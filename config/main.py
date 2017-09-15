@@ -251,5 +251,49 @@ def startup(interface_name, verbose):
     run_command(command, display_cmd=verbose)
 
 
+#
+# 'acl' group
+#
+
+@cli.group()
+def acl():
+    """ACL-related configuration tasks"""
+    pass
+
+
+#
+# 'acl update' group
+#
+
+@acl.group()
+def update():
+    """ACL-related configuration tasks"""
+    pass
+
+
+#
+# 'full' subcommand
+#
+
+@update.command()
+@click.argument('file_name', required=True)
+def full(file_name):
+    """Full update of ACL rules configuration."""
+    command = "acl-loader update full {}".format(file_name)
+    run_command(command)
+
+
+#
+# 'incremental' subcommand
+#
+
+@update.command()
+@click.argument('file_name', required=True)
+def incremental(file_name):
+    """Incremental update of ACL rule configuration."""
+    command = "acl-loader update incremental {}".format(file_name)
+    run_command(command)
+
+
 if __name__ == '__main__':
     cli()

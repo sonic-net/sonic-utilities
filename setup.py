@@ -10,7 +10,7 @@ setup(
     url='https://github.com/Azure/sonic-utilities',
     maintainer='Joe LeVeque',
     maintainer_email='jolevequ@microsoft.com',
-    packages=['config', 'sfputil', 'show', 'sonic_eeprom', 'sonic_sfp', "sonic_installer"],
+    packages=['config', 'sfputil', 'show', 'sonic_eeprom', 'sonic_sfp', "sonic_installer", 'acl_loader'],
     package_data={
         'show': ['aliases.ini']
     },
@@ -25,20 +25,22 @@ setup(
         'scripts/generate_dump',
         'scripts/lldpshow',
         'scripts/portstat',
-        'scripts/teamshow', 
+        'scripts/teamshow',
     ],
     data_files=[
         ('/etc/bash_completion.d', ['data/etc/bash_completion.d/config']),
         ('/etc/bash_completion.d', ['data/etc/bash_completion.d/sfputil']),
         ('/etc/bash_completion.d', ['data/etc/bash_completion.d/show']),
         ('/etc/bash_completion.d', ['data/etc/bash_completion.d/sonic_installer']),
+        ('/etc/bash_completion.d', ['data/etc/bash_completion.d/acl-loader']),
     ],
     entry_points={
         'console_scripts': [
             'config = config.main:cli',
             'sfputil = sfputil.main:cli',
             'show = show.main:cli',
-            'sonic_installer = sonic_installer.main:cli'
+            'sonic_installer = sonic_installer.main:cli',
+            'acl-loader = acl_loader.main:cli'
         ]
     },
     install_requires=[

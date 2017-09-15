@@ -549,5 +549,60 @@ def uptime():
     run_command('uptime -p')
 
 
+#
+# 'session' command ###
+#
+
+@cli.command()
+@click.argument('session_name', required=False)
+def session(session_name):
+    """Show existing everflow sessions"""
+    if session_name is None:
+        session_name = ""
+
+    run_command("acl-loader show session {}".format(session_name))
+
+
+#
+# 'acl' group ###
+#
+
+@cli.group(cls=AliasedGroup, default_if_no_args=False)
+def acl():
+    """Show ACL related information"""
+    pass
+
+
+#
+# 'acl table' command ###
+#
+
+@acl.command()
+@click.argument('table_name', required=False)
+def table(table_name):
+    """Show existing ACL tables"""
+    if table_name is None:
+        table_name = ""
+
+    run_command("acl-loader show table {}".format(table_name))
+
+
+#
+# 'acl rule' command ###
+#
+
+@acl.command()
+@click.argument('table_name', required=False)
+@click.argument('rule_id', required=False)
+def rule(table_name, rule_id):
+    """Show existing ACL rules"""
+    if table_name is None:
+        table_name = ""
+
+    if rule_id is None:
+        rule_id = ""
+
+    run_command("acl-loader show rule {} {}".format(table_name, rule_id))
+
 if __name__ == '__main__':
     cli()
