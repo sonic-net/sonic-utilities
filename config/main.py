@@ -240,9 +240,10 @@ def breakout_warnUser_extraTables(cm, final_delPorts, confirm=True):
             # find relavent tables in extra tables, i.e. one which can have deleted
             # ports
             tables = cm.configWithKeys(configIn=eTables, keys=final_delPorts)
-            click.secho("Below Config can not be verified, It may cause harm "\
-                "to the system\n {}".format(json.dumps(tables, indent=2)))
-            click.confirm('Do you wish to Continue?', abort=True)
+            if len(tables):
+                click.secho("Below Config can not be verified, It may cause harm "\
+                    "to the system\n {}".format(json.dumps(tables, indent=2)))
+                click.confirm('Do you wish to Continue?', abort=True)
     except Exception as e:
         raise Exception("Failed in breakout_warnUser_extraTables. Error: {}".format(str(e)))
     return
