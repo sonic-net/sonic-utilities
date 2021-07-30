@@ -2119,6 +2119,43 @@ def is_dynamic_buffer_enabled(config_db):
     return 'dynamic' == device_metadata.get('buffer_model')
 
 #
+# 'qos scheduler' group ('config qos scheduler ...')
+#
+@qos.group()
+def scheduler():
+    """QoS-Scheduler-related configuration tasks"""
+    pass
+
+@scheduler.command(name='add')
+@click.argument('profile_name', metavar='<profile_name>', required=True)
+@click.option('--meter_type', help='Meter type', type=click.Choice(['bytes', 'packets']), default='bytes')
+@click.option('--pir', help='Maximum bandwidth rate', type=click.IntRange(1, 50000000000), required=True)
+@click.option('--pbs', help='Maximum bandwidth burst', type=click.IntRange(1, 256000000), required=True)
+def add(profile_name, meter_type, pir, pbs):
+    """Add QoS-Scheduler profile."""
+
+    config_db = ConfigDBConnector()
+    config_db.connect()
+
+    data = {
+        'meter_type': meter_type,
+        'pir': pir,
+        'pbs': pbs
+    }
+
+    config_db.set_entry("SCHEDULER", profile_name, data)
+
+@scheduler.command(name='del')
+@click.argument('profile_name', metavar='<profile_name>', required=True)
+def delete(profile_name):
+    """Delete QoS-Scheduler profile."""
+
+    config_db = ConfigDBConnector()
+    config_db.connect()
+
+    config_db.set_entry("SCHEDULER", profile_name, None)
+
+#
 # 'warm_restart' group ('config warm_restart ...')
 #
 @config.group(cls=clicommon.AbbreviationGroup, name='warm_restart')
@@ -3094,6 +3131,62 @@ def interface(ctx, namespace):
     config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=str(namespace))
     config_db.connect()
     ctx.obj = {'config_db': config_db, 'namespace': str(namespace)}
+
+#
+# config interface rate-limit bind in <interface> <profile_name>
+#
+@interface.command(name='rate-limit')
+@click.argument('op', metavar='<op>', type=click.Choice(['bind', 'unbind']), required=True)
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('profile_name', metavar='<profile_name>', required=False)
+@click.option('-q', '--queue', help='queue', type=click.IntRange(0, 7), multiple=True, required=False)
+@click.pass_context
+def rate_limit(ctx, op, interface_name, profile_name, queue):
+    """Rate limit configuration."""
+
+    config_db = ConfigDBConnector()
+    config_db.connect()
+
+    if len(queue) == 0:
+        # port rate limit
+        field_key = 'scheduler'
+
+        if op == 'bind':
+            data = {
+                field_key: '[SCHEDULER|{}]'.format(profile_name)
+            }
+
+            config_db.mod_entry('PORT_QOS_MAP', interface_name, data)
+        else:
+            cur_data = config_db.get_entry('PORT_QOS_MAP', interface_name)
+
+            if field_key not in cur_data.keys():
+                ctx.fail("Not set rate limit profile on Interface {}".format(interface_name))
+
+            del cur_data[field_key]
+
+            config_db.set_entry('PORT_QOS_MAP', interface_name, cur_data)
+    else:
+        # queue rate limit
+        for qid in queue:
+            key = '{}|{}'.format(interface_name, qid)
+
+            if op == 'bind':
+                data = {
+                    'scheduler': '[SCHEDULER|{}]'.format(profile_name)
+                }
+
+                config_db.mod_entry('QUEUE', key, data)
+            else:
+                cur_data = config_db.get_entry('QUEUE', key)
+
+                if 'scheduler' not in cur_data.keys():
+                    ctx.fail("Not set rate limit profile on queue {}".format(key))
+
+                del cur_data['scheduler']
+
+                config_db.set_entry('QUEUE', key, cur_data)
+
 #
 # 'startup' subcommand
 #
