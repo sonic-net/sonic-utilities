@@ -3137,11 +3137,12 @@ def interface(ctx, namespace):
 #
 @interface.command(name='rate-limit')
 @click.argument('op', metavar='<op>', type=click.Choice(['bind', 'unbind']), required=True)
+@click.argument('dir', metavar='<dir>', type=click.Choice(['out']), required=True)
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @click.argument('profile_name', metavar='<profile_name>', required=False)
 @click.option('-q', '--queue', help='queue', type=click.IntRange(0, 7), multiple=True, required=False)
 @click.pass_context
-def rate_limit(ctx, op, interface_name, profile_name, queue):
+def rate_limit(ctx, op, dir, interface_name, profile_name, queue):
     """Rate limit configuration."""
 
     config_db = ConfigDBConnector()
