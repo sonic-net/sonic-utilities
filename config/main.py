@@ -2122,16 +2122,18 @@ def is_dynamic_buffer_enabled(config_db):
 # 'qos scheduler' group ('config qos scheduler ...')
 #
 @qos.group()
-def scheduler():
+@click.pass_context
+def scheduler(ctx):
     """QoS-Scheduler-related configuration tasks"""
     pass
 
 @scheduler.command(name='add')
+@click.pass_context
 @click.argument('profile_name', metavar='<profile_name>', required=True)
 @click.option('--meter_type', help='Meter type', type=click.Choice(['bytes', 'packets']), default='bytes')
 @click.option('--pir', help='Maximum bandwidth rate', type=click.IntRange(1, 50000000000), required=True)
 @click.option('--pbs', help='Maximum bandwidth burst', type=click.IntRange(1, 256000000), required=True)
-def add(profile_name, meter_type, pir, pbs):
+def add(ctx, profile_name, meter_type, pir, pbs):
     """Add QoS-Scheduler profile."""
 
     config_db = ConfigDBConnector()
@@ -2146,12 +2148,29 @@ def add(profile_name, meter_type, pir, pbs):
     config_db.set_entry("SCHEDULER", profile_name, data)
 
 @scheduler.command(name='del')
+@click.pass_context
 @click.argument('profile_name', metavar='<profile_name>', required=True)
-def delete(profile_name):
+def delete(ctx, profile_name):
     """Delete QoS-Scheduler profile."""
 
     config_db = ConfigDBConnector()
     config_db.connect()
+
+    port_qos_table = config_db.get_table('PORT_QOS_MAP')
+    for k, v in port_qos_table.items():
+        scheduler = v.get('scheduler','')
+
+        found = False if scheduler.find(profile_name) == -1 else True
+        if found:
+            ctx.fail('The profile is binding to interface, unbind from it first.')
+
+    queue_table = config_db.get_table('QUEUE')
+    for k, v in queue_table.items():
+        scheduler = v.get('scheduler','')
+
+        found = False if scheduler.find(profile_name) == -1 else True
+        if found:
+            ctx.fail('The profile is binding to queue, unbind from it first.')
 
     config_db.set_entry("SCHEDULER", profile_name, None)
 
