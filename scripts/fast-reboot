@@ -676,9 +676,9 @@ if [[ -f ${SHUTDOWN_ORDER_FILE} ]]; then
 else
     # TODO: to be removed once sonic-buildimage change is in
     if [[ "${REBOOT_TYPE}" == "fast-reboot" ]]; then
-        SERVICES_TO_STOP="nat radv bgp sflow lldp swss teamd syncd"
+        SERVICES_TO_STOP="nat radv bgp sflow lldp swss teamd syncd pmon"
     elif [[ "${REBOOT_TYPE}" == "fastfast-reboot" || "${REBOOT_TYPE}" == "warm-reboot" ]]; then
-        SERVICES_TO_STOP="nat radv bgp sflow lldp teamd swss syncd"
+        SERVICES_TO_STOP="nat radv bgp sflow lldp teamd swss syncd pmon"
     else
         error "Unexpected reboot type ${REBOOT_TYPE}"
         exit $EXIT_FAILURE
