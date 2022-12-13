@@ -19,5 +19,9 @@
      "VIDTORID":{
      		"oid:0xd00000000056d": "oid:0xd",
 		"oid:0x10000000004a4": "oid:0x1690000000001"
-     }
+     },
+     "ASIC_STATE:SAI_OBJECT_TYPE_ROUTE_ENTRY:{\"dest\":\"10.2.1.1\",\"switch_id\":\"oid:0x21000000000000\",\"vr\":\"oid:0x300000000007c\"}": {
+        "SAI_ROUTE_ENTRY_ATTR_PACKET_ACTION": "SAI_PACKET_ACTION_FORWARD",
+        "SAI_ROUTE_ENTRY_ATTR_NEXT_HOP_ID": "oid:0x40000000015d8"
+    }
 }

@@ -515,12 +515,16 @@ show_muxcable_tunnel_route_expected_output_json="""\
     "TUNNEL_ROUTE": {
         "Ethernet0": {
             "server_ipv4": {
-                "DEST": "10.2.1.1"
+                "DEST": "10.2.1.1",
+                "kernel": 1,
+                "asic": 1
             }
         },
         "Ethernet4": {
             "server_ipv4": {
-                "DEST": "10.3.1.1"
+                "DEST": "10.3.1.1",
+                "kernel": 1,
+                "asic": false
             }
         }
     }
@@ -528,10 +532,10 @@ show_muxcable_tunnel_route_expected_output_json="""\
 """
 
 show_muxcable_tunnel_route_expected_output="""\
-PORT       DEST_TYPE    DEST_ADDRESS
----------  -----------  --------------
-Ethernet0  server_ipv4  10.2.1.1
-Ethernet4  server_ipv4  10.3.1.1
+PORT       DEST_TYPE    DEST_ADDRESS    kernel    asic
+---------  -----------  --------------  --------  ------
+Ethernet0  server_ipv4  10.2.1.1        added     added
+Ethernet4  server_ipv4  10.3.1.1        added     -
 """
 
 show_muxcable_tunnel_route_expected_output_port_json="""\
@@ -539,7 +543,9 @@ show_muxcable_tunnel_route_expected_output_port_json="""\
     "TUNNEL_ROUTE": {
         "Ethernet0": {
             "server_ipv4": {
-                "DEST": "10.2.1.1"
+                "DEST": "10.2.1.1",
+                "kernel": 1,
+                "asic": 1
             }
         }
     }
@@ -547,9 +553,9 @@ show_muxcable_tunnel_route_expected_output_port_json="""\
 """
 
 show_muxcable_tunnel_route_expected_port_output="""\
-PORT       DEST_TYPE    DEST_ADDRESS
----------  -----------  --------------
-Ethernet0  server_ipv4  10.2.1.1
+PORT       DEST_TYPE    DEST_ADDRESS    kernel    asic
+---------  -----------  --------------  --------  ------
+Ethernet0  server_ipv4  10.2.1.1        added     added
 """
 
 class TestMuxcable(object):
