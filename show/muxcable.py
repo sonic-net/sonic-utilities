@@ -549,7 +549,7 @@ def create_json_dump_per_port_config(db, port_status_dict, per_npu_configdb, asi
     if soc_ipv4_value is not None:
         port_status_dict["MUX_CABLE"]["PORTS"][port_name]["SERVER"]["soc_ipv4"] = soc_ipv4_value
 
-def get_tunnel_route_per_port(db, port_tunnel_route, per_npu_configdb, per_npu_appl_db, asic_id, port):
+def get_tunnel_route_per_port(db, port_tunnel_route, per_npu_configdb, per_npu_appl_db, per_npu_asic_db, asic_id, port):
 
     mux_cfg_dict = per_npu_configdb[asic_id].get_all(
     per_npu_configdb[asic_id].CONFIG_DB, 'MUX_CABLE|{}'.format(port))
@@ -591,8 +591,8 @@ def create_table_dump_per_port_tunnel_route(db, print_data, per_npu_configdb, pe
             print_line.append(port)
             print_line.append(dest_name)
             print_line.append(values['DEST'])
-            print_line.append('added' if values['asic'] else '-')
             print_line.append('added' if values['kernel'] else '-')
+            print_line.append('added' if values['asic'] else '-')
             print_data.append(print_line)
 
 @muxcable.command()
@@ -1969,7 +1969,7 @@ def tunnel_route(db, port, json_output):
 
                 create_table_dump_per_port_tunnel_route(db, print_data, per_npu_configdb, per_npu_appl_db, per_npu_asic_db, asic_index, port)
 
-                headers = ['PORT', 'DEST_TYPE', 'DEST_ADDRESS']
+                headers = ['PORT', 'DEST_TYPE', 'DEST_ADDRESS', 'kernel', 'asic']
 
                 click.echo(tabulate(print_data, headers=headers))
         else:
@@ -1998,7 +1998,7 @@ def tunnel_route(db, port, json_output):
             
                     create_table_dump_per_port_tunnel_route(db, print_data, per_npu_configdb, per_npu_appl_db, per_npu_asic_db, asic_id, port)
 
-            headers = ['PORT', 'DEST_TYPE', 'DEST_ADDRESS']
+            headers = ['PORT', 'DEST_TYPE', 'DEST_ADDRESS', 'kernel', 'asic']
 
             click.echo(tabulate(print_data, headers=headers))
 
