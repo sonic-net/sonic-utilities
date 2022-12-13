@@ -559,24 +559,31 @@ def get_tunnel_route_per_port(db, port_tunnel_route, per_npu_configdb, per_npu_a
         dest_address = mux_cfg_dict.get(name, None)
 
         if dest_address is not None:
-            route_keys = per_npu_appl_db[asic_id].keys(
+            kernel_route_keys = per_npu_appl_db[asic_id].keys(
                 per_npu_appl_db[asic_id].APPL_DB, 'TUNNEL_ROUTE_TABLE:*{}'.format(dest_address))
-            
-            if route_keys is not None and len(route_keys):
+            if_kernel_tunnel_route_programed = kernel_route_keys is not None and len(kernel_route_keys)
 
+            asic_route_keys = per_npu_asic_db[asic_id].keys(
+                per_npu_asic_db[asic_id].ASIC_DB, 'ASIC_STATE:SAI_OBJECT_TYPE_ROUTE_ENTRY:*{}*'.format(dest_address))
+            if_asic_tunnel_route_programed = asic_route_keys is not None and len(asic_route_keys)
+
+            if if_kernel_tunnel_route_programed or if_asic_tunnel_route_programed:
                 port_tunnel_route["TUNNEL_ROUTE"][port] = port_tunnel_route["TUNNEL_ROUTE"].get(port, {})
                 port_tunnel_route["TUNNEL_ROUTE"][port][name] = {}
                 port_tunnel_route["TUNNEL_ROUTE"][port][name]['DEST'] = dest_address
 
-def create_json_dump_per_port_tunnel_route(db, port_tunnel_route, per_npu_configdb, per_npu_appl_db, asic_id, port):
+                port_tunnel_route["TUNNEL_ROUTE"][port][name]['kernel'] = if_kernel_tunnel_route_programed
+                port_tunnel_route["TUNNEL_ROUTE"][port][name]['asic'] = if_asic_tunnel_route_programed
 
-    get_tunnel_route_per_port(db, port_tunnel_route, per_npu_configdb, per_npu_appl_db,  asic_id, port)
+def create_json_dump_per_port_tunnel_route(db, port_tunnel_route, per_npu_configdb, per_npu_appl_db, per_npu_asic_db, asic_id, port):
 
-def create_table_dump_per_port_tunnel_route(db, print_data, per_npu_configdb, per_npu_appl_db, asic_id, port):
+    get_tunnel_route_per_port(db, port_tunnel_route, per_npu_configdb, per_npu_appl_db, per_npu_asic_db, asic_id, port)
+
+def create_table_dump_per_port_tunnel_route(db, print_data, per_npu_configdb, per_npu_appl_db, per_npu_asic_db, asic_id, port):
 
     port_tunnel_route = {}
     port_tunnel_route["TUNNEL_ROUTE"] = {}
-    get_tunnel_route_per_port(db, port_tunnel_route, per_npu_configdb, per_npu_appl_db,  asic_id, port)
+    get_tunnel_route_per_port(db, port_tunnel_route, per_npu_configdb, per_npu_appl_db, per_npu_asic_db, asic_id, port)
 
     for port, route in port_tunnel_route["TUNNEL_ROUTE"].items():
         for dest_name, values in route.items():
@@ -584,6 +591,8 @@ def create_table_dump_per_port_tunnel_route(db, print_data, per_npu_configdb, pe
             print_line.append(port)
             print_line.append(dest_name)
             print_line.append(values['DEST'])
+            print_line.append('added' if values['asic'] else '-')
+            print_line.append('added' if values['kernel'] else '-')
             print_data.append(print_line)
 
 @muxcable.command()
@@ -1904,6 +1913,7 @@ def tunnel_route(db, port, json_output):
     port = platform_sfputil_helper.get_interface_name(port, db)
 
     per_npu_appl_db = {}
+    per_npu_asic_db = {}
     per_npu_configdb = {}
     mux_tbl_keys = {}
 
@@ -1913,6 +1923,9 @@ def tunnel_route(db, port, json_output):
 
         per_npu_appl_db[asic_id] = swsscommon.SonicV2Connector(use_unix_socket_path=False, namespace=namespace)
         per_npu_appl_db[asic_id].connect(per_npu_appl_db[asic_id].APPL_DB)
+
+        per_npu_asic_db[asic_id] = swsscommon.SonicV2Connector(use_unix_socket_path=False, namespace=namespace)
+        per_npu_asic_db[asic_id].connect(per_npu_asic_db[asic_id].ASIC_DB)
 
         per_npu_configdb[asic_id] = swsscommon.SonicV2Connector(use_unix_socket_path=False, namespace=namespace)
         per_npu_configdb[asic_id].connect(per_npu_configdb[asic_id].CONFIG_DB) 
@@ -1947,14 +1960,14 @@ def tunnel_route(db, port, json_output):
                 port_tunnel_route = {}
                 port_tunnel_route["TUNNEL_ROUTE"] = {}
 
-                create_json_dump_per_port_tunnel_route(db, port_tunnel_route, per_npu_configdb, per_npu_appl_db, asic_index, port)
+                create_json_dump_per_port_tunnel_route(db, port_tunnel_route, per_npu_configdb, per_npu_appl_db, per_npu_asic_db, asic_index, port)
 
                 click.echo("{}".format(json.dumps(port_tunnel_route, indent=4)))
 
             else:
                 print_data = []
 
-                create_table_dump_per_port_tunnel_route(db, print_data, per_npu_configdb, per_npu_appl_db, asic_index, port)
+                create_table_dump_per_port_tunnel_route(db, print_data, per_npu_configdb, per_npu_appl_db, per_npu_asic_db, asic_index, port)
 
                 headers = ['PORT', 'DEST_TYPE', 'DEST_ADDRESS']
 
@@ -1972,7 +1985,7 @@ def tunnel_route(db, port, json_output):
                 for key in natsorted(mux_tbl_keys[asic_id]):
                     port = key.split("|")[1]
 
-                    create_json_dump_per_port_tunnel_route(db, port_tunnel_route, per_npu_configdb, per_npu_appl_db, asic_id, port)
+                    create_json_dump_per_port_tunnel_route(db, port_tunnel_route, per_npu_configdb, per_npu_appl_db, per_npu_asic_db, asic_id, port)
             
             click.echo("{}".format(json.dumps(port_tunnel_route, indent=4)))
         else:
@@ -1983,7 +1996,7 @@ def tunnel_route(db, port, json_output):
                 for key in natsorted(mux_tbl_keys[asic_id]):
                     port = key.split("|")[1]
             
-                    create_table_dump_per_port_tunnel_route(db, print_data, per_npu_configdb, per_npu_appl_db, asic_id, port)
+                    create_table_dump_per_port_tunnel_route(db, print_data, per_npu_configdb, per_npu_appl_db, per_npu_asic_db, asic_id, port)
 
             headers = ['PORT', 'DEST_TYPE', 'DEST_ADDRESS']
 
