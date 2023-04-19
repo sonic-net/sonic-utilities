@@ -11,7 +11,7 @@
     "nexthop": "10.0.0.57,10.0.0.59,10.0.0.61,10.0.0.63",
     "ifname" : ""
   },
-  "ROUTE_TABLE:VRF-Red:192.168.112.128/25": {
+  "ROUTE_TABLE:VrfRed:192.168.112.128/25": {
     "nexthop": "10.0.0.57,10.0.0.59,10.0.0.61,10.0.0.63",
     "ifname" : "PortChannel101,PortChannel102,PortChannel103,PortChannel104"
   },
