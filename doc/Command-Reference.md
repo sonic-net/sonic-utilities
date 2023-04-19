@@ -4884,8 +4884,8 @@ The "current-mode" subcommand is used to display current breakout mode for all i
 
 **show interfaces counters**
 
-This show command displays packet counters for all interfaces since the last time the counters were cleared. To display l3 counters "rif" subcommand can be used. There is no facility to display counters for one specific l2 interface. For l3 interfaces a single interface output mode is present. Optional argument "-a" provides two additional columns - RX-PPS and TX_PPS.
-Optional argument "-p" specify a period (in seconds) with which to gather counters over.
+This show command displays packet counters for all interfaces(except the "show interface detailed" command) since the last time the counters were cleared. To display l3 counters "rif" subcommand can be used. There is no facility to display counters for one specific l2 interface. For l3 interfaces a single interface output mode is present.  Optional argument "-a" provides two additional columns - RX-PPS and TX_PPS. 
+Optional argument "-p" specify a period (in seconds) with which to gather counters over. To display the detailed per-interface counters "detailed <interface-name>" subcommand can be used.
 
 - Usage:
   ```
@@ -4895,6 +4895,7 @@ Optional argument "-p" specify a period (in seconds) with which to gather counte
   show interfaces counters rif [-p|--period <period>] [-i <interface_name>]
   show interfaces counters fec-histogram [-i <interface_name>]
   show interfaces counters fec-stats
+  show interfaces counters detailed <interface_name>
   ```
 
 - Example:
@@ -4998,6 +4999,56 @@ Optionally, you can specify a period (in seconds) with which to gather counters 
     Ethernet16        U      377   32.64 KB/s      0.00%         0         0         0      214   18.01 KB/s      0.00%         0         0         0
     Ethernet20        U      284   36.81 KB/s      0.00%         0         0         0      138  8758.25 B/s      0.00%         0         0         0
     Ethernet24        U      173   16.09 KB/s      0.00%         0         0         0      169   11.39 KB/s      0.00%         0         0         0
+  ```
+
+The "detailed" subcommand is used to display more detailed interface counters. Along with tx/rx counters, it also displays the WRED drop counters that are supported on the platform.
+
+- Example:
+  ```
+    admin@sonic:~$ show interfaces counters detailed Ethernet8
+    Packets Received 64 Octets..................... 0
+    Packets Received 65-127 Octets................. 0
+    Packets Received 128-255 Octets................ 0
+    Packets Received 256-511 Octets................ 0
+    Packets Received 512-1023 Octets............... 0
+    Packets Received 1024-1518 Octets.............. 0
+    Packets Received 1519-2047 Octets.............. 0
+    Packets Received 2048-4095 Octets.............. 0
+    Packets Received 4096-9216 Octets.............. 0
+    Packets Received 9217-16383 Octets............. 0
+
+    Total Packets Received Without Errors.......... 0
+    Unicast Packets Received....................... 0
+    Multicast Packets Received..................... 0
+    Broadcast Packets Received..................... 0
+
+    Jabbers Received............................... N/A
+    Fragments Received............................. N/A
+    Undersize Received............................. 0
+    Overruns Received.............................. 0
+
+    Packets Transmitted 64 Octets.................. 0
+    Packets Transmitted 65-127 Octets.............. 0
+    Packets Transmitted 128-255 Octets............. 0
+    Packets Transmitted 256-511 Octets............. 0
+    Packets Transmitted 512-1023 Octets............ 0
+    Packets Transmitted 1024-1518 Octets........... 0
+    Packets Transmitted 1519-2047 Octets........... 0
+    Packets Transmitted 2048-4095 Octets........... 0
+    Packets Transmitted 4096-9216 Octets........... 0
+    Packets Transmitted 9217-16383 Octets.......... 0
+
+    Total Packets Transmitted Successfully......... 0
+    Unicast Packets Transmitted.................... 0
+    Multicast Packets Transmitted.................. 0
+    Broadcast Packets Transmitted.................. 0
+
+    WRED Green Dropped Packets..................... 0
+    WRED Yellow Dropped Packets.................... 0
+    WRED Red Dropped Packets....................... 0
+    WRED Total Dropped Packets..................... 0
+
+    Time Since Counters Last Cleared............... None
   ```
 
 - NOTE: Interface counters can be cleared by the user with the following command:
@@ -9335,6 +9386,7 @@ This sub-section explains the following queue parameters that can be displayed u
 2) queue watermark
 3) priority-group  watermark
 4) queue persistent-watermark
+5) queue wredcounters
 
 
 **show queue counters**
@@ -9527,6 +9579,83 @@ This command displays the user persistet-watermark for the queues (Egress shared
 
   admin@sonic:~$ sonic-clear priority-group drop counters
   ```
+
+**show queue wredcounters**
+
+This command displays wred-drop packet/byte and ecn-marked packet/byte counters for all queues of all ports or one specific-port given as arguement.
+This command can be used to clear the counters for all queues of all ports. Note that port specific clear is not supported.
+
+- Usage:
+  ```
+  show queue wredcounters [<interface_name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show queue wredcounters
+     Port      TxQ    WredDrp/pkts    WredDrp/bytes  EcnMarked/pkts  EcnMarked/bytes
+  ---------  -----  --------------  --------------- --------------- ----------------
+
+  Ethernet0    UC0               0                0               0                0
+  Ethernet0    UC1               0                0               0                0
+  Ethernet0    UC2               0                0               0                0
+  Ethernet0    UC3               0                0               0                0
+  Ethernet0    UC4               0                0               0                0
+  Ethernet0    UC5               0                0               0                0
+  Ethernet0    UC6               0                0               0                0
+  Ethernet0    UC7               0                0               0                0
+  Ethernet0    UC8               0                0               0                0
+  Ethernet0    UC9               0                0               0                0
+  Ethernet0    MC0               0                0               0                0
+  Ethernet0    MC1               0                0               0                0
+  Ethernet0    MC2               0                0               0                0
+  Ethernet0    MC3               0                0               0                0
+  Ethernet0    MC4               0                0               0                0
+  Ethernet0    MC5               0                0               0                0
+  Ethernet0    MC6               0                0               0                0
+  Ethernet0    MC7               0                0               0                0
+  Ethernet0    MC8               0                0               0                0
+  Ethernet0    MC9               0                0               0                0
+
+     Port      TxQ    WredDrp/pkts    WredDrp/bytes  EcnMarked/pkts  EcnMarked/bytes
+  ---------  -----  --------------  --------------- --------------- ----------------
+
+  Ethernet4    UC0               0                0               0                0
+  Ethernet4    UC1               0                0               0                0
+  Ethernet4    UC2               0                0               0                0
+  Ethernet4    UC3               0                0               0                0
+  Ethernet4    UC4               0                0               0                0
+  Ethernet4    UC5               0                0               0                0
+  Ethernet4    UC6               0                0               0                0
+  Ethernet4    UC7               0                0               0                0
+  Ethernet4    UC8               0                0               0                0
+  Ethernet4    UC9               0                0               0                0
+  Ethernet4    MC0               0                0               0                0
+  Ethernet4    MC1               0                0               0                0
+  Ethernet4    MC2               0                0               0                0
+  Ethernet4    MC3               0                0               0                0
+  Ethernet4    MC4               0                0               0                0
+  Ethernet4    MC5               0                0               0                0
+  Ethernet4    MC6               0                0               0                0
+  Ethernet4    MC7               0                0               0                0
+  Ethernet4    MC8               0                0               0                0
+  Ethernet4    MC9               0                0               0                0
+
+  ...
+  ```
+
+Optionally, you can specify an interface name in order to display only that particular interface
+
+- Example:
+  ```
+  admin@sonic:~$ show queue wredcounters Ethernet72
+  ```
+
+- NOTE: Queue counters can be cleared by the user with the following command:
+  ```
+  admin@sonic:~$ sonic-clear queue wredcounters
+  ```
+
 
 #### Buffer Pool
 
