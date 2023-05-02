@@ -65,7 +65,8 @@ from sonic_package_manager.version import (
     version_to_tag,
     tag_to_version
 )
-
+from sonic_package_manager.manifest import MANIFEST_LOCATION
+LOCAL_TARBALL_PATH="/tmp/local_tarball.gz"
 
 @contextlib.contextmanager
 def failure_ignore(ignore: bool):
@@ -344,6 +345,8 @@ class PackageManager:
                 expression: Optional[str] = None,
                 repotag: Optional[str] = None,
                 tarball: Optional[str] = None,
+                use_local_manifest: bool = False,
+                name: Optional[str] = None,
                 **kwargs):
         """ Install/Upgrade SONiC Package from either an expression
         representing the package and its version, repository and tag or
@@ -358,7 +361,7 @@ class PackageManager:
             PackageManagerError
         """
 
-        source = self.get_package_source(expression, repotag, tarball)
+        source = self.get_package_source(expression, repotag, tarball, use_local_manifest=use_local_manifest, name=name)
         package = source.get_package()
 
         if self.is_installed(package.name):
@@ -430,7 +433,7 @@ class PackageManager:
                     self.service_creator.generate_shutdown_sequence_files,
                     self.get_installed_packages())
                 )
-
+                
                 if not skip_host_plugins:
                     self._install_cli_plugins(package)
                     exits.callback(rollback(self._uninstall_cli_plugins, package))
@@ -445,6 +448,74 @@ class PackageManager:
         package.entry.version = version
         self.database.update_package(package.entry)
         self.database.commit()
+
+    @under_lock
+    @opt_check
+    def update(self, name: str,
+                  force: bool = False):
+        """ Update SONiC Package referenced by name. The update
+        can be forced if force argument is True.
+
+        Args:
+            name: SONiC Package name.
+            use_local_manifest: Use this manifest to update
+            force: Force the installation.
+        Raises:
+            PackageManagerError
+        """
+
+        with failure_ignore(force):
+            if not self.is_installed(name):
+                raise PackageUninstallationError(f'{name} is not installed')
+
+        old_package = self.get_installed_package(name)
+        new_package = self.get_installed_package(name, use_edit=True)
+
+        service_create_opts = {
+            'register_feature': False,
+        }
+        service_remove_opts = {
+            'deregister_feature': False,
+        }
+    
+        try:
+            with contextlib.ExitStack() as exits:
+                self.service_creator.remove(old_package, **service_remove_opts)
+                exits.callback(rollback(self.service_creator.create, old_package,
+                                        **service_create_opts))
+
+                self.docker.rm_by_ancestor(old_package.image_id, force=True)
+
+                self.service_creator.create(new_package, **service_create_opts)
+                exits.callback(rollback(self.service_creator.remove, new_package,
+                                        **service_remove_opts))
+
+                self.service_creator.generate_shutdown_sequence_files(
+                    self._get_installed_packages_and(new_package)
+                )
+                exits.callback(rollback(
+                    self.service_creator.generate_shutdown_sequence_files,
+                    self._get_installed_packages_and(old_package))
+                )
+
+                self.feature_registry.update(old_package.manifest, new_package.manifest)
+                exits.callback(rollback(
+                    self.feature_registry.update, new_package.manifest, old_package.manifest)
+                )
+
+                exits.pop_all()
+        except Exception as err:
+            raise PackageUpgradeError(f'Failed to update {new_package.name}: {err}')
+        except KeyboardInterrupt:
+            raise
+
+        new_package_entry = new_package.entry
+        new_package_entry.installed = True
+        self.database.update_package(new_package_entry)
+        self.database.commit()
+        manifest_path = os.path.join(MANIFEST_LOCATION, name)
+        edit_path = os.path.join(MANIFEST_LOCATION, name + ".edit")
+        os.rename(edit_path,manifest_path)
 
     @under_lock
     @opt_check
@@ -468,6 +539,9 @@ class PackageManager:
 
         package = self.get_installed_package(name)
         service_name = package.manifest['service']['name']
+
+        image_id_used = False
+        image_id_used = any(entry.image_id == package.image_id for entry in self.database if entry.name != package.name)
 
         with failure_ignore(force):
             if self.feature_registry.is_feature_enabled(service_name):
@@ -493,7 +567,11 @@ class PackageManager:
                 self._get_installed_packages_except(package)
             )
             self.docker.rm_by_ancestor(package.image_id, force=True)
-            self.docker.rmi(package.image_id, force=True)
+            # Delete image if it is not in use, otherwise skip deletion
+            if not image_id_used:
+                self.docker.rmi(package.image_id, force=True)
+            else:
+                print(f'Image with ID {package.image_id} is in use by other package(s). Skipping deletion')
             package.entry.image_id = None
         except Exception as err:
             raise PackageUninstallationError(
@@ -504,6 +582,13 @@ class PackageManager:
         package.entry.version = None
         self.database.update_package(package.entry)
         self.database.commit()
+        manifest_path = os.path.join(MANIFEST_LOCATION, name)
+        edit_path = os.path.join(MANIFEST_LOCATION, name + ".edit")
+        if os.path.exists(manifest_path):
+            os.remove(manifest_path)
+        if os.path.exists(edit_path):
+            os.remove(edit_path)
+
 
     @under_lock
     @opt_check
@@ -620,8 +705,13 @@ class PackageManager:
                     self._install_cli_plugins(new_package)
                     exits.callback(rollback(self._uninstall_cli_plugin, new_package))
 
-                self.docker.rmi(old_package.image_id, force=True)
-
+                old_image_id_used = False
+                old_image_id_used = any(entry.image_id == old_package.image_id for entry in self.database if entry.name != old_package.name)
+                if not old_image_id_used or old_package.image_id != new_package.image_id:
+                    self.docker.rmi(old_package.image_id, force=True)
+                else:
+                    print(f'Image with ID {old_package.image_id} is in use by other package(s). Skipping deletion')
+                
                 exits.pop_all()
         except Exception as err:
             raise PackageUpgradeError(f'Failed to upgrade {new_package.name}: {err}')
@@ -764,7 +854,7 @@ class PackageManager:
 
             self.database.commit()
 
-    def get_installed_package(self, name: str) -> Package:
+    def get_installed_package(self, name: str, use_local_manifest: bool = False, use_edit: bool = False) -> Package:
         """ Get installed package by name.
 
         Args:
@@ -777,14 +867,19 @@ class PackageManager:
         source = LocalSource(package_entry,
                              self.database,
                              self.docker,
-                             self.metadata_resolver)
+                             self.metadata_resolver,
+                             use_local_manifest=use_local_manifest,
+                             name=name,
+                             use_edit=use_edit)
         return source.get_package()
 
     def get_package_source(self,
                            package_expression: Optional[str] = None,
                            repository_reference: Optional[str] = None,
                            tarboll_path: Optional[str] = None,
-                           package_ref: Optional[PackageReference] = None):
+                           package_ref: Optional[PackageReference] = None,
+                           use_local_manifest: bool = False,
+                           name: Optional[str] = None):
         """ Returns PackageSource object based on input source.
 
         Args:
@@ -800,7 +895,7 @@ class PackageManager:
 
         if package_expression:
             ref = parse_reference_expression(package_expression)
-            return self.get_package_source(package_ref=ref)
+            return self.get_package_source(package_ref=ref, name=name)
         elif repository_reference:
             repo_ref = utils.DockerReference.parse(repository_reference)
             repository = repo_ref['name']
@@ -810,15 +905,19 @@ class PackageManager:
                                   reference,
                                   self.database,
                                   self.docker,
-                                  self.metadata_resolver)
+                                  self.metadata_resolver,
+                                  use_local_manifest,
+                                  name)
         elif tarboll_path:
             return TarballSource(tarboll_path,
                                  self.database,
                                  self.docker,
-                                 self.metadata_resolver)
+                                 self.metadata_resolver,
+                                 use_local_manifest,
+                                 name)
         elif package_ref:
             package_entry = self.database.get_package(package_ref.name)
-
+            name = package_ref.name
             # Determine the reference if not specified.
             # If package is installed assume the installed
             # one is requested, otherwise look for default
@@ -829,7 +928,9 @@ class PackageManager:
                     return LocalSource(package_entry,
                                        self.database,
                                        self.docker,
-                                       self.metadata_resolver)
+                                       self.metadata_resolver,
+                                       use_local_manifest,
+                                       name)
                 if package_entry.default_reference is not None:
                     package_ref.reference = package_entry.default_reference
                 else:
@@ -840,7 +941,9 @@ class PackageManager:
                                   package_ref.reference,
                                   self.database,
                                   self.docker,
-                                  self.metadata_resolver)
+                                  self.metadata_resolver,
+                                  use_local_manifest,
+                                  name)
         else:
             raise ValueError('No package source provided')
 

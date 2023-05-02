@@ -2,14 +2,13 @@
 
 import json
 import contextlib
-from unittest.mock import Mock, MagicMock
-
+from unittest.mock import Mock, MagicMock, patch, mock_open
 import pytest
 
 from sonic_package_manager.database import PackageEntry
 from sonic_package_manager.errors import MetadataError
 from sonic_package_manager.manifest import Manifest
-from sonic_package_manager.metadata import MetadataResolver
+from sonic_package_manager.metadata import MetadataResolver, Metadata
 from sonic_package_manager.version import Version
 
 
@@ -87,3 +86,70 @@ def test_metadata_construction(manifest_str):
     })
     assert metadata.yang_modules == ['TEST', 'TEST 2']
 
+
+@patch("sonic_package_manager.metadata.os.path.exists", return_value=True)
+@patch("sonic_package_manager.metadata.open", create=True)
+def test_get_manifest_from_local_file(mock_open, mock_path_exists, mock_docker_api, mock_registry_resolver):
+    # Setting up mock file content with required fields
+    mock_file_content = {
+        "package": {
+            "name": "test-package",
+            "version": "1.0.0",
+        },
+        "service": {
+            "name": "test-package",
+            "asic-service": False,
+            "host-service": True,
+        },
+        "container": {
+            "privileged": True,
+        },
+    }
+    mock_open.return_value.__enter__.return_value.read.return_value = json.dumps(mock_file_content)
+
+    # Creating a mock MetadataResolver
+    metadata_resolver = MetadataResolver(mock_docker_api, mock_registry_resolver)
+
+    # Mocking necessary dependencies in the MetadataResolver instance
+    metadata_resolver.docker.labels = Mock(return_value={"com.azure.sonic.manifest": "mocked_manifest_labels"})
+
+    # Testing with an existing local manifest
+    metadata = metadata_resolver.from_local('test-image', use_local_manifest=True, name='test-package', use_edit=False)
+
+    assert isinstance(metadata, Metadata)
+
+
+
+def test_get_manifest_from_local_file2(capsys):
+    metadata_resolver = MetadataResolver(None, None)  # Replace None with appropriate mocks
+
+    with patch('os.path.exists', return_value=True), \
+         patch('os.mkdir'), \
+         patch('builtins.open', mock_open(read_data=json.dumps({"package": {"name": "test-package"}}))):
+        # Test when manifest file exists
+        manifest = metadata_resolver.get_manifest_from_local_file('test-package')
+        assert manifest is not None
+
+    with patch('os.path.exists', return_value=False), \
+         patch('os.mkdir'), \
+         patch('builtins.open', mock_open()):
+        # Test when manifest file does not exist
+        manifest = metadata_resolver.get_manifest_from_local_file('non-existent-package')
+        captured = capsys.readouterr()
+        assert captured.out.strip() == "Local Manifest file /var/lib/sonic-package-manager/manifests/non-existent-package does not exists"
+        assert manifest is None
+
+    manifest_data = {"package": {"name": "test-package"}, "service": {"name": "test-package"}}
+    with patch('os.path.exists', return_value=True), \
+         patch('os.mkdir'), \
+         patch('builtins.open', mock_open(read_data=json.dumps(manifest_data))), \
+         patch('json.load', return_value=manifest_data), \
+         patch('json.dump') as mock_json_dump:
+        # Test when custom_name is provided
+        manifest = metadata_resolver.get_manifest_from_local_file('test-package', custom_name='custom-name')
+
+    captured = capsys.readouterr()
+    print("Captured Output:", captured.out)
+
+    # Assert that the manifest is not None
+    assert manifest is not None
