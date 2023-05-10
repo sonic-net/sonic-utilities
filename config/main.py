@@ -1247,6 +1247,9 @@ def save(filename):
         log.log_info("'save' executing...")
         clicommon.run_command(command, display_cmd=True)
 
+        command = "echo " + file
+        file = subprocess.getoutput(command)
+
         config_db = sort_dict(read_json_file(file))
         with open(file, 'w') as config_db_file:
             json.dump(config_db, config_db_file, indent=4)
