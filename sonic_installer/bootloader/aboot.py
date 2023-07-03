@@ -17,13 +17,13 @@ from M2Crypto import X509
 
 from sonic_py_common import device_info
 from ..common import (
-   HOST_PATH,
-   IMAGE_DIR_PREFIX,
-   IMAGE_PREFIX,
-   ROOTFS_NAME,
-   run_command,
-   run_command_or_raise,
-   default_sigpipe,
+    HOST_PATH,
+    IMAGE_DIR_PREFIX,
+    IMAGE_PREFIX,
+    ROOTFS_NAME,
+    run_command,
+    run_command_or_raise,
+    default_sigpipe,
 )
 from .bootloader import Bootloader
 
@@ -38,6 +38,7 @@ SWI_SIG_FILE_NAME = 'swi-signature'
 SWIX_SIG_FILE_NAME = 'swix-signature'
 ISSUERCERT = 'IssuerCert'
 
+
 def parse_cmdline(cmdline=None):
     if cmdline is None:
         with open('/proc/cmdline') as f:
@@ -49,12 +50,14 @@ def parse_cmdline(cmdline=None):
         if idx == -1:
             data[entry] = None
         else:
-            data[entry[:idx]] = entry[idx+1:]
+            data[entry[:idx]] = entry[idx + 1:]
     return data
+
 
 def docker_inram(cmdline=None):
     cmdline = parse_cmdline(cmdline)
     return cmdline.get('docker_inram') == 'on'
+
 
 def is_secureboot():
     global _secureboot
@@ -63,8 +66,8 @@ def is_secureboot():
         _secureboot = cmdline.get('secure_boot_enable') in ['y', '1']
     return _secureboot
 
-class AbootBootloader(Bootloader):
 
+class AbootBootloader(Bootloader):
     NAME = 'aboot'
     BOOT_CONFIG_PATH = os.path.join(HOST_PATH, 'boot-config')
     DEFAULT_IMAGE_PATH = '/tmp/sonic_image.swi'
@@ -93,9 +96,12 @@ class AbootBootloader(Bootloader):
 
     def _swi_image_path(self, image):
         image_dir = image.replace(IMAGE_PREFIX, IMAGE_DIR_PREFIX, 1)
+        config = self._boot_config_read()
+        match = re.search(r"(flash|drive):/*(\S+)/", config['SWI'])
+
         if is_secureboot():
-           return 'flash:%s/sonic.swi' % image_dir
-        return 'flash:%s/.sonic-boot.swi' % image_dir
+            return '%s:%s/sonic.swi' % (match.group(1), image_dir)
+        return '%s:%s/.sonic-boot.swi' % (match.group(1), image_dir)
 
     def get_current_image(self):
         with open('/proc/cmdline') as f:
@@ -112,8 +118,8 @@ class AbootBootloader(Bootloader):
 
     def get_next_image(self):
         config = self._boot_config_read()
-        match = re.search(r"flash:/*(\S+)/", config['SWI'])
-        return match.group(1).replace(IMAGE_DIR_PREFIX, IMAGE_PREFIX, 1)
+        match = re.search(r"(flash|drive):/*(\S+)/", config['SWI'])
+        return match.group(2).replace(IMAGE_DIR_PREFIX, IMAGE_PREFIX, 1)
 
     def set_default_image(self, image):
         image_path = self._swi_image_path(image)
@@ -145,7 +151,7 @@ class AbootBootloader(Bootloader):
 
         image_path = self.get_image_path(image)
         click.echo('Removing image root filesystem...')
-        subprocess.call(['rm','-rf', image_path])
+        subprocess.call(['rm', '-rf', image_path])
         click.echo('Image removed')
 
     def _get_image_cmdline(self, image):
@@ -191,7 +197,8 @@ class AbootBootloader(Bootloader):
         # Otherwise, we grep to see if current platform is inside the
         # supported target platforms list.
         with open(os.devnull, 'w') as fnull:
-            p1 = subprocess.Popen(['/usr/bin/unzip', '-qop', image_path, '.platforms_asic'], stdout=subprocess.PIPE, stderr=fnull, preexec_fn=default_sigpipe)
+            p1 = subprocess.Popen(['/usr/bin/unzip', '-qop', image_path, '.platforms_asic'], stdout=subprocess.PIPE,
+                                  stderr=fnull, preexec_fn=default_sigpipe)
             p2 = subprocess.Popen(['grep', '-Fxq', '-m 1', platform], stdin=p1.stdout, preexec_fn=default_sigpipe)
 
             p1.wait()
@@ -273,7 +280,7 @@ class AbootBootloader(Bootloader):
     def _get_swi_file_offset(self, swipath, filename):
         with zipfile.ZipFile(swipath) as swi:
             with swi.open(filename) as f:
-                return f._fileobj.tell() # pylint: disable=protected-access
+                return f._fileobj.tell()  # pylint: disable=protected-access
 
     @contextmanager
     def get_rootfs_path(self, image_path):

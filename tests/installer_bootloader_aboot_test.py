@@ -21,6 +21,7 @@ def test_swi_image_path():
                      f'{aboot.IMAGE_PREFIX}abcde/.sonic-boot.swi'
 
     bootloader = aboot.AbootBootloader()
+    bootloader._boot_config_read = Mock(return_value={'SWI': "flash:image-master.0-12345678/.sonic-boot.swi"})
 
     # Verify converted swi image path
     image_path = bootloader._swi_image_path(image_id)
