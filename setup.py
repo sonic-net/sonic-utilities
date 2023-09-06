@@ -269,6 +269,15 @@ setup(
         'mockredispy>=2.9.3',
         'deepdiff==6.2.2'
     ],
+    extras_require = {
+        'testing': [
+            'pyfakefs',
+            'responses',
+            'pytest',
+            'mockredispy>=2.9.3',
+            'deepdiff==6.2.2'
+        ],
+    },
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Environment :: Console',
