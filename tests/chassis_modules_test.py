@@ -2,10 +2,6 @@ import sys
 import os
 from click.testing import CliRunner
 
-test_path = os.path.dirname(os.path.abspath(__file__))
-modules_path = os.path.dirname(test_path)
-sys.path.insert(0, modules_path)
-
 import show.main as show
 import config.main as config
 import tests.mock_tables.dbconnector

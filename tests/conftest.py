@@ -60,6 +60,13 @@ generated_services_list = [
     'snmp.timer',
     'telemetry.timer']
 
+@pytest.fixture(autouse=True)
+def setup_env():
+    # This is needed because we call scripts from this module as a separate
+    # process when running tests, and so the PYTHONPATH needs to be set
+    # correctly for those scripts to run.
+    if "PYTHONPATH" not in os.environ:
+        os.environ["PYTHONPATH"] = os.getcwd()
 
 @pytest.fixture
 def get_cmd_module():
