@@ -797,3 +797,27 @@ def fec_status(interfacename, namespace, display, verbose):
         cmd += ['-n', str(namespace)]
 
     clicommon.run_command(cmd, display_cmd=verbose)
+
+# 'path-tracing' subcommand ("show interfaces path-tracing")
+@interfaces.command("path-tracing")
+@click.argument('interfacename', required=False)
+@multi_asic_util.multi_asic_click_options
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def path_tracing(interfacename, namespace, display, verbose):
+    """Show Interface Path Tracing information"""
+
+    ctx = click.get_current_context()
+
+    cmd = ['intfutil', '-c', 'path-tracing']
+
+    if interfacename is not None:
+        interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
+
+        cmd += ['-i', str(interfacename)]
+    else:
+        cmd += ['-d', str(display)]
+
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
+
+    clicommon.run_command(cmd, display_cmd=verbose)
