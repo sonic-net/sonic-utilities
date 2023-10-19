@@ -22,13 +22,13 @@ class Crm:
         "ipv4_route", "ipv6_route", "ipv4_nexthop", "ipv6_nexthop", "ipv4_neighbor", "ipv6_neighbor",
         "nexthop_group_member", "nexthop_group", "acl_table", "acl_group", "acl_entry",
         "acl_counter", "fdb_entry", "ipmc_entry", "snat_entry", "dnat_entry", "mpls_inseg",
-        "mpls_nexthop","srv6_nexthop", "srv6_my_sid_entry"
+        "mpls_nexthop", "srv6_nexthop", "srv6_my_sid_entry", "twamp_entry"
     )
 
     resources = (
         "ipv4_route", "ipv6_route", "ipv4_nexthop", "ipv6_nexthop", "ipv4_neighbor", "ipv6_neighbor",
         "nexthop_group_member", "nexthop_group", "fdb_entry", "ipmc_entry", "snat_entry", "dnat_entry",
-        "mpls_inseg", "mpls_nexthop","srv6_nexthop", "srv6_my_sid_entry"
+        "mpls_inseg", "mpls_nexthop", "srv6_nexthop", "srv6_my_sid_entry", "twamp_entry"
     )
 
     acl_resources = (
@@ -795,6 +795,16 @@ def srv6_my_sid_entry(ctx):
     elif ctx.obj["crm"].cli_mode == 'resources':
         ctx.obj["crm"].show_resources('srv6_my_sid_entry')
 
+
+@resources.command()
+@click.pass_context
+def twamp_entry(ctx):
+    """Show CRM information for TWAMP entry"""
+    if ctx.obj["crm"].cli_mode == 'thresholds':
+        ctx.obj["crm"].show_thresholds('twamp_entry')
+    elif ctx.obj["crm"].cli_mode == 'resources':
+        ctx.obj["crm"].show_resources('twamp_entry')
+
 thresholds.add_command(acl)
 thresholds.add_command(all)
 thresholds.add_command(fdb)
@@ -807,6 +817,7 @@ thresholds.add_command(snat)
 thresholds.add_command(dnat)
 thresholds.add_command(srv6_nexthop)
 thresholds.add_command(srv6_my_sid_entry)
+thresholds.add_command(twamp_entry)
 
 if device_info.get_platform_info().get('switch_type') == "dpu":
     resources.add_command(show_dash)
