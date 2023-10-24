@@ -5,7 +5,7 @@ import pytest
 import show.main as show
 from click.testing import CliRunner
 
-from .wm_input.wm_test_vectors import *
+from wm_input.wm_test_vectors import *
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)

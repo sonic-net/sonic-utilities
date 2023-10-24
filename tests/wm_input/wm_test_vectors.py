@@ -25,6 +25,14 @@ Ethernet4    500    501    502    503    504    505    506    507
 Ethernet8    900    901    902    903    904    905    906    907
 """
 
+show_pg_wm_shared_output_masic="""\
+Ingress shared pool occupancy per PG:
+          Port    PG0    PG1    PG2    PG3    PG4    PG5    PG6    PG7    PG8    PG9    PG10    PG11    PG12    PG13    PG14    PG15
+--------------  -----  -----  -----  -----  -----  -----  -----  -----  -----  -----  ------  ------  ------  ------  ------  ------
+Ethernet-BP256    100    101    102    103    104    105    106    107    108    109     110     111     112     113     114     115
+Ethernet-BP260    200    201    202    203    204    205    206    207    208    209     210     211     212     213     214     215
+"""
+
 show_pg_persistent_wm_hdrm_output="""\
 Ingress headroom per PG:
      Port    PG0    PG1    PG2    PG3    PG4    PG5    PG6    PG7
@@ -114,6 +122,7 @@ Headroom pool maximum occupancy:
 ---------------------  -------
 ingress_lossless_pool   863616
 """
+
 
 testData = {
              'show_pg_wm_shared' :  [ {'cmd' : ['priority-group', 'watermark', 'shared'],
