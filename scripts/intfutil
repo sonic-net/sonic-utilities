@@ -930,13 +930,6 @@ class IntfPathTracing(object):
     def get_intf_path_tracing(self):
         self.front_panel_ports_list = get_frontpanel_port_list(self.config_db)
         self.appl_db_keys = appl_db_keys_get(self.db, self.front_panel_ports_list, None)
-        self.get_raw_po_int_configdb_info = get_raw_portchannel_info(self.config_db)
-        self.portchannel_list = get_portchannel_list(self.get_raw_po_int_configdb_info)
-        self.po_int_tuple_list = create_po_int_tuple_list(self.get_raw_po_int_configdb_info)
-        self.po_int_dict = create_po_int_dict(self.po_int_tuple_list)
-        self.int_po_dict = create_int_to_portchannel_dict(self.po_int_tuple_list)
-        self.po_speed_dict = po_speed_dict(self.po_int_dict, self.db)
-        self.portchannel_keys = self.po_speed_dict.keys()
 
         if self.appl_db_keys:
             self.table += self.generate_intf_path_tracing()
