@@ -1951,7 +1951,8 @@
         "profile": "egress_lossless_profile"
     },
     "PORT_QOS_MAP|Ethernet0": {
-        "pfc_enable": "3,4"
+        "pfc_enable": "3,4",
+        "scheduler": "port_scheduler"
     },
     "PORT_QOS_MAP|Ethernet4": {
         "pfc_enable": "3,4"

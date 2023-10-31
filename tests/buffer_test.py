@@ -348,7 +348,7 @@ class TestInterfaceBuffer(object):
             print(result.exit_code, result.output)
             assert result.exit_code == 0
             assert {'profile': 'NULL'} == db.cfgdb.get_entry('BUFFER_PG', 'Ethernet0|5')
-            assert {'pfc_enable': '3,4,5'} == db.cfgdb.get_entry('PORT_QOS_MAP', 'Ethernet0')
+            assert {'pfc_enable': '3,4,5', 'scheduler': 'port_scheduler'} == db.cfgdb.get_entry('PORT_QOS_MAP', 'Ethernet0')
 
         # Try to add an existing entry
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
@@ -433,7 +433,7 @@ class TestInterfaceBuffer(object):
             assert result.exit_code == 0
             keys = db.cfgdb.get_keys('BUFFER_PG')
             assert keys == [('Ethernet0', '0')]
-            assert {'pfc_enable': ''} == db.cfgdb.get_entry('PORT_QOS_MAP', 'Ethernet0')
+            assert {'pfc_enable': '', 'scheduler': 'port_scheduler'} == db.cfgdb.get_entry('PORT_QOS_MAP', 'Ethernet0')
 
     def test_config_int_buffer_pg_lossless_set(self, get_cmd_module):
         (config, show) = get_cmd_module
@@ -456,7 +456,7 @@ class TestInterfaceBuffer(object):
             print(result.exit_code, result.output)
             assert result.exit_code == 0
             assert {'profile': 'headroom_profile'} == db.cfgdb.get_entry('BUFFER_PG', 'Ethernet0|3-4')
-            assert {'pfc_enable': '3,4'} == db.cfgdb.get_entry('PORT_QOS_MAP', 'Ethernet0')
+            assert {'pfc_enable': '3,4', 'scheduler': 'port_scheduler'} == db.cfgdb.get_entry('PORT_QOS_MAP', 'Ethernet0')
 
     def test_config_int_buffer_pg_lossless_remove(self, get_cmd_module):
         (config, show) = get_cmd_module
@@ -490,7 +490,7 @@ class TestInterfaceBuffer(object):
             print(result.exit_code, result.output)
             assert result.exit_code == 0
             assert [('Ethernet0', '0')] == db.cfgdb.get_keys('BUFFER_PG')
-            assert {'pfc_enable': ''} == db.cfgdb.get_entry('PORT_QOS_MAP', 'Ethernet0')
+            assert {'pfc_enable': '', 'scheduler': 'port_scheduler'} == db.cfgdb.get_entry('PORT_QOS_MAP', 'Ethernet0')
 
         # Remove all lossless PGs is tested in the 'add' test case to avoid repeating adding PGs
 

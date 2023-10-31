@@ -2909,7 +2909,12 @@ def _qos_update_ports(ctx, ports, dry_run, json_data):
             click.secho("QoS definition template not found at {}".format(qos_template_file), fg="yellow")
             ctx.abort()
 
-        # Remove multi indexed entries first
+        # Remove entries first
+        for table_name in tables_single_index:
+            for port in portset_to_handle:
+                if config_db.get_entry(table_name, port):
+                    config_db.set_entry(table_name, port, None)
+
         for table_name in tables_multi_index:
             entries = config_db.get_keys(table_name)
             for key in entries:
