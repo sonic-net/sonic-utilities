@@ -5,6 +5,7 @@
 # pg-drop is a tool for show/clear ingress pg dropped packet stats.
 #
 #####################################################################
+from importlib import reload
 import json
 import argparse
 import os
@@ -13,6 +14,8 @@ from collections import OrderedDict
 
 from natsort import natsorted
 from tabulate import tabulate
+from utilities_common.general import load_db_config
+from sonic_py_common import multi_asic
 
 # mock the redis for unit test purposes #
 try:
@@ -22,7 +25,9 @@ try:
         sys.path.insert(0, modules_path)
         sys.path.insert(0, tests_path)
         import mock_tables.dbconnector
-
+    if os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] == "multi_asic":
+        import mock_tables.mock_multi_asic
+        mock_tables.dbconnector.load_namespace_config()
 except KeyError:
     pass
 
@@ -43,13 +48,15 @@ def get_dropstat_dir():
 
 class PgDropStat(object):
 
-    def __init__(self):
-        self.counters_db = SonicV2Connector(host='127.0.0.1')
+    def __init__(self, namespace):
+        self.namespace = namespace
+        self.counters_db = SonicV2Connector(namespace=namespace, use_unix_socket_path=True)
+        self.configdb = ConfigDBConnector(namespace=namespace, use_unix_socket_path=True)
+
         self.counters_db.connect(self.counters_db.COUNTERS_DB)
-
-        self.configdb = ConfigDBConnector()
         self.configdb.connect()
-
+        namespaces = multi_asic.get_namespace_list()
+        self.target_ns = [namespace] if self.namespace else namespaces
         dropstat_dir = get_dropstat_dir()
         self.port_drop_stats_file = os.path.join(dropstat_dir, 'pg_drop_stats')
 
@@ -57,14 +64,14 @@ class PgDropStat(object):
             """
                 Get port ID using object ID
             """
-            port_id = self.counters_db.get(self.counters_db.COUNTERS_DB, COUNTERS_PG_PORT_MAP, oid)
+            port_id = self.get_counter_index(COUNTERS_PG_PORT_MAP, oid)
             if not port_id:
                 print("Port is not available for oid '{}'".format(oid))
                 sys.exit(1)
             return port_id
 
         # Get all ports
-        self.counter_port_name_map = self.counters_db.get_all(self.counters_db.COUNTERS_DB, COUNTERS_PORT_NAME_MAP)
+        self.counter_port_name_map = self.get_counters_db_map(COUNTERS_PORT_NAME_MAP)
         if not self.counter_port_name_map:
             print("COUNTERS_PORT_NAME_MAP is empty!")
             sys.exit(1)
@@ -77,7 +84,7 @@ class PgDropStat(object):
             self.port_name_map[self.counter_port_name_map[port]] = port
 
         # Get PGs for each port
-        counter_pg_name_map = self.counters_db.get_all(self.counters_db.COUNTERS_DB, COUNTERS_PG_NAME_MAP)
+        counter_pg_name_map = self.get_counters_db_map(COUNTERS_PG_NAME_MAP)
         if not counter_pg_name_map:
             print("COUNTERS_PG_NAME_MAP is empty!")
             sys.exit(1)
@@ -94,13 +101,41 @@ class PgDropStat(object):
                                "header_prefix": "PG"},
         }
 
+    def get_counter_index(self, index_map, table_id):
+        if multi_asic.is_multi_asic() and not self.namespace:
+            for ns in self.target_ns:
+                counters_db = SonicV2Connector(namespace=ns, use_unix_socket_path=True)
+                counters_db.connect(self.counters_db.COUNTERS_DB)
+                index = counters_db.get(self.counters_db.COUNTERS_DB, index_map, table_id)
+                if index:
+                    return index
+            return None
+        else:
+            return self.counters_db.get(self.counters_db.COUNTERS_DB, index_map, table_id)
+
+    def get_counters_db_map(self, map_name):
+        if multi_asic.is_multi_asic() and not self.namespace:
+            map = {}
+            for ns in self.target_ns:
+                counters_db = SonicV2Connector(namespace=ns, use_unix_socket_path=True)
+                counters_db.connect(self.counters_db.COUNTERS_DB)
+                map.update(self.counters_db.get_all(
+                    self.counters_db.COUNTERS_DB, map_name
+                ))
+            if map == {}:
+                return None
+            else:
+                return map
+        else:
+            return self.counters_db.get_all(self.counters_db.COUNTERS_DB, map_name)
+
     def get_pg_index(self, oid):
         """
             return PG index (0-7)
 
             oid - object ID for entry in redis
         """
-        pg_index = self.counters_db.get(self.counters_db.COUNTERS_DB, COUNTERS_PG_INDEX_MAP, oid)
+        pg_index = self.get_counter_index(COUNTERS_PG_INDEX_MAP, oid)
         if not pg_index:
             print("Priority group index is not available for oid '{}'".format(oid))
             sys.exit(1)
@@ -154,7 +189,7 @@ class PgDropStat(object):
             old_collected_data = port_drop_ckpt.get(name,{})[full_table_id] if len(port_drop_ckpt) > 0 else 0
             idx = int(idx_func(obj_id))
             pos = self.header_idx_to_pos[idx]
-            counter_data = self.counters_db.get(self.counters_db.COUNTERS_DB, full_table_id, counter_name)
+            counter_data = self.get_counter_index(full_table_id, counter_name)
             if counter_data is None:
                 fields[pos] = STATUS_NA
             elif fields[pos] != STATUS_NA:
@@ -180,18 +215,18 @@ class PgDropStat(object):
         print(tabulate(table, self.header_list, tablefmt='simple', stralign='right'))
 
     def get_counts(self, counters, oid):
-            """
-                Get the PG drop counts for an individual counter.
-            """
-            counts = {}
-            table_id = COUNTER_TABLE_PREFIX + oid
-            for counter in counters:
-                counter_data = self.counters_db.get(self.counters_db.COUNTERS_DB, table_id, counter)
-                if counter_data is None:
-                    counts[table_id] = 0
-                else:
-                    counts[table_id] = int(counter_data)
-            return counts
+        """
+            Get the PG drop counts for an individual counter.
+        """
+        counts = {}
+        table_id = COUNTER_TABLE_PREFIX + oid
+        for counter in counters:
+            counter_data = self.get_counter_index(table_id, counter)
+            if counter_data is None:
+                counts[table_id] = 0
+            else:
+                counts[table_id] = int(counter_data)
+        return counts
 
     def get_counts_table(self, counters, object_table):
         """
@@ -199,7 +234,7 @@ class PgDropStat(object):
             to its PG drop counts. Counts are contained in a dictionary that maps
             counter oid to its counts.
         """
-        counter_object_name_map = self.counters_db.get_all(self.counters_db.COUNTERS_DB, object_table)
+        counter_object_name_map = self.get_counters_db_map(object_table)
         current_stat_dict = OrderedDict()
 
         if counter_object_name_map is None:
@@ -243,6 +278,7 @@ pg-drop -c clear
 """)
 
     parser.add_argument('-c', '--command', type=str, help='Desired action to perform')
+    parser.add_argument('-n', '--namespace', type=str, help='Namespace name or all', default=None)
 
     args = parser.parse_args()
     command = args.command
@@ -256,7 +292,13 @@ pg-drop -c clear
             print(e)
             sys.exit(e.errno)
 
-    pgdropstat = PgDropStat()
+    load_db_config()
+    namespaces = multi_asic.get_namespace_list()
+    if args.namespace and args.namespace not in namespaces:
+        print("Input arguments error. Namespaces must be one of", *namespaces)
+        sys.exit(1)
+
+    pgdropstat = PgDropStat(args.namespace)
 
     if command == 'clear':
         pgdropstat.clear_drop_counts()
