@@ -8,6 +8,7 @@ import jsonpatch
 import sys
 import unittest
 import ipaddress
+import shutil
 from unittest import mock
 from jsonpatch import JsonPatchConflict
 
@@ -261,6 +262,46 @@ class TestConfigReload(object):
 
             assert "\n".join([l.rstrip() for l in result.output.split('\n')][:1]) == reload_config_with_sys_info_command_output
 
+    def test_config_reload_stdin(self, get_cmd_module, setup_single_broadcom_asic):
+        def mock_json_load(f):
+            device_metadata = {
+                "DEVICE_METADATA": {
+                    "localhost": {
+                        "docker_routing_config_mode": "split",
+                        "hostname": "sonic",
+                        "hwsku": "Seastone-DX010-25-50",
+                        "mac": "00:e0:ec:89:6e:48",
+                        "platform": "x86_64-cel_seastone-r0",
+                        "type": "ToRRouter"
+                    }
+                }
+            }
+            return device_metadata
+        with mock.patch("utilities_common.cli.run_command", mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command,\
+                mock.patch("json.load", mock.MagicMock(side_effect=mock_json_load)):
+            (config, show) = get_cmd_module
+
+            dev_stdin = "/dev/stdin"
+            jsonfile_init_cfg = os.path.join(mock_db_path, "init_cfg.json")
+
+            # create object
+            config.INIT_CFG_FILE = jsonfile_init_cfg
+
+            db = Db()
+            runner = CliRunner()
+            obj = {'config_db': db.cfgdb}
+
+            # simulate 'config reload' to provoke load_sys_info option
+            result = runner.invoke(config.config.commands["reload"], [dev_stdin, "-l", "-n", "-y"], obj=obj)
+
+            print(result.exit_code)
+            print(result.output)
+            traceback.print_tb(result.exc_info[2])
+
+            assert result.exit_code == 0
+
+            assert "\n".join([l.rstrip() for l in result.output.split('\n')][:1]) == reload_config_with_sys_info_command_output
+
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
@@ -464,9 +505,66 @@ class TestReloadConfig(object):
         print("SETUP")
         import config.main
         importlib.reload(config.main)
-        open(cls.dummy_cfg_file, 'w').close()
+
+    def add_sysinfo_to_cfg_file(self):
+        with open(self.dummy_cfg_file, 'w') as f:
+            device_metadata = {
+                "DEVICE_METADATA": {
+                    "localhost": {
+                        "platform": "some_platform",
+                        "mac": "02:42:f0:7f:01:05"
+                    }
+                }
+            }
+            f.write(json.dumps(device_metadata))
+
+    def test_reload_config_invalid_input(self, get_cmd_module, setup_single_broadcom_asic):
+        open(self.dummy_cfg_file, 'w').close()
+        with mock.patch(
+                "utilities_common.cli.run_command",
+                mock.MagicMock(side_effect=mock_run_command_side_effect)
+        ) as mock_run_command:
+            (config, show) = get_cmd_module
+            runner = CliRunner()
+
+            result = runner.invoke(
+                config.config.commands["reload"],
+                [self.dummy_cfg_file, '-y', '-f'])
+
+            print(result.exit_code)
+            print(result.output)
+            traceback.print_tb(result.exc_info[2])
+            assert result.exit_code != 0
+
+    def test_reload_config_no_sysinfo(self, get_cmd_module, setup_single_broadcom_asic):
+        with open(self.dummy_cfg_file, 'w') as f:
+            device_metadata = {
+                "DEVICE_METADATA": {
+                    "localhost": {
+                        "hwsku": "some_hwsku"
+                    }
+                }
+            }
+            f.write(json.dumps(device_metadata))
+
+        with mock.patch(
+                "utilities_common.cli.run_command",
+                mock.MagicMock(side_effect=mock_run_command_side_effect)
+        ) as mock_run_command:
+            (config, show) = get_cmd_module
+            runner = CliRunner()
+
+            result = runner.invoke(
+                config.config.commands["reload"],
+                [self.dummy_cfg_file, '-y', '-f'])
+
+            print(result.exit_code)
+            print(result.output)
+            traceback.print_tb(result.exc_info[2])
+            assert result.exit_code == 0
 
     def test_reload_config(self, get_cmd_module, setup_single_broadcom_asic):
+        self.add_sysinfo_to_cfg_file()
         with mock.patch(
                 "utilities_common.cli.run_command",
                 mock.MagicMock(side_effect=mock_run_command_side_effect)
@@ -486,6 +584,7 @@ class TestReloadConfig(object):
                 == RELOAD_CONFIG_DB_OUTPUT
 
     def test_config_reload_disabled_service(self, get_cmd_module, setup_single_broadcom_asic):
+        self.add_sysinfo_to_cfg_file()
         with mock.patch(
                "utilities_common.cli.run_command",
                mock.MagicMock(side_effect=mock_run_command_side_effect_disabled_timer)
@@ -505,6 +604,7 @@ class TestReloadConfig(object):
             assert "\n".join([l.rstrip() for l in result.output.split('\n')]) == reload_config_with_disabled_service_output
 
     def test_reload_config_masic(self, get_cmd_module, setup_multi_broadcom_masic):
+        self.add_sysinfo_to_cfg_file()
         with mock.patch(
                 "utilities_common.cli.run_command",
                 mock.MagicMock(side_effect=mock_run_command_side_effect)
