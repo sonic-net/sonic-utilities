@@ -1796,7 +1796,7 @@ main() {
         /proc/interrupts /proc/iomem /proc/ioports /proc/kallsyms \
         /proc/loadavg /proc/locks /proc/meminfo /proc/misc \
         /proc/modules /proc/self/mounts /proc/self/net \
-        /proc/pagetypeinfo /proc/partitions /proc/sched_debug /proc/slabinfo \
+        /proc/pagetypeinfo /proc/partitions /proc/slabinfo \
         /proc/softirqs /proc/stat /proc/swaps /proc/sysvipc /proc/timer_list \
         /proc/uptime /proc/version /proc/vmallocinfo /proc/vmstat \
         /proc/zoneinfo &
