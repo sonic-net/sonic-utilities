@@ -29,42 +29,6 @@ def format_attr_value(entry, attr):
     return entry.get(attr["name"], "N/A")
 
 
-def format_group_value(entry, attrs):
-    """ Helper that formats grouped attribute to be presented in the table output.
-
-    Args:
-        entry (Dict[str, str]): CONFIG DB entry configuration.
-        attrs (List[Dict]): Attributes metadata that belongs to the same group.
-
-    Returns:
-        str: fomatted group attributes.
-    """
-
-    data = []
-    for attr in attrs:
-        if entry.get(attr["name"]):
-            data.append((attr["name"] + ":", format_attr_value(entry, attr)))
-    return tabulate.tabulate(data, tablefmt="plain")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 @click.group(name="ldap-server",
              cls=clicommon.AliasedGroup,
              invoke_without_command=True)
