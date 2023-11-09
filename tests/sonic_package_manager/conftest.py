@@ -408,6 +408,7 @@ def sonic_fs(fs):
     fs.create_dir(SYSTEMD_LOCATION)
     fs.create_dir(DOCKER_CTL_SCRIPT_LOCATION)
     fs.create_dir(SERVICE_MGMT_SCRIPT_LOCATION)
+    fs.create_file(GENERATED_SERVICES_CONF_FILE)
     fs.create_file(os.path.join(TEMPLATES_PATH, SERVICE_FILE_TEMPLATE))
     fs.create_file(os.path.join(TEMPLATES_PATH, TIMER_UNIT_TEMPLATE))
     fs.create_file(os.path.join(TEMPLATES_PATH, SERVICE_MGMT_SCRIPT_TEMPLATE))
