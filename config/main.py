@@ -6581,7 +6581,9 @@ def add_ntp_server(ctx, ntp_ip_address):
         return
     else:
         try:
-            db.set_entry('NTP_SERVER', ntp_ip_address, {'NULL': 'NULL'})
+            db.set_entry('NTP_SERVER', ntp_ip_address,
+                         {'resolve_as': ntp_ip_address,
+                          'association_type': 'server'})
         except ValueError as e:
             ctx.fail("Invalid ConfigDB. Error: {}".format(e)) 
         click.echo("NTP server {} added to configuration".format(ntp_ip_address))
