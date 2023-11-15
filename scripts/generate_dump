@@ -50,6 +50,7 @@ SKIP_BCMCMD=0
 SAVE_STDERR=true
 RETURN_CODE=$EXT_SUCCESS
 DEBUG_DUMP=false
+ROUTE_TAB_LIMIT_DIRECT_ITERATION=24000
 
 # lock dirs/files
 LOCKDIR="/tmp/techsupport-lock"
@@ -863,24 +864,114 @@ save_redis() {
 }
 
 ###############################################################################
-# SAI DUMP from syncd
+# GET ROUTE table size by ASIC id and ip version
+# Globals:
+#  TIMEOUT_MIN
+#  TIMEOUT_EXIT_CODE
+# Arguments:
+#  asic id
+#  IP version
+# Returns:
+#  Status: 0 success, otherwise failure
+###############################################################################
+get_route_table_size_by_asic_id_and_ipver() {
+    local asic_id="$1"
+    local ip_ver="$2"
+    local filepath="/tmp/route_summary.txt"
+    local ns=""
+    RC=0
+
+    if [[ $NUM_ASICS -gt 1 ]] ; then
+        ns="-n ${asic_id}"
+    fi
+
+    if [ $ip_ver = "ipv4" ]; then
+        cmd="vtysh ${ns} -c 'show ip route summary json'"
+    elif [ $ip_ver = "ipv6" ]; then
+        cmd="vtysh ${ns} -c 'show ipv6 route summary json'"
+    else
+        echo "Wrong argument $ip_ver."
+        return 255
+    fi
+
+    local timeout_cmd="timeout --foreground ${TIMEOUT_MIN}m"
+    local cmds="$cmd > '$filepath'"
+
+    eval "${timeout_cmd} bash -c \"${cmds}\"" || RC=$?
+
+    if [ $RC -eq $TIMEOUT_EXIT_CODE ]; then
+        echo "Command: $cmds timedout after ${TIMEOUT_MIN} minutes."
+        return $RC
+    elif [ $RC -ne 0 ]; then
+        echo "Command: $cmds failed with RC $RC"
+        return $RC
+    fi
+
+    local route_tab_size=$(python3 -c "\
+import json
+with open('$filepath') as json_file:
+    data = json.load(json_file)
+    print(data['routesTotal'])")
+    rm $filepath
+    echo "$route_tab_size"
+}
+
+###############################################################################
+# SAI DUMP based on the route table size
+# if the route table has more than ROUTE_TAB_LIMIT_DIRECT_ITERATION
+# then dump by Redis Save command,
+# otherwize, dump it by directly iteration the Redis
+#
 # Globals:
 #  NUM_ASICS
+#  ROUTE_TAB_LIMIT_DIRECT_ITERATION
 # Arguments:
 #  None
 # Returns:
 #  None
 ###############################################################################
-save_saidump() {
+save_saidump_by_route_size() {
     trap 'handle_error $? $LINENO' ERR
-    if [[ ( "$NUM_ASICS" == 1 ) ]] ; then
-        save_cmd "docker exec syncd saidump" "saidump"
-    else
-        for (( i=0; i<$NUM_ASICS; i++ ))
-        do
-            save_cmd "docker exec syncd$i saidump" "saidump$i"
-        done
-    fi
+
+    for (( i=0; i<$NUM_ASICS; i++ ))
+    do
+        route_size_ipv4=`get_route_table_size_by_asic_id_and_ipver $i ipv4`
+        ret=$?
+
+        if [ $ret -ne 0 ]; then
+            echo "Get route table's size by asicid $i and ipv4 failed."
+            return $ret
+        fi
+
+        route_size_ipv6=`get_route_table_size_by_asic_id_and_ipver $i ipv6`
+        ret=$?
+
+        if [ $ret -ne 0 ]; then
+            echo "Get route table's size by asicid $i and ipv6 failed."
+            return $ret
+        fi
+
+        route_size=`expr $route_size_ipv4 + $route_size_ipv6`
+        echo "The route table's size is $route_size(ipv4 $route_size_ipv4, ipv6 $route_size_ipv6)"
+
+        if [[ $route_size -gt $ROUTE_TAB_LIMIT_DIRECT_ITERATION ]]; then
+            echo "Dump by using Redis SAVE."
+
+            if [[ ( "$NUM_ASICS" == 1 ) ]] ; then
+                save_cmd "docker exec syncd saidump.sh" "saidump"
+            else
+                save_cmd "docker exec syncd$i saidump.sh" "saidump$i"
+            fi
+        else
+            echo "Dump by using direct iteration of Redis DB."
+
+            if [[ ( "$NUM_ASICS" == 1 ) ]] ; then
+                save_cmd "docker exec syncd saidump" "saidump"
+            else
+                save_cmd "docker exec syncd$i saidump" "saidump$i"
+            fi
+        fi
+    done
 }
 
 ###############################################################################
@@ -1807,9 +1898,7 @@ main() {
     save_cmd "ps -AwwL -o user,pid,lwp,ppid,nlwp,pcpu,pri,nice,vsize,rss,tty,stat,wchan:12,start,bsdtime,command" "ps.extended" &
     wait
 
-    if [[ "$device_type" != "SpineRouter" ]]; then
-        save_saidump
-    fi
+    save_saidump_by_route_size
 
     if [ "$asic" = "barefoot" ]; then
         collect_barefoot
