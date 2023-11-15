@@ -352,6 +352,7 @@ class ServiceCreator:
         # Write to tmp file and replace the original file with it
         with tempfile.NamedTemporaryFile('w', delete=False) as tmp:
             tmp.write('\n'.join(list_of_services))
+            tmp.write('\n')
             tmp.flush()
 
             shutil.move(tmp.name, GENERATED_SERVICES_CONF_FILE)

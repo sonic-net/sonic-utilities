@@ -113,7 +113,10 @@ def test_service_creator(sonic_fs, manifest, service_creator, package_manager):
     assert read_file('warm-reboot_order') == 'swss teamd test syncd'
     assert read_file('fast-reboot_order') == 'teamd test swss syncd'
     assert read_file('test_reconcile') == 'test-process test-process-3'
-    assert set(read_file('generated_services.conf').split()) == set(['test.service', 'test@.service'])
+
+    generated_services_conf_content = read_file('generated_services.conf')
+    assert generated_services_conf_content.endswith('\n')
+    assert set(generated_services_conf_content.split()) == set(['test.service', 'test@.service'])
 
 
 def test_service_creator_with_timer_unit(sonic_fs, manifest, service_creator):
