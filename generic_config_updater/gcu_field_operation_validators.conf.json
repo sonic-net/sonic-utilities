@@ -17,7 +17,8 @@
     "helper_data": {
         "rdma_config_update_validator": {
             "mellanox_asics": {
-                "spc1": [ "ACS-MSN2700", "ACS-MSN2740", "ACS-MSN2100", "ACS-MSN2410", "ACS-MSN2010", "Mellanox-SN2700", "Mellanox-SN2700-D48C8" ],
+                "spc1": [ "ACS-MSN2700", "ACS-MSN2740", "ACS-MSN2100", "ACS-MSN2410", "ACS-MSN2010", "Mellanox-SN2700", "Mellanox-SN2700-D48C8",
+                          "ACS-MSN2700-A1", "Mellanox-SN2700-A1", "Mellanox-SN2700-A1-C28D8", "Mellanox-SN2700-A1-D40C8S8", "Mellanox-SN2700-A1-D44C10", "Mellanox-SN2700-A1-D48C8" ],
                 "spc2": [ "ACS-MSN3800", "Mellanox-SN3800-D112C8" ],
                 "spc3": [ "ACS-MSN4700", "ACS-MSN4600", "ACS-MSN4600C", "ACS-MSN4410", "Mellanox-SN4600C-D112C8", "Mellanox-SN4600C-C64", "Mellanox-SN4700-O8C48" ],
                 "spc4": [ "ACS-SN5600"]
