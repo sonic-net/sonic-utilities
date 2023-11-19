@@ -1745,6 +1745,22 @@ save_dump_state_all_ns() {
     done
 }
 
+###############################################################################
+# Save important files that are present in container storage for better debugging
+# Files will be saved under dump/<container_name>/
+# Types of Files Saved:
+# 1) rsyslogd.conf
+###############################################################################
+save_container_files() {
+    trap 'handle_error $? $LINENO' ERR
+    local CONTAINER_FDUMP="container_dumps"
+    # Get the running container names
+    container_names=$(docker ps --format '{{.Names}}' --filter status=running)
+    for name in $container_names; do
+        $MKDIR $V -p $LOGDIR/$CONTAINER_FDUMP/$name
+        copy_from_docker $name "/etc/rsyslog.conf" $LOGDIR/$CONTAINER_FDUMP/$name/rsyslog.conf
+    done
+}
 
 ###############################################################################
 # Main generate_dump routine
@@ -1871,6 +1887,8 @@ main() {
     save_bfd_info &
     wait
     save_redis_info &
+
+    save_container_files &
 
     if $DEBUG_DUMP
     then
