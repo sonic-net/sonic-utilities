@@ -9,6 +9,11 @@ import sonic_package_manager
 from sonic_package_manager.errors import *
 from sonic_package_manager.version import Version
 
+@pytest.fixture(autouse=True)
+def mock_run_command():
+    with patch('sonic_package_manager.manager.run_command') as run_command:
+        yield run_command
+
 
 def test_installation_not_installed(package_manager):
     package_manager.install('test-package')
