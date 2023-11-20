@@ -129,3 +129,18 @@ def test_set_fips(get_bootloader):
     mock_bootloader.get_fips = Mock(return_value=True)
     result = runner.invoke(sonic_installer.commands["get-fips"], [next_image])
     assert "FIPS is enabled" in result.output
+
+@patch("sonic_installer.common.subprocess.Popen")
+def test_runtime_exception(mock_popen):
+    """ This test covers the "sonic-installer" exception handling. """
+
+    mock_popen.return_value.returncode = 1
+    mock_popen.return_value.communicate.return_value = ('Running', 'Failed')
+
+    with pytest.raises(sonic_installer_common.SonicRuntimeException) as sre:
+        sonic_installer_common.run_command_or_raise(["test.sh"])
+
+    assert '\nSTDOUT:\nRunning' in sre.value.notes, "Invalid STDOUT"
+    assert '\nSTDERR:\nFailed' in sre.value.notes, "Invalid STDERR"
+
+    assert all(v in str(sre.value) for v in ['test.sh', 'Running', 'Failed']), "Invalid message"
