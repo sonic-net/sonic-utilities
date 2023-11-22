@@ -88,6 +88,7 @@ setup(
         'utilities_common',
         'watchdogutil',
         'sonic_cli_gen',
+        'wol',
     ],
     package_data={
         'generic_config_updater': ['gcu_services_validator.conf.json', 'gcu_field_operation_validators.conf.json'],
@@ -222,6 +223,7 @@ setup(
             'undebug = undebug.main:cli',
             'watchdogutil = watchdogutil.main:watchdogutil',
             'sonic-cli-gen = sonic_cli_gen.main:cli',
+            'wol = wol.main:wol',
         ]
     },
     install_requires=[

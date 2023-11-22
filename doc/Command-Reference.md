@@ -205,6 +205,8 @@
 * [Static DNS Commands](#static-dns-commands)
   * [Static DNS config command](#static-dns-config-command)
   * [Static DNS show command](#static-dns-show-command)
+* [Wake-on-LAN Commands](#wake-on-lan-commands)
+  * [Send Wake-on-LAN Magic Packet command](#send-wake-on-lan-magic-packet-command)
 
 ## Document History
 
@@ -12844,3 +12846,42 @@ admin@sonic:~$ show dns nameserver
      8.8.8.8
 
 ```
+
+# Wake-on-LAN Commands
+
+## Send Wake-on-LAN Magic Packet command
+
+The `wol` command is used to send magic packet to target device.
+
+### Usage
+
+```
+wol <interface> <target_mac> [-b] [-p password] [-c count] [-i interval] [-v]
+```
+
+- `interface`: SONiC interface name.
+- `target_mac`: a list of target devices' MAC address, separated by comma.
+- `-b`: Use broadcast MAC address instead of target device's MAC address as **Destination MAC Address in Ethernet Frame Header**.
+- `-p password`: An optional 4 or 6 byte password, in ethernet hex format or quad-dotted decimal[^3].
+- `-c count`: For each target MAC address, the `count` of magic packets to send. `count` must between 1 and 5. Default value is 1. This param must use with `-i`.
+- `-i interval`: Wait `interval` milliseconds between sending each magic packet. `interval` must between 0 and 2000. Default value is 0. This param must use with `-c`.
+- `-v`: Verbose output.
+
+### Example
+
+```
+admin@sonic:~$ wol Ethernet10 00:11:22:33:44:55
+admin@sonic:~$ wol Ethernet10 00:11:22:33:44:55 -b
+admin@sonic:~$ wol Vlan1000 00:11:22:33:44:55,11:33:55:77:99:bb -p 00:22:44:66:88:aa
+admin@sonic:~$ wol Vlan1000 00:11:22:33:44:55,11:33:55:77:99:bb -p 192.168.1.1 -c 3 -i 2000 -v
+Sending 3 magic packet to 00:11:22:33:44:55 via interface Vlan1000
+1st magic packet sent to 00:11:22:33:44:55
+2nd magic packet sent to 00:11:22:33:44:55
+3rd magic packet sent to 00:11:22:33:44:55
+Sending 3 magic packet to 11:33:55:77:99:bb via interface Vlan1000
+1st magic packet sent to 11:33:55:77:99:bb
+2nd magic packet sent to 11:33:55:77:99:bb
+3rd magic packet sent to 11:33:55:77:99:bb
+```
+
+For the 4th example, it specifise 2 target MAC addresses and `count` is 3. So it'll send 6 magic packets in total.
