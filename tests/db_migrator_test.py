@@ -740,3 +740,61 @@ class TestFastUpgrade_to_4_0_3(object):
         advance_version_for_expected_database(dbmgtr.configDB, expected_db.cfgdb, 'version_4_0_3')
         assert not self.check_config_db(dbmgtr.configDB, expected_db.cfgdb)
         assert dbmgtr.CURRENT_VERSION == expected_db.cfgdb.get_entry('VERSIONS', 'DATABASE')['VERSION']
+
+class TestSflowSampleDirectionMigrator(object):
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "2"
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+        dbconnector.dedicated_dbs['CONFIG_DB'] = None
+        dbconnector.dedicated_dbs['APPL_DB'] = None
+
+    def test_sflow_migrator(self):
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'sflow_table_input')
+        dbconnector.dedicated_dbs['APPL_DB'] = os.path.join(mock_db_path, 'appl_db', 'sflow_table_input')
+        import db_migrator
+        dbmgtr = db_migrator.DBMigrator(None)
+        dbmgtr.migrate()
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'sflow_table_expected')
+        dbconnector.dedicated_dbs['APPL_DB'] = os.path.join(mock_db_path, 'appl_db', 'sflow_table_expected')
+        expected_db = Db()
+
+        # verify migrated config DB
+        resulting_table = dbmgtr.configDB.get_table('SFLOW')
+        expected_table = expected_db.cfgdb.get_table('SFLOW')
+        diff = DeepDiff(resulting_table, expected_table, ignore_order=True)
+        assert not diff
+
+        resulting_table = dbmgtr.configDB.get_table('SFLOW_SESSION')
+        expected_table = expected_db.cfgdb.get_table('SFLOW_SESSION')
+        diff = DeepDiff(resulting_table, expected_table, ignore_order=True)
+        assert not diff
+
+        # verify migrated appDB
+        expected_appl_db = SonicV2Connector(host='127.0.0.1')
+        expected_appl_db.connect(expected_appl_db.APPL_DB)
+
+
+        expected_keys = expected_appl_db.keys(expected_appl_db.APPL_DB, "SFLOW_TABLE:global")
+        expected_keys.sort()
+        resulting_keys = dbmgtr.appDB.keys(dbmgtr.appDB.APPL_DB, "SFLOW_TABLE:global")
+        resulting_keys.sort()
+        for key in expected_keys:
+            resulting_keys = dbmgtr.appDB.get_all(dbmgtr.appDB.APPL_DB, key)
+            expected_keys = expected_appl_db.get_all(expected_appl_db.APPL_DB, key)
+            diff = DeepDiff(resulting_keys, expected_keys, ignore_order=True)
+            assert not diff
+
+        expected_keys = expected_appl_db.keys(expected_appl_db.APPL_DB, "SFLOW_SESSION_TABLE:*")
+        expected_keys.sort()
+        resulting_keys = dbmgtr.appDB.keys(dbmgtr.appDB.APPL_DB, "SFLOW_SESSION_TABLE:*")
+        resulting_keys.sort()
+        assert expected_keys == resulting_keys
+        for key in expected_keys:
+            resulting_keys = dbmgtr.appDB.get_all(dbmgtr.appDB.APPL_DB, key)
+            expected_keys = expected_appl_db.get_all(expected_appl_db.APPL_DB, key)
+            diff = DeepDiff(resulting_keys, expected_keys, ignore_order=True)
+            assert not diff

@@ -50,7 +50,7 @@ class DBMigrator():
                      none-zero values.
               build: sequentially increase within a minor version domain.
         """
-        self.CURRENT_VERSION = 'version_4_0_4'
+        self.CURRENT_VERSION = 'version_4_0_5'
 
         self.TABLE_NAME      = 'VERSIONS'
         self.TABLE_KEY       = 'DATABASE'
@@ -726,6 +726,35 @@ class DBMigrator():
                 flex_counter['FLEX_COUNTER_DELAY_STATUS'] = 'true'
                 self.configDB.mod_entry('FLEX_COUNTER_TABLE', obj, flex_counter)
 
+    def migrate_sflow_table(self):
+        """
+        Migrate "SFLOW_TABLE" and "SFLOW_SESSION_TABLE" to update default sample_direction
+        """
+
+        sflow_tbl = self.configDB.get_table('SFLOW')
+        for k, v in sflow_tbl.items():
+            if 'sample_direction' not in v:
+                v['sample_direction'] = 'rx'
+                self.configDB.set_entry('SFLOW', k, v)
+
+        sflow_sess_tbl = self.configDB.get_table('SFLOW_SESSION')
+        for k, v in sflow_sess_tbl.items():
+            if 'sample_direction' not in v:
+                v['sample_direction'] = 'rx'
+                self.configDB.set_entry('SFLOW_SESSION', k, v)
+
+        sflow_table = self.appDB.get_table("SFLOW_TABLE")
+        for key, value in sflow_table.items():
+            if 'sample_direction' not in value:
+                sflow_key = "SFLOW_TABLE:{}".format(key)
+                self.appDB.set(self.appDB.APPL_DB, sflow_key, 'sample_direction','rx')
+
+        sflow_sess_table = self.appDB.get_table("SFLOW_SESSION_TABLE")
+        for key, value in sflow_sess_table.items():
+            if 'sample_direction' not in value:
+                sflow_key = "SFLOW_SESSION_TABLE:{}".format(key)
+                self.appDB.set(self.appDB.APPL_DB, sflow_key, 'sample_direction','rx')
+
     def version_unknown(self):
         """
         version_unknown tracks all SONiC versions that doesn't have a version
@@ -1059,9 +1088,19 @@ class DBMigrator():
     def version_4_0_4(self):
         """
         Version 4_0_4.
-        This is the latest version for master branch
         """
         log.log_info('Handling version_4_0_4')
+
+        self.migrate_sflow_table()
+        self.set_version('version_4_0_5')
+        return 'version_4_0_5'
+
+    def version_4_0_5(self):
+        """
+        Version 4_0_5.
+        This is the latest version for master branch
+        """
+        log.log_info('Handling version_4_0_5')
         return None
 
     def get_version(self):

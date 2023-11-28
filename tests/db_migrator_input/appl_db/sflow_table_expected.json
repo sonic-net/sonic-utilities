@@ -1,0 +1,21 @@
+{
+  "SFLOW_TABLE:global": {
+      "admin_state": "up",
+      "sample_direction": "rx"
+  },
+ "SFLOW_SESSION_TABLE:Ethernet6": {
+      "admin_state": "up",
+      "sample_direction": "rx",
+      "sample_rate": "1000"
+  },
+  "SFLOW_SESSION_TABLE:Ethernet7": {
+      "admin_state": "up",
+      "sample_direction": "rx",
+      "sample_rate": "1000"
+  },
+  "SFLOW_SESSION_TABLE:Ethernet8": {
+      "admin_state": "up",
+      "sample_direction": "rx",
+      "sample_rate": "1000"
+  }
+}
