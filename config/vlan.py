@@ -67,12 +67,10 @@ def is_dhcpv6_relay_config_exist(db, vlan_name):
         return True
 
 
-def delete_state_db_entry(entry_name):
-    state_db = SonicV2Connector()
-    state_db.connect(state_db.STATE_DB)
-    exists = state_db.exists(state_db.STATE_DB, 'DHCPv6_COUNTER_TABLE|{}'.format(entry_name))
+def delete_db_entry(entry_name, db_connector, db_name):
+    exists = db_connector.exists(db_name, entry_name)
     if exists:
-        state_db.delete(state_db.STATE_DB, 'DHCPv6_COUNTER_TABLE|{}'.format(entry_name))
+        db_connector.delete(db_name, entry_name)
 
 
 @vlan.command('del')
@@ -125,7 +123,8 @@ def del_vlan(db, vid, no_restart_dhcp_relay):
         # We need to restart dhcp_relay service after dhcpv6_relay config change
         if is_dhcp_relay_running():
             dhcp_relay_util.handle_restart_dhcp_relay_service()
-    delete_state_db_entry(vlan)
+    delete_db_entry("DHCPv6_COUNTER_TABLE|{}".format(vlan), db.db, db.db.STATE_DB)
+    delete_db_entry("DHCP_COUNTER_TABLE|{}".format(vlan), db.db, db.db.STATE_DB)
 
     vlans = db.cfgdb.get_keys('VLAN')
     if not vlans:
@@ -279,6 +278,8 @@ def del_vlan_member(db, vid, port):
 
     try:
         config_db.set_entry('VLAN_MEMBER', (vlan, port), None)
+        delete_db_entry("DHCPv6_COUNTER_TABLE|{}".format(port), db.db, db.db.STATE_DB)
+        delete_db_entry("DHCP_COUNTER_TABLE|{}".format(port), db.db, db.db.STATE_DB)
     except JsonPatchConflict:
         ctx.fail("{} invalid or does not exist, or {} is not a member of {}".format(vlan, port, vlan))
 
