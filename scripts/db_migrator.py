@@ -6,8 +6,6 @@ import json
 import sys
 import traceback
 import re
-import sonic_yang
-import syslog
 
 from sonic_py_common import device_info, logger
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector, SonicDBConfig
@@ -15,7 +13,6 @@ from minigraph import parse_xml
 
 INIT_CFG_FILE = '/etc/sonic/init_cfg.json'
 MINIGRAPH_FILE = '/etc/sonic/minigraph.xml'
-YANG_MODELS_DIR = "/usr/local/yang-models"
 
 # mock the redis for unit test purposes #
 try:
@@ -1164,31 +1161,6 @@ class DBMigrator():
             version = next_version
         # Perform common migration ops
         self.common_migration_ops()
-        config = self.configDB.get_config()
-        # Fix table key in tuple
-        for table_name, table in config.items():
-            new_table = {}
-            hit = False
-            for table_key, table_val in table.items():
-                if isinstance(table_key, tuple):
-                    new_key = "|".join(table_key)
-                    new_table[new_key] = table_val
-                    hit = True
-                else:
-                    new_table[table_key] = table_val
-            if hit:
-                config[table_name] = new_table
-        # Run yang validation
-        yang_parser = sonic_yang.SonicYang(YANG_MODELS_DIR)
-        yang_parser.loadYangModel()
-        try:
-            yang_parser.loadData(configdbJson=config)
-            yang_parser.validate_data_tree()
-        except sonic_yang.SonicYangException as e:
-            syslog.syslog(syslog.LOG_CRIT, "Yang validation failed: " + str(e))
-            if os.environ["UTILITIES_UNIT_TESTING"] == "2":
-                raise
-
 
 def main():
     try:

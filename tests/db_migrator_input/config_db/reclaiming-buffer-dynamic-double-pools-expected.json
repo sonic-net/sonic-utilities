@@ -12,7 +12,7 @@
         "profile": "NULL"
     },
     "BUFFER_PG|Ethernet8|3-4": {
-        "profile": "customized_ingress_lossless_profile"
+        "profile": "customized_lossless_profile"
     },
     "BUFFER_PG|Ethernet12|0": {
         "profile": "ingress_lossy_profile"
@@ -103,11 +103,6 @@
     "BUFFER_PORT_INGRESS_PROFILE_LIST|Ethernet24": {
         "profile_list": "ingress_lossless_profile,ingress_lossy_profile"
     },
-    "BUFFER_PROFILE|customized_egress_lossless_profile": {
-        "dynamic_th": "7",
-        "pool": "egress_lossless_pool",
-        "size": "0"
-    },
     "BUFFER_PROFILE|egress_lossless_profile": {
         "dynamic_th": "7",
         "pool": "egress_lossless_pool",
@@ -117,11 +112,6 @@
         "dynamic_th": "7",
         "pool": "egress_lossy_pool",
         "size": "9216"
-    },
-    "BUFFER_PROFILE|customized_ingress_lossless_profile": {
-        "dynamic_th": "7",
-        "pool": "ingress_lossless_pool",
-        "size": "0"
     },
     "BUFFER_PROFILE|ingress_lossless_profile": {
         "dynamic_th": "7",
