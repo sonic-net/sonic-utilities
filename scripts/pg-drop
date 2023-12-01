@@ -50,13 +50,9 @@ class PgDropStat(object):
 
     def __init__(self, namespace):
         self.namespace = namespace
-        self.counters_db = SonicV2Connector(namespace=namespace, use_unix_socket_path=True)
         self.configdb = ConfigDBConnector(namespace=namespace, use_unix_socket_path=True)
-
-        self.counters_db.connect(self.counters_db.COUNTERS_DB)
         self.configdb.connect()
-        namespaces = multi_asic.get_namespace_list()
-        self.target_ns = [namespace] if self.namespace else namespaces
+        self.target_ns = multi_asic.get_namespace_list(namespace)
         dropstat_dir = get_dropstat_dir()
         self.port_drop_stats_file = os.path.join(dropstat_dir, 'pg_drop_stats')
 
@@ -102,32 +98,23 @@ class PgDropStat(object):
         }
 
     def get_counter_index(self, index_map, table_id):
-        if multi_asic.is_multi_asic() and not self.namespace:
-            for ns in self.target_ns:
-                counters_db = SonicV2Connector(namespace=ns, use_unix_socket_path=True)
-                counters_db.connect(self.counters_db.COUNTERS_DB)
-                index = counters_db.get(self.counters_db.COUNTERS_DB, index_map, table_id)
-                if index:
-                    return index
-            return None
-        else:
-            return self.counters_db.get(self.counters_db.COUNTERS_DB, index_map, table_id)
+        for ns in self.target_ns:
+            counters_db = SonicV2Connector(namespace=ns, use_unix_socket_path=True)
+            counters_db.connect(counters_db.COUNTERS_DB)
+            index = counters_db.get(counters_db.COUNTERS_DB, index_map, table_id)
+            if index:
+                return index
+        return None
 
     def get_counters_db_map(self, map_name):
-        if multi_asic.is_multi_asic() and not self.namespace:
-            map = {}
-            for ns in self.target_ns:
-                counters_db = SonicV2Connector(namespace=ns, use_unix_socket_path=True)
-                counters_db.connect(self.counters_db.COUNTERS_DB)
-                map.update(self.counters_db.get_all(
-                    self.counters_db.COUNTERS_DB, map_name
-                ))
-            if map == {}:
-                return None
-            else:
-                return map
-        else:
-            return self.counters_db.get_all(self.counters_db.COUNTERS_DB, map_name)
+        map = {}
+        for ns in self.target_ns:
+            counters_db = SonicV2Connector(namespace=ns, use_unix_socket_path=True)
+            counters_db.connect(counters_db.COUNTERS_DB)
+            map_result = counters_db.get_all(counters_db.COUNTERS_DB, map_name)
+            if map_result:
+                map.update(map_result)
+        return map
 
     def get_pg_index(self, oid):
         """
@@ -237,7 +224,7 @@ class PgDropStat(object):
         counter_object_name_map = self.get_counters_db_map(object_table)
         current_stat_dict = OrderedDict()
 
-        if counter_object_name_map is None:
+        if not counter_object_name_map:
             return current_stat_dict
 
         for obj in natsorted(counter_object_name_map):

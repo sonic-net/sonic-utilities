@@ -18,6 +18,18 @@ Ethernet-BP256    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A   
 Ethernet-BP260    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A     N/A     N/A     N/A     N/A     N/A     N/A
 """
 
+pg_drop_masic_all_result="""\
+Ingress PG dropped packets:
+          Port    PG0    PG1    PG2    PG3    PG4    PG5    PG6    PG7    PG8    PG9    PG10    PG11    PG12    PG13    PG14    PG15
+--------------  -----  -----  -----  -----  -----  -----  -----  -----  -----  -----  ------  ------  ------  ------  ------  ------
+     Ethernet0      0      0      0      0      0      0      0      0      0      0       0       0       0       0       0       0
+     Ethernet4      0      0      0      0      0      0      0      0      0      0       0       0       0       0       0       0
+  Ethernet-BP0      0      0      0      0      0      0      0      0      0      0       0       0       0       0       0       0
+  Ethernet-BP4      0      0      0      0      0      0      0      0      0      0       0       0       0       0       0       0
+Ethernet-BP256    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A     N/A     N/A     N/A     N/A     N/A     N/A
+Ethernet-BP260    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A     N/A     N/A     N/A     N/A     N/A     N/A
+"""
+
 class TestMultiAsicPgDropstat(object):
    @classmethod
    def setup_class(cls):
@@ -25,6 +37,15 @@ class TestMultiAsicPgDropstat(object):
       os.environ['UTILITIES_UNIT_TESTING'] = "2"
       os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
       print("SETUP")
+
+   def test_show_pg_drop_masic_all(self):
+      return_code, result = get_result_and_return_code([
+         'pg-drop', '-c', 'show'
+      ])
+      print("return_code: {}".format(return_code))
+      print("result = {}".format(result))
+      assert return_code == 0
+      assert result == pg_drop_masic_all_result
 
    def test_show_pg_drop_masic(self):
       return_code, result = get_result_and_return_code([
