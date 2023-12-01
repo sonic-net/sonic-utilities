@@ -4248,34 +4248,130 @@ This command displays switch hash global configuration.
   show switch-hash global
   ```
 
+- Options:
+  - _-j,--json_: display in JSON format
+
 - Example:
   ```bash
   admin@sonic:~$ show switch-hash global
-  ECMP HASH          LAG HASH
-  -----------------  -----------------
-  DST_MAC            DST_MAC
-  SRC_MAC            SRC_MAC
-  ETHERTYPE          ETHERTYPE
-  IP_PROTOCOL        IP_PROTOCOL
-  DST_IP             DST_IP
-  SRC_IP             SRC_IP
-  L4_DST_PORT        L4_DST_PORT
-  L4_SRC_PORT        L4_SRC_PORT
-  INNER_DST_MAC      INNER_DST_MAC
-  INNER_SRC_MAC      INNER_SRC_MAC
-  INNER_ETHERTYPE    INNER_ETHERTYPE
-  INNER_IP_PROTOCOL  INNER_IP_PROTOCOL
-  INNER_DST_IP       INNER_DST_IP
-  INNER_SRC_IP       INNER_SRC_IP
-  INNER_L4_DST_PORT  INNER_L4_DST_PORT
-  INNER_L4_SRC_PORT  INNER_L4_SRC_PORT
+  +--------+-------------------------------------+
+  | Hash   | Configuration                       |
+  +========+=====================================+
+  | ECMP   | +-------------------+-------------+ |
+  |        | | Hash Field        | Algorithm   | |
+  |        | |-------------------+-------------| |
+  |        | | DST_MAC           | CRC         | |
+  |        | | SRC_MAC           |             | |
+  |        | | ETHERTYPE         |             | |
+  |        | | IP_PROTOCOL       |             | |
+  |        | | DST_IP            |             | |
+  |        | | SRC_IP            |             | |
+  |        | | L4_DST_PORT       |             | |
+  |        | | L4_SRC_PORT       |             | |
+  |        | | INNER_DST_MAC     |             | |
+  |        | | INNER_SRC_MAC     |             | |
+  |        | | INNER_ETHERTYPE   |             | |
+  |        | | INNER_IP_PROTOCOL |             | |
+  |        | | INNER_DST_IP      |             | |
+  |        | | INNER_SRC_IP      |             | |
+  |        | | INNER_L4_DST_PORT |             | |
+  |        | | INNER_L4_SRC_PORT |             | |
+  |        | +-------------------+-------------+ |
+  +--------+-------------------------------------+
+  | LAG    | +-------------------+-------------+ |
+  |        | | Hash Field        | Algorithm   | |
+  |        | |-------------------+-------------| |
+  |        | | DST_MAC           | CRC         | |
+  |        | | SRC_MAC           |             | |
+  |        | | ETHERTYPE         |             | |
+  |        | | IP_PROTOCOL       |             | |
+  |        | | DST_IP            |             | |
+  |        | | SRC_IP            |             | |
+  |        | | L4_DST_PORT       |             | |
+  |        | | L4_SRC_PORT       |             | |
+  |        | | INNER_DST_MAC     |             | |
+  |        | | INNER_SRC_MAC     |             | |
+  |        | | INNER_ETHERTYPE   |             | |
+  |        | | INNER_IP_PROTOCOL |             | |
+  |        | | INNER_DST_IP      |             | |
+  |        | | INNER_SRC_IP      |             | |
+  |        | | INNER_L4_DST_PORT |             | |
+  |        | | INNER_L4_SRC_PORT |             | |
+  |        | +-------------------+-------------+ |
+  +--------+-------------------------------------+
+  ```
+
+**show switch-hash capabilities**
+
+This command displays switch hash capabilities.
+
+- Usage:
+  ```bash
+  show switch-hash capabilities
+  ```
+
+- Options:
+  - _-j,--json_: display in JSON format
+
+- Example:
+  ```bash
+  admin@sonic:~$ show switch-hash capabilities
+  +--------+-------------------------------------+
+  | Hash   | Capabilities                        |
+  +========+=====================================+
+  | ECMP   | +-------------------+-------------+ |
+  |        | | Hash Field        | Algorithm   | |
+  |        | |-------------------+-------------| |
+  |        | | IN_PORT           | CRC         | |
+  |        | | DST_MAC           | XOR         | |
+  |        | | SRC_MAC           | RANDOM      | |
+  |        | | ETHERTYPE         | CRC_32LO    | |
+  |        | | VLAN_ID           | CRC_32HI    | |
+  |        | | IP_PROTOCOL       | CRC_CCITT   | |
+  |        | | DST_IP            | CRC_XOR     | |
+  |        | | SRC_IP            |             | |
+  |        | | L4_DST_PORT       |             | |
+  |        | | L4_SRC_PORT       |             | |
+  |        | | INNER_DST_MAC     |             | |
+  |        | | INNER_SRC_MAC     |             | |
+  |        | | INNER_ETHERTYPE   |             | |
+  |        | | INNER_IP_PROTOCOL |             | |
+  |        | | INNER_DST_IP      |             | |
+  |        | | INNER_SRC_IP      |             | |
+  |        | | INNER_L4_DST_PORT |             | |
+  |        | | INNER_L4_SRC_PORT |             | |
+  |        | +-------------------+-------------+ |
+  +--------+-------------------------------------+
+  | LAG    | +-------------------+-------------+ |
+  |        | | Hash Field        | Algorithm   | |
+  |        | |-------------------+-------------| |
+  |        | | IN_PORT           | CRC         | |
+  |        | | DST_MAC           | XOR         | |
+  |        | | SRC_MAC           | RANDOM      | |
+  |        | | ETHERTYPE         | CRC_32LO    | |
+  |        | | VLAN_ID           | CRC_32HI    | |
+  |        | | IP_PROTOCOL       | CRC_CCITT   | |
+  |        | | DST_IP            | CRC_XOR     | |
+  |        | | SRC_IP            |             | |
+  |        | | L4_DST_PORT       |             | |
+  |        | | L4_SRC_PORT       |             | |
+  |        | | INNER_DST_MAC     |             | |
+  |        | | INNER_SRC_MAC     |             | |
+  |        | | INNER_ETHERTYPE   |             | |
+  |        | | INNER_IP_PROTOCOL |             | |
+  |        | | INNER_DST_IP      |             | |
+  |        | | INNER_SRC_IP      |             | |
+  |        | | INNER_L4_DST_PORT |             | |
+  |        | | INNER_L4_SRC_PORT |             | |
+  |        | +-------------------+-------------+ |
+  +--------+-------------------------------------+
   ```
 
 ### Hash Config Commands
 
 This subsection explains how to configure switch hash.
 
-**config switch-hash global**
+**config switch-hash global ecmp/lag hash**
 
 This command is used to manage switch hash global configuration.
 
@@ -4324,6 +4420,25 @@ This command is used to manage switch hash global configuration.
   'INNER_SRC_IP' \
   'INNER_L4_DST_PORT' \
   'INNER_L4_SRC_PORT'
+  ```
+
+**config switch-hash global ecmp/lag hash algorithm**
+
+This command is used to manage switch hash algorithm global configuration.
+
+- Usage:
+  ```bash
+  config switch-hash global ecmp-hash-algorithm <hash_algorithm>
+  config switch-hash global lag-hash-algorithm <hash_algorithm>
+  ```
+
+- Parameters:
+  - _hash_algorithm_: hash algorithm for hashing packets going through ECMP/LAG
+
+- Examples:
+  ```bash
+  admin@sonic:~$ config switch-hash global ecmp-hash-algorithm 'CRC'
+  admin@sonic:~$ config switch-hash global lag-hash-algorithm 'CRC'
   ```
 
 ## Interfaces

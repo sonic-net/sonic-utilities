@@ -3,156 +3,579 @@ Module holding the correct values for show CLI command outputs for the hash_test
 """
 
 show_hash_empty="""\
-ECMP HASH    LAG HASH
------------  ----------
+No configuration is present in CONFIG DB
 """
 
 show_hash_ecmp="""\
-ECMP HASH          LAG HASH
------------------  ----------
-DST_MAC            N/A
-SRC_MAC
-ETHERTYPE
-IP_PROTOCOL
-DST_IP
-SRC_IP
-L4_DST_PORT
-L4_SRC_PORT
-INNER_DST_MAC
-INNER_SRC_MAC
-INNER_ETHERTYPE
-INNER_IP_PROTOCOL
-INNER_DST_IP
-INNER_SRC_IP
-INNER_L4_DST_PORT
-INNER_L4_SRC_PORT
++--------+-------------------------------------+
+| Hash   | Configuration                       |
++========+=====================================+
+| ECMP   | +-------------------+-------------+ |
+|        | | Hash Field        | Algorithm   | |
+|        | |-------------------+-------------| |
+|        | | DST_MAC           | CRC         | |
+|        | | SRC_MAC           |             | |
+|        | | ETHERTYPE         |             | |
+|        | | IP_PROTOCOL       |             | |
+|        | | DST_IP            |             | |
+|        | | SRC_IP            |             | |
+|        | | L4_DST_PORT       |             | |
+|        | | L4_SRC_PORT       |             | |
+|        | | INNER_DST_MAC     |             | |
+|        | | INNER_SRC_MAC     |             | |
+|        | | INNER_ETHERTYPE   |             | |
+|        | | INNER_IP_PROTOCOL |             | |
+|        | | INNER_DST_IP      |             | |
+|        | | INNER_SRC_IP      |             | |
+|        | | INNER_L4_DST_PORT |             | |
+|        | | INNER_L4_SRC_PORT |             | |
+|        | +-------------------+-------------+ |
++--------+-------------------------------------+
+| LAG    | +--------------+-------------+      |
+|        | | Hash Field   | Algorithm   |      |
+|        | |--------------+-------------|      |
+|        | | N/A          | N/A         |      |
+|        | +--------------+-------------+      |
++--------+-------------------------------------+
+"""
+show_hash_ecmp_json="""\
+{
+    "ecmp": {
+        "hash_field": [
+            "DST_MAC",
+            "SRC_MAC",
+            "ETHERTYPE",
+            "IP_PROTOCOL",
+            "DST_IP",
+            "SRC_IP",
+            "L4_DST_PORT",
+            "L4_SRC_PORT",
+            "INNER_DST_MAC",
+            "INNER_SRC_MAC",
+            "INNER_ETHERTYPE",
+            "INNER_IP_PROTOCOL",
+            "INNER_DST_IP",
+            "INNER_SRC_IP",
+            "INNER_L4_DST_PORT",
+            "INNER_L4_SRC_PORT"
+        ],
+        "algorithm": "CRC"
+    },
+    "lag": {
+        "hash_field": "N/A",
+        "algorithm": "N/A"
+    }
+}
 """
 
 show_hash_lag="""\
-ECMP HASH    LAG HASH
------------  -----------------
-N/A          DST_MAC
-             SRC_MAC
-             ETHERTYPE
-             IP_PROTOCOL
-             DST_IP
-             SRC_IP
-             L4_DST_PORT
-             L4_SRC_PORT
-             INNER_DST_MAC
-             INNER_SRC_MAC
-             INNER_ETHERTYPE
-             INNER_IP_PROTOCOL
-             INNER_DST_IP
-             INNER_SRC_IP
-             INNER_L4_DST_PORT
-             INNER_L4_SRC_PORT
++--------+-------------------------------------+
+| Hash   | Configuration                       |
++========+=====================================+
+| ECMP   | +--------------+-------------+      |
+|        | | Hash Field   | Algorithm   |      |
+|        | |--------------+-------------|      |
+|        | | N/A          | N/A         |      |
+|        | +--------------+-------------+      |
++--------+-------------------------------------+
+| LAG    | +-------------------+-------------+ |
+|        | | Hash Field        | Algorithm   | |
+|        | |-------------------+-------------| |
+|        | | DST_MAC           | XOR         | |
+|        | | SRC_MAC           |             | |
+|        | | ETHERTYPE         |             | |
+|        | | IP_PROTOCOL       |             | |
+|        | | DST_IP            |             | |
+|        | | SRC_IP            |             | |
+|        | | L4_DST_PORT       |             | |
+|        | | L4_SRC_PORT       |             | |
+|        | | INNER_DST_MAC     |             | |
+|        | | INNER_SRC_MAC     |             | |
+|        | | INNER_ETHERTYPE   |             | |
+|        | | INNER_IP_PROTOCOL |             | |
+|        | | INNER_DST_IP      |             | |
+|        | | INNER_SRC_IP      |             | |
+|        | | INNER_L4_DST_PORT |             | |
+|        | | INNER_L4_SRC_PORT |             | |
+|        | +-------------------+-------------+ |
++--------+-------------------------------------+
+"""
+show_hash_lag_json="""\
+{
+    "ecmp": {
+        "hash_field": "N/A",
+        "algorithm": "N/A"
+    },
+    "lag": {
+        "hash_field": [
+            "DST_MAC",
+            "SRC_MAC",
+            "ETHERTYPE",
+            "IP_PROTOCOL",
+            "DST_IP",
+            "SRC_IP",
+            "L4_DST_PORT",
+            "L4_SRC_PORT",
+            "INNER_DST_MAC",
+            "INNER_SRC_MAC",
+            "INNER_ETHERTYPE",
+            "INNER_IP_PROTOCOL",
+            "INNER_DST_IP",
+            "INNER_SRC_IP",
+            "INNER_L4_DST_PORT",
+            "INNER_L4_SRC_PORT"
+        ],
+        "algorithm": "XOR"
+    }
+}
 """
 
 show_hash_ecmp_and_lag="""\
-ECMP HASH          LAG HASH
------------------  -----------------
-DST_MAC            DST_MAC
-SRC_MAC            SRC_MAC
-ETHERTYPE          ETHERTYPE
-IP_PROTOCOL        IP_PROTOCOL
-DST_IP             DST_IP
-SRC_IP             SRC_IP
-L4_DST_PORT        L4_DST_PORT
-L4_SRC_PORT        L4_SRC_PORT
-INNER_DST_MAC      INNER_DST_MAC
-INNER_SRC_MAC      INNER_SRC_MAC
-INNER_ETHERTYPE    INNER_ETHERTYPE
-INNER_IP_PROTOCOL  INNER_IP_PROTOCOL
-INNER_DST_IP       INNER_DST_IP
-INNER_SRC_IP       INNER_SRC_IP
-INNER_L4_DST_PORT  INNER_L4_DST_PORT
-INNER_L4_SRC_PORT  INNER_L4_SRC_PORT
++--------+-------------------------------------+
+| Hash   | Configuration                       |
++========+=====================================+
+| ECMP   | +-------------------+-------------+ |
+|        | | Hash Field        | Algorithm   | |
+|        | |-------------------+-------------| |
+|        | | DST_MAC           | CRC         | |
+|        | | SRC_MAC           |             | |
+|        | | ETHERTYPE         |             | |
+|        | | IP_PROTOCOL       |             | |
+|        | | DST_IP            |             | |
+|        | | SRC_IP            |             | |
+|        | | L4_DST_PORT       |             | |
+|        | | L4_SRC_PORT       |             | |
+|        | | INNER_DST_MAC     |             | |
+|        | | INNER_SRC_MAC     |             | |
+|        | | INNER_ETHERTYPE   |             | |
+|        | | INNER_IP_PROTOCOL |             | |
+|        | | INNER_DST_IP      |             | |
+|        | | INNER_SRC_IP      |             | |
+|        | | INNER_L4_DST_PORT |             | |
+|        | | INNER_L4_SRC_PORT |             | |
+|        | +-------------------+-------------+ |
++--------+-------------------------------------+
+| LAG    | +-------------------+-------------+ |
+|        | | Hash Field        | Algorithm   | |
+|        | |-------------------+-------------| |
+|        | | DST_MAC           | XOR         | |
+|        | | SRC_MAC           |             | |
+|        | | ETHERTYPE         |             | |
+|        | | IP_PROTOCOL       |             | |
+|        | | DST_IP            |             | |
+|        | | SRC_IP            |             | |
+|        | | L4_DST_PORT       |             | |
+|        | | L4_SRC_PORT       |             | |
+|        | | INNER_DST_MAC     |             | |
+|        | | INNER_SRC_MAC     |             | |
+|        | | INNER_ETHERTYPE   |             | |
+|        | | INNER_IP_PROTOCOL |             | |
+|        | | INNER_DST_IP      |             | |
+|        | | INNER_SRC_IP      |             | |
+|        | | INNER_L4_DST_PORT |             | |
+|        | | INNER_L4_SRC_PORT |             | |
+|        | +-------------------+-------------+ |
++--------+-------------------------------------+
+"""
+show_hash_ecmp_and_lag_json="""\
+{
+    "ecmp": {
+        "hash_field": [
+            "DST_MAC",
+            "SRC_MAC",
+            "ETHERTYPE",
+            "IP_PROTOCOL",
+            "DST_IP",
+            "SRC_IP",
+            "L4_DST_PORT",
+            "L4_SRC_PORT",
+            "INNER_DST_MAC",
+            "INNER_SRC_MAC",
+            "INNER_ETHERTYPE",
+            "INNER_IP_PROTOCOL",
+            "INNER_DST_IP",
+            "INNER_SRC_IP",
+            "INNER_L4_DST_PORT",
+            "INNER_L4_SRC_PORT"
+        ],
+        "algorithm": "CRC"
+    },
+    "lag": {
+        "hash_field": [
+            "DST_MAC",
+            "SRC_MAC",
+            "ETHERTYPE",
+            "IP_PROTOCOL",
+            "DST_IP",
+            "SRC_IP",
+            "L4_DST_PORT",
+            "L4_SRC_PORT",
+            "INNER_DST_MAC",
+            "INNER_SRC_MAC",
+            "INNER_ETHERTYPE",
+            "INNER_IP_PROTOCOL",
+            "INNER_DST_IP",
+            "INNER_SRC_IP",
+            "INNER_L4_DST_PORT",
+            "INNER_L4_SRC_PORT"
+        ],
+        "algorithm": "XOR"
+    }
+}
 """
 
 show_hash_capabilities_no="""\
-ECMP HASH        LAG HASH
----------------  ---------------
-no capabilities  no capabilities
++--------+---------------------------------------+
+| Hash   | Capabilities                          |
++========+=======================================+
+| ECMP   | +-----------------+-----------------+ |
+|        | | Hash Field      | Algorithm       | |
+|        | |-----------------+-----------------| |
+|        | | no capabilities | no capabilities | |
+|        | +-----------------+-----------------+ |
++--------+---------------------------------------+
+| LAG    | +-----------------+-----------------+ |
+|        | | Hash Field      | Algorithm       | |
+|        | |-----------------+-----------------| |
+|        | | no capabilities | no capabilities | |
+|        | +-----------------+-----------------+ |
++--------+---------------------------------------+
+"""
+show_hash_capabilities_no_json="""\
+{
+    "ecmp": {
+        "hash_field": "no capabilities",
+        "algorithm": "no capabilities"
+    },
+    "lag": {
+        "hash_field": "no capabilities",
+        "algorithm": "no capabilities"
+    }
+}
 """
 
 show_hash_capabilities_na="""\
-ECMP HASH    LAG HASH
------------  ----------
-N/A          N/A
++--------+--------------------------------+
+| Hash   | Capabilities                   |
++========+================================+
+| ECMP   | +--------------+-------------+ |
+|        | | Hash Field   | Algorithm   | |
+|        | |--------------+-------------| |
+|        | | N/A          | N/A         | |
+|        | +--------------+-------------+ |
++--------+--------------------------------+
+| LAG    | +--------------+-------------+ |
+|        | | Hash Field   | Algorithm   | |
+|        | |--------------+-------------| |
+|        | | N/A          | N/A         | |
+|        | +--------------+-------------+ |
++--------+--------------------------------+
+"""
+show_hash_capabilities_na_json="""\
+{
+    "ecmp": {
+        "hash_field": "N/A",
+        "algorithm": "N/A"
+    },
+    "lag": {
+        "hash_field": "N/A",
+        "algorithm": "N/A"
+    }
+}
 """
 
 show_hash_capabilities_empty="""\
-ECMP HASH      LAG HASH
--------------  -------------
-not supported  not supported
++--------+-----------------------------------+
+| Hash   | Capabilities                      |
++========+===================================+
+| ECMP   | +---------------+---------------+ |
+|        | | Hash Field    | Algorithm     | |
+|        | |---------------+---------------| |
+|        | | not supported | not supported | |
+|        | +---------------+---------------+ |
++--------+-----------------------------------+
+| LAG    | +---------------+---------------+ |
+|        | | Hash Field    | Algorithm     | |
+|        | |---------------+---------------| |
+|        | | not supported | not supported | |
+|        | +---------------+---------------+ |
++--------+-----------------------------------+
+"""
+show_hash_capabilities_empty_json="""\
+{
+    "ecmp": {
+        "hash_field": "not supported",
+        "algorithm": "not supported"
+    },
+    "lag": {
+        "hash_field": "not supported",
+        "algorithm": "not supported"
+    }
+}
 """
 
 show_hash_capabilities_ecmp="""\
-ECMP HASH          LAG HASH
------------------  -------------
-IN_PORT            not supported
-DST_MAC
-SRC_MAC
-ETHERTYPE
-VLAN_ID
-IP_PROTOCOL
-DST_IP
-SRC_IP
-L4_DST_PORT
-L4_SRC_PORT
-INNER_DST_MAC
-INNER_SRC_MAC
-INNER_ETHERTYPE
-INNER_IP_PROTOCOL
-INNER_DST_IP
-INNER_SRC_IP
-INNER_L4_DST_PORT
-INNER_L4_SRC_PORT
++--------+-------------------------------------+
+| Hash   | Capabilities                        |
++========+=====================================+
+| ECMP   | +-------------------+-------------+ |
+|        | | Hash Field        | Algorithm   | |
+|        | |-------------------+-------------| |
+|        | | IN_PORT           | CRC         | |
+|        | | DST_MAC           | XOR         | |
+|        | | SRC_MAC           | RANDOM      | |
+|        | | ETHERTYPE         | CRC_32LO    | |
+|        | | VLAN_ID           | CRC_32HI    | |
+|        | | IP_PROTOCOL       | CRC_CCITT   | |
+|        | | DST_IP            | CRC_XOR     | |
+|        | | SRC_IP            |             | |
+|        | | L4_DST_PORT       |             | |
+|        | | L4_SRC_PORT       |             | |
+|        | | INNER_DST_MAC     |             | |
+|        | | INNER_SRC_MAC     |             | |
+|        | | INNER_ETHERTYPE   |             | |
+|        | | INNER_IP_PROTOCOL |             | |
+|        | | INNER_DST_IP      |             | |
+|        | | INNER_SRC_IP      |             | |
+|        | | INNER_L4_DST_PORT |             | |
+|        | | INNER_L4_SRC_PORT |             | |
+|        | +-------------------+-------------+ |
++--------+-------------------------------------+
+| LAG    | +---------------+---------------+   |
+|        | | Hash Field    | Algorithm     |   |
+|        | |---------------+---------------|   |
+|        | | not supported | not supported |   |
+|        | +---------------+---------------+   |
++--------+-------------------------------------+
+"""
+show_hash_capabilities_ecmp_json="""\
+{
+    "ecmp": {
+        "hash_field": [
+            "IN_PORT",
+            "DST_MAC",
+            "SRC_MAC",
+            "ETHERTYPE",
+            "VLAN_ID",
+            "IP_PROTOCOL",
+            "DST_IP",
+            "SRC_IP",
+            "L4_DST_PORT",
+            "L4_SRC_PORT",
+            "INNER_DST_MAC",
+            "INNER_SRC_MAC",
+            "INNER_ETHERTYPE",
+            "INNER_IP_PROTOCOL",
+            "INNER_DST_IP",
+            "INNER_SRC_IP",
+            "INNER_L4_DST_PORT",
+            "INNER_L4_SRC_PORT"
+        ],
+        "algorithm": [
+            "CRC",
+            "XOR",
+            "RANDOM",
+            "CRC_32LO",
+            "CRC_32HI",
+            "CRC_CCITT",
+            "CRC_XOR"
+        ]
+    },
+    "lag": {
+        "hash_field": "not supported",
+        "algorithm": "not supported"
+    }
+}
 """
 
 show_hash_capabilities_lag="""\
-ECMP HASH      LAG HASH
--------------  -----------------
-not supported  IN_PORT
-               DST_MAC
-               SRC_MAC
-               ETHERTYPE
-               VLAN_ID
-               IP_PROTOCOL
-               DST_IP
-               SRC_IP
-               L4_DST_PORT
-               L4_SRC_PORT
-               INNER_DST_MAC
-               INNER_SRC_MAC
-               INNER_ETHERTYPE
-               INNER_IP_PROTOCOL
-               INNER_DST_IP
-               INNER_SRC_IP
-               INNER_L4_DST_PORT
-               INNER_L4_SRC_PORT
++--------+-------------------------------------+
+| Hash   | Capabilities                        |
++========+=====================================+
+| ECMP   | +---------------+---------------+   |
+|        | | Hash Field    | Algorithm     |   |
+|        | |---------------+---------------|   |
+|        | | not supported | not supported |   |
+|        | +---------------+---------------+   |
++--------+-------------------------------------+
+| LAG    | +-------------------+-------------+ |
+|        | | Hash Field        | Algorithm   | |
+|        | |-------------------+-------------| |
+|        | | IN_PORT           | CRC         | |
+|        | | DST_MAC           | XOR         | |
+|        | | SRC_MAC           | RANDOM      | |
+|        | | ETHERTYPE         | CRC_32LO    | |
+|        | | VLAN_ID           | CRC_32HI    | |
+|        | | IP_PROTOCOL       | CRC_CCITT   | |
+|        | | DST_IP            | CRC_XOR     | |
+|        | | SRC_IP            |             | |
+|        | | L4_DST_PORT       |             | |
+|        | | L4_SRC_PORT       |             | |
+|        | | INNER_DST_MAC     |             | |
+|        | | INNER_SRC_MAC     |             | |
+|        | | INNER_ETHERTYPE   |             | |
+|        | | INNER_IP_PROTOCOL |             | |
+|        | | INNER_DST_IP      |             | |
+|        | | INNER_SRC_IP      |             | |
+|        | | INNER_L4_DST_PORT |             | |
+|        | | INNER_L4_SRC_PORT |             | |
+|        | +-------------------+-------------+ |
++--------+-------------------------------------+
+"""
+show_hash_capabilities_lag_json="""\
+{
+    "ecmp": {
+        "hash_field": "not supported",
+        "algorithm": "not supported"
+    },
+    "lag": {
+        "hash_field": [
+            "IN_PORT",
+            "DST_MAC",
+            "SRC_MAC",
+            "ETHERTYPE",
+            "VLAN_ID",
+            "IP_PROTOCOL",
+            "DST_IP",
+            "SRC_IP",
+            "L4_DST_PORT",
+            "L4_SRC_PORT",
+            "INNER_DST_MAC",
+            "INNER_SRC_MAC",
+            "INNER_ETHERTYPE",
+            "INNER_IP_PROTOCOL",
+            "INNER_DST_IP",
+            "INNER_SRC_IP",
+            "INNER_L4_DST_PORT",
+            "INNER_L4_SRC_PORT"
+        ],
+        "algorithm": [
+            "CRC",
+            "XOR",
+            "RANDOM",
+            "CRC_32LO",
+            "CRC_32HI",
+            "CRC_CCITT",
+            "CRC_XOR"
+        ]
+    }
+}
 """
 
 show_hash_capabilities_ecmp_and_lag="""\
-ECMP HASH          LAG HASH
------------------  -----------------
-IN_PORT            IN_PORT
-DST_MAC            DST_MAC
-SRC_MAC            SRC_MAC
-ETHERTYPE          ETHERTYPE
-VLAN_ID            VLAN_ID
-IP_PROTOCOL        IP_PROTOCOL
-DST_IP             DST_IP
-SRC_IP             SRC_IP
-L4_DST_PORT        L4_DST_PORT
-L4_SRC_PORT        L4_SRC_PORT
-INNER_DST_MAC      INNER_DST_MAC
-INNER_SRC_MAC      INNER_SRC_MAC
-INNER_ETHERTYPE    INNER_ETHERTYPE
-INNER_IP_PROTOCOL  INNER_IP_PROTOCOL
-INNER_DST_IP       INNER_DST_IP
-INNER_SRC_IP       INNER_SRC_IP
-INNER_L4_DST_PORT  INNER_L4_DST_PORT
-INNER_L4_SRC_PORT  INNER_L4_SRC_PORT
++--------+-------------------------------------+
+| Hash   | Capabilities                        |
++========+=====================================+
+| ECMP   | +-------------------+-------------+ |
+|        | | Hash Field        | Algorithm   | |
+|        | |-------------------+-------------| |
+|        | | IN_PORT           | CRC         | |
+|        | | DST_MAC           | XOR         | |
+|        | | SRC_MAC           | RANDOM      | |
+|        | | ETHERTYPE         | CRC_32LO    | |
+|        | | VLAN_ID           | CRC_32HI    | |
+|        | | IP_PROTOCOL       | CRC_CCITT   | |
+|        | | DST_IP            | CRC_XOR     | |
+|        | | SRC_IP            |             | |
+|        | | L4_DST_PORT       |             | |
+|        | | L4_SRC_PORT       |             | |
+|        | | INNER_DST_MAC     |             | |
+|        | | INNER_SRC_MAC     |             | |
+|        | | INNER_ETHERTYPE   |             | |
+|        | | INNER_IP_PROTOCOL |             | |
+|        | | INNER_DST_IP      |             | |
+|        | | INNER_SRC_IP      |             | |
+|        | | INNER_L4_DST_PORT |             | |
+|        | | INNER_L4_SRC_PORT |             | |
+|        | +-------------------+-------------+ |
++--------+-------------------------------------+
+| LAG    | +-------------------+-------------+ |
+|        | | Hash Field        | Algorithm   | |
+|        | |-------------------+-------------| |
+|        | | IN_PORT           | CRC         | |
+|        | | DST_MAC           | XOR         | |
+|        | | SRC_MAC           | RANDOM      | |
+|        | | ETHERTYPE         | CRC_32LO    | |
+|        | | VLAN_ID           | CRC_32HI    | |
+|        | | IP_PROTOCOL       | CRC_CCITT   | |
+|        | | DST_IP            | CRC_XOR     | |
+|        | | SRC_IP            |             | |
+|        | | L4_DST_PORT       |             | |
+|        | | L4_SRC_PORT       |             | |
+|        | | INNER_DST_MAC     |             | |
+|        | | INNER_SRC_MAC     |             | |
+|        | | INNER_ETHERTYPE   |             | |
+|        | | INNER_IP_PROTOCOL |             | |
+|        | | INNER_DST_IP      |             | |
+|        | | INNER_SRC_IP      |             | |
+|        | | INNER_L4_DST_PORT |             | |
+|        | | INNER_L4_SRC_PORT |             | |
+|        | +-------------------+-------------+ |
++--------+-------------------------------------+
+"""
+show_hash_capabilities_ecmp_and_lag_json="""\
+{
+    "ecmp": {
+        "hash_field": [
+            "IN_PORT",
+            "DST_MAC",
+            "SRC_MAC",
+            "ETHERTYPE",
+            "VLAN_ID",
+            "IP_PROTOCOL",
+            "DST_IP",
+            "SRC_IP",
+            "L4_DST_PORT",
+            "L4_SRC_PORT",
+            "INNER_DST_MAC",
+            "INNER_SRC_MAC",
+            "INNER_ETHERTYPE",
+            "INNER_IP_PROTOCOL",
+            "INNER_DST_IP",
+            "INNER_SRC_IP",
+            "INNER_L4_DST_PORT",
+            "INNER_L4_SRC_PORT"
+        ],
+        "algorithm": [
+            "CRC",
+            "XOR",
+            "RANDOM",
+            "CRC_32LO",
+            "CRC_32HI",
+            "CRC_CCITT",
+            "CRC_XOR"
+        ]
+    },
+    "lag": {
+        "hash_field": [
+            "IN_PORT",
+            "DST_MAC",
+            "SRC_MAC",
+            "ETHERTYPE",
+            "VLAN_ID",
+            "IP_PROTOCOL",
+            "DST_IP",
+            "SRC_IP",
+            "L4_DST_PORT",
+            "L4_SRC_PORT",
+            "INNER_DST_MAC",
+            "INNER_SRC_MAC",
+            "INNER_ETHERTYPE",
+            "INNER_IP_PROTOCOL",
+            "INNER_DST_IP",
+            "INNER_SRC_IP",
+            "INNER_L4_DST_PORT",
+            "INNER_L4_SRC_PORT"
+        ],
+        "algorithm": [
+            "CRC",
+            "XOR",
+            "RANDOM",
+            "CRC_32LO",
+            "CRC_32HI",
+            "CRC_CCITT",
+            "CRC_XOR"
+        ]
+    }
+}
 """
