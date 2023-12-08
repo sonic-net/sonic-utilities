@@ -1611,9 +1611,9 @@ save_crash_files() {
         for file in $(find_files "/var/core/"); do
             # don't gzip already-gzipped log files :)
             if [ -z "${file##*.gz}" ]; then
-                save_file $file core false
+                save_file $file core false true
             else
-                save_file $file core true
+                save_file $file core true true
             fi
         done
     fi
@@ -1624,9 +1624,9 @@ save_crash_files() {
             # don't gzip already-gzipped dmesg files :)
             if [ ! ${file} = "/var/crash/kexec_cmd" -a ! ${file} = "/var/crash/export" ]; then
                 if [[ ${file} == *"kdump."* ]]; then
-                    save_file $file kdump false
+                    save_file $file kdump false true
                 else
-                    save_file $file kdump true
+                    save_file $file kdump true true
                 fi
             fi
         done
