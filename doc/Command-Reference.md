@@ -202,6 +202,9 @@
   * [MACsec config command](#macsec-config-command)
   * [MACsec show command](#macsec-show-command)
   * [MACsec clear command](#macsec-clear-command)
+* [SFP Utilities Commands](#sfp-utilities-commands)
+  * [SFP Utilities read command](#sfp-utilities-read-command)
+  * [SFP Utilities write command](#sfp-utilities-write-command)
 * [Static DNS Commands](#static-dns-commands)
   * [Static DNS config command](#static-dns-config-command)
   * [Static DNS show command](#static-dns-show-command)
@@ -12909,6 +12912,78 @@ Clear MACsec counters which is to reset all MACsec counters to ZERO.
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#macsec-commands)
+
+# SFP Utilities Commands
+
+This sub-section explains the list of commands available for SFP utilities feature.
+
+# SFP Utilities read command
+
+- Read SFP EEPROM data
+
+```
+admin@sonic:~$ sfputil read-eeprom --help
+Usage: sfputil read-eeprom [OPTIONS]
+
+  Read SFP EEPROM data
+
+Options:
+  -p, --port <logical_port_name>  Logical port name  [required]
+  -n, --page <page>               EEPROM page number  [required]
+  -o, --offset <offset>           EEPROM offset within the page  [required]
+  -s, --size <size>               Size of byte to be read  [required]
+  --no-format                     Display non formatted data
+  --wire-addr TEXT                Wire address of sff8472
+  --help                          Show this message and exit.
+```
+
+```
+admin@sonic:~$ sfputil read-eeprom -p Ethernet0 -n 0 -o 100 -s 2
+        00000064 4a 44                                            |..|
+
+admin@sonic:~$ sfputil read-eeprom --port Ethernet0 --page 0 --offset 0 --size 32
+        00000000 11 08 06 00 00 00 00 00  00 00 00 00 00 00 00 00 |................|
+        00000010 00 00 00 00 00 00 00 00  00 00 00 00 00 00 00 00 |................|
+
+admin@sonic:~$ sfputil read-eeprom --port Ethernet0 --page 0 --offset 100 --size 2 --no-format
+4a44
+```
+
+# SFP Utilities write command
+
+- Write SFP EEPROM data
+
+```
+admin@sonic:~$ sfputil write-eeprom --help
+Usage: sfputil write-eeprom [OPTIONS]
+
+  Write SFP EEPROM data
+
+Options:
+  -p, --port <logical_port_name>  Logical port name  [required]
+  -n, --page <page>               EEPROM page number  [required]
+  -o, --offset <offset>           EEPROM offset within the page  [required]
+  -d, --data <data>               Hex string EEPROM data  [required]
+  --wire-addr TEXT                Wire address of sff8472
+  --verify                        Verify the data by reading back
+  --help                          Show this message and exit.
+```
+
+- Write success
+```
+admin@sonic:~$ sfputil write-eeprom -p Ethernet0 -n 0 -o 100 -d 4a44
+
+admin@sonic:~$ sfputil write-eeprom --port Etherent0 --page 0 --offset 100 --data 0000 --verify
+
+```
+
+- Write fail
+```
+admin@sonic:~$ sfputil write-eeprom -p Etherent0 -n 0 -o 100 -d 4a44 --verify
+Error: Write data failed! Write: 4a44, read: 0000.
+```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#sfp-utilities-commands)
 
 # Static DNS Commands
 
