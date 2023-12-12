@@ -2,7 +2,6 @@ import os
 import sys
 from utilities_common.cli import UserCache
 from utils import get_result_and_return_code
-from importlib import reload
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
