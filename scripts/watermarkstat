@@ -89,18 +89,20 @@ class Watermarkstat(object):
             self.counters_db.append(counters_db)
 
         def get_queue_type(table_id):
+            queue_type = None
             for counters_db in self.counters_db:
                 queue_type = counters_db.get(counters_db.COUNTERS_DB, COUNTERS_QUEUE_TYPE_MAP, table_id)
-                if queue_type is None:
-                    print("Queue Type is not available in table '{}'".format(table_id), file=sys.stderr)
-                    sys.exit(1)
-                elif queue_type and queue_type == SAI_QUEUE_TYPE_MULTICAST:
+                if queue_type and queue_type == SAI_QUEUE_TYPE_MULTICAST:
                     return QUEUE_TYPE_MC
                 elif queue_type and queue_type == SAI_QUEUE_TYPE_UNICAST:
                     return QUEUE_TYPE_UC
                 elif queue_type and queue_type == SAI_QUEUE_TYPE_ALL:
                     return QUEUE_TYPE_ALL
-            print("Queue Type '{} in table '{}' is invalid".format(queue_type, table_id), file=sys.stderr)
+
+            if queue_type is None:
+                print("Queue Type is not available in table '{}'".format(table_id), file=sys.stderr)
+            else:
+                print("Queue Type '{} in table '{}' is invalid".format(queue_type, table_id), file=sys.stderr)
             sys.exit(1)
 
         def get_queue_port(table_id):
