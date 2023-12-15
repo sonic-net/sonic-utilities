@@ -1,4 +1,5 @@
 import copy
+from io import StringIO
 import json
 import os
 import logging
@@ -7,7 +8,7 @@ import syslog
 import time
 from sonic_py_common import device_info
 from unittest.mock import MagicMock, patch
-from tests.route_check_test_data import APPL_DB, ARGS, ASIC_DB, CONFIG_DB, DEFAULT_CONFIG_DB, DESCR, OP_DEL, OP_SET, PRE, RESULT, RET, TEST_DATA, UPD, FRR_ROUTES
+from tests.route_check_test_data import APPL_DB, ARGS, ASIC_DB, CONFIG_DB, DEFAULT_CONFIG_DB, APPL_STATE_DB, DESCR, OP_DEL, OP_SET, PRE, RESULT, RET, TEST_DATA, UPD, FRR_ROUTES
 
 import pytest
 
@@ -89,7 +90,7 @@ class Table:
         return True, ret
 
 
-db_conns = {"APPL_DB": APPL_DB, "ASIC_DB": ASIC_DB}
+db_conns = {"APPL_DB": APPL_DB, "ASIC_DB": ASIC_DB, "APPL_STATE_DB": APPL_STATE_DB }
 def conn_side_effect(arg, _):
     return db_conns[arg]
 
@@ -321,3 +322,11 @@ class TestRouteCheck(object):
         assert len(msg) == 5
         msg = route_check.print_message(syslog.LOG_ERR, "a", "b", "c", "d", "e", "f")
         assert len(msg) == 5
+
+    def test_mitigate_routes(self, mock_dbs):
+        missed_frr_rt = [ { 'prefix': '192.168.0.1', 'protocol': 'bgp' } ]
+        rt_appl = [ '192.168.0.1' ]
+        with patch('sys.stdout', new_callable=StringIO) as mock_stdout:
+           route_check.mitigate_installed_not_offloaded_frr_routes(missed_frr_rt, rt_appl)
+        # Verify that the stdout are suppressed in this function
+        assert not mock_stdout.getvalue()

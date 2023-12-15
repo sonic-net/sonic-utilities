@@ -114,11 +114,12 @@ def set_level(lvl, log_to_syslog):
         report_level = syslog.LOG_DEBUG
 
 
-def print_message(lvl, *args):
+def print_message(lvl, *args, write_to_stdout=True):
     """
     print and log the message for given level.
     :param lvl: Log level for this message as ERR/INFO/DEBUG
     :param args: message as list of strings or convertible to string
+    :param write_to_stdout: print the message to stdout if set to true
     :return None
     """
     msg = ""
@@ -129,7 +130,8 @@ def print_message(lvl, *args):
                 break
             msg += str(arg)[0:rem_len]
 
-        print(msg)
+        if write_to_stdout:
+            print(msg)
         if write_to_syslog:
             syslog.syslog(lvl, msg)
 
@@ -575,7 +577,7 @@ def mitigate_installed_not_offloaded_frr_routes(missed_frr_rt, rt_appl):
         fvs = swsscommon.FieldValuePairs([('err_str', 'SWSS_RC_SUCCESS'), ('protocol', entry['protocol'])])
         response_producer.send('SWSS_RC_SUCCESS', entry['prefix'], fvs)
 
-        print_message(syslog.LOG_ERR, f'Mitigated route {entry["prefix"]}')
+        print_message(syslog.LOG_ERR, f'Mitigated route {entry["prefix"]}', write_to_stdout=False)
 
 
 def get_soc_ips(config_db):

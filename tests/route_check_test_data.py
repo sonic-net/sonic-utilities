@@ -4,6 +4,7 @@ RET = "return"
 APPL_DB = 0
 ASIC_DB = 1
 CONFIG_DB = 4
+APPL_STATE_DB = 14
 PRE = "pre-value"
 UPD = "update"
 FRR_ROUTES = "frr-routes"
