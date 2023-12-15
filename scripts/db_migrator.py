@@ -615,28 +615,6 @@ class DBMigrator():
                 config.pop('has_timer')
                 self.configDB.set_entry('FEATURE', feature, config)
 
-    def migrate_route_table(self):
-        """
-        Handle route table migration. Migrations handled:
-        1. 'weight' attr in ROUTE object was introduced 202205 onwards.
-            Upgrade from older branch to 202205 will require this 'weight' attr to be added explicitly
-        2. 'protocol' attr in ROUTE introduced in 202305 onwards.
-            WarmRestartHelper reconcile logic requires to have "protocol" field in the old dumped ROUTE_TABLE.
-        """
-        route_table = self.appDB.get_table("ROUTE_TABLE")
-        for route_prefix, route_attr in route_table.items():
-            if type(route_prefix) == tuple:
-                # IPv6 route_prefix is returned from db as tuple
-                route_key = "ROUTE_TABLE:" + ":".join(route_prefix)
-            else:
-                # IPv4 route_prefix is returned from db as str
-                route_key = "ROUTE_TABLE:{}".format(route_prefix)
-
-            if 'weight' not in route_attr:
-                self.appDB.set(self.appDB.APPL_DB, route_key, 'weight','')
-
-            if 'protocol' not in route_attr:
-                self.appDB.set(self.appDB.APPL_DB, route_key, 'protocol', '')
 
     def migrate_dns_nameserver(self):
         """
@@ -1143,8 +1121,6 @@ class DBMigrator():
             self.migrate_mgmt_ports_on_s6100()
         else:
             log.log_notice("Asic Type: {}, Hwsku: {}".format(self.asic_type, self.hwsku))
-
-        self.migrate_route_table()
 
         # Updating edgezone aggregator cable length config for T0 devices
         self.update_edgezone_aggregator_config()
