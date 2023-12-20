@@ -5,6 +5,7 @@
 # Command-line utility for interacting with SFP transceivers within SONiC
 #
 
+import copy
 import os
 import sys
 import natsort
@@ -39,6 +40,7 @@ ERROR_SFPUTILHELPER_LOAD = 3
 ERROR_PORT_CONFIG_LOAD = 4
 ERROR_NOT_IMPLEMENTED = 5
 ERROR_INVALID_PORT = 6
+ERROR_INVALID_PAGE = 7
 SMBUS_BLOCK_WRITE_SIZE = 32
 # Default host password as per CMIS spec:
 # http://www.qsfp-dd.com/wp-content/uploads/2021/05/CMIS5p0.pdf
@@ -57,6 +59,10 @@ MAX_OFFSET_FOR_A0H_UPPER_PAGE = 255
 MAX_OFFSET_FOR_A0H_LOWER_PAGE = 127
 MAX_OFFSET_FOR_A2H = 255
 PAGE_SIZE_FOR_A0H = 256
+SFF8636_MODULE_PAGES = [0, 1, 2, 3]
+SFF8472_MODULE_PAGES = [0, 1, 2]
+CMIS_MODULE_PAGES = [0, 1, 2, 16, 17]
+CMIS_COHERENT_MODULE_PAGES = [0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x38, 0x39, 0x3a, 0x3b]
 
 EEPROM_DUMP_INDENT = ' ' * 8
 
@@ -687,123 +693,243 @@ def eeprom(port, dump_dom, namespace):
 
     click.echo(output)
 
+
 # 'eeprom-hexdump' subcommand
 @show.command()
-@click.option('-p', '--port', metavar='<port_name>', required=True, help="Display SFP EEPROM hexdump for port <port_name>")
-@click.option('-n', '--page', metavar='<page_number>', help="Display SFP EEEPROM hexdump for <page_number_in_hex>")
+@click.option('-p', '--port', metavar='<port_name>', help="Display SFP EEPROM hexdump for port <port_name>")
+@click.option('-n', '--page', metavar='<page_number>', type=click.IntRange(0, MAX_EEPROM_PAGE), help="Display SFP EEEPROM hexdump for <page_number_in_hex>")
 def eeprom_hexdump(port, page):
-    """Display EEPROM hexdump of SFP transceiver(s) for a given port name and page number"""
-    output = ""
+    """Display EEPROM hexdump of SFP transceiver(s)"""
+    if port:
+        if page is None:
+            page = 0
+        return_code, output = eeprom_hexdump_single_port(port, page)
+        click.echo(output)
+        sys.exit(return_code)
+    else:
+        logical_port_list = natsorted(platform_sfputil.logical)
+        lines = []
+        for logical_port_name in logical_port_list:
+            return_code, output = eeprom_hexdump_single_port(logical_port_name, page)
+            if return_code != 0:
+                lines.append(f'EEPROM hexdump for port {logical_port_name}')
+                lines.append(f'{EEPROM_DUMP_INDENT}{output}\n')
+                continue
+            lines.append(output)
+        click.echo('\n'.join(lines))
 
-    if platform_sfputil.is_logical_port(port) == 0:
-        click.echo("Error: invalid port {}".format(port))
+
+def validate_eeprom_page(page):
+    """
+    Validate input page module EEPROM
+    Args:
+        page: str page input by user
+
+    Returns:
+        int page
+    """
+    try:
+        page = int(page)
+    except ValueError:
+        click.echo('Please enter a numeric page number')
+        sys.exit(ERROR_NOT_IMPLEMENTED)
+    if page < 0 or page > 255:
+        click.echo(f'Invalid page {page}')
+        sys.exit(ERROR_INVALID_PAGE)
+    return page
+
+
+def eeprom_hexdump_single_port(logical_port_name, page):
+    """
+    Dump EEPROM for a single logical port in hex format.
+    Args:
+        logical_port_name: logical port name
+        page: page to be dumped
+
+    Returns:
+        tuple(0, dump string) if success else tuple(error_code, error_message)
+    """
+    if platform_sfputil.is_logical_port(logical_port_name) == 0:
         print_all_valid_port_values()
-        sys.exit(ERROR_INVALID_PORT)
-
-    if page is None:
-        page = '0'
-
-    logical_port_name = port
-    physical_port = logical_port_to_physical_port_index(logical_port_name)
+        return ERROR_INVALID_PORT, f'Error: invalid port {logical_port_name}'
 
     if is_port_type_rj45(logical_port_name):
-        click.echo("{}: SFP EEPROM Hexdump is not applicable for RJ45 port".format(port))
-        sys.exit(ERROR_INVALID_PORT)
+        return ERROR_INVALID_PORT, f'{logical_port_name}: SFP EEPROM Hexdump is not applicable for RJ45 port'
 
+    physical_port = logical_port_to_physical_port_index(logical_port_name)
     try:
-        presence = platform_chassis.get_sfp(physical_port).get_presence()
+        sfp = platform_chassis.get_sfp(physical_port)
+        presence = sfp.get_presence()
     except NotImplementedError:
-        click.echo("Sfp.get_presence() is currently not implemented for this platform")
-        sys.exit(ERROR_NOT_IMPLEMENTED)
+        return ERROR_NOT_IMPLEMENTED, 'Sfp.get_presence() is currently not implemented for this platform'
 
     if not presence:
-        click.echo("SFP EEPROM not detected")
-        sys.exit(ERROR_NOT_IMPLEMENTED)
+        return ERROR_NOT_IMPLEMENTED, 'SFP EEPROM not detected'
+
+    try:
+        api = sfp.get_xcvr_api()
+        if not api:
+            return ERROR_NOT_IMPLEMENTED, 'Error: Failed to read EEPROM for offset 0!'
+
+        from sonic_platform_base.sonic_xcvr.api.public import sff8636, sff8436, cmis, sff8472
+        from sonic_platform_base.sonic_xcvr.fields import consts
+        if isinstance(api, cmis.CmisApi):
+            if page is None: # print all possible pages
+                if api.is_flat_memory():
+                    pages = [0]
+                else:
+                    pages = copy.deepcopy(CMIS_MODULE_PAGES)
+                    if api.is_coherent_module():
+                        pages.extend(CMIS_COHERENT_MODULE_PAGES)
+                    cdb_support = api.xcvr_eeprom.read(consts.CDB_SUPPORT)
+                    if cdb_support != 0:
+                        pages.append(0x9f)
+            else:
+                pages = [0]
+                if page not in pages:
+                    pages.append(page)
+            return eeprom_hexdump_pages_general(logical_port_name, pages, page)
+        elif isinstance(api, sff8636.Sff8636Api) or isinstance(api, sff8436.Sff8436Api):
+            if page is None:
+                if api.is_flat_memory():
+                    pages = [0]
+                else:
+                    pages = copy.deepcopy(SFF8636_MODULE_PAGES)
+            else:
+                pages = [0]
+                if page not in pages:
+                    pages.append(page)
+            return eeprom_hexdump_pages_general(logical_port_name, pages, page)
+        elif isinstance(api, sff8472.Sff8472Api):
+            if page is None:
+                if not api.is_copper():
+                    pages = copy.deepcopy(SFF8472_MODULE_PAGES)
+                else:
+                    pages = [0]
+            else:
+                pages = copy.deepcopy(SFF8472_MODULE_PAGES) if not api.is_copper() else [0]
+                if page not in pages:
+                    pages.append(page)
+            return eeprom_hexdump_pages_sff8472(logical_port_name, pages, page)
+        else:
+            return ERROR_NOT_IMPLEMENTED, 'Cable type is not supported'
+    except NotImplementedError:
+        return ERROR_NOT_IMPLEMENTED, 'Sfp.read_eeprom() is currently not implemented for this platform'
+
+
+def eeprom_hexdump_pages_general(logical_port_name, pages, target_page):
+    """
+    Dump module EEPROM for given pages in hex format. This function is designed for cable type other than SFF8472.
+    Args:
+        logical_port_name: logical port name
+        pages: a list of pages to be dumped. The list always include a default page list and the target_page input by
+               user
+        target_page: user input page number, optional. target_page is only for display purpose
+
+    Returns:
+        tuple(0, dump string) if success else tuple(error_code, error_message)
+    """
+    if target_page is not None:
+        lines = [f'EEPROM hexdump for port {logical_port_name} page {target_page}h']
     else:
-        try:
-            id = platform_chassis.get_sfp(physical_port).read_eeprom(0, 1)
-            if id is None:
-                click.echo("Error: Failed to read EEPROM for offset 0!")
-                sys.exit(ERROR_NOT_IMPLEMENTED)
-        except NotImplementedError:
-            click.echo("Sfp.read_eeprom() is currently not implemented for this platform")
-            sys.exit(ERROR_NOT_IMPLEMENTED)
+        lines = [f'EEPROM hexdump for port {logical_port_name}']
+    physical_port = logical_port_to_physical_port_index(logical_port_name)
+    for page in pages:
+        if page == 0:
+            lines.append(f'{EEPROM_DUMP_INDENT}Lower page 0h')
+            return_code, output = eeprom_dump_general(physical_port, page, 0, PAGE_SIZE, 0)
+            if return_code != 0:
+                return return_code, output
+            lines.append(output)
 
-        if id[0] == 0x3:
-            output = eeprom_hexdump_sff8472(port, physical_port, page)
+            lines.append(f'\n{EEPROM_DUMP_INDENT}Upper page 0h')
+            return_code, output = eeprom_dump_general(physical_port, page, PAGE_OFFSET, PAGE_SIZE, PAGE_OFFSET)
+            if return_code != 0:
+                return return_code, output
+            lines.append(output)
         else:
-            output = eeprom_hexdump_sff8636(port, physical_port, page)
+            lines.append(f'\n{EEPROM_DUMP_INDENT}Upper page {page:x}h')
+            return_code, output = eeprom_dump_general(physical_port, page, page * PAGE_SIZE + PAGE_OFFSET, PAGE_SIZE, PAGE_OFFSET)
+            if return_code != 0:
+                return return_code, output
+            lines.append(output)
 
-    output += '\n'
+    lines.append('') # add a new line
+    return 0, '\n'.join(lines)
 
-    click.echo(output)
 
-def eeprom_hexdump_sff8472(port, physical_port, page):
-    try:
-        output = ""
-        indent = ' ' * 8
-        output += 'EEPROM hexdump for port {} page {}h'.format(port, page)
-        output += '\n{}A0h dump'.format(indent)
-        page_dump = platform_chassis.get_sfp(physical_port).read_eeprom(0, SFF8472_A0_SIZE)
-        if page_dump is None:
-            click.echo("Error: Failed to read EEPROM for A0h!")
-            sys.exit(ERROR_NOT_IMPLEMENTED)
+def eeprom_hexdump_pages_sff8472(logical_port_name, pages, target_page):
+    """
+    Dump module EEPROM for given pages in hex format. This function is designed for SFF8472 only.
+    Args:
+        logical_port_name: logical port name
+        pages: a list of pages to be dumped. The list always include a default page list and the target_page input by
+               user
+        target_page: user input page number, optional. target_page is only for display purpose
 
-        output += hexdump(indent, page_dump, 0)
-        page_dump = platform_chassis.get_sfp(physical_port).read_eeprom(SFF8472_A0_SIZE, PAGE_SIZE)
-        if page_dump is None:
-            click.echo("Error: Failed to read EEPROM for A2h!")
-            sys.exit(ERROR_NOT_IMPLEMENTED)
+    Returns:
+        tuple(0, dump string) if success else tuple(error_code, error_message)
+    """
+    if target_page is not None:
+        lines = [f'EEPROM hexdump for port {logical_port_name} page {target_page}h']
+    else:
+        lines = [f'EEPROM hexdump for port {logical_port_name}']
+    physical_port = logical_port_to_physical_port_index(logical_port_name)
+    api = platform_chassis.get_sfp(physical_port).get_xcvr_api()
+    is_flat_memory = api.is_flat_memory()
+    for page in pages:
+        if page == 0:
+            lines.append(f'{EEPROM_DUMP_INDENT}A0h dump')
+            if not is_flat_memory:
+                return_code, output = eeprom_dump_general(physical_port, page, 0, SFF8472_A0_SIZE, 0)
+            else:
+                return_code, output = eeprom_dump_general(physical_port, page, 0, PAGE_SIZE, 0)
+            if return_code != 0:
+                return return_code, 'Error: Failed to read EEPROM for A0h!'
+            lines.append(output)
+        elif page == 1:
+            lines.append(f'\n{EEPROM_DUMP_INDENT}A2h dump (lower 128 bytes)')
+            return_code, output = eeprom_dump_general(physical_port, page, SFF8472_A0_SIZE, PAGE_SIZE, 0)
+            if return_code != 0:
+                return ERROR_NOT_IMPLEMENTED, 'Error: Failed to read EEPROM for A2h!'
+            lines.append(output)
         else:
-            output += '\n\n{}A2h dump (lower 128 bytes)'.format(indent)
-            output += hexdump(indent, page_dump, 0)
+            lines.append(f'\n{EEPROM_DUMP_INDENT}A2h dump (upper 128 bytes) page {page - 2:x}h')
+            return_code, output = eeprom_dump_general(physical_port, page, SFF8472_A0_SIZE + PAGE_OFFSET + page * PAGE_SIZE, PAGE_SIZE, PAGE_SIZE)
+            if return_code != 0:
+                return ERROR_NOT_IMPLEMENTED, 'Error: Failed to read EEPROM for A2h upper page!'
+            lines.append(output)
 
-        page_dump = platform_chassis.get_sfp(physical_port).read_eeprom(SFF8472_A0_SIZE + PAGE_OFFSET + (int(page, base=16) * PAGE_SIZE), PAGE_SIZE)
-        if page_dump is None:
-            click.echo("Error: Failed to read EEPROM for A2h upper page!")
-            sys.exit(ERROR_NOT_IMPLEMENTED)
-        else:
-            output += '\n\n{}A2h dump (upper 128 bytes) page {}h'.format(indent, page)
-            output += hexdump(indent, page_dump, PAGE_OFFSET)
-    except NotImplementedError:
-        click.echo("Sfp.read_eeprom() is currently not implemented for this platform")
-        sys.exit(ERROR_NOT_IMPLEMENTED)
-    except ValueError:
-        click.echo("Please enter a numeric page number")
-        sys.exit(ERROR_NOT_IMPLEMENTED)
-
-    return output
-
-def eeprom_hexdump_sff8636(port, physical_port, page):
-    try:
-        output = ""
-        indent = ' ' * 8
-        output += 'EEPROM hexdump for port {} page {}h'.format(port, page)
-        output += '\n{}Lower page 0h'.format(indent)
-        page_dump = platform_chassis.get_sfp(physical_port).read_eeprom(0, PAGE_SIZE)
-        if page_dump is None:
-            click.echo("Error: Failed to read EEPROM for page 0!")
-            sys.exit(ERROR_NOT_IMPLEMENTED)
-
-        output += hexdump(indent, page_dump, 0)
-        page_dump = platform_chassis.get_sfp(physical_port).read_eeprom(int(page, base=16) * PAGE_SIZE + PAGE_OFFSET, PAGE_SIZE)
-        if page_dump is None:
-            click.echo("Error: Failed to read EEPROM!")
-            sys.exit(ERROR_NOT_IMPLEMENTED)
-        else:
-            output += '\n\n{}Upper page {}h'.format(indent, page)
-            output += hexdump(indent, page_dump, PAGE_OFFSET)
-    except NotImplementedError:
-        click.echo("Sfp.read_eeprom() is currently not implemented for this platform")
-        sys.exit(ERROR_NOT_IMPLEMENTED)
-    except ValueError:
-        click.echo("Please enter a numeric page number")
-        sys.exit(ERROR_NOT_IMPLEMENTED)
-
-    return output
+    lines.append('') # add a new line
+    return 0, '\n'.join(lines)
 
 
-def eeprom_dump_general(physical_port, page, overall_offset, size, page_offset, no_format=False):
+def eeprom_dump_general(physical_port, page, flat_offset, size, page_offset, no_format=False):
+    """
+    Dump module EEPROM.
+    Args:
+        physical_port: physical port index
+        page: module EEPROM page number
+        flat_offset: overall offset in flat memory
+        size: size of bytes to be dumped
+        page_offset: offset within a page, only for print purpose
+        no_format: False if dump with hex format else dump with flat hex string. Default False.
+
+    Returns:
+        tuple(0, dump string) if success else tuple(error_code, error_message)
+    """
+    sfp = platform_chassis.get_sfp(physical_port)
+    page_dump = sfp.read_eeprom(flat_offset, size)
+    if page_dump is None:
+        return ERROR_NOT_IMPLEMENTED, f'Error: Failed to read EEPROM for page {page:x}h, flat_offset {flat_offset}, page_offset {page_offset}, size {size}!'
+    if not no_format:
+        return 0, hexdump(EEPROM_DUMP_INDENT, page_dump, page_offset, start_newline=False)
+    else:
+        return 0, ''.join('{:02x}'.format(x) for x in page_dump)
+
+
+
+def eeprom_dump_general(physical_port, page, flat_offset, size, page_offset, no_format=False):
     """
     Dump module EEPROM for given pages in hex format.
     Args:
@@ -815,9 +941,9 @@ def eeprom_dump_general(physical_port, page, overall_offset, size, page_offset, 
         tuple(0, dump string) if success else tuple(error_code, error_message)
     """
     sfp = platform_chassis.get_sfp(physical_port)
-    page_dump = sfp.read_eeprom(overall_offset, size)
+    page_dump = sfp.read_eeprom(flat_offset, size)
     if page_dump is None:
-        return ERROR_NOT_IMPLEMENTED, f'Error: Failed to read EEPROM for page {page:x}h, overall_offset {overall_offset}, page_offset {page_offset}, size {size}!'
+        return ERROR_NOT_IMPLEMENTED, f'Error: Failed to read EEPROM for page {page:x}h, flat_offset {flat_offset}, page_offset {page_offset}, size {size}!'
     if not no_format:
         return 0, hexdump(EEPROM_DUMP_INDENT, page_dump, page_offset, start_newline=False)
     else:
@@ -829,6 +955,7 @@ def convert_byte_to_valid_ascii_char(byte):
         return '.'
     else:
         return chr(byte)
+
 
 def hexdump(indent, data, mem_address, start_newline=True):
     size = len(data)
@@ -858,6 +985,7 @@ def hexdump(indent, data, mem_address, start_newline=True):
         offset += 16
         mem_address += 16
     return '\n'.join(lines)
+
 
 # 'presence' subcommand
 @show.command()

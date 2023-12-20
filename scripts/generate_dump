@@ -1853,6 +1853,7 @@ main() {
     save_cmd "show interface transceiver presence" "interface.xcvrs.presence" &
     save_cmd "show interface transceiver eeprom --dom" "interface.xcvrs.eeprom" &
     save_cmd "show ip interface -d all" "ip.interface" &
+    save_cmd "sfputil show eeprom-hexdump" "interface.xcvrs.eeprom.raw" &
     wait
 
     save_cmd "lldpctl" "lldpctl" &
