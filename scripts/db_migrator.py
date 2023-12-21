@@ -37,7 +37,14 @@ log = logger.Logger(SYSLOG_IDENTIFIER)
 class DBMigrator():
     def __init__(self, namespace, socket=None):
         """
-        Version string format:
+        Version string format (202305 and above):
+            version_<branch>_<build>
+              branch: master, 202311, 202305, etc.
+              build:  sequentially increase with leading 0 to make it 2 digits.
+                      because the minor number has been removed to make it different
+                      from the old format, adding a leading 0 to make sure that we
+                      have double digit version number spaces.
+        Version string format (before 202305):
            version_<major>_<minor>_<build>
               major: starting from 1, sequentially incrementing in master
                      branch.
@@ -47,7 +54,7 @@ class DBMigrator():
                      none-zero values.
               build: sequentially increase within a minor version domain.
         """
-        self.CURRENT_VERSION = 'version_4_0_5'
+        self.CURRENT_VERSION = 'version_202405_01'
 
         self.TABLE_NAME      = 'VERSIONS'
         self.TABLE_KEY       = 'DATABASE'
@@ -1055,27 +1062,46 @@ class DBMigrator():
         """
         log.log_info('Handling version_4_0_3')
 
+        self.set_version('version_202305_01')
+        return 'version_202305_01'
+
+    def version_202305_01(self):
+        """
+        Version 202305_01.
+        This is current last erversion for 202305 branch
+        """
+        log.log_info('Handling version_202305_01')
+        self.set_version('version_202311_01')
+        return 'version_202311_01'
+
+    def version_202311_01(self):
+        """
+        Version 202311_01.
+        """
+        log.log_info('Handling version_202311_01')
+
         # Updating DNS nameserver
         self.migrate_dns_nameserver()
-        self.set_version('version_4_0_4')
-        return 'version_4_0_4'
-
-    def version_4_0_4(self):
-        """
-        Version 4_0_4.
-        """
-        log.log_info('Handling version_4_0_4')
 
         self.migrate_sflow_table()
-        self.set_version('version_4_0_5')
-        return 'version_4_0_5'
+        self.set_version('version_202311_02')
+        return 'version_202311_02'
 
-    def version_4_0_5(self):
+    def version_202311_02(self):
         """
-        Version 4_0_5.
-        This is the latest version for master branch
+        Version 202311_02.
+        This is current last erversion for 202311 branch
         """
-        log.log_info('Handling version_4_0_5')
+        log.log_info('Handling version_202311_02')
+        self.set_version('version_202405_01')
+        return 'version_202405_01'
+
+    def version_202405_01(self):
+        """
+        Version 202405_01, this version should be the final version for
+        master branch until 202405 branch is created.
+        """
+        log.log_info('Handling version_202405_01')
         return None
 
     def get_version(self):

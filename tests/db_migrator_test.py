@@ -25,6 +25,36 @@ os.environ["PATH"] += os.pathsep + scripts_path
 def get_sonic_version_info_mlnx():
     return {'asic_type': 'mellanox'}
 
+def version_greater_than(v1, v2):
+    # Return True when v1 is later than v2. Otherwise return False.
+    if 'master' in v1:
+        if 'master' in v2:
+            # both are master versions, directly compare.
+            return v1 > v2
+
+        # v1 is master verson and v2 is not, v1 is higher
+        return True
+
+    if 'master' in v2:
+        # v2 is master version and v1 is not.
+        return False
+
+    s1 = v1.split('_')
+    s2 = v2.split('_')
+    if len(s1) == 3:
+        # new format version_<barnch>_<ver>
+        if len(s2) == 3:
+            # Both are new format version string
+            return v1 > v2
+        return True
+
+    if len(s2) == 3:
+        # v2 is new format and v1 is old format.
+        return False
+
+    # Both are old format version_a_b_c
+    return v1 > v2
+
 
 def advance_version_for_expected_database(migrated_db, expected_db, last_interested_version):
     # In case there are new db versions greater than the latest one that mellanox buffer migrator is interested,
@@ -32,9 +62,39 @@ def advance_version_for_expected_database(migrated_db, expected_db, last_interes
     expected_dbversion = expected_db.get_entry('VERSIONS', 'DATABASE')
     dbmgtr_dbversion = migrated_db.get_entry('VERSIONS', 'DATABASE')
     if expected_dbversion and dbmgtr_dbversion:
-        if expected_dbversion['VERSION'] == last_interested_version and dbmgtr_dbversion['VERSION'] > expected_dbversion['VERSION']:
+        if expected_dbversion['VERSION'] == last_interested_version and version_greater_than(dbmgtr_dbversion['VERSION'], expected_dbversion['VERSION']):
             expected_dbversion['VERSION'] = dbmgtr_dbversion['VERSION']
             expected_db.set_entry('VERSIONS', 'DATABASE', expected_dbversion)
+
+
+class TestVersionComparison(object):
+    @classmethod
+    def setup_class(cls):
+        cls.version_comp_list = [
+                                  # Old format v.s old format
+                                  { 'v1' : 'version_1_0_1', 'v2' : 'version_1_0_2', 'result' : False },
+                                  { 'v1' : 'version_1_0_2', 'v2' : 'version_1_0_1', 'result' : True  },
+                                  { 'v1' : 'version_1_0_1', 'v2' : 'version_2_0_1', 'result' : False },
+                                  { 'v1' : 'version_2_0_1', 'v2' : 'version_1_0_1', 'result' : True  },
+                                  # New format v.s old format
+                                  { 'v1' : 'version_1_0_1', 'v2' : 'version_202311_01', 'result' : False },
+                                  { 'v1' : 'version_202311_01', 'v2' : 'version_1_0_1', 'result' : True  },
+                                  { 'v1' : 'version_1_0_1', 'v2' : 'version_master_01', 'result' : False },
+                                  { 'v1' : 'version_master_01', 'v2' : 'version_1_0_1', 'result' : True  },
+                                  # New format v.s new format
+                                  { 'v1' : 'version_202311_01', 'v2' : 'version_202311_02', 'result' : False },
+                                  { 'v1' : 'version_202311_02', 'v2' : 'version_202311_01', 'result' : True  },
+                                  { 'v1' : 'version_202305_01', 'v2' : 'version_202311_01', 'result' : False },
+                                  { 'v1' : 'version_202311_01', 'v2' : 'version_202305_01', 'result' : True  },
+                                  { 'v1' : 'version_202311_01', 'v2' : 'version_master_01', 'result' : False },
+                                  { 'v1' : 'version_master_01', 'v2' : 'version_202311_01', 'result' : True  },
+                                  { 'v1' : 'version_master_01', 'v2' : 'version_master_02', 'result' : False },
+                                  { 'v1' : 'version_master_02', 'v2' : 'version_master_01', 'result' : True  },
+                                ]
+
+    def test_version_comparison(self):
+        for rec in self.version_comp_list:
+            assert version_greater_than(rec['v1'], rec['v2']) == rec['result'], 'test failed: {}'.format(rec)
 
 
 class TestMellanoxBufferMigrator(object):
@@ -704,7 +764,7 @@ class TestFastUpgrade_to_4_0_3(object):
         expected_db = self.mock_dedicated_config_db(db_after_migrate)
         advance_version_for_expected_database(dbmgtr.configDB, expected_db.cfgdb, 'version_4_0_3')
         assert not self.check_config_db(dbmgtr.configDB, expected_db.cfgdb)
-        assert dbmgtr.CURRENT_VERSION == expected_db.cfgdb.get_entry('VERSIONS', 'DATABASE')['VERSION']
+        assert dbmgtr.CURRENT_VERSION == expected_db.cfgdb.get_entry('VERSIONS', 'DATABASE')['VERSION'], '{} {}'.format(dbmgtr.CURRENT_VERSION, dbmgtr.get_version())
 
 class TestSflowSampleDirectionMigrator(object):
     @classmethod
