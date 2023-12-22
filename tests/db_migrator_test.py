@@ -368,8 +368,8 @@ class TestDnsNameserverMigrator(object):
         dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'dns-nameserver-input')
         import db_migrator
         dbmgtr = db_migrator.DBMigrator(None)
-        # Set minigraph_data to DNS_NAMESERVERS
-        dbmgtr.minigraph_data = {
+        # Set config_src_data to DNS_NAMESERVERS
+        dbmgtr.config_src_data = {
             'DNS_NAMESERVER': {
                 '1.1.1.1': {},
                 '2001:1001:110:1001::1': {}
@@ -635,8 +635,8 @@ class TestWarmUpgrade_to_2_0_2(object):
         dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'cross_branch_upgrade_to_version_2_0_2_input')
         import db_migrator
         dbmgtr = db_migrator.DBMigrator(None)
-        # set minigraph_data to None to mimic the missing minigraph.xml scenario
-        dbmgtr.minigraph_data = None
+        # set config_src_data to None to mimic the missing minigraph.xml scenario
+        dbmgtr.config_src_data = None
         dbmgtr.migrate()
         dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'cross_branch_upgrade_without_mg_2_0_2_expected.json')
         expected_db = Db()
@@ -823,3 +823,49 @@ class TestSflowSampleDirectionMigrator(object):
             expected_keys = expected_appl_db.get_all(expected_appl_db.APPL_DB, key)
             diff = DeepDiff(resulting_keys, expected_keys, ignore_order=True)
             assert not diff
+
+class TestGoldenConfig(object):
+    @classmethod
+    def setup_class(cls):
+        os.system("cp %s %s" % (mock_db_path + '/golden_config_db.json.test', mock_db_path + '/golden_config_db.json'))
+        os.environ['UTILITIES_UNIT_TESTING'] = "2"
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+        os.system("rm %s" % (mock_db_path + '/golden_config_db.json'))
+
+    def test_golden_config_hostname(self):
+        import db_migrator
+        dbmgtr = db_migrator.DBMigrator(None)
+        config = dbmgtr.config_src_data
+        device_metadata = config.get('DEVICE_METADATA', {})
+        assert device_metadata != {}
+        host = device_metadata.get('localhost', {})
+        assert host != {}
+        hostname = host.get('hostname', '')
+        # hostname is from golden_config_db.json
+        assert hostname == 'SONiC-Golden-Config'
+
+class TestGoldenConfigInvalid(object):
+    @classmethod
+    def setup_class(cls):
+        os.system("cp %s %s" % (mock_db_path + '/golden_config_db.json.invalid', mock_db_path + '/golden_config_db.json'))
+        os.environ['UTILITIES_UNIT_TESTING'] = "2"
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+        os.system("rm %s" % (mock_db_path + '/golden_config_db.json'))
+
+    def test_golden_config_hostname(self):
+        import db_migrator
+        dbmgtr = db_migrator.DBMigrator(None)
+        config = dbmgtr.config_src_data
+        device_metadata = config.get('DEVICE_METADATA', {})
+        assert device_metadata != {}
+        host = device_metadata.get('localhost', {})
+        assert host != {}
+        hostname = host.get('hostname', '')
+        # hostname is from minigraph.xml
+        assert hostname == 'SONiC-Dummy'
