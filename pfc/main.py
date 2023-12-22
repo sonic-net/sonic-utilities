@@ -1,12 +1,24 @@
 #!/usr/bin/env python3
-
+import os
+import sys
 import click
 from swsscommon.swsscommon import ConfigDBConnector
 from tabulate import tabulate
 from natsort import natsorted
+from importlib import reload
 
 ALL_PRIORITIES = [str(x) for x in range(8)]
 PRIORITY_STATUS = ['on', 'off']
+
+# mock the redis for unit test purposes #
+try:
+    if os.environ["UTILITIES_UNIT_TESTING"] == "2":
+        modules_path = os.path.join(os.path.dirname(__file__), "..")
+        tests_path = os.path.join(modules_path, "tests")
+        sys.path.insert(0, modules_path)
+        sys.path.insert(0, tests_path)
+except KeyError:
+    pass
 
 class Pfc(object):
     def configPfcAsym(self, interface, pfc_asym):
@@ -18,6 +30,8 @@ class Pfc(object):
 
         configdb.mod_entry("PORT", interface, {'pfc_asym': pfc_asym})
 
+        if "UTILITIES_UNIT_TESTING" in os.environ and os.environ["UTILITIES_UNIT_TESTING"] == "2":
+            self.showPfcAsym(interface)
 
     def showPfcAsym(self, interface):
         """
