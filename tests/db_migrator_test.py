@@ -1,7 +1,8 @@
 import os
 import pytest
 import sys
-
+import argparse
+from unittest import mock
 from deepdiff import DeepDiff
 
 from swsscommon.swsscommon import SonicV2Connector
@@ -869,3 +870,18 @@ class TestGoldenConfigInvalid(object):
         hostname = host.get('hostname', '')
         # hostname is from minigraph.xml
         assert hostname == 'SONiC-Dummy'
+
+class TestMain(object):
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "2"
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+
+    @mock.patch('argparse.ArgumentParser.parse_args')
+    def test_init(self, mock_args):
+        mock_args.return_value=argparse.Namespace(namespace=None, operation='get_version', socket=None)
+        import db_migrator
+        db_migrator.main()
