@@ -471,3 +471,86 @@ def rate_limit_container(db, service_name, interval, burst):
     feature_data = db.cfgdb.get_table(syslog_common.FEATURE_TABLE)
     syslog_common.service_validator(feature_data, service_name)
     syslog_common.save_rate_limit_to_db(db, service_name, interval, burst, log)
+
+
+@syslog.group(
+    name="rate-limit-feature",
+    cls=clicommon.AliasedGroup
+)
+def rate_limit_feature():
+    """ Configure syslog rate limit feature """
+    pass
+
+
+@rate_limit_feature.command("enable")
+@clicommon.pass_db
+def enable_rate_limit_feature(db):
+    """ Enable syslog rate limit feature """
+    feature_data = db.cfgdb.get_table(syslog_common.FEATURE_TABLE)
+    for feature_name in feature_data.keys():
+        click.echo(f'Enabling syslog rate limit feature for {feature_name}')
+        output, _ = clicommon.run_command(['docker', 'ps', '-q', '-f', 'status=running', '-f', f'name={feature_name}'], return_cmd=True)
+        if not output:
+            click.echo(f'{feature_name} is not running, ignoring...')
+            continue
+        
+        output, _ = clicommon.run_command(['docker', 'exec', '-i', feature_name, 'supervisorctl', 'status', 'containercfgd'], 
+                                          ignore_error=True, return_cmd=True)
+        if 'no such process' not in output:
+            click.echo(f'Syslog rate limit feature is already enabled in {feature_name}, ignoring...')
+            continue
+        
+        commands = [
+            ['docker', 'cp', '/usr/share/sonic/templates/containercfgd.conf', f'{feature_name}:/etc/supervisor/conf.d/'],
+            ['docker', 'exec', '-i', feature_name, 'supervisorctl', 'reread'],
+            ['docker', 'exec', '-i', feature_name, 'supervisorctl', 'update'],
+            ['docker', 'exec', '-i', feature_name, 'supervisorctl', 'start', 'containercfgd']
+        ]
+        
+        failed = False
+        for command in commands:
+            output, ret = clicommon.run_command(command, return_cmd=True)
+            if ret != 0:
+                failed = True
+                click.echo(f'Enable syslog rate limit feature for {feature_name} failed - {output}')
+                break
+        
+        if not failed:
+            click.echo(f'Enabled syslog rate limit feature for {feature_name}')
+        
+            
+@rate_limit_feature.command("disable")
+@clicommon.pass_db
+def disable_rate_limit_feature(db):
+    """ Disable syslog rate limit feature """
+    feature_data = db.cfgdb.get_table(syslog_common.FEATURE_TABLE)
+    for feature_name in feature_data.keys():
+        click.echo(f'Disabling syslog rate limit feature for {feature_name}')
+        output, _ = clicommon.run_command(['docker', 'ps', '-q', '-f', 'status=running', '-f', f'name={feature_name}'], return_cmd=True)
+        if not output:
+            click.echo(f'{feature_name} is not running, ignoring...')
+            continue
+        
+        output, _ = clicommon.run_command(['docker', 'exec', '-i', feature_name, 'supervisorctl', 'status', 'containercfgd'], 
+                                          ignore_error=True, return_cmd=True)
+        if 'no such process' in output:
+            click.echo(f'Syslog rate limit feature is already disabled in {feature_name}, ignoring...')
+            continue
+        
+        commands = [
+            ['docker', 'exec', '-i', feature_name, 'supervisorctl', 'stop', 'containercfgd'],
+            ['docker', 'exec', '-i', feature_name, 'rm', '-f', '/etc/supervisor/conf.d/containercfgd.conf'],
+            ['docker', 'exec', '-i', feature_name, 'supervisorctl', 'reread'],
+            ['docker', 'exec', '-i', feature_name, 'supervisorctl', 'update']
+        ]
+        failed = False
+        for command in commands:
+            output, ret = clicommon.run_command(command, return_cmd=True)
+            if ret != 0:
+                failed = True
+                click.echo(f'Disable syslog rate limit feature for {feature_name} failed - {output}')
+                break
+        
+        if not failed:
+            click.echo(f'Disabled syslog rate limit feature for {feature_name}')
+

@@ -10226,6 +10226,33 @@ This command is used to configure syslog rate limit for containers.
   admin@sonic:~$ sudo config syslog rate-limit-container bgp --interval 300 --burst 20000
   ```
 
+**config syslog rate-limit-feature enable**
+
+This command is used to enable syslog rate limit feature.
+
+- Usage:
+  ```
+  config syslog rate-limit-feature enable
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config syslog rate-limit-feature enable
+  ```
+
+**config syslog rate-limit-feature disable**
+
+This command is used to disable syslog rate limit feature.
+
+- Usage:
+  ```
+  config syslog rate-limit-feature disable
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config syslog rate-limit-feature disable
+  ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#syslog)
 
