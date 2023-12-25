@@ -9,12 +9,12 @@ cn=ldapadm,dc=test1,dc=test2  password                      3          3  dc=tes
 """
 
 show_ldap_server="""\
-IPADDRESS      PRIORITY
------------  ----------
-10.0.0.1              1
+HOSTNAME      PRIORITY
+----------  ----------
+10.0.0.1             1
 """
 
 show_ldap_server_deleted="""\
-IPADDRESS    PRIORITY
------------  ----------
+HOSTNAME    PRIORITY
+----------  ----------
 """

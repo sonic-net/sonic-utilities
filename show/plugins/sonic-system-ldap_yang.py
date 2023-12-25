@@ -10,9 +10,6 @@ import natsort
 import utilities_common.cli as clicommon
 
 
-
-
-
 def format_attr_value(entry, attr):
     """ Helper that formats attribute to be presented in the table output.
 
@@ -37,10 +34,8 @@ def LDAP_SERVER(db):
     """  [Callable command group] """
 
     header = [
-"IPADDRESS",
-
+"HOSTNAME",
 "PRIORITY",
-
 ]
 
     body = []
@@ -63,16 +58,12 @@ def LDAP_SERVER(db):
     click.echo(tabulate.tabulate(body, header))
 
 
-
-
-
 @click.group(name="ldap",
              cls=clicommon.AliasedGroup)
 def LDAP():
     """  """
 
     pass
-
 
 
 @LDAP.command(name="global")
@@ -119,7 +110,7 @@ def LDAP_global(db):
     ),
     format_attr_value(
         entry,
-        {'name': 'port', 'description': 'TCP port to communite with LDAP server', 'is-leaf-list': False, 'is-mandatory': False, 'group': ''}
+        {'name': 'port', 'description': 'TCP port to communicate with LDAP server', 'is-leaf-list': False, 'is-mandatory': False, 'group': ''}
     ),
     format_attr_value(
         entry,
@@ -129,9 +120,6 @@ def LDAP_global(db):
 
     body.append(row)
     click.echo(tabulate.tabulate(body, header))
-
-
-
 
 
 def register(cli):

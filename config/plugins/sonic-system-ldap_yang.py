@@ -10,7 +10,6 @@ import utilities_common.cli as clicommon
 import utilities_common.general as general
 from config import config_mgmt
 
-
 # Load sonic-cfggen from source since /usr/local/bin/sonic-cfggen does not have .py extension.
 sonic_cfggen = general.load_module_from_source('sonic_cfggen', '/usr/local/bin/sonic-cfggen')
 
@@ -134,41 +133,6 @@ def del_entry_validated(db, table, key):
     db.set_entry(table, key, None)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 @click.group(name="ldap-server",
              cls=clicommon.AliasedGroup)
 def LDAP_SERVER():
@@ -177,20 +141,9 @@ def LDAP_SERVER():
     pass
 
 
-
-
-
-
-
-
-
-
-
-
 @LDAP_SERVER.command(name="add")
-
 @click.argument(
-    "ipaddress",
+    "hostname",
     nargs=1,
     required=True,
 )
@@ -200,11 +153,11 @@ def LDAP_SERVER():
     help="Server priority",
 )
 @clicommon.pass_db
-def LDAP_SERVER_add(db, ipaddress, priority):
+def LDAP_SERVER_add(db, hostname, priority):
     """ Add object in LDAP_SERVER. """
 
     table = "LDAP_SERVER"
-    key = ipaddress
+    key = hostname
     data = {}
     if priority is not None:
         data["priority"] = priority
@@ -218,7 +171,7 @@ def LDAP_SERVER_add(db, ipaddress, priority):
 @LDAP_SERVER.command(name="update")
 
 @click.argument(
-    "ipaddress",
+    "hostname",
     nargs=1,
     required=True,
 )
@@ -228,11 +181,11 @@ def LDAP_SERVER_add(db, ipaddress, priority):
     help="Server priority",
 )
 @clicommon.pass_db
-def LDAP_SERVER_update(db, ipaddress, priority):
+def LDAP_SERVER_update(db, hostname, priority):
     """ Add object in LDAP_SERVER. """
 
     table = "LDAP_SERVER"
-    key = ipaddress
+    key = hostname
     data = {}
     if priority is not None:
         data["priority"] = priority
@@ -246,29 +199,20 @@ def LDAP_SERVER_update(db, ipaddress, priority):
 @LDAP_SERVER.command(name="delete")
 
 @click.argument(
-    "ipaddress",
+    "hostname",
     nargs=1,
     required=True,
 )
 @clicommon.pass_db
-def LDAP_SERVER_delete(db, ipaddress):
+def LDAP_SERVER_delete(db, hostname):
     """ Delete object in LDAP_SERVER. """
 
     table = "LDAP_SERVER"
-    key = ipaddress
+    key = hostname
     try:
         del_entry_validated(db.cfgdb, table, key)
     except Exception as err:
         exit_with_error(f"Error: {err}", fg="red")
-
-
-
-
-
-
-
-
-
 
 
 @click.group(name="ldap",
@@ -279,8 +223,6 @@ def LDAP():
     pass
 
 
-
-
 @LDAP.group(name="global",
                         cls=clicommon.AliasedGroup)
 @clicommon.pass_db
@@ -288,8 +230,6 @@ def LDAP_global(db):
     """  """
 
     pass
-
-
 
 
 @LDAP_global.command(name="bind-dn")
@@ -314,7 +254,6 @@ def LDAP_global_bind_dn(db, bind_dn):
         exit_with_error(f"Error: {err}", fg="red")
 
 
-
 @LDAP_global.command(name="bind-password")
 
 @click.argument(
@@ -335,7 +274,6 @@ def LDAP_global_bind_password(db, bind_password):
         update_entry_validated(db.cfgdb, table, key, data, create_if_not_exists=True)
     except Exception as err:
         exit_with_error(f"Error: {err}", fg="red")
-
 
 
 @LDAP_global.command(name="bind-timeout")
@@ -360,7 +298,6 @@ def LDAP_global_bind_timeout(db, bind_timeout):
         exit_with_error(f"Error: {err}", fg="red")
 
 
-
 @LDAP_global.command(name="version")
 
 @click.argument(
@@ -381,7 +318,6 @@ def LDAP_global_version(db, version):
         update_entry_validated(db.cfgdb, table, key, data, create_if_not_exists=True)
     except Exception as err:
         exit_with_error(f"Error: {err}", fg="red")
-
 
 
 @LDAP_global.command(name="base-dn")
@@ -406,7 +342,6 @@ def LDAP_global_base_dn(db, base_dn):
         exit_with_error(f"Error: {err}", fg="red")
 
 
-
 @LDAP_global.command(name="port")
 
 @click.argument(
@@ -416,7 +351,7 @@ def LDAP_global_base_dn(db, base_dn):
 )
 @clicommon.pass_db
 def LDAP_global_port(db, port):
-    """ TCP port to communite with LDAP server """
+    """ TCP port to communicate with LDAP server """
 
     table = "LDAP"
     key = "global"
@@ -427,7 +362,6 @@ def LDAP_global_port(db, port):
         update_entry_validated(db.cfgdb, table, key, data, create_if_not_exists=True)
     except Exception as err:
         exit_with_error(f"Error: {err}", fg="red")
-
 
 
 @LDAP_global.command(name="timeout")
@@ -450,32 +384,6 @@ def LDAP_global_timeout(db, timeout):
         update_entry_validated(db.cfgdb, table, key, data, create_if_not_exists=True)
     except Exception as err:
         exit_with_error(f"Error: {err}", fg="red")
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 def register(cli):
