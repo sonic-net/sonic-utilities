@@ -350,11 +350,29 @@ def setup_multi_asic_bgp_instance(request):
         else:
             return ""
 
+    def mock_run_show_summ_bgp_command_no_ext_neigh_on_all_asic(vtysh_cmd, bgp_namespace, vtysh_shell_cmd=constants.VTYSH_COMMAND):
+        if vtysh_cmd == "show ip bgp summary json":
+            m_asic_json_file = 'no_ext_bgp_neigh.json'
+        else:
+            m_asic_json_file = 'device_bgp_info.json'
+        
+        bgp_mocked_json = os.path.join(
+            test_path, 'mock_tables', bgp_namespace, m_asic_json_file)
+        if os.path.isfile(bgp_mocked_json):
+            with open(bgp_mocked_json) as json_data:
+                mock_frr_data = json_data.read()
+            return mock_frr_data
+        else:
+            return ""
+            
+            
     _old_run_bgp_command = bgp_util.run_bgp_command
     if request.param == 'ip_route_for_int_ip':
         bgp_util.run_bgp_command = mock_run_bgp_command_for_static
     elif request.param == 'show_bgp_summary_no_neigh':
         bgp_util.run_bgp_command = mock_run_show_sum_bgp_command
+    elif request.param == 'show_bgp_summary_no_ext_neigh_on_all_asic':
+        bgp_util.run_bgp_command = mock_run_show_summ_bgp_command_no_ext_neigh_on_all_asic
     else:
         bgp_util.run_bgp_command = mock_run_bgp_command
 
