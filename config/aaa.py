@@ -332,7 +332,7 @@ default.add_command(passkey)
 @click.option('-m', '--use-mgmt-vrf', help="Management vrf, default is no vrf", is_flag=True)
 @click.option('-e', '--encrypt', help='Enable passkey encryption feature', is_flag=True)
 @clicommon.pass_db
-def add(db, address, timeout, key, auth_type, port, pri, use_mgmt_vrf, encrypt):
+def add(address, timeout, key, auth_type, port, pri, use_mgmt_vrf, encrypt):
     """Specify a TACACS+ server"""
     if ADHOC_VALIDATION:
         if not clicommon.is_ipaddress(address):
