@@ -271,14 +271,11 @@ class TestRouteCheck(object):
         # Test timeout
         ex_raised = False
         # Use an expected failing test case to trigger the select
-        ct_data = TEST_DATA['2']
-        set_test_case_data(ct_data)
+        set_test_case_data(TEST_DATA['2'])
+
         try:
-            with patch('sys.argv', [route_check.__file__.split('/')[-1]]), \
-                patch('route_check.load_db_config', side_effect=lambda: init_db_conns(ct_data[NAMESPACE])):
-
+            with patch('sys.argv', [route_check.__file__.split('/')[-1]]):
                 ret, res = route_check.main()
-
         except Exception as err:
             ex_raised = True
             expect = "timeout occurred"
