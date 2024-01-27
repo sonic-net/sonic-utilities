@@ -548,6 +548,10 @@ def check_frr_pending_routes():
                 if entry['vrfName'] != 'default':
                     continue
 
+                # skip if this bgp source prefix is not selected as best
+                if not entry.get('selected', False):
+                    continue
+
                 if not entry.get('offloaded', False):
                     missed_rt.append(entry)
 
