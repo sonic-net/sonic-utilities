@@ -618,6 +618,30 @@ class DBMigrator():
         if not certs:
             self.configDB.set_entry("TELEMETRY", "certs", telemetry_data.get("certs"))
 
+    def migrate_gnmi(self):
+        # If there's GNMI table in CONFIG_DB, no need to migrate
+        gnmi = self.configDB.get_entry('GNMI', 'gnmi')
+        certs = self.configDB.get_entry('GNMI', 'certs')
+        if gnmi and certs:
+            return
+        if self.config_src_data:
+            if 'GNMI' in self.config_src_data:
+                # If there's GNMI in minigraph or golden config, copy configuration from config_src_data
+                gnmi_data = self.config_src_data['GNMI']
+                log.log_notice('Migrate GNMI configuration')
+                if 'gnmi' in gnmi_data:
+                    self.configDB.set_entry("GNMI", "gnmi", gnmi_data.get('gnmi'))
+                if 'certs' in gnmi_data:
+                    self.configDB.set_entry("GNMI", "certs", gnmi_data.get('certs'))
+        else:
+            # If there's no minigraph or golden config, copy configuration from CONFIG_DB TELEMETRY table
+            gnmi = self.configDB.get_entry('TELEMETRY', 'gnmi')
+            if gnmi:
+                self.configDB.set_entry("GNMI", "gnmi", gnmi)
+            certs = self.configDB.get_entry('TELEMETRY', 'certs')
+            if certs:
+                self.configDB.set_entry("GNMI", "certs", certs)
+
     def migrate_console_switch(self):
         # CONSOLE_SWITCH - add missing key
         if not self.config_src_data or 'CONSOLE_SWITCH' not in self.config_src_data:
@@ -1137,9 +1161,20 @@ class DBMigrator():
     def version_202311_02(self):
         """
         Version 202311_02.
-        This is current last erversion for 202311 branch
         """
         log.log_info('Handling version_202311_02')
+        # Update GNMI table
+        self.migrate_gnmi()
+
+        self.set_version('version_202311_03')
+        return 'version_202311_03'
+
+    def version_202311_03(self):
+        """
+        Version 202311_03.
+        This is current last erversion for 202311 branch
+        """
+        log.log_info('Handling version_202311_03')
         self.set_version('version_202405_01')
         return 'version_202405_01'
 

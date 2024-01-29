@@ -379,7 +379,7 @@ class TestDnsNameserverMigrator(object):
         dbmgtr.migrate()
         dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'dns-nameserver-expected')
         expected_db = Db()
-        advance_version_for_expected_database(dbmgtr.configDB, expected_db.cfgdb, 'version_4_0_4')
+        advance_version_for_expected_database(dbmgtr.configDB, expected_db.cfgdb, 'version_202405_01')
         resulting_keys = dbmgtr.configDB.keys(dbmgtr.configDB.CONFIG_DB, 'DNS_NAMESERVER*')
         expected_keys = expected_db.cfgdb.keys(expected_db.cfgdb.CONFIG_DB, 'DNS_NAMESERVER*')
 
@@ -767,6 +767,7 @@ class TestFastUpgrade_to_4_0_3(object):
         assert not self.check_config_db(dbmgtr.configDB, expected_db.cfgdb)
         assert dbmgtr.CURRENT_VERSION == expected_db.cfgdb.get_entry('VERSIONS', 'DATABASE')['VERSION'], '{} {}'.format(dbmgtr.CURRENT_VERSION, dbmgtr.get_version())
 
+
 class TestSflowSampleDirectionMigrator(object):
     @classmethod
     def setup_class(cls):
@@ -885,3 +886,59 @@ class TestMain(object):
         mock_args.return_value=argparse.Namespace(namespace=None, operation='get_version', socket=None)
         import db_migrator
         db_migrator.main()
+
+
+class TestGNMIMigrator(object):
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "2"
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+        dbconnector.dedicated_dbs['CONFIG_DB'] = None
+
+    def test_dns_nameserver_migrator_minigraph(self):
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'gnmi-input')
+        import db_migrator
+        dbmgtr = db_migrator.DBMigrator(None)
+        # Set config_src_data
+        dbmgtr.config_src_data = {
+            'GNMI': {
+                'gnmi': {
+                    "client_auth": "true", 
+                    "log_level": "2", 
+                    "port": "50052"
+                }, 
+                'certs': {
+                    "server_key": "/etc/sonic/telemetry/streamingtelemetryserver.key", 
+                    "ca_crt": "/etc/sonic/telemetry/dsmsroot.cer", 
+                    "server_crt": "/etc/sonic/telemetry/streamingtelemetryserver.cer"
+                }
+            }
+        }
+        dbmgtr.migrate()
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'gnmi-minigraph-expected')
+        expected_db = Db()
+        advance_version_for_expected_database(dbmgtr.configDB, expected_db.cfgdb, 'version_202405_01')
+        resulting_table = dbmgtr.configDB.get_table("GNMI")
+        expected_table = expected_db.cfgdb.get_table("GNMI")
+
+        diff = DeepDiff(resulting_table, expected_table, ignore_order=True)
+        assert not diff
+
+    def test_dns_nameserver_migrator_configdb(self):
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'gnmi-input')
+        import db_migrator
+        dbmgtr = db_migrator.DBMigrator(None)
+        # Set config_src_data
+        dbmgtr.config_src_data = {}
+        dbmgtr.migrate()
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'gnmi-configdb-expected')
+        expected_db = Db()
+        advance_version_for_expected_database(dbmgtr.configDB, expected_db.cfgdb, 'version_202405_01')
+        resulting_table = dbmgtr.configDB.get_table("GNMI")
+        expected_table = expected_db.cfgdb.get_table("GNMI")
+
+        diff = DeepDiff(resulting_table, expected_table, ignore_order=True)
+        assert not diff
