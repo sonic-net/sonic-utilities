@@ -1199,11 +1199,7 @@ config.add_command(muxcable.muxcable)
 config.add_command(nat.nat)
 config.add_command(vlan.vlan)
 config.add_command(vxlan.vxlan)
-
-#add mclag commands
 config.add_command(mclag.mclag)
-config.add_command(mclag.mclag_member)
-config.add_command(mclag.mclag_unique_ip)
 
 # syslog module
 config.add_command(syslog.syslog)
