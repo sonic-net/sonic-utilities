@@ -457,6 +457,14 @@ TEST_DATA = {
                     "selected": True,
                 },
             ],
+            "1.1.1.0/24": [
+                {
+                    "prefix": "1.1.1.0/24",
+                    "vrfName": "default",
+                    "protocol": "static",
+                    "selected": True,
+                },
+            ],
             "10.10.196.24/31": [
                 {
                     "protocol": "connected",
@@ -466,7 +474,8 @@ TEST_DATA = {
         },
         RESULT: {
             "missed_FRR_routes": [
-                {"prefix": "10.10.196.12/31", "vrfName": "default", "protocol": "bgp", "selected": True}
+                {"prefix": "10.10.196.12/31", "vrfName": "default", "protocol": "bgp", "selected": True},
+                {"prefix": "1.1.1.0/24", "vrfName": "default", "protocol": "static", "selected": True},
             ],
         },
         RET: -1,

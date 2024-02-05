@@ -540,7 +540,7 @@ def check_frr_pending_routes():
 
         for _, entries in frr_routes.items():
             for entry in entries:
-                if entry['protocol'] != 'bgp':
+                if entry['protocol'] in ('connected', 'kernel'):
                     continue
 
                 # TODO: Also handle VRF routes. Currently this script does not check for VRF routes so it would be incorrect for us
