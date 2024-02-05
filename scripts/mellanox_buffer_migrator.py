@@ -117,6 +117,7 @@ class MellanoxBufferMigrator():
         self.default_speed_list = ['1000', '10000', '25000', '40000', '50000', '100000', '200000', '400000']
         self.default_cable_len_list = ['5m', '40m', '300m']
         self.is_buffer_config_default = True
+        self.is_buffer_config_empty = False
 
     mellanox_default_parameter = {
         "version_1_0_2": {
@@ -645,7 +646,10 @@ class MellanoxBufferMigrator():
         # If some buffer pool is not default ones, don't need migrate
         for buffer_pool in default_buffer_pool_list_old:
             if buffer_pool not in configdb_buffer_pool_names and buffer_pool != 'ingress_lossy_pool':
+                # Check whether it's empty buffer configuration
                 log.log_notice("Default pool {} isn't in CONFIG_DB, skip buffer pool migration".format(buffer_pool))
+                if not self.configDB.get_keys('BUFFER_*'):
+                    self.is_buffer_config_empty = True
                 return True
 
         default_buffer_pools_old = self.mlnx_default_buffer_parameters(old_version, "buffer_pools")
@@ -818,7 +822,7 @@ class MellanoxBufferMigrator():
         if not self.ready:
             return True
 
-        if not self.is_buffer_config_default or self.is_msft_sku:
+        if not self.is_buffer_config_default and not self.is_buffer_config_empty or self.is_msft_sku:
             log.log_notice("No item pending to be updated")
             metadata = self.configDB.get_entry('DEVICE_METADATA', 'localhost')
             metadata['buffer_model'] = 'traditional'

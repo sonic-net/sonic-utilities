@@ -154,6 +154,8 @@ class TestMellanoxBufferMigrator(object):
 
     @pytest.mark.parametrize('scenario',
                              ['empty-config',
+                              'empty-config-with-device-info-generic',
+                              'empty-config-with-device-info-traditional',
                               'non-default-config',
                               'non-default-xoff',
                               'non-default-lossless-profile-in-pg',
