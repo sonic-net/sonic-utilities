@@ -13060,7 +13060,7 @@ Usage: sfputil read-eeprom [OPTIONS]
 
 Options:
   -p, --port <logical_port_name>  Logical port name  [required]
-  -n, --page <page>               EEPROM page number  [required]
+  -n, --page <page>               EEPROM page number in hex [required]
   -o, --offset <offset>           EEPROM offset within the page  [required]
   -s, --size <size>               Size of byte to be read  [required]
   --no-format                     Display non formatted data
@@ -13092,7 +13092,7 @@ Usage: sfputil write-eeprom [OPTIONS]
 
 Options:
   -p, --port <logical_port_name>  Logical port name  [required]
-  -n, --page <page>               EEPROM page number  [required]
+  -n, --page <page>               EEPROM page number in hex [required]
   -o, --offset <offset>           EEPROM offset within the page  [required]
   -d, --data <data>               Hex string EEPROM data  [required]
   --wire-addr TEXT                Wire address of sff8472
