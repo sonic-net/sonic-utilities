@@ -1570,6 +1570,56 @@ collect_innovium() {
 }
 
 ###############################################################################
+# Collect Nvidia Bluefield specific information
+# Globals:
+#  CMD_PREFIX
+# Arguments:
+#  None
+# Returns:
+#  None
+###############################################################################
+collect_nvidia_bluefield() {
+    trap 'handle_error $? $LINENO' ERR
+    local timeout_cmd="timeout --foreground ${TIMEOUT_MIN}m"
+    local sai_dump_folder="/root/saisdkdump"
+    local sai_dump_filename="${sai_dump_folder}/sai_sdk_dump_$(date +"%m_%d_%Y_%I_%M_%p")"
+
+    ${CMD_PREFIX}docker exec syncd mkdir -p $sai_dump_folder
+    ${CMD_PREFIX}docker exec syncd saisdkdump -f $sai_dump_filename
+
+    if [ $? != 0 ]; then
+        echo "Failed to collect saisdkdump."
+    fi
+
+    copy_from_docker syncd $sai_dump_folder $sai_dump_folder
+    echo "$sai_dump_folder"
+    for file in `ls $sai_dump_folder`; do
+        save_file ${sai_dump_folder}/${file} sai_sdk_dump true
+    done
+
+    ${CMD_PREFIX}rm -rf $sai_dump_folder
+    ${CMD_PREFIX}docker exec syncd rm -rf $sai_dump_folder
+
+    DUMP_FILE=/usr/bin/platform-dump.sh
+    if [ -f "$DUMP_FILE" ]; then
+      ${CMD_PREFIX}${timeout_cmd} ${DUMP_FILE} $ALLOW_PROCESS_STOP
+      ret=$?
+      if [ $ret -ne 0 ]; then
+        if [ $ret -eq $TIMEOUT_EXIT_CODE ]; then
+          echo "platform dump timedout after ${TIMEOUT_MIN} minutes."
+        else
+          echo "platform dump failed ..."
+        fi
+      else
+        save_file "/tmp/platform-dump*" "platform-dump" false
+        rm -f /tmp/platform-dump*
+      fi
+    else
+      echo "Platform dump script $DUMP_FILE does not exist"
+    fi
+}
+
+###############################################################################
 # Save log file
 # Globals:
 #  TAR, TARFILE, DUMPDIR, BASE, TARDIR, TECHSUPPORT_TIME_INFO
@@ -1987,6 +2037,10 @@ main() {
         collect_cisco_8000
     fi
 
+    if [[ "$asic" = "nvidia-bluefield" ]]; then
+        collect_nvidia_bluefield
+    fi
+
     if [ "$asic" = "innovium" ]; then
         collect_innovium
     fi
@@ -2031,7 +2085,7 @@ main() {
 
     save_sai_failure_dump 
 
-    if [[ "$asic" = "mellanox" ]]; then
+    if [[ "$asic" = "mellanox" ]] || [[ "$asic" = "nvidia-bluefield" ]]; then
         collect_mellanox_dfw_dumps
     fi
 
