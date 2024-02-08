@@ -401,7 +401,8 @@ def process_bgp_summary_json(bgp_summary, cmd_output, device, has_bgp_neighbors=
 
                 bgp_summary.setdefault('peers', []).append(peers)
         else:
-            bgp_summary['peers'] = []
+            if 'peers' not in bgp_summary:
+                bgp_summary['peers'] = []             
     except KeyError as e:
         ctx = click.get_current_context()
         ctx.fail("{} missing in the bgp_summary".format(e.args[0]))

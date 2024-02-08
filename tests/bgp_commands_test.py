@@ -280,10 +280,11 @@ Neighbhor      V     AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ  Up/Down 
 
 Total number of neighbors 23
 """
-
-SHOW_BGP_SUMMARY_V4_NO_EXT_NEIGHBORS = """
+SHOW_BGP_SUMMARY_V4_NO_EXT_NEIGHBORS_ON_ALL_ASIC = """
 IPv4 Unicast Summary:
 asic0: BGP router identifier 10.1.0.32, local AS number 65100 vrf-id 0
+BGP table version 8972
+asic1: BGP router identifier 10.1.0.32, local AS number 65100 vrf-id 0
 BGP table version 8972
 RIB entries 0, using 0 bytes of memory
 Peers 0, using 0 KiB of memory
@@ -294,6 +295,24 @@ Neighbhor    V    AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ    Up/Down  
 -----------  ---  ----  ---------  ---------  --------  -----  ------  ---------  --------------  --------------
 
 Total number of neighbors 0
+"""
+
+SHOW_BGP_SUMMARY_V4_NO_EXT_NEIGHBORS_ON_ASIC1 = """
+IPv4 Unicast Summary:
+asic0: BGP router identifier 192.0.0.6, local AS number 65100 vrf-id 0
+BGP table version 59923
+asic1: BGP router identifier 10.1.0.32, local AS number 65100 vrf-id 0
+BGP table version 8972
+RIB entries 3, using 3 bytes of memory
+Peers 3, using 3 KiB of memory
+Peer groups 3, using 3 bytes of memory
+
+
+Neighbhor      V     AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ  Up/Down      State/PfxRcd  NeighborName
+-----------  ---  -----  ---------  ---------  --------  -----  ------  ---------  --------------  --------------
+10.0.0.1       4  65222       4633      11029         0      0       0  00:18:33             8514  ARISTA01T2
+
+Total number of neighbors 1
 """
 
 SHOW_BGP_SUMMARY_ALL_V4_NO_EXT_NEIGHBORS = """
@@ -513,13 +532,14 @@ class TestBgpCommandsMultiAsic(object):
         assert result.exit_code == 0
         assert result.output == show_error_no_v6_neighbor_multi_asic
 
-
     @patch.object(bgp_util, 'get_external_bgp_neighbors_dict', mock.MagicMock(return_value={}))
+    @patch.object(multi_asic.MultiAsic, 'get_ns_list_based_on_options', mock.Mock(return_value=['asic0', 'asic1']))
     @patch.object(multi_asic.MultiAsic, 'get_display_option', mock.MagicMock(return_value=constants.DISPLAY_EXTERNAL))
     @pytest.mark.parametrize('setup_multi_asic_bgp_instance',
-                             ['show_bgp_summary_no_ext_neigh_on_all_asic'], indirect=['setup_multi_asic_bgp_instance'])
+                             ['show_bgp_summary_no_ext_neigh_on_all_asic'],
+                             indirect=['setup_multi_asic_bgp_instance'])
     @patch.object(device_info, 'is_chassis', mock.MagicMock(return_value=True))
-    def test_bgp_summary_multi_asic_no_external_neighbor(
+    def test_bgp_summary_multi_asic_no_external_neighbors_on_all_asic(
             self,
             setup_bgp_commands,
             setup_multi_asic_bgp_instance):
@@ -529,8 +549,27 @@ class TestBgpCommandsMultiAsic(object):
             show.cli.commands["ip"].commands["bgp"].commands["summary"], [])
         print("{}".format(result.output))
         assert result.exit_code == 0
-        assert result.output == SHOW_BGP_SUMMARY_V4_NO_EXT_NEIGHBORS
-    
+        assert result.output == SHOW_BGP_SUMMARY_V4_NO_EXT_NEIGHBORS_ON_ALL_ASIC     
+
+
+    @patch.object(multi_asic.MultiAsic, 'get_ns_list_based_on_options', mock.Mock(return_value=['asic0', 'asic1']))
+    @patch.object(multi_asic.MultiAsic, 'get_display_option', mock.MagicMock(return_value=constants.DISPLAY_EXTERNAL))
+    @pytest.mark.parametrize('setup_multi_asic_bgp_instance',
+                             ['show_bgp_summary_no_ext_neigh_on_asic1'],
+                             indirect=['setup_multi_asic_bgp_instance'])
+    @patch.object(device_info, 'is_chassis', mock.MagicMock(return_value=True))
+    def test_bgp_summary_multi_asic_no_external_neighbor_on_asic1(
+            self,
+            setup_bgp_commands,
+            setup_multi_asic_bgp_instance):
+        show = setup_bgp_commands
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["ip"].commands["bgp"].commands["summary"], [])
+        print("{}".format(result.output))
+        assert result.exit_code == 0
+        assert result.output == SHOW_BGP_SUMMARY_V4_NO_EXT_NEIGHBORS_ON_ASIC1
+
     
     @pytest.mark.parametrize('setup_multi_asic_bgp_instance',
                              ['show_bgp_summary_no_ext_neigh_on_all_asic'], indirect=['setup_multi_asic_bgp_instance'])
