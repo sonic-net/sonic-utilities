@@ -1707,6 +1707,15 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
     argv_str = ' '.join(['config', *sys.argv[1:]])
     log.log_notice(f"'load_minigraph' executing with command: {argv_str}")
 
+    # check if golden_config exists if override flag is set
+    if override_config:
+        if golden_config_path is None:
+            golden_config_path = DEFAULT_GOLDEN_CONFIG_DB_FILE
+        if not os.path.isfile(golden_config_path):
+            click.secho("Cannot find '{}'!".format(golden_config_path),
+                        fg='magenta')
+            raise click.Abort()
+
     #Stop services before config push
     if not no_service_restart:
         log.log_notice("'load_minigraph' stopping services...")
@@ -1778,12 +1787,6 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
 
     # Load golden_config_db.json
     if override_config:
-        if golden_config_path is None:
-            golden_config_path = DEFAULT_GOLDEN_CONFIG_DB_FILE
-        if not os.path.isfile(golden_config_path):
-            click.secho("Cannot find '{}'!".format(golden_config_path),
-                        fg='magenta')
-            raise click.Abort()
         override_config_by(golden_config_path)
 
     # Invoke platform script if available before starting the services
