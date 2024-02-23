@@ -24,6 +24,7 @@ from sonic_py_common import device_info, logger, multi_asic
 from utilities_common.sfp_helper import covert_application_advertisement_to_output_string
 from utilities_common.sfp_helper import QSFP_DATA_MAP
 from tabulate import tabulate
+from utilities_common.general import load_db_config
 
 VERSION = '3.0'
 
@@ -563,6 +564,7 @@ def load_sfputilhelper():
 
 
 def load_port_config():
+    load_db_config()
     try:
         if multi_asic.is_multi_asic():
             # For multi ASIC platforms we pass DIR of port_config_file_path and the number of asics
