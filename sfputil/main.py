@@ -85,8 +85,6 @@ QSFP_DD_DATA_MAP = {
     'encoding': 'Encoding',
     'connector': 'Connector',
     'application_advertisement': 'Application Advertisement',
-    'active_firmware': 'Active Firmware Version',
-    'inactive_firmware': 'Inactive Firmware Version',
     'hardware_rev': 'Hardware Revision',
     'media_interface_code': 'Media Interface Code',
     'host_electrical_interface': 'Host Electrical Interface',
@@ -1316,9 +1314,12 @@ def update_firmware_info_to_state_db(port_name):
         state_db = SonicV2Connector(use_unix_socket_path=False, namespace=namespace)
         if state_db is not None:
             state_db.connect(state_db.STATE_DB)
-            active_firmware, inactive_firmware = platform_chassis.get_sfp(physical_port).get_transceiver_info_firmware_versions()
-            state_db.set(state_db.STATE_DB, 'TRANSCEIVER_INFO|{}'.format(port_name), "active_firmware", active_firmware)
-            state_db.set(state_db.STATE_DB, 'TRANSCEIVER_INFO|{}'.format(port_name), "inactive_firmware", inactive_firmware)
+            transceiver_firmware_info_dict = platform_chassis.get_sfp(physical_port).get_transceiver_info_firmware_versions()
+            if transceiver_firmware_info_dict is not None:
+                active_firmware = transceiver_firmware_info_dict.get('active_firmware', 'N/A')
+                inactive_firmware = transceiver_firmware_info_dict.get('inactive_firmware', 'N/A')
+                state_db.set(state_db.STATE_DB, 'TRANSCEIVER_FIRMWARE_INFO|{}'.format(port_name), "active_firmware", active_firmware)
+                state_db.set(state_db.STATE_DB, 'TRANSCEIVER_FIRMWARE_INFO|{}'.format(port_name), "inactive_firmware", inactive_firmware)
 
 # 'firmware' subgroup
 @cli.group()

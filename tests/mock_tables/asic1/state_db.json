@@ -29,8 +29,6 @@
         "media_interface_technology" : "1550 nm DFB",
         "vendor_rev" : "XX",
         "cmis_rev" : "4.1",
-        "active_firmware" : "X.X",
-        "inactive_firmware" : "X.X",
         "supported_max_tx_power" : "4.0",
         "supported_min_tx_power" : "-22.9",
         "supported_max_laser_freq" : "196100",
@@ -69,6 +67,10 @@
         "vcchighwarning": "3.4650",
         "vcclowalarm": "2.9700",
         "vcclowwarning": "3.1349"
+    },
+    "TRANSCEIVER_FIRMWARE_INFO|Ethernet64": {
+        "active_firmware": "X.X",
+        "inactive_firmware": "X.X"
     },
     "CHASSIS_INFO|chassis 1": {
         "psu_num": "2"
