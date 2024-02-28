@@ -517,8 +517,10 @@ class SFPShow(object):
                 for suffix in ZR_PM_THRESHOLD_KEY_SUFFIXS:
                     key = self.convert_pm_prefix_to_threshold_prefix(
                         prefix) + suffix
-                    thresholds.append(
-                        float(sfp_threshold_dict[key]) if key in sfp_threshold_dict else None)
+                    if key in sfp_threshold_dict and sfp_threshold_dict[key] != 'N/A':
+                        thresholds.append(float(sfp_threshold_dict[key]))
+                    else:
+                        thresholds.append(None)
 
                 tca_high, tca_low = None, None
                 if values[2] is not None and thresholds[0] is not None:
