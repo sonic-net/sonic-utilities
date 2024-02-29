@@ -4513,7 +4513,11 @@ def fec(ctx, interface_name, interface_fec, verbose):
 def ip(ctx):
     """Set IP interface attributes"""
     pass
-
+  
+def validate_vlan_exists(db,text):
+    data = db.get_table('VLAN')
+    keys = list(data.keys())
+    return text in keys
 #
 # 'add' subcommand
 #
@@ -4577,6 +4581,12 @@ def add(ctx, interface_name, ip_addr, gw):
     table_name = get_interface_table_name(interface_name)
     if table_name == "":
         ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan/Loopback]")
+    
+    if table_name == "VLAN_INTERFACE":
+        if not validate_vlan_exists(config_db, interface_name):
+            ctx.fail(f"Error: {interface_name} does not exist. Vlan must be created before adding an IP address")
+            return
+    
     interface_entry = config_db.get_entry(table_name, interface_name)
     if len(interface_entry) == 0:
         if table_name == "VLAN_SUB_INTERFACE":
