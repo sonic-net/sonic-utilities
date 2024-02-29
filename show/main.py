@@ -989,6 +989,90 @@ def route_map(route_map_name, verbose):
     run_command(cmd, display_cmd=verbose)
 
 #
+# 'vrrp' group ("show vrrp ...")
+#
+@cli.group(cls=clicommon.AliasedGroup, invoke_without_command="true")
+@click.pass_context
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def vrrp(ctx, verbose):
+    """Show vrrp commands"""
+    if ctx.invoked_subcommand is not None:
+        return
+
+    cmd = 'sudo {} -c "show vrrp"'.format(constants.RVTYSH_COMMAND)
+    run_command(cmd, display_cmd=verbose)
+
+# 'interface' command  
+@vrrp.command('interface')
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrid', metavar='<vrid>', required=False)
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def vrrp_interface(ctx, interface_name, vrid, verbose):
+    """show vrrp interface <interface_name> <vrid>"""
+    cmd = 'sudo {} -c "show vrrp'.format(constants.RVTYSH_COMMAND)
+    if vrid is not None:
+        cmd += ' interface {} {}"'.format(interface_name, vrid)
+    else:
+        cmd += ' interface {}"'.format(interface_name)
+    run_command(cmd, display_cmd=verbose)
+
+# 'vrid' command  
+@vrrp.command('vrid')
+@click.pass_context
+@click.argument('vrid', metavar='<vrid>', required=True)
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def vrrp_vrid(ctx, vrid, verbose):
+    """show vrrp vrid <vrid>"""
+    cmd = 'sudo {} -c "show vrrp {}"'.format(constants.RVTYSH_COMMAND, vrid)
+    run_command(cmd, display_cmd=verbose)
+
+# 'summary' command
+@vrrp.command('summary')
+@click.pass_context
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def vrrp_summary(ctx, verbose):
+    """show vrrp summary"""
+    cmd = 'sudo {} -c "show vrrp summary"'.format(constants.RVTYSH_COMMAND)
+    # run_command(cmd, display_cmd=verbose)
+    result = run_command(cmd, display_cmd=verbose, return_cmd=True)
+    result = result.splitlines()
+    if len(result) == 0:
+        return
+
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    headers = []
+    table = []
+    interface_index = 0
+    vrid_index = 0
+    priority_index = 0
+    for line in result:
+        if len(line.split()) <= 1:
+            continue
+        if len(headers) == 0:
+            headers = line.split()
+            interface_index = headers.index("Interface")
+            vrid_index = headers.index("VRID")
+            priority_index = headers.index("Priority")
+            headers.insert(priority_index, "Configured Priority")
+        else:
+            vrrp = line.split()
+            interface_name = vrrp[interface_index]
+            vrid = vrrp[vrid_index]
+            vrrp_entry = config_db.get_entry("VRRP", (interface_name, vrid))
+            conf_priority = 100
+            if "priority" in vrrp_entry:
+                conf_priority = int(vrrp_entry["priority"])
+            vrrp.insert(priority_index, conf_priority)
+            table.append(vrrp)
+
+    if len(headers) != 0 and len(table) != 0:
+        click.echo()
+        click.echo(tabulate(table, headers=headers, tablefmt="simple"))
+        click.echo()
+
+#
 # 'ip' group ("show ip ...")
 #
 

@@ -5432,6 +5432,480 @@ def disable_use_link_local_only(ctx, interface_name):
     interface_dict = db.get_table(interface_type)
     set_ipv6_link_local_only_on_interface(db, interface_dict, interface_type, interface_name, "disable")
 
+
+#
+# 'vrrp' subgroup ('config interface vrrp ...')
+#
+@interface.group(cls=clicommon.AbbreviationGroup)
+@click.pass_context
+def vrrp(ctx):
+    """Vrrp configuration"""
+    pass
+
+#
+# ip subgroup ('config interface vrrp ip ...')
+#
+@vrrp.group(cls=clicommon.AbbreviationGroup, name='ip')
+@click.pass_context
+def ip(ctx):
+    """vrrp ip configuration """
+    pass
+
+@ip.command('add')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.argument("ip_addr", metavar="<ip_addr>", required=True)
+@click.pass_context
+def add_vrrp_ip(ctx, interface_name, vrrp_id, ip_addr):
+    """Add IPv4 or IPv6 address to the vrrp instance"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "VLAN_SUB_INTERFACE" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    try:
+        ip_address = ipaddress.ip_interface(ip_addr)
+    except ValueError as err:
+        ctx.fail("IP address is not valid: {}".format(err))
+
+    if ip_address.version == 6:
+        if ip_address.is_unspecified:
+            ctx.fail("IPv6 address {} is unspecified".format(str(ip_address)))
+        elif ip_address.is_loopback and not is_loopback_name_valid(interface_name):
+            ctx.fail("IPv6 address is {} is loopback".format(str(ip_address)))
+        elif ip_address.is_multicast:
+            ctx.fail("IPv6 address is {} is multicast".format(str(ip_address)))
+        elif str(ip_address.ip) == "::":
+            ctx.fail("IPv6 address is {} is Zero".format(str(ip_address)))
+        elif str(ip_address.netmask) == "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff" and ("/" not in ip_addr):
+            ctx.fail("IPv6 address {} is missing a mask. Such as xx:xx::xx/xx".format(str(ip_addr)))
+    elif ip_address.version == 4:
+        if ip_address.is_multicast:
+            ctx.fail("IPv4 address {} is multicast".format(str(ip_address)))
+        elif ip_address.is_loopback and not is_loopback_name_valid(interface_name):
+            ctx.fail("IPv4 address {} is loopback".format(str(ip_address)))
+        elif str(ip_address.ip) == "0.0.0.0":
+            ctx.fail("IPv4 address {} is Zero".format(str(ip_address)))
+        elif str(ip_address.netmask) == "255.255.255.255" and ("/" not in ip_addr):
+            ctx.fail("IPv4 address {} is missing a mask. Such as xx.xx.xx.xx/xx".format(str(ip_addr)))
+
+    vrrp_entry = config_db.get_entry("VRRP", (interface_name, str(vrrp_id)))
+    if vrrp_entry:
+        address = vrrp_entry.get("vip")
+        if address:
+            address_list = address.split(",")
+            #add ip address
+            if ip_addr in address_list:
+                ctx.fail("{} has already configured on the vrrp instance {}!".format(ip_addr, vrrp_id))
+            else:
+                if len(address_list) < 4:
+                    address_list.append(ip_addr) 
+                else:
+                    ctx.fail("The vrrp instance {} has already configured 4 IPs".format( vrrp_id))
+            vrrp_entry['vip'] = ",".join(address_list)
+        else:
+            vrrp_entry['vip'] = ip_addr
+        config_db.set_entry("VRRP", (interface_name, str(vrrp_id)), vrrp_entry)
+    else:
+        vrrp_keys = config_db.get_keys("VRRP")
+        if len(vrrp_keys) >= 128:
+            ctx.fail("Has already configured 128 IPs")
+        intf_cfg = 0
+        for key in vrrp_keys:
+            if key[1] == vrrp_id:
+                ctx.fail("The vrrp instance {} has already configured!".format(vrrp_id))
+            if key[0] == interface_name:
+                intf_cfg +=1
+            if intf_cfg >= 16:
+                ctx.fail("{} has already configured 16 vrrp instances!".format(interface_name))
+        config_db.set_entry('VRRP', (interface_name, str(vrrp_id)), {"vid": vrrp_id, "vip": ip_addr})
+
+
+@ip.command('remove')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.argument("ip_addr", metavar="<ip_addr>", required=True)
+@click.pass_context
+def remove_vrrp_ip(ctx, interface_name, vrrp_id, ip_addr):
+    """Remove IPv4 or IPv6 address to the vrrp instance"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "VLAN_SUB_INTERFACE" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    try:
+        ip_address = ipaddress.ip_interface(ip_addr)
+    except ValueError as err:
+        ctx.fail("IP address is not valid: {}".format(err))
+
+    if ip_address.version == 6:
+        if ip_address.is_unspecified:
+            ctx.fail("IPv6 address {} is unspecified".format(str(ip_address)))
+        elif ip_address.is_loopback and not is_loopback_name_valid(interface_name):
+            ctx.fail("IPv6 address is {} is loopback".format(str(ip_address)))
+        elif ip_address.is_multicast:
+            ctx.fail("IPv6 address is {} is multicast".format(str(ip_address)))
+        elif str(ip_address.ip) == "::":
+            ctx.fail("IPv6 address is {} is Zero".format(str(ip_address)))
+        elif str(ip_address.netmask) == "ffff:ffff:ffff:ffff:ffff:ffff:ffff:ffff" and ("/" not in ip_addr):
+            ctx.fail("IPv6 address {} is missing a mask. Such as xx:xx::xx/xx".format(str(ip_addr)))
+    elif ip_address.version == 4:
+        if ip_address.is_multicast:
+            ctx.fail("IPv4 address {} is multicast".format(str(ip_address)))
+        elif ip_address.is_loopback and not is_loopback_name_valid(interface_name):
+            ctx.fail("IPv4 address {} is loopback".format(str(ip_address)))
+        elif str(ip_address.ip) == "0.0.0.0":
+            ctx.fail("IPv4 address {} is Zero".format(str(ip_address)))
+        elif str(ip_address.netmask) == "255.255.255.255" and ("/" not in ip_addr):
+            ctx.fail("IPv4 address {} is missing a mask. Such as xx.xx.xx.xx/xx".format(str(ip_addr)))
+
+    vrrp_entry = config_db.get_entry("VRRP", (interface_name, str(vrrp_id)))
+    if vrrp_entry:
+        address_list = vrrp_entry.get("vip")
+        if address_list:
+            address = address_list.split(",")
+            #del ip address
+            if ip_addr in address:
+                address.remove(ip_addr)
+            else:
+                ctx.fail("{} is not configured on the vrrp instance {}!".format(ip_addr, vrrp_id))    
+            vrrp_entry['vip'] = ",".join(address)
+            config_db.set_entry("VRRP", (interface_name, str(vrrp_id)), vrrp_entry)
+        else:
+            ctx.fail("{} is not configured on the vrrp instance {}!".format(ip_addr, vrrp_id))
+    else:
+        ctx.fail("{} is not configured on the vrrp instance {}!".format(ip_addr, vrrp_id))
+
+#
+# track interface subgroup ('config interface vrrp track_interface ...')
+#
+@vrrp.group(cls=clicommon.AbbreviationGroup, name='track_interface')
+@click.pass_context
+def track_interface(ctx):
+    """ vrrp track_interface configuration """
+    pass
+
+@track_interface.command('add')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.argument("track_interface", metavar="<track_interface>", required=True)
+@click.argument('weight', metavar='<weight>', required=True, type=click.IntRange(10, 50))
+@click.pass_context
+def add_track_interface(ctx, interface_name, vrrp_id, track_interface, weight):
+    """add track_interface to the vrrp instance"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "VLAN_SUB_INTERFACE" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    trace_table_name = get_interface_table_name(track_interface)
+    if trace_table_name != "INTERFACE":
+        ctx.fail("'track_interface' is not valid. Valid names [Ethernet]")
+
+    track_intf_key = track_interface + "|weight|" + str(weight)
+    vrrp_entry = config_db.get_entry("VRRP", (interface_name, str(vrrp_id)))
+    if not vrrp_entry:
+        ctx.fail("vrrp instance {} not found on interface {}".format(vrrp_id, interface_name))
+
+    track_list = vrrp_entry.get("track_interface")
+    if track_list:
+        track_intf = track_list.split(",")
+        if len(track_intf) >= 8:
+            ctx.fail("The vrrp instance {} has already configured 8 track interfaces".format( vrrp_id))
+            
+        #add track interface
+        for track_str in track_intf:
+            index = track_str.index("|")
+            if track_interface == track_str[:index]:
+                track_intf.remove(track_str)
+
+        track_intf.append(track_intf_key)
+        vrrp_entry['track_interface'] = ",".join(track_intf)
+    else:
+        vrrp_entry["track_interface"] = track_intf_key
+    config_db.set_entry("VRRP", (interface_name, str(vrrp_id)), vrrp_entry)
+
+@track_interface.command('remove')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.argument("track_interface", metavar="<track_interface>", required=True)
+@click.pass_context
+def remove_track_interface(ctx, interface_name, vrrp_id, track_interface):
+    """Remove track_interface to the vrrp instance"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "VLAN_SUB_INTERFACE" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    vrrp_entry = config_db.get_entry("VRRP", (interface_name, str(vrrp_id)))
+    if not vrrp_entry:
+        ctx.fail("{} is not configured on the vrrp instance {}!".format(track_interface, vrrp_id))
+
+    track_list = vrrp_entry.get("track_interface")
+    if track_list:
+        track_intf = track_list.split(",")
+        #del track interface
+        has_config = False
+        for track_str in track_intf:
+            index = track_str.index("|")
+            if track_interface == track_str[:index]:
+                track_intf.remove(track_str)
+                has_config = True
+
+        if has_config != True:
+            ctx.fail("{} is not configured on the vrrp instance {}!".format(track_interface, vrrp_id))
+            
+        vrrp_entry['track_interface'] = ",".join(track_intf)
+        config_db.set_entry("VRRP", (interface_name, str(vrrp_id)), vrrp_entry)
+    else:
+        ctx.fail("{} is not configured on the vrrp instance {}!".format(track_interface, vrrp_id))
+
+#
+# 'vrrp' subcommand ('config interface vrrp priority ...')
+#
+@vrrp.command("priority")
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.argument('priority', metavar='<priority>', required=True, type=click.IntRange(1, 254), default=100)
+@click.pass_context
+def priority(ctx, interface_name, vrrp_id, priority):
+    """config priority to the vrrp instance"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "VLAN_SUB_INTERFACE" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    vrrp_entry = config_db.get_entry("VRRP", (interface_name, str(vrrp_id)))
+    if not vrrp_entry:
+        ctx.fail("vrrp instance {} not found on interface {}".format(vrrp_id, interface_name))
+
+    vrrp_entry['priority'] = priority
+    config_db.set_entry("VRRP", (interface_name, str(vrrp_id)), vrrp_entry)
+
+#
+# 'vrrp' subcommand ('config interface vrrp adv_interval ...')
+#
+@vrrp.command("adv_interval")
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.argument('interval', metavar='<interval>', required=True, type=click.IntRange(10, 40950), default=1000)
+@click.pass_context
+def adv_interval(ctx, interface_name, vrrp_id, interval):
+    """config adv_interval to the vrrp instance"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "VLAN_SUB_INTERFACE" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    vrrp_entry = config_db.get_entry("VRRP", (interface_name, str(vrrp_id)))
+    if not vrrp_entry:
+        ctx.fail("vrrp instance {} not found on interface {}".format(vrrp_id, interface_name))
+
+    vrrp_entry['adv_interval'] = interval
+    config_db.set_entry("VRRP", (interface_name, str(vrrp_id)), vrrp_entry)
+
+#
+# 'vrrp' subcommand ('config interface vrrp pre_empt ...')
+#
+@vrrp.command("pre_empt")
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.argument('mode', metavar='<mode>', required=True, type=click.Choice(["enabled", "disabled"]))
+@click.pass_context
+def pre_empt(ctx, interface_name, vrrp_id, mode):
+    """Config pre_empt mode to the vrrp instance"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "VLAN_SUB_INTERFACE" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    vrrp_entry = config_db.get_entry("VRRP", (interface_name, str(vrrp_id)))
+    if not vrrp_entry:
+        ctx.fail("vrrp instance {} not found on interface {}".format(vrrp_id, interface_name))
+
+    vrrp_entry['pre_empt'] = mode
+    config_db.set_entry("VRRP", (interface_name, str(vrrp_id)), vrrp_entry)
+
+#
+# 'vrrp' subcommand ('config interface vrrp backup_forward ...')
+#
+@vrrp.command("backup_forward")
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.argument('forward', metavar='<forward>', required=True, type=click.Choice(["enabled", "disabled"]), default="disabled")
+@click.pass_context
+def backup_forward(ctx, interface_name, vrrp_id, forward):
+    """config adv_interval to the vrrp instance"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "VLAN_SUB_INTERFACE" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    vrrp_entry = config_db.get_entry("VRRP", (interface_name, str(vrrp_id)))
+    if not vrrp_entry:
+        ctx.fail("vrrp instance {} not found on interface {}".format(vrrp_id, interface_name))
+
+    vrrp_entry['backup_forward'] = forward
+    config_db.set_entry("VRRP", (interface_name, str(vrrp_id)), vrrp_entry)
+
+#
+# 'vrrp' subcommand ('config interface vrrp version...')
+#
+@vrrp.command("version")
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.argument('version', metavar='<version>', required=True, type=click.Choice(["2", "3"]))
+@click.pass_context
+def version(ctx, interface_name, vrrp_id, version):
+    """Config vrrp packet version to the vrrp instance"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "VLAN_SUB_INTERFACE" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    vrrp_entry = config_db.get_entry("VRRP", (interface_name, str(vrrp_id)))
+    if not vrrp_entry:
+        ctx.fail("vrrp instance {} not found on interface {}".format(vrrp_id, interface_name))
+
+    vrrp_entry['version'] = version
+    config_db.set_entry("VRRP", (interface_name, str(vrrp_id)), vrrp_entry)
+
+#
+# 'vrrp' subcommand
+#
+@vrrp.command("add")
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.pass_context
+def add_vrrp(ctx, interface_name, vrrp_id):
+    """Add vrrp instance to the interface"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+    
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "VLAN_SUB_INTERFACE" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    vrrp_entry = config_db.get_entry("VRRP", (interface_name, str(vrrp_id)))
+    if vrrp_entry:
+        ctx.fail("{} has already configured the vrrp instance {}!".format(interface_name, vrrp_id))
+    else:
+        vrrp_keys = config_db.get_keys("VRRP")
+        if len(vrrp_keys) >= 128:
+            ctx.fail("Has already configured 128 IPs")
+        intf_cfg = 0
+        for key in vrrp_keys:
+            if key[1] == vrrp_id:
+                ctx.fail("The vrrp instance {} has already configured!".format(vrrp_id))
+            if key[0] == interface_name:
+                intf_cfg +=1
+            if intf_cfg >= 16:
+                ctx.fail("{} has already configured 16 vrrp instances!".format(interface_name))
+
+        config_db.set_entry('VRRP', (interface_name, str(vrrp_id)), {"vid": vrrp_id})
+
+@vrrp.command("remove")
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.pass_context
+def remove_vrrp(ctx, interface_name, vrrp_id):
+    """Remove vrrp instance to the interface"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "VLAN_SUB_INTERFACE" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    vrrp_entry = config_db.get_entry("VRRP", (interface_name, str(vrrp_id)))
+    if not vrrp_entry:
+        ctx.fail("{} dose not configured the vrrp instance {}!".format(interface_name, vrrp_id))
+    config_db.set_entry('VRRP', (interface_name, str(vrrp_id)), None)
+
 #
 # 'vrf' group ('config vrf ...')
 #
