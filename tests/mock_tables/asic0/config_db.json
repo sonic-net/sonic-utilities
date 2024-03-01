@@ -75,6 +75,7 @@
         "admin_status": "up",
         "members@": "Ethernet0,Ethernet4",
         "min_links": "2",
+        "mode": "trunk",
         "mtu": "9100"
     },
     "PORTCHANNEL|PortChannel4001": {

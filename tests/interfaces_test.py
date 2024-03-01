@@ -144,6 +144,86 @@ Flags: A - active, I - inactive, Up - up, Dw - Down, N/A - not available,
  1001  PortChannel1001  N/A
 """
 
+
+show_interfaces_switchport_status_output="""\
+Interface        Mode
+---------------  ------
+Ethernet0        routed
+Ethernet4        trunk
+Ethernet8        routed
+Ethernet12       routed
+Ethernet16       trunk
+Ethernet20       routed
+Ethernet24       trunk
+Ethernet28       trunk
+Ethernet36       routed
+Ethernet40       routed
+Ethernet44       routed
+Ethernet48       routed
+Ethernet52       routed
+Ethernet56       routed
+Ethernet60       routed
+Ethernet64       routed
+Ethernet68       routed
+Ethernet72       routed
+Ethernet76       routed
+Ethernet80       routed
+Ethernet84       routed
+Ethernet88       routed
+Ethernet92       routed
+Ethernet96       routed
+Ethernet100      routed
+Ethernet104      routed
+Ethernet108      routed
+Ethernet116      routed
+Ethernet124      routed
+PortChannel0001  routed
+PortChannel0002  routed
+PortChannel0003  routed
+PortChannel0004  routed
+PortChannel1001  trunk
+"""
+
+show_interfaces_switchport_config_output = """\
+Interface        Mode    Untagged    Tagged
+---------------  ------  ----------  --------
+Ethernet0        routed
+Ethernet4        trunk   1000
+Ethernet8        routed  1000
+Ethernet12       routed  1000
+Ethernet16       trunk   1000
+Ethernet20       routed
+Ethernet24       trunk   2000
+Ethernet28       trunk   2000
+Ethernet36       routed
+Ethernet40       routed
+Ethernet44       routed
+Ethernet48       routed
+Ethernet52       routed
+Ethernet56       routed
+Ethernet60       routed
+Ethernet64       routed
+Ethernet68       routed
+Ethernet72       routed
+Ethernet76       routed
+Ethernet80       routed
+Ethernet84       routed
+Ethernet88       routed
+Ethernet92       routed
+Ethernet96       routed
+Ethernet100      routed
+Ethernet104      routed
+Ethernet108      routed
+Ethernet116      routed
+Ethernet124      routed
+PortChannel0001  routed
+PortChannel0002  routed
+PortChannel0003  routed
+PortChannel0004  routed
+PortChannel1001  trunk               4000
+"""
+
+
 class TestInterfaces(object):
     @classmethod
     def setup_class(cls):
@@ -336,6 +416,26 @@ class TestInterfaces(object):
         intf_list = parse_interface_in_filter(intf_filter)
         assert len(intf_list) == 3
         assert intf_list == ["Ethernet-BP10", "Ethernet-BP11", "Ethernet-BP12"]
+
+
+    def test_show_interfaces_switchport_status(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["interfaces"].commands["switchport"].commands["status"])
+        print(result.exit_code)
+        print(result.output)
+
+        assert result.exit_code == 0
+        assert result.output == show_interfaces_switchport_status_output
+
+    def test_show_interfaces_switchport_config(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["interfaces"].commands["switchport"].commands["config"])
+        print(result.exit_code)
+        print(result.output)
+
+        assert result.exit_code == 0
+        assert result.output == show_interfaces_switchport_config_output
+        
 
     @classmethod
     def teardown_class(cls):

@@ -232,7 +232,7 @@ class TestIPv6LinkLocal(object):
         result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"], ["4000", "Ethernet40"], obj=obj)
         print(result.output)
         assert result.exit_code != 0
-        assert 'Error: Ethernet40 is a router interface!' in result.output
+        assert 'Error: Ethernet40 is in routed mode!\nUse switchport mode command to change port mode' in result.output
 
     @classmethod
     def teardown_class(cls):

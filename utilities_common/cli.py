@@ -269,6 +269,111 @@ def is_port_vlan_member(config_db, port, vlan):
 
     return False
 
+ 
+def vlan_range_list(ctx, vid_range: str) -> list:
+
+    vid1, vid2 = map(int, vid_range.split("-"))
+
+    if vid1 == 1 or vid2 == 1:
+        ctx.fail("Vlan1 is default vlan")
+
+    if vid1 >= vid2:
+        ctx.fail("{} is greater than {}. List cannot be generated".format(vid1,vid2))
+
+    if is_vlanid_in_range(vid1) and is_vlanid_in_range(vid2):
+        return list(range(vid1, vid2+1))
+    else:
+        ctx.fail("Invalid VLAN ID must be in (2-4094)")
+
+
+def multiple_vlan_parser(ctx, s_input: str) -> list:
+
+    vlan_list = []
+
+    vlan_map = map(str, s_input.replace(" ", "").split(","))
+    for vlan in vlan_map:
+        if "-" in vlan:
+            vlan_list += vlan_range_list(ctx, vlan)
+        elif vlan.isdigit() and int(vlan) not in vlan_list:
+            vlan_list.append(int(vlan))
+        elif not vlan.isdigit():
+            ctx.fail("{} is not integer".format(vlan))
+
+    vlan_list.sort()
+    return vlan_list
+
+
+def get_existing_vlan_id(db) -> list:
+    existing_vlans = []
+    vlan_data = db.cfgdb.get_table('VLAN')
+
+    for i in vlan_data.keys():
+        existing_vlans.append(int(i.strip("Vlan")))
+
+    return sorted(existing_vlans)
+
+def get_existing_vlan_id_on_interface(db,port) -> list:
+    intf_vlans = []
+    vlan_member_data = db.cfgdb.get_table('VLAN_MEMBER')
+
+    for (k,v) in vlan_member_data.keys():
+        if v == port:
+            intf_vlans.append(int(k.strip("Vlan")))
+
+    return sorted(intf_vlans)
+
+
+def vlan_member_input_parser(ctx, command_mode, db, except_flag, multiple, vid, port) -> list:
+    vid_list = []
+    if vid == "all":
+        if command_mode == "add":
+            return get_existing_vlan_id(db) # config vlan member add
+        if command_mode == "del":
+            return get_existing_vlan_id_on_interface(db,port) # config vlan member del
+
+    if multiple:
+        vid_list = multiple_vlan_parser(ctx, vid)
+
+    if except_flag:
+        if command_mode == "add":
+            comp_list = get_existing_vlan_id(db)  # config vlan member add
+
+        elif command_mode == "del":
+            comp_list = get_existing_vlan_id_on_interface(db,port) # config vlan member del
+
+        if multiple:
+            for i in vid_list:
+                if i in comp_list:
+                    comp_list.remove(i)
+
+        else:
+            if not vid.isdigit():
+                ctx.fail("Vlan is not integer.")
+            vid = int(vid)
+            if vid in comp_list:
+                comp_list.remove(vid)
+        vid_list = comp_list
+
+    elif not multiple:
+        # if entered vlan is not a integer
+        if not vid.isdigit():
+            ctx.fail("Vlan is not integer.")
+        vid_list.append(int(vid))
+
+    # sorting the vid_list
+    vid_list.sort()
+    return vid_list
+
+def interface_is_tagged_member(db, interface_name):
+    """ Check if interface has tagged members i.e. is in trunk mode"""
+    vlan_member_table = db.get_table('VLAN_MEMBER')
+
+    for key, val in vlan_member_table.items():
+        if(key[1] == interface_name):
+            if (val['tagging_mode'] == 'tagged'):
+                return True
+    return False
+
 def interface_is_in_vlan(vlan_member_table, interface_name):
     """ Check if an interface is in a vlan """
     for _,intf in vlan_member_table:
@@ -308,6 +413,55 @@ def is_pc_router_interface(config_db, pc):
             return True
 
     return False
+
+def get_vlan_id(vlan):
+    vlan_prefix, vid = vlan.split('Vlan')
+    return vid
+
+def get_interface_name_for_display(db ,interface):
+    interface_naming_mode = get_interface_naming_mode()
+    iface_alias_converter = InterfaceAliasConverter(db)
+    if interface_naming_mode == "alias" and interface:
+        return iface_alias_converter.name_to_alias(interface)
+    return interface
+
+def get_interface_untagged_vlan_members(db,interface):
+    untagged_vlans = []
+    vlan_member = db.cfgdb.get_table('VLAN_MEMBER')
+
+    for member in natsorted(list(vlan_member.keys())):
+        interface_vlan, interface_name = member
+
+        if interface == interface_name and vlan_member[member]['tagging_mode'] == 'untagged':
+            untagged_vlans.append(get_vlan_id(interface_vlan))
+
+    return "\n".join(untagged_vlans)
+
+def get_interface_tagged_vlan_members(db,interface):
+    tagged_vlans = []
+    formatted_tagged_vlans = []
+    vlan_member = db.cfgdb.get_table('VLAN_MEMBER')
+
+    for member in natsorted(list(vlan_member.keys())):
+        interface_vlan, interface_name = member
+
+        if interface == interface_name and vlan_member[member]['tagging_mode'] == 'tagged':
+            tagged_vlans.append(get_vlan_id(interface_vlan))
+
+    for i in range(len(tagged_vlans)//5+1):
+        formatted_tagged_vlans.append(" ,".join([str(x) for x in tagged_vlans[i*5:(i+1)*5]]))
+
+    return "\n".join(formatted_tagged_vlans)
+
+def get_interface_switchport_mode(db, interface):
+    port = db.cfgdb.get_entry('PORT',interface)
+    portchannel = db.cfgdb.get_entry('PORTCHANNEL',interface)
+    switchport_mode = 'routed'
+    if "mode" in port:
+        switchport_mode = port['mode']
+    elif "mode" in portchannel:
+        switchport_mode = portchannel['mode']
+    return switchport_mode
 
 def is_port_mirror_dst_port(config_db, port):
     """Check if port is already configured as mirror destination port """
