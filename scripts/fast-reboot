@@ -54,6 +54,7 @@ EXIT_TEAMD_RETRY_COUNT_FAILURE=23
 function error()
 {
     echo $@ >&2
+    logger -p user.err "Error seen during warm-reboot shutdown process: $@"
 }
 
 function debug()
