@@ -1959,6 +1959,9 @@ def override_config_table(db, input_config_db, dry_run):
         # Use deepcopy by default to avoid modifying input config
         updated_config = update_config(current_config, ns_config_input)
 
+        # Enable YANG hard dependecy check to exit early if not satisfied
+        table_hard_dependency_check(updated_config)
+
         yang_enabled = device_info.is_yang_config_validation_enabled(config_db)
         if yang_enabled:
             # The ConfigMgmt will load YANG and running
@@ -2003,6 +2006,22 @@ def override_config_db(config_db, config_input):
     data = sonic_cfggen.FormatConverter.output_to_db(config_input)
     config_db.mod_config(data)
     click.echo("Overriding completed. No service is restarted.")
+
+
+def table_hard_dependency_check(config_json):
+    aaa_table_hard_dependency_check(config_json)
+
+
+def aaa_table_hard_dependency_check(config_json):
+    AAA_TABLE = config_json.get("AAA", {})
+    TACPLUS_TABLE = config_json.get("TACPLUS", {})
+
+    aaa_authentication_login = AAA_TABLE.get("authentication", {}).get("login", "")
+    tacacs_enable = "tacacs+" in aaa_authentication_login.split(",")
+    tacplus_passkey = TACPLUS_TABLE.get("global", {}).get("passkey", "")
+    if tacacs_enable and len(tacplus_passkey) == 0:
+        click.secho("Authentication with 'tacacs+' is not allowed when passkey not exits.", fg="magenta")
+        sys.exit(1)
 
 
 #
