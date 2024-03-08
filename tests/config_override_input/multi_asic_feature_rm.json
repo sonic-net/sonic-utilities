@@ -4,5 +4,8 @@
     },
     "asic0": {
         "FEATURE": {}
+    },
+    "asic1": {
+        "FEATURE": {}
     }
 }
