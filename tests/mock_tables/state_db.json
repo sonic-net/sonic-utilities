@@ -684,16 +684,17 @@
         "media_interface_technology" : "1550 nm DFB",
         "vendor_rev" : "XX",
         "cmis_rev" : "4.1",
-        "active_firmware" : "X.X",
-        "inactive_firmware" : "X.X",
         "supported_max_tx_power" : "4.0",
         "supported_min_tx_power" : "-22.9",
         "supported_max_laser_freq" : "196100",
         "supported_min_laser_freq" : "191300"
     },
+    "TRANSCEIVER_FIRMWARE_INFO|Ethernet64": {
+        "active_firmware": "X.X",
+        "inactive_firmware": "X.X"
+    },
     "TRANSCEIVER_INFO|Ethernet72": {
         "active_apsel_hostlane4": "N/A",
-        "active_firmware": "0.0",
         "is_replaceable": "True",
         "application_advertisement": "{1: {'host_electrical_interface_id': 'IB NDR', 'module_media_interface_id': 'Copper cable', 'media_lane_count': 4, 'host_lane_count': 4, 'host_lane_assignment_options': 17}, 2: {'host_electrical_interface_id': 'IB SDR (Arch.Spec.Vol.2)', 'module_media_interface_id': 'Copper cable', 'media_lane_count': 4, 'host_lane_count': 4, 'host_lane_assignment_options': 17}}",
         "host_electrical_interface": "N/A",
@@ -710,7 +711,6 @@
         "supported_min_laser_freq": "N/A",
         "serial": "serial1   ",
         "active_apsel_hostlane7": "N/A",
-        "inactive_firmware": "N/A",
         "active_apsel_hostlane1": "N/A",
         "type": "OSFP 8X Pluggable Transceiver",
         "cable_length": "1.0",
@@ -795,6 +795,10 @@
         "txbiashighwarning": "N/A",
         "txbiaslowalarm": "N/A",
         "txbiaslowwarning": "N/A"
+    },
+    "TRANSCEIVER_FIRMWARE_INFO|Ethernet72": {
+        "active_firmware": "0.0",
+        "inactive_firmware": "N/A"
     },
     "TRANSCEIVER_STATUS|Ethernet0": {
         "status": "67",
@@ -1356,7 +1360,8 @@
         "speed" : "100000",
         "supported_speeds": "10000,25000,40000,100000",
         "supported_fecs": "rs,none,test",
-        "link_training_status": "not_trained"
+        "link_training_status": "not_trained",
+	"fec": "rs"
     },
     "PORT_TABLE|Ethernet32": {
         "link_training_status": "trained"
@@ -1365,6 +1370,11 @@
         "speed": "40000",
         "supported_fecs": "N/A",
         "link_training_status": "off"
+    },
+    "PORT_TABLE|Ethernet124": {
+        "speed": "40000",
+        "supported_fecs": "rs,none,fc,auto",
+        "fec": "rs"
     },
     "PCIE_DEVICE|00:01.0": {
         "correctable|BadDLLP": "0",

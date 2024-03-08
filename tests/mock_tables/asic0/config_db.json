@@ -248,6 +248,36 @@
         "asn": "65200",
         "keepalive": "3"
     },
+    "BGP_VOQ_CHASSIS_NEIGHBOR|3.3.3.1": {
+        "rrclient": "0",
+        "name": "str2-sonic-lc1-1-ASIC0",
+        "local_addr": "3.3.3.2",
+        "nhopself": "0",
+        "admin_status": "up",
+        "holdtime": "10",
+        "asn": "65200",
+        "keepalive": "3"
+    },
+    "BGP_VOQ_CHASSIS_NEIGHBOR|3.3.3.2": {
+        "rrclient": "0",
+        "name": "str2-sonic-lc2-1-ASIC0",
+        "local_addr": "3.3.3.2",
+        "nhopself": "0",
+        "admin_status": "up",
+        "holdtime": "10",
+        "asn": "65200",
+        "keepalive": "3"
+    },
+    "BGP_VOQ_CHASSIS_NEIGHBOR|3.3.3.8": {
+        "rrclient": "0",
+        "name": "str2-sonic-lc1-1-ASIC1",
+        "local_addr": "3.3.3.9",
+        "nhopself": "0",
+        "admin_status": "up",
+        "holdtime": "10",
+        "asn": "65200",
+        "keepalive": "3"
+    },
     "ACL_RULE|DATAACL_5|RULE_1": {
         "IP_PROTOCOL": "126",
         "PACKET_ACTION": "FORWARD",

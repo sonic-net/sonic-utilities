@@ -144,6 +144,7 @@ Flags: A - active, I - inactive, Up - up, Dw - Down, N/A - not available,
  1001  PortChannel1001  N/A
 """
 
+
 show_interfaces_switchport_status_output="""\
 Interface        Mode
 ---------------  ------
@@ -159,8 +160,8 @@ Ethernet36       routed
 Ethernet40       routed
 Ethernet44       routed
 Ethernet48       routed
-Ethernet52       access
-Ethernet56       access
+Ethernet52       routed
+Ethernet56       routed
 Ethernet60       routed
 Ethernet64       routed
 Ethernet68       routed
@@ -198,8 +199,8 @@ Ethernet36       routed
 Ethernet40       routed
 Ethernet44       routed
 Ethernet48       routed
-Ethernet52       access
-Ethernet56       access
+Ethernet52       routed
+Ethernet56       routed
 Ethernet60       routed
 Ethernet64       routed
 Ethernet68       routed
@@ -416,6 +417,7 @@ class TestInterfaces(object):
         assert len(intf_list) == 3
         assert intf_list == ["Ethernet-BP10", "Ethernet-BP11", "Ethernet-BP12"]
 
+
     def test_show_interfaces_switchport_status(self):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["interfaces"].commands["switchport"].commands["status"])
@@ -434,6 +436,7 @@ class TestInterfaces(object):
         assert result.exit_code == 0
         assert result.output == show_interfaces_switchport_config_output
         
+
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")

@@ -17,7 +17,7 @@ sys.modules['sonic_platform'] = mock.MagicMock()
 
 
 decode_syseeprom_path = os.path.join(scripts_path, 'decode-syseeprom')
-decode_syseeprom = load_module_from_source('decode-syseeprom', decode_syseeprom_path)
+decode_syseeprom = load_module_from_source('decode_syseeprom', decode_syseeprom_path)
 
 # Replace swsscommon objects with mocked objects
 decode_syseeprom.SonicV2Connector = dbconnector.SonicV2Connector
@@ -195,8 +195,9 @@ CRC-32               0xFE        4  0xAC518FB3
 
     @mock.patch('os.geteuid', lambda: 0)
     @mock.patch('sonic_py_common.device_info.get_platform', lambda: 'arista')
-    @mock.patch('decode-syseeprom.read_and_print_eeprom')
-    @mock.patch('decode-syseeprom.read_eeprom_from_db')
+    @mock.patch.object(sys, 'argv', ["decode-syseeprom"])
+    @mock.patch('decode_syseeprom.read_and_print_eeprom')
+    @mock.patch('decode_syseeprom.read_eeprom_from_db')
     def test_support_platforms_not_db_based(self, mockDbBased, mockNotDbBased):
         decode_syseeprom.main()
         assert mockNotDbBased.called

@@ -1,0 +1,28 @@
+{
+    "running_config": {
+        "AAA": {
+            "authentication": {
+                "login": "tacacs+"
+            }
+        },
+        "TACPLUS": {
+            "global": {
+                "passkey": ""
+            }
+        }
+    },
+    "golden_config": {
+    },
+    "expected_config": {
+        "AAA": {
+            "authentication": {
+                "login": "tacacs+"
+            }
+        },
+        "TACPLUS": {
+            "global": {
+                "passkey": ""
+            }
+        }
+    }
+}

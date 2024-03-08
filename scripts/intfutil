@@ -806,6 +806,63 @@ class IntfLinkTrainingStatus(object):
                               appl_db_port_status_get(self.db, key, PORT_ADMIN_STATUS)))
         return table
 
+# ========================== FEC logic ==========================
+header_fec = ['Interface', 'FEC Oper', 'FEC Admin']
+
+class IntfFecStatus(object):
+
+    def __init__(self, intf_name, namespace_option, display_option):
+        self.db = None
+        self.config_db = None
+        self.table = []
+        self.multi_asic = multi_asic_util.MultiAsic(
+            display_option, namespace_option)
+
+        if intf_name is not None and intf_name == SUB_PORT:
+            self.intf_name = None
+        else:
+            self.intf_name = intf_name
+
+    def display_fec_status(self):
+        self.get_intf_fec_status()
+        # Sorting and tabulating the result table.
+        sorted_table = natsorted(self.table)
+        print(tabulate(sorted_table, header_fec, tablefmt="simple", stralign='right'))
+
+    @multi_asic_util.run_on_multi_asic
+    def get_intf_fec_status(self):
+        self.front_panel_ports_list = get_frontpanel_port_list(self.config_db)
+        self.appl_db_keys = appl_db_keys_get(self.db, self.front_panel_ports_list, self.intf_name)
+        if self.appl_db_keys:
+            self.table += self.generate_fec_status()
+
+    def generate_fec_status(self):
+        """
+            Generate FEC output
+        """
+
+        i = {}
+        table = []
+        key = []
+
+        #
+        # Iterate through all the keys and append port's associated state to
+        # the result table.
+        #
+        for i in self.appl_db_keys:
+            key = re.split(':', i, maxsplit=1)[-1].strip()
+            if key in self.front_panel_ports_list:
+                if self.multi_asic.skip_display(constants.PORT_OBJ, key):
+                    continue
+                admin_fec = appl_db_port_status_get(self.db, key, PORT_FEC)
+                oper_fec = self.db.get(self.db.STATE_DB, PORT_STATE_TABLE_PREFIX + key, PORT_FEC)
+                oper_status = self.db.get(self.db.APPL_DB, PORT_STATUS_TABLE_PREFIX + key, PORT_OPER_STATUS)
+                if oper_status != "up" or oper_fec is None:
+                    oper_fec= "N/A"
+                oper_status = self.db.get(self.db.APPL_DB, PORT_STATUS_TABLE_PREFIX + key, PORT_OPER_STATUS)
+                table.append((key, oper_fec, admin_fec))
+        return table
+
 def main():
     parser = argparse.ArgumentParser(description='Display Interface information',
                                      formatter_class=argparse.RawTextHelpFormatter)
@@ -829,6 +886,9 @@ def main():
     elif args.command == "link_training":
         interface_lt_status = IntfLinkTrainingStatus(args.interface, args.namespace, args.display)
         interface_lt_status.display_link_training_status()
+    elif args.command == "fec":
+        interface_fec_status = IntfFecStatus(args.interface, args.namespace, args.display)
+        interface_fec_status.display_fec_status()
 
     sys.exit(0)
 

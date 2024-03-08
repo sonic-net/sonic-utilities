@@ -18,6 +18,7 @@ NEW_FEATURE_CONFIG = os.path.join(DATA_DIR, "new_feature_config.json")
 FULL_CONFIG_OVERRIDE = os.path.join(DATA_DIR, "full_config_override.json")
 PORT_CONFIG_OVERRIDE = os.path.join(DATA_DIR, "port_config_override.json")
 EMPTY_TABLE_REMOVAL = os.path.join(DATA_DIR, "empty_table_removal.json")
+AAA_YANG_HARD_CHECK = os.path.join(DATA_DIR, "aaa_yang_hard_check.json")
 RUNNING_CONFIG_YANG_FAILURE = os.path.join(DATA_DIR, "running_config_yang_failure.json")
 GOLDEN_INPUT_YANG_FAILURE = os.path.join(DATA_DIR, "golden_input_yang_failure.json")
 FINAL_CONFIG_YANG_FAILURE = os.path.join(DATA_DIR, "final_config_yang_failure.json")
@@ -158,6 +159,25 @@ class TestConfigOverride(object):
         self.check_override_config_table(
             db, config, read_data['running_config'], read_data['golden_config'],
             read_data['expected_config'])
+
+    def test_aaa_yang_hard_depdency_check_failure(self):
+        """YANG hard depdency must be satisfied"""
+        db = Db()
+        with open(AAA_YANG_HARD_CHECK, "r") as f:
+            read_data = json.load(f)
+            def read_json_file_side_effect(filename):
+                return read_data['golden_config']
+
+            with mock.patch('config.main.read_json_file',
+                            mock.MagicMock(side_effect=read_json_file_side_effect)):
+                write_init_config_db(db.cfgdb, read_data['running_config'])
+
+                runner = CliRunner()
+                result = runner.invoke(config.config.commands["override-config-table"],
+                                       ['golden_config_db.json'], obj=db)
+
+                assert result.exit_code != 0
+                assert "Authentication with 'tacacs+' is not allowed when passkey not exits." in result.output
 
     def check_override_config_table(self, db, config, running_config,
                                     golden_config, expected_config):

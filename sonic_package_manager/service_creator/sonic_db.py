@@ -12,7 +12,6 @@ from sonic_package_manager.service_creator import ETC_SONIC_PATH
 from sonic_package_manager.service_creator.utils import in_chroot
 
 CONFIG_DB = 'CONFIG_DB'
-CONFIG_DB_JSON = os.path.join(ETC_SONIC_PATH, 'config_db.json')
 INIT_CFG_JSON = os.path.join(ETC_SONIC_PATH, 'init_cfg.json')
 
 
@@ -99,12 +98,9 @@ class SonicDB:
         """ Yields available DBs connectors. """
 
         initial_db_conn = cls.get_initial_db_connector()
-        persistent_db_conn = cls.get_persistent_db_connector()
         running_db_conn = cls.get_running_db_connector()
 
         yield initial_db_conn
-        if persistent_db_conn is not None:
-            yield persistent_db_conn
         if running_db_conn is not None:
             yield running_db_conn
 
@@ -126,15 +122,6 @@ class SonicDB:
                 cls._running_db_conn = None
 
         return cls._running_db_conn
-
-    @classmethod
-    def get_persistent_db_connector(cls):
-        """ Returns persistent DB connector. """
-
-        if not os.path.exists(CONFIG_DB_JSON):
-            return None
-
-        return PersistentConfigDbConnector(CONFIG_DB_JSON)
 
     @classmethod
     def get_initial_db_connector(cls):

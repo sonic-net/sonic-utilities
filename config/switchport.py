@@ -135,4 +135,3 @@ def switchport_mode(db, type, port):
                 db.cfgdb.mod_entry("PORTCHANNEL", port, {"mode": "{}".format(type)})
 
             click.echo("{} switched from {} to {} mode".format(port,existing_mode,type))
-

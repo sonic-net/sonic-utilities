@@ -1,0 +1,57 @@
+{
+    "VERSIONS|DATABASE": {
+        "VERSION": "version_4_0_5"
+    },
+    "SFLOW|global": {
+        "admin_state": "up",
+        "sample_direction": "rx"
+    },
+    "SFLOW_SESSION|Ethernet0": {
+        "admin_state": "up",
+        "sample_direction": "rx",
+        "sample_rate": "1000"
+    },
+    "SFLOW_SESSION|Ethernet2": {
+        "admin_state": "down",
+        "sample_direction": "rx",
+        "sample_rate": "2000"
+    },
+    "SFLOW_SESSION|Ethernet4": {
+        "admin_state": "up",
+        "sample_direction": "rx",
+        "sample_rate": "4000"
+    },
+    "PORT|Ethernet0": {
+        "admin_status": "up",
+        "alias": "Ethernet1/1",
+        "description": "",
+        "index": "1",
+        "lanes": "77,78",
+        "mtu": "9100",
+        "pfc_asym": "off",
+        "speed": "100000",
+        "tpid": "0x8100"
+    },
+    "PORT|Ethernet2": {
+        "admin_status": "up",
+        "alias": "Ethernet2/1",
+        "description": "",
+        "index": "2",
+        "lanes": "79,80",
+        "mtu": "9100",
+        "pfc_asym": "off",
+        "speed": "100000",
+        "tpid": "0x8100"
+    },
+    "PORT|Ethernet4": {
+        "admin_status": "up",
+        "alias": "Ethernet4/1",
+        "description": "",
+        "index": "3",
+        "lanes": "81,82",
+        "mtu": "9100",
+        "pfc_asym": "off",
+        "speed": "100000",
+        "tpid": "0x8100"
+    }
+}

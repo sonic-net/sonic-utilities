@@ -6,7 +6,7 @@ from click.testing import CliRunner
 
 class TestDebugFrr(object):
     @patch('subprocess.check_output', MagicMock(return_value='FRRouting'))
-    def setup(self):
+    def setup(self, check_output = None):
         print('SETUP')
         import debug.main as debug
         import undebug.main as undebug
@@ -379,7 +379,7 @@ class TestDebugFrr(object):
 
 class TestDebugQuagga(object):
     @patch('subprocess.check_output', MagicMock(return_value='quagga'))
-    def setup(self):
+    def setup(self, check_output = None):
         print('SETUP')
         import debug.main as debug
         import undebug.main as undebug

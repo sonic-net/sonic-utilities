@@ -110,7 +110,7 @@ class TestConfigInterface(object):
         assert "fec fc is not in ['rs', 'none', 'test']" in result.output
         # Negative case: set a fec mode which is not default on an interface without supported_fecs
         result = self.basic_check("fec", ["Ethernet4", "test"], ctx, operator.ne)
-        assert "fec test is not in ['rs', 'fc', 'none']" in result.output
+        assert "fec test is not in ['rs', 'fc', 'none', 'auto']" in result.output
         # Negative case: set a fec mode on a port where setting fec is not supported
         result = self.basic_check("fec", ["Ethernet112", "test"], ctx, operator.ne)
         assert "Setting fec is not supported" in result.output

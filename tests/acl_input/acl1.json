@@ -235,7 +235,7 @@
 									}
 								}
 							},
-							"2": {
+							"100": {
 								"config": {
 									"sequence-id": 100
 								},
@@ -285,6 +285,27 @@
 										}
 									}
 								}
+							},
+							"2": {
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"config": {
+									"sequence-id": 2
+								},
+								"ip": {
+									"config": {
+										"protocol": "1"
+									}
+								},
+								"icmp": {
+									"config": {
+										"type": "136",
+										"code": "0"
+									}
+								}
 							}
 						}
 					},
@@ -308,6 +329,27 @@
 									"config": {
 										"protocol": "0",
 										"destination-ip-address": "fc02::/64"
+									}
+								}
+							},
+							"2": {
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"config": {
+									"sequence-id": 2
+								},
+								"ip": {
+									"config": {
+										"protocol": "58"
+									}
+								},
+								"icmp": {
+									"config": {
+										"type": "136",
+										"code": "0"
 									}
 								}
 							}

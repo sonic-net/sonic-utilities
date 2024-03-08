@@ -2,6 +2,10 @@
     "SWITCH_CAPABILITY|switch": {
         "ECMP_HASH_CAPABLE": "true",
         "LAG_HASH_CAPABLE": "true",
-        "HASH|NATIVE_HASH_FIELD_LIST": ""
+        "ECMP_HASH_ALGORITHM_CAPABLE": "true",
+        "LAG_HASH_ALGORITHM_CAPABLE": "true",
+        "HASH|NATIVE_HASH_FIELD_LIST": "",
+        "ECMP_HASH_ALGORITHM": "",
+        "LAG_HASH_ALGORITHM": ""
     }
 }

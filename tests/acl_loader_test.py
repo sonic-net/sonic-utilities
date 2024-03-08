@@ -150,7 +150,6 @@ class TestAclLoader(object):
     def test_icmpv6_translation(self, acl_loader):
         acl_loader.rules_info = {}
         acl_loader.load_rules_from_file(os.path.join(test_path, 'acl_input/acl1.json'))
-        print(acl_loader.rules_info)
         assert acl_loader.rules_info[("DATAACL_2", "RULE_1")] == {
             "ICMPV6_TYPE": 1,
             "ICMPV6_CODE": 0,
@@ -169,6 +168,30 @@ class TestAclLoader(object):
             "IP_TYPE": "IPV6ANY",
             "PACKET_ACTION": "FORWARD",
             "PRIORITY": "9900"
+        }
+
+    def test_icmp_translation_in_custom_acl_table_type(self, acl_loader):
+        acl_loader.rules_info = {}
+        acl_loader.load_rules_from_file(os.path.join(test_path, 'acl_input/acl1.json'))
+        assert acl_loader.rules_info[("BMC_ACL_NORTHBOUND", "RULE_2")]
+        assert acl_loader.rules_info[("BMC_ACL_NORTHBOUND", "RULE_2")] == {
+            "ICMP_TYPE": 136,
+            "ICMP_CODE": 0,
+            "IP_PROTOCOL": 1,
+            "PACKET_ACTION": "FORWARD",
+            "PRIORITY": "9998"
+        }
+
+    def test_icmpv6_translation_in_custom_acl_table_type(self, acl_loader):
+        acl_loader.rules_info = {}
+        acl_loader.load_rules_from_file(os.path.join(test_path, 'acl_input/acl1.json'))
+        assert acl_loader.rules_info[("BMC_ACL_NORTHBOUND_V6", "RULE_2")]
+        assert acl_loader.rules_info[("BMC_ACL_NORTHBOUND_V6", "RULE_2")] == {
+            "ICMPV6_TYPE": 136,
+            "ICMPV6_CODE": 0,
+            "IP_PROTOCOL": 58,
+            "PACKET_ACTION": "FORWARD",
+            "PRIORITY": "9998"
         }
 
     def test_ingress_default_deny_rule(self, acl_loader):
@@ -250,7 +273,7 @@ class TestAclLoader(object):
         assert not acl_loader.rules_info.get("RULE_1")
 
 
-    def test_icmp_fields_with_non_tcp_protocol(self, acl_loader):
+    def test_tcp_fields_with_non_tcp_protocol(self, acl_loader):
         acl_loader.rules_info = {}
         acl_loader.load_rules_from_file(os.path.join(test_path, 'acl_input/tcp_bad_protocol_number.json'))
         assert not acl_loader.rules_info.get("RULE_1")

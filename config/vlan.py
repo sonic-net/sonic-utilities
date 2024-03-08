@@ -12,17 +12,13 @@ ADHOC_VALIDATION = True
 DHCP_RELAY_TABLE = "DHCP_RELAY"
 DHCPV6_SERVERS = "dhcpv6_servers"
 
-
 #
 # 'vlan' group ('config vlan ...')
 #
-
-
 @click.group(cls=clicommon.AbbreviationGroup, name='vlan')
 def vlan():
     """VLAN-related configuration tasks"""
     pass
-
 
 
 def set_dhcp_relay_table(table, config_db, vlan_name, value):
@@ -30,8 +26,60 @@ def set_dhcp_relay_table(table, config_db, vlan_name, value):
 
 
 def is_dhcp_relay_running():
-    out, _ = clicommon.run_command("systemctl show dhcp_relay.service --property ActiveState --value", return_cmd=True)
+    out, _ = clicommon.run_command(["systemctl", "show", "dhcp_relay.service", "--property", "ActiveState", "--value"],
+                                   return_cmd=True)
     return out.strip() == "active"
+
+
+@vlan.command('add')
+@click.argument('vid', metavar='<vid>', required=True)
+@click.option('-m', '--multiple', is_flag=True, help="Add Multiple Vlan(s) in Range or in Comma separated list")
+@clicommon.pass_db
+def add_vlan(db, vid, multiple):
+    """Add VLAN"""
+
+    ctx = click.get_current_context()
+
+    config_db = ValidatedConfigDBConnector(db.cfgdb)
+
+    vid_list = []
+    # parser will parse the vid input if there are syntax errors it will throw error
+    if multiple:
+        vid_list = clicommon.multiple_vlan_parser(ctx, vid)
+    else:
+        if not vid.isdigit():
+            ctx.fail("{} is not integer".format(vid))
+        vid_list.append(int(vid))
+
+    if ADHOC_VALIDATION:
+
+        # loop will execute till an exception occurs
+        for vid in vid_list:
+
+            if not clicommon.is_vlanid_in_range(vid):
+                ctx.fail("Invalid VLAN ID {} (2-4094)".format(vid))
+            
+            #Multiple VLANs need to be referenced
+            vlan = 'Vlan{}'.format(vid)
+
+            # default vlan checker
+            if vid == 1:
+                # TODO: MISSING CONSTRAINT IN YANG MODEL
+                ctx.fail("{} is default VLAN.".format(vlan))
+
+            log.log_info("'vlan add {}' executing...".format(vid))
+
+            # TODO: MISSING CONSTRAINT IN YANG MODEL
+            if clicommon.check_if_vlanid_exist(db.cfgdb, vlan):
+                log.log_info("{} already exists".format(vlan))
+                ctx.fail("{} already exists, Aborting!!!".format(vlan))
+				
+            if clicommon.check_if_vlanid_exist(db.cfgdb, vlan, "DHCP_RELAY"):
+                ctx.fail("DHCPv6 relay config for {} already exists".format(vlan))
+
+            # set dhcpv4_relay table
+            set_dhcp_relay_table('VLAN', config_db, vlan, {'vlanid': str(vid)})
+
 
 def is_dhcpv6_relay_config_exist(db, vlan_name):
     keys = db.cfgdb.get_keys(DHCP_RELAY_TABLE)
@@ -44,65 +92,10 @@ def is_dhcpv6_relay_config_exist(db, vlan_name):
         return True
 
 
-@vlan.command('add')
-@click.argument('vid', metavar='<vid>', required=True)
-@click.option('-m', '--multiple', is_flag=True, help="Add Multiple Vlan(s) in Range or in Comma separated list")
-@clicommon.pass_db
-def add_vlan(db, vid, multiple):
-    """Add VLAN"""
-
-    ctx = click.get_current_context()
-    
-    config_db = ValidatedConfigDBConnector(db.cfgdb)
-
-    vid_list = []
-    # parser will parse the vid input if there are syntax errors it will throw error
-    if multiple:
-        vid_list = clicommon.multiple_vlan_parser(ctx, vid)
-    else:
-        if not vid.isdigit():
-            ctx.fail("{} is not integer".format(vid))
-        vid_list.append(int(vid))
-
-    if ADHOC_VALIDATION:
-
-        # loop will execute till an exception occurs
-        for vid in vid_list:
-
-            vlan = 'Vlan{}'.format(vid)
-
-            # default vlan checker
-            if vid == 1:
-                # TODO: MISSING CONSTRAINT IN YANG MODEL
-                ctx.fail("{} is default VLAN.".format(vlan))
-
-            log.log_info("'vlan add {}' executing...".format(vid))
-
-            if not clicommon.is_vlanid_in_range(vid):
-                ctx.fail("Invalid VLAN ID {} (2-4094)".format(vid))
-
-            # TODO: MISSING CONSTRAINT IN YANG MODEL
-            if clicommon.check_if_vlanid_exist(db.cfgdb, vlan):
-                log.log_info("{} already exists".format(vlan))
-                ctx.fail("{} already exists, Aborting!!!".format(vlan))
-				
-            if clicommon.check_if_vlanid_exist(db.cfgdb, vlan, "DHCP_RELAY"):
-                ctx.fail("DHCPv6 relay config for {} already exists".format(vlan))
-
-            try:
-				# set dhcpv4_relay / VLAN table
-                config_db.set_entry('VLAN', vlan, {'vlanid': str(vid)})
-
-            except ValueError:
-                ctx.fail("Invalid VLAN ID {} (2-4094)".format(vid))
-
-
-def delete_state_db_entry(entry_name):
-    state_db = SonicV2Connector()
-    state_db.connect(state_db.STATE_DB)
-    exists = state_db.exists(state_db.STATE_DB, 'DHCPv6_COUNTER_TABLE|{}'.format(entry_name))
+def delete_db_entry(entry_name, db_connector, db_name):
+    exists = db_connector.exists(db_name, entry_name)
     if exists:
-        state_db.delete(state_db.STATE_DB, 'DHCPv6_COUNTER_TABLE|{}'.format(entry_name))
+        db_connector.delete(db_name, entry_name)
 
 
 @vlan.command('del')
@@ -110,13 +103,12 @@ def delete_state_db_entry(entry_name):
 @click.option('-m', '--multiple', is_flag=True, help="Add Multiple Vlan(s) in Range or in Comma separated list")
 @click.option('--no_restart_dhcp_relay', is_flag=True, type=click.BOOL, required=False, default=False,
               help="If no_restart_dhcp_relay is True, do not restart dhcp_relay while del vlan and \
-                require dhcpv6 relay of this is empty")
+                  require dhcpv6 relay of this is empty")
 @clicommon.pass_db
 def del_vlan(db, vid, multiple, no_restart_dhcp_relay):
     """Delete VLAN"""
 
     ctx = click.get_current_context()
-    config_db = ValidatedConfigDBConnector(db.cfgdb)
 
     vid_list = []
     # parser will parse the vid input if there are syntax errors it will throw error
@@ -126,22 +118,23 @@ def del_vlan(db, vid, multiple, no_restart_dhcp_relay):
         if not vid.isdigit():
             ctx.fail("{} is not integer".format(vid))
         vid_list.append(int(vid))
-
+    
+    config_db = ValidatedConfigDBConnector(db.cfgdb)
     if ADHOC_VALIDATION:
-        # loop will execute till an exception occurs
         for vid in vid_list:
-
             log.log_info("'vlan del {}' executing...".format(vid))
-
+            
             if not clicommon.is_vlanid_in_range(vid):
                 ctx.fail("Invalid VLAN ID {} (2-4094)".format(vid))
-
+            
+            #Multiple VLANs needs to be referenced
             vlan = 'Vlan{}'.format(vid)
 
+            #Multiple VLANs needs to be checked
             if no_restart_dhcp_relay:
                 if is_dhcpv6_relay_config_exist(db, vlan):
                     ctx.fail("Can't delete {} because related DHCPv6 Relay config is exist".format(vlan))
-            
+
             if clicommon.check_if_vlanid_exist(db.cfgdb, vlan) == False:
                 log.log_info("{} does not exist".format(vlan))
                 ctx.fail("{} does not exist, Aborting!!!".format(vlan))
@@ -160,37 +153,37 @@ def del_vlan(db, vid, multiple, no_restart_dhcp_relay):
             vxlan_table = db.cfgdb.get_table('VXLAN_TUNNEL_MAP')
             for vxmap_key, vxmap_data in vxlan_table.items():
                 if vxmap_data['vlan'] == 'Vlan{}'.format(vid):
-                    ctx.fail("vlan: {} can not be removed. First remove vxlan mapping '{}' assigned to VLAN".format(vid, '|'.join(vxmap_key)))
-			
-            # set dhcpv4_relay / VLAN table
-            config_db.set_entry('VLAN', 'Vlan{}'.format(vid), None)
-            
+                    ctx.fail("vlan: {} can not be removed. First remove vxlan mapping '{}' assigned to VLAN".format(vid, '|'.join(vxmap_key))) 
+        
+            # set dhcpv4_relay table
+            set_dhcp_relay_table('VLAN', config_db, vlan, None)
+
             if not no_restart_dhcp_relay and is_dhcpv6_relay_config_exist(db, vlan):
                 # set dhcpv6_relay table
                 set_dhcp_relay_table('DHCP_RELAY', config_db, vlan, None)
                 # We need to restart dhcp_relay service after dhcpv6_relay config change
                 if is_dhcp_relay_running():
                     dhcp_relay_util.handle_restart_dhcp_relay_service()
-                    
-            delete_state_db_entry(vlan)
-               
+
+            delete_db_entry("DHCPv6_COUNTER_TABLE|{}".format(vlan), db.db, db.db.STATE_DB)
+            delete_db_entry("DHCP_COUNTER_TABLE|{}".format(vlan), db.db, db.db.STATE_DB)
+
     vlans = db.cfgdb.get_keys('VLAN')
     if not vlans:
-        docker_exec_cmd = "docker exec -i swss {}"
-        _, rc = clicommon.run_command(docker_exec_cmd.format("supervisorctl status ndppd"), ignore_error=True, return_cmd=True)
+        docker_exec_cmd = ['docker', 'exec', '-i', 'swss']
+        _, rc = clicommon.run_command(docker_exec_cmd + ['supervisorctl', 'status', 'ndppd'], ignore_error=True, return_cmd=True)
         if rc == 0:
             click.echo("No VLANs remaining, stopping ndppd service")
-            clicommon.run_command(docker_exec_cmd.format("supervisorctl stop ndppd"), ignore_error=True, return_cmd=True)
-            clicommon.run_command(docker_exec_cmd.format("rm -f /etc/supervisor/conf.d/ndppd.conf"), ignore_error=True, return_cmd=True)
-            clicommon.run_command(docker_exec_cmd.format("supervisorctl update"), return_cmd=True)
-                
+            clicommon.run_command(docker_exec_cmd + ['supervisorctl', 'stop', 'ndppd'], ignore_error=True, return_cmd=True)
+            clicommon.run_command(docker_exec_cmd + ['rm', '-f', '/etc/supervisor/conf.d/ndppd.conf'], ignore_error=True, return_cmd=True)
+            clicommon.run_command(docker_exec_cmd + ['supervisorctl', 'update'], return_cmd=True)
 
 def restart_ndppd():
     verify_swss_running_cmd = ['docker', 'container', 'inspect', '-f', '{{.State.Status}}', 'swss']
     docker_exec_cmd = ['docker', 'exec', '-i', 'swss']
     ndppd_config_gen_cmd = ['sonic-cfggen', '-d', '-t', '/usr/share/sonic/templates/ndppd.conf.j2,/etc/ndppd.conf']
-    ndppd_restart_cmd =['supervisorctl', 'restart', 'ndppd']
-    ndppd_status_cmd= ["supervisorctl", "status", "ndppd"]
+    ndppd_restart_cmd = ['supervisorctl', 'restart', 'ndppd']
+    ndppd_status_cmd = ["supervisorctl", "status", "ndppd"]
     ndppd_conf_copy_cmd = ['cp', '/usr/share/sonic/templates/ndppd.conf', '/etc/supervisor/conf.d/']
     supervisor_update_cmd = ['supervisorctl', 'update']
 
@@ -230,30 +223,24 @@ def config_proxy_arp(db, vid, mode):
     db.cfgdb.mod_entry('VLAN_INTERFACE', vlan, {"proxy_arp": mode})
     click.echo('Proxy ARP setting saved to ConfigDB')
     restart_ndppd()
-
-
 #
 # 'member' group ('config vlan member ...')
 #
-
-
 @vlan.group(cls=clicommon.AbbreviationGroup, name='member')
 def vlan_member():
     pass
-
 
 @vlan_member.command('add')
 @click.argument('vid', metavar='<vid>', required=True)
 @click.argument('port', metavar='port', required=True)
 @click.option('-u', '--untagged', is_flag=True, help="Untagged status")
 @click.option('-m', '--multiple', is_flag=True, help="Add Multiple Vlan(s) in Range or in Comma separated list")
-@click.option('-e', '--except_flag', is_flag=True, help="Skips the given vlans and adds all other existing vlans.")
+@click.option('-e', '--except_flag', is_flag=True, help="Skips the given vlans and adds all other existing vlans")
 @clicommon.pass_db
 def add_vlan_member(db, vid, port, untagged, multiple, except_flag):
     """Add VLAN member"""
 
     ctx = click.get_current_context()
-    config_db = ValidatedConfigDBConnector(db.cfgdb)
 
     # parser will parse the vid input if there are syntax errors it will throw error
 
@@ -262,9 +249,13 @@ def add_vlan_member(db, vid, port, untagged, multiple, except_flag):
     # multiple vlan command cannot be used to add multiple untagged vlan members
     if untagged and (multiple or except_flag or vid == "all"):
         ctx.fail("{} cannot have more than one untagged Vlan.".format(port))
+    
+    config_db = ValidatedConfigDBConnector(db.cfgdb)
 
     if ADHOC_VALIDATION:
         for vid in vid_list:
+
+            vlan = 'Vlan{}'.format(vid)
 
             # default vlan checker
             if vid == 1:
@@ -275,7 +266,6 @@ def add_vlan_member(db, vid, port, untagged, multiple, except_flag):
             if not clicommon.is_vlanid_in_range(vid):
                 ctx.fail("Invalid VLAN ID {} (2-4094)".format(vid))
 
-            vlan = 'Vlan{}'.format(vid)
             if clicommon.check_if_vlanid_exist(db.cfgdb, vlan) == False:
                 log.log_info("{} does not exist".format(vlan))
                 ctx.fail("{} does not exist".format(vlan))
@@ -303,6 +293,10 @@ def add_vlan_member(db, vid, port, untagged, multiple, except_flag):
                 is_port = False
             else:
                 ctx.fail("{} does not exist".format(port))
+            
+            if (is_port and clicommon.is_port_router_interface(db.cfgdb, port)) or \
+                (not is_port and clicommon.is_pc_router_interface(db.cfgdb, port)): # TODO: MISSING CONSTRAINT IN YANG MODEL
+                ctx.fail("{} is in routed mode!\nUse switchport mode command to change port mode".format(port))
 
             portchannel_member_table = db.cfgdb.get_table('PORTCHANNEL_MEMBER')
 
@@ -338,28 +332,28 @@ def add_vlan_member(db, vid, port, untagged, multiple, except_flag):
                 pass
             
             # in case of exception in list last added member will be shown to user
+        
             try:
-                config_db.set_entry('VLAN_MEMBER', (vlan, port), {'tagging_mode': "untagged" if untagged else "tagged"})
+                config_db.set_entry('VLAN_MEMBER', (vlan, port), {'tagging_mode': "untagged" if untagged else "tagged" })
             except ValueError:
                 ctx.fail("{} invalid or does not exist, or {} invalid or does not exist".format(vlan, port))
-
 
 @vlan_member.command('del')
 @click.argument('vid', metavar='<vid>', required=True)
 @click.argument('port', metavar='<port>', required=True)
 @click.option('-m', '--multiple', is_flag=True, help="Add Multiple Vlan(s) in Range or in Comma separated list")
-@click.option('-e', '--except_flag', is_flag=True, help="Skips the given vlans and adds all other existing vlans.")
+@click.option('-e', '--except_flag', is_flag=True, help="Skips the given vlans and adds all other existing vlans")
 @clicommon.pass_db
 def del_vlan_member(db, vid, port, multiple, except_flag):
     """Delete VLAN member"""
 
     ctx = click.get_current_context()
-    config_db = ValidatedConfigDBConnector(db.cfgdb)
-
+    
     # parser will parse the vid input if there are syntax errors it will throw error
 
     vid_list = clicommon.vlan_member_input_parser(ctx,"del", db, except_flag, multiple, vid, port)
 
+    config_db = ValidatedConfigDBConnector(db.cfgdb)
     if ADHOC_VALIDATION:
         for vid in vid_list:
 
@@ -369,8 +363,9 @@ def del_vlan_member(db, vid, port, multiple, except_flag):
                 ctx.fail("Invalid VLAN ID {} (2-4094)".format(vid))
 
             vlan = 'Vlan{}'.format(vid)
+
             if clicommon.check_if_vlanid_exist(db.cfgdb, vlan) == False:
-                log.log_info("{} does not exist, Aborting!!!".format(vlan))
+                log.log_info("{} does not exist".format(vlan))
                 ctx.fail("{} does not exist, Aborting!!!".format(vlan))
 
             if clicommon.get_interface_naming_mode() == "alias":  # TODO: MISSING CONSTRAINT IN YANG MODEL
@@ -384,8 +379,11 @@ def del_vlan_member(db, vid, port, multiple, except_flag):
             if not clicommon.is_port_vlan_member(db.cfgdb, port, vlan):
                 ctx.fail("{} is not a member of {}".format(port, vlan))
 
+        
             try:
                 config_db.set_entry('VLAN_MEMBER', (vlan, port), None)
-
+                delete_db_entry("DHCPv6_COUNTER_TABLE|{}".format(port), db.db, db.db.STATE_DB)
+                delete_db_entry("DHCP_COUNTER_TABLE|{}".format(port), db.db, db.db.STATE_DB)
             except JsonPatchConflict:
                 ctx.fail("{} invalid or does not exist, or {} is not a member of {}".format(vlan, port, vlan))
+

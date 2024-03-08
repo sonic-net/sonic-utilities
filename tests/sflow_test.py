@@ -18,6 +18,7 @@ config.asic_type = mock.MagicMock(return_value = "broadcom")
 show_sflow_output = """
 sFlow Global Information:
   sFlow Admin State:          up
+  sFlow Sample Direction:     both
   sFlow Polling Interval:     0
   sFlow AgentID:              default
 
@@ -29,17 +30,17 @@ sFlow Global Information:
 # Expected output for 'show sflow interface'
 show_sflow_intf_output = """
 sFlow interface configurations
-+-------------+---------------+-----------------+
-| Interface   | Admin State   |   Sampling Rate |
-+=============+===============+=================+
-| Ethernet0   | up            |            2500 |
-+-------------+---------------+-----------------+
-| Ethernet4   | up            |            1000 |
-+-------------+---------------+-----------------+
-| Ethernet112 | up            |            1000 |
-+-------------+---------------+-----------------+
-| Ethernet116 | up            |            5000 |
-+-------------+---------------+-----------------+
++-------------+---------------+-----------------+----------------------+
+| Interface   | Admin State   |   Sampling Rate | Sampling Direction   |
++=============+===============+=================+======================+
+| Ethernet0   | up            |            2500 | both                 |
++-------------+---------------+-----------------+----------------------+
+| Ethernet4   | up            |            1000 | tx                   |
++-------------+---------------+-----------------+----------------------+
+| Ethernet112 | up            |            1000 | both                 |
++-------------+---------------+-----------------+----------------------+
+| Ethernet116 | up            |            5000 | rx                   |
++-------------+---------------+-----------------+----------------------+
 """
 
 class TestShowSflow(object):
@@ -425,6 +426,144 @@ class TestShowSflow(object):
 
         return
 
+    def test_config_sflow_sample_direction(self):
+        # config sflow sample-direction<rx|tx|both>
+        db = Db()
+        runner = CliRunner()
+        obj = {'db':db.cfgdb}
+
+        #Sample direction : Invalid
+        result = runner.invoke(config.config.commands["sflow"].commands["sample-direction"], ["NA"], obj=obj)
+        print(result.output)
+        expected = "Error: Direction NA is invalid"
+        assert expected in result.output
+
+        #disable
+        result = runner.invoke(config.config.commands["sflow"].commands["sample-direction"], ["tx"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        # change the output
+        global show_sflow_output
+        show_sflow_output_tx = show_sflow_output.replace(
+            'Sample Direction:     both',
+            'Sample Direction:     tx')
+
+        show_sflow_output_rx = show_sflow_output.replace(
+            'Sample Direction:     both',
+            'Sample Direction:     rx')
+
+        # run show and check
+        result = runner.invoke(show.cli.commands["sflow"], [], obj=db)
+        print(result.exit_code, result.output, show_sflow_output_tx)
+        assert result.exit_code == 0
+        assert result.output == show_sflow_output_tx
+
+        # sample-direction rx
+        with mock.patch("utilities_common.cli.run_command", mock.MagicMock()) as mock_run_command:
+            result = runner.invoke(config.config.commands["sflow"].commands["sample-direction"], ["rx"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+
+        # run show and check
+        result = runner.invoke(show.cli.commands["sflow"], [], obj=db)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert result.output == show_sflow_output_rx
+
+        return
+
+    def test_config_all_intf_sample_direction(self):
+        db = Db()
+        runner = CliRunner()
+        obj = {'db':db.cfgdb}
+
+        # set all direction to both
+        result = runner.invoke(config.config.commands["sflow"].
+            commands["interface"].commands["sample-direction"], ["all","both"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        # verify in configDb
+        sflowSession = db.cfgdb.get_table('SFLOW_SESSION')
+        assert sflowSession["all"]["sample_direction"] == "both"
+
+        # set all direction to tx
+        result = runner.invoke(config.config.commands["sflow"].
+            commands["interface"].commands["sample-direction"], ["all","tx"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        # verify in configDb
+        sflowSession = db.cfgdb.get_table('SFLOW_SESSION')
+        assert sflowSession["all"]["sample_direction"] == "tx"
+
+        # set all direction to rx
+        result = runner.invoke(config.config.commands["sflow"].
+            commands["interface"].commands["sample-direction"], ["all","rx"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        # verify in configDb
+        sflowSession = db.cfgdb.get_table('SFLOW_SESSION')
+        assert sflowSession["all"]["sample_direction"] == "rx"
+
+        return
+
+    def test_config_sflow_intf_sample_direction(self):
+        db = Db()
+        runner = CliRunner()
+        obj = {'db':db.cfgdb}
+
+        # mock interface_name_is_valid
+        config.interface_name_is_valid = mock.MagicMock(return_value = True)
+
+        # set sample-direction to Invalid
+        result = runner.invoke(config.config.commands["sflow"].
+            commands["interface"].commands["sample-direction"],
+            ["Ethernet2", "NA"], obj=obj)
+        print(result.exit_code, result.output)
+        expected = "Error: Direction NA is invalid"
+        assert result.exit_code == 2
+        assert expected in result.output
+
+        # set sample-direction to both
+        result = runner.invoke(config.config.commands["sflow"].
+            commands["interface"].commands["sample-direction"],
+            ["Ethernet2", "both"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        # we can not use 'show sflow interface', becasue 'show sflow interface'
+        # gets data from appDB, we need to fetch data from configDB for verification
+        sflowSession = db.cfgdb.get_table('SFLOW_SESSION')
+        assert sflowSession["Ethernet2"]["sample_direction"] == "both"
+
+        # set sample-direction to tx
+        result = runner.invoke(config.config.commands["sflow"].
+            commands["interface"].commands["sample-direction"],
+            ["Ethernet2", "tx"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        # we can not use 'show sflow interface', becasue 'show sflow interface'
+        # gets data from appDB, we need to fetch data from configDB for verification
+        sflowSession = db.cfgdb.get_table('SFLOW_SESSION')
+        assert sflowSession["Ethernet2"]["sample_direction"] == "tx"
+
+        # set sample-direction to rx
+        result = runner.invoke(config.config.commands["sflow"].
+            commands["interface"].commands["sample-direction"],
+            ["Ethernet2", "rx"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        # we can not use 'show sflow interface', becasue 'show sflow interface'
+        # gets data from appDB, we need to fetch data from configDB for verification
+        sflowSession = db.cfgdb.get_table('SFLOW_SESSION')
+        assert sflowSession["Ethernet2"]["sample_direction"] == "rx"
+
+        return
 
     @classmethod
     def teardown_class(cls):

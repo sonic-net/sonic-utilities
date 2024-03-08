@@ -305,7 +305,7 @@ class SFPShow(object):
         return output
 
     # Convert sfp info in DB to cli output string
-    def convert_sfp_info_to_output_string(self, sfp_info_dict):
+    def convert_sfp_info_to_output_string(self, sfp_info_dict, sfp_firmware_info_dict):
         indent = ' ' * 8
         output = ''
         is_sfp_cmis = 'cmis_rev' in sfp_info_dict
@@ -333,6 +333,8 @@ class SFPShow(object):
                         output += '{}N/A\n'.format((indent * 2))
             elif key == 'application_advertisement':
                 output += covert_application_advertisement_to_output_string(indent, sfp_info_dict)
+            elif key == 'active_firmware' or key == 'inactive_firmware':
+                output += '{}{}: {}\n'.format(indent, data_map[key], sfp_firmware_info_dict[key] if key in sfp_firmware_info_dict else 'N/A')
             else:
                 output += '{}{}: {}\n'.format(indent, data_map[key], sfp_info_dict[key])
 
@@ -441,12 +443,13 @@ class SFPShow(object):
         output = ''
 
         sfp_info_dict = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_INFO|{}'.format(interface_name))
+        sfp_firmware_info_dict = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_FIRMWARE_INFO|{}'.format(interface_name))
         if sfp_info_dict:
             if sfp_info_dict['type'] == RJ45_PORT_TYPE:
                 output = 'SFP EEPROM is not applicable for RJ45 port\n'
             else:
                 output = 'SFP EEPROM detected\n'
-                sfp_info_output = self.convert_sfp_info_to_output_string(sfp_info_dict)
+                sfp_info_output = self.convert_sfp_info_to_output_string(sfp_info_dict, sfp_firmware_info_dict)
                 output += sfp_info_output
 
                 if dump_dom:
@@ -517,8 +520,10 @@ class SFPShow(object):
                 for suffix in ZR_PM_THRESHOLD_KEY_SUFFIXS:
                     key = self.convert_pm_prefix_to_threshold_prefix(
                         prefix) + suffix
-                    thresholds.append(
-                        float(sfp_threshold_dict[key]) if key in sfp_threshold_dict else None)
+                    if key in sfp_threshold_dict and sfp_threshold_dict[key] != 'N/A':
+                        thresholds.append(float(sfp_threshold_dict[key]))
+                    else:
+                        thresholds.append(None)
 
                 tca_high, tca_low = None, None
                 if values[2] is not None and thresholds[0] is not None:

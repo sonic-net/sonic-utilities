@@ -142,14 +142,39 @@ test_caclrule = [
         },
     ]
 
-test_rsyslog_fail = [
-        # Fail the calls, to get the entire fail path calls invoked
-        #
-        { "cmd": "/usr/bin/rsyslog-config.sh", "rc": 1 },        # config update; fails
-        { "cmd": "systemctl restart rsyslog", "rc": 1 },         # rsyslog restart; fails
-        { "cmd": "systemctl reset-failed rsyslog", "rc": 1 },    # reset; failure here just logs
-        { "cmd": "systemctl restart rsyslog", "rc": 1 },         # restart again; fails
-        { "cmd": "systemctl restart rsyslog", "rc": 1 },         # restart again; fails
+
+test_rsyslog_data = [
+        { "old": {}, "upd": {}, "cmd": "" },
+        {
+            "old": { "SYSLOG_SERVER": {
+                "10.13.14.17": {},
+                "2001:aa:aa::aa": {} } },
+            "upd": { "SYSLOG_SERVER": {
+                "10.13.14.17": {},
+                "2001:aa:aa::aa": {} } },
+            "cmd": ""
+        },
+        {
+            "old": { "SYSLOG_SERVER": {
+                "10.13.14.17": {} } },
+            "upd": { "SYSLOG_SERVER": {
+                "10.13.14.18": {} } },
+            "cmd": "systemctl reset-failed rsyslog-config rsyslog,systemctl restart rsyslog-config"
+        },
+        {
+            "old": { "SYSLOG_SERVER": {
+                "10.13.14.17": {} } },
+            "upd": { "SYSLOG_SERVER": {
+                "10.13.14.17": {},
+                "2001:aa:aa::aa": {} } },
+            "cmd": "systemctl reset-failed rsyslog-config rsyslog,systemctl restart rsyslog-config"
+        },
+        {
+            "old": { "SYSLOG_SERVER": {
+                "10.13.14.17": {} } },
+            "upd": {},
+            "cmd": "systemctl reset-failed rsyslog-config rsyslog,systemctl restart rsyslog-config"
+        }
     ]
 
 test_vlanintf_data = [
@@ -208,14 +233,16 @@ class TestServiceValidator(unittest.TestCase):
             vlan_validator(entry["old"], entry["upd"], None)
 
 
-
-        # Test failure case
-        #
-        os_system_calls = test_rsyslog_fail
+        os_system_calls = []
         os_system_call_index = 0
+        for entry in test_rsyslog_data:
+            if entry["cmd"]:
+                for c in entry["cmd"].split(","):
+                    os_system_calls.append({"cmd": c, "rc": 0})
+            msg = "case failed: {}".format(str(entry))
 
-        rc = rsyslog_validator("", "", "")
-        assert not rc, "rsyslog_validator expected to fail"
+            rsyslog_validator(entry["old"], entry["upd"], None)
+
 
         os_system_calls = []
         os_system_call_index = 0

@@ -130,6 +130,14 @@ def getPortChannels():
                 "adminUp": False
                 }
 
+    deviceMetadataTable = Table(configDb, "DEVICE_METADATA")
+    metadata = deviceMetadataTable.get("localhost")
+    defaultBgpStatus = True
+    for key, value in metadata[1]:
+        if key == "default_bgp_status":
+            defaultBgpStatus = value == "up"
+            break
+
     bgpTable = Table(configDb, "BGP_NEIGHBOR")
     bgpNeighbors = bgpTable.getKeys()
     for bgpNeighbor in bgpNeighbors:
@@ -137,7 +145,7 @@ def getPortChannels():
         if not neighborData[0]:
             continue
         localAddr = None
-        isAdminUp = False
+        isAdminUp = defaultBgpStatus
         for key, value in neighborData[1]:
             if key == "local_addr":
                 if value not in portChannelData:

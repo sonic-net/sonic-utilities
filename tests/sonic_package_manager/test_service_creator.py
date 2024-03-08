@@ -95,6 +95,7 @@ def service_creator(mock_feature_registry,
 
 def test_service_creator(sonic_fs, manifest, service_creator, package_manager):
     entry = PackageEntry('test', 'azure/sonic-test')
+    manifest['service']['asic-service'] = True
     package = Package(entry, Metadata(manifest))
     installed_packages = package_manager._get_installed_packages_and(package)
     service_creator.create(package)
@@ -112,6 +113,10 @@ def test_service_creator(sonic_fs, manifest, service_creator, package_manager):
     assert read_file('warm-reboot_order') == 'swss teamd test syncd'
     assert read_file('fast-reboot_order') == 'teamd test swss syncd'
     assert read_file('test_reconcile') == 'test-process test-process-3'
+
+    generated_services_conf_content = read_file('generated_services.conf')
+    assert generated_services_conf_content.endswith('\n')
+    assert set(generated_services_conf_content.split()) == set(['test.service', 'test@.service'])
 
 
 def test_service_creator_with_timer_unit(sonic_fs, manifest, service_creator):

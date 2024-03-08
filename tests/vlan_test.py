@@ -134,6 +134,7 @@ config_add_del_vlan_and_vlan_member_output="""\
 +-----------+-----------------+-----------------+----------------+-------------+
 """
 
+
 test_config_add_del_multiple_vlan_and_vlan_member_output="""\
 +-----------+-----------------+-----------------+----------------+-------------+
 |   VLAN ID | IP Address      | Ports           | Port Tagging   | Proxy ARP   |
@@ -251,7 +252,6 @@ test_config_add_del_vlan_and_vlan_member_with_switchport_modes_output = """\
 +-----------+-----------------+-----------------+----------------+-------------+
 """
 
-
 config_add_del_vlan_and_vlan_member_in_alias_mode_output="""\
 +-----------+-----------------+-----------------+----------------+-------------+
 |   VLAN ID | IP Address      | Ports           | Port Tagging   | Proxy ARP   |
@@ -272,6 +272,8 @@ config_add_del_vlan_and_vlan_member_in_alias_mode_output="""\
 +-----------+-----------------+-----------------+----------------+-------------+
 """
 
+
+
 test_config_add_del_vlan_and_vlan_member_with_switchport_modes_and_change_mode_types_output = """\
 +-----------+-----------------+-----------------+----------------+-------------+
 |   VLAN ID | IP Address      | Ports           | Port Tagging   | Proxy ARP   |
@@ -291,7 +293,6 @@ test_config_add_del_vlan_and_vlan_member_with_switchport_modes_and_change_mode_t
 |      4000 |                 | PortChannel1001 | tagged         | disabled    |
 +-----------+-----------------+-----------------+----------------+-------------+
 """
-
 
 
 class TestVlan(object):
@@ -401,6 +402,7 @@ class TestVlan(object):
         assert result.exit_code != 0
         assert "Error: Vlan1001 does not exist" in result.output
 
+
     def test_config_vlan_add_vlan_with_multiple_vlanids(self, mock_restart_dhcp_relay_service):
         runner = CliRunner()
         result = runner.invoke(config.config.commands["vlan"].commands["add"], ["10,20,30,40", "--multiple"])
@@ -437,7 +439,7 @@ class TestVlan(object):
         print(result.output)
         assert result.exit_code != 0
         assert "Vlan1 is default vlan" in result.output
-
+    
     def test_config_vlan_add_vlan_is_digit_fail(self):
         runner = CliRunner()
         vid = "test_fail_case"
@@ -499,6 +501,7 @@ class TestVlan(object):
         assert result.exit_code != 0
         assert "Error: Ethernet3 does not exist" in result.output
 
+
     def test_config_vlan_add_nonexist_portchannel_member(self):
         runner = CliRunner()
         #switch port mode for PortChannel1011 to trunk mode
@@ -515,14 +518,17 @@ class TestVlan(object):
         assert result.exit_code != 0
         assert "Error: PortChannel1011 does not exist" in result.output
 
+
     def test_config_vlan_add_portchannel_member(self):
         runner = CliRunner()
         db = Db()
+
         result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"], \
 				["1000", "PortChannel1001", "--untagged"], obj=db)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
+
 
         # show output
         result = runner.invoke(show.cli.commands["vlan"].commands["brief"], [], obj=db)
@@ -594,20 +600,31 @@ class TestVlan(object):
         assert result.exit_code != 0
         assert "Error: VLAN ID 1000 can not be removed. First remove all members assigned to this VLAN." in result.output
 
-        vlan_member = db.cfgdb.get_table('VLAN_MEMBER')
-        keys = [ (k, v) for k, v in vlan_member if k == 'Vlan{}'.format(1000) ]
-        for k,v in keys:    
-            result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["del"], ["1000", v], obj=db)
-            print(result.exit_code)
-            print(result.output)
-            assert result.exit_code == 0
+        with mock.patch("config.vlan.delete_db_entry") as delete_db_entry:
+            vlan_member = db.cfgdb.get_table('VLAN_MEMBER')
+            keys = [ (k, v) for k, v in vlan_member if k == 'Vlan{}'.format(1000) ]
+            for k,v in keys:    
+                result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["del"], ["1000", v], obj=db)
+                print(result.exit_code)
+                print(result.output)
+                assert result.exit_code == 0
 
-        with mock.patch("config.vlan.delete_state_db_entry") as delete_state_db_entry:
             result = runner.invoke(config.config.commands["vlan"].commands["del"], ["1000"], obj=db)
             print(result.exit_code)
             print(result.output)
             assert result.exit_code == 0
-            delete_state_db_entry.assert_called_once_with("Vlan1000")
+            delete_db_entry.assert_has_calls([
+                mock.call("DHCPv6_COUNTER_TABLE|Vlan1000", mock.ANY, db.db.STATE_DB),
+                mock.call("DHCPv6_COUNTER_TABLE|Ethernet4", mock.ANY, db.db.STATE_DB),
+                mock.call("DHCPv6_COUNTER_TABLE|Ethernet8", mock.ANY, db.db.STATE_DB),
+                mock.call("DHCPv6_COUNTER_TABLE|Ethernet12", mock.ANY, db.db.STATE_DB),
+                mock.call("DHCPv6_COUNTER_TABLE|Ethernet16", mock.ANY, db.db.STATE_DB),
+                mock.call("DHCP_COUNTER_TABLE|Vlan1000", mock.ANY, db.db.STATE_DB),
+                mock.call("DHCP_COUNTER_TABLE|Ethernet4", mock.ANY, db.db.STATE_DB),
+                mock.call("DHCP_COUNTER_TABLE|Ethernet8", mock.ANY, db.db.STATE_DB),
+                mock.call("DHCP_COUNTER_TABLE|Ethernet12", mock.ANY, db.db.STATE_DB),
+                mock.call("DHCP_COUNTER_TABLE|Ethernet16", mock.ANY, db.db.STATE_DB)
+            ], any_order=True)
 
         # show output
         result = runner.invoke(show.cli.commands["vlan"].commands["brief"], [], obj=db)
@@ -630,10 +647,10 @@ class TestVlan(object):
             print(result.exit_code)
             print(result.output)
             mock_run_command.assert_has_calls([
-                mock.call("docker exec -i swss supervisorctl status ndppd", ignore_error=True, return_cmd=True),
-                mock.call("docker exec -i swss supervisorctl stop ndppd", ignore_error=True, return_cmd=True),
-                mock.call("docker exec -i swss rm -f /etc/supervisor/conf.d/ndppd.conf", ignore_error=True, return_cmd=True),
-                mock.call("docker exec -i swss supervisorctl update", return_cmd=True)
+                mock.call(['docker', 'exec', '-i', 'swss', 'supervisorctl', 'status', 'ndppd'], ignore_error=True, return_cmd=True),
+                mock.call(['docker', 'exec', '-i', 'swss', 'supervisorctl', 'stop', 'ndppd'], ignore_error=True, return_cmd=True),
+                mock.call(['docker', 'exec', '-i', 'swss', 'rm', '-f', '/etc/supervisor/conf.d/ndppd.conf'], ignore_error=True, return_cmd=True),
+                mock.call(['docker', 'exec', '-i', 'swss', 'supervisorctl', 'update'], return_cmd=True)
             ])
             assert result.exit_code == 0
 
@@ -770,11 +787,12 @@ class TestVlan(object):
 
         os.environ['SONIC_CLI_IFACE_MODE'] = "default"
 
+
     def test_config_add_del_multiple_vlan_and_vlan_member(self,mock_restart_dhcp_relay_service):
         runner = CliRunner()
         db = Db()
 
-        # add vlan 1001
+        # add vlan 1001,1002,1003
         result = runner.invoke(config.config.commands["vlan"].commands["add"], ["1001,1002,1003","--multiple"], obj=db)
         print(result.exit_code)
         print(result.output)
@@ -789,7 +807,7 @@ class TestVlan(object):
         assert result.exit_code != 0
         assert "Ethernet20 is in routed mode!\nUse switchport mode command to change port mode" in result.output
 
-        # configure Ethernet20 from routed to access mode
+        # configure Ethernet20 from routed to trunk mode
         result = runner.invoke(config.config.commands["switchport"].commands["mode"],["trunk", "Ethernet20"], obj=db)
         print(result.exit_code)
         print(result.output)
@@ -833,7 +851,7 @@ class TestVlan(object):
         runner = CliRunner()
         db = Db()
 
-        # add vlan 1001
+        # add vlan 1001,1002
         result = runner.invoke(config.config.commands["vlan"].commands["add"], ["1001,1002","--multiple"], obj=db)
         print(result.exit_code)
         print(result.output)
@@ -848,14 +866,14 @@ class TestVlan(object):
         assert result.exit_code != 0
         assert "Ethernet20 is in routed mode!\nUse switchport mode command to change port mode" in result.output
 
-        # configure Ethernet20 from routed to access mode
+        # configure Ethernet20 from routed to trunk mode
         result = runner.invoke(config.config.commands["switchport"].commands["mode"],["trunk", "Ethernet20"], obj=db)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
         assert "Ethernet20 switched from routed to trunk mode" in result.output
 
-        # add Ethernet20 to vlan 1001
+        # add Ethernet20 to vlan1001, vlan1002, vlan1003 multiple flag
         result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"],
                 ["1000,4000", "Ethernet20", "--multiple", "--except_flag"], obj=db)
         print(result.exit_code)
@@ -889,7 +907,7 @@ class TestVlan(object):
         print(result.output)
         assert result.exit_code == 0
 
-        # add del 1001
+        # del 1001,1002
         result = runner.invoke(config.config.commands["vlan"].commands["del"], ["1001-1002","--multiple"], obj=db)
         print(result.exit_code)
         print(result.output)
@@ -1085,13 +1103,6 @@ class TestVlan(object):
         print(result.output)
         assert result.exit_code == 0
 
-        
-        # configure Ethernet64 to routed mode
-        result = runner.invoke(config.config.commands["switchport"].commands["mode"],["routed", "Ethernet64"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-
         # add Ethernet64 to vlan 1001 but Ethernet64 is in routed mode will give error
         result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"],
                 ["1001", "Ethernet64"], obj=db)
@@ -1143,6 +1154,7 @@ class TestVlan(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output == test_config_add_del_vlan_and_vlan_member_with_switchport_modes_and_change_mode_types_output
+
 
     def test_config_vlan_proxy_arp_with_nonexist_vlan_intf_table(self):
         modes = ["enabled", "disabled"]
@@ -1377,3 +1389,37 @@ class TestVlan(object):
         os.environ['UTILITIES_UNIT_TESTING'] = "0"
         bgp_util.run_bgp_command = cls._old_run_bgp_command
         print("TEARDOWN")
+
+    def test_config_vlan_del_dhcp_relay_restart(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {"config_db": db.cfgdb}
+
+        # remove vlan IP`s
+        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"],
+                               ["Vlan1000", "192.168.0.1/21"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code != 0
+
+        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"],
+                               ["Vlan1000", "fc02:1000::1/64"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code != 0
+
+        # remove vlan members
+        vlan_member = db.cfgdb.get_table("VLAN_MEMBER")
+        keys = [(k, v) for k, v in vlan_member if k == "Vlan{}".format(1000)]
+        for _, v in keys:
+            result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["del"], ["1000", v], obj=db)
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+
+        origin_run_command_func = config.vlan.clicommon.run_command
+        config.vlan.clicommon.run_command = mock.MagicMock(return_value=("active", 0))
+        result = runner.invoke(config.config.commands["vlan"].commands["del"], ["1000"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+
+        config.vlan.clicommon.run_command = origin_run_command_func

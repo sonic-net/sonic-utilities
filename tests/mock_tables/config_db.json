@@ -1,6 +1,7 @@
 {
     "SFLOW|global": {
         "admin_state": "up",
+        "sample_direction": "both",
         "polling_interval": "0"
     },
     "SFLOW_COLLECTOR|prod": {
@@ -185,7 +186,7 @@
         "lanes": "49,50,51,52",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "access",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -197,7 +198,7 @@
         "lanes": "57,58,59,60",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "access",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -221,6 +222,7 @@
         "lanes": "69,70,71,72",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -399,7 +401,8 @@
         "tpid": "0x8100",
         "mode": "routed",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "fec" : "auto"
     },
     "VLAN_SUB_INTERFACE|Ethernet0.10": {
         "admin_status": "up"
@@ -699,9 +702,9 @@
         "admin_status": "up",
         "members@": "Ethernet32",
         "min_links": "1",
-        "mode":"trunk",
         "tpid": "0x8100",
-        "mtu": "9100"
+        "mtu": "9100",
+        "mode": "trunk"
     },
     "PORTCHANNEL|PortChannel0001": {
         "admin_status": "up",
@@ -1934,10 +1937,20 @@
         "mode": "dynamic",
         "type": "ingress"
     },
+    "BUFFER_POOL|ingress_lossless_pool_hbm": {
+        "mode": "static",
+        "size": "139458240",
+        "type": "ingress"
+    },
     "BUFFER_PROFILE|ingress_lossy_profile": {
 	"dynamic_th": "3",
 	"pool": "ingress_lossy_pool",
 	"size": "0"
+    },
+    "BUFFER_PROFILE|ingress_lossless_profile_hbm": {
+       "static_th": "12121212",
+       "pool": "ingress_lossless_pool_hbm",
+       "size": "0"
     },
     "BUFFER_PROFILE|headroom_profile": {
         "dynamic_th": "0",
@@ -1971,7 +1984,8 @@
         "profile": "egress_lossless_profile"
     },
     "PORT_QOS_MAP|Ethernet0": {
-        "pfc_enable": "3,4"
+        "pfc_enable": "3,4",
+        "scheduler": "port_scheduler"
     },
     "PORT_QOS_MAP|Ethernet4": {
         "pfc_enable": "3,4"
@@ -2723,5 +2737,10 @@
         "alias": "Fabric2",
         "isolateStatus": "False",
         "lanes": "2"
+    },
+    "DHCP_RELAY|Vlan1000": {
+        "dhcpv6_servers": [
+            "fc02:2000::1"
+        ]
     }
 }

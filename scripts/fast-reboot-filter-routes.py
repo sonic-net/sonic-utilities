@@ -6,27 +6,21 @@ import os
 import utilities_common.cli as clicommon
 import syslog
 import traceback
-import click
 from swsscommon.swsscommon import ConfigDBConnector
 
 ROUTE_IDX = 1
 
 def get_connected_routes():
-    cmd = 'sudo vtysh -c "show ip route connected json"'
+    cmd = ['sudo', 'vtysh', '-c', "show ip route connected json"]
     connected_routes = []
-    try:
-        output, ret = clicommon.run_command(cmd, return_cmd=True)
-        if ret != 0:
-            click.echo(output.rstrip('\n'))
-            sys.exit(ret)
-        if output is not None:
-            route_info = json.loads(output)
-            for route in route_info.keys():
-                connected_routes.append(route)
-    except Exception:
-        ctx = click.get_current_context()
-        ctx.fail("Unable to get connected routes from bgp")
-    
+    output, ret = clicommon.run_command(cmd, return_cmd=True)
+    if ret != 0:
+        raise Exception("Failed to execute {}: {}".format(" ".join(cmd), output.rstrip('\n')))
+    if output is not None:
+        route_info = json.loads(output)
+        for route in route_info.keys():
+            connected_routes.append(route)
+
     return connected_routes
 
 def get_route(db, route):
@@ -81,6 +75,7 @@ if __name__ == '__main__':
         syslog.syslog(syslog.LOG_NOTICE, "SIGINT received. Quitting")
         res = 1
     except Exception as e:
+        print(e)
         syslog.syslog(syslog.LOG_ERR, "Got an exception %s: Traceback: %s" % (str(e), traceback.format_exc()))
         res = 2
     finally:

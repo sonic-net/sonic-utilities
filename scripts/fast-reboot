@@ -54,6 +54,7 @@ EXIT_TEAMD_RETRY_COUNT_FAILURE=23
 function error()
 {
     echo $@ >&2
+    logger -p user.err "Error seen during warm-reboot shutdown process: $@"
 }
 
 function debug()
@@ -193,40 +194,12 @@ function request_pre_shutdown()
 {
     if [ -x ${DEVPATH}/${PLATFORM}/${PLATFORM_REBOOT_PRE_CHECK} ]; then
         debug "Requesting platform reboot pre-check ..."
-    	${DEVPATH}/${PLATFORM}/${PLATFORM_REBOOT_PRE_CHECK} ${REBOOT_TYPE} 
+    	${DEVPATH}/${PLATFORM}/${PLATFORM_REBOOT_PRE_CHECK} ${REBOOT_TYPE}
     fi
     debug "Requesting pre-shutdown ..."
     STATE=$(timeout 5s docker exec syncd /usr/bin/syncd_request_shutdown --pre &> /dev/null; if [[ $? == 124 ]]; then echo "timed out"; fi)
     if [[ x"${STATE}" == x"timed out" ]]; then
         error "Failed to request pre-shutdown"
-    fi
-}
-
-function recover_issu_bank_file()
-{
-    debug "Recovering the (${ISSU_BANK_FILE}) file"
-    docker exec -i syncd sx_api_dbg_generate_dump.py
-    issu_bank_value=`docker exec -i syncd cat /tmp/sdkdump | grep 'ISSU Bank' | grep -o -E '[0-9]+'`
-    printf $issu_bank_value > /host/warmboot/issu_bank.txt
-}
-
-function check_issu_bank_file()
-{
-    ISSU_BANK_FILE=/host/warmboot/issu_bank.txt
-
-    if [[ ! -s "$ISSU_BANK_FILE" ]]; then
-        error "(${ISSU_BANK_FILE}) does NOT exist or empty ..."
-        recover_issu_bank_file
-        return
-    fi
-
-    issu_file_chars_count=`stat -c %s ${ISSU_BANK_FILE}`;
-    issu_file_content=`awk '{print $0}' ${ISSU_BANK_FILE}`
-
-    if [[ $issu_file_chars_count != 1 ]] ||
-        [[ "$issu_file_content" != "0" && "$issu_file_content" != "1" ]]; then
-        error "(${ISSU_BANK_FILE}) is broken ..."
-        recover_issu_bank_file
     fi
 }
 
@@ -464,7 +437,7 @@ function invoke_kexec() {
 
 function load_kernel() {
     # Load kernel into the memory
-    invoke_kexec -a 
+    invoke_kexec -a
 }
 
 function load_kernel_secure() {
@@ -630,7 +603,7 @@ fi
 if is_secureboot && grep -q aboot_machine= /host/machine.conf; then
     load_aboot_secureboot_kernel
 else
-    # check if secure boot is enable in UEFI 
+    # check if secure boot is enable in UEFI
     CHECK_SECURE_UPGRADE_ENABLED=0
     SECURE_UPGRADE_ENABLED=$(bootctl status 2>/dev/null | grep -c "Secure Boot: enabled") || CHECK_SECURE_UPGRADE_ENABLED=$?
     if [[ CHECK_SECURE_UPGRADE_ENABLED -ne 0 ]]; then
@@ -773,17 +746,9 @@ for service in ${SERVICES_TO_STOP}; do
             # Pre-shutdown syncd
             initialize_pre_shutdown
 
-            if [[ "x$sonic_asic_type" == x"mellanox" ]]; then
-                check_issu_bank_file
-            fi
-
             request_pre_shutdown
 
             wait_for_pre_shutdown_complete_or_fail
-
-            if [[ "x$sonic_asic_type" == x"mellanox" ]]; then
-                check_issu_bank_file
-            fi
         fi
 
         if [[ "$REBOOT_TYPE" = "fastfast-reboot" || "$REBOOT_TYPE" = "fast-reboot" ]]; then

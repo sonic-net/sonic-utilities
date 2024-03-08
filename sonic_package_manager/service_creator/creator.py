@@ -3,8 +3,10 @@
 import contextlib
 import os
 import sys
+import shutil
 import stat
 import subprocess
+import tempfile
 from collections import defaultdict
 from typing import Dict, Type, List
 
@@ -31,6 +33,8 @@ SERVICE_FILE_TEMPLATE = 'sonic.service.j2'
 TIMER_UNIT_TEMPLATE = 'timer.unit.j2'
 
 SYSTEMD_LOCATION = '/usr/lib/systemd/system'
+
+GENERATED_SERVICES_CONF_FILE = '/etc/sonic/generated_services.conf'
 
 SERVICE_MGMT_SCRIPT_TEMPLATE = 'service_mgmt.sh.j2'
 SERVICE_MGMT_SCRIPT_LOCATION = '/usr/local/bin'
@@ -163,6 +167,7 @@ class ServiceCreator:
             self.generate_service_mgmt(package)
             self.update_dependent_list_file(package)
             self.generate_systemd_service(package)
+            self.update_generated_services_conf_file(package)
             self.generate_dump_script(package)
             self.generate_service_reconciliation_file(package)
             self.install_yang_module(package)
@@ -199,6 +204,7 @@ class ServiceCreator:
         remove_if_exists(os.path.join(DEBUG_DUMP_SCRIPT_LOCATION, f'{name}'))
         remove_if_exists(os.path.join(ETC_SONIC_PATH, f'{name}_reconcile'))
         self.update_dependent_list_file(package, remove=True)
+        self.update_generated_services_conf_file(package, remove=True)
 
         if deregister_feature and not keep_config:
             self.remove_config(package)
@@ -319,6 +325,37 @@ class ServiceCreator:
                 template_vars['multi_instance'] = True
                 render_template(template, output_file, template_vars)
                 log.info(f'generated {output_file}')
+
+    def update_generated_services_conf_file(self, package: Package, remove=False):
+        """ Updates generated_services.conf file.
+
+        Args:
+            package: Package to update generated_services.conf with.
+            remove: True if update for removal process.
+        Returns:
+            None.
+        """
+        name = package.manifest['service']['name']
+        asic_service= package.manifest['service']['asic-service']
+
+        with open(GENERATED_SERVICES_CONF_FILE, 'r') as generated_services_conf_file:
+            list_of_services = set(generated_services_conf_file.read().split())
+
+        if not remove:
+            list_of_services.add(f'{name}.service')
+            if asic_service:
+                list_of_services.add(f'{name}@.service')
+        else:
+            list_of_services.discard(f'{name}.service')
+            list_of_services.discard(f'{name}@.service')
+
+        # Write to tmp file and replace the original file with it
+        with tempfile.NamedTemporaryFile('w', delete=False) as tmp:
+            tmp.write('\n'.join(list_of_services))
+            tmp.write('\n')
+            tmp.flush()
+
+            shutil.move(tmp.name, GENERATED_SERVICES_CONF_FILE)
 
     def update_dependent_list_file(self, package: Package, remove=False):
         """ This function updates dependent list file for packages listed in "dependent-of"

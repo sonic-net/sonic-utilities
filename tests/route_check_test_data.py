@@ -4,6 +4,7 @@ RET = "return"
 APPL_DB = 0
 ASIC_DB = 1
 CONFIG_DB = 4
+APPL_STATE_DB = 14
 PRE = "pre-value"
 UPD = "update"
 FRR_ROUTES = "frr-routes"
@@ -393,7 +394,8 @@ TEST_DATA = {
                     "prefix": "0.0.0.0/0",
                     "vrfName": "default",
                     "protocol": "bgp",
-                    "offloaded": "true",
+                    "selected": True,
+                    "offloaded": True,
                 },
             ],
             "10.10.196.12/31": [
@@ -401,12 +403,14 @@ TEST_DATA = {
                     "prefix": "10.10.196.12/31",
                     "vrfName": "default",
                     "protocol": "bgp",
-                    "offloaded": "true",
+                    "selected": True,
+                    "offloaded": True,
                 },
             ],
             "10.10.196.24/31": [
                 {
                     "protocol": "connected",
+                    "selected": True,
                 },
             ],
         },
@@ -441,7 +445,73 @@ TEST_DATA = {
                     "prefix": "0.0.0.0/0",
                     "vrfName": "default",
                     "protocol": "bgp",
-                    "offloaded": "true",
+                    "selected": True,
+                    "offloaded": True,
+                },
+            ],
+            "10.10.196.12/31": [
+                {
+                    "prefix": "10.10.196.12/31",
+                    "vrfName": "default",
+                    "protocol": "bgp",
+                    "selected": True,
+                },
+            ],
+            "1.1.1.0/24": [
+                {
+                    "prefix": "1.1.1.0/24",
+                    "vrfName": "default",
+                    "protocol": "static",
+                    "selected": True,
+                },
+            ],
+            "10.10.196.24/31": [
+                {
+                    "protocol": "connected",
+                    "selected": True,
+                },
+            ],
+        },
+        RESULT: {
+            "missed_FRR_routes": [
+                {"prefix": "10.10.196.12/31", "vrfName": "default", "protocol": "bgp", "selected": True},
+                {"prefix": "1.1.1.0/24", "vrfName": "default", "protocol": "static", "selected": True},
+            ],
+        },
+        RET: -1,
+    },
+    "12": {
+        DESCR: "skip bgp routes offloaded check, if not selected as best",
+        ARGS: "route_check -m INFO -i 1000",
+        PRE: {
+            APPL_DB: {
+                ROUTE_TABLE: {
+                    "0.0.0.0/0" : { "ifname": "portchannel0" },
+                    "10.10.196.12/31" : { "ifname": "portchannel0" },
+                },
+                INTF_TABLE: {
+                    "PortChannel1013:10.10.196.24/31": {},
+                    "PortChannel1023:2603:10b0:503:df4::5d/126": {},
+                    "PortChannel1024": {}
+                }
+            },
+            ASIC_DB: {
+                RT_ENTRY_TABLE: {
+                    RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
+                    RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
+                    RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
+                    RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                }
+            },
+        },
+        FRR_ROUTES: {
+            "0.0.0.0/0": [
+                {
+                    "prefix": "0.0.0.0/0",
+                    "vrfName": "default",
+                    "protocol": "bgp",
+                    "selected": True,
+                    "offloaded": True,
                 },
             ],
             "10.10.196.12/31": [
@@ -454,17 +524,12 @@ TEST_DATA = {
             "10.10.196.24/31": [
                 {
                     "protocol": "connected",
+                    "selected": True,
                 },
             ],
         },
-        RESULT: {
-            "missed_FRR_routes": [
-                {"prefix": "10.10.196.12/31", "vrfName": "default", "protocol": "bgp"}
-            ],
-        },
-        RET: -1,
     },
-    "10": {
+    "13": {
         DESCR: "basic good one with IPv6 address",
         ARGS: "route_check -m INFO -i 1000",
         PRE: {
@@ -482,7 +547,7 @@ TEST_DATA = {
             }
         }
     },
-    "11": {
+    "14": {
         DESCR: "dualtor ignore vlan neighbor route miss case",
         ARGS: "route_check -i 15",
         RET: -1,

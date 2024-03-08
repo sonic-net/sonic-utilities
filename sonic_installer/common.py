@@ -41,16 +41,25 @@ def run_command(command, stdout=subprocess.PIPE, env=None, shell=False):
         sys.exit(proc.returncode)
 
 # Run bash command and return output, raise if it fails
-def run_command_or_raise(argv, raise_exception=True):
+def run_command_or_raise(argv, raise_exception=True, capture=True):
     click.echo(click.style("Command: ", fg='cyan') + click.style(' '.join(argv), fg='green'))
 
-    proc = subprocess.Popen(argv, text=True, stdout=subprocess.PIPE)
-    out, _ = proc.communicate()
+    stdout = subprocess.PIPE if capture else None
+    proc = subprocess.Popen(argv, text=True, stdout=stdout)
+    out, err = proc.communicate()
 
     if proc.returncode != 0 and raise_exception:
-        raise SonicRuntimeException("Failed to run command '{0}'".format(argv))
+        sre = SonicRuntimeException("Failed to run command '{0}'".format(argv))
+        if out:
+            sre.add_note("\nSTDOUT:\n{}".format(out.rstrip("\n")))
+        if err:
+            sre.add_note("\nSTDERR:\n{}".format(err.rstrip("\n")))
+        raise sre
 
-    return out.rstrip("\n")
+    if out is not None:
+        out = out.rstrip("\n")
+
+    return out
 
 # Needed to prevent "broken pipe" error messages when piping
 # output of multiple commands using subprocess.Popen()

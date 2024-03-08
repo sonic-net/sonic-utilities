@@ -764,6 +764,39 @@ def link_training_status(interfacename, namespace, display, verbose):
         cmd += ['-n', str(namespace)]
 
     clicommon.run_command(cmd, display_cmd=verbose)
+#
+# fec group (show interfaces fec ...)
+#
+@interfaces.group(name='fec', cls=clicommon.AliasedGroup)
+def fec():
+    """Show interface fec information"""
+    pass
+
+
+# 'fec status' subcommand ("show interfaces fec status")
+@fec.command(name='status')
+@click.argument('interfacename', required=False)
+@multi_asic_util.multi_asic_click_options
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def fec_status(interfacename, namespace, display, verbose):
+    """Show interface fec status"""
+
+    ctx = click.get_current_context()
+
+    cmd = ['intfutil', '-c', 'fec']
+
+    #ignore the display option when interface name is passed
+    if interfacename is not None:
+        interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
+
+        cmd += ['-i', str(interfacename)]
+    else:
+        cmd += ['-d', str(display)]
+
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
+
+    clicommon.run_command(cmd, display_cmd=verbose)
 
 
 #

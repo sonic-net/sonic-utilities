@@ -117,7 +117,7 @@ class PackageConstraint:
 
     name: str
     constraint: VersionConstraint
-    _components: ComponentConstraints = ComponentConstraints({})
+    _components: ComponentConstraints = field(default_factory=ComponentConstraints)
 
     def __str__(self): return f'{self.name}{self.constraint}'
 

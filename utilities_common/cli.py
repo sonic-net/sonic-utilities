@@ -20,7 +20,6 @@ VLAN_SUB_INTERFACE_SEPARATOR = '.'
 
 pass_db = click.make_pass_decorator(Db, ensure=True)
 
-
 class AbbreviationGroup(click.Group):
     """This subclass of click.Group supports abbreviated subgroup/subcommand names
     """
@@ -77,10 +76,8 @@ class Config(object):
         except configparser.NoSectionError:
             pass
 
-
 # Global Config object
 _config = None
-
 
 class AliasedGroup(click.Group):
     """This subclass of click.Group supports abbreviations and
@@ -120,7 +117,6 @@ class AliasedGroup(click.Group):
             return click.Group.get_command(self, ctx, matches[0])
         ctx.fail('Too many matches: %s' % ', '.join(sorted(matches)))
 
-
 class InterfaceAliasConverter(object):
     """Class which handles conversion between interface name and alias"""
 
@@ -135,6 +131,7 @@ class InterfaceAliasConverter(object):
             self.port_dict = self.config_db.get_table('PORT')
         self.alias_max_length = 0
 
+
         if not self.port_dict:
             self.port_dict = {}
 
@@ -142,7 +139,7 @@ class InterfaceAliasConverter(object):
             try:
                 if self.alias_max_length < len(
                         self.port_dict[port_name]['alias']):
-                    self.alias_max_length = len(
+                   self.alias_max_length = len(
                         self.port_dict[port_name]['alias'])
             except KeyError:
                 break
@@ -154,8 +151,7 @@ class InterfaceAliasConverter(object):
         vlan_id = ''
         sub_intf_sep_idx = -1
         if interface_name is not None:
-            sub_intf_sep_idx = interface_name.find(
-                VLAN_SUB_INTERFACE_SEPARATOR)
+            sub_intf_sep_idx = interface_name.find(VLAN_SUB_INTERFACE_SEPARATOR)
             if sub_intf_sep_idx != -1:
                 vlan_id = interface_name[sub_intf_sep_idx + 1:]
                 # interface_name holds the parent port name
@@ -164,7 +160,7 @@ class InterfaceAliasConverter(object):
             for port_name in self.port_dict:
                 if interface_name == port_name:
                     return self.port_dict[port_name]['alias'] if sub_intf_sep_idx == -1 \
-                        else self.port_dict[port_name]['alias'] + VLAN_SUB_INTERFACE_SEPARATOR + vlan_id
+                            else self.port_dict[port_name]['alias'] + VLAN_SUB_INTERFACE_SEPARATOR + vlan_id
 
         # interface_name not in port_dict. Just return interface_name
         return interface_name if sub_intf_sep_idx == -1 else interface_name + VLAN_SUB_INTERFACE_SEPARATOR + vlan_id
@@ -176,8 +172,7 @@ class InterfaceAliasConverter(object):
         vlan_id = ''
         sub_intf_sep_idx = -1
         if interface_alias is not None:
-            sub_intf_sep_idx = interface_alias.find(
-                VLAN_SUB_INTERFACE_SEPARATOR)
+            sub_intf_sep_idx = interface_alias.find(VLAN_SUB_INTERFACE_SEPARATOR)
             if sub_intf_sep_idx != -1:
                 vlan_id = interface_alias[sub_intf_sep_idx + 1:]
                 # interface_alias holds the parent port alias
@@ -190,18 +185,14 @@ class InterfaceAliasConverter(object):
         # interface_alias not in port_dict. Just return interface_alias
         return interface_alias if sub_intf_sep_idx == -1 else interface_alias + VLAN_SUB_INTERFACE_SEPARATOR + vlan_id
 
-
 # Lazy global class instance for SONiC interface name to alias conversion
-iface_alias_converter = lazy_object_proxy.Proxy(
-    lambda: InterfaceAliasConverter())
-
+iface_alias_converter = lazy_object_proxy.Proxy(lambda: InterfaceAliasConverter())
 
 def get_interface_naming_mode():
     mode = os.getenv('SONIC_CLI_IFACE_MODE')
     if mode is None:
         mode = "default"
     return mode
-
 
 def is_ipaddress(val):
     """ Validate if an entry is a valid IP """
@@ -213,7 +204,6 @@ def is_ipaddress(val):
     except netaddr.core.AddrFormatError:
         return False
     return True
-
 
 def ipaddress_type(val):
     """ Return the IP address type """
@@ -227,7 +217,6 @@ def ipaddress_type(val):
 
     return ip_version.version
 
-
 def is_ip_prefix_in_key(key):
     '''
     Function to check if IP address is present in the key. If it
@@ -235,7 +224,6 @@ def is_ip_prefix_in_key(key):
     be string
     '''
     return (isinstance(key, tuple))
-
 
 def is_valid_port(config_db, port):
     """Check if port is in PORT table"""
@@ -246,7 +234,6 @@ def is_valid_port(config_db, port):
 
     return False
 
-
 def is_valid_portchannel(config_db, port):
     """Check if port is in PORT_CHANNEL table"""
 
@@ -256,7 +243,6 @@ def is_valid_portchannel(config_db, port):
 
     return False
 
-
 def is_vlanid_in_range(vid):
     """Check if vlan id is valid or not"""
 
@@ -265,7 +251,6 @@ def is_vlanid_in_range(vid):
 
     return False
 
-
 def check_if_vlanid_exist(config_db, vlan, table_name='VLAN'):
     """Check if vlan id exits in the config db or ot"""
 
@@ -273,7 +258,6 @@ def check_if_vlanid_exist(config_db, vlan, table_name='VLAN'):
         return True
 
     return False
-
 
 def is_port_vlan_member(config_db, port, vlan):
     """Check if port is a member of vlan"""
@@ -285,7 +269,7 @@ def is_port_vlan_member(config_db, port, vlan):
 
     return False
 
-
+ 
 def vlan_range_list(ctx, vid_range: str) -> list:
 
     vid1, vid2 = map(int, vid_range.split("-"))
@@ -346,7 +330,7 @@ def vlan_member_input_parser(ctx, command_mode, db, except_flag, multiple, vid, 
             return get_existing_vlan_id(db) # config vlan member add
         if command_mode == "del":
             return get_existing_vlan_id_on_interface(db,port) # config vlan member del
-        
+
     if multiple:
         vid_list = multiple_vlan_parser(ctx, vid)
 
@@ -392,26 +376,23 @@ def interface_is_tagged_member(db, interface_name):
 
 def interface_is_in_vlan(vlan_member_table, interface_name):
     """ Check if an interface is in a vlan """
-    for _, intf in vlan_member_table:
+    for _,intf in vlan_member_table:
         if intf == interface_name:
             return True
 
     return False
-
 
 def is_valid_vlan_interface(config_db, interface):
     """ Check an interface is a valid VLAN interface """
     return interface in config_db.get_table("VLAN_INTERFACE")
 
-
 def interface_is_in_portchannel(portchannel_member_table, interface_name):
     """ Check if an interface is part of portchannel """
-    for _, intf in portchannel_member_table:
+    for _,intf in portchannel_member_table:
         if intf == interface_name:
             return True
 
     return False
-
 
 def is_port_router_interface(config_db, port):
     """Check if port is a router interface"""
@@ -422,7 +403,6 @@ def is_port_router_interface(config_db, port):
             return True
 
     return False
-
 
 def is_pc_router_interface(config_db, pc):
     """Check if portchannel is a router interface"""
@@ -454,7 +434,7 @@ def get_interface_untagged_vlan_members(db,interface):
 
         if interface == interface_name and vlan_member[member]['tagging_mode'] == 'untagged':
             untagged_vlans.append(get_vlan_id(interface_vlan))
-            
+
     return "\n".join(untagged_vlans)
 
 def get_interface_tagged_vlan_members(db,interface):
@@ -467,10 +447,10 @@ def get_interface_tagged_vlan_members(db,interface):
 
         if interface == interface_name and vlan_member[member]['tagging_mode'] == 'tagged':
             tagged_vlans.append(get_vlan_id(interface_vlan))
-    
+
     for i in range(len(tagged_vlans)//5+1):
         formatted_tagged_vlans.append(" ,".join([str(x) for x in tagged_vlans[i*5:(i+1)*5]]))
-            
+
     return "\n".join(formatted_tagged_vlans)
 
 def get_interface_switchport_mode(db, interface):
@@ -486,12 +466,11 @@ def get_interface_switchport_mode(db, interface):
 def is_port_mirror_dst_port(config_db, port):
     """Check if port is already configured as mirror destination port """
     mirror_table = config_db.get_table('MIRROR_SESSION')
-    for _, v in mirror_table.items():
+    for _,v in mirror_table.items():
         if 'dst_port' in v and v['dst_port'] == port:
             return True
 
     return False
-
 
 def vni_id_is_valid(vni):
     """Check if the vni id is in acceptable range (between 1 and 2^24)
@@ -502,7 +481,6 @@ def vni_id_is_valid(vni):
 
     return True
 
-
 def is_vni_vrf_mapped(db, vni):
     """Check if the vni is mapped to vrf
     """
@@ -511,29 +489,26 @@ def is_vni_vrf_mapped(db, vni):
     vrf_table = db.cfgdb.get_table('VRF')
     vrf_keys = vrf_table.keys()
     if vrf_keys is not None:
-        for vrf_key in vrf_keys:
-            if ('vni' in vrf_table[vrf_key] and vrf_table[vrf_key]['vni'] == vni):
-                found = 1
-                break
+      for vrf_key in vrf_keys:
+        if ('vni' in vrf_table[vrf_key] and vrf_table[vrf_key]['vni'] == vni):
+           found = 1
+           break
 
     if (found == 1):
-        print("VNI {} mapped to Vrf {}, Please remove VRF VNI mapping".format(
-            vni, vrf_key))
+        print("VNI {} mapped to Vrf {}, Please remove VRF VNI mapping".format(vni, vrf_key))
         return False
 
     return True
 
-
 def interface_has_mirror_config(mirror_table, interface_name):
     """Check if port is already configured with mirror config """
-    for _, v in mirror_table.items():
+    for _,v in mirror_table.items():
         if 'src_port' in v and v['src_port'] == interface_name:
             return True
         if 'dst_port' in v and v['dst_port'] == interface_name:
             return True
 
     return False
-
 
 def print_output_in_alias_mode(output, index):
     """Convert and print all instances of SONiC interface
@@ -560,12 +535,12 @@ def print_output_in_alias_mode(output, index):
         interface_name = word[index]
         interface_name = interface_name.replace(':', '')
     for port_name in natsorted(list(iface_alias_converter.port_dict.keys())):
-        if interface_name == port_name:
-            alias_name = iface_alias_converter.port_dict[port_name]['alias']
+            if interface_name == port_name:
+                alias_name = iface_alias_converter.port_dict[port_name]['alias']
     if alias_name:
         if len(alias_name) < iface_alias_converter.alias_max_length:
             alias_name = alias_name.rjust(
-                iface_alias_converter.alias_max_length)
+                                iface_alias_converter.alias_max_length)
         output = output.replace(interface_name, alias_name, 1)
 
     click.echo(output.rstrip('\n'))
@@ -595,7 +570,7 @@ def run_command_in_alias_mode(command, shell=False):
                 index = 0
                 if output.startswith("IFACE"):
                     output = output.replace("IFACE", "IFACE".rjust(
-                        iface_alias_converter.alias_max_length))
+                               iface_alias_converter.alias_max_length))
                 print_output_in_alias_mode(output, index)
 
             elif command_str.startswith("intfstat"):
@@ -603,7 +578,7 @@ def run_command_in_alias_mode(command, shell=False):
                 index = 0
                 if output.startswith("IFACE"):
                     output = output.replace("IFACE", "IFACE".rjust(
-                        iface_alias_converter.alias_max_length))
+                               iface_alias_converter.alias_max_length))
                 print_output_in_alias_mode(output, index)
 
             elif command_str == "pfcstat":
@@ -611,11 +586,11 @@ def run_command_in_alias_mode(command, shell=False):
                 index = 0
                 if output.startswith("Port Tx"):
                     output = output.replace("Port Tx", "Port Tx".rjust(
-                        iface_alias_converter.alias_max_length))
+                                iface_alias_converter.alias_max_length))
 
                 elif output.startswith("Port Rx"):
                     output = output.replace("Port Rx", "Port Rx".rjust(
-                        iface_alias_converter.alias_max_length))
+                                iface_alias_converter.alias_max_length))
                 print_output_in_alias_mode(output, index)
 
             elif (command_str.startswith("sudo sfputil show eeprom")):
@@ -630,7 +605,7 @@ def run_command_in_alias_mode(command, shell=False):
                 index = 0
                 if output.startswith("Port"):
                     output = output.replace("Port", "Port".rjust(
-                        iface_alias_converter.alias_max_length))
+                               iface_alias_converter.alias_max_length))
                 print_output_in_alias_mode(output, index)
 
             elif command_str == "sudo lldpshow":
@@ -638,7 +613,7 @@ def run_command_in_alias_mode(command, shell=False):
                 index = 0
                 if output.startswith("LocalPort"):
                     output = output.replace("LocalPort", "LocalPort".rjust(
-                        iface_alias_converter.alias_max_length))
+                               iface_alias_converter.alias_max_length))
                 print_output_in_alias_mode(output, index)
 
             elif command_str.startswith("queuestat"):
@@ -646,7 +621,7 @@ def run_command_in_alias_mode(command, shell=False):
                 index = 0
                 if output.startswith("Port"):
                     output = output.replace("Port", "Port".rjust(
-                        iface_alias_converter.alias_max_length))
+                               iface_alias_converter.alias_max_length))
                 print_output_in_alias_mode(output, index)
 
             elif command_str == "fdbshow":
@@ -655,7 +630,7 @@ def run_command_in_alias_mode(command, shell=False):
                 if output.startswith("No."):
                     output = "  " + output
                     output = re.sub(
-                        'Type', '      Type', output)
+                                'Type', '      Type', output)
                 elif output[0].isdigit():
                     output = "    " + output
                 print_output_in_alias_mode(output, index)
@@ -670,8 +645,8 @@ def run_command_in_alias_mode(command, shell=False):
                 """Show ip(v6) int"""
                 index = 0
                 if output.startswith("Interface"):
-                    output = output.replace("Interface", "Interface".rjust(
-                        iface_alias_converter.alias_max_length))
+                   output = output.replace("Interface", "Interface".rjust(
+                               iface_alias_converter.alias_max_length))
                 print_output_in_alias_mode(output, index)
 
             else:
@@ -684,9 +659,8 @@ def run_command_in_alias_mode(command, shell=False):
                 converted_output = raw_output
                 for port_name in iface_alias_converter.port_dict:
                     converted_output = re.sub(r"(^|\s){}($|,{{0,1}}\s)".format(port_name),
-                                              r"\1{}\2".format(
-                                                  iface_alias_converter.name_to_alias(port_name)),
-                                              converted_output)
+                            r"\1{}\2".format(iface_alias_converter.name_to_alias(port_name)),
+                            converted_output)
                 click.echo(converted_output.rstrip('\n'))
 
     rc = process.poll()
@@ -721,7 +695,7 @@ def run_command(command, display_cmd=False, ignore_error=False, return_cmd=False
     if get_interface_naming_mode() == "alias" and not command_str.startswith("intfutil") and not re.search("show ip|ipv6 route", command_str):
         run_command_in_alias_mode(command, shell=shell)
         sys.exit(0)
-        
+
     proc = subprocess.Popen(command, shell=shell, text=True, stdout=subprocess.PIPE)
 
     if return_cmd:
@@ -773,12 +747,11 @@ def interface_is_untagged_member(db, interface_name):
     """ Check if interface is already untagged member"""
     vlan_member_table = db.get_table('VLAN_MEMBER')
 
-    for key, val in vlan_member_table.items():
+    for key,val in vlan_member_table.items():
         if(key[1] == interface_name):
             if (val['tagging_mode'] == 'untagged'):
                 return True
     return False
-
 
 def is_interface_in_config_db(config_db, interface_name):
     """ Check if an interface is in CONFIG DB """
@@ -786,8 +759,8 @@ def is_interface_in_config_db(config_db, interface_name):
         not interface_name in config_db.get_keys('INTERFACE') and
         not interface_name in config_db.get_keys('PORTCHANNEL_INTERFACE') and
         not interface_name in config_db.get_keys('VLAN_SUB_INTERFACE') and
-            not interface_name == 'null'):
-        return False
+        not interface_name == 'null'):
+            return False
 
     return True
 
@@ -804,11 +777,9 @@ class MutuallyExclusiveOption(click.Option):
 
     def get_help_record(self, ctx):
         """Return help string with mutually_exclusive list added."""
-        help_record = list(
-            super(MutuallyExclusiveOption, self).get_help_record(ctx))
+        help_record = list(super(MutuallyExclusiveOption, self).get_help_record(ctx))
         if self.mutually_exclusive:
-            mutually_exclusive_str = 'NOTE: this argument is mutually exclusive with arguments: %s' % ', '.join(
-                self.mutually_exclusive)
+            mutually_exclusive_str = 'NOTE: this argument is mutually exclusive with arguments: %s' % ', '.join(self.mutually_exclusive)
             if help_record[-1]:
                 help_record[-1] += ' ' + mutually_exclusive_str
             else:
@@ -820,9 +791,8 @@ class MutuallyExclusiveOption(click.Option):
             for opt_name in self.mutually_exclusive:
                 if opt_name in opts and opts[opt_name] is not None:
                     raise click.UsageError(
-                        "Illegal usage: %s is mutually exclusive with arguments %s" % (
-                            self.name, ', '.join(self.mutually_exclusive))
-                    )
+                        "Illegal usage: %s is mutually exclusive with arguments %s" % (self.name, ', '.join(self.mutually_exclusive))
+                        )
         return super(MutuallyExclusiveOption, self).handle_parse_result(ctx, opts, args)
 
 
@@ -871,10 +841,8 @@ class UserCache:
             tag (str): Tag the user cache. Different tags correspond to different cache directories even for the same user.
         """
         self.uid = os.getuid()
-        self.app_name = os.path.basename(
-            sys.argv[0]) if app_name is None else app_name
-        self.cache_directory_suffix = str(
-            self.uid) if tag is None else f"{self.uid}-{tag}"
+        self.app_name = os.path.basename(sys.argv[0]) if app_name is None else app_name
+        self.cache_directory_suffix = str(self.uid) if tag is None else f"{self.uid}-{tag}"
         self.cache_directory_app = os.path.join(self.CACHE_DIR, self.app_name)
 
         prev_umask = os.umask(0)
@@ -883,8 +851,7 @@ class UserCache:
         finally:
             os.umask(prev_umask)
 
-        self.cache_directory = os.path.join(
-            self.cache_directory_app, self.cache_directory_suffix)
+        self.cache_directory = os.path.join(self.cache_directory_app, self.cache_directory_suffix)
         os.makedirs(self.cache_directory, exist_ok=True)
 
     def get_directory(self):

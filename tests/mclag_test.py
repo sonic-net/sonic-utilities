@@ -360,6 +360,8 @@ class TestMclag(object):
 
 
     def test_mclag_add_mclag_member_to_nonexisting_domain(self):
+        # This is required for the add command to fail; otherwise, it incorrectly passes
+        mclag.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
         obj = {'db':db.cfgdb}

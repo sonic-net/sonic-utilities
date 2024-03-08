@@ -76,3 +76,21 @@ class TestSquashFs(object):
 
     def teardown(self):
         print('TEARDOWN')
+
+
+class TestComponentUpdateProvider(object):
+    def setup(self):
+        print('SETUP')
+
+    @patch("glob.glob", MagicMock(side_effect=[[], ['abc'], [], ['abc']]))
+    @patch("fwutil.lib.ComponentUpdateProvider.read_au_status_file_if_exists", MagicMock(return_value=['def']))
+    @patch("fwutil.lib.ComponentUpdateProvider._ComponentUpdateProvider__validate_platform_schema", MagicMock())
+    @patch("fwutil.lib.PlatformComponentsParser.parse_platform_components", MagicMock())
+    @patch("os.mkdir", MagicMock())
+    def test_is_capable_auto_update(self):
+        CUProvider = fwutil_lib.ComponentUpdateProvider()
+        assert CUProvider.is_capable_auto_update('none') == True
+        assert CUProvider.is_capable_auto_update('def') == True
+
+    def teardown(self):
+        print('TEARDOWN')

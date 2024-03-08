@@ -49,11 +49,15 @@ def _service_restart(svc_name):
 
 
 def rsyslog_validator(old_config, upd_config, keys):
-    rc = os.system("/usr/bin/rsyslog-config.sh")
-    if rc != 0:
-        return _service_restart("rsyslog")
-    else:
-        return True
+    old_syslog = old_config.get("SYSLOG_SERVER", {})
+    upd_syslog = upd_config.get("SYSLOG_SERVER", {})
+
+    if old_syslog != upd_syslog:
+        os.system("systemctl reset-failed rsyslog-config rsyslog")
+        rc = os.system("systemctl restart rsyslog-config")
+        if rc != 0:
+            return False
+    return True
 
 
 def dhcp_validator(old_config, upd_config, keys):

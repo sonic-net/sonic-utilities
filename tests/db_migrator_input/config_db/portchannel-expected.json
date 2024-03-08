@@ -33,8 +33,8 @@
     },
     "PORTCHANNEL|PortChannel9999": {
         "admin_status": "up",
-        "mode": "routed",
         "mtu": "9100",
+        "mode": "routed",
         "lacp_key": "auto"
     },
     "VERSIONS|DATABASE": {

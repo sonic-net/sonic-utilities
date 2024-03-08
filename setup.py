@@ -88,6 +88,7 @@ setup(
         'utilities_common',
         'watchdogutil',
         'sonic_cli_gen',
+        'wol',
     ],
     package_data={
         'generic_config_updater': ['gcu_services_validator.conf.json', 'gcu_field_operation_validators.conf.json'],
@@ -222,12 +223,13 @@ setup(
             'undebug = undebug.main:cli',
             'watchdogutil = watchdogutil.main:watchdogutil',
             'sonic-cli-gen = sonic_cli_gen.main:cli',
+            'wol = wol.main:wol',
         ]
     },
     install_requires=[
         'bcrypt==3.2.2',
         'click==7.0',
-        'cryptography==3.3.2',
+        'cryptography>=3.3.2',
         'urllib3>=2',
         'click-log>=0.3.2',
         'docker>=4.4.4',
@@ -249,11 +251,12 @@ setup(
         'prettyprinter>=0.18.0',
         'pyroute2>=0.5.14, <0.6.1',
         'requests>=2.25.0',
-        'tabulate==0.8.2',
+        'tabulate==0.9.0',
         'toposort==1.6',
         'www-authenticate==0.9.2',
         'xmltodict==0.12.0',
         'lazy-object-proxy',
+        'six==1.16.0',
     ] + sonic_dependencies,
     setup_requires= [
         'pytest-runner',
@@ -264,8 +267,17 @@ setup(
         'responses',
         'pytest',
         'mockredispy>=2.9.3',
-        'deepdiff==5.2.3'
+        'deepdiff==6.2.2'
     ],
+    extras_require = {
+        'testing': [
+            'pyfakefs',
+            'responses',
+            'pytest',
+            'mockredispy>=2.9.3',
+            'deepdiff==6.2.2'
+        ],
+    },
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Environment :: Console',

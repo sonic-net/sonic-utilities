@@ -45,7 +45,7 @@ def show_sflow_interface(config_db):
         return
 
     click.echo("\nsFlow interface configurations")
-    header = ['Interface', 'Admin State', 'Sampling Rate']
+    header = ['Interface', 'Admin State', 'Sampling Rate', 'Sampling Direction']
     body = []
     for pname in natsorted(list(port_tbl.keys())):
         intf_key = 'SFLOW_SESSION_TABLE:' + pname
@@ -56,6 +56,7 @@ def show_sflow_interface(config_db):
         body_info = [pname]
         body_info.append(sess_info.get('admin_state'))
         body_info.append(sess_info.get('sample_rate'))
+        body_info.append(sess_info.get('sample_direction'))
         body.append(body_info)
     click.echo(tabulate(body, header, tablefmt='grid'))
 
@@ -63,11 +64,15 @@ def show_sflow_interface(config_db):
 def show_sflow_global(config_db):
     sflow_info = config_db.get_table('SFLOW')
     global_admin_state = 'down'
+    global_sample_dir = 'rx'
     if sflow_info:
         global_admin_state = sflow_info['global']['admin_state']
+        if ('sample_direction' in sflow_info['global']):
+            global_sample_dir = sflow_info['global']['sample_direction']
 
     click.echo("\nsFlow Global Information:")
     click.echo("  sFlow Admin State:".ljust(30) + "{}".format(global_admin_state))
+    click.echo("  sFlow Sample Direction:".ljust(30) + "{}".format(global_sample_dir))
 
     click.echo("  sFlow Polling Interval:".ljust(30), nl=False)
     if (sflow_info and 'polling_interval' in sflow_info['global']):

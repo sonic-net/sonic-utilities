@@ -384,7 +384,7 @@ def migrate_sonic_packages(bootloader, binary_image_version):
             run_command_or_raise(["chroot", new_image_mount, SONIC_PACKAGE_MANAGER, "migrate",
                                 os.path.join("/", TMP_DIR, packages_file),
                                 "--dockerd-socket", os.path.join("/", TMP_DIR, DOCKERD_SOCK),
-                                "-y"])
+                                "-y"], capture=False)
         finally:
             if docker_started:
                 run_command_or_raise(["chroot", new_image_mount, DOCKER_CTL_SCRIPT, "stop"], raise_exception=False)

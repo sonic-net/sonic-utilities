@@ -1,3 +1,4 @@
+from unittest.mock import patch
 import click
 import config.main as config
 import operator
@@ -46,6 +47,25 @@ class TestConfigXcvr(object):
         # Setting tx power on a port channel is not supported
         result = self.basic_check("tx_power", ["PortChannel0001", "11.3"], ctx, operator.ne)
         assert 'Invalid port PortChannel0001' in result.output
+
+    @patch("config.main.ConfigDBConnector.get_entry")
+    def test_dom(self, mock_get_entry, ctx):
+        interface_name = 'Ethernet0'
+        desired_config = 'enable'
+
+        result = self.basic_check("dom", ["", desired_config], ctx, operator.ne)
+        assert "Interface name is invalid. Please enter a valid interface name!!" in result.output
+
+        mock_get_entry.return_value = None
+        result = self.basic_check("dom", [interface_name, desired_config], ctx, operator.ne)
+        assert "Interface {} does not exist".format(interface_name) in result.output
+
+        mock_get_entry.return_value = {'subport': '2'}
+        result = self.basic_check("dom", [interface_name, desired_config], ctx, operator.ne)
+        assert "DOM monitoring config only supported for subports {}".format(config.DOM_CONFIG_SUPPORTED_SUBPORTS) in result.output
+
+        mock_get_entry.return_value = {'subport': '1'}
+        result = self.basic_check("dom", [interface_name, desired_config], ctx)
 
     def basic_check(self, command_name, para_list, ctx, op=operator.eq, expect_result=0):
         runner = CliRunner()

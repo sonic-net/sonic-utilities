@@ -1,0 +1,57 @@
+{
+  "vrfId": 0,
+  "vrfName": "default",
+  "tableVersion": 59925,
+  "routerId": "192.0.0.6",
+  "defaultLocPrf": 100,
+  "localAS": 65100,
+  "routes": {
+    "0.0.0.0/0": [
+      {
+        "valid": true,
+        "multipath": true,
+        "pathFrom": "internal",
+        "prefix": "0.0.0.0",
+        "prefixLen": 0,
+        "network": "0.0.0.0\/0",
+        "version": 12050,
+        "locPrf": 100,
+        "weight": 0,
+        "peerId": "3.3.3.2",
+        "path": "65200 6666 6667",
+        "origin": "IGP",
+        "nexthops": [
+          {
+            "ip": "10.0.0.7",
+            "hostname": "str2-sonic-lc1-1",
+            "afi": "ipv4",
+            "used": true
+          }
+        ]
+      },
+      {
+        "valid": true,
+        "bestpath": true,
+        "selectionReason": "Router ID",
+        "pathFrom": "internal",
+        "prefix": "0.0.0.0",
+        "prefixLen": 0,
+        "network": "0.0.0.0\/0",
+        "version": 12050,
+        "locPrf": 100,
+        "weight": 0,
+        "peerId": "3.3.3.1",
+        "path": "65200 6666 6667",
+        "origin": "IGP",
+        "nexthops": [
+          {
+            "ip": "10.0.0.1",
+            "hostname": "str2-sonic-lc1-1",
+            "afi": "ipv4",
+            "used": true
+          }
+        ]
+      }
+    ]
+  }
+}

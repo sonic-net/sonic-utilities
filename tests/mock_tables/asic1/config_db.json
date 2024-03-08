@@ -197,5 +197,35 @@
         "holdtime": "0",
         "asn": "65100",
         "keepalive": "0"
+    },
+    "BGP_VOQ_CHASSIS_NEIGHBOR|3.3.3.1": {
+        "rrclient": "0",
+        "name": "str2-sonic-lc1-1-ASIC1",
+        "local_addr": "3.3.3.2",
+        "nhopself": "0",
+        "admin_status": "up",
+        "holdtime": "10",
+        "asn": "65200",
+        "keepalive": "3"
+    },
+    "BGP_VOQ_CHASSIS_NEIGHBOR|3.3.3.2": {
+        "rrclient": "0",
+        "name": "str2-sonic-lc3-1-ASIC0",
+        "local_addr": "3.3.3.2",
+        "nhopself": "0",
+        "admin_status": "up",
+        "holdtime": "10",
+        "asn": "65200",
+        "keepalive": "3"
+    },
+    "BGP_VOQ_CHASSIS_NEIGHBOR|3.3.3.6": {
+        "rrclient": "0",
+        "name": "str2-sonic-lc3-1-ASIC1",
+        "local_addr": "3.3.3.7",
+        "nhopself": "0",
+        "admin_status": "up",
+        "holdtime": "10",
+        "asn": "65200",
+        "keepalive": "3"
     }
 }

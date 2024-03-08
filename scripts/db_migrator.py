@@ -8,11 +8,14 @@ import traceback
 import re
 
 from sonic_py_common import device_info, logger
-from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector, SonicDBConfig
+from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from minigraph import parse_xml
+from utilities_common.helper import update_config
+from utilities_common.general import load_db_config
 
 INIT_CFG_FILE = '/etc/sonic/init_cfg.json'
 MINIGRAPH_FILE = '/etc/sonic/minigraph.xml'
+GOLDEN_CFG_FILE = '/etc/sonic/golden_config_db.json'
 
 # mock the redis for unit test purposes #
 try:
@@ -24,10 +27,12 @@ try:
         sys.path.insert(0, tests_path)
         INIT_CFG_FILE = os.path.join(mocked_db_path, "init_cfg.json")
         MINIGRAPH_FILE = os.path.join(mocked_db_path, "minigraph.xml")
+        GOLDEN_CFG_FILE = os.path.join(mocked_db_path, "golden_config_db.json")
 except KeyError:
     pass
 
 SYSLOG_IDENTIFIER = 'db_migrator'
+DEFAULT_NAMESPACE = ''
 
 
 # Global logger instance
@@ -37,7 +42,14 @@ log = logger.Logger(SYSLOG_IDENTIFIER)
 class DBMigrator():
     def __init__(self, namespace, socket=None):
         """
-        Version string format:
+        Version string format (202305 and above):
+            version_<branch>_<build>
+              branch: master, 202311, 202305, etc.
+              build:  sequentially increase with leading 0 to make it 2 digits.
+                      because the minor number has been removed to make it different
+                      from the old format, adding a leading 0 to make sure that we
+                      have double digit version number spaces.
+        Version string format (before 202305):
            version_<major>_<minor>_<build>
               major: starting from 1, sequentially incrementing in master
                      branch.
@@ -47,21 +59,14 @@ class DBMigrator():
                      none-zero values.
               build: sequentially increase within a minor version domain.
         """
-        self.CURRENT_VERSION = 'version_4_0_4'
+        self.CURRENT_VERSION = 'version_202405_01'
 
         self.TABLE_NAME      = 'VERSIONS'
         self.TABLE_KEY       = 'DATABASE'
         self.TABLE_FIELD     = 'VERSION'
 
-        # load config data from minigraph to get the default/hardcoded values from minigraph.py
-        # this is to avoid duplicating the hardcoded these values in db_migrator
-        self.minigraph_data = None
-        try:
-            if os.path.isfile(MINIGRAPH_FILE):
-                self.minigraph_data = parse_xml(MINIGRAPH_FILE)
-        except Exception as e:
-            log.log_error('Caught exception while trying to parse minigraph: ' + str(e))
-            pass
+        # Generate config_src_data from minigraph and golden config
+        self.generate_config_src(namespace)
 
         db_kwargs = {}
         if socket:
@@ -99,6 +104,55 @@ class DBMigrator():
         if self.asic_type == "mellanox":
             from mellanox_buffer_migrator import MellanoxBufferMigrator
             self.mellanox_buffer_migrator = MellanoxBufferMigrator(self.configDB, self.appDB, self.stateDB)
+
+    def generate_config_src(self, ns):
+        '''
+        Generate config_src_data from minigraph and golden config
+        This method uses golden_config_data and minigraph_data as local variables,
+        which means they are not accessible or modifiable from outside this method.
+        This way, this method ensures that these variables are not changed unintentionally.
+        Args:
+            ns: namespace
+        Returns:
+        '''
+        # load config data from golden_config_db.json
+        golden_config_data = None
+        try:
+            if os.path.isfile(GOLDEN_CFG_FILE):
+                with open(GOLDEN_CFG_FILE) as f:
+                    golden_data = json.load(f)
+                    if ns is None:
+                        golden_config_data = golden_data
+                    else:
+                        if ns == DEFAULT_NAMESPACE:
+                            config_namespace = "localhost"
+                        else:
+                            config_namespace = ns
+                        golden_config_data = golden_data[config_namespace]
+        except Exception as e:
+            log.log_error('Caught exception while trying to load golden config: ' + str(e))
+            pass
+        # load config data from minigraph to get the default/hardcoded values from minigraph.py
+        minigraph_data = None
+        try:
+            if os.path.isfile(MINIGRAPH_FILE):
+                minigraph_data = parse_xml(MINIGRAPH_FILE)
+        except Exception as e:
+            log.log_error('Caught exception while trying to parse minigraph: ' + str(e))
+            pass
+        # When both golden config and minigraph exists, override minigraph config with golden config
+        # config_src_data is the source of truth for config data
+        # this is to avoid duplicating the hardcoded these values in db_migrator
+        self.config_src_data = None
+        if minigraph_data:
+            # Shallow copy for better performance
+            self.config_src_data = minigraph_data
+            if golden_config_data:
+                # Shallow copy for better performance
+                self.config_src_data = update_config(minigraph_data, golden_config_data, False)
+        elif golden_config_data:
+            # Shallow copy for better performance
+            self.config_src_data = golden_config_data
 
     def migrate_pfc_wd_table(self):
         '''
@@ -455,7 +509,7 @@ class DBMigrator():
                         self.configDB.set(self.configDB.CONFIG_DB, '{}|{}'.format(table_name, key), 'adv_speeds', value['speed'])
                 elif value['autoneg'] == '0':
                     self.configDB.set(self.configDB.CONFIG_DB, '{}|{}'.format(table_name, key), 'autoneg', 'off')
-
+    
 
     def migrate_config_db_switchport_mode(self):
         port_table = self.configDB.get_table('PORT')
@@ -573,9 +627,9 @@ class DBMigrator():
 
     def migrate_restapi(self):
         # RESTAPI - add missing key
-        if not self.minigraph_data or 'RESTAPI' not in self.minigraph_data:
+        if not self.config_src_data or 'RESTAPI' not in self.config_src_data:
             return
-        restapi_data = self.minigraph_data['RESTAPI']
+        restapi_data = self.config_src_data['RESTAPI']
         log.log_notice('Migrate RESTAPI configuration')
         config = self.configDB.get_entry('RESTAPI', 'config')
         if not config:
@@ -586,9 +640,9 @@ class DBMigrator():
 
     def migrate_telemetry(self):
         # TELEMETRY - add missing key
-        if not self.minigraph_data or 'TELEMETRY' not in self.minigraph_data:
+        if not self.config_src_data or 'TELEMETRY' not in self.config_src_data:
             return
-        telemetry_data = self.minigraph_data['TELEMETRY']
+        telemetry_data = self.config_src_data['TELEMETRY']
         log.log_notice('Migrate TELEMETRY configuration')
         gnmi = self.configDB.get_entry('TELEMETRY', 'gnmi')
         if not gnmi:
@@ -597,11 +651,35 @@ class DBMigrator():
         if not certs:
             self.configDB.set_entry("TELEMETRY", "certs", telemetry_data.get("certs"))
 
+    def migrate_gnmi(self):
+        # If there's GNMI table in CONFIG_DB, no need to migrate
+        gnmi = self.configDB.get_entry('GNMI', 'gnmi')
+        certs = self.configDB.get_entry('GNMI', 'certs')
+        if gnmi and certs:
+            return
+        if self.config_src_data:
+            if 'GNMI' in self.config_src_data:
+                # If there's GNMI in minigraph or golden config, copy configuration from config_src_data
+                gnmi_data = self.config_src_data['GNMI']
+                log.log_notice('Migrate GNMI configuration')
+                if 'gnmi' in gnmi_data:
+                    self.configDB.set_entry("GNMI", "gnmi", gnmi_data.get('gnmi'))
+                if 'certs' in gnmi_data:
+                    self.configDB.set_entry("GNMI", "certs", gnmi_data.get('certs'))
+        else:
+            # If there's no minigraph or golden config, copy configuration from CONFIG_DB TELEMETRY table
+            gnmi = self.configDB.get_entry('TELEMETRY', 'gnmi')
+            if gnmi:
+                self.configDB.set_entry("GNMI", "gnmi", gnmi)
+            certs = self.configDB.get_entry('TELEMETRY', 'certs')
+            if certs:
+                self.configDB.set_entry("GNMI", "certs", certs)
+
     def migrate_console_switch(self):
         # CONSOLE_SWITCH - add missing key
-        if not self.minigraph_data or 'CONSOLE_SWITCH' not in self.minigraph_data:
+        if not self.config_src_data or 'CONSOLE_SWITCH' not in self.config_src_data:
             return
-        console_switch_data = self.minigraph_data['CONSOLE_SWITCH']
+        console_switch_data = self.config_src_data['CONSOLE_SWITCH']
         log.log_notice('Migrate CONSOLE_SWITCH configuration')
         console_mgmt = self.configDB.get_entry('CONSOLE_SWITCH', 'console_mgmt')
         if not console_mgmt:
@@ -610,11 +688,11 @@ class DBMigrator():
 
     def migrate_device_metadata(self):
         # DEVICE_METADATA - synchronous_mode entry
-        if not self.minigraph_data or 'DEVICE_METADATA' not in self.minigraph_data:
+        if not self.config_src_data or 'DEVICE_METADATA' not in self.config_src_data:
             return
         log.log_notice('Migrate DEVICE_METADATA missing configuration')
         metadata = self.configDB.get_entry('DEVICE_METADATA', 'localhost')
-        device_metadata_data = self.minigraph_data["DEVICE_METADATA"]["localhost"]
+        device_metadata_data = self.config_src_data["DEVICE_METADATA"]["localhost"]
         if 'synchronous_mode' not in metadata:
             metadata['synchronous_mode'] = device_metadata_data.get("synchronous_mode")
             self.configDB.set_entry('DEVICE_METADATA', 'localhost', metadata)
@@ -648,47 +726,25 @@ class DBMigrator():
                 config.pop('has_timer')
                 self.configDB.set_entry('FEATURE', feature, config)
 
-    def migrate_route_table(self):
-        """
-        Handle route table migration. Migrations handled:
-        1. 'weight' attr in ROUTE object was introduced 202205 onwards.
-            Upgrade from older branch to 202205 will require this 'weight' attr to be added explicitly
-        2. 'protocol' attr in ROUTE introduced in 202305 onwards.
-            WarmRestartHelper reconcile logic requires to have "protocol" field in the old dumped ROUTE_TABLE.
-        """
-        route_table = self.appDB.get_table("ROUTE_TABLE")
-        for route_prefix, route_attr in route_table.items():
-            if type(route_prefix) == tuple:
-                # IPv6 route_prefix is returned from db as tuple
-                route_key = "ROUTE_TABLE:" + ":".join(route_prefix)
-            else:
-                # IPv4 route_prefix is returned from db as str
-                route_key = "ROUTE_TABLE:{}".format(route_prefix)
-
-            if 'weight' not in route_attr:
-                self.appDB.set(self.appDB.APPL_DB, route_key, 'weight','')
-
-            if 'protocol' not in route_attr:
-                self.appDB.set(self.appDB.APPL_DB, route_key, 'protocol', '')
 
     def migrate_dns_nameserver(self):
         """
         Handle DNS_NAMESERVER table migration. Migrations handled:
         If there's no DNS_NAMESERVER in config_DB, load DNS_NAMESERVER from minigraph
         """
-        if not self.minigraph_data or 'DNS_NAMESERVER' not in self.minigraph_data:
+        if not self.config_src_data or 'DNS_NAMESERVER' not in self.config_src_data:
             return
         dns_table = self.configDB.get_table('DNS_NAMESERVER')
         if not dns_table:
-            for addr, config in self.minigraph_data['DNS_NAMESERVER'].items():
+            for addr, config in self.config_src_data['DNS_NAMESERVER'].items():
                 self.configDB.set_entry('DNS_NAMESERVER', addr, config)
 
     def migrate_routing_config_mode(self):
         # DEVICE_METADATA - synchronous_mode entry
-        if not self.minigraph_data or 'DEVICE_METADATA' not in self.minigraph_data:
+        if not self.config_src_data or 'DEVICE_METADATA' not in self.config_src_data:
             return
         device_metadata_old = self.configDB.get_entry('DEVICE_METADATA', 'localhost')
-        device_metadata_new = self.minigraph_data['DEVICE_METADATA']['localhost']
+        device_metadata_new = self.config_src_data['DEVICE_METADATA']['localhost']
         # overwrite the routing-config-mode as per minigraph parser
         # Criteria for update:
         # if config mode is missing in base OS or if base and target modes are not same
@@ -755,6 +811,35 @@ class DBMigrator():
             if delay_status is None or delay_status == 'false':
                 flex_counter['FLEX_COUNTER_DELAY_STATUS'] = 'true'
                 self.configDB.mod_entry('FLEX_COUNTER_TABLE', obj, flex_counter)
+
+    def migrate_sflow_table(self):
+        """
+        Migrate "SFLOW_TABLE" and "SFLOW_SESSION_TABLE" to update default sample_direction
+        """
+
+        sflow_tbl = self.configDB.get_table('SFLOW')
+        for k, v in sflow_tbl.items():
+            if 'sample_direction' not in v:
+                v['sample_direction'] = 'rx'
+                self.configDB.set_entry('SFLOW', k, v)
+
+        sflow_sess_tbl = self.configDB.get_table('SFLOW_SESSION')
+        for k, v in sflow_sess_tbl.items():
+            if 'sample_direction' not in v:
+                v['sample_direction'] = 'rx'
+                self.configDB.set_entry('SFLOW_SESSION', k, v)
+
+        sflow_table = self.appDB.get_table("SFLOW_TABLE")
+        for key, value in sflow_table.items():
+            if 'sample_direction' not in value:
+                sflow_key = "SFLOW_TABLE:{}".format(key)
+                self.appDB.set(self.appDB.APPL_DB, sflow_key, 'sample_direction','rx')
+
+        sflow_sess_table = self.appDB.get_table("SFLOW_SESSION_TABLE")
+        for key, value in sflow_sess_table.items():
+            if 'sample_direction' not in value:
+                sflow_key = "SFLOW_SESSION_TABLE:{}".format(key)
+                self.appDB.set(self.appDB.APPL_DB, sflow_key, 'sample_direction','rx')
 
     def version_unknown(self):
         """
@@ -929,6 +1014,7 @@ class DBMigrator():
         """
         log.log_info('Handling version_3_0_0')
         self.migrate_config_db_port_table_for_auto_neg()
+        self.migrate_config_db_switchport_mode()
         self.set_version('version_3_0_1')
         return 'version_3_0_1'
 
@@ -944,7 +1030,9 @@ class DBMigrator():
             for name, data in portchannel_table.items():
                 data['lacp_key'] = 'auto'
                 self.configDB.set_entry('PORTCHANNEL', name, data)
+        self.migrate_config_db_switchport_mode()
         self.set_version('version_3_0_2')
+
         return 'version_3_0_2'
 
     def version_3_0_2(self):
@@ -1017,10 +1105,19 @@ class DBMigrator():
     def version_3_0_6(self):
         """
         Version 3_0_6
-        This is the latest version for 202211 branch
         """
 
         log.log_info('Handling version_3_0_6')
+        self.set_version('version_3_0_7')
+        return 'version_3_0_7'
+
+    def version_3_0_7(self):
+        """
+        Version 3_0_7
+        This is the latest version for 202205 branch
+        """
+
+        log.log_info('Handling version_3_0_7')
         self.set_version('version_4_0_0')
         return 'version_4_0_0'
 
@@ -1054,7 +1151,7 @@ class DBMigrator():
         self.migrate_feature_timer()
         self.set_version('version_4_0_2')
         return 'version_4_0_2'
-	
+
     def version_4_0_2(self):
         """
         Version 4_0_2.
@@ -1071,28 +1168,58 @@ class DBMigrator():
         Version 4_0_3.
         """
         log.log_info('Handling version_4_0_3')
+        
+        self.set_version('version_202305_01')
+        return 'version_202305_01'
+
+    def version_202305_01(self):
+        """
+        Version 202305_01.
+        This is current last erversion for 202305 branch
+        """
+        log.log_info('Handling version_202305_01')
+        self.set_version('version_202311_01')
+        return 'version_202311_01'
+
+    def version_202311_01(self):
+        """
+        Version 202311_01.
+        """
+        log.log_info('Handling version_202311_01')
 
         # Updating DNS nameserver
         self.migrate_dns_nameserver()
-        self.set_version('version_4_0_4')
-        return 'version_4_0_4'
 
-    def version_4_0_4(self):
+        self.migrate_sflow_table()
+        self.set_version('version_202311_02')
+        return 'version_202311_02'
+
+    def version_202311_02(self):
         """
-        Version 4_0_4.
+        Version 202311_02.
         """
-        log.log_info('Handling version_4_0_4')
-		
-        self.migrate_config_db_switchport_mode()
-        self.set_version('version_4_0_4')
-        return 'version_4_0_5'
-	
-    def version_4_0_5(self):
+        log.log_info('Handling version_202311_02')
+        # Update GNMI table
+        self.migrate_gnmi()
+
+        self.set_version('version_202311_03')
+        return 'version_202311_03'
+
+    def version_202311_03(self):
         """
-        Version 4_0_5.
-        This is the latest version for master branch
+        Version 202311_03.
+        This is current last erversion for 202311 branch
         """
-        log.log_info('Handling version_4_0_5')
+        log.log_info('Handling version_202311_03')
+        self.set_version('version_202405_01')
+        return 'version_202405_01'
+
+    def version_202405_01(self):
+        """
+        Version 202405_01, this version should be the final version for
+        master branch until 202405 branch is created.
+        """
+        log.log_info('Handling version_202405_01')
         return None
 
     def get_version(self):
@@ -1138,8 +1265,6 @@ class DBMigrator():
             self.migrate_mgmt_ports_on_s6100()
         else:
             log.log_notice("Asic Type: {}, Hwsku: {}".format(self.asic_type, self.hwsku))
-
-        self.migrate_route_table()
 
         # Updating edgezone aggregator cable length config for T0 devices
         self.update_edgezone_aggregator_config()
@@ -1188,10 +1313,7 @@ def main():
         socket_path = args.socket
         namespace = args.namespace
 
-        if args.namespace is not None:
-            SonicDBConfig.load_sonic_global_db_config(namespace=args.namespace)
-        else:
-            SonicDBConfig.initialize()
+        load_db_config()
 
         if socket_path:
             dbmgtr = DBMigrator(namespace, socket=socket_path)

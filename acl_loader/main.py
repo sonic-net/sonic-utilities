@@ -598,6 +598,14 @@ class AclLoader(object):
                     is_rule_v6 = True
             except Exception as e:
                 pass
+        else:
+            # get the IP version type using IP_PROTOCOL.
+            try:
+                ip_protocol = rule.ip.config.protocol
+                if ip_protocol == "IP_ICMPV6" or int(ip_protocol) == self.ip_protocol_map["IP_ICMPV6"]:
+                    is_rule_v6 = True
+            except Exception as e:
+                pass
 
         type_key = "ICMPV6_TYPE" if is_rule_v6 else "ICMP_TYPE"
         code_key = "ICMPV6_CODE" if is_rule_v6 else "ICMP_CODE"

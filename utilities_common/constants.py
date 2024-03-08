@@ -1,7 +1,7 @@
 #All the constant used in sonic-utilities
 
 DEFAULT_NAMESPACE = ''
-DEFAULT_SUPPORTED_FECS_LIST = [ 'rs', 'fc', 'none']
+DEFAULT_SUPPORTED_FECS_LIST = [ 'rs', 'fc', 'none', 'auto']
 DISPLAY_ALL = 'all'
 DISPLAY_EXTERNAL = 'frontend'
 BGP_NEIGH_OBJ = 'BGP_NEIGH'

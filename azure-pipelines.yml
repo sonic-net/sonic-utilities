@@ -13,6 +13,13 @@ resources:
     name: sonic-net/sonic-swss
     endpoint: sonic-net
 
+variables:
+  - name: BUILD_BRANCH
+    ${{ if eq(variables['Build.Reason'], 'PullRequest') }}:
+      value: $(System.PullRequest.TargetBranch)
+    ${{ else }}:
+      value: $(Build.SourceBranchName)
+
 stages:
 - stage: Build
 
@@ -26,7 +33,7 @@ stages:
       vmImage: ubuntu-20.04
 
     container:
-      image: sonicdev-microsoft.azurecr.io:443/sonic-slave-bullseye:latest
+      image: sonicdev-microsoft.azurecr.io:443/sonic-slave-bullseye:$(BUILD_BRANCH)
 
     steps:
     - script: |

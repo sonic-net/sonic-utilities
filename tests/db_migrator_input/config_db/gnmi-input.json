@@ -1,0 +1,15 @@
+{
+    "TELEMETRY|gnmi": {
+        "client_auth": "true", 
+        "log_level": "2", 
+        "port": "50051"
+    }, 
+    "TELEMETRY|certs": {
+        "server_key": "/etc/sonic/telemetry/streamingtelemetryserver.key", 
+        "ca_crt": "/etc/sonic/telemetry/dsmsroot.cer", 
+        "server_crt": "/etc/sonic/telemetry/streamingtelemetryserver.cer"
+    },
+    "VERSIONS|DATABASE": {
+        "VERSION": "version_202311_01"
+    }
+}

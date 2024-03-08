@@ -17,9 +17,12 @@
     "helper_data": {
         "rdma_config_update_validator": {
             "mellanox_asics": {
-                "spc1": [ "ACS-MSN2700", "ACS-MSN2740", "ACS-MSN2100", "ACS-MSN2410", "ACS-MSN2010", "Mellanox-SN2700", "Mellanox-SN2700-D48C8" ],
-                "spc2": [ "ACS-MSN3800", "Mellanox-SN3800-D112C8" ],
-                "spc3": [ "ACS-MSN4700", "ACS-MSN4600", "ACS-MSN4600C", "ACS-MSN4410", "Mellanox-SN4600C-D112C8", "Mellanox-SN4600C-C64", "Mellanox-SN4700-O8C48" ]
+                "spc1": [ "ACS-MSN2700", "ACS-MSN2740", "ACS-MSN2100", "ACS-MSN2410", "ACS-MSN2010", "Mellanox-SN2700", "Mellanox-SN2700-C28D8", "Mellanox-SN2700-D40C8S8", "Mellanox-SN2700-D44C10", "Mellanox-SN2700-D48C8",
+                          "ACS-MSN2700-A1", "Mellanox-SN2700-A1", "Mellanox-SN2700-A1-C28D8", "Mellanox-SN2700-A1-D40C8S8", "Mellanox-SN2700-A1-D44C10", "Mellanox-SN2700-A1-D48C8" ],
+                "spc2": [ "ACS-MSN3800", "Mellanox-SN3800-D112C8", "ACS-MSN3420", "ACS-MSN3700C", "ACS-MSN3700", "Mellanox-SN3800-C64", "Mellanox-SN3800-D100C12S2", "Mellanox-SN3800-D24C52", "Mellanox-SN3800-D28C49S1", "Mellanox-SN3800-D28C50" ],
+                "spc3": [ "ACS-MSN4700", "ACS-MSN4600", "ACS-MSN4600C", "ACS-MSN4410", "Mellanox-SN4600C-D112C8", "Mellanox-SN4600C-C64", "Mellanox-SN4700-O8C48", "Mellanox-SN4600C-D100C12S2", "Mellanox-SN4600C-D48C40",
+                          "Mellanox-SN4700-A96C8V8", "Mellanox-SN4700-C128", "Mellanox-SN4700-O28", "Mellanox-SN4700-O8V48", "Mellanox-SN4700-V48C32"],
+                "spc4": [ "ACS-SN5600"]
             },
             "broadcom_asics": {
                 "th": [ "Force10-S6100", "Arista-7060CX-32S-C32", "Arista-7060CX-32S-C32-T1", "Arista-7060CX-32S-D48C8", "Celestica-DX010-C32", "Seastone-DX010" ],
@@ -47,6 +50,7 @@
                             "spc1": "20181100",
 			    "spc2": "20191100",
                             "spc3": "20220500",
+                            "spc4": "20221100",
                             "td2": "20181100",
                             "th": "20181100",
                             "th2": "20181100",
@@ -72,11 +76,12 @@
                             "spc1": "20191100",
 			    "spc2": "20191100",
                             "spc3": "20220500",
+                            "spc4": "20221100",
                             "td2": "",
                             "th": "20221100",
                             "th2": "20221100",
                             "td3": "20221100",
-                            "cisco-8000": ""
+                            "cisco-8000": "20201200"
                         }
                     }
                 }
@@ -95,11 +100,12 @@
                             "spc1": "20181100",
 			    "spc2": "20191100",
                             "spc3": "20220500",
+                            "spc4": "20221100",
                             "td2": "20181100",
                             "th": "20181100",
                             "th2": "20181100",
                             "td3": "20201200",
-                            "cisco-8000": ""
+                            "cisco-8000": "20201200"
                         }
                     },
                     "PG headroom modification": {
@@ -111,11 +117,12 @@
                             "spc1": "20191100",
 			    "spc2": "20191100",
                             "spc3": "20220500",
+                            "spc4": "20221100",
                             "td2": "",
                             "th": "20221100",
                             "th2": "20221100",
                             "td3": "20221100",
-                            "cisco-8000": ""
+                            "cisco-8000": "20201200"
                         }
                     }
                 }
@@ -136,11 +143,12 @@
                             "spc1": "20181100",
 			    "spc2": "20191100",
                             "spc3": "20220500",
+                            "spc4": "20221100",
                             "td2": "20181100",
                             "th": "20181100",
                             "th2": "20181100",
                             "td3": "20201200",
-                            "cisco-8000": ""
+                            "cisco-8000": "20201200"
                         }
                     }
                 }
