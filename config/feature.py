@@ -69,6 +69,8 @@ def feature():
 
 def _update_field(db, name, fld, val):
     tbl = db.cfgdb.get_table('FEATURE')
+    if tbl == None:
+        sys.exit(1)
     if name not in tbl:
         click.echo("Unable to retrieve {} from FEATURE table".format(name))
         sys.exit(1)
