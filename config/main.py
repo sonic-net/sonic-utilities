@@ -1759,7 +1759,7 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
     update_sonic_environment()
 
     if os.path.isfile('/etc/sonic/acl.json'):
-        clicommon.run_command(['acl-loader', 'update', 'full', '/etc/sonic/acl.json'], display_cmd=True)
+        clicommon.run_command(['acl-loader', 'update', 'full', '/etc/sonic/acl.json', '--skip_action_validation'], display_cmd=True)
 
     # Load port_config.json
     try:
