@@ -38,6 +38,15 @@ def is_bgp_neigh_present(neighbor_ip, namespace=multi_asic.DEFAULT_NAMESPACE):
     return False
 
 
+def is_bgp_feature_state_enabled(namespace=multi_asic.DEFAULT_NAMESPACE):
+    config_db = multi_asic.connect_config_db_for_ns(namespace)
+    bgp= config_db.get_entry("FEATURE","bgp")
+    if "state" in bgp:
+        if bgp["state"] == "enabled":
+            return True
+    return False
+    
+
 def is_ipv4_address(ip_address):
     """
     Checks if given ip is ipv4
