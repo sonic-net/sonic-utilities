@@ -4,6 +4,8 @@ from unittest import mock
 from sonic_py_common import multi_asic
 from utilities_common import multi_asic as multi_asic_util
 
+add_unknown_intf=False
+
 mock_intf_table = {
     '': {
         'eth0': {
@@ -60,6 +62,8 @@ def mock_single_asic_get_ip_intf_from_ns(namespace):
     interfaces = []
     try:
         interfaces = list(mock_intf_table[namespace].keys())
+        if add_unknown_intf:
+            interfaces.append("unknownintf")
     except KeyError:
         pass
     return interfaces
@@ -70,7 +74,8 @@ def mock_single_asic_get_ip_intf_addr_from_ns(namespace, iface):
     try:
         ipaddresses = mock_intf_table[namespace][iface]
     except KeyError:
-        pass
+        if add_unknown_intf:
+            raise ValueError("Unknow interface")
     return ipaddresses
 
 
