@@ -1,0 +1,48 @@
+#!/usr/bin/env python3
+
+import os
+import sys
+
+SRC_DIR = "/host/pmon/storagemon"
+BASE_PATH = "/sys/block"
+DISKSTATS_FILE = "/proc/diskstats"
+FSSTATS_PREFIX = "/host/pmon/storagemon/fs-stats-"
+
+devices = []
+
+def get_storage_disks():
+    fdlist = os.listdir(BASE_PATH)
+    for fd in fdlist:
+        if 'boot' in fd or 'loop' in fd:
+            continue
+        else:
+            self.devices.append(fd)
+
+def main():
+
+    for device in devices:
+        import pdb; pdb.set_trace()
+        with open(DISKSTATS_FILE) as fd:
+            diskstats = fd.readlines()
+
+        fs_reads = ""
+        fs_writes = ""
+
+        for line in diskstats:
+            if device == line.split()[2]:
+                fs_reads = line.split()[3]
+                fs_writes = line.split()[7]
+                break
+
+        # Highly unlikely scenario
+        if fs_reads == "" or fs_writes == "":
+            break
+        else:
+            filename = FSSTATS_PREFIX + device
+            with open (filename, 'w') as f:
+                f.write("{} {}".format(fs_reads, fs_writes))
+
+
+if __name__ == "__main__":
+    main()
+

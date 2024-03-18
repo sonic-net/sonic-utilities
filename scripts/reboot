@@ -242,6 +242,12 @@ if [ -x ${DEVPATH}/${PLATFORM}/${PLATFORM_UPDATE_REBOOT_CAUSE} ]; then
     ${DEVPATH}/${PLATFORM}/${PLATFORM_UPDATE_REBOOT_CAUSE}
 fi
 
+if [ -x /usr/bin/local/fsio-sync ]; then
+    VERBOSE=yes debug "Syncing FS I/O reads and writes to disk"
+    /usr/bin/local/fsio-sync
+    sleep 1
+fi
+
 if [ -x ${DEVPATH}/${PLATFORM}/${PLAT_REBOOT} ]; then
     VERBOSE=yes debug "Rebooting with platform ${PLATFORM} specific tool ..."
     ${DEVPATH}/${PLATFORM}/${PLAT_REBOOT} $@

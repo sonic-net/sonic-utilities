@@ -135,6 +135,7 @@ setup(
         'scripts/fdbshow',
         'scripts/fibshow',
         'scripts/flow_counters_stat',
+        'scripts/fsio-sync',
         'scripts/gearboxutil',
         'scripts/generate_dump',
         'scripts/generate_shutdown_order.py',
