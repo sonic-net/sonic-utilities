@@ -4643,6 +4643,7 @@ def add(ctx, interface_name, ip_addr, gw):
             config_db.set_entry("MGMT_INTERFACE", (interface_name, str(ip_address)), {"NULL": "NULL"})
         else:
             config_db.set_entry("MGMT_INTERFACE", (interface_name, str(ip_address)), {"gwaddr": gw})
+        config_db.set_entry("MGMT_PORT", interface_name, {"admin_status": "up", "alias": interface_name})
 
         return
 
