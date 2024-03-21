@@ -2994,7 +2994,14 @@ def _qos_update_ports(ctx, ports, dry_run, json_data):
         for table_name in tables_multi_index:
             entries = config_db.get_keys(table_name)
             for key in entries:
-                port, _ = key
+                # Add support for chassis/multi-dut:
+                # on a single-dut, key = ('Ethernet136', '6')
+                # while on a chassis, key = ('str2-chassis-lcx-1', 'Asic0', 'Ethernet84', '5')
+                for element in key:
+                    if element.startswith('Eth'):
+                        port = element
+                        break
+                assert port is not None, "Port is not found in config DB"
                 if not port in portset_to_handle:
                     continue
                 config_db.set_entry(table_name, '|'.join(key), None)
