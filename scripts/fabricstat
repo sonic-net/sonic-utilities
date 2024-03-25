@@ -307,6 +307,40 @@ class FabricReachability(FabricStat):
         print(tabulate(body, header, tablefmt='simple', stralign='right'))
         return
 
+class FabricIsolation(FabricStat):
+    def isolation_print(self):
+        # Connect to database
+        self.db = multi_asic.connect_to_all_dbs_for_ns(self.namespace)
+        # Get the set of all fabric ports
+        port_keys = self.db.keys(self.db.STATE_DB, FABRIC_PORT_STATUS_TABLE_PREFIX + '*')
+        # Create a new dictionary. The keys are the local port values in integer format.
+        # Only fabric ports that have remote port data are added.
+        port_dict = {}
+        for port_key in port_keys:
+            port_data = self.db.get_all(self.db.STATE_DB, port_key)
+            if "REMOTE_PORT" in port_data:
+                port_number = int(port_key.replace("FABRIC_PORT_TABLE|PORT", ""))
+                port_dict.update({port_number: port_data})
+        # Create ordered table of fabric ports.
+        header = ["Local Link", "Auto Isolated", "Manual Isolated", "Isolated"]
+        auto_isolated = 0
+        manual_isolated = 0
+        isolated = 0
+        body = []
+        for port_number in sorted(port_dict.keys()):
+            port_data = port_dict[port_number]
+            if "AUTO_ISOLATED" in port_data:
+                auto_isolated = port_data["AUTO_ISOLATED"]
+            if "CONFIG_ISOLATED" in port_data:
+                manual_isolated = port_data["CONFIG_ISOLATED"]
+            if "ISOLATED" in port_data:
+                isolated = port_data["ISOLATED"]
+            body.append((port_number, auto_isolated, manual_isolated, isolated));
+        if self.namespace:
+            print(f"\n{self.namespace}")
+        print(tabulate(body, header, tablefmt='simple', stralign='right'))
+        return
+
 def main():
     global cnstat_dir
     global cnstat_fqn_file_port
@@ -329,12 +363,14 @@ Examples:
     parser.add_argument('-r','--reachability', action='store_true', help='Display reachability, otherwise port stat')
     parser.add_argument('-n','--namespace', default=None, help='Display fabric ports counters for specific namespace')
     parser.add_argument('-e', '--errors', action='store_true', help='Display errors')
+    parser.add_argument('-i','--isolation', action='store_true', help='Display fabric ports isolation status')
     parser.add_argument('-C','--clear', action='store_true', help='Copy & clear fabric counters')
     parser.add_argument('-D','--delete', action='store_true', help='Delete saved stats')
 
     args = parser.parse_args()
     queue = args.queue
     reachability = args.reachability
+    isolation_status = args.isolation
     namespace = args.namespace
     errors_only = args.errors
 
@@ -361,6 +397,10 @@ Examples:
         elif reachability:
            stat = FabricReachability(ns)
            stat.reachability_print()
+           return
+        elif isolation_status:
+           stat = FabricIsolation(ns)
+           stat.isolation_print()
            return
         else:
            stat = FabricPortStat(ns)
