@@ -5,7 +5,7 @@ ecnconfig is the utility to
 
 1) show and change ECN configuration
 
-usage: ecnconfig [-h] [-v] [-l] [-p PROFILE] [-gmin GREEN_MIN]
+usage: ecnconfig [-h] [-v] [-l] [-p PROFILE] [-gmin GREEN_MIN] [-n NAMESPACE]
                  [-gmax GREEN_MAX] [-ymin YELLOW_MIN] [-ymax YELLOW_MAX]
                  [-rmin RED_MIN] [-rmax RED_MAX] [-gdrop GREEN_DROP_PROB]
                  [-ydrop YELLOW_DROP_PROB] [-rdrop RED_DROP_PROB] [-vv]
@@ -16,6 +16,7 @@ optional arguments:
   -vv    --verbose             verbose output
   -l     --list                show ECN WRED configuration
   -p     --profile             specify WRED profile name
+  -n     --namespace           show ECN configuration for specified namespace
   -gmin  --green-min           set min threshold for packets marked green
   -gmax  --green-max           set max threshold for packets marked green
   -ymin  --yellow-min          set min threshold for packets marked yellow
@@ -62,12 +63,16 @@ try:
         sys.path.insert(0, modules_path)
         sys.path.insert(0, tests_path)
         import mock_tables.dbconnector
-
+    if os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] == "multi_asic":
+        import mock_tables.mock_multi_asic
+        mock_tables.dbconnector.load_namespace_config()
 except KeyError:
     pass
 
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 
+from sonic_py_common import multi_asic
+from utilities_common.general import load_db_config
 
 WRED_PROFILE_TABLE_NAME = "WRED_PROFILE"
 WRED_CONFIG_FIELDS = {
@@ -92,22 +97,32 @@ def chk_exec_privilege():
     if os.geteuid() != 0 and os.environ.get("UTILITIES_UNIT_TESTING", "0") != "2":
         sys.exit("Root privileges required for this operation")
 
+def get_table(namespace, db, table_name):
+    if namespace or not multi_asic.is_multi_asic():
+        return db.get_table(table_name)
+    else:
+        return multi_asic.get_table(table_name)
+
 class EcnConfig(object):
     """
     Process ecnconfig
     """
-    def __init__(self, filename, verbose):
+    def __init__(self, filename, verbose, namespace):
         self.ports = []
         self.queues = []
         self.filename = filename
         self.verbose = verbose
+        self.namespace = namespace
 
         # Set up db connections
-        self.db = ConfigDBConnector()
+        if namespace:
+            self.db = ConfigDBConnector(namespace=namespace, use_unix_socket_path=True)
+        else:
+            self.db = ConfigDBConnector()
         self.db.connect()
 
     def list(self):
-        wred_profiles = self.db.get_table(WRED_PROFILE_TABLE_NAME)
+        wred_profiles = get_table(self.namespace, self.db, WRED_PROFILE_TABLE_NAME)
         for name, data in wred_profiles.items():
             profile_name = name
             profile_data = data
@@ -122,7 +137,7 @@ class EcnConfig(object):
 
     # get parameters of a WRED profile
     def get_profile_data(self, profile):
-        wred_profiles = self.db.get_table(WRED_PROFILE_TABLE_NAME)
+        wred_profiles = get_table(self.namespace, self.db, WRED_PROFILE_TABLE_NAME)
 
         for profile_name, profile_data in wred_profiles.items():
             if profile_name == profile:
@@ -196,24 +211,25 @@ class EcnQ(object):
     """
     Process ecn on/off on queues
     """
-    def __init__(self, queues, filename, verbose):
+    def __init__(self, queues, filename, verbose, namespace):
         self.ports_key = []
         self.queues = queues.split(',')
         self.filename = filename
         self.verbose = verbose
+        self.namespace = namespace
 
         # Set up db connections
-        self.config_db = ConfigDBConnector()
+        self.config_db = ConfigDBConnector(namespace=namespace, use_unix_socket_path=False)
+        self.db = SonicV2Connector(namespace=namespace, use_unix_socket_path=False)
         self.config_db.connect()
 
-        self.db = SonicV2Connector(use_unix_socket_path=False)
         self.db.connect(self.db.CONFIG_DB)
 
         self.gen_ports_key()
 
     def gen_ports_key(self):
         if self.ports_key is not None:
-            port_table = self.config_db.get_table(DEVICE_NEIGHBOR_TABLE_NAME)
+            port_table = get_table(self.namespace, self.config_db, DEVICE_NEIGHBOR_TABLE_NAME)
             self.ports_key = list(port_table.keys())
 
             # Verify at least one port is available
@@ -228,7 +244,7 @@ class EcnQ(object):
 
     def dump_table_info(self):
         if self.filename is not None:
-            q_table = self.config_db.get_table(QUEUE_TABLE_NAME)
+            q_table = get_table(self.namespace, self.config_db, QUEUE_TABLE_NAME)
             with open(self.filename, "w") as fd:
                 json.dump({repr(x):y for x, y in q_table.items()}, fd)
 
@@ -290,6 +306,7 @@ def main():
     parser.add_argument('-ydrop', '--yellow-drop-prob', type=str, help='set max drop/mark probability for packets marked \'yellow\'', default=None)
     parser.add_argument('-rdrop', '--red-drop-prob', type=str, help='set max drop/mark probability for packets marked \'red\'', default=None)
     parser.add_argument('-v', '--version', action='version', version='%(prog)s 1.0')
+    parser.add_argument('-n', '--namespace', type=str, help='Namespace name or all', default=None)
     parser.add_argument('-vv', '--verbose', action='store_true', help='Verbose output', default=False)
 
     parser.add_argument('command', nargs='?', choices=['on', 'off'], type=str, help='turn on/off ecn', default=None)
@@ -302,12 +319,18 @@ def main():
     args = parser.parse_args()
 
     try:
+        load_db_config()
+        namespaces = multi_asic.get_namespace_list()
+        if args.namespace and args.namespace not in namespaces:
+            raise Exception("Input arguments error. Namespaces must be one of", *namespaces)
         if args.list or args.profile:
-            prof_cfg = EcnConfig(args.filename, args.verbose)
+            prof_cfg = EcnConfig(args.filename, args.verbose, args.namespace)
             if args.list:
                 arg_len_max = 2
                 if args.verbose:
                     arg_len_max += 1
+                if args.namespace:
+                    arg_len_max += 2
                 if args.filename:
                     arg_len_max += 2
                 if len(sys.argv) > arg_len_max:
@@ -317,6 +340,8 @@ def main():
                 arg_len_min = 4
                 if args.verbose:
                     arg_len_min += 1
+                if args.namespace:
+                    arg_len_min += 2
                 if args.filename:
                     arg_len_min += 2
                 if len(sys.argv) < arg_len_min:
@@ -325,7 +350,7 @@ def main():
                 # get current configuration data
                 wred_profile_data = prof_cfg.get_profile_data(args.profile)
                 if wred_profile_data is None:
-                    raise Exception("Input arguments error. Invalid WRED profile %s" % (args.profile))
+                    raise Exception("Input arguments error. Invalid WRED profile %s for namespace %s" % (args.profile), (args.namespace))
 
                 if args.green_max:
                     wred_profile_data[WRED_CONFIG_FIELDS["gmax"]] = args.green_max
@@ -377,10 +402,13 @@ def main():
                 arg_len_min += 1
             if args.verbose:
                 arg_len_min += 1
+            if args.namespace:
+                arg_len_min += 2
             if len(sys.argv) < arg_len_min:
                 raise Exception("Input arguments error. Specify at least one queue by index")
-
-            q_ecn = EcnQ(args.queue, args.filename, args.verbose)
+            if multi_asic.is_multi_asic() and not args.namespace:
+                raise Exception("Input arguments error: Namespace must be specified for get/set command for multi-asic.")
+            q_ecn = EcnQ(args.queue, args.filename, args.verbose, args.namespace)
             if not args.command:
                 q_ecn.get()
             else:
