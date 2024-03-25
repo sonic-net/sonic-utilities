@@ -734,6 +734,13 @@
         "tpid": "0x8100",
         "mtu": "9100"
     },
+    "PORTCHANNEL|PortChannel0100": {
+        "admin_status": "up",
+        "min_links": "1",
+        "tpid": "0x8100",
+        "static": "true",
+        "mtu": "9100"
+    },
     "PORTCHANNEL_MEMBER|PortChannel1001|Ethernet32": {
         "NULL": "NULL"
     },

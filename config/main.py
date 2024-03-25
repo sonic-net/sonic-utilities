@@ -2154,8 +2154,11 @@ def portchannel(db, ctx, namespace):
 @click.option('--fast-rate', default='false',
               type=click.Choice(['true', 'false'],
                                 case_sensitive=False))
+@click.option('--static', default='false',
+              type=click.Choice(['true', 'false'],
+                                case_sensitive=False))
 @click.pass_context
-def add_portchannel(ctx, portchannel_name, min_links, fallback, fast_rate):
+def add_portchannel(ctx, portchannel_name, min_links, fallback, fast_rate, static):
     """Add port channel"""
     
     fvs = {
@@ -2169,6 +2172,8 @@ def add_portchannel(ctx, portchannel_name, min_links, fallback, fast_rate):
         fvs['min_links'] = str(min_links)
     if fallback != 'false':
         fvs['fallback'] = 'true'
+    if static != 'false':
+        fvs['static'] = 'true'
     
     db = ValidatedConfigDBConnector(ctx.obj['db'])
     if ADHOC_VALIDATION:

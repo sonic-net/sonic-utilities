@@ -1,5 +1,6 @@
 {
     "LAG_TABLE|PortChannel001":{
+        "setup.runner_name": "lacp",
         "runner.active": "true",
         "runner.fallback": "false",
         "runner.fast_rate": "false",
@@ -10,6 +11,7 @@
         "team_device.ifinfo.ifindex": "137"
     },
     "LAG_TABLE|PortChannel002":{
+        "setup.runner_name": "lacp",
         "runner.active": "true",
         "runner.fallback": "false",
         "runner.fast_rate": "false",

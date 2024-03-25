@@ -84,6 +84,8 @@ show_ipv6_link_local_mode_output="""\
 +------------------+----------+
 | PortChannel0004  | Disabled |
 +------------------+----------+
+| PortChannel0100  | Disabled |
++------------------+----------+
 | Vlan1000         | Disabled |
 +------------------+----------+
 | Vlan2000         | Disabled |

@@ -127,6 +127,32 @@ class TestPortChannel(object):
         assert result.exit_code != 0
         assert 'Invalid value for "--fast-rate"'  in result.output
 
+    @pytest.mark.parametrize("static", ["False", "True", "false", "true"])
+    def test_add_portchannel_with_static_adhoc_validation(self, static):
+        config.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'db':db.cfgdb}
+
+        # add a portchannel with fats rate
+        result = runner.invoke(config.config.commands["portchannel"].commands["add"], ["PortChannel0101", "--static", static], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+
+    @pytest.mark.parametrize("static", ["Fls", "tru"])
+    def test_add_portchannel_with_invalid_static(self, static):
+        runner = CliRunner()
+        db = Db()
+        obj = {'db':db.cfgdb}
+        
+        # add a portchannel with invalid fats rate
+        result = runner.invoke(config.config.commands["portchannel"].commands["add"], ["PortChannel0101", "--static", static], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert 'Invalid value for "--static"'  in result.output
+
     def test_add_portchannel_member_with_invalid_name(self):
         runner = CliRunner()
         db = Db()

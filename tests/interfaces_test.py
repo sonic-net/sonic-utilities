@@ -129,6 +129,7 @@ Flags: A - active, I - inactive, Up - up, Dw - Down, N/A - not available,
  0002  PortChannel0002  LACP(A)(Up)  Ethernet116(S)
  0003  PortChannel0003  LACP(A)(Up)  Ethernet120(S)
  0004  PortChannel0004  LACP(A)(Up)  N/A
+ 0100  PortChannel0100  NONE(A)(Up)  N/A
  1001  PortChannel1001  N/A
 """
 
@@ -141,6 +142,7 @@ Flags: A - active, I - inactive, Up - up, Dw - Down, N/A - not available,
  0002  PortChannel0002  LACP(A)(Up)  etp30(S)
  0003  PortChannel0003  LACP(A)(Up)  etp31(S)
  0004  PortChannel0004  LACP(A)(Up)  N/A
+ 0100  PortChannel0100  NONE(A)(Up)  N/A
  1001  PortChannel1001  N/A
 """
 
