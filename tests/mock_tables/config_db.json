@@ -104,7 +104,8 @@
         "tpid": "0x8100",
         "mode": "trunk",
         "pfc_asym": "off",
-        "speed": "1000"
+        "speed": "1000",
+        "role": "Dpc"
     },
     "PORT|Ethernet28": {
         "admin_status": "up",

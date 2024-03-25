@@ -14,7 +14,6 @@ from typing import Dict
 
 import click
 from natsort import natsorted
-from sonic_py_common.interface import front_panel_prefix, backplane_prefix, inband_prefix, recirc_prefix
 from sonic_py_common import multi_asic
 from utilities_common.sfp_helper import covert_application_advertisement_to_output_string
 from utilities_common.sfp_helper import (
@@ -544,6 +543,10 @@ class SFPShow(object):
             output = ZR_PM_NOT_APPLICABLE_STR + '\n'
         return output
 
+    def is_valid_physical_port(self, port_name):
+        role = self.db.get(self.db.APPL_DB, 'PORT_TABLE:{}'.format(port_name), multi_asic.PORT_ROLE)
+        return multi_asic.is_front_panel_port(port_name, role)
+
     @multi_asic_util.run_on_multi_asic
     def get_eeprom(self):
         if self.intf_name is not None:
@@ -553,7 +556,7 @@ class SFPShow(object):
             port_table_keys = self.db.keys(self.db.APPL_DB, "PORT_TABLE:*")
             for i in port_table_keys:
                 interface = re.split(':', i, maxsplit=1)[-1].strip()
-                if interface and interface.startswith(front_panel_prefix()) and not interface.startswith((backplane_prefix(), inband_prefix(), recirc_prefix())):
+                if interface and self.is_valid_physical_port(interface):
                     self.intf_eeprom[interface] = self.convert_interface_sfp_info_to_cli_output_string(
                         self.db, interface, self.dump_dom)
 
@@ -577,7 +580,7 @@ class SFPShow(object):
             port_table_keys = self.db.keys(self.db.APPL_DB, "PORT_TABLE:*")
             for i in port_table_keys:
                 key = re.split(':', i, maxsplit=1)[-1].strip()
-                if key and key.startswith(front_panel_prefix()) and not key.startswith((backplane_prefix(), inband_prefix(), recirc_prefix())):
+                if key and self.is_valid_physical_port(key):
                     presence_string = self.convert_interface_sfp_presence_state_to_cli_output_string(self.db, key)
                     port_table.append((key, presence_string))
 
@@ -592,7 +595,7 @@ class SFPShow(object):
             port_table_keys = self.db.keys(self.db.APPL_DB, "PORT_TABLE:*")
             for i in port_table_keys:
                 interface = re.split(':', i, maxsplit=1)[-1].strip()
-                if interface and interface.startswith(front_panel_prefix()) and not interface.startswith((backplane_prefix(), inband_prefix(), recirc_prefix())):
+                if interface and self.is_valid_physical_port(interface):
                     self.intf_pm[interface] = self.convert_interface_sfp_pm_to_cli_output_string(
                         self.db, interface)
 
@@ -605,7 +608,7 @@ class SFPShow(object):
             port_table_keys = self.db.keys(self.db.APPL_DB, "PORT_TABLE:*")
             for i in port_table_keys:
                 interface = re.split(':', i, maxsplit=1)[-1].strip()
-                if interface and interface.startswith(front_panel_prefix()) and not interface.startswith((backplane_prefix(), inband_prefix(), recirc_prefix())):
+                if interface and self.is_valid_physical_port(interface):
                     self.intf_status[interface] = self.convert_interface_sfp_status_to_cli_output_string(
                         self.db, interface)
 
