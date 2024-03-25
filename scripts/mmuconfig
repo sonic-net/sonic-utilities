@@ -22,6 +22,8 @@ import argparse
 import tabulate
 import traceback
 import json
+from utilities_common.general import load_db_config
+from sonic_py_common import multi_asic
 
 BUFFER_POOL_TABLE_NAME = "BUFFER_POOL"
 BUFFER_PROFILE_TABLE_NAME = "BUFFER_PROFILE"
@@ -42,24 +44,29 @@ try:
         sys.path.insert(0, modules_path)
         sys.path.insert(0, tests_path)
         import mock_tables.dbconnector
-
+    if os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] == "multi_asic":
+        import mock_tables.mock_multi_asic
+        mock_tables.dbconnector.load_namespace_config()
 except KeyError:
     pass
 
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 
 class MmuConfig(object):
-    def __init__(self, verbose, config, filename):
+    def __init__(self, verbose, config, filename, namespace):
         self.verbose = verbose
         self.config = config
         self.filename = filename
+        self.namespace = namespace
+
+        self.use_unix_socket_path = self.namespace != None
 
         # Set up db connections
         if self.config:
-            self.db = ConfigDBConnector()
+            self.db = ConfigDBConnector(namespace=namespace, use_unix_socket_path=self.use_unix_socket_path)
             self.db.connect()
         else:
-            self.db = SonicV2Connector(use_unix_socket_path=False)
+            self.db = SonicV2Connector(namespace=namespace, use_unix_socket_path=self.use_unix_socket_path)
             self.db.connect(self.db.STATE_DB, False)
 
     def get_table(self, tablename):
@@ -67,13 +74,17 @@ class MmuConfig(object):
             return self.db.get_table(tablename)
 
         entries = {}
-        keys = self.db.keys(self.db.STATE_DB, tablename + '*')
+        for ns in multi_asic.get_namespace_list(self.namespace):
+            db = SonicV2Connector(namespace=ns, use_unix_socket_path=True)
+            db.connect(db.STATE_DB, False)
+            keys = db.keys(db.STATE_DB, tablename + '*')
 
-        if not keys:
+            if keys:
+                for key in keys:
+                    entries[key.split('|')[1]] = db.get_all(db.STATE_DB, key)
+
+        if not entries:
             return None
-
-        for key in keys:
-            entries[key.split('|')[1]] = self.db.get_all(self.db.STATE_DB, key)
 
         return entries
 
@@ -120,6 +131,9 @@ class MmuConfig(object):
         if os.geteuid() != 0 and os.environ.get("UTILITIES_UNIT_TESTING", "0") != "2":
             sys.exit("Root privileges required for this operation")
 
+        if not self.namespace and multi_asic.is_multi_asic():
+            sys.exit("Namespace must be specified for this operation")
+
         field = BUFFER_PROFILE_FIELDS[field_alias]
         buf_profs = self.db.get_table(BUFFER_PROFILE_TABLE_NAME)
         v = int(value)
@@ -164,6 +178,7 @@ def main(config):
         parser.add_argument('-l', '--list', action='store_true', help='show buffer state')
         parser.add_argument('-v', '--version', action='version', version='%(prog)s 1.0')
 
+    parser.add_argument('-n', '--namespace', type=str, help='Namespace name', default=None)
     parser.add_argument('-vv', '--verbose', action='store_true', help='verbose output', default=False)
     parser.add_argument('-f', '--filename', help='file used by mock tests', type=str, default=None)
 
@@ -174,7 +189,14 @@ def main(config):
     args = parser.parse_args()
 
     try:
-        mmu_cfg = MmuConfig(args.verbose, config, args.filename)
+        load_db_config()
+        namespaces = multi_asic.get_namespace_list()
+
+        if args.namespace and args.namespace not in namespaces:
+            print("Invalid namespace: Namespace must be one of", *namespaces)
+            sys.exit(1)
+
+        mmu_cfg = MmuConfig(args.verbose, config, args.filename, args.namespace)
         if args.list:
             mmu_cfg.list()
         elif config and args.profile:
