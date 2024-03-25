@@ -3846,6 +3846,21 @@ This command sets the number of consecutive polls in which no error is detected 
   admin@sonic:~$ config fabric port monitor poll threshold recovery 5 -n asic0
   ```
 
+**config fabric port monitor state <enable/disable>**
+
+This command sets the monitor state in CONFIG_DB to enable/disable the fabric monitor feature.
+
+- Usage:
+  ```
+  config fabric port monitor state [OPTIONS] <state>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ config fabric port monitor state enable
+  admin@sonic:~$ config fabric port monitor state disable
+  ```
+
 ## Feature
 
 SONiC includes a capability in which Feature state can be enabled/disabled

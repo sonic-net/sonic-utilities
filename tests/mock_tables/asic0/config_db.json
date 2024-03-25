@@ -288,5 +288,12 @@
         "ports@": "Ethernet124",
         "type": "L3",
         "stage": "ingress"
+    },
+    "FABRIC_MONITOR|FABRIC_MONITOR_DATA": {
+        "monCapacityThreshWarn": "100",
+        "monErrThreshCrcCells": "1",
+        "monErrThreshRxCells": "61035156",
+        "monPollThreshIsolation": "1",
+        "monPollThreshRecovery": "8"
     }
 }

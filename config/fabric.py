@@ -157,6 +157,39 @@ def error_threshold(crccells, rxcells, namespace):
     config_db.mod_entry("FABRIC_MONITOR", "FABRIC_MONITOR_DATA",
         {'monErrThreshCrcCells': crccells, 'monErrThreshRxCells': rxcells})
 
+def setFabricPortMonitorState(state, namespace, ctx):
+    """ set the fabric port monitor state"""
+    # Connect to config database
+    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
+    config_db.connect()
+
+    # Make sure configuration data exists
+    monitorData = config_db.get_all(config_db.CONFIG_DB, "FABRIC_MONITOR|FABRIC_MONITOR_DATA")
+    if not bool(monitorData):
+        ctx.fail("Fabric monitor configuration data not present")
+
+    # Update entry
+    config_db.mod_entry("FABRIC_MONITOR", "FABRIC_MONITOR_DATA",
+        {'monState': state})
+
+#
+# 'config fabric port montior state <enable/disable>'
+#
+@monitor.command()
+@click.argument('state', metavar='<state>', required=True)
+@multi_asic_util.multi_asic_click_option_namespace
+def state(state, namespace):
+    """FABRIC PORT MONITOR STATE configuration tasks"""
+    ctx = click.get_current_context()
+
+    n_asics = multi_asic.get_num_asics()
+    if n_asics > 1 and namespace is None:
+        ns_list = multi_asic.get_namespace_list()
+        for namespace in ns_list:
+            setFabricPortMonitorState(state, namespace, ctx)
+    else:
+        setFabricPortMonitorState(state, namespace, ctx)
+
 #
 # 'config fabric port monitor poll ...'
 #
