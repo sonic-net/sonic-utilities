@@ -47,6 +47,7 @@ CMIS_DATA_MAP = {**QSFP_DATA_MAP, **QSFP_CMIS_DELTA_DATA_MAP}
 # For non-CMIS, only first 1 or 4 lanes are applicable.
 # For CMIS, all 8 lanes are applicable.
 QSFP_STATUS_MAP = {
+    'cmis_state': 'CMIS State (SW)',
     'txfault1': 'Tx fault flag on media lane 1',
     'txfault2': 'Tx fault flag on media lane 2',
     'txfault3': 'Tx fault flag on media lane 3',

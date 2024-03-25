@@ -304,6 +304,7 @@ Ethernet4:
 
 test_qsfp_dd_status_output = """\
 Ethernet44:
+        CMIS State (SW): READY
         Tx fault flag on media lane 1: False
         Tx fault flag on media lane 2: False
         Tx fault flag on media lane 3: False

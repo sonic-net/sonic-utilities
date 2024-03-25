@@ -374,6 +374,7 @@
         "rx_sig_power_max": "40"
     },
     "TRANSCEIVER_STATUS|Ethernet44":{
+        "cmis_state": "READY",
         "DP1State": "DataPathActivated",
         "DP2State": "DataPathActivated",
         "DP3State": "DataPathActivated",
