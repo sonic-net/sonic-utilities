@@ -72,6 +72,12 @@
     "VLAN|Vlan7": {
         "vlanid": "7"
     },
+    "VLAN|Vlan8": {
+        "vlanid": "8"
+    },
+    "VLAN|Vlan9": {
+        "vlanid": "9"
+    },
 
 
     "VLAN_MEMBER|Vlan2|Ethernet0": {
