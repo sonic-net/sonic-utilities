@@ -484,4 +484,3 @@ class TestSyslog:
             config.config.commands["syslog"].commands["rate-limit-feature"].commands["disable"], obj=db
         )
         assert result.exit_code == SUCCESS
-        
