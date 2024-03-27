@@ -134,11 +134,16 @@ class Lldpshow(object):
                     continue
                 remote_port = intf.find('port')
                 r_portid = remote_port.find('id').text
-                key = l_intf + "#" + r_portid
+                chassis = intf.find('chassis')
+                rmt_name = chassis.find('name')
+                if rmt_name is not None: 
+                    rmt_host_name = rmt_name.text
+                else:
+                    rmt_host_name = ""
+                key = l_intf + "#" + rmt_host_name + "#" + r_portid
                 self.lldpsum[key] = {}
                 self.lldpsum[key]['l_intf'] = l_intf
                 self.lldpsum[key]['r_portid'] = r_portid
-                chassis = intf.find('chassis')
                 capabs = chassis.findall('capability')
                 capab = self.parse_cap(capabs)
                 rmt_name = chassis.find('name')
