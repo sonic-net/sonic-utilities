@@ -13,6 +13,9 @@ def
 {%-         set filename_postfix = 't0' %}
 {%-     elif 'leafrouter' in switch_role.lower() and 'mgmt' not in switch_role.lower()%}
 {%-         set filename_postfix = 't1' %}
+{%-     elif 'spinerouter' in switch_role.lower() and 'mgmt' not in switch_role.lower()%}
+{%-         set topo = 't2' %}
+{%-         set filename_postfix = set_default_topology() %}
 {%-     else %}
 {%-         set filename_postfix = set_default_topology() %}
 {%-     endif %}
@@ -138,14 +141,19 @@ def
 {{ defs.generate_pg_profils(port_names_active) }}
 {% else %}
     "BUFFER_PG": {
-{% for port in PORT_ACTIVE %}
-        "{{ port }}|0": {
-            "profile" : "ingress_lossy_profile"
-        }{% if not loop.last %},{% endif %}
-
-{% endfor %}
+    {% for port in PORT_ACTIVE %}
+        {%- if topo == 't2'%}
+            "lc1-1|asic0|{{ port }}|0": {
+                "profile": "ingress_lossy_profile"
+            }
+        {%- else %}
+            "{{ port }}|0": {
+                "profile": "ingress_lossy_profile"
+            }
+        {%- endif %}
+    {% endfor %}
     },
-{% endif %}
+{%- endif %}
 
 {% if defs.generate_queue_buffers is defined %}
 {{ defs.generate_queue_buffers(port_names_active) }}
