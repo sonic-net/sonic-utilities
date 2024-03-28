@@ -4,6 +4,7 @@ import re
 from unittest.mock import Mock, call, patch
 
 import pytest
+import mock
 
 import sonic_package_manager
 from sonic_package_manager.errors import *
@@ -389,3 +390,31 @@ def test_manager_migration_dockerd(package_manager, fake_db_for_migration, mock_
     package_manager.migrate_packages(fake_db_for_migration, '/var/run/docker.sock')
     package_manager.get_docker_client.assert_has_calls([
         call('/var/run/docker.sock')], any_order=True)
+
+
+def test_manager_update(package_manager, mock_docker_api, mock_service_creator, fake_metadata_resolver, anything):
+    # Install the initial version
+    package_manager.install('test-package=1.6.0')
+
+    # Mock the metadata for the updated version
+    updated_manifest = fake_metadata_resolver.metadata_store['Azure/docker-test']['1.6.0']['manifest']
+    updated_components = fake_metadata_resolver.metadata_store['Azure/docker-test']['1.6.0']['components']
+
+    # Update the metadata resolver to return the updated version metadata
+    fake_metadata_resolver.metadata_store['Azure/docker-test']['1.6.0']['manifest'] = updated_manifest
+    fake_metadata_resolver.metadata_store['Azure/docker-test']['1.6.0']['components'] = updated_components
+
+    # Mock service creator methods
+    mock_service_creator.create.side_effect = lambda pkg, **opts: print(f'Creating service for {pkg.name}')
+    mock_service_creator.remove.side_effect = lambda pkg, **opts: print(f'Removing service for {pkg.name}')
+    mock_service_creator.generate_shutdown_sequence_files.side_effect = lambda pkgs: print(f'Generating shutdown sequence files for {pkgs}')
+
+    edit_path = '/var/lib/sonic-package-manager/manifests/test-package.edit'
+    manifest_path = '/var/lib/sonic-package-manager/manifests/test-package'
+
+    with mock.patch('os.rename', side_effect=lambda src, dest: None):
+        package_manager.update('test-package')
+
+    # Assertions for service creator calls
+    mock_service_creator.remove.assert_called_once_with(anything, deregister_feature=False)
+

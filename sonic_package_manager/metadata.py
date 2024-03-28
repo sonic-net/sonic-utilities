@@ -4,14 +4,14 @@ from dataclasses import dataclass, field
 
 import json
 import tarfile
-from typing import Dict, List
-
+from typing import Dict, List, Optional
+import os
 from sonic_package_manager import utils
 from sonic_package_manager.errors import MetadataError
 from sonic_package_manager.logger import log
 from sonic_package_manager.manifest import Manifest
 from sonic_package_manager.version import Version
-
+from sonic_package_manager.manifest import DEFAULT_MANIFEST, MANIFEST_LOCATION, DEFAUT_MANIFEST_NAME, DMFILE_NAME
 
 def translate_plain_to_tree(plain: Dict[str, str], sep='.') -> Dict:
     """ Convert plain key/value dictionary into
@@ -65,7 +65,47 @@ class MetadataResolver:
         self.docker = docker
         self.registry_resolver = registry_resolver
 
-    def from_local(self, image: str) -> Metadata:
+    def get_manifest_from_local_file(self, name, custom_name: Optional[str] = None):
+        if name is None:
+            return None
+
+        if not os.path.exists(MANIFEST_LOCATION):
+            os.mkdir(MANIFEST_LOCATION)
+        if name == DEFAUT_MANIFEST_NAME and not os.path.exists(DMFILE_NAME):
+            with open(DMFILE_NAME, 'w') as file:
+                json.dump(DEFAULT_MANIFEST, file, indent=4)
+            #print(f"Manifest '{DEFAUT_MANIFEST_NAME}' created now")
+
+        manifest_path = os.path.join(MANIFEST_LOCATION, name)
+        if os.path.exists(manifest_path):
+            with open(manifest_path, 'r') as file:
+                manifest_dict = json.load(file)
+                if custom_name:
+                    manifest_dict["package"]["name"] = custom_name
+                    manifest_dict["service"]["name"] = custom_name
+
+                    #create a manifest file with custom_name, if name is default_manifest
+                    new_manifest_path = os.path.join(MANIFEST_LOCATION, custom_name)
+                    with open(new_manifest_path, 'w') as file: 
+                        json.dump(manifest_dict, file, indent=4) 
+
+                json_str = json.dumps(manifest_dict, indent=4)
+                desired_dict = {
+                    'Tag': 'master',
+                    'com': {
+                        'azure': {
+                            'sonic': {
+                                'manifest': json_str
+                                }
+                            }
+                        }
+                    }
+                return desired_dict
+        else:
+            print("Local Manifest file {} does not exists".format(manifest_path))
+            return None
+
+    def from_local(self, image: str, use_local_manifest: bool = False, name: Optional[str] = None, use_edit: bool = False) -> Metadata:
         """ Reads manifest from locally installed docker image.
 
         Args:
@@ -75,16 +115,31 @@ class MetadataResolver:
         Raises:
             MetadataError
         """
+        if name and (use_local_manifest or use_edit):
+            edit_file_name = name + '.edit'
+            if use_edit:
+                labels = self.get_manifest_from_local_file(edit_file_name)
+                return self.from_labels(labels)
+            elif use_local_manifest:
+                labels = self.get_manifest_from_local_file(name)
+                return self.from_labels(labels)
 
         labels = self.docker.labels(image)
-        if labels is None:
-            raise MetadataError('No manifest found in image labels')
+        if labels is None or len(labels) == 0 or 'com.azure.sonic.manifest' not in labels:
+            if name:
+                labels = self.get_manifest_from_local_file(name)
+                if labels is None:
+                    raise MetadataError('No manifest found in image labels and also could not create locally')    
+            else:
+                raise MetadataError('No manifest found in image labels and also could not create locally')
 
         return self.from_labels(labels)
 
     def from_registry(self,
                       repository: str,
-                      reference: str) -> Metadata:
+                      reference: str,
+                      use_local_manifest: bool = False,
+                      name: Optional[str] = None) -> Metadata:
         """ Reads manifest from remote registry.
 
         Args:
@@ -96,19 +151,26 @@ class MetadataResolver:
             MetadataError
         """
 
-        registry = self.registry_resolver.get_registry_for(repository)
+        if use_local_manifest:
+            labels = self.get_manifest_from_local_file(name)
+            return self.from_labels(labels)
 
+        registry = self.registry_resolver.get_registry_for(repository)
         manifest = registry.manifest(repository, reference)
         digest = manifest['config']['digest']
 
         blob = registry.blobs(repository, digest)
         labels = blob['config']['Labels']
+        if labels is None or len(labels) == 0 or 'com.azure.sonic.manifest' not in labels:
+                if name is None:
+                    raise MetadataError('The name(custom) option is required as there is no metadata found in image labels')
+                custom_name = name
+                labels = self.get_manifest_from_local_file("default_manifest", custom_name)
         if labels is None:
-            raise MetadataError('No manifest found in image labels')
-
+                    raise MetadataError('No manifest found in image labels and also could not create locally')    
         return self.from_labels(labels)
 
-    def from_tarball(self, image_path: str) -> Metadata:
+    def from_tarball(self, image_path: str, use_local_manifest: bool = False, name: Optional[str] = None) -> Metadata:
         """ Reads manifest image tarball.
         Args:
             image_path: Path to image tarball.
@@ -117,6 +179,9 @@ class MetadataResolver:
         Raises:
             MetadataError
         """
+        if use_local_manifest:
+            labels = self.get_manifest_from_local_file(name)
+            return self.from_labels(labels)
 
         with tarfile.open(image_path) as image:
             manifest = json.loads(image.extractfile('manifest.json').read())
@@ -124,9 +189,13 @@ class MetadataResolver:
             blob = manifest[0]['Config']
             image_config = json.loads(image.extractfile(blob).read())
             labels = image_config['config']['Labels']
-            if labels is None:
-                raise MetadataError('No manifest found in image labels')
-
+            if labels is None or len(labels) == 0 or 'com.azure.sonic.manifest' not in labels:
+                if name is None:
+                    raise MetadataError('The name(custom) option is required as there is no metadata found in image labels')
+                custom_name = name
+                labels = self.get_manifest_from_local_file("default_manifest", custom_name)
+                if labels is None:
+                    raise MetadataError('No manifest found in image labels and also could not create locally')    
             return self.from_labels(labels)
 
     @classmethod
@@ -176,5 +245,5 @@ class MetadataResolver:
             log.debug(f"Found YANG modules: {labels_yang_modules.keys()}")
         else:
             log.debug("No YANG modules found")
-
+    
         return Metadata(Manifest.marshal(manifest_dict), components, yang_modules)

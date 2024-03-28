@@ -11,6 +11,73 @@ from sonic_package_manager.constraint import (
 from sonic_package_manager.errors import ManifestError
 from sonic_package_manager.version import Version
 
+import os
+
+DEFAULT_MANIFEST = {
+    "version": "1.0.0",
+    "package": {
+        "version": "1.0.0",
+        "name": "default_manifest",
+        "description": "",
+        "base-os": {},
+        "depends": [],
+        "breaks": [],
+        "init-cfg": {},
+        "changelog": {},
+        "debug-dump": ""
+    },
+    "service": {
+        "name": "default_manifest",
+        "requires": [],
+        "requisite": [],
+        "wanted-by": [],
+        "after": [],
+        "before": [],
+        "dependent": [],
+        "dependent-of": [],
+        "post-start-action": "",
+        "pre-shutdown-action": "",
+        "asic-service": False,
+        "host-service": True,
+        "delayed": False,
+        "check_up_status": False,
+        "warm-shutdown": {
+            "after": [],
+            "before": []
+        },
+        "fast-shutdown": {
+            "after": [],
+            "before": []
+        },
+        "syslog": {
+            "support-rate-limit": False
+        }
+    },
+    "container": {
+        "privileged": False,
+        "entrypoint": "",
+        "volumes": [],
+        "mounts": [],
+        "environment": {},
+        "tmpfs": []
+    },
+    "processes": [],
+    "cli": {
+        "mandatory": False,
+        "show": [],
+        "config": [],
+        "clear": [],
+        "auto-generate-show": False,
+        "auto-generate-config": False,
+        "auto-generate-show-source-yang-modules": [],
+        "auto-generate-config-source-yang-modules": []
+    }
+}
+#DEFAULT_MANIFEST = {'version': '1.0.0', 'package': {'version': '1.0.0', 'depends': [], 'name': 'default_manifest'}, 'service': {'name': 'default_manifest', 'requires': ['docker'], 'after': ['docker'], 'before': [], 'dependent-of': [], 'asic-service': False, 'host-service': False, 'warm-shutdown': {'after': [], 'before': []}, 'fast-shutdown':
+    #{'after': [], 'before': []}, 'syslog': {'support-rate-limit': False}}, 'container': {'privileged': False, 'volumes': [], 'tmpfs': [], 'entrypoint': ''}, 'cli': { 'mandatory': False, 'config': [], 'show': [], 'clear': []}}
+MANIFEST_LOCATION = "/var/lib/sonic-package-manager/manifests/"
+DEFAUT_MANIFEST_NAME = "default_manifest"
+DMFILE_NAME = os.path.join(MANIFEST_LOCATION, DEFAUT_MANIFEST_NAME)
 
 class ManifestSchema:
     """ ManifestSchema class describes and provides marshalling
@@ -212,6 +279,7 @@ class ManifestSchema:
         ]),
         ManifestRoot('container', [
             ManifestField('privileged', DefaultMarshaller(bool), False),
+            ManifestField('entrypoint', DefaultMarshaller(str), ''),
             ManifestArray('volumes', DefaultMarshaller(str)),
             ManifestArray('mounts', ManifestRoot('mounts', [
                 ManifestField('source', DefaultMarshaller(str)),

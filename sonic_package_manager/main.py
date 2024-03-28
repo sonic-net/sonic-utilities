@@ -9,12 +9,20 @@ import typing
 import click
 import click_log
 import tabulate
+from urllib.parse import urlparse
+import paramiko
+import requests
+import getpass
+import shutil
 from natsort import natsorted
 
 from sonic_package_manager.database import PackageEntry, PackageDatabase
 from sonic_package_manager.errors import PackageManagerError
 from sonic_package_manager.logger import log
 from sonic_package_manager.manager import PackageManager
+from sonic_package_manager.manifest import Manifest, DEFAULT_MANIFEST, MANIFEST_LOCATION, DEFAUT_MANIFEST_NAME, DMFILE_NAME
+LOCAL_TARBALL_PATH="/tmp/local_tarball.gz"
+LOCAL_JSON="/tmp/local_json"
 
 BULLET_UC = '\u2022'
 
@@ -97,11 +105,8 @@ PACKAGE_SOURCE_OPTIONS = [
                  cls=MutuallyExclusiveOption,
                  mutually_exclusive=['from_tarball', 'package_expr']),
     click.option('--from-tarball',
-                 type=click.Path(exists=True,
-                                 readable=True,
-                                 file_okay=True,
-                                 dir_okay=False),
-                 help='Fetch package from saved image tarball.',
+                 type=str,
+                 help='Fetch package from saved image tarball from local/scp/sftp/http',
                  cls=MutuallyExclusiveOption,
                  mutually_exclusive=['from_repository', 'package_expr']),
     click.argument('package-expr',
@@ -156,6 +161,13 @@ def repository(ctx):
 
     pass
 
+
+@cli.group()
+@click.pass_context
+def manifests(ctx):
+    """ Custom local Manifest management commands. """
+    
+    pass
 
 @cli.group()
 @click.pass_context
@@ -215,6 +227,11 @@ def manifest(ctx,
     manager: PackageManager = ctx.obj
 
     try:
+        if from_tarball:
+            #Download the tar file from local/scp/sftp/http
+            download_file(from_tarball, LOCAL_TARBALL_PATH)
+            from_tarball = LOCAL_TARBALL_PATH
+
         source = manager.get_package_source(package_expr,
                                             from_repository,
                                             from_tarball)
@@ -255,6 +272,11 @@ def changelog(ctx,
     manager: PackageManager = ctx.obj
 
     try:
+        if from_tarball:
+            #Download the tar file from local/scp/sftp/http
+            download_file(from_tarball, LOCAL_TARBALL_PATH)
+            from_tarball = LOCAL_TARBALL_PATH
+
         source = manager.get_package_source(package_expr,
                                             from_repository,
                                             from_tarball)
@@ -278,6 +300,167 @@ def changelog(ctx,
 
     except Exception as err:
         exit_cli(f'Failed to print package changelog: {err}', fg='red')
+
+
+
+@manifests.command('create')
+@click.pass_context
+@click.argument('name', type=click.Path())
+@click.option('--from-json', type=str, help='specify manifest json file')
+@root_privileges_required
+def create(ctx, name, from_json):
+    """Create a new custom local manifest file."""
+
+    #Validation checks
+    manager: PackageManager = ctx.obj
+    if manager.is_installed(name):
+        click.echo("Error: A package with the same name {} is already installed".format(name))
+        return
+    MFILE_NAME = os.path.join(MANIFEST_LOCATION, name)
+    if os.path.exists(MFILE_NAME):
+        click.echo("Error: Manifest file '{}' already exists.".format(name))
+        return
+    
+    #Creation of default  manifest file in case the file does not exist
+    if not os.path.exists(MANIFEST_LOCATION):
+        os.mkdir(MANIFEST_LOCATION)
+    if not os.path.exists(DMFILE_NAME):
+        with open(DMFILE_NAME, 'w') as file:
+            json.dump(DEFAULT_MANIFEST, file, indent=4)
+        #click.echo(f"Manifest '{DEFAUT_MANIFEST_NAME}' created now.")
+
+    
+    #Create the manifest file in centralized location
+    #Download the json file from scp/sftp/http to local_json_file
+    try: 
+        if from_json:
+            download_file(from_json, LOCAL_JSON)
+            from_json = LOCAL_JSON
+            data = {}
+            with open(from_json, 'r') as file:
+                data = json.load(file)
+            #Validate with manifest scheme
+            Manifest.marshal(data)
+            
+            #Make sure the 'name' is overwritten into the dict
+            data['package']['name'] = name
+            data['service']['name'] = name
+
+            with open(MFILE_NAME, 'w') as file:
+                json.dump(data, file, indent=4)
+        else:
+            shutil.copy(DMFILE_NAME, MFILE_NAME)
+        click.echo(f"Manifest '{name}' created successfully.")
+    except Exception as e:
+        click.echo("Error: Manifest {} creation failed - {}".format(name, str(e)))
+        return
+        
+
+
+#At the end of sonic-package-manager install, a new manifest file is created with the name.
+#At the end of sonic-package-manager uninstall name, this manifest file name and name.edit will be deleted.
+#At the end of sonic-package-manager update, we need to mv maniests name.edit to name in case of success, else keep it as such.
+#So during sonic-package-manager update, we could take old package from name and new package from edit and at the end, follow 3rd point
+@manifests.command('update')
+@click.pass_context
+@click.argument('name', type=click.Path())
+@click.option('--from-json', type=str, required=True)
+#@click.argument('--from-json', type=str, help='Specify Manifest json file')
+@root_privileges_required
+def update(ctx, name, from_json):
+    """Update an existing custom local manifest file with new one."""
+
+    manager: PackageManager = ctx.obj
+    ORG_FILE = os.path.join(MANIFEST_LOCATION, name)
+    if not os.path.exists(ORG_FILE):
+        click.echo(f'Local Manifest file for {name} does not exists to update')
+        return
+    try:
+        #download json file from remote/local path
+        download_file(from_json, LOCAL_JSON)
+        from_json = LOCAL_JSON
+        with open(from_json, 'r') as file:
+            data = json.load(file)
+
+        #Validate with manifest scheme
+        Manifest.marshal(data)
+        
+        #Make sure the 'name' is overwritten into the dict
+        data['package']['name'] = name
+        data['service']['name'] = name
+
+        if manager.is_installed(name):
+            edit_name = name + '.edit'
+            EDIT_FILE = os.path.join(MANIFEST_LOCATION, edit_name)
+            with open(EDIT_FILE, 'w') as edit_file:
+                json.dump(data, edit_file, indent=4)
+            click.echo(f"Manifest '{name}' updated successfully.")
+        else:
+            #If package is not installed, 
+            ## update the name file directly
+            with open(ORG_FILE, 'w') as orig_file:
+                json.dump(data, orig_file, indent=4)
+            click.echo(f"Manifest '{name}' updated successfully.")
+    except Exception as e:
+        click.echo(f"Error occurred while updating manifest '{name}': {e}")
+        return
+
+
+@manifests.command('delete')
+@click.pass_context
+@click.argument('name', type=click.Path())
+@root_privileges_required
+def delete(ctx, name):
+    """Delete a custom local manifest file."""
+    # Check if the manifest file exists
+    mfile_name = "{}{}".format(MANIFEST_LOCATION, name)
+    if not os.path.exists(mfile_name):
+        click.echo("Error: Manifest file '{}' not found.".format(name))
+        return
+
+    try:
+        # Confirm deletion with user input
+        confirm = click.prompt("Are you sure you want to delete the manifest file '{}'? (y/n)".format(name), type=str)
+        if confirm.lower() == 'y':
+            os.remove(mfile_name)
+            click.echo("Manifest '{}' deleted successfully.".format(name))
+        else:
+            click.echo("Deletion cancelled.")
+    except Exception as e:
+        click.echo("Error: Failed to delete manifest file '{}'. {}".format(name, e))
+
+
+@manifests.command('show')
+@click.pass_context
+@click.argument('name', type=click.Path())
+@root_privileges_required
+def show_manifest(ctx, name):
+    """Show the contents of custom local manifest file."""
+    mfile_name = "{}{}".format(MANIFEST_LOCATION, name)
+    edit_file_name = "{}.edit".format(mfile_name)
+    try:
+        if os.path.exists(edit_file_name):
+            mfile_name = edit_file_name
+        with open(mfile_name, 'r') as file:
+            data = json.load(file)
+            click.echo("Manifest file: {}".format(name))
+            click.echo(json.dumps(data, indent=4))
+    except FileNotFoundError:
+        click.echo("Manifest file '{}' not found.".format(name))
+
+@manifests.command('list')
+@click.pass_context
+@root_privileges_required
+def list_manifests(ctx):
+    """List all custom local manifest files."""
+    # Get all files in the manifest location
+    manifest_files = os.listdir(MANIFEST_LOCATION)
+    if not manifest_files:
+        click.echo("No custom local manifest files found.")
+    else:
+        click.echo("Custom Local Manifest files:")
+        for file in manifest_files:
+            click.echo("- {}".format(file))
 
 
 @repository.command()
@@ -316,6 +499,78 @@ def remove(ctx, name):
         exit_cli(f'Failed to remove repository {name}: {err}', fg='red')
 
 
+def parse_url(url):
+    # Parse information from URL
+    parsed_url = urlparse(url)
+    if parsed_url.scheme == "scp" or parsed_url.scheme == "sftp":
+        return parsed_url.username, parsed_url.password, parsed_url.hostname, parsed_url.path
+    elif parsed_url.scheme == "http":
+        return None, None, parsed_url.netloc, parsed_url.path
+    elif not parsed_url.scheme:  # No scheme indicates a local file path
+        return None, None, None, parsed_url.path
+    else:
+        raise ValueError("Unsupported URL scheme")
+
+def validate_url_or_abort(url):
+    # Attempt to retrieve HTTP response code
+    try:
+        response = requests.head(url)
+        response_code = response.status_code
+    except requests.exceptions.RequestException as err:
+        response_code = None
+
+    if not response_code:
+        print("Did not receive a response from remote machine. Aborting...")
+        return
+    else:
+        # Check for a 4xx response code which indicates a nonexistent URL
+        if str(response_code).startswith('4'):
+            print("Image file not found on remote machine. Aborting...")
+            return
+
+def download_file(url, local_path):
+    # Parse information from the URL
+    username, password, hostname, remote_path = parse_url(url)
+
+    if username is not None:
+        # If password is not provided, prompt the user for it securely
+        if password is None:
+            password = getpass.getpass(prompt=f"Enter password for {username}@{hostname}: ")
+
+        # Create an SSH client for SCP or SFTP
+        client = paramiko.SSHClient()
+        # Automatically add the server's host key (this is insecure and should be handled differently in production)
+        client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        try:
+            # Connect to the SSH server
+            client.connect(hostname, username=username, password=password)
+
+            # Open an SCP channel for SCP or an SFTP channel for SFTP
+            with client.open_sftp() as sftp:
+                # Download the file
+                sftp.get(remote_path, local_path)
+
+        finally:
+            # Close the SSH connection
+            client.close()
+    elif hostname:
+        # Download using HTTP for URLs without credentials
+        validate_url_or_abort(url)
+        try:
+            response = requests.get(url)
+            with open(local_path, 'wb') as f:
+                f.write(response.content)
+        except requests.exceptions.RequestException as e:
+            print("Download error", e)
+            return
+    else:
+        if os.path.exists(remote_path):
+            shutil.copy(remote_path, local_path)
+        else:
+            print(f"Error: Source file '{remote_path}' does not exist.")
+
+
 @cli.command()
 @click.option('--enable',
               is_flag=True,
@@ -334,6 +589,13 @@ def remove(ctx, name):
               help='Allow package downgrade. By default an attempt to downgrade the package '
               'will result in a failure since downgrade might not be supported by the package, '
               'thus requires explicit request from the user.')
+@click.option('--use-local-manifest',
+              is_flag=True,
+              default=None,
+              help='Use locally created custom manifest file ')
+@click.option('--name',
+                 type=str,
+                 help='custom name for the package')
 @add_options(PACKAGE_SOURCE_OPTIONS)
 @add_options(PACKAGE_COMMON_OPERATION_OPTIONS)
 @add_options(PACKAGE_COMMON_INSTALL_OPTIONS)
@@ -348,7 +610,9 @@ def install(ctx,
             enable,
             set_owner,
             skip_host_plugins,
-            allow_downgrade):
+            allow_downgrade,
+            use_local_manifest,
+            name):
     """ Install/Upgrade package using [PACKAGE_EXPR] in format "<name>[=<version>|@<reference>]".
 
     The repository to pull the package from is resolved by lookup in package database,
@@ -378,16 +642,49 @@ def install(ctx,
     if allow_downgrade is not None:
         install_opts['allow_downgrade'] = allow_downgrade
 
+    if use_local_manifest:
+        if not name:
+            click.echo(f'name argument is not provided to use local manifest')
+            return
+        ORG_FILE = os.path.join(MANIFEST_LOCATION, name)
+        if not os.path.exists(ORG_FILE):
+            click.echo(f'Local Manifest file for {name} does not exists to install')
+            return
+        
+    if from_tarball:
+        #Download the tar file from local/scp/sftp/http
+        download_file(from_tarball, LOCAL_TARBALL_PATH)
+        from_tarball = LOCAL_TARBALL_PATH
+
     try:
         manager.install(package_expr,
                         from_repository,
                         from_tarball,
+                        use_local_manifest,
+                        name,
                         **install_opts)
     except Exception as err:
         exit_cli(f'Failed to install {package_source}: {err}', fg='red')
     except KeyboardInterrupt:
         exit_cli('Operation canceled by user', fg='red')
 
+
+@cli.command()
+@add_options(PACKAGE_COMMON_OPERATION_OPTIONS)
+@click.argument('name')
+@click.pass_context
+@root_privileges_required
+def update(ctx, name, force, yes):
+    """ Update package to the updated manifest file """
+
+    manager: PackageManager = ctx.obj
+
+    try:
+        manager.update(name, force)
+    except Exception as err:
+        exit_cli(f'Failed to update package {name}: {err}', fg='red')
+    except KeyboardInterrupt:
+        exit_cli('Operation canceled by user', fg='red')
 
 @cli.command()
 @add_options(PACKAGE_COMMON_OPERATION_OPTIONS)

@@ -235,6 +235,11 @@ class ServiceCreator:
         if container_spec['privileged']:
             run_opt.append('--privileged')
 
+        entrypoint_arg = ''
+        ep = container_spec['entrypoint']
+        if ep:
+            entrypoint_arg = ep
+
         run_opt.append('-t')
 
         for volume in container_spec['volumes']:
@@ -255,6 +260,7 @@ class ServiceCreator:
             'docker_container_name': name,
             'docker_image_id': image_id,
             'docker_image_run_opt': run_opt,
+            'docker_entrypoint': entrypoint_arg
         }
         render_template(script_template, script_path, render_ctx, executable=True)
         log.info(f'generated {script_path}')

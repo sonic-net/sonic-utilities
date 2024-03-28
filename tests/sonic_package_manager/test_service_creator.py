@@ -43,6 +43,7 @@ def manifest():
         },
         'container': {
             'privileged': True,
+            'entrypoint': '',
             'volumes': [
                 '/etc/sonic:/etc/sonic:ro'
             ]
@@ -602,3 +603,39 @@ class TestSyslogRateLimit:
             ],
             any_order = True
         )
+
+
+def test_generate_container_mgmt_entrypoint():
+    # Mock Package object with necessary attributes
+    package_mock = Mock()
+    package_mock.image_id = "some_image_id"
+    package_mock.manifest = {
+        'service': {'name': 'test'},
+        'container': {
+            'privileged': True,
+            'entrypoint': '/custom_entrypoint',
+            'volumes': [],
+            'mounts': [],
+            'tmpfs': [],
+            'environment': {}
+        }
+    }
+
+    mock_feature_registry = Mock()
+    mock_sonic_db = Mock()
+    mock_cli_gen = Mock()
+    mock_config_mgmt = Mock()
+
+    # Mock constants
+    with patch('sonic_package_manager.service_creator.creator.DOCKER_CTL_SCRIPT_LOCATION', '/usr/bin/'), \
+         patch('sonic_package_manager.service_creator.creator.DOCKER_CTL_SCRIPT_TEMPLATE', 'docker_ctl_script_template.tmpl'), \
+         patch('sonic_package_manager.service_creator.creator.get_tmpl_path', return_value='mocked_template_path'), \
+         patch('sonic_package_manager.service_creator.creator.render_template') as mock_render_template, \
+         patch('sonic_package_manager.service_creator.creator.log.info') as mock_log_info:
+
+        srv_instance = ServiceCreator(mock_feature_registry, mock_sonic_db, mock_cli_gen, mock_config_mgmt)
+        srv_instance.generate_container_mgmt(package_mock)
+
+    # Assertions
+        mock_render_template.assert_called_once()
+        mock_log_info.assert_called_once_with('generated /usr/bin/test.sh')
