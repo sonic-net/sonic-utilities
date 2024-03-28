@@ -235,6 +235,48 @@ class TestDualtorNeighborCheck(object):
             assert asic_route_table == result[4]
             assert asic_neigh_table == result[5]
 
+    def test_read_from_db_script_not_existed(self, mock_log_functions):
+        with patch("dualtor_neighbor_check.run_command") as mock_run_command:
+            neighbors = {"192.168.0.2": "ee:86:d8:46:7d:01"}
+            mux_states = {"Ethernet4": "active"}
+            hw_mux_states = {"Ethernet4": "active"}
+            asic_fdb = {"ee:86:d8:46:7d:01": "oid:0x3a00000000064b"}
+            asic_route_table = []
+            asic_neigh_table = ["{\"ip\":\"192.168.0.23\",\"rif\":\"oid:0x6000000000671\",\"switch_id\":\"oid:0x21000000000000\"}"]
+            mock_run_command.side_effect = [
+                "(integer) 0",
+                "c53fd5eaad68be1e66a2fe80cd20a9cb18c91259",
+                json.dumps(
+                    {
+                        "neighbors": neighbors,
+                        "mux_states": mux_states,
+                        "hw_mux_states": hw_mux_states,
+                        "asic_fdb": asic_fdb,
+                        "asic_route_table": asic_route_table,
+                        "asic_neigh_table": asic_neigh_table
+                    }
+                )
+            ]
+            mock_appl_db = MagicMock()
+            mock_appl_db.get = MagicMock(return_value="c53fd5eaad68be1e66a2fe80cd20a9cb18c91259")
+
+            result = dualtor_neighbor_check.read_tables_from_db(mock_appl_db)
+
+            mock_appl_db.get.assert_called_once_with("_DUALTOR_NEIGHBOR_CHECK_SCRIPT_SHA1")
+            mock_run_command.assert_has_calls(
+                [
+                    call("sudo redis-cli SCRIPT EXISTS c53fd5eaad68be1e66a2fe80cd20a9cb18c91259"),
+                    call("sudo redis-cli SCRIPT LOAD \"%s\"" % dualtor_neighbor_check.DB_READ_SCRIPT),
+                    call("sudo redis-cli EVALSHA c53fd5eaad68be1e66a2fe80cd20a9cb18c91259 0")
+                ]
+            )
+            assert neighbors == result[0]
+            assert mux_states == result[1]
+            assert hw_mux_states == result[2]
+            assert {k: v.lstrip("oid:0x") for k, v in asic_fdb.items()} == result[3]
+            assert asic_route_table == result[4]
+            assert asic_neigh_table == result[5]
+
     def test_read_from_db_with_lua_cache(self, mock_log_functions):
         with patch("dualtor_neighbor_check.run_command") as mock_run_command:
             neighbors = {"192.168.0.2": "ee:86:d8:46:7d:01"}
@@ -243,23 +285,31 @@ class TestDualtorNeighborCheck(object):
             asic_fdb = {"ee:86:d8:46:7d:01": "oid:0x3a00000000064b"}
             asic_route_table = []
             asic_neigh_table = ["{\"ip\":\"192.168.0.23\",\"rif\":\"oid:0x6000000000671\",\"switch_id\":\"oid:0x21000000000000\"}"]
-            mock_run_command.return_value = json.dumps(
-                {
-                    "neighbors": neighbors,
-                    "mux_states": mux_states,
-                    "hw_mux_states": hw_mux_states,
-                    "asic_fdb": asic_fdb,
-                    "asic_route_table": asic_route_table,
-                    "asic_neigh_table": asic_neigh_table
-                }
-            )
+            mock_run_command.side_effect = [
+                "(integer) 1",
+                json.dumps(
+                    {
+                        "neighbors": neighbors,
+                        "mux_states": mux_states,
+                        "hw_mux_states": hw_mux_states,
+                        "asic_fdb": asic_fdb,
+                        "asic_route_table": asic_route_table,
+                        "asic_neigh_table": asic_neigh_table
+                    }
+                )
+            ]
             mock_appl_db = MagicMock()
             mock_appl_db.get = MagicMock(return_value="c53fd5eaad68be1e66a2fe80cd20a9cb18c91259")
 
             result = dualtor_neighbor_check.read_tables_from_db(mock_appl_db)
 
             mock_appl_db.get.assert_called_once_with("_DUALTOR_NEIGHBOR_CHECK_SCRIPT_SHA1")
-            mock_run_command.assert_called_once_with("sudo redis-cli EVALSHA c53fd5eaad68be1e66a2fe80cd20a9cb18c91259 0")
+            mock_run_command.assert_has_calls(
+                [
+                    call("sudo redis-cli SCRIPT EXISTS c53fd5eaad68be1e66a2fe80cd20a9cb18c91259"),
+                    call("sudo redis-cli EVALSHA c53fd5eaad68be1e66a2fe80cd20a9cb18c91259 0")
+                ]
+            )
             assert neighbors == result[0]
             assert mux_states == result[1]
             assert hw_mux_states == result[2]
