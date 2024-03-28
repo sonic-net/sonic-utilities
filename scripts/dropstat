@@ -20,6 +20,8 @@ import sys
 from collections import OrderedDict
 from natsort import natsorted
 from tabulate import tabulate
+from sonic_py_common import multi_asic
+from utilities_common.general import load_db_config
 
 # mock the redis for unit test purposes #
 try:
@@ -28,9 +30,12 @@ try:
         test_path = os.path.join(modules_path, "tests")
         sys.path.insert(0, modules_path)
         sys.path.insert(0, test_path)
-        import mock_tables.dbconnector
+        from tests.mock_tables import dbconnector
         socket.gethostname = lambda: 'sonic_drops_test'
         os.getuid = lambda: 27
+    if os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] == "multi_asic":
+        import tests.mock_tables.mock_multi_asic
+        dbconnector.load_namespace_config()
 except KeyError:
     pass
 
@@ -85,11 +90,11 @@ def get_dropstat_dir():
 
 
 class DropStat(object):
-    def __init__(self):
-        self.config_db = ConfigDBConnector()
+    def __init__(self, namespace):
+        self.config_db = ConfigDBConnector(namespace=namespace, use_unix_socket_path=True if namespace else False)
         self.config_db.connect()
 
-        self.db = SonicV2Connector(use_unix_socket_path=False)
+        self.db = SonicV2Connector(namespace=namespace, use_unix_socket_path=True if namespace else False)
         self.db.connect(self.db.COUNTERS_DB)
         self.db.connect(self.db.ASIC_DB)
         self.db.connect(self.db.APPL_DB)
@@ -403,6 +408,7 @@ Examples:
     # Variables
     parser.add_argument('-g', '--group',   type=str, help='The group of the target drop counter', default=None)
     parser.add_argument('-t', '--type',    type=str, help='The type of the target drop counter', default=None)
+    parser.add_argument('-n', '--namespace', type=str, help='Namespace name', default=None)
 
     args = parser.parse_args()
 
@@ -410,8 +416,17 @@ Examples:
 
     group = args.group
     counter_type = args.type
+    namespace = args.namespace
 
-    dcstat = DropStat()
+    load_db_config()
+    namespaces = multi_asic.get_namespace_list()
+    if namespace and namespace not in namespaces:
+        raise Exception("Input arguments error. Namespaces must be one of", *namespaces)
+
+    if multi_asic.is_multi_asic() and not namespace:
+        raise Exception("Input arguments error. Namespace must be specified for multi-asic devices.")
+
+    dcstat = DropStat(namespace)
     if command == 'clear':
         dcstat.clear_drop_counts()
     elif command == 'show':
