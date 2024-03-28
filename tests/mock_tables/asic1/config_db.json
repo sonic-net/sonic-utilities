@@ -1,12 +1,11 @@
 {
     "DEVICE_METADATA|localhost": {
-        "asic_id": "08:00.0",
         "asic_name": "asic1",
         "bgp_asn": "65100",
         "cloudtype": "None",
         "default_bgp_status": "down",
         "default_pfcwd_status": "enable",
-        "deployment_id": "None",
+        "deployment_id": "1",
         "docker_routing_config_mode": "separated",
         "hostname": "sonic",
         "hwsku": "multi_asic",
@@ -51,9 +50,7 @@
     },
     "PORTCHANNEL|PortChannel4009": {
         "admin_status": "up",
-        "members": [
-            "Ethernet-BP256,Ethernet-BP260"
-        ],
+
         "min_links": "2",
         "mtu": "9100"
     },
@@ -74,22 +71,9 @@
         "restoration_time": "200"
     },
     "PFC_WD|GLOBAL": {
-        "BIG_RED_SWITCH": "enable",
         "POLL_INTERVAL": "199"
     },
-    "PORT_QOS_MAP|Ethernet0": {
-        "pfc_enable": "3,4"
-    },
-    "PORT_QOS_MAP|Ethernet4": {
-        "pfc_enable": "3,4"
-    },
-    "PORT_QOS_MAP|Ethernet8": {
-        "pfc_enable": "3,4"
-    },
-    "PORT_QOS_MAP|Ethernet-BP0": {
-        "pfc_enable": "3,4"
-    },
-    "PORT_QOS_MAP|Ethernet-BP4": {
+    "PORT_QOS_MAP|Ethernet64": {
         "pfc_enable": "3,4"
     },
     "PORT_QOS_MAP|Ethernet-BP256": {
@@ -160,15 +144,10 @@
         "srv6_nexthop_high_threshold": "85",
         "srv6_nexthop_low_threshold": "70"
     },
-    "MUX_CABLE|Ethernet32": {
+    "MUX_CABLE|Ethernet64": {
         "state": "auto",
-	"server_ipv4": "10.1.1.1",
-	"server_ipv6": "fc00::75"
-    },
-    "MUX_CABLE|Ethernet0": {
-        "state": "auto",
-	"server_ipv4": "10.2.1.1",
-	"server_ipv6": "e800::46"
+	"server_ipv4": "10.1.1.1/32",
+	"server_ipv6": "fc00::75/128"
     },
     "PEER_SWITCH|sonic" : {
       "address_ipv4": "10.2.2.2"
@@ -205,7 +184,7 @@
         "nhopself": "0",
         "admin_status": "up",
         "holdtime": "10",
-        "asn": "65200",
+        "asn": "65100",
         "keepalive": "3"
     },
     "BGP_VOQ_CHASSIS_NEIGHBOR|3.3.3.2": {
@@ -215,7 +194,7 @@
         "nhopself": "0",
         "admin_status": "up",
         "holdtime": "10",
-        "asn": "65200",
+        "asn": "65100",
         "keepalive": "3"
     },
     "BGP_VOQ_CHASSIS_NEIGHBOR|3.3.3.6": {
@@ -225,7 +204,7 @@
         "nhopself": "0",
         "admin_status": "up",
         "holdtime": "10",
-        "asn": "65200",
+        "asn": "65100",
         "keepalive": "3"
     },
     "FABRIC_MONITOR|FABRIC_MONITOR_DATA": {

@@ -2,6 +2,7 @@
     "localhost": {
         "DEVICE_METADATA": {
             "localhost": {
+                "bgp_asn": "65100",
                 "default_bgp_status": "down",
                 "default_pfcwd_status": "enable",
                 "deployment_id": "1",
@@ -17,13 +18,12 @@
     "asic0": {
         "DEVICE_METADATA": {
             "localhost": {
-                "asic_id": "01.00.0",
                 "asic_name": "asic0",
                 "bgp_asn": "65100",
                 "cloudtype": "None",
                 "default_bgp_status": "down",
                 "default_pfcwd_status": "enable",
-                "deployment_id": "None",
+                "deployment_id": "1",
                 "docker_routing_config_mode": "separated",
                 "hostname": "sonic",
                 "hwsku": "multi_asic",
@@ -36,13 +36,12 @@
     "asic1": {
         "DEVICE_METADATA": {
             "localhost": {
-                "asic_id": "08:00.0",
                 "asic_name": "asic1",
                 "bgp_asn": "65100",
                 "cloudtype": "None",
                 "default_bgp_status": "down",
                 "default_pfcwd_status": "enable",
-                "deployment_id": "None",
+                "deployment_id": "1",
                 "docker_routing_config_mode": "separated",
                 "hostname": "sonic",
                 "hwsku": "multi_asic",
