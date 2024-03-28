@@ -3252,7 +3252,13 @@ def add_snmp_agent_address(ctx, agentip, port, vrf):
         ipaddresses = netifaces.ifaddresses(intf)
         if ip_family[ip.version] in ipaddresses:
             for ipaddr in ipaddresses[ip_family[ip.version]]:
-                if agentip.lower() == ipaddr['addr'].lower():
+                # link local address will have scope along with ip address
+                # for ex fe80::1%eth0
+                if agentip.lower() == ipaddr['addr'].lower().split('%')[0]:
+                    agent_address = ipaddress.ip_address(agentip)
+                    if agent_address.version == 6 and agent_address.is_link_local:
+                        # add scope id for link local ip address
+                        agentip = agentip + '%' + intf
                     found = 1
                     break
         if found == 1:
