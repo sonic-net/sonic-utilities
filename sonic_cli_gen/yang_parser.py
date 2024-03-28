@@ -169,6 +169,13 @@ def on_table_container(y_module: OrderedDict,
         'description': get_description(tbl_container)
     }
 
+    # add optional configuration for config and db-name, compatible
+    optional_keys = {'config':'config', 'db-name':'sonic-ext:db-name'}
+    for k, v in optional_keys.items():
+        obj = tbl_container.get(v)
+        if obj is not None:
+            y2d_elem[k] = obj.get('@value')
+
     # determine if 'table container' has a 'list' entity
     if tbl_container.get('list') is None:
         y2d_elem['static-objects'] = list()
