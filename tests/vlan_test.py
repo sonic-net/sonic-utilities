@@ -134,124 +134,6 @@ config_add_del_vlan_and_vlan_member_output="""\
 +-----------+-----------------+-----------------+----------------+-------------+
 """
 
-
-test_config_add_del_multiple_vlan_and_vlan_member_output="""\
-+-----------+-----------------+-----------------+----------------+-------------+
-|   VLAN ID | IP Address      | Ports           | Port Tagging   | Proxy ARP   |
-+===========+=================+=================+================+=============+
-|      1000 | 192.168.0.1/21  | Ethernet4       | untagged       | disabled    |
-|           | fc02:1000::1/64 | Ethernet8       | untagged       |             |
-|           |                 | Ethernet12      | untagged       |             |
-|           |                 | Ethernet16      | untagged       |             |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      1001 |                 | Ethernet20      | tagged         | disabled    |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      1002 |                 | Ethernet20      | tagged         | disabled    |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      1003 |                 | Ethernet20      | tagged         | disabled    |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      2000 | 192.168.0.10/21 | Ethernet24      | untagged       | enabled     |
-|           | fc02:1011::1/64 | Ethernet28      | untagged       |             |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      3000 |                 |                 |                | disabled    |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      4000 |                 | PortChannel1001 | tagged         | disabled    |
-+-----------+-----------------+-----------------+----------------+-------------+
-"""
-
-test_config_add_del_add_vlans_and_add_all_vlan_member_output="""\
-+-----------+-----------------+-----------------+----------------+-------------+
-|   VLAN ID | IP Address      | Ports           | Port Tagging   | Proxy ARP   |
-+===========+=================+=================+================+=============+
-|      1000 | 192.168.0.1/21  | Ethernet4       | untagged       | disabled    |
-|           | fc02:1000::1/64 | Ethernet8       | untagged       |             |
-|           |                 | Ethernet12      | untagged       |             |
-|           |                 | Ethernet16      | untagged       |             |
-|           |                 | Ethernet20      | tagged         |             |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      1001 |                 | Ethernet20      | tagged         | disabled    |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      1002 |                 | Ethernet20      | tagged         | disabled    |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      1003 |                 | Ethernet20      | tagged         | disabled    |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      2000 | 192.168.0.10/21 | Ethernet20      | tagged         | enabled     |
-|           | fc02:1011::1/64 | Ethernet24      | untagged       |             |
-|           |                 | Ethernet28      | untagged       |             |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      3000 |                 | Ethernet20      | tagged         | disabled    |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      4000 |                 | Ethernet20      | tagged         | disabled    |
-|           |                 | PortChannel1001 | tagged         |             |
-+-----------+-----------------+-----------------+----------------+-------------+
-"""
-
-test_config_add_del_add_vlans_and_add_vlans_member_except_vlan_output = """\
-+-----------+-----------------+-----------------+----------------+-------------+
-|   VLAN ID | IP Address      | Ports           | Port Tagging   | Proxy ARP   |
-+===========+=================+=================+================+=============+
-|      1000 | 192.168.0.1/21  | Ethernet4       | untagged       | disabled    |
-|           | fc02:1000::1/64 | Ethernet8       | untagged       |             |
-|           |                 | Ethernet12      | untagged       |             |
-|           |                 | Ethernet16      | untagged       |             |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      1001 |                 | Ethernet20      | tagged         | disabled    |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      1002 |                 | Ethernet20      | tagged         | disabled    |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      2000 | 192.168.0.10/21 | Ethernet20      | tagged         | enabled     |
-|           | fc02:1011::1/64 | Ethernet24      | untagged       |             |
-|           |                 | Ethernet28      | untagged       |             |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      3000 |                 | Ethernet20      | tagged         | disabled    |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      4000 |                 | PortChannel1001 | tagged         | disabled    |
-+-----------+-----------------+-----------------+----------------+-------------+
-"""
-
-test_config_add_del_add_vlans_and_add_vlans_member_except_vlan__after_del_member_output = """\
-+-----------+-----------------+-----------------+----------------+-------------+
-|   VLAN ID | IP Address      | Ports           | Port Tagging   | Proxy ARP   |
-+===========+=================+=================+================+=============+
-|      1000 | 192.168.0.1/21  | Ethernet4       | untagged       | disabled    |
-|           | fc02:1000::1/64 | Ethernet8       | untagged       |             |
-|           |                 | Ethernet12      | untagged       |             |
-|           |                 | Ethernet16      | untagged       |             |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      1001 |                 | Ethernet20      | tagged         | disabled    |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      1002 |                 | Ethernet20      | tagged         | disabled    |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      2000 | 192.168.0.10/21 | Ethernet24      | untagged       | enabled     |
-|           | fc02:1011::1/64 | Ethernet28      | untagged       |             |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      3000 |                 |                 |                | disabled    |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      4000 |                 | PortChannel1001 | tagged         | disabled    |
-+-----------+-----------------+-----------------+----------------+-------------+
-"""
-
-test_config_add_del_vlan_and_vlan_member_with_switchport_modes_output = """\
-+-----------+-----------------+-----------------+----------------+-------------+
-|   VLAN ID | IP Address      | Ports           | Port Tagging   | Proxy ARP   |
-+===========+=================+=================+================+=============+
-|      1000 | 192.168.0.1/21  | Ethernet4       | untagged       | disabled    |
-|           | fc02:1000::1/64 | Ethernet8       | untagged       |             |
-|           |                 | Ethernet12      | untagged       |             |
-|           |                 | Ethernet16      | untagged       |             |
-|           |                 | Ethernet20      | tagged         |             |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      1001 |                 | Ethernet20      | untagged       | disabled    |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      2000 | 192.168.0.10/21 | Ethernet24      | untagged       | enabled     |
-|           | fc02:1011::1/64 | Ethernet28      | untagged       |             |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      3000 |                 |                 |                | disabled    |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      4000 |                 | PortChannel1001 | tagged         | disabled    |
-+-----------+-----------------+-----------------+----------------+-------------+
-"""
-
 config_add_del_vlan_and_vlan_member_in_alias_mode_output="""\
 +-----------+-----------------+-----------------+----------------+-------------+
 |   VLAN ID | IP Address      | Ports           | Port Tagging   | Proxy ARP   |
@@ -265,28 +147,6 @@ config_add_del_vlan_and_vlan_member_in_alias_mode_output="""\
 +-----------+-----------------+-----------------+----------------+-------------+
 |      2000 | 192.168.0.10/21 | etp7            | untagged       | enabled     |
 |           | fc02:1011::1/64 | etp8            | untagged       |             |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      3000 |                 |                 |                | disabled    |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      4000 |                 | PortChannel1001 | tagged         | disabled    |
-+-----------+-----------------+-----------------+----------------+-------------+
-"""
-
-
-
-test_config_add_del_vlan_and_vlan_member_with_switchport_modes_and_change_mode_types_output = """\
-+-----------+-----------------+-----------------+----------------+-------------+
-|   VLAN ID | IP Address      | Ports           | Port Tagging   | Proxy ARP   |
-+===========+=================+=================+================+=============+
-|      1000 | 192.168.0.1/21  | Ethernet4       | untagged       | disabled    |
-|           | fc02:1000::1/64 | Ethernet8       | untagged       |             |
-|           |                 | Ethernet12      | untagged       |             |
-|           |                 | Ethernet16      | untagged       |             |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      1001 |                 |                 |                | disabled    |
-+-----------+-----------------+-----------------+----------------+-------------+
-|      2000 | 192.168.0.10/21 | Ethernet24      | untagged       | enabled     |
-|           | fc02:1011::1/64 | Ethernet28      | untagged       |             |
 +-----------+-----------------+-----------------+----------------+-------------+
 |      3000 |                 |                 |                | disabled    |
 +-----------+-----------------+-----------------+----------------+-------------+
@@ -376,7 +236,7 @@ class TestVlan(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code != 0
-        assert "Error: Invalid VLAN ID 4096 (2-4094)" in result.output
+        assert "Error: Invalid VLAN ID 4096 (1-4094)" in result.output
 
     def test_config_vlan_add_vlan_with_exist_vlanid(self):
         runner = CliRunner()
@@ -392,7 +252,7 @@ class TestVlan(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code != 0
-        assert "Error: Invalid VLAN ID 4096 (2-4094)" in result.output
+        assert "Error: Invalid VLAN ID 4096 (1-4094)" in result.output
 
     def test_config_vlan_del_vlan_with_nonexist_vlanid(self):
         runner = CliRunner()
@@ -402,80 +262,13 @@ class TestVlan(object):
         assert result.exit_code != 0
         assert "Error: Vlan1001 does not exist" in result.output
 
-
-    def test_config_vlan_add_vlan_with_multiple_vlanids(self, mock_restart_dhcp_relay_service):
-        runner = CliRunner()
-        result = runner.invoke(config.config.commands["vlan"].commands["add"], ["10,20,30,40", "--multiple"])
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-
-    def test_config_vlan_add_vlan_with_multiple_vlanids_with_range(self, mock_restart_dhcp_relay_service):
-        runner = CliRunner()
-        result = runner.invoke(config.config.commands["vlan"].commands["add"], ["10-20", "--multiple"])
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-
-    def  test_config_vlan_add_vlan_with_multiple_vlanids_with_range_and_multiple_ids(self, mock_restart_dhcp_relay_service):
-        runner = CliRunner()
-        result = runner.invoke(config.config.commands["vlan"].commands["add"], ["10-15,20,25,30", "--multiple"])
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-
-    def  test_config_vlan_add_vlan_with_wrong_range(self):
-        runner = CliRunner()
-        result = runner.invoke(config.config.commands["vlan"].commands["add"], ["15-10", "--multiple"])
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code != 0
-        assert "15 is greater than 10. List cannot be generated" in result.output
-
-    def  test_config_vlan_add_vlan_range_with_default_vlan(self):
-        runner = CliRunner()
-        result = runner.invoke(config.config.commands["vlan"].commands["add"], ["1-10", "--multiple"])
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code != 0
-        assert "Vlan1 is default vlan" in result.output
-    
-    def test_config_vlan_add_vlan_is_digit_fail(self):
-        runner = CliRunner()
-        vid = "test_fail_case"
-        result = runner.invoke(config.config.commands["vlan"].commands["add"], [vid])
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code != 0
-        assert "{} is not integer".format(vid) in result.output
-
-    def test_config_vlan_add_vlan_is_default_vlan(self):
-        runner = CliRunner()
-        default_vid = "1"
-        vlan = "Vlan{}".format(default_vid)
-        result = runner.invoke(config.config.commands["vlan"].commands["add"], [default_vid])
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code != 0
-        assert "{} is default VLAN.".format(vlan) in result.output
-
-    def test_config_vlan_del_vlan_does_not_exist(self):
-        runner = CliRunner()
-        vid = "3010"
-        vlan = "Vlan{}".format(vid)
-        result = runner.invoke(config.config.commands["vlan"].commands["del"], [vid])
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code != 0
-        assert "{} does not exist".format(vlan) in result.output
-
     def test_config_vlan_add_member_with_invalid_vlanid(self):
         runner = CliRunner()
         result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"], ["4096", "Ethernet4"])
         print(result.exit_code)
         print(result.output)
         assert result.exit_code != 0
-        assert "Error: Invalid VLAN ID 4096 (2-4094)" in result.output
+        assert "Error: Invalid VLAN ID 4096 (1-4094)" in result.output
 
     def test_config_vlan_add_member_with_nonexist_vlanid(self):
         runner = CliRunner()
@@ -501,23 +294,14 @@ class TestVlan(object):
         assert result.exit_code != 0
         assert "Error: Ethernet3 does not exist" in result.output
 
-
     def test_config_vlan_add_nonexist_portchannel_member(self):
         runner = CliRunner()
-        #switch port mode for PortChannel1011 to trunk mode
-        result = runner.invoke(config.config.commands["switchport"].commands["mode"],["trunk", "PortChannel1011"])
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code != 0
-        assert "Error: PortChannel1011 does not exist" in result.output
-
         result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"], \
 				["1000", "PortChannel1011"])
         print(result.exit_code)
         print(result.output)
         assert result.exit_code != 0
         assert "Error: PortChannel1011 does not exist" in result.output
-
 
     def test_config_vlan_add_portchannel_member(self):
         runner = CliRunner()
@@ -528,7 +312,6 @@ class TestVlan(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-
 
         # show output
         result = runner.invoke(show.cli.commands["vlan"].commands["brief"], [], obj=db)
@@ -546,7 +329,7 @@ class TestVlan(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code != 0
-        assert "Error: PortChannel0001 is in routed mode!\nUse switchport mode command to change port mode" in result.output
+        assert "Error: PortChannel0001 is a router interface!" in result.output
 
     def test_config_vlan_with_vxlanmap_del_vlan(self, mock_restart_dhcp_relay_service):
         runner = CliRunner()
@@ -674,22 +457,6 @@ class TestVlan(object):
         print(result.output)
         assert result.exit_code == 0
 
-        # add Ethernet20 to vlan 1001 but Ethernet20 is in routed mode will give error
-        result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"],
-                ["1001", "Ethernet20", "--untagged"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        traceback.print_tb(result.exc_info[2])
-        assert result.exit_code != 0
-        assert "Ethernet20 is in routed mode!\nUse switchport mode command to change port mode" in result.output
-
-        # configure Ethernet20 from routed to access mode
-        result = runner.invoke(config.config.commands["switchport"].commands["mode"],["access", "Ethernet20"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-        assert "Ethernet20 switched from routed to access mode" in result.output
-
         # add Ethernet20 to vlan 1001
         result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"],
                 ["1001", "Ethernet20", "--untagged"], obj=db)
@@ -735,22 +502,6 @@ class TestVlan(object):
         print(result.output)
         assert result.exit_code == 0
 
-        # add etp6 to vlan 1001 but etp6 is in routed mode will give error
-        result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"],
-                ["1001", "etp6", "--untagged"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        traceback.print_tb(result.exc_info[2])
-        assert result.exit_code != 0
-        assert "Ethernet20 is in routed mode!\nUse switchport mode command to change port mode" in result.output
-
-        # configure etp6 from routed to access mode
-        result = runner.invoke(config.config.commands["switchport"].commands["mode"],["access", "etp6"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-        assert "Ethernet20 switched from routed to access mode" in result.output
-
         # add etp6 to vlan 1001
         result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"],
                 ["1001", "etp6", "--untagged"], obj=db)
@@ -786,375 +537,6 @@ class TestVlan(object):
         assert result.output == show_vlan_brief_in_alias_mode_output
 
         os.environ['SONIC_CLI_IFACE_MODE'] = "default"
-
-
-    def test_config_add_del_multiple_vlan_and_vlan_member(self,mock_restart_dhcp_relay_service):
-        runner = CliRunner()
-        db = Db()
-
-        # add vlan 1001,1002,1003
-        result = runner.invoke(config.config.commands["vlan"].commands["add"], ["1001,1002,1003","--multiple"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-
-        # add Ethernet20 to vlan1001, vlan1002, vlan1003 multiple flag but Ethernet20 is in routed mode will give error
-        result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"],
-                ["1001,1002,1003", "Ethernet20", "--multiple"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        traceback.print_tb(result.exc_info[2])
-        assert result.exit_code != 0
-        assert "Ethernet20 is in routed mode!\nUse switchport mode command to change port mode" in result.output
-
-        # configure Ethernet20 from routed to trunk mode
-        result = runner.invoke(config.config.commands["switchport"].commands["mode"],["trunk", "Ethernet20"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-        assert "Ethernet20 switched from routed to trunk mode" in result.output
-
-        # add Ethernet20 to vlan 1001
-        result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"],
-                ["1001,1002,1003", "Ethernet20", "--multiple"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        traceback.print_tb(result.exc_info[2])
-        assert result.exit_code == 0
-
-        # show output
-        result = runner.invoke(show.cli.commands["vlan"].commands["brief"], [], obj=db)
-        print(result.output)
-        assert result.output == test_config_add_del_multiple_vlan_and_vlan_member_output
-
-        # remove vlan member
-        result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["del"],
-                ["1001-1003", "Ethernet20", "--multiple"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-
-        # add del 1001
-        result = runner.invoke(config.config.commands["vlan"].commands["del"], ["1001-1003","--multiple"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-
-        # show output
-        result = runner.invoke(show.cli.commands["vlan"].commands["brief"], [], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-        assert result.output == show_vlan_brief_output
-
-    def test_config_add_del_add_vlans_and_add_vlans_member_except_vlan(self, mock_restart_dhcp_relay_service):
-        runner = CliRunner()
-        db = Db()
-
-        # add vlan 1001,1002
-        result = runner.invoke(config.config.commands["vlan"].commands["add"], ["1001,1002","--multiple"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-
-        # add Ethernet20 to vlan1001, vlan1002, vlan1003 multiple flag but Ethernet20 is in routed mode will give error
-        result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"],
-                ["1000,4000", "Ethernet20", "--multiple", "--except_flag"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        traceback.print_tb(result.exc_info[2])
-        assert result.exit_code != 0
-        assert "Ethernet20 is in routed mode!\nUse switchport mode command to change port mode" in result.output
-
-        # configure Ethernet20 from routed to trunk mode
-        result = runner.invoke(config.config.commands["switchport"].commands["mode"],["trunk", "Ethernet20"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-        assert "Ethernet20 switched from routed to trunk mode" in result.output
-
-        # add Ethernet20 to vlan1001, vlan1002, vlan1003 multiple flag
-        result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"],
-                ["1000,4000", "Ethernet20", "--multiple", "--except_flag"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        traceback.print_tb(result.exc_info[2])
-        assert result.exit_code == 0
-
-        # show output
-        result = runner.invoke(show.cli.commands["vlan"].commands["brief"], [], obj=db)
-        print(result.output)
-        assert result.output == test_config_add_del_add_vlans_and_add_vlans_member_except_vlan_output
-
-        # remove vlan member except some
-        result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["del"],
-                ["1001,1002", "Ethernet20", "--multiple", "--except_flag"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-
-        # show output
-        result = runner.invoke(show.cli.commands["vlan"].commands["brief"], [], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-        assert result.output == test_config_add_del_add_vlans_and_add_vlans_member_except_vlan__after_del_member_output
-
-         # remove vlan member
-        result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["del"],
-                ["1001,1002", "Ethernet20", "--multiple"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-
-        # del 1001,1002
-        result = runner.invoke(config.config.commands["vlan"].commands["del"], ["1001-1002","--multiple"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-
-        # show output
-        result = runner.invoke(show.cli.commands["vlan"].commands["brief"], [], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-        assert result.output == show_vlan_brief_output
-
-
-    def test_config_add_del_add_vlans_and_add_all_vlan_member(self, mock_restart_dhcp_relay_service):
-        runner = CliRunner()
-        db = Db()
-
-        # add vlan 1001
-        result = runner.invoke(config.config.commands["vlan"].commands["add"], ["1001,1002,1003","--multiple"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-
-        # add Ethernet20 to vlan1001, vlan1002, vlan1003 multiple flag but Ethernet20 is in routed mode will give error
-        result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"],
-                ["all", "Ethernet20"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        traceback.print_tb(result.exc_info[2])
-        assert result.exit_code != 0
-        assert "Ethernet20 is in routed mode!\nUse switchport mode command to change port mode" in result.output
-
-        # configure Ethernet20 from routed to access mode
-        result = runner.invoke(config.config.commands["switchport"].commands["mode"],["trunk", "Ethernet20"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-        assert "Ethernet20 switched from routed to trunk mode" in result.output
-
-        # add Ethernet20 to vlan 1001
-        result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"],
-                ["all", "Ethernet20"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        traceback.print_tb(result.exc_info[2])
-        assert result.exit_code == 0
-
-        # show output
-        result = runner.invoke(show.cli.commands["vlan"].commands["brief"], [], obj=db)
-        print(result.output)
-        assert result.output == test_config_add_del_add_vlans_and_add_all_vlan_member_output
-
-        # remove vlan member
-        result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["del"],
-                ["all", "Ethernet20"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-
-        # add del 1001
-        result = runner.invoke(config.config.commands["vlan"].commands["del"], ["1001-1003","--multiple"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-
-        # show output
-        result = runner.invoke(show.cli.commands["vlan"].commands["brief"], [], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-        assert result.output == show_vlan_brief_output
-
-    def test_config_add_del_vlan_and_vlan_member_with_switchport_modes(self, mock_restart_dhcp_relay_service):
-        runner = CliRunner()
-        db = Db()
-
-        # add vlan 1001
-        result = runner.invoke(config.config.commands["vlan"].commands["add"], ["1001"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-
-        # add Ethernet20 to vlan 1001 but Ethernet20 is in routed mode will give error
-        result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"],
-                ["1001", "Ethernet20", "--untagged"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        traceback.print_tb(result.exc_info[2])
-        assert result.exit_code != 0
-        assert "Ethernet20 is in routed mode!\nUse switchport mode command to change port mode" in result.output
-
-
-        # configure Ethernet20 from routed to access mode
-        result = runner.invoke(config.config.commands["switchport"].commands["mode"],["access", "Ethernet20"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-        assert "Ethernet20 switched from routed to access mode" in result.output
-
-        # add Ethernet20 to vlan 1001
-        result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"],
-                ["1001", "Ethernet20", "--untagged"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        traceback.print_tb(result.exc_info[2])
-        assert result.exit_code == 0
-
-        # add Ethernet20 to vlan 1001 as tagged member
-        result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"],
-                ["1000", "Ethernet20"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        traceback.print_tb(result.exc_info[2])
-        assert result.exit_code != 0
-        assert "Ethernet20 is in access mode! Tagged Members cannot be added" in result.output
-
-        # configure Ethernet20 from access to trunk mode
-        result = runner.invoke(config.config.commands["switchport"].commands["mode"],["trunk", "Ethernet20"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-        assert "Ethernet20 switched from access to trunk mode" in result.output
-
-        # add Ethernet20 to vlan 1001 as tagged member
-        result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"],
-                ["1000", "Ethernet20"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        traceback.print_tb(result.exc_info[2])
-        assert result.exit_code == 0
-
-        # show output
-        result = runner.invoke(show.cli.commands["vlan"].commands["brief"], [], obj=db)
-        print(result.output)
-        assert result.output == test_config_add_del_vlan_and_vlan_member_with_switchport_modes_output
-
-        # configure Ethernet20 from trunk to routed mode
-        result = runner.invoke(config.config.commands["switchport"].commands["mode"],["routed", "Ethernet20"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code != 0
-        assert "Ethernet20 has tagged member(s). \nRemove them to change mode to routed" in result.output
-
-        # remove vlan member
-        result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["del"],
-                ["1000", "Ethernet20"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-
-        # configure Ethernet20 from trunk to routed mode
-        result = runner.invoke(config.config.commands["switchport"].commands["mode"],["routed", "Ethernet20"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code != 0
-        assert "Ethernet20 has untagged member. \nRemove it to change mode to routed" in result.output
-
-        # remove vlan member
-        result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["del"],
-                ["1001", "Ethernet20"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-
-        # configure Ethernet20 from trunk to routed mode
-        result = runner.invoke(config.config.commands["switchport"].commands["mode"],["routed", "Ethernet20"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-        assert "Ethernet20 switched from trunk to routed mode" in result.output
-
-        # add del 1001
-        result = runner.invoke(config.config.commands["vlan"].commands["del"], ["1001"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-
-        # show output
-        result = runner.invoke(show.cli.commands["vlan"].commands["brief"], [], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-        assert result.output == show_vlan_brief_output
-
-
-    def test_config_add_del_vlan_and_vlan_member_with_switchport_modes_and_change_mode_types(self, mock_restart_dhcp_relay_service):
-        runner = CliRunner()
-        db = Db()
-
-        # add vlan 1001
-        result = runner.invoke(config.config.commands["vlan"].commands["add"], ["1001"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-
-        # add Ethernet64 to vlan 1001 but Ethernet64 is in routed mode will give error
-        result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"],
-                ["1001", "Ethernet64"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        traceback.print_tb(result.exc_info[2])
-        assert result.exit_code != 0
-        assert "Ethernet64 is in routed mode!\nUse switchport mode command to change port mode" in result.output
-
-        # configure Ethernet64 from routed to trunk mode
-        result = runner.invoke(config.config.commands["switchport"].commands["mode"],["trunk", "Ethernet64"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-        assert "Ethernet64 switched from routed to trunk mode" in result.output
-
-        # add Ethernet64 to vlan 1001
-        result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"],
-                ["1001", "Ethernet64"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        traceback.print_tb(result.exc_info[2])
-        assert result.exit_code == 0
-
-        # configure Ethernet64 from routed to access mode
-        result = runner.invoke(config.config.commands["switchport"].commands["mode"],["access", "Ethernet64"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code != 0
-        assert "Ethernet64 is in trunk mode and have tagged member(s).\nRemove tagged member(s) from Ethernet64 to switch to access mode" in result.output
-
-        # remove vlan member
-        result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["del"],
-                ["1001", "Ethernet64"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-
-        # configure Ethernet64 from routed to access mode
-        result = runner.invoke(config.config.commands["switchport"].commands["mode"],["access", "Ethernet64"], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-        assert "Ethernet64 switched from trunk to access mode" in result.output
-
-        # show output
-        result = runner.invoke(show.cli.commands["vlan"].commands["brief"], [], obj=db)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-        assert result.output == test_config_add_del_vlan_and_vlan_member_with_switchport_modes_and_change_mode_types_output
-
 
     def test_config_vlan_proxy_arp_with_nonexist_vlan_intf_table(self):
         modes = ["enabled", "disabled"]
@@ -1244,8 +626,8 @@ class TestVlan(object):
         result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["add"],
                                ["Ethernet4", "10.10.10.1/24"], obj=obj)        
         print(result.exit_code, result.output)
-        assert result.exit_code != 0
-        assert 'Interface Ethernet4 is not in routed mode!' in result.output
+        assert result.exit_code == 0
+        assert 'Interface Ethernet4 is a member of vlan' in result.output
         
     def test_config_vlan_add_member_of_portchannel(self):
         runner = CliRunner()

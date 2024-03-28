@@ -30,7 +30,6 @@
         "lanes": "25,26,27,28",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -42,7 +41,6 @@
         "lanes": "29,30,31,32",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "trunk",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -54,7 +52,6 @@
         "lanes": "33,34,35,36",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -66,7 +63,6 @@
         "lanes": "37,38,39,40",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -78,7 +74,6 @@
         "lanes": "16",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "trunk",
         "pfc_asym": "off",
         "speed": "100"
     },
@@ -90,7 +85,6 @@
         "lanes": "41,42,43,44",
         "mtu": "9100",
         "tpid": "0x9200",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -102,7 +96,6 @@
         "lanes": "1,2,3,4",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "trunk",
         "pfc_asym": "off",
         "speed": "1000"
     },
@@ -114,7 +107,6 @@
         "lanes": "5,6,7,8",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "trunk",
         "pfc_asym": "off",
         "speed": "1000"
     },
@@ -126,7 +118,6 @@
         "lanes": "13,14,15,16",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -138,7 +129,6 @@
         "lanes": "9,10,11,12",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "10"
     },
@@ -150,7 +140,6 @@
         "lanes": "17,18,19,20",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -162,7 +151,6 @@
         "lanes": "21,22,23,24",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -174,7 +162,6 @@
         "lanes": "53,54,55,56",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -186,7 +173,6 @@
         "lanes": "49,50,51,52",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -198,7 +184,6 @@
         "lanes": "57,58,59,60",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -210,7 +195,6 @@
         "lanes": "61,62,63,64",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -222,7 +206,6 @@
         "lanes": "69,70,71,72",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -234,7 +217,6 @@
         "lanes": "65,66,67,68",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -246,7 +228,6 @@
         "lanes": "73,74,75,76",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -258,7 +239,6 @@
         "lanes": "77,78,79,80",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -270,7 +250,6 @@
         "lanes": "109,110,111,112",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -282,7 +261,6 @@
         "lanes": "105,106,107,108",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -294,7 +272,6 @@
         "lanes": "113,114,115,116",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -306,7 +283,6 @@
         "lanes": "117,118,119,120",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -318,7 +294,6 @@
         "lanes": "125,126,127,128",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -329,7 +304,6 @@
         "lanes": "121,122,123,124",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -340,7 +314,6 @@
         "lanes": "81,82,83,84",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -351,7 +324,6 @@
         "lanes": "85,86,87,88",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -363,7 +335,6 @@
         "lanes": "93,94,95,96",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -375,7 +346,6 @@
         "lanes": "89,90,91,92",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -387,7 +357,6 @@
         "lanes": "101,102,103,104",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -399,7 +368,6 @@
         "lanes": "97,98,99,100",
         "mtu": "9100",
         "tpid": "0x8100",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000",
         "fec" : "auto"
@@ -703,8 +671,7 @@
         "members@": "Ethernet32",
         "min_links": "1",
         "tpid": "0x8100",
-        "mtu": "9100",
-        "mode": "trunk"
+        "mtu": "9100"
     },
     "PORTCHANNEL|PortChannel0001": {
         "admin_status": "up",

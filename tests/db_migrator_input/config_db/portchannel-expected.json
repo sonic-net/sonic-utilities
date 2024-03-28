@@ -3,7 +3,6 @@
         "admin_status": "up",
         "members@": "Ethernet0,Ethernet4",
         "min_links": "2",
-        "mode": "routed",
         "mtu": "9100",
         "lacp_key": "auto"
     },
@@ -11,7 +10,6 @@
         "admin_status": "up",
         "members@": "Ethernet8,Ethernet12",
         "min_links": "2",
-        "mode": "routed",
         "mtu": "9100",
         "lacp_key": "auto"
     },
@@ -19,7 +17,6 @@
         "admin_status": "up",
         "members@": "Ethernet16",
         "min_links": "1",
-        "mode": "routed",
         "mtu": "9100",
         "lacp_key": "auto"
     },
@@ -27,14 +24,12 @@
         "admin_status": "up",
         "members@": "Ethernet20,Ethernet24",
         "min_links": "2",
-        "mode": "routed",
         "mtu": "9100",
         "lacp_key": "auto"
     },
     "PORTCHANNEL|PortChannel9999": {
         "admin_status": "up",
         "mtu": "9100",
-        "mode": "routed",
         "lacp_key": "auto"
     },
     "VERSIONS|DATABASE": {
