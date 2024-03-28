@@ -66,6 +66,7 @@ from . import warm_restart
 from . import plugins
 from . import syslog
 from . import dns
+from . import twamp_light
 
 # Global Variables
 PLATFORM_JSON = 'platform.json'
@@ -317,6 +318,7 @@ cli.add_command(vxlan.vxlan)
 cli.add_command(system_health.system_health)
 cli.add_command(warm_restart.warm_restart)
 cli.add_command(dns.dns)
+cli.add_command(twamp_light.twamp_light)
 
 # syslog module
 cli.add_command(syslog.syslog)

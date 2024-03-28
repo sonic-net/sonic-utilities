@@ -58,6 +58,7 @@ from .config_mgmt import ConfigMgmtDPB, ConfigMgmt
 from . import mclag
 from . import syslog
 from . import dns
+from . import twamp_light
 
 # mock masic APIs for unit test
 try:
@@ -1201,6 +1202,7 @@ config.add_command(muxcable.muxcable)
 config.add_command(nat.nat)
 config.add_command(vlan.vlan)
 config.add_command(vxlan.vxlan)
+config.add_command(twamp_light.twamp_light)
 
 #add mclag commands
 config.add_command(mclag.mclag)
