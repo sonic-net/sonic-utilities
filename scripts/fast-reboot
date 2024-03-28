@@ -308,25 +308,29 @@ function setup_reboot_variables()
     HWSKU=$(show platform summary --json | python -c 'import sys, json; print(json.load(sys.stdin)["hwsku"])')
     NEXT_SONIC_IMAGE=$(sonic-installer list | grep "Next: " | cut -d ' ' -f 2)
     IMAGE_PATH="/host/image-${NEXT_SONIC_IMAGE#SONiC-OS-}"
+    if [[ -f ${DEVPATH}/${PLATFORM}/installer.conf ]]; then
+	    . ${DEVPATH}/${PLATFORM}/installer.conf
+    fi
+
     if grep -q aboot_platform= /host/machine.conf; then
         if is_secureboot; then
             KERNEL_IMAGE=""
             BOOT_OPTIONS="SONIC_BOOT_TYPE=${BOOT_TYPE_ARG} secure_boot_enable=1"
         else
             KERNEL_IMAGE="$(ls $IMAGE_PATH/boot/vmlinuz-*)"
-            BOOT_OPTIONS="$(cat "$IMAGE_PATH/kernel-cmdline" | tr '\n' ' ') SONIC_BOOT_TYPE=${BOOT_TYPE_ARG}"
+            BOOT_OPTIONS="$(cat "$IMAGE_PATH/kernel-cmdline" | tr '\n' ' ') ${KEXEC_LOAD_EXTRA_CMDLINE_LINUX} SONIC_BOOT_TYPE=${BOOT_TYPE_ARG}"
         fi
         INITRD=$(echo $KERNEL_IMAGE | sed 's/vmlinuz/initrd.img/g')
     elif grep -q onie_platform= /host/machine.conf; then
         if [ -r /host/grub/grub.cfg ]; then
             KERNEL_OPTIONS=$(cat /host/grub/grub.cfg | sed "/$NEXT_SONIC_IMAGE'/,/}/"'!'"g" | grep linux)
             KERNEL_IMAGE="/host$(echo $KERNEL_OPTIONS | cut -d ' ' -f 2)"
-            BOOT_OPTIONS="$(echo $KERNEL_OPTIONS | sed -e 's/\s*linux\s*/BOOT_IMAGE=/') SONIC_BOOT_TYPE=${BOOT_TYPE_ARG}"
+            BOOT_OPTIONS="$(echo $KERNEL_OPTIONS | sed -e 's/\s*linux\s*/BOOT_IMAGE=/') ${KEXEC_LOAD_EXTRA_CMDLINE_LINUX} SONIC_BOOT_TYPE=${BOOT_TYPE_ARG}"
             INITRD=$(echo $KERNEL_IMAGE | sed 's/vmlinuz/initrd.img/g')
         # Handle architectures supporting Device Tree
         elif [ -f /sys/firmware/devicetree/base/chosen/bootargs ]; then
             KERNEL_IMAGE="$(ls $IMAGE_PATH/boot/vmlinuz-*)"
-            BOOT_OPTIONS="$(cat /sys/firmware/devicetree/base/chosen/bootargs | sed 's/.$//') SONIC_BOOT_TYPE=${BOOT_TYPE_ARG}"
+            BOOT_OPTIONS="$(cat /sys/firmware/devicetree/base/chosen/bootargs | sed 's/.$//') ${KEXEC_LOAD_EXTRA_CMDLINE_LINUX} SONIC_BOOT_TYPE=${BOOT_TYPE_ARG}"
             INITRD=$(echo $KERNEL_IMAGE | sed 's/vmlinuz/initrd.img/g')
 
             # If initrd is a U-Boot uImage, remove the uImage header
