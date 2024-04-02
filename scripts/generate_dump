@@ -1564,6 +1564,27 @@ collect_cisco_8000() {
         echo "'/usr/share/sonic/device/${platform}' does not exist" > /tmp/error
         save_file /tmp/error sai false
     fi
+
+    save_cmd "show platform versions" "platform.versions"
+
+    # run 'hw-management-generate-dump.sh' script and save the result file
+    HW_DUMP_FILE=/usr/bin/hw-management-generate-dump.sh
+    if [[ -x $HW_DUMP_FILE ]]; then
+      ${CMD_PREFIX} $HW_DUMP_FILE $ALLOW_PROCESS_STOP
+      ret=$?
+      if [[ $ret -ne 0 ]]; then
+        if [[ $ret -eq $TIMEOUT_EXIT_CODE ]]; then
+          echo "hw-management dump timedout after ${TIMEOUT_MIN} minutes."
+        else
+          echo "hw-management dump failed ..."
+        fi
+      else
+        save_file "/tmp/hw-mgmt-dump*" "hw-mgmt" false
+        rm -f /tmp/hw-mgmt-dump*
+      fi
+    else
+      echo "HW Mgmt dump script $HW_DUMP_FILE does not exist"
+    fi
 }
 
 ##############################################################################
