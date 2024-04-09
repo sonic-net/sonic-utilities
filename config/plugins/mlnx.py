@@ -216,7 +216,7 @@ def sdk_sniffer_enable():
                                       env_variable_string=sdk_sniffer_env_variable_string)
     if not ignore:
         err = restart_swss()
-        if err is not 0:
+        if err != 0:
             return
         click.echo('SDK sniffer is Enabled, recording file is %s.' % sdk_sniffer_filename)
     else:
@@ -229,7 +229,7 @@ def sdk_sniffer_disable():
     ignore = sniffer_env_variable_set(enable=False, env_variable_name=ENV_VARIABLE_SX_SNIFFER)
     if not ignore:
         err = restart_swss()
-        if err is not 0:
+        if err != 0:
             return
         click.echo("SDK sniffer is Disabled.")
     else:
