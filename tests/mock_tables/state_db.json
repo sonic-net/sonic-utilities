@@ -173,24 +173,6 @@
         "nominal_bit_rate": "N/A",
         "application_advertisement": "N/A"
     },
-    "TRANSCEIVER_INFO|Ethernet24": {
-        "type": "QSFP28 or later",
-        "hardware_rev": "AC",
-        "serial": "MT1706FT02066",
-        "manufacturer": "Mellanox",
-        "model": "MFA1A00-C003",
-        "vendor_oui": "00-02-c9",
-        "vendor_date": "2017-01-13 ",
-        "connector": "No separable connector",
-        "encoding": "64B66B",
-        "ext_identifier": "Power Class 3(2.5W max), CDR present in Rx Tx",
-        "ext_rateselect_compliance": "QSFP+ Rate Select Version 1",
-        "cable_type": "Length Cable Assembly(m)",
-        "cable_length": "3",
-        "specification_compliance": "{'10/40G Ethernet Compliance Code': '40G Active Cable (XLPPI)'}",
-        "nominal_bit_rate": "255",
-        "application_advertisement": "N/A"
-    },
     "TRANSCEIVER_INFO|Ethernet28": {
         "type": "RJ45",
         "hardware_rev": "N/A",

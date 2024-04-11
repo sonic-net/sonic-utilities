@@ -11,23 +11,23 @@ modules_path = os.path.dirname(root_path)
 scripts_path = os.path.join(modules_path, "scripts")
 
 show_interface_status_output="""\
-      Interface            Lanes    Speed    MTU    FEC      Alias             Vlan    Oper    Admin             Type    Asym PFC
----------------  ---------------  -------  -----  -----  ---------  ---------------  ------  -------  ---------------  ----------
-      Ethernet0                0      25G   9100     rs  Ethernet0           routed    down       up  QSFP28 or later         off
-     Ethernet16               16     100M   9100    N/A       etp5            trunk      up       up             RJ45         off
-     Ethernet24               24       1G   9100    N/A       etp6            trunk      up       up  QSFP28 or later         off
-     Ethernet28               28    1000M   9100    N/A       etp8            trunk      up       up             RJ45         off
-     Ethernet32      13,14,15,16      40G   9100     rs       etp9  PortChannel1001      up       up              N/A         off
-     Ethernet36       9,10,11,12      10M   9100    N/A      etp10           routed      up       up             RJ45         off
-    Ethernet112      93,94,95,96      40G   9100     rs      etp29  PortChannel0001      up       up              N/A         off
-    Ethernet116      89,90,91,92      40G   9100     rs      etp30  PortChannel0002      up       up              N/A         off
-    Ethernet120  101,102,103,104      40G   9100     rs      etp31  PortChannel0003      up       up              N/A         off
-    Ethernet124     97,98,99,100      40G   9100   auto      etp32  PortChannel0004      up       up              N/A         off
-PortChannel0001              N/A      40G   9100    N/A        N/A           routed    down       up              N/A         N/A
-PortChannel0002              N/A      40G   9100    N/A        N/A           routed      up       up              N/A         N/A
-PortChannel0003              N/A      40G   9100    N/A        N/A           routed      up       up              N/A         N/A
-PortChannel0004              N/A      40G   9100    N/A        N/A           routed      up       up              N/A         N/A
-PortChannel1001              N/A      40G   9100    N/A        N/A            trunk     N/A      N/A              N/A         N/A
+      Interface            Lanes    Speed    MTU    FEC      Alias             Vlan    Oper    Admin               Type    Asym PFC
+---------------  ---------------  -------  -----  -----  ---------  ---------------  ------  -------  -----------------  ----------
+      Ethernet0                0      25G   9100     rs  Ethernet0           routed    down       up    QSFP28 or later         off
+     Ethernet16               16     100M   9100    N/A       etp5            trunk      up       up               RJ45         off
+     Ethernet24               24       1G   9100    N/A       etp6            trunk      up       up  DPU-NPU Data Port         off
+     Ethernet28               28    1000M   9100    N/A       etp8            trunk      up       up               RJ45         off
+     Ethernet32      13,14,15,16      40G   9100     rs       etp9  PortChannel1001      up       up                N/A         off
+     Ethernet36       9,10,11,12      10M   9100    N/A      etp10           routed      up       up               RJ45         off
+    Ethernet112      93,94,95,96      40G   9100     rs      etp29  PortChannel0001      up       up                N/A         off
+    Ethernet116      89,90,91,92      40G   9100     rs      etp30  PortChannel0002      up       up                N/A         off
+    Ethernet120  101,102,103,104      40G   9100     rs      etp31  PortChannel0003      up       up                N/A         off
+    Ethernet124     97,98,99,100      40G   9100   auto      etp32  PortChannel0004      up       up                N/A         off
+PortChannel0001              N/A      40G   9100    N/A        N/A           routed    down       up                N/A         N/A
+PortChannel0002              N/A      40G   9100    N/A        N/A           routed      up       up                N/A         N/A
+PortChannel0003              N/A      40G   9100    N/A        N/A           routed      up       up                N/A         N/A
+PortChannel0004              N/A      40G   9100    N/A        N/A           routed      up       up                N/A         N/A
+PortChannel1001              N/A      40G   9100    N/A        N/A            trunk     N/A      N/A                N/A         N/A
 """
 
 show_interface_status_Ethernet32_output="""\

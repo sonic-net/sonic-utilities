@@ -79,7 +79,8 @@
         "pfc_asym": "off",
         "mtu": "9100",
         "tpid": "0x8100",
-        "admin_status": "up"
+        "admin_status": "up",
+        "role": "Dpc"
     },
     "PORT_TABLE:Ethernet28": {
         "index": "7",
