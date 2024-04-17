@@ -1251,6 +1251,7 @@ collect_mellanox() {
       echo "HW Mgmt dump script $HW_DUMP_FILE does not exist"
     fi
 
+    save_cmd "get_component_versions.py" "component_versions"
 }
 
 ###############################################################################
