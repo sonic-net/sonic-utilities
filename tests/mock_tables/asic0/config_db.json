@@ -294,5 +294,13 @@
         "monErrThreshRxCells": "61035156",
         "monPollThreshIsolation": "1",
         "monPollThreshRecovery": "8"
+    },
+    "SYSLOG_CONFIG_FEATURE|bgp": {
+        "rate_limit_interval": "111",
+        "rate_limit_burst": "33333"
+    },
+    "SYSLOG_CONFIG_FEATURE|database": {
+        "rate_limit_interval": "222",
+        "rate_limit_burst": "22222"
     }
 }

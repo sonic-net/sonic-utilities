@@ -794,13 +794,19 @@
         "state": "enabled",
         "auto_restart": "enabled",
         "high_mem_alert": "disabled",
-        "set_owner": "local"
+        "set_owner": "local",
+        "support_syslog_rate_limit": "true",
+        "has_global_scope": "false",
+        "has_per_asic_scope": "true"
     },
     "FEATURE|database": {
         "state": "always_enabled",
         "auto_restart": "always_enabled",
         "high_mem_alert": "disabled",
-        "set_owner": "local"
+        "set_owner": "local",
+        "support_syslog_rate_limit": "true",
+        "has_global_scope": "true",
+        "has_per_asic_scope": "true"
     },
     "FEATURE|dhcp_relay": {
         "state": "enabled",
@@ -824,7 +830,10 @@
         "state": "enabled",
         "auto_restart": "enabled",
         "high_mem_alert": "disabled",
-        "set_owner": "kube"
+        "set_owner": "kube",
+        "support_syslog_rate_limit": "true",
+        "has_global_scope": "true",
+        "has_per_asic_scope": "false"
     },
     "FEATURE|radv": {
         "state": "enabled",
@@ -873,6 +882,14 @@
         "auto_restart": "enabled",
         "high_mem_alert": "disabled",
         "set_owner": "kube"
+    },
+    "SYSLOG_CONFIG_FEATURE|database": {
+        "rate_limit_interval": "200",
+        "rate_limit_burst": "20000"
+    },
+    "SYSLOG_CONFIG_FEATURE|pmon": {
+        "rate_limit_interval": "100",
+        "rate_limit_burst": "10000"
     },
     "DEVICE_METADATA|localhost": {
         "default_bgp_status": "down",
