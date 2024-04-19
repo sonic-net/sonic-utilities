@@ -23,6 +23,7 @@ ROUTE_TABLE = 'ROUTE_TABLE'
 VNET_ROUTE_TABLE = 'VNET_ROUTE_TABLE'
 INTF_TABLE = 'INTF_TABLE'
 RT_ENTRY_TABLE = 'ASIC_STATE'
+FEATURE_TABLE = 'FEATURE'
 SEPARATOR = ":"
 DEVICE_METADATA = "DEVICE_METADATA"
 MUX_CABLE = "MUX_CABLE"
@@ -32,7 +33,17 @@ LOCALHOST = "localhost"
 RT_ENTRY_KEY_PREFIX = 'SAI_OBJECT_TYPE_ROUTE_ENTRY:{\"dest":\"'
 RT_ENTRY_KEY_SUFFIX = '\",\"switch_id\":\"oid:0x21000000000000\",\"vr\":\"oid:0x3000000000023\"}'
 
-DEFAULT_CONFIG_DB = {DEVICE_METADATA: {LOCALHOST: {}}}
+DEFAULT_CONFIG_DB = {
+    DEVICE_METADATA: {
+        LOCALHOST: {
+            }
+        },
+    FEATURE_TABLE: {
+        "bgp": {
+            "state": "enabled"
+            }
+        }
+    }
 
 TEST_DATA = {
     "0": {
@@ -330,6 +341,11 @@ TEST_DATA = {
                 CONFIG_DB: {
                     DEVICE_METADATA: {
                         LOCALHOST: {"subtype": "DualToR"}
+                    },
+                    FEATURE_TABLE: {
+                        "bgp": {
+                            "state": "enabled"
+                        }
                     }
                 },
                 APPL_DB: {
@@ -396,6 +412,11 @@ TEST_DATA = {
                             "soc_ipv6": "fc02:1000::3/128",
                             "state": "auto"
                         },
+                    },
+                    FEATURE_TABLE: {
+                        "bgp": {
+                            "state": "enabled"
+                        }
                     }
                 },
                 APPL_DB: {
@@ -633,6 +654,11 @@ TEST_DATA = {
                 CONFIG_DB: {
                     DEVICE_METADATA: {
                         LOCALHOST: {"subtype": "DualToR"}
+                    },
+                    FEATURE_TABLE: {
+                        "bgp": {
+                            "state": "enabled"
+                        }
                     }
                 },
                 APPL_DB: {
@@ -954,5 +980,132 @@ TEST_DATA = {
         },
         RET: -1,
     },
-
+    "22": {
+        DESCR: "basic good one on single asic, bgp disabled",
+        MULTI_ASIC: False,
+        NAMESPACE: [''],
+        ARGS: "route_check -m INFO -i 1000",
+        PRE: {
+            DEFAULTNS: {
+                CONFIG_DB: {
+                    DEVICE_METADATA: {
+                        LOCALHOST: {
+                        }
+                    },
+                    FEATURE_TABLE: {
+                        "bgp": {
+                            "state": "disabled"
+                        }
+                    }
+                },
+                APPL_DB: {
+                    ROUTE_TABLE: {
+                        "0.0.0.0/0" : { "ifname": "portchannel0" },
+                        "10.10.196.12/31" : { "ifname": "portchannel0" },
+                    },
+                    INTF_TABLE: {
+                        "PortChannel1013:10.10.196.24/31": {},
+                        "PortChannel1023:2603:10b0:503:df4::5d/126": {},
+                        "PortChannel1024": {}
+                    }
+                },
+                ASIC_DB: {
+                    RT_ENTRY_TABLE: {
+                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
+                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
+                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
+                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                    }
+                },
+            },
+        },
+        FRR_ROUTES: {
+            DEFAULTNS: {
+                "0.0.0.0/0": [
+                    {
+                        "prefix": "0.0.0.0/0",
+                        "vrfName": "default",
+                        "protocol": "bgp",
+                        "offloaded": "true",
+                    },
+                ],
+                "10.10.196.12/31": [
+                    {
+                        "prefix": "10.10.196.12/31",
+                        "vrfName": "default",
+                        "protocol": "bgp",
+                    },
+                ],
+                "10.10.196.24/31": [
+                    {
+                        "protocol": "connected",
+                    },
+                ],
+            },
+        },
+    },
+    "23": {
+        DESCR: "basic good one on multi-asic, bgp disabled",
+        MULTI_ASIC: True,
+        NAMESPACE: ['asic0'],
+        ARGS: "route_check -m INFO -i 1000",
+        PRE: {
+            ASIC0: {
+                CONFIG_DB: {
+                    DEVICE_METADATA: {
+                        LOCALHOST: {
+                        }
+                    },
+                    FEATURE_TABLE: {
+                        "bgp": {
+                            "state": "disabled"
+                        }
+                    }
+                },
+                APPL_DB: {
+                    ROUTE_TABLE: {
+                        "0.0.0.0/0" : { "ifname": "portchannel0" },
+                        "10.10.196.12/31" : { "ifname": "portchannel0" },
+                    },
+                    INTF_TABLE: {
+                        "PortChannel1013:10.10.196.24/31": {},
+                        "PortChannel1023:2603:10b0:503:df4::5d/126": {},
+                        "PortChannel1024": {}
+                    }
+                },
+                ASIC_DB: {
+                    RT_ENTRY_TABLE: {
+                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
+                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
+                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
+                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                    }
+                },
+            },
+        },
+        FRR_ROUTES: {
+            ASIC0: {
+                "0.0.0.0/0": [
+                    {
+                        "prefix": "0.0.0.0/0",
+                        "vrfName": "default",
+                        "protocol": "bgp",
+                        "offloaded": "true",
+                    },
+                ],
+                "10.10.196.12/31": [
+                    {
+                        "prefix": "10.10.196.12/31",
+                        "vrfName": "default",
+                        "protocol": "bgp",
+                    },
+                ],
+                "10.10.196.24/31": [
+                    {
+                        "protocol": "connected",
+                    },
+                ],
+            },
+        },
+    },
 }
