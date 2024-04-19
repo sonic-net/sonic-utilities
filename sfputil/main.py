@@ -705,7 +705,7 @@ def eeprom_hexdump(port, page):
             page = 0
         else:
             page = validate_eeprom_page(page)
-        return_code, output = eeprom_hexdump_single_port(port, int(str(page), base=16))
+        return_code, output = eeprom_hexdump_single_port(port, page)
         click.echo(output)
         sys.exit(return_code)
     else:
