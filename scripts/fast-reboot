@@ -252,6 +252,7 @@ function backup_database()
                                           and not string.match(k, 'MIRROR_SESSION_TABLE|') \
                                           and not string.match(k, 'FG_ROUTE_TABLE|') \
                                           and not string.match(k, 'WARM_RESTART_ENABLE_TABLE|') \
+                                          and not string.match(k, 'TRANSCEIVER_INFO|') \
                                           and not string.match(k, 'VXLAN_TUNNEL_TABLE|') \
                                           and not string.match(k, 'BUFFER_MAX_PARAM_TABLE|') \
                                           and not string.match(k, 'FAST_RESTART_ENABLE_TABLE|') then
