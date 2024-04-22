@@ -2710,18 +2710,51 @@
     },
     "FABRIC_PORT|Fabric0": {
         "alias": "Fabric0",
+        "forceUnisolateStatus": "0",
         "isolateStatus": "False",
         "lanes": "0"
     },
     "FABRIC_PORT|Fabric1": {
         "alias": "Fabric1",
+        "forceUnisolateStatus": "0",
         "isolateStatus": "False",
         "lanes": "1"
     },
     "FABRIC_PORT|Fabric2": {
         "alias": "Fabric2",
+        "forceUnisolateStatus": "0",
         "isolateStatus": "False",
         "lanes": "2"
+    },
+    "FABRIC_PORT|Fabric3": {
+        "alias": "Fabric3",
+        "forceUnisolateStatus": "0",
+        "isolateStatus": "False",
+        "lanes": "3"
+    },
+    "FABRIC_PORT|Fabric4": {
+        "alias": "Fabric4",
+        "forceUnisolateStatus": "0",
+        "isolateStatus": "False",
+        "lanes": "4"
+    },
+    "FABRIC_PORT|Fabric5": {
+        "alias": "Fabric5",
+        "forceUnisolateStatus": "0",
+        "isolateStatus": "False",
+        "lanes": "5"
+    },
+    "FABRIC_PORT|Fabric6": {
+        "alias": "Fabric6",
+        "forceUnisolateStatus": "0",
+        "isolateStatus": "False",
+        "lanes": "6"
+    },
+    "FABRIC_PORT|Fabric7": {
+        "alias": "Fabric7",
+        "forceUnisolateStatus": "0",
+        "isolateStatus": "False",
+        "lanes": "7"
     },
     "DHCP_RELAY|Vlan1000": {
         "dhcpv6_servers": [

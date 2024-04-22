@@ -16,6 +16,18 @@ def counters():
 @fabric.group(invoke_without_command=True)
 @multi_asic_util.multi_asic_click_option_namespace
 @click.option('-e', '--errors', is_flag=True)
+def isolation(namespace, errors):
+    """Show fabric isolation status"""
+    cmd = ['fabricstat',  '-i']
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
+    if errors:
+        cmd += ["-e"]
+    clicommon.run_command(cmd)
+
+@fabric.group(invoke_without_command=True)
+@multi_asic_util.multi_asic_click_option_namespace
+@click.option('-e', '--errors', is_flag=True)
 def reachability(namespace, errors):
     """Show fabric reachability"""
     cmd = ['fabricstat', '-r']

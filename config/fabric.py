@@ -2,7 +2,10 @@ import click
 import utilities_common.cli as clicommon
 import utilities_common.multi_asic as multi_asic_util
 from sonic_py_common import multi_asic
-from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
+from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector, APP_FABRIC_PORT_TABLE_NAME
+
+FABRIC_PORT_STATUS_TABLE_PREFIX = APP_FABRIC_PORT_TABLE_NAME+"|"
+
 
 #
 # 'config fabric ...'
@@ -66,18 +69,12 @@ def isolate(portid, namespace):
 #
 @port.command()
 @click.argument('portid', metavar='<portid>', required=True)
+@click.option('-f', '--force', is_flag=True, default=False, help='Force to unisolate a link even if it is auto isolated.')
 @multi_asic_util.multi_asic_click_option_namespace
-def unisolate(portid, namespace):
+def unisolate(portid, namespace, force):
     """FABRIC PORT unisolate <portid>"""
 
     ctx = click.get_current_context()
-
-    if not portid.isdigit():
-        ctx.fail("Invalid portid")
-
-    n_asics = multi_asic.get_num_asics()
-    if n_asics > 1 and namespace is None:
-        ctx.fail('Must specify asic')
 
     # Connect to config database
     config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
@@ -86,6 +83,37 @@ def unisolate(portid, namespace):
     # Connect to state database
     state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
     state_db.connect(state_db.STATE_DB, False)
+
+    n_asics = multi_asic.get_num_asics()
+    if n_asics > 1 and namespace is None:
+       ctx.fail( 'Must specify asic' )
+
+    # If "all" is specified then unisolate all ports.
+    if portid == "all":
+       port_keys = state_db.keys(state_db.STATE_DB, FABRIC_PORT_STATUS_TABLE_PREFIX + '*')
+       for port_key in port_keys:
+          port_data = state_db.get_all(state_db.STATE_DB, port_key)
+          if "REMOTE_PORT" in port_data:
+             port_number = int( port_key.replace( "FABRIC_PORT_TABLE|PORT", "" ) )
+
+             # Make sure configuration data exists
+             portName = f'Fabric{port_number}'
+             portConfigData = config_db.get_all(config_db.CONFIG_DB, "FABRIC_PORT|" + portName)
+             if not bool( portConfigData ):
+                ctx.fail( "Fabric monitor configuration data not present" )
+
+             # Update entry
+             config_db.mod_entry( "FABRIC_PORT", portName, {'isolateStatus': False} )
+             if force:
+                forceShutCnt = int( portConfigData['forceUnisolateStatus'] )
+                forceShutCnt += 1
+                config_db.mod_entry( "FABRIC_PORT", portName,
+                                     {'forceUnisolateStatus': forceShutCnt})
+
+       return
+
+    if not portid.isdigit():
+       ctx.fail( "Invalid portid" )
 
     # check if the port is actually in use
     portName = f'PORT{portid}'
@@ -101,6 +129,15 @@ def unisolate(portid, namespace):
 
     # Update entry
     config_db.mod_entry("FABRIC_PORT", portName, {'isolateStatus': False})
+
+    if force:
+        forceShutCnt = int( portConfigData['forceUnisolateStatus'] )
+        forceShutCnt += 1
+        config_db.mod_entry( "FABRIC_PORT", portName,
+                             {'forceUnisolateStatus': forceShutCnt})
+
+        click.echo("Force unisolate the link.")
+        click.echo("It will clear all fabric link monitoring status for this link!")
 
 #
 # 'config fabric port monitor ...'
