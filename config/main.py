@@ -19,7 +19,7 @@ import tempfile
 from jsonpatch import JsonPatchConflict
 from jsonpointer import JsonPointerException
 from collections import OrderedDict
-from generic_config_updater.generic_updater import GenericUpdater, ConfigFormat
+from generic_config_updater.generic_updater import GenericUpdater, ConfigFormat, extract_scope
 from minigraph import parse_device_desc_xml, minigraph_encoder
 from natsort import natsorted
 from portconfig import get_child_ports
@@ -1152,6 +1152,24 @@ def validate_gre_type(ctx, _, value):
         return gre_type_value
     except ValueError:
         raise click.UsageError("{} is not a valid GRE type".format(value))
+    
+# Function to apply patch for a single ASIC.
+def apply_patch_for_scope(scope_changes, results, config_format, verbose, dry_run, ignore_non_yang_tables, ignore_path):
+    scope, changes = scope_changes
+    # Replace localhost to DEFAULT_NAMESPACE which is db definition of Host
+    if scope.lower() == "localhost" or scope == "":
+        scope = multi_asic.DEFAULT_NAMESPACE
+        
+    scope_for_log = scope if scope else "localhost"
+    try:
+        # Call apply_patch with the ASIC-specific changes and predefined parameters
+        GenericUpdater(namespace=scope).apply_patch(jsonpatch.JsonPatch(changes), config_format, verbose, dry_run, ignore_non_yang_tables, ignore_path)
+        results[scope_for_log] = {"success": True, "message": "Success"}
+        log.log_notice(f"'apply-patch' executed successfully for {scope_for_log} by {changes}")
+    except Exception as e:
+        results[scope_for_log] = {"success": False, "message": str(e)}
+        log.log_error(f"'apply-patch' executed failed for {scope_for_log} by {changes} due to {str(e)}")
+
 
 # This is our main entrypoint - the main 'config' command
 @click.group(cls=clicommon.AbbreviationGroup, context_settings=CONTEXT_SETTINGS)
@@ -1357,12 +1375,47 @@ def apply_patch(ctx, patch_file_path, format, dry_run, ignore_non_yang_tables, i
             patch_as_json = json.loads(text)
             patch = jsonpatch.JsonPatch(patch_as_json)
 
+        results = {}
         config_format = ConfigFormat[format.upper()]
-        GenericUpdater().apply_patch(patch, config_format, verbose, dry_run, ignore_non_yang_tables, ignore_path)
+        # Initialize a dictionary to hold changes categorized by scope
+        changes_by_scope = {}
 
+        # Iterate over each change in the JSON Patch
+        for change in patch:
+            scope, modified_path = extract_scope(change["path"])
+
+            # Modify the 'path' in the change to remove the scope
+            change["path"] = modified_path
+
+            # Check if the scope is already in our dictionary, if not, initialize it
+            if scope not in changes_by_scope:
+                changes_by_scope[scope] = []
+
+            # Add the modified change to the appropriate list based on scope
+            changes_by_scope[scope].append(change)
+
+        # Empty case to force validate YANG model.
+        if not changes_by_scope:
+            asic_list = [multi_asic.DEFAULT_NAMESPACE]
+            asic_list.extend(multi_asic.get_namespace_list())
+            for asic in asic_list:
+                changes_by_scope[asic] = []
+
+        # Apply changes for each scope
+        for scope_changes in changes_by_scope.items():
+            apply_patch_for_scope(scope_changes, results, config_format, verbose, dry_run, ignore_non_yang_tables, ignore_path)
+
+        # Check if any updates failed
+        failures = [scope for scope, result in results.items() if not result['success']]
+
+        if failures:
+            failure_messages = '\n'.join([f"- {failed_scope}: {results[failed_scope]['message']}" for failed_scope in failures])
+            raise Exception(f"Failed to apply patch on the following scopes:\n{failure_messages}")
+
+        log.log_notice(f"Patch applied successfully for {patch}.")
         click.secho("Patch applied successfully.", fg="cyan", underline=True)
     except Exception as ex:
-        click.secho("Failed to apply patch", fg="red", underline=True, err=True)
+        click.secho("Failed to apply patch due to: {}".format(ex), fg="red", underline=True, err=True)
         ctx.fail(ex)
 
 @config.command()
@@ -2078,7 +2131,7 @@ def synchronous_mode(sync_mode):
     if ADHOC_VALIDATION:
         if sync_mode != 'enable' and sync_mode != 'disable':
             raise click.BadParameter("Error: Invalid argument %s, expect either enable or disable" % sync_mode)
-        
+
     config_db = ValidatedConfigDBConnector(ConfigDBConnector())
     config_db.connect()
     try:
@@ -2086,7 +2139,7 @@ def synchronous_mode(sync_mode):
     except ValueError as e:
         ctx = click.get_current_context()
         ctx.fail("Error: Invalid argument %s, expect either enable or disable" % sync_mode)
-    
+
     click.echo("""Wrote %s synchronous mode into CONFIG_DB, swss restart required to apply the configuration: \n
     Option 1. config save -y \n
               config reload -y \n
@@ -2152,7 +2205,7 @@ def portchannel(db, ctx, namespace):
 @click.pass_context
 def add_portchannel(ctx, portchannel_name, min_links, fallback, fast_rate):
     """Add port channel"""
-    
+
     fvs = {
         'admin_status': 'up',
         'mtu': '9100',
@@ -2164,7 +2217,7 @@ def add_portchannel(ctx, portchannel_name, min_links, fallback, fast_rate):
         fvs['min_links'] = str(min_links)
     if fallback != 'false':
         fvs['fallback'] = 'true'
-    
+
     db = ValidatedConfigDBConnector(ctx.obj['db'])
     if ADHOC_VALIDATION:
         if is_portchannel_name_valid(portchannel_name) != True:
@@ -2172,18 +2225,18 @@ def add_portchannel(ctx, portchannel_name, min_links, fallback, fast_rate):
                     .format(portchannel_name, CFG_PORTCHANNEL_PREFIX, CFG_PORTCHANNEL_NO))
         if is_portchannel_present_in_db(db, portchannel_name):
             ctx.fail("{} already exists!".format(portchannel_name)) # TODO: MISSING CONSTRAINT IN YANG MODEL
-    
+
     try:
         db.set_entry('PORTCHANNEL', portchannel_name, fvs)
     except ValueError:
         ctx.fail("{} is invalid!, name should have prefix '{}' and suffix '{}'".format(portchannel_name, CFG_PORTCHANNEL_PREFIX, CFG_PORTCHANNEL_NO))
- 
+
 @portchannel.command('del')
 @click.argument('portchannel_name', metavar='<portchannel_name>', required=True)
 @click.pass_context
 def remove_portchannel(ctx, portchannel_name):
     """Remove port channel"""
-    
+
     db = ValidatedConfigDBConnector(ctx.obj['db'])
     if ADHOC_VALIDATION:
         if is_portchannel_name_valid(portchannel_name) != True:
@@ -2201,7 +2254,7 @@ def remove_portchannel(ctx, portchannel_name):
 
         if len([(k, v) for k, v in db.get_table('PORTCHANNEL_MEMBER') if k == portchannel_name]) != 0: # TODO: MISSING CONSTRAINT IN YANG MODEL
             ctx.fail("Error: Portchannel {} contains members. Remove members before deleting Portchannel!".format(portchannel_name))
-    
+
     try:
         db.set_entry('PORTCHANNEL', portchannel_name, None)
     except JsonPatchConflict:
@@ -2219,7 +2272,7 @@ def portchannel_member(ctx):
 def add_portchannel_member(ctx, portchannel_name, port_name):
     """Add member to port channel"""
     db = ValidatedConfigDBConnector(ctx.obj['db'])
-    
+
     if ADHOC_VALIDATION:
         if clicommon.is_port_mirror_dst_port(db, port_name):
             ctx.fail("{} is configured as mirror destination port".format(port_name)) # TODO: MISSING CONSTRAINT IN YANG MODEL
@@ -2236,7 +2289,7 @@ def add_portchannel_member(ctx, portchannel_name, port_name):
         # Dont proceed if the port channel does not exist
         if is_portchannel_present_in_db(db, portchannel_name) is False:
             ctx.fail("{} is not present.".format(portchannel_name))
- 
+
         # Don't allow a port to be member of port channel if it is configured with an IP address
         for key,value in db.get_table('INTERFACE').items():
             if type(key) == tuple:
@@ -2274,7 +2327,7 @@ def add_portchannel_member(ctx, portchannel_name, port_name):
                     member_port_speed = member_port_entry.get(PORT_SPEED)
 
                     port_speed = port_entry.get(PORT_SPEED) # TODO: MISSING CONSTRAINT IN YANG MODEL
-                    if member_port_speed != port_speed: 
+                    if member_port_speed != port_speed:
                         ctx.fail("Port speed of {} is different than the other members of the portchannel {}"
                                  .format(port_name, portchannel_name))
 
@@ -2347,7 +2400,7 @@ def del_portchannel_member(ctx, portchannel_name, port_name):
         # Dont proceed if the the port is not an existing member of the port channel
         if not is_port_member_of_this_portchannel(db, port_name, portchannel_name):
             ctx.fail("{} is not a member of portchannel {}".format(port_name, portchannel_name))
-    
+
     try:
         db.set_entry('PORTCHANNEL_MEMBER', portchannel_name + '|' + port_name, None)
     except JsonPatchConflict:
@@ -2534,7 +2587,7 @@ def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer
     if not namespaces['front_ns']:
         config_db = ValidatedConfigDBConnector(ConfigDBConnector())
         config_db.connect()
-        if ADHOC_VALIDATION: 
+        if ADHOC_VALIDATION:
             if validate_mirror_session_config(config_db, session_name, None, src_port, direction) is False:
                 return
         try:
@@ -3504,7 +3557,7 @@ def del_community(db, community):
         if community not in snmp_communities:
             click.echo("SNMP community {} is not configured".format(community))
             sys.exit(1)
-    
+
     config_db = ValidatedConfigDBConnector(db.cfgdb)
     try:
         config_db.set_entry('SNMP_COMMUNITY', community, None)
@@ -4562,7 +4615,7 @@ def fec(ctx, interface_name, interface_fec, verbose):
 def ip(ctx):
     """Set IP interface attributes"""
     pass
-  
+
 def validate_vlan_exists(db,text):
     data = db.get_table('VLAN')
     keys = list(data.keys())
@@ -4630,12 +4683,12 @@ def add(ctx, interface_name, ip_addr, gw):
     table_name = get_interface_table_name(interface_name)
     if table_name == "":
         ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan/Loopback]")
-    
+
     if table_name == "VLAN_INTERFACE":
         if not validate_vlan_exists(config_db, interface_name):
             ctx.fail(f"Error: {interface_name} does not exist. Vlan must be created before adding an IP address")
             return
-    
+
     interface_entry = config_db.get_entry(table_name, interface_name)
     if len(interface_entry) == 0:
         if table_name == "VLAN_SUB_INTERFACE":
@@ -5057,7 +5110,7 @@ def cable_length(ctx, interface_name, length):
 
     if not is_dynamic_buffer_enabled(config_db):
         ctx.fail("This command can only be supported on a system with dynamic buffer enabled")
-    
+
     if ADHOC_VALIDATION:
         # Check whether port is legal
         ports = config_db.get_entry("PORT", interface_name)
@@ -5402,7 +5455,7 @@ def unbind(ctx, interface_name):
         config_db.set_entry(table_name, interface_name, subintf_entry)
     else:
         config_db.set_entry(table_name, interface_name, None)
-    
+
     click.echo("Interface {} IP disabled and address(es) removed due to unbinding VRF.".format(interface_name))
 #
 # 'ipv6' subgroup ('config interface ipv6 ...')
@@ -6580,7 +6633,7 @@ def add_loopback(ctx, loopback_name):
         lo_intfs = [k for k, v in config_db.get_table('LOOPBACK_INTERFACE').items() if type(k) != tuple]
         if loopback_name in lo_intfs:
             ctx.fail("{} already exists".format(loopback_name)) # TODO: MISSING CONSTRAINT IN YANG VALIDATION
-    
+
     try:
         config_db.set_entry('LOOPBACK_INTERFACE', loopback_name, {"NULL" : "NULL"})
     except ValueError:
@@ -6604,7 +6657,7 @@ def del_loopback(ctx, loopback_name):
     ips = [ k[1] for k in lo_config_db if type(k) == tuple and k[0] == loopback_name ]
     for ip in ips:
         config_db.set_entry('LOOPBACK_INTERFACE', (loopback_name, ip), None)
-    
+
     try:
         config_db.set_entry('LOOPBACK_INTERFACE', loopback_name, None)
     except JsonPatchConflict:
@@ -6662,9 +6715,9 @@ def ntp(ctx):
 def add_ntp_server(ctx, ntp_ip_address):
     """ Add NTP server IP """
     if ADHOC_VALIDATION:
-        if not clicommon.is_ipaddress(ntp_ip_address): 
+        if not clicommon.is_ipaddress(ntp_ip_address):
             ctx.fail('Invalid IP address')
-    db = ValidatedConfigDBConnector(ctx.obj['db'])    
+    db = ValidatedConfigDBConnector(ctx.obj['db'])
     ntp_servers = db.get_table("NTP_SERVER")
     if ntp_ip_address in ntp_servers:
         click.echo("NTP server {} is already configured".format(ntp_ip_address))
@@ -6675,7 +6728,7 @@ def add_ntp_server(ctx, ntp_ip_address):
                          {'resolve_as': ntp_ip_address,
                           'association_type': 'server'})
         except ValueError as e:
-            ctx.fail("Invalid ConfigDB. Error: {}".format(e)) 
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
         click.echo("NTP server {} added to configuration".format(ntp_ip_address))
         try:
             click.echo("Restarting ntp-config service...")
@@ -6691,7 +6744,7 @@ def del_ntp_server(ctx, ntp_ip_address):
     if ADHOC_VALIDATION:
         if not clicommon.is_ipaddress(ntp_ip_address):
             ctx.fail('Invalid IP address')
-    db = ValidatedConfigDBConnector(ctx.obj['db'])    
+    db = ValidatedConfigDBConnector(ctx.obj['db'])
     ntp_servers = db.get_table("NTP_SERVER")
     if ntp_ip_address in ntp_servers:
         try:
@@ -7019,19 +7072,19 @@ def add(ctx, name, ipaddr, port, vrf):
     if not is_valid_collector_info(name, ipaddr, port, vrf):
         return
 
-    config_db = ValidatedConfigDBConnector(ctx.obj['db']) 
+    config_db = ValidatedConfigDBConnector(ctx.obj['db'])
     collector_tbl = config_db.get_table('SFLOW_COLLECTOR')
 
     if (collector_tbl and name not in collector_tbl and len(collector_tbl) == 2):
         click.echo("Only 2 collectors can be configured, please delete one")
         return
-    
+
     try:
         config_db.mod_entry('SFLOW_COLLECTOR', name,
                             {"collector_ip": ipaddr,  "collector_port": port,
                              "collector_vrf": vrf})
     except ValueError as e:
-        ctx.fail("Invalid ConfigDB. Error: {}".format(e)) 
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
     return
 
 #
@@ -7364,7 +7417,7 @@ def add_subinterface(ctx, subinterface_name, vid):
     if vid is not None:
         subintf_dict.update({"vlan" : vid})
     subintf_dict.update({"admin_status" : "up"})
-    
+
     try:
         config_db.set_entry('VLAN_SUB_INTERFACE', subinterface_name, subintf_dict)
     except ValueError as e:
