@@ -5,7 +5,7 @@ import argparse
 from unittest import mock
 from deepdiff import DeepDiff
 
-from swsscommon.swsscommon import SonicV2Connector
+from swsscommon.swsscommon import SonicV2Connector, SonicDBConfig
 from sonic_py_common import device_info
 
 from .mock_tables import dbconnector
@@ -886,6 +886,22 @@ class TestMain(object):
     @mock.patch('argparse.ArgumentParser.parse_args')
     def test_init(self, mock_args):
         mock_args.return_value=argparse.Namespace(namespace=None, operation='get_version', socket=None)
+        import db_migrator
+        db_migrator.main()
+
+    @mock.patch('argparse.ArgumentParser.parse_args')
+    @mock.patch('swsscommon.swsscommon.SonicDBConfig.isInit', mock.MagicMock(return_value=False))
+    @mock.patch('swsscommon.swsscommon.SonicDBConfig.initialize', mock.MagicMock())
+    def test_init_no_namespace(self, mock_args):
+        mock_args.return_value=argparse.Namespace(namespace=None, operation='version_202405_01', socket=None)
+        import db_migrator
+        db_migrator.main()
+
+    @mock.patch('argparse.ArgumentParser.parse_args')
+    @mock.patch('swsscommon.swsscommon.SonicDBConfig.isGlobalInit', mock.MagicMock(return_value=False))
+    @mock.patch('swsscommon.swsscommon.SonicDBConfig.initializeGlobalConfig', mock.MagicMock())
+    def test_init_namespace(self, mock_args):
+        mock_args.return_value=argparse.Namespace(namespace="asic0", operation='version_202405_01', socket=None)
         import db_migrator
         db_migrator.main()
 

@@ -8,10 +8,9 @@ import traceback
 import re
 
 from sonic_py_common import device_info, logger
-from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
+from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector, SonicDBConfig
 from minigraph import parse_xml
 from utilities_common.helper import update_config
-from utilities_common.general import load_db_config
 
 INIT_CFG_FILE = '/etc/sonic/init_cfg.json'
 MINIGRAPH_FILE = '/etc/sonic/minigraph.xml'
@@ -1277,7 +1276,14 @@ def main():
         socket_path = args.socket
         namespace = args.namespace
 
-        load_db_config()
+        # Can't load global config base on the result of is_multi_asic(), because on multi-asic device, when db_migrate.py
+        # run on the local database, ASIC instance will have not created the /var/run/redis0/sonic-db/database-config.json
+        if args.namespace is not None:
+            if not SonicDBConfig.isGlobalInit():
+                SonicDBConfig.initializeGlobalConfig()
+        else:
+            if not SonicDBConfig.isInit():
+                SonicDBConfig.initialize()
 
         if socket_path:
             dbmgtr = DBMigrator(namespace, socket=socket_path)
