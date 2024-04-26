@@ -1671,5 +1671,15 @@
         "minimum_current": "339",
         "timestamp": "20230704 17:38:04",
         "warning_status": "False"
+    },
+    "FABRIC_CAPACITY_TABLE|FABRIC_CAPACITY_DATA" : {
+        "fabric_capacity": "88632",
+        "missing_capacity": "265896",
+        "operating_links": "2",
+        "number_of_links": "8",
+        "warning_threshold": "100"
+    },
+    "PORT_CAPACITY_TABLE|PORT_CAPACITY_DATA" : {
+        "capacity": "80000"
     }
 }

@@ -2703,6 +2703,7 @@
         "direction": "RX"
     },
     "FABRIC_MONITOR|FABRIC_MONITOR_DATA": {
+        "monCapacityThreshWarn": "100",
         "monErrThreshCrcCells": "1",
         "monErrThreshRxCells": "61035156",
         "monPollThreshIsolation": "1",

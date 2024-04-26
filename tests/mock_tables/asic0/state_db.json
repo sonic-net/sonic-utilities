@@ -304,5 +304,15 @@
     },
     "ACL_RULE_TABLE|DATAACL_5|RULE_1" : {
         "status": "Active"
+    },
+    "FABRIC_CAPACITY_TABLE|FABRIC_CAPACITY_DATA" : {
+        "fabric_capacity": "221580",
+        "missing_capacity": "132948",
+        "operating_links": "5",
+        "number_of_links": "8",
+        "warning_threshold": "100"
+    },
+    "PORT_CAPACITY_TABLE|PORT_CAPACITY_DATA" : {
+        "capacity": "80000"
     }
 }

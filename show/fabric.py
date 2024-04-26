@@ -13,6 +13,23 @@ def counters():
     """Show fabric port counters"""
     pass
 
+@fabric.group(cls=clicommon.AliasedGroup)
+def monitor():
+    """Show fabric monitor"""
+    pass
+
+@monitor.group(invoke_without_command=True)
+@multi_asic_util.multi_asic_click_option_namespace
+@click.option('-e', '--errors', is_flag=True)
+def capacity(namespace, errors):
+    """Show fabric capacity"""
+    cmd = ['fabricstat', '-c']
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
+    if errors:
+        cmd += ['-e']
+    clicommon.run_command(cmd)
+
 @fabric.group(invoke_without_command=True)
 @multi_asic_util.multi_asic_click_option_namespace
 @click.option('-e', '--errors', is_flag=True)

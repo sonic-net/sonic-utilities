@@ -315,3 +315,45 @@ def recovery(pollcount, namespace):
         {"monPollThreshRecovery": pollcount})
 
 
+#
+# 'config fabric monitor ...'
+#
+@fabric.group(cls=clicommon.AbbreviationGroup, name='monitor')
+def capacity_monitor():
+    """FABRIC MONITOR configuration tasks"""
+    pass
+
+#
+# 'config fabric monitor capacity...'
+#
+@capacity_monitor.group(cls=clicommon.AbbreviationGroup)
+def capacity():
+    """FABRIC MONITOR CAPACITY configuration tasks"""
+    pass
+
+#
+# 'config fabric monitor capacity threshold <capcityThresh>'
+#
+@capacity.command()
+@click.argument('capacitythreshold', metavar='<capacityThreshold>', required=True, type=int)
+def threshold(capacitythreshold):
+    """FABRIC CAPACITY MONITOR THRESHOLD configuration tasks"""
+    ctx = click.get_current_context()
+
+    if capacitythreshold < 5 or capacitythreshold > 250:
+        ctx.fail("threshold must be in range 5...250")
+
+    namespaces = multi_asic.get_namespace_list()
+    for idx, namespace in enumerate(namespaces, start=1):
+        # Connect to config database
+        config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
+        config_db.connect()
+
+        # Make sure configuration data exists
+        monitorData = config_db.get_all(config_db.CONFIG_DB, "FABRIC_MONITOR|FABRIC_MONITOR_DATA")
+        if not bool(monitorData):
+            ctx.fail("Fabric monitor configuration data not present")
+
+        # Update entry
+        config_db.mod_entry("FABRIC_MONITOR", "FABRIC_MONITOR_DATA",
+            {"monCapacityThreshWarn": capacitythreshold})

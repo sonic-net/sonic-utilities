@@ -270,5 +270,15 @@
     },
     "FABRIC_PORT_TABLE|PORT7" : {
         "STATUS": "down"
+    },
+    "FABRIC_CAPACITY_TABLE|FABRIC_CAPACITY_DATA" : {
+        "fabric_capacity": "88632",
+        "missing_capacity": "265896",
+        "operating_links": "2",
+        "number_of_links": "8",
+        "warning_threshold": "100"
+    },
+    "PORT_CAPACITY_TABLE|PORT_CAPACITY_DATA" : {
+        "capacity": "80000"
     }
 }

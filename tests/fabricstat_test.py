@@ -151,6 +151,25 @@ asic0
            7                0             93        up
 """
 
+multi_asic_fabric_capacity = """\
+Monitored fabric capacity threshold: 100%
+
+  ASIC    Operating     Total #     %    Last Event    Last Time
+              Links    of Links
+------  -----------  ----------  ----  ------------  -----------
+ asic0            5           8  62.5          None        Never
+ asic1            2           8  25            None        Never
+"""
+
+multi_asic_fabric_capacity_asic0 = """\
+Monitored fabric capacity threshold: 100%
+
+  ASIC    Operating     Total #     %    Last Event    Last Time
+              Links    of Links
+------  -----------  ----------  ----  ------------  -----------
+ asic0            5           8  62.5          None        Never
+"""
+
 multi_asic_fabric_isolation = """\
 
 asic0
@@ -180,7 +199,6 @@ asic0
            6                0                  0           0
            7                0                  0           0
 """
-
 
 class TestFabricStat(object):
     @classmethod
@@ -301,6 +319,20 @@ class TestMultiAsicFabricStat(object):
         print("result = {}".format(result))
         assert return_code == 0
         assert result == multi_asic_fabric_reachability_asic0
+
+    def test_mutli_show_fabric_capacity(self):
+        return_code, result = get_result_and_return_code(['fabricstat', '-c'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result == multi_asic_fabric_capacity
+
+    def test_multi_show_fabric_capacity_asic(self):
+        return_code, result = get_result_and_return_code(['fabricstat', '-c', '-n', 'asic0'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result == multi_asic_fabric_capacity_asic0
 
     def test_multi_show_fabric_isolation(self):
         return_code, result = get_result_and_return_code(['fabricstat', '-i'])
