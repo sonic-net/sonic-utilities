@@ -157,6 +157,7 @@ class TestMellanoxBufferMigrator(object):
                              ['empty-config',
                               'empty-config-with-device-info-generic',
                               'empty-config-with-device-info-traditional',
+                              'empty-config-with-device-info-nvidia',
                               'non-default-config',
                               'non-default-xoff',
                               'non-default-lossless-profile-in-pg',
