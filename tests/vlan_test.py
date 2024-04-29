@@ -368,13 +368,17 @@ class TestVlan(object):
         assert "Error: Vlan1000 can not be removed. First remove IP addresses assigned to this VLAN" in result.output
 
         # remove vlan IP`s
-        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"], ["Vlan1000", "192.168.0.1/21"], obj=obj)
-        print(result.exit_code, result.output)
-        assert result.exit_code != 0
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"], ["Vlan1000", "192.168.0.1/21"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 1
 
-        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"], ["Vlan1000", "fc02:1000::1/64"], obj=obj)
-        print(result.exit_code, result.output)
-        assert result.exit_code != 0
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"], ["Vlan1000", "fc02:1000::1/64"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 1
 
         # del vlan with IP
         result = runner.invoke(config.config.commands["vlan"].commands["del"], ["1000"], obj=db)
@@ -778,15 +782,19 @@ class TestVlan(object):
         obj = {"config_db": db.cfgdb}
 
         # remove vlan IP`s
-        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"],
-                               ["Vlan1000", "192.168.0.1/21"], obj=obj)
-        print(result.exit_code, result.output)
-        assert result.exit_code != 0
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"],
+                                   ["Vlan1000", "192.168.0.1/21"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 1
 
-        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"],
-                               ["Vlan1000", "fc02:1000::1/64"], obj=obj)
-        print(result.exit_code, result.output)
-        assert result.exit_code != 0
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"],
+                                   ["Vlan1000", "fc02:1000::1/64"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 1
 
         # remove vlan members
         vlan_member = db.cfgdb.get_table("VLAN_MEMBER")

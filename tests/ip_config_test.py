@@ -99,22 +99,28 @@ class TestConfigIP(object):
         assert ('Eth36.10', '32.11.10.1/24') in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
 
         # config int ip remove Ethernet64 10.10.10.1/24
-        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"], ["Ethernet64", "10.10.10.1/24"], obj=obj)
-        print(result.exit_code, result.output)
-        assert result.exit_code != 0
-        assert ('Ethernet64', '10.10.10.1/24') not in db.cfgdb.get_table('INTERFACE')
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"], ["Ethernet64", "10.10.10.1/24"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 1
+            assert ('Ethernet64', '10.10.10.1/24') not in db.cfgdb.get_table('INTERFACE')
 
         # config int ip remove Ethernet0.10 10.11.10.1/24
-        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"], ["Ethernet0.10", "10.11.10.1/24"], obj=obj)
-        print(result.exit_code, result.output)
-        assert result.exit_code != 0
-        assert ('Ethernet0.10', '10.11.10.1/24') not in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"], ["Ethernet0.10", "10.11.10.1/24"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 1
+            assert ('Ethernet0.10', '10.11.10.1/24') not in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
 
         # config int ip remove Eth36.10 32.11.10.1/24
-        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"], ["Eth36.10", "32.11.10.1/24"], obj=obj)
-        print(result.exit_code, result.output)
-        assert result.exit_code != 0
-        assert ('Eth36.10', '32.11.10.1/24') not in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"], ["Eth36.10", "32.11.10.1/24"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 1
+            assert ('Eth36.10', '32.11.10.1/24') not in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
 
     def test_add_interface_invalid_ipv4(self):
         db = Db()
@@ -185,20 +191,26 @@ class TestConfigIP(object):
         assert ('Eth36.10', '3210:1db8:11a3:19d7:1f34:8a2e:17a0:765d/34') in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
 
         # config int ip remove Ethernet72 2001:1db8:11a3:19d7:1f34:8a2e:17a0:765d/34
-        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"], ["Ethernet72", "2001:1db8:11a3:19d7:1f34:8a2e:17a0:765d/34"], obj=obj)
-        print(result.exit_code, result.output)
-        assert result.exit_code != 0
-        assert ('Ethernet72', '2001:1db8:11a3:19d7:1f34:8a2e:17a0:765d/34') not in db.cfgdb.get_table('INTERFACE')
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"], ["Ethernet72", "2001:1db8:11a3:19d7:1f34:8a2e:17a0:765d/34"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 1
+            assert ('Ethernet72', '2001:1db8:11a3:19d7:1f34:8a2e:17a0:765d/34') not in db.cfgdb.get_table('INTERFACE')
 
-        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"], ["Ethernet0.10", "1010:1db8:11a3:19d7:1f34:8a2e:17a0:765d/34"], obj=obj)
-        print(result.exit_code, result.output)
-        assert result.exit_code != 0
-        assert ('Ethernet0.10', '1010:1db8:11a3:19d7:1f34:8a2e:17a0:765d/34') not in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"], ["Ethernet0.10", "1010:1db8:11a3:19d7:1f34:8a2e:17a0:765d/34"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 1
+            assert ('Ethernet0.10', '1010:1db8:11a3:19d7:1f34:8a2e:17a0:765d/34') not in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
 
-        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"], ["Eth36.10", "3210:1db8:11a3:19d7:1f34:8a2e:17a0:765d/34"], obj=obj)
-        print(result.exit_code, result.output)
-        assert result.exit_code != 0
-        assert ('Eth36.10', '3210:1db8:11a3:19d7:1f34:8a2e:17a0:765d/34') not in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"], ["Eth36.10", "3210:1db8:11a3:19d7:1f34:8a2e:17a0:765d/34"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 1
+            assert ('Eth36.10', '3210:1db8:11a3:19d7:1f34:8a2e:17a0:765d/34') not in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
 
     def test_del_interface_case_sensitive_ipv6(self):
         db = Db()
@@ -209,10 +221,12 @@ class TestConfigIP(object):
         assert ('Ethernet72', 'FC00::1/126') in db.cfgdb.get_table('INTERFACE')
 
         # config int ip remove Ethernet72 FC00::1/126
-        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"], ["Ethernet72", "FC00::1/126"], obj=obj)
-        print(result.exit_code, result.output)
-        assert result.exit_code != 0
-        assert ('Ethernet72', 'FC00::1/126') not in db.cfgdb.get_table('INTERFACE')
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"], ["Ethernet72", "FC00::1/126"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 1
+            assert ('Ethernet72', 'FC00::1/126') not in db.cfgdb.get_table('INTERFACE')
 
     def test_add_interface_invalid_ipv6(self):
         db = Db()
@@ -248,10 +262,12 @@ class TestConfigIP(object):
         assert ('Ethernet68', '2001:db8:11a3:9d7:1f34:8a2e:7a0:765d/34') in db.cfgdb.get_table('INTERFACE')
 
         # config int ip remove Ethernet68 2001:0db8:11a3:09d7:1f34:8a2e:07a0:765d/34
-        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"], ["Ethernet68", "2001:0db8:11a3:09d7:1f34:8a2e:07a0:765d/34"], obj=obj)
-        print(result.exit_code, result.output)
-        assert result.exit_code != 0
-        assert ('Ethernet68', '2001:db8:11a3:9d7:1f34:8a2e:7a0:765d/34') not in db.cfgdb.get_table('INTERFACE')
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"], ["Ethernet68", "2001:0db8:11a3:09d7:1f34:8a2e:07a0:765d/34"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 1
+            assert ('Ethernet68', '2001:db8:11a3:9d7:1f34:8a2e:7a0:765d/34') not in db.cfgdb.get_table('INTERFACE')
 
     def test_add_del_interface_shortened_ipv6_with_leading_zeros(self):
         db = Db()
@@ -265,10 +281,12 @@ class TestConfigIP(object):
         assert ('Ethernet68', '3000::1/64') in db.cfgdb.get_table('INTERFACE')
 
         # config int ip remove Ethernet68 3000::001/64
-        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"], ["Ethernet68", "3000::001/64"], obj=obj)
-        print(result.exit_code, result.output)
-        assert result.exit_code != 0
-        assert ('Ethernet68', '3000::1/64') not in db.cfgdb.get_table('INTERFACE')
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"], ["Ethernet68", "3000::001/64"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 1
+            assert ('Ethernet68', '3000::1/64') not in db.cfgdb.get_table('INTERFACE')
 
     def test_intf_vrf_bind_unbind(self):
         runner = CliRunner()
