@@ -807,6 +807,39 @@ class DBMigrator():
                 sflow_key = "SFLOW_SESSION_TABLE:{}".format(key)
                 self.appDB.set(self.appDB.APPL_DB, sflow_key, 'sample_direction','rx')
 
+    def migrate_tacplus(self):
+        if not self.config_src_data or 'TACPLUS' not in self.config_src_data:
+            return
+
+        tacplus_new = self.config_src_data['TACPLUS']
+        log.log_notice('Migrate TACPLUS configuration')
+
+        global_old = self.configDB.get_entry('TACPLUS', 'global')
+        if not global_old:
+            global_new = tacplus_new.get("global")
+            self.configDB.set_entry("TACPLUS", "global", global_new)
+            log.log_info('Migrate TACPLUS global: {}'.format(global_new))
+
+    def migrate_aaa(self):
+        if not self.config_src_data or 'AAA' not in self.config_src_data:
+            return
+
+        aaa_new = self.config_src_data['AAA']
+        log.log_notice('Migrate AAA configuration')
+
+        authentication = self.configDB.get_entry('AAA', 'authentication')
+        if not authentication:
+            authentication_new = aaa_new.get("authentication")
+            self.configDB.set_entry("AAA", "authentication", authentication_new)
+            log.log_info('Migrate AAA authentication: {}'.format(authentication_new))
+
+        # setup per-command accounting
+        accounting = self.configDB.get_entry('AAA', 'accounting')
+        if not accounting:
+            accounting_new = aaa_new.get("accounting")
+            self.configDB.set_entry("AAA", "accounting", accounting_new)
+            log.log_info('Migrate AAA accounting: {}'.format(accounting_new))
+
     def version_unknown(self):
         """
         version_unknown tracks all SONiC versions that doesn't have a version
@@ -1233,6 +1266,9 @@ class DBMigrator():
         self.update_edgezone_aggregator_config()
         # update FRR config mode based on minigraph parser on target image
         self.migrate_routing_config_mode()
+
+        self.migrate_tacplus()
+        self.migrate_aaa()
 
     def migrate(self):
         version = self.get_version()

@@ -4,6 +4,7 @@ import sys
 import argparse
 from unittest import mock
 from deepdiff import DeepDiff
+import json
 
 from swsscommon.swsscommon import SonicV2Connector, SonicDBConfig
 from sonic_py_common import device_info
@@ -957,6 +958,54 @@ class TestGNMIMigrator(object):
         advance_version_for_expected_database(dbmgtr.configDB, expected_db.cfgdb, 'version_202405_01')
         resulting_table = dbmgtr.configDB.get_table("GNMI")
         expected_table = expected_db.cfgdb.get_table("GNMI")
+
+        diff = DeepDiff(resulting_table, expected_table, ignore_order=True)
+        assert not diff
+
+class TestAAAMigrator(object):
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "2"
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+        dbconnector.dedicated_dbs['CONFIG_DB'] = None
+
+    def load_golden_config(self, dbmgtr, test_json):
+        dbmgtr.config_src_data = {}
+
+        json_path = os.path.join(mock_db_path, 'config_db', test_json + ".json")
+        if os.path.exists(json_path):
+            with open(json_path) as f:
+                dbmgtr.config_src_data = json.load(f)
+                print("test_per_command_aaa load golden config success, config_src_data: {}".format(dbmgtr.config_src_data))
+        else:
+            print("test_per_command_aaa load golden config failed, file {} does not exist.".format(test_json))
+
+
+    @pytest.mark.parametrize('test_json', ['per_command_aaa_enable',
+                                           'per_command_aaa_no_passkey',
+                                           'per_command_aaa_disable',
+                                           'per_command_aaa_no_change',
+                                           'per_command_aaa_no_tacplus',
+                                           'per_command_aaa_no_authentication'])
+    def test_per_command_aaa(self, test_json):
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', test_json)
+        import db_migrator
+        dbmgtr = db_migrator.DBMigrator(None)
+        self.load_golden_config(dbmgtr, test_json + '_golden')
+        dbmgtr.migrate_tacplus()
+        dbmgtr.migrate_aaa()
+        resulting_table = dbmgtr.configDB.get_table("AAA")
+
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', test_json + '_expected')
+        expected_db = Db()
+        expected_table = expected_db.cfgdb.get_table("AAA")
+
+        print("test_per_command_aaa: {}".format(test_json))
+        print("test_per_command_aaa, resulting_table: {}".format(resulting_table))
+        print("test_per_command_aaa, expected_table: {}".format(expected_table))
 
         diff = DeepDiff(resulting_table, expected_table, ignore_order=True)
         assert not diff
