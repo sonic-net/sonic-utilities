@@ -21,6 +21,16 @@ variables:
       value: $(Build.SourceBranchName)
 
 stages:
+- stage: Pretest
+  jobs:
+  - job: static_analysis
+    displayName: "Static Analysis"
+    timeoutInMinutes: 10
+    continueOnError: true
+    pool: ubuntu-20.04
+    steps:
+    - template: .azure-pipelines/pre-commit-check.yml
+
 - stage: Build
 
   jobs:
