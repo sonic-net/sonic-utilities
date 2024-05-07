@@ -42,7 +42,7 @@ ENV_VARIABLE_SX_SNIFFER = 'SX_SNIFFER_ENABLE'
 ENV_VARIABLE_SX_SNIFFER_TARGET = 'SX_SNIFFER_TARGET'
 
 # SDK sniffer file path and name
-SDK_SNIFFER_TARGET_PATH = '/var/log/mellanox/sniffer/'
+SDK_SNIFFER_TARGET_PATH = '/var/log/sdk_dbg/'
 SDK_SNIFFER_FILENAME_PREFIX = 'sx_sdk_sniffer_'
 SDK_SNIFFER_FILENAME_EXT = '.pcap'
 
