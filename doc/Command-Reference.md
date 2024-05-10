@@ -162,6 +162,8 @@
 * [Subinterfaces](#subinterfaces)
   * [Subinterfaces Show Commands](#subinterfaces-show-commands)
   * [Subinterfaces Config Commands](#subinterfaces-config-commands)
+  * [Switchport Modes](#switchport-modes)
+  * [Switchport Modes Config Commands](#switchportmodes-config-commands)
 * [Syslog](#syslog)
   * [Syslog show commands](#syslog-show-commands)
   * [Syslog config commands](#syslog-config-commands)
@@ -4486,6 +4488,7 @@ Subsequent pages explain each of these commands in detail.
   neighbor     Show neighbor related information
   portchannel  Show PortChannel information
   status       Show Interface status information
+  switchport   Show Interface switchport information
   tpid         Show Interface tpid information
   transceiver  Show SFP Transceiver information
   ```
@@ -4950,6 +4953,53 @@ This command displays some more fields such as Lanes, Speed, MTU, Type, Asymmetr
   Ethernet176  109,110,111,112     100G    9100    hundredGigE45    down     down     N/A         N/A
   Ethernet180  105,106,107,108     100G    9100    hundredGigE46    down     down     N/A         N/A
   ```
+
+
+**show interface switchport status**
+
+This command displays switchport modes status of the interfaces
+
+- Usage:
+  ```
+  show interfaces switchport status
+  ```
+
+- Example (show interface switchport status of all interfaces):
+  ```
+  admin@sonic:~$ show interfaces switchport status
+  Interface     Mode                   
+  -----------  --------          
+  Ethernet0     access                  
+  Ethernet4     trunk                 
+  Ethernet8     routed          
+  <contiues to display all the interfaces>
+  ```
+
+**show interface switchport config**
+
+This command displays switchport modes configuration of the interfaces
+
+- Usage:
+  ```
+  show interfaces switchport config
+  ```
+
+- Example (show interface switchport config of all interfaces):
+  ```
+  admin@sonic:~$ show interfaces switchport config
+  Interface     Mode        Untagged   Tagged              
+  -----------  --------     --------   -------     
+  Ethernet0     access      2             
+  Ethernet4     trunk       3          4,5,6      
+  Ethernet8     routed          
+  <contiues to display all the interfaces>
+  ```
+
+
+For details please refer [Switchport Mode HLD](https://github.com/sonic-net/SONiC/pull/912/files#diff-03597c34684d527192f76a6e975792fcfc83f54e20dde63f159399232d148397) to know more about th
+is command.
+
+
 
 **show interfaces transceiver**
 
@@ -10103,6 +10153,31 @@ This sub-section explains how to configure subinterfaces.
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#subinterfaces)
 
+
+## Switchport Modes
+### Switchport Modes Config Commands
+This subsection explains how to configure switchport modes on a Port/PortChannel.
+**config switchport mode **
+Usage:
+  ```
+  config switchport mode <access|trunk|routed> <member_portname/member_portchannel>
+  ```
+- Example (Config switchport mode access on "Ethernet0):
+  ```
+  admin@sonic:~$ sudo config switchport mode access Ethernet0
+  ```
+- Example (Config switchport mode trunk on "Ethernet4"):
+  ```
+  admin@sonic:~$ sudo config switchport mode trunk Ethernet4
+  ```
+- Example (Config switchport mode routed on "Ethernet12"):
+  ```
+  admin@sonic:~$ sudo config switchport mode routed Ethernet12
+  `
+``
+Go Back To [Beginning of the document](#) or [Beginning of this section](#switchport-modes)
+
+
 ## Syslog
 
 ### Syslog Show Commands
@@ -10887,6 +10962,22 @@ This command is used to add or delete the vlan.
   admin@sonic:~$ sudo config vlan add 100
   ```
 
+
+**config vlan add/del -m**
+This command is used to add or delete multiple vlans via single command.
+- Usage:
+  ```
+  config vlan (add | del) -m <vlan_id>
+  ```
+- Example01 (Create the VLAN "Vlan100, Vlan101, Vlan102, Vlan103" if these does not already exist)
+  ```
+  admin@sonic:~$ sudo config vlan add -m 100-103
+  ```
+- Example02 (Create the VLAN "Vlan105, Vlan106, Vlan107, Vlan108" if these does not already exist):
+  ```
+  admin@sonic:~$ sudo config vlan add -m 105,106,107,108
+  ```
+
 **config vlan member add/del**
 
 This command is to add or delete a member port into the already created vlan.
@@ -10906,6 +10997,37 @@ This command is to add or delete a member port into the already created vlan.
 
   admin@sonic:~$ sudo config vlan member add 100 Ethernet4
   This command will add Ethernet4 as member of the vlan 100.
+  ```
+
+**config vlan member add/del -m -e**
+This command is to add or delete a member port into multiple already created vlans.
+- Usage:
+  ```
+  config vlan member add/del [-m] [-e] <vlan_id> <member_portname>
+  ```
+*NOTE: -m flag multiple Vlans in range or comma separted list can be added as a member port.*
+*NOTE: -e is used as an except flag as explained with examples below.*
+- Example:
+  ```
+  admin@sonic:~$ sudo config vlan member add -m 100-103 Ethernet0
+  This command will add Ethernet0 as member of the vlan 100, vlan 101, vlan 102, vlan 103
+   ```
+   ```
+  admin@sonic:~$ sudo config vlan member add -m 100,101,102 Ethernet4
+  This command will add Ethernet4 as member of the vlan 100, vlan 101, vlan 102
+   ```
+   ```
+  admin@sonic:~$ sudo config vlan member add -e -m 104,105 Ethernet8
+  Suppose vlan 100, vlan 101, vlan 102, vlan 103, vlan 104, vlan 105 are exisiting vlans. This command will add Ethernet8 as member of  vlan 100, vlan 101, vlan 102, vlan 103
+  ```
+  ```
+  admin@sonic:~$ sudo config vlan member add -e 100 Ethernet12
+  Suppose vlan 100, vlan 101, vlan 102, vlan 103, vlan 104, vlan 105 are exisiting vlans. This command will add Ethernet12 as member of vlan 101, vlan 102, vlan 103, vlan 104, vlan 105
+  ```
+   ```
+  admin@sonic:~$ sudo config vlan member add all Ethernet20
+  Suppose vlan 100, vlan 101, vlan 102, vlan 103, vlan 104, vlan 105 are exisiting vlans. This command will add Ethernet20 as member of vlan 100, vlan 101, vlan 102, vlan 103, vlan 104, vlan 1
+05
   ```
 
 **config proxy_arp enabled/disabled**
