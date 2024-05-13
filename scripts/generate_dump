@@ -1952,6 +1952,8 @@ main() {
     # 1st counter snapshot early. Need 2 snapshots to make sense of counters trend.
     save_counter_snapshot $asic 1
 
+    save_cmd "show asic-sdk-health-event received" "asic.sdk.health.event" &
+
     save_cmd "systemd-analyze blame" "systemd.analyze.blame" &
     save_cmd "systemd-analyze dump" "systemd.analyze.dump" &
     save_cmd "systemd-analyze plot" "systemd.analyze.plot.svg" &

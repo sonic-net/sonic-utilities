@@ -29,6 +29,10 @@
 * [ARP & NDP](#arp--ndp)
   * [ARP show commands](#arp-show-commands)
   * [NDP show commands](#ndp-show-commands)
+* [ASIC SDK health event](#asic-sdk-health-event)
+  * [ASIC SDK health event config commands](#asic-sdk-health-event-config-commands)
+  * [ASIC SDK health event show commands](#asic-sdk-health-event-show-commands)
+  * [ASIC SDK health event clear commands](#asic-sdk-health-event-clear-commands)
 * [BFD](#bfd)
   * [BFD show commands](#bfd-show-commands)
 * [BGP](#bgp)
@@ -1930,6 +1934,158 @@ This command is used to display: ACL rules, tables and their priority, ACL packe
 
   If the `PACKETS COUNT` and `BYTES COUNT` fields have some numeric value it means that it is a SONiC ACL's and those counters are created in SONiC `COUNTERS_DB`.
 
+## ASIC SDK health event
+
+### ASIC SDK health event config commands
+
+**config asic-sdk-health-event suppress **
+
+This command is for a customer to configure the categories that he/she wants to suppress for a certain severity.
+
+- Usage:
+  ```
+  config config asic-sdk-health-event suppress <severity> [--category-list <category-list>|<none>|<all>] [--max-events <max-events>]
+  ```
+
+  - Parameters:
+    - severity: Specify the severity whose ASIC/SDK health events to be suppressed. It can be one of `fatal`, `warning`, and `notice`.
+    - category-list: Specify the categories from which the ASIC/SDK health events to be suppressed. It is a list whose element is one of `software`, `firmware`, `cpu_hw`, `asic_hw` separated by a comma.
+      If the category-list is `none`, none category is suppressed and all the categories will be notified for `severity`. In this case, it will not be stored in the CONFIG_DB.
+      If the category-list is `all`, all the categories are suppressed and none category will be notified for `severity`.
+    - max-events: Specify the maximum number of events of the severity to be stored in the STATE_DB.
+      There is no limitation if the max-events is 0. In this case, it will not be stored in the CONFIG_DB.
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config asic-sdk-health-event suppress fatal --category-list cpu_hw,software --max-events 10240
+  ```
+
+  This command will suppress ASIC/SDK health events whose severity is fatal and cagetory is cpu_hw or software. Maximum number of such events in the STATE_DB is 10240.
+
+### ASIC SDK health event show commands
+
+**show asic-sdk-health-event received**
+
+This command displays the received ASIC/SDK health events.
+
+- Usage:
+  ```
+  show asic-sdk-health-event received [-n <asicname>]
+  ```
+
+- Details:
+  - show asic-sdk-health-event received: Display the ASIC/SDK health events received on all ASICs
+  - show asic-sdk-health-event received -n asic0: Display all the ASIC/SDK health events received on asic0
+
+
+- Example:
+  ```
+  admin@sonic:~$ show asic-sdk-health-event received
+  Time                 Severity     Category   Description
+  -------------------  -----------  ---------  -----------------
+  2023-10-20 05:07:34  fatal        firmware   Command timeout
+  2023-10-20 03:06:25  fatal        software   SDK daemon keep alive failed
+  2023-10-20 05:07:34  fatal        asic_hw    Uncorrectable ECC error
+  2023-10-20 01:58:43  notice       asic_hw    Correctable ECC error
+  ```
+
+- Example on a multi ASIC system:
+  ```
+  admin@sonic:~$ show asic-sdk-health-event received
+  asic0:
+  Time                 Severity     Category   Description
+  -------------------  -----------  ---------  -----------------
+  2023-10-20 05:07:34  fatal        firmware   Command timeout
+  2023-10-20 03:06:25  fatal        software   SDK daemon keep alive failed
+  asic1:
+  Time                 Severity     Category   Description
+  -------------------  -----------  ---------  -----------------
+  2023-10-20 05:07:34  fatal        asic_hw    Uncorrectable ECC error
+  2023-10-20 01:58:43  notice       asic_hw    Correctable ECC error
+  ```
+
+Optionally, you can specify the asic name in order to display the ASIC/SDK health events received on that particular ASIC on a multi ASIC system
+
+- Example:
+  ```
+  admin@sonic:~$ show asic-sdk-health-event received -n asic1
+  asic1:
+  Time                 Severity     Category   Description
+  -------------------  -----------  ---------  -----------------
+  2023-10-20 05:07:34  fatal        firmware   Command timeout
+  ```
+
+**show asic-sdk-health-event suppress-configuration**
+
+This command displays the suppressed category list and maximum number of events of ASIC/SDK health events.
+
+- Usage:
+  ```
+  show asic-sdk-health-event suppressed-category-list [-n <asicname>]
+  ```
+
+- Details:
+  - show asic-sdk-health-event suppress-configuration: Display the ASIC/SDK health event suppress category list and maximum number of events on all ASICs
+  - show asic-sdk-health-event suppress-configuration -n asic0: Display all the ASIC/SDK health event suppress category list and maximum number of events on asic0
+
+
+- Example:
+  ```
+  admin@sonic:~$ show asic-sdk-health-event suppress-configuration
+  Severity    Suppressed category-list    Max events
+  ----------  --------------------------  ------------
+  fatal       software                    unlimited
+  notice      none                        1024
+  warning     firmware,asic_hw            10240
+  ```
+
+- Example on a multi ASIC system:
+  ```
+  admin@sonic:~$ show asic-sdk-health-event suppress-configuration
+  asic0:
+  Severity    Suppressed category-list    Max events
+  ----------  --------------------------  ------------
+  notice      none                        1024
+  warning     firmware,asic_hw            10240
+  asic1:
+  Severity    Suppressed category-list    Max events
+  ----------  --------------------------  ------------
+  fatal       software                    unlimited
+  ```
+
+Optionally, you can specify the asic name in order to display the ASIC/SDK health event suppress category list on that particular ASIC on a multi ASIC system
+
+- Example:
+  ```
+  admin@sonic:~$ show asic-sdk-health-event suppress-configuration -n asic1
+  asic1:
+  Severity    Suppressed category-list    Max events
+  ----------  --------------------------  ------------
+  fatal       software                    unlimited
+  ```
+
+### ASIC SDK health event clear commands
+
+**sonic-clear asic-sdk-health-event**
+
+This command clears all the received ASIC/SDK health events.
+
+- Usage:
+  ```
+  sonic-clear asic-sdk-health-event [-n <asicname>]
+  ```
+
+- Details:
+  - sonic-clear asic-sdk-health-event: Clear the ASIC/SDK health events received on all ASICs
+  - sonic-clear asic-sdk-health-event -n asic0: Display all the ASIC/SDK health events received on asic0
+
+
+- Example:
+  ```
+  admin@sonic:~$ sonic-clear asic-sdk-health-event
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#asic-sdk-health-event)
 
 ## ARP & NDP
 

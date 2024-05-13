@@ -7548,5 +7548,124 @@ def date(date, time):
     clicommon.run_command(['timedatectl', 'set-time', date_time])
 
 
+#
+# 'asic-sdk-health-event' group ('config asic-sdk-health-event ...')
+#
+@config.group()
+def asic_sdk_health_event():
+    """Configuring asic-sdk-health-event"""
+    pass
+
+
+@asic_sdk_health_event.group()
+def suppress():
+    """Suppress ASIC/SDK health event"""
+    pass
+
+
+def handle_asic_sdk_health_suppress(db, severity, category_list, max_events, namespace):
+    ctx = click.get_current_context()
+
+    if multi_asic.get_num_asics() > 1:
+        namespace_list = multi_asic.get_namespaces_from_linux()
+    else:
+        namespace_list = [DEFAULT_NAMESPACE]
+
+    severityCapabilities = {
+        "fatal": "REG_FATAL_ASIC_SDK_HEALTH_CATEGORY",
+        "warning": "REG_WARNING_ASIC_SDK_HEALTH_CATEGORY",
+        "notice": "REG_NOTICE_ASIC_SDK_HEALTH_CATEGORY"
+    }
+
+    if category_list:
+        categories = {"software", "firmware", "cpu_hw", "asic_hw"}
+
+        if category_list == 'none':
+            suppressedCategoriesList = []
+        elif category_list == 'all':
+            suppressedCategoriesList = list(categories)
+        else:
+            suppressedCategoriesList = category_list.split(',')
+
+            unsupportCategories = set(suppressedCategoriesList) - categories
+            if unsupportCategories:
+                ctx.fail("Invalid category(ies): {}".format(unsupportCategories))
+
+    for ns in namespace_list:
+        if namespace and namespace != ns:
+            continue
+
+        config_db = db.cfgdb_clients[ns]
+        state_db = db.db_clients[ns]
+
+        entry_name = "SWITCH_CAPABILITY|switch"
+        if "true" != state_db.get(state_db.STATE_DB, entry_name, "ASIC_SDK_HEALTH_EVENT"):
+            ctx.fail("ASIC/SDK health event is not supported on the platform")
+
+        if "true" != state_db.get(state_db.STATE_DB, entry_name, severityCapabilities[severity]):
+            ctx.fail("Suppressing ASIC/SDK health {} event is not supported on the platform".format(severity))
+
+        entry = config_db.get_entry("SUPPRESS_ASIC_SDK_HEALTH_EVENT", severity)
+        need_remove = False
+        noarg = True
+
+        if category_list:
+            noarg = False
+            if suppressedCategoriesList:
+                entry["categories"] = suppressedCategoriesList
+            elif entry.get("categories"):
+                entry.pop("categories")
+                need_remove = True
+
+        if max_events is not None:
+            noarg = False
+            if max_events > 0:
+                entry["max_events"] = max_events
+            elif entry.get("max_events"):
+                entry.pop("max_events")
+                need_remove = True
+
+        if noarg:
+            ctx.fail("At least one argument should be provided!")
+
+        if entry:
+            config_db.set_entry("SUPPRESS_ASIC_SDK_HEALTH_EVENT", severity, entry)
+        elif need_remove:
+            config_db.set_entry("SUPPRESS_ASIC_SDK_HEALTH_EVENT", severity, None)
+
+
+@suppress.command()
+@click.option('--category-list', metavar='<category_list>', type=str, help="Categories to be suppressed")
+@click.option('--max-events', metavar='<max_events>', type=click.IntRange(0), help="Maximum number of received events")
+@click.option('--namespace', '-n', 'namespace', required=False, default=None, show_default=False,
+              help='Option needed for multi-asic only: provide namespace name',
+              type=click.Choice(multi_asic_util.multi_asic_ns_choices()))
+@clicommon.pass_db
+def fatal(db, category_list, max_events, namespace):
+    handle_asic_sdk_health_suppress(db, 'fatal', category_list, max_events, namespace)
+
+
+@suppress.command()
+@click.option('--category-list', metavar='<category_list>', type=str, help="Categories to be suppressed")
+@click.option('--max-events', metavar='<max_events>', type=click.IntRange(0), help="Maximum number of received events")
+@click.option('--namespace', '-n', 'namespace', required=False, default=None, show_default=False,
+              help='Option needed for multi-asic only: provide namespace name',
+              type=click.Choice(multi_asic_util.multi_asic_ns_choices()))
+@clicommon.pass_db
+def warning(db, category_list, max_events, namespace):
+    handle_asic_sdk_health_suppress(db, 'warning', category_list, max_events, namespace)
+
+
+@suppress.command()
+@click.option('--category-list', metavar='<category_list>', type=str, help="Categories to be suppressed")
+@click.option('--max-events', metavar='<max_events>', type=click.IntRange(0), help="Maximum number of received events")
+@click.option('--namespace', '-n', 'namespace', required=False, default=None, show_default=False,
+              help='Option needed for multi-asic only: provide namespace name',
+              type=click.Choice(multi_asic_util.multi_asic_ns_choices()))
+@clicommon.pass_db
+def notice(db, category_list, max_events, namespace):
+    handle_asic_sdk_health_suppress(db, 'notice', category_list, max_events, namespace)
+
+
 if __name__ == '__main__':
     config()
