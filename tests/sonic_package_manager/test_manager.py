@@ -1,13 +1,14 @@
 #!/usr/bin/env python
 
 import re
-from unittest.mock import Mock, call, patch
-
+import unittest
+from unittest.mock import Mock, call, patch, mock_open
 import pytest
 
 import sonic_package_manager
 from sonic_package_manager.errors import *
 from sonic_package_manager.version import Version
+import json
 
 @pytest.fixture(autouse=True)
 def mock_run_command():
@@ -352,10 +353,10 @@ def test_manager_migration(package_manager, fake_db_for_migration):
         call('test-package-3=1.6.0'),
         # test-package-4 was not present in DB at all, but it is present and installed in
         # fake_db_for_migration, thus asserting that it is going to be installed.
-        call('test-package-4=1.5.0'),
+        call(None, 'Azure/docker-test-4:1.5.0', name='test-package-4'),
         # test-package-5 1.5.0 was installed in fake_db_for_migration but the default
         # in current db is 1.9.0, assert that migration will install the newer version.
-        call('test-package-5=1.9.0'),
+        call(None, 'Azure/docker-test-5:1.9.0', name='test-package-5'),
         # test-package-6 2.0.0 was installed in fake_db_for_migration but the default
         # in current db is 1.5.0, assert that migration will install the newer version.
         call('test-package-6=2.0.0')],
@@ -389,3 +390,204 @@ def test_manager_migration_dockerd(package_manager, fake_db_for_migration, mock_
     package_manager.migrate_packages(fake_db_for_migration, '/var/run/docker.sock')
     package_manager.get_docker_client.assert_has_calls([
         call('/var/run/docker.sock')], any_order=True)
+
+
+def test_create_package_manifest_default_manifest(package_manager):
+    """Test case for creating a default manifest."""
+
+    with patch('os.path.exists', return_value=False), \
+         patch('os.mkdir'), \
+         patch('builtins.open', new_callable=mock_open()), \
+         patch('click.echo') as mock_echo:
+
+        package_manager.create_package_manifest("default_manifest", from_json=None)
+
+    mock_echo.assert_called_once_with("Default Manifest creation is not allowed by user")
+
+
+def test_create_package_manifest_existing_package(package_manager):
+    """Test case for creating a manifest with an existing package."""
+
+    with patch('os.path.exists', side_effect=[False, True]), \
+         patch('sonic_package_manager.main.PackageManager.is_installed', return_value=True), \
+         patch('click.echo') as mock_echo:
+
+        package_manager.create_package_manifest("test-package", from_json=None)
+
+    mock_echo.assert_called_once_with("Error: A package with the same name test-package is already installed")
+
+
+def test_create_package_manifest_existing_manifest(package_manager):
+    """Test case for creating a manifest with an existing manifest file."""
+
+    with patch('os.path.exists', return_value=True), \
+         patch('click.echo') as mock_echo:
+
+        package_manager.create_package_manifest("test-manifest", from_json=None)
+
+    mock_echo.assert_called_once_with("Error: Manifest file 'test-manifest' already exists.")
+
+
+def test_manifests_create_command(package_manager):
+    with patch('click.echo') as mock_echo, \
+         patch('os.path.exists') as mock_exists, \
+         patch('os.mkdir'), \
+         patch('builtins.open', new_callable=mock_open()), \
+         patch('json.dump'), \
+         patch('json.load') as mock_json_load, \
+         patch('sonic_package_manager.manifest.Manifest.marshal') as mock_marshal, \
+         patch('sonic_package_manager.manager.PackageManager.is_installed') as mock_is_installed, \
+         patch('sonic_package_manager.manager.PackageManager.download_file') as mock_download_file:
+
+        dummy_json = {"package": {"name": "test", "version": "1.0.0"}, "service": {"name": "test"}}
+        # Setup mocks
+        mock_exists.return_value = False
+        mock_is_installed.return_value = False
+        mock_download_file.return_value = True
+        mock_marshal.return_value = None
+        mock_json_load.return_value = dummy_json
+
+        # Run the function
+        package_manager.create_package_manifest("test_manifest", dummy_json)
+
+        # Assertions
+        mock_echo.assert_called_with("Manifest 'test_manifest' created successfully.")
+
+
+def test_manifests_update_command(package_manager):
+    with patch('click.echo') as mock_echo, \
+         patch('os.path.exists') as mock_exists, \
+         patch('os.mkdir'), \
+         patch('builtins.open', new_callable=unittest.mock.mock_open), \
+         patch('json.dump'), \
+         patch('json.load') as mock_json_load, \
+         patch('sonic_package_manager.manifest.Manifest.marshal') as mock_marshal, \
+         patch('sonic_package_manager.manager.PackageManager.is_installed') as mock_is_installed, \
+         patch('sonic_package_manager.manager.PackageManager.download_file') as mock_download_file:
+
+        dummy_json = {"package": {"name": "test", "version": "2.0.0"}, "service": {"name": "test"}}
+        # Setup mocks
+        mock_exists.return_value = True
+        mock_is_installed.return_value = True
+        mock_download_file.return_value = True
+        mock_marshal.return_value = None
+        mock_json_load.return_value = dummy_json
+
+        # Run the function
+        package_manager.update_package_manifest("test_manifest", "dummy_json")
+
+        # Assertions
+        mock_echo.assert_called_with("Manifest 'test_manifest' updated successfully.")
+
+
+def test_delete_package_manifest(package_manager):
+    with patch('click.echo') as mock_echo, \
+         patch('click.prompt') as mock_prompt, \
+         patch('os.path.exists') as mock_exists, \
+         patch('os.remove'):
+
+        # Test case 1: deleting default manifest
+        package_manager.delete_package_manifest("default_manifest")
+        mock_echo.assert_called_with("Default Manifest deletion is not allowed")
+        mock_echo.reset_mock()  # Reset the mock for the next test case
+
+        # Test case 2: manifest file doesn't exist
+        mock_exists.return_value = True
+        mock_exists.side_effect = lambda x: False if x.endswith("test_manifest") else True
+        package_manager.delete_package_manifest("test_manifest")
+        mock_echo.assert_called_with("Error: Manifest file 'test_manifest' not found.")
+        mock_echo.reset_mock()
+
+        # Test case 3: user confirms deletion
+        mock_exists.side_effect = lambda x: True if x.endswith("test_manifest") else False
+        mock_prompt.return_value = "y"
+        package_manager.delete_package_manifest("test_manifest")
+        mock_echo.assert_called_with("Manifest 'test_manifest' deleted successfully.")
+        mock_echo.reset_mock()
+
+        # Test case 4: user cancels deletion
+        mock_prompt.return_value = "n"
+        package_manager.delete_package_manifest("test_manifest")
+        mock_echo.assert_called_with("Deletion cancelled.")
+        mock_echo.reset_mock()
+
+
+def test_show_package_manifest(package_manager):
+    with patch('click.echo') as mock_echo, \
+         patch('os.path.exists') as mock_exists, \
+         patch('builtins.open', unittest.mock.mock_open()), \
+         patch('json.load') as mock_json_load:
+
+        mock_exists.return_value = True
+        mock_exists.side_effect = lambda x: True if x.endswith("test_manifest") else False
+
+        dummy_json = {"package": {"name": "test", "version": "2.0.0"}, "service": {"name": "test"}}
+        mock_json_load.return_value = dummy_json
+
+        package_manager.show_package_manifest("test_manifest")
+        mock_echo.assert_called_with(json.dumps(dummy_json, indent=4))
+
+
+def test_list_package_manifest(package_manager):
+    with patch('click.echo') as mock_echo, \
+         patch('os.path.exists') as mock_exists, \
+         patch('os.listdir') as mock_listdir:
+
+        # Test case 1: no custom local manifest files found
+        mock_exists.return_value = True
+        mock_listdir.return_value = []
+        package_manager.list_package_manifest()
+        mock_echo.assert_called_with("No custom local manifest files found.")
+
+        # Test case 2: custom local manifest files found
+        mock_listdir.return_value = ["manifest1.json", "manifest2.json"]
+        package_manager.list_package_manifest()
+        mock_echo.assert_any_call("Custom Local Manifest files:")
+        mock_echo.assert_any_call("- manifest1.json")
+        mock_echo.assert_any_call("- manifest2.json")
+
+
+def test_download_file_http(package_manager):
+    fake_remote_url = "http://www.example.com/index.html"
+    fake_local_path = "local_path"
+    with patch("requests.get") as mock_requests_get:
+        with patch("builtins.open", mock_open()) as mock_file:
+            package_manager.download_file(fake_remote_url, fake_local_path)
+    mock_requests_get.assert_called_once_with(fake_remote_url, stream=True)
+    mock_file.assert_called_once_with("local_path", "wb")
+
+
+def test_download_file_scp(package_manager):
+    fake_remote_url = "scp://admin@10.x.x.x:/home/admin/sec_update.json"
+    fake_local_path = "local_path"
+
+    with patch("paramiko.SSHClient") as mock_ssh_client:
+        with patch("scp.SCPClient"):
+            with patch("getpass.getpass", return_value="test_password"):
+                package_manager.download_file(fake_remote_url, fake_local_path)
+
+    mock_ssh_client.assert_called_once()
+    mock_ssh_client.return_value.set_missing_host_key_policy.assert_called_once()
+    mock_ssh_client.return_value.connect.assert_called_once_with(
+        "10.x.x.x",
+        username="admin",
+        password="test_password"
+    )
+
+
+def test_download_file_sftp(package_manager):
+    fake_remote_url = "sftp://admin@10.x.x.x:/home/admin/sec_update.json"
+    fake_local_path = "local_path"
+
+    with patch("paramiko.SSHClient") as mock_ssh_client:
+        with patch("paramiko.SFTPClient.from_transport"):
+            with patch("getpass.getpass", return_value="test_password"):
+                package_manager.download_file(fake_remote_url, fake_local_path)
+
+    mock_ssh_client.assert_called_once()
+    mock_ssh_client.return_value.set_missing_host_key_policy.assert_called_once()
+    mock_ssh_client.return_value.connect.assert_called_once_with(
+        "10.x.x.x",
+        username="admin",
+        password="test_password"
+    )

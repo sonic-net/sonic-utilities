@@ -257,6 +257,7 @@ setup(
         'xmltodict==0.12.0',
         'lazy-object-proxy',
         'six==1.16.0',
+        'scp==0.14.5',
     ] + sonic_dependencies,
     setup_requires= [
         'pytest-runner',

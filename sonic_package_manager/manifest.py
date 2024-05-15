@@ -10,7 +10,12 @@ from sonic_package_manager.constraint import (
 )
 from sonic_package_manager.errors import ManifestError
 from sonic_package_manager.version import Version
+from sonic_package_manager.database import BASE_LIBRARY_PATH
+import os
+import json
 
+MANIFESTS_LOCATION = os.path.join(BASE_LIBRARY_PATH, "manifests")
+DEFAULT_MANIFEST_FILE = os.path.join(BASE_LIBRARY_PATH, "default_manifest")
 
 class ManifestSchema:
     """ ManifestSchema class describes and provides marshalling
@@ -249,3 +254,38 @@ class Manifest(dict):
 
     def unmarshal(self) -> Dict:
         return self.SCHEMA.unmarshal(self)
+
+    def get_manifest_from_local_file(name):
+
+        if '.edit' in name:
+            actual_name = name.split('.edit')[0]
+        else:
+            actual_name = name
+
+        manifest_path = os.path.join(MANIFESTS_LOCATION, name)
+        if os.path.exists(manifest_path):
+            with open(manifest_path, 'r') as file:
+                manifest_dict = json.load(file)
+                manifest_dict["package"]["name"] = actual_name
+                manifest_dict["service"]["name"] = actual_name
+        else:
+            with open(DEFAULT_MANIFEST_FILE, 'r') as file:
+                manifest_dict = json.load(file)
+                manifest_dict["package"]["name"] = actual_name
+                manifest_dict["service"]["name"] = actual_name
+                new_manifest_path = os.path.join(MANIFESTS_LOCATION, name)
+                with open(new_manifest_path, 'w') as file:
+                    json.dump(manifest_dict, file, indent=4)
+
+        json_str = json.dumps(manifest_dict, indent=4)
+        desired_dict = {
+            'Tag': 'master',
+            'com': {
+                'azure': {
+                    'sonic': {
+                        'manifest': json_str
+                        }
+                    }
+                }
+            }
+        return desired_dict
