@@ -1,0 +1,5 @@
+{
+    "LDAP_SERVER|10.0.0.1": {
+            "priority": 1
+    }
+}

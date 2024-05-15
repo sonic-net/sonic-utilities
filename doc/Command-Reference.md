@@ -96,6 +96,11 @@
 * [Linux Kernel Dump](#linux-kernel-dump)
   * [Linux Kernel Dump show commands](#Linux-Kernel-Dump-show-commands)
   * [Linux Kernel Dump config commands](#Linux-Kernel-Dump-config-commands)
+* [LDAP](#LDAP)
+  * [show LDAP global commands](#LDAP-global-show-commands)
+  * [LDAP global config commands](#LDAP-global-config-commands)
+  * [show LDAP server commands](#LDAP-server-show-commands)
+  * [LDAP server config commands](#LDAP-server-config-commands)
 * [LLDP](#lldp)
   * [LLDP show commands](#lldp-show-commands)
 * [Loading, Reloading And Saving Configuration](#loading-reloading-and-saving-configuration)
@@ -6298,6 +6303,86 @@ This command displays the kubernetes server status.
   ```
 Go Back To [Beginning of the document](#) or [Beginning of this section](#Kubernetes)
 
+## LDAP
+
+### show LDAP global commands
+
+This command displays the global LDAP configuration that includes the following parameters: base_dn, bind_password, bind_timeout, version, port, timeout.
+
+- Usage:
+  ```
+  show ldap global
+  ```
+- Example:
+
+  ```
+  admin@sonic:~$ show ldap global
+  		base-dn        Ldap user base dn <string>
+  		bind-dn        LDAP global bind dn <string>
+  		bind-password  Shared secret used for encrypting the communication <password>
+  		bind-timeout   Ldap bind timeout <0-120>
+  		port           TCP port to communicate with LDAP server <1-65535>
+  		timeout        Ldap timeout duration in sec <1-60>
+  		version        Ldap version <1-3>
+
+  ```
+
+### LDAP global config commands
+
+These commands are used to configure the LDAP global parameters
+
+ - Usage:
+  ```
+  config ldap global
+  ```
+- Example:
+  ```
+  admin@sonic:~$ config ldap global
+
+  host 		 <ADDRESS> --prio <1 - 8>
+  base-dn        Ldap user base dn <string>
+  bind-dn        LDAP global bind dn <string>
+  bind-password  Shared secret used for encrypting the communication <password>
+  bind-timeout   Ldap bind timeout <0-120>
+  port           TCP port to communicate with LDAP server <1-65535>
+  timeout        Ldap timeout duration in sec <1-60>
+  version        Ldap version <1-3>
+  ```
+
+### show LDAP server commands
+
+This command displays the global LDAP configuration that includes the following parameters: base_dn, bind_password, bind_timeout, version, port, timeout.
+
+- Usage:
+  ```
+  show ldap-server
+  ```
+- Example:
+
+  ```
+  admin@sonic:~$ show ldap-server
+  		hostname        Ldap hostname or IP of the configured LDAP server
+  		priority        priority for the relevant LDAP server <1-8>
+  ```
+
+### LDAP server config commands
+
+These commands are used to manage the LDAP servers in the system, they are created in correspondance to the global config parameters mentioned earlier.
+
+ - Usage:
+  ```
+  config ldap-server
+  ```
+- Example:
+  ```
+  admin@sonic:~$ config ldap-server
+
+  add 		 Add a new LDAP server <ip> --priority <1-8>
+  delete         Delete an existing LDAP server from the list <ip> --priority <1-8>
+  update         Update and existing LDAP server
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#LDAP)
+  
 ## Linux Kernel Dump
 
 This section demonstrates the show commands and configuration commands of Linux kernel dump mechanism in SONiC.

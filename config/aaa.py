@@ -119,9 +119,9 @@ authentication.add_command(trace)
 
 
 @click.command()
-@click.argument('auth_protocol', nargs=-1, type=click.Choice(["radius", "tacacs+", "local", "default"]))
+@click.argument('auth_protocol', nargs=-1, type=click.Choice(["ldap", "radius", "tacacs+", "local", "default"]))
 def login(auth_protocol):
-    """Switch login authentication [ {radius, tacacs+, local} | default ]"""
+    """Switch login authentication [ {ldap, radius, tacacs+, local} | default ]"""
     if len(auth_protocol) is 0:
         click.echo('Argument "auth_protocol" is required')
         return
@@ -140,9 +140,9 @@ def login(auth_protocol):
             val2 = auth_protocol[1]
             good_ap = False
             if val == 'local':
-                if val2 == 'radius' or val2 == 'tacacs+':
+                if val2 == 'radius' or val2 == 'tacacs+' or val2 == 'ldap':
                     good_ap = True
-            elif val == 'radius' or val == 'tacacs+':
+            elif val == 'radius' or val == 'tacacs+' or val == 'ldap':
                 if val2 == 'local':
                     good_ap = True
             if good_ap == True:
