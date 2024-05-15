@@ -198,6 +198,25 @@ function parse_options()
     done
 }
 
+function linecard_reboot_notify_supervisor()
+{
+    is_linecard=$(python3 -c 'from sonic_py_common import device_info; print("True") if device_info.is_chassis() == True and device_info.is_supervisor() == False else print("False")')
+    if [ $is_linecard == "True" ]; then
+        key=$(sonic-db-cli STATE_DB keys "CHASSIS_MODULE_TABLE|LINE-CARD*")
+        status=$?
+        if [ $status -eq 0 ]; then
+            module="${key#CHASSIS_MODULE_TABLE}"
+            if [ ! -z module ]; then
+                sonic-db-cli CHASSIS_STATE_DB hset "CHASSIS_MODULE_REBOOT_INFO_TABLE${module}" "reboot" "expected"
+                status=$?
+                if [ $status -ne 0 ]; then
+                    debug "Failed to notify Supervisor: Linecard reboot is expected"
+                fi
+            fi
+        fi
+    fi
+}
+
 parse_options $@
 
 # Exit if not superuser
@@ -215,6 +234,9 @@ reboot_pre_check
 
 # Tag remotely deployed images as local
 tag_images
+
+# Linecard reboot notify supervisor
+linecard_reboot_notify_supervisor
 
 # Stop SONiC services gracefully.
 stop_sonic_services
