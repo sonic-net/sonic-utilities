@@ -130,6 +130,35 @@ class TestConfigIP(object):
             assert mock_run_command.call_count == 1
             assert ('Eth36.10', '32.11.10.1/24') not in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
 
+        # config int ip add vlan1000 10.21.20.1/24 as secondary
+        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["add"],
+                               ["Vlan1000", "10.11.20.1/24", "--secondary"], obj=obj)
+        assert result.exit_code == 0
+        assert ('Vlan1000', '10.11.20.1/24') in db.cfgdb.get_table('VLAN_INTERFACE')
+        assert db.cfgdb.get_table('VLAN_INTERFACE')[('Vlan1000', '10.11.20.1/24')]['secondary'] == "true"
+
+        # config int ip add vlan2000 10.21.20.1/24 as secondary
+        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["add"],
+                               ["Vlan2000", "10.21.20.1/24", "-s"], obj=obj)
+        assert result.exit_code == 0
+        assert ('Vlan2000', '10.21.20.1/24') in db.cfgdb.get_table('VLAN_INTERFACE')
+        assert db.cfgdb.get_table('VLAN_INTERFACE')[('Vlan2000', '10.21.20.1/24')]['secondary'] == "true"
+
+        # config int ip add vlan4000 10.16.20.1/24 as primary and make sure secondary is not present in table
+        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["add"],
+                               ["Vlan4000", "10.16.20.1/24"], obj=obj)
+        assert result.exit_code == 0
+        assert ('Vlan4000', '10.16.20.1/24') in db.cfgdb.get_table('VLAN_INTERFACE')
+        assert 'secondary' not in db.cfgdb.get_table('VLAN_INTERFACE')[('Vlan4000', '10.16.20.1/24')]
+
+        # create vlan 500
+        result = runner.invoke(config.config.commands["vlan"].commands["add"], ["500"], obj=db)
+        # config int ip add vlan500 10.21.20.1/24 as secondary - should fail as vlan500 is not added in table
+        ERR_MSG = "Error: Primary for the interface Vlan500 is not set, so skipping adding the interface"
+        result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["add"],
+                               ["Vlan500", "10.21.20.1/24", "--secondary"], obj=obj)
+        assert result.exit_code != 0
+        assert ERR_MSG in result.output
 
     def test_add_interface_invalid_ipv4(self):
         db = Db()
