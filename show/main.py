@@ -1438,11 +1438,11 @@ def all(verbose):
         for ns in ns_list:
             ns_config = get_config_json_by_namespace(ns)
             if bgp_util.is_bgp_feature_state_enabled(ns):
-                ns_config['bgpraw'] = bgp_util.run_bgp_show_command(bgpraw_cmd, ns)
+                ns_config['bgpraw'] = bgp_util.run_bgp_show_command(bgpraw_cmd, ns, exit_on_fail=False)
             output[ns] = ns_config
         click.echo(json.dumps(output, indent=4))
     else:
-        host_config['bgpraw'] = bgp_util.run_bgp_show_command(bgpraw_cmd)
+        host_config['bgpraw'] = bgp_util.run_bgp_show_command(bgpraw_cmd, exit_on_fail=False)
         click.echo(json.dumps(output['localhost'], indent=4))
 
 

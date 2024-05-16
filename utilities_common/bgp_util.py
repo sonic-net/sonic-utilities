@@ -197,7 +197,8 @@ def get_neighbor_dict_from_table(db, table_name):
         return neighbor_dict
 
 
-def run_bgp_command(vtysh_cmd, bgp_namespace=multi_asic.DEFAULT_NAMESPACE, vtysh_shell_cmd=constants.VTYSH_COMMAND):
+def run_bgp_command(vtysh_cmd, bgp_namespace=multi_asic.DEFAULT_NAMESPACE,
+                    vtysh_shell_cmd=constants.VTYSH_COMMAND, exit_on_fail=True):
     bgp_instance_id = []
     output = None
     if bgp_namespace is not multi_asic.DEFAULT_NAMESPACE:
@@ -208,16 +209,16 @@ def run_bgp_command(vtysh_cmd, bgp_namespace=multi_asic.DEFAULT_NAMESPACE, vtysh
         output, ret = clicommon.run_command(cmd, return_cmd=True)
         if ret != 0:
             click.echo(output.rstrip('\n'))
-            sys.exit(ret)
+            output = "" if not exit_on_fail else sys.exit(ret)
     except Exception:
         ctx = click.get_current_context()
-        ctx.fail("Unable to get summary from bgp {}".format(bgp_instance_id))
+        ctx.fail("Unable to get summary from bgp {}".format(bgp_instance_id)) if exit_on_fail else None
 
     return output
 
 
-def run_bgp_show_command(vtysh_cmd, bgp_namespace=multi_asic.DEFAULT_NAMESPACE):
-    output = run_bgp_command(vtysh_cmd, bgp_namespace, constants.RVTYSH_COMMAND)
+def run_bgp_show_command(vtysh_cmd, bgp_namespace=multi_asic.DEFAULT_NAMESPACE, exit_on_fail=True):
+    output = run_bgp_command(vtysh_cmd, bgp_namespace, constants.RVTYSH_COMMAND, exit_on_fail)
     # handle the the alias mode in the following code
     if output is not None:
         if clicommon.get_interface_naming_mode() == "alias" and re.search("show ip|ipv6 route", vtysh_cmd):

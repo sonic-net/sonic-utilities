@@ -317,7 +317,7 @@ def setup_multi_asic_bgp_instance(request):
         else:
             return ""
 
-    def mock_run_bgp_command(vtysh_cmd, bgp_namespace, vtysh_shell_cmd=constants.RVTYSH_COMMAND):
+    def mock_run_bgp_command(vtysh_cmd, bgp_namespace, vtysh_shell_cmd=constants.RVTYSH_COMMAND, exit_on_fail=True):
         if m_asic_json_file.startswith('bgp_v4_network') or \
             m_asic_json_file.startswith('bgp_v6_network'):
             return mock_show_bgp_network_multi_asic(m_asic_json_file)
@@ -335,7 +335,8 @@ def setup_multi_asic_bgp_instance(request):
         else:
             return ""
 
-    def mock_run_show_sum_bgp_command(vtysh_cmd, bgp_namespace, vtysh_shell_cmd=constants.VTYSH_COMMAND):
+    def mock_run_show_sum_bgp_command(
+            vtysh_cmd, bgp_namespace, vtysh_shell_cmd=constants.VTYSH_COMMAND, exit_on_fail=True):
         if vtysh_cmd == "show ip bgp summary json":
             m_asic_json_file = 'no_bgp_neigh.json'
         else:
@@ -350,7 +351,8 @@ def setup_multi_asic_bgp_instance(request):
         else:
             return ""
 
-    def mock_run_show_summ_bgp_command_no_ext_neigh_on_all_asic(vtysh_cmd, bgp_namespace, vtysh_shell_cmd=constants.VTYSH_COMMAND):
+    def mock_run_show_summ_bgp_command_no_ext_neigh_on_all_asic(
+            vtysh_cmd, bgp_namespace, vtysh_shell_cmd=constants.VTYSH_COMMAND, exit_on_fail=True):
         if vtysh_cmd == "show ip bgp summary json":
             m_asic_json_file = 'no_ext_bgp_neigh.json'
         else:
@@ -365,7 +367,8 @@ def setup_multi_asic_bgp_instance(request):
         else:
             return ""
 
-    def mock_run_show_summ_bgp_command_no_ext_neigh_on_asic1(vtysh_cmd, bgp_namespace, vtysh_shell_cmd=constants.VTYSH_COMMAND):
+    def mock_run_show_summ_bgp_command_no_ext_neigh_on_asic1(
+            vtysh_cmd, bgp_namespace, vtysh_shell_cmd=constants.VTYSH_COMMAND, exit_on_fail=True):
         if vtysh_cmd == "show ip bgp summary json":
             if bgp_namespace == "asic1":
                 m_asic_json_file = 'no_ext_bgp_neigh.json'
