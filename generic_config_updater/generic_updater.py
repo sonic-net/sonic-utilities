@@ -2,7 +2,7 @@ import json
 import jsonpointer
 import os
 from enum import Enum
-from .gu_common import GenericConfigUpdaterError, EmptyTableError, ConfigWrapper, \
+from .gu_common import HOST_NAMESPACE, GenericConfigUpdaterError, EmptyTableError, ConfigWrapper, \
                        DryRunConfigWrapper, PatchWrapper, genericUpdaterLogging
 from .patch_sorter import StrictPatchSorter, NonStrictPatchSorter, ConfigSplitter, \
                           TablesWithoutYangConfigSplitter, IgnorePathsFromYangConfigSplitter
@@ -16,27 +16,25 @@ def extract_scope(path):
     if not path:
         raise Exception("Wrong patch with empty path.")
 
-    try:
-        pointer = jsonpointer.JsonPointer(path)
-        parts = pointer.parts
-    except Exception as e:
-        raise Exception(f"Error resolving path: '{path}' due to {e}")
+    pointer = jsonpointer.JsonPointer(path)
+    parts = pointer.parts
 
     if not parts:
-        raise Exception("Wrong patch with empty path.")
+        raise GenericConfigUpdaterError("Wrong patch with empty path.")
     if parts[0].startswith("asic"):
         if not parts[0][len("asic"):].isnumeric():
-            raise Exception(f"Error resolving path: '{path}' due to incorrect ASIC number.")
+            raise GenericConfigUpdaterError(f"Error resolving path: '{path}' due to incorrect ASIC number.")
         scope = parts[0]
         remainder = "/" + "/".join(parts[1:])
-    elif parts[0] == "localhost":
-        scope = "localhost"
+    elif parts[0] == HOST_NAMESPACE:
+        scope = HOST_NAMESPACE
         remainder = "/" + "/".join(parts[1:])
     else:
         scope = ""
         remainder = path
 
     return scope, remainder
+
 
 class ConfigLock:
     def acquire_lock(self):
@@ -67,7 +65,7 @@ class PatchApplier:
         self.changeapplier = changeapplier if changeapplier is not None else ChangeApplier(namespace=self.namespace)
 
     def apply(self, patch, sort=True):
-        scope = self.namespace if self.namespace else 'localhost'
+        scope = self.namespace if self.namespace else HOST_NAMESPACE
         self.logger.log_notice(f"{scope}: Patch application starting.")
         self.logger.log_notice(f"{scope}: Patch: {patch}")
 
@@ -84,10 +82,10 @@ class PatchApplier:
         self.config_wrapper.validate_field_operation(old_config, target_config)
 
         # Validate target config does not have empty tables since they do not show up in ConfigDb
-        self.logger.log_notice(f"{scope}: alidating target config does not have empty tables, " \
-                               "since they do not show up in ConfigDb.")
+        self.logger.log_notice(f"""{scope}: validating target config does not have empty tables,
+                               since they do not show up in ConfigDb.""")
         empty_tables = self.config_wrapper.get_empty_tables(target_config)
-        if empty_tables: # if there are empty tables
+        if empty_tables:  # if there are empty tables
             empty_tables_txt = ", ".join(empty_tables)
             raise EmptyTableError(f"{scope}: given patch is not valid because it will result in empty tables " \
                              "which is not allowed in ConfigDb. " \
@@ -104,9 +102,6 @@ class PatchApplier:
         changes_len = len(changes)
         self.logger.log_notice(f"The {scope} patch was converted into {changes_len} " \
                           f"change{'s' if changes_len != 1 else ''}{':' if changes_len > 0 else '.'}")
-
-        for change in changes:
-            self.logger.log_notice(f"  * {change}")
 
         # Apply changes in order
         self.logger.log_notice(f"{scope}: applying {changes_len} change{'s' if changes_len != 1 else ''} " \

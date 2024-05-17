@@ -16,6 +16,7 @@ YANG_DIR = "/usr/local/yang-models"
 SYSLOG_IDENTIFIER = "GenericConfigUpdater"
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 GCU_FIELD_OP_CONF_FILE = f"{SCRIPT_DIR}/gcu_field_operation_validators.conf.json"
+HOST_NAMESPACE = "localhost"
 
 class GenericConfigUpdaterError(Exception):
     pass
