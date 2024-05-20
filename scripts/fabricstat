@@ -399,6 +399,49 @@ class FabricIsolation(FabricStat):
         print(tabulate(body, header, tablefmt='simple', stralign='right'))
         return
 
+class FabricRate(FabricStat):
+    def rate_print(self):
+        # Connect to database
+        self.db = multi_asic.connect_to_all_dbs_for_ns(self.namespace)
+        # Get the set of all fabric ports
+        port_keys = self.db.keys(self.db.STATE_DB, FABRIC_PORT_STATUS_TABLE_PREFIX + '*')
+        # Create a new dictionary. The keys are the local port values in integer format.
+        # Only fabric ports that have remote port data are added.
+        port_dict = {}
+        for port_key in port_keys:
+            port_data = self.db.get_all(self.db.STATE_DB, port_key)
+            port_number = int(port_key.replace("FABRIC_PORT_TABLE|PORT", ""))
+            port_dict.update({port_number: port_data})
+        # Create ordered table of fabric ports.
+        rxRate = 0
+        rxData = 0
+        txRate = 0
+        txData = 0
+        time = 0
+        local_time = ""
+        # RX data , Tx data , Time are for testing
+        asic = "asic0"
+        if self.namespace:
+            asic = self.namespace
+        header = ["ASIC", "Link ID", "Rx Data Mbps", "Tx Data Mbps"]
+        body = []
+        for port_number in sorted(port_dict.keys()):
+            port_data = port_dict[port_number]
+            if "OLD_RX_RATE_AVG" in port_data:
+                rxRate = port_data["OLD_RX_RATE_AVG"]
+            if "OLD_RX_DATA" in port_data:
+                rxData = port_data["OLD_RX_DATA"]
+            if "OLD_TX_RATE_AVG" in port_data:
+                txRate = port_data["OLD_TX_RATE_AVG"]
+            if "OLD_TX_DATA" in port_data:
+                txData = port_data["OLD_TX_DATA"]
+            if "LAST_TIME" in port_data:
+                time = int(port_data["LAST_TIME"])
+                local_time = datetime.fromtimestamp(time)
+            body.append((asic, port_number, rxRate, txRate));
+        click.echo()
+        click.echo(tabulate(body, header, tablefmt='simple', stralign='right'))
+
 def main():
     global cnstat_dir
     global cnstat_fqn_file_port
@@ -415,6 +458,8 @@ Examples:
     fabricstat -q -n asic0
     fabricstat -c
     fabricstat -c -n asic0
+    fabricstat -s
+    fabricstat -s -n asic0
     fabricstat -C
     fabricstat -D
 """)
@@ -425,6 +470,7 @@ Examples:
     parser.add_argument('-e', '--errors', action='store_true', help='Display errors')
     parser.add_argument('-c','--capacity',action='store_true', help='Display fabric capacity')
     parser.add_argument('-i','--isolation', action='store_true', help='Display fabric ports isolation status')
+    parser.add_argument('-s','--rate', action='store_true', help='Display fabric counters rate')
     parser.add_argument('-C','--clear', action='store_true', help='Copy & clear fabric counters')
     parser.add_argument('-D','--delete', action='store_true', help='Delete saved stats')
 
@@ -433,6 +479,7 @@ Examples:
     reachability = args.reachability
     capacity_status = args.capacity
     isolation_status = args.isolation
+    rate = args.rate
     namespace = args.namespace
     errors_only = args.errors
 
@@ -455,17 +502,21 @@ Examples:
 
     def nsStat(ns, errors_only):
         if queue:
-           stat = FabricQueueStat(ns)
+            stat = FabricQueueStat(ns)
         elif reachability:
-           stat = FabricReachability(ns)
-           stat.reachability_print()
-           return
+            stat = FabricReachability(ns)
+            stat.reachability_print()
+            return
         elif isolation_status:
-           stat = FabricIsolation(ns)
-           stat.isolation_print()
-           return
+            stat = FabricIsolation(ns)
+            stat.isolation_print()
+            return
+        elif rate:
+            stat = FabricRate(ns)
+            stat.rate_print()
+            return
         else:
-           stat = FabricPortStat(ns)
+            stat = FabricPortStat(ns)
         cnstat_dict = stat.get_cnstat_dict()
         if save_fresh_stats:
             stat.save_fresh_stats()

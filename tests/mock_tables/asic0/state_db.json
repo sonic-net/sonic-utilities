@@ -256,7 +256,12 @@
     "FABRIC_PORT_TABLE|PORT0" : {
         "STATUS": "up",
         "REMOTE_MOD": "0",
-        "REMOTE_PORT": "79"
+        "REMOTE_PORT": "79",
+        "OLD_RX_RATE_AVG": "0",
+        "OLD_RX_DATA": "0",
+        "OLD_TX_RATE_AVG": "19.8",
+        "OLD_TX_DATA": "18490000000",
+        "LAST_TIME": "1676672799"
     },
     "FABRIC_PORT_TABLE|PORT1" : {
         "STATUS": "down"
@@ -264,7 +269,12 @@
     "FABRIC_PORT_TABLE|PORT2" : {
         "STATUS": "up",
         "REMOTE_MOD": "0",
-        "REMOTE_PORT": "94"
+        "REMOTE_PORT": "94",
+        "OLD_RX_RATE_AVG": "0",
+        "OLD_RX_DATA": "0",
+        "OLD_TX_RATE_AVG": "39.8",
+        "OLD_TX_DATA": "24490000000",
+        "LAST_TIME": "1676672799"
     },
     "FABRIC_PORT_TABLE|PORT3" : {
         "STATUS": "down"
@@ -272,7 +282,12 @@
     "FABRIC_PORT_TABLE|PORT4" : {
         "STATUS": "up",
         "REMOTE_MOD": "0",
-        "REMOTE_PORT": "85"
+        "REMOTE_PORT": "85",
+        "OLD_RX_RATE_AVG": "0",
+        "OLD_RX_DATA": "0",
+        "OLD_TX_RATE_AVG": "39.8",
+        "OLD_TX_DATA": "24490000000",
+        "LAST_TIME": "1676672799"
     },
     "FABRIC_PORT_TABLE|PORT5" : {
         "STATUS": "down"
@@ -280,12 +295,22 @@
     "FABRIC_PORT_TABLE|PORT6" : {
         "STATUS": "up",
         "REMOTE_MOD": "0",
-        "REMOTE_PORT": "84"
+        "REMOTE_PORT": "84",
+        "OLD_RX_RATE_AVG": "0",
+        "OLD_RX_DATA": "0",
+        "OLD_TX_RATE_AVG": "39.3",
+        "OLD_TX_DATA": "24170000000",
+        "LAST_TIME": "1676672799"
     },
     "FABRIC_PORT_TABLE|PORT7" : {
         "STATUS": "up",
         "REMOTE_MOD": "0",
-        "REMOTE_PORT": "93"
+        "REMOTE_PORT": "93",
+        "OLD_RX_RATE_AVG": "0",
+        "OLD_RX_DATA": "0",
+        "OLD_TX_RATE_AVG": "39.3",
+        "OLD_TX_DATA": "24190000000",
+        "LAST_TIME": "1676672799"
     },
     "CHASSIS_MIDPLANE_TABLE|LINE-CARD0": {
         "ip_address": "127.0.0.1",

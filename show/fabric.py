@@ -74,3 +74,13 @@ def queue(namespace):
     if namespace is not None:
         cmd += ['-n', str(namespace)]
     clicommon.run_command(cmd)
+
+
+@counters.command()
+@multi_asic_util.multi_asic_click_option_namespace
+def rate(namespace):
+    """Show fabric counters rate"""
+    cmd = ['fabricstat', '-s']
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
+    clicommon.run_command(cmd)
