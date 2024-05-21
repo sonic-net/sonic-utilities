@@ -255,6 +255,7 @@ function backup_database()
                                           and not string.match(k, 'TRANSCEIVER_INFO|') \
                                           and not string.match(k, 'VXLAN_TUNNEL_TABLE|') \
                                           and not string.match(k, 'BUFFER_MAX_PARAM_TABLE|') \
+                                          and not string.match(k, 'STORAGE_INFO|') \
                                           and not string.match(k, 'FAST_RESTART_ENABLE_TABLE|') then
                 redis.call('del', k)
             end
@@ -809,7 +810,6 @@ if [[ -x ${DEVPATH}/${PLATFORM}/${PLATFORM_FWUTIL_AU_REBOOT_HANDLE} ]]; then
         exit "${EXIT_PLATFORM_FW_AU_FAILURE}"
     fi
 fi
-
 
 # Enable Watchdog Timer
 if [ -x ${WATCHDOG_UTIL} ]; then
