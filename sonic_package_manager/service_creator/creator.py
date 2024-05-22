@@ -2,6 +2,7 @@
 
 import contextlib
 import os
+import glob
 import sys
 import shutil
 import stat
@@ -33,6 +34,7 @@ SERVICE_FILE_TEMPLATE = 'sonic.service.j2'
 TIMER_UNIT_TEMPLATE = 'timer.unit.j2'
 
 SYSTEMD_LOCATION = '/usr/lib/systemd/system'
+ETC_SYSTEMD_LOCATION = '/etc/systemd/system'
 
 GENERATED_SERVICES_CONF_FILE = '/etc/sonic/generated_services.conf'
 
@@ -92,17 +94,29 @@ def set_executable_bit(filepath):
     os.chmod(filepath, st.st_mode | stat.S_IEXEC)
 
 
-def remove_if_exists(path):
+def remove_file(path):
     """ Remove filepath if it exists """
 
-    if not os.path.exists(path):
-        return
+    try:
+        os.remove(path)
+        log.info(f'removed {path}')
+    except FileNotFoundError:
+        pass
 
-    os.remove(path)
-    log.info(f'removed {path}')
+
+def remove_dir(path):
+    """ Remove filepath if it exists """
+
+    try:
+        shutil.rmtree(path)
+        log.info(f'removed {path}')
+    except FileNotFoundError:
+        pass
+
 
 def is_list_of_strings(command):
     return isinstance(command, list) and all(isinstance(item, str) for item in command)
+
 
 def run_command(command: List[str]):
     """ Run arbitrary bash command.
@@ -197,12 +211,22 @@ class ServiceCreator:
         """
 
         name = package.manifest['service']['name']
-        remove_if_exists(os.path.join(SYSTEMD_LOCATION, f'{name}.service'))
-        remove_if_exists(os.path.join(SYSTEMD_LOCATION, f'{name}@.service'))
-        remove_if_exists(os.path.join(SERVICE_MGMT_SCRIPT_LOCATION, f'{name}.sh'))
-        remove_if_exists(os.path.join(DOCKER_CTL_SCRIPT_LOCATION, f'{name}.sh'))
-        remove_if_exists(os.path.join(DEBUG_DUMP_SCRIPT_LOCATION, f'{name}'))
-        remove_if_exists(os.path.join(ETC_SONIC_PATH, f'{name}_reconcile'))
+        remove_file(os.path.join(SYSTEMD_LOCATION, f'{name}.service'))
+        remove_file(os.path.join(SYSTEMD_LOCATION, f'{name}@.service'))
+        remove_file(os.path.join(SERVICE_MGMT_SCRIPT_LOCATION, f'{name}.sh'))
+        remove_file(os.path.join(DOCKER_CTL_SCRIPT_LOCATION, f'{name}.sh'))
+        remove_file(os.path.join(DEBUG_DUMP_SCRIPT_LOCATION, f'{name}'))
+        remove_file(os.path.join(ETC_SONIC_PATH, f'{name}_reconcile'))
+
+        # remove symlinks and configuration directories created by featured
+        remove_file(os.path.join(ETC_SYSTEMD_LOCATION, f'{name}.service'))
+        for unit_file in glob.glob(os.path.join(ETC_SYSTEMD_LOCATION, f'{name}@*.service')):
+            remove_file(unit_file)
+
+        remove_dir(os.path.join(ETC_SYSTEMD_LOCATION, f'{name}.service.d'))
+        for unit_dir in glob.glob(os.path.join(ETC_SYSTEMD_LOCATION, f'{name}@*.service.d')):
+            remove_dir(unit_dir)
+
         self.update_dependent_list_file(package, remove=True)
         self.update_generated_services_conf_file(package, remove=True)
 

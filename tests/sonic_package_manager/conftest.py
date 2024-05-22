@@ -16,6 +16,7 @@ from sonic_package_manager.metadata import Metadata, MetadataResolver
 from sonic_package_manager.registry import RegistryResolver
 from sonic_package_manager.version import Version
 from sonic_package_manager.service_creator.creator import *
+from sonic_package_manager.service_creator.creator import ETC_SYSTEMD_LOCATION
 
 
 @pytest.fixture
@@ -405,6 +406,7 @@ def fake_db_for_migration(fake_metadata_resolver):
 def sonic_fs(fs):
     fs.create_file('/proc/1/root')
     fs.create_dir(ETC_SONIC_PATH)
+    fs.create_dir(ETC_SYSTEMD_LOCATION)
     fs.create_dir(SYSTEMD_LOCATION)
     fs.create_dir(DOCKER_CTL_SCRIPT_LOCATION)
     fs.create_dir(SERVICE_MGMT_SCRIPT_LOCATION)

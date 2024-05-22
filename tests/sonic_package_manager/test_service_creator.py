@@ -12,6 +12,7 @@ from sonic_package_manager.manifest import Manifest
 from sonic_package_manager.metadata import Metadata
 from sonic_package_manager.package import Package
 from sonic_package_manager.service_creator.creator import *
+from sonic_package_manager.service_creator.creator import ETC_SYSTEMD_LOCATION
 from sonic_package_manager.service_creator.feature import FeatureRegistry
 
 
@@ -106,6 +107,14 @@ def test_service_creator(sonic_fs, manifest, service_creator, package_manager):
     assert sonic_fs.exists(os.path.join(SERVICE_MGMT_SCRIPT_LOCATION, 'test.sh'))
     assert sonic_fs.exists(os.path.join(SYSTEMD_LOCATION, 'test.service'))
 
+    # Create symlinks and directory featured creates
+    os.symlink('/dev/null', os.path.join(ETC_SYSTEMD_LOCATION, 'test.service'))
+    os.symlink('/dev/null', os.path.join(ETC_SYSTEMD_LOCATION, 'test@1.service'))
+    os.symlink('/dev/null', os.path.join(ETC_SYSTEMD_LOCATION, 'test@2.service'))
+    os.mkdir(os.path.join(ETC_SYSTEMD_LOCATION, 'test.service.d'))
+    os.mkdir(os.path.join(ETC_SYSTEMD_LOCATION, 'test@1.service.d'))
+    os.mkdir(os.path.join(ETC_SYSTEMD_LOCATION, 'test@2.service.d'))
+
     def read_file(name):
         with open(os.path.join(ETC_SONIC_PATH, name)) as file:
             return file.read()
@@ -117,6 +126,15 @@ def test_service_creator(sonic_fs, manifest, service_creator, package_manager):
     generated_services_conf_content = read_file('generated_services.conf')
     assert generated_services_conf_content.endswith('\n')
     assert set(generated_services_conf_content.split()) == set(['test.service', 'test@.service'])
+
+    service_creator.remove(package)
+
+    assert not sonic_fs.exists(os.path.join(ETC_SYSTEMD_LOCATION, 'test.service'))
+    assert not sonic_fs.exists(os.path.join(ETC_SYSTEMD_LOCATION, 'test@1.service'))
+    assert not sonic_fs.exists(os.path.join(ETC_SYSTEMD_LOCATION, 'test@2.service'))
+    assert not sonic_fs.exists(os.path.join(ETC_SYSTEMD_LOCATION, 'test.service.d'))
+    assert not sonic_fs.exists(os.path.join(ETC_SYSTEMD_LOCATION, 'test@1.service.d'))
+    assert not sonic_fs.exists(os.path.join(ETC_SYSTEMD_LOCATION, 'test@2.service.d'))
 
 
 def test_service_creator_with_timer_unit(sonic_fs, manifest, service_creator):
