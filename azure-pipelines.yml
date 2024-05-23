@@ -47,6 +47,13 @@ stages:
 
     steps:
     - script: |
+        set -ex
+        sudo apt-get update
+        sudo apt-get install -y python3-pip
+        sudo pip3 install requests==2.31.0
+      displayName: "Install dependencies"
+
+    - script: |
         sourceBranch=$(Build.SourceBranchName)
         if [[ "$(Build.Reason)" == "PullRequest" ]];then
           sourceBranch=$(System.PullRequest.TargetBranch)
