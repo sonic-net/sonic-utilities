@@ -89,6 +89,15 @@ def get_proxy_arp(ctx, vlan):
 
     return proxy_arp
 
+def get_static_anycast_gateway(ctx, vlan):
+    cfg, _ = ctx
+    _, vlan_ip_data, _ = cfg
+
+    if vlan in vlan_ip_data:
+        if vlan_ip_data[vlan].get("static_anycast_gateway") == "true":
+            return "enabled"
+
+    return "disabled"
 
 class VlanBrief:
     """ This class is used as a namespace to
@@ -103,7 +112,8 @@ class VlanBrief:
         ("IP Address", get_vlan_ip_address),
         ("Ports", get_vlan_ports),
         ("Port Tagging", get_vlan_ports_tagging),
-        ("Proxy ARP", get_proxy_arp)
+        ("Proxy ARP", get_proxy_arp),
+        ("Static Anycast Gateway", get_static_anycast_gateway)
     ]
 
     @classmethod

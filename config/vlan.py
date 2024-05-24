@@ -402,3 +402,51 @@ def del_vlan_member(db, vid, port, multiple, except_flag):
                 delete_db_entry("DHCP_COUNTER_TABLE|{}".format(port), db.db, db.db.STATE_DB)
             except JsonPatchConflict:
                 ctx.fail("{} invalid or does not exist, or {} is not a member of {}".format(vlan, port, vlan))
+
+#
+# 'static-anycast-gateway' group ('config vlan static-anycast-gateway ...')
+#
+@vlan.group(cls=clicommon.AbbreviationGroup, name='static-anycast-gateway')
+def static_anycast_gateway():
+    pass
+
+@static_anycast_gateway.command('enable')
+@click.argument('vid', metavar='<vid>', required=True, type=int)
+@clicommon.pass_db
+def enable_vlan_sag(db, vid):
+    """Enable static-anycast-gatweay on VLAN interface"""
+    ctx = click.get_current_context()
+
+    log.log_info(f"'vlan static-anycast-gateway enable {vid}' executing...")
+
+    vlan = f'Vlan{vid}'
+    if not clicommon.is_valid_vlan_interface(db.cfgdb, vlan):
+        ctx.fail(f"Interface {vlan} does not exist")
+
+    vlan_entry = db.cfgdb.get_entry('VLAN_INTERFACE', vlan)
+    if vlan_entry and vlan_entry.get('static_anycast_gateway') == 'true':
+        ctx.fail(f"static-anycast-gateway is already enabled")
+
+    db.cfgdb.mod_entry('VLAN_INTERFACE', vlan, {"static_anycast_gateway": "true"})
+    click.echo('static-anycast-gateway setting saved to ConfigDB')
+
+
+@static_anycast_gateway.command('disable')
+@click.argument('vid', metavar='<vid>', required=True, type=int)
+@clicommon.pass_db
+def disable_vlan_sag(db, vid):
+    """Disable static-anycast-gatweay on VLAN interface"""
+    ctx = click.get_current_context()
+
+    log.log_info(f"'vlan static-anycast-gateway disable {vid}' executing...")
+
+    vlan = f'Vlan{vid}'
+    if not clicommon.is_valid_vlan_interface(db.cfgdb, vlan):
+        ctx.fail(f"Interface {vlan} does not exist")
+
+    vlan_entry = db.cfgdb.get_entry('VLAN_INTERFACE', vlan)
+    if vlan_entry and vlan_entry.get('static_anycast_gateway') != 'true':
+        ctx.fail(f"static-anycast-gateway is already disabled")
+
+    db.cfgdb.mod_entry('VLAN_INTERFACE', vlan, {"static_anycast_gateway": "false"})
+    click.echo('static-anycast-gateway setting saved to ConfigDB')

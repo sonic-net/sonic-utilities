@@ -2496,6 +2496,30 @@ def ztp(status, verbose):
        cmd += ["--verbose"]
     run_command(cmd, display_cmd=verbose)
 
+#
+# 'static anycast gateway' command ("show static-anycast-gateway")
+#
+@cli.command('static-anycast-gateway')
+@clicommon.pass_db
+def sag(db):
+    """Show static anycast gateway information"""
+    header = ['MacAddress', 'Interfaces']
+    body = []
+
+    sag_entry = db.cfgdb.get_entry('SAG', 'GLOBAL')
+    if sag_entry:
+        sag_mac = sag_entry.get('gateway_mac')
+
+        intf_dict = db.cfgdb.get_table('VLAN_INTERFACE')
+        for key, value in intf_dict.items():
+            if value.get('static_anycast_gateway') == 'true':
+                if not body:
+                    body.append([sag_mac, key])
+                else:
+                    body.append(['', key])
+
+    click.echo("Static Anycast Gateway Information")
+    click.echo(tabulate(body, header, tablefmt='simple'))
 
 #
 # 'bmp' group ("show bmp ...")
