@@ -172,6 +172,9 @@
 * [Radius](#radius)
   * [Radius show commands](#show-radius-commands)
   * [Radius config commands](#Radius-config-commands)
+* [SAG MAC](#sag)
+  * [SAG MAC config commands](#sag-config-commands)
+  * [SAG MAC show commands](#sag-show-commands)
 * [Switch](#switch)
   * [Switch Show commands](#switch-show-commands)
   * [Switch Clear commands](#switch-clear-commands)
@@ -10928,6 +10931,60 @@ This command is to config the radius server for various parameter listed.
 
   ```
 
+## SAG MAC
+
+### SAG MAC config commands
+
+This section explains all the commands that are supported in SONiC to configure static-anycast-gateway MAC address.
+
+**config static-anycast-gateway mac_address add <mac_address>**
+
+This command enables use to add a static-anycast-gateway MAC address
+- Usage:
+  ```
+  config static-anycast-gateway mac_address add <mac_address>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config static-anycast-gateway mac_address add 00:11:22:33:44:55
+  ```
+
+**config static-anycast-gateway mac_address del**
+
+This command enables user to delete the static-anycast-gateway MAC address.
+
+- Usage:
+  ```
+  config static-anycast-gateway mac_address del
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config static-anycast-gateway mac_address del
+  ```
+  
+### SAG MAC Show commands
+**show static-anycast-gateway**
+This command displays all the interfaces which have enabled the SAG MAC address.
+- Usage:
+  ```
+  show static-anycast_gateway 
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show static-anycast-gateway
+  Static Anycast Gateway Information
+  MacAddress         Interfaces
+  -----------------  ------------
+  00:11:22:33:44:55  Vlan3
+                     Vlan4
+
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#sag)
+
 # Switch
 
 This section explains the various show, configuration and clear commands available for users.
@@ -11003,6 +11060,7 @@ This command is used to clear switch counters.
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#switch)
+
 
 ## sFlow
 
@@ -12588,7 +12646,7 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#System
 
 **show vlan brief**
 
-This command displays brief information about all the vlans configured in the device. It displays the vlan ID, IP address (if configured for the vlan), list of vlan member ports, whether the port is tagged or in untagged mode, the DHCPv4 Helper Address, and the proxy ARP status
+This command displays brief information about all the vlans configured in the device. It displays the vlan ID, IP address (if configured for the vlan), list of vlan member ports, whether the port is tagged or in untagged mode, the DHCPv4 Helper Address, the proxy ARP status, and the sag status.
 
 - Usage:
   ```
@@ -12598,15 +12656,15 @@ This command displays brief information about all the vlans configured in the de
 - Example:
   ```
   admin@sonic:~$ show vlan brief
-
-  +-----------+--------------+-----------+----------------+-----------------------+-------------+
-  |   VLAN ID | IP Address   | Ports     | Port Tagging   | DHCP Helper Address   | Proxy ARP   |
-  +===========+==============+===========+================+=======================+=============+
-  |       100 | 1.1.2.2/16   | Ethernet0 | tagged         | 192.0.0.1             | disabled    |
-  |           |              | Ethernet4 | tagged         | 192.0.0.2             |             |
-  |           |              |           |                | 192.0.0.3             |             |
-  +-----------+--------------+-----------+----------------+-----------------------+-------------+
+  +-----------+------------------+-----------+----------------+-------------+--------------------------+-----------------------+
+  |   VLAN ID | IP Address       | Ports     | Port Tagging   | Proxy ARP   | Static Anycast Gateway   | DHCP Helper Address   |
+  +===========+==================+===========+================+=============+==========================+=======================+
+  |         3 | 200.200.200.1/24 | Ethernet8 | untagged       | disabled    | enabled                  |                       |
+  +-----------+------------------+-----------+----------------+-------------+--------------------------+-----------------------+
+  |         4 | 100.200.200.1/24 | Ethernet4 | untagged       | disabled    | enabled                  |                       |
+  +-----------+------------------+-----------+----------------+-------------+--------------------------+-----------------------+
   ```
+  
 
 **show vlan config**
 
@@ -12680,6 +12738,22 @@ This command is to add or delete a member port into the already created vlan.
 
   admin@sonic:~$ sudo config vlan member add 100 Ethernet4
   This command will add Ethernet4 as member of the vlan 100.
+  ```
+**config sag enable/disable**
+
+This command is used to enable or disable static-anycast-gateway for a VLAN interface
+
+- Usage:
+  ```
+  config vlan static-anycast-gateway enable/disable <vlan_id>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config vlan static-anycast-gateway enable 3
+  static-anycast-gateway setting saved to ConfigDB
+  admin@sonic:~$ sudo config vlan static-anycast-gateway disable 3
+  static-anycast-gateway setting saved to ConfigDB
   ```
 
 **config vlan member add/del -m -e**
