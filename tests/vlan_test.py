@@ -107,8 +107,10 @@ Vlan3000   3000
 Vlan4000   4000  PortChannel1001  tagged
 """
 
-show_vlan_config_in_alias_mode_output = """\
+show_vlan_config_in_alias_mode_output="""\
 Name        VID  Member           Mode
+--------  -----  ---------------  --------
+Vlan1000   1000  etp2             untagged
 Vlan1000   1000  etp3             untagged
 Vlan1000   1000  etp4             untagged
 Vlan1000   1000  etp5             untagged
