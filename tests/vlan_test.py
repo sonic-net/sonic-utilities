@@ -27,7 +27,7 @@ IP_VERSION_PARAMS_MAP = {
     }
 }
 
-show_vlan_brief_output = """\
+show_vlan_brief_output="""\
 +-----------+-----------------+-----------------+----------------+-------------+--------------------------+
 |   VLAN ID | IP Address      | Ports           | Port Tagging   | Proxy ARP   | Static Anycast Gateway   |
 +===========+=================+=================+================+=============+==========================+
