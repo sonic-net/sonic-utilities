@@ -248,7 +248,17 @@ function backup_database()
     # Delete keys in stateDB except FDB_TABLE|*, MIRROR_SESSION_TABLE|*, WARM_RESTART_ENABLE_TABLE|*, FG_ROUTE_TABLE|*
     sonic-db-cli STATE_DB eval "
         for _, k in ipairs(redis.call('keys', '*')) do
-            if not string.match(k, 'FDB_TABLE|') and not string.match(k, 'WARM_RESTART_TABLE|') \
+            if string.match(k, 'PORT_TABLE|Ethernet') then
+                for i, f in ipairs(redis.call('hgetall', k)) do
+                    if i % 2 == 1 then
+                        if not string.match(f, 'host_tx_ready') \
+                            and not string.match(f, 'NPU_SI_SETTINGS_SYNC_STATUS') \
+                            and not string.match(f, 'CMIS_REINIT_REQUIRED') then
+                            redis.call('hdel', k, f)
+                        end
+                    end
+                end
+            elseif not string.match(k, 'FDB_TABLE|') and not string.match(k, 'WARM_RESTART_TABLE|') \
                                           and not string.match(k, 'MIRROR_SESSION_TABLE|') \
                                           and not string.match(k, 'FG_ROUTE_TABLE|') \
                                           and not string.match(k, 'WARM_RESTART_ENABLE_TABLE|') \
