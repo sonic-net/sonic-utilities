@@ -27,7 +27,7 @@ stages:
     displayName: "Static Analysis"
     timeoutInMinutes: 10
     continueOnError: true
-    pool: ubuntu-20.04
+    pool: sonic-ubuntu-1c
     steps:
     - template: .azure-pipelines/pre-commit-check.yml
 
