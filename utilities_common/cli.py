@@ -731,8 +731,7 @@ def run_command(command, display_cmd=False, ignore_error=False, return_cmd=False
     # with a list for next hops
     if (get_interface_naming_mode() == "alias" and not command_str.startswith("intfutil") and not re.search(
             "show ip|ipv6 route", command_str)):
-        run_command_in_alias_mode(command, shell=shell)
-        sys.exit(0)
+        return run_command_in_alias_mode(command, shell=shell)
 
     proc = subprocess.Popen(command, shell=shell, text=True, stdout=subprocess.PIPE)
 
