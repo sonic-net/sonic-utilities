@@ -66,6 +66,7 @@ from . import warm_restart
 from . import plugins
 from . import syslog
 from . import dns
+from . import bgp_cli
 
 # Global Variables
 PLATFORM_JSON = 'platform.json'
@@ -325,6 +326,8 @@ cli.add_command(syslog.syslog)
 if is_gearbox_configured():
     cli.add_command(gearbox.gearbox)
 
+# bgp module
+cli.add_command(bgp_cli.BGP)
 
 #
 # 'vrf' command ("show vrf")

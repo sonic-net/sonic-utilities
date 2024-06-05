@@ -2630,6 +2630,26 @@ When enabled, BGP will not advertise routes which aren't yet offloaded.
   Disabled
   ```
 
+**show bgp device-global**
+
+This command displays BGP device global configuration.
+
+- Usage:
+  ```bash
+  show bgp device-global
+  ```
+
+- Options:
+  - _-j,--json_: display in JSON format
+
+- Example:
+  ```bash
+  admin@sonic:~$ show bgp device-global
+  TSA      W-ECMP
+  -------  -------
+  enabled  enabled
+  ```
+
 Go Back To [Beginning of the document](#) or [Beginning of this section](#bgp)
 
 ### BGP config commands
@@ -2738,6 +2758,26 @@ Once enabled, BGP will not advertise routes which aren't yet offloaded.
   ```
   ```
   admin@sonic:~$ sudo config suppress-fib-pending disabled 
+  ```
+
+**config bgp device-global tsa/w-ecmp**
+
+This command is used to manage BGP device global configuration.
+
+Feature list:
+1. TSA - Traffic-Shift-Away
+2. W-ECMP - Weighted-Cost Multi-Path
+
+- Usage:
+  ```bash
+  config bgp device-global tsa <enabled|disabled>
+  config bgp device-global w-ecmp <enabled|disabled>
+  ```
+
+- Examples:
+  ```bash
+  admin@sonic:~$ config bgp device-global tsa enabled
+  admin@sonic:~$ config bgp device-global w-ecmp enabled
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#bgp)
