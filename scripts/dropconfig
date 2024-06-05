@@ -105,7 +105,7 @@ class DropConfig(object):
             if supported_reasons and int(capabilities.get('count', 0)) > 0:
                 print('\n{}'.format(counter))
                 for reason in supported_reasons:
-                    print('\t{}'.format(reason))
+                    print('        {}'.format(reason))
 
     def create_counter(self, counter_name, alias, group, counter_type,
                        description, reasons):
