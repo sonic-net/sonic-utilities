@@ -540,7 +540,10 @@ Examples:
             stat = FabricCapacity(namespace, table_cnt, threshold)
             stat.capacity_print()
 
-        click.echo("Monitored fabric capacity threshold: {}".format(threshold[0]))
+        print_th = ""
+        if threshold:
+            print_th = threshold[0]
+        click.echo("Monitored fabric capacity threshold: {}".format(print_th))
         click.echo()
         click.echo(tabulate(table_cnt, capacity_header, tablefmt='simple', stralign='right'))
     else:
