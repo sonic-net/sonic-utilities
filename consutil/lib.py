@@ -277,7 +277,7 @@ class SysInfoProvider(object):
     @staticmethod
     def list_console_ttys():
         """Lists all console tty devices"""
-        cmd = ["ls", SysInfoProvider.DEVICE_PREFIX + "*"]
+        cmd = ["bash", "-c", "ls " + SysInfoProvider.DEVICE_PREFIX + "*"]
         output, _ = SysInfoProvider.run_command(cmd, abort=False)
         ttys = output.split('\n')
         ttys = list([dev for dev in ttys if re.match(SysInfoProvider.DEVICE_PREFIX + r"\d+", dev) != None])
