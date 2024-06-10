@@ -249,7 +249,7 @@ def breakout_Ports(cm, delPorts=list(), portJson=dict(), force=False, \
             click.echo("*** Printing dependencies ***")
             for dep in deps:
                 click.echo(dep)
-            sys.exit(0)
+            sys.exit(1)
         else:
             click.echo("[ERROR] Port breakout Failed!!! Opting Out")
             raise click.Abort()
