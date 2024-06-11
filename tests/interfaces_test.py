@@ -1,9 +1,11 @@
 import os
 import traceback
+import config.main as config
 
 from click.testing import CliRunner
 from unittest import mock
 from utilities_common.intf_filter import parse_interface_in_filter
+from utilities_common.db import Db
 
 import config.main as config
 import show.main as show
@@ -436,6 +438,56 @@ class TestInterfaces(object):
         print(result.output)
         assert result.exit_code != 0
         assert "Error: Invalid interface name Ethernet3" in result.output
+
+    def test_add_remove_sys_mac_portchannel(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db':db.cfgdb}
+        config.run_vtysh_command = mock.MagicMock(return_value=None)
+        result = runner.invoke(config.config.commands["interface"].commands["sys-mac"].commands["add"], ["PortChannel0001", "00:01:01:01:01:02"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        pc_table = obj['config_db'].get_table("PORTCHANNEL")
+        assert pc_table["PortChannel0001"]['system_mac'] == "00:01:01:01:01:02"
+        result = runner.invoke(config.config.commands["interface"].commands["sys-mac"].commands["add"], ["PortChannel0001", "00:01:01:01:01:03"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        pc_table = obj['config_db'].get_table("PORTCHANNEL")
+        pc_table["PortChannel0001"]['system_mac'] == "00:01:01:01:01:03"
+        result = runner.invoke(config.config.commands["interface"].commands["sys-mac"].commands["remove"], ["PortChannel0001", "00:01:01:01:01:02"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 2
+        pc_table = obj['config_db'].get_table("PORTCHANNEL")
+        assert pc_table["PortChannel0001"]['system_mac'] == "00:01:01:01:01:03"
+        result = runner.invoke(config.config.commands["interface"].commands["sys-mac"].commands["remove"], ["PortChannel0001", "00:01:01:01:01:03"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        pc_table = obj['config_db'].get_table("PORTCHANNEL")
+        assert pc_table["PortChannel0001"]['system_mac'] == 'None'
+
+    def test_invalid_multicast_sys_mac_portchannel(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db':db.cfgdb}
+        result = runner.invoke(config.config.commands["interface"].commands["sys-mac"].commands["add"], ["PortChannel0001", "01:01:01:01:01:02"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "System MAC address 01:01:01:01:01:02 is multicast, only unicast allowed." in result.output
+
+    def test_invalid_sys_mac_portchannel(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db':db.cfgdb}
+        result = runner.invoke(config.config.commands["interface"].commands["sys-mac"].commands["add"], ["PortChannel0001", "00:01:01:01:01:"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "System MAC address 00:01:01:01:01: format is not valid." in result.output
 
     def test_show_interfaces_naming_mode_default(self):
         runner = CliRunner()

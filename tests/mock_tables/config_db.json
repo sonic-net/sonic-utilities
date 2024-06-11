@@ -742,7 +742,8 @@
         "members@": "Ethernet112",
         "min_links": "1",
         "tpid": "0x8100",
-        "mtu": "9100"
+        "mtu": "9100",
+        "system_mac": "00:01:01:01:01:02"
     },
     "PORTCHANNEL|PortChannel0002": {
         "admin_status": "up",

@@ -2893,6 +2893,7 @@ def remove_portchannel(ctx, portchannel_name):
     except JsonPatchConflict:
         ctx.fail("{} is not present.".format(portchannel_name))
 
+
 @portchannel.group(cls=clicommon.AbbreviationGroup, name='member')
 @click.pass_context
 def portchannel_member(ctx):
@@ -5173,6 +5174,83 @@ def shutdown(ctx, interface_name):
     for lo in lo_list:
         if lo in intf_fs:
             config_db.mod_entry("LOOPBACK_INTERFACE", lo, {"admin_status": "down"})
+
+#
+# 'sys-mac' group ('config interface sys-mac ...')
+#
+@interface.group(cls=clicommon.AbbreviationGroup)
+@click.pass_context
+def sys_mac(ctx):
+    pass
+
+@sys_mac.command('add')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('sys_mac', metavar='<sys_mac>', required=True)
+@click.pass_context
+def add_pc_sys_id_mac(ctx, interface_name, sys_mac):
+    """Add System Mac"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+
+    if is_portchannel_name_valid(interface_name) != True:
+            ctx.fail("{} is invalid!, name should have prefix '{}' and suffix '{}'"
+                    .format(interface_name, CFG_PORTCHANNEL_PREFIX, CFG_PORTCHANNEL_NO))
+    if is_portchannel_present_in_db(config_db, interface_name) is False:
+        ctx.fail("{} is not present.".format(interface_name))
+    else:
+        try:
+            gateway_mac = netaddr.EUI(sys_mac)
+        except Exception as e:
+            ctx.fail(f'System MAC address {sys_mac} format is not valid.')
+        if (gateway_mac.words[0] & 0b01):
+            ctx.fail(f'System MAC address {sys_mac} is multicast, only unicast allowed.')
+        config_db.mod_entry("PORTCHANNEL", interface_name, {'system_mac': sys_mac})
+
+        # Update frr
+        port_id = port_id_from_if_name(interface_name)
+        cmd = ['sudo', 'vtysh', '-c', 'configure terminal', '-c', 'interface {}'.format(interface_name)]
+        evpn_es_tbl = config_db.get_entry('EVPN_ETHERNET_SEGMENT', interface_name)
+        if evpn_es_tbl and 'type' in evpn_es_tbl and evpn_es_tbl['type'] == 'TYPE_3_MAC_BASED':
+            cmd.append('-c')
+            cmd.append('evpn mh es-id {}'.format(port_id))
+            cmd.append('-c')
+            cmd.append('evpn mh es-sys-mac {}'.format(sys_mac))
+        op = run_vtysh_command(cmd)
+        if op:
+            ctx.fail("VTYSh config failed. Error: {}".format(op))
+
+@sys_mac.command('remove')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('sys_mac', metavar='<sys_mac>', required=True)
+@click.pass_context
+def del_pc_sys_id_mac(ctx, interface_name, sys_mac):
+    """Del System Mac"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+    if is_portchannel_name_valid(interface_name) != True:
+            ctx.fail("{} is invalid!, name should have prefix '{}' and suffix '{}'"
+                    .format(interface_name, CFG_PORTCHANNEL_PREFIX, CFG_PORTCHANNEL_NO))
+    if is_portchannel_present_in_db(config_db, interface_name) is False:
+        ctx.fail("{} is not present.".format(interface_name))
+    else:
+        pc_table = config_db.get_table('PORTCHANNEL')
+        entry = config_db.get_entry("PORTCHANNEL", interface_name)
+        conf_sys_mac = None
+        if 'system_mac' in entry:
+            conf_sys_mac = entry['system_mac']
+            del entry['system_mac']
+        if conf_sys_mac and conf_sys_mac == sys_mac:
+            config_db.set_entry("PORTCHANNEL", interface_name, entry)
+
+            # Update frr
+            cmd = ['sudo', 'vtysh', '-c', 'configure terminal', '-c', 'interface {}'.format(interface_name)]
+            evpn_es_tbl = config_db.get_entry('EVPN_ETHERNET_SEGMENT', interface_name)
+            if evpn_es_tbl and 'type' in evpn_es_tbl and evpn_es_tbl['type'] == 'TYPE_3_MAC_BASED':
+                cmd.append('-c')
+                cmd.append('no evpn mh es-sys-mac')
+                op = run_vtysh_command(cmd)
+                if op:
+                    ctx.fail("VTYSh config failed. Error: {}".format(op))
+        else:
+            ctx.fail("For {} sys-mac is not present or different value is configured.".format(interface_name))
 
 #
 # 'speed' subcommand
