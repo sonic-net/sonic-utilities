@@ -16,6 +16,7 @@ logger = genericUpdaterLogging.get_logger(title="Change Applier")
 
 print_to_console = False
 
+
 def set_verbose(verbose=False):
     global print_to_console, logger
 
@@ -34,10 +35,11 @@ def log_error(m):
     logger.log(logger.LOG_PRIORITY_ERROR, m, print_to_console)
 
 
-def get_config_db(namespace=multi_asic.DEFAULT_NAMESPACE):
-    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
+def get_config_db(scope=multi_asic.DEFAULT_NAMESPACE):
+    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=scope)
     config_db.connect()
     return config_db
+
 
 def set_config(config_db, tbl, key, data):
     config_db.set_entry(tbl, key, data)
@@ -61,10 +63,8 @@ class DryRunChangeApplier:
     def __init__(self, config_wrapper):
         self.config_wrapper = config_wrapper
 
-
     def apply(self, change):
         self.config_wrapper.apply_change_to_config_db(change)
-
 
     def remove_backend_tables_from_config(self, data):
         return data
@@ -74,9 +74,9 @@ class ChangeApplier:
 
     updater_conf = None
 
-    def __init__(self, namespace=multi_asic.DEFAULT_NAMESPACE):
-        self.namespace = namespace
-        self.config_db = get_config_db(self.namespace)
+    def __init__(self, scope=multi_asic.DEFAULT_NAMESPACE):
+        self.scope = scope
+        self.config_db = get_config_db(self.scope)
         self.backend_tables = [
             "BUFFER_PG",
             "BUFFER_PROFILE",
@@ -85,7 +85,6 @@ class ChangeApplier:
         if (not ChangeApplier.updater_conf) and os.path.exists(UPDATER_CONF_FILE):
             with open(UPDATER_CONF_FILE, "r") as s:
                 ChangeApplier.updater_conf = json.load(s)
-
 
     def _invoke_cmd(self, cmd, old_cfg, upd_cfg, keys):
         # cmd is in the format as <package/module name>.<method name>
@@ -97,7 +96,6 @@ class ChangeApplier:
         method_to_call = getattr(module, method_name)
 
         return method_to_call(old_cfg, upd_cfg, keys)
-
 
     def _services_validate(self, old_cfg, upd_cfg, keys):
         lst_svcs = set()
@@ -124,7 +122,6 @@ class ChangeApplier:
             log_debug("service invoked: {}".format(cmd))
         return 0
 
-
     def _upd_data(self, tbl, run_tbl, upd_tbl, upd_keys):
         for key in set(run_tbl.keys()).union(set(upd_tbl.keys())):
             run_data = run_tbl.get(key, None)
@@ -135,11 +132,9 @@ class ChangeApplier:
                 upd_keys[tbl][key] = {}
                 log_debug("Patch affected tbl={} key={}".format(tbl, key))
 
-
     def _report_mismatch(self, run_data, upd_data):
         log_error("run_data vs expected_data: {}".format(
             str(jsondiff.diff(run_data, upd_data))[0:40]))
-
 
     def apply(self, change):
         run_data = self._get_running_config()
@@ -147,8 +142,7 @@ class ChangeApplier:
         upd_keys = defaultdict(dict)
 
         for tbl in sorted(set(run_data.keys()).union(set(upd_data.keys()))):
-            self._upd_data(tbl, run_data.get(tbl, {}),
-                    upd_data.get(tbl, {}), upd_keys)
+            self._upd_data(tbl, run_data.get(tbl, {}), upd_data.get(tbl, {}), upd_keys)
 
         ret = self._services_validate(run_data, upd_data, upd_keys)
         if not ret:
@@ -168,9 +162,9 @@ class ChangeApplier:
 
     def _get_running_config(self):
         _, fname = tempfile.mkstemp(suffix="_changeApplier")
-        
-        if self.namespace:
-            cmd = ['sonic-cfggen', '-d', '--print-data', '-n', self.namespace]
+
+        if self.scope:
+            cmd = ['sonic-cfggen', '-d', '--print-data', '-n', self.scope]
         else:
             cmd = ['sonic-cfggen', '-d', '--print-data']
 
@@ -181,7 +175,9 @@ class ChangeApplier:
         return_code = result.returncode
         if return_code:
             os.remove(fname)
-            raise GenericConfigUpdaterError(f"Failed to get running config for namespace: {self.namespace}, Return code: {return_code}, Error: {err}")
+            raise GenericConfigUpdaterError(
+                f"Failed to get running config for scope: {self.scope}," +
+                f"Return code: {return_code}, Error: {err}")
 
         run_data = {}
         try:

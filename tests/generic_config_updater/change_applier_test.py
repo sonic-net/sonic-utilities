@@ -242,10 +242,11 @@ class TestChangeApplier(unittest.TestCase):
         running_config = copy.deepcopy(read_data["running_data"])
         json_changes = copy.deepcopy(read_data["json_changes"])
 
+        generic_config_updater.change_applier.ChangeApplier.updater_conf = None
         generic_config_updater.change_applier.UPDATER_CONF_FILE = CONF_FILE
         generic_config_updater.change_applier.set_verbose(True)
         generic_config_updater.services_validator.set_verbose(True)
-        
+
         applier = generic_config_updater.change_applier.ChangeApplier()
         debug_print("invoked applier")
 
@@ -254,7 +255,7 @@ class TestChangeApplier(unittest.TestCase):
 
             # Take copy for comparison
             start_running_config = copy.deepcopy(running_config)
-            
+
             debug_print("main: json_change_index={}".format(json_change_index))
 
             applier.apply(mock_obj())
@@ -297,4 +298,3 @@ class TestDryRunChangeApplier(unittest.TestCase):
 
         # Assert
         applier.config_wrapper.apply_change_to_config_db.assert_has_calls([call(change)])
-

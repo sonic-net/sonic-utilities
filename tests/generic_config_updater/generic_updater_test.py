@@ -2,7 +2,7 @@ import json
 import os
 import shutil
 import unittest
-from unittest.mock import MagicMock, Mock, call
+from unittest.mock import MagicMock, Mock, call, patch
 from .gutest_helpers import create_side_effect_dict, Files
 
 import generic_config_updater.generic_updater as gu
@@ -124,6 +124,8 @@ class TestConfigReplacer(unittest.TestCase):
 
         return gu.ConfigReplacer(patch_applier, config_wrapper, patch_wrapper)
 
+
+@patch('generic_config_updater.generic_updater.get_config_json', MagicMock(return_value={}))
 class TestFileSystemConfigRollbacker(unittest.TestCase):
     def setUp(self):
         self.checkpoints_dir = os.path.join(os.getcwd(),"checkpoints")

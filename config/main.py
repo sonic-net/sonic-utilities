@@ -1185,7 +1185,7 @@ def apply_patch_for_scope(scope_changes, results, config_format, verbose, dry_ru
     scope_for_log = scope if scope else HOST_NAMESPACE
     try:
         # Call apply_patch with the ASIC-specific changes and predefined parameters
-        GenericUpdater(namespace=scope).apply_patch(jsonpatch.JsonPatch(changes),
+        GenericUpdater(scope=scope).apply_patch(jsonpatch.JsonPatch(changes),
                                                     config_format,
                                                     verbose,
                                                     dry_run,

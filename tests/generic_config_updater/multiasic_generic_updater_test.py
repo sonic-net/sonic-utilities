@@ -19,7 +19,7 @@ class TestMultiAsicPatchApplier(unittest.TestCase):
     @patch('generic_config_updater.gu_common.PatchWrapper.simulate_patch')
     @patch('generic_config_updater.generic_updater.ChangeApplier')
     def test_apply_patch_specific_namespace(self, mock_ChangeApplier, mock_simulate_patch, mock_get_config, mock_get_empty_tables):
-        namespace = "asic0"
+        scope = "asic0"
         patch_data = jsonpatch.JsonPatch([
             {
                 "op": "add",
@@ -158,10 +158,10 @@ class TestMultiAsicPatchApplier(unittest.TestCase):
             }
         }
 
-        patch_applier = generic_config_updater.generic_updater.PatchApplier(namespace=namespace)
+        patch_applier = generic_config_updater.generic_updater.PatchApplier(scope=scope)
 
         # Apply the patch and verify
         patch_applier.apply(patch_data)
 
         # Assertions to ensure the namespace is correctly used in underlying calls
-        mock_ChangeApplier.assert_called_once_with(namespace=namespace)
+        mock_ChangeApplier.assert_called_once_with(scope=scope)

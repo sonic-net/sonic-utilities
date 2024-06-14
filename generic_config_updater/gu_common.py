@@ -18,6 +18,7 @@ SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 GCU_FIELD_OP_CONF_FILE = f"{SCRIPT_DIR}/gcu_field_operation_validators.conf.json"
 HOST_NAMESPACE = "localhost"
 
+
 class GenericConfigUpdaterError(Exception):
     pass
 
@@ -53,8 +54,8 @@ class JsonChange:
         return False
 
 class ConfigWrapper:
-    def __init__(self, yang_dir=YANG_DIR, namespace=multi_asic.DEFAULT_NAMESPACE):
-        self.namespace = namespace
+    def __init__(self, yang_dir=YANG_DIR, scope=multi_asic.DEFAULT_NAMESPACE):
+        self.scope = scope
         self.yang_dir = YANG_DIR
         self.sonic_yang_with_loaded_models = None
 
@@ -65,8 +66,8 @@ class ConfigWrapper:
         return config_db_json
 
     def _get_config_db_as_text(self):
-        if self.namespace is not None and self.namespace != multi_asic.DEFAULT_NAMESPACE:
-            cmd = ['sonic-cfggen', '-d', '--print-data', '-n', self.namespace]
+        if self.scope is not None and self.scope != multi_asic.DEFAULT_NAMESPACE:
+            cmd = ['sonic-cfggen', '-d', '--print-data', '-n', self.scope]
         else:
             cmd = ['sonic-cfggen', '-d', '--print-data']
 
@@ -74,7 +75,8 @@ class ConfigWrapper:
         text, err = result.communicate()
         return_code = result.returncode
         if return_code: # non-zero means failure
-            raise GenericConfigUpdaterError(f"Failed to get running config for namespace: {self.namespace}, Return code: {return_code}, Error: {err}")
+            raise GenericConfigUpdaterError(f"Failed to get running config for namespace: {self.scope},"
+                                            f" Return code: {return_code}, Error: {err}")
         return text
 
     def get_sonic_yang_as_json(self):
@@ -301,8 +303,8 @@ class ConfigWrapper:
 
 class DryRunConfigWrapper(ConfigWrapper):
     # This class will simulate all read/write operations to ConfigDB on a virtual storage unit.
-    def __init__(self, initial_imitated_config_db = None, namespace=multi_asic.DEFAULT_NAMESPACE):
-        super().__init__(namespace=namespace)
+    def __init__(self, initial_imitated_config_db=None, scope=multi_asic.DEFAULT_NAMESPACE):
+        super().__init__(scope=scope)
         self.logger = genericUpdaterLogging.get_logger(title="** DryRun", print_all_to_console=True)
         self.imitated_config_db = copy.deepcopy(initial_imitated_config_db)
 
@@ -322,9 +324,9 @@ class DryRunConfigWrapper(ConfigWrapper):
 
 
 class PatchWrapper:
-    def __init__(self, config_wrapper=None, namespace=multi_asic.DEFAULT_NAMESPACE):
-        self.namespace = namespace
-        self.config_wrapper = config_wrapper if config_wrapper is not None else ConfigWrapper(self.namespace)
+    def __init__(self, config_wrapper=None, scope=multi_asic.DEFAULT_NAMESPACE):
+        self.scope = scope
+        self.config_wrapper = config_wrapper if config_wrapper is not None else ConfigWrapper(self.scope)
         self.path_addressing = PathAddressing(self.config_wrapper)
 
     def validate_config_db_patch_has_yang_models(self, patch):
