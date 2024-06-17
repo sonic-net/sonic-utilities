@@ -289,6 +289,10 @@
 * [CoPP Commands](#copp-commands)
   * [Overview](#overview)
   * [CoPP show commands](#copp-show-commands)
+* [Power over Ethernet](#power-over-ethernet)
+  * [PoE show commands](#poe-show-commands)
+  * [PoE config commands](#poe-config-commands)
+
 ## Document History
 
 | Version | Modification Date | Details |
@@ -18006,3 +18010,114 @@ Yellow Action............... forward
 Green Action................ forward
 Red Action.................. drop
 ```
+
+## Power over Ethernet
+
+This section explains all the PoE commands that are supported in SONiC.
+
+### PoE show commands
+This sub-section contains the show commands.
+
+- Show status of all PoE devices:
+  ```
+  show poe status
+  ```
+  ```
+  admin@sonic:~$ show poe status
+    Id    PoE ports  Total power    Power consump    Power available    Power limit mode    HW info    Version
+  ----  -----------  -------------  ---------------  -----------------  ------------------  ---------  ---------
+     0           16  100.000 W      10.000 W         90.000 W           port                mcu1       0.1.2.3
+     1           16  100.000 W      10.000 W         90.000 W           class               mcu2       0.1.2.3
+  ```
+
+- Show status of all PoE PSEs:
+  ```
+  show poe pse status
+  ```
+  ```
+  admin@sonic:~$ show poe pse status
+    Id  Status    Temperature    SW ver            HW ver
+  ----  --------  -------------  ----------------  ----------------
+     0  active    25.000 C       0.1.2.3           4.5.6.7
+     1  active    25.000 C       0.1.2.3           4.5.6.7
+     2  active    25.000 C       0.1.2.3           4.5.6.7
+     3  active    25.000 C       0.1.2.3           4.5.6.7
+  ```
+
+- Show status of all PoE interfaces:
+  ```
+  show poe interface status
+  ```
+  ```
+  admin@sonic:~$ show poe interface status
+  Port         Status      En/Dis    Priority    Protocol          Class A    Class B  PWR Consump    PWR limit    Voltage    Current
+  -----------  ----------  --------  ----------  --------------  ---------  ---------  -------------  -----------  ---------  ---------
+  Ethernet1    delivering  enable    crit        802.3bt Type 3          2          4  10.000 W       50.000 W     50.000 V   0.200 A
+  Ethernet2    delivering  enable    crit        802.3bt Type 3          2          4  10.000 W       50.000 W     50.000 V   0.200 A
+  Ethernet3    delivering  enable    low         802.3bt Type 3          2          4  10.000 W       50.000 W     50.000 V   0.200 A
+  Ethernet4    delivering  enable    low         802.3bt Type 3          2          4  10.000 W       50.000 W     50.000 V   0.200 A
+  ```
+
+- Show current configuration of all PoE interfaces:
+  ```
+  show poe interface configuration
+  ```
+  ```
+  admin@sonic:~$ show poe interface configuration
+  Port         En/Dis      Power limit  Priority
+  -----------  --------  -------------  ----------
+  Ethernet1    enable               50  crit
+  Ethernet2    enable               50  crit
+  Ethernet3    enable               50  low
+  Ethernet4    enable               50  low
+  ```
+
+### PoE config commands
+This sub-section contains the config commands.
+
+
+- Enable PoE:
+  ```
+  admin@sonic:~$ sudo config poe interface status --help
+  Usage: config poe interface status [OPTIONS] IFNAME [enable|disable]
+
+    Enable or disable PoE on interface
+
+  Options:
+    -h, -?, --help  Show this message and exit.
+  ```
+  ```
+  admin@sonic:~$ sudo config poe interface status Ethernet1 enable
+  ```
+
+
+- Configure power limit:
+  ```
+  admin@sonic:~$ sudo config poe interface power-limit --help
+  Usage: config poe interface power-limit [OPTIONS] IFNAME POWER_LIMIT
+
+    Configure PoE interface power limit
+
+  Options:
+    -h, -?, --help  Show this message and exit.
+  ```
+  ```
+  admin@sonic:~$ sudo config poe interface power-limit Ethernet1 25
+  ```
+
+
+- Configure priority:
+  ```
+  admin@sonic:~$ sudo config poe interface priority --help
+  Usage: config poe interface priority [OPTIONS] IFNAME [low|high|crit]
+
+    Configure PoE interface priority
+
+  Options:
+    -?, -h, --help  Show this message and exit.
+  ```
+  ```
+  admin@sonic:~$ sudo config poe interface priority Ethernet1 crit
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#power-over-ethernet)
