@@ -1,0 +1,110 @@
+{
+    "POE_PORT_TABLE|Ethernet0": {
+        "status": "off",
+        "enabled": "disable",
+        "priority": "high",
+        "protocol": "IEEE_802.3at",
+        "pwr_consump": "12.5",
+        "pwr_limit": "25.5",
+        "fp_port": "0",
+        "class_a": "1",
+        "class_b": "1",
+        "current": "0.250",
+        "voltage": "50.000"
+    },
+    "POE_PORT_TABLE|Ethernet4": {
+        "status": "delivering",
+        "enabled": "enable",
+        "priority": "crit",
+        "protocol": "IEEE_802.3af",
+        "pwr_consump": "15.5",
+        "pwr_limit": "30.5",
+        "fp_port": "1",
+        "class_a": "2",
+        "class_b": "2",
+        "current": "0.329",
+        "voltage": "47.123"
+    },
+    "POE_PORT_TABLE|Ethernet8": {
+        "status": "searching",
+        "enabled": "enable",
+        "priority": "low",
+        "protocol": "IEEE_802.3at",
+        "pwr_consump": "8.5",
+        "pwr_limit": "30.5",
+        "fp_port": "2",
+        "class_a": "3",
+        "class_b": "3",
+        "current": "0.212",
+        "voltage": "40.000"
+    },
+    "POE_PORT_TABLE|Ethernet12": {
+        "status": "fault",
+        "enabled": "",
+        "priority": "",
+        "protocol": "",
+        "pwr_consump": "",
+        "pwr_limit": "",
+        "fp_port": "",
+        "class_a": "",
+        "class_b": "",
+        "current": "",
+        "voltage": ""
+    },
+    "POE_PSE_TABLE|0": {
+        "status": "active",
+        "temperature": "40",
+        "sw_ver": "1.0.0",
+        "hw_ver": "1.1.0"
+    },
+    "POE_PSE_TABLE|1": {
+        "status": "fail",
+        "temperature": "30",
+        "sw_ver": "2.0.0",
+        "hw_ver": "2.2.0"
+    },
+    "POE_PSE_TABLE|2": {
+        "status": "not present",
+        "temperature": "",
+        "sw_ver": "",
+        "hw_ver": ""
+    },
+    "POE_PSE_TABLE|3": {
+        "status": "",
+        "temperature": "",
+        "sw_ver": "",
+        "hw_ver": ""
+    },
+    "POE_DEVICE_TABLE|1": {
+        "total_ports": "10",
+        "total_pwr": "100",
+        "pwr_consump": "20.0",
+        "pwr_limit_mode": "port",
+        "hw_info": "HW INFO 1",
+        "version": "1.0.0"
+    },
+    "POE_DEVICE_TABLE|2": {
+        "total_ports": "20",
+        "total_pwr": "200",
+        "pwr_consump": "40.0",
+        "pwr_limit_mode": "class",
+        "hw_info": "HW INFO 2",
+        "version": "2.0.0"
+    },
+    "POE_DEVICE_TABLE|3": {
+        "total_ports": "30",
+        "total_pwr": "300",
+        "pwr_consump": "60.0",
+        "pwr_limit_mode": "port",
+        "hw_info": "HW INFO 3",
+        "version": "3.0.0"
+    },
+    "POE_DEVICE_TABLE|4": {
+        "total_ports": "40",
+        "total_pwr": "",
+        "pwr_consump": "",
+        "pwr_limit_mode": "",
+        "hw_info": "",
+        "version": ""
+    }
+}
