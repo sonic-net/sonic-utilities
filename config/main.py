@@ -31,7 +31,7 @@ from sonic_py_common.interface import get_interface_table_name, get_port_table_n
 from sonic_yang_cfg_generator import SonicYangCfgDbGenerator
 from utilities_common import util_base
 from swsscommon import swsscommon
-from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
+from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector, ConfigDBPipeConnector
 from utilities_common.db import Db
 from utilities_common.intf_filter import parse_interface_in_filter
 from utilities_common import bgp_util
@@ -1197,7 +1197,7 @@ def validate_gre_type(ctx, _, value):
         raise click.UsageError("{} is not a valid GRE type".format(value))
 
 
-def multi_asic_save_config(db, filename):
+def multiasic_save_to_singlefile(db, filename):
     """A function to save all asic's config to single file
     """
     all_current_config = {}
@@ -1263,6 +1263,96 @@ def validate_patch(patch):
         return True
     except Exception as e:
         raise GenericConfigUpdaterError(f"Validate json patch: {patch} failed due to:{e}")
+
+
+def multiasic_validate_single_file(filename):
+    ns_list = [DEFAULT_NAMESPACE, *multi_asic.get_namespace_list()]
+    file_input = read_json_file(filename)
+    file_ns_list = [DEFAULT_NAMESPACE if key == HOST_NAMESPACE else key for key in file_input]
+    if set(ns_list) != set(file_ns_list):
+        click.echo(
+            "Input file {} must contain all asics config. ns_list: {} file ns_list: {}".format(
+                filename, ns_list, file_ns_list)
+        )
+        raise click.Abort()
+
+
+def load_sysinfo_if_missing(asic_config):
+    device_metadata = asic_config.get('DEVICE_METADATA', {})
+    platform = device_metadata.get("localhost", {}).get("platform")
+    mac = device_metadata.get("localhost", {}).get("mac")
+    if not platform:
+        log.log_warning("platform is missing from Input file")
+        return True
+    elif not mac:
+        log.log_warning("mac is missing from Input file")
+        return True
+    else:
+        return False
+
+
+def flush_configdb(namespace=DEFAULT_NAMESPACE):
+    if namespace is DEFAULT_NAMESPACE:
+        config_db = ConfigDBConnector()
+    else:
+        config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
+
+    config_db.connect()
+    client = config_db.get_redis_client(config_db.CONFIG_DB)
+    client.flushdb()
+    return client, config_db
+
+
+def migrate_db_to_lastest(namespace=DEFAULT_NAMESPACE):
+    # Migrate DB contents to latest version
+    db_migrator = '/usr/local/bin/db_migrator.py'
+    if os.path.isfile(db_migrator) and os.access(db_migrator, os.X_OK):
+        if namespace is DEFAULT_NAMESPACE:
+            command = [db_migrator, '-o', 'migrate']
+        else:
+            command = [db_migrator, '-o', 'migrate', '-n', namespace]
+        clicommon.run_command(command, display_cmd=True)
+
+
+def multiasic_write_to_db(filename, load_sysinfo):
+    file_input = read_json_file(filename)
+    for ns in [DEFAULT_NAMESPACE, *multi_asic.get_namespace_list()]:
+        asic_name = HOST_NAMESPACE if ns == DEFAULT_NAMESPACE else ns
+        asic_config = file_input[asic_name]
+
+        asic_load_sysinfo = True if load_sysinfo else False
+        if not asic_load_sysinfo:
+            asic_load_sysinfo = load_sysinfo_if_missing(asic_config)
+
+        if asic_load_sysinfo:
+            cfg_hwsku = asic_config.get("DEVICE_METADATA", {}).\
+                get("localhost", {}).get("hwsku")
+            if not cfg_hwsku:
+                click.secho("Could not get the HWSKU from config file,  Exiting!", fg='magenta')
+                sys.exit(1)
+
+        client, _ = flush_configdb(ns)
+
+        if asic_load_sysinfo:
+            if ns is DEFAULT_NAMESPACE:
+                command = [str(SONIC_CFGGEN_PATH), '-H', '-k', str(cfg_hwsku), '--write-to-db']
+            else:
+                command = [str(SONIC_CFGGEN_PATH), '-H', '-k', str(cfg_hwsku), '-n', str(ns), '--write-to-db']
+            clicommon.run_command(command, display_cmd=True)
+
+        if ns is DEFAULT_NAMESPACE:
+            config_db = ConfigDBPipeConnector(use_unix_socket_path=True)
+        else:
+            config_db = ConfigDBPipeConnector(use_unix_socket_path=True, namespace=ns)
+
+        config_db.connect(False)
+        sonic_cfggen.FormatConverter.to_deserialized(asic_config)
+        data = sonic_cfggen.FormatConverter.output_to_db(asic_config)
+        config_db.mod_config(sonic_cfggen.FormatConverter.output_to_db(data))
+        client.set(config_db.INIT_INDICATOR, 1)
+
+        migrate_db_to_lastest(ns)
+
 
 # This is our main entrypoint - the main 'config' command
 @click.group(cls=clicommon.AbbreviationGroup, context_settings=CONTEXT_SETTINGS)
@@ -1351,7 +1441,7 @@ def save(db, filename):
         # save all ASIC configurations to that single file.
         if len(cfg_files) == 1 and multi_asic.is_multi_asic():
             filename = cfg_files[0]
-            multi_asic_save_config(db, filename)
+            multiasic_save_to_singlefile(db, filename)
             return
         elif len(cfg_files) != num_cfg_file:
             click.echo("Input {} config file(s) separated by comma for multiple files ".format(num_cfg_file))
@@ -1669,11 +1759,15 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
     if multi_asic.is_multi_asic() and file_format == 'config_db':
         num_cfg_file += num_asic
 
+    multiasic_single_file_mode = False
     # If the user give the filename[s], extract the file names.
     if filename is not None:
         cfg_files = filename.split(',')
 
-        if len(cfg_files) != num_cfg_file:
+        if len(cfg_files) == 1 and multi_asic.is_multi_asic():
+            multiasic_validate_single_file(cfg_files[0])
+            multiasic_single_file_mode = True
+        elif len(cfg_files) != num_cfg_file:
             click.echo("Input {} config file(s) separated by comma for multiple files ".format(num_cfg_file))
             return
 
@@ -1682,127 +1776,109 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
         log.log_notice("'reload' stopping services...")
         _stop_services()
 
-    # In Single ASIC platforms we have single DB service. In multi-ASIC platforms we have a global DB
-    # service running in the host + DB services running in each ASIC namespace created per ASIC.
-    # In the below logic, we get all namespaces in this platform and add an empty namespace ''
-    # denoting the current namespace which we are in ( the linux host )
-    for inst in range(-1, num_cfg_file-1):
-        # Get the namespace name, for linux host it is None
-        if inst == -1:
-            namespace = None
-        else:
-            namespace = "{}{}".format(NAMESPACE_PREFIX, inst)
+    if multiasic_single_file_mode:
+        multiasic_write_to_db(cfg_files[0], load_sysinfo)
+    else:
+        # In Single ASIC platforms we have single DB service. In multi-ASIC platforms we have a global DB
+        # service running in the host + DB services running in each ASIC namespace created per ASIC.
+        # In the below logic, we get all namespaces in this platform and add an empty namespace ''
+        # denoting the current namespace which we are in ( the linux host )
+        for inst in range(-1, num_cfg_file-1):
+            # Get the namespace name, for linux host it is DEFAULT_NAMESPACE
+            if inst == -1:
+                namespace = DEFAULT_NAMESPACE
+            else:
+                namespace = "{}{}".format(NAMESPACE_PREFIX, inst)
 
-        # Get the file from user input, else take the default file /etc/sonic/config_db{NS_id}.json
-        if cfg_files:
-            file = cfg_files[inst+1]
-            # Save to tmpfile in case of stdin input which can only be read once
-            if file == "/dev/stdin":
-                file_input = read_json_file(file)
-                (_, tmpfname) = tempfile.mkstemp(dir="/tmp", suffix="_configReloadStdin")
-                write_json_file(file_input, tmpfname)
-                file = tmpfname
-        else:
-            if file_format == 'config_db':
-                if namespace is None:
-                    file = DEFAULT_CONFIG_DB_FILE
+            # Get the file from user input, else take the default file /etc/sonic/config_db{NS_id}.json
+            if cfg_files:
+                file = cfg_files[inst+1]
+                # Save to tmpfile in case of stdin input which can only be read once
+                if file == "/dev/stdin":
+                    file_input = read_json_file(file)
+                    (_, tmpfname) = tempfile.mkstemp(dir="/tmp", suffix="_configReloadStdin")
+                    write_json_file(file_input, tmpfname)
+                    file = tmpfname
+            else:
+                if file_format == 'config_db':
+                    if namespace is DEFAULT_NAMESPACE:
+                        file = DEFAULT_CONFIG_DB_FILE
+                    else:
+                        file = "/etc/sonic/config_db{}.json".format(inst)
                 else:
-                    file = "/etc/sonic/config_db{}.json".format(inst)
+                    file = DEFAULT_CONFIG_YANG_FILE
+
+            # Check the file exists before proceeding.
+            if not os.path.exists(file):
+                click.echo("The config file {} doesn't exist".format(file))
+                continue
+
+            if file_format == 'config_db':
+                file_input = read_json_file(file)
+                if not load_sysinfo:
+                    load_sysinfo = load_sysinfo_if_missing(file_input)
+
+            if load_sysinfo:
+                try:
+                    command = [SONIC_CFGGEN_PATH, "-j", file, '-v', "DEVICE_METADATA.localhost.hwsku"]
+                    proc = subprocess.Popen(command, text=True, stdout=subprocess.PIPE)
+                    output, err = proc.communicate()
+
+                except FileNotFoundError as e:
+                    click.echo("{}".format(str(e)), err=True)
+                    raise click.Abort()
+                except Exception as e:
+                    click.echo("{}\n{}".format(type(e), str(e)), err=True)
+                    raise click.Abort()
+
+                if not output:
+                    click.secho("Could not get the HWSKU from config file,  Exiting!!!", fg='magenta')
+                    sys.exit(1)
+
+                cfg_hwsku = output.strip()
+
+            client, config_db = flush_configdb(namespace)
+
+            if load_sysinfo:
+                if namespace is DEFAULT_NAMESPACE:
+                    command = [
+                        str(SONIC_CFGGEN_PATH), '-H', '-k', str(cfg_hwsku), '--write-to-db']
+                else:
+                    command = [
+                        str(SONIC_CFGGEN_PATH), '-H', '-k', str(cfg_hwsku), '-n', str(namespace), '--write-to-db']
+                clicommon.run_command(command, display_cmd=True)
+
+            # For the database service running in linux host we use the file user gives as input
+            # or by default DEFAULT_CONFIG_DB_FILE. In the case of database service running in namespace,
+            # the default config_db<namespaceID>.json format is used.
+
+            config_gen_opts = []
+
+            if os.path.isfile(INIT_CFG_FILE):
+                config_gen_opts += ['-j', str(INIT_CFG_FILE)]
+
+            if file_format == 'config_db':
+                config_gen_opts += ['-j', str(file)]
             else:
-                file = DEFAULT_CONFIG_YANG_FILE
+                config_gen_opts += ['-Y', str(file)]
 
+            if namespace is not DEFAULT_NAMESPACE:
+                config_gen_opts += ['-n', str(namespace)]
 
-        # Check the file exists before proceeding.
-        if not os.path.exists(file):
-            click.echo("The config file {} doesn't exist".format(file))
-            continue
+            command = [SONIC_CFGGEN_PATH] + config_gen_opts + ['--write-to-db']
 
-        if file_format == 'config_db':
-            file_input = read_json_file(file)
-
-            platform = file_input.get("DEVICE_METADATA", {}).\
-                get(HOST_NAMESPACE, {}).get("platform")
-            mac = file_input.get("DEVICE_METADATA", {}).\
-                get(HOST_NAMESPACE, {}).get("mac")
-
-            if not platform or not mac:
-                log.log_warning("Input file does't have platform or mac. platform: {}, mac: {}"
-                    .format(None if platform is None else platform, None if mac is None else mac))
-                load_sysinfo = True
-
-        if load_sysinfo:
-            try:
-                command = [SONIC_CFGGEN_PATH, "-j", file, '-v', "DEVICE_METADATA.localhost.hwsku"]
-                proc = subprocess.Popen(command, text=True, stdout=subprocess.PIPE)
-                output, err = proc.communicate()
-
-            except FileNotFoundError as e:
-                click.echo("{}".format(str(e)), err=True)
-                raise click.Abort()
-            except Exception as e:
-                click.echo("{}\n{}".format(type(e), str(e)), err=True)
-                raise click.Abort()
-
-            if not output:
-                click.secho("Could not get the HWSKU from config file,  Exiting!!!", fg='magenta')
-                sys.exit(1)
-
-            cfg_hwsku = output.strip()
-
-        if namespace is None:
-            config_db = ConfigDBConnector()
-        else:
-            config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
-
-        config_db.connect()
-        client = config_db.get_redis_client(config_db.CONFIG_DB)
-        client.flushdb()
-
-        if load_sysinfo:
-            if namespace is None:
-                command = [str(SONIC_CFGGEN_PATH), '-H', '-k', str(cfg_hwsku), '--write-to-db']
-            else:
-                command = [str(SONIC_CFGGEN_PATH), '-H', '-k', str(cfg_hwsku), '-n', str(namespace), '--write-to-db']
             clicommon.run_command(command, display_cmd=True)
+            client.set(config_db.INIT_INDICATOR, 1)
 
-        # For the database service running in linux host we use the file user gives as input
-        # or by default DEFAULT_CONFIG_DB_FILE. In the case of database service running in namespace,
-        # the default config_db<namespaceID>.json format is used.
+            if os.path.exists(file) and file.endswith("_configReloadStdin"):
+                # Remove tmpfile
+                try:
+                    os.remove(file)
+                except OSError as e:
+                    click.echo("An error occurred while removing the temporary file: {}".format(str(e)), err=True)
 
-
-        config_gen_opts = []
-
-        if os.path.isfile(INIT_CFG_FILE):
-            config_gen_opts += ['-j', str(INIT_CFG_FILE)]
-
-        if file_format == 'config_db':
-            config_gen_opts += ['-j', str(file)]
-        else:
-            config_gen_opts += ['-Y', str(file)]
-
-        if namespace is not None:
-            config_gen_opts += ['-n', str(namespace)]
-
-        command = [SONIC_CFGGEN_PATH] + config_gen_opts + ['--write-to-db']
-
-        clicommon.run_command(command, display_cmd=True)
-        client.set(config_db.INIT_INDICATOR, 1)
-
-        if os.path.exists(file) and file.endswith("_configReloadStdin"):
-            # Remove tmpfile
-            try:
-                os.remove(file)
-            except OSError as e:
-                click.echo("An error occurred while removing the temporary file: {}".format(str(e)), err=True)
-
-        # Migrate DB contents to latest version
-        db_migrator='/usr/local/bin/db_migrator.py'
-        if os.path.isfile(db_migrator) and os.access(db_migrator, os.X_OK):
-            if namespace is None:
-                command = [db_migrator, '-o', 'migrate']
-            else:
-                command = [db_migrator, '-o', 'migrate', '-n', str(namespace)]
-            clicommon.run_command(command, display_cmd=True)
+            # Migrate DB contents to latest version
+            migrate_db_to_lastest(namespace)
 
     # Re-generate the environment variable in case config_db.json was edited
     update_sonic_environment()
@@ -4084,6 +4160,7 @@ def del_user(db, user):
 def bgp():
     """BGP-related configuration tasks"""
     pass
+
 
 
 # BGP module extensions

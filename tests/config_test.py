@@ -169,6 +169,21 @@ Restarting SONiC target ...
 Reloading Monit configuration ...
 """
 
+reload_config_masic_onefile_output = """\
+Stopping SONiC target ...
+Restarting SONiC target ...
+Reloading Monit configuration ...
+"""
+
+reload_config_masic_onefile_gen_sysinfo_output = """\
+Stopping SONiC target ...
+Running command: /usr/local/bin/sonic-cfggen -H -k Mellanox-SN3800-D112C8 --write-to-db
+Running command: /usr/local/bin/sonic-cfggen -H -k multi_asic -n asic0 --write-to-db
+Running command: /usr/local/bin/sonic-cfggen -H -k multi_asic -n asic1 --write-to-db
+Restarting SONiC target ...
+Reloading Monit configuration ...
+"""
+
 save_config_output = """\
 Running command: /usr/local/bin/sonic-cfggen -d --print-data > /etc/sonic/config_db.json
 """
@@ -633,6 +648,211 @@ class TestConfigReload(object):
         print("TEARDOWN")
         os.environ['UTILITIES_UNIT_TESTING'] = "0"
 
+        # change back to single asic config
+        from .mock_tables import dbconnector
+        from .mock_tables import mock_single_asic
+        importlib.reload(mock_single_asic)
+        dbconnector.load_namespace_config()
+
+
+class TestConfigReloadMasic(object):
+    @classmethod
+    def setup_class(cls):
+        print("SETUP")
+        os.environ['UTILITIES_UNIT_TESTING'] = "2"
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
+        import config.main
+        importlib.reload(config.main)
+        # change to multi asic config
+        from .mock_tables import dbconnector
+        from .mock_tables import mock_multi_asic
+        importlib.reload(mock_multi_asic)
+        dbconnector.load_namespace_config()
+
+    def test_config_reload_onefile_masic(self):
+        def read_json_file_side_effect(filename):
+            return {
+                "localhost": {
+                    "DEVICE_METADATA": {
+                        "localhost": {
+                            "default_bgp_status": "down",
+                            "default_pfcwd_status": "enable",
+                            "deployment_id": "1",
+                            "docker_routing_config_mode": "separated",
+                            "hostname": "sonic-switch",
+                            "hwsku": "Mellanox-SN3800-D112C8",
+                            "mac": "1d:34:db:16:a6:00",
+                            "platform": "x86_64-mlnx_msn3800-r0",
+                            "peer_switch": "sonic-switch",
+                            "type": "ToRRouter",
+                            "suppress-fib-pending": "enabled"
+                        }
+                    }
+                },
+                "asic0": {
+                    "DEVICE_METADATA": {
+                        "localhost": {
+                            "asic_id": "01.00.0",
+                            "asic_name": "asic0",
+                            "bgp_asn": "65100",
+                            "cloudtype": "None",
+                            "default_bgp_status": "down",
+                            "default_pfcwd_status": "enable",
+                            "deployment_id": "None",
+                            "docker_routing_config_mode": "separated",
+                            "hostname": "sonic",
+                            "hwsku": "multi_asic",
+                            "mac": "02:42:f0:7f:01:05",
+                            "platform": "multi_asic",
+                            "region": "None",
+                            "sub_role": "FrontEnd",
+                            "type": "LeafRouter"
+                        }
+                    }
+                },
+                "asic1": {
+                    "DEVICE_METADATA": {
+                        "localhost": {
+                            "asic_id": "08:00.0",
+                            "asic_name": "asic1",
+                            "bgp_asn": "65100",
+                            "cloudtype": "None",
+                            "default_bgp_status": "down",
+                            "default_pfcwd_status": "enable",
+                            "deployment_id": "None",
+                            "docker_routing_config_mode": "separated",
+                            "hostname": "sonic",
+                            "hwsku": "multi_asic",
+                            "mac": "02:42:f0:7f:01:06",
+                            "platform": "multi_asic",
+                            "region": "None",
+                            "sub_role": "BackEnd",
+                            "type": "LeafRouter"
+                        }
+                    }
+                }
+            }
+
+        with mock.patch("utilities_common.cli.run_command",
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)),\
+            mock.patch('config.main.read_json_file',
+                       mock.MagicMock(side_effect=read_json_file_side_effect)):
+
+            runner = CliRunner()
+
+            result = runner.invoke(config.config.commands["reload"], ["-y", "-f", "all_config_db.json"])
+
+            print(result.exit_code)
+            print(result.output)
+            traceback.print_tb(result.exc_info[2])
+
+            assert result.exit_code == 0
+            assert "\n".join([li.rstrip() for li in result.output.split('\n')]) == reload_config_masic_onefile_output
+
+    def test_config_reload_onefile_gen_sysinfo_masic(self):
+        def read_json_file_side_effect(filename):
+            return {
+                "localhost": {
+                    "DEVICE_METADATA": {
+                        "localhost": {
+                            "default_bgp_status": "down",
+                            "default_pfcwd_status": "enable",
+                            "deployment_id": "1",
+                            "docker_routing_config_mode": "separated",
+                            "hostname": "sonic-switch",
+                            "hwsku": "Mellanox-SN3800-D112C8",
+                            "peer_switch": "sonic-switch",
+                            "type": "ToRRouter",
+                            "suppress-fib-pending": "enabled"
+                        }
+                    }
+                },
+                "asic0": {
+                    "DEVICE_METADATA": {
+                        "localhost": {
+                            "asic_id": "01.00.0",
+                            "asic_name": "asic0",
+                            "bgp_asn": "65100",
+                            "cloudtype": "None",
+                            "default_bgp_status": "down",
+                            "default_pfcwd_status": "enable",
+                            "deployment_id": "None",
+                            "docker_routing_config_mode": "separated",
+                            "hostname": "sonic",
+                            "hwsku": "multi_asic",
+                            "region": "None",
+                            "sub_role": "FrontEnd",
+                            "type": "LeafRouter"
+                        }
+                    }
+                },
+                "asic1": {
+                    "DEVICE_METADATA": {
+                        "localhost": {
+                            "asic_id": "08:00.0",
+                            "asic_name": "asic1",
+                            "bgp_asn": "65100",
+                            "cloudtype": "None",
+                            "default_bgp_status": "down",
+                            "default_pfcwd_status": "enable",
+                            "deployment_id": "None",
+                            "docker_routing_config_mode": "separated",
+                            "hostname": "sonic",
+                            "hwsku": "multi_asic",
+                            "region": "None",
+                            "sub_role": "BackEnd",
+                            "type": "LeafRouter"
+                        }
+                    }
+                }
+            }
+
+        with mock.patch("utilities_common.cli.run_command",
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)),\
+            mock.patch('config.main.read_json_file',
+                       mock.MagicMock(side_effect=read_json_file_side_effect)):
+
+            runner = CliRunner()
+
+            result = runner.invoke(config.config.commands["reload"], ["-y", "-f", "all_config_db.json"])
+
+            print(result.exit_code)
+            print(result.output)
+            traceback.print_tb(result.exc_info[2])
+
+            assert result.exit_code == 0
+            assert "\n".join(
+                [li.rstrip() for li in result.output.split('\n')]
+            ) == reload_config_masic_onefile_gen_sysinfo_output
+
+    def test_config_reload_onefile_bad_format_masic(self):
+        def read_json_file_side_effect(filename):
+            return {
+                "localhost": {},
+                "asic0": {}
+            }
+
+        with mock.patch("utilities_common.cli.run_command",
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)),\
+            mock.patch('config.main.read_json_file',
+                       mock.MagicMock(side_effect=read_json_file_side_effect)):
+
+            runner = CliRunner()
+
+            result = runner.invoke(config.config.commands["reload"], ["-y", "-f", "all_config_db.json"])
+
+            print(result.exit_code)
+            print(result.output)
+            traceback.print_tb(result.exc_info[2])
+
+            assert result.exit_code != 0
+            assert "Input file all_config_db.json must contain all asics config" in result.output
+
+    @classmethod
+    def teardown_class(cls):
+        print("TEARDOWN")
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
         # change back to single asic config
         from .mock_tables import dbconnector
         from .mock_tables import mock_single_asic
