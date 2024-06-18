@@ -987,8 +987,13 @@ class TestLoadMinigraph(object):
     def test_load_minigraph_with_specified_golden_config_path(self, get_cmd_module):
         def is_file_side_effect(filename):
             return True if 'golden_config' in filename else False
+
+        def read_json_file_side_effect(filename):
+            return {}
+
         with mock.patch("utilities_common.cli.run_command", mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command, \
-                mock.patch('os.path.isfile', mock.MagicMock(side_effect=is_file_side_effect)):
+                mock.patch('os.path.isfile', mock.MagicMock(side_effect=is_file_side_effect)), \
+                mock.patch('config.main.read_json_file', mock.MagicMock(side_effect=read_json_file_side_effect)):
             (config, show) = get_cmd_module
             runner = CliRunner()
             result = runner.invoke(config.config.commands["load_minigraph"], ["--override_config", "--golden_config_path",  "golden_config.json", "-y"])
@@ -999,13 +1004,47 @@ class TestLoadMinigraph(object):
     def test_load_minigraph_with_default_golden_config_path(self, get_cmd_module):
         def is_file_side_effect(filename):
             return True if 'golden_config' in filename else False
+
+        def read_json_file_side_effect(filename):
+            return {}
+
         with mock.patch("utilities_common.cli.run_command", mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command, \
-                mock.patch('os.path.isfile', mock.MagicMock(side_effect=is_file_side_effect)):
+                mock.patch('os.path.isfile', mock.MagicMock(side_effect=is_file_side_effect)), \
+                mock.patch('config.main.read_json_file', mock.MagicMock(side_effect=read_json_file_side_effect)):
             (config, show) = get_cmd_module
             runner = CliRunner()
             result = runner.invoke(config.config.commands["load_minigraph"], ["--override_config", "-y"])
             assert result.exit_code == 0
             assert "config override-config-table /etc/sonic/golden_config_db.json" in result.output
+
+    @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs',
+                mock.MagicMock(return_value=("dummy_path", None)))
+    def test_load_minigraph_hard_dependency_check(self, get_cmd_module):
+        def is_file_side_effect(filename):
+            return True if 'golden_config' in filename else False
+
+        def read_json_file_side_effect(filename):
+            return {
+                "AAA": {
+                    "authentication": {
+                        "login": "tacacs+"
+                    }
+                },
+                "TACPLUS": {
+                    "global": {
+                        "passkey": ""
+                    }
+                }
+            }
+
+        with mock.patch("utilities_common.cli.run_command", mock.MagicMock(side_effect=mock_run_command_side_effect)), \
+                mock.patch('os.path.isfile', mock.MagicMock(side_effect=is_file_side_effect)), \
+                mock.patch('config.main.read_json_file', mock.MagicMock(side_effect=read_json_file_side_effect)):
+            (config, _) = get_cmd_module
+            runner = CliRunner()
+            result = runner.invoke(config.config.commands["load_minigraph"], ["--override_config", "-y"])
+            assert result.exit_code != 0
+            assert "Authentication with 'tacacs+' is not allowed when passkey not exits." in result.output
 
     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs', mock.MagicMock(return_value=("dummy_path", None)))
     def test_load_minigraph_with_traffic_shift_away(self, get_cmd_module):
@@ -1024,7 +1063,12 @@ class TestLoadMinigraph(object):
         with mock.patch("utilities_common.cli.run_command", mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command:
             def is_file_side_effect(filename):
                 return True if 'golden_config' in filename else False
-            with mock.patch('os.path.isfile', mock.MagicMock(side_effect=is_file_side_effect)):
+
+            def read_json_file_side_effect(filename):
+                return {}
+
+            with mock.patch('os.path.isfile', mock.MagicMock(side_effect=is_file_side_effect)), \
+                    mock.patch('config.main.read_json_file', mock.MagicMock(side_effect=read_json_file_side_effect)):
                 (config, show) = get_cmd_module
                 db = Db()
                 golden_config = {}
