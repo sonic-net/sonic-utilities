@@ -898,9 +898,46 @@ def _reset_failed_services():
     for service in _get_sonic_services():
         clicommon.run_command(['systemctl', 'reset-failed', str(service)])
 
+
+def get_service_finish_timestamp(service):
+    out, _ = clicommon.run_command(['sudo',
+                                    'systemctl',
+                                    'show',
+                                    '--no-pager',
+                                    service,
+                                    '-p',
+                                    'ExecMainExitTimestamp',
+                                    '--value'],
+                                   return_cmd=True)
+    return out.strip(' \t\n\r')
+
+
+def wait_service_restart_finish(service, last_timestamp, timeout=30):
+    start_time = time.time()
+    elapsed_time = 0
+    while elapsed_time < timeout:
+        current_timestamp = get_service_finish_timestamp(service)
+        if current_timestamp and (current_timestamp != last_timestamp):
+            return
+
+        time.sleep(1)
+        elapsed_time = time.time() - start_time
+
+    log.log_warning("Service: {} does not restart in {} seconds, stop waiting".format(service, timeout))
+
+
 def _restart_services():
+    last_interface_config_timestamp = get_service_finish_timestamp('interfaces-config')
+    last_networking_timestamp = get_service_finish_timestamp('networking')
+
     click.echo("Restarting SONiC target ...")
     clicommon.run_command(['sudo', 'systemctl', 'restart', 'sonic.target'])
+
+    # These service will restart eth0 and cause device lost network for 10 seconds
+    # When enable TACACS, every remote user commands will authorize by TACACS service via network
+    # If load_minigraph exit before eth0 restart, commands after load_minigraph may failed
+    wait_service_restart_finish('interfaces-config', last_interface_config_timestamp)
+    wait_service_restart_finish('networking', last_networking_timestamp)
 
     try:
         subprocess.check_call(['sudo', 'monit', 'status'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
