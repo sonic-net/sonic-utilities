@@ -848,6 +848,8 @@
     "FEATURE|lldp": {
         "state": "enabled",
         "auto_restart": "enabled",
+        "has_global_scope": "False",
+        "has_per_asic_scope": "True",
         "high_mem_alert": "disabled",
         "set_owner": "kube"
     },
