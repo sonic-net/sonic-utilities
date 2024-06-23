@@ -126,6 +126,7 @@ setup(
         'scripts/dualtor_neighbor_check.py',
         'scripts/dump_nat_entries.py',
         'scripts/ecnconfig',
+        'scripts/express-reboot',
         'scripts/fabricstat',
         'scripts/fanshow',
         'scripts/fast-reboot',
