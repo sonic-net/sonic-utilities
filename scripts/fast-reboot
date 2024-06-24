@@ -244,6 +244,19 @@ function wait_for_pre_shutdown_complete_or_fail()
 function backup_database()
 {
     debug "Backing up database ..."
+
+    if [[ "$REBOOT_TYPE" = "fastfast-reboot" || "$REBOOT_TYPE" = "fast-reboot" ]]; then
+        # Advanced reboot: dump state to host disk
+        sonic-db-cli ASIC_DB FLUSHDB > /dev/null
+        sonic-db-cli COUNTERS_DB FLUSHDB > /dev/null
+        sonic-db-cli FLEX_COUNTER_DB FLUSHDB > /dev/null
+    fi
+
+    if [[ "$REBOOT_TYPE" = "fast-reboot" ]]; then
+        # Flush RESTAP_DB in fast-reboot to avoid stale status
+        sonic-db-cli RESTAPI_DB FLUSHDB > /dev/null
+    fi
+
     # Dump redis content to a file 'dump.rdb' in warmboot directory
     mkdir -p $WARM_DIR
     # Delete keys in stateDB except FDB_TABLE|*, MIRROR_SESSION_TABLE|*, WARM_RESTART_ENABLE_TABLE|*, FG_ROUTE_TABLE|*
@@ -806,22 +819,10 @@ for service in ${SERVICES_TO_STOP}; do
             wait_for_pre_shutdown_complete_or_fail
         fi
 
-        if [[ "$REBOOT_TYPE" = "fastfast-reboot" || "$REBOOT_TYPE" = "fast-reboot" ]]; then
-            # Advanced reboot: dump state to host disk
-            sonic-db-cli ASIC_DB FLUSHDB > /dev/null
-            sonic-db-cli COUNTERS_DB FLUSHDB > /dev/null
-            sonic-db-cli FLEX_COUNTER_DB FLUSHDB > /dev/null
-        fi
-
-        if [[ "$REBOOT_TYPE" = "fast-reboot" ]]; then
-            # Flush RESTAP_DB in fast-reboot to avoid stale status
-            sonic-db-cli RESTAPI_DB FLUSHDB > /dev/null
-        fi
-
-        backup_database
-
     fi
 done
+
+backup_database
 
 # Stop the docker container engine. Otherwise we will have a broken docker storage
 systemctl stop docker.service || debug "Ignore stopping docker service error $?"
