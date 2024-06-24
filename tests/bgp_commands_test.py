@@ -25,32 +25,32 @@ Peers 24, using 502080 KiB of memory
 Peer groups 4, using 256 bytes of memory
 
 
-Neighbhor      V     AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ  Up/Down    State/PfxRcd    NeighborName
------------  ---  -----  ---------  ---------  --------  -----  ------  ---------  --------------  --------------
-10.0.0.1       4  65200       5919       2717         0      0       0  1d21h11m   6402            ARISTA01T2
-10.0.0.5       4  65200       5916       2714         0      0       0  1d21h10m   6402            ARISTA03T2
-10.0.0.9       4  65200       5915       2713         0      0       0  1d21h09m   6402            ARISTA05T2
-10.0.0.13      4  65200       5917       2716         0      0       0  1d21h11m   6402            ARISTA07T2
-10.0.0.17      4  65200       5916       2713         0      0       0  1d21h09m   6402            ARISTA09T2
-10.0.0.21      4  65200       5917       2716         0      0       0  1d21h11m   6402            ARISTA11T2
-10.0.0.25      4  65200       5917       2716         0      0       0  1d21h11m   6402            ARISTA13T2
-10.0.0.29      4  65200       5916       2714         0      0       0  1d21h10m   6402            ARISTA15T2
-10.0.0.33      4  64001          0          0         0      0       0  never      Active          ARISTA01T0
-10.0.0.35      4  64002          0          0         0      0       0  never      Active          ARISTA02T0
-10.0.0.37      4  64003          0          0         0      0       0  never      Active          ARISTA03T0
-10.0.0.39      4  64004          0          0         0      0       0  never      Active          ARISTA04T0
-10.0.0.41      4  64005          0          0         0      0       0  never      Active          ARISTA05T0
-10.0.0.43      4  64006          0          0         0      0       0  never      Active          ARISTA06T0
-10.0.0.45      4  64007          0          0         0      0       0  never      Active          ARISTA07T0
-10.0.0.47      4  64008          0          0         0      0       0  never      Active          ARISTA08T0
-10.0.0.49      4  64009          0          0         0      0       0  never      Active          ARISTA09T0
-10.0.0.51      4  64010          0          0         0      0       0  never      Active          ARISTA10T0
-10.0.0.53      4  64011          0          0         0      0       0  never      Active          ARISTA11T0
-10.0.0.55      4  64012          0          0         0      0       0  never      Active          ARISTA12T0
-10.0.0.57      4  64013          0          0         0      0       0  never      Active          ARISTA13T0
-10.0.0.59      4  64014          0          0         0      0       0  never      Active          ARISTA14T0
-10.0.0.61      4  64015          0          0         0      0       0  never      Active          INT_NEIGH0
-10.0.0.63      4  64016          0          0         0      0       0  never      Active          INT_NEIGH1
+Neighbor      V     AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ  Up/Down    State/PfxRcd    NeighborName
+----------  ---  -----  ---------  ---------  --------  -----  ------  ---------  --------------  --------------
+10.0.0.1      4  65200       5919       2717         0      0       0  1d21h11m   6402            ARISTA01T2
+10.0.0.5      4  65200       5916       2714         0      0       0  1d21h10m   6402            ARISTA03T2
+10.0.0.9      4  65200       5915       2713         0      0       0  1d21h09m   6402            ARISTA05T2
+10.0.0.13     4  65200       5917       2716         0      0       0  1d21h11m   6402            ARISTA07T2
+10.0.0.17     4  65200       5916       2713         0      0       0  1d21h09m   6402            ARISTA09T2
+10.0.0.21     4  65200       5917       2716         0      0       0  1d21h11m   6402            ARISTA11T2
+10.0.0.25     4  65200       5917       2716         0      0       0  1d21h11m   6402            ARISTA13T2
+10.0.0.29     4  65200       5916       2714         0      0       0  1d21h10m   6402            ARISTA15T2
+10.0.0.33     4  64001          0          0         0      0       0  never      Active          ARISTA01T0
+10.0.0.35     4  64002          0          0         0      0       0  never      Active          ARISTA02T0
+10.0.0.37     4  64003          0          0         0      0       0  never      Active          ARISTA03T0
+10.0.0.39     4  64004          0          0         0      0       0  never      Active          ARISTA04T0
+10.0.0.41     4  64005          0          0         0      0       0  never      Active          ARISTA05T0
+10.0.0.43     4  64006          0          0         0      0       0  never      Active          ARISTA06T0
+10.0.0.45     4  64007          0          0         0      0       0  never      Active          ARISTA07T0
+10.0.0.47     4  64008          0          0         0      0       0  never      Active          ARISTA08T0
+10.0.0.49     4  64009          0          0         0      0       0  never      Active          ARISTA09T0
+10.0.0.51     4  64010          0          0         0      0       0  never      Active          ARISTA10T0
+10.0.0.53     4  64011          0          0         0      0       0  never      Active          ARISTA11T0
+10.0.0.55     4  64012          0          0         0      0       0  never      Active          ARISTA12T0
+10.0.0.57     4  64013          0          0         0      0       0  never      Active          ARISTA13T0
+10.0.0.59     4  64014          0          0         0      0       0  never      Active          ARISTA14T0
+10.0.0.61     4  64015          0          0         0      0       0  never      Active          INT_NEIGH0
+10.0.0.63     4  64016          0          0         0      0       0  never      Active          INT_NEIGH1
 
 Total number of neighbors 24
 """
@@ -65,32 +65,32 @@ Peers 24, using 502080 KiB of memory
 Peer groups 4, using 256 bytes of memory
 
 
-Neighbhor      V     AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ  Up/Down    State/PfxRcd    NeighborName
------------  ---  -----  ---------  ---------  --------  -----  ------  ---------  --------------  --------------
-fc00::1a       4  65200       6665       6672         0      0       0  2d09h39m   6402            ARISTA07T2
-fc00::2        4  65200       6666       7913         0      0       0  2d09h39m   6402            ARISTA01T2
-fc00::2a       4  65200       6666       7913         0      0       0  2d09h39m   6402            ARISTA11T2
-fc00::3a       4  65200       6666       7912         0      0       0  2d09h39m   6402            ARISTA15T2
-fc00::4a       4  64003          0          0         0      0       0  never      Active          ARISTA03T0
-fc00::4e       4  64004          0          0         0      0       0  never      Active          ARISTA04T0
-fc00::5a       4  64007          0          0         0      0       0  never      Active          ARISTA07T0
-fc00::5e       4  64008          0          0         0      0       0  never      Active          ARISTA08T0
-fc00::6a       4  64011          0          0         0      0       0  never      Connect         ARISTA11T0
-fc00::6e       4  64012          0          0         0      0       0  never      Active          ARISTA12T0
-fc00::7a       4  64015          0          0         0      0       0  never      Active          ARISTA15T0
-fc00::7e       4  64016          0          0         0      0       0  never      Active          ARISTA16T0
-fc00::12       4  65200       6666       7915         0      0       0  2d09h39m   6402            ARISTA05T2
-fc00::22       4  65200       6667       7915         0      0       0  2d09h39m   6402            ARISTA09T2
-fc00::32       4  65200       6663       6669         0      0       0  2d09h36m   6402            ARISTA13T2
-fc00::42       4  64001          0          0         0      0       0  never      Active          ARISTA01T0
-fc00::46       4  64002          0          0         0      0       0  never      Active          ARISTA02T0
-fc00::52       4  64005          0          0         0      0       0  never      Active          ARISTA05T0
-fc00::56       4  64006          0          0         0      0       0  never      Active          ARISTA06T0
-fc00::62       4  64009          0          0         0      0       0  never      Active          ARISTA09T0
-fc00::66       4  64010          0          0         0      0       0  never      Active          ARISTA10T0
-fc00::72       4  64013          0          0         0      0       0  never      Active          ARISTA13T0
-fc00::76       4  64014          0          0         0      0       0  never      Active          INT_NEIGH0
-fc00::a        4  65200       6665       6671         0      0       0  2d09h38m   6402            INT_NEIGH1
+Neighbor      V     AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ  Up/Down    State/PfxRcd    NeighborName
+----------  ---  -----  ---------  ---------  --------  -----  ------  ---------  --------------  --------------
+fc00::1a      4  65200       6665       6672         0      0       0  2d09h39m   6402            ARISTA07T2
+fc00::2       4  65200       6666       7913         0      0       0  2d09h39m   6402            ARISTA01T2
+fc00::2a      4  65200       6666       7913         0      0       0  2d09h39m   6402            ARISTA11T2
+fc00::3a      4  65200       6666       7912         0      0       0  2d09h39m   6402            ARISTA15T2
+fc00::4a      4  64003          0          0         0      0       0  never      Active          ARISTA03T0
+fc00::4e      4  64004          0          0         0      0       0  never      Active          ARISTA04T0
+fc00::5a      4  64007          0          0         0      0       0  never      Active          ARISTA07T0
+fc00::5e      4  64008          0          0         0      0       0  never      Active          ARISTA08T0
+fc00::6a      4  64011          0          0         0      0       0  never      Connect         ARISTA11T0
+fc00::6e      4  64012          0          0         0      0       0  never      Active          ARISTA12T0
+fc00::7a      4  64015          0          0         0      0       0  never      Active          ARISTA15T0
+fc00::7e      4  64016          0          0         0      0       0  never      Active          ARISTA16T0
+fc00::12      4  65200       6666       7915         0      0       0  2d09h39m   6402            ARISTA05T2
+fc00::22      4  65200       6667       7915         0      0       0  2d09h39m   6402            ARISTA09T2
+fc00::32      4  65200       6663       6669         0      0       0  2d09h36m   6402            ARISTA13T2
+fc00::42      4  64001          0          0         0      0       0  never      Active          ARISTA01T0
+fc00::46      4  64002          0          0         0      0       0  never      Active          ARISTA02T0
+fc00::52      4  64005          0          0         0      0       0  never      Active          ARISTA05T0
+fc00::56      4  64006          0          0         0      0       0  never      Active          ARISTA06T0
+fc00::62      4  64009          0          0         0      0       0  never      Active          ARISTA09T0
+fc00::66      4  64010          0          0         0      0       0  never      Active          ARISTA10T0
+fc00::72      4  64013          0          0         0      0       0  never      Active          ARISTA13T0
+fc00::76      4  64014          0          0         0      0       0  never      Active          INT_NEIGH0
+fc00::a       4  65200       6665       6671         0      0       0  2d09h38m   6402            INT_NEIGH1
 
 Total number of neighbors 24
 """
@@ -112,8 +112,8 @@ Peers 0, using 0 KiB of memory
 Peer groups 0, using 0 bytes of memory
 
 
-Neighbhor    V    AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ    Up/Down    State/PfxRcd    NeighborName
------------  ---  ----  ---------  ---------  --------  -----  ------  ---------  --------------  --------------
+Neighbor    V    AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ    Up/Down    State/PfxRcd    NeighborName
+----------  ---  ----  ---------  ---------  --------  -----  ------  ---------  --------------  --------------
 
 Total number of neighbors 0
 """
@@ -128,8 +128,8 @@ Peers 0, using 0 KiB of memory
 Peer groups 0, using 0 bytes of memory
 
 
-Neighbhor    V    AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ    Up/Down    State/PfxRcd    NeighborName
------------  ---  ----  ---------  ---------  --------  -----  ------  ---------  --------------  --------------
+Neighbor    V    AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ    Up/Down    State/PfxRcd    NeighborName
+----------  ---  ----  ---------  ---------  --------  -----  ------  ---------  --------------  --------------
 
 Total number of neighbors 0
 """
@@ -146,8 +146,8 @@ Peers 0, using 0 KiB of memory
 Peer groups 0, using 0 bytes of memory
 
 
-Neighbhor    V    AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ    Up/Down    State/PfxRcd    NeighborName
------------  ---  ----  ---------  ---------  --------  -----  ------  ---------  --------------  --------------
+Neighbor    V    AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ    Up/Down    State/PfxRcd    NeighborName
+----------  ---  ----  ---------  ---------  --------  -----  ------  ---------  --------------  --------------
 
 Total number of neighbors 0
 """
@@ -164,8 +164,8 @@ Peers 0, using 0 KiB of memory
 Peer groups 0, using 0 bytes of memory
 
 
-Neighbhor    V    AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ    Up/Down    State/PfxRcd    NeighborName
------------  ---  ----  ---------  ---------  --------  -----  ------  ---------  --------------  --------------
+Neighbor    V    AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ    Up/Down    State/PfxRcd    NeighborName
+----------  ---  ----  ---------  ---------  --------  -----  ------  ---------  --------------  --------------
 
 Total number of neighbors 0
 """
@@ -180,28 +180,28 @@ Peers 23, using 501768 KiB of memory
 Peer groups 3, using 192 bytes of memory
 
 
-Neighbhor      V     AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ  Up/Down      State/PfxRcd  NeighborName
------------  ---  -----  ---------  ---------  --------  -----  ------  ---------  --------------  --------------
-10.0.0.1       4  65200       4632      11028         0      0       0  00:18:31             8514  ARISTA01T2
-10.0.0.9       4  65202       4632      11029         0      0       0  00:18:33             8514  ARISTA05T2
-10.0.0.13      4  65203       4632      11028         0      0       0  00:18:33             8514  ARISTA07T2
-10.0.0.17      4  65204       4631      11028         0      0       0  00:18:31             8514  ARISTA09T2
-10.0.0.21      4  65205       4632      11031         0      0       0  00:18:33             8514  ARISTA11T2
-10.0.0.25      4  65206       4632      11031         0      0       0  00:18:33             8514  ARISTA13T2
-10.0.0.29      4  65207       4632      11028         0      0       0  00:18:31             8514  ARISTA15T2
-10.0.0.33      4  65208       4633      11029         0      0       0  00:18:33             8514  ARISTA01T0
-10.0.0.37      4  65210       4632      11028         0      0       0  00:18:32             8514  ARISTA03T0
-10.0.0.39      4  65211       4629       6767         0      0       0  00:18:22             8514  ARISTA04T0
-10.0.0.41      4  65212       4632      11028         0      0       0  00:18:32             8514  ARISTA05T0
-10.0.0.43      4  65213       4629       6767         0      0       0  00:18:23             8514  ARISTA06T0
-10.0.0.45      4  65214       4633      11029         0      0       0  00:18:33             8514  ARISTA07T0
-10.0.0.47      4  65215       4629       6767         0      0       0  00:18:23             8514  ARISTA08T0
-10.0.0.49      4  65216       4633      11029         0      0       0  00:18:35             8514  ARISTA09T0
-10.0.0.51      4  65217       4633      11029         0      0       0  00:18:33             8514  ARISTA10T0
-10.0.0.53      4  65218       4632      11029         0      0       0  00:18:35             8514  ARISTA11T0
-10.0.0.55      4  65219       4632      11029         0      0       0  00:18:33             8514  ARISTA12T0
-10.0.0.57      4  65220       4632      11029         0      0       0  00:18:35             8514  ARISTA13T0
-10.0.0.59      4  65221       4632      11029         0      0       0  00:18:33             8514  ARISTA14T0
+Neighbor      V     AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ  Up/Down      State/PfxRcd  NeighborName
+----------  ---  -----  ---------  ---------  --------  -----  ------  ---------  --------------  --------------
+10.0.0.1      4  65200       4632      11028         0      0       0  00:18:31             8514  ARISTA01T2
+10.0.0.9      4  65202       4632      11029         0      0       0  00:18:33             8514  ARISTA05T2
+10.0.0.13     4  65203       4632      11028         0      0       0  00:18:33             8514  ARISTA07T2
+10.0.0.17     4  65204       4631      11028         0      0       0  00:18:31             8514  ARISTA09T2
+10.0.0.21     4  65205       4632      11031         0      0       0  00:18:33             8514  ARISTA11T2
+10.0.0.25     4  65206       4632      11031         0      0       0  00:18:33             8514  ARISTA13T2
+10.0.0.29     4  65207       4632      11028         0      0       0  00:18:31             8514  ARISTA15T2
+10.0.0.33     4  65208       4633      11029         0      0       0  00:18:33             8514  ARISTA01T0
+10.0.0.37     4  65210       4632      11028         0      0       0  00:18:32             8514  ARISTA03T0
+10.0.0.39     4  65211       4629       6767         0      0       0  00:18:22             8514  ARISTA04T0
+10.0.0.41     4  65212       4632      11028         0      0       0  00:18:32             8514  ARISTA05T0
+10.0.0.43     4  65213       4629       6767         0      0       0  00:18:23             8514  ARISTA06T0
+10.0.0.45     4  65214       4633      11029         0      0       0  00:18:33             8514  ARISTA07T0
+10.0.0.47     4  65215       4629       6767         0      0       0  00:18:23             8514  ARISTA08T0
+10.0.0.49     4  65216       4633      11029         0      0       0  00:18:35             8514  ARISTA09T0
+10.0.0.51     4  65217       4633      11029         0      0       0  00:18:33             8514  ARISTA10T0
+10.0.0.53     4  65218       4632      11029         0      0       0  00:18:35             8514  ARISTA11T0
+10.0.0.55     4  65219       4632      11029         0      0       0  00:18:33             8514  ARISTA12T0
+10.0.0.57     4  65220       4632      11029         0      0       0  00:18:35             8514  ARISTA13T0
+10.0.0.59     4  65221       4632      11029         0      0       0  00:18:33             8514  ARISTA14T0
 
 Total number of neighbors 20
 """
@@ -216,28 +216,28 @@ Peers 23, using 501768 KiB of memory
 Peer groups 3, using 192 bytes of memory
 
 
-Neighbhor      V     AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ  Up/Down      State/PfxRcd  NeighborName
------------  ---  -----  ---------  ---------  --------  -----  ------  ---------  --------------  --------------
-fc00::1a       4  65203       4438       6578         0      0       0  00:08:57             8514  ARISTA07T2
-fc00::2        4  65200       4439       6578         0      0       0  00:08:56             8513  ARISTA01T2
-fc00::2a       4  65205       4439       6578         0      0       0  00:08:57             8514  ARISTA11T2
-fc00::3a       4  65207       4439       6578         0      0       0  00:08:57             8514  ARISTA15T2
-fc00::4a       4  65210       4439       6579         0      0       0  00:08:59             8514  ARISTA03T0
-fc00::4e       4  65211       4440       6579         0      0       0  00:09:00             8514  ARISTA04T0
-fc00::5a       4  65214       4440       6579         0      0       0  00:09:00             8514  ARISTA07T0
-fc00::5e       4  65215       4438       6576         0      0       0  00:08:50             8514  ARISTA08T0
-fc00::6a       4  65218       4441       6580         0      0       0  00:09:01             8514  ARISTA11T0
-fc00::6e       4  65219       4442       6580         0      0       0  00:09:01             8514  ARISTA12T0
-fc00::7a       4  65222       4441       6580         0      0       0  00:09:01             8514  ARISTA15T0
-fc00::12       4  65202       4438       6578         0      0       0  00:08:57             8514  ARISTA05T2
-fc00::22       4  65204       4438       6578         0      0       0  00:08:57             8514  ARISTA09T2
-fc00::32       4  65206       4438       6578         0      0       0  00:08:57             8514  ARISTA13T2
-fc00::42       4  65208       4442       6580         0      0       0  00:09:01             8514  ARISTA01T0
-fc00::52       4  65212       4439       6579         0      0       0  00:08:59             8514  ARISTA05T0
-fc00::56       4  65213       4439       6579         0      0       0  00:08:59             8514  ARISTA06T0
-fc00::62       4  65216       4438       6576         0      0       0  00:08:50             8514  ARISTA09T0
-fc00::66       4  65217       4442       6580         0      0       0  00:09:01             8514  ARISTA10T0
-fc00::72       4  65220       4441       6580         0      0       0  00:09:01             8514  ARISTA13T0
+Neighbor      V     AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ  Up/Down      State/PfxRcd  NeighborName
+----------  ---  -----  ---------  ---------  --------  -----  ------  ---------  --------------  --------------
+fc00::1a      4  65203       4438       6578         0      0       0  00:08:57             8514  ARISTA07T2
+fc00::2       4  65200       4439       6578         0      0       0  00:08:56             8513  ARISTA01T2
+fc00::2a      4  65205       4439       6578         0      0       0  00:08:57             8514  ARISTA11T2
+fc00::3a      4  65207       4439       6578         0      0       0  00:08:57             8514  ARISTA15T2
+fc00::4a      4  65210       4439       6579         0      0       0  00:08:59             8514  ARISTA03T0
+fc00::4e      4  65211       4440       6579         0      0       0  00:09:00             8514  ARISTA04T0
+fc00::5a      4  65214       4440       6579         0      0       0  00:09:00             8514  ARISTA07T0
+fc00::5e      4  65215       4438       6576         0      0       0  00:08:50             8514  ARISTA08T0
+fc00::6a      4  65218       4441       6580         0      0       0  00:09:01             8514  ARISTA11T0
+fc00::6e      4  65219       4442       6580         0      0       0  00:09:01             8514  ARISTA12T0
+fc00::7a      4  65222       4441       6580         0      0       0  00:09:01             8514  ARISTA15T0
+fc00::12      4  65202       4438       6578         0      0       0  00:08:57             8514  ARISTA05T2
+fc00::22      4  65204       4438       6578         0      0       0  00:08:57             8514  ARISTA09T2
+fc00::32      4  65206       4438       6578         0      0       0  00:08:57             8514  ARISTA13T2
+fc00::42      4  65208       4442       6580         0      0       0  00:09:01             8514  ARISTA01T0
+fc00::52      4  65212       4439       6579         0      0       0  00:08:59             8514  ARISTA05T0
+fc00::56      4  65213       4439       6579         0      0       0  00:08:59             8514  ARISTA06T0
+fc00::62      4  65216       4438       6576         0      0       0  00:08:50             8514  ARISTA09T0
+fc00::66      4  65217       4442       6580         0      0       0  00:09:01             8514  ARISTA10T0
+fc00::72      4  65220       4441       6580         0      0       0  00:09:01             8514  ARISTA13T0
 
 Total number of neighbors 20
 """
@@ -252,31 +252,31 @@ Peers 23, using 501768 KiB of memory
 Peer groups 3, using 192 bytes of memory
 
 
-Neighbhor      V     AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ  Up/Down    State/PfxRcd    NeighborName
------------  ---  -----  ---------  ---------  --------  -----  ------  ---------  --------------  ------------------
-3.3.3.6        4  65100          0          0         0      0       0  never      Connect         str2-chassis-lc6-1
-3.3.3.7        4  65100        808     178891         0      0       0  00:17:47   1458            str2-chassis-lc7-1
-10.0.0.1       4  65200       4632      11028         0      0       0  00:18:31   8514            ARISTA01T2
-10.0.0.9       4  65202       4632      11029         0      0       0  00:18:33   8514            ARISTA05T2
-10.0.0.13      4  65203       4632      11028         0      0       0  00:18:33   8514            ARISTA07T2
-10.0.0.17      4  65204       4631      11028         0      0       0  00:18:31   8514            ARISTA09T2
-10.0.0.21      4  65205       4632      11031         0      0       0  00:18:33   8514            ARISTA11T2
-10.0.0.25      4  65206       4632      11031         0      0       0  00:18:33   8514            ARISTA13T2
-10.0.0.29      4  65207       4632      11028         0      0       0  00:18:31   8514            ARISTA15T2
-10.0.0.33      4  65208       4633      11029         0      0       0  00:18:33   8514            ARISTA01T0
-10.0.0.37      4  65210       4632      11028         0      0       0  00:18:32   8514            ARISTA03T0
-10.0.0.39      4  65211       4629       6767         0      0       0  00:18:22   8514            ARISTA04T0
-10.0.0.41      4  65212       4632      11028         0      0       0  00:18:32   8514            ARISTA05T0
-10.0.0.43      4  65213       4629       6767         0      0       0  00:18:23   8514            ARISTA06T0
-10.0.0.45      4  65214       4633      11029         0      0       0  00:18:33   8514            ARISTA07T0
-10.0.0.47      4  65215       4629       6767         0      0       0  00:18:23   8514            ARISTA08T0
-10.0.0.49      4  65216       4633      11029         0      0       0  00:18:35   8514            ARISTA09T0
-10.0.0.51      4  65217       4633      11029         0      0       0  00:18:33   8514            ARISTA10T0
-10.0.0.53      4  65218       4632      11029         0      0       0  00:18:35   8514            ARISTA11T0
-10.0.0.55      4  65219       4632      11029         0      0       0  00:18:33   8514            ARISTA12T0
-10.0.0.57      4  65220       4632      11029         0      0       0  00:18:35   8514            ARISTA13T0
-10.0.0.59      4  65221       4632      11029         0      0       0  00:18:33   8514            ARISTA14T0
-10.0.0.61      4  65222       4633      11029         0      0       0  00:18:33   8514            INT_NEIGH0
+Neighbor      V     AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ  Up/Down    State/PfxRcd    NeighborName
+----------  ---  -----  ---------  ---------  --------  -----  ------  ---------  --------------  ------------------
+3.3.3.6       4  65100          0          0         0      0       0  never      Connect         str2-chassis-lc6-1
+3.3.3.7       4  65100        808     178891         0      0       0  00:17:47   1458            str2-chassis-lc7-1
+10.0.0.1      4  65200       4632      11028         0      0       0  00:18:31   8514            ARISTA01T2
+10.0.0.9      4  65202       4632      11029         0      0       0  00:18:33   8514            ARISTA05T2
+10.0.0.13     4  65203       4632      11028         0      0       0  00:18:33   8514            ARISTA07T2
+10.0.0.17     4  65204       4631      11028         0      0       0  00:18:31   8514            ARISTA09T2
+10.0.0.21     4  65205       4632      11031         0      0       0  00:18:33   8514            ARISTA11T2
+10.0.0.25     4  65206       4632      11031         0      0       0  00:18:33   8514            ARISTA13T2
+10.0.0.29     4  65207       4632      11028         0      0       0  00:18:31   8514            ARISTA15T2
+10.0.0.33     4  65208       4633      11029         0      0       0  00:18:33   8514            ARISTA01T0
+10.0.0.37     4  65210       4632      11028         0      0       0  00:18:32   8514            ARISTA03T0
+10.0.0.39     4  65211       4629       6767         0      0       0  00:18:22   8514            ARISTA04T0
+10.0.0.41     4  65212       4632      11028         0      0       0  00:18:32   8514            ARISTA05T0
+10.0.0.43     4  65213       4629       6767         0      0       0  00:18:23   8514            ARISTA06T0
+10.0.0.45     4  65214       4633      11029         0      0       0  00:18:33   8514            ARISTA07T0
+10.0.0.47     4  65215       4629       6767         0      0       0  00:18:23   8514            ARISTA08T0
+10.0.0.49     4  65216       4633      11029         0      0       0  00:18:35   8514            ARISTA09T0
+10.0.0.51     4  65217       4633      11029         0      0       0  00:18:33   8514            ARISTA10T0
+10.0.0.53     4  65218       4632      11029         0      0       0  00:18:35   8514            ARISTA11T0
+10.0.0.55     4  65219       4632      11029         0      0       0  00:18:33   8514            ARISTA12T0
+10.0.0.57     4  65220       4632      11029         0      0       0  00:18:35   8514            ARISTA13T0
+10.0.0.59     4  65221       4632      11029         0      0       0  00:18:33   8514            ARISTA14T0
+10.0.0.61     4  65222       4633      11029         0      0       0  00:18:33   8514            INT_NEIGH0
 
 Total number of neighbors 23
 """
@@ -291,8 +291,8 @@ Peers 0, using 0 KiB of memory
 Peer groups 0, using 0 bytes of memory
 
 
-Neighbhor    V    AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ    Up/Down    State/PfxRcd    NeighborName
------------  ---  ----  ---------  ---------  --------  -----  ------  ---------  --------------  --------------
+Neighbor    V    AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ    Up/Down    State/PfxRcd    NeighborName
+----------  ---  ----  ---------  ---------  --------  -----  ------  ---------  --------------  --------------
 
 Total number of neighbors 0
 """
@@ -308,9 +308,9 @@ Peers 3, using 3 KiB of memory
 Peer groups 3, using 3 bytes of memory
 
 
-Neighbhor      V     AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ  Up/Down      State/PfxRcd  NeighborName
------------  ---  -----  ---------  ---------  --------  -----  ------  ---------  --------------  --------------
-10.0.0.1       4  65222       4633      11029         0      0       0  00:18:33             8514  ARISTA01T2
+Neighbor      V     AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ  Up/Down      State/PfxRcd  NeighborName
+----------  ---  -----  ---------  ---------  --------  -----  ------  ---------  --------------  --------------
+10.0.0.1      4  65222       4633      11029         0      0       0  00:18:33             8514  ARISTA01T2
 
 Total number of neighbors 1
 """
@@ -326,14 +326,14 @@ Peers 6, using 4444848 KiB of memory
 Peer groups 4, using 256 bytes of memory
 
 
-Neighbhor      V     AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ  Up/Down      State/PfxRcd  NeighborName
------------  ---  -----  ---------  ---------  --------  -----  ------  ---------  --------------  ----------------------
-3.3.3.1        4  65100        277          9         0      0       0  00:00:14            33798  str2-sonic-lc1-1-ASIC0
-3.3.3.1        4  65100        280         14         0      0       0  00:00:22            33798  str2-sonic-lc1-1-ASIC1
-3.3.3.2        4  65100        277          9         0      0       0  00:00:14            33798  str2-sonic-lc2-1-ASIC0
-3.3.3.2        4  65100        280         14         0      0       0  00:00:22            33798  str2-sonic-lc3-1-ASIC0
-3.3.3.6        4  65100         14         14         0      0       0  00:00:23                4  str2-sonic-lc3-1-ASIC1
-3.3.3.8        4  65100         12         10         0      0       0  00:00:15                4  str2-sonic-lc1-1-ASIC1
+Neighbor      V     AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ  Up/Down      State/PfxRcd  NeighborName
+----------  ---  -----  ---------  ---------  --------  -----  ------  ---------  --------------  ----------------------
+3.3.3.1       4  65100        277          9         0      0       0  00:00:14            33798  str2-sonic-lc1-1-ASIC0
+3.3.3.1       4  65100        280         14         0      0       0  00:00:22            33798  str2-sonic-lc1-1-ASIC1
+3.3.3.2       4  65100        277          9         0      0       0  00:00:14            33798  str2-sonic-lc2-1-ASIC0
+3.3.3.2       4  65100        280         14         0      0       0  00:00:22            33798  str2-sonic-lc3-1-ASIC0
+3.3.3.6       4  65100         14         14         0      0       0  00:00:23                4  str2-sonic-lc3-1-ASIC1
+3.3.3.8       4  65100         12         10         0      0       0  00:00:15                4  str2-sonic-lc1-1-ASIC1
 
 Total number of neighbors 6
 """
