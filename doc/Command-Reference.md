@@ -145,7 +145,7 @@
 * [Platform Specific Commands](#platform-specific-commands)
   * [Mellanox Platform Specific Commands](#mellanox-platform-specific-commands)
   * [Barefoot Platform Specific Commands](#barefoot-platform-specific-commands)
-* [PINS](#pins-show commands)
+* [PINS](#pins-show-commands)
 * [PortChannels](#portchannels)
   * [PortChannel Show commands](#portchannel-show-commands)
   * [PortChannel Config commands](#portchannel-config-commands)
@@ -9084,7 +9084,7 @@ communicate with the P4RT application.
   }
   ```
 
-Go Back To [Beginning of the document](#) or [Beginning of this section](#pbh)
+Go Back To [Beginning of the document](#) or [Beginning of this section](#pins)
 
 ## QoS
 
