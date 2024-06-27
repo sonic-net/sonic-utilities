@@ -395,7 +395,7 @@ def get_counter_value(pbh_counters, saved_pbh_counters, key, type):
     if not pbh_counters[key]:
         return '0'
 
-    if key in saved_pbh_counters:
+    if key in saved_pbh_counters and saved_pbh_counters[key]:
         new_value = int(pbh_counters[key][type]) - int(saved_pbh_counters[key][type])
         if new_value >= 0:
             return str(new_value)
