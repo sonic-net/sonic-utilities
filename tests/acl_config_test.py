@@ -1,10 +1,12 @@
 import pytest
+from typing import Tuple
 
 import config.main as config
 
 from click.testing import CliRunner
 from config.main import expand_vlan_ports, parse_acl_table_info
 
+from swsssdk import ConfigDBConnector
 
 class TestConfigAcl(object):
     def test_expand_vlan(self):
@@ -79,3 +81,71 @@ class TestConfigAcl(object):
 
         assert result.exit_code != 0
         assert "Cannot bind empty VLAN Vlan3000" in result.output
+
+    @pytest.fixture(scope="function")
+    def mock_configDBConnector(self):
+        db = {
+            "ACL_RULE": {},
+            "ACL_TABLE": {}
+        }
+
+        def _get_keys(self, table_name):
+            data = []
+            for key in db[table_name]:
+                k = key.split('|')
+                data.append((k[0], k[1]))
+
+            return data
+
+        def _set_entry(self, table_name, key, value):
+            tmp_key = key
+            if isinstance(key, Tuple):
+                tmp_key = '|'.join(key)
+
+            # if tmp_key not in db[table_name]:
+            #     assert False
+
+            data = db[table_name][tmp_key]
+            if value == None:
+                data['removed'] = True
+
+        orig_get_keys = ConfigDBConnector.get_keys
+        orig_set_entry= ConfigDBConnector.set_entry
+
+        ConfigDBConnector.get_keys = _get_keys
+        ConfigDBConnector.set_entry = _set_entry
+
+        yield db
+
+        ConfigDBConnector.get_keys = orig_get_keys
+        ConfigDBConnector.get_keys = orig_set_entry
+
+    def test_acl_remove_table(self, mock_configDBConnector):
+        runner = CliRunner()
+
+        config_db = ConfigDBConnector()
+        config_db.connect()
+
+        ACL_TABLE_NAME = "DATA_ACL2"
+
+        mock_configDBConnector["ACL_RULE"]["DATA_ACL|RULE1"] = {}
+        mock_configDBConnector["ACL_RULE"]["DATA_ACL|RULE1"]["removed"] = False
+        mock_configDBConnector["ACL_RULE"]["DATA_ACL|RULE2"] = {}
+        mock_configDBConnector["ACL_RULE"]["DATA_ACL|RULE2"]["removed"] = False
+
+        mock_configDBConnector["ACL_RULE"]["{}|RULE1".format(ACL_TABLE_NAME)] = {}
+        mock_configDBConnector["ACL_RULE"]["{}|RULE1".format(ACL_TABLE_NAME)]["removed"] = False
+        mock_configDBConnector["ACL_RULE"]["{}|RULE2".format(ACL_TABLE_NAME)] = {}
+        mock_configDBConnector["ACL_RULE"]["{}|RULE2".format(ACL_TABLE_NAME)]["removed"] = False
+
+        mock_configDBConnector["ACL_TABLE"][ACL_TABLE_NAME] = {}
+
+        result = runner.invoke(
+            config.config.commands["acl"].commands["remove"].commands["table"],
+            [ACL_TABLE_NAME])
+
+        assert result.exit_code == 0
+        assert mock_configDBConnector["ACL_RULE"]["DATA_ACL|RULE1"]["removed"] == False
+        assert mock_configDBConnector["ACL_RULE"]["DATA_ACL|RULE2"]["removed"] == False
+        assert mock_configDBConnector["ACL_RULE"]["{}|RULE1".format(ACL_TABLE_NAME)]["removed"] == True
+        assert mock_configDBConnector["ACL_RULE"]["{}|RULE2".format(ACL_TABLE_NAME)]["removed"] == True
