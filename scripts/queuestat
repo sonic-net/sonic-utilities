@@ -11,11 +11,14 @@ import argparse
 import datetime
 import os.path
 import sys
+import operator as op
+import re
 
 from collections import namedtuple, OrderedDict
 from natsort import natsorted
 from tabulate import tabulate
-from sonic_py_common import multi_asic
+from sonic_py_common import multi_asic, device_info
+from swsscommon import swsscommon
 
 # mock the redis for unit test purposes #
 try:
@@ -65,6 +68,7 @@ SAI_QUEUE_TYPE_UNICAST_VOQ = "SAI_QUEUE_TYPE_UNICAST_VOQ"
 SAI_QUEUE_TYPE_ALL = "SAI_QUEUE_TYPE_ALL"
 
 COUNTER_TABLE_PREFIX = "COUNTERS:"
+VOQ_COUNTERS_PREFIX = "COUNTERS|"
 COUNTERS_PORT_NAME_MAP = "COUNTERS_PORT_NAME_MAP"
 COUNTERS_SYSTEM_PORT_NAME_MAP = "COUNTERS_SYSTEM_PORT_NAME_MAP"
 COUNTERS_QUEUE_NAME_MAP = "COUNTERS_QUEUE_NAME_MAP"
@@ -76,6 +80,28 @@ COUNTERS_QUEUE_PORT_MAP = "COUNTERS_QUEUE_PORT_MAP"
 cnstat_dir = 'N/A'
 cnstat_fqn_file = 'N/A'
 
+class voqCounterUtil():
+    @staticmethod
+    def parse_key(key):
+        # COUNTERS|nfc406-7|Asic0|Ethernet164@nfc406-9|Asic0:3
+        _, sysPort, fapId, voqIdx = re.search(r"(COUNTERS).([a-zA-Z0-9\-\|]+).([a-zA-Z0-9\-\|]+).(\d)",key).groups()
+        return sysPort, fapId, voqIdx
+        # sysPort = nfc406-7|Asic0|Ethernet164
+        # fapId = nfc406-9:Asic0
+
+    @staticmethod
+    def get_key(sysPort, fapId, voqIdx):
+        return VOQ_COUNTERS_PREFIX +  sysPort + "@" + fapId + ":" + voqIdx
+
+    @staticmethod
+    def process_keys(keys):
+        metaData = {}
+        ports = set()
+        for key in keys:
+            sysPort, fapId, voqIdx = voqCounterUtil.parse_key(key)
+            ports.add(sysPort)
+            metaData.setdefault(sysPort,{}).setdefault(fapId,set()).add(voqIdx)
+        return metaData, ports
 
 def build_json(port, cnstat, voq=False):
     def ports_stats(k):
@@ -112,7 +138,10 @@ class Queuestat(object):
                 self.db = multi_asic.connect_to_all_dbs_for_ns(ns)
         else:
             self.db = SonicV2Connector(use_unix_socket_path=False)
-            self.db.connect(self.db.COUNTERS_DB)
+            if voq and device_info.is_supervisor():
+                self.db.connect(self.db.CHASSIS_APP_DB)
+            else:
+                self.db.connect(self.db.COUNTERS_DB)
         self.voq = voq
 
         def get_queue_port(table_id):
@@ -124,7 +153,10 @@ class Queuestat(object):
             return port_table_id
 
         # Get all ports
-        if voq:
+        if voq and device_info.is_supervisor():
+            # counter_port_name_map is assigned later for SSI as a list
+            self.counter_port_name_map = []
+        elif voq:
             self.counter_port_name_map = self.db.get_all(self.db.COUNTERS_DB, COUNTERS_SYSTEM_PORT_NAME_MAP)
         else:
             self.counter_port_name_map = self.db.get_all(self.db.COUNTERS_DB, COUNTERS_PORT_NAME_MAP)
@@ -135,12 +167,21 @@ class Queuestat(object):
 
         self.port_queues_map = {}
         self.port_name_map = {}
+        self.ports = {}
+        self.voqIdxs = {}
+        self.metaData = {}
 
         for port in self.counter_port_name_map:
             self.port_queues_map[port] = {}
             self.port_name_map[self.counter_port_name_map[port]] = port
 
         counter_queue_name_map = None
+        if voq and device_info.is_supervisor():
+            keys = self.db.keys(self.db.CHASSIS_APP_DB, VOQ_COUNTERS_PREFIX + "*")
+            self.metaData, self.ports = voqCounterUtil.process_keys(keys)
+            self.counter_port_name_map = self.ports
+            return
+
         # Get Queues for each port
         if voq:
             counter_queue_name_map = self.db.get_all(self.db.COUNTERS_DB, COUNTERS_VOQ_NAME_MAP)
@@ -154,6 +195,31 @@ class Queuestat(object):
         for queue in counter_queue_name_map:
             port = self.port_name_map[get_queue_port(counter_queue_name_map[queue])]
             self.port_queues_map[port][queue] = counter_queue_name_map[queue]
+
+    def getAggregatePortStats( self, port ):
+        voqCnt = {}
+
+        for fapId in self.metaData[port]:
+            for idx in self.metaData[port][fapId]:
+                key = voqCounterUtil.get_key(port,fapId,idx)
+                for counter_name in counter_bucket_dict:
+                    voqCnt.setdefault(idx,{}).setdefault(counter_name,0)
+                    counter_data = self.db.get(self.db.CHASSIS_APP_DB, key, counter_name)
+                    if counter_data is not None:
+                        voqCnt[idx][counter_name] += int(counter_data)
+
+        # Build a dictionary of stats
+        cnstat_dict = OrderedDict()
+        cnstat_dict['time'] = datetime.datetime.now()
+        for idx in sorted(voqCnt.keys()):
+            fields = ["0"]*6
+            fields[0] = idx
+            fields[1] = QUEUE_TYPE_VOQ
+            for counter_name, pos in counter_bucket_dict.items():
+                fields[pos] = str(voqCnt[idx][counter_name])
+            cntr = QueueStats._make(fields)._asdict()
+            cnstat_dict[port+":"+idx] = cntr
+        return cnstat_dict
 
     def get_cnstat(self, queue_map):
         """
@@ -327,7 +393,11 @@ class Queuestat(object):
         json_output = {}
         for port in natsorted(self.counter_port_name_map):
             json_output[port] = {}
-            cnstat_dict = self.get_cnstat(self.port_queues_map[port])
+            if self.voq and device_info.is_supervisor():
+                cnstat_dict = self.getAggregatePortStats(port)
+
+            else:
+                cnstat_dict = self.get_cnstat(self.port_queues_map[port])
 
             cnstat_fqn_file_name = cnstat_fqn_file + port
             if os.path.isfile(cnstat_fqn_file_name):
@@ -354,12 +424,16 @@ class Queuestat(object):
         Get stat for the port
         If JSON option is True  print data in JSON format
         """
-        if not port in self.port_queues_map:
+        if not (port in self.port_queues_map or port in self.ports):
             print("Port doesn't exist!", port)
             sys.exit(1)
 
         # Get stat for the port queried
-        cnstat_dict = self.get_cnstat(self.port_queues_map[port])
+        if self.voq and device_info.is_supervisor():
+            cnstat_dict = self.getAggregatePortStats(port)
+        else:
+            cnstat_dict = self.get_cnstat(self.port_queues_map[port])
+
         cnstat_fqn_file_name = cnstat_fqn_file + port
         json_output = {}
         json_output[port] = {}
