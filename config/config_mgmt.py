@@ -432,8 +432,8 @@ class ConfigMgmtDPB(ConfigMgmt):
         '''
         MAX_WAIT = 60
         try:
-            # delete Port and get the Config diff, deps and True/False
-            delConfigToLoad, deps, ret = self._deletePorts(ports=delPorts, \
+            # delete Port and get the Config diff for delete port, delete dependencies, deps and True/False
+            delConfigToLoad, delConfigDepToLoad, deps, ret = self._deletePorts(ports=delPorts, \
                 force=force)
             # return dependencies if delete port fails
             if ret == False:
@@ -453,10 +453,14 @@ class ConfigMgmtDPB(ConfigMgmt):
 
             # If we are here, then get ready to update the Config DB as below:
             # -- shutdown the ports,
+            # -- Update deletion of dependencies in Config DB,
+            # -- Wait 1 sec to complete the deletion of dependencies,             
             # -- Update deletion of ports in Config DB,
             # -- verify Asic DB for port deletion,
             # -- then update addition of ports in config DB.
             self._shutdownIntf(delPorts)
+            self.writeConfigDB(delConfigDepToLoad)
+            tsleep(1)
             self.writeConfigDB(delConfigToLoad)
             # Verify in Asic DB,
             self._verifyAsicDB(db=dataBase, ports=delPorts, portMap=if_name_map, \
@@ -479,10 +483,10 @@ class ConfigMgmtDPB(ConfigMgmt):
             force (bool): if false return dependecies, else delete dependencies.
 
         Returns:
-            (configToLoad, deps, ret) (tuple)[dict, list, bool]: config, dependecies
+            (configToLoad, configDepToLoad, deps, ret) (tuple)[dict, list, bool]: config, config, dependecies
             and success/fail.
         '''
-        configToLoad = None; deps = None
+        configToLoad = None; configDepToLoad = None; deps = None
         try:
             self.sysLog(msg="delPorts ports:{} force:{}".format(ports, force))
 
@@ -500,7 +504,7 @@ class ConfigMgmtDPB(ConfigMgmt):
 
             # No further action with no force and deps exist
             if not force and deps:
-                return configToLoad, deps, False
+                return configToLoad, configDepToLoad, deps, False
 
             # delets all deps, No topological sort is needed as of now, if deletion
             # of deps fails, return immediately
@@ -510,6 +514,18 @@ class ConfigMgmtDPB(ConfigMgmt):
                     self.sy.deleteNode(str(dep))
             # mark deps as None now,
             deps = None
+              
+            if not self.validateConfigData():
+                return configToLoad, configDepToLoad, deps, False
+
+            # Dependencies are deleted, Lets get the diff
+            self.configdbJsonOut = self.sy.getData()
+            
+            # Update configToLoad
+            configDepToLoad = self._updateDiffConfigDB()
+
+ 			# Update self.configdbJsonOut which removed dependencies to self.configdbJsonIn
+            self.configdbJsonIn = self.configdbJsonOut           
 
             # all deps are deleted now, delete all ports now
             for port in ports:
@@ -519,7 +535,7 @@ class ConfigMgmtDPB(ConfigMgmt):
 
             # Let`s Validate the tree now
             if not self.validateConfigData():
-                return configToLoad, deps, False
+                return configToLoad, configDepToLoad, deps, False
 
             # All great if we are here, Lets get the diff
             self.configdbJsonOut = self.sy.getData()
@@ -530,9 +546,9 @@ class ConfigMgmtDPB(ConfigMgmt):
             self.sysLog(doPrint=True, logLevel=syslog.LOG_ERR, msg=str(e))
             self.sysLog(doPrint=True, logLevel=syslog.LOG_ERR, \
                 msg="Port Deletion Failed")
-            return configToLoad, deps, False
+            return configToLoad, configDepToLoad, deps, False
 
-        return configToLoad, deps, True
+        return configToLoad, configDepToLoad, deps, True
 
     def _addPorts(self, portJson=dict(), loadDefConfig=True):
         '''
