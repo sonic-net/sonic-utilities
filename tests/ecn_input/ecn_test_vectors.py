@@ -18,6 +18,37 @@ red_drop_probability     5
 
 """
 
+ecn_show_config_output_multi="""\
+Profile: AZURE_LOSSLESS
+-----------------------  -------
+red_max_threshold        2097152
+wred_green_enable        true
+ecn                      ecn_all
+green_min_threshold      1048576
+red_min_threshold        1048576
+wred_yellow_enable       true
+yellow_min_threshold     1048576
+green_max_threshold      2097152
+green_drop_probability   5
+yellow_max_threshold     2097152
+wred_red_enable          true
+yellow_drop_probability  5
+red_drop_probability     5
+-----------------------  -------
+
+Profile: AZURE_LOSSY
+-----------------------  -----
+red_max_threshold        32760
+red_min_threshold        4095
+yellow_max_threshold     32760
+yellow_min_threshold     4095
+green_max_threshold      32760
+green_min_threshold      4095
+yellow_drop_probability  2
+-----------------------  -----
+
+"""
+
 testData = {
              'ecn_show_config' : {'cmd' : ['show'],
                                   'args' : [],
@@ -218,5 +249,35 @@ testData = {
                                      'rc' : 0,
                                      'cmp_args' : ['wred_profile,AZURE_LOSSLESS'],
                                      'cmp_q_args' : ['0', '1', '2', '5', '6', '7']
-                                    }
+                                    },
+             'ecn_show_config_masic': {'cmd' : ['show_masic'],
+                                     'args' : ['-l'],
+                                     'rc' : 0,
+                                     'rc_output' : ecn_show_config_output_multi,
+                                    },
+             'test_ecn_show_config_verbose_masic': {'cmd' : ['show_masic'],
+                                     'args' : ['-l', '-vv'],
+                                     'rc' : 0,
+                                     'rc_output' : ecn_show_config_output_multi + 'Total profiles: 2\n',
+                                    },
+             'test_ecn_show_config_namespace': {'cmd' : ['show_masic'],
+                                     'args' : ['-l', '-n', 'asic0'],
+                                     'rc' : 0,
+                                     'rc_output' : ecn_show_config_output,
+                                    },
+             'test_ecn_show_config_namespace_verbose': {'cmd' : ['show_masic'],
+                                     'args' : ['-l', '-n', 'asic0', '-vv'],
+                                     'rc' : 0,
+                                     'rc_output' : ecn_show_config_output + 'Total profiles: 1\n',
+                                    },
+             'ecn_cfg_threshold_masic': {'cmd' : ['config_masic'],
+                                     'args' : ['-p', 'AZURE_LOSSY', '-gmax', '35000', '-n', 'asic1'],
+                                     'rc' : 0,
+                                     'cmp_args' : ['AZURE_LOSSY,green_max_threshold,35000']
+                                    },
+             'ecn_cfg_probability_masic': {'cmd' : ['config_masic'],
+                                     'args' : ['-p', 'AZURE_LOSSY', '-ydrop', '3', '-n', 'asic1'],
+                                     'rc' : 0,
+                                     'cmp_args' : ['AZURE_LOSSY,yellow_drop_probability,3']
+                                    },
            }
