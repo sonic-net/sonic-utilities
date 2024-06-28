@@ -82,12 +82,15 @@ COMMAND_TIMEOUT = 300
 # To be enhanced. Routing-stack information should be collected from a global
 # location (configdb?), so that we prevent the continous execution of this
 # bash oneliner. To be revisited once routing-stack info is tracked somewhere.
+
+
 def get_routing_stack():
     result = None
     command = "sudo docker ps | grep bgp | awk '{print$2}' | cut -d'-' -f3 | cut -d':' -f1 | head -n 1"
 
     try:
-        stdout = subprocess.check_output(command, shell=True, text=True, timeout=COMMAND_TIMEOUT)
+        stdout = subprocess.check_output(
+            command, shell=True, text=True, timeout=COMMAND_TIMEOUT)
         result = stdout.rstrip('\n')
     except Exception as err:
         click.echo('Failed to get routing stack: {}'.format(err), err=True)
@@ -99,6 +102,8 @@ def get_routing_stack():
 routing_stack = get_routing_stack()
 
 # Read given JSON file
+
+
 def readJsonFile(fileName):
     try:
         with open(fileName) as f:
@@ -108,6 +113,7 @@ def readJsonFile(fileName):
         raise click.Abort()
     return result
 
+
 def run_command(command, display_cmd=False, return_cmd=False, shell=False):
     if not shell:
         command_str = ' '.join(command)
@@ -115,15 +121,26 @@ def run_command(command, display_cmd=False, return_cmd=False, shell=False):
         command_str = command
 
     if display_cmd:
-        click.echo(click.style("Command: ", fg='cyan') + click.style(command_str, fg='green'))
+        click.echo(
+            click.style(
+                "Command: ",
+                fg='cyan') +
+            click.style(
+                command_str,
+                fg='green'))
 
     # No conversion needed for intfutil commands as it already displays
     # both SONiC interface name and alias name for all interfaces.
-    if clicommon.get_interface_naming_mode() == "alias" and not command_str.startswith("intfutil"):
+    if clicommon.get_interface_naming_mode(
+    ) == "alias" and not command_str.startswith("intfutil"):
         clicommon.run_command_in_alias_mode(command, shell=shell)
         raise sys.exit(0)
 
-    proc = subprocess.Popen(command, shell=shell, text=True, stdout=subprocess.PIPE)
+    proc = subprocess.Popen(
+        command,
+        shell=shell,
+        text=True,
+        stdout=subprocess.PIPE)
 
     while True:
         if return_cmd:
@@ -139,9 +156,11 @@ def run_command(command, display_cmd=False, return_cmd=False, shell=False):
     if rc != 0:
         sys.exit(rc)
 
+
 def get_cmd_output(cmd):
     proc = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE)
     return proc.communicate()[0], proc.returncode
+
 
 def get_config_json_by_namespace(namespace):
     cmd = ['sonic-cfggen', '-d', '--print-data']
@@ -161,12 +180,16 @@ def get_config_json_by_namespace(namespace):
 
     return config_json
 
+
 # Lazy global class instance for SONiC interface name to alias conversion
-iface_alias_converter = lazy_object_proxy.Proxy(lambda: clicommon.InterfaceAliasConverter())
+iface_alias_converter = lazy_object_proxy.Proxy(
+    lambda: clicommon.InterfaceAliasConverter())
 
 #
-# Display all storm-control data 
+# Display all storm-control data
 #
+
+
 def display_storm_all():
     """ Show storm-control """
     header = ['Interface Name', 'Storm Type', 'Rate (kbps)']
@@ -177,7 +200,7 @@ def display_storm_all():
 
     table = config_db.get_table('PORT_STORM_CONTROL')
 
-    #To avoid further looping below
+    # To avoid further looping below
     if not table:
         return
 
@@ -186,7 +209,7 @@ def display_storm_all():
     for storm_key in sorted_table:
         interface_name = storm_key[0]
         storm_type = storm_key[1]
-        #interface_name, storm_type = storm_key.split(':')
+        # interface_name, storm_type = storm_key.split(':')
         data = config_db.get_entry('PORT_STORM_CONTROL', storm_key)
 
         if not data:
@@ -201,15 +224,17 @@ def display_storm_all():
 #
 # Get storm-control configurations per interface append to body
 #
+
+
 def get_storm_interface(intf, body):
-    storm_type_list = ['broadcast','unknown-unicast','unknown-multicast']
+    storm_type_list = ['broadcast', 'unknown-unicast', 'unknown-multicast']
 
     config_db = ConfigDBConnector()
     config_db.connect()
 
     table = config_db.get_table('PORT_STORM_CONTROL')
 
-    #To avoid further looping below
+    # To avoid further looping below
     if not table:
         return
 
@@ -224,10 +249,12 @@ def get_storm_interface(intf, body):
 #
 # Display storm-control data of given interface
 #
+
+
 def display_storm_interface(intf):
     """ Show storm-control """
 
-    storm_type_list = ['broadcast','unknown-unicast','unknown-multicast']
+    storm_type_list = ['broadcast', 'unknown-unicast', 'unknown-multicast']
 
     header = ['Interface Name', 'Storm Type', 'Rate (kbps)']
     body = []
@@ -237,7 +264,7 @@ def display_storm_interface(intf):
 
     table = config_db.get_table('PORT_STORM_CONTROL')
 
-    #To avoid further looping below
+    # To avoid further looping below
     if not table:
         return
 
@@ -251,6 +278,7 @@ def display_storm_interface(intf):
 
     click.echo(tabulate(body, header, tablefmt="grid"))
 
+
 def connect_config_db():
     """
     Connects to config_db
@@ -258,6 +286,7 @@ def connect_config_db():
     config_db = ConfigDBConnector()
     config_db.connect()
     return config_db
+
 
 def is_gearbox_configured():
     """
@@ -268,11 +297,13 @@ def is_gearbox_configured():
 
     keys = app_db.keys(app_db.APPL_DB, '*')
 
-    # If any _GEARBOX_TABLE:phy:* records present in APPL_DB, then the gearbox is configured
+    # If any _GEARBOX_TABLE:phy:* records present in APPL_DB, then the gearbox
+    # is configured
     if any(re.match(GEARBOX_TABLE_PHY_PATTERN, key) for key in keys):
         return True
     else:
         return False
+
 
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help', '-?'])
 
@@ -282,6 +313,8 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help', '-?'])
 
 # This is our entrypoint - the main "show" command
 # TODO: Consider changing function name to 'show' for better understandability
+
+
 @click.group(cls=clicommon.AliasedGroup, context_settings=CONTEXT_SETTINGS)
 @click.pass_context
 def cli(ctx):
@@ -333,10 +366,16 @@ cli.add_command(bgp_cli.BGP)
 # 'vrf' command ("show vrf")
 #
 
+
 def get_interface_bind_to_vrf(config_db, vrf_name):
     """Get interfaces belong to vrf
     """
-    tables = ['INTERFACE', 'PORTCHANNEL_INTERFACE', 'VLAN_INTERFACE', 'LOOPBACK_INTERFACE', 'VLAN_SUB_INTERFACE']
+    tables = [
+        'INTERFACE',
+        'PORTCHANNEL_INTERFACE',
+        'VLAN_INTERFACE',
+        'LOOPBACK_INTERFACE',
+        'VLAN_SUB_INTERFACE']
     data = []
     for table_name in tables:
         interface_dict = config_db.get_table(table_name)
@@ -345,6 +384,7 @@ def get_interface_bind_to_vrf(config_db, vrf_name):
                 if 'vrf_name' in interface_dict[interface] and vrf_name == interface_dict[interface]['vrf_name']:
                     data.append(interface)
     return data
+
 
 @cli.command()
 @click.argument('vrf_name', required=False)
@@ -376,6 +416,7 @@ def vrf(vrf_name):
 # 'events' command ("show event-counters")
 #
 
+
 @cli.command()
 def event_counters():
     """Show events counter"""
@@ -393,7 +434,12 @@ def event_counters():
         table.append((key_list[1], data_dict["value"]))
 
     if table:
-        click.echo(tabulate(table, header, tablefmt='simple', stralign='right'))
+        click.echo(
+            tabulate(
+                table,
+                header,
+                tablefmt='simple',
+                stralign='right'))
     else:
         click.echo('No data available in COUNTERS_EVENTS\n')
 
@@ -427,6 +473,7 @@ def arp(ipaddress, iface, verbose):
 # 'ndp' command ("show ndp")
 #
 
+
 @cli.command()
 @click.argument('ip6address', required=False)
 @click.option('-if', '--iface')
@@ -443,13 +490,18 @@ def ndp(ip6address, iface, verbose):
 
     run_command(cmd, display_cmd=verbose)
 
+
 def is_mgmt_vrf_enabled(ctx):
     """Check if management VRF is enabled"""
     if ctx.invoked_subcommand is None:
         cmd = ['sonic-cfggen', '-d', '--var-json', "MGMT_VRF_CONFIG"]
 
-        p = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        try :
+        p = subprocess.Popen(
+            cmd,
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE)
+        try:
             mvrf_dict = json.loads(p.stdout.read())
         except ValueError:
             print("MGMT_VRF_CONFIG is not present.")
@@ -459,15 +511,17 @@ def is_mgmt_vrf_enabled(ctx):
         # and return True accordingly.
         if 'mgmtVrfEnabled' in mvrf_dict['vrf_global']:
             if (mvrf_dict['vrf_global']['mgmtVrfEnabled'] == "true"):
-                #ManagementVRF is enabled. Return True.
+                # ManagementVRF is enabled. Return True.
                 return True
 
     return False
 
 #
-# 'storm-control' group 
+# 'storm-control' group
 # "show storm-control [interface <interface>]"
 #
+
+
 @cli.group('storm-control', invoke_without_command=True)
 @click.option('--namespace',
               '-n',
@@ -477,7 +531,8 @@ def is_mgmt_vrf_enabled(ctx):
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-@click.option('--display', '-d', 'display', default=None, show_default=False, type=str, help='all|frontend')
+@click.option('--display', '-d', 'display', default=None,
+              show_default=False, type=str, help='all|frontend')
 @click.pass_context
 def storm_control(ctx, namespace, display):
     """ Show storm-control """
@@ -492,12 +547,15 @@ def storm_control(ctx, namespace, display):
                 get_storm_interface(intf, body)
             click.echo(tabulate(body, header, tablefmt="grid"))
 
+
 @storm_control.command('interface')
-@click.argument('interface', metavar='<interface>',required=True)
+@click.argument('interface', metavar='<interface>', required=True)
 def interface(interface, namespace, display):
     if multi_asic.is_multi_asic() and namespace not in multi_asic.get_namespace_list():
         ctx = click.get_current_context()
-        ctx.fail('-n/--namespace option required. provide namespace from list {}'.format(multi_asic.get_namespace_list()))
+        ctx.fail(
+            '-n/--namespace option required. provide namespace from list {}'.format(
+                multi_asic.get_namespace_list()))
     if interface:
         display_storm_interface(interface)
 
@@ -505,10 +563,11 @@ def interface(interface, namespace, display):
 # 'mgmt-vrf' group ("show mgmt-vrf ...")
 #
 
+
 @cli.group('mgmt-vrf', invoke_without_command=True)
 @click.argument('routes', required=False, type=click.Choice(["routes"]))
 @click.pass_context
-def mgmt_vrf(ctx,routes):
+def mgmt_vrf(ctx, routes):
     """Show management VRF attributes"""
 
     if is_mgmt_vrf_enabled(ctx) is False:
@@ -531,14 +590,17 @@ def mgmt_vrf(ctx,routes):
 # 'management_interface' group ("show management_interface ...")
 #
 
+
 @cli.group(name='management_interface', cls=clicommon.AliasedGroup)
 def management_interface():
     """Show management interface parameters"""
     pass
 
 # 'address' subcommand ("show management_interface address")
+
+
 @management_interface.command()
-def address ():
+def address():
     """Show IP address configured for management interface"""
 
     config_db = ConfigDBConnector()
@@ -548,15 +610,18 @@ def address ():
     mgmt_ip_data = config_db.get_table('MGMT_INTERFACE')
     for key in natsorted(list(mgmt_ip_data.keys())):
         click.echo("Management IP address = {0}".format(key[1]))
-        click.echo("Management Network Default Gateway = {0}".format(mgmt_ip_data[key]['gwaddr']))
+        click.echo(
+            "Management Network Default Gateway = {0}".format(
+                mgmt_ip_data[key]['gwaddr']))
 
 #
 # 'snmpagentaddress' group ("show snmpagentaddress ...")
 #
 
+
 @cli.group('snmpagentaddress', invoke_without_command=True)
 @click.pass_context
-def snmpagentaddress (ctx):
+def snmpagentaddress(ctx):
     """Show SNMP agent listening IP address configuration"""
     config_db = ConfigDBConnector()
     config_db.connect()
@@ -572,9 +637,10 @@ def snmpagentaddress (ctx):
 # 'snmptrap' group ("show snmptrap ...")
 #
 
+
 @cli.group('snmptrap', invoke_without_command=True)
 @click.pass_context
-def snmptrap (ctx):
+def snmptrap(ctx):
     """Show SNMP agent Trap server configuration"""
     config_db = ConfigDBConnector()
     config_db.connect()
@@ -584,12 +650,16 @@ def snmptrap (ctx):
     body = []
     for row in traptable:
         if row == "v1TrapDest":
-            ver=1
+            ver = 1
         elif row == "v2TrapDest":
-            ver=2
+            ver = 2
         else:
-            ver=3
-        body.append([ver, traptable[row]['DestIp'], traptable[row]['DestPort'], traptable[row]['vrf'], traptable[row]['Community']])
+            ver = 3
+        body.append([ver,
+                     traptable[row]['DestIp'],
+                     traptable[row]['DestPort'],
+                     traptable[row]['vrf'],
+                     traptable[row]['Community']])
     click.echo(tabulate(body, header))
 
 
@@ -603,6 +673,8 @@ def subinterfaces():
     pass
 
 # 'subinterfaces' subcommand ("show subinterfaces status")
+
+
 @subinterfaces.command()
 @click.argument('subinterfacename', type=str, required=False)
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
@@ -617,7 +689,8 @@ def status(subinterfacename, verbose):
             return
 
         if clicommon.get_interface_naming_mode() == "alias":
-            subinterfacename = iface_alias_converter.alias_to_name(subinterfacename)
+            subinterfacename = iface_alias_converter.alias_to_name(
+                subinterfacename)
 
         cmd += ['-i', str(subinterfacename)]
     else:
@@ -628,12 +701,15 @@ def status(subinterfacename, verbose):
 # 'pfc' group ("show pfc ...")
 #
 
+
 @cli.group(cls=clicommon.AliasedGroup)
 def pfc():
     """Show details of the priority-flow-control (pfc) """
     pass
 
 # 'counters' subcommand ("show interfaces pfccounters")
+
+
 @pfc.command()
 @multi_asic_util.multi_asic_click_options
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
@@ -645,6 +721,7 @@ def counters(namespace, display, verbose):
         cmd += ['-n', str(namespace)]
 
     run_command(cmd, display_cmd=verbose)
+
 
 @pfc.command()
 @click.argument('interface', type=click.STRING, required=False)
@@ -658,6 +735,7 @@ def priority(interface):
         cmd += [str(interface)]
 
     run_command(cmd)
+
 
 @pfc.command()
 @click.argument('interface', type=click.STRING, required=False)
@@ -673,10 +751,13 @@ def asymmetric(interface):
     run_command(cmd)
 
 # 'pfcwd' subcommand ("show pfcwd...")
+
+
 @cli.group(cls=clicommon.AliasedGroup)
 def pfcwd():
     """Show details of the pfc watchdog """
     pass
+
 
 @pfcwd.command()
 @multi_asic_util.multi_asic_click_options
@@ -689,6 +770,7 @@ def config(namespace, display, verbose):
         cmd += ['-n', str(namespace)]
 
     run_command(cmd, display_cmd=verbose)
+
 
 @pfcwd.command()
 @multi_asic_util.multi_asic_click_options
@@ -706,15 +788,18 @@ def stats(namespace, display, verbose):
 # 'watermark' group ("show watermark telemetry interval")
 #
 
+
 @cli.group(cls=clicommon.AliasedGroup)
 def watermark():
     """Show details of watermark """
     pass
 
+
 @watermark.group()
 def telemetry():
     """Show watermark telemetry info"""
     pass
+
 
 @telemetry.command('interval')
 def show_tm_interval():
@@ -733,6 +818,8 @@ def queue():
     pass
 
 # 'counters' subcommand ("show queue counters")
+
+
 @queue.command()
 @click.argument('interfacename', required=False)
 @multi_asic_util.multi_asic_click_options
@@ -770,12 +857,15 @@ def counters(interfacename, namespace, display, verbose, json, voq, nonzero):
 # 'watermarks' subgroup ("show queue watermarks ...")
 #
 
+
 @queue.group()
 def watermark():
     """Show user WM for queues"""
     pass
 
 # 'unicast' subcommand ("show queue watermarks unicast")
+
+
 @watermark.command('unicast')
 def wm_q_uni():
     """Show user WM for unicast queues"""
@@ -783,6 +873,8 @@ def wm_q_uni():
     run_command(command)
 
 # 'multicast' subcommand ("show queue watermarks multicast")
+
+
 @watermark.command('multicast')
 def wm_q_multi():
     """Show user WM for multicast queues"""
@@ -790,6 +882,8 @@ def wm_q_multi():
     run_command(command)
 
 # 'all' subcommand ("show queue watermarks all")
+
+
 @watermark.command('all')
 def wm_q_all():
     """Show user WM for all queues"""
@@ -800,12 +894,15 @@ def wm_q_all():
 # 'persistent-watermarks' subgroup ("show queue persistent-watermarks ...")
 #
 
+
 @queue.group(name='persistent-watermark')
 def persistent_watermark():
     """Show persistent WM for queues"""
     pass
 
 # 'unicast' subcommand ("show queue persistent-watermarks unicast")
+
+
 @persistent_watermark.command('unicast')
 def pwm_q_uni():
     """Show persistent WM for unicast queues"""
@@ -813,6 +910,8 @@ def pwm_q_uni():
     run_command(command)
 
 # 'multicast' subcommand ("show queue persistent-watermarks multicast")
+
+
 @persistent_watermark.command('multicast')
 def pwm_q_multi():
     """Show persistent WM for multicast queues"""
@@ -820,6 +919,8 @@ def pwm_q_multi():
     run_command(command)
 
 # 'all' subcommand ("show queue persistent-watermarks all")
+
+
 @persistent_watermark.command('all')
 def pwm_q_all():
     """Show persistent WM for all queues"""
@@ -830,14 +931,17 @@ def pwm_q_all():
 # 'priority-group' group ("show priority-group ...")
 #
 
+
 @cli.group(name='priority-group', cls=clicommon.AliasedGroup)
 def priority_group():
     """Show details of the PGs """
+
 
 @priority_group.group()
 def watermark():
     """Show priority-group user WM"""
     pass
+
 
 @watermark.command('headroom')
 def wm_pg_headroom():
@@ -845,16 +949,19 @@ def wm_pg_headroom():
     command = ['watermarkstat', '-t', 'pg_headroom']
     run_command(command)
 
+
 @watermark.command('shared')
 def wm_pg_shared():
     """Show user shared WM for pg"""
     command = ['watermarkstat', '-t', 'pg_shared']
     run_command(command)
 
+
 @priority_group.group()
 def drop():
     """Show priority-group"""
     pass
+
 
 @drop.command('counters')
 def pg_drop_counters():
@@ -862,16 +969,19 @@ def pg_drop_counters():
     command = ['pg-drop', '-c', 'show']
     run_command(command)
 
+
 @priority_group.group(name='persistent-watermark')
 def persistent_watermark():
     """Show priority-group persistent WM"""
     pass
+
 
 @persistent_watermark.command('headroom')
 def pwm_pg_headroom():
     """Show persistent headroom WM for pg"""
     command = ['watermarkstat', '-p', '-t', 'pg_headroom']
     run_command(command)
+
 
 @persistent_watermark.command('shared')
 def pwm_pg_shared():
@@ -888,11 +998,13 @@ def pwm_pg_shared():
 def buffer_pool():
     """Show details of the buffer pools"""
 
+
 @buffer_pool.command('watermark')
 def wm_buffer_pool():
     """Show user WM for buffer pools"""
-    command = ['watermarkstat', '-t' ,'buffer_pool']
+    command = ['watermarkstat', '-t', 'buffer_pool']
     run_command(command)
+
 
 @buffer_pool.command('persistent-watermark')
 def pwm_buffer_pool():
@@ -909,11 +1021,13 @@ def pwm_buffer_pool():
 def headroom_pool():
     """Show details of headroom pool"""
 
+
 @headroom_pool.command('watermark')
 def wm_headroom_pool():
     """Show user WM for headroom pool"""
     command = ['watermarkstat', '-t', 'headroom_pool']
     run_command(command)
+
 
 @headroom_pool.command('persistent-watermark')
 def pwm_headroom_pool():
@@ -959,6 +1073,7 @@ def mac(ctx, vlan, port, address, type, count, verbose):
 
     run_command(cmd, display_cmd=verbose)
 
+
 @mac.command('aging-time')
 @click.pass_context
 def aging_time(ctx):
@@ -974,12 +1089,15 @@ def aging_time(ctx):
     for key in keys:
         fdb_aging_time = app_db.get(app_db.APPL_DB, key, 'fdb_aging_time')
         if fdb_aging_time is not None:
-            click.echo("Aging time for {} is {} seconds".format(key.split(':')[-1], fdb_aging_time))
+            click.echo("Aging time for {} is {} seconds".format(
+                key.split(':')[-1], fdb_aging_time))
         else:
-            click.echo("Aging time not configured for the {}".format(key.split(':')[-1]))
+            click.echo("Aging time not configured for the {}".format(
+                key.split(':')[-1]))
 #
 # 'show route-map' command ("show route-map")
 #
+
 
 @cli.command('route-map')
 @click.argument('route_map_name', required=False)
@@ -996,6 +1114,8 @@ def route_map(route_map_name, verbose):
 #
 
 # This group houses IP (i.e., IPv4) commands and subgroups
+
+
 @cli.group(cls=clicommon.AliasedGroup)
 def ip():
     """Show IP (IPv4) commands"""
@@ -1025,6 +1145,7 @@ def interfaces(ctx, namespace, display):
 #
 # 'show ip interfaces loopback-action' command
 #
+
 
 @interfaces.command()
 def loopback_action():
@@ -1057,10 +1178,16 @@ def loopback_action():
 # 'route' subcommand ("show ip route")
 #
 
+
 @ip.command()
-@click.argument('args', metavar='[IPADDRESS] [vrf <vrf_name>] [...]', nargs=-1, required=False)
-@click.option('--display', '-d', 'display', default=None, show_default=False, type=str, help='all|frontend')
-@click.option('--namespace', '-n', 'namespace', default=None, type=str, show_default=False, help='Namespace name or all')
+@click.argument('args',
+                metavar='[IPADDRESS] [vrf <vrf_name>] [...]',
+                nargs=-1,
+                required=False)
+@click.option('--display', '-d', 'display', default=None,
+              show_default=False, type=str, help='all|frontend')
+@click.option('--namespace', '-n', 'namespace', default=None,
+              type=str, show_default=False, help='Namespace name or all')
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def route(args, namespace, display, verbose):
     """Show IP (IPv4) routing table"""
@@ -1070,6 +1197,7 @@ def route(args, namespace, display, verbose):
 #
 # 'prefix-list' subcommand ("show ip prefix-list")
 #
+
 
 @ip.command('prefix-list')
 @click.argument('prefix_list_name', required=False)
@@ -1093,6 +1221,8 @@ def protocol(verbose):
 #
 # 'fib' subcommand ("show ip fib")
 #
+
+
 @ip.command()
 @click.argument('ipaddress', required=False)
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
@@ -1118,6 +1248,7 @@ def ipv6():
 # 'prefix-list' subcommand ("show ipv6 prefix-list")
 #
 
+
 @ipv6.command('prefix-list')
 @click.argument('prefix_list_name', required=False)
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
@@ -1127,7 +1258,6 @@ def prefix_list(prefix_list_name, verbose):
     if prefix_list_name is not None:
         cmd[-1] += ' {}'.format(prefix_list_name)
     run_command(cmd, display_cmd=verbose)
-
 
 
 #
@@ -1155,9 +1285,14 @@ def interfaces(namespace, display):
 #
 
 @ipv6.command()
-@click.argument('args', metavar='[IPADDRESS] [vrf <vrf_name>] [...]', nargs=-1, required=False)
-@click.option('--display', '-d', 'display', default=None, show_default=False, type=str, help='all|frontend')
-@click.option('--namespace', '-n', 'namespace', default=None, type=str, show_default=False, help='Namespace name or all')
+@click.argument('args',
+                metavar='[IPADDRESS] [vrf <vrf_name>] [...]',
+                nargs=-1,
+                required=False)
+@click.option('--display', '-d', 'display', default=None,
+              show_default=False, type=str, help='all|frontend')
+@click.option('--namespace', '-n', 'namespace', default=None,
+              type=str, show_default=False, help='Namespace name or all')
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def route(args, namespace, display, verbose):
     """Show IPv6 routing table"""
@@ -1172,6 +1307,7 @@ def protocol(verbose):
     """Show IPv6 protocol information"""
     cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', "show ipv6 protocol"]
     run_command(cmd, display_cmd=verbose)
+
 
 #
 # Inserting BGP functionality into cli's show parse-chain.
@@ -1191,6 +1327,7 @@ elif routing_stack == "frr":
 #
 # 'link-local-mode' subcommand ("show ipv6 link-local-mode")
 #
+
 
 @ipv6.command('link-local-mode')
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
@@ -1234,6 +1371,8 @@ def link_local_mode(verbose):
 #
 # 'fib' subcommand ("show ipv6 fib")
 #
+
+
 @ipv6.command()
 @click.argument('ipaddress', required=False)
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
@@ -1248,12 +1387,16 @@ def fib(ipaddress, verbose):
 # 'lldp' group ("show lldp ...")
 #
 
+
 @cli.group(cls=clicommon.AliasedGroup)
 def lldp():
     """Show LLDP information"""
     pass
 
-# Default 'lldp' command (called if no subcommands or their aliases were passed)
+# Default 'lldp' command (called if no subcommands or their aliases were
+# passed)
+
+
 @lldp.command()
 @click.argument('interfacename', required=False)
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
@@ -1270,6 +1413,8 @@ def neighbors(interfacename, verbose):
     run_command(cmd, display_cmd=verbose)
 
 # 'table' subcommand ("show lldp table")
+
+
 @lldp.command()
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def table(verbose):
@@ -1314,6 +1459,7 @@ def logging(process, lines, follow, verbose):
 # 'version' command ("show version")
 #
 
+
 @cli.command()
 @click.option("--verbose", is_flag=True, help="Enable verbose output")
 def version(verbose):
@@ -1323,13 +1469,20 @@ def version(verbose):
     chassis_info = platform.get_chassis_info()
 
     sys_uptime_cmd = ["uptime"]
-    sys_uptime = subprocess.Popen(sys_uptime_cmd, text=True, stdout=subprocess.PIPE)
+    sys_uptime = subprocess.Popen(
+        sys_uptime_cmd,
+        text=True,
+        stdout=subprocess.PIPE)
 
     sys_date = datetime.now()
 
-    click.echo("\nSONiC Software Version: SONiC.{}".format(version_info['build_version']))
+    click.echo(
+        "\nSONiC Software Version: SONiC.{}".format(
+            version_info['build_version']))
     click.echo("SONiC OS Version: {}".format(version_info['sonic_os_version']))
-    click.echo("Distribution: Debian {}".format(version_info['debian_version']))
+    click.echo(
+        "Distribution: Debian {}".format(
+            version_info['debian_version']))
     click.echo("Kernel: {}".format(version_info['kernel_version']))
     click.echo("Build commit: {}".format(version_info['commit_id']))
     click.echo("Build date: {}".format(version_info['build_date']))
@@ -1344,13 +1497,15 @@ def version(verbose):
     click.echo("Uptime: {}".format(sys_uptime.stdout.read().strip()))
     click.echo("Date: {}".format(sys_date.strftime("%a %d %b %Y %X")))
     click.echo("\nDocker images:")
-    cmd = ['sudo', 'docker', 'images', '--format', "table {{.Repository}}\\t{{.Tag}}\\t{{.ID}}\\t{{.Size}}"]
+    cmd = ['sudo', 'docker', 'images', '--format',
+           "table {{.Repository}}\\t{{.Tag}}\\t{{.ID}}\\t{{.Size}}"]
     p = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE)
     click.echo(p.stdout.read())
 
 #
 # 'environment' command ("show environment")
 #
+
 
 @cli.command()
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
@@ -1377,24 +1532,43 @@ def users(verbose):
 #
 
 @cli.command()
-@click.option('--since', required=False, help="Collect logs and core files since given date")
-@click.option('-g', '--global-timeout', required=False, type=int, help="Global timeout in minutes. WARN: Dump might be incomplete if enforced")
-@click.option('-c', '--cmd-timeout', default=5, type=int, help="Individual command timeout in minutes. Default 5 mins")
+@click.option('--since', required=False,
+              help="Collect logs and core files since given date")
+@click.option('-g', '--global-timeout', required=False, type=int,
+              help="Global timeout in minutes. WARN: Dump might be incomplete if enforced")
+@click.option('-c', '--cmd-timeout', default=5, type=int,
+              help="Individual command timeout in minutes. Default 5 mins")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-@click.option('--allow-process-stop', is_flag=True, help="Dump additional data which may require system interruption")
+@click.option('--allow-process-stop', is_flag=True,
+              help="Dump additional data which may require system interruption")
 @click.option('--silent', is_flag=True, help="Run techsupport in silent mode")
 @click.option('--debug-dump', is_flag=True, help="Collect Debug Dump Output")
-@click.option('--redirect-stderr', '-r', is_flag=True, help="Redirect an intermediate errors to STDERR")
-def techsupport(since, global_timeout, cmd_timeout, verbose, allow_process_stop, silent, debug_dump, redirect_stderr):
+@click.option('--redirect-stderr', '-r', is_flag=True,
+              help="Redirect an intermediate errors to STDERR")
+def techsupport(
+        since,
+        global_timeout,
+        cmd_timeout,
+        verbose,
+        allow_process_stop,
+        silent,
+        debug_dump,
+        redirect_stderr):
     """Gather information for troubleshooting"""
     cmd = ["sudo"]
 
     if global_timeout:
-        cmd += ['timeout', '--kill-after={}s'.format(COMMAND_TIMEOUT), '-s', 'SIGTERM', '--foreground', '{}m'.format(global_timeout)]
+        cmd += ['timeout',
+                '--kill-after={}s'.format(COMMAND_TIMEOUT),
+                '-s',
+                'SIGTERM',
+                '--foreground',
+                '{}m'.format(global_timeout)]
 
     if silent:
         cmd += ["generate_dump"]
-        click.echo("Techsupport is running with silent option. This command might take a long time.")
+        click.echo(
+            "Techsupport is running with silent option. This command might take a long time.")
     else:
         cmd += ['generate_dump', '-v']
 
@@ -1441,11 +1615,13 @@ def all(verbose):
         for ns in ns_list:
             ns_config = get_config_json_by_namespace(ns)
             if bgp_util.is_bgp_feature_state_enabled(ns):
-                ns_config['bgpraw'] = bgp_util.run_bgp_show_command(bgpraw_cmd, ns, exit_on_fail=False)
+                ns_config['bgpraw'] = bgp_util.run_bgp_show_command(
+                    bgpraw_cmd, ns, exit_on_fail=False)
             output[ns] = ns_config
         click.echo(json.dumps(output, indent=4))
     else:
-        host_config['bgpraw'] = bgp_util.run_bgp_show_command(bgpraw_cmd, exit_on_fail=False)
+        host_config['bgpraw'] = bgp_util.run_bgp_show_command(
+            bgpraw_cmd, exit_on_fail=False)
         click.echo(json.dumps(output['localhost'], indent=4))
 
 
@@ -1475,7 +1651,13 @@ def ports(portname, verbose):
 # 'bgp' subcommand ("show runningconfiguration bgp")
 @runningconfiguration.command()
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-@click.option('--namespace', '-n', 'namespace', required=False, default=None, type=str, show_default=False,
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              required=False,
+              default=None,
+              type=str,
+              show_default=False,
               help='Option needed for multi-asic only: provide namespace name',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
 def bgp(namespace, verbose):
@@ -1489,7 +1671,9 @@ def bgp(namespace, verbose):
     if multi_asic.is_multi_asic():
         if namespace and namespace not in multi_asic.get_namespace_list():
             ctx = click.get_current_context()
-            ctx.fail("invalid value for -n/--namespace option. provide namespace from list {}".format(multi_asic.get_namespace_list()))
+            ctx.fail(
+                "invalid value for -n/--namespace option. provide namespace from list {}".format(
+                    multi_asic.get_namespace_list()))
     if not multi_asic.is_multi_asic() and namespace:
         ctx = click.get_current_context()
         ctx.fail("-n/--namespace is not available for single asic")
@@ -1501,10 +1685,12 @@ def bgp(namespace, verbose):
         if not namespace:
             ns_list = multi_asic.get_namespace_list()
             for ns in ns_list:
-                output += "\n------------Showing running config bgp on {}------------\n".format(ns)
+                output += "\n------------Showing running config bgp on {}------------\n".format(
+                    ns)
                 output += bgp_util.run_bgp_show_command(cmd, ns)
         else:
-            output += "\n------------Showing running config bgp on {}------------\n".format(namespace)
+            output += "\n------------Showing running config bgp on {}------------\n".format(
+                namespace)
             output += bgp_util.run_bgp_show_command(cmd, namespace)
     else:
         output += bgp_util.run_bgp_show_command(cmd)
@@ -1539,8 +1725,14 @@ def ntp(verbose):
             ntp_server = line.split(" ")[1]
             ntp_servers.append(ntp_server)
     ntp_dict['NTP Servers'] = ntp_servers
-    print(tabulate(ntp_dict, headers=list(ntp_dict.keys()), tablefmt="simple", stralign='left', missingval=""))
-
+    print(
+        tabulate(
+            ntp_dict,
+            headers=list(
+                ntp_dict.keys()),
+            tablefmt="simple",
+            stralign='left',
+            missingval=""))
 
 
 # 'snmp' subcommand ("show runningconfiguration snmp")
@@ -1550,13 +1742,13 @@ def ntp(verbose):
 def snmp(ctx, db):
     """Show SNMP running configuration"""
     if ctx.invoked_subcommand is None:
-       show_run_snmp(db.cfgdb)
+        show_run_snmp(db.cfgdb)
 
 
 # ("show runningconfiguration snmp community")
 @snmp.command('community')
-@click.option('--json', 'json_output', required=False, is_flag=True, type=click.BOOL,
-              help="Display the output in JSON format")
+@click.option('--json', 'json_output', required=False, is_flag=True,
+              type=click.BOOL, help="Display the output in JSON format")
 @clicommon.pass_db
 def community(db, json_output):
     """show SNMP running configuration community"""
@@ -1576,8 +1768,8 @@ def community(db, json_output):
 
 # ("show runningconfiguration snmp contact")
 @snmp.command('contact')
-@click.option('--json', 'json_output', required=False, is_flag=True, type=click.BOOL,
-              help="Display the output in JSON format")
+@click.option('--json', 'json_output', required=False, is_flag=True,
+              type=click.BOOL, help="Display the output in JSON format")
 @clicommon.pass_db
 def contact(db, json_output):
     """show SNMP running configuration contact"""
@@ -1604,8 +1796,8 @@ def contact(db, json_output):
 
 # ("show runningconfiguration snmp location")
 @snmp.command('location')
-@click.option('--json', 'json_output', required=False, is_flag=True, type=click.BOOL,
-              help="Display the output in JSON format")
+@click.option('--json', 'json_output', required=False, is_flag=True,
+              type=click.BOOL, help="Display the output in JSON format")
 @clicommon.pass_db
 def location(db, json_output):
     """show SNMP running configuration location"""
@@ -1631,27 +1823,44 @@ def location(db, json_output):
 
 # ("show runningconfiguration snmp user")
 @snmp.command('user')
-@click.option('--json', 'json_output', required=False, is_flag=True, type=click.BOOL,
-              help="Display the output in JSON format")
+@click.option('--json', 'json_output', required=False, is_flag=True,
+              type=click.BOOL, help="Display the output in JSON format")
 @clicommon.pass_db
 def users(db, json_output):
     """show SNMP running configuration user"""
     snmp_users = db.cfgdb.get_table('SNMP_USER')
-    snmp_user_header = ['User', "Permission Type", "Type", "Auth Type", "Auth Password", "Encryption Type",
-                        "Encryption Password"]
+    snmp_user_header = [
+        'User',
+        "Permission Type",
+        "Type",
+        "Auth Type",
+        "Auth Password",
+        "Encryption Type",
+        "Encryption Password"]
     snmp_user_body = []
     if json_output:
         click.echo(snmp_users)
     else:
         for snmp_user, snmp_user_value in snmp_users.items():
-            snmp_user_permissions_type = snmp_users[snmp_user].get('SNMP_USER_PERMISSION', 'Null')
-            snmp_user_auth_type = snmp_users[snmp_user].get('SNMP_USER_AUTH_TYPE', 'Null')
-            snmp_user_auth_password = snmp_users[snmp_user].get('SNMP_USER_AUTH_PASSWORD', 'Null')
-            snmp_user_encryption_type = snmp_users[snmp_user].get('SNMP_USER_ENCRYPTION_TYPE', 'Null')
-            snmp_user_encryption_password = snmp_users[snmp_user].get('SNMP_USER_ENCRYPTION_PASSWORD', 'Null')
-            snmp_user_type = snmp_users[snmp_user].get('SNMP_USER_TYPE', 'Null')
-            snmp_user_body.append([snmp_user, snmp_user_permissions_type, snmp_user_type, snmp_user_auth_type,
-                                   snmp_user_auth_password, snmp_user_encryption_type, snmp_user_encryption_password])
+            snmp_user_permissions_type = snmp_users[snmp_user].get(
+                'SNMP_USER_PERMISSION', 'Null')
+            snmp_user_auth_type = snmp_users[snmp_user].get(
+                'SNMP_USER_AUTH_TYPE', 'Null')
+            snmp_user_auth_password = snmp_users[snmp_user].get(
+                'SNMP_USER_AUTH_PASSWORD', 'Null')
+            snmp_user_encryption_type = snmp_users[snmp_user].get(
+                'SNMP_USER_ENCRYPTION_TYPE', 'Null')
+            snmp_user_encryption_password = snmp_users[snmp_user].get(
+                'SNMP_USER_ENCRYPTION_PASSWORD', 'Null')
+            snmp_user_type = snmp_users[snmp_user].get(
+                'SNMP_USER_TYPE', 'Null')
+            snmp_user_body.append([snmp_user,
+                                   snmp_user_permissions_type,
+                                   snmp_user_type,
+                                   snmp_user_auth_type,
+                                   snmp_user_auth_password,
+                                   snmp_user_encryption_type,
+                                   snmp_user_encryption_password])
         click.echo(tabulate(natsorted(snmp_user_body), snmp_user_header))
 
 
@@ -1667,12 +1876,19 @@ def show_run_snmp(db, ctx):
     snmp_contact_body = []
     snmp_comm_header = ["Community String", "Community Type"]
     snmp_comm_body = []
-    snmp_user_header = ['User', "Permission Type", "Type", "Auth Type", "Auth Password", "Encryption Type",
-                        "Encryption Password"]
+    snmp_user_header = [
+        'User',
+        "Permission Type",
+        "Type",
+        "Auth Type",
+        "Auth Password",
+        "Encryption Type",
+        "Encryption Password"]
     snmp_user_body = []
     try:
         if snmp_contact_location_table['LOCATION']:
-            snmp_location = [snmp_contact_location_table['LOCATION']['Location']]
+            snmp_location = [
+                snmp_contact_location_table['LOCATION']['Location']]
             snmp_location_body.append(snmp_location)
     except KeyError:
         snmp_contact_location_table['LOCATION'] = ''
@@ -1681,7 +1897,8 @@ def show_run_snmp(db, ctx):
     try:
         if snmp_contact_location_table['CONTACT']:
             snmp_contact = list(snmp_contact_location_table['CONTACT'].keys())
-            snmp_contact_email = [snmp_contact_location_table['CONTACT'][snmp_contact[0]]]
+            snmp_contact_email = [
+                snmp_contact_location_table['CONTACT'][snmp_contact[0]]]
             snmp_contact_body.append([snmp_contact[0], snmp_contact_email[0]])
     except KeyError:
         snmp_contact_location_table['CONTACT'] = ''
@@ -1695,14 +1912,24 @@ def show_run_snmp(db, ctx):
     click.echo(tabulate(natsorted(snmp_comm_body), snmp_comm_header))
     click.echo("\n")
     for snmp_user, snmp_user_value in snmp_users.items():
-        snmp_user_permissions_type = snmp_users[snmp_user].get('SNMP_USER_PERMISSION', 'Null')
-        snmp_user_auth_type = snmp_users[snmp_user].get('SNMP_USER_AUTH_TYPE', 'Null')
-        snmp_user_auth_password = snmp_users[snmp_user].get('SNMP_USER_AUTH_PASSWORD', 'Null')
-        snmp_user_encryption_type = snmp_users[snmp_user].get('SNMP_USER_ENCRYPTION_TYPE', 'Null')
-        snmp_user_encryption_password = snmp_users[snmp_user].get('SNMP_USER_ENCRYPTION_PASSWORD', 'Null')
+        snmp_user_permissions_type = snmp_users[snmp_user].get(
+            'SNMP_USER_PERMISSION', 'Null')
+        snmp_user_auth_type = snmp_users[snmp_user].get(
+            'SNMP_USER_AUTH_TYPE', 'Null')
+        snmp_user_auth_password = snmp_users[snmp_user].get(
+            'SNMP_USER_AUTH_PASSWORD', 'Null')
+        snmp_user_encryption_type = snmp_users[snmp_user].get(
+            'SNMP_USER_ENCRYPTION_TYPE', 'Null')
+        snmp_user_encryption_password = snmp_users[snmp_user].get(
+            'SNMP_USER_ENCRYPTION_PASSWORD', 'Null')
         snmp_user_type = snmp_users[snmp_user].get('SNMP_USER_TYPE', 'Null')
-        snmp_user_body.append([snmp_user, snmp_user_permissions_type, snmp_user_type, snmp_user_auth_type,
-                               snmp_user_auth_password, snmp_user_encryption_type, snmp_user_encryption_password])
+        snmp_user_body.append([snmp_user,
+                               snmp_user_permissions_type,
+                               snmp_user_type,
+                               snmp_user_auth_type,
+                               snmp_user_auth_password,
+                               snmp_user_encryption_type,
+                               snmp_user_encryption_password])
     click.echo(tabulate(natsorted(snmp_user_body), snmp_user_header))
 
 
@@ -1715,7 +1942,8 @@ def syslog(verbose):
     header = ["Syslog Servers"]
     body = []
 
-    re_syslog = re.compile(r'^action\(type=\"omfwd\" Target=\"{1}(.+?)\"{1}.*\)')
+    re_syslog = re.compile(
+        r'^action\(type=\"omfwd\" Target=\"{1}(.+?)\"{1}.*\)')
 
     try:
         with open("/etc/rsyslog.conf") as syslog_file:
@@ -1728,7 +1956,13 @@ def syslog(verbose):
         if re_match:
             body.append(["[{}]".format(re_match.group(1))])
 
-    click.echo(tabulate(body, header, tablefmt="simple", stralign="left", missingval=""))
+    click.echo(
+        tabulate(
+            body,
+            header,
+            tablefmt="simple",
+            stralign="left",
+            missingval=""))
 
 
 #
@@ -1755,17 +1989,21 @@ def bgp(verbose):
     result = stdout.rstrip()
     click.echo("Routing-Stack is: {}".format(result))
     if result == "quagga":
-        run_command(['sudo', 'docker', 'exec', 'bgp', 'cat', '/etc/quagga/bgpd.conf'], display_cmd=verbose)
+        run_command(['sudo', 'docker', 'exec', 'bgp', 'cat',
+                    '/etc/quagga/bgpd.conf'], display_cmd=verbose)
     elif result == "frr":
-        run_command(['sudo', 'docker', 'exec', 'bgp', 'cat', '/etc/frr/bgpd.conf'], display_cmd=verbose)
+        run_command(['sudo', 'docker', 'exec', 'bgp', 'cat',
+                    '/etc/frr/bgpd.conf'], display_cmd=verbose)
     elif result == "gobgp":
-        run_command(['sudo', 'docker', 'exec', 'bgp', 'cat', '/etc/gpbgp/bgpd.conf'], display_cmd=verbose)
+        run_command(['sudo', 'docker', 'exec', 'bgp', 'cat',
+                    '/etc/gpbgp/bgpd.conf'], display_cmd=verbose)
     else:
         click.echo("Unidentified routing-stack")
 
 #
 # 'ntp' command ("show ntp")
 #
+
 
 @cli.command()
 @click.pass_context
@@ -1776,15 +2014,23 @@ def ntp(ctx, verbose):
     ntpstat_cmd = ["ntpstat"]
     ntpcmd = ["ntpq", "-p", "-n"]
     if is_mgmt_vrf_enabled(ctx) is True:
-        #ManagementVRF is enabled. Call ntpq using "ip vrf exec" or cgexec based on linux version
-        os_info =  os.uname()
+        # ManagementVRF is enabled. Call ntpq using "ip vrf exec" or cgexec
+        # based on linux version
+        os_info = os.uname()
         release = os_info[2].split('-')
         if parse_version(release[0]) > parse_version("4.9.0"):
             ntpstat_cmd = ['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'ntpstat']
             ntpcmd = ['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'ntpq', '-p', '-n']
         else:
             ntpstat_cmd = ['sudo', 'cgexec', '-g', 'l3mdev:mgmt', 'ntpstat']
-            ntpcmd = ['sudo', 'cgexec', '-g', 'l3mdev:mgmt', 'ntpq', '-p', '-n']
+            ntpcmd = [
+                'sudo',
+                'cgexec',
+                '-g',
+                'l3mdev:mgmt',
+                'ntpq',
+                '-p',
+                '-n']
 
     run_command(ntpstat_cmd, display_cmd=verbose)
     run_command(ntpcmd, display_cmd=verbose)
@@ -1792,6 +2038,7 @@ def ntp(ctx, verbose):
 #
 # 'uptime' command ("show uptime")
 #
+
 
 @cli.command()
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
@@ -1842,14 +2089,15 @@ def services():
     while True:
         line = proc.stdout.readline()
         if line != '':
-                print(line.rstrip()+'\t'+"docker")
-                print("---------------------------")
-                cmd0 = ["sudo", "docker", "exec", line.rstrip(), "ps", "aux"]
-                cmd1 = ["sed", '$d']
-                _, stdout = getstatusoutput_noshell_pipe(cmd0, cmd1)
-                print(stdout)
+            print(line.rstrip() + '\t' + "docker")
+            print("---------------------------")
+            cmd0 = ["sudo", "docker", "exec", line.rstrip(), "ps", "aux"]
+            cmd1 = ["sed", '$d']
+            _, stdout = getstatusoutput_noshell_pipe(cmd0, cmd1)
+            print(stdout)
         else:
-                break
+            break
+
 
 @cli.command()
 @clicommon.pass_db
@@ -1902,7 +2150,8 @@ def tacacs():
     if 'global' in data:
         tacplus['global'].update(data['global'])
     for key in tacplus['global']:
-        output += ('TACPLUS global %s %s\n' % (str(key), str(tacplus['global'][key])))
+        output += ('TACPLUS global %s %s\n' %
+                   (str(key), str(tacplus['global'][key])))
 
     data = config_db.get_table('TACPLUS_SERVER')
     if data != {}:
@@ -1912,6 +2161,7 @@ def tacacs():
             for key in entry:
                 output += ('               %s %s\n' % (key, str(entry[key])))
     click.echo(output)
+
 
 @cli.command()
 @clicommon.pass_db
@@ -1932,7 +2182,8 @@ def radius(db):
     if 'global' in data:
         radius['global'].update(data['global'])
     for key in radius['global']:
-        output += ('RADIUS global %s %s\n' % (str(key), str(radius['global'][key])))
+        output += ('RADIUS global %s %s\n' %
+                   (str(key), str(radius['global'][key])))
 
     data = config_db.get_table('RADIUS_SERVER')
     if data != {}:
@@ -1948,16 +2199,18 @@ def radius(db):
     if radius['global'].get('statistics', False) and (data != {}):
         for row in data:
             exists = counters_db.exists(counters_db.COUNTERS_DB,
-                                     'RADIUS_SERVER_STATS:{}'.format(row))
+                                        'RADIUS_SERVER_STATS:{}'.format(row))
             if not exists:
                 continue
 
-            counter_entry = counters_db.get_all(counters_db.COUNTERS_DB,
-                    'RADIUS_SERVER_STATS:{}'.format(row))
+            counter_entry = counters_db.get_all(
+                counters_db.COUNTERS_DB,
+                'RADIUS_SERVER_STATS:{}'.format(row))
             output += ('\nStatistics for RADIUS_SERVER address %s\n' % row)
             for key in counter_entry:
                 if counter_entry[key] != "0":
-                    output += ('               %s %s\n' % (key, str(counter_entry[key])))
+                    output += ('               %s %s\n' %
+                               (key, str(counter_entry[key])))
     try:
         counters_db.close(counters_db.COUNTERS_DB)
     except Exception as e:
@@ -1968,6 +2221,8 @@ def radius(db):
 #
 # 'mirror_session' command  ("show mirror_session ...")
 #
+
+
 @cli.command('mirror_session')
 @click.argument('session_name', required=False)
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
@@ -2031,6 +2286,8 @@ def mmu():
 #
 # 'buffer' command ("show buffer")
 #
+
+
 @cli.group(cls=clicommon.AliasedGroup)
 def buffer():
     """Show buffer information"""
@@ -2039,6 +2296,8 @@ def buffer():
 #
 # 'configuration' command ("show buffer command")
 #
+
+
 @buffer.command()
 def configuration():
     """show buffer configuration"""
@@ -2048,6 +2307,8 @@ def configuration():
 #
 # 'information' command ("show buffer state")
 #
+
+
 @buffer.command()
 def information():
     """show buffer information"""
@@ -2059,7 +2320,8 @@ def information():
 # 'line' command ("show line")
 #
 @cli.command('line')
-@click.option('--brief', '-b', metavar='<brief_mode>', required=False, is_flag=True)
+@click.option('--brief', '-b', metavar='<brief_mode>',
+              required=False, is_flag=True)
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def line(brief, verbose):
     """Show all console lines and their info include available ttyUSB devices unless specified brief mode"""
@@ -2081,7 +2343,7 @@ def ztp(status, verbose):
 
     cmd = ['ztp', 'status']
     if verbose:
-       cmd += ["--verbose"]
+        cmd += ["--verbose"]
     run_command(cmd, display_cmd=verbose)
 
 
@@ -2094,16 +2356,29 @@ def bfd():
     pass
 
 # 'summary' subcommand ("show bfd summary")
+
+
 @bfd.command()
 @clicommon.pass_db
 def summary(db):
     """Show bfd session information"""
-    bfd_headers = ["Peer Addr", "Interface", "Vrf", "State", "Type", "Local Addr",
-                "TX Interval", "RX Interval", "Multiplier", "Multihop", "Local Discriminator"]
+    bfd_headers = [
+        "Peer Addr",
+        "Interface",
+        "Vrf",
+        "State",
+        "Type",
+        "Local Addr",
+        "TX Interval",
+        "RX Interval",
+        "Multiplier",
+        "Multihop",
+        "Local Discriminator"]
 
     bfd_keys = db.db.keys(db.db.STATE_DB, "BFD_SESSION_TABLE|*")
 
-    click.echo("Total number of BFD sessions: {}".format(0 if bfd_keys is None else len(bfd_keys)))
+    click.echo("Total number of BFD sessions: {}".format(
+        0 if bfd_keys is None else len(bfd_keys)))
 
     bfd_body = []
     if bfd_keys is not None:
@@ -2111,9 +2386,18 @@ def summary(db):
             key_values = key.split('|')
             values = db.db.get_all(db.db.STATE_DB, key)
             if "local_discriminator" not in values.keys():
-                values["local_discriminator"] = "NA"            
-            bfd_body.append([key_values[3], key_values[2], key_values[1], values["state"], values["type"], values["local_addr"],
-                                values["tx_interval"], values["rx_interval"], values["multiplier"], values["multihop"], values["local_discriminator"]])
+                values["local_discriminator"] = "NA"
+            bfd_body.append([key_values[3],
+                             key_values[2],
+                             key_values[1],
+                             values["state"],
+                             values["type"],
+                             values["local_addr"],
+                             values["tx_interval"],
+                             values["rx_interval"],
+                             values["multiplier"],
+                             values["multihop"],
+                             values["local_discriminator"]])
 
     click.echo(tabulate(bfd_body, bfd_headers))
 
@@ -2124,17 +2408,31 @@ def summary(db):
 @click.argument('peer_ip', required=True)
 def peer(db, peer_ip):
     """Show bfd session information for BFD peer"""
-    bfd_headers = ["Peer Addr", "Interface", "Vrf", "State", "Type", "Local Addr",
-                "TX Interval", "RX Interval", "Multiplier", "Multihop", "Local Discriminator"]
+    bfd_headers = [
+        "Peer Addr",
+        "Interface",
+        "Vrf",
+        "State",
+        "Type",
+        "Local Addr",
+        "TX Interval",
+        "RX Interval",
+        "Multiplier",
+        "Multihop",
+        "Local Discriminator"]
 
-    bfd_keys = db.db.keys(db.db.STATE_DB, "BFD_SESSION_TABLE|*|{}".format(peer_ip))
+    bfd_keys = db.db.keys(
+        db.db.STATE_DB,
+        "BFD_SESSION_TABLE|*|{}".format(peer_ip))
     delimiter = db.db.get_db_separator(db.db.STATE_DB)
 
     if bfd_keys is None or len(bfd_keys) == 0:
         click.echo("No BFD sessions found for peer IP {}".format(peer_ip))
         return
 
-    click.echo("Total number of BFD sessions for peer IP {}: {}".format(peer_ip, len(bfd_keys)))
+    click.echo(
+        "Total number of BFD sessions for peer IP {}: {}".format(
+            peer_ip, len(bfd_keys)))
 
     bfd_body = []
     if bfd_keys is not None:
@@ -2142,9 +2440,18 @@ def peer(db, peer_ip):
             key_values = key.split(delimiter)
             values = db.db.get_all(db.db.STATE_DB, key)
             if "local_discriminator" not in values.keys():
-                values["local_discriminator"] = "NA"            
-            bfd_body.append([key_values[3], key_values[2], key_values[1], values.get("state"), values.get("type"), values.get("local_addr"),
-                                values.get("tx_interval"), values.get("rx_interval"), values.get("multiplier"), values.get("multihop"), values.get("local_discriminator")])
+                values["local_discriminator"] = "NA"
+            bfd_body.append([key_values[3],
+                             key_values[2],
+                             key_values[1],
+                             values.get("state"),
+                             values.get("type"),
+                             values.get("local_addr"),
+                             values.get("tx_interval"),
+                             values.get("rx_interval"),
+                             values.get("multiplier"),
+                             values.get("multihop"),
+                             values.get("local_discriminator")])
 
     click.echo(tabulate(bfd_body, bfd_headers))
 
@@ -2169,8 +2476,13 @@ def asic_sdk_health_event():
 
 @asic_sdk_health_event.command()
 @clicommon.pass_db
-@click.option('--namespace', '-n', 'namespace', default=None, show_default=True,
-              type=click.Choice(multi_asic_util.multi_asic_ns_choices()), help='Namespace name or all')
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              show_default=True,
+              type=click.Choice(multi_asic_util.multi_asic_ns_choices()),
+              help='Namespace name or all')
 def suppress_configuration(db, namespace):
     """ Show the suppress configuration """
     if multi_asic.get_num_asics() > 1:
@@ -2190,16 +2502,20 @@ def suppress_configuration(db, namespace):
             continue
 
         state_db = db.db_clients[ns]
-        if "true" != state_db.get(db.db.STATE_DB, "SWITCH_CAPABILITY|switch", "ASIC_SDK_HEALTH_EVENT"):
+        if "true" != state_db.get(
+            db.db.STATE_DB,
+            "SWITCH_CAPABILITY|switch",
+                "ASIC_SDK_HEALTH_EVENT"):
             continue
 
         supported = True
 
         if masic:
-            click.echo("{}:".format(ns));
+            click.echo("{}:".format(ns))
 
         config_db = db.cfgdb_clients[ns]
-        suppressSeverities = config_db.get_table('SUPPRESS_ASIC_SDK_HEALTH_EVENT')
+        suppressSeverities = config_db.get_table(
+            'SUPPRESS_ASIC_SDK_HEALTH_EVENT')
 
         for severity in natsorted(suppressSeverities):
             body.append([severity,
@@ -2215,8 +2531,13 @@ def suppress_configuration(db, namespace):
 
 @asic_sdk_health_event.command()
 @clicommon.pass_db
-@click.option('--namespace', '-n', 'namespace', default=None, show_default=True,
-              type=click.Choice(multi_asic_util.multi_asic_ns_choices()), help='Namespace name or all')
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              show_default=True,
+              type=click.Choice(multi_asic_util.multi_asic_ns_choices()),
+              help='Namespace name or all')
 def received(db, namespace):
     """ Show the received ASIC/SDK health event """
     if multi_asic.get_num_asics() > 1:
@@ -2236,19 +2557,24 @@ def received(db, namespace):
             continue
 
         state_db = db.db_clients[ns]
-        if "true" != state_db.get(db.db.STATE_DB, "SWITCH_CAPABILITY|switch", "ASIC_SDK_HEALTH_EVENT"):
+        if "true" != state_db.get(
+            db.db.STATE_DB,
+            "SWITCH_CAPABILITY|switch",
+                "ASIC_SDK_HEALTH_EVENT"):
             continue
 
         supported = True
 
         if masic:
-            click.echo("{}:".format(ns));
+            click.echo("{}:".format(ns))
 
-        event_keys = state_db.keys(db.db.STATE_DB, "ASIC_SDK_HEALTH_EVENT_TABLE|*")
+        event_keys = state_db.keys(
+            db.db.STATE_DB, "ASIC_SDK_HEALTH_EVENT_TABLE|*")
 
         for key in natsorted(event_keys):
             event = state_db.get_all(state_db.STATE_DB, key)
-            body.append([key.split('|')[1], event.get('severity'), event.get('category'), event.get('description')])
+            body.append([key.split('|')[1], event.get('severity'),
+                        event.get('category'), event.get('description')])
 
         click.echo(tabulate(body, header))
 

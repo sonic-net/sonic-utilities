@@ -62,50 +62,32 @@ class TestBgp:
 
     # ---------- SHOW BGP ---------- #
 
-    @pytest.mark.parametrize(
-        "cfgdb,output", [
-            pytest.param(
-                os.path.join(mock_config_path, "empty"),
-                {
-                    "plain": assert_show_output.show_device_global_empty,
-                    "json": assert_show_output.show_device_global_empty
-                },
-                id="empty"
-            ),
-            pytest.param(
-                os.path.join(mock_config_path, "all_disabled"),
-                {
-                    "plain": assert_show_output.show_device_global_all_disabled,
-                    "json": assert_show_output.show_device_global_all_disabled_json
-                },
-                id="all-disabled"
-            ),
-            pytest.param(
-                os.path.join(mock_config_path, "all_enabled"),
-                {
-                    "plain": assert_show_output.show_device_global_all_enabled,
-                    "json": assert_show_output.show_device_global_all_enabled_json
-                },
-                id="all-enabled"
-            ),
-            pytest.param(
-                os.path.join(mock_config_path, "tsa_enabled"),
-                {
-                    "plain": assert_show_output.show_device_global_tsa_enabled,
-                    "json": assert_show_output.show_device_global_tsa_enabled_json
-                },
-                id="tsa-enabled"
-            ),
-            pytest.param(
-                os.path.join(mock_config_path, "wcmp_enabled"),
-                {
-                    "plain": assert_show_output.show_device_global_wcmp_enabled,
-                    "json": assert_show_output.show_device_global_wcmp_enabled_json
-                },
-                id="w-ecmp-enabled"
-            )
-        ]
-    )
+    @pytest.mark.parametrize("cfgdb,output",
+                             [pytest.param(os.path.join(mock_config_path,
+                                                        "empty"),
+                                           {"plain": assert_show_output.show_device_global_empty,
+                                            "json": assert_show_output.show_device_global_empty},
+                                           id="empty"),
+                                 pytest.param(os.path.join(mock_config_path,
+                                                           "all_disabled"),
+                                              {"plain": assert_show_output.show_device_global_all_disabled,
+                                               "json": assert_show_output.show_device_global_all_disabled_json},
+                                              id="all-disabled"),
+                                 pytest.param(os.path.join(mock_config_path,
+                                                           "all_enabled"),
+                                              {"plain": assert_show_output.show_device_global_all_enabled,
+                                               "json": assert_show_output.show_device_global_all_enabled_json},
+                                              id="all-enabled"),
+                                 pytest.param(os.path.join(mock_config_path,
+                                                           "tsa_enabled"),
+                                              {"plain": assert_show_output.show_device_global_tsa_enabled,
+                                               "json": assert_show_output.show_device_global_tsa_enabled_json},
+                                              id="tsa-enabled"),
+                                 pytest.param(os.path.join(mock_config_path,
+                                                           "wcmp_enabled"),
+                                              {"plain": assert_show_output.show_device_global_wcmp_enabled,
+                                               "json": assert_show_output.show_device_global_wcmp_enabled_json},
+                                              id="w-ecmp-enabled")])
     @pytest.mark.parametrize(
         "format", [
             "plain",

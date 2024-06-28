@@ -2,6 +2,7 @@ import click
 import tabulate
 import json
 import utilities_common.cli as clicommon
+from sonic_py_common import multi_asic
 
 from utilities_common.bgp import (
     CFG_BGP_DEVICE_GLOBAL,
@@ -11,7 +12,7 @@ from utilities_common.bgp import (
 
 
 #
-# BGP helpers ---------------------------------------------------------------------------------------------------------
+# BGP helpers ------------------------------------------------------------
 #
 
 
@@ -33,7 +34,7 @@ def format_attr_value(entry, attr):
 
 
 #
-# BGP CLI -------------------------------------------------------------------------------------------------------------
+# BGP CLI ----------------------------------------------------------------
 #
 
 
@@ -46,83 +47,94 @@ def BGP():
 
     pass
 
-
-#
-# BGP device-global ---------------------------------------------------------------------------------------------------
-#
+# BGP device-global
 
 
-@BGP.command(
-    name="device-global"
-)
-@click.option(
-    "-j", "--json", "json_format",
-    help="Display in JSON format",
-    is_flag=True,
-    default=False
-)
+@BGP.command(name="device-global")
+@click.option("-j", "--json", "json_format",
+              help="Display in JSON format",
+              is_flag=True,
+              default=False)
 @clicommon.pass_db
 @click.pass_context
 def DEVICE_GLOBAL(ctx, db, json_format):
     """ Show BGP device global state """
 
-    header = [
-        "TSA",
-        "W-ECMP",
-    ]
     body = []
+    results = {}
 
-    table = db.cfgdb.get_table(CFG_BGP_DEVICE_GLOBAL)
-    entry = table.get(BGP_DEVICE_GLOBAL_KEY, {})
+    if multi_asic.is_multi_asic():
+        masic = True
+        header = ["ASIC ID", "TSA", "W-ECMP"]
+        namespaces = multi_asic.get_namespace_list()
+    else:
+        masic = False
+        header = ["TSA", "W-ECMP"]
+        namespaces = [multi_asic.DEFAULT_NAMESPACE]
 
-    if not entry:
-        click.echo("No configuration is present in CONFIG DB")
-        ctx.exit(0)
+    for ns in namespaces:
+        config_db = db.cfgdb_clients[ns]
+
+        table = config_db.get_table(CFG_BGP_DEVICE_GLOBAL)
+        entry = table.get(BGP_DEVICE_GLOBAL_KEY, {})
+
+        if not entry:
+            click.echo("No configuration is present in CONFIG DB")
+            ctx.exit(0)
+
+        if json_format:
+            json_output = {
+                "tsa": to_str(
+                    format_attr_value(
+                        entry,
+                        {
+                            'name': 'tsa_enabled',
+                            'is-leaf-list': False
+                        }
+                    )
+                ),
+                "w-ecmp": to_str(
+                    format_attr_value(
+                        entry,
+                        {
+                            'name': 'wcmp_enabled',
+                            'is-leaf-list': False
+                        }
+                    )
+                )
+            }
+
+            if masic:
+                results[ns] = json_output
+            else:
+                results = json_output
+        else:
+            row = [
+                to_str(
+                    format_attr_value(
+                        entry,
+                        {
+                            'name': 'tsa_enabled',
+                            'is-leaf-list': False
+                        }
+                    )
+                ),
+                to_str(
+                    format_attr_value(
+                        entry,
+                        {
+                            'name': 'wcmp_enabled',
+                            'is-leaf-list': False
+                        }
+                    )
+                )
+            ]
+            if masic:
+                row.insert(0, ns)
+
+            body.append(row)
 
     if json_format:
-        json_dict = {
-            "tsa": to_str(
-                format_attr_value(
-                    entry,
-                    {
-                        'name': 'tsa_enabled',
-                        'is-leaf-list': False
-                    }
-                )
-            ),
-            "w-ecmp": to_str(
-                format_attr_value(
-                    entry,
-                    {
-                        'name': 'wcmp_enabled',
-                        'is-leaf-list': False
-                    }
-                )
-            )
-        }
-        click.echo(json.dumps(json_dict, indent=4))
-        ctx.exit(0)
-
-    row = [
-        to_str(
-            format_attr_value(
-                entry,
-                {
-                    'name': 'tsa_enabled',
-                    'is-leaf-list': False
-                }
-            )
-        ),
-        to_str(
-            format_attr_value(
-                entry,
-                {
-                    'name': 'wcmp_enabled',
-                    'is-leaf-list': False
-                }
-            )
-        )
-    ]
-    body.append(row)
-
-    click.echo(tabulate.tabulate(body, header))
+        click.echo(json.dumps(results, indent=4))
+    else:
+        click.echo(tabulate.tabulate(body, headers=header))

@@ -2642,12 +2642,23 @@ This command displays BGP device global configuration.
 - Options:
   - _-j,--json_: display in JSON format
 
+Single ASIC
 - Example:
   ```bash
   admin@sonic:~$ show bgp device-global
   TSA      W-ECMP
   -------  -------
   enabled  enabled
+  ```
+
+Multiple ASICs
+- Example:
+  ```bash
+  admin@sonic:~$ show bgp device-global
+  ASIC ID    W-ECMP
+  ---------  --------
+  asic0      disabled
+  asic1      enabled
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#bgp)
@@ -13712,3 +13723,33 @@ Sending 3 magic packet to 11:33:55:77:99:bb via interface Vlan1000
 ```
 
 For the 4th example, it specifise 2 target MAC addresses and `count` is 3. So it'll send 6 magic packets in total.
+
+# W-ECMP
+
+**show w-ecmp status**
+
+This command is used to display the status of w-ecmp on single and multi-asics. This command is useful to indicate whether or not route maps are added on each asic.
+
+- Usage:
+  ```
+  show w-ecmp status
+  ```
+
+Single ASIC
+- Example:
+  ```
+  admin@sonic:~$ show w-ecmp status
+  W-ECMP
+  --------
+  enabled
+  ```
+
+Multi ASICs
+- Example:
+  ```
+  admin@sonic:~$ show w-ecmp status
+  ASIC ID    W-ECMP
+  ---------  --------
+  asic0      enabled
+  asic1      disabled
+  ```
