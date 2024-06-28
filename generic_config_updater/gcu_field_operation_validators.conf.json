@@ -20,8 +20,8 @@
                 "spc1": [ "ACS-MSN2700", "ACS-MSN2740", "ACS-MSN2100", "ACS-MSN2410", "ACS-MSN2010", "Mellanox-SN2700", "Mellanox-SN2700-C28D8", "Mellanox-SN2700-D40C8S8", "Mellanox-SN2700-D44C10", "Mellanox-SN2700-D48C8",
                           "ACS-MSN2700-A1", "Mellanox-SN2700-A1", "Mellanox-SN2700-A1-C28D8", "Mellanox-SN2700-A1-D40C8S8", "Mellanox-SN2700-A1-D44C10", "Mellanox-SN2700-A1-D48C8" ],
                 "spc2": [ "ACS-MSN3800", "Mellanox-SN3800-D112C8", "ACS-MSN3420", "ACS-MSN3700C", "ACS-MSN3700", "Mellanox-SN3800-C64", "Mellanox-SN3800-D100C12S2", "Mellanox-SN3800-D24C52", "Mellanox-SN3800-D28C49S1", "Mellanox-SN3800-D28C50" ],
-                "spc3": [ "ACS-MSN4700", "ACS-MSN4600", "ACS-MSN4600C", "ACS-MSN4410", "Mellanox-SN4600C-D112C8", "Mellanox-SN4600C-C64", "Mellanox-SN4700-O8C48", "Mellanox-SN4600C-D100C12S2", "Mellanox-SN4600C-D48C40",
-                          "Mellanox-SN4700-A96C8V8", "Mellanox-SN4700-C128", "Mellanox-SN4700-O28", "Mellanox-SN4700-O8V48", "Mellanox-SN4700-V48C32"],
+                "spc3": [ "ACS-MSN4700", "ACS-MSN4600", "ACS-MSN4600C", "ACS-MSN4410", "ACS-SN4280", "Mellanox-SN4600C-D112C8", "Mellanox-SN4600C-C64", "Mellanox-SN4700-O8C48", "Mellanox-SN4600C-D100C12S2", "Mellanox-SN4600C-D48C40",
+                          "Mellanox-SN4700-A96C8V8", "Mellanox-SN4700-C128", "Mellanox-SN4700-O28", "Mellanox-SN4700-O8V48", "Mellanox-SN4700-V48C32", "Mellanox-SN4280-O28"],
                 "spc4": [ "ACS-SN5600", "Mellanox-SN5600-O128", "Mellanox-SN5600-V256", "ACS-SN5400" ]
             },
             "broadcom_asics": {
