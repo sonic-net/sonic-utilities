@@ -1,14 +1,15 @@
 import sys
 import os
+from unittest import mock
 
 import click
 from click.testing import CliRunner
-
 from .mock_tables import dbconnector
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
 scripts_path = os.path.join(modules_path, "scripts")
+show_path = os.path.join(modules_path, "show")
 sys.path.insert(0, modules_path)
 
 class MockerConfig(object):
@@ -305,6 +306,121 @@ Name         Status    Type
 psu.voltage  Ignored   Device
 """
         assert result.output == expected
+
+    def test_health_summary_all(self):
+        conn = dbconnector.SonicV2Connector()
+        conn.connect(conn.CHASSIS_STATE_DB)
+        conn.set(conn.CHASSIS_STATE_DB, 'SYSTEM_HEALTH_INFO|DPU0',
+                 "container_checker", "container_checker is not Status ok")
+        conn.set(conn.CHASSIS_STATE_DB, 'SYSTEM_HEALTH_INFO|DPU0',
+                 "summary", "Not OK")
+        with mock.patch("show.system_health.SonicV2Connector", return_value=conn):
+            runner = CliRunner()
+            result = runner.invoke(show.cli.commands["system-health"].commands["summary"], ["all"])
+            click.echo(result.output)
+
+    def test_health_summary_switch(self):
+        conn = dbconnector.SonicV2Connector()
+        conn.connect(conn.CHASSIS_STATE_DB)
+        conn.set(conn.CHASSIS_STATE_DB, 'SYSTEM_HEALTH_INFO|DPU0',
+                 "container_checker", "container_checker is not Status ok")
+        conn.set(conn.CHASSIS_STATE_DB, 'SYSTEM_HEALTH_INFO|DPU0',
+                 "summary", "Not OK")
+        with mock.patch("show.system_health.SonicV2Connector", return_value=conn):
+            runner = CliRunner()
+            result = runner.invoke(show.cli.commands["system-health"].commands["summary"], ["SWITCH"])
+            click.echo(result.output)
+
+    def test_health_summary_dpu(self):
+        conn = dbconnector.SonicV2Connector()
+        conn.connect(conn.CHASSIS_STATE_DB)
+        conn.set(conn.CHASSIS_STATE_DB, 'SYSTEM_HEALTH_INFO|DPU0',
+                 "container_checker", "container_checker is not Status ok")
+        conn.set(conn.CHASSIS_STATE_DB, 'SYSTEM_HEALTH_INFO|DPU0',
+                 "summary", "Not OK")
+        with mock.patch("show.system_health.SonicV2Connector", return_value=conn):
+            runner = CliRunner()
+            result = runner.invoke(show.cli.commands["system-health"].commands["summary"], ["DPU0"])
+            click.echo(result.output)
+
+    def test_health_monitorlist_all(self):
+        conn = dbconnector.SonicV2Connector()
+        conn.connect(conn.CHASSIS_STATE_DB)
+        conn.set(conn.CHASSIS_STATE_DB, 'SYSTEM_HEALTH_INFO|DPU0',
+                 "container_checker", "container_checker is not Status ok")
+        conn.set(conn.CHASSIS_STATE_DB, 'SYSTEM_HEALTH_INFO|DPU0',
+                 "summary", "Not OK")
+        with mock.patch("show.system_health.SonicV2Connector", return_value=conn):
+            runner = CliRunner()
+            result = runner.invoke(show.cli.commands["system-health"].commands["monitor-list"], ["all"])
+            click.echo(result.output)
+
+    def test_health_monitorlist_switch(self):
+        conn = dbconnector.SonicV2Connector()
+        conn.connect(conn.CHASSIS_STATE_DB)
+        conn.set(conn.CHASSIS_STATE_DB, 'SYSTEM_HEALTH_INFO|DPU0',
+                 "container_checker", "container_checker is not Status ok")
+        conn.set(conn.CHASSIS_STATE_DB, 'SYSTEM_HEALTH_INFO|DPU0',
+                 "summary", "Not OK")
+        with mock.patch("show.system_health.SonicV2Connector", return_value=conn):
+            runner = CliRunner()
+            result = runner.invoke(show.cli.commands["system-health"].commands["monitor-list"], ["SWITCH"])
+            click.echo(result.output)
+
+    def test_health_monitorlist_dpu(self):
+        conn = dbconnector.SonicV2Connector()
+        conn.connect(conn.CHASSIS_STATE_DB)
+        conn.set(conn.CHASSIS_STATE_DB, 'SYSTEM_HEALTH_INFO|DPU0',
+                 "container_checker", "container_checker is not Status ok")
+        conn.set(conn.CHASSIS_STATE_DB, 'SYSTEM_HEALTH_INFO|DPU0',
+                 "summary", "Not OK")
+        with mock.patch("show.system_health.SonicV2Connector", return_value=conn):
+            runner = CliRunner()
+            result = runner.invoke(show.cli.commands["system-health"].commands["monitor-list"], ["DPU0"])
+            click.echo(result.output)
+
+    def test_health_detail_all(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["system-health"].commands["detail"], ["all"])
+        click.echo(result.output)
+
+    def test_health_detail_switch(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["system-health"].commands["detail"], ["SWITCH"])
+        click.echo(result.output)
+
+    def test_health_detail_dpu(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["system-health"].commands["detail"], ["DPU0"])
+        click.echo(result.output)
+
+    def test_health_dpu(self):
+        conn = dbconnector.SonicV2Connector()
+        conn.connect(conn.CHASSIS_STATE_DB)
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0',
+                 "id", "0")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0',
+                 "dpu_midplane_link_reason", "OK")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0',
+                 "dpu_midplane_link_state", "UP")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0',
+                 "dpu_data_plane_time", "20240607 15:08:51")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0',
+                 "dpu_control_plane_time", "20240608 09:11:13")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0',
+                 "dpu_data_plane_state", "UP")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0',
+                 "dpu_control_plane_reason", "Uplink is UP")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0',
+                 "dpu_control_plane_state", "UP")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0',
+                 "dpu_data_plane_reason", "Polaris is UP")
+        conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0',
+                 "dpu_midplane_link_time", "20240608 09:11:13")
+        with mock.patch("show.system_health.SonicV2Connector", return_value=conn):
+            runner = CliRunner()
+            result = runner.invoke(show.cli.commands["system-health"].commands["dpu"], ["DPU0"])
+            click.echo(result.output)
 
     def test_health_systemready(self):
         runner = CliRunner()

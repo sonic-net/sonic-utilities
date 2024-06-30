@@ -110,8 +110,10 @@ def shutdown_chassis_module(db, chassis_module_name):
 
     if not chassis_module_name.startswith("SUPERVISOR") and \
        not chassis_module_name.startswith("LINE-CARD") and \
-       not chassis_module_name.startswith("FABRIC-CARD"):
-        ctx.fail("'module_name' has to begin with 'SUPERVISOR', 'LINE-CARD' or 'FABRIC-CARD'")
+       not chassis_module_name.startswith("FABRIC-CARD") and \
+       not chassis_module_name.startswith("DPU") and \
+       not chassis_module_name.startswith("SWITCH"):
+        ctx.fail("'module_name' has to begin with 'SUPERVISOR', 'LINE-CARD', 'FABRIC-CARD', 'DPU' or 'SWITCH'")
 
     # To avoid duplicate operation
     if get_config_module_state(db, chassis_module_name) == 'down':

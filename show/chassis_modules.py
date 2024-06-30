@@ -37,14 +37,14 @@ def status(db, chassis_module_name):
     header = ['Name', 'Description', 'Physical-Slot', 'Oper-Status', 'Admin-Status', 'Serial']
     chassis_cfg_table = db.cfgdb.get_table('CHASSIS_MODULE')
 
-    state_db = SonicV2Connector(host="127.0.0.1")
+    state_db = SonicV2Connector(host="127.0.0.1", port="6379")
     state_db.connect(state_db.STATE_DB)
 
-    key_pattern = '*'
+    key_pattern = 'CHASSIS_MODULE_TABLE|*'
     if chassis_module_name:
-        key_pattern = '|' + chassis_module_name
+        key_pattern = 'CHASSIS_MODULE_TABLE|' + chassis_module_name
 
-    keys = state_db.keys(state_db.STATE_DB, CHASSIS_MODULE_INFO_TABLE + key_pattern)
+    keys = state_db.keys(state_db.STATE_DB, key_pattern)
     if not keys:
         print('Key {} not found in {} table'.format(key_pattern, CHASSIS_MODULE_INFO_TABLE))
         return
