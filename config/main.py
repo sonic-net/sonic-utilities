@@ -4697,7 +4697,7 @@ def breakout(ctx, interface_name, mode, verbose, force_remove_dependencies, load
     except Exception as e:
         click.secho("Failed to break out Port. Error: {}".format(str(e)), fg='magenta')
 
-        sys.exit(0)
+        sys.exit(1)
 
 def _get_all_mgmtinterface_keys():
     """Returns list of strings containing mgmt interface keys
