@@ -61,6 +61,9 @@ PORT_LINK_TRAINING_STATUS = 'link_training_status'
 VLAN_SUB_INTERFACE_SEPARATOR = "."
 VLAN_SUB_INTERFACE_TYPE = "802.1q-encapsulation"
 
+PORT_PATH_TRACING_INTERFACE_ID = "pt_interface_id"
+PORT_PATH_TRACING_TIMESTAMP_TEMPLATE = "pt_timestamp_template"
+
 SUB_PORT = "subport"
 
 def get_frontpanel_port_list(config_db):
@@ -867,10 +870,79 @@ class IntfFecStatus(object):
                 table.append((key, oper_fec, admin_fec))
         return table
 
+
+# ========================== interface path-tracing logic ==========================
+
+header_path_tracing = ['Interface', 'Alias', 'Oper', 'Admin', 'PT Interface ID', 'PT Timestamp Template']
+
+class IntfPathTracing(object):
+
+    def __init__(self, intf_name, namespace_option, display_option):
+        """
+        Class constructor method
+        :param self:
+        :param intf_name: string of interface
+        :return:
+        """
+        self.db = None
+        self.config_db = None
+        self.intf_name = intf_name
+        self.table = []
+        self.multi_asic = multi_asic_util.MultiAsic(
+            display_option, namespace_option)
+
+        if intf_name is not None and intf_name == SUB_PORT:
+            self.intf_name = None
+
+    def display_intf_path_tracing(self):
+        self.get_intf_path_tracing()
+
+        # Sorting and tabulating the result table.
+        sorted_table = natsorted(self.table)
+        print(tabulate(sorted_table, header_path_tracing, tablefmt="simple", stralign='right'))
+
+    def generate_intf_path_tracing(self):
+        """
+            Generate interface path-tracing output
+        """
+
+        i = {}
+        table = []
+        key = []
+
+        intf_fs = parse_interface_in_filter(self.intf_name)
+        #
+        # Iterate through all the keys and append port's associated state to
+        # the result table.
+        #
+        for i in self.appl_db_keys:
+            key = re.split(':', i, maxsplit=1)[-1].strip()
+            if key in self.front_panel_ports_list:
+                if self.multi_asic.skip_display(constants.PORT_OBJ, key):
+                    continue
+
+                if self.intf_name is None or key in intf_fs:
+                    table.append((key,
+                        appl_db_port_status_get(self.db, key, PORT_ALIAS),
+                        appl_db_port_status_get(self.db, key, PORT_OPER_STATUS),
+                        appl_db_port_status_get(self.db, key, PORT_ADMIN_STATUS),
+                        appl_db_port_status_get(self.db, key, PORT_PATH_TRACING_INTERFACE_ID),
+                        appl_db_port_status_get(self.db, key, PORT_PATH_TRACING_TIMESTAMP_TEMPLATE)))
+        return table
+
+    @multi_asic_util.run_on_multi_asic
+    def get_intf_path_tracing(self):
+        self.front_panel_ports_list = get_frontpanel_port_list(self.config_db)
+        self.appl_db_keys = appl_db_keys_get(self.db, self.front_panel_ports_list, None)
+
+        if self.appl_db_keys:
+            self.table += self.generate_intf_path_tracing()
+
+
 def main():
     parser = argparse.ArgumentParser(description='Display Interface information',
                                      formatter_class=argparse.RawTextHelpFormatter)
-    parser.add_argument('-c', '--command', type=str, help='get interface status or description or auto negotiation status or tpid', default=None)
+    parser.add_argument('-c', '--command', type=str, help='get interface status or description or auto negotiation status or tpid or path-tracing information', default=None)
     parser.add_argument('-i', '--interface', type=str, help='interface information for specific port: Ethernet0', default=None)
     parser = multi_asic_util.multi_asic_args(parser)
     args = parser.parse_args()
@@ -893,6 +965,9 @@ def main():
     elif args.command == "fec":
         interface_fec_status = IntfFecStatus(args.interface, args.namespace, args.display)
         interface_fec_status.display_fec_status()
+    elif args.command == "path-tracing":
+        interface_path_tracing = IntfPathTracing(args.interface, args.namespace, args.display)
+        interface_path_tracing.display_intf_path_tracing()
 
     sys.exit(0)
 
