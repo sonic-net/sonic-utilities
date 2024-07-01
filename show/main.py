@@ -857,9 +857,12 @@ def drop():
     pass
 
 @drop.command('counters')
-def pg_drop_counters():
+@multi_asic_util.multi_asic_click_option_namespace
+def pg_drop_counters(namespace):
     """Show dropped packets for priority-group"""
     command = ['pg-drop', '-c', 'show']
+    if namespace is not None:
+        command += ['-n', str(namespace)]
     run_command(command)
 
 @priority_group.group(name='persistent-watermark')
