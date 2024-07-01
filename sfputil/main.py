@@ -674,6 +674,20 @@ def eeprom(port, dump_dom, namespace):
 
                 if dump_dom:
                     try:
+                        api = platform_chassis.get_sfp(physical_port).get_xcvr_api()
+                    except NotImplementedError:
+                        output += "API is currently not implemented for this platform\n"
+                        click.echo(output)
+                        sys.exit(ERROR_NOT_IMPLEMENTED)
+                    if api is None:
+                        output += "API is none while getting DOM info!\n"
+                        click.echo(output)
+                        sys.exit(ERROR_NOT_IMPLEMENTED)
+                    else:
+                        if api.is_flat_memory():
+                            output += "DOM values not supported for flat memory module\n"
+                            continue
+                    try:
                         xcvr_dom_info = platform_chassis.get_sfp(physical_port).get_transceiver_bulk_status()
                     except NotImplementedError:
                         click.echo("Sfp.get_transceiver_bulk_status() is currently not implemented for this platform")
