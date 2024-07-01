@@ -264,25 +264,53 @@ Ethernet40: SFP EEPROM detected
 """
 
 test_qsfp_dd_pm_output = """\
+PM window: 60sec
 Ethernet44:
+    PM window start time: Mon Jul 31 17:12:49 UTC 2023
+    PM window end time:   Mon Jul 31 17:13:50 UTC 2023
     Parameter        Unit    Min       Avg       Max       Threshold    Threshold    Threshold     Threshold    Threshold    Threshold
                                                            High         High         Crossing      Low          Low          Crossing
                                                            Alarm        Warning      Alert-High    Alarm        Warning      Alert-Low
     ---------------  ------  --------  --------  --------  -----------  -----------  ------------  -----------  -----------  -----------
-    Tx Power         dBm     -8.22     -8.23     -8.24     -5.0         -6.0         False         -16.99       -16.003      False
-    Rx Total Power   dBm     -10.61    -10.62    -10.62    2.0          0.0          False         -21.0        -18.0        False
-    Rx Signal Power  dBm     -40.0     0.0       40.0      13.0         10.0         True          -18.0        -15.0        True
-    CD-short link    ps/nm   0.0       0.0       0.0       1000.0       500.0        False         -1000.0      -500.0       False
-    PDL              dB      0.5       0.6       0.6       4.0          4.0          False         0.0          0.0          False
-    OSNR             dB      36.5      36.5      36.5      99.0         99.0         False         0.0          0.0          False
-    eSNR             dB      30.5      30.5      30.5      99.0         99.0         False         0.0          0.0          False
-    CFO              MHz     54.0      70.0      121.0     3800.0       3800.0       False         -3800.0      -3800.0      False
-    DGD              ps      5.37      5.56      5.81      7.0          7.0          False         0.0          0.0          False
-    SOPMD            ps^2    0.0       0.0       0.0       655.35       655.35       False         0.0          0.0          False
-    SOP ROC          krad/s  1.0       1.0       2.0       N/A          N/A          N/A           N/A          N/A          N/A
-    Pre-FEC BER      N/A     4.58E-04  4.66E-04  5.76E-04  1.25E-02     1.10E-02     0.0           0.0          0.0          0.0
-    Post-FEC BER     N/A     0.0       0.0       0.0       1000.0       1.0          False         0.0          0.0          False
-    EVM              %       100.0     100.0     100.0     N/A          N/A          N/A           N/A          N/A          N/A
+    Tx Power         dBm     -8.19     -8.17     -8.15     -5           -6           False         -16.99       -16.003      False
+    Rx Total Power   dBm     -8.61     -8.56     -8.51     2            0            False         -21          -18          False
+    Rx Signal Power  dBm     -9.12     -9.09     -9.07     13           10           False         -18          -15          False
+    CD-short link    ps/nm   -2        -1        0         1000         500          False         -1000        -500         False
+    PDL              dB      0.3       0.3       0.4       4            4            False         0            0            False
+    OSNR             dB      36.4      36.4      36.4      99           99           False         0            0            False
+    eSNR             dB      17.9      18        18.2      99           99           False         0            0            False
+    CFO              MHz     -776      -659      -546      3800         3800         False         -3800        -3800        False
+    DGD              ps      2         2         2         7            7            False         0            0            False
+    SOPMD            ps^2    26        34        44        655.35       655.35       False         0            0            False
+    SOP ROC          krad/s  0         0         0         N/A          N/A          N/A           N/A          N/A          N/A
+    Pre-FEC BER      N/A     5.37E-04  5.55E-04  5.80E-04  1.25E-02     1.10E-02     False         0            0            False
+    Post-FEC BER     N/A     0         0         0         1.00E+03     1.00E+00     False         0            0            False
+    EVM              %       0         0         0         N/A          N/A          N/A           N/A          N/A          N/A
+"""
+
+test_qsfp_dd_pm_hist_60s_win1_output = """\
+PM window: 60sec
+Ethernet44:
+    PM window start time: Mon Jul 31 17:11:48 UTC 2023
+    PM window end time:   Mon Jul 31 17:12:49 UTC 2023
+    Parameter        Unit    Min       Avg       Max       Threshold    Threshold    Threshold     Threshold    Threshold    Threshold
+                                                           High         High         Crossing      Low          Low          Crossing
+                                                           Alarm        Warning      Alert-High    Alarm        Warning      Alert-Low
+    ---------------  ------  --------  --------  --------  -----------  -----------  ------------  -----------  -----------  -----------
+    Tx Power         dBm     -8.17     -8.16     -8.15     -5           -6           False         -16.99       -16.003      False
+    Rx Total Power   dBm     -8.66     -8.6      -8.53     2            0            False         -21          -18          False
+    Rx Signal Power  dBm     -9.15     -9.12     -9.07     13           10           False         -18          -15          False
+    CD-short link    ps/nm   -2        0         2         1000         500          False         -1000        -500         False
+    PDL              dB      0.3       0.3       0.4       4            4            False         0            0            False
+    OSNR             dB      36.4      36.4      36.4      99           99           False         0            0            False
+    eSNR             dB      17.9      18.1      18.2      99           99           False         0            0            False
+    CFO              MHz     -768      -660      -561      3800         3800         False         -3800        -3800        False
+    DGD              ps      2         2         2         7            7            False         0            0            False
+    SOPMD            ps^2    26        34        42        655.35       655.35       False         0            0            False
+    SOP ROC          krad/s  0         0         0         N/A          N/A          N/A           N/A          N/A          N/A
+    Pre-FEC BER      N/A     5.30E-04  5.49E-04  5.82E-04  1.25E-02     1.10E-02     False         0            0            False
+    Post-FEC BER     N/A     0         0         0         1.00E+03     1.00E+00     False         0            0            False
+    EVM              %       0         0         0         N/A          N/A          N/A           N/A          N/A          N/A
 """
 
 test_qsfp_status_output = """\
@@ -831,6 +859,7 @@ Ethernet64  Present
 """
 
 test_qsfp_dd_pm_all_output = """\
+PM window: 60sec
 Ethernet0: Transceiver performance monitoring not applicable
 
 Ethernet4: Transceiver performance monitoring not applicable
@@ -982,13 +1011,35 @@ Ethernet36  Present
 
     def test_qsfp_dd_pm(self):
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["pm"], ["Ethernet44"])
+        result = runner.invoke(
+                show.cli.commands["interfaces"]
+                        .commands["transceiver"]
+                        .commands["pm"]
+                        .commands["current"],
+                ["60sec", "Ethernet44"]
+        )
         assert result.exit_code == 0
-        assert "\n".join([ l.rstrip() for l in result.output.split('\n')]) == test_qsfp_dd_pm_output
+        assert "\n".join([ l.rstrip() for l in result.output.split('\n')][1:]) == test_qsfp_dd_pm_output
 
-        result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["pm"], ["Ethernet200"])
-        result_lines = result.output.strip('\n')
-        expected = "Ethernet200: Transceiver performance monitoring not applicable"
+        result = runner.invoke(
+                show.cli.commands["interfaces"]
+                        .commands["transceiver"]
+                        .commands["pm"]
+                        .commands["history"],
+                ["60sec", "window", "1",  "Ethernet44"]
+        )
+        assert result.exit_code == 0
+        assert "\n".join([ l.rstrip() for l in result.output.split('\n')][1:]) == test_qsfp_dd_pm_hist_60s_win1_output
+
+        result = runner.invoke(
+                show.cli.commands["interfaces"]
+                        .commands["transceiver"]
+                        .commands["pm"]
+                        .commands["current"],
+                ["15min", "Ethernet200"]
+        )
+        result_lines = result.output.strip('\n')[result.output.find('\n'):].strip('\n')
+        expected = "PM window: 15min\nEthernet200: Transceiver performance monitoring not applicable"
         assert result_lines == expected
 
     def test_qsfp_status(self):
@@ -1014,6 +1065,11 @@ Ethernet36  Present
         os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
+
+def mocked_click_convert_method(*args, **kwargs):
+    """Mock click.Choice.convert method to return the value passed in"""
+    value = args[1]
+    return value
 
 class Test_multiAsic_SFP(object):
     @classmethod
@@ -1067,12 +1123,19 @@ Ethernet200  Not present
         expected = "Ethernet200: SFP EEPROM Not detected"
         assert result_lines == expected
 
-    @patch.object(show_module.interfaces.click.Choice, 'convert', MagicMock(return_value='asic0'))
+    @patch.object(show_module.interfaces.click.Choice, 'convert', new=mocked_click_convert_method)
     def test_qsfp_dd_pm_with_ns(self):
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["pm"], ['Ethernet0', '-n', 'asic0'])
-        result_lines = result.output.strip('\n')
-        expected = "Ethernet0: Transceiver performance monitoring not applicable"
+        result = runner.invoke(
+                show.cli.commands["interfaces"]
+                        .commands["transceiver"]
+                        .commands["pm"]
+                        .commands["current"],
+                ["60sec", "Ethernet0", "-n", "asic0"]
+        )
+        result_lines = result.output.strip('\n')[result.output.find('\n'):].strip('\n')
+        expected = "PM window: 60sec\nEthernet0: Transceiver performance monitoring not applicable"
+        assert result.exit_code == 0
         assert result_lines == expected
 
     @patch.object(show_module.interfaces.click.Choice, 'convert', MagicMock(return_value='asic0'))
@@ -1117,9 +1180,15 @@ Ethernet200  Not present
 
     def test_qsfp_dd_pm_all(self):
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["pm"])
+        result = runner.invoke(
+                show.cli.commands["interfaces"]
+                        .commands["transceiver"]
+                        .commands["pm"]
+                        .commands["current"],
+                ["60sec"]
+        )
         assert result.exit_code == 0
-        assert "\n".join([ l.rstrip() for l in result.output.split('\n')]) == test_qsfp_dd_pm_all_output
+        assert "\n".join([ l.rstrip() for l in result.output.split('\n')][1:]) == test_qsfp_dd_pm_all_output
 
     def test_qsfp_dd_status_all(self):
         runner = CliRunner()
