@@ -44,6 +44,10 @@ def manifest():
         },
         'container': {
             'privileged': True,
+            'network': 'bridge',
+            'ports': [
+                "8080:8080"
+            ],
             'volumes': [
                 '/etc/sonic:/etc/sonic:ro'
             ]
@@ -135,6 +139,17 @@ def test_service_creator(sonic_fs, manifest, service_creator, package_manager):
     assert not sonic_fs.exists(os.path.join(ETC_SYSTEMD_LOCATION, 'test.service.d'))
     assert not sonic_fs.exists(os.path.join(ETC_SYSTEMD_LOCATION, 'test@1.service.d'))
     assert not sonic_fs.exists(os.path.join(ETC_SYSTEMD_LOCATION, 'test@2.service.d'))
+
+
+def test_service_creator_asic_service_network_type_err(sonic_fs, manifest, service_creator, package_manager):
+    new_manifest = copy.deepcopy(manifest)
+    new_manifest['service']['asic-service'] = True
+    entry = PackageEntry('test', 'azure/sonic-test')
+    package = Package(entry, Metadata(new_manifest))
+    installed_packages = package_manager._get_installed_packages_and(package)
+
+    with pytest.raises(ServiceCreatorError) as e:
+        service_creator.create(package)
 
 
 def test_service_creator_with_timer_unit(sonic_fs, manifest, service_creator):
