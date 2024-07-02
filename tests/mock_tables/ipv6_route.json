@@ -17,7 +17,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 }
             ],
             "prefix": "2064:100::1/128",
@@ -45,7 +46,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "2064:100::3/128",
@@ -73,7 +75,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -82,7 +85,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:10::/64",
@@ -110,7 +114,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -119,7 +124,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:11::/64",
@@ -147,7 +153,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -156,7 +163,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:1::/64",
@@ -184,7 +192,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -193,7 +202,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:20::/64",
@@ -221,7 +231,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -230,7 +241,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:21::/64",
@@ -258,7 +270,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -267,7 +280,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:30::/64",
@@ -295,7 +309,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -304,7 +319,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:31::/64",
@@ -332,7 +348,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -341,7 +358,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:40::/64",
@@ -369,7 +387,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -378,7 +397,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:41::/64",
@@ -406,7 +426,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -415,7 +436,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:50::/64",
@@ -443,7 +465,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -452,7 +475,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:51::/64",
@@ -480,7 +504,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -489,7 +514,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:60::/64",
@@ -517,7 +543,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -526,7 +553,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:61::/64",
@@ -554,7 +582,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -563,7 +592,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:70::/64",
@@ -591,7 +621,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -600,7 +631,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:71::/64",
@@ -628,7 +660,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -637,7 +670,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:80::/64",
@@ -665,7 +699,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -674,7 +709,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:81::/64",
@@ -702,7 +738,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -711,7 +748,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:90::/64",
@@ -739,7 +777,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -748,7 +787,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:91::/64",
@@ -776,7 +816,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -785,7 +826,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:a0::/64",
@@ -813,7 +855,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -822,7 +865,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:a1::/64",
@@ -850,7 +894,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -859,7 +904,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:b0::/64",
@@ -887,7 +933,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -896,7 +943,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:b1::/64",
@@ -924,7 +972,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -933,7 +982,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:c0::/64",
@@ -961,7 +1011,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -970,7 +1021,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:c1::/64",
@@ -998,7 +1050,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1007,7 +1060,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:d0::/64",
@@ -1035,7 +1089,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1044,7 +1099,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:d1::/64",
@@ -1072,7 +1128,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1081,7 +1138,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:e0::/64",
@@ -1109,7 +1167,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1118,7 +1177,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:e1::/64",
@@ -1146,7 +1206,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1155,7 +1216,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:f0::/64",
@@ -1183,7 +1245,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1192,7 +1255,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800:0:f1::/64",
@@ -1220,7 +1284,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1229,7 +1294,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a800::/64",
@@ -1257,7 +1323,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1266,7 +1333,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:10::/64",
@@ -1294,7 +1362,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1303,7 +1372,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:11::/64",
@@ -1331,7 +1401,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1340,7 +1411,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:1::/64",
@@ -1368,7 +1440,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1377,7 +1450,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:20::/64",
@@ -1405,7 +1479,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1414,7 +1489,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:21::/64",
@@ -1442,7 +1518,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1451,7 +1528,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:30::/64",
@@ -1479,7 +1557,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1488,7 +1567,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:31::/64",
@@ -1516,7 +1596,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1525,7 +1606,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:40::/64",
@@ -1553,7 +1635,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1562,7 +1645,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:41::/64",
@@ -1590,7 +1674,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1599,7 +1684,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:50::/64",
@@ -1627,7 +1713,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1636,7 +1723,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:51::/64",
@@ -1664,7 +1752,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1673,7 +1762,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:60::/64",
@@ -1701,7 +1791,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1710,7 +1801,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:61::/64",
@@ -1738,7 +1830,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1747,7 +1840,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:70::/64",
@@ -1775,7 +1869,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1784,7 +1879,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:71::/64",
@@ -1812,7 +1908,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1821,7 +1918,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:80::/64",
@@ -1849,7 +1947,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1858,7 +1957,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:81::/64",
@@ -1886,7 +1986,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1895,7 +1996,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:90::/64",
@@ -1923,7 +2025,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1932,7 +2035,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:91::/64",
@@ -1960,7 +2064,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -1969,7 +2074,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:a0::/64",
@@ -1997,7 +2103,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -2006,7 +2113,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:a1::/64",
@@ -2034,7 +2142,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -2043,7 +2152,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:b0::/64",
@@ -2071,7 +2181,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -2080,7 +2191,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:b1::/64",
@@ -2108,7 +2220,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -2117,7 +2230,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:c0::/64",
@@ -2145,7 +2259,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -2154,7 +2269,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:c1::/64",
@@ -2182,7 +2298,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -2191,7 +2308,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:d0::/64",
@@ -2219,7 +2337,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -2228,7 +2347,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:d1::/64",
@@ -2256,7 +2376,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -2265,7 +2386,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:e0::/64",
@@ -2293,7 +2415,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -2302,7 +2425,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:e1::/64",
@@ -2330,7 +2454,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -2339,7 +2464,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:f0::/64",
@@ -2367,7 +2493,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -2376,7 +2503,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801:0:f1::/64",
@@ -2404,7 +2532,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -2413,7 +2542,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "20c0:a801::/64",
@@ -2468,7 +2598,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "fc00::2"
+                    "ip": "fc00::2",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -2477,7 +2608,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "fc00::6"
+                    "ip": "fc00::6",
+                    "weight": "1"
                 }
             ],
             "prefix": "::/0",
