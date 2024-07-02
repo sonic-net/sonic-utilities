@@ -44,6 +44,7 @@ import utilities_common.multi_asic as multi_asic_util
 from .utils import log
 
 from . import aaa
+from . import bgp
 from . import chassis_modules
 from . import console
 from . import feature
@@ -571,86 +572,6 @@ def get_intf_ipv6_link_local_mode(ctx, interface_name, table_name):
             return "disable"
     else:
         return ""
-
-def _is_neighbor_ipaddress(config_db, ipaddress):
-    """Returns True if a neighbor has the IP address <ipaddress>, False if not
-    """
-    entry = config_db.get_entry('BGP_NEIGHBOR', ipaddress)
-    return True if entry else False
-
-def _get_all_neighbor_ipaddresses(config_db):
-    """Returns list of strings containing IP addresses of all BGP neighbors
-    """
-    addrs = []
-    bgp_sessions = config_db.get_table('BGP_NEIGHBOR')
-    for addr, session in bgp_sessions.items():
-        addrs.append(addr)
-    return addrs
-
-def _get_neighbor_ipaddress_list_by_hostname(config_db, hostname):
-    """Returns list of strings, each containing an IP address of neighbor with
-       hostname <hostname>. Returns empty list if <hostname> not a neighbor
-    """
-    addrs = []
-    bgp_sessions = config_db.get_table('BGP_NEIGHBOR')
-    for addr, session in bgp_sessions.items():
-        if 'name' in session and session['name'] == hostname:
-            addrs.append(addr)
-    return addrs
-
-def _change_bgp_session_status_by_addr(config_db, ipaddress, status, verbose):
-    """Start up or shut down BGP session by IP address
-    """
-    verb = 'Starting' if status == 'up' else 'Shutting'
-    click.echo("{} {} BGP session with neighbor {}...".format(verb, status, ipaddress))
-
-    config_db.mod_entry('bgp_neighbor', ipaddress, {'admin_status': status})
-
-def _change_bgp_session_status(config_db, ipaddr_or_hostname, status, verbose):
-    """Start up or shut down BGP session by IP address or hostname
-    """
-    ip_addrs = []
-
-    # If we were passed an IP address, convert it to lowercase because IPv6 addresses were
-    # stored in ConfigDB with all lowercase alphabet characters during minigraph parsing
-    if _is_neighbor_ipaddress(config_db, ipaddr_or_hostname.lower()):
-        ip_addrs.append(ipaddr_or_hostname.lower())
-    else:
-        # If <ipaddr_or_hostname> is not the IP address of a neighbor, check to see if it's a hostname
-        ip_addrs = _get_neighbor_ipaddress_list_by_hostname(config_db, ipaddr_or_hostname)
-
-    if not ip_addrs:
-        return False
-
-    for ip_addr in ip_addrs:
-        _change_bgp_session_status_by_addr(config_db, ip_addr, status, verbose)
-
-    return True
-
-def _validate_bgp_neighbor(config_db, neighbor_ip_or_hostname):
-    """validates whether the given ip or host name is a BGP neighbor
-    """
-    ip_addrs = []
-    if _is_neighbor_ipaddress(config_db, neighbor_ip_or_hostname.lower()):
-        ip_addrs.append(neighbor_ip_or_hostname.lower())
-    else:
-        ip_addrs = _get_neighbor_ipaddress_list_by_hostname(config_db, neighbor_ip_or_hostname.upper())
-
-    return ip_addrs
-
-def _remove_bgp_neighbor_config(config_db, neighbor_ip_or_hostname):
-    """Removes BGP configuration of the given neighbor
-    """
-    ip_addrs = _validate_bgp_neighbor(config_db, neighbor_ip_or_hostname)
-
-    if not ip_addrs:
-        return False
-
-    for ip_addr in ip_addrs:
-        config_db.mod_entry('bgp_neighbor', ip_addr, None)
-        click.echo("Removed configuration of BGP neighbor {}".format(ip_addr))
-
-    return True
 
 def _change_hostname(hostname):
     current_hostname = os.uname()[1]
@@ -1391,6 +1312,7 @@ def config(ctx):
 config.add_command(aaa.aaa)
 config.add_command(aaa.tacacs)
 config.add_command(aaa.radius)
+config.add_command(bgp.bgp)
 config.add_command(chassis_modules.chassis)
 config.add_command(console.console)
 config.add_command(fabric.fabric)
@@ -1402,6 +1324,9 @@ config.add_command(muxcable.muxcable)
 config.add_command(nat.nat)
 config.add_command(vlan.vlan)
 config.add_command(vxlan.vxlan)
+
+# BGP module extensions
+config.commands['bgp'].add_command(bgp_cli.DEVICE_GLOBAL)
 
 #add mclag commands
 config.add_command(mclag.mclag)
@@ -4147,167 +4072,6 @@ def del_user(db, user):
         except SystemExit as e:
             click.echo("Restart service snmp failed with error {}".format(e))
             raise click.Abort()
-
-#
-# 'bgp' group ('config bgp ...')
-#
-
-@config.group(cls=clicommon.AbbreviationGroup)
-def bgp():
-    """BGP-related configuration tasks"""
-    pass
-
-
-
-# BGP module extensions
-config.commands['bgp'].add_command(bgp_cli.DEVICE_GLOBAL)
-
-#
-# 'shutdown' subgroup ('config bgp shutdown ...')
-#
-
-@bgp.group(cls=clicommon.AbbreviationGroup)
-def shutdown():
-    """Shut down BGP session(s)"""
-    pass
-
-# 'all' subcommand
-@shutdown.command()
-@click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
-def all(verbose):
-    """Shut down all BGP sessions
-       In the case of Multi-Asic platform, we shut only the EBGP sessions with external neighbors.
-    """
-    log.log_info("'bgp shutdown all' executing...")
-    namespaces = [DEFAULT_NAMESPACE]
-
-    if multi_asic.is_multi_asic():
-        ns_list = multi_asic.get_all_namespaces()
-        namespaces = ns_list['front_ns']
-
-    # Connect to CONFIG_DB in linux host (in case of single ASIC) or CONFIG_DB in all the
-    # namespaces (in case of multi ASIC) and do the sepcified "action" on the BGP neighbor(s)
-    for namespace in namespaces:
-        config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
-        config_db.connect()
-        bgp_neighbor_ip_list = _get_all_neighbor_ipaddresses(config_db)
-        for ipaddress in bgp_neighbor_ip_list:
-            _change_bgp_session_status_by_addr(config_db, ipaddress, 'down', verbose)
-
-# 'neighbor' subcommand
-@shutdown.command()
-@click.argument('ipaddr_or_hostname', metavar='<ipaddr_or_hostname>', required=True)
-@click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
-def neighbor(ipaddr_or_hostname, verbose):
-    """Shut down BGP session by neighbor IP address or hostname.
-       User can specify either internal or external BGP neighbor to shutdown
-    """
-    log.log_info("'bgp shutdown neighbor {}' executing...".format(ipaddr_or_hostname))
-    namespaces = [DEFAULT_NAMESPACE]
-    found_neighbor = False
-
-    if multi_asic.is_multi_asic():
-        ns_list = multi_asic.get_all_namespaces()
-        namespaces = ns_list['front_ns'] + ns_list['back_ns']
-
-    # Connect to CONFIG_DB in linux host (in case of single ASIC) or CONFIG_DB in all the
-    # namespaces (in case of multi ASIC) and do the sepcified "action" on the BGP neighbor(s)
-    for namespace in namespaces:
-        config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
-        config_db.connect()
-        if _change_bgp_session_status(config_db, ipaddr_or_hostname, 'down', verbose):
-            found_neighbor = True
-
-    if not found_neighbor:
-        click.get_current_context().fail("Could not locate neighbor '{}'".format(ipaddr_or_hostname))
-
-@bgp.group(cls=clicommon.AbbreviationGroup)
-def startup():
-    """Start up BGP session(s)"""
-    pass
-
-# 'all' subcommand
-@startup.command()
-@click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
-def all(verbose):
-    """Start up all BGP sessions
-       In the case of Multi-Asic platform, we startup only the EBGP sessions with external neighbors.
-    """
-    log.log_info("'bgp startup all' executing...")
-    namespaces = [DEFAULT_NAMESPACE]
-
-    if multi_asic.is_multi_asic():
-        ns_list = multi_asic.get_all_namespaces()
-        namespaces = ns_list['front_ns']
-
-    # Connect to CONFIG_DB in linux host (in case of single ASIC) or CONFIG_DB in all the
-    # namespaces (in case of multi ASIC) and do the sepcified "action" on the BGP neighbor(s)
-    for namespace in namespaces:
-        config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
-        config_db.connect()
-        bgp_neighbor_ip_list = _get_all_neighbor_ipaddresses(config_db)
-        for ipaddress in bgp_neighbor_ip_list:
-            _change_bgp_session_status_by_addr(config_db, ipaddress, 'up', verbose)
-
-# 'neighbor' subcommand
-@startup.command()
-@click.argument('ipaddr_or_hostname', metavar='<ipaddr_or_hostname>', required=True)
-@click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
-def neighbor(ipaddr_or_hostname, verbose):
-    log.log_info("'bgp startup neighbor {}' executing...".format(ipaddr_or_hostname))
-    """Start up BGP session by neighbor IP address or hostname.
-       User can specify either internal or external BGP neighbor to startup
-    """
-    namespaces = [DEFAULT_NAMESPACE]
-    found_neighbor = False
-
-    if multi_asic.is_multi_asic():
-        ns_list = multi_asic.get_all_namespaces()
-        namespaces = ns_list['front_ns'] + ns_list['back_ns']
-
-    # Connect to CONFIG_DB in linux host (in case of single ASIC) or CONFIG_DB in all the
-    # namespaces (in case of multi ASIC) and do the sepcified "action" on the BGP neighbor(s)
-    for namespace in namespaces:
-        config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
-        config_db.connect()
-        if _change_bgp_session_status(config_db, ipaddr_or_hostname, 'up', verbose):
-            found_neighbor = True
-
-    if not found_neighbor:
-        click.get_current_context().fail("Could not locate neighbor '{}'".format(ipaddr_or_hostname))
-
-#
-# 'remove' subgroup ('config bgp remove ...')
-#
-
-@bgp.group(cls=clicommon.AbbreviationGroup)
-def remove():
-    "Remove BGP neighbor configuration from the device"
-    pass
-
-@remove.command('neighbor')
-@click.argument('neighbor_ip_or_hostname', metavar='<neighbor_ip_or_hostname>', required=True)
-def remove_neighbor(neighbor_ip_or_hostname):
-    """Deletes BGP neighbor configuration of given hostname or ip from devices
-       User can specify either internal or external BGP neighbor to remove
-    """
-    namespaces = [DEFAULT_NAMESPACE]
-    removed_neighbor = False
-
-    if multi_asic.is_multi_asic():
-        ns_list = multi_asic.get_all_namespaces()
-        namespaces = ns_list['front_ns'] + ns_list['back_ns']
-
-    # Connect to CONFIG_DB in linux host (in case of single ASIC) or CONFIG_DB in all the
-    # namespaces (in case of multi ASIC) and do the sepcified "action" on the BGP neighbor(s)
-    for namespace in namespaces:
-        config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
-        config_db.connect()
-        if _remove_bgp_neighbor_config(config_db, neighbor_ip_or_hostname):
-            removed_neighbor = True
-
-    if not removed_neighbor:
-        click.get_current_context().fail("Could not locate neighbor '{}'".format(neighbor_ip_or_hostname))
 
 #
 # 'interface' group ('config interface ...')
