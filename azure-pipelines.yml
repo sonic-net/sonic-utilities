@@ -104,6 +104,47 @@ stages:
       workingDirectory: $(Pipeline.Workspace)/
       displayName: 'Install swss-common dependencies'
 
+
+    - task: DownloadPipelineArtifact@2
+        inputs:
+          source: specific
+          project: build
+          pipeline: Azure.sonic-buildimage.common_libs
+          runVersion: 'latestFromBranch'
+          runBranch: 'refs/heads/master'
+          path: $(Build.ArtifactStagingDirectory)/download
+          ${{ if eq(parameters.arch, 'amd64') }}:
+            artifact: common-lib
+          ${{ else }}:
+            artifact: common-lib.${{ parameters.arch }}
+          patterns: |
+            target/debs/${{ parameters.debian_version }}/libprotobuf*.deb
+
+    - script: |
+          sudo dpkg -i $( find download -type f -name '*.deb' )
+        workingDirectory: $(Build.ArtifactStagingDirectory)
+        displayName: "Install protobuf"
+
+    - task: DownloadPipelineArtifact@2
+        inputs:
+          source: specific
+          project: build
+          pipeline: sonic-net.sonic-dash-api
+          ${{ if eq(parameters.arch, 'amd64') }}:
+            artifact: sonic-dash-api
+          ${{ else }}:
+            artifact: sonic-dash-api.${{ parameters.arch }}
+          patterns: |
+            libdashapi*.deb
+        displayName: "Download dash api deb packages"
+
+    - script: |
+            set -xe
+            sudo apt-get update
+            sudo dpkg -i libdashapi_*.deb
+          workingDirectory: $(Pipeline.Workspace)/
+          displayName: 'Install swss-common dependencies'
+
     - script: |
         set -xe
         sudo pip3 install swsssdk-2.0.1-py3-none-any.whl
