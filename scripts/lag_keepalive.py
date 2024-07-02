@@ -2,12 +2,20 @@
 
 from scapy.config import conf
 conf.ipv6_enabled = False
-from scapy.all import sendp, sniff
+from scapy.fields import ByteField, ShortField, MACField, XStrFixedLenField, ConditionalField
+from scapy.layers.l2 import Ether
+from scapy.sendrecv import sendp, sniff
+from scapy.packet import Packet, split_layers, bind_layers
+import scapy.contrib.lacp
+import subprocess
+import json
 from swsscommon.swsscommon import ConfigDBConnector
-import time, threading, traceback
+import time, traceback
 import syslog
 
 SYSLOG_ID = 'lag_keepalive'
+SLOW_PROTOCOL_MAC_ADDRESS = "01:80:c2:00:00:02"
+LACP_ETHERTYPE = 0x8809
 
 
 def log_info(msg):
@@ -22,24 +30,46 @@ def log_error(msg):
     syslog.closelog()
 
 
-def sniff_lacpdu(device_mac, lag_member, lag_member_to_packet):
-    sniffed_packet = sniff(iface=lag_member,
-        filter="ether proto 0x8809 and ether src {}".format(device_mac),
-        count=1, timeout=30)
-    lag_member_to_packet[lag_member] = sniffed_packet
+def getCmdOutput(cmd):
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
+    return proc.communicate()[0], proc.returncode
+
+
+def get_port_channel_config(portChannelName):
+    (processStdout, _) = getCmdOutput(["teamdctl", portChannelName, "state", "dump"])
+    return json.loads(processStdout)
+
+
+def craft_lacp_packet(portChannelConfig, portName):
+    portConfig = portChannelConfig["ports"][portName]
+    actorConfig = portConfig["runner"]["actor_lacpdu_info"]
+    partnerConfig = portConfig["runner"]["partner_lacpdu_info"]
+    l2 = Ether(dst=SLOW_PROTOCOL_MAC_ADDRESS, src=portConfig["ifinfo"]["dev_addr"], type=LACP_ETHERTYPE)
+    l3 = scapy.contrib.lacp.SlowProtocol(subtype=0x01)
+    l4 = scapy.contrib.lacp.LACP()
+    l4.version = 0x1
+    l4.actor_system_priority = actorConfig["system_priority"]
+    l4.actor_system = actorConfig["system"]
+    l4.actor_key = actorConfig["key"]
+    l4.actor_port_priority = actorConfig["port_priority"]
+    l4.actor_port_number = actorConfig["port"]
+    l4.actor_state = actorConfig["state"]
+    l4.partner_system_priority = partnerConfig["system_priority"]
+    l4.partner_system = partnerConfig["system"]
+    l4.partner_key = partnerConfig["key"]
+    l4.partner_port_priority = partnerConfig["port_priority"]
+    l4.partner_port_number = partnerConfig["port"]
+    l4.partner_state = partnerConfig["state"]
+    packet = l2 / l3 / l4
+    return packet
 
 
 def get_lacpdu_per_lag_member():
     appDB = ConfigDBConnector()
     appDB.db_connect('APPL_DB')
     appDB_lag_info = appDB.get_keys('LAG_MEMBER_TABLE')
-    configDB = ConfigDBConnector()
-    configDB.db_connect('CONFIG_DB')
-    device_mac = configDB.get(configDB.CONFIG_DB,  "DEVICE_METADATA|localhost", "mac")
-    hwsku = configDB.get(configDB.CONFIG_DB,  "DEVICE_METADATA|localhost", "hwsku")
     active_lag_members = list()
     lag_member_to_packet = dict()
-    sniffer_threads = list()
     for lag_entry in appDB_lag_info:
         lag_name = str(lag_entry[0])
         oper_status = appDB.get(appDB.APPL_DB,"LAG_TABLE:{}".format(lag_name), "oper_status")
@@ -47,16 +77,10 @@ def get_lacpdu_per_lag_member():
             # only apply the workaround for active lags
             lag_member = str(lag_entry[1])
             active_lag_members.append(lag_member)
-            # use threading to capture lacpdus from several lag members simultaneously
-            sniffer_thread = threading.Thread(target=sniff_lacpdu,
-                args=(device_mac, lag_member, lag_member_to_packet))
-            sniffer_thread.start()
-            sniffer_threads.append(sniffer_thread)
+            # craft lacpdu packets for each lag member based on config
+            port_channel_config = get_port_channel_config(lag_name)
+            lag_member_to_packet[lag_member] = craft_lacp_packet(port_channel_config, lag_member)
 
-    # sniff for lacpdu should finish in <= 30s. sniff timeout is also set to 30s
-    for sniffer in sniffer_threads:
-        sniffer.join(timeout=30)
-    
     return active_lag_members, lag_member_to_packet
 
 
@@ -80,8 +104,8 @@ def main():
         try:
             active_lag_members, lag_member_to_packet = get_lacpdu_per_lag_member()
             if len(active_lag_members) != len(lag_member_to_packet.keys()):
-                log_error("Failed to capture LACPDU packets for some lag members. " +\
-                "Active lag members: {}. LACPDUs captured for: {}".format(
+                log_error("Failed to craft LACPDU packets for some lag members. " +\
+                "Active lag members: {}. LACPDUs craft for: {}".format(
                     active_lag_members, lag_member_to_packet.keys()))
 
             log_info("ready to send LACPDU packets via {}".format(lag_member_to_packet.keys()))
