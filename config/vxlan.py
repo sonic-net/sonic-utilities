@@ -15,15 +15,18 @@ def vxlan():
 @vxlan.command('add')
 @click.argument('vxlan_name', metavar='<vxlan_name>', required=True)
 @click.argument('src_ip', metavar='<src_ip>', required=True)
+@click.argument('dst_ip', metavar='[dst_ip]', default=None, required=False)
 @clicommon.pass_db
-def add_vxlan(db, vxlan_name, src_ip):
+def add_vxlan(db, vxlan_name, src_ip, dst_ip):
     """Add VXLAN"""
     ctx = click.get_current_context()
     config_db = ValidatedConfigDBConnector(db.cfgdb)
 
     if ADHOC_VALIDATION:
         if not clicommon.is_ipaddress(src_ip):
-            ctx.fail("{} invalid src ip address".format(src_ip))  
+            ctx.fail("{} invalid src ip address".format(src_ip))
+        if dst_ip and not clicommon.is_ipaddress(dst_ip):
+            ctx.fail("{} invalid dst ip address".format(dst_ip))
 
     vxlan_keys = db.cfgdb.get_keys('VXLAN_TUNNEL')
     if not vxlan_keys:
@@ -32,9 +35,13 @@ def add_vxlan(db, vxlan_name, src_ip):
       vxlan_count = len(vxlan_keys)
 
     if(vxlan_count > 0):
-        ctx.fail("VTEP already configured.")  
+        ctx.fail("VTEP already configured.")
 
-    fvs = {'src_ip': src_ip}
+    if dst_ip:
+        fvs = {'src_ip': src_ip, 'dst_ip': dst_ip}
+    else:
+        fvs = {'src_ip': src_ip}
+
     try:
         config_db.set_entry('VXLAN_TUNNEL', vxlan_name, fvs)
     except ValueError as e:
