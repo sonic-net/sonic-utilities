@@ -2117,13 +2117,13 @@ def generate_sysinfo(cur_config, config_input, ns=None):
 
     # Reuse current config's mac and platform. Generate if absent
     if cur_device_metadata is not None:
-        mac = cur_device_metadata.get('localhost', {}).get('mac')
-        platform = cur_device_metadata.get('localhost', {}).get('platform')
+        mac = cur_device_metadata.get('localhost', {}).get('mac').rstrip('\n')
+        platform = cur_device_metadata.get('localhost', {}).get('platform').rstrip('\n')
 
     if not mac:
         if ns:
-            asic_role = device_metadata.get('localhost', {}).get('sub_role')
-            switch_type = device_metadata.get('localhost', {}).get('switch_type')
+            asic_role = device_metadata.get('localhost', {}).get('sub_role').rstrip('\n')
+            switch_type = device_metadata.get('localhost', {}).get('switch_type').rstrip('\n')
 
             if ((switch_type is not None and switch_type.lower() == "chassis-packet") or
                     (asic_role is not None and asic_role.lower() == "backend")):
