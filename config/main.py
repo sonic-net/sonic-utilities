@@ -2204,7 +2204,9 @@ def override_config_table(db, input_config_db, dry_run):
         table_hard_dependency_check(updated_config)
 
         yang_enabled = device_info.is_yang_config_validation_enabled(config_db)
-        if yang_enabled:
+
+        # Always enable YANG check
+        if yang_enabled or True:
             # The ConfigMgmt will load YANG and running
             # config during initialization.
             try:
@@ -2214,8 +2216,9 @@ def override_config_table(db, input_config_db, dry_run):
                 click.secho("Failed to validate running config. Error: {}".format(ex), fg="magenta")
                 sys.exit(1)
 
-            # Validate input config
-            validate_config_by_cm(cm, ns_config_input, "config_input")
+            #skip input override config check since it is missing YANG dependencies
+            ## Validate input config
+            #validate_config_by_cm(cm, ns_config_input, "config_input")
             # Validate updated whole config
             validate_config_by_cm(cm, updated_config, "updated_config")
         else:

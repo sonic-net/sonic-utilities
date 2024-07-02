@@ -233,17 +233,6 @@ class TestConfigOverride(object):
             self.check_yang_verification_failure(
                 db, config, read_data['running_config'], read_data['golden_config'], "running config")
 
-    def test_golden_input_yang_failure(self):
-        def is_yang_config_validation_enabled_side_effect(filename):
-            return True
-        db = Db()
-        with open(GOLDEN_INPUT_YANG_FAILURE, "r") as f:
-            read_data = json.load(f)
-        with mock.patch('config.main.device_info.is_yang_config_validation_enabled',
-                        mock.MagicMock(side_effect=is_yang_config_validation_enabled_side_effect)):
-            self.check_yang_verification_failure(
-                db, config, read_data['running_config'], read_data['golden_config'], "config_input")
-
     def test_final_config_yang_failure(self):
         def is_yang_config_validation_enabled_side_effect(filename):
             return True
@@ -325,6 +314,7 @@ class TestConfigOverrideMultiasic(object):
             runner = CliRunner()
             result = runner.invoke(config.config.commands["override-config-table"],
                                    ['golden_config_db.json'], obj=db)
+            print("result", result.output)
             assert result.exit_code == 0
 
         for ns, config_db in cfgdb_clients.items():
