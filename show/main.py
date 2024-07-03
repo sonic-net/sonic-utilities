@@ -933,8 +933,9 @@ def pwm_headroom_pool():
 @click.option('-a', '--address')
 @click.option('-t', '--type')
 @click.option('-c', '--count', is_flag=True)
+@click.option('-l', '--local', is_flag=True)
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def mac(ctx, vlan, port, address, type, count, verbose):
+def mac(ctx, vlan, port, address, type, count, local, verbose):
     """Show MAC (FDB) entries"""
 
     if ctx.invoked_subcommand is not None:
@@ -956,6 +957,9 @@ def mac(ctx, vlan, port, address, type, count, verbose):
 
     if count:
         cmd += ["-c"]
+
+    if local:
+        cmd += " -l"
 
     run_command(cmd, display_cmd=verbose)
 
