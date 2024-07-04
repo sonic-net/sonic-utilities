@@ -2155,7 +2155,7 @@ finalize() {
 
 
 ###############################################################################
-# Remove secret from pipeline inout and output result to pipeline.
+# Remove secret from pipeline input and output result to pipeline.
 # Globals:
 #  None
 # Arguments:
@@ -2166,6 +2166,18 @@ finalize() {
 remove_secret_from_config_db_dump() {
     # Remove tacacs & radius passkey and snmp community from config DB
     sed -E 's/\"passkey\"\s*:\s*\"([^\"]*)\"/\"passkey\":\"****\"/g; /SNMP_COMMUNITY/,/\s{2,4}\},/d'
+}
+
+
+###############################################################################
+# Remove secret from file.
+###############################################################################
+remove_secret_from_config_db_dump_file() {
+    local dumpfile=$1
+    if [ -e ${dumpfile} ]; then
+        cat $dumpfile | remove_secret_from_config_db_dump > $dumpfile.temp
+        mv $dumpfile.temp $dumpfile
+    fi
 }
 
 ###############################################################################
@@ -2201,8 +2213,24 @@ remove_secret_from_etc_files() {
     sed -i -E 's/(\s*snmp_\S*community\s*:\s*)(\S*)/\1****/g' $dumppath/etc/sonic/snmp.yml
 
     # Remove secret from /etc/sonic/config_db.json
-    cat $dumppath/etc/sonic/config_db.json | remove_secret_from_config_db_dump > $dumppath/etc/sonic/config_db.json.temp
-    mv $dumppath/etc/sonic/config_db.json.temp $dumppath/etc/sonic/config_db.json
+    remove_secret_from_config_db_dump_file $dumppath/etc/sonic/config_db.json
+
+    # Remove secret from /etc/sonic/golden_config_db.json
+    remove_secret_from_config_db_dump_file $dumppath/etc/sonic/golden_config_db.json
+
+    # Remove secret from /etc/sonic/old_config/
+
+    # Remove snmp community string from old_config/snmp.yml
+    local oldsnmp=${dumppath}/etc/sonic/old_config/snmp.yml
+    if [ -e ${oldsnmp} ]; then
+        sed -i -E 's/(\s*snmp_\S*community\s*:\s*)(\S*)/\1****/g' $oldsnmp
+    fi
+
+    # Remove secret from /etc/sonic/config_db.json
+    remove_secret_from_config_db_dump_file ${dumppath}/etc/sonic/old_config/config_db.json
+
+    # Remove secret from /etc/sonic/golden_config_db.json
+    remove_secret_from_config_db_dump_file ${dumppath}/etc/sonic/old_config/golden_config_db.json
 }
 
 ###############################################################################
