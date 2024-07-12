@@ -1510,3 +1510,46 @@ EEPROM hexdump for port Ethernet4
 
         mock_is_multi_asic.return_value = False
         assert sfputil.load_port_config() == True
+
+    @patch('sfputil.main.is_port_type_rj45', MagicMock(return_value=False))
+    @patch('sfputil.main.platform_chassis')
+    @patch('sfputil.main.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
+    @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
+    def test_debug_loopback(self, mock_chassis):
+        mock_sfp = MagicMock()
+        mock_api = MagicMock()
+        mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
+        mock_sfp.get_presence.return_value = True
+        mock_sfp.get_xcvr_api = MagicMock(return_value=mock_api)
+
+        runner = CliRunner()
+        mock_sfp.get_presence.return_value = False
+        result = runner.invoke(sfputil.cli.commands['debug'].commands['loopback'],
+                               ["Ethernet0", "host-side-input"])
+        assert result.output == 'Ethernet0: SFP EEPROM not detected\n'
+        mock_sfp.get_presence.return_value = True
+
+        mock_sfp.get_xcvr_api = MagicMock(side_effect=NotImplementedError)
+        result = runner.invoke(sfputil.cli.commands['debug'].commands['loopback'],
+                               ["Ethernet0", "host-side-input"])
+        assert result.output == 'Ethernet0: This functionality is not implemented\n'
+        assert result.exit_code == ERROR_NOT_IMPLEMENTED
+
+        mock_sfp.get_xcvr_api = MagicMock(return_value=mock_api)
+        result = runner.invoke(sfputil.cli.commands['debug'].commands['loopback'],
+                               ["Ethernet0", "host-side-input"])
+        assert result.output == 'Ethernet0: Set host-side-input loopback\n'
+        assert result.exit_code != ERROR_NOT_IMPLEMENTED
+
+        mock_api.set_loopback_mode.return_value = False
+        result = runner.invoke(sfputil.cli.commands['debug'].commands['loopback'],
+                               ["Ethernet0", "none"])
+        assert result.output == 'Ethernet0: Set none loopback failed\n'
+        assert result.exit_code == EXIT_FAIL
+
+        mock_api.set_loopback_mode.return_value = True
+        mock_api.set_loopback_mode.side_effect = AttributeError
+        result = runner.invoke(sfputil.cli.commands['debug'].commands['loopback'],
+                               ["Ethernet0", "none"])
+        assert result.output == 'Ethernet0: Set loopback mode is not applicable for this module\n'
+        assert result.exit_code == ERROR_NOT_IMPLEMENTED

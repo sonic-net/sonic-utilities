@@ -47,6 +47,8 @@
   * [CMIS firmware version show commands](#cmis-firmware-version-show-commands)
   * [CMIS firmware upgrade commands](#cmis-firmware-upgrade-commands)
   * [CMIS firmware target mode commands](#cmis-firmware-target-mode-commands)
+* [CMIS debug](#cmis-debug)
+* [CMIS debug loopback](#cmis-debug-loopback)
 * [DHCP Relay](#dhcp-relay)
   * [DHCP Relay show commands](#dhcp-relay-show-commands)
   * [DHCP Relay clear commands](#dhcp-relay-clear-commands)
@@ -3092,6 +3094,31 @@ Example of the module supporting target mode
   ```
   admin@sonic:~$ sfputil firmware target Ethernet180 1
   Target Mode set to 1
+  ```
+
+## CMIS debug
+
+### CMIS debug loopback
+
+This command is the standard CMIS diagnostic control used for troubleshooting link and performance issues between the host switch and transceiver module.
+
+**sfputil debug loopback**
+
+- Usage:
+  ```
+  sfputil debug loopback PORT_NAME LOOPBACK_MODE
+
+  Set the loopback mode
+  host-side-input: host side input loopback mode
+  host-side-output: host side output loopback mode
+  media-side-input: media side input loopback mode
+  media-side-output: media side output loopback mode
+  none: disable loopback mode
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sfputil debug loopback Ethernet88 host-side-input
   ```
 
 ## DHCP Relay
