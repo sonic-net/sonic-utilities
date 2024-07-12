@@ -123,7 +123,7 @@ class TestConfigMgmt(TestCase):
             ['00:11:22:BB:CC:DD', '00:11:22:bb:cc:dd']
 
         # verify correct function call to writeConfigDB
-        assert cmdpb.writeConfigDB.call_count == 3
+        assert cmdpb.writeConfigDB.call_count == 4
         print(cmdpb.writeConfigDB.call_args_list[0])
         # args is populated if call is done as writeConfigDB(a, b), kwargs is
         # populated if call is done as writeConfigDB(A=a, B=b)
