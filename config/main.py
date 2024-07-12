@@ -3538,8 +3538,12 @@ def add_snmp_agent_address(ctx, agentip, port, vrf):
     config_db.set_entry('SNMP_AGENT_ADDRESS_CONFIG', key, {})
 
     #Restarting the SNMP service will regenerate snmpd.conf and rerun snmpd
-    cmd="systemctl restart snmp"
-    os.system (cmd)
+    try:
+        clicommon.run_command("systemctl reset-failed snmp.service", display_cmd=False)
+        clicommon.run_command("systemctl restart snmp.service", display_cmd=False)
+    except SystemExit as e:
+        click.echo("Restart service snmp failed with error {}".format(e))
+        raise click.Abort()
 
 @snmpagentaddress.command('del')
 @click.argument('agentip', metavar='<SNMP AGENT LISTENING IP Address>', required=True)
@@ -3557,8 +3561,12 @@ def del_snmp_agent_address(ctx, agentip, port, vrf):
         key = key+vrf
     config_db = ctx.obj['db']
     config_db.set_entry('SNMP_AGENT_ADDRESS_CONFIG', key, None)
-    cmd="systemctl restart snmp"
-    os.system (cmd)
+    try:
+        clicommon.run_command("systemctl reset-failed snmp.service", display_cmd=False)
+        clicommon.run_command("systemctl restart snmp.service", display_cmd=False)
+    except SystemExit as e:
+        click.echo("Restart service snmp failed with error {}".format(e))
+        raise click.Abort()
 
 @config.group(cls=clicommon.AbbreviationGroup)
 @click.pass_context
@@ -3588,8 +3596,12 @@ def modify_snmptrap_server(ctx, ver, serverip, port, vrf, comm):
     else:
         config_db.mod_entry('SNMP_TRAP_CONFIG', "v3TrapDest", {"DestIp": serverip, "DestPort": port, "vrf": vrf, "Community": comm})
 
-    cmd="systemctl restart snmp"
-    os.system (cmd)
+    try:
+        clicommon.run_command("systemctl reset-failed snmp.service", display_cmd=False)
+        clicommon.run_command("systemctl restart snmp.service", display_cmd=False)
+    except SystemExit as e:
+        click.echo("Restart service snmp failed with error {}".format(e))
+        raise click.Abort()
 
 @snmptrap.command('del')
 @click.argument('ver', metavar='<SNMP Version>', type=click.Choice(['1', '2', '3']), required=True)
@@ -3604,8 +3616,13 @@ def delete_snmptrap_server(ctx, ver):
         config_db.mod_entry('SNMP_TRAP_CONFIG', "v2TrapDest", None)
     else:
         config_db.mod_entry('SNMP_TRAP_CONFIG', "v3TrapDest", None)
-    cmd="systemctl restart snmp"
-    os.system (cmd)
+
+    try:
+        clicommon.run_command("systemctl reset-failed snmp.service", display_cmd=False)
+        clicommon.run_command("systemctl restart snmp.service", display_cmd=False)
+    except SystemExit as e:
+        click.echo("Restart service snmp failed with error {}".format(e))
+        raise click.Abort()
 
 
 
