@@ -22,7 +22,7 @@
                 "spc2": [ "ACS-MSN3800", "Mellanox-SN3800-D112C8", "ACS-MSN3420", "ACS-MSN3700C", "ACS-MSN3700", "Mellanox-SN3800-C64", "Mellanox-SN3800-D100C12S2", "Mellanox-SN3800-D24C52", "Mellanox-SN3800-D28C49S1", "Mellanox-SN3800-D28C50" ],
                 "spc3": [ "ACS-MSN4700", "ACS-MSN4600", "ACS-MSN4600C", "ACS-MSN4410", "Mellanox-SN4600C-D112C8", "Mellanox-SN4600C-C64", "Mellanox-SN4700-O8C48", "Mellanox-SN4600C-D100C12S2", "Mellanox-SN4600C-D48C40",
                           "Mellanox-SN4700-A96C8V8", "Mellanox-SN4700-C128", "Mellanox-SN4700-O28", "Mellanox-SN4700-O8V48", "Mellanox-SN4700-V48C32"],
-                "spc4": [ "ACS-SN5600", "Mellanox-SN5600-O128", "Mellanox-SN5600-V256", "ACS-SN5400" ]
+                "spc4": [ "ACS-SN5600", "Mellanox-SN5600-O128", "Mellanox-SN5600-V256", "Mellanox-SN5600-C256", "ACS-SN5400" ]
             },
             "broadcom_asics": {
                 "th": [ "Force10-S6100", "Arista-7060CX-32S-C32", "Arista-7060CX-32S-C32-T1", "Arista-7060CX-32S-D48C8", "Celestica-DX010-C32", "Seastone-DX010" ],
