@@ -20,6 +20,46 @@ EXIT_FAIL = -1
 ERROR_NOT_IMPLEMENTED = 5
 ERROR_INVALID_PORT = 6
 
+FLAT_MEMORY_MODULE_EEPROM_SFP_INFO_DICT = {
+    'type': 'QSFP28 or later',
+    'type_abbrv_name': 'QSFP28',
+    'manufacturer': 'Mellanox',
+    'model': 'MCP1600-C003',
+    'vendor_rev': 'A2',
+    'serial': 'MT1636VS10561',
+    'vendor_oui': '00-02-c9',
+    'vendor_date': '2016-07-18',
+    'connector': 'No separable connector',
+    'encoding': '64B66B',
+    'ext_identifier': 'Power Class 1(1.5W max)',
+    'ext_rateselect_compliance': 'QSFP+ Rate Select Version 1',
+    'cable_type': 'Length Cable Assembly(m)',
+    'cable_length': '3',
+    'application_advertisement': 'N/A',
+    'specification_compliance': "{'10/40G Ethernet Compliance Code': '40GBASE-CR4'}",
+    'dom_capability': "{'Tx_power_support': 'no', 'Rx_power_support': 'no',\
+                        'Voltage_support': 'no', 'Temp_support': 'no'}",
+    'nominal_bit_rate': '255'
+}
+FLAT_MEMORY_MODULE_EEPROM = """Ethernet16: SFP EEPROM detected
+        Application Advertisement: N/A
+        Connector: No separable connector
+        Encoding: 64B66B
+        Extended Identifier: Power Class 1(1.5W max)
+        Extended RateSelect Compliance: QSFP+ Rate Select Version 1
+        Identifier: QSFP28 or later
+        Length Cable Assembly(m): 3
+        Nominal Bit Rate(100Mbs): 255
+        Specification compliance:
+                10/40G Ethernet Compliance Code: 40GBASE-CR4
+        Vendor Date Code(YYYY-MM-DD Lot): 2016-07-18
+        Vendor Name: Mellanox
+        Vendor OUI: 00-02-c9
+        Vendor PN: MCP1600-C003
+        Vendor Rev: A2
+        Vendor SN: MT1636VS10561
+"""
+
 class TestSfputil(object):
     def test_format_dict_value_to_string(self):
         sorted_key_table = [
@@ -584,6 +624,39 @@ Ethernet0  N/A
         assert result.exit_code == 0
         expected_output = "Ethernet16: SFP EEPROM is not applicable for RJ45 port\n\n\n"
         assert result.output == expected_output
+
+    @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
+    @patch('sfputil.main.logical_port_name_to_physical_port_list', MagicMock(return_value=[1]))
+    @patch('sfputil.main.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
+    @patch('sfputil.main.is_port_type_rj45', MagicMock(return_value=False))
+    @pytest.mark.parametrize("exception, xcvr_api_none, expected_output", [
+        (None, False, '''DOM values not supported for flat memory module\n\n'''),
+        (NotImplementedError, False, '''API is currently not implemented for this platform\n\n'''),
+        (None, True, '''API is none while getting DOM info!\n\n''')
+    ])
+    @patch('sfputil.main.platform_chassis')
+    def test_show_eeprom_dom_conditions(self, mock_chassis, exception, xcvr_api_none, expected_output):
+        mock_sfp = MagicMock()
+        mock_sfp.get_presence.return_value = True
+        mock_sfp.get_transceiver_info.return_value = FLAT_MEMORY_MODULE_EEPROM_SFP_INFO_DICT
+        mock_chassis.get_sfp.return_value = mock_sfp
+
+        if exception:
+            mock_chassis.get_sfp().get_xcvr_api.side_effect = exception
+        elif xcvr_api_none:
+            mock_chassis.get_sfp().get_xcvr_api.return_value = None
+        else:
+            mock_api = MagicMock()
+            mock_chassis.get_sfp().get_xcvr_api.return_value = mock_api
+
+        runner = CliRunner()
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom'], ["-p", "Ethernet16", "-d"])
+
+        if exception or xcvr_api_none:
+            assert result.exit_code == ERROR_NOT_IMPLEMENTED
+        else:
+            assert result.exit_code == 0
+        assert result.output == FLAT_MEMORY_MODULE_EEPROM + expected_output
 
     @patch('sfputil.main.platform_chassis')
     @patch('sfputil.main.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=0)))
