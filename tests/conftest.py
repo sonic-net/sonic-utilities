@@ -386,6 +386,13 @@ def setup_multi_asic_bgp_instance(request):
         else:
             return ""
 
+    def mock_multi_asic_list():
+        return ["asic0", "asic1"]
+
+    # mock multi-asic list
+    if request.param == "bgp_v4_network_all_asic":
+        multi_asic.get_namespace_list = mock_multi_asic_list
+
     _old_run_bgp_command = bgp_util.run_bgp_command
     if request.param == 'ip_route_for_int_ip':
         bgp_util.run_bgp_command = mock_run_bgp_command_for_static

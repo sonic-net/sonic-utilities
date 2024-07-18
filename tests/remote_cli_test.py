@@ -12,9 +12,9 @@ import select
 import socket
 import termios
 
-MULTI_LC_REXEC_OUTPUT = '''======== sonic-lc1 output: ========
+MULTI_LC_REXEC_OUTPUT = '''======== LINE-CARD0|sonic-lc1 output: ========
 hello world
-======== LINE-CARD2 output: ========
+======== LINE-CARD2|sonic-lc3 output: ========
 hello world
 '''
 REXEC_HELP = '''Usage: cli [OPTIONS] LINECARD_NAMES...
@@ -152,12 +152,12 @@ class TestRemoteExec(object):
     @mock.patch.object(linecard.Linecard, 'execute_cmd', mock.MagicMock(return_value="hello world"))
     def test_rexec_invalid_lc(self):
         runner = CliRunner()
-        LINECARD_NAME = "sonic-lc-3"
+        LINECARD_NAME = "sonic-lc-100"
         result = runner.invoke(
             rexec.cli, [LINECARD_NAME, "-c", "show version"])
         print(result.output)
         assert result.exit_code == 1, result.output
-        assert "Linecard sonic-lc-3 not found\n" == result.output
+        assert "Linecard sonic-lc-100 not found\n" == result.output
 
     @mock.patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=True))
     @mock.patch("os.getlogin", mock.MagicMock(return_value="admin"))

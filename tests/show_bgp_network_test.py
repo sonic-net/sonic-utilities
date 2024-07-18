@@ -57,7 +57,8 @@ class TestBgpNetwork(object):
          ('bgp_v4_network_bestpath', 'bgp_v4_network_bestpath'),
          ('bgp_v6_network_longer_prefixes', 'bgp_v6_network_longer_prefixes'),
          ('bgp_v4_network', 'bgp_v4_network_longer_prefixes_error'),
-         ('bgp_v4_network', 'bgp_v6_network_longer_prefixes_error')],
+         ('bgp_v4_network', 'bgp_v6_network_longer_prefixes_error'),
+         ('bgp_v4_network', 'bgp_v4_network_all_asic_on_single_asic')],
         indirect=['setup_single_bgp_instance'])
     def test_bgp_network(self, setup_bgp_commands, test_vector,
                          setup_single_bgp_instance):
@@ -84,7 +85,9 @@ class TestMultiAsicBgpNetwork(object):
          ('bgp_v4_network_bestpath_asic0', 'bgp_v4_network_bestpath_asic0'),
         ('bgp_v6_network_asic0', 'bgp_v6_network_asic0'),
          ('bgp_v6_network_ip_address_asic0', 'bgp_v6_network_ip_address_asic0'),
-         ('bgp_v6_network_bestpath_asic0', 'bgp_v6_network_bestpath_asic0')],
+         ('bgp_v6_network_bestpath_asic0', 'bgp_v6_network_bestpath_asic0'),
+         ('bgp_v4_network_all_asic', 'bgp_v4_network_all_asic'),
+         ('bgp_v4_network', 'bgp_v4_network_asic_unknown')],
         indirect=['setup_multi_asic_bgp_instance'])
     def test_bgp_network(self, setup_bgp_commands, test_vector,
                          setup_multi_asic_bgp_instance):
