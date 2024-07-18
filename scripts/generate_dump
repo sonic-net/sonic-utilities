@@ -1881,6 +1881,10 @@ while getopts ":xnvhzas:t:r:d" opt; do
             date --date="${SINCE_DATE}" &> /dev/null || abort "${EXT_INVALID_ARGUMENT}" "Invalid date expression passed: '${SINCE_DATE}'"
             ;;
         t)
+            if ! [[ ${OPTARG} =~ ^[0-9]+$ ]]; then
+                echo "Invalid timeout value: ${OPTARG}, Please enter a numeric value."
+                exit $EXT_GENERAL
+            fi
             TIMEOUT_MIN="${OPTARG}"
             ;;
         r)
