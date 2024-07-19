@@ -74,24 +74,27 @@ class TestVersionComparison(object):
     def setup_class(cls):
         cls.version_comp_list = [
                                   # Old format v.s old format
-                                  { 'v1' : 'version_1_0_1', 'v2' : 'version_1_0_2', 'result' : False },
-                                  { 'v1' : 'version_1_0_2', 'v2' : 'version_1_0_1', 'result' : True  },
-                                  { 'v1' : 'version_1_0_1', 'v2' : 'version_2_0_1', 'result' : False },
-                                  { 'v1' : 'version_2_0_1', 'v2' : 'version_1_0_1', 'result' : True  },
+                                  {'v1': 'version_1_0_1', 'v2': 'version_1_0_2', 'result': False},
+                                  {'v1': 'version_1_0_2', 'v2': 'version_1_0_1', 'result': True},
+                                  {'v1': 'version_1_0_1', 'v2': 'version_2_0_1', 'result': False},
+                                  {'v1': 'version_2_0_1', 'v2': 'version_1_0_1', 'result': True},
                                   # New format v.s old format
-                                  { 'v1' : 'version_1_0_1', 'v2' : 'version_202311_01', 'result' : False },
-                                  { 'v1' : 'version_202311_01', 'v2' : 'version_1_0_1', 'result' : True  },
-                                  { 'v1' : 'version_1_0_1', 'v2' : 'version_master_01', 'result' : False },
-                                  { 'v1' : 'version_master_01', 'v2' : 'version_1_0_1', 'result' : True  },
+                                  {'v1': 'version_1_0_1', 'v2': 'version_202311_01', 'result': False},
+                                  {'v1': 'version_202311_01', 'v2': 'version_1_0_1', 'result': True},
+                                  {'v1': 'version_1_0_1', 'v2': 'version_master_01', 'result': False},
+                                  {'v1': 'version_master_01', 'v2': 'version_1_0_1', 'result': True},
                                   # New format v.s new format
-                                  { 'v1' : 'version_202311_01', 'v2' : 'version_202311_02', 'result' : False },
-                                  { 'v1' : 'version_202311_02', 'v2' : 'version_202311_01', 'result' : True  },
-                                  { 'v1' : 'version_202305_01', 'v2' : 'version_202311_01', 'result' : False },
-                                  { 'v1' : 'version_202311_01', 'v2' : 'version_202305_01', 'result' : True  },
-                                  { 'v1' : 'version_202311_01', 'v2' : 'version_master_01', 'result' : False },
-                                  { 'v1' : 'version_master_01', 'v2' : 'version_202311_01', 'result' : True  },
-                                  { 'v1' : 'version_master_01', 'v2' : 'version_master_02', 'result' : False },
-                                  { 'v1' : 'version_master_02', 'v2' : 'version_master_01', 'result' : True  },
+                                  {'v1': 'version_202311_01', 'v2': 'version_202311_02', 'result': False},
+                                  {'v1': 'version_202311_02', 'v2': 'version_202311_01', 'result': True},
+                                  {'v1': 'version_202305_01', 'v2': 'version_202311_01', 'result': False},
+                                  {'v1': 'version_202311_01', 'v2': 'version_202305_01', 'result': True},
+                                  {'v1': 'version_202405_01', 'v2': 'version_202411_01', 'result': False},
+                                  {'v1': 'version_202411_01', 'v2': 'version_202405_01', 'result': True},
+                                  {'v1': 'version_202411_01', 'v2': 'version_master_01', 'result': False},
+                                  {'v1': 'version_202311_01', 'v2': 'version_master_01', 'result': False},
+                                  {'v1': 'version_master_01', 'v2': 'version_202311_01', 'result': True},
+                                  {'v1': 'version_master_01', 'v2': 'version_master_02', 'result': False},
+                                  {'v1': 'version_master_02', 'v2': 'version_master_01', 'result': True},
                                 ]
 
     def test_version_comparison(self):
@@ -383,7 +386,7 @@ class TestDnsNameserverMigrator(object):
         dbmgtr.migrate()
         dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'dns-nameserver-expected')
         expected_db = Db()
-        advance_version_for_expected_database(dbmgtr.configDB, expected_db.cfgdb, 'version_202405_01')
+        advance_version_for_expected_database(dbmgtr.configDB, expected_db.cfgdb, 'version_202411_01')
         resulting_keys = dbmgtr.configDB.keys(dbmgtr.configDB.CONFIG_DB, 'DNS_NAMESERVER*')
         expected_keys = expected_db.cfgdb.keys(expected_db.cfgdb.CONFIG_DB, 'DNS_NAMESERVER*')
 
@@ -895,7 +898,7 @@ class TestMain(object):
     @mock.patch('swsscommon.swsscommon.SonicDBConfig.isInit', mock.MagicMock(return_value=False))
     @mock.patch('swsscommon.swsscommon.SonicDBConfig.initialize', mock.MagicMock())
     def test_init_no_namespace(self, mock_args):
-        mock_args.return_value=argparse.Namespace(namespace=None, operation='version_202405_01', socket=None)
+        mock_args.return_value = argparse.Namespace(namespace=None, operation='version_202411_01', socket=None)
         import db_migrator
         db_migrator.main()
 
@@ -903,7 +906,7 @@ class TestMain(object):
     @mock.patch('swsscommon.swsscommon.SonicDBConfig.isGlobalInit', mock.MagicMock(return_value=False))
     @mock.patch('swsscommon.swsscommon.SonicDBConfig.initializeGlobalConfig', mock.MagicMock())
     def test_init_namespace(self, mock_args):
-        mock_args.return_value=argparse.Namespace(namespace="asic0", operation='version_202405_01', socket=None)
+        mock_args.return_value = argparse.Namespace(namespace="asic0", operation='version_202411_01', socket=None)
         import db_migrator
         db_migrator.main()
 
@@ -940,7 +943,7 @@ class TestGNMIMigrator(object):
         dbmgtr.migrate()
         dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'gnmi-minigraph-expected')
         expected_db = Db()
-        advance_version_for_expected_database(dbmgtr.configDB, expected_db.cfgdb, 'version_202405_01')
+        advance_version_for_expected_database(dbmgtr.configDB, expected_db.cfgdb, 'version_202411_01')
         resulting_table = dbmgtr.configDB.get_table("GNMI")
         expected_table = expected_db.cfgdb.get_table("GNMI")
 
@@ -956,7 +959,7 @@ class TestGNMIMigrator(object):
         dbmgtr.migrate()
         dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'gnmi-configdb-expected')
         expected_db = Db()
-        advance_version_for_expected_database(dbmgtr.configDB, expected_db.cfgdb, 'version_202405_01')
+        advance_version_for_expected_database(dbmgtr.configDB, expected_db.cfgdb, 'version_202411_01')
         resulting_table = dbmgtr.configDB.get_table("GNMI")
         expected_table = expected_db.cfgdb.get_table("GNMI")
 
