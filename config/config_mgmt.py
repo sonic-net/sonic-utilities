@@ -378,6 +378,31 @@ class ConfigMgmtDPB(ConfigMgmt):
 
         return True
 
+    def _verifyPortShutdown(self, db, ports, timeout):
+        self.sysLog(doPrint=True, msg="Verify Port shutdown from State DB, Wait...")
+
+        db.connect(db.STATE_DB)
+        for waitTime in range(timeout):
+            retry = False
+            for intf in ports:
+                _hash = "PORT_TABLE|{}".format(intf)
+                port_status = db.get(db.STATE_DB, _hash, "admin_status")
+                if port_status != 'down':
+                    retry = True
+                    continue
+            if retry:
+                tsleep(1)
+            else:
+                break
+
+        if waitTime + 1 == timeout:
+            for intf in ports:
+                _hash = "PORT_TABLE|{}".format(intf)
+                port_status = db.get(db.STATE_DB, _hash, "admin_status")
+                if port_status != 'down':
+                    self.sysLog(syslog.LOG_CRIT, "Fail to shutdown port {}".format(intf))
+
+
     def _verifyAsicDB(self, db, ports, portMap, timeout):
         '''
         Verify in the Asic DB that port are deleted, Keep on trying till timeout
@@ -457,6 +482,7 @@ class ConfigMgmtDPB(ConfigMgmt):
             # -- verify Asic DB for port deletion,
             # -- then update addition of ports in config DB.
             self._shutdownIntf(delPorts)
+            self._verifyPortShutdown(dataBase, delPorts, MAX_WAIT)
             self.writeConfigDB(delConfigToLoad)
             # Verify in Asic DB,
             self._verifyAsicDB(db=dataBase, ports=delPorts, portMap=if_name_map, \
@@ -603,9 +629,14 @@ class ConfigMgmtDPB(ConfigMgmt):
         Returns:
             void
         """
+        configdb = ConfigDBConnector()
+        configdb.connect(False)
         shutDownConf = dict(); shutDownConf["PORT"] = dict()
         for intf in ports:
-            shutDownConf["PORT"][intf] = {"admin_status": "down"}
+            port_entry = configdb.get_entry('PORT', intf)
+            port_status = port_entry.get("admin_status")
+            if port_status == "up":
+                shutDownConf["PORT"][intf] = {"admin_status": "down"}
         self.sysLog(msg='shutdown Interfaces: {}'.format(shutDownConf))
 
         if len(shutDownConf["PORT"]):
