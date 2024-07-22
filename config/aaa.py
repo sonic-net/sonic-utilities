@@ -1,16 +1,29 @@
 import click
 import ipaddress
 import re
+import subprocess
 from swsscommon.swsscommon import ConfigDBConnector
 from .validated_config_db_connector import ValidatedConfigDBConnector
 from jsonpatch import JsonPatchConflict
 from jsonpointer import JsonPointerException
 import utilities_common.cli as clicommon
 
+TAC_PLUS_PASSKEY_MAX_LEN = 65
 ADHOC_VALIDATION = True
 RADIUS_MAXSERVERS = 8
 RADIUS_PASSKEY_MAX_LEN = 65
 VALID_CHARS_MSG = "Valid chars are ASCII printable except SPACE, '#', and ','"
+TACPLUS_SECRET_PASSWORD = "ktbSJeed7apq9dZHOD1O5wW9cvSaRWjW767qLyFEurDTSNEvHdYspaCuEzZcMg8R"
+
+
+def encrypt_data(secret):
+    cmd = ['openssl', 'enc', '-aes-128-cbc', '-A',  '-a', '-salt', '-pbkdf2',
+           '-pass', 'pass:' + TACPLUS_SECRET_PASSWORD]
+    p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
+                         stderr=subprocess.PIPE, universal_newlines=True)
+    outsecret, errs = p.communicate(input=secret)
+    return outsecret, errs
+
 
 def is_secret(secret):
     return bool(re.match('^' + '[^ #,]*' + '$', secret))
@@ -240,7 +253,20 @@ def passkey(ctx, secret):
     if ctx.obj == 'default':
         del_table_key('TACPLUS', 'global', 'passkey')
     elif secret:
-        add_table_kv('TACPLUS', 'global', 'passkey', secret)
+        if len(secret) > TAC_PLUS_PASSKEY_MAX_LEN:
+            click.echo('Maximum of %d chars can be configured' % TAC_PLUS_PASSKEY_MAX_LEN)
+            return
+        elif not is_secret(secret):
+            click.echo(VALID_CHARS_MSG)
+            return
+
+        outsecret, errs = encrypt_data(secret)
+        if not errs:
+            add_table_kv('TACPLUS', 'global', 'passkey', outsecret)
+        else:
+            click.echo('Key configuration failed' % errs)
+            return
+
     else:
         click.echo('Argument "secret" is required')
 tacacs.add_command(passkey)
@@ -278,7 +304,13 @@ def add(address, timeout, key, auth_type, port, pri, use_mgmt_vrf):
         if timeout is not None:
             data['timeout'] = str(timeout)
         if key is not None:
-            data['passkey'] = key
+            outsecret, errs = encrypt_data(key)
+            if not errs:
+                data['passkey'] = outsecret
+            else:
+                click.echo('Key configuration failed' % errs)
+                return
+
         if use_mgmt_vrf :
             data['vrf'] = "mgmt"
         try:
