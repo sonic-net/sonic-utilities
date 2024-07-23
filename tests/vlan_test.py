@@ -1426,7 +1426,7 @@ class TestVlan(object):
                                ["Ethernet4", "10.10.10.1/24"], obj=obj)
         print(result.exit_code, result.output)
         assert result.exit_code == 0
-        assert 'Interface Ethernet4 is in trunk mode and needs to be in routed mode!' in result.output
+        assert 'Interface Ethernet4 is a member of vlan\nAborting!\n' in result.output
 
     def test_config_vlan_add_member_of_portchannel(self):
         runner = CliRunner()
