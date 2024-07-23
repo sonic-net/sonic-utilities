@@ -1120,7 +1120,6 @@ save_file() {
 find_files() {
     trap 'handle_error $? $LINENO' ERR
     local -r directory=$1
-    $TOUCH --date="${SINCE_DATE}" "${REFERENCE_FILE}"
     local -r find_command="find -L $directory -type f -newer ${REFERENCE_FILE}"
 
     echo $($find_command)
@@ -1914,6 +1913,8 @@ main() {
     ${CMD_PREFIX}renice +5 -p $$ >> /dev/null
     ${CMD_PREFIX}ionice -c 2 -n 5 -p $$ >> /dev/null
 
+    # Created file as a reference to compare modification time
+    $TOUCH --date="${SINCE_DATE}" "${REFERENCE_FILE}"
     $MKDIR $V -p $TARDIR
 
     # Start with this script so its obvious what code is responsible
