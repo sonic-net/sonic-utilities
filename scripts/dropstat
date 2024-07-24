@@ -11,8 +11,8 @@
 # - Refactor calls to COUNTERS_DB to reduce redundancy
 # - Cache DB queries to reduce # of expensive queries
 
+import click
 import json
-import argparse
 import os
 import socket
 import sys
@@ -20,6 +20,9 @@ import sys
 from collections import OrderedDict
 from natsort import natsorted
 from tabulate import tabulate
+from sonic_py_common import multi_asic
+from utilities_common.general import load_db_config
+import utilities_common.multi_asic as multi_asic_util
 
 # mock the redis for unit test purposes #
 try:
@@ -28,9 +31,14 @@ try:
         test_path = os.path.join(modules_path, "tests")
         sys.path.insert(0, modules_path)
         sys.path.insert(0, test_path)
-        import mock_tables.dbconnector
+        from tests.mock_tables import dbconnector
         socket.gethostname = lambda: 'sonic_drops_test'
         os.getuid = lambda: 27
+    if os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] == "multi_asic":
+        import tests.mock_tables.mock_multi_asic
+        dbconnector.load_namespace_config()
+    else:
+        dbconnector.load_database_config()
 except KeyError:
     pass
 
@@ -90,29 +98,31 @@ def get_dropstat_dir():
 
 
 class DropStat(object):
-    def __init__(self):
-        self.config_db = ConfigDBConnector()
-        self.config_db.connect()
-
-        self.db = SonicV2Connector(use_unix_socket_path=False)
-        self.db.connect(self.db.COUNTERS_DB)
-        self.db.connect(self.db.ASIC_DB)
-        self.db.connect(self.db.APPL_DB)
-        self.db.connect(self.db.CONFIG_DB)
+    def __init__(self, namespace):
+        self.namespaces = multi_asic.get_namespace_list(namespace)
+        self.multi_asic = multi_asic_util.MultiAsic(namespace_option=namespace)
+        self.db = None
+        self.config_db = None
+        self.cached_namespace = None
 
         dropstat_dir = get_dropstat_dir()
         self.port_drop_stats_file = os.path.join(dropstat_dir, 'port-stats')
-        self.switch_drop_stats_file = os.path.join(dropstat_dir + 'switch-stats')
-        self.switch_std_drop_stats_file = os.path.join(dropstat_dir,  'switch-std-drop-stats')
+        self.switch_drop_stats_file = os.path.join(dropstat_dir, 'switch-stats')
+        self.switch_std_drop_stats_file = os.path.join(dropstat_dir, 'switch-std-drop-stats')
 
         self.stat_lookup = {}
         self.reverse_stat_lookup = {}
 
+    @multi_asic_util.run_on_multi_asic
     def show_drop_counts(self, group, counter_type):
         """
             Prints out the current drop counts at the port-level and
             switch-level.
         """
+
+        if os.environ.get("UTILITIES_UNIT_TESTING_DROPSTAT_CLEAN_CACHE", "0") == "1":
+           # Temp cache needs to be cleard to avoid interference from previous test cases
+           UserCache().remove()
 
         self.show_switch_std_drop_counts(group, counter_type)
         self.show_port_drop_counts(group, counter_type)
@@ -124,16 +134,36 @@ class DropStat(object):
             Clears the current drop counts.
         """
 
-        try:
-            json.dump(self.get_counts_table(self.gather_counters(std_port_rx_counters + std_port_tx_counters, DEBUG_COUNTER_PORT_STAT_MAP), COUNTERS_PORT_NAME_MAP),
-                        open(self.port_drop_stats_file, 'w+'))
+        counters_port_drop = {}
+        counters_switch_drop = {}
+        counters_switch_std_drop = {}
+        for ns in self.namespaces:
+            self.config_db = multi_asic.connect_config_db_for_ns(ns)
+            self.db = multi_asic.connect_to_all_dbs_for_ns(ns)
+
+            counts = self.get_counts_table(self.gather_counters(std_port_rx_counters + std_port_tx_counters, DEBUG_COUNTER_PORT_STAT_MAP), COUNTERS_PORT_NAME_MAP)
+            if counts:
+                counters_port_drop.update(counts)
+
             counters = self.gather_counters([], DEBUG_COUNTER_SWITCH_STAT_MAP)
             if counters:
-               json.dump(self.get_counts(counters, self.get_switch_id()), open(self.switch_drop_stats_file, 'w+'))
+                counts = self.get_counts(counters, self.get_switch_id())
+                counters_switch_drop.update(counts)
 
             counters = self.get_configured_counters(DEBUG_COUNTER_SWITCH_STAT_MAP, True)
             if counters:
-               json.dump(self.get_counts(counters, self.get_switch_id()), open(self.switch_std_drop_stats_file, 'w+'))
+                counts = self.get_counts(counters, self.get_switch_id())
+                counters_switch_std_drop.update(counts)
+
+        try:
+            if counters_port_drop:
+                json.dump(counters_port_drop, open(self.port_drop_stats_file, 'w+'))
+
+            if counters_switch_drop:
+                json.dump(counters_switch_drop, open(self.switch_drop_stats_file, 'w+'))
+
+            if counters_switch_std_drop:
+                json.dump(counters_switch_std_drop, open(self.switch_std_drop_stats_file, 'w+'))
         except IOError as e:
             print(e)
             sys.exit(e.errno)
@@ -321,12 +351,13 @@ class DropStat(object):
             the given object type.
         """
 
+        if self.cached_namespace != self.multi_asic.current_namespace:
+            self.stat_lookup = {}
+            self.cached_namespace = self.multi_asic.current_namespace
+
         if not self.stat_lookup.get(object_stat_map, None):
             stats_map = self.db.get_all(self.db.COUNTERS_DB, object_stat_map)
-            if stats_map:
-                self.stat_lookup[object_stat_map] = stats_map
-            else:
-                self.stat_lookup[object_stat_map] = None
+            self.stat_lookup[object_stat_map] = stats_map if stats_map else None
 
         return self.stat_lookup[object_stat_map]
 
@@ -457,39 +488,22 @@ class DropStat(object):
         else:
             return PORT_STATE_NA
 
+@click.command(help='Display drop counters')
+@click.option('-c', '--command', required=True, help='Desired action to perform',
+              type=click.Choice(['clear', 'show'], case_sensitive=False))
+@click.option('-g', '--group', default=None, help='The group of the target drop counter')
+@click.option('-t', '--type', 'counter_type', default=None, help='The type of the target drop counter')
+@click.option('-n', '--namespace', help='Namespace name', default=None,
+              type=click.Choice(multi_asic.get_namespace_list()))
+@click.version_option(version='1.0')
+def main(command, group, counter_type, namespace):
+    load_db_config()
 
-def main():
-    parser = argparse.ArgumentParser(description='Display drop counters',
-                                     formatter_class=argparse.RawTextHelpFormatter,
-                                     epilog="""
-Examples:
-  dropstat
-""")
-
-    # Version
-    parser.add_argument('-v', '--version', action='version', version='%(prog)s 1.0')
-
-    # Actions
-    parser.add_argument('-c', '--command', type=str, help='Desired action to perform')
-
-    # Variables
-    parser.add_argument('-g', '--group',   type=str, help='The group of the target drop counter', default=None)
-    parser.add_argument('-t', '--type',    type=str, help='The type of the target drop counter', default=None)
-
-    args = parser.parse_args()
-
-    command = args.command
-
-    group = args.group
-    counter_type = args.type
-
-    dcstat = DropStat()
+    dcstat = DropStat(namespace)
     if command == 'clear':
         dcstat.clear_drop_counts()
-    elif command == 'show':
-        dcstat.show_drop_counts(group, counter_type)
     else:
-        print("Command not recognized")
+        dcstat.show_drop_counts(group, counter_type)
 
 
 if __name__ == '__main__':
