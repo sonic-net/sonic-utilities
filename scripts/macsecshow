@@ -1,0 +1,231 @@
+#!/usr/bin/env python3
+
+#####################################################################
+#
+# macsecshow is a tool for summarizing MACsec details. 
+#
+#####################################################################
+
+import os
+import swsssdk
+import subprocess
+import sys
+
+import click
+from collections import namedtuple
+from utilities_common.netstat import STATUS_NA
+
+MACSEC_PORT_TABLE_PREFIX = "MACSEC_PORT_TABLE:"
+
+COUNTER_TABLE_PREFIX = "COUNTERS:"
+COUNTERS_MACSEC_FLOW_TX_NAME_MAP = "COUNTERS_MACSEC_FLOW_TX_NAME_MAP"
+COUNTERS_MACSEC_FLOW_RX_NAME_MAP = "COUNTERS_MACSEC_FLOW_RX_NAME_MAP"
+COUNTERS_MACSEC_SA_TX_NAME_MAP   = "COUNTERS_MACSEC_SA_TX_NAME_MAP"
+COUNTERS_MACSEC_SA_RX_NAME_MAP   = "COUNTERS_MACSEC_SA_RX_NAME_MAP"
+
+FlowStats = namedtuple("FlowStats", "ctl, untagged, tx_too_long, rx_no_tag,\
+                       rx_bad_tag, rx_no_sci, rx_unk_sci, rx_overrun,")
+
+flow_stat_names = (
+    'SAI_MACSEC_FLOW_STAT_CONTROL_PKTS',
+    'SAI_MACSEC_FLOW_STAT_PKTS_UNTAGGED',
+    'SAI_MACSEC_FLOW_STAT_OUT_PKTS_TOO_LONG',
+    'SAI_MACSEC_FLOW_STAT_IN_PKTS_NO_TAG',
+    'SAI_MACSEC_FLOW_STAT_IN_PKTS_BAD_TAG',
+    'SAI_MACSEC_FLOW_STAT_IN_PKTS_NO_SCI',
+    'SAI_MACSEC_FLOW_STAT_IN_PKTS_UNKNOWN_SCI',
+    'SAI_MACSEC_FLOW_STAT_IN_PKTS_OVERRUN'
+)
+
+SaStats = namedtuple("SaStats", "b_enc, b_prot, tx_p_enc, tx_p_prot, rx_p_ok,\
+                     rx_p_unchecked, rx_p_delayed, rx_p_late, rx_p_invalid,\
+                     rx_p_not_valid, rx_p_not_using_sa, rx_p_unused_sa")
+
+sa_stat_names = (
+    'SAI_MACSEC_SA_STAT_OCTETS_ENCRYPTED',
+    'SAI_MACSEC_SA_STAT_OCTETS_PROTECTED',
+    'SAI_MACSEC_SA_STAT_OUT_PKTS_ENCRYPTED',
+    'SAI_MACSEC_SA_STAT_OUT_PKTS_PROTECTED',
+    'SAI_MACSEC_SA_STAT_IN_PKTS_OK',
+    'SAI_MACSEC_SA_STAT_IN_PKTS_UNCHECKED',
+    'SAI_MACSEC_SA_STAT_IN_PKTS_DELAYED',
+    'SAI_MACSEC_SA_STAT_IN_PKTS_LATE',
+    'SAI_MACSEC_SA_STAT_IN_PKTS_INVALID',
+    'SAI_MACSEC_SA_STAT_IN_PKTS_NOT_VALID',
+    'SAI_MACSEC_SA_STAT_IN_PKTS_NOT_USING_SA',
+    'SAI_MACSEC_SA_STAT_IN_PKTS_UNUSED_SA'
+)
+
+def get_macsec_port_list(appl_db, intf_name):
+    """
+       Get the macsec port names from database.
+    """
+    if intf_name is None:
+        port_keys = appl_db.keys(appl_db.APPL_DB, MACSEC_PORT_TABLE_PREFIX+"*")
+    else:
+        port_keys = appl_db.keys(appl_db.APPL_DB, MACSEC_PORT_TABLE_PREFIX+"%s" % intf_name)
+    if port_keys is None:
+        return None
+    macsec_ports = [key[len(MACSEC_PORT_TABLE_PREFIX):] for key in port_keys]
+    return macsec_ports
+
+class MacsecConn(object):
+    def display_connections(self, intf_name):
+        """
+            Get MACsec info from wpa_cli.
+        """
+        macsec_cmd = 'docker exec -it macsec wpa_cli -g /var/run/' + intf_name + ' IFNAME=' + intf_name + ' macsec'
+        click.echo("Interface: {} ".format(intf_name))
+        p = subprocess.Popen(macsec_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, shell=True)
+        (output, err) = p.communicate()
+        rc = p.wait()
+        if rc == 0:
+            click.echo(output)
+        else:
+            click.echo("Error retrieving MACsec connections: {} ".format(err))
+
+    def __init__(self, intf_name):
+        # setup db connection
+        self.db = swsssdk.SonicV2Connector(host='127.0.0.1')
+        self.db.connect(self.db.APPL_DB)
+        self.ports = get_macsec_port_list(self.db, intf_name)
+        if self.ports is None:
+            return
+        for port in self.ports:
+            self.display_connections(port)
+
+class MacsecStat(object):
+    def get_flow_stats(self, table_id):
+        """
+            Get the stats from specific MACsec Flow.
+        """
+        fields = [STATUS_NA] * len(flow_stat_names)
+        for pos, stat_name in enumerate(flow_stat_names):
+            full_table_id = COUNTER_TABLE_PREFIX + table_id
+            stat_data =  self.db.get(self.db.COUNTERS_DB, full_table_id, stat_name)
+            if stat_data:
+                fields[pos] = str(stat_data)
+
+        flow_stats = FlowStats._make(fields)
+        return flow_stats
+
+    def get_sa_stats(self, table_id):
+        """
+            Get the stats from specific MACsec SA.
+        """
+        fields = ['0'] * len(sa_stat_names)
+        for pos, stat_name in enumerate(sa_stat_names):
+            full_table_id = COUNTER_TABLE_PREFIX + table_id
+            stat_data =  self.db.get(self.db.COUNTERS_DB, full_table_id, stat_name)
+            if stat_data:
+                fields[pos] = str(stat_data)
+
+        sa_stats = SaStats._make(fields)
+        return sa_stats
+
+    def get_sa_id(self, port, sa_map):
+        """
+            Get the MACsec SA from the port.
+        """
+        for sa_name in sa_map:
+            if port == sa_name.split(':')[0]:
+                return sa_map[sa_name]
+
+        return None
+
+    def display_txsa_statistics(self, port):
+        """
+            Get MACsec stats from COUNTERS_DB.
+        """
+        txsa_id = self.get_sa_id(port, self.txsa_map)
+        
+        body = """        TX:
+          Encrypted packets:    %10s
+          Encrypted bytes:      %10s
+          Protected packets:    %10s
+          Protected bytes:      %10s"""
+
+        if txsa_id:
+            txsa_stats = self.get_sa_stats(txsa_id)
+            body = body % (txsa_stats.tx_p_enc, txsa_stats.b_enc,
+                           txsa_stats.tx_p_prot, txsa_stats.b_prot)
+        else:
+            body = body % ('0', '0', '0', '0')
+
+        click.echo(body)
+
+    def display_rxsa_statistics(self, port):
+        """
+            Get MACsec stats from COUNTERS_DB.
+        """
+        rxsa_id = self.get_sa_id(port, self.rxsa_map)
+        
+        body = """        RX:
+          OK packets:           %10s
+          Encrypted bytes:      %10s
+          Protected bytes:      %10s
+          Unchecked packets:    %10s
+          Delayed packets:      %10s
+          Late packets:         %10s
+          Invalid packets:      %10s
+          Not valid packets:    %10s
+          Not using SA packets: %10s
+          Unused SA packets:    %10s"""
+
+        if rxsa_id:
+            rxsa_stats = self.get_sa_stats(rxsa_id)
+            body = body % (rxsa_stats.rx_p_ok, rxsa_stats.b_enc, rxsa_stats.b_prot,
+                           rxsa_stats.rx_p_unchecked, rxsa_stats.rx_p_delayed,
+                           rxsa_stats.rx_p_late, rxsa_stats.rx_p_invalid,
+                           rxsa_stats.rx_p_not_valid, rxsa_stats.rx_p_not_using_sa,
+                           rxsa_stats.rx_p_unused_sa)
+        else:
+            body = body % ('0', '0', '0', '0', '0',
+                           '0', '0', '0', '0', '0')
+
+        click.echo(body)
+
+    def __init__(self, intf_name):
+        # setup db connection
+        self.db = swsssdk.SonicV2Connector(host='127.0.0.1')
+        self.db.connect(self.db.APPL_DB)
+        self.db.connect(self.db.COUNTERS_DB)
+        self.ports = get_macsec_port_list(self.db, intf_name)
+        if self.ports is None:
+            return
+
+        self.txflow_map = self.db.get_all(self.db.COUNTERS_DB, COUNTERS_MACSEC_FLOW_TX_NAME_MAP);
+        self.rxflow_map = self.db.get_all(self.db.COUNTERS_DB, COUNTERS_MACSEC_FLOW_RX_NAME_MAP);
+        self.txsa_map = self.db.get_all(self.db.COUNTERS_DB, COUNTERS_MACSEC_SA_TX_NAME_MAP);
+        self.rxsa_map = self.db.get_all(self.db.COUNTERS_DB, COUNTERS_MACSEC_SA_RX_NAME_MAP);
+
+        for port in self.ports:
+            click.echo("Interface: {} ".format(port))
+            self.display_txsa_statistics(port)
+            self.display_rxsa_statistics(port)
+            click.echo("")
+
+def main(args):
+    if os.geteuid() != 0:
+        exit("This utility must be run as root")
+
+    if len(args) == 0:
+        click.echo("No valid arguments provided")
+        return
+
+    command = args[0]
+    if command != "connections" and command != "statistics":
+        click.echo("No valid command provided")
+        return
+
+    intf_name = args[1] if len(args) == 2 else None
+
+    if command == "connections":
+        MacsecConn(intf_name)
+    elif command == "statistics":
+        MacsecStat(intf_name)
+
+    sys.exit(0)
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

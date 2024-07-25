@@ -53,6 +53,7 @@ from . import fabric
 from . import flow_counters
 from . import kdump
 from . import kube
+from . import macsec
 from . import muxcable
 from . import nat
 from . import vlan
@@ -1408,6 +1409,7 @@ config.add_command(feature.feature)
 config.add_command(flow_counters.flowcnt_route)
 config.add_command(kdump.kdump)
 config.add_command(kube.kubernetes)
+config.add_command(macsec.macsec)
 config.add_command(muxcable.muxcable)
 config.add_command(nat.nat)
 config.add_command(vlan.vlan)
