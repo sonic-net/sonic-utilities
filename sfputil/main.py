@@ -1320,6 +1320,62 @@ def reset(port_name):
 
         i += 1
 
+
+# 'power' subgroup
+@cli.group()
+def power():
+    """Enable or disable power of SFP transceiver"""
+    pass
+
+
+# Helper method for setting low-power mode
+def set_power(port_name, enable):
+    physical_port = logical_port_to_physical_port_index(port_name)
+    sfp = platform_chassis.get_sfp(physical_port)
+
+    if is_port_type_rj45(port_name):
+        click.echo("Power disable/enable is not available for RJ45 port {}.".format(port_name))
+        sys.exit(EXIT_FAIL)
+
+    try:
+        presence = sfp.get_presence()
+    except NotImplementedError:
+        click.echo("sfp get_presence() NOT implemented!")
+        sys.exit(EXIT_FAIL)
+
+    if not presence:
+        click.echo("{}: SFP EEPROM not detected\n".format(port_name))
+        sys.exit(EXIT_FAIL)
+
+    try:
+        result = platform_chassis.get_sfp(physical_port).set_power(enable)
+    except (NotImplementedError, AttributeError):
+        click.echo("This functionality is currently not implemented for this platform")
+        sys.exit(ERROR_NOT_IMPLEMENTED)
+
+    if result:
+        click.echo("OK")
+    else:
+        click.echo("Failed")
+        sys.exit(EXIT_FAIL)
+
+
+# 'disable' subcommand
+@power.command()
+@click.argument('port_name', metavar='<port_name>')
+def disable(port_name):
+    """Disable power of SFP transceiver"""
+    set_power(port_name, False)
+
+
+# 'enable' subcommand
+@power.command()
+@click.argument('port_name', metavar='<port_name>')
+def enable(port_name):
+    """Enable power of SFP transceiver"""
+    set_power(port_name, True)
+
+
 def update_firmware_info_to_state_db(port_name):
     physical_port = logical_port_to_physical_port_index(port_name)
 

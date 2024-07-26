@@ -612,6 +612,51 @@ Ethernet0  N/A
 
     @patch('sfputil.main.platform_chassis')
     @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
+    @patch('sfputil.main.is_port_type_rj45', MagicMock(return_value=True))
+    def test_power_RJ45(self, mock_chassis):
+        mock_sfp = MagicMock()
+        mock_api = MagicMock()
+        mock_sfp.get_xcvr_api = MagicMock(return_value=mock_api)
+        mock_sfp.get_presence.return_value = True
+        mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
+        runner = CliRunner()
+        result = runner.invoke(sfputil.cli.commands['power'].commands['enable'], ["Ethernet0"])
+        assert result.output == 'Power disable/enable is not available for RJ45 port Ethernet0.\n'
+        assert result.exit_code == EXIT_FAIL
+
+    @patch('sfputil.main.platform_chassis')
+    @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
+    @patch('sfputil.main.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
+    @patch('sfputil.main.is_port_type_rj45', MagicMock(return_value=False))
+    def test_power(self, mock_chassis):
+        mock_sfp = MagicMock()
+        mock_api = MagicMock()
+        mock_sfp.get_xcvr_api = MagicMock(return_value=mock_api)
+        mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
+        mock_sfp.get_presence.return_value = True
+        runner = CliRunner()
+        result = runner.invoke(sfputil.cli.commands['power'].commands['enable'], ["Ethernet0"])
+        assert result.exit_code == 0
+
+        mock_sfp.get_presence.return_value = False
+        result = runner.invoke(sfputil.cli.commands['power'].commands['enable'], ["Ethernet0"])
+        assert result.output == 'Ethernet0: SFP EEPROM not detected\n\n'
+
+        mock_sfp.get_presence.return_value = True
+        mock_sfp.set_power = MagicMock(side_effect=NotImplementedError)
+        runner = CliRunner()
+        result = runner.invoke(sfputil.cli.commands['power'].commands['enable'], ["Ethernet0"])
+        assert result.output == 'This functionality is currently not implemented for this platform\n'
+        assert result.exit_code == ERROR_NOT_IMPLEMENTED
+
+        mock_sfp.set_power = MagicMock(return_value=False)
+        runner = CliRunner()
+        result = runner.invoke(sfputil.cli.commands['power'].commands['enable'], ["Ethernet0"])
+        assert result.output == 'Failed\n'
+
+
+    @patch('sfputil.main.platform_chassis')
+    @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
     @patch('sfputil.main.logical_port_name_to_physical_port_list', MagicMock(return_value=[1]))
     @patch('sfputil.main.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
     @patch('sfputil.main.is_port_type_rj45', MagicMock(return_value=True))
