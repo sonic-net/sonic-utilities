@@ -595,10 +595,10 @@ testData = {
         'rc': 0,
         'rc_output': bgp_v6_network_longer_prefixes
     },
-    'bgp_v4_network_multi_asic': {
+    'bgp_v4_network_default_multi_asic': {
         'args': [],
-        'rc': 2,
-        'rc_err_msg': multi_asic_bgp_network_err
+        'rc': 0,
+        'rc_output': bgp_v4_network_all_asic
     },
     'bgp_v4_network_asic0': {
         'args': ['-nasic0'],

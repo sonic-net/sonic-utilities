@@ -78,7 +78,7 @@ class TestMultiAsicBgpNetwork(object):
 
     @pytest.mark.parametrize(
         'setup_multi_asic_bgp_instance, test_vector',
-        [('bgp_v4_network', 'bgp_v4_network_multi_asic'),
+        [('bgp_v4_network_all_asic', 'bgp_v4_network_default_multi_asic'),
          ('bgp_v6_network', 'bgp_v6_network_multi_asic'),
          ('bgp_v4_network_asic0', 'bgp_v4_network_asic0'),
          ('bgp_v4_network_ip_address_asic0', 'bgp_v4_network_ip_address_asic0'),

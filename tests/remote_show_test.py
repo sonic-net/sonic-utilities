@@ -31,6 +31,7 @@ class TestRexecBgp(object):
         pass
 
     @mock.patch("sonic_py_common.device_info.is_supervisor", mock.MagicMock(return_value=True))
+    @mock.patch("sys.argv", ["show", "ip", "bgp", "summary"])
     def test_show_ip_bgp_rexec(self, setup_bgp_commands):
         show = setup_bgp_commands
         runner = CliRunner()
@@ -44,6 +45,7 @@ class TestRexecBgp(object):
         assert MULTI_LC_REXEC_OUTPUT == result.output
 
     @mock.patch("sonic_py_common.device_info.is_supervisor", mock.MagicMock(return_value=True))
+    @mock.patch("sys.argv", ["show", "ip", "bgp", "summary"])
     def test_show_ip_bgp_error_rexec(self, setup_bgp_commands):
         show = setup_bgp_commands
         runner = CliRunner()
@@ -55,3 +57,17 @@ class TestRexecBgp(object):
         subprocess.run = _old_subprocess_run
         assert result.exit_code == 1
         assert MULTI_LC_ERR_OUTPUT == result.output
+
+    @mock.patch("sonic_py_common.device_info.is_supervisor", mock.MagicMock(return_value=True))
+    @mock.patch("sys.argv", ["show", "ip", "bgp", "network", "10.0.0.0/24"])
+    def test_show_ip_bgp_network_rexec(self, setup_bgp_commands):
+        show = setup_bgp_commands
+        runner = CliRunner()
+
+        _old_subprocess_run = subprocess.run
+        subprocess.run = mock_rexec_command
+        result = runner.invoke(show.cli.commands["ip"].commands["bgp"], args=["network", "10.0.0.0/24"])
+        print(result.output)
+        subprocess.run = _old_subprocess_run
+        assert result.exit_code == 0
+        assert MULTI_LC_REXEC_OUTPUT == result.output

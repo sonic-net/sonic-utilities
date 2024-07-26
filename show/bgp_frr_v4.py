@@ -20,12 +20,13 @@ import utilities_common.multi_asic as multi_asic_util
 def bgp():
     """Show IPv4 BGP (Border Gateway Protocol) information"""
     if device_info.is_supervisor():
-        # if the device is a chassis, the command need to be executed by rexec
-        click.echo("Since the current device is a chassis supervisor, " +
-                   "this command will be executed remotely on all linecards")
-        proc = subprocess.run(["rexec", "all"] + ["-c", " ".join(sys.argv)])
-        sys.exit(proc.returncode)
-    pass
+        subcommand = sys.argv[3]
+        if subcommand not in "network":
+            # the command will be executed directly by rexec if it is not "show ip bgp network"
+            click.echo("Since the current device is a chassis supervisor, " +
+                       "this command will be executed remotely on all linecards")
+            proc = subprocess.run(["rexec", "all"] + ["-c", " ".join(sys.argv)])
+            sys.exit(proc.returncode)
 
 
 # 'summary' subcommand ("show ip bgp summary")
@@ -92,7 +93,7 @@ def neighbors(ipaddress, info_type, namespace):
 @bgp.command()
 @click.argument('ipaddress',
                 metavar='[<ipv4-address>|<ipv4-prefix>]',
-                required=False)
+                required=True if device_info.is_supervisor() else False)
 @click.argument('info_type',
                 metavar='[bestpath|json|longer-prefixes|multipath]',
                 type=click.Choice(
@@ -103,19 +104,22 @@ def neighbors(ipaddress, info_type, namespace):
                 'namespace',
                 type=str,
                 show_default=True,
-                required=True if multi_asic.is_multi_asic is True else False,
+                required=False,
                 help='Namespace name or all',
-                default=multi_asic.DEFAULT_NAMESPACE,
+                default="all",
                 callback=multi_asic_util.multi_asic_namespace_validation_callback)
 def network(ipaddress, info_type, namespace):
     """Show IP (IPv4) BGP network"""
 
+    if device_info.is_supervisor():
+        # the command will be executed by rexec
+        click.echo("Since the current device is a chassis supervisor, " +
+                   "this command will be executed remotely on all linecards")
+        proc = subprocess.run(["rexec", "all"] + ["-c", " ".join(sys.argv)])
+        sys.exit(proc.returncode)
+
     namespace = namespace.strip()
     if multi_asic.is_multi_asic():
-        if namespace == multi_asic.DEFAULT_NAMESPACE:
-            ctx = click.get_current_context()
-            ctx.fail('-n/--namespace option required. provide namespace from list {}'
-                     .format(multi_asic.get_namespace_list()))
         if namespace != "all" and namespace not in multi_asic.get_namespace_list():
             ctx = click.get_current_context()
             ctx.fail('invalid namespace {}. provide namespace from list {}'
