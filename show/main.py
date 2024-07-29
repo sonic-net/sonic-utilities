@@ -66,6 +66,7 @@ from . import warm_restart
 from . import plugins
 from . import syslog
 from . import dns
+from . import bgp_cli
 
 # Global Variables
 PLATFORM_JSON = 'platform.json'
@@ -164,7 +165,7 @@ def get_config_json_by_namespace(namespace):
 iface_alias_converter = lazy_object_proxy.Proxy(lambda: clicommon.InterfaceAliasConverter())
 
 #
-# Display all storm-control data 
+# Display all storm-control data
 #
 def display_storm_all():
     """ Show storm-control """
@@ -325,6 +326,8 @@ cli.add_command(syslog.syslog)
 if is_gearbox_configured():
     cli.add_command(gearbox.gearbox)
 
+# bgp module
+cli.add_command(bgp_cli.BGP)
 
 #
 # 'vrf' command ("show vrf")
@@ -462,7 +465,7 @@ def is_mgmt_vrf_enabled(ctx):
     return False
 
 #
-# 'storm-control' group 
+# 'storm-control' group
 # "show storm-control [interface <interface>]"
 #
 @cli.group('storm-control', invoke_without_command=True)
@@ -854,9 +857,12 @@ def drop():
     pass
 
 @drop.command('counters')
-def pg_drop_counters():
+@multi_asic_util.multi_asic_click_option_namespace
+def pg_drop_counters(namespace):
     """Show dropped packets for priority-group"""
     command = ['pg-drop', '-c', 'show']
+    if namespace is not None:
+        command += ['-n', str(namespace)]
     run_command(command)
 
 @priority_group.group(name='persistent-watermark')
@@ -1184,7 +1190,11 @@ elif routing_stack == "frr":
     ip.add_command(bgp)
     from .bgp_frr_v6 import bgp
     ipv6.add_command(bgp)
-
+elif device_info.is_supervisor():
+    from .bgp_frr_v4 import bgp
+    ip.add_command(bgp)
+    from .bgp_frr_v6 import bgp
+    ipv6.add_command(bgp)
 #
 # 'link-local-mode' subcommand ("show ipv6 link-local-mode")
 #
@@ -1438,11 +1448,11 @@ def all(verbose):
         for ns in ns_list:
             ns_config = get_config_json_by_namespace(ns)
             if bgp_util.is_bgp_feature_state_enabled(ns):
-                ns_config['bgpraw'] = bgp_util.run_bgp_show_command(bgpraw_cmd, ns)
+                ns_config['bgpraw'] = bgp_util.run_bgp_show_command(bgpraw_cmd, ns, exit_on_fail=False)
             output[ns] = ns_config
         click.echo(json.dumps(output, indent=4))
     else:
-        host_config['bgpraw'] = bgp_util.run_bgp_show_command(bgpraw_cmd)
+        host_config['bgpraw'] = bgp_util.run_bgp_show_command(bgpraw_cmd, exit_on_fail=False)
         click.echo(json.dumps(output['localhost'], indent=4))
 
 
@@ -2108,7 +2118,7 @@ def summary(db):
             key_values = key.split('|')
             values = db.db.get_all(db.db.STATE_DB, key)
             if "local_discriminator" not in values.keys():
-                values["local_discriminator"] = "NA"            
+                values["local_discriminator"] = "NA"
             bfd_body.append([key_values[3], key_values[2], key_values[1], values["state"], values["type"], values["local_addr"],
                                 values["tx_interval"], values["rx_interval"], values["multiplier"], values["multihop"], values["local_discriminator"]])
 
@@ -2139,22 +2149,108 @@ def peer(db, peer_ip):
             key_values = key.split(delimiter)
             values = db.db.get_all(db.db.STATE_DB, key)
             if "local_discriminator" not in values.keys():
-                values["local_discriminator"] = "NA"            
+                values["local_discriminator"] = "NA"
             bfd_body.append([key_values[3], key_values[2], key_values[1], values.get("state"), values.get("type"), values.get("local_addr"),
                                 values.get("tx_interval"), values.get("rx_interval"), values.get("multiplier"), values.get("multihop"), values.get("local_discriminator")])
 
     click.echo(tabulate(bfd_body, bfd_headers))
 
 
-# 'suppress-fib-pending' subcommand ("show suppress-fib-pending")
-@cli.command('suppress-fib-pending')
-@clicommon.pass_db
-def suppress_pending_fib(db):
-    """ Show the status of suppress pending FIB feature """
+# asic-sdk-health-event subcommand ("show asic-sdk-health-event")
+@cli.group(cls=clicommon.AliasedGroup)
+def asic_sdk_health_event():
+    """"""
+    pass
 
-    field_values = db.cfgdb.get_entry('DEVICE_METADATA', 'localhost')
-    state = field_values.get('suppress-fib-pending', 'disabled').title()
-    click.echo(state)
+
+@asic_sdk_health_event.command()
+@clicommon.pass_db
+@click.option('--namespace', '-n', 'namespace', default=None, show_default=True,
+              type=click.Choice(multi_asic_util.multi_asic_ns_choices()), help='Namespace name or all')
+def suppress_configuration(db, namespace):
+    """ Show the suppress configuration """
+    if multi_asic.get_num_asics() > 1:
+        namespace_list = multi_asic.get_namespaces_from_linux()
+        masic = True
+    else:
+        namespace_list = [multi_asic.DEFAULT_NAMESPACE]
+        masic = False
+
+    header = ['Severity', 'Suppressed category-list', "Max events"]
+    body = []
+
+    supported = False
+
+    for ns in namespace_list:
+        if namespace and namespace != ns:
+            continue
+
+        state_db = db.db_clients[ns]
+        if "true" != state_db.get(db.db.STATE_DB, "SWITCH_CAPABILITY|switch", "ASIC_SDK_HEALTH_EVENT"):
+            continue
+
+        supported = True
+
+        if masic:
+            click.echo("{}:".format(ns));
+
+        config_db = db.cfgdb_clients[ns]
+        suppressSeverities = config_db.get_table('SUPPRESS_ASIC_SDK_HEALTH_EVENT')
+
+        for severity in natsorted(suppressSeverities):
+            body.append([severity,
+                         ','.join(suppressSeverities[severity].get('categories', ['none'])),
+                         suppressSeverities[severity].get('max_events', 'unlimited')])
+
+        click.echo(tabulate(body, header))
+
+    if not supported:
+        ctx = click.get_current_context()
+        ctx.fail("ASIC/SDK health event is not supported on the platform")
+
+
+@asic_sdk_health_event.command()
+@clicommon.pass_db
+@click.option('--namespace', '-n', 'namespace', default=None, show_default=True,
+              type=click.Choice(multi_asic_util.multi_asic_ns_choices()), help='Namespace name or all')
+def received(db, namespace):
+    """ Show the received ASIC/SDK health event """
+    if multi_asic.get_num_asics() > 1:
+        namespace_list = multi_asic.get_namespaces_from_linux()
+        masic = True
+    else:
+        namespace_list = [multi_asic.DEFAULT_NAMESPACE]
+        masic = False
+
+    header = ['Date', 'Severity', 'Category', 'Description']
+    body = []
+
+    supported = False
+
+    for ns in namespace_list:
+        if namespace and namespace != ns:
+            continue
+
+        state_db = db.db_clients[ns]
+        if "true" != state_db.get(db.db.STATE_DB, "SWITCH_CAPABILITY|switch", "ASIC_SDK_HEALTH_EVENT"):
+            continue
+
+        supported = True
+
+        if masic:
+            click.echo("{}:".format(ns));
+
+        event_keys = state_db.keys(db.db.STATE_DB, "ASIC_SDK_HEALTH_EVENT_TABLE|*")
+
+        for key in natsorted(event_keys):
+            event = state_db.get_all(state_db.STATE_DB, key)
+            body.append([key.split('|')[1], event.get('severity'), event.get('category'), event.get('description')])
+
+        click.echo(tabulate(body, header))
+
+    if not supported:
+        ctx = click.get_current_context()
+        ctx.fail("ASIC/SDK health event is not supported on the platform")
 
 
 # Load plugins and register them

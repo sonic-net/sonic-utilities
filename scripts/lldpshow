@@ -26,8 +26,9 @@ import sys
 from lxml import etree as ET
 
 from sonic_py_common import device_info
+from utilities_common import constants
 from swsscommon.swsscommon import ConfigDBConnector
-from utilities_common.general import load_db_config
+from utilities_common.general import load_db_config, get_feature_state_data
 from tabulate import tabulate
 
 BACKEND_ASIC_INTERFACE_NAME_PREFIX = 'Ethernet-BP'
@@ -69,8 +70,12 @@ class Lldpshow(object):
                 self.lldp_interface[instance_num] += key + SPACE_TOKEN
 
         # LLDP running in host namespace
-        self.lldp_instance.append(LLDP_INSTANCE_IN_HOST_NAMESPACE)
-        self.lldp_interface.append(LLDP_INTERFACE_LIST_IN_HOST_NAMESPACE)
+        config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=constants.DEFAULT_NAMESPACE)
+        config_db.connect()
+        global_scope, asic_scope = get_feature_state_data(config_db, "lldp")
+        if global_scope == "True":
+            self.lldp_instance.append(LLDP_INSTANCE_IN_HOST_NAMESPACE)
+            self.lldp_interface.append(LLDP_INTERFACE_LIST_IN_HOST_NAMESPACE)
 
     def get_info(self, lldp_detail_info, lldp_port):
         """
@@ -85,7 +90,7 @@ class Lldpshow(object):
             elif lldp_interface_list == '':
                 lldp_args = []
             else:
-                lldp_args = [lldp_interface_list]
+                lldp_args = lldp_interface_list.split(' ')
             lldp_cmd = ['sudo', 'docker', 'exec', '-i', 'lldp{}'.format(self.lldp_instance[lldp_instace_num]), 'lldpctl'] + lldp_args
             p = subprocess.Popen(lldp_cmd, stdout=subprocess.PIPE, text=True)
             (output, err) = p.communicate()

@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 
 #####################################################################
 #
@@ -38,14 +38,18 @@ from utilities_common import constants
 import utilities_common.multi_asic as multi_asic_util
 
 QueueStats = namedtuple("QueueStats", "queueindex, queuetype, totalpacket, totalbytes, droppacket, dropbytes")
+VoqStats = namedtuple("VoqStats", "queueindex, queuetype, totalpacket, totalbytes, droppacket, dropbytes, creditWDpkts")
 header = ['Port', 'TxQ', 'Counter/pkts', 'Counter/bytes', 'Drop/pkts', 'Drop/bytes']
-voq_header = ['Port', 'Voq', 'Counter/pkts', 'Counter/bytes', 'Drop/pkts', 'Drop/bytes']
+voq_header = ['Port', 'Voq', 'Counter/pkts', 'Counter/bytes', 'Drop/pkts', 'Drop/bytes', 'Credit-WD-Del/pkts']
 
 counter_bucket_dict = {
     'SAI_QUEUE_STAT_PACKETS': 2,
     'SAI_QUEUE_STAT_BYTES': 3,
     'SAI_QUEUE_STAT_DROPPED_PACKETS': 4,
     'SAI_QUEUE_STAT_DROPPED_BYTES': 5,
+}
+voq_counter_bucket_dict = {
+    'SAI_QUEUE_STAT_CREDIT_WD_DELETED_PACKETS': 6
 }
 
 from utilities_common.cli import json_dump
@@ -73,15 +77,24 @@ cnstat_dir = 'N/A'
 cnstat_fqn_file = 'N/A'
 
 
-def build_json(port, cnstat):
+def build_json(port, cnstat, voq=False):
     def ports_stats(k):
         p = {}
-        p[k[1]] = {
-            "totalpacket": k[2],
-            "totalbytes": k[3],
-            "droppacket": k[4],
-            "dropbytes": k[5]
-        }
+        if voq:
+           p[k[1]] = {
+              "totalpacket": k[2],
+              "totalbytes": k[3],
+              "droppacket": k[4],
+              "dropbytes": k[5],
+              "creditWDPkts": k[6]
+           }
+        else:
+           p[k[1]] = {
+              "totalpacket": k[2],
+              "totalbytes": k[3],
+              "droppacket": k[4],
+              "dropbytes": k[5]
+           }
         return p
 
     out = {}
@@ -175,18 +188,30 @@ class Queuestat(object):
                     print("Queue Type is invalid:", table_id, queue_type)
                     sys.exit(1)
 
-            fields = ["0","0","0","0","0","0"]
+            if self.voq:
+               fields = ["0","0","0","0","0","0","0"]
+            else:
+               fields = ["0","0","0","0","0","0"]
             fields[0] = get_queue_index(table_id)
             fields[1] = get_queue_type(table_id)
 
-            for counter_name, pos in counter_bucket_dict.items():
+            counter_dict = {}
+            counter_dict.update(counter_bucket_dict)
+            if self.voq:
+               counter_dict.update(voq_counter_bucket_dict)
+
+            for counter_name, pos in counter_dict.items():
                 full_table_id = COUNTER_TABLE_PREFIX + table_id
                 counter_data =  self.db.get(self.db.COUNTERS_DB, full_table_id, counter_name)
                 if counter_data is None:
                     fields[pos] = STATUS_NA
                 elif fields[pos] != STATUS_NA:
                     fields[pos] = str(int(counter_data))
-            cntr = QueueStats._make(fields)._asdict()
+
+            if self.voq:
+               cntr = VoqStats._make(fields)._asdict()
+            else:
+               cntr = QueueStats._make(fields)._asdict()
             return cntr
 
        # Build a dictionary of the stats
@@ -211,14 +236,21 @@ class Queuestat(object):
                 if json_opt:
                     json_output[port][key] = data
                 continue
-            if not non_zero or data['totalpacket'] != '0' or  data['totalbytes'] != '0' or \
-               data['droppacket'] != '0' or data['dropbytes'] != '0':
-                table.append((port, data['queuetype'] + str(data['queueindex']),
-                            data['totalpacket'], data['totalbytes'],
-                            data['droppacket'], data['dropbytes']))
+            if self.voq:
+               if not non_zero or data['totalpacket'] != '0' or  data['totalbytes'] != '0' or \
+                  data['droppacket'] != '0' or data['dropbytes'] != '0' or data['creditWDpkts'] != '0':
+                  table.append((port, data['queuetype'] + str(data['queueindex']),
+                              data['totalpacket'], data['totalbytes'],
+                              data['droppacket'], data['dropbytes'], data['creditWDpkts']))
+            else:
+               if not non_zero or data['totalpacket'] != '0' or  data['totalbytes'] != '0' or \
+                  data['droppacket'] != '0' or data['dropbytes'] != '0':
+                  table.append((port, data['queuetype'] + str(data['queueindex']),
+                              data['totalpacket'], data['totalbytes'],
+                              data['droppacket'], data['dropbytes']))
 
         if json_opt:
-            json_output[port].update(build_json(port, table))
+            json_output[port].update(build_json(port, table, self.voq))
             return json_output
         else:
             hdr = voq_header if self.voq else header
@@ -242,25 +274,42 @@ class Queuestat(object):
             old_cntr = None
             if key in cnstat_old_dict:
                 old_cntr = cnstat_old_dict.get(key)
-
             if old_cntr is not None:
-                if not non_zero or ns_diff(cntr['totalpacket'], old_cntr['totalpacket']) != '0' or \
+                if self.voq:
+                   if not non_zero or ns_diff(cntr['totalpacket'], old_cntr['totalpacket']) != '0' or \
+                                   ns_diff(cntr['totalbytes'], old_cntr['totalbytes']) != '0' or \
+                                   ns_diff(cntr['droppacket'], old_cntr['droppacket']) != '0' or \
+                                   ns_diff(cntr['dropbytes'], old_cntr['dropbytes']) != '0' or \
+                                   ns_diff(cntr['creditWDpkts'], old_cntr['creditWDpkts']) != '0':
+                       table.append((port, cntr['queuetype'] + str(cntr['queueindex']),
+                                   ns_diff(cntr['totalpacket'], old_cntr['totalpacket']),
+                                   ns_diff(cntr['totalbytes'], old_cntr['totalbytes']),
+                                   ns_diff(cntr['droppacket'], old_cntr['droppacket']),
+                                   ns_diff(cntr['dropbytes'], old_cntr['dropbytes']),
+                                   ns_diff(cntr['creditWDpkts'], old_cntr['creditWDpkts'])))
+                   elif not non_zero or cntr['totalpacket'] != '0' or cntr['totalbytes'] != '0' or \
+                                  cntr['droppacket'] != '0' or cntr['dropbytes'] != '0' or cntr['creditWDpkts'] != '0':
+                       table.append((port, cntr['queuetype'] + str(cntr['queueindex']),
+                                  cntr['totalpacket'], cntr['totalbytes'],
+                                  cntr['droppacket'], cntr['dropbytes'], cntr['creditWDpkts']))
+                else:
+                   if not non_zero or ns_diff(cntr['totalpacket'], old_cntr['totalpacket']) != '0' or \
                                    ns_diff(cntr['totalbytes'], old_cntr['totalbytes']) != '0' or \
                                    ns_diff(cntr['droppacket'], old_cntr['droppacket']) != '0' or \
                                    ns_diff(cntr['dropbytes'], old_cntr['dropbytes']) != '0':
-                    table.append((port, cntr['queuetype'] + str(cntr['queueindex']),
-                                ns_diff(cntr['totalpacket'], old_cntr['totalpacket']),
-                                ns_diff(cntr['totalbytes'], old_cntr['totalbytes']),
-                                ns_diff(cntr['droppacket'], old_cntr['droppacket']),
-                                ns_diff(cntr['dropbytes'], old_cntr['dropbytes'])))
-                elif not non_zero or cntr['totalpacket'] != '0' or cntr['totalbytes'] != '0' or \
+                      table.append((port, cntr['queuetype'] + str(cntr['queueindex']),
+                                  ns_diff(cntr['totalpacket'], old_cntr['totalpacket']),
+                                  ns_diff(cntr['totalbytes'], old_cntr['totalbytes']),
+                                  ns_diff(cntr['droppacket'], old_cntr['droppacket']),
+                                  ns_diff(cntr['dropbytes'], old_cntr['dropbytes'])))
+                   elif not non_zero or cntr['totalpacket'] != '0' or cntr['totalbytes'] != '0' or \
                                      cntr['droppacket'] != '0' or cntr['dropbytes'] != '0':
-                    table.append((port, cntr['queuetype'] + str(cntr['queueindex']),
-                            cntr['totalpacket'], cntr['totalbytes'],
-                            cntr['droppacket'], cntr['dropbytes']))
+                      table.append((port, cntr['queuetype'] + str(cntr['queueindex']),
+                               cntr['totalpacket'], cntr['totalbytes'],
+                               cntr['droppacket'], cntr['dropbytes']))
 
         if json_opt:
-            json_output[port].update(build_json(port, table))
+            json_output[port].update(build_json(port, table, self.voq))
             return json_output
         else:
             hdr = voq_header if self.voq else header

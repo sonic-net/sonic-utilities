@@ -78,6 +78,14 @@ pbh_table2  vxlan   300                 400
 """
 
 
+show_pbh_statistics_partial = """\
+TABLE       RULE    RX PACKETS COUNT    RX BYTES COUNT
+----------  ------  ------------------  ----------------
+pbh_table1  nvgre   100                 200
+pbh_table2  vxlan   0                   0
+"""
+
+
 show_pbh_statistics_updated="""\
 TABLE       RULE    RX PACKETS COUNT    RX BYTES COUNT
 ----------  ------  ------------------  ----------------

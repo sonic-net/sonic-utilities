@@ -946,6 +946,34 @@ class TestPBH:
         assert result.exit_code == SUCCESS
         assert result.output == assert_show_output.show_pbh_statistics_zero
 
+    def test_show_pbh_statistics_after_clear_and_counters_partial(self):
+        dbconnector.dedicated_dbs['COUNTERS_DB'] = os.path.join(mock_db_path, 'counters_db_partial')
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'full_pbh_config')
+
+        self.remove_pbh_counters_file()
+
+        db = Db()
+        runner = CliRunner()
+
+        result = runner.invoke(
+            clear.cli.commands["pbh"].
+            commands["statistics"], [], obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+
+        dbconnector.dedicated_dbs['COUNTERS_DB'] = os.path.join(mock_db_path, 'counters_db')
+
+        result = runner.invoke(
+            show.cli.commands["pbh"].
+            commands["statistics"], [], obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+        assert result.exit_code == SUCCESS
+        assert result.output == assert_show_output.show_pbh_statistics_partial
 
     def test_show_pbh_statistics_after_clear_and_counters_updated(self):
         dbconnector.dedicated_dbs['COUNTERS_DB'] = os.path.join(mock_db_path, 'counters_db')

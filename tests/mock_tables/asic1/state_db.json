@@ -70,7 +70,13 @@
     },
     "TRANSCEIVER_FIRMWARE_INFO|Ethernet64": {
         "active_firmware": "X.X",
-        "inactive_firmware": "X.X"
+        "inactive_firmware": "X.X",
+        "e1_active_firmware" : "X.X",
+        "e1_inactive_firmware" : "Y.Y",
+        "e1_server_firmware" : "A.B.C.D",
+        "e2_active_firmware" : "X.X",
+        "e2_inactive_firmware" : "Y.Y",
+        "e2_server_firmware" : "A.B.C.D"
     },
     "CHASSIS_INFO|chassis 1": {
         "psu_num": "2"
@@ -264,5 +270,15 @@
     },
     "FABRIC_PORT_TABLE|PORT7" : {
         "STATUS": "down"
+    },
+    "FABRIC_CAPACITY_TABLE|FABRIC_CAPACITY_DATA" : {
+        "fabric_capacity": "88632",
+        "missing_capacity": "265896",
+        "operating_links": "2",
+        "number_of_links": "8",
+        "warning_threshold": "100"
+    },
+    "PORT_CAPACITY_TABLE|PORT_CAPACITY_DATA" : {
+        "capacity": "80000"
     }
 }

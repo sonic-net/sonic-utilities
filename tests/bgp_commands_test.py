@@ -336,7 +336,7 @@ Neighbhor      V     AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ  Up/Down 
 3.3.3.8        4  65100         12         10         0      0       0  00:00:15                4  str2-sonic-lc1-1-ASIC1
 
 Total number of neighbors 6
-"""
+"""  # noqa: E501
 
 
 class TestBgpCommandsSingleAsic(object):

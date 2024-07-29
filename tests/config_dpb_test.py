@@ -350,7 +350,7 @@ class TestConfigDPB(object):
             commands["breakout"], ['{}'.format(interface), '{}'.format(newMode), '-v', '-y'], obj=obj)
 
         print(result.exit_code, result.output)
-        assert result.exit_code == 0
+        assert result.exit_code == 1
         assert 'Below Config can not be verified' in result.output
         assert 'UNKNOWN_TABLE' in result.output
         assert 'Do you wish to Continue?' in result.output
@@ -396,7 +396,7 @@ class TestConfigDPB(object):
             commands["breakout"], ['{}'.format(interface), '{}'.format(newMode), '-v', '-y'], obj=obj)
 
         print(result.exit_code, result.output)
-        assert result.exit_code == 0
+        assert result.exit_code == 1
         assert 'Dependencies Exist.' in result.output
 
         # verbose must be set while creating instance of ConfigMgmt class
@@ -538,7 +538,7 @@ class TestConfigDPB(object):
                 commands["breakout"], ['{}'.format(interface), '{}'.format(newMode), '-v','-y'], obj=obj)
 
             print(result.exit_code, result.output)
-            assert result.exit_code == 0
+            assert result.exit_code == 1
             assert 'Dependencies Exist.' in result.output
             assert 'Printing dependencies' in result.output
             assert 'NO-NSW-PACL-V4' in result.output

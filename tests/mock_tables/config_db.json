@@ -30,6 +30,7 @@
         "lanes": "25,26,27,28",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -41,6 +42,7 @@
         "lanes": "29,30,31,32",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "trunk",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -52,6 +54,7 @@
         "lanes": "33,34,35,36",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -63,6 +66,7 @@
         "lanes": "37,38,39,40",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -74,6 +78,7 @@
         "lanes": "16",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "trunk",
         "pfc_asym": "off",
         "speed": "100"
     },
@@ -96,6 +101,7 @@
         "lanes": "1,2,3,4",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "trunk",
         "pfc_asym": "off",
         "speed": "1000",
         "role": "Dpc"
@@ -108,6 +114,7 @@
         "lanes": "5,6,7,8",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "trunk",
         "pfc_asym": "off",
         "speed": "1000"
     },
@@ -119,6 +126,7 @@
         "lanes": "13,14,15,16",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -130,6 +138,7 @@
         "lanes": "9,10,11,12",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "10"
     },
@@ -141,6 +150,7 @@
         "lanes": "17,18,19,20",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -152,6 +162,7 @@
         "lanes": "21,22,23,24",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -163,6 +174,7 @@
         "lanes": "53,54,55,56",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -174,6 +186,7 @@
         "lanes": "49,50,51,52",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -185,6 +198,7 @@
         "lanes": "57,58,59,60",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -196,6 +210,7 @@
         "lanes": "61,62,63,64",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -207,6 +222,7 @@
         "lanes": "69,70,71,72",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -218,6 +234,7 @@
         "lanes": "65,66,67,68",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -229,6 +246,7 @@
         "lanes": "73,74,75,76",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -240,6 +258,7 @@
         "lanes": "77,78,79,80",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -251,6 +270,7 @@
         "lanes": "109,110,111,112",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -262,6 +282,7 @@
         "lanes": "105,106,107,108",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -273,6 +294,7 @@
         "lanes": "113,114,115,116",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -284,6 +306,7 @@
         "lanes": "117,118,119,120",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -295,6 +318,7 @@
         "lanes": "125,126,127,128",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -305,6 +329,7 @@
         "lanes": "121,122,123,124",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -315,6 +340,7 @@
         "lanes": "81,82,83,84",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -325,6 +351,7 @@
         "lanes": "85,86,87,88",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -336,6 +363,7 @@
         "lanes": "93,94,95,96",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -347,6 +375,7 @@
         "lanes": "89,90,91,92",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -358,6 +387,7 @@
         "lanes": "101,102,103,104",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -369,6 +399,7 @@
         "lanes": "97,98,99,100",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000",
         "fec" : "auto"
@@ -794,13 +825,19 @@
         "state": "enabled",
         "auto_restart": "enabled",
         "high_mem_alert": "disabled",
-        "set_owner": "local"
+        "set_owner": "local",
+        "support_syslog_rate_limit": "true",
+        "has_global_scope": "false",
+        "has_per_asic_scope": "true"
     },
     "FEATURE|database": {
         "state": "always_enabled",
         "auto_restart": "always_enabled",
         "high_mem_alert": "disabled",
-        "set_owner": "local"
+        "set_owner": "local",
+        "support_syslog_rate_limit": "true",
+        "has_global_scope": "true",
+        "has_per_asic_scope": "true"
     },
     "FEATURE|dhcp_relay": {
         "state": "enabled",
@@ -811,6 +848,8 @@
     "FEATURE|lldp": {
         "state": "enabled",
         "auto_restart": "enabled",
+        "has_global_scope": "False",
+        "has_per_asic_scope": "True",
         "high_mem_alert": "disabled",
         "set_owner": "kube"
     },
@@ -824,7 +863,10 @@
         "state": "enabled",
         "auto_restart": "enabled",
         "high_mem_alert": "disabled",
-        "set_owner": "kube"
+        "set_owner": "kube",
+        "support_syslog_rate_limit": "true",
+        "has_global_scope": "true",
+        "has_per_asic_scope": "false"
     },
     "FEATURE|radv": {
         "state": "enabled",
@@ -873,6 +915,14 @@
         "auto_restart": "enabled",
         "high_mem_alert": "disabled",
         "set_owner": "kube"
+    },
+    "SYSLOG_CONFIG_FEATURE|database": {
+        "rate_limit_interval": "200",
+        "rate_limit_burst": "20000"
+    },
+    "SYSLOG_CONFIG_FEATURE|pmon": {
+        "rate_limit_interval": "100",
+        "rate_limit_burst": "10000"
     },
     "DEVICE_METADATA|localhost": {
         "default_bgp_status": "down",
@@ -2686,6 +2736,7 @@
         "direction": "RX"
     },
     "FABRIC_MONITOR|FABRIC_MONITOR_DATA": {
+        "monCapacityThreshWarn": "100",
         "monErrThreshCrcCells": "1",
         "monErrThreshRxCells": "61035156",
         "monPollThreshIsolation": "1",
@@ -2693,18 +2744,51 @@
     },
     "FABRIC_PORT|Fabric0": {
         "alias": "Fabric0",
+        "forceUnisolateStatus": "0",
         "isolateStatus": "False",
         "lanes": "0"
     },
     "FABRIC_PORT|Fabric1": {
         "alias": "Fabric1",
+        "forceUnisolateStatus": "0",
         "isolateStatus": "False",
         "lanes": "1"
     },
     "FABRIC_PORT|Fabric2": {
         "alias": "Fabric2",
+        "forceUnisolateStatus": "0",
         "isolateStatus": "False",
         "lanes": "2"
+    },
+    "FABRIC_PORT|Fabric3": {
+        "alias": "Fabric3",
+        "forceUnisolateStatus": "0",
+        "isolateStatus": "False",
+        "lanes": "3"
+    },
+    "FABRIC_PORT|Fabric4": {
+        "alias": "Fabric4",
+        "forceUnisolateStatus": "0",
+        "isolateStatus": "False",
+        "lanes": "4"
+    },
+    "FABRIC_PORT|Fabric5": {
+        "alias": "Fabric5",
+        "forceUnisolateStatus": "0",
+        "isolateStatus": "False",
+        "lanes": "5"
+    },
+    "FABRIC_PORT|Fabric6": {
+        "alias": "Fabric6",
+        "forceUnisolateStatus": "0",
+        "isolateStatus": "False",
+        "lanes": "6"
+    },
+    "FABRIC_PORT|Fabric7": {
+        "alias": "Fabric7",
+        "forceUnisolateStatus": "0",
+        "isolateStatus": "False",
+        "lanes": "7"
     },
     "DHCP_RELAY|Vlan1000": {
         "dhcpv6_servers": [

@@ -1,9 +1,11 @@
 #!/usr/bin/env python
 
 import pytest
+import json
+from unittest.mock import patch, mock_open
 
 from sonic_package_manager.constraint import ComponentConstraints
-from sonic_package_manager.manifest import Manifest, ManifestError
+from sonic_package_manager.manifest import Manifest, ManifestError, MANIFESTS_LOCATION
 
 
 def test_manifest_v1_defaults():
@@ -85,3 +87,33 @@ def test_manifest_v1_unmarshal():
     for key, section in manifest_json_input.items():
         for field, value in section.items():
             assert manifest_json[key][field] == value
+
+
+@patch("sonic_package_manager.manifest.open", new_callable=mock_open)
+def test_get_manifest_from_local_file_existing_manifest(mock_open, sonic_fs):
+    # Create a mock manifest file
+    manifest_name = "test_manifest.json"
+    manifest_content = {"package": {"name": "test_package", "version": "1.0.0"},
+                        "service": {"name": "test_service"}}
+    mock_open.return_value.__enter__.return_value.read.return_value = json.dumps(manifest_content)
+    sonic_fs.create_dir(MANIFESTS_LOCATION)
+
+    # Call the function
+    desired_dict = Manifest.get_manifest_from_local_file(manifest_name)
+
+    exp_manifest_content = {"package": {"name": "test_manifest.json", "version": "1.0.0"},
+                            "service": {"name": "test_manifest.json"}}
+    manifest_string = json.dumps(exp_manifest_content, indent=4)
+    desired_output = {
+        'Tag': 'master',
+        'com': {
+            'azure': {
+                'sonic': {
+                    'manifest': manifest_string
+                }
+            }
+        }
+    }
+
+    # Check if the returned dictionary matches the expected structure
+    assert desired_dict == desired_output

@@ -2,6 +2,7 @@ import os
 
 from click.testing import CliRunner
 from utilities_common.general import load_module_from_source
+from importlib import reload
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
@@ -76,6 +77,22 @@ class TestLldp(object):
 
     def test_get_info(self):
         lldp = lldpshow.Lldpshow()
+        lldp.lldp_instance = ['']
+        lldp.lldpraw = expected_lldpctl_xml_output
+        lldp.get_info(lldp_detail_info=True, lldp_port='Ethernet0')
+        lldp.parse_info(lldp_detail_info=True)
+        output = lldp.get_summary_output(lldp_detail_info=True)
+        assert output.strip('\n') == expected_lldpctl_xml_output[0].strip('\n')
+
+    def test_get_info_multi_asic(self):
+        from .mock_tables import mock_multi_asic
+        from .mock_tables import dbconnector
+        reload(mock_multi_asic)
+        dbconnector.load_namespace_config()
+        lldp = lldpshow.Lldpshow()
+        from .mock_tables import mock_single_asic
+        reload(mock_single_asic)
+        dbconnector.load_namespace_config()
         lldp.lldp_instance = ['']
         lldp.lldpraw = expected_lldpctl_xml_output
         lldp.get_info(lldp_detail_info=True, lldp_port='Ethernet0')

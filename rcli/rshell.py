@@ -28,14 +28,14 @@ def cli(linecard_name, username):
     try:
         linecard = Linecard(linecard_name, username, password)
         if linecard.connection:
-            click.echo(f"Connecting to {linecard.linecard_name}")
+            click.echo(f"Connecting to {linecard.module_name}")
             # If connection was created, connection exists.
             # Otherwise, user will see an error message.
             linecard.start_shell()
             click.echo("Connection Closed")
     except paramiko.ssh_exception.AuthenticationException:
         click.echo(
-            f"Login failed on '{linecard.linecard_name}' with username '{linecard.username}'")
+            f"Login failed on '{linecard.module_name}' with username '{linecard.username}'")
 
 
 if __name__=="__main__":

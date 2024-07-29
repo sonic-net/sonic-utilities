@@ -43,6 +43,20 @@ def get_linecard_module_name_from_hostname(linecard_name: str):
 
     return None
 
+
+def get_linecard_hostname_from_module_name(linecard_name: str):
+
+    chassis_state_db = connect_to_chassis_state_db()
+    keys = chassis_state_db.keys(chassis_state_db.CHASSIS_STATE_DB, '{}|{}'.format(CHASSIS_MODULE_HOSTNAME_TABLE, '*'))
+    for key in keys:
+        module_name = key.split('|')[1]
+        if module_name.replace('-', '').lower() == linecard_name.replace('-', '').lower():
+            hostname = chassis_state_db.get(chassis_state_db.CHASSIS_STATE_DB, key, CHASSIS_MODULE_HOSTNAME)
+            return hostname
+
+    return None
+
+
 def get_linecard_ip(linecard_name: str):
     """
     Given a linecard name, lookup its IP address in the midplane table
@@ -68,6 +82,7 @@ def get_linecard_ip(linecard_name: str):
         click.echo('Linecard {} not accessible'.format(linecard_name))
         return None
     return module_ip
+
 
 def get_module_ip_and_access_from_state_db(module_name):
     state_db = connect_state_db()

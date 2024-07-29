@@ -600,6 +600,12 @@ Ethernet64: SFP EEPROM detected
                                    100GAUI-2 C2M (Annex 135G) - Host Assign (0x55) - 400ZR, DWDM, amplified - Media Assign (0x1)
         CMIS Rev: 4.1
         Connector: LC
+        E1 Active Firmware: X.X
+        E1 Inactive Firmware: Y.Y
+        E1 Server Firmware: A.B.C.D
+        E2 Active Firmware: X.X
+        E2 Inactive Firmware: Y.Y
+        E2 Server Firmware: A.B.C.D
         Encoding: N/A
         Extended Identifier: Power Class 8 (20.0W Max)
         Extended RateSelect Compliance: N/A
@@ -690,6 +696,12 @@ Ethernet64: SFP EEPROM detected
                                    100GAUI-2 C2M (Annex 135G) - Host Assign (0x55) - 400ZR, DWDM, amplified - Media Assign (0x1)
         CMIS Rev: 4.1
         Connector: LC
+        E1 Active Firmware: X.X
+        E1 Inactive Firmware: Y.Y
+        E1 Server Firmware: A.B.C.D
+        E2 Active Firmware: X.X
+        E2 Inactive Firmware: Y.Y
+        E2 Server Firmware: A.B.C.D
         Encoding: N/A
         Extended Identifier: Power Class 8 (20.0W Max)
         Extended RateSelect Compliance: N/A
@@ -780,6 +792,12 @@ Ethernet64: SFP EEPROM detected
                                    100GAUI-2 C2M (Annex 135G) - Host Assign (0x55) - 400ZR, DWDM, amplified - Media Assign (0x1)
         CMIS Rev: 4.1
         Connector: LC
+        E1 Active Firmware: X.X
+        E1 Inactive Firmware: Y.Y
+        E1 Server Firmware: A.B.C.D
+        E2 Active Firmware: X.X
+        E2 Inactive Firmware: Y.Y
+        E2 Server Firmware: A.B.C.D
         Encoding: N/A
         Extended Identifier: Power Class 8 (20.0W Max)
         Extended RateSelect Compliance: N/A

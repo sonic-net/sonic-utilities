@@ -334,6 +334,9 @@ class SFPShow(object):
                 output += covert_application_advertisement_to_output_string(indent, sfp_info_dict)
             elif key == 'active_firmware' or key == 'inactive_firmware':
                 output += '{}{}: {}\n'.format(indent, data_map[key], sfp_firmware_info_dict[key] if key in sfp_firmware_info_dict else 'N/A')
+            elif key.startswith(('e1_', 'e2_')):
+                if key in sfp_firmware_info_dict:
+                    output += '{}{}: {}\n'.format(indent, data_map[key], sfp_firmware_info_dict[key])
             else:
                 output += '{}{}: {}\n'.format(indent, data_map[key], sfp_info_dict[key])
 

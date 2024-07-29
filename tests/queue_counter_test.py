@@ -1851,136 +1851,136 @@ show_queue_counters_port_json_nz = """\
 
 
 show_queue_voq_counters = """\
-            Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes
-----------------  -----  --------------  ---------------  -----------  ------------
-testsw|Ethernet0   VOQ0               0                0            0             0
-testsw|Ethernet0   VOQ1              60               43           39             1
-testsw|Ethernet0   VOQ2              82                7           39            21
-testsw|Ethernet0   VOQ3              11               59           12            94
-testsw|Ethernet0   VOQ4              36               62           35            40
-testsw|Ethernet0   VOQ5              49               91            2            88
-testsw|Ethernet0   VOQ6              33               17           94            74
-testsw|Ethernet0   VOQ7              40               71           95            33
+            Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes    Credit-WD-Del/pkts
+----------------  -----  --------------  ---------------  -----------  ------------  --------------------
+testsw|Ethernet0   VOQ0               0                0            0             0                     0
+testsw|Ethernet0   VOQ1              60               43           39             1                     1
+testsw|Ethernet0   VOQ2              82                7           39            21                    19
+testsw|Ethernet0   VOQ3              11               59           12            94                    12
+testsw|Ethernet0   VOQ4              36               62           35            40                    11
+testsw|Ethernet0   VOQ5              49               91            2            88                    15
+testsw|Ethernet0   VOQ6              33               17           94            74                    17
+testsw|Ethernet0   VOQ7              40               71           95            33                    73
 
-            Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes
-----------------  -----  --------------  ---------------  -----------  ------------
-testsw|Ethernet4   VOQ0              54                8           93            78
-testsw|Ethernet4   VOQ1              83               96           74             9
-testsw|Ethernet4   VOQ2              15               60           61            31
-testsw|Ethernet4   VOQ3              45               52           82            94
-testsw|Ethernet4   VOQ4              55               88           89            52
-testsw|Ethernet4   VOQ5              14               70           95            79
-testsw|Ethernet4   VOQ6              68               60           66            81
-testsw|Ethernet4   VOQ7              63                4           48            76
+            Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes    Credit-WD-Del/pkts
+----------------  -----  --------------  ---------------  -----------  ------------  --------------------
+testsw|Ethernet4   VOQ0              54                8           93            78                    29
+testsw|Ethernet4   VOQ1              83               96           74             9                    42
+testsw|Ethernet4   VOQ2              15               60           61            31                    54
+testsw|Ethernet4   VOQ3              45               52           82            94                    19
+testsw|Ethernet4   VOQ4              55               88           89            52                    28
+testsw|Ethernet4   VOQ5              14               70           95            79                    13
+testsw|Ethernet4   VOQ6              68               60           66            81                    22
+testsw|Ethernet4   VOQ7              63                4           48            76                    53
 
-            Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes
-----------------  -----  --------------  ---------------  -----------  ------------
-testsw|Ethernet8   VOQ0              41               73           77            74
-testsw|Ethernet8   VOQ1              60               21           56            54
-testsw|Ethernet8   VOQ2              57               31           12            39
-testsw|Ethernet8   VOQ3              41               96           70            98
-testsw|Ethernet8   VOQ4              18               49           63            36
-testsw|Ethernet8   VOQ5              99               90            3            15
-testsw|Ethernet8   VOQ6               8               84           82            94
-testsw|Ethernet8   VOQ7              83               15           75            92
+            Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes    Credit-WD-Del/pkts
+----------------  -----  --------------  ---------------  -----------  ------------  --------------------
+testsw|Ethernet8   VOQ0              41               73           77            74                    67
+testsw|Ethernet8   VOQ1              60               21           56            54                    79
+testsw|Ethernet8   VOQ2              57               31           12            39                    35
+testsw|Ethernet8   VOQ3              41               96           70            98                    47
+testsw|Ethernet8   VOQ4              18               49           63            36                    62
+testsw|Ethernet8   VOQ5              99               90            3            15                    19
+testsw|Ethernet8   VOQ6               8               84           82            94                    33
+testsw|Ethernet8   VOQ7              83               15           75            92                     3
 
 """
 
 show_queue_voq_counters_nz = """\
-            Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes
-----------------  -----  --------------  ---------------  -----------  ------------
-testsw|Ethernet0   VOQ1              60               43           39             1
-testsw|Ethernet0   VOQ2              82                7           39            21
-testsw|Ethernet0   VOQ3              11               59           12            94
-testsw|Ethernet0   VOQ4              36               62           35            40
-testsw|Ethernet0   VOQ5              49               91            2            88
-testsw|Ethernet0   VOQ6              33               17           94            74
-testsw|Ethernet0   VOQ7              40               71           95            33
+            Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes    Credit-WD-Del/pkts
+----------------  -----  --------------  ---------------  -----------  ------------  --------------------
+testsw|Ethernet0   VOQ1              60               43           39             1                     1
+testsw|Ethernet0   VOQ2              82                7           39            21                    19
+testsw|Ethernet0   VOQ3              11               59           12            94                    12
+testsw|Ethernet0   VOQ4              36               62           35            40                    11
+testsw|Ethernet0   VOQ5              49               91            2            88                    15
+testsw|Ethernet0   VOQ6              33               17           94            74                    17
+testsw|Ethernet0   VOQ7              40               71           95            33                    73
 
-            Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes
-----------------  -----  --------------  ---------------  -----------  ------------
-testsw|Ethernet4   VOQ0              54                8           93            78
-testsw|Ethernet4   VOQ1              83               96           74             9
-testsw|Ethernet4   VOQ2              15               60           61            31
-testsw|Ethernet4   VOQ3              45               52           82            94
-testsw|Ethernet4   VOQ4              55               88           89            52
-testsw|Ethernet4   VOQ5              14               70           95            79
-testsw|Ethernet4   VOQ6              68               60           66            81
-testsw|Ethernet4   VOQ7              63                4           48            76
+            Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes    Credit-WD-Del/pkts
+----------------  -----  --------------  ---------------  -----------  ------------  --------------------
+testsw|Ethernet4   VOQ0              54                8           93            78                    29
+testsw|Ethernet4   VOQ1              83               96           74             9                    42
+testsw|Ethernet4   VOQ2              15               60           61            31                    54
+testsw|Ethernet4   VOQ3              45               52           82            94                    19
+testsw|Ethernet4   VOQ4              55               88           89            52                    28
+testsw|Ethernet4   VOQ5              14               70           95            79                    13
+testsw|Ethernet4   VOQ6              68               60           66            81                    22
+testsw|Ethernet4   VOQ7              63                4           48            76                    53
 
-            Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes
-----------------  -----  --------------  ---------------  -----------  ------------
-testsw|Ethernet8   VOQ0              41               73           77            74
-testsw|Ethernet8   VOQ1              60               21           56            54
-testsw|Ethernet8   VOQ2              57               31           12            39
-testsw|Ethernet8   VOQ3              41               96           70            98
-testsw|Ethernet8   VOQ4              18               49           63            36
-testsw|Ethernet8   VOQ5              99               90            3            15
-testsw|Ethernet8   VOQ6               8               84           82            94
-testsw|Ethernet8   VOQ7              83               15           75            92
+            Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes    Credit-WD-Del/pkts
+----------------  -----  --------------  ---------------  -----------  ------------  --------------------
+testsw|Ethernet8   VOQ0              41               73           77            74                    67
+testsw|Ethernet8   VOQ1              60               21           56            54                    79
+testsw|Ethernet8   VOQ2              57               31           12            39                    35
+testsw|Ethernet8   VOQ3              41               96           70            98                    47
+testsw|Ethernet8   VOQ4              18               49           63            36                    62
+testsw|Ethernet8   VOQ5              99               90            3            15                    19
+testsw|Ethernet8   VOQ6               8               84           82            94                    33
+testsw|Ethernet8   VOQ7              83               15           75            92                     3
 
 """
 
 show_queue_voq_counters_with_clear = ["""\
-            Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes
-----------------  -----  --------------  ---------------  -----------  ------------
-testsw|Ethernet0   VOQ0               0                0            0             0
-testsw|Ethernet0   VOQ1               0                0            0             0
-testsw|Ethernet0   VOQ2               0                0            0             0
-testsw|Ethernet0   VOQ3               0                0            0             0
-testsw|Ethernet0   VOQ4               0                0            0             0
-testsw|Ethernet0   VOQ5               0                0            0             0
-testsw|Ethernet0   VOQ6               0                0            0             0
-testsw|Ethernet0   VOQ7               0                0            0             0
+            Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes    Credit-WD-Del/pkts
+----------------  -----  --------------  ---------------  -----------  ------------  --------------------
+testsw|Ethernet0   VOQ0               0                0            0             0                     0
+testsw|Ethernet0   VOQ1               0                0            0             0                     0
+testsw|Ethernet0   VOQ2               0                0            0             0                     0
+testsw|Ethernet0   VOQ3               0                0            0             0                     0
+testsw|Ethernet0   VOQ4               0                0            0             0                     0
+testsw|Ethernet0   VOQ5               0                0            0             0                     0
+testsw|Ethernet0   VOQ6               0                0            0             0                     0
+testsw|Ethernet0   VOQ7               0                0            0             0                     0
 """, """\
-            Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes
-----------------  -----  --------------  ---------------  -----------  ------------
-testsw|Ethernet4   VOQ0               0                0            0             0
-testsw|Ethernet4   VOQ1               0                0            0             0
-testsw|Ethernet4   VOQ2               0                0            0             0
-testsw|Ethernet4   VOQ3               0                0            0             0
-testsw|Ethernet4   VOQ4               0                0            0             0
-testsw|Ethernet4   VOQ5               0                0            0             0
-testsw|Ethernet4   VOQ6               0                0            0             0
-testsw|Ethernet4   VOQ7               0                0            0             0
+            Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes    Credit-WD-Del/pkts
+----------------  -----  --------------  ---------------  -----------  ------------  --------------------
+testsw|Ethernet4   VOQ0               0                0            0             0                     0
+testsw|Ethernet4   VOQ1               0                0            0             0                     0
+testsw|Ethernet4   VOQ2               0                0            0             0                     0
+testsw|Ethernet4   VOQ3               0                0            0             0                     0
+testsw|Ethernet4   VOQ4               0                0            0             0                     0
+testsw|Ethernet4   VOQ5               0                0            0             0                     0
+testsw|Ethernet4   VOQ6               0                0            0             0                     0
+testsw|Ethernet4   VOQ7               0                0            0             0                     0
 """, """\
-            Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes
-----------------  -----  --------------  ---------------  -----------  ------------
-testsw|Ethernet8   VOQ0               0                0            0             0
-testsw|Ethernet8   VOQ1               0                0            0             0
-testsw|Ethernet8   VOQ2               0                0            0             0
-testsw|Ethernet8   VOQ3               0                0            0             0
-testsw|Ethernet8   VOQ4               0                0            0             0
-testsw|Ethernet8   VOQ5               0                0            0             0
-testsw|Ethernet8   VOQ6               0                0            0             0
-testsw|Ethernet8   VOQ7               0                0            0             0
+            Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes    Credit-WD-Del/pkts
+----------------  -----  --------------  ---------------  -----------  ------------  --------------------
+testsw|Ethernet8   VOQ0               0                0            0             0                     0
+testsw|Ethernet8   VOQ1               0                0            0             0                     0
+testsw|Ethernet8   VOQ2               0                0            0             0                     0
+testsw|Ethernet8   VOQ3               0                0            0             0                     0
+testsw|Ethernet8   VOQ4               0                0            0             0                     0
+testsw|Ethernet8   VOQ5               0                0            0             0                     0
+testsw|Ethernet8   VOQ6               0                0            0             0                     0
+testsw|Ethernet8   VOQ7               0                0            0             0                     0
 """
 ]
 
 show_queue_port_voq_counters = """\
-            Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes
-----------------  -----  --------------  ---------------  -----------  ------------
-testsw|Ethernet0   VOQ0               0                0            0             0
-testsw|Ethernet0   VOQ1              60               43           39             1
-testsw|Ethernet0   VOQ2              82                7           39            21
-testsw|Ethernet0   VOQ3              11               59           12            94
-testsw|Ethernet0   VOQ4              36               62           35            40
-testsw|Ethernet0   VOQ5              49               91            2            88
-testsw|Ethernet0   VOQ6              33               17           94            74
-testsw|Ethernet0   VOQ7              40               71           95            33
+            Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes    Credit-WD-Del/pkts
+----------------  -----  --------------  ---------------  -----------  ------------  --------------------
+testsw|Ethernet0   VOQ0               0                0            0             0                     0
+testsw|Ethernet0   VOQ1              60               43           39             1                     1
+testsw|Ethernet0   VOQ2              82                7           39            21                    19
+testsw|Ethernet0   VOQ3              11               59           12            94                    12
+testsw|Ethernet0   VOQ4              36               62           35            40                    11
+testsw|Ethernet0   VOQ5              49               91            2            88                    15
+testsw|Ethernet0   VOQ6              33               17           94            74                    17
+testsw|Ethernet0   VOQ7              40               71           95            33                    73
 
 """
 
 show_queue_port_voq_counters_nz = """\
-            Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes
-----------------  -----  --------------  ---------------  -----------  ------------
-testsw|Ethernet0   VOQ1              60               43           39             1
-testsw|Ethernet0   VOQ2              82                7           39            21
-testsw|Ethernet0   VOQ3              11               59           12            94
-testsw|Ethernet0   VOQ4              36               62           35            40
-testsw|Ethernet0   VOQ5              49               91            2            88
-testsw|Ethernet0   VOQ6              33               17           94            74
-testsw|Ethernet0   VOQ7              40               71           95            33
+            Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes    Credit-WD-Del/pkts
+----------------  -----  --------------  ---------------  -----------  ------------  --------------------
+testsw|Ethernet0   VOQ1              60               43           39             1                     1
+testsw|Ethernet0   VOQ2              82                7           39            21                    19
+testsw|Ethernet0   VOQ3              11               59           12            94                    12
+testsw|Ethernet0   VOQ4              36               62           35            40                    11
+testsw|Ethernet0   VOQ5              49               91            2            88                    15
+testsw|Ethernet0   VOQ6              33               17           94            74                    17
+testsw|Ethernet0   VOQ7              40               71           95            33                    73
 
 """
 
@@ -1988,48 +1988,56 @@ show_queue_voq_counters_json = """\
 {
   "testsw|Ethernet0": {
     "VOQ0": {
+      "creditWDPkts": "0",
       "dropbytes": "0",
       "droppacket": "0",
       "totalbytes": "0",
       "totalpacket": "0"
     },
     "VOQ1": {
+      "creditWDPkts": "1",
       "dropbytes": "1",
       "droppacket": "39",
       "totalbytes": "43",
       "totalpacket": "60"
     },
     "VOQ2": {
+      "creditWDPkts": "19",
       "dropbytes": "21",
       "droppacket": "39",
       "totalbytes": "7",
       "totalpacket": "82"
     },
     "VOQ3": {
+      "creditWDPkts": "12",
       "dropbytes": "94",
       "droppacket": "12",
       "totalbytes": "59",
       "totalpacket": "11"
     },
     "VOQ4": {
+      "creditWDPkts": "11",
       "dropbytes": "40",
       "droppacket": "35",
       "totalbytes": "62",
       "totalpacket": "36"
     },
     "VOQ5": {
+      "creditWDPkts": "15",
       "dropbytes": "88",
       "droppacket": "2",
       "totalbytes": "91",
       "totalpacket": "49"
     },
     "VOQ6": {
+      "creditWDPkts": "17",
       "dropbytes": "74",
       "droppacket": "94",
       "totalbytes": "17",
       "totalpacket": "33"
     },
     "VOQ7": {
+      "creditWDPkts": "73",
       "dropbytes": "33",
       "droppacket": "95",
       "totalbytes": "71",
@@ -2038,48 +2046,56 @@ show_queue_voq_counters_json = """\
   },
   "testsw|Ethernet4": {
     "VOQ0": {
+      "creditWDPkts": "29",
       "dropbytes": "78",
       "droppacket": "93",
       "totalbytes": "8",
       "totalpacket": "54"
     },
     "VOQ1": {
+      "creditWDPkts": "42",
       "dropbytes": "9",
       "droppacket": "74",
       "totalbytes": "96",
       "totalpacket": "83"
     },
     "VOQ2": {
+      "creditWDPkts": "54",
       "dropbytes": "31",
       "droppacket": "61",
       "totalbytes": "60",
       "totalpacket": "15"
     },
     "VOQ3": {
+      "creditWDPkts": "19",
       "dropbytes": "94",
       "droppacket": "82",
       "totalbytes": "52",
       "totalpacket": "45"
     },
     "VOQ4": {
+      "creditWDPkts": "28",
       "dropbytes": "52",
       "droppacket": "89",
       "totalbytes": "88",
       "totalpacket": "55"
     },
     "VOQ5": {
+      "creditWDPkts": "13",
       "dropbytes": "79",
       "droppacket": "95",
       "totalbytes": "70",
       "totalpacket": "14"
     },
     "VOQ6": {
+      "creditWDPkts": "22",
       "dropbytes": "81",
       "droppacket": "66",
       "totalbytes": "60",
       "totalpacket": "68"
     },
     "VOQ7": {
+      "creditWDPkts": "53",
       "dropbytes": "76",
       "droppacket": "48",
       "totalbytes": "4",
@@ -2088,48 +2104,56 @@ show_queue_voq_counters_json = """\
   },
   "testsw|Ethernet8": {
     "VOQ0": {
+      "creditWDPkts": "67",
       "dropbytes": "74",
       "droppacket": "77",
       "totalbytes": "73",
       "totalpacket": "41"
     },
     "VOQ1": {
+      "creditWDPkts": "79",
       "dropbytes": "54",
       "droppacket": "56",
       "totalbytes": "21",
       "totalpacket": "60"
     },
     "VOQ2": {
+      "creditWDPkts": "35",
       "dropbytes": "39",
       "droppacket": "12",
       "totalbytes": "31",
       "totalpacket": "57"
     },
     "VOQ3": {
+      "creditWDPkts": "47",
       "dropbytes": "98",
       "droppacket": "70",
       "totalbytes": "96",
       "totalpacket": "41"
     },
     "VOQ4": {
+      "creditWDPkts": "62",
       "dropbytes": "36",
       "droppacket": "63",
       "totalbytes": "49",
       "totalpacket": "18"
     },
     "VOQ5": {
+      "creditWDPkts": "19",
       "dropbytes": "15",
       "droppacket": "3",
       "totalbytes": "90",
       "totalpacket": "99"
     },
     "VOQ6": {
+      "creditWDPkts": "33",
       "dropbytes": "94",
       "droppacket": "82",
       "totalbytes": "84",
       "totalpacket": "8"
     },
     "VOQ7": {
+      "creditWDPkts": "3",
       "dropbytes": "92",
       "droppacket": "75",
       "totalbytes": "15",
@@ -2142,48 +2166,56 @@ show_queue_port_voq_counters_json = """\
 {
   "testsw|Ethernet0": {
     "VOQ0": {
+      "creditWDPkts": "0",
       "dropbytes": "0",
       "droppacket": "0",
       "totalbytes": "0",
       "totalpacket": "0"
     },
     "VOQ1": {
+      "creditWDPkts": "1",
       "dropbytes": "1",
       "droppacket": "39",
       "totalbytes": "43",
       "totalpacket": "60"
     },
     "VOQ2": {
+      "creditWDPkts": "19",
       "dropbytes": "21",
       "droppacket": "39",
       "totalbytes": "7",
       "totalpacket": "82"
     },
     "VOQ3": {
+      "creditWDPkts": "12",
       "dropbytes": "94",
       "droppacket": "12",
       "totalbytes": "59",
       "totalpacket": "11"
     },
     "VOQ4": {
+      "creditWDPkts": "11",
       "dropbytes": "40",
       "droppacket": "35",
       "totalbytes": "62",
       "totalpacket": "36"
     },
     "VOQ5": {
+      "creditWDPkts": "15",
       "dropbytes": "88",
       "droppacket": "2",
       "totalbytes": "91",
       "totalpacket": "49"
     },
     "VOQ6": {
+      "creditWDPkts": "17",
       "dropbytes": "74",
       "droppacket": "94",
       "totalbytes": "17",
       "totalpacket": "33"
     },
     "VOQ7": {
+      "creditWDPkts": "73",
       "dropbytes": "33",
       "droppacket": "95",
       "totalbytes": "71",

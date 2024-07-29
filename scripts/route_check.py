@@ -328,6 +328,16 @@ def get_asicdb_routes(namespace):
     return (selector, subs, sorted(rt))
 
 
+def is_bgp_suppress_fib_pending_enabled(namespace):
+    """
+    Retruns True if FIB suppression is enabled in BGP config, False otherwise
+    """
+    show_run_cmd = ['show', 'runningconfiguration', 'bgp', '-n', namespace]
+
+    output = subprocess.check_output(show_run_cmd, text=True)
+    return 'bgp suppress-fib-pending' in output
+
+
 def is_suppress_fib_pending_enabled(namespace):
     """
     Returns True if FIB suppression is enabled, False otherwise
@@ -533,6 +543,18 @@ def filter_out_standalone_tunnel_routes(namespace, routes):
 
     return updated_routes
 
+def is_feature_bgp_enabled(namespace):
+    """
+    Check if bgp feature is enabled or disabled.
+    Return True if enabled else False.
+    """
+    cfg_db = multi_asic.connect_config_db_for_ns(namespace)
+    feature_table = cfg_db.get_table("FEATURE")
+    bgp_enabled = False
+    if 'bgp' in feature_table:
+        if feature_table['bgp']["state"] == "enabled":
+            bgp_enabled = True
+    return bgp_enabled
 
 def check_frr_pending_routes(namespace):
     """
@@ -769,18 +791,20 @@ def check_routes(namespace):
                 results[namespace] = {}
             results[namespace]["Unaccounted_ROUTE_ENTRY_TABLE_entries"] = rt_asic_miss
 
-        rt_frr_miss = check_frr_pending_routes(namespace)
+        if is_bgp_suppress_fib_pending_enabled(namespace):
+            rt_frr_miss = check_frr_pending_routes(namespace)
 
-        if rt_frr_miss:
-            if namespace not in results:
-                results[namespace] = {}
-            results[namespace]["missed_FRR_routes"] = rt_frr_miss
+            if rt_frr_miss:
+                if namespace not in results:
+                    results[namespace] = {}
+                results[namespace]["missed_FRR_routes"] = rt_frr_miss
 
-        if results:
-            if rt_frr_miss and not rt_appl_miss and not rt_asic_miss:
-                print_message(syslog.LOG_ERR, "Some routes are not set offloaded in FRR{} but all routes in APPL_DB and ASIC_DB are in sync".format(namespace))
-                if is_suppress_fib_pending_enabled(namespace):
-                    mitigate_installed_not_offloaded_frr_routes(namespace, rt_frr_miss, rt_appl)
+            if results:
+                if rt_frr_miss and not rt_appl_miss and not rt_asic_miss:
+                    print_message(syslog.LOG_ERR, "Some routes are not set offloaded in FRR{} but all "
+                                  "routes in APPL_DB and ASIC_DB are in sync".format(namespace))
+                    if is_suppress_fib_pending_enabled(namespace):
+                        mitigate_installed_not_offloaded_frr_routes(namespace, rt_frr_miss, rt_appl)
 
     if results:
         print_message(syslog.LOG_WARNING, "Failure results: {",  json.dumps(results, indent=4), "}")
@@ -830,6 +854,10 @@ def main():
 
     signal.signal(signal.SIGALRM, handler)
     load_db_config()
+
+    if not is_feature_bgp_enabled(namespace):
+        print_message(syslog.LOG_INFO, "BGP feature is disabled, exiting without checking routes!!")
+        return 0, None
 
     while True:
         signal.alarm(TIMEOUT_SECONDS)
