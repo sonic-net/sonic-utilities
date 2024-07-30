@@ -9,25 +9,61 @@ import generic_config_updater.gu_common
 
 class TestMultiAsicChangeApplier(unittest.TestCase):
 
-    def test_extract_scope(self):
+    @patch('sonic_py_common.multi_asic.is_multi_asic')
+    def test_extract_scope_multiasic(self, mock_is_multi_asic):
+        mock_is_multi_asic.return_value = True
         test_paths_expectedresults = {
-            "/asic0/PORTCHANNEL/PortChannel102/admin_status": (True, "asic0", "/PORTCHANNEL/PortChannel102/admin_status"),
-            "/asic01/PORTCHANNEL/PortChannel102/admin_status": (True, "asic01", "/PORTCHANNEL/PortChannel102/admin_status"),
-            "/asic123456789/PORTCHANNEL/PortChannel102/admin_status":  (True, "asic123456789", "/PORTCHANNEL/PortChannel102/admin_status"),
-            "/asic0123456789/PORTCHANNEL/PortChannel102/admin_status": (True, "asic0123456789", "/PORTCHANNEL/PortChannel102/admin_status"),
-            "/localhost/BGP_DEVICE_GLOBAL/STATE/tsa_enabled": (True, "localhost", "/BGP_DEVICE_GLOBAL/STATE/tsa_enabled"),
-            "/asic1/BGP_DEVICE_GLOBAL/STATE/tsa_enabled": (True, "asic1", "/BGP_DEVICE_GLOBAL/STATE/tsa_enabled"),
-            "/sometable/data": (True, "", "/sometable/data"),
-            "": (False, "", ""),
-            "localhostabc/BGP_DEVICE_GLOBAL/STATE/tsa_enabled": (False, "", ""),
-            "/asic77": (False, "", ""),
-            "/Asic0/PORTCHANNEL/PortChannel102/admin_status": (False, "", ""),
-            "/ASIC1/PORTCHANNEL/PortChannel102/admin_status": (False, "", ""),
-            "/Localhost/PORTCHANNEL/PortChannel102/admin_status": (False, "", ""),
-            "/LocalHost/PORTCHANNEL/PortChannel102/admin_status": (False, "", ""),
-            "/asci1/PORTCHANNEL/PortChannel102/admin_status": (False, "", ""),
-            "/asicx/PORTCHANNEL/PortChannel102/admin_status": (False, "", ""),
-            "/asic-12/PORTCHANNEL/PortChannel102/admin_status": (False, "", ""),
+            "/asic0/PORTCHANNEL/PortChannel102/admin_status": (
+                True, "asic0", "/PORTCHANNEL/PortChannel102/admin_status"
+            ),
+            "/asic01/PORTCHANNEL/PortChannel102/admin_status": (
+                True, "asic01", "/PORTCHANNEL/PortChannel102/admin_status"
+            ),
+            "/asic123456789/PORTCHANNEL/PortChannel102/admin_status": (
+                True, "asic123456789", "/PORTCHANNEL/PortChannel102/admin_status"
+            ),
+            "/asic0123456789/PORTCHANNEL/PortChannel102/admin_status": (
+                True, "asic0123456789", "/PORTCHANNEL/PortChannel102/admin_status"
+            ),
+            "/localhost/BGP_DEVICE_GLOBAL/STATE/tsa_enabled": (
+                True, "localhost", "/BGP_DEVICE_GLOBAL/STATE/tsa_enabled"
+            ),
+            "/asic1/BGP_DEVICE_GLOBAL/STATE/tsa_enabled": (
+                True, "asic1", "/BGP_DEVICE_GLOBAL/STATE/tsa_enabled"
+            ),
+            "/sometable/data": (
+                False, "", "/sometable/data"
+            ),
+            "": (
+                False, "", ""
+            ),
+            "localhostabc/BGP_DEVICE_GLOBAL/STATE/tsa_enabled": (
+                False, "", ""
+            ),
+            "/asic77": (
+                False, "", ""
+            ),
+            "/Asic0/PORTCHANNEL/PortChannel102/admin_status": (
+                False, "", ""
+            ),
+            "/ASIC1/PORTCHANNEL/PortChannel102/admin_status": (
+                False, "", ""
+            ),
+            "/Localhost/PORTCHANNEL/PortChannel102/admin_status": (
+                False, "", ""
+            ),
+            "/LocalHost/PORTCHANNEL/PortChannel102/admin_status": (
+                False, "", ""
+            ),
+            "/asci1/PORTCHANNEL/PortChannel102/admin_status": (
+                False, "", ""
+            ),
+            "/asicx/PORTCHANNEL/PortChannel102/admin_status": (
+                False, "", ""
+            ),
+            "/asic-12/PORTCHANNEL/PortChannel102/admin_status": (
+                False, "", ""
+            ),
         }
 
         for test_path, (result, expectedscope, expectedremainder) in test_paths_expectedresults.items():
@@ -35,8 +71,71 @@ class TestMultiAsicChangeApplier(unittest.TestCase):
                 scope, remainder = extract_scope(test_path)
                 assert(scope == expectedscope)
                 assert(remainder == expectedremainder)
-            except Exception as e:
-                assert(result == False)
+            except Exception:
+                assert(not result)
+
+    @patch('sonic_py_common.multi_asic.is_multi_asic')
+    def test_extract_scope_singleasic(self, mock_is_multi_asic):
+        mock_is_multi_asic.return_value = False
+        test_paths_expectedresults = {
+            "/asic0/PORTCHANNEL/PortChannel102/admin_status": (
+                True, "asic0", "/PORTCHANNEL/PortChannel102/admin_status"
+            ),
+            "/asic01/PORTCHANNEL/PortChannel102/admin_status": (
+                True, "asic01", "/PORTCHANNEL/PortChannel102/admin_status"
+            ),
+            "/asic123456789/PORTCHANNEL/PortChannel102/admin_status":  (
+                True, "asic123456789", "/PORTCHANNEL/PortChannel102/admin_status"
+            ),
+            "/asic0123456789/PORTCHANNEL/PortChannel102/admin_status": (
+                True, "asic0123456789", "/PORTCHANNEL/PortChannel102/admin_status"
+            ),
+            "/localhost/BGP_DEVICE_GLOBAL/STATE/tsa_enabled": (
+                True, "localhost", "/BGP_DEVICE_GLOBAL/STATE/tsa_enabled"
+            ),
+            "/asic1/BGP_DEVICE_GLOBAL/STATE/tsa_enabled": (
+                True, "asic1", "/BGP_DEVICE_GLOBAL/STATE/tsa_enabled"
+            ),
+            "/sometable/data": (
+                True, "", "/sometable/data"
+            ),
+            "": (
+                False, "", ""
+            ),
+            "localhostabc/BGP_DEVICE_GLOBAL/STATE/tsa_enabled": (
+                False, "", ""
+            ),
+            "/asic77": (False, "", ""),
+            "/Asic0/PORTCHANNEL/PortChannel102/admin_status": (
+                False, "", ""
+            ),
+            "/ASIC1/PORTCHANNEL/PortChannel102/admin_status": (
+                False, "", ""
+            ),
+            "/Localhost/PORTCHANNEL/PortChannel102/admin_status": (
+                False, "", ""
+            ),
+            "/LocalHost/PORTCHANNEL/PortChannel102/admin_status": (
+                False, "", ""
+            ),
+            "/asci1/PORTCHANNEL/PortChannel102/admin_status": (
+                False, "", ""
+            ),
+            "/asicx/PORTCHANNEL/PortChannel102/admin_status": (
+                False, "", ""
+            ),
+            "/asic-12/PORTCHANNEL/PortChannel102/admin_status": (
+                False, "", ""
+            ),
+        }
+
+        for test_path, (result, expectedscope, expectedremainder) in test_paths_expectedresults.items():
+            try:
+                scope, remainder = extract_scope(test_path)
+                assert(scope == expectedscope)
+                assert(remainder == expectedremainder)
+            except Exception:
+                assert(not result)
 
     @patch('generic_config_updater.change_applier.ChangeApplier._get_running_config', autospec=True)
     @patch('generic_config_updater.change_applier.ConfigDBConnector', autospec=True)

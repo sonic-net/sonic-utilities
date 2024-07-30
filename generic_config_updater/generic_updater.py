@@ -31,6 +31,9 @@ def extract_scope(path):
         scope = HOST_NAMESPACE
         remainder = "/" + "/".join(parts[1:])
     else:
+        if multi_asic.is_multi_asic():
+            raise GenericConfigUpdaterError(f"Multi ASIC must have namespace prefix in path: '{path}'.")
+
         scope = ""
         remainder = path
     return scope, remainder
