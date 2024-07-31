@@ -113,6 +113,8 @@ class AbootBootloader(Bootloader):
     def get_next_image(self):
         config = self._boot_config_read()
         match = re.search(r"flash:/*(\S+)/", config['SWI'])
+        if not match:
+           return config['SWI'].split(':', 1)[-1]
         return match.group(1).replace(IMAGE_DIR_PREFIX, IMAGE_PREFIX, 1)
 
     def set_default_image(self, image):
