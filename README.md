@@ -51,7 +51,7 @@ A convenient alternative is to let the SONiC build system configure a build envi
 
 2. Build the sonic-utilities Python wheel package inside the Bullseye slave container, and tell the build system to keep the container alive when finished
     ```
-    make NOSTRETCH=1 NOBUSTER=1 KEEP_SLAVE_ON=yes target/python-wheels/bullseye/sonic_utilities-1.2-py3-none-any.whl
+    make -f Makefile.work BLDENV=bookworm KEEP_SLAVE_ON=yes target/python-wheels/bookworm/sonic_utilities-1.2-py3-none-any.whl
     ```
 
 3. When the build finishes, your prompt will change to indicate you are inside the slave container. Change into the `src/sonic-utilities/` directory
