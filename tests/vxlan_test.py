@@ -15,13 +15,6 @@ from .mock_tables import dbconnector
 test_path = os.path.dirname(os.path.abspath(__file__))
 mock_db_path = os.path.join(test_path, "vnet_input")
 
-show_vxlan_interface_output="""\
-VTEP Information:
-
-	VTEP Name : vtep1, SIP  : 1.1.1.1
-	NVO Name  : nvo1,  VTEP : vtep1
-"""
-
 show_vxlan_vlanvnimap_output="""\
 +---------+-------+
 | VLAN    |   VNI |
@@ -71,6 +64,13 @@ vtep1                1.1.1.1                        map_100_Vlan100    100 -> Vl
                                                     map_102_Vlan102    102 -> Vlan102
                                                     map_200_Vlan200    200 -> Vlan200
 """
+
+show_vxlan_interface_output = """\
+VTEP Information:
+
+	VTEP Name : vtep1, SIP  : 1.1.1.1
+	NVO Name  : nvo1,  VTEP : vtep1
+"""  # noqa: E101,W191
 
 show_vxlan_remotevni_output="""\
 +---------+--------------+-------+
@@ -330,6 +330,30 @@ class TestVxlan(object):
         assert result.exit_code == 0
 
         result = runner.invoke(config.config.commands["vxlan"].commands["del"], ["vtep1"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+
+        result = runner.invoke(config.config.commands['vxlan'].commands['add'],
+                               ['vtep1', '1.1.1.1', '1.2.3.4.5'], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+
+        result = runner.invoke(config.config.commands['vxlan'].commands['add'],
+                               ['vtep1', '1.2.3.4.5', '2.2.2.2.2'], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+
+        result = runner.invoke(config.config.commands['vxlan'].commands['add'],
+                               ['vtep1', '1.1.1.1', '2.2.2.2'], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+
+        result = runner.invoke(config.config.commands['vxlan'].commands['del'],
+                               ['vtep1'], obj=db)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
