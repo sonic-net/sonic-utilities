@@ -2253,6 +2253,26 @@ def received(db, namespace):
         ctx.fail("ASIC/SDK health event is not supported on the platform")
 
 
+#
+# 'local-users-passwords-reset' command group ("show local-users-passwords-reset ...")
+#
+@cli.command('local-users-passwords-reset')
+@clicommon.pass_db
+def local_users_passwords_reset(db):
+    """Show local-users-passwords-reset state"""
+
+    feature_table = db.cfgdb.get_entry('LOCAL_USERS_PASSWORDS_RESET', 'global')
+
+    hdrs = ['state']
+    data = []
+
+    for key in hdrs:
+        data.append(feature_table.get(key, ''))
+
+    messages = [data]
+    click.echo(tabulate(messages, headers=hdrs, tablefmt='simple', missingval=''))
+
+
 # Load plugins and register them
 helper = util_base.UtilHelper()
 helper.load_and_register_plugins(plugins, cli)
