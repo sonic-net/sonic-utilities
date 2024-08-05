@@ -353,6 +353,7 @@ def test_feature_registration(mock_sonic_db, manifest):
         'has_global_scope': 'True',
         'delayed': 'False',
         'check_up_status': 'False',
+        'irrel_for_sysready': 'True',
         'support_syslog_rate_limit': 'False',
     })
 
@@ -367,6 +368,7 @@ def test_feature_update(mock_sonic_db, manifest):
         'has_global_scope': 'True',
         'delayed': 'False',
         'check_up_status': 'False',
+        'irrel_for_sysready': 'True',
         'support_syslog_rate_limit': 'False',
     }
     mock_connector = Mock()
@@ -391,6 +393,7 @@ def test_feature_update(mock_sonic_db, manifest):
             'has_global_scope': 'True',
             'delayed': 'True',
             'check_up_status': 'False',
+            'irrel_for_sysready': 'True',
             'support_syslog_rate_limit': 'False',
         }),
     ], any_order=True)
@@ -413,6 +416,7 @@ def test_feature_registration_with_timer(mock_sonic_db, manifest):
         'has_global_scope': 'True',
         'delayed': 'True',
         'check_up_status': 'False',
+        'irrel_for_sysready': 'True',
         'support_syslog_rate_limit': 'False',
     })
 
@@ -433,6 +437,7 @@ def test_feature_registration_with_non_default_owner(mock_sonic_db, manifest):
         'has_global_scope': 'True',
         'delayed': 'False',
         'check_up_status': 'False',
+        'irrel_for_sysready': 'True',
         'support_syslog_rate_limit': 'False',
     })
 
