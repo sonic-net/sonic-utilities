@@ -1,0 +1,37 @@
+{
+    "TWAMP_SESSION|SESSION_SEND_VM1": {
+            "dst_ip": "10.10.100.2",
+            "dst_udp_port": "863",
+            "mode": "LIGHT",
+            "packet_count": "100",
+            "role": "SENDER",
+            "src_ip": "10.20.100.1",
+            "src_udp_port": "862",
+            "statistics_interval": "15000",
+            "timeout": "5",
+            "tx_interval": "100",
+            "admin_state": "enabled"
+    },
+    "TWAMP_SESSION|SESSION_SEND_VM2": {
+            "dst_ip": "192.168.100.2",
+            "dst_udp_port": "1863",
+            "mode": "LIGHT",
+            "packet_count": "2000",
+            "role": "SENDER",
+            "src_ip": "192.168.50.3",
+            "src_udp_port": "1862",
+            "statistics_interval": "1500",
+            "timeout": "5",
+            "tx_interval": "200",
+            "admin_state": "enabled"
+    },
+    "TWAMP_SESSION|SESSION_RECV_VM3": {
+            "dst_ip": "100.100.100.2",
+            "dst_udp_port": "2863",
+            "mode": "LIGHT",
+            "role": "REFLECTOR",
+            "src_ip": "100.100.50.3",
+            "src_udp_port": "2862",
+            "admin_state": "enabled"
+    }
+}
