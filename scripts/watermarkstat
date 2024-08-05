@@ -5,7 +5,6 @@
 # watermarkstat is a tool for displaying watermarks.
 #
 #####################################################################
-
 import argparse
 import json
 import os
@@ -13,6 +12,8 @@ import sys
 
 from natsort import natsorted
 from tabulate import tabulate
+from sonic_py_common import multi_asic
+from utilities_common.general import load_db_config
 
 # mock the redis for unit test purposes #
 try:
@@ -21,7 +22,11 @@ try:
         tests_path = os.path.join(modules_path, "tests")
         sys.path.insert(0, modules_path)
         sys.path.insert(0, tests_path)
-        from mock_tables import dbconnector
+        from tests.mock_tables import dbconnector
+
+        if os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] == "multi_asic":
+            import tests.mock_tables.mock_multi_asic
+            dbconnector.load_namespace_config()
 
         if os.environ["WATERMARKSTAT_UNIT_TESTING"] == "1":
             input_path = os.path.join(tests_path, "wm_input")
@@ -68,31 +73,40 @@ COUNTERS_BUFFER_POOL_NAME_MAP = "COUNTERS_BUFFER_POOL_NAME_MAP"
 
 class Watermarkstat(object):
 
-    def __init__(self):
-        self.counters_db = SonicV2Connector(use_unix_socket_path=False)
-        self.counters_db.connect(self.counters_db.COUNTERS_DB)
+    def __init__(self, namespace):
+        self.namespace = namespace
 
         # connect APP DB for clear notifications
-        self.app_db = SonicV2Connector(use_unix_socket_path=False)
-        self.app_db.connect(self.counters_db.APPL_DB)
+        self.app_db = SonicV2Connector(namespace=namespace, use_unix_socket_path=True)
+        self.app_db.connect(self.app_db.APPL_DB)
+        namespaces = multi_asic.get_namespace_list()
+        self.target_ns = [namespace] if self.namespace else namespaces
+        self.counters_db = []
+
+        for ns in self.target_ns:
+            counters_db = SonicV2Connector(namespace=ns, use_unix_socket_path=True)
+            counters_db.connect(counters_db.COUNTERS_DB)
+            self.counters_db.append(counters_db)
 
         def get_queue_type(table_id):
-            queue_type = self.counters_db.get(self.counters_db.COUNTERS_DB, COUNTERS_QUEUE_TYPE_MAP, table_id)
+            queue_type = None
+            for counters_db in self.counters_db:
+                queue_type = counters_db.get(counters_db.COUNTERS_DB, COUNTERS_QUEUE_TYPE_MAP, table_id)
+                if queue_type and queue_type == SAI_QUEUE_TYPE_MULTICAST:
+                    return QUEUE_TYPE_MC
+                elif queue_type and queue_type == SAI_QUEUE_TYPE_UNICAST:
+                    return QUEUE_TYPE_UC
+                elif queue_type and queue_type == SAI_QUEUE_TYPE_ALL:
+                    return QUEUE_TYPE_ALL
+
             if queue_type is None:
                 print("Queue Type is not available in table '{}'".format(table_id), file=sys.stderr)
-                sys.exit(1)
-            elif queue_type == SAI_QUEUE_TYPE_MULTICAST:
-                return QUEUE_TYPE_MC
-            elif queue_type == SAI_QUEUE_TYPE_UNICAST:
-                return QUEUE_TYPE_UC
-            elif queue_type == SAI_QUEUE_TYPE_ALL:
-                return QUEUE_TYPE_ALL
             else:
                 print("Queue Type '{} in table '{}' is invalid".format(queue_type, table_id), file=sys.stderr)
-                sys.exit(1)
+            sys.exit(1)
 
         def get_queue_port(table_id):
-            port_table_id = self.counters_db.get(self.counters_db.COUNTERS_DB, COUNTERS_QUEUE_PORT_MAP, table_id)
+            port_table_id = get_port(COUNTERS_QUEUE_PORT_MAP, table_id)
             if port_table_id is None:
                 print("Port is not available in table '{}'".format(table_id), file=sys.stderr)
                 sys.exit(1)
@@ -100,15 +114,34 @@ class Watermarkstat(object):
             return port_table_id
 
         def get_pg_port(table_id):
-            port_table_id = self.counters_db.get(self.counters_db.COUNTERS_DB, COUNTERS_PG_PORT_MAP, table_id)
+            port_table_id = get_port(COUNTERS_PG_PORT_MAP, table_id)
             if port_table_id is None:
                 print("Port is not available in table '{}'".format(table_id), file=sys.stderr)
                 sys.exit(1)
 
             return port_table_id
 
+        def get_port(type, table_id):
+            for counters_db in self.counters_db:
+                result_table_id = counters_db.get(counters_db.COUNTERS_DB, type, table_id)
+                if result_table_id:
+                    return result_table_id
+            return None
+
+        def get_counters_db_map(map_name):
+            map = {}
+            for counters_db in self.counters_db:
+                get_map = counters_db.get_all(counters_db.COUNTERS_DB, map_name)
+                if get_map:
+                    map.update(get_map)
+            if map == {}:
+                return None
+            else:
+                return map
+
+        self.counter_port_name_map = get_counters_db_map(COUNTERS_PORT_NAME_MAP)
+
         # Get all ports
-        self.counter_port_name_map = self.counters_db.get_all(self.counters_db.COUNTERS_DB, COUNTERS_PORT_NAME_MAP)
         if self.counter_port_name_map is None:
             print("COUNTERS_PORT_NAME_MAP is empty!", file=sys.stderr)
             sys.exit(1)
@@ -127,7 +160,7 @@ class Watermarkstat(object):
             self.port_name_map[self.counter_port_name_map[port]] = port
 
         # Get Queues for each port
-        counter_queue_name_map = self.counters_db.get_all(self.counters_db.COUNTERS_DB, COUNTERS_QUEUE_NAME_MAP)
+        counter_queue_name_map = get_counters_db_map(COUNTERS_QUEUE_NAME_MAP)
         if counter_queue_name_map is None:
             print("COUNTERS_QUEUE_NAME_MAP is empty!", file=sys.stderr)
             sys.exit(1)
@@ -144,7 +177,7 @@ class Watermarkstat(object):
                 self.port_all_queues_map[port][queue] = counter_queue_name_map[queue]
 
         # Get PGs for each port
-        counter_pg_name_map = self.counters_db.get_all(self.counters_db.COUNTERS_DB, COUNTERS_PG_NAME_MAP)
+        counter_pg_name_map = get_counters_db_map(COUNTERS_PG_NAME_MAP)
         if counter_pg_name_map is None:
             print("COUNTERS_PG_NAME_MAP is empty!", file=sys.stderr)
             sys.exit(1)
@@ -154,7 +187,7 @@ class Watermarkstat(object):
             self.port_pg_map[port][pg] = counter_pg_name_map[pg]
 
         # Get all buffer pools
-        self.buffer_pool_name_to_oid_map = self.counters_db.get_all(self.counters_db.COUNTERS_DB, COUNTERS_BUFFER_POOL_NAME_MAP)
+        self.buffer_pool_name_to_oid_map = get_counters_db_map(COUNTERS_BUFFER_POOL_NAME_MAP)
         if self.buffer_pool_name_to_oid_map is None:
             print("COUNTERS_BUFFER_POOL_NAME_MAP is empty!", file=sys.stderr)
             sys.exit(1)
@@ -194,7 +227,7 @@ class Watermarkstat(object):
         }
 
     def get_queue_index(self, table_id):
-        queue_index = self.counters_db.get(self.counters_db.COUNTERS_DB, COUNTERS_QUEUE_INDEX_MAP, table_id)
+        queue_index = self.get_index(COUNTERS_QUEUE_INDEX_MAP, table_id)
         if queue_index is None:
             print("Queue index is not available in table '{}'".format(table_id), file=sys.stderr)
             sys.exit(1)
@@ -202,12 +235,19 @@ class Watermarkstat(object):
         return queue_index
 
     def get_pg_index(self, table_id):
-        pg_index = self.counters_db.get(self.counters_db.COUNTERS_DB, COUNTERS_PG_INDEX_MAP, table_id)
+        pg_index = self.get_index(COUNTERS_PG_INDEX_MAP, table_id)
         if pg_index is None:
             print("Priority group index is not available in table '{}'".format(table_id), file=sys.stderr)
             sys.exit(1)
 
         return pg_index
+
+    def get_index(self, index_map, table_id):
+        for counters_db in self.counters_db:
+            index = counters_db.get(counters_db.COUNTERS_DB, index_map, table_id)
+            if index:
+                return index
+        return None
 
     def build_header(self, wm_type, counter_type):
         if wm_type is None:
@@ -256,7 +296,7 @@ class Watermarkstat(object):
             full_table_id = table_prefix + obj_id
             idx = int(idx_func(obj_id))
             pos = self.header_idx_to_pos[idx]
-            counter_data = self.counters_db.get(self.counters_db.COUNTERS_DB, full_table_id, watermark)
+            counter_data = self.get_index(full_table_id, watermark)
             if counter_data is None or counter_data == '':
                 fields[pos] = STATUS_NA
             elif fields[pos] != STATUS_NA:
@@ -274,7 +314,7 @@ class Watermarkstat(object):
                     continue
 
                 db_key = table_prefix + bp_oid
-                data = self.counters_db.get(self.counters_db.COUNTERS_DB, db_key, type["wm_name"])
+                data = self.get_index(db_key, type["wm_name"])
                 if data is None:
                     data = STATUS_NA
                 table.append((buf_pool, data))
@@ -299,7 +339,6 @@ class Watermarkstat(object):
 
 
 def main():
-
     parser = argparse.ArgumentParser(description='Display the watermark counters',
                                       formatter_class=argparse.RawTextHelpFormatter,
                                       epilog="""
@@ -324,12 +363,24 @@ Examples:
                         choices=['pg_headroom', 'pg_shared', 'q_shared_uni', 'q_shared_multi', 'buffer_pool', 'headroom_pool', 'q_shared_all'],
                         help='The type of watermark')
     parser.add_argument('-v', '--version', action='version', version='%(prog)s 1.0')
+    parser.add_argument('-n', '--namespace', type=str, help='Namespace name', default=None)
     args = parser.parse_args()
-    watermarkstat = Watermarkstat()
+
+    load_db_config()
+    namespaces = multi_asic.get_namespace_list()
+    if args.namespace and args.namespace not in namespaces:
+        print("Input arguments error. Namespaces must be one of", *namespaces)
+        sys.exit(1)
+
+    watermarkstat = Watermarkstat(args.namespace)
 
     if args.clear:
-        watermarkstat.send_clear_notification(("PERSISTENT" if args.persistent else "USER", args.type.upper()))
-        sys.exit(0)
+        if multi_asic.is_multi_asic() and not args.namespace:
+            print("Input arguments error. Namespace must be specified for multi-asic device for clear")
+            sys.exit(1)
+        else:
+            watermarkstat.send_clear_notification(("PERSISTENT" if args.persistent else "USER", args.type.upper()))
+            sys.exit(0)
 
     table_prefix = PERSISTENT_TABLE_PREFIX if args.persistent else USER_TABLE_PREFIX
     watermarkstat.print_all_stat(table_prefix, args.type)
