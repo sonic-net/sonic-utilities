@@ -147,7 +147,7 @@ function clear_boot()
     # common_clear
     debug "${REBOOT_TYPE} failure ($?) cleanup ..."
 
-    /sbin/kexec -u || /bin/true
+    /sbin/kexec -u -a || /bin/true
 
     teardown_control_plane_assistant
 
@@ -519,7 +519,7 @@ function unload_kernel()
 {
     # Unload the previously loaded kernel if any loaded
     if [[ "$(cat /sys/kernel/kexec_loaded)" -eq 1 ]]; then
-        /sbin/kexec -u
+        /sbin/kexec -u -a
     fi
 }
 
