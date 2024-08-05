@@ -5,7 +5,6 @@ REBOOT_TIME=$(date)
 REBOOT_CAUSE_FILE="/host/reboot-cause/reboot-cause.txt"
 WARM_DIR=/host/warmboot
 REDIS_FILE=dump.rdb
-CONFIG_DB_FILE=/etc/sonic/config_db.json
 REBOOT_SCRIPT_NAME=$(basename $0)
 REBOOT_TYPE="${REBOOT_SCRIPT_NAME}"
 SHUTDOWN_ORDER_FILE="/etc/sonic/${REBOOT_TYPE}_order"
@@ -722,8 +721,8 @@ fi
 
 if [[ "$REBOOT_TYPE" = "fast-reboot" ]]; then
     COUNTERPOLL_DELAY_RC=0
-    # Delay counters in config_db.json
-    /usr/local/bin/counterpoll config-db delay $CONFIG_DB_FILE || COUNTERPOLL_DELAY_RC=$?
+    # Delay counters in CONFIG_DB
+    /usr/local/bin/counterpoll delay || COUNTERPOLL_DELAY_RC=$?
     if [[ COUNTERPOLL_DELAY_RC -ne 0 ]]; then
         error "Failed to delay counterpoll. Exit code: $COUNTERPOLL_DELAY_RC"
         unload_kernel
