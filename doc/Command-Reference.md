@@ -2724,6 +2724,514 @@ This command is used to remove particular IPv4 or IPv6 BGP neighbor configuratio
   admin@sonic:~$ sudo config bgp remove neighbor SONIC02SPINE
   ```
 
+**config bgp autonomous-system add**
+
+This command is used to enable a BGP protocol process with the specified ASN.
+
+- Usage:
+  ```
+  config bgp autonomous-system add <asn>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp autonomous-system add 100
+  ```
+
+**config bgp router-id add**
+
+This command is used to specify the router-ID. By default router ID value is selected as the largest IP Address of the interfaces.
+Loopback interface ip address is preferable option for router-ID.
+
+- Usage:
+  ```
+  config bgp router-id add <interface-ip>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp router-id add  10.10.10.10
+  ```
+
+**config bgp neighbor remote-as add**
+
+This command is used to add the BGP neighbor with specified remote AS number.
+
+- Usage:
+  ```
+  config bgp neighbor remote-as <neighbor-ip> <remote-asn>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp neighbor remote-as add 10.0.0.61 64015
+  ```
+
+**config bgp neighbor update-source add**
+
+This command is used to specify the local IP source address to use for the BGP session to this neighbour.
+
+- Usage:
+  ```
+  config bgp neighbor update-source add <neighbor-ip> <local-ip-source>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp neighbor update-source add 10.0.0.61 10.0.0.60
+  ```
+
+**config bgp bestpath as-path multipath-relax on**
+
+This command is used to specifiy that BGP decision process should consider paths of equal AS_PATH length candidates for multipath computation
+Without the knob, the entire AS_PATH must match for multipath computation.
+
+- Usage:
+  ```
+  config bgp bestpath as-path multipath-relax <on/off>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp bestpath as-path multipath-relax on
+  ```
+  ```
+  admin@sonic:~$ sudo config bgp bestpath as-path multipath-relax off
+  ```
+
+**config bgp address-family ipv4 unicast max-paths add**
+
+This command is used to set the maximum-paths value used for ecmp calculations for this address family.
+
+- Usage:
+  ```
+  config bgp address-family ipv4 unicast max-paths add <maximum-paths>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp address-family ipv4 unicast max-paths add 64
+  ```
+
+**config bgp address-family ipv4 unicast network add**
+
+This command is used to add the announcement network. This network will be announced to all neighbors.
+
+- Usage:
+  ```
+  config bgp address-family ipv4 unicast network add <network>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp address-family ipv4 unicast network add 10.127.127.1/32
+  ```
+
+**config bgp address-family ipv4 unicast neighbor activate**
+
+This command is used to modify whether to enable an address family for a specific neighbor.
+By default only the IPv4 unicast address family is enabled.
+
+- Usage:
+  ```
+  config bgp address-family ipv4 unicast neighbor activate <neighbor-ip> <on/off>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp address-family ipv4 unicast neighbor activate 10.0.0.2 on
+  ```
+  ```
+  admin@sonic:~$ sudo config bgp address-family ipv4 unicast neighbor activate 10.0.0.2 off
+  ```
+
+**config bgp graceful-restart state**
+
+This command is used to enable BGP graceful restart functionality at the global level.
+
+- Usage:
+  ```
+  config bgp graceful-restart state <on/off>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp graceful-restart state on
+  ```
+  ```
+  admin@sonic:~$ sudo config bgp graceful-restart state off
+  ```
+
+**config bgp graceful-restart restart-time add**
+
+This command is used to set the time to wait to delete stale routes before a BGP open message is received.
+
+- Usage:
+  ```
+  config bgp graceful-restart restart-time add <time>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp graceful-restart restart-time add 5
+  ```
+
+**config bgp graceful-restart stalepath-time add**
+
+This command is used to set the max time (in seconds) to hold onto restarting peer’s stale paths.
+It also controls Enhanced Route-Refresh timer.
+If this command is configured and the router does not receive a Route-Refresh EoRR message, the router removes the stale routes from the BGP table after the timer expires. The stale path timer is started when the router receives a Route-Refresh BoRR message.
+
+- Usage:
+  ```
+  config bgp graceful-restart stalepath-time add <time>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp graceful-restart stalepath-time add 6
+  ```
+
+**config bgp graceful-restart preserve-fw-state**
+
+This command is used to set Forwarding State (F) bit in “Flags for Address Family” for given AFI and SAFI.
+When set, the bit indicates that the forwarding state has been preserved. 
+
+- Usage:
+  ```
+  config bgp graceful-restart preserve-fw-state <on/off>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp graceful-restart preserve-fw-state on
+  ```
+  ```
+  admin@sonic:~$ sudo config bgp graceful-restart preserve-fw-state off
+  ```
+
+**config bgp listen limit add**
+
+This command is used to define the maximum number of peers accepted for one BGP instance. This limit is set to 100 by default.
+
+- Usage:
+  ```
+  config bgp listen limit add <max_dynamic_neighbors>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp listen limit add 10
+  ```
+
+**config bgp default ipv4-unicast**
+
+This command is used to allow the user to specify that the IPv4 Unicast address family is turned on by default or not.
+This command defaults to on.
+
+- Usage:
+  ```
+  config bgp default ipv4-unicast <on/off>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp default ipv4-unicast on
+  ```
+  ```
+  admin@sonic:~$ sudo config bgp default ipv4-unicast off
+  ```
+
+**config bgp fast-external-failover**
+
+This command is used to cause bgp to take down ebgp peers immediately when a link flaps.
+
+- Usage:
+  ```
+  config bgp fast-external-failover <on/off>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp fast-external-failover on
+  ```
+  ```
+  admin@sonic:~$ sudo config bgp fast-external-failover off
+  ```
+
+**config bgp bestpath compare-routerid**
+
+This command is used to ensure that when comparing routes where both are equal on most metrics,
+including local-pref, AS_PATH length, IGP cost, MED, that the tie is broken based on router-ID.
+
+- Usage:
+  ```
+  config bgp bestpath compare-routerid <on/off>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp bestpath compare-routerid on
+  ```
+  ```
+  admin@sonic:~$ sudo config bgp bestpath compare-routerid off
+  ```
+
+**config bgp client-to-client reflection**
+
+This command is used to enable route reflector automatically reflects routes from one BGP client to another.
+By default reflection is enabled. Off argument disables route reflection.
+
+- Usage:
+  ```
+  config bgp client-to-client reflection <on/off>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp client-to-client reflection on
+  ```
+  ```
+  admin@sonic:~$ sudo config bgp client-to-client reflection off
+  ```
+
+**config bgp cluster-id add**
+
+This command is used to add cluster. Cluster is a collection of route reflectors and their clients, and is used by route reflectors to avoid looping.
+
+- Usage:
+  ```
+  config bgp cluster-id add <cluster-ip>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp cluster-id add 10.20.30.40
+  ```
+
+**config bgp address-family ipv4 unicast distance bgp add**
+
+This command is used to change distance value of BGP. The arguments are the distance values for external routes, internal routes and local routes respectively.
+
+- Usage:
+  ```
+  config bgp address-family ipv4 unicast distance bgp add <ext_r_dist> <int_r_dist> <local_r_dist>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp address-family ipv4 unicast distance bgp add 64 65 66
+  ```
+
+**config bgp address-family ipv4 unicast redistribute connected**
+
+This command is used to redistribute all the connected routes from other protocols into BGP.
+
+- Usage:
+  ```
+  config bgp address-family ipv4 unicast redistribute connected <on/off>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp address-family ipv4 unicast redistribute connected on
+  ```
+  ```
+  admin@sonic:~$ sudo config bgp address-family ipv4 unicast redistribute connected off
+  ```
+
+**config bgp neighbor local-as add**
+
+This command is used to specify an alternate AS for this BGP process when interacting with the specified peer. With no modifiers, the specified local-as is prepended to the received AS_PATH when receiving routing updates from the peer, and prepended to the outgoing AS_PATH (after the process local AS) when transmitting local routes to the peer.
+If the no-prepend attribute is specified, then the supplied local-as is not prepended to the received AS_PATH.
+If the replace-as attribute is specified, then only the supplied local-as is prepended to the AS_PATH when transmitting local-route updates to this peer.
+Note that replace-as can only be specified if no-prepend is.
+This command is only allowed for eBGP peers.
+
+- Usage:
+  ```
+  config bgp neighbor local-as add <neighbor-ip> <local-asn> [--no-prepend|--replace-as]
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp neighbor local-as add 10.0.0.61 64016 --no-prepend --replace-as
+  ```
+
+**config bgp neighbor ebgp-multihop**
+
+This command is used to allow sessions with eBGP neighbors to establish when they are multiple hops (--max-hops) away.
+When the neighbor is not directly connected and this knob is not enabled, the session will not establish.
+
+- Usage:
+  ```
+  config bgp neighbor ebgp-multihop <neighbor-ip> <on/off> [--max-hops <hops>]
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp neighbor ebgp-multihop 10.0.0.61 on --max-hops 64
+  ```
+
+**config bgp neighbor advertisement-interval add**
+
+This command is used to setup the minimum route advertisement interval(mrai) for the peer in question.
+This number is between 0 and 600 seconds, with the default advertisement interval being 0.
+
+- Usage:
+  ```
+  config bgp neighbor advertisement-interval add <neighbor-ip> <interval>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp neighbor advertisement-interval add 10.0.0.61 9
+  ```
+
+**config bgp neighbor timers add**
+
+This command is used to set keepalive and hold timers for a neighbor. 
+
+- Usage:
+  ```
+  config bgp neighbor timers add <neighbor-ip> <keepalive> <holdtime>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp neighbor advertisement-interval add 10.0.0.61 9 10
+  ```
+
+**config bgp neighbor shutdown**
+
+This command is used to shutdown the peer. 
+When you want to preserve the configuration, but want to drop the BGP peer, use this syntax.
+
+- Usage:
+  ```
+  config bgp neighbor shutdown <neighbor-ip> <on/off>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ config bgp neighbor shutdown 10.0.0.61 on
+  ```
+
+**config bgp address-family ipv4 unicast max-paths ibgp add**
+
+This command is used to sets the maximum-paths value used for ecmp calculations for this bgp instance in IBGP.
+
+- Usage:
+  ```
+  config bgp address-family ipv4 unicast max-paths ibgp add <max_ibgp_paths> [--equal-cluster-length]
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp address-family ipv4 unicast max-paths ibgp add 8 --equal-cluster-length
+  ```
+
+**config bgp ebgp-requires-policy**
+
+This command is used to require incoming and outgoing filters to be applied for eBGP sessions as part of RFC-8212 compliance.
+Without the incoming filter, no routes will be accepted. Without the outgoing filter, no routes will be announced.
+Enabled by default.
+
+- Usage:
+  ```
+  config bgp ebgp-requires-policy <on/off>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp ebgp-requires-policy on
+  ```
+  ```
+  admin@sonic:~$ sudo config bgp ebgp-requires-policy off
+  ```
+
+**config bgp address-family l2vpn evpn neighbor activate**
+
+This command is used to activate the l2vpn evpn address-family for this peer in order to allow EVPN NLRI to be advertised and received.
+
+- Usage:
+  ```
+  config bgp address-family l2vpn evpn neighbor activate <neighbor-ip> <on/off>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp address-family l2vpn evpn neighbor activate 10.0.0.2 on
+  ```
+  ```
+  admin@sonic:~$ sudo config bgp address-family l2vpn evpn neighbor activate 10.0.0.2 off
+  ```
+
+**config bgp address-family l2vpn evpn advertise-all-vni**
+
+This command is used to enable EVPN for a BGP instance.
+
+- Usage:
+  ```
+  config bgp address-family l2vpn evpn advertise-all-vni <on/off>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp address-family l2vpn evpn advertise-all-vni on
+  ```
+  ```
+  admin@sonic:~$ sudo config bgp address-family l2vpn evpn advertise-all-vni off
+  ```
+
+**config bgp address-family l2vpn evpn neighbor allowas-in**
+
+This command is used to accept incoming routes with AS path containing AS number with the same value as the current system AS.
+This is used when you want to use the same AS number in your sites, but you can’t connect them directly.
+This is an alternative to neighbor WORD as-override.
+The parameter (1-10) configures the amount of accepted occurrences of the system AS number in AS path.
+
+- Usage:
+  ```
+  config bgp address-family l2vpn evpn neighbor allowas-in <nighbor-ip> <on/off> [--allowas <1-10|origin>]
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp address-family l2vpn evpn neighbor allowas-in 10.0.0.61 on --allowas origin
+  ```
+  ```
+  admin@sonic:~$ sudo config bgp address-family l2vpn evpn neighbor allowas-in 10.0.0.61 on --allowas 2
+  ```
+
+**config bgp address-family l2vpn evpn neighbor route-reflector-client**
+
+This command is used to configure multiple reflector. This helps to avoid single point of failure.
+
+- Usage:
+  ```
+  config bgp address-family l2vpn evpn neighbor route-reflector-client <neighbor-ip> <on/off>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp address-family l2vpn evpn neighbor route-reflector-client 10.0.0.61 on
+  ```
+
+**config bgp address-family l2vpn evpn neighbor soft-reconf inbound**
+
+This command is used to save the routing information from neighbor unmodified in the adj-RIB-in table. The inbound BGP policy will be applied and routing information will be stored in the BGP table.
+
+- Usage:
+  ```
+  config bgp address-family l2vpn evpn neighbor soft-reconf inbound <neighbor-ip> <on/off>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp address-family l2vpn evpn neighbor soft-reconf inbound 10.0.0.61 on
+  ```
+
 **config bgp device-global tsa/w-ecmp**
 
 This command is used to manage BGP device global configuration.
