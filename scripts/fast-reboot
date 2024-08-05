@@ -416,6 +416,10 @@ function setup_reboot_variables()
         local fstype=$(blkid -o value -s TYPE ${sonic_dev})
         BOOT_OPTIONS="${BOOT_OPTIONS} ssd-upgrader-part=${sonic_dev},${fstype}"
     fi
+
+    # Set governor to performance to speed up boot process.
+    # The governor is reset back to kernel default in warmboot-finalizer script.
+    BOOT_OPTIONS="${BOOT_OPTIONS} cpufreq.default_governor=performance"
 }
 
 function check_docker_exec()
