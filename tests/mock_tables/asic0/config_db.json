@@ -1,12 +1,11 @@
 {
     "DEVICE_METADATA|localhost": {
-        "asic_id": "01.00.0",
         "asic_name": "asic0",
         "bgp_asn": "65100",
         "cloudtype": "None",
         "default_bgp_status": "down",
         "default_pfcwd_status": "enable",
-        "deployment_id": "None",
+        "deployment_id": "1",
         "docker_routing_config_mode": "separated",
         "hostname": "sonic",
         "hwsku": "multi_asic",
@@ -40,10 +39,32 @@
     },
     "PORT|Ethernet16": {
         "lanes": "17,18,19,20",
-        "description": "ARISTA01T2:Ethernet3/3/1",
+        "description": "ARISTA01T2:Ethernet3/5/1",
         "pfc_asym": "off",
         "mtu": "9100",
         "alias": "Ethernet1/5",
+        "admin_status": "up",
+        "role": "Ext",
+        "speed": "40000",
+        "asic_port_name": "Eth1-ASIC0"
+    },
+    "PORT|Ethernet32": {
+        "lanes": "13,14,15,16",
+        "description": "ARISTA01T2:Ethernet3/3/1",
+        "pfc_asym": "off",
+        "mtu": "9100",
+        "alias": "Ethernet1/9",
+        "admin_status": "up",
+        "role": "Ext",
+        "speed": "40000",
+        "asic_port_name": "Eth1-ASIC0"
+    },
+    "PORT|Ethernet124": {
+        "lanes": "97,98,99,100",
+        "description": "ARISTA04T1:PORT|Ethernet1",
+        "pfc_asym": "off",
+        "mtu": "9100",
+        "alias": "Ethernet1/32",
         "admin_status": "up",
         "role": "Ext",
         "speed": "40000",
@@ -73,14 +94,12 @@
     },
     "PORTCHANNEL|PortChannel1002": {
         "admin_status": "up",
-        "members@": "Ethernet0,Ethernet4",
         "min_links": "2",
         "mode": "trunk",
         "mtu": "9100"
     },
     "PORTCHANNEL|PortChannel4001": {
         "admin_status": "up",
-        "members@": "Ethernet-BP0,Ethernet-BP4",
         "min_links": "2",
         "mtu": "9100"
     },
@@ -117,7 +136,6 @@
         "restoration_time": "200"
     },
     "PFC_WD|GLOBAL": {
-        "BIG_RED_SWITCH": "enable",
         "POLL_INTERVAL": "199"
     },
     "PORT_QOS_MAP|Ethernet0": {
@@ -126,19 +144,13 @@
     "PORT_QOS_MAP|Ethernet4": {
         "pfc_enable": "3,4"
     },
-    "PORT_QOS_MAP|Ethernet8": {
+    "PORT_QOS_MAP|Ethernet16": {
         "pfc_enable": "3,4"
     },
     "PORT_QOS_MAP|Ethernet-BP0": {
         "pfc_enable": "3,4"
     },
     "PORT_QOS_MAP|Ethernet-BP4": {
-        "pfc_enable": "3,4"
-    },
-    "PORT_QOS_MAP|Ethernet-BP256": {
-        "pfc_enable": "3,4"
-    },
-    "PORT_QOS_MAP|Ethernet-BP260": {
         "pfc_enable": "3,4"
     },
     "CRM|Config": {
@@ -206,13 +218,13 @@
     },
     "MUX_CABLE|Ethernet32": {
         "state": "auto",
-	"server_ipv4": "10.1.1.1",
-	"server_ipv6": "fc00::75"
+	"server_ipv4": "10.1.1.1/32",
+	"server_ipv6": "fc00::75/128"
     },
     "MUX_CABLE|Ethernet0": {
         "state": "auto",
-	"server_ipv4": "10.2.1.1",
-	"server_ipv6": "e800::46"
+	"server_ipv4": "10.2.1.1/32",
+	"server_ipv6": "e800::46/128"
     },
     "PEER_SWITCH|sonic" : {
       "address_ipv4": "10.2.2.2"
@@ -255,7 +267,7 @@
         "nhopself": "0",
         "admin_status": "up",
         "holdtime": "10",
-        "asn": "65200",
+        "asn": "65100",
         "keepalive": "3"
     },
     "BGP_VOQ_CHASSIS_NEIGHBOR|3.3.3.2": {
@@ -265,7 +277,7 @@
         "nhopself": "0",
         "admin_status": "up",
         "holdtime": "10",
-        "asn": "65200",
+        "asn": "65100",
         "keepalive": "3"
     },
     "BGP_VOQ_CHASSIS_NEIGHBOR|3.3.3.8": {
@@ -275,7 +287,7 @@
         "nhopself": "0",
         "admin_status": "up",
         "holdtime": "10",
-        "asn": "65200",
+        "asn": "65100",
         "keepalive": "3"
     },
     "ACL_RULE|DATAACL_5|RULE_1": {
@@ -285,7 +297,7 @@
     },
     "ACL_TABLE|DATAACL_5": {
         "policy_desc": "DATAACL_5",
-        "ports@": "Ethernet124",
+        "ports@": "Ethernet4",
         "type": "L3",
         "stage": "ingress"
     },
