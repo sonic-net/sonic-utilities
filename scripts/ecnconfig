@@ -5,7 +5,7 @@ ecnconfig is the utility to
 
 1) show and change ECN configuration
 
-usage: ecnconfig [-h] [-v] [-l] [-p PROFILE] [-gmin GREEN_MIN]
+usage: ecnconfig [-h] [-v] [-l] [-p PROFILE] [-gmin GREEN_MIN] [-n NAMESPACE]
                  [-gmax GREEN_MAX] [-ymin YELLOW_MIN] [-ymax YELLOW_MAX]
                  [-rmin RED_MIN] [-rmax RED_MAX] [-gdrop GREEN_DROP_PROB]
                  [-ydrop YELLOW_DROP_PROB] [-rdrop RED_DROP_PROB] [-vv]
@@ -16,6 +16,7 @@ optional arguments:
   -vv    --verbose             verbose output
   -l     --list                show ECN WRED configuration
   -p     --profile             specify WRED profile name
+  -n     --namespace           show ECN configuration for specified namespace
   -gmin  --green-min           set min threshold for packets marked green
   -gmax  --green-max           set max threshold for packets marked green
   -ymin  --yellow-min          set min threshold for packets marked yellow
@@ -47,7 +48,7 @@ $ecnconfig -q 3
 ECN status:
 queue 3: on
 """
-import argparse
+import click
 import json
 import os
 import sys
@@ -62,12 +63,17 @@ try:
         sys.path.insert(0, modules_path)
         sys.path.insert(0, tests_path)
         import mock_tables.dbconnector
-
+    if os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] == "multi_asic":
+        import mock_tables.mock_multi_asic
+        mock_tables.dbconnector.load_namespace_config()
 except KeyError:
     pass
 
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 
+from sonic_py_common import multi_asic
+from utilities_common import multi_asic as multi_asic_util
+from utilities_common.general import load_db_config
 
 WRED_PROFILE_TABLE_NAME = "WRED_PROFILE"
 WRED_CONFIG_FIELDS = {
@@ -82,7 +88,6 @@ WRED_CONFIG_FIELDS = {
     "rdrop": "red_drop_probability"
 }
 
-PORT_TABLE_NAME            = "PORT"
 QUEUE_TABLE_NAME           = "QUEUE"
 DEVICE_NEIGHBOR_TABLE_NAME = "DEVICE_NEIGHBOR"
 FIELD                      = "wred_profile"
@@ -96,18 +101,25 @@ class EcnConfig(object):
     """
     Process ecnconfig
     """
-    def __init__(self, filename, verbose):
+    def __init__(self, test_filename, verbose, namespace):
         self.ports = []
         self.queues = []
-        self.filename = filename
         self.verbose = verbose
+        self.namespace = namespace
+        self.multi_asic = multi_asic_util.MultiAsic(namespace_option=namespace)
+        self.config_db = None
+        self.num_wred_profiles = 0
 
-        # Set up db connections
-        self.db = ConfigDBConnector()
-        self.db.connect()
+        # For unit testing
+        self.test_filename = test_filename
+        self.updated_profile_tables = {}
 
+    @multi_asic_util.run_on_multi_asic
     def list(self):
-        wred_profiles = self.db.get_table(WRED_PROFILE_TABLE_NAME)
+        """
+        List all WRED profiles.
+        """
+        wred_profiles = self.config_db.get_table(WRED_PROFILE_TABLE_NAME)
         for name, data in wred_profiles.items():
             profile_name = name
             profile_data = data
@@ -117,12 +129,18 @@ class EcnConfig(object):
                 line = [field, value]
                 config.append(line)
             print(tabulate(config) + "\n")
-        if self.verbose:
-            print("Total profiles: %d" % len(wred_profiles))
+        self.num_wred_profiles += len(wred_profiles)
 
-    # get parameters of a WRED profile
     def get_profile_data(self, profile):
-        wred_profiles = self.db.get_table(WRED_PROFILE_TABLE_NAME)
+        """
+        Get parameters of a WRED profile
+        """
+        if self.namespace or not multi_asic.is_multi_asic():
+            db = ConfigDBConnector(namespace=self.namespace)
+            db.connect()
+            wred_profiles = db.get_table(WRED_PROFILE_TABLE_NAME)
+        else:
+            wred_profiles = multi_asic.get_table(WRED_PROFILE_TABLE_NAME)
 
         for profile_name, profile_data in wred_profiles.items():
             if profile_name == profile:
@@ -131,6 +149,9 @@ class EcnConfig(object):
         return None
 
     def validate_profile_data(self, profile_data):
+        """
+        Validate threshold, probability and color values.
+        """
         result = True
 
         # check if thresholds are non-negative integers
@@ -168,73 +189,116 @@ class EcnConfig(object):
 
         return result
 
+    @multi_asic_util.run_on_multi_asic
     def set_wred_threshold(self, profile, threshold, value):
+        """
+        Single asic behaviour:
+        Set threshold value on default namespace
+
+        Multi asic behaviour:
+        Set threshold value on the specified namespace.
+        If no namespace is provided, set on all namespaces.
+        """
         chk_exec_privilege()
 
+        # Modify the threshold
         field = WRED_CONFIG_FIELDS[threshold]
         if self.verbose:
-            print("Setting %s value to %s" % (field, value))
-        self.db.mod_entry(WRED_PROFILE_TABLE_NAME, profile, {field: value})
-        if self.filename is not None:
-            prof_table = self.db.get_table(WRED_PROFILE_TABLE_NAME)
-            with open(self.filename, "w") as fd:
-                json.dump(prof_table, fd)
+            namespace_str = f" for namespace {self.multi_asic.current_namespace}" if multi_asic.is_multi_asic() else ''
+            print("Setting %s value to %s%s" % (field, value, namespace_str))
+        self.config_db.mod_entry(WRED_PROFILE_TABLE_NAME, profile, {field: value})
 
+        # Record the change for unit testing
+        if self.test_filename:
+            profile_table = self.config_db.get_table(WRED_PROFILE_TABLE_NAME)
+            if self.multi_asic.current_namespace in self.updated_profile_tables.keys():
+                self.updated_profile_tables[self.multi_asic.current_namespace][profile][threshold] = value
+            else:
+                self.updated_profile_tables[self.multi_asic.current_namespace] = profile_table
+
+    @multi_asic_util.run_on_multi_asic
     def set_wred_prob(self, profile, drop_color, value):
+        """
+        Single asic behaviour:
+        Set drop probability on default namespace
+
+        Multi asic behaviour:
+        Set drop probability value on the specified namespace.
+        If no namespace is provided, set on all namespaces.
+        """
         chk_exec_privilege()
 
+        # Modify the drop probability
         field = WRED_CONFIG_FIELDS[drop_color]
         if self.verbose:
-            print("Setting %s value to %s%%" % (field, value))
-        self.db.mod_entry(WRED_PROFILE_TABLE_NAME, profile, {field: value})
-        if self.filename is not None:
-            prof_table = self.db.get_table(WRED_PROFILE_TABLE_NAME)
-            with open(self.filename, "w") as fd:
-                json.dump(prof_table, fd)
+            namespace_str = f" for namespace {self.multi_asic.current_namespace}" if multi_asic.is_multi_asic() else ''
+            print("Setting %s value to %s%%%s" % (field, value, namespace_str))
+        self.config_db.mod_entry(WRED_PROFILE_TABLE_NAME, profile, {field: value})
+
+        # Record the change for unit testing
+        if self.test_filename:
+            profile_table = self.config_db.get_table(WRED_PROFILE_TABLE_NAME)
+            if self.multi_asic.current_namespace in self.updated_profile_tables.keys():
+                self.updated_profile_tables[self.multi_asic.current_namespace][profile][field] = value
+            else:
+                self.updated_profile_tables[self.multi_asic.current_namespace] = profile_table
 
 class EcnQ(object):
     """
     Process ecn on/off on queues
     """
-    def __init__(self, queues, filename, verbose):
+    def __init__(self, queues, test_filename, verbose, namespace):
         self.ports_key = []
         self.queues = queues.split(',')
-        self.filename = filename
         self.verbose = verbose
+        self.namespace = namespace
+        self.multi_asic = multi_asic_util.MultiAsic(namespace_option=namespace)
+        self.config_db = None
+        self.db = None
 
-        # Set up db connections
-        self.config_db = ConfigDBConnector()
-        self.config_db.connect()
-
-        self.db = SonicV2Connector(use_unix_socket_path=False)
-        self.db.connect(self.db.CONFIG_DB)
-
-        self.gen_ports_key()
+        # For unit testing
+        self.test_filename = test_filename
+        self.updated_q_table = {}
 
     def gen_ports_key(self):
-        if self.ports_key is not None:
-            port_table = self.config_db.get_table(DEVICE_NEIGHBOR_TABLE_NAME)
-            self.ports_key = list(port_table.keys())
+        port_table = self.config_db.get_table(DEVICE_NEIGHBOR_TABLE_NAME)
+        self.ports_key = list(port_table.keys())
 
-            # Verify at least one port is available
-            if len(self.ports_key) == 0:
-                raise Exception("No active ports detected in table '{}'".format(DEVICE_NEIGHBOR_TABLE_NAME))
+        # Verify at least one port is available
+        if len(self.ports_key) == 0:
+            raise Exception("No active ports detected in table '{}'".format(DEVICE_NEIGHBOR_TABLE_NAME))
 
-            # In multi-ASIC platforms backend ethernet ports are identified as
-            # 'Ethernet-BPxy'. Add 1024 to sort backend ports to the end.
-            self.ports_key.sort(
-                key = lambda k: int(k[8:]) if "BP" not in k else int(k[11:]) + 1024
-            )
+        # In multi-ASIC platforms backend ethernet ports are identified as
+        # 'Ethernet-BPxy'. Add 1024 to sort backend ports to the end.
+        self.ports_key.sort(
+            key = lambda k: int(k[8:]) if "BP" not in k else int(k[11:]) + 1024
+        )
 
     def dump_table_info(self):
-        if self.filename is not None:
+        """
+        A function to dump updated queue tables.
+        These JSON dumps are used exclusively by unit tests.
+        The tables are organized by namespaces for multi-asic support.
+        """
+        if self.test_filename is not None:
             q_table = self.config_db.get_table(QUEUE_TABLE_NAME)
-            with open(self.filename, "w") as fd:
-                json.dump({repr(x):y for x, y in q_table.items()}, fd)
+            with open(self.test_filename, "w") as fd:
+                self.updated_q_table[self.multi_asic.current_namespace] = {repr(x):y for x, y in q_table.items()}
+                json.dump(self.updated_q_table, fd)
 
+    @multi_asic_util.run_on_multi_asic
     def set(self, enable):
+        """
+        Single asic behaviour:
+        Enable or disable queues on default namespace
+
+        Multi asic behaviour:
+        Enable or disable queues on a specified namespace.
+        If no namespace is provided, set on all namespaces.
+        """
         chk_exec_privilege()
 
+        self.gen_ports_key()
         for queue in self.queues:
             if self.verbose:
                 print("%s ECN on %s queue %s" % ("Enable" if enable else "Disable", ','.join(self.ports_key), queue))
@@ -252,10 +316,24 @@ class EcnQ(object):
                     self.config_db.mod_entry(QUEUE_TABLE_NAME, key, None)
                 else:
                     self.config_db.set_entry(QUEUE_TABLE_NAME, key, entry)
+        # For unit testing
         self.dump_table_info()
 
+    @multi_asic_util.run_on_multi_asic
     def get(self):
-        print("ECN status:")
+        """
+        Single asic behaviour:
+        Get status of queues on default namespace
+
+        Multi asic behaviour:
+        Get status of queues on a specified namespace.
+        If no namespace is provided, get queue status on all namespaces.
+        """
+        self.gen_ports_key()
+        namespace = self.multi_asic.current_namespace
+        namespace_str = f" for namespace {namespace}" if namespace else ''
+        print(f"ECN status{namespace_str}:")
+
         for queue in self.queues:
             out = ' '.join(['queue', queue])
             if self.verbose:
@@ -270,81 +348,77 @@ class EcnQ(object):
                 print("%s: on" % (out))
             else:
                 print("%s: off" % (out))
+        # For unit testing
         self.dump_table_info()
 
-def main():
-    parser = argparse.ArgumentParser(description='Show and change:\n'
-                                                 '1) ECN WRED configuration\n'
-                                                 '2) ECN on/off status on queues',
-                                     formatter_class=argparse.RawTextHelpFormatter)
-
-    parser.add_argument('-l', '--list', action='store_true', help='show ECN WRED configuration')
-    parser.add_argument('-p', '--profile', type=str, help='specify WRED profile name', default=None)
-    parser.add_argument('-gmin', '--green-min', type=str, help='set min threshold for packets marked \'green\'', default=None)
-    parser.add_argument('-gmax', '--green-max', type=str, help='set max threshold for packets marked \'green\'', default=None)
-    parser.add_argument('-ymin', '--yellow-min', type=str, help='set min threshold for packets marked \'yellow\'', default=None)
-    parser.add_argument('-ymax', '--yellow-max', type=str, help='set max threshold for packets marked \'yellow\'', default=None)
-    parser.add_argument('-rmin', '--red-min', type=str, help='set min threshold for packets marked \'red\'', default=None)
-    parser.add_argument('-rmax', '--red-max', type=str, help='set max threshold for packets marked \'red\'', default=None)
-    parser.add_argument('-gdrop', '--green-drop-prob', type=str, help='set max drop/mark probability for packets marked \'green\'', default=None)
-    parser.add_argument('-ydrop', '--yellow-drop-prob', type=str, help='set max drop/mark probability for packets marked \'yellow\'', default=None)
-    parser.add_argument('-rdrop', '--red-drop-prob', type=str, help='set max drop/mark probability for packets marked \'red\'', default=None)
-    parser.add_argument('-v', '--version', action='version', version='%(prog)s 1.0')
-    parser.add_argument('-vv', '--verbose', action='store_true', help='Verbose output', default=False)
-
-    parser.add_argument('command', nargs='?', choices=['on', 'off'], type=str, help='turn on/off ecn', default=None)
-    parser.add_argument('-q', '--queue', type=str, help='specify queue index list: 3,4', default=None)
-    parser.add_argument('-f', '--filename', help='file used by mock tests', type=str, default=None)
-
+@click.command(help='Show and change: ECN WRED configuration\nECN on/off status on queues')
+@click.argument('command', type=click.Choice(['on', 'off'], case_sensitive=False), required=False, default=None)
+@click.option('-l', '--list', 'show_config', is_flag=True, help='show ECN WRED configuration')
+@click.option('-p', '--profile', type=str, help='specify WRED profile name', default=None)
+@click.option('-gmin', '--green-min', type=str, help='set min threshold for packets marked \'green\'', default=None)
+@click.option('-gmax', '--green-max', type=str, help='set max threshold for packets marked \'green\'', default=None)
+@click.option('-ymin', '--yellow-min', type=str, help='set min threshold for packets marked \'yellow\'', default=None)
+@click.option('-ymax', '--yellow-max', type=str, help='set max threshold for packets marked \'yellow\'', default=None)
+@click.option('-rmin', '--red-min', type=str, help='set min threshold for packets marked \'red\'', default=None)
+@click.option('-rmax', '--red-max', type=str, help='set max threshold for packets marked \'red\'', default=None)
+@click.option('-gdrop', '--green-drop-prob', type=str, help='set max drop/mark probability for packets marked \'green\'', default=None)
+@click.option('-ydrop', '--yellow-drop-prob', type=str, help='set max drop/mark probability for packets marked \'yellow\'', default=None)
+@click.option('-rdrop', '--red-drop-prob', type=str, help='set max drop/mark probability for packets marked \'red\'', default=None)
+@click.option('-n', '--namespace', type=click.Choice(multi_asic.get_namespace_list()), help='Namespace name or skip for all', default=None)
+@click.option('-vv', '--verbose', is_flag=True, help='Verbose output', default=False)
+@click.option('-q', '--queue', type=str, help='specify queue index list: 3,4', default=None)
+@click.version_option(version='1.0')
+def main(command, show_config, profile, green_min,
+         green_max, yellow_min, yellow_max, red_min,
+         red_max, green_drop_prob, yellow_drop_prob,
+         red_drop_prob, namespace, verbose, queue):
+    test_filename = None
     if os.environ.get("UTILITIES_UNIT_TESTING", "0") == "2":
-        sys.argv.extend(['-f', '/tmp/ecnconfig'])
-
-    args = parser.parse_args()
+        test_filename = '/tmp/ecnconfig'
 
     try:
-        if args.list or args.profile:
-            prof_cfg = EcnConfig(args.filename, args.verbose)
-            if args.list:
-                arg_len_max = 2
-                if args.verbose:
-                    arg_len_max += 1
-                if args.filename:
-                    arg_len_max += 2
-                if len(sys.argv) > arg_len_max:
+        load_db_config()
+        if show_config or profile:
+            # Check if a set option has been provided
+            setOption = (green_min or green_max or yellow_min or yellow_max or red_min or red_max
+                         or green_drop_prob or yellow_drop_prob or red_drop_prob)
+
+            prof_cfg = EcnConfig(test_filename, verbose, namespace)
+            if show_config:
+                if setOption:
                     raise Exception("Input arguments error. No set options allowed when -l[ist] specified")
+
                 prof_cfg.list()
-            elif args.profile:
-                arg_len_min = 4
-                if args.verbose:
-                    arg_len_min += 1
-                if args.filename:
-                    arg_len_min += 2
-                if len(sys.argv) < arg_len_min:
+                if verbose:
+                    print("Total profiles: %d" % prof_cfg.num_wred_profiles)
+
+            elif profile:
+                if not setOption:
                     raise Exception("Input arguments error. Specify at least one threshold parameter to set")
 
                 # get current configuration data
-                wred_profile_data = prof_cfg.get_profile_data(args.profile)
+                wred_profile_data = prof_cfg.get_profile_data(profile)
                 if wred_profile_data is None:
-                    raise Exception("Input arguments error. Invalid WRED profile %s" % (args.profile))
+                    raise Exception("Input arguments error. Invalid WRED profile %s for namespace %s" % (profile, namespace))
 
-                if args.green_max:
-                    wred_profile_data[WRED_CONFIG_FIELDS["gmax"]] = args.green_max
-                if args.green_min:
-                    wred_profile_data[WRED_CONFIG_FIELDS["gmin"]] = args.green_min
-                if args.yellow_max:
-                    wred_profile_data[WRED_CONFIG_FIELDS["ymax"]] = args.yellow_max
-                if args.yellow_min:
-                    wred_profile_data[WRED_CONFIG_FIELDS["ymin"]] = args.yellow_min
-                if args.red_max:
-                    wred_profile_data[WRED_CONFIG_FIELDS["rmax"]] = args.red_max
-                if args.red_min:
-                    wred_profile_data[WRED_CONFIG_FIELDS["rmin"]] = args.red_min
-                if args.green_drop_prob:
-                    wred_profile_data[WRED_CONFIG_FIELDS["gdrop"]] = args.green_drop_prob
-                if args.yellow_drop_prob:
-                    wred_profile_data[WRED_CONFIG_FIELDS["ydrop"]] = args.yellow_drop_prob
-                if args.red_drop_prob:
-                    wred_profile_data[WRED_CONFIG_FIELDS["rdrop"]] = args.red_drop_prob
+                if green_max:
+                    wred_profile_data[WRED_CONFIG_FIELDS["gmax"]] = green_max
+                if green_min:
+                    wred_profile_data[WRED_CONFIG_FIELDS["gmin"]] = green_min
+                if yellow_max:
+                    wred_profile_data[WRED_CONFIG_FIELDS["ymax"]] = yellow_max
+                if yellow_min:
+                    wred_profile_data[WRED_CONFIG_FIELDS["ymin"]] = yellow_min
+                if red_max:
+                    wred_profile_data[WRED_CONFIG_FIELDS["rmax"]] = red_max
+                if red_min:
+                    wred_profile_data[WRED_CONFIG_FIELDS["rmin"]] = red_min
+                if green_drop_prob:
+                    wred_profile_data[WRED_CONFIG_FIELDS["gdrop"]] = green_drop_prob
+                if yellow_drop_prob:
+                    wred_profile_data[WRED_CONFIG_FIELDS["ydrop"]] = yellow_drop_prob
+                if red_drop_prob:
+                    wred_profile_data[WRED_CONFIG_FIELDS["rdrop"]] = red_drop_prob
 
                 # validate new configuration data
                 if prof_cfg.validate_profile_data(wred_profile_data) == False:
@@ -352,41 +426,39 @@ def main():
 
                 # apply new configuration
                 # the following parameters can be combined in one run
-                if args.green_max:
-                    prof_cfg.set_wred_threshold(args.profile, "gmax", args.green_max)
-                if args.green_min:
-                    prof_cfg.set_wred_threshold(args.profile, "gmin", args.green_min)
-                if args.yellow_max:
-                    prof_cfg.set_wred_threshold(args.profile, "ymax", args.yellow_max)
-                if args.yellow_min:
-                    prof_cfg.set_wred_threshold(args.profile, "ymin", args.yellow_min)
-                if args.red_max:
-                    prof_cfg.set_wred_threshold(args.profile, "rmax", args.red_max)
-                if args.red_min:
-                    prof_cfg.set_wred_threshold(args.profile, "rmin", args.red_min)
-                if args.green_drop_prob:
-                    prof_cfg.set_wred_prob(args.profile, "gdrop", args.green_drop_prob)
-                if args.yellow_drop_prob:
-                    prof_cfg.set_wred_prob(args.profile, "ydrop", args.yellow_drop_prob)
-                if args.red_drop_prob:
-                    prof_cfg.set_wred_prob(args.profile, "rdrop", args.red_drop_prob)
+                if green_max:
+                    prof_cfg.set_wred_threshold(profile, "gmax", green_max)
+                if green_min:
+                    prof_cfg.set_wred_threshold(profile, "gmin", green_min)
+                if yellow_max:
+                    prof_cfg.set_wred_threshold(profile, "ymax", yellow_max)
+                if yellow_min:
+                    prof_cfg.set_wred_threshold(profile, "ymin", yellow_min)
+                if red_max:
+                    prof_cfg.set_wred_threshold(profile, "rmax", red_max)
+                if red_min:
+                    prof_cfg.set_wred_threshold(profile, "rmin", red_min)
+                if green_drop_prob:
+                    prof_cfg.set_wred_prob(profile, "gdrop", green_drop_prob)
+                if yellow_drop_prob:
+                    prof_cfg.set_wred_prob(profile, "ydrop", yellow_drop_prob)
+                if red_drop_prob:
+                    prof_cfg.set_wred_prob(profile, "rdrop", red_drop_prob)
 
-        elif args.queue:
-            arg_len_min = 3
-            if args.filename:
-                arg_len_min += 1
-            if args.verbose:
-                arg_len_min += 1
-            if len(sys.argv) < arg_len_min:
+                # Dump the current config in the file for unit tests
+                if test_filename:
+                    with open(test_filename, "w") as fd:
+                        json.dump(prof_cfg.updated_profile_tables, fd)
+
+        elif queue:
+            if queue.split(',') == ['']:
                 raise Exception("Input arguments error. Specify at least one queue by index")
-
-            q_ecn = EcnQ(args.queue, args.filename, args.verbose)
-            if not args.command:
+            q_ecn = EcnQ(queue, test_filename, verbose, namespace)
+            if command is None:
                 q_ecn.get()
             else:
-                q_ecn.set(enable = True if args.command == 'on' else False)
+                q_ecn.set(enable = True if command == 'on' else False)
         else:
-            parser.print_help()
             sys.exit(1)
 
     except Exception as e:
