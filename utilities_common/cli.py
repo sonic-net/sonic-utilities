@@ -803,6 +803,19 @@ def is_interface_in_config_db(config_db, interface_name):
     return True
 
 
+def get_interface_dhcp_mitigation_rate(config_db, interface):
+    port_data = config_db.get_entry('PORT', interface)
+
+    if "dhcp_rate_limit" in port_data:
+        rate = port_data["dhcp_rate_limit"]
+    else:
+        rate = "0"
+
+    if rate == "0":
+        return ""
+    return rate
+
+
 class MutuallyExclusiveOption(click.Option):
     """
     This option type is extended with `mutually_exclusive` parameter which make
