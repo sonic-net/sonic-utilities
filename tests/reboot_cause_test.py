@@ -55,6 +55,7 @@ class TestShowRebootCause(object):
             result = runner.invoke(show.cli.commands["reboot-cause"], [])
             assert result.output == expected_output
 
+
     # Test 'show reboot-cause history'
     def test_reboot_cause_history(self):
         expected_output = """\
@@ -67,6 +68,39 @@ Name                 Cause        Time                          User    Comment
         result = runner.invoke(show.cli.commands["reboot-cause"].commands["history"], [])
         print(result.output)
         assert result.output == expected_output
+
+    # Test 'show reboot-cause history all'
+    def test_reboot_cause_history_all(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["reboot-cause"].commands["history"], ["all"])
+        print(result.output)
+
+    # Test 'show reboot-cause history SWITCH'
+    def test_reboot_cause_history_switch(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["reboot-cause"].commands["history"], ["SWITCH"])
+        print(result.output)
+
+    # Test 'show reboot-cause history DPU0'
+    def test_reboot_cause_history_dpu(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["reboot-cause"].commands["history"], ["DPU0"])
+        print(result.output)
+
+    # Test 'show reboot-cause all'
+    def test_reboot_cause_all(self):
+        with mock.patch("show.reboot_cause.fetch_data_from_db",
+                        return_value={
+                            "comment": "",
+                            "gen_time": "2020_10_22_03_14_07",
+                            "device": "DPU0",
+                            "cause": "reboot",
+                            "user": "admin",
+                            "time": "Thu Oct 22 03:11:08 UTC 2020"
+                        }):
+            runner = CliRunner()
+            result = runner.invoke(show.cli.commands["reboot-cause"].commands["all"], [])
+            print(result.output)
 
     @classmethod
     def teardown_class(cls):
