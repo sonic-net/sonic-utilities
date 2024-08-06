@@ -41,7 +41,6 @@ REBOOT_SCRIPT_NAME=$(basename $0)
 REBOOT_TYPE="${REBOOT_SCRIPT_NAME}"
 TAG_LATEST=no
 REBOOT_FLAGS=""
-FORCE_REBOOT="no"
 
 function debug()
 {
@@ -192,7 +191,6 @@ function parse_options()
                 ;;
             f )
                 REBOOT_FLAGS+=" -f"
-                FORCE_REBOOT="yes"
                 ;;
         esac
     done
@@ -278,12 +276,9 @@ fi
 if [ -x ${DEVPATH}/${PLATFORM}/${PRE_REBOOT_HOOK} ]; then
     debug "Executing the pre-reboot script"
     ${DEVPATH}/${PLATFORM}/${PRE_REBOOT_HOOK}
-    EXIT_CODE=$?
-    if [[ ${EXIT_CODE} != ${EXIT_SUCCESS} ]]; then
-        if [[ "${FORCE_REBOOT}" != "yes" ]]; then
-            echo "Reboot is interrupted: use -f (force) to override"
-            exit ${EXIT_ERROR}
-        fi
+    EXIT_CODE="$?"
+    if [[ "${EXIT_CODE}" != "${EXIT_SUCCESS}" ]]; then
+        debug "WARNING: Failed to handle pre-reboot script: rc=${EXIT_CODE}"
     fi
 fi
 
