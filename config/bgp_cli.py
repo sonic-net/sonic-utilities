@@ -15,7 +15,7 @@ log.set_min_log_priority_info()
 
 
 #
-# BGP DB interface ----------------------------------------------------------------------------------------------------
+# BGP DB interface -------------------------------------------------------
 #
 
 
@@ -65,7 +65,7 @@ def update_entry_validated(db, table, key, data, create_if_not_exists=False):
 
 
 #
-# BGP handlers --------------------------------------------------------------------------------------------------------
+# BGP handlers -----------------------------------------------------------
 #
 
 
@@ -79,32 +79,71 @@ def tsa_handler(ctx, db, state):
     }
 
     try:
-        update_entry_validated(db.cfgdb, table, key, data, create_if_not_exists=True)
+        update_entry_validated(
+            db.cfgdb,
+            table,
+            key,
+            data,
+            create_if_not_exists=True)
         log.log_notice("Configured TSA state: {}".format(to_str(state)))
     except Exception as e:
         log.log_error("Failed to configure TSA state: {}".format(str(e)))
         ctx.fail(str(e))
 
 
-def wcmp_handler(ctx, db, state):
-    """ Handle config updates for Weighted-Cost Multi-Path (W-ECMP) feature """
+def originate_bandwidth_handler(ctx, db, state):
+    """ Handle config updates for originate_bandwidth for Weighted-Cost Multi-Path (W-ECMP) feature """
 
     table = CFG_BGP_DEVICE_GLOBAL
     key = BGP_DEVICE_GLOBAL_KEY
     data = {
-        "wcmp_enabled": state,
+        "originate_bandwidth": state,
     }
 
     try:
-        update_entry_validated(db.cfgdb, table, key, data, create_if_not_exists=True)
-        log.log_notice("Configured W-ECMP state: {}".format(to_str(state)))
+        update_entry_validated(
+            db.cfgdb,
+            table,
+            key,
+            data,
+            create_if_not_exists=True)
+        log.log_notice(
+            "Configured originate_bandwidth state: {}".format(
+                to_str(state)))
     except Exception as e:
-        log.log_error("Failed to configure W-ECMP state: {}".format(str(e)))
+        log.log_error(
+            "Failed to configure originate_bandwidth state: {}".format(
+                str(e)))
+        ctx.fail(str(e))
+
+
+def received_bandwidth_handler(ctx, db, state):
+
+    table = CFG_BGP_DEVICE_GLOBAL
+    key = BGP_DEVICE_GLOBAL_KEY
+    data = {
+        "received_bandwidth": state,
+    }
+
+    try:
+        update_entry_validated(
+            db.cfgdb,
+            table,
+            key,
+            data,
+            create_if_not_exists=True)
+        log.log_notice(
+            "Configured received_bandwidth state: {}".format(
+                to_str(state)))
+    except Exception as e:
+        log.log_error(
+            "Failed to configure received_bandwidth state: {}".format(
+                str(e)))
         ctx.fail(str(e))
 
 
 #
-# BGP device-global ---------------------------------------------------------------------------------------------------
+# BGP device-global ------------------------------------------------------
 #
 
 
@@ -119,7 +158,7 @@ def DEVICE_GLOBAL():
 
 
 #
-# BGP device-global tsa -----------------------------------------------------------------------------------------------
+# BGP device-global tsa --------------------------------------------------
 #
 
 
@@ -154,9 +193,8 @@ def DEVICE_GLOBAL_TSA_DISABLED(ctx, db):
 
     tsa_handler(ctx, db, "false")
 
-
 #
-# BGP device-global w-ecmp --------------------------------------------------------------------------------------------
+# BGP device-global w-ecmp ---------------------------
 #
 
 
@@ -165,28 +203,125 @@ def DEVICE_GLOBAL_TSA_DISABLED(ctx, db):
     cls=clicommon.AliasedGroup
 )
 def DEVICE_GLOBAL_WCMP():
-    """ Configure Weighted-Cost Multi-Path (W-ECMP) feature """
+    """Configure Weighted-Cost Multi-Path (W-ECMP) feature"""
+    pass
 
+#
+# BGP device-global w-ecmp originate-bandwidth ---------------------------
+#
+
+
+@DEVICE_GLOBAL_WCMP.group(
+    name="originate-bandwidth",
+    cls=clicommon.AliasedGroup
+)
+def DEVICE_GLOBAL_WCMP_ORIGINATE_BANDWIDTH():
+    """Configure Originate Bandwidth via (W-ECMP) feature"""
     pass
 
 
-@DEVICE_GLOBAL_WCMP.command(
-    name="enabled"
+@DEVICE_GLOBAL_WCMP_ORIGINATE_BANDWIDTH.command(
+    name="cumulative"
 )
 @clicommon.pass_db
 @click.pass_context
-def DEVICE_GLOBAL_WCMP_ENABLED(ctx, db):
-    """ Enable Weighted-Cost Multi-Path (W-ECMP) feature """
+def DEVICE_GLOBAL_WCMP_ORIGINATE_BANDWIDTH_CUMULATIVE(ctx, db):
+    """Cumulative bandwidth of all multipaths"""
+    originate_bandwidth_handler(ctx, db, "cumulative")
 
-    wcmp_handler(ctx, db, "true")
+
+@DEVICE_GLOBAL_WCMP_ORIGINATE_BANDWIDTH.command(
+    name="num-multipaths"
+)
+@clicommon.pass_db
+@click.pass_context
+def DEVICE_GLOBAL_WCMP_ORIGINATE_BANDWIDTH_NUM_MULTIPATHS(ctx, db):
+    """Bandwidth based on number of multipaths"""
+    originate_bandwidth_handler(ctx, db, "num_multipaths")
 
 
-@DEVICE_GLOBAL_WCMP.command(
+@DEVICE_GLOBAL_WCMP_ORIGINATE_BANDWIDTH.command(
     name="disabled"
 )
 @clicommon.pass_db
 @click.pass_context
-def DEVICE_GLOBAL_WCMP_DISABLED(ctx, db):
-    """ Disable Weighted-Cost Multi-Path (W-ECMP) feature """
+def DEVICE_GLOBAL_WCMP_ORIGINATE_BANDWIDTH_DISABLED(ctx, db):
+    """Disable Weighted-Cost Multi-Path (W-ECMP) feature"""
+    originate_bandwidth_handler(ctx, db, "disabled")
 
-    wcmp_handler(ctx, db, "false")
+
+@DEVICE_GLOBAL_WCMP_ORIGINATE_BANDWIDTH.command(
+    name="set-bandwidth"
+)
+@clicommon.pass_db
+@click.pass_context
+@click.argument("bandwidth", required=True, type=str)
+def DEVICE_GLOBAL_WCMP_ORIGINATE_BANDWIDTH_SET_BANDWIDTH(ctx, db, bandwidth):
+    """(1-25600 Mbps) Set bandwidth for W-ECMP"""
+    try:
+        bandwidth = int(bandwidth)
+    except ValueError:
+        raise click.BadParameter('Bandwidth must be an integer.')
+
+    if not (1 <= bandwidth <= 25600):
+        raise click.BadParameter('Bandwidth must be between 1 and 25600.')
+
+    originate_bandwidth_handler(ctx, db, str(bandwidth))
+
+
+#
+# BGP device-global w-ecmp received-bandwidth ----------------------------
+#
+
+
+@DEVICE_GLOBAL_WCMP.group(
+    name="received-bandwidth",
+    cls=clicommon.AliasedGroup
+)
+def DEVICE_GLOBAL_WCMP_RECEIVED_BANDWIDTH():
+    """ Configure Received Bandwidth via (W-ECMP) feature """
+    pass
+
+
+@DEVICE_GLOBAL_WCMP_RECEIVED_BANDWIDTH.command(
+    name="ignore"
+)
+@clicommon.pass_db
+@click.pass_context
+def DEVICE_GLOBAL_WCMP_RECEIVED_BANDWIDTH_IGNORE(ctx, db):
+    """ Ignore link bandwidth (i.e., do regular ECMP, not weighted) """
+
+    received_bandwidth_handler(ctx, db, "ignore")
+
+
+@DEVICE_GLOBAL_WCMP_RECEIVED_BANDWIDTH.command(
+    name="allow"
+)
+@clicommon.pass_db
+@click.pass_context
+def DEVICE_GLOBAL_WCMP_RECEIVED_BANDWIDTH_ALLOW(ctx, db):
+    """ Allow for normal behavior without bestpath for bandwidth """
+
+    received_bandwidth_handler(ctx, db, "allow")
+
+
+@DEVICE_GLOBAL_WCMP_RECEIVED_BANDWIDTH.command(
+    name="skip-missing"
+)
+@clicommon.pass_db
+@click.pass_context
+def DEVICE_GLOBAL_WCMP_RECEIVED_BANDWIDTH_SKIP_MISSING(ctx, db):
+    """ Ignore paths without link bandwidth for W-ECMP (if other paths have it) """
+
+    received_bandwidth_handler(ctx, db, "skip_missing")
+
+
+@DEVICE_GLOBAL_WCMP_RECEIVED_BANDWIDTH.command(
+    name="default-weight-for-missing"
+)
+@clicommon.pass_db
+@click.pass_context
+def DEVICE_GLOBAL_WCMP_RECEIVED_BANDWIDTH_DEFAULT_WEIGHT(ctx, db):
+    """ Assign value 1 to paths not having link bandwidth """
+
+    received_bandwidth_handler(ctx, db, "default_weight_for_missing")

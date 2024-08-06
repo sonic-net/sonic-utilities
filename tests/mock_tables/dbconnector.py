@@ -14,6 +14,7 @@ from swsscommon import swsscommon
 
 
 topo = None
+namespaces = {}
 dedicated_dbs = {}
 
 def clean_up_config():
@@ -54,6 +55,9 @@ def connect_SonicV2Connector(self, db_name, retry_on=True):
         self.dbintf.redis_kwargs['db_name'] = dedicated_dbs[db_name]
     else:
         self.dbintf.redis_kwargs['db_name'] = db_name
+    if self.namespace in namespaces:
+        if db_name in namespaces[self.namespace]:
+            self.dbintf.redis_kwargs['db_name'] = namespaces[self.namespace][db_name]
     self.dbintf.redis_kwargs['decode_responses'] = True
     _old_connect_SonicV2Connector(self, db_name, retry_on)
 

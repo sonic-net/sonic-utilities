@@ -1,6 +1,7 @@
 {
     "BGP_DEVICE_GLOBAL|STATE": {
         "tsa_enabled": "true",
-        "wcmp_enabled": "false"
+        "originate_bandwidth": "cumulative",
+        "received_bandwidth": "skip_missing"
     }
 }

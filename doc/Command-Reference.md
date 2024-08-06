@@ -2624,12 +2624,23 @@ This command displays BGP device global configuration.
 - Options:
   - _-j,--json_: display in JSON format
 
+Single ASIC
 - Example:
   ```bash
   admin@sonic:~$ show bgp device-global
-  TSA      W-ECMP
-  -------  -------
-  enabled  enabled
+  TSA      W-ECMP      BANDWIDTH
+  -------  ----------  ------------
+  enabled  cumulative  skip_missing
+  ```
+
+Multiple ASICs
+- Example:
+  ```bash
+  admin@sonic:~$ show bgp device-global
+  ASIC ID    TSA      W-ECMP      BANDWIDTH
+  ---------  -------  ----------  ------------
+  asic0      enabled  cumulative  skip_missing
+  asic1      enabled  cumulative  skip_missing
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#bgp)
@@ -2724,24 +2735,52 @@ This command is used to remove particular IPv4 or IPv6 BGP neighbor configuratio
   admin@sonic:~$ sudo config bgp remove neighbor SONIC02SPINE
   ```
 
-**config bgp device-global tsa/w-ecmp**
+**config bgp device-global tsa**
 
 This command is used to manage BGP device global configuration.
 
 Feature list:
 1. TSA - Traffic-Shift-Away
-2. W-ECMP - Weighted-Cost Multi-Path
 
 - Usage:
   ```bash
   config bgp device-global tsa <enabled|disabled>
-  config bgp device-global w-ecmp <enabled|disabled>
   ```
 
 - Examples:
   ```bash
   admin@sonic:~$ config bgp device-global tsa enabled
-  admin@sonic:~$ config bgp device-global w-ecmp enabled
+  ```
+
+**config bgp device-global w-ecmp originate-bandwidth**
+
+This command controls how the device advertises/outbounds bandwidth to eBGP peers.
+
+- Usage:
+  ```bash
+  config bgp device-global w-ecmp originate-bandwidth <cumulative|num-multipaths|disabled|set-bandwidth [BANDWIDTH]>
+  ```
+
+- Examples:
+  ```bash
+  admin@sonic:~$ config bgp device-global w-ecmp originate-bandwidth cumulative
+  ```
+  ```bash
+  admin@sonic:~$ config bgp device-global w-ecmp originate-bandwidth set-bandwidth 5
+  ```
+
+**config bgp device-global w-ecmp received-bandwidth**
+
+This command allows for the control of link bandwidth processing on the receiver
+
+- Usage:
+  ```bash
+  config bgp device-global w-ecmp received-bandwidth <ignore|allow|skip-missing|default-weight-for-missing>
+  ```
+
+- Examples:
+  ```bash
+  admin@sonic:~$ config bgp device-global w-ecmp received-bandwidth ignore
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#bgp)
@@ -13701,3 +13740,33 @@ Sending 3 magic packet to 11:33:55:77:99:bb via interface Vlan1000
 ```
 
 For the 4th example, it specifise 2 target MAC addresses and `count` is 3. So it'll send 6 magic packets in total.
+
+# W-ECMP
+
+**show w-ecmp status**
+
+This command is used to display the status of w-ecmp on single and multi-asics. This command is useful to indicate whether or not route maps are added on each asic.
+
+- Usage:
+  ```
+  show w-ecmp status
+  ```
+
+Single ASIC
+- Example:
+  ```
+  admin@sonic:~$ show w-ecmp status
+  W-ECMP
+  --------
+  enabled
+  ```
+
+Multi ASICs
+- Example:
+  ```
+  admin@sonic:~$ show w-ecmp status
+  ASIC ID    W-ECMP
+  ---------  --------
+  asic0      enabled
+  asic1      disabled
+  ```
