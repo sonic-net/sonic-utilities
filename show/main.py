@@ -2253,6 +2253,29 @@ def received(db, namespace):
         ctx.fail("ASIC/SDK health event is not supported on the platform")
 
 
+#
+# 'logrorare' command group ("show logrotate ...")
+#
+@cli.group('logrotate', invoke_without_command=True)
+@clicommon.pass_db
+def logrotate(db):
+    """Show logrotate configuration"""
+
+    table = []
+
+    logging_table = db.cfgdb.get_table('LOGGING')
+    for key, value in logging_table.items():
+        disk_percentage = value.get('disk_percentage', '')
+        frequency = value.get('frequency', '')
+        max_number = value.get('max_number', '')
+        size = value.get('size', '')
+
+        table.append((key, disk_percentage, frequency, max_number, size))
+
+    hdrs = ['file', 'disk-percentage', 'frequency', 'max-number', 'size']
+    click.echo(tabulate(table, headers=hdrs, tablefmt='simple', missingval=''))
+
+
 # Load plugins and register them
 helper = util_base.UtilHelper()
 helper.load_and_register_plugins(plugins, cli)
