@@ -218,6 +218,8 @@ class ManifestSchema:
         ManifestRoot('container', [
             ManifestField('privileged', DefaultMarshaller(bool), False),
             ManifestArray('volumes', DefaultMarshaller(str)),
+            ManifestField('network', DefaultMarshaller(str), ''),
+            ManifestArray('ports', DefaultMarshaller(str)),
             ManifestArray('mounts', ManifestRoot('mounts', [
                 ManifestField('source', DefaultMarshaller(str)),
                 ManifestField('target', DefaultMarshaller(str)),

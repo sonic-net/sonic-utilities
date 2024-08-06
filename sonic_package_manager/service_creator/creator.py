@@ -252,6 +252,7 @@ class ServiceCreator:
         image_id = package.image_id
         name = package.manifest['service']['name']
         container_spec = package.manifest['container']
+        is_asic_service = package.manifest['service']['asic-service']
         script_path = os.path.join(DOCKER_CTL_SCRIPT_LOCATION, f'{name}.sh')
         script_template = get_tmpl_path(DOCKER_CTL_SCRIPT_TEMPLATE)
         run_opt = []
@@ -260,6 +261,17 @@ class ServiceCreator:
             run_opt.append('--privileged')
 
         run_opt.append('-t')
+
+        if not is_asic_service:
+            if container_spec['network']:
+                docker_network_type = container_spec['network']
+                run_opt.append(f'--net={docker_network_type}')
+        else:
+            if container_spec['network']:
+                raise ServiceCreatorError(f"Invalid Configuration, asic-service must not contain network type")
+
+        for port in container_spec['ports']:
+            run_opt.append(f'--publish {port}')
 
         for volume in container_spec['volumes']:
             run_opt.append(f'-v {volume}')
