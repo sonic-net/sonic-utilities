@@ -25,6 +25,7 @@ import sys
 import syslog
 import subprocess
 
+from swsssdk import ConfigDBConnector
 from swsscommon.swsscommon import ConfigDBConnector
 from sonic_installer.bootloader import get_bootloader
 from sonic_installer.common import IMAGE_PREFIX
@@ -172,9 +173,16 @@ def cmd_dump_config_json():
     kdump_enabled = get_kdump_administrative_mode()
     kdump_memory = get_kdump_memory()
     kdump_num_dumps = get_kdump_num_dumps()
+    # remote SSH variables
+    ssh_connection_string = get_ssh_connection_string()
+    ssh_private_key_path = get_ssh_private_key_path()
+    kdump_remote_enabled = get_kdump_remote_enabled()
     data = { "enable" : kdump_enabled, \
              "memory" : kdump_memory, \
-             "max-dumps" : int(kdump_num_dumps) }
+             "max-dumps" : int(kdump_num_dumps), \
+             "ssh_connection_string" : str(ssh_connection_string), \
+             "ssh_private_key-path" : str(ssh_private_key_path), \
+             "remote_enabled" : kdump_remote_enabled }
     print(json.dumps(data, indent=4))
 
 def cmd_dump_kdump_records_json():
@@ -223,11 +231,18 @@ def cmd_dump_status_json():
     kdump_oper_state = get_kdump_oper_mode(kdump_enabled)
     kdump_memory = get_kdump_memory()
     kdump_num_dumps = get_kdump_num_dumps()
+    # remote SSH variables
+    ssh_connection_string = get_ssh_connection_string()
+    ssh_private_key_path = get_ssh_private_key_path()
+    kdump_remote_enabled = get_kdump_remote_enabled()
     data = { "enable" : kdump_enabled, \
              "current-state" : kdump_oper_state, \
              "memory" : kdump_memory, \
              "allocated-memory" : get_crash_kernel_size(), \
-             "max-dumps" : int(kdump_num_dumps) }
+             "max-dumps" : int(kdump_num_dumps), \
+             "ssh-connection-string" : str(ssh_connection_string), \
+             "ssh-private-key-path" : str(ssh_private_key_path), \
+             "remote-enabled" : kdump_remote_enabled }
     print(json.dumps(data, indent=4))
 
 ## Query current configuration to check if kdump is enabled or disabled
@@ -299,6 +314,62 @@ def get_kdump_num_dumps():
                     num_dumps = num
     return num_dumps
 
+## Query current configuration for kdump ssh_connection_string
+#
+#  @return The ssh remote connection string for storing kernel dump files remotely
+#          (read from running configuration)
+def get_ssh_connection_string():
+    ssh_connection_string = "user@ip/hostname --default, please change--"
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
+    if config_db is not None:
+        config_db.connect()
+        table_data = config_db.get_table('KDUMP')
+        if table_data is not None:
+            config_data = table_data.get('config')
+            if config_data is not None:
+                conn = config_data.get('ssh_connection_string')
+                if conn:
+                    ssh_connection_string = conn
+    return ssh_connection_string
+
+## Query current configuration for kdump ssh_private_key_path
+#
+#  @return The ssh remote connection private_key_file_path for connecting to remote server without authentication (command "sudo kdump-config propagate" required)
+#          (read from running configuration)
+def get_ssh_private_key_path():
+    ssh_private_key_path = "/root/.ssh/kdump_id_rsa --default, please change--"
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
+    if config_db is not None:
+        config_db.connect()
+        table_data = config_db.get_table('KDUMP')
+        if table_data is not None:
+            config_data = table_data.get('config')
+            if config_data is not None:
+                pr_key_path = config_data.get('ssh_private_key_path')
+                if pr_key_path:
+                    ssh_private_key_path = pr_key_path
+    return ssh_private_key_path
+
+## Query current configuration for kdump remote_enabled
+#
+#  @return The if remote connection is enabled for connecting to remote server
+#          (read from running configuration)
+def get_kdump_remote_enabled():
+    remote_enabled = False
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
+    if config_db is not None:
+        config_db.connect()
+        table_data = config_db.get_table('KDUMP')
+        if table_data is not None:
+            config_data = table_data.get('config')
+            if config_data is not None:
+                remote_en = config_data.get('remote_enabled')
+                if remote_en:
+                    remote_enabled = remote_en
+    return remote_enabled
+
+
+
 ## Read current value for USE_KDUMP in kdump config file
 #
 #  @return The integer value X from USE_KDUMP=X in /etc/default/kdump-tools
@@ -362,6 +433,138 @@ def write_num_dumps(num_dumps):
         print_err("Error while writing KDUMP_NUM_DUMPS into %s" % kdump_cfg)
         sys.exit(1)
 
+## Read current value for SSH SSH kdump-ssh-connection-string in kdump config file
+#
+#  @return The string value X from SSH=X in /etc/default/kdump-tools
+def read_ssh_connection_string_from_db():
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
+    config_db.connect()
+    
+    kdump_table = config_db.get_table('KDUMP')
+    if kdump_table:
+        config_data = kdump_table.get('config')
+        if config_data:
+            return config_data.get('ssh_connection_string')
+    return None
+
+## Change the value for SSH kdump-ssh-connection-string in kdump config file /etc/default/kdump-tools
+#
+#  #param ssh-connection-string value for new value
+def write_ssh_connection_string_to_kdump_tools():
+    ssh_connection_string = read_ssh_connection_string_from_db()
+    if not ssh_connection_string:
+        print("Error: SSH connection string not found in Config DB.")
+        return False
+        
+    try:
+        # Use sed to update the SSH connection string in the kdump-tools file
+        subprocess.run(['sudo', 'sed', '-i', 's/#SSH=.*/SSH="{}"/g'.format(ssh_connection_string), kdump_cfg], check=True)
+        
+        return True
+    except Exception as e:
+        print("Error: Unable to write to {}. Exception: {}".format(kdump_cfg, str(e)))
+        return False
+
+
+## Read current value for SSH_KEY kdump-ssh-private-key-path in kdump config file
+#
+#  @return The string value X from SSH_KEY=X in /etc/default/kdump-tools
+def read_ssh_private_key_path(kdump_cfg="/etc/default/kdump-tools"):
+    """Reads the SSH private key path from the kdump configuration file.
+
+    Args:
+        kdump_cfg (str, optional): The path to the kdump configuration file.
+            Defaults to "/etc/default/kdump-tools".
+
+    Returns:
+        str: The extracted SSH private key path from the file or None if not found.
+        Raises:
+            Exception: If there's an error running the grep command.
+    """
+
+    try:
+        # Construct the full command string safely
+        command = f"grep '#*SSH_KEY=.*' {kdump_cfg} | cut -d = -f 2"
+
+        # Use subprocess.run without shell execution
+        output = subprocess.run(
+            command.split(), capture_output=True, text=True, check=True
+        ).stdout.strip()
+
+        if output:
+            return output  # Existing SSH private key path found
+        else:
+            return None  # No matching line found
+
+    except subprocess.CalledProcessError as e:
+        raise Exception(f"Error reading SSH private key path from {kdump_cfg}: {str(e)}")
+
+
+def write_ssh_private_key_path(ssh_private_key_path, kdump_cfg="/etc/default/kdump-tools"):
+    """Writes the SSH private key path to the kdump configuration file.
+
+    Args:
+        ssh_private_key_path (str): The SSH private key path to write.
+        kdump_cfg (str, optional): The path to the kdump configuration file.
+            Defaults to "/etc/default/kdump-tools".
+
+    Raises:
+        Exception: If there's an error writing to the file.
+    """
+
+    try:
+        # Construct the full command string safely
+        command = f"sed -i 's/#*SSH_KEY=.*$/SSH_KEY={ssh_private_key_path}/' {kdump_cfg}"
+
+        # Use subprocess.run without shell execution
+        subprocess.run(command.split(), check=True)
+
+    except subprocess.CalledProcessError as e:
+        raise Exception(f"Error writing SSH private key path to {kdump_cfg}: {str(e)}")
+
+
+# Example usage
+ssh_private_key_path = get_ssh_private_key_path()
+
+# Write the retrieved value to kdump_cfg only if it's not the default value
+if ssh_private_key_path != "/root/.ssh/kdump_id_rsa --default, please change--":
+    write_ssh_private_key_path(ssh_private_key_path)
+
+# Now you can potentially read the written value using read_ssh_private_key_path(kdump_cfg)
+
+## Disable remote: Comment the value for SSH and SSH_KEY in kdump config file /etc/default/kdump-tools
+#
+def kdump_remote_disable():
+  """
+  Disables remote kdump in the configuration file (kdump_cfg).
+
+  This function checks if remote kdump is already enabled before attempting
+  to disable it. If enabled, it uses sed to modify the configuration file
+  in-place, removing any comment character (#) before the SSH and SSH_KEY lines.
+  The function exits with an error message if any of the sed commands fail.
+
+  Returns:
+      None
+  """
+
+  # Check if remote kdump is already enabled
+  if get_kdump_remote_enabled().lower() == "true":
+    # Disable SSH key authentication
+    rc = run_command("/bin/sed -i '/*SSH=\"/s/\#/' %s" % (kdump_cfg), use_shell=False)
+    if rc != 0:
+      print_err("Error while disabling SSH key auth in", kdump_cfg)
+      sys.exit(1)
+
+    # Disable SSH authentication (optional, depending on configuration)
+    rc = run_command("/bin/sed -i '/*SSH_KEY=\"/s/\#/' %s" % (kdump_cfg), use_shell=False)
+    if rc != 0:
+      print_err("Error while disabling SSH auth in", kdump_cfg)
+      sys.exit(1)
+
+    print("Successfully disabled remote kdump in", kdump_cfg)
+  else:
+    print("Remote kdump is already disabled in", kdump_cfg)
+
 ## Enable kdump
 #
 #  @param verbose If True, the function will display a few additinal information
@@ -417,7 +620,7 @@ def kdump_enable(verbose, kdump_enabled, memory, num_dumps, image, cmdline_file)
 
 ## Read kdump configuration saved in the startup configuration file
 #
-#  @param    config_param If True, the function will display a few additional information
+#  @param    config_param If True, the function will display a few additional information.
 #  @return   Value of the configuration parameter saved in the startup configuration file
 #  @return   None if the startup configuration file does not exist or the kdump
 #                      configuration parameter is not present in the file.
@@ -448,8 +651,15 @@ def cmd_kdump_enable(verbose, image):
     kdump_enabled = get_kdump_administrative_mode()
     memory = get_kdump_memory()
     num_dumps = get_kdump_num_dumps()
+    
+    ##
+    # ToDo - 02
+    ##
+    ssh_connection_string = get_ssh_connection_string()
+    ssh_private_key_path = get_ssh_private_key_path()
+    remote_enabled = get_kdump_remote_enabled()
     if verbose:
-        print("configDB: kdump_enabled=%d memory=[%s] num_nums=%d" % (kdump_enabled, memory, num_dumps))
+        print("configDB: kdump_enabled=%d memory=[%s] num_nums=%d ssh_connection_string=%d ssh_private_key_path=%d  remote_enabled=%d" % (kdump_enabled, memory, num_dumps, ssh_connection_string, ssh_private_key_path, remote_enabled))
 
     if os.path.exists(grub_cfg):
         return kdump_enable(verbose, kdump_enabled, memory, num_dumps, image, grub_cfg)
