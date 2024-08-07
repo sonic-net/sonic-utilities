@@ -1,16 +1,21 @@
 import click
 import ipaddress
 import re
+import subprocess
 from swsscommon.swsscommon import ConfigDBConnector
 from .validated_config_db_connector import ValidatedConfigDBConnector
 from jsonpatch import JsonPatchConflict
 from jsonpointer import JsonPointerException
 import utilities_common.cli as clicommon
+from sonic_py_common.security_cipher import master_key_mgr 
 
 ADHOC_VALIDATION = True
 RADIUS_MAXSERVERS = 8
 RADIUS_PASSKEY_MAX_LEN = 65
 VALID_CHARS_MSG = "Valid chars are ASCII printable except SPACE, '#', and ','"
+TACACS_PASSKEY_MAX_LEN = 65
+
+secure_cipher = master_key_mgr()
 
 def is_secret(secret):
     return bool(re.match('^' + '[^ #,]*' + '$', secret))
@@ -234,13 +239,37 @@ default.add_command(authtype)
 
 @click.command()
 @click.argument('secret', metavar='<secret_string>', required=False)
+@click.option('-e', '--encrypt', help='Enable passkey encryption feature', is_flag=True)
 @click.pass_context
-def passkey(ctx, secret):
+def passkey(ctx, secret, encrypt):
     """Specify TACACS+ server global passkey <STRING>"""
     if ctx.obj == 'default':
         del_table_key('TACPLUS', 'global', 'passkey')
     elif secret:
-        add_table_kv('TACPLUS', 'global', 'passkey', secret)
+        if len(secret) > TACACS_PASSKEY_MAX_LEN:
+            click.echo('Maximum of %d chars can be configured' % TACACS_PASSKEY_MAX_LEN)
+            return
+        elif not is_secret(secret):
+            click.echo(VALID_CHARS_MSG)
+            return
+
+        if encrypt:
+            try:
+                passwd = getpass.getpass()
+            except Exception as e:
+                click.echo('getpass aborted' % e)
+                return
+            add_table_kv('TACPLUS', 'global', 'key_encrypt', True) 
+            outsecret, errs = secure_cipher.encrypt_passkey('TACPLUS', secret, passwd)
+            if not errs:
+                add_table_kv('TACPLUS', 'global', 'passkey', outsecret)
+            else:
+                click.echo('Passkey configuration failed' % errs)
+                return
+        else:
+            add_table_kv('TACPLUS', 'global', 'key_encrypt', False)
+            add_table_kv('TACPLUS', 'global', 'passkey', secret)
+            secure_cipher.del_cipher_pass()
     else:
         click.echo('Argument "secret" is required')
 tacacs.add_command(passkey)
@@ -256,7 +285,8 @@ default.add_command(passkey)
 @click.option('-o', '--port', help='TCP port range is 1 to 65535, default 49', type=click.IntRange(1, 65535), default=49)
 @click.option('-p', '--pri', help="Priority, default 1", type=click.IntRange(1, 64), default=1)
 @click.option('-m', '--use-mgmt-vrf', help="Management vrf, default is no vrf", is_flag=True)
-def add(address, timeout, key, auth_type, port, pri, use_mgmt_vrf):
+@click.option('-e', '--encrypt', help='Enable passkey encryption feature', is_flag=True)
+def add(address, timeout, key, auth_type, port, pri, use_mgmt_vrf, encrypt):
     """Specify a TACACS+ server"""
     if ADHOC_VALIDATION:
         if not clicommon.is_ipaddress(address):
@@ -278,7 +308,23 @@ def add(address, timeout, key, auth_type, port, pri, use_mgmt_vrf):
         if timeout is not None:
             data['timeout'] = str(timeout)
         if key is not None:
-            data['passkey'] = key
+            if encrypt:
+                try:
+                    passwd = getpass.getpass()
+                except Exception as e:
+                    click.echo('getpass aborted' % e)
+                    return
+                add_table_kv('TACPLUS', 'global', 'key_encrypt', True)
+                outsecret, errs = secure_cipher.encrypt_passkey('TACPLUS', key, passwd)
+                if not errs:
+                    data['passkey'] = outsecret
+                else:
+                    click.echo('Passkey configuration failed' % errs)
+                    return
+            else:
+                add_table_kv('TACPLUS', 'global', 'key_encrypt', False)
+                data['passkey'] = key
+                secure_cipher.del_cipher_pass() 
         if use_mgmt_vrf :
             data['vrf'] = "mgmt"
         try:
