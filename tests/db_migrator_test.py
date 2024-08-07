@@ -1013,3 +1013,28 @@ class TestAAAMigrator(object):
 
         diff = DeepDiff(resulting_table, expected_table, ignore_order=True)
         assert not diff
+
+
+class TestCoppGroupTrapAction(object):
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "2"
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+        dbconnector.dedicated_dbs['CONFIG_DB'] = None
+
+    def test_copp_group_trap_action_migrator(self):
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'copp_group_table_input')
+        import db_migrator
+        dbmgtr = db_migrator.DBMigrator(None)
+        dbmgtr.migrate()
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'copp_group_table_expected')
+        expected_db = Db()
+
+        resulting_table = dbmgtr.configDB.get_table('COPP_GROUP')
+        expected_table = expected_db.cfgdb.get_table('COPP_GROUP')
+
+        diff = DeepDiff(resulting_table, expected_table, ignore_order=True)
+        assert not diff
