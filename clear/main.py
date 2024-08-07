@@ -276,8 +276,15 @@ def clear_pwm_pg_shared():
 
 @cli.group()
 def queue():
-    """Clear queue WM"""
+    """Clear queue"""
     pass
+
+@queue.command()
+def wredcounters():
+    """Clear queue wredcounters"""
+    command = ['wredstat', '-c']
+    run_command(command)
+
 
 @queue.group()
 def watermark():

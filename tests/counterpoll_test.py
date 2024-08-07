@@ -29,6 +29,8 @@ ACL                   5000                enable
 TUNNEL_STAT           3000                enable
 FLOW_CNT_TRAP_STAT    10000               enable
 FLOW_CNT_ROUTE_STAT   10000               enable
+WRED_ECN_QUEUE_STAT   10000               enable
+WRED_ECN_PORT_STAT    1000                enable
 """
 
 class TestCounterpoll(object):
@@ -221,6 +223,66 @@ class TestCounterpoll(object):
         assert result.exit_code == 2
         assert expected in result.output
 
+    @pytest.mark.parametrize("status", ["disable", "enable"])
+    def test_update_wred_port_counter_status(self, status):
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(counterpoll.cli.commands["wredport"].commands[status], [], obj=db.cfgdb)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        table = db.cfgdb.get_table('FLEX_COUNTER_TABLE')
+        assert status == table["WRED_ECN_PORT"]["FLEX_COUNTER_STATUS"]
+
+        if status == "enable":
+            result = runner.invoke(counterpoll.cli.commands["show"], [])
+            print(result.output)
+            assert "WRED_ECN_PORT_STAT" in result.output
+
+    @pytest.mark.parametrize("status", ["disable", "enable"])
+    def test_update_wred_queue_counter_status(self, status):
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(counterpoll.cli.commands["wredqueue"].commands[status], [], obj=db.cfgdb)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        table = db.cfgdb.get_table('FLEX_COUNTER_TABLE')
+        print(table)
+        assert status == table["WRED_ECN_QUEUE"]["FLEX_COUNTER_STATUS"]
+
+        if status == "enable":
+            result = runner.invoke(counterpoll.cli.commands["show"], [])
+            print(result.output)
+            assert "WRED_ECN_QUEUE_STAT" in result.output
+
+    def test_update_wred_port_counter_interval(self):
+        runner = CliRunner()
+        db = Db()
+        test_interval = "15000"
+
+        result = runner.invoke(counterpoll.cli.commands["wredport"].commands["interval"], [test_interval], obj=db.cfgdb)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
+        print(table)
+        assert test_interval == table["WRED_ECN_PORT"]["POLL_INTERVAL"]
+
+    def test_update_wred_queue_counter_interval(self):
+        runner = CliRunner()
+        db = Db()
+        test_interval = "18000"
+
+        result = runner.invoke(counterpoll.cli.commands["wredqueue"].commands["interval"], [test_interval], obj=db.cfgdb)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
+        print(table)
+        assert test_interval == table["WRED_ECN_QUEUE"]["POLL_INTERVAL"]
 
     @classmethod
     def teardown_class(cls):
