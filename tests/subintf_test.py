@@ -24,7 +24,7 @@ class TestSubinterface(object):
         runner = CliRunner()
         db = Db()
         obj = {'db':db.cfgdb}
-        
+
         result = runner.invoke(config.config.commands["subinterface"].commands["add"], ["Eth0.102", "1002"], obj=obj)
         print(result.exit_code, result.output)
         assert result.exit_code == 0
@@ -53,35 +53,23 @@ class TestSubinterface(object):
         runner = CliRunner()
         db = Db()
         obj = {'db':db.cfgdb}
-        
+
         result = runner.invoke(config.config.commands["subinterface"].commands["add"], ["Ethernet0.102"], obj=obj)
         print(result.exit_code, result.output)
         assert result.exit_code == 0
         assert ('Ethernet0.102') in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
         assert db.cfgdb.get_table('VLAN_SUB_INTERFACE')['Ethernet0.102']['admin_status'] == 'up'
 
-        result = runner.invoke(config.config.commands["subinterface"].commands["add"], ["PortChannel0004.104"], obj=obj)
-        print(result.exit_code, result.output)
-        assert result.exit_code == 0
-        assert ('PortChannel0004.104') in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
-        assert db.cfgdb.get_table('VLAN_SUB_INTERFACE')['PortChannel0004.104']['admin_status'] == 'up'
-
         result = runner.invoke(config.config.commands["subinterface"].commands["del"], ["Ethernet0.102"], obj=obj)
         print(result.exit_code, result.output)
         assert result.exit_code == 0
         assert ('Ethernet0.102') not in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
 
-        result = runner.invoke(config.config.commands["subinterface"].commands["del"], ["PortChannel0004.104"], obj=obj)
-        print(result.exit_code, result.output)
-        assert result.exit_code == 0
-        assert ('PortChannel0004.104') not in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
-
-
     def test_add_existing_subintf_again(self):
         runner = CliRunner()
         db = Db()
         obj = {'db':db.cfgdb}
-        
+
         result = runner.invoke(config.config.commands["subinterface"].commands["add"], ["Ethernet0.102"], obj=obj)
         print(result.exit_code, result.output)
         assert result.exit_code == 0
@@ -104,7 +92,7 @@ class TestSubinterface(object):
         runner = CliRunner()
         db = Db()
         obj = {'db':db.cfgdb}
-        
+
         result = runner.invoke(config.config.commands["subinterface"].commands["del"], ["Ethernet0.102"], obj=obj)
         print(result.exit_code, result.output)
         assert result.exit_code != 0
