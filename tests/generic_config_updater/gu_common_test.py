@@ -343,6 +343,13 @@ class TestConfigWrapper(unittest.TestCase):
             }}
         self.validate_lanes(config)
 
+    def test_validate_lanes__valid_lanes_0_multi_ports__success(self):
+        config = {"PORT": {
+            "Ethernet0": {"lanes": "0,64,65", "speed": "10000"},
+            "Ethernet1": {"lanes": "0,66,68", "speed": "10000"},
+            }}
+        self.validate_lanes(config)
+
     def test_validate_lanes__same_valid_lanes_single_port__failure(self):
         config = {"PORT": {"Ethernet0": {"lanes": "65 \r\t\n, 65", "speed":"10000"}}}
         self.validate_lanes(config, '65')

@@ -239,6 +239,9 @@ class ConfigWrapper:
             for port in port_to_lanes_map:
                 lanes = port_to_lanes_map[port]
                 for lane in lanes:
+                    # Bypass default "0" set in lanes of multiasic's host
+                    if lane == "0":
+                        continue
                     if lane in existing:
                         return False, f"'{lane}' lane is used multiple times in PORT: {set([port, existing[lane]])}"
                     existing[lane] = port
