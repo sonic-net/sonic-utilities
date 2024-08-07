@@ -27,16 +27,16 @@ Restarting SNMP service...
 """
 
 config_snmp_contact_add_del_new_contact ="""\
-Contact name testuser and contact email testuser@contoso.com have been added to configuration
+SNMP Contact testuser testuser@contoso.com has been added to configuration
 Restarting SNMP service...
 """ 
 
 tabular_data_show_run_snmp_contact_expected = """\
-Contact    Contact Email\n---------  --------------------\ntestuser   testuser@contoso.com
+Contact\n-----------------------------\ntestuser testuser@contoso.com
 """
 
 json_data_show_run_snmp_contact_expected = """\
-{'testuser': 'testuser@contoso.com'}
+{'Contact': 'testuser testuser@contoso.com'}
 """
 
 tabular_data_show_run_snmp_community_expected = """\
@@ -98,9 +98,9 @@ Location
 public
 
 
-SNMP_CONTACT    SNMP_CONTACT_EMAIL
---------------  --------------------
-testuser        testuser@contoso.com
+Contact
+-----------------------------
+testuser testuser@contoso.com
 
 
 Community String    Community Type
@@ -214,12 +214,12 @@ class TestSNMPShowCommands(object):
         runner = CliRunner()
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
             result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["add"],
-                                    ["testuser", "testuser@contoso.com"], obj=db)
+                                   ["testuser testuser@contoso.com"], obj=db)
             print(result.exit_code)
             print(result.output)
             assert result.exit_code == 0
             assert result.output == config_snmp_contact_add_del_new_contact
-            assert db.cfgdb.get_entry("SNMP", "CONTACT") == {"testuser": "testuser@contoso.com"}
+            assert db.cfgdb.get_entry("SNMP", "CONTACT") == {"Contact": "testuser testuser@contoso.com"}
 
             result = runner.invoke(show.cli.commands["runningconfiguration"].commands["snmp"].commands["contact"], 
                                    [], obj=db)
@@ -233,12 +233,12 @@ class TestSNMPShowCommands(object):
         runner = CliRunner()
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
             result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["add"],
-                                    ["testuser", "testuser@contoso.com"], obj=db)
+                                   ["testuser testuser@contoso.com"], obj=db)
             print(result.exit_code)
             print(result.output)
             assert result.exit_code == 0
             assert result.output == config_snmp_contact_add_del_new_contact
-            assert db.cfgdb.get_entry("SNMP", "CONTACT") == {"testuser": "testuser@contoso.com"}
+            assert db.cfgdb.get_entry("SNMP", "CONTACT") == {"Contact": "testuser testuser@contoso.com"}
 
             result = runner.invoke(show.cli.commands["runningconfiguration"].commands["snmp"].commands["contact"], 
                                    ["--json"], obj=db)
@@ -436,12 +436,12 @@ class TestSNMPShowCommands(object):
         runner = CliRunner()
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
             result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["add"],
-                                    ["testuser", "testuser@contoso.com"], obj=db)
+                                   ["testuser testuser@contoso.com"], obj=db)
             print(result.exit_code)
             print(result.output)
             assert result.exit_code == 0
             assert result.output == config_snmp_contact_add_del_new_contact
-            assert db.cfgdb.get_entry("SNMP", "CONTACT") == {"testuser": "testuser@contoso.com"}
+            assert db.cfgdb.get_entry("SNMP", "CONTACT") == {"Contact": "testuser testuser@contoso.com"}
 
             result = runner.invoke(config.config.commands["snmp"].commands["location"].commands["add"],
                                     ["public"], obj=db)

@@ -15,15 +15,15 @@ from unittest.mock import patch
 from utilities_common.db import Db
 
 tabular_data_show_run_snmp_contact_expected = """\
-Contact    Contact Email\n---------  --------------------\ntestuser   testuser@contoso.com
+Contact\n---------  --------------------\ntestuser testuser@contoso.com
 """
 
 json_data_show_run_snmp_contact_expected = """\
-{'testuser': 'testuser@contoso.com'}
+{'Contact': 'testuser testuser@contoso.com'}
 """
 
 config_snmp_contact_add_del_new_contact ="""\
-Contact name testuser and contact email testuser@contoso.com have been added to configuration
+SNMP Contact testuser testuser@contoso.com has been added to configuration
 Restarting SNMP service...
 """ 
 
@@ -242,17 +242,17 @@ class TestSNMPConfigCommands(object):
         result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["del"], ["blah"], obj=db)
         print(result.exit_code)
         assert result.exit_code == 2
-        assert 'Contact name blah is not configured' in result.output
+        assert 'SNMP Contact blah is not configured' in result.output
         assert db.cfgdb.get_entry("SNMP", "CONTACT") == {}
 
     def test_config_snmp_contact_modify_without_contact_redis(self):
         db = Db()
         runner = CliRunner()
         result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["modify"], 
-                                                     ["blah", "blah@contoso.com"], obj=db)
+                                                     ["blah blah@contoso.com"], obj=db)
         print(result.exit_code)
-        assert result.exit_code == 3
-        assert 'Contact name blah is not configured' in result.output
+        assert result.exit_code == 2
+        assert "Cannot modify SNMP Contact.  You must use 'config snmp contact add' command." in result.output
         assert db.cfgdb.get_entry("SNMP", "CONTACT") == {}
 
     def test_config_snmp_contact_add_del_new_contact(self):
@@ -260,19 +260,19 @@ class TestSNMPConfigCommands(object):
         runner = CliRunner()
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
             result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["add"],
-                                    ["testuser", "testuser@contoso.com"], obj=db)
+                                   ["testuser testuser@contoso.com"], obj=db)
             print(result.exit_code)
             print(result.output)
             assert result.exit_code == 0
             assert result.output == config_snmp_contact_add_del_new_contact
-            assert db.cfgdb.get_entry("SNMP", "CONTACT") == {"testuser": "testuser@contoso.com"}
+            assert db.cfgdb.get_entry("SNMP", "CONTACT") == {"Contact": "testuser testuser@contoso.com"}
 
             result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["del"],
-                                    ["testuser"], obj=db)
+                                   ["testuser testuser@contoso.com"], obj=db)
             print(result.exit_code)
             print(result.output)
             assert result.exit_code == 0
-            assert 'SNMP contact testuser removed from configuration' in result.output
+            assert 'SNMP Contact testuser testuser@contoso.com removed from configuration' in result.output
             assert db.cfgdb.get_entry("SNMP", "CONTACT") == {} 
 
     # Add snmp contact tests
@@ -281,29 +281,18 @@ class TestSNMPConfigCommands(object):
         runner = CliRunner()
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
             result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["add"],
-                                    ["testuser", "testuser@contoso.com"], obj=db)
+                                   ["testuser testuser@contoso.com"], obj=db)
             print(result.exit_code)
             print(result.output)
             assert result.exit_code == 0
             assert result.output == config_snmp_contact_add_del_new_contact
-            assert db.cfgdb.get_entry("SNMP", "CONTACT") == {"testuser": "testuser@contoso.com"}
+            assert db.cfgdb.get_entry("SNMP", "CONTACT") == {"Contact": "testuser testuser@contoso.com"}
 
             result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["add"],
-                                                     ["blah", "blah@contoso.com"], obj=db)
+                                   ["blah blah@contoso.com"], obj=db)
             print(result.exit_code)
             assert result.exit_code == 1
-            assert 'Contact already exists.  Use sudo config snmp contact modify instead' in result.output
-
-    def test_config_snmp_contact_add_invalid_email(self):
-        db = Db()
-        runner = CliRunner()
-        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
-            result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["add"],
-                              ["testuser", "testusercontoso.com"], obj=db)
-            print(result.exit_code)
-            assert result.exit_code == 2
-            assert "Contact email testusercontoso.com is not valid" in result.output
-
+            assert 'Contact already exists, Use sudo config snmp contact modify instead' in result.output
 
     # Delete snmp contact tests
     def test_config_snmp_contact_del_new_contact_when_contact_exists(self):
@@ -311,35 +300,35 @@ class TestSNMPConfigCommands(object):
         runner = CliRunner()
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
             result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["add"],
-                                    ["testuser", "testuser@contoso.com"], obj=db)
+                                   ["testuser testuser@contoso.com"], obj=db)
             print(result.exit_code)
             print(result.output)
             assert result.exit_code == 0
             assert result.output == config_snmp_contact_add_del_new_contact
-            assert db.cfgdb.get_entry("SNMP", "CONTACT") == {"testuser": "testuser@contoso.com"}
+            assert db.cfgdb.get_entry("SNMP", "CONTACT") == {"Contact": "testuser testuser@contoso.com"}
 
             result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["del"], ["blah"], obj=db)
             print(result.exit_code)
             assert result.exit_code == 1
-            assert 'SNMP contact blah is not configured' in result.output
+            assert 'SNMP Contact blah does not exist.' in result.output
 
     def test_config_snmp_contact_del_with_existing_contact(self):
         db = Db()
         runner = CliRunner()
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
             result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["add"],
-                                    ["testuser", "testuser@contoso.com"], obj=db)
+                                   ["testuser testuser@contoso.com"], obj=db)
             print(result.exit_code)
             print(result.output)
             assert result.exit_code == 0
             assert result.output == config_snmp_contact_add_del_new_contact
-            assert db.cfgdb.get_entry("SNMP", "CONTACT") == {"testuser": "testuser@contoso.com"}
+            assert db.cfgdb.get_entry("SNMP", "CONTACT") == {"Contact": "testuser testuser@contoso.com"}
 
             result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["del"], 
-                                   ["testuser"], obj=db)
+                                   ["testuser testuser@contoso.com"], obj=db)
             print(result.exit_code)
             assert result.exit_code == 0
-            assert 'SNMP contact testuser removed from configuration' in result.output
+            assert 'SNMP Contact testuser testuser@contoso.com removed from configuration' in result.output
             assert db.cfgdb.get_entry("SNMP", "CONTACT") == {}
 
     # Modify snmp contact tests
@@ -348,74 +337,37 @@ class TestSNMPConfigCommands(object):
         runner = CliRunner()
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
             result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["add"],
-                                    ["testuser", "testuser@contoso.com"], obj=db)
+                                   ["testuser testuser@contoso.com"], obj=db)
             print(result.exit_code)
             print(result.output)
             assert result.exit_code == 0
             assert result.output == config_snmp_contact_add_del_new_contact
-            assert db.cfgdb.get_entry("SNMP", "CONTACT") == {"testuser": "testuser@contoso.com"}
+            assert db.cfgdb.get_entry("SNMP", "CONTACT") == {"Contact": "testuser testuser@contoso.com"}
 
             result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["modify"],
-                                                         ["testuser", "testuser@test.com"], obj=db)
+                                                         ["testuser testuser@test.com"], obj=db)
             print(result.exit_code)
             assert result.exit_code == 0
-            assert 'SNMP contact testuser email updated to testuser@test.com' in result.output
-            assert db.cfgdb.get_entry("SNMP", "CONTACT") == {"testuser": "testuser@test.com"}
+            assert 'SNMP contact testuser testuser@test.com modified in configuration' in result.output
+            assert db.cfgdb.get_entry("SNMP", "CONTACT") == {"Contact": "testuser testuser@test.com"}
 
     def test_config_snmp_contact_modify_contact_and_email_with_existing_entry(self):
         db = Db()
         runner = CliRunner()
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
             result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["add"],
-                                    ["testuser", "testuser@contoso.com"], obj=db)
+                                   ["testuser testuser@contoso.com"], obj=db)
             print(result.exit_code)
             print(result.output)
             assert result.exit_code == 0
             assert result.output == config_snmp_contact_add_del_new_contact
-            assert db.cfgdb.get_entry("SNMP", "CONTACT") == {"testuser": "testuser@contoso.com"}
+            assert db.cfgdb.get_entry("SNMP", "CONTACT") == {"Contact": "testuser testuser@contoso.com"}
 
             result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["modify"],
-                                                     ["testuser", "testuser@contoso.com"], obj=db)
+                                   ["testuser testuser@contoso.com"], obj=db)
             print(result.exit_code)
             assert result.exit_code == 1
             assert 'SNMP contact testuser testuser@contoso.com already exists' in result.output
-
-    def test_config_snmp_contact_modify_existing_contact_with_invalid_email(self):
-        db = Db()
-        runner = CliRunner()
-        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
-            result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["add"],
-                                    ["testuser", "testuser@contoso.com"], obj=db)
-            print(result.exit_code)
-            print(result.output)
-            assert result.exit_code == 0
-            assert result.output == config_snmp_contact_add_del_new_contact
-            assert db.cfgdb.get_entry("SNMP", "CONTACT") == {"testuser": "testuser@contoso.com"}
-
-            result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["modify"],
-                                                     ["testuser", "testuser@contosocom"], obj=db)
-            print(result.exit_code)
-            assert result.exit_code == 2
-            assert 'Contact email testuser@contosocom is not valid' in result.output
-
-
-    def test_config_snmp_contact_modify_new_contact_with_invalid_email(self):
-        db = Db()
-        runner = CliRunner()
-        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
-            result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["add"],
-                                    ["testuser", "testuser@contoso.com"], obj=db)
-            print(result.exit_code)
-            print(result.output)
-            assert result.exit_code == 0
-            assert result.output == config_snmp_contact_add_del_new_contact
-            assert db.cfgdb.get_entry("SNMP", "CONTACT") == {"testuser": "testuser@contoso.com"}
-
-            result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["modify"],
-                                                     ["blah", "blah@contoso@com"], obj=db)
-            print(result.exit_code)
-            assert result.exit_code == 2
-            assert 'Contact email blah@contoso@com is not valid' in result.output
 
     # Add snmp location tests
     def test_config_snmp_location_add_exiting_location_with_same_location_already_existing(self):
@@ -860,12 +812,6 @@ class TestSNMPConfigCommands(object):
         print(result.exit_code)
         assert result.exit_code == 1
         assert 'SNMP user test_nopriv_RO_2 is not configured' in result.output
-
-    @pytest.mark.parametrize("invalid_email", ['test@contoso', 'test.contoso.com', 'testcontoso@com', 
-                                               '123_%contoso.com', 'mytest@contoso.comm'])
-    def test_is_valid_email(self, invalid_email):
-        output = config.is_valid_email(invalid_email)
-        assert output == False
 
     @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry", mock.Mock(side_effect=ValueError))

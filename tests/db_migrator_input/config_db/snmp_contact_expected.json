@@ -1,0 +1,5 @@
+{
+    "SNMP|CONTACT": {
+        "Contact": "test-name test-email@test.com"
+    }
+}

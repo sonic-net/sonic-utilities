@@ -1589,7 +1589,7 @@ def community(db, json_output):
 def contact(db, json_output):
     """show SNMP running configuration contact"""
     snmp = db.cfgdb.get_table('SNMP')
-    snmp_header = ["Contact", "Contact Email"]
+    snmp_header = ["Contact"]
     snmp_body = []
     if json_output:
         try:
@@ -1601,9 +1601,8 @@ def contact(db, json_output):
     else:
         try:
             if snmp['CONTACT']:
-                snmp_contact = list(snmp['CONTACT'].keys())
-                snmp_contact_email = [snmp['CONTACT'][snmp_contact[0]]]
-                snmp_body.append([snmp_contact[0], snmp_contact_email[0]])
+                snmp_contact = [snmp['CONTACT']['Contact']]
+                snmp_body.append(snmp_contact)
         except KeyError:
             snmp['CONTACT'] = ''
         click.echo(tabulate(snmp_body, snmp_header))
@@ -1670,7 +1669,7 @@ def show_run_snmp(db, ctx):
     snmp_users = db.cfgdb.get_table('SNMP_USER')
     snmp_location_header = ["Location"]
     snmp_location_body = []
-    snmp_contact_header = ["SNMP_CONTACT", "SNMP_CONTACT_EMAIL"]
+    snmp_contact_header = ["Contact"]
     snmp_contact_body = []
     snmp_comm_header = ["Community String", "Community Type"]
     snmp_comm_body = []
@@ -1687,9 +1686,8 @@ def show_run_snmp(db, ctx):
     click.echo("\n")
     try:
         if snmp_contact_location_table['CONTACT']:
-            snmp_contact = list(snmp_contact_location_table['CONTACT'].keys())
-            snmp_contact_email = [snmp_contact_location_table['CONTACT'][snmp_contact[0]]]
-            snmp_contact_body.append([snmp_contact[0], snmp_contact_email[0]])
+            snmp_contact = [snmp_contact_location_table['CONTACT']['Contact']]
+            snmp_contact_body.append(snmp_contact)
     except KeyError:
         snmp_contact_location_table['CONTACT'] = ''
     click.echo(tabulate(snmp_contact_body, snmp_contact_header))
