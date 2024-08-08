@@ -172,9 +172,10 @@ def cmd_dump_config_json():
     kdump_enabled = get_kdump_administrative_mode()
     kdump_memory = get_kdump_memory()
     kdump_num_dumps = get_kdump_num_dumps()
+    # remote SSH variables
     data = { "enable" : kdump_enabled, \
              "memory" : kdump_memory, \
-             "max-dumps" : int(kdump_num_dumps) }
+             "max-dumps" : int(kdump_num_dumps)}
     print(json.dumps(data, indent=4))
 
 def cmd_dump_kdump_records_json():
@@ -223,6 +224,7 @@ def cmd_dump_status_json():
     kdump_oper_state = get_kdump_oper_mode(kdump_enabled)
     kdump_memory = get_kdump_memory()
     kdump_num_dumps = get_kdump_num_dumps()
+    # remote SSH variables
     data = { "enable" : kdump_enabled, \
              "current-state" : kdump_oper_state, \
              "memory" : kdump_memory, \
@@ -417,7 +419,7 @@ def kdump_enable(verbose, kdump_enabled, memory, num_dumps, image, cmdline_file)
 
 ## Read kdump configuration saved in the startup configuration file
 #
-#  @param    config_param If True, the function will display a few additional information
+#  @param    config_param If True, the function will display a few additional information.
 #  @return   Value of the configuration parameter saved in the startup configuration file
 #  @return   None if the startup configuration file does not exist or the kdump
 #                      configuration parameter is not present in the file.
@@ -449,8 +451,7 @@ def cmd_kdump_enable(verbose, image):
     memory = get_kdump_memory()
     num_dumps = get_kdump_num_dumps()
     if verbose:
-        print("configDB: kdump_enabled=%d memory=[%s] num_nums=%d" % (kdump_enabled, memory, num_dumps))
-
+        print("kdump enabled: %s" % kdump_enabled)
     if os.path.exists(grub_cfg):
         return kdump_enable(verbose, kdump_enabled, memory, num_dumps, image, grub_cfg)
     elif open(machine_cfg, 'r').read().find('aboot_platform') >= 0:
@@ -527,10 +528,9 @@ def cmd_kdump_disable(verbose):
     kdump_enabled = get_kdump_administrative_mode()
     memory = get_kdump_memory()
     num_dumps = get_kdump_num_dumps()
-
+    
     if verbose:
         print("configDB: kdump_enabled=%d memory=[%s] num_nums=%d" % (kdump_enabled, memory, num_dumps))
-
     if os.path.exists(grub_cfg):
         return kdump_disable(verbose, image, grub_cfg)
     elif open(machine_cfg, 'r').read().find('aboot_platform') >= 0:
