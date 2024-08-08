@@ -72,7 +72,7 @@ def fabric_module_set_admin_status(db, chassis_module_name, state):
     if state == "down":
         for asic in asic_list:
             click.echo("Stop swss@{} and peer services".format(asic))
-            clicommon.run_command('sudo systemctl stop swss@{}.service'.format(asic))
+            clicommon.run_command(['sudo', 'systemctl', 'stop', 'swss@{}.service'.format(asic)])
 
         is_active = subprocess.call(["systemctl", "is-active", "--quiet", "swss@{}.service".format(asic)])
 
@@ -89,13 +89,13 @@ def fabric_module_set_admin_status(db, chassis_module_name, state):
         # without bring down the hardware
         for asic in asic_list:
             # To address systemd service restart limit by resetting the count
-            clicommon.run_command('sudo systemctl reset-failed swss@{}.service'.format(asic))
+            clicommon.run_command(['sudo', 'systemctl', 'reset-failed', 'swss@{}.service'.format(asic)])
             click.echo("Start swss@{} and peer services".format(asic))
-            clicommon.run_command('sudo systemctl start swss@{}.service'.format(asic))
+            clicommon.run_command(['sudo', 'systemctl', 'start', 'swss@{}.service'.format(asic)])
     elif state == "up":
         for asic in asic_list:
             click.echo("Start swss@{} and peer services".format(asic))
-            clicommon.run_command('sudo systemctl start swss@{}.service'.format(asic))
+            clicommon.run_command(['sudo', 'systemctl', 'start', 'swss@{}.service'.format(asic)])
 
 #
 # 'shutdown' subcommand ('config chassis_modules shutdown ...')
