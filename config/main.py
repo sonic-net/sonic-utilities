@@ -42,6 +42,7 @@ from utilities_common.helper import get_port_pbh_binding, get_port_acl_binding, 
 from utilities_common.general import load_db_config, load_module_from_source
 from .validated_config_db_connector import ValidatedConfigDBConnector
 import utilities_common.multi_asic as multi_asic_util
+from utilities_common.flock import try_lock
 
 from .utils import log
 
@@ -123,6 +124,12 @@ TTL_RANGE = click.IntRange(min=0, max=255)
 QUEUE_RANGE = click.IntRange(min=0, max=255)
 GRE_TYPE_RANGE = click.IntRange(min=0, max=65535)
 ADHOC_VALIDATION = True
+
+if os.environ.get("UTILITIES_UNIT_TESTING", "0") in ("1", "2"):
+    temp_system_reload_lockfile = tempfile.NamedTemporaryFile()
+    SYSTEM_RELOAD_LOCK = temp_system_reload_lockfile.name
+else:
+    SYSTEM_RELOAD_LOCK = "/etc/sonic/reload.lock"
 
 # Load sonic-cfggen from source since /usr/local/bin/sonic-cfggen does not have .py extension.
 sonic_cfggen = load_module_from_source('sonic_cfggen', '/usr/local/bin/sonic-cfggen')
@@ -1753,9 +1760,11 @@ def list_checkpoints(ctx, verbose):
 @click.option('-n', '--no_service_restart', default=False, is_flag=True, help='Do not restart docker services')
 @click.option('-f', '--force', default=False, is_flag=True, help='Force config reload without system checks')
 @click.option('-t', '--file_format', default='config_db',type=click.Choice(['config_yang', 'config_db']),show_default=True,help='specify the file format')
+@click.option('-b', '--bypass-lock', default=False, is_flag=True, help='Do reload without acquiring lock')
 @click.argument('filename', required=False)
 @clicommon.pass_db
-def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_format):
+@try_lock(SYSTEM_RELOAD_LOCK, timeout=0)
+def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_format, bypass_lock):
     """Clear current configuration and import a previous saved config DB dump file.
        <filename> : Names of configuration file(s) to load, separated by comma with no spaces in between
     """
@@ -1968,8 +1977,10 @@ def load_mgmt_config(filename):
 @click.option('-t', '--traffic_shift_away', default=False, is_flag=True, help='Keep device in maintenance with TSA')
 @click.option('-o', '--override_config', default=False, is_flag=True, help='Enable config override. Proceed with default path.')
 @click.option('-p', '--golden_config_path', help='Provide golden config path to override. Use with --override_config')
+@click.option('-b', '--bypass-lock', default=False, is_flag=True, help='Do load minigraph without acquiring lock')
 @clicommon.pass_db
-def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, golden_config_path):
+@try_lock(SYSTEM_RELOAD_LOCK, timeout=0)
+def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, golden_config_path, bypass_lock):
     """Reconfigure based on minigraph."""
     argv_str = ' '.join(['config', *sys.argv[1:]])
     log.log_notice(f"'load_minigraph' executing with command: {argv_str}")
