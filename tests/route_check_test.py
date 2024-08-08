@@ -252,11 +252,8 @@ class TestRouteCheck(object):
 
     def mock_check_output(self, ct_data, *args, **kwargs):
         ns = self.extract_namespace_from_args(args[0])
-        if 'show runningconfiguration bgp' in ' '.join(args[0]):
-            return 'bgp suppress-fib-pending'
-        else:
-            routes = ct_data.get(FRR_ROUTES, {}).get(ns, {})
-            return json.dumps(routes)
+        routes = ct_data.get(FRR_ROUTES, {}).get(ns, {})
+        return json.dumps(routes)
 
     def assert_results(self, ct_data, ret, res):
         expect_ret = ct_data.get(RET, 0)
