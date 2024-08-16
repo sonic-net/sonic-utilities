@@ -239,7 +239,8 @@ class ConfigWrapper:
             for port in port_to_lanes_map:
                 lanes = port_to_lanes_map[port]
                 for lane in lanes:
-                    if lane in existing:
+                    # default lane would be 0, it does not need validate duplication.
+                    if lane in existing and lane != '0':
                         return False, f"'{lane}' lane is used multiple times in PORT: {set([port, existing[lane]])}"
                     existing[lane] = port
         return True, None
