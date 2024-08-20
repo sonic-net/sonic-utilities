@@ -11,6 +11,7 @@ from unittest import mock
 import select
 import socket
 import termios
+import getpass
 
 MULTI_LC_REXEC_OUTPUT = '''======== LINE-CARD0|sonic-lc1 output: ========
 hello world
@@ -75,17 +76,27 @@ def mock_paramiko_connection(channel):
     return conn
 
 
+def mock_getpass(prompt="Password:", stream=None):
+    return "dummy"
+
+
 class TestRemoteExec(object):
+    __getpass = getpass.getpass
+
     @classmethod
     def setup_class(cls):
         print("SETUP")
         from .mock_tables import dbconnector
         dbconnector.load_database_config()
+        getpass.getpass = mock_getpass
+
+    @classmethod
+    def teardown_class(cls):
+        print("TEARDOWN")
+        getpass.getpass = TestRemoteExec.__getpass
 
     @mock.patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=True))
     @mock.patch("os.getlogin", mock.MagicMock(return_value="admin"))
-    @mock.patch("rcli.utils.get_password", mock.MagicMock(return_value="dummy"))
-    # @mock.patch.object(linecard.Linecard, '_get_password', mock.MagicMock(return_value='dummmy'))
     @mock.patch.object(paramiko.SSHClient, 'connect', mock.MagicMock())
     @mock.patch.object(paramiko.SSHClient, 'exec_command', mock.MagicMock(return_value=mock_exec_command()))
     def test_rexec_with_module_name(self):
@@ -98,7 +109,6 @@ class TestRemoteExec(object):
 
     @mock.patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=True))
     @mock.patch("os.getlogin", mock.MagicMock(return_value="admin"))
-    @mock.patch("rcli.utils.get_password", mock.MagicMock(return_value="dummy"))
     @mock.patch.object(paramiko.SSHClient, 'connect', mock.MagicMock())
     @mock.patch.object(paramiko.SSHClient, 'exec_command', mock.MagicMock(return_value=mock_exec_command()))
     def test_rexec_with_hostname(self):
@@ -111,7 +121,6 @@ class TestRemoteExec(object):
 
     @mock.patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=True))
     @mock.patch("os.getlogin", mock.MagicMock(return_value="admin"))
-    @mock.patch("rcli.utils.get_password", mock.MagicMock(return_value="dummy"))
     @mock.patch.object(paramiko.SSHClient, 'connect', mock.MagicMock())
     @mock.patch.object(paramiko.SSHClient, 'exec_command', mock.MagicMock(return_value=mock_exec_error_cmd()))
     def test_rexec_error_with_module_name(self):
@@ -133,7 +142,6 @@ class TestRemoteExec(object):
 
     @mock.patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=True))
     @mock.patch("os.getlogin", mock.MagicMock(return_value="admin"))
-    @mock.patch("rcli.utils.get_password", mock.MagicMock(return_value="dummy"))
     @mock.patch.object(paramiko.SSHClient, 'connect', mock.MagicMock())
     @mock.patch.object(linecard.Linecard, 'execute_cmd', mock.MagicMock(return_value="hello world"))
     def test_rexec_all(self):
@@ -147,7 +155,6 @@ class TestRemoteExec(object):
 
     @mock.patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=True))
     @mock.patch("os.getlogin", mock.MagicMock(return_value="admin"))
-    @mock.patch("rcli.utils.get_password", mock.MagicMock(return_value="dummy"))
     @mock.patch.object(paramiko.SSHClient, 'connect', mock.MagicMock())
     @mock.patch.object(linecard.Linecard, 'execute_cmd', mock.MagicMock(return_value="hello world"))
     def test_rexec_invalid_lc(self):
@@ -161,7 +168,6 @@ class TestRemoteExec(object):
 
     @mock.patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=True))
     @mock.patch("os.getlogin", mock.MagicMock(return_value="admin"))
-    @mock.patch("rcli.utils.get_password", mock.MagicMock(return_value="dummy"))
     @mock.patch.object(paramiko.SSHClient, 'connect', mock.MagicMock())
     @mock.patch.object(linecard.Linecard, 'execute_cmd', mock.MagicMock(return_value="hello world"))
     def test_rexec_unreachable_lc(self):
@@ -175,7 +181,6 @@ class TestRemoteExec(object):
 
     @mock.patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=True))
     @mock.patch("os.getlogin", mock.MagicMock(return_value="admin"))
-    @mock.patch("rcli.utils.get_password", mock.MagicMock(return_value="dummy"))
     @mock.patch.object(paramiko.SSHClient, 'connect', mock.MagicMock())
     @mock.patch.object(linecard.Linecard, 'execute_cmd', mock.MagicMock(return_value="hello world"))
     def test_rexec_help(self):
@@ -188,7 +193,6 @@ class TestRemoteExec(object):
 
     @mock.patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=True))
     @mock.patch("os.getlogin", mock.MagicMock(return_value="admin"))
-    @mock.patch("rcli.utils.get_password", mock.MagicMock(return_value="dummy"))
     @mock.patch.object(paramiko.SSHClient, 'connect', mock.MagicMock(side_effect=paramiko.ssh_exception.NoValidConnectionsError({('192.168.0.1',
                                                                                                                                   22): "None"})))
     @mock.patch.object(linecard.Linecard, 'execute_cmd', mock.MagicMock(return_value="hello world"))
@@ -202,7 +206,6 @@ class TestRemoteExec(object):
         assert "Failed to connect to sonic-lc1 with username admin\n" == result.output
 
     @mock.patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=True))
-    @mock.patch("rcli.utils.get_password", mock.MagicMock(return_value="dummy"))
     @mock.patch.object(paramiko.SSHClient, 'connect', mock.MagicMock(side_effect=paramiko.ssh_exception.NoValidConnectionsError({('192.168.0.1',
                                                                                                                                   22): "None"})))
     def test_rexec_with_user_param(self):
@@ -213,6 +216,19 @@ class TestRemoteExec(object):
         print(result.output)
         assert result.exit_code == 1, result.output
         assert "Failed to connect to sonic-lc1 with username testuser\n" == result.output
+
+    @mock.patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=True))
+    @mock.patch("os.getlogin", mock.MagicMock(return_value="admin"))
+    def test_rexec_without_password_input(self):
+        runner = CliRunner()
+        getpass.getpass = TestRemoteExec.__getpass
+        LINECARD_NAME = "all"
+        result = runner.invoke(
+            rexec.cli, [LINECARD_NAME, "-c", "show version"])
+        getpass.getpass = mock_getpass
+        print(result.output)
+        assert result.exit_code == 1, result.output
+        assert "Aborted" in result.output
 
 
 class TestRemoteCLI(object):
