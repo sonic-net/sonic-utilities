@@ -303,5 +303,28 @@
     "SYSLOG_CONFIG_FEATURE|database": {
         "rate_limit_interval": "222",
         "rate_limit_burst": "22222"
+    },
+    "WRED_PROFILE|AZURE_LOSSLESS": {
+        "red_max_threshold": "2097152",
+        "ecn": "ecn_all",
+        "green_min_threshold": "1048576",
+        "red_min_threshold": "1048576",
+        "yellow_min_threshold": "1048576",
+        "green_max_threshold": "2097152",
+        "green_drop_probability": "5",
+        "yellow_max_threshold": "2097152",
+        "yellow_drop_probability": "5",
+        "red_drop_probability": "5"
+    },
+    "DEVICE_NEIGHBOR|Ethernet4": {
+        "name": "Serverss0",
+        "port": "eth0"
+    },
+    "QUEUE|Ethernet4|0": {
+        "scheduler": "[SCHEDULAR|scheduler.0]"
+    },
+    "QUEUE|Ethernet4|1": {
+        "scheduler": "[SCHEDULAR|scheduler.0]",
+        "wred_profile": "AZURE_LOSSLESS"
     }
 }

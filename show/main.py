@@ -2008,10 +2008,13 @@ def policer(policer_name, verbose):
 # 'ecn' command ("show ecn")
 #
 @cli.command('ecn')
+@multi_asic_util.multi_asic_click_option_namespace
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def ecn(verbose):
+def ecn(namespace, verbose):
     """Show ECN configuration"""
     cmd = ['ecnconfig', '-l']
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
     run_command(cmd, display_cmd=verbose)
 
 
