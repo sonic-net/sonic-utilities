@@ -186,6 +186,14 @@ class InterfaceAliasConverter(object):
         # interface_alias not in port_dict. Just return interface_alias
         return interface_alias if sub_intf_sep_idx == -1 else interface_alias + VLAN_SUB_INTERFACE_SEPARATOR + vlan_id
 
+    def iface_naming_mode_alias_to_name(self, interface_alias):
+        """Return interface name if can find the interface name by alias
+           Return none if can't find the interface name by alias
+        """
+        for port_name in self.port_dict:
+            if interface_alias == self.port_dict[port_name]['alias']:
+                return port_name
+        return None
 
 # Lazy global class instance for SONiC interface name to alias conversion
 iface_alias_converter = lazy_object_proxy.Proxy(lambda: InterfaceAliasConverter())
