@@ -179,14 +179,10 @@ def server_validator(ctx, db, ip_addr, is_exist=True):
     """
     if is_exist:
         if not is_exist_in_db(db, str(SYSLOG_TABLE_CDB), str(ip_addr)):
-            raise click.UsageError("Invalid value for {}: {} is not a valid syslog server".format(
-                get_param_hint(ctx, "server_ip_address"), ip_addr), ctx
-            )
+            raise click.UsageError("Syslog server {} is not configured.".format(str(ip_addr)))
     else:
         if is_exist_in_db(db, str(SYSLOG_TABLE_CDB), str(ip_addr)):
-            raise click.UsageError("Invalid value for {}: {} is a valid syslog server".format(
-                get_param_hint(ctx, "server_ip_address"), ip_addr), ctx
-            )
+            raise click.UsageError("Syslog server {} is already configured.".format(str(ip_addr)))
 
 
 def ip_addr_validator(ctx, param, value):
