@@ -118,3 +118,12 @@ def format_util(brate, port_rate):
         util = brate/(float(port_rate)*1000*1000/8.0)*100
         return "{:.2f}%".format(util)
 
+
+def format_util_directly(util):
+    """
+        Format the util without calculation.
+    """
+    if util == STATUS_NA:
+        return STATUS_NA
+    else:
+        return "{:.2f}%".format(float(util))
