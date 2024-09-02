@@ -2159,6 +2159,17 @@ def peer(db, peer_ip):
     click.echo(tabulate(bfd_body, bfd_headers))
 
 
+# 'suppress-fib-pending' subcommand ("show suppress-fib-pending")
+@cli.command('suppress-fib-pending')
+@clicommon.pass_db
+def suppress_pending_fib(db):
+    """ Show the status of suppress pending FIB feature """
+
+    field_values = db.cfgdb.get_entry('DEVICE_METADATA', 'localhost')
+    state = field_values.get('suppress-fib-pending', 'disabled').title()
+    click.echo(state)
+
+
 # asic-sdk-health-event subcommand ("show asic-sdk-health-event")
 @cli.group(cls=clicommon.AliasedGroup)
 def asic_sdk_health_event():
