@@ -93,7 +93,7 @@ class ManifestSchema:
                         raise ManifestError(f'{value} has items not of type {self.type.__name__}')
                 return value
             elif isinstance(value, self.type):
-                return [value]
+                return [] if not value else [value]
             else:
                 raise ManifestError(f'{value} is not of type {self.type.__name__}')
 
