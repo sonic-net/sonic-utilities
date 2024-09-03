@@ -3141,7 +3141,7 @@ def reload(ctx, no_dynamic_buffer, no_delay, dry_run, json_data, ports, verbose)
 
     _, hwsku_path = device_info.get_paths_to_platform_and_hwsku_dirs()
     sonic_version_file = device_info.get_sonic_version_file()
-    from_db = ['-d', '--write-to-db']
+    from_db = ['-d']
     if dry_run:
         from_db = ['--additional-data'] + [str(json_data)] if json_data else []
 
@@ -3187,11 +3187,27 @@ def reload(ctx, no_dynamic_buffer, no_delay, dry_run, json_data, ports, verbose)
             )
             if os.path.isfile(qos_template_file):
                 cmd_ns = [] if ns is DEFAULT_NAMESPACE else ['-n', str(ns)]
-                fname = "{}{}".format(dry_run, asic_id_suffix) if dry_run else "config-db"
-                command = [SONIC_CFGGEN_PATH] + cmd_ns + from_db + ['-t', '{},{}'.format(buffer_template_file, fname), '-t', '{},{}'.format(qos_template_file, fname), '-y', sonic_version_file]
-                # Apply the configurations only when both buffer and qos
-                # configuration files are present
+                buffer_fname = "/tmp/cfg_buffer{}.json".format(asic_id_suffix)
+                qos_fname = "/tmp/cfg_qos{}.json".format(asic_id_suffix)
+
+                command = [SONIC_CFGGEN_PATH] + cmd_ns + from_db + [
+                    '-t', '{},{}'.format(buffer_template_file, buffer_fname),
+                    '-t', '{},{}'.format(qos_template_file, qos_fname),
+                    '-y', sonic_version_file
+                ]
                 clicommon.run_command(command, display_cmd=True)
+
+                command = [SONIC_CFGGEN_PATH] + cmd_ns + ["-j", buffer_fname, "-j", qos_fname]
+                if dry_run:
+                    out, rc = clicommon.run_command(command + ["--print-data"], display_cmd=True, return_cmd=True)
+                    if rc != 0:
+                        # clicommon.run_command does this by default when rc != 0 and return_cmd=False
+                        sys.exit(rc)
+                    with open("{}{}".format(dry_run, asic_id_suffix), 'w') as f:
+                        json.dump(json.loads(out), f, sort_keys=True, indent=4)
+                else:
+                    clicommon.run_command(command + ["--write-to-db"], display_cmd=True)
+
             else:
                 click.secho("QoS definition template not found at {}".format(
                     qos_template_file
