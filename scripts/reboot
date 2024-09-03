@@ -111,7 +111,7 @@ function reboot_pre_check()
 
 function parse_options()
 {
-    while getopts "h?v" opt; do
+    while getopts "h?vf" opt; do
         case ${opt} in
             h|\? )
                 show_help_and_exit
