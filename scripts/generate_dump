@@ -1209,6 +1209,16 @@ collect_mellanox() {
     local timeout_cmd="timeout --foreground ${TIMEOUT_MIN}m"
     local sai_dump_folder="/tmp/saisdkdump"
     local sai_dump_filename="${sai_dump_folder}/sai_sdk_dump_$(date +"%m_%d_%Y_%I_%M_%p")"
+    local platform=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_platform())")
+    local platform_folder="/usr/share/sonic/device/${platform}"
+    local hwsku=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_hwsku())")
+    local sku_folder="/usr/share/sonic/device/${platform}/${hwsku}"
+    local cmis_host_mgmt_files=(
+        "/tmp/nv-syncd-shared/sai.profile"
+        "${sku_folder}/pmon_daemon_control.json"
+        "${sku_folder}/media_settings.json"
+        "${sku_folder}/optics_si_settings.json"
+    )
 
     if [[ "$( docker container inspect -f '{{.State.Running}}' syncd )" == "true" ]]; then
         if [[ x"$(sonic-db-cli APPL_DB EXISTS PORT_TABLE:PortInitDone)" == x"1" ]]; then
@@ -1251,6 +1261,21 @@ collect_mellanox() {
     fi
 
     save_cmd "get_component_versions.py" "component_versions"
+
+    # Save CMIS-host-management related files
+    local cmis_host_mgmt_path="cmis-host-mgmt"
+
+    for file in "${cmis_host_mgmt_files[@]}"; do
+        if [[ -f "${file}" ]]; then
+            ${CMD_PREFIX}save_file "${file}" "$cmis_host_mgmt_path" false true
+        fi
+    done
+
+    if [[ ! -f "${sku_folder}/pmon_daemon_control.json" && -f "${platform_folder}/pmon_daemon_control.json" ]]; then
+        ${CMD_PREFIX}save_file "${platform_folder}/pmon_daemon_control.json" "$cmis_host_mgmt_path" false true
+    fi
+
+    save_cmd "show interfaces autoneg status" "autoneg.status"
 }
 
 ###############################################################################
