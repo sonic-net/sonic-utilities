@@ -17,6 +17,7 @@ import time
 import itertools
 import copy
 import tempfile
+import sonic_yang
 
 from jsonpatch import JsonPatchConflict
 from jsonpointer import JsonPointerException
@@ -59,7 +60,7 @@ from . import nat
 from . import vlan
 from . import vxlan
 from . import plugins
-from .config_mgmt import ConfigMgmtDPB, ConfigMgmt
+from .config_mgmt import ConfigMgmtDPB, ConfigMgmt, YANG_DIR
 from . import mclag
 from . import syslog
 from . import switchport
@@ -1994,8 +1995,22 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
                         fg='magenta')
             raise click.Abort()
 
-        # Dependency check golden config json
         config_to_check = read_json_file(golden_config_path)
+        if multi_asic.is_multi_asic():
+            # Multiasic has not 100% fully validated. Thus pass here.
+            pass
+        else:
+            sy = sonic_yang.SonicYang(YANG_DIR)
+            sy.loadYangModel()
+            try:
+                sy.loadData(configdbJson=config_to_check)
+                sy.validate_data_tree()
+            except sonic_yang.SonicYangException as e:
+                click.secho("{} fails YANG validation! Error: {}".format(golden_config_path, str(e)),
+                            fg='magenta')
+                raise click.Abort()
+
+        # Dependency check golden config json
         if multi_asic.is_multi_asic():
             host_config = config_to_check.get('localhost', {})
         else:
@@ -2322,7 +2337,7 @@ def aaa_table_hard_dependency_check(config_json):
     tacacs_enable = "tacacs+" in aaa_authentication_login.split(",")
     tacplus_passkey = TACPLUS_TABLE.get("global", {}).get("passkey", "")
     if tacacs_enable and len(tacplus_passkey) == 0:
-        click.secho("Authentication with 'tacacs+' is not allowed when passkey not exits.", fg="magenta")
+        click.secho("Authentication with 'tacacs+' is not allowed when passkey not exists.", fg="magenta")
         sys.exit(1)
 
 
