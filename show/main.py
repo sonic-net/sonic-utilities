@@ -647,7 +647,8 @@ def counters(namespace, display, verbose):
 
 @pfc.command()
 @click.argument('interface', type=click.STRING, required=False)
-def priority(interface):
+@multi_asic_util.multi_asic_click_option_namespace
+def priority(interface, namespace):
     """Show pfc priority"""
     cmd = ['pfc', 'show', 'priority']
     if interface is not None and clicommon.get_interface_naming_mode() == "alias":
@@ -655,12 +656,15 @@ def priority(interface):
 
     if interface is not None:
         cmd += [str(interface)]
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
 
     run_command(cmd)
 
 @pfc.command()
 @click.argument('interface', type=click.STRING, required=False)
-def asymmetric(interface):
+@multi_asic_util.multi_asic_click_option_namespace
+def asymmetric(interface, namespace):
     """Show asymmetric pfc"""
     cmd = ['pfc', 'show', 'asymmetric']
     if interface is not None and clicommon.get_interface_naming_mode() == "alias":
@@ -668,6 +672,8 @@ def asymmetric(interface):
 
     if interface is not None:
         cmd += [str(interface)]
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
 
     run_command(cmd)
 
