@@ -6470,13 +6470,26 @@ def ecn(profile, rmax, rmin, ymax, ymin, gmax, gmin, rdrop, ydrop, gdrop, verbos
 @config.command()
 @click.option('-p', metavar='<profile_name>', type=str, required=True, help="Profile name")
 @click.option('-a', metavar='<alpha>', type=click.IntRange(-8,8), help="Set alpha for profile type dynamic")
-@click.option('-s', metavar='<staticth>', type=int, help="Set staticth for profile type static")
-def mmu(p, a, s):
+@click.option('-s', metavar='<staticth>', type=click.IntRange(min=0), help="Set staticth for profile type static")
+@click.option('--verbose', '-vv', is_flag=True, help="Enable verbose output")
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def mmu(p, a, s, namespace, verbose):
     """mmuconfig configuration tasks"""
     log.log_info("'mmuconfig -p {}' executing...".format(p))
     command = ['mmuconfig', '-p', str(p)]
     if a is not None: command += ['-a', str(a)]
     if s is not None: command += ['-s', str(s)]
+    if namespace is not None:
+        command += ['-n', str(namespace)]
+    if verbose:
+        command += ['-vv']
     clicommon.run_command(command)
 
 

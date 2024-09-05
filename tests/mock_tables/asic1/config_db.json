@@ -262,5 +262,40 @@
     },
     "QUEUE|Ethernet0|1": {
         "scheduler": "[SCHEDULAR|scheduler.0]"
+    },
+    "BUFFER_POOL|ingress_lossless_pool": {
+        "mode": "dynamic",
+        "type": "ingress"
+    },
+    "BUFFER_PROFILE|alpha_profile": {
+        "dynamic_th": "0",
+        "pool": "ingress_lossless_pool",
+        "headroom_type": "dynamic"
+    },
+    "BUFFER_PROFILE|headroom_profile": {
+        "dynamic_th": "0",
+        "pool": "ingress_lossless_pool",
+        "xon": "18432",
+        "xoff": "32768",
+        "size": "51200"
+    },
+    "BUFFER_POOL|egress_lossless_pool": {
+        "mode": "dynamic",
+        "size": "13945824",
+        "type": "egress"
+    },
+    "BUFFER_PROFILE|egress_lossless_profile": {
+        "dynamic_th": "0",
+        "pool": "egress_lossless_pool",
+        "size": "0"
+    },
+    "BUFFER_POOL|egress_lossy_pool": {
+        "mode": "dynamic",
+        "type": "egress"
+    },
+    "BUFFER_PROFILE|egress_lossy_profile": {
+        "dynamic_th": "0",
+        "pool": "egress_lossy_pool",
+        "size": "0"
     }
 }

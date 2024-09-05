@@ -291,7 +291,6 @@ def cli(ctx):
     load_db_config()
     ctx.obj = Db()
 
-
 # Add groups from other modules
 cli.add_command(acl.acl)
 cli.add_command(chassis_modules.chassis)
@@ -2033,9 +2032,22 @@ def boot():
 # 'mmu' command ("show mmu")
 #
 @cli.command('mmu')
-def mmu():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+@click.option('--verbose', '-vv', is_flag=True, help="Enable verbose output")
+def mmu(namespace, verbose):
     """Show mmu configuration"""
     cmd = ['mmuconfig', '-l']
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
+    if verbose:
+        cmd += ['-vv']
     run_command(cmd)
 
 #
@@ -2049,10 +2061,25 @@ def buffer():
 #
 # 'configuration' command ("show buffer command")
 #
+
+
 @buffer.command()
-def configuration():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+@click.option('--verbose', '-vv', is_flag=True, help="Enable verbose output")
+def configuration(namespace, verbose):
     """show buffer configuration"""
     cmd = ['mmuconfig', '-l']
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
+    if verbose:
+        cmd += ['-vv']
     run_command(cmd)
 
 #
