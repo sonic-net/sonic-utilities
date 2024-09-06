@@ -72,6 +72,7 @@ from . import bgp_cli
 PLATFORM_JSON = 'platform.json'
 HWSKU_JSON = 'hwsku.json'
 PORT_STR = "Ethernet"
+BMP_STATE_DB = 'BMP_STATE_DB'
 
 VLAN_SUB_INTERFACE_SEPARATOR = '.'
 
@@ -2126,6 +2127,138 @@ def ztp(status, verbose):
     if verbose:
        cmd += ["--verbose"]
     run_command(cmd, display_cmd=verbose)
+
+
+#
+# 'bmp' group ("show bmp ...")
+#
+@cli.group(cls=clicommon.AliasedGroup)
+def bmp():
+    """Show details of the bmp dataset"""
+    pass
+
+
+# 'bgp-neighbor-table' subcommand ("show bmp bgp-neighbor-table")
+@bmp.command('bgp-neighbor-table')
+@clicommon.pass_db
+def bmp_neighbor_table(db):
+    """Show bmp bgp-neighbor-table information"""
+    bmp_headers = ["Neighbor_Address", "Peer_Address", "Peer_ASN", "Peer_RD", "Peer_Port",
+                   "Local_Address", "Local_ASN", "Local_Port", "Advertised_Capabilities", "Received_Capabilities"]
+
+    # BGP_NEIGHBOR_TABLE|10.0.1.2
+    bmp_keys = db.db.keys(BMP_STATE_DB, "BGP_NEIGHBOR_TABLE|*")
+
+    click.echo("Total number of bmp neighbors: {}".format(0 if bmp_keys is None else len(bmp_keys)))
+
+    bmp_body = []
+    if bmp_keys is not None:
+        for key in bmp_keys:
+            values = db.db.get_all(BMP_STATE_DB, key)
+            bmp_body.append([
+                values["peer_addr"],  # Neighbor_Address
+                values["peer_addr"],
+                values["peer_asn"],
+                values["peer_rd"],
+                values["peer_port"],
+                values["local_addr"],
+                values["local_asn"],
+                values["local_port"],
+                values["sent_cap"],
+                values["recv_cap"]
+            ])
+
+    click.echo(tabulate(bmp_body, bmp_headers))
+
+
+# 'bmp-rib-out-table' subcommand ("show bmp bgp-rib-out-table")
+@bmp.command('bgp-rib-out-table')
+@clicommon.pass_db
+def bmp_rib_out_table(db):
+    """Show bmp bgp-rib-out-table information"""
+    bmp_headers = ["Neighbor_Address", "NLRI", "Origin", "AS_Path", "Origin_AS", "Next_Hop", "Local_Pref",
+                   "Originator_ID",  "Community_List", "Ext_Community_List"]
+
+    # BGP_RIB_OUT_TABLE|192.181.168.0/25|10.0.0.59
+    bmp_keys = db.db.keys(BMP_STATE_DB, "BGP_RIB_OUT_TABLE|*")
+    delimiter = db.db.get_db_separator(BMP_STATE_DB)
+
+    click.echo("Total number of bmp bgp-rib-out-table: {}".format(0 if bmp_keys is None else len(bmp_keys)))
+
+    bmp_body = []
+    if bmp_keys is not None:
+        for key in bmp_keys:
+            key_values = key.split(delimiter)
+            if len(key_values) < 3:
+                continue
+            values = db.db.get_all(BMP_STATE_DB, key)
+            bmp_body.append([
+                key_values[2],  # Neighbor_Address
+                key_values[1],  # NLRI
+                values["origin"],
+                values["as_path"],
+                values["origin_as"],
+                values["next_hop"],
+                values["local_pref"],
+                values["originator_id"],
+                values["community_list"],
+                values["ext_community_list"]
+            ])
+
+    click.echo(tabulate(bmp_body, bmp_headers))
+
+
+# 'bgp-rib-in-table' subcommand ("show bmp bgp-rib-in-table")
+@bmp.command('bgp-rib-in-table')
+@clicommon.pass_db
+def bmp_rib_in_table(db):
+    """Show bmp bgp-rib-in-table information"""
+    bmp_headers = ["Neighbor_Address", "NLRI", "Origin", "AS_Path", "Origin_AS", "Next_Hop", "Local_Pref",
+                   "Originator_ID",  "Community_List", "Ext_Community_List"]
+
+    # BGP_RIB_IN_TABLE|20c0:ef50::/64|10.0.0.57
+    bmp_keys = db.db.keys(BMP_STATE_DB, "BGP_RIB_IN_TABLE|*")
+    delimiter = db.db.get_db_separator(BMP_STATE_DB)
+
+    click.echo("Total number of bmp bgp-rib-in-table: {}".format(0 if bmp_keys is None else len(bmp_keys)))
+
+    bmp_body = []
+    if bmp_keys is not None:
+        for key in bmp_keys:
+            key_values = key.split(delimiter)
+            if len(key_values) < 3:
+                continue
+            values = db.db.get_all(BMP_STATE_DB, key)
+            bmp_body.append([
+                key_values[2],  # Neighbor_Address
+                key_values[1],  # NLRI
+                values["origin"],
+                values["as_path"],
+                values["origin_as"],
+                values["next_hop"],
+                values["local_pref"],
+                values["originator_id"],
+                values["community_list"],
+                values["ext_community_list"]
+            ])
+
+    click.echo(tabulate(bmp_body, bmp_headers))
+
+
+# 'tables' subcommand ("show bmp tables")
+@bmp.command('tables')
+@clicommon.pass_db
+def tables(db):
+    """Show bmp table status information"""
+    bmp_headers = ["Table_Name", "Enabled"]
+    bmp_body = []
+    click.echo("BMP tables: ")
+    bmp_keys = db.cfgdb.get_table('BMP')
+    if bmp_keys['table']:
+        bmp_body.append(['bgp_neighbor_table', bmp_keys['table']['bgp_neighbor_table']])
+        bmp_body.append(['bgp_rib_in_table', bmp_keys['table']['bgp_rib_in_table']])
+        bmp_body.append(['bgp_rib_out_table', bmp_keys['table']['bgp_rib_out_table']])
+    click.echo(tabulate(bmp_body, bmp_headers))
 
 
 #
