@@ -1,10 +1,11 @@
 import os
 from importlib import reload
-
 import pytest
+
 
 from . import show_ip_route_common
 from click.testing import CliRunner
+
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
 scripts_path = os.path.join(modules_path, "scripts")

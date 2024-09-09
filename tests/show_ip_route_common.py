@@ -875,3 +875,60 @@ ibgp                 6409                 6409
 Totals               6467                 6466
 
 """
+
+SHOW_IP_ROUTE_REMOTE_LC = """\
+Codes: K - kernel route, C - connected, S - static, R - RIP,
+       O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
+       T - Table, v - VNC, V - VNC-Direct, A - Babel, D - SHARP,
+       F - PBR, f - OpenFabric,
+       > - selected route, * - FIB route, q - queued route, r - rejected route
+
+B> 0.0.0.0/0 [200/0]   via 20.1.24.128, recursive via iBGP 04w0d12h
+                       via 20.1.16.128, recursive via iBGP 04w0d12h
+                       via 20.1.8.128, recursive via iBGP 04w0d12h
+                       via 20.1.0.128, recursive via iBGP 04w0d12h
+"""
+
+SHOW_IP_ROUTE_LC = """\
+Codes: K - kernel route, C - connected, S - static, R - RIP,
+       O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
+       T - Table, v - VNC, V - VNC-Direct, A - Babel, D - SHARP,
+       F - PBR, f - OpenFabric,
+       > - selected route, * - FIB route, q - queued route, r - rejected route
+
+B>*0.0.0.0/0 [20/0] via 20.1.24.128, PortChannel13, 04w0d11h
+  *                 via 20.1.16.128, PortChannel9, 04w0d11h
+  *                 via 20.1.8.128, PortChannel5, 04w0d11h
+  *                 via 20.1.0.128, PortChannel1, 04w0d11h
+"""
+
+SHOW_IP_ROUTE_REMOTE_LC_DEFAULT_ROUTE = """\
+Routing entry for 0.0.0.0/0
+  Known via "bgp", distance 200, metric 0, best
+  Last update 04w0d12h ago
+    * 20.1.24.128 recursive via iBGP
+    * 20.1.16.128 recursive via iBGP
+    * 20.1.8.128 recursive via iBGP
+    * 20.1.0.128 recursive via iBGP
+
+"""
+
+SHOW_IP_ROUTE_LC_DEFAULT_ROUTE = """\
+Routing entry for 0.0.0.0/0
+  Known via "bgp", distance 20, metric 0, best
+  Last update 04w0d11h ago
+  * 20.1.24.128, via PortChannel13
+  * 20.1.16.128, via PortChannel9
+  * 20.1.8.128, via PortChannel5
+  * 20.1.0.128, via PortChannel1
+
+"""
+
+SHOW_IP_ROUTE_LC_DEFAULT_ROUTE_2 = """\
+Routing entry for 0.0.0.0/0
+  Known via "bgp", distance 20, metric 0, best
+  Last update 01:01:51 ago
+  * 10.0.0.7, via PortChannel106
+  * 10.0.0.1, via PortChannel102
+
+"""
