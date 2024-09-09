@@ -1545,7 +1545,7 @@ def ntp(verbose):
     """Show NTP running configuration"""
     ntp_servers = []
     ntp_dict = {}
-    with open("/etc/ntp.conf") as ntp_file:
+    with open("/etc/ntpsec/ntp.conf") as ntp_file:
         data = ntp_file.readlines()
     for line in data:
         if line.startswith("server "):
