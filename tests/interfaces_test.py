@@ -264,6 +264,7 @@ PortChannel1001  trunk               4000
 """
 
 
+
 class TestInterfaces(object):
     @classmethod
     def setup_class(cls):
@@ -339,7 +340,8 @@ class TestInterfaces(object):
 
     def test_show_interfaces_neighbor_expected_t1(self, setup_t1_topo):
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands["interfaces"].commands["neighbor"].commands["expected"], [])
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["neighbor"].commands["expected"], [])
         print(result.exit_code)
         print(result.output)
         # traceback.print_tb(result.exc_info[2])
@@ -358,7 +360,8 @@ class TestInterfaces(object):
 
     def test_show_interfaces_neighbor_expected_t1_Ethernet0(self, setup_t1_topo):
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands["interfaces"].commands["neighbor"].commands["expected"], ["Ethernet0"])
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["neighbor"].commands["expected"], ["Ethernet0"])
         print(result.exit_code)
         print(result.output)
         # traceback.print_tb(result.exc_info[2])
@@ -368,7 +371,8 @@ class TestInterfaces(object):
     def test_show_interfaces_neighbor_expected_etp29(self):
         runner = CliRunner()
         os.environ['SONIC_CLI_IFACE_MODE'] = "alias"
-        result = runner.invoke(show.cli.commands["interfaces"].commands["neighbor"].commands["expected"], ["etp29"])
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["neighbor"].commands["expected"], ["etp29"])
         os.environ['SONIC_CLI_IFACE_MODE'] = "default"
         print(result.exit_code)
         print(result.output)
@@ -443,17 +447,14 @@ class TestInterfaces(object):
         intf_list = parse_interface_in_filter(intf_filter)
         assert len(intf_list) == 1
         assert intf_list[0] == "Ethernet0"
-
         intf_filter = "Ethernet1-3"
         intf_list = parse_interface_in_filter(intf_filter)
         assert len(intf_list) == 3
         assert intf_list == ["Ethernet1", "Ethernet2", "Ethernet3"]
-
         intf_filter = "Ethernet-BP10"
         intf_list = parse_interface_in_filter(intf_filter)
         assert len(intf_list) == 1
         assert intf_list[0] == "Ethernet-BP10"
-
         intf_filter = "Ethernet-BP10-12"
         intf_list = parse_interface_in_filter(intf_filter)
         assert len(intf_list) == 3
@@ -462,17 +463,14 @@ class TestInterfaces(object):
     def test_show_interfaces_switchport_status(self):
         runner = CliRunner()
         db = Db()
-
         result = runner.invoke(
             config.config.commands["switchport"].commands["mode"], ["routed", "PortChannel0001"], obj=db)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-
         result = runner.invoke(show.cli.commands["interfaces"].commands["switchport"].commands["status"])
         print(result.exit_code)
         print(result.output)
-
         assert result.exit_code == 0
         assert result.output == show_interfaces_switchport_status_output
 
@@ -481,7 +479,6 @@ class TestInterfaces(object):
         result = runner.invoke(show.cli.commands["interfaces"].commands["switchport"].commands["config"])
         print(result.exit_code)
         print(result.output)
-
         assert result.exit_code == 0
         assert result.output == show_interfaces_switchport_config_output
 
@@ -492,7 +489,6 @@ class TestInterfaces(object):
         os.environ['SONIC_CLI_IFACE_MODE'] = "default"
         print(result.exit_code)
         print(result.output)
-
         assert result.exit_code == 0
         assert result.output == show_interfaces_switchport_config_in_alias_mode_output
 
