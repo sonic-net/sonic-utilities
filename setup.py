@@ -124,6 +124,7 @@ setup(
         'scripts/dropstat',
         'scripts/dualtor_neighbor_check.py',
         'scripts/dump_nat_entries.py',
+        'scripts/debug_voq_chassis_packet_drops.sh',
         'scripts/ecnconfig',
         'scripts/fabricstat',
         'scripts/fanshow',
