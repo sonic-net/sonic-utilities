@@ -3144,19 +3144,19 @@ This command is the standard CMIS diagnostic control used for troubleshooting li
 
 - Usage:
   ```
-  sfputil debug loopback PORT_NAME LOOPBACK_MODE
+  sfputil debug loopback PORT_NAME LOOPBACK_MODE <enable/disable>
 
-  Set the loopback mode
+  Valid values for loopback mode
   host-side-input: host side input loopback mode
   host-side-output: host side output loopback mode
   media-side-input: media side input loopback mode
   media-side-output: media side output loopback mode
-  none: disable loopback mode
   ```
 
 - Example:
   ```
-  admin@sonic:~$ sfputil debug loopback Ethernet88 host-side-input
+  admin@sonic:~$ sfputil debug loopback Ethernet88 host-side-input enable
+  admin@sonic:~$ sfputil debug loopback Ethernet88 media-side-output disable
   ```
 
 ## DHCP Relay
