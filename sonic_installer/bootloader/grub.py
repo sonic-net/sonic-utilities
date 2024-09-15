@@ -164,7 +164,7 @@ class GrubBootloader(OnieInstallerBootloader):
             if ! [ -n "$(ls -A /sys/firmware/efi/efivars 2>/dev/null)" ]; then
                 mount -t efivarfs none /sys/firmware/efi/efivars 2>/dev/null
             fi
-            SECURE_UPGRADE_ENABLED=$(bootctl status 2>/dev/null | grep -c "Secure Boot: enabled")
+            SECURE_UPGRADE_ENABLED=$(mokutil --sb-state 2>/dev/null | grep -c "enabled")
         else
             echo "efi not supported - exiting without verification"
             exit 1
