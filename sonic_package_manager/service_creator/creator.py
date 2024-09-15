@@ -31,7 +31,6 @@ from sonic_package_manager.service_creator.utils import in_chroot
 
 
 SERVICE_FILE_TEMPLATE = 'sonic.service.j2'
-TIMER_UNIT_TEMPLATE = 'timer.unit.j2'
 
 SYSTEMD_LOCATION = '/usr/lib/systemd/system'
 ETC_SYSTEMD_LOCATION = '/etc/systemd/system'
@@ -305,7 +304,7 @@ class ServiceCreator:
         log.info(f'generated {script_path}')
 
     def generate_systemd_service(self, package: Package):
-        """ Generates systemd service(s) file and timer(s) (if needed) for package.
+        """ Generates systemd service(s) file for package.
 
         Args:
             package: Package object to generate service for.
@@ -332,23 +331,6 @@ class ServiceCreator:
             template_vars['multi_instance'] = True
             render_template(template, output_file, template_vars)
             log.info(f'generated {output_file}')
-
-        if package.manifest['service']['delayed']:
-            template_vars = {
-                'source': get_tmpl_path(TIMER_UNIT_TEMPLATE),
-                'manifest': package.manifest.unmarshal(),
-                'multi_instance': False,
-            }
-            output_file = os.path.join(SYSTEMD_LOCATION, f'{name}.timer')
-            template = os.path.join(TEMPLATES_PATH, TIMER_UNIT_TEMPLATE)
-            render_template(template, output_file, template_vars)
-            log.info(f'generated {output_file}')
-
-            if package.manifest['service']['asic-service']:
-                output_file = os.path.join(SYSTEMD_LOCATION, f'{name}@.timer')
-                template_vars['multi_instance'] = True
-                render_template(template, output_file, template_vars)
-                log.info(f'generated {output_file}')
 
     def update_generated_services_conf_file(self, package: Package, remove=False):
         """ Updates generated_services.conf file.
