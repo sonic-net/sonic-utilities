@@ -2433,6 +2433,46 @@ def received(db, namespace):
         ctx.fail("ASIC/SDK health event is not supported on the platform")
 
 
+#
+# 'serial_console' command group ("show serial_console ...")
+#
+@cli.group('serial_console', invoke_without_command=True)
+@clicommon.pass_db
+def serial_console(db):
+    """Show serial_console configuration"""
+
+    serial_console_table = db.cfgdb.get_entry('SERIAL_CONSOLE', 'POLICIES')
+
+    hdrs = ['inactivity-timeout', 'sysrq-capabilities']
+    data = []
+
+    data.append(serial_console_table.get('inactivity_timeout', '900 <default>'))
+    data.append(serial_console_table.get('sysrq_capabilities', 'disabled <default>'))
+
+    configuration = [data]
+    click.echo(tabulate(configuration, headers=hdrs, tablefmt='simple', missingval=''))
+
+
+#
+# 'ssh' command group ("show ssh ...")
+#
+@cli.group('ssh', invoke_without_command=True)
+@clicommon.pass_db
+def ssh(db):
+    """Show ssh configuration"""
+
+    serial_console_table = db.cfgdb.get_entry('SSH_SERVER', 'POLICIES')
+
+    hdrs = ['inactivity-timeout', 'max-sessions']
+    data = []
+
+    data.append(serial_console_table.get('inactivity_timeout', '900 <default>'))
+    data.append(serial_console_table.get('max_session', '0 <default>'))
+
+    configuration = [data]
+    click.echo(tabulate(configuration, headers=hdrs, tablefmt='simple', missingval=''))
+
+
 # Load plugins and register them
 helper = util_base.UtilHelper()
 helper.load_and_register_plugins(plugins, cli)

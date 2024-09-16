@@ -7987,5 +7987,71 @@ def notice(db, category_list, max_events, namespace):
     handle_asic_sdk_health_suppress(db, 'notice', category_list, max_events, namespace)
 
 
+#
+# 'serial_console' group ('config  serial_console')
+#
+@config.group(cls=clicommon.AbbreviationGroup, name='serial_console')
+def serial_console():
+    """Configuring system serial-console behavior"""
+    pass
+
+
+@serial_console.command('sysrq-capabilities')
+@click.argument('sysrq_capabilities', metavar='<enabled|disabled>', required=True,
+                type=click.Choice(['enabled', 'disabled']))
+def sysrq_capabilities(sysrq_capabilities):
+    """Set serial console sysrq-capabilities state"""
+
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    config_db.mod_entry("SERIAL_CONSOLE", 'POLICIES',
+                        {'sysrq_capabilities': sysrq_capabilities})
+
+
+@serial_console.command('inactivity-timeout')
+@click.argument('inactivity_timeout', metavar='<timeout>', required=True,
+                type=click.IntRange(0, 35000))
+def inactivity_timeout_serial(inactivity_timeout):
+    """Set serial console inactivity timeout"""
+
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    config_db.mod_entry("SERIAL_CONSOLE", 'POLICIES',
+                        {'inactivity_timeout': inactivity_timeout})
+
+
+#
+# 'ssh' group ('config  ssh')
+#
+@config.group(cls=clicommon.AbbreviationGroup, name='ssh')
+def ssh():
+    """Configuring system ssh behavior"""
+    pass
+
+
+@ssh.command('inactivity-timeout')
+@click.argument('inactivity_timeout', metavar='<timeout>', required=True,
+                type=click.IntRange(0, 35000))
+def inactivity_timeout_ssh(inactivity_timeout):
+    """Set ssh inactivity timeout"""
+
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    config_db.mod_entry("SSH_SERVER", 'POLICIES',
+                        {'inactivity_timeout': inactivity_timeout})
+
+
+@ssh.command('max-sessions')
+@click.argument('max-sessions', metavar='<max-sessions>', required=True,
+                type=click.IntRange(0, 100))
+def max_sessions(max_sessions):
+    """Set max number of concurrent logins"""
+
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    config_db.mod_entry("SSH_SERVER", 'POLICIES',
+                        {'max_sessions': max_sessions})
+
+
 if __name__ == '__main__':
     config()
