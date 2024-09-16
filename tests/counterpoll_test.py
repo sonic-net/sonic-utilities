@@ -221,6 +221,21 @@ class TestCounterpoll(object):
         assert result.exit_code == 2
         assert expected in result.output
 
+    def test_delay(self):
+        runner = CliRunner()
+        db = Db()
+
+        for key in db.cfgdb.get_keys('FLEX_COUNTER_TABLE'):
+            entry = db.cfgdb.get_entry('FLEX_COUNTER_TABLE', key)
+            assert 'FLEX_COUNTER_DELAY_STATUS' not in entry
+
+        result = runner.invoke(counterpoll.cli.commands["delay"], [], obj=db.cfgdb)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        for key in db.cfgdb.get_keys('FLEX_COUNTER_TABLE'):
+            entry = db.cfgdb.get_entry('FLEX_COUNTER_TABLE', key)
+            assert entry['FLEX_COUNTER_DELAY_STATUS'] == 'true'
 
     @classmethod
     def teardown_class(cls):

@@ -14,9 +14,15 @@ DEFLT_60_SEC= "default (60000)"
 DEFLT_10_SEC= "default (10000)"
 DEFLT_1_SEC = "default (1000)"
 
+
 @click.group()
-def cli():
+@click.pass_context
+def cli(ctx):
     """ SONiC Static Counter Poll configurations """
+
+    ctx.obj = ConfigDBConnector()
+    ctx.obj.connect()
+
 
 # Queue counter commands
 @cli.group()
@@ -381,6 +387,19 @@ def disable(ctx):
     fc_info = {}
     fc_info['FLEX_COUNTER_STATUS'] = 'disable'
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "FLOW_CNT_ROUTE", fc_info)
+
+
+@cli.command()
+@click.pass_context
+def delay(ctx):
+    """ Delays all counters for next boot """
+    config_db = ctx.obj
+
+    for key in config_db.get_keys('FLEX_COUNTER_TABLE'):
+        entry = config_db.get_entry('FLEX_COUNTER_TABLE', key)
+        entry['FLEX_COUNTER_DELAY_STATUS'] = 'true'
+        config_db.mod_entry('FLEX_COUNTER_TABLE', key, entry)
+
 
 @cli.command()
 def show():
