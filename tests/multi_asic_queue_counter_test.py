@@ -89,14 +89,14 @@ Ethernet-BP4    UC4             120               82            4            22
 Ethernet-BP4    UC5             121               83            3            21
 Ethernet-BP4    UC6             122               84            2            20
 Ethernet-BP4    UC7             123               85            1            19
-Ethernet-BP4    MC8             124               86            0            18
-Ethernet-BP4    MC9             125               87            1            17
-Ethernet-BP4   MC10             126               88            2            16
-Ethernet-BP4   MC11             127               89            3            15
-Ethernet-BP4   MC12             128               90            4            14
-Ethernet-BP4   MC13             129               91            5            13
-Ethernet-BP4   MC14             130               92            6            12
-Ethernet-BP4   MC15             131               93            7            11
+Ethernet-BP4   ALL8             124               86            0            18
+Ethernet-BP4   ALL9             125               87            1            17
+Ethernet-BP4  ALL10             126               88            2            16
+Ethernet-BP4  ALL11             127               89            3            15
+Ethernet-BP4  ALL12             128               90            4            14
+Ethernet-BP4  ALL13             129               91            5            13
+Ethernet-BP4  ALL14             130               92            6            12
+Ethernet-BP4  ALL15             131               93            7            11
 
 """
 
@@ -112,14 +112,14 @@ Ethernet-BP4    UC4             120               82            4            22
 Ethernet-BP4    UC5             121               83            3            21
 Ethernet-BP4    UC6             122               84            2            20
 Ethernet-BP4    UC7             123               85            1            19
-Ethernet-BP4    MC8             124               86            0            18
-Ethernet-BP4    MC9             125               87            1            17
-Ethernet-BP4   MC10             126               88            2            16
-Ethernet-BP4   MC11             127               89            3            15
-Ethernet-BP4   MC12             128               90            4            14
-Ethernet-BP4   MC13             129               91            5            13
-Ethernet-BP4   MC14             130               92            6            12
-Ethernet-BP4   MC15             131               93            7            11
+Ethernet-BP4   ALL8             124               86            0            18
+Ethernet-BP4   ALL9             125               87            1            17
+Ethernet-BP4  ALL10             126               88            2            16
+Ethernet-BP4  ALL11             127               89            3            15
+Ethernet-BP4  ALL12             128               90            4            14
+Ethernet-BP4  ALL13             129               91            5            13
+Ethernet-BP4  ALL14             130               92            6            12
+Ethernet-BP4  ALL15             131               93            7            11
 
 """
 

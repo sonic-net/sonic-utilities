@@ -5,14 +5,15 @@
 # watermarkstat is a tool for displaying watermarks.
 #
 #####################################################################
-
-import argparse
+import click
 import json
 import os
 import sys
 
 from natsort import natsorted
 from tabulate import tabulate
+from sonic_py_common import multi_asic
+import utilities_common.multi_asic as multi_asic_util
 
 # mock the redis for unit test purposes #
 try:
@@ -22,6 +23,10 @@ try:
         sys.path.insert(0, modules_path)
         sys.path.insert(0, tests_path)
         from mock_tables import dbconnector
+
+        if os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] == "multi_asic":
+            import tests.mock_tables.mock_multi_asic
+            dbconnector.load_namespace_config()
 
         if os.environ["WATERMARKSTAT_UNIT_TESTING"] == "1":
             input_path = os.path.join(tests_path, "wm_input")
@@ -66,18 +71,33 @@ COUNTERS_PG_INDEX_MAP = "COUNTERS_PG_INDEX_MAP"
 COUNTERS_BUFFER_POOL_NAME_MAP = "COUNTERS_BUFFER_POOL_NAME_MAP"
 
 
+class WatermarkstatWrapper(object):
+    """A wrapper to execute Watermarkstat over the correct namespaces"""
+    def __init__(self, namespace):
+        self.namespace = namespace
+
+        # Initialize the multi_asic object
+        self.multi_asic = multi_asic_util.MultiAsic(namespace_option=namespace)
+        self.db = None
+
+    @multi_asic_util.run_on_multi_asic
+    def run(self, clear, persistent, wm_type):
+        watermarkstat = Watermarkstat(self.db, self.multi_asic.current_namespace)
+        if clear:
+            watermarkstat.send_clear_notification(("PERSISTENT" if persistent else "USER", wm_type.upper()))
+        else:
+            table_prefix = PERSISTENT_TABLE_PREFIX if persistent else USER_TABLE_PREFIX
+            watermarkstat.print_all_stat(table_prefix, wm_type)
+
+
 class Watermarkstat(object):
 
-    def __init__(self):
-        self.counters_db = SonicV2Connector(use_unix_socket_path=False)
-        self.counters_db.connect(self.counters_db.COUNTERS_DB)
-
-        # connect APP DB for clear notifications
-        self.app_db = SonicV2Connector(use_unix_socket_path=False)
-        self.app_db.connect(self.counters_db.APPL_DB)
+    def __init__(self, db, namespace):
+        self.namespace = namespace
+        self.db = db
 
         def get_queue_type(table_id):
-            queue_type = self.counters_db.get(self.counters_db.COUNTERS_DB, COUNTERS_QUEUE_TYPE_MAP, table_id)
+            queue_type = self.db.get(self.db.COUNTERS_DB, COUNTERS_QUEUE_TYPE_MAP, table_id)
             if queue_type is None:
                 print("Queue Type is not available in table '{}'".format(table_id), file=sys.stderr)
                 sys.exit(1)
@@ -92,7 +112,7 @@ class Watermarkstat(object):
                 sys.exit(1)
 
         def get_queue_port(table_id):
-            port_table_id = self.counters_db.get(self.counters_db.COUNTERS_DB, COUNTERS_QUEUE_PORT_MAP, table_id)
+            port_table_id = self.db.get(self.db.COUNTERS_DB, COUNTERS_QUEUE_PORT_MAP, table_id)
             if port_table_id is None:
                 print("Port is not available in table '{}'".format(table_id), file=sys.stderr)
                 sys.exit(1)
@@ -100,7 +120,7 @@ class Watermarkstat(object):
             return port_table_id
 
         def get_pg_port(table_id):
-            port_table_id = self.counters_db.get(self.counters_db.COUNTERS_DB, COUNTERS_PG_PORT_MAP, table_id)
+            port_table_id = self.db.get(self.db.COUNTERS_DB, COUNTERS_PG_PORT_MAP, table_id)
             if port_table_id is None:
                 print("Port is not available in table '{}'".format(table_id), file=sys.stderr)
                 sys.exit(1)
@@ -108,7 +128,7 @@ class Watermarkstat(object):
             return port_table_id
 
         # Get all ports
-        self.counter_port_name_map = self.counters_db.get_all(self.counters_db.COUNTERS_DB, COUNTERS_PORT_NAME_MAP)
+        self.counter_port_name_map = self.db.get_all(self.db.COUNTERS_DB, COUNTERS_PORT_NAME_MAP)
         if self.counter_port_name_map is None:
             print("COUNTERS_PORT_NAME_MAP is empty!", file=sys.stderr)
             sys.exit(1)
@@ -127,7 +147,7 @@ class Watermarkstat(object):
             self.port_name_map[self.counter_port_name_map[port]] = port
 
         # Get Queues for each port
-        counter_queue_name_map = self.counters_db.get_all(self.counters_db.COUNTERS_DB, COUNTERS_QUEUE_NAME_MAP)
+        counter_queue_name_map = self.db.get_all(self.db.COUNTERS_DB, COUNTERS_QUEUE_NAME_MAP)
         if counter_queue_name_map is None:
             print("COUNTERS_QUEUE_NAME_MAP is empty!", file=sys.stderr)
             sys.exit(1)
@@ -144,7 +164,7 @@ class Watermarkstat(object):
                 self.port_all_queues_map[port][queue] = counter_queue_name_map[queue]
 
         # Get PGs for each port
-        counter_pg_name_map = self.counters_db.get_all(self.counters_db.COUNTERS_DB, COUNTERS_PG_NAME_MAP)
+        counter_pg_name_map = self.db.get_all(self.db.COUNTERS_DB, COUNTERS_PG_NAME_MAP)
         if counter_pg_name_map is None:
             print("COUNTERS_PG_NAME_MAP is empty!", file=sys.stderr)
             sys.exit(1)
@@ -154,7 +174,7 @@ class Watermarkstat(object):
             self.port_pg_map[port][pg] = counter_pg_name_map[pg]
 
         # Get all buffer pools
-        self.buffer_pool_name_to_oid_map = self.counters_db.get_all(self.counters_db.COUNTERS_DB, COUNTERS_BUFFER_POOL_NAME_MAP)
+        self.buffer_pool_name_to_oid_map = self.db.get_all(self.db.COUNTERS_DB, COUNTERS_BUFFER_POOL_NAME_MAP)
         if self.buffer_pool_name_to_oid_map is None:
             print("COUNTERS_BUFFER_POOL_NAME_MAP is empty!", file=sys.stderr)
             sys.exit(1)
@@ -194,7 +214,7 @@ class Watermarkstat(object):
         }
 
     def get_queue_index(self, table_id):
-        queue_index = self.counters_db.get(self.counters_db.COUNTERS_DB, COUNTERS_QUEUE_INDEX_MAP, table_id)
+        queue_index = self.db.get(self.db.COUNTERS_DB, COUNTERS_QUEUE_INDEX_MAP, table_id)
         if queue_index is None:
             print("Queue index is not available in table '{}'".format(table_id), file=sys.stderr)
             sys.exit(1)
@@ -202,7 +222,7 @@ class Watermarkstat(object):
         return queue_index
 
     def get_pg_index(self, table_id):
-        pg_index = self.counters_db.get(self.counters_db.COUNTERS_DB, COUNTERS_PG_INDEX_MAP, table_id)
+        pg_index = self.db.get(self.db.COUNTERS_DB, COUNTERS_PG_INDEX_MAP, table_id)
         if pg_index is None:
             print("Priority group index is not available in table '{}'".format(table_id), file=sys.stderr)
             sys.exit(1)
@@ -256,7 +276,7 @@ class Watermarkstat(object):
             full_table_id = table_prefix + obj_id
             idx = int(idx_func(obj_id))
             pos = self.header_idx_to_pos[idx]
-            counter_data = self.counters_db.get(self.counters_db.COUNTERS_DB, full_table_id, watermark)
+            counter_data = self.db.get(self.db.COUNTERS_DB, full_table_id, watermark)
             if counter_data is None or counter_data == '':
                 fields[pos] = STATUS_NA
             elif fields[pos] != STATUS_NA:
@@ -274,7 +294,7 @@ class Watermarkstat(object):
                     continue
 
                 db_key = table_prefix + bp_oid
-                data = self.counters_db.get(self.counters_db.COUNTERS_DB, db_key, type["wm_name"])
+                data = self.db.get(self.db.COUNTERS_DB, db_key, type["wm_name"])
                 if data is None:
                     data = STATUS_NA
                 table.append((buf_pool, data))
@@ -283,58 +303,52 @@ class Watermarkstat(object):
             # Get stat for each port
             for port in natsorted(self.counter_port_name_map):
                 row_data = list()
+
                 data = self.get_counters(table_prefix,
                                          type["obj_map"][port], type["idx_func"], type["wm_name"])
                 row_data.append(port)
                 row_data.extend(data)
                 table.append(tuple(row_data))
 
-        print(type["message"])
+        namespace_str = f" (Namespace {self.namespace})" if multi_asic.is_multi_asic() else ''
+        print(type["message"] + namespace_str)
         print(tabulate(table, self.header_list, tablefmt='simple', stralign='right'))
 
     def send_clear_notification(self, data):
         msg = json.dumps(data, separators=(',', ':'))
-        self.app_db.publish('APPL_DB', 'WATERMARK_CLEAR_REQUEST', msg)
+        self.db.publish('APPL_DB', 'WATERMARK_CLEAR_REQUEST', msg)
         return
 
+@click.command()
+@click.option('-c', '--clear', is_flag=True, help='Clear watermarks request')
+@click.option('-p', '--persistent', is_flag=True, help='Do the operations on the persistent watermark')
+@click.option('-t', '--type', 'wm_type', type=click.Choice(['pg_headroom', 'pg_shared', 'q_shared_uni', 'q_shared_multi', 'buffer_pool', 'headroom_pool', 'q_shared_all']), help='The type of watermark', required=True)
+@click.option('-n', '--namespace', type=click.Choice(multi_asic.get_namespace_list()), help='Namespace name or skip for all', default=None)
+@click.version_option(version='1.0')
+def main(clear, persistent, wm_type, namespace):
+    """
+       Display the watermark counters
 
-def main():
+       Examples:
+       watermarkstat -t pg_headroom
+       watermarkstat -t pg_shared
+       watermarkstat -t q_shared_all
+       watermarkstat -p -t q_shared_all
+       watermarkstat -t q_shared_all -c
+       watermarkstat -t q_shared_uni -c
+       wwatermarkstat -t q_shared_multi -c
+       watermarkstat -p -t pg_shared
+       watermarkstat -p -t q_shared_multi -c
+       watermarkstat -t buffer_pool
+       watermarkstat -t buffer_pool -c
+       watermarkstat -p -t buffer_pool -c
+       watermarkstat -t pg_headroom -n asic0
+       watermarkstat -p -t buffer_pool -c -n asic1
+    """
 
-    parser = argparse.ArgumentParser(description='Display the watermark counters',
-                                      formatter_class=argparse.RawTextHelpFormatter,
-                                      epilog="""
-Examples:
-  watermarkstat -t pg_headroom
-  watermarkstat -t pg_shared
-  watermarkstat -t q_shared_all
-  watermarkstat -p -t q_shared_all
-  watermarkstat -t q_shared_all -c
-  watermarkstat -t q_shared_uni -c
-  watermarkstat -t q_shared_multi -c
-  watermarkstat -p -t pg_shared
-  watermarkstat -p -t q_shared_multi -c
-  watermarkstat -t buffer_pool
-  watermarkstat -t buffer_pool -c
-  watermarkstat -p -t buffer_pool -c
-""")
-
-    parser.add_argument('-c', '--clear', action='store_true', help='Clear watermarks request')
-    parser.add_argument('-p', '--persistent', action='store_true', help='Do the operations on the persistent watermark')
-    parser.add_argument('-t', '--type', required=True, action='store',
-                        choices=['pg_headroom', 'pg_shared', 'q_shared_uni', 'q_shared_multi', 'buffer_pool', 'headroom_pool', 'q_shared_all'],
-                        help='The type of watermark')
-    parser.add_argument('-v', '--version', action='version', version='%(prog)s 1.0')
-    args = parser.parse_args()
-    watermarkstat = Watermarkstat()
-
-    if args.clear:
-        watermarkstat.send_clear_notification(("PERSISTENT" if args.persistent else "USER", args.type.upper()))
-        sys.exit(0)
-
-    table_prefix = PERSISTENT_TABLE_PREFIX if args.persistent else USER_TABLE_PREFIX
-    watermarkstat.print_all_stat(table_prefix, args.type)
+    namespace_context = WatermarkstatWrapper(namespace)
+    namespace_context.run(clear, persistent, wm_type)
     sys.exit(0)
-
 
 if __name__ == "__main__":
     main()
