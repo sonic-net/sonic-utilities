@@ -248,7 +248,7 @@ setup(
         'pexpect>=4.8.0',
         'semantic-version>=2.8.5',
         'prettyprinter>=0.18.0',
-        'pyroute2>=0.5.14, <0.6.1',
+        'pyroute2==0.7.12',
         'requests>=2.25.0, <=2.31.0',
         'tabulate==0.9.0',
         'toposort==1.6',
