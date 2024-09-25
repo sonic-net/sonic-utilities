@@ -856,6 +856,20 @@ class DBMigrator():
             if keys:
                 self.configDB.delete(self.configDB.CONFIG_DB, authorization_key)
 
+    def migrate_config_db_snmp_contact(self):
+        """
+        Migrate SNMP": { "CONTACT": { "joe": "joe@email.com"}} to
+                SNMP": { "CONTACT": { "Contact": "joe joe@email.com"}}
+        As per the changes to fix DB schema based on sonic-snmp.yang
+        """
+        snmp_contact = self.configDB.get_entry('SNMP', 'CONTACT')
+        if 'Contact' not in snmp_contact:
+            contact_name = list(snmp_contact.keys())[0]
+            contact_email = snmp_contact[contact_name]
+            self.configDB.set_entry('SNMP', 'CONTACT', None)
+            snmp_contact = {'Contact': contact_name + ' ' + contact_email}
+            self.configDB.set_entry('SNMP', 'CONTACT', snmp_contact)
+
     def version_unknown(self):
         """
         version_unknown tracks all SONiC versions that doesn't have a version
@@ -1231,6 +1245,10 @@ class DBMigrator():
         Version 202405_01.
         """
         log.log_info('Handling version_202405_01')
+
+        if self.configDB.keys(self.configDB.CONFIG_DB, "SNMP|CONTACT"):
+            self.migrate_config_db_snmp_contact()
+
         self.set_version('version_202411_01')
         return 'version_202411_01'
 
