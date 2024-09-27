@@ -22,6 +22,7 @@ sys.path.insert(0, modules_path)
 
 
 show_queue_counters = """\
+For namespace :
      Port    TxQ    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes
 ---------  -----  --------------  ---------------  -----------  ------------
 Ethernet0    UC0               0                0            0             0
@@ -55,6 +56,7 @@ Ethernet0  ALL27             N/A              N/A          N/A           N/A
 Ethernet0  ALL28             N/A              N/A          N/A           N/A
 Ethernet0  ALL29             N/A              N/A          N/A           N/A
 
+For namespace :
      Port    TxQ    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes
 ---------  -----  --------------  ---------------  -----------  ------------
 Ethernet4    UC0              41               96           70            98
@@ -88,6 +90,7 @@ Ethernet4  ALL27             N/A              N/A          N/A           N/A
 Ethernet4  ALL28             N/A              N/A          N/A           N/A
 Ethernet4  ALL29             N/A              N/A          N/A           N/A
 
+For namespace :
      Port    TxQ    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes
 ---------  -----  --------------  ---------------  -----------  ------------
 Ethernet8    UC0               0                0            0             0
@@ -123,6 +126,7 @@ Ethernet8  ALL29             N/A              N/A          N/A           N/A
 
 """
 show_queue_counters_nz = """\
+For namespace :
      Port    TxQ    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes
 ---------  -----  --------------  ---------------  -----------  ------------
 Ethernet0    UC1              60               43           39             1
@@ -155,6 +159,7 @@ Ethernet0  ALL27             N/A              N/A          N/A           N/A
 Ethernet0  ALL28             N/A              N/A          N/A           N/A
 Ethernet0  ALL29             N/A              N/A          N/A           N/A
 
+For namespace :
      Port    TxQ    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes
 ---------  -----  --------------  ---------------  -----------  ------------
 Ethernet4    UC0              41               96           70            98
@@ -188,6 +193,7 @@ Ethernet4  ALL27             N/A              N/A          N/A           N/A
 Ethernet4  ALL28             N/A              N/A          N/A           N/A
 Ethernet4  ALL29             N/A              N/A          N/A           N/A
 
+For namespace :
      Port    TxQ    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes
 ---------  -----  --------------  ---------------  -----------  ------------
 Ethernet8    UC1              38               17           68            91
@@ -324,6 +330,7 @@ Ethernet8  ALL29             N/A              N/A          N/A           N/A
 """]
 
 show_queue_counters_port = """\
+For namespace :
      Port    TxQ    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes
 ---------  -----  --------------  ---------------  -----------  ------------
 Ethernet8    UC0               0                0            0             0
@@ -359,6 +366,7 @@ Ethernet8  ALL29             N/A              N/A          N/A           N/A
 
 """
 show_queue_counters_port_nz = """\
+For namespace :
      Port    TxQ    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes
 ---------  -----  --------------  ---------------  -----------  ------------
 Ethernet8    UC1              38               17           68            91
@@ -1851,6 +1859,7 @@ show_queue_counters_port_json_nz = """\
 
 
 show_queue_voq_counters = """\
+For namespace :
             Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes    Credit-WD-Del/pkts
 ----------------  -----  --------------  ---------------  -----------  ------------  --------------------
 testsw|Ethernet0   VOQ0               0                0            0             0                     0
@@ -1862,6 +1871,7 @@ testsw|Ethernet0   VOQ5              49               91            2           
 testsw|Ethernet0   VOQ6              33               17           94            74                    17
 testsw|Ethernet0   VOQ7              40               71           95            33                    73
 
+For namespace :
             Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes    Credit-WD-Del/pkts
 ----------------  -----  --------------  ---------------  -----------  ------------  --------------------
 testsw|Ethernet4   VOQ0              54                8           93            78                    29
@@ -1873,6 +1883,7 @@ testsw|Ethernet4   VOQ5              14               70           95           
 testsw|Ethernet4   VOQ6              68               60           66            81                    22
 testsw|Ethernet4   VOQ7              63                4           48            76                    53
 
+For namespace :
             Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes    Credit-WD-Del/pkts
 ----------------  -----  --------------  ---------------  -----------  ------------  --------------------
 testsw|Ethernet8   VOQ0              41               73           77            74                    67
@@ -1887,6 +1898,7 @@ testsw|Ethernet8   VOQ7              83               15           75           
 """
 
 show_queue_voq_counters_nz = """\
+For namespace :
             Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes    Credit-WD-Del/pkts
 ----------------  -----  --------------  ---------------  -----------  ------------  --------------------
 testsw|Ethernet0   VOQ1              60               43           39             1                     1
@@ -1897,6 +1909,7 @@ testsw|Ethernet0   VOQ5              49               91            2           
 testsw|Ethernet0   VOQ6              33               17           94            74                    17
 testsw|Ethernet0   VOQ7              40               71           95            33                    73
 
+For namespace :
             Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes    Credit-WD-Del/pkts
 ----------------  -----  --------------  ---------------  -----------  ------------  --------------------
 testsw|Ethernet4   VOQ0              54                8           93            78                    29
@@ -1908,6 +1921,7 @@ testsw|Ethernet4   VOQ5              14               70           95           
 testsw|Ethernet4   VOQ6              68               60           66            81                    22
 testsw|Ethernet4   VOQ7              63                4           48            76                    53
 
+For namespace :
             Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes    Credit-WD-Del/pkts
 ----------------  -----  --------------  ---------------  -----------  ------------  --------------------
 testsw|Ethernet8   VOQ0              41               73           77            74                    67
@@ -1958,6 +1972,7 @@ testsw|Ethernet8   VOQ7               0                0            0           
 ]
 
 show_queue_port_voq_counters = """\
+For namespace :
             Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes    Credit-WD-Del/pkts
 ----------------  -----  --------------  ---------------  -----------  ------------  --------------------
 testsw|Ethernet0   VOQ0               0                0            0             0                     0
@@ -1972,6 +1987,7 @@ testsw|Ethernet0   VOQ7              40               71           95           
 """
 
 show_queue_port_voq_counters_nz = """\
+For namespace :
             Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes    Credit-WD-Del/pkts
 ----------------  -----  --------------  ---------------  -----------  ------------  --------------------
 testsw|Ethernet0   VOQ1              60               43           39             1                     1
