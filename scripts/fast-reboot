@@ -304,17 +304,23 @@ function check_mirror_session_acls()
     ACL_ND="missing"
     start_time=${SECONDS}
     elapsed_time=$((${SECONDS} - ${start_time}))
+    retry_count=0
     while [[ ${elapsed_time} -lt 10 ]]; do
 	CHECK_ACL_ENTRIES=0
+        retry_count=$((retry_count + 1))
         ACL_OUTPUT=$(sonic-db-cli ASIC_DB KEYS "*" | grep SAI_OBJECT_TYPE_ACL_ENTRY) || CHECK_ACL_ENTRIES=$?
 	if [[ ${CHECK_ACL_ENTRIES} -ne 0 ]]; then
-	    error "Failed to retrieve SAI_OBJECT_TYPE_ACL_ENTRY from redis"
-	    exit ${EXIT_NO_MIRROR_SESSION_ACLS}
+	    debug "Failed to retrieve SAI_OBJECT_TYPE_ACL_ENTRY from redis, retrying... (Attempt: ${retry_count})"
+	    sleep 0.1
+	    elapsed_time=$((${SECONDS} - ${start_time}))
+	    continue
 	fi
 	ACL_ENTRIES=( ${ACL_OUTPUT} )
 	if [[ ${#ACL_ENTRIES[@]} -eq 0 ]]; then
-	    error "NO SAI_OBJECT_TYPE_ACL_ENTRY objects found"
-	    exit ${EXIT_NO_MIRROR_SESSION_ACLS}
+	    debug "NO SAI_OBJECT_TYPE_ACL_ENTRY objects found, retrying... (Attempt: ${retry_count})"
+	    sleep 0.1
+	    elapsed_time=$((${SECONDS} - ${start_time}))
+	    continue
 	fi
         for ACL_ENTRY in ${ACL_ENTRIES[@]}; do
             ACL_PRIORITY=$(sonic-db-cli ASIC_DB HGET ${ACL_ENTRY} SAI_ACL_ENTRY_ATTR_PRIORITY)
@@ -332,7 +338,7 @@ function check_mirror_session_acls()
         elapsed_time=$((${SECONDS} - ${start_time}))
     done
     if [[ "${ACL_ARP}" != "found" || "${ACL_ND}" != "found" ]]; then
-        debug "Failed to program mirror session ACLs on ASIC. ACLs: ARP=${ACL_ARP} ND=${ACL_ND}"
+        error "Failed to program mirror session ACLs on ASIC. ACLs: ARP=${ACL_ARP} ND=${ACL_ND}"
         exit ${EXIT_NO_MIRROR_SESSION_ACLS}
     fi
     debug "Mirror session ACLs (arp, nd) programmed to ASIC successfully"
