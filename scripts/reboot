@@ -197,6 +197,7 @@ function get_reboot_status()
 function reboot_dpu_module()
 {
     local DPU_NAME=$1
+    local DPU_INDEX=${DPU_NAME//[!0-9]/}
 
     debug "User requested rebooting device ${DPU_NAME} ..."
 
@@ -266,7 +267,7 @@ function reboot_dpu_module()
     fi
 
     # Update STATE_DB with DPU PCIe key
-    sonic-db-cli state_db set "PCIE_DETACH_INFO|${DPU_NAME}" '{"dpu_id": "0", "dpu_state": "detaching", "bus_info": ${DPU_BUS_INFO}}'
+    sonic-db-cli state_db set "PCIE_DETACH_INFO|${DPU_NAME}" '{"dpu_id": "${DPU_INDEX}", "dpu_state": "detaching", "bus_info": ${DPU_BUS_INFO}}'
 
     # Detach the DPU module PCIe
     echo 1 > /sys/bus/pci/devices/${DPU_BUS_INFO}/remove
@@ -280,6 +281,9 @@ function reboot_dpu_module()
 
     # Rescan the PCIe
     echo 1 > /sys/bus/pci/rescan
+
+    # Update STATE_DB to delete DPU PCIe key
+    sonic-db-cli state_db del "PCIE_DETACH_INFO|${DPU_NAME}"
 }
 
 function parse_options()
