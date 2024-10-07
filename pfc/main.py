@@ -28,7 +28,7 @@ class Pfc(object):
         This function dumps the current config in a JSON file for unit testing.
         """
         # Only dump files in unit testing mode
-        if os.environ["UTILITIES_UNIT_TESTING"] != "2":
+        if os.getenv("UTILITIES_UNIT_TESTING") != "2":
             return
 
         if namespace not in self.updated_port_tables.keys():
