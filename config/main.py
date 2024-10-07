@@ -66,6 +66,7 @@ from . import syslog
 from . import switchport
 from . import dns
 from . import bgp_cli
+from . import pac
 
 
 # mock masic APIs for unit test
@@ -1420,6 +1421,7 @@ config.add_command(muxcable.muxcable)
 config.add_command(nat.nat)
 config.add_command(vlan.vlan)
 config.add_command(vxlan.vxlan)
+config.add_command(pac.dot1x)
 
 #add mclag commands
 config.add_command(mclag.mclag)
@@ -6935,6 +6937,289 @@ def add_interface_storm(ctx, port_name,storm_type, kbps, namespace):
 def del_interface_storm(ctx,port_name,storm_type, namespace):
     if storm_control_delete_entry(port_name, storm_type) is False:
         ctx.fail("Unable to delete {} storm-control from interface {}".format(storm_type, port_name))
+
+
+#
+# 'authentication' group ('config interface authentication ...')
+#
+@interface.group('authentication')
+@click.pass_context
+def authentication(ctx):
+    """PAC authentication-related configuration tasks"""
+    pass
+
+#
+# 'authentication port-control' command ('config interface authentication port-control <interface> <control_mode>')
+#
+@authentication.command('port-control')
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('control_mode', metavar='<control_mode>', required=True, type=click.Choice(['auto', 'force-authorized', 'force-unauthorized']))
+def add_portcontrol(ctx, control_mode, interface_name):
+    """Add port-control configutation"""
+
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db.connect()
+
+    try:
+        config_db.mod_entry('PAC_PORT_CONFIG_TABLE', (interface_name), {'port_control_mode': control_mode })
+
+    except ValueError as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+
+#
+# 'authentication host-mode' command ('config interface authentication host-mode <interface> <host_mode>')
+#
+@authentication.command('host-mode')
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('host_mode', metavar='<host_mode>', required=True, type=click.Choice(['single-host', 'multi-host', 'multi-auth']))
+def add_hostmode(ctx, host_mode, interface_name):
+    """Add host-mode configutation"""
+
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db.connect()
+
+    try:
+        config_db.mod_entry('PAC_PORT_CONFIG_TABLE', (interface_name), {'host_control_mode': host_mode })
+
+    except ValueError as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+#
+# 'authentication max-users' command ('config interface authentication max-users <interface> <max_users>')
+#
+@authentication.command('max-users')
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('max_users', metavar='<host_mode>', required=True, type=int)
+def add_maxusers(ctx, max_users, interface_name):
+    """Add max-users configutation"""
+    if max_users not in range(1, 16):
+        ctx.fail("Given max_users {} is not allowed. Please enter a valid range <1-16>!!".format(max_users))
+
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db.connect()
+
+    try:
+        config_db.mod_entry('PAC_PORT_CONFIG_TABLE', (interface_name), {'max_users_per_port': max_users })
+
+    except ValueError as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+#
+# 'authentication periodic' command ('config interface authentication periodic <interface> <status>')
+#
+@authentication.command('periodic')
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('status', metavar='<status>', required=True, type=click.Choice(['enable', 'disable']))
+def add_periodic(ctx, status, interface_name):
+    """Add periodic authentication configutation"""
+
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db.connect()
+
+    try:
+        config_db.mod_entry('PAC_PORT_CONFIG_TABLE', (interface_name), {'reauth_enable': True if status == 'enable' else False })
+
+    except ValueError as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+#
+# 'authentication reauth-period' command ('config interface authentication reauth-period <interface> <server|reauth_period>')
+#
+@authentication.command('reauth-period')
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('status', metavar='<reauth_period>', required=True)
+def add_reauthperiod(ctx, status, interface_name):
+    """Add reauth-period configutation"""
+
+
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db.connect()
+    is_server = False
+    val = 0
+    if status == 'server':
+        is_server = True
+    else:
+        val = int(status)
+        if val not in range(1,65535):
+            ctx.fail("Input not in range <1-65535>")
+    try:
+        if is_server:
+            config_db.mod_entry('PAC_PORT_CONFIG_TABLE', (interface_name), {'reauth_period_from_server': True})
+        else:
+            config_db.mod_entry('PAC_PORT_CONFIG_TABLE', (interface_name), {'reauth_period': val})
+            config_db.mod_entry('PAC_PORT_CONFIG_TABLE', (interface_name), {'reauth_period_from_server': False})
+
+
+    except ValueError as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+
+#
+# 'authentication order' command ('config interface authentication order <interface> <order_list>')
+#
+@authentication.command('order')
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('order_list', metavar='<order_list>', required=True, type=click.Choice(['dot1x,mab', 'mab,dot1x', 'dot1x', 'mab']))
+def add_order(ctx, order_list, interface_name):
+    """Add order configutation"""
+
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db.connect()
+
+    order_list.split()
+    try:
+        config_db.mod_entry('PAC_PORT_CONFIG_TABLE', (interface_name), {'method_list@': order_list })
+
+    except ValueError as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+
+#
+# 'authentication priority' command ('config interface authentication priority <interface> <priority_list>')
+#
+@authentication.command('priority')
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('priority_list', metavar='<priority_list>', required=True, type=click.Choice(['dot1x,mab', 'mab,dot1x', 'dot1x', 'mab']))
+def add_priority(ctx, priority_list, interface_name):
+    """Add priority configutation"""
+
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db.connect()
+
+    priority_list.split()
+    try:
+        config_db.mod_entry('PAC_PORT_CONFIG_TABLE', (interface_name), {'priority_list@': priority_list })
+
+    except ValueError as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+#
+# 'mab' group ('config interface mab ...')
+#
+@interface.group('mab')
+@click.pass_context
+def mab(ctx):
+    """Mac auth bypass authentication-related configuration tasks"""
+    pass
+
+
+
+#
+# 'mab' command ('config interface mab <interface> <enable|disable> [eap-md5|pap|chap]')
+#
+@interface.command('mab')
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('status', metavar='<status>', required=True, type=click.Choice(['enable', 'disable']))
+@click.option('-a', '--auth-type', required=False, type=click.Choice(['eap-md5', 'pap', 'chap']))
+def add_mab(ctx, status, auth_type, interface_name):
+    """Add mab configutation"""
+
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db.connect()
+
+    print(status)
+    print(auth_type)
+    print(interface_name)
+    try:
+        config_db.mod_entry('MAB_PORT_CONFIG_TABLE', (interface_name), {'mab_enable': True if status == 'enable' else False})
+        if auth_type == 'pap' or auth_type == 'chap':
+            config_db.mod_entry('MAB_PORT_CONFIG_TABLE', (interface_name), {'mab_auth_type': auth_type})
+        else:
+            config_db.mod_entry('MAB_PORT_CONFIG_TABLE', (interface_name), {'mab_auth_type': 'eap-md5'})
+
+    except ValueError as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+
+def pac_is_port_any_vlan_member(config_db, port):
+    """Check if port is a member of any vlan"""
+
+    vlan_ports_data = config_db.get_table('VLAN_MEMBER')
+    for key in vlan_ports_data:
+        if key[1] == port:
+            return True
+
+    return False
+
+
+def pac_interface_name_valid(ctx, config_db, interface_name):
+    """Check if the given interface is valid for pac config"""
+
+    valid_interface = False
+    if interface_name.startswith("Ethernet"):
+
+        valid_interface = True
+        if valid_interface  and clicommon.is_port_router_interface(config_db, interface_name):
+            ctx.fail("{} is a router interface!".format(interface_name))
+            valid_interface = False
+ 
+        if valid_interface and clicommon.is_port_mirror_dst_port(config_db, interface_name):
+            ctx.fail("{} is configured as mirror destination port".format(interface_name))
+            valid_interface = False
+ 
+        portchannel_member_table = config_db.get_table('PORTCHANNEL_MEMBER')
+
+        if valid_interface and clicommon.interface_is_in_portchannel(portchannel_member_table, interface_name):
+            ctx.fail("{} is part of portchannel!".format(interface_name))
+            valid_interface = False
+
+        if valid_interface and (pac_is_port_any_vlan_member(config_db, interface_name) is False):
+            ctx.fail("{} is not a member of any vlan".format(interface_name))
+            valid_interface = False
+    
+    if valid_interface:
+        return True
+    else:
+        return False
+
+ 
+
+#
+# 'dot1x' group ('config interface dot1x ...')
+#
+@interface.group('dot1x')
+@click.pass_context
+def dot1x(ctx):
+    """PAC authentication-related configuration tasks"""
+    pass
+
+
+
+#
+# 'interface dot1x pae' command ('config interface dot1x pae <interface> <authenticator|none>')
+#
+@dot1x.command('pae')
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('role', metavar='<role>', required=True, type=click.Choice(['authenticator', 'none']))
+def add_pae(ctx, role, interface_name):
+    """Add pae configutation"""
+
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db.connect()
+
+    if role == 'authenticator' and pac_interface_name_valid(ctx, config_db, interface_name) is False:
+        ctx.fail("Given interface {} is not allowed. Please enter a valid interface for pac!!".format(interface_name))
+
+    try:
+        config_db.mod_entry('PAC_PORT_CONFIG_TABLE', (interface_name), {'port_pae_role': role})
+
+    except ValueError as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+
+
+
+
 
 def is_loopback_name_valid(loopback_name):
     """Loopback name validation
