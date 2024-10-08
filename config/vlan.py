@@ -6,6 +6,7 @@ from jsonpatch import JsonPatchConflict
 from time import sleep
 from .utils import log
 from .validated_config_db_connector import ValidatedConfigDBConnector
+from . import stp
 
 ADHOC_VALIDATION = True
 DHCP_RELAY_TABLE = "DHCP_RELAY"
@@ -72,6 +73,10 @@ def add_vlan(db, vid, multiple):
 
             if clicommon.check_if_vlanid_exist(db.cfgdb, vlan):  # TODO: MISSING CONSTRAINT IN YANG MODEL
                 ctx.fail("{} already exists.".format(vlan))
+
+            # Enable STP on VLAN if PVST is enabled globally
+            if stp.is_global_stp_enabled(db.cfgdb):
+                stp.vlan_enable_stp(db.cfgdb, vlan)
 
             if clicommon.check_if_vlanid_exist(db.cfgdb, vlan, "DHCP_RELAY"):
                 ctx.fail("DHCPv6 relay config for {} already exists".format(vlan))
@@ -155,6 +160,13 @@ def del_vlan(db, vid, multiple, no_restart_dhcp_relay):
                 if vxmap_data['vlan'] == 'Vlan{}'.format(vid):
                     ctx.fail("vlan: {} can not be removed. "
                              "First remove vxlan mapping '{}' assigned to VLAN".format(vid, '|'.join(vxmap_key)))
+
+            # Delete STP_VLAN & STP_VLAN_PORT entries when VLAN is deleted.
+            db.cfgdb.set_entry('STP_VLAN', 'Vlan{}'.format(vid), None)
+            stp_intf_list = stp.get_intf_list_from_stp_vlan_intf_table(db.cfgdb, 'Vlan{}'.format(vid))
+            for intf_name in stp_intf_list:
+                key = 'Vlan{}'.format(vid) + "|" + intf_name
+                db.cfgdb.set_entry('STP_VLAN_PORT', key, None)
 
             # set dhcpv4_relay table
             set_dhcp_relay_table('VLAN', config_db, vlan, None)
@@ -296,6 +308,13 @@ def add_vlan_member(db, vid, port, untagged, multiple, except_flag):
             if (clicommon.interface_is_untagged_member(
                     db.cfgdb, port) and untagged):  # TODO: MISSING CONSTRAINT IN YANG MODEL
                 ctx.fail("{} is already untagged member!".format(port))
+
+            # If port is being made L2 port, enable STP
+            if stp.is_global_stp_enabled(db.cfgdb) is True:
+                vlan_list_for_intf = stp.get_vlan_list_for_interface(db.cfgdb, port)
+                if len(vlan_list_for_intf) == 0:
+                    stp.interface_enable_stp(db.cfgdb, port)
+
             # checking mode status of port if its access, trunk or routed
             if is_port:
                 port_data = config_db.get_entry('PORT', port)
@@ -355,6 +374,14 @@ def del_vlan_member(db, vid, port, multiple, except_flag):
 
             if not clicommon.is_port_vlan_member(db.cfgdb, port, vlan):  # TODO: MISSING CONSTRAINT IN YANG MODEL
                 ctx.fail("{} is not a member of {}".format(port, vlan))
+ 
+            # If port is being made non-L2 port, disable STP
+            if stp.is_global_stp_enabled(db.cfgdb) is True:
+                vlan_interface = str(vlan) + "|" + port
+                db.cfgdb.set_entry('STP_VLAN_PORT', vlan_interface, None)
+                vlan_list_for_intf = stp.get_vlan_list_for_interface(db.cfgdb, port)
+                if len(vlan_list_for_intf) == 0:
+                    log.log_info("'vlan list for intf is zero...")
 
             try:
                 config_db.set_entry('VLAN_MEMBER', (vlan, port), None)

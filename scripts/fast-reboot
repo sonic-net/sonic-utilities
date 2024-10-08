@@ -772,6 +772,11 @@ if [ -x ${LOG_SSD_HEALTH} ]; then
     ${LOG_SSD_HEALTH}
 fi
 
+# Kill stp docker
+debug "Stopping stp ..."
+docker kill stp > /dev/null
+debug "Stopped stp ..."
+
 # Stop any timers to prevent any containers starting in the middle of the process.
 TIMERS=$(systemctl list-dependencies --plain sonic-delayed.target | sed 1d)
 for timer in ${TIMERS}; do

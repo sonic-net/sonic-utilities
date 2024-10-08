@@ -3,6 +3,7 @@ import sys
 import click
 import subprocess
 from shlex import join
+from . import stp
 
 def run_command(command, pager=False):
     command_str = join(command)
@@ -24,6 +25,11 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help', '-?'])
 def cli():
     """SONiC command line - 'debug' command"""
     pass
+
+#
+# STP
+#
+cli.add_command(stp.spanning_tree)
 
 prefix_pattern = '^[A-Za-z0-9.:/]*$'
 p = subprocess.check_output(['sudo', 'vtysh', '-c', 'show version'], text=True)

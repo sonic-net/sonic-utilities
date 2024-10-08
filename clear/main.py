@@ -12,6 +12,7 @@ from utilities_common import util_base
 from show.plugins.pbh import read_pbh_counters
 from config.plugins.pbh import serialize_pbh_counters
 from . import plugins
+from . import stp
 
 # This is from the aliases example:
 # https://github.com/pallets/click/blob/57c6f09611fc47ca80db0bd010f05998b3c0aa95/examples/aliases/aliases.py
@@ -124,6 +125,11 @@ CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help', '-?'])
 def cli():
     """SONiC command line - 'Clear' command"""
     pass
+
+#
+# 'STP'
+#
+cli.add_command(stp.spanning_tree)
 
 #
 # 'ip' group ###
