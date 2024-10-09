@@ -10,12 +10,19 @@ from .bgp_commands_input.bgp_neighbor_test_vector import *
 def executor(test_vector, show):
     runner = CliRunner()
     input = testData[test_vector]
+
+    if "alias" in test_vector:
+        os.environ['SONIC_CLI_IFACE_MODE'] = "alias"
+
     if test_vector.startswith('bgp_v6'):
         exec_cmd = show.cli.commands["ipv6"].commands["bgp"].commands["neighbors"]
     else:
         exec_cmd = show.cli.commands["ip"].commands["bgp"].commands["neighbors"]
 
     result = runner.invoke(exec_cmd, input['args'])
+
+    if "alias" in test_vector:
+        os.environ['SONIC_CLI_IFACE_MODE'] = "default"
 
     print(result.exit_code)
     print(result.output)
@@ -50,6 +57,7 @@ class TestBgpNeighbors(object):
     @pytest.mark.parametrize('setup_single_bgp_instance, test_vector',
                              [
                                  ('bgp_v4_neighbors_output', 'bgp_v4_neighbors'),
+                                 ('bgp_v4_neighbors_output', 'bgp_v4_alias_neighbors'),
                                  ('bgp_v4_neighbors_output',
                                      'bgp_v4_neighbor_ip_address'),
                                  ('bgp_v4_neighbor_invalid_neigh',
@@ -61,6 +69,7 @@ class TestBgpNeighbors(object):
                                  ('bgp_v4_neighbor_output_recv_routes',
                                      'bgp_v4_neighbor_recv_routes'),
                                  ('bgp_v6_neighbors_output', 'bgp_v6_neighbors'),
+                                 ('bgp_v6_neighbors_output', 'bgp_v6_alias_neighbors'),
                                  ('bgp_v6_neighbors_output',
                                      'bgp_v6_neighbor_ip_address'),
                                  ('bgp_v6_neighbor_invalid',
