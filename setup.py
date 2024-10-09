@@ -189,7 +189,9 @@ setup(
         'scripts/verify_image_sign.sh',
         'scripts/verify_image_sign_common.sh',
         'scripts/check_db_integrity.py',
-        'scripts/sysreadyshow'
+        'scripts/sysreadyshow',
+        'scripts/gen_sai_dbg_dump.sh',
+        'scripts/gen_sai_dbg_dump_lib.sh',
     ],
     entry_points={
         'console_scripts': [
