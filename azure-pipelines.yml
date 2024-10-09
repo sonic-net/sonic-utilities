@@ -121,7 +121,7 @@ stages:
         curl -sSL https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
         sudo apt-add-repository https://packages.microsoft.com/debian/11/prod
         sudo apt-get update
-        sudo apt-get install -y dotnet-sdk-5.0
+        sudo apt-get install -y dotnet-sdk-8.0
       displayName: "Install .NET CORE"
 
     - script: |
