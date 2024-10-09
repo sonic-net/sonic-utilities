@@ -641,7 +641,14 @@ class DBMigrator():
             if certs:
                 self.configDB.set_entry("GNMI", "certs", certs)
 
-    def migrate_console_switch(self):
+    def migrate_remove_feature(self, feature):
+        if self.configDB.get_entry('FEATURE', feature):
+            log.log_notice('Migrate remove {}'.format(feature))
+            self.configDB.mod_entry('FEATURE', feature, None)
+        if self.configDB.get_entry('AUTO_TECHSUPPORT_FEATURE', feature):
+            self.configDB.mod_entry('AUTO_TECHSUPPORT_FEATURE', feature, None)
+
+   def migrate_console_switch(self):
         # CONSOLE_SWITCH - add missing key
         if not self.config_src_data or 'CONSOLE_SWITCH' not in self.config_src_data:
             return
@@ -1231,6 +1238,7 @@ class DBMigrator():
         Version 202405_01.
         """
         log.log_info('Handling version_202405_01')
+        self.migrate_remove_feature('telemetry')
         self.set_version('version_202411_01')
         return 'version_202411_01'
 
