@@ -132,20 +132,6 @@ def is_issu_status_enabled():
 
     return issu_enabled
 
-
-@mlnx.command('sniffer')
-def sniffer_status():
-    """ Show sniffer status """
-    components = ['sdk']
-    env_variable_strings = [ENV_VARIABLE_SX_SNIFFER]
-    for index in range(len(components)):
-        enabled = sniffer_status_get(env_variable_strings[index])
-        if enabled is True:
-            click.echo(components[index] + " sniffer is enabled")
-        else:
-            click.echo(components[index] + " sniffer is disabled")
-
-
 @mlnx.command('issu')
 def issu_status():
     """ Show ISSU status """
