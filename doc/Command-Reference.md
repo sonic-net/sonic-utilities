@@ -10858,6 +10858,35 @@ This command is used to disable syslog rate limit feature.
   config syslog rate-limit-feature disable database -n asci0
   ```
 
+**config syslog level**
+
+This command is used to configure log level for a given log identifier.
+
+- Usage:
+  ```
+  config syslog level -i <log_identifier> -l <log_level> --container [<container_name>] --program [<program_name>]
+
+  config syslog level -i <log_identifier> -l <log_level> --container [<container_name>] --pid [<process_id>]
+
+  config syslog level -i <log_identifier> -l <log_level> ---pid [<process_id>]
+  ```
+
+- Example:
+
+  ```
+  # Update the log level without refresh the configuration
+  config syslog level -i xcvrd -l DEBUG
+
+  # Update the log level and send SIGHUP to xcvrd running in PMON
+  config syslog level -i xcvrd -l DEBUG --container pmon --program xcvrd
+
+  # Update the log level and send SIGHUP to PID 20 running in PMON
+  config syslog level -i xcvrd -l DEBUG --container pmon --pid 20
+
+  # Update the log level and send SIGHUP to PID 20 running in host
+  config syslog level -i xcvrd -l DEBUG --pid 20
+  ```
+
 Go Back To [Beginning of the document](#) or [Beginning of this section](#syslog)
 
 ## System State

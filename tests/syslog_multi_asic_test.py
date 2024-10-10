@@ -279,3 +279,19 @@ class TestSyslogRateLimitMultiAsic:
             ['database', '-n', 'asic0']
         )
         assert result.exit_code == 0
+
+    @mock.patch('config.syslog.clicommon.run_command')
+    def test_config_log_level(self, mock_run, setup_cmd_module):
+        _, config = setup_cmd_module
+        db = Db()
+        runner = CliRunner()
+
+        mock_run.return_value = ('something', 0)
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["level"],
+            ['-i', 'component', '-l', 'DEBUG', '-n', 'asic0'], obj=db
+        )
+        assert result.exit_code == 0
+        cfg_db = db.cfgdb_clients['asic0']
+        data = cfg_db.get_entry('LOGGER', 'component')
+        assert data.get('LOGLEVEL') == 'DEBUG'
