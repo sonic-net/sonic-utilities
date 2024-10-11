@@ -60,6 +60,7 @@ from .config_mgmt import ConfigMgmtDPB, ConfigMgmt, YANG_DIR
 from . import mclag
 from . import syslog
 from . import dns
+from . import bgp_cli
 
 # mock masic APIs for unit test
 try:
@@ -3976,6 +3977,9 @@ def del_user(db, user):
 def bgp():
     """BGP-related configuration tasks"""
     pass
+
+# BGP module extensions
+config.commands['bgp'].add_command(bgp_cli.DEVICE_GLOBAL)
 
 #
 # 'shutdown' subgroup ('config bgp shutdown ...')
