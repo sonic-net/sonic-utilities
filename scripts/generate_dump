@@ -1108,6 +1108,83 @@ save_file() {
 }
 
 ###############################################################################
+# generate_sai_dbg_dump_file
+# Description:
+#  This function triggers the generation of a SAI debug dump file in the 
+#  `syncd` Docker container and saves it to the local system. The function 
+#  communicates with the Redis database to initiate the dump process
+#
+# Globals:
+#  None
+#
+# Arguments:
+#  None
+#
+# Returns:
+#  0 - On success
+#  1 - On failure
+###############################################################################
+generate_sai_dbg_dump_file() {
+    trap 'handle_error $? $LINENO' ERR
+    local syncd_sai_dump_filename="/var/log/dbg_gen_dump.log"
+
+    if $NOOP; then
+        echo "generate_sai_dump"
+        return 1
+    fi
+
+    # Validate the argument
+    local sai_dump_filename="$1"
+    if [ -z "$sai_dump_filename" ]; then
+        echo "Error: No filename provided for the SAI debug dump file."
+        return 1
+    fi
+
+    # Extract the directory from the filename
+    local sai_dump_dir
+    sai_dump_dir=$(dirname "$sai_dump_filename")
+
+    # Check if the directory exists; if not, create it
+    if [ ! -d "$sai_dump_dir" ]; then
+        echo "Directory '$sai_dump_dir' does not exist. Creating it..."
+        mkdir -p "$sai_dump_dir"
+        if [ $? -ne 0 ]; then
+            echo "Error: Failed to create directory '$sai_dump_dir'."
+            return 1
+        fi
+    fi
+
+    # Ensure the syncd container is running
+    if [[ "$( docker container inspect -f '{{.State.Running}}' syncd )" != "true" ]]; then
+        echo "Error: syncd container is not running."
+        return 1
+    fi
+
+    # Generate the SAI dump file using the refactored function
+    source /usr/local/bin/gen_sai_dbg_dump_lib.sh
+    if ! generate_sai_dump "$syncd_sai_dump_filename"; then
+        echo "Error: Failed to generate SAI debug dump."
+        return 1
+    fi
+
+    # Copy the dump file from the Docker container
+    if ! copy_from_docker syncd $syncd_sai_dump_filename $sai_dump_filename; then
+        echo "Error: Failed to copy the SAI dump file from the container."
+        return 1
+    fi
+
+    # Save the file using the save_file function
+    if ! save_file $sai_dump_filename sai_sdk_dump false; then
+        echo "Error: Failed to save the SAI dump file."
+        return 1
+    fi
+
+    # remove the dump files after saving to show techsupport package
+    rm -rf $sai_dump_filename
+    docker exec syncd rm -rf $syncd_sai_dump_filename;
+
+}
+###############################################################################
 # find_files routine
 # Globals:
 #  SINCE_DATE: list files only newer than given date
@@ -1366,6 +1443,10 @@ save_marvellcmd() {
 ###############################################################################
 collect_marvell() {
     trap 'handle_error $? $LINENO' ERR
+    
+    local sai_dump_folder="/tmp/saisdkdump"
+    local sai_dump_filename="${sai_dump_folder}/sai_sdk_dump_$(date +"%m_%d_%Y_%I_%M_%p")"
+    generate_sai_dbg_dump_file "$sai_dump_filename"
 
     save_marvellcmd "show version" "CPSS_version"
     save_marvellcmd "debug-mode;xps-api call xpsDataIntegrityDumpSerInfo all" "SER_table"
