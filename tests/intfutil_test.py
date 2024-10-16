@@ -127,6 +127,27 @@ Ethernet120         N/A           rs
 Ethernet124          rs         auto
 """
 
+show_interfaces_path_tracing_output = """\
+  Interface      Alias    Oper    Admin    PT Interface ID    PT Timestamp Template
+-----------  ---------  ------  -------  -----------------  -----------------------
+  Ethernet0  Ethernet0    down       up                129                template3
+ Ethernet16       etp5      up       up                130                template1
+ Ethernet24       etp6      up       up                131                template2
+ Ethernet28       etp8      up       up                132                template3
+ Ethernet32       etp9      up       up                133                template4
+ Ethernet36      etp10      up       up                N/A                      N/A
+Ethernet112      etp29      up       up                N/A                      N/A
+Ethernet116      etp30      up       up                N/A                      N/A
+Ethernet120      etp31      up       up                N/A                      N/A
+Ethernet124      etp32      up       up                N/A                      N/A
+"""
+
+show_interfaces_path_tracing_Ethernet0_output = """\
+  Interface      Alias    Oper    Admin    PT Interface ID    PT Timestamp Template
+-----------  ---------  ------  -------  -----------------  -----------------------
+  Ethernet0  Ethernet0    down       up                129                template3
+"""
+
 class TestIntfutil(TestCase):
     @classmethod
     def setup_class(cls):
@@ -359,6 +380,31 @@ class TestIntfutil(TestCase):
         print(result.output)
         assert result.exit_code == 0
         assert result.output == show_interface_fec_status_output
+
+    def test_show_interfaces_path_tracing_status(self):
+        result = self.runner.invoke(show.cli.commands["interfaces"].commands["path-tracing"], [])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == show_interfaces_path_tracing_output
+
+        # Test 'intfutil -c path-tracing'
+        output = subprocess.check_output(['intfutil', '-c', 'path-tracing'], stderr=subprocess.STDOUT, text=True)
+        print(output)
+        assert result.output == show_interfaces_path_tracing_output
+
+    def test_show_interfaces_path_tracing_Ethernet0_status(self):
+        result = self.runner.invoke(show.cli.commands["interfaces"].commands["path-tracing"], ["Ethernet0"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == show_interfaces_path_tracing_Ethernet0_output
+
+        # Test 'intfutil -c path-tracing'
+        output = subprocess.check_output(['intfutil', '-c', 'path-tracing', '-i', 'Ethernet0'],
+                                         stderr=subprocess.STDOUT, text=True)
+        print(output)
+        assert result.output == show_interfaces_path_tracing_Ethernet0_output
 
     @classmethod
     def teardown_class(cls):

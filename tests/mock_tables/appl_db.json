@@ -44,7 +44,9 @@
         "interface_type": "CR4",
         "adv_interface_types": "CR4,CR2",
         "autoneg": "on",
-        "link_training": "on"
+        "link_training": "on",
+        "pt_interface_id": "129",
+        "pt_timestamp_template": "template3"
     },
     "PORT_TABLE:Ethernet16": {
         "index": "4",
@@ -55,7 +57,9 @@
         "oper_status": "up",
         "pfc_asym": "off",
         "mtu": "9100",
-        "admin_status": "up"
+        "admin_status": "up",
+        "pt_interface_id": "130",
+        "pt_timestamp_template": "template1"
     },
     "PORT_TABLE:Ethernet36": {
         "index": "9",
@@ -80,7 +84,9 @@
         "mtu": "9100",
         "tpid": "0x8100",
         "admin_status": "up",
-        "role": "Dpc"
+        "role": "Dpc",
+        "pt_interface_id": "131",
+        "pt_timestamp_template": "template2"
     },
     "PORT_TABLE:Ethernet28": {
         "index": "7",
@@ -91,7 +97,9 @@
         "oper_status": "up",
         "pfc_asym": "off",
         "mtu": "9100",
-        "admin_status": "up"
+        "admin_status": "up",
+        "pt_interface_id": "132",
+        "pt_timestamp_template": "template3"
     },
     "PORT_TABLE:Ethernet32": {
         "index": "8",
@@ -108,7 +116,9 @@
         "autoneg": "off",
         "adv_speeds": "all",
         "adv_interface_types": "all",
-        "link_training": "on"
+        "link_training": "on",
+        "pt_interface_id": "133",
+        "pt_timestamp_template": "template4"
     },
     "PORT_TABLE:Ethernet112": {
         "index": "28",
