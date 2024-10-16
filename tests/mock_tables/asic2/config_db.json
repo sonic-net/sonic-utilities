@@ -1,12 +1,11 @@
 {
     "DEVICE_METADATA|localhost": {
-        "asic_id": "03.00.0",
         "asic_name": "asic2",
         "bgp_asn": "65100",
         "cloudtype": "None",
         "default_bgp_status": "down",
         "default_pfcwd_status": "enable",
-        "deployment_id": "None",
+        "deployment_id": "1",
         "docker_routing_config_mode": "separated",
         "hostname": "sonic",
         "hwsku": "multi_asic",
@@ -62,25 +61,21 @@
     },
     "PORTCHANNEL|PortChannel1015": {
         "admin_status": "up",
-        "members@": "Ethernet20",
         "min_links": "1",
         "mtu": "9100"
     },
     "PORTCHANNEL|PortChannel1016": {
         "admin_status": "up",
-        "members@": "Ethernet24",
         "min_links": "1",
         "mtu": "9100"
     },
     "PORTCHANNEL|PortChannel4011": {
         "admin_status": "up",
-        "members@": "Ethernet-BP20",
         "min_links": "1",
         "mtu": "9100"
     },
     "PORTCHANNEL|PortChannel4012": {
         "admin_status": "up",
-        "members@": "Ethernet-BP24",
         "min_links": "1",
         "mtu": "9100"
     },
@@ -117,7 +112,6 @@
         "restoration_time": "200"
     },
     "PFC_WD|GLOBAL": {
-        "BIG_RED_SWITCH": "enable",
         "POLL_INTERVAL": "199"
     },
     "FEATURE|bgp": {
