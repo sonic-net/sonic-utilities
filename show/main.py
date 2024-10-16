@@ -1928,22 +1928,15 @@ def bgp(verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def ntp(ctx, verbose):
     """Show NTP information"""
-    from pkg_resources import parse_version
-    ntpstat_cmd = ["ntpstat"]
-    ntpcmd = ["ntpq", "-p", "-n"]
+    chronyc_tracking_cmd = ["chronyc", "tracking"]
+    chronyc_sources_cmd = ["chronyc", "sources"]
     if is_mgmt_vrf_enabled(ctx) is True:
-        #ManagementVRF is enabled. Call ntpq using "ip vrf exec" or cgexec based on linux version
-        os_info =  os.uname()
-        release = os_info[2].split('-')
-        if parse_version(release[0]) > parse_version("4.9.0"):
-            ntpstat_cmd = ['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'ntpstat']
-            ntpcmd = ['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'ntpq', '-p', '-n']
-        else:
-            ntpstat_cmd = ['sudo', 'cgexec', '-g', 'l3mdev:mgmt', 'ntpstat']
-            ntpcmd = ['sudo', 'cgexec', '-g', 'l3mdev:mgmt', 'ntpq', '-p', '-n']
+        #ManagementVRF is enabled. Call chronyc using "ip vrf exec" based on linux version
+        chronyc_tracking_cmd = ["sudo", "ip", "vrf", "exec", "mgmt"] + chronyc_tracking_cmd
+        chronyc_sources_cmd = ["sudo", "ip", "vrf", "exec", "mgmt"] + chronyc_sources_cmd
 
-    run_command(ntpstat_cmd, display_cmd=verbose)
-    run_command(ntpcmd, display_cmd=verbose)
+    run_command(chronyc_tracking_cmd, display_cmd=verbose)
+    run_command(chronyc_sources_cmd, display_cmd=verbose)
 
 #
 # 'uptime' command ("show uptime")
