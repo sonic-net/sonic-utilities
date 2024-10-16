@@ -1,0 +1,98 @@
+#!/usr/bin/python3
+
+"""
+    Script to clear pac information 
+    Example of the output:
+
+    root@sonic:/home/admin# sudo pacclear -a
+
+    root@sonic:/home/admin# sudo pacclear -i Ethernet0
+
+    root@sonic:/home/admin# sudo pacclear -m 00:00:00:11:12:22
+
+"""
+
+import json
+import argparse
+import sys
+
+from tabulate import tabulate
+from swsscommon.swsscommon import ConfigDBConnector
+
+class pacClear(object):
+
+    def __init__(self):
+        super(pacClear,self).__init__()
+        self.config_db = ConfigDBConnector()
+        self.config_db.connect()
+
+        return
+
+
+    def clear_authentication_all(self):
+        """
+            Clear Pac session related data.
+        """
+        opdata = ['clear-pac','all']
+        msg = json.dumps(opdata,separators=(',','|'))
+        self.config_db.publish('CONFIG_DB', "clearAuthSessions", msg)
+
+    def clear_authentication_mac(self, mac):
+        """
+            Clear Pac session related data.
+        """
+        opdata = ['clear-pac', mac]
+        msg = json.dumps(opdata,separators=(',','|'))
+        self.config_db.publish('CONFIG_DB', "clearAuthSessions", msg)
+
+    def clear_authentication_interface(self, interface):
+        """
+            Clear Pac session related data.
+        """
+        opdata = ['clear-pac', interface]
+        msg = json.dumps(opdata,separators=(',','|'))
+        self.config_db.publish('CONFIG_DB', "clearAuthSessions", msg)
+
+
+
+
+
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Display the PAC  information',
+                                     formatter_class=argparse.RawTextHelpFormatter,
+                                     epilog="""
+    Examples:
+    pacclear -m mac
+    pacclear -i interface
+    pacclear -a
+    """)
+    parser.add_argument('-a', '--all', action='store_true', help='Clear all sessions')
+    parser.add_argument('-i', '--interface', type=str, help='Clear all sessions on interface')
+    parser.add_argument('-m', '--mac', type=str, help='Clear sessions for mac')
+
+    args = parser.parse_args()
+    
+    clear_all = args.all
+    clear_interface = args.interface
+    clear_mac = args.mac
+    
+    if clear_interface:
+        clear_interface = clear_interface.strip()
+
+    try:
+        pac = pacClear()
+        if clear_mac:
+            pac.clear_authentication_mac(clear_mac)
+        if clear_interface:
+            pac.clear_authentication_interface(clear_interface)
+        if clear_all:
+            pac.clear_authentication_all()
+    except Exception as e:
+        print(str(e))
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
+

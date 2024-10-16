@@ -208,6 +208,31 @@ def dropcounters():
     command = ["dropstat", "-c", "clear"]
     run_command(command)
 
+#
+# 'authentication' command ###
+#
+
+@cli.group()
+def authentication():
+    """Clear authentication sessions"""
+    pass
+
+
+@authentication.command('sessions')
+@click.option('-i', '--interface')
+@click.option('-m', '--mac')
+def authentication_clear(interface, mac):
+    if interface is None and mac is None:
+        command = ['pacclear', '-a']
+        run_command(command)
+    elif mac is not None:
+        command = ['pacclear', '-m  {}'.format(mac)]
+        run_command(command)
+    elif interface is not None:
+        command = ['pacclear', '-i {}'.format(interface)]
+        run_command(command)
+
+
 @cli.command()
 def tunnelcounters():
     """Clear Tunnel counters"""

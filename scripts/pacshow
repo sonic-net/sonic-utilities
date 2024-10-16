@@ -1,0 +1,361 @@
+#!/usr/bin/python3
+
+"""
+    Script to show pac information 
+    Example of the output:
+
+    root@sonic:/home/admin# sudo pacshow -t interface -a
+
+	Interface    Port-Control    Host-Mode    Pae-Role      Max-Users  Reauth      Reauth-Period  Reauth-from-Serer    config-methods    config-priority    enabled-methods    enabled-priority
+	-----------  --------------  -----------  ----------  -----------  --------  ---------------  -------------------  ----------------  -----------------  -----------------  ------------------
+	Ethernet1    auto            multi-auth   none                 16  disabled               60  False                ['dot1x', 'mab']  none               none               none
+	Ethernet2    auto            multi-auth   none                 16  disabled               60  False                none              none               none               none
+
+    root@sonic:/home/admin# sudo pacshow -t interface -i Ethernet1
+
+   Interface    Port-Control    Host-Mode    Pae-Role      Max-Users  Reauth      Reauth-Period  Reauth-from-Serer    config-methods    config-priority    enabled-methods    enabled-priority
+    -----------  --------------  -----------  ----------  -----------  --------  ---------------  -------------------  ----------------  -----------------  -----------------  ------------------
+    Ethernet1    auto            multi-auth   none                 16  disabled               60  False                ['dot1x', 'mab']  none               none               none
+
+
+   root@sonic:/home/admin# sudo pacshow -t client -a
+
+	Authenticated Clients : 2
+
+	Interface    mac-addr           user-name      vlan
+	-----------  -----------------  -----------  ------
+	Ethernet0    00:11:01:00:00:01  vijaya1          10
+	Ethernet2    00:11:01:00:00:03  vijaya3          20
+   
+	root@sonic:/home/admin# sudo pacshow -t client -i Ethernet2
+
+	Authenticated Clients : 2
+
+	Interface    mac-addr           user-name      vlan
+	-----------  -----------------  -----------  ------
+	Ethernet2    00:11:01:00:00:03  vijaya3          20
+
+   root@sonic:/home/admin# sudo pacshow -t mab -a
+
+	Interface    MAB Enabled    auth-type
+	-----------  -------------  -----------
+	Ethernet2    true           eap-md5
+
+   root@sonic:/home/admin# sudo pacshow -t mab -a -i Ethernet2
+
+	Interface    MAB Enabled    auth-type
+	-----------  -------------  -----------
+	Ethernet2    true           eap-md5
+   
+	root@sonic:/home/admin# sudo pacshow -t dot1x -a 
+    
+    Admin Mode : disabled
+
+"""
+
+import argparse
+import sys
+
+from tabulate import tabulate
+from swsscommon.swsscommon import ConfigDBConnector, SonicV2Connector
+
+def pac_populate_dict(display_dict, port, config, oper):
+	
+    display_dict[port] = {}
+    for i in config.keys():
+        if i == "port_control_mode":
+            display_dict[port]['port-control'] = config["port_control_mode"]
+
+        if i == "host_control_mode":
+            display_dict[port]['host-control'] = config["host_control_mode"]
+        if i == "max_users_per_port":
+            display_dict[port]['max-users'] = config["max_users_per_port"]
+        if i == "port_pae_role":
+            display_dict[port]['port-role'] = config["port_pae_role"]
+        if i == "reauth_enable":
+            display_dict[port]['reauth-enable'] = 'enabled' if True == config["reauth_enable"] else 'disabled'
+        if i == "reauth_period":
+            display_dict[port]['reauth-period'] = config["reauth_period"]
+        if i == "reauth_period_from_server":
+            display_dict[port]['reauthperiod-from-server'] = config["reauth_period_from_server"]
+        if i == "method_list":
+            display_dict[port]['config-methods'] = config["method_list"]
+        if i == "priority_list":
+            display_dict[port]['config-priority'] = config["priority_list"]
+
+    display_dict[port]['enabled-methods'] = ['none']
+    display_dict[port]['enabled-priority'] = ['none']
+    
+    if oper:
+        for i in oper.keys():
+            if i == "enabled_method_list@": 
+                display_dict[port]['enabled-methods'] = oper["enabled_method_list@"]
+            if i == "enabled_priority_list@":
+                display_dict[port]['enabled-priority'] = oper["enabled_priority_list@"]
+
+    if 'port-control' not in display_dict[port].keys():
+        display_dict[port]['port-control'] = 'none'
+    if 'host-control' not in display_dict[port].keys():
+        display_dict[port]['host-control'] = 'none'
+    if 'max-users' not in display_dict[port].keys():
+        display_dict[port]['max-users'] = '16'
+    if 'port-role' not in display_dict[port].keys():
+        display_dict[port]['port-role'] = 'none'
+    if 'reauth-enable' not in display_dict[port].keys():
+        display_dict[port]['reauth-enable'] = 'disabled'
+    if 'reauth-period' not in display_dict[port].keys():
+        display_dict[port]['reauth-period'] = '60'
+    if 'reauthperiod-from-server' not in display_dict[port].keys():
+        display_dict[port]['reauthperiod-from-server'] = False
+    if 'config-methods' not in display_dict[port].keys():
+        display_dict[port]['config-methods'] = ['dot1x', 'mab']
+    if 'config-priority' not in display_dict[port].keys():
+        display_dict[port]['config-priority'] = ['dot1x', 'mab']
+
+
+
+
+class pacShow(object):
+
+    def __init__(self):
+        super(pacShow,self).__init__()
+        self.config_db = ConfigDBConnector()
+        self.config_db.connect()
+
+        self.state_db = SonicV2Connector(host='127.0.0.1')
+        self.state_db.connect(self.state_db.STATE_DB)
+        return
+
+
+    def fetch_authentication_interface(self, port):
+        """
+            Fetch interface related data.
+        """
+        self.display_dict = {}
+
+        pac_tables = self.config_db.get_table('PAC_PORT_CONFIG_TABLE')
+        if not pac_tables:
+            return
+        if port == 'all':
+            for i in pac_tables:
+                pac_keys = []
+                config_dict = {}
+                oper_dict = {}
+                pac_keys = i.split("|")
+                if pac_keys[0] not in self.display_dict.keys():
+                    if pac_tables[i].__len__() == 0:
+                        continue
+                    self.display_dict[pac_keys[0]] = {}
+                config_dict = pac_tables[i]
+                oper_dict = self.state_db.get_all(self.state_db.STATE_DB, 'PAC_PORT_OPER_TABLE|{}'.format(pac_keys[0]))
+                pac_populate_dict(self.display_dict, pac_keys[0],config_dict, oper_dict)
+        else:
+            config_dict = {}
+            oper_dict = {}
+            config_dict = pac_tables[port]
+            oper_dict = self.state_db.get_all(self.state_db.STATE_DB, 'PAC_PORT_OPER_TABLE|{}'.format(port))
+            pac_populate_dict(self.display_dict, port,config_dict, oper_dict)
+
+
+    def fetch_mab_interface(self, port):
+        """
+            Fetch interface related mab data.
+        """
+        self.display_dict = {}
+
+        mab_tables = self.config_db.get_table('MAB_PORT_CONFIG_TABLE')
+        if not mab_tables:
+            return
+        if port == 'all':
+            for i in mab_tables:
+                mab_keys = []
+                mab_keys = i.split("|")
+                self.display_dict[mab_keys[0]]= mab_tables[i]
+        else:
+            self.display_dict[port] = mab_tables[port] 
+
+
+
+    def fetch_authentication_client_all(self):
+        """
+            Fetch client related data per interface.
+        """
+        self.client_dict = {}
+
+        client_tables = self.state_db.keys(self.state_db.STATE_DB, 'PAC_AUTHENTICATED_CLIENT_OPER_TABLE|*')
+        for i in client_tables:
+            client_keys = []
+            test_dict = {}
+            client_keys = i.split("|")
+            if client_keys[1]:
+                if client_keys[1] not in self.client_dict.keys():
+                    self.client_dict[client_keys[1]] = {}
+                test_dict = self.state_db.get_all(self.state_db.STATE_DB, i)
+                self.client_dict[client_keys[1]][client_keys[2]] = self.state_db.get_all(self.state_db.STATE_DB, i)
+
+
+    def fetch_authentication_client(self, port):
+        """
+            Fetch client related data per interface.
+        """
+        self.client_dict = {}
+
+        client_tables = self.state_db.keys(self.state_db.STATE_DB, 'PAC_AUTHENTICATED_CLIENT_OPER_TABLE|*')
+        for i in client_tables:
+            client_keys = []
+            client_keys = i.split("|")
+            if port in client_keys:
+                if client_keys[1] not in self.client_dict.keys():
+                    self.client_dict[client_keys[1]] = {}
+                self.client_dict[client_keys[1]][client_keys[2]] = self.state_db.get_all(self.state_db.STATE_DB, i)
+
+    def display_authentication(self):
+        """
+            display the number of authenticated clients.
+        """
+        client_tables = self.state_db.keys(self.state_db.STATE_DB, 'PAC_AUTHENTICATED_CLIENT_OPER_TABLE|*')
+        print("Authenticated Clients : {}".format(len(client_tables)))
+
+    def display_dot1x(self):
+        """
+            display the dot1x system-auth-control status.
+        """
+        self.display_dict = {}
+
+        self.display_dict = self.config_db.get_all(self.config_db.CONFIG_DB, 'HOSTAPD_GLOBAL_CONFIG_TABLE|GLOBAL')
+        if 'dot1x_system_auth_control' not in self.display_dict.keys():
+            status = False
+        else:
+            status = self.display_dict['dot1x_system_auth_control']
+        print("802.1X admin mode : {}".format("Enabled" if status else  "Disabled"))
+
+
+
+    def display_authentication_interface(self):
+        """
+            display interface related data.
+        """
+        HEADER = ['Interface', 'Port-Control', 'Host-Mode', 'Pae-Role', 'Max-Users', 'Reauth', 'Reauth-Period', 'Reauth-from-Serer', 'config-methods', 'config-priority', 'enabled-methods', 'enabled-priority'] 
+        output = []
+        for i in self.display_dict.keys():
+            data = {}
+            data = self.display_dict[i]
+            output.append([i, data['port-control'], data['host-control'], data['port-role'], data['max-users'], data['reauth-enable'], data['reauth-period'], data['reauthperiod-from-server'], ','.join(data['config-methods']), ','.join(data['config-priority']), data['enabled-methods'], data['enabled-priority']])
+        print("")
+        print(tabulate(output, HEADER))
+        print("")
+
+    def display_authentication_client_interface(self):
+        """
+            display per interface related client data.
+        """
+        sorted_keys = sorted(self.client_dict.keys())
+        for i in sorted_keys:
+            print("Interface  : {}".format(i))
+            for j in self.client_dict[i].keys():
+                print("mac-addr : {}".format(j))
+                for client_data in self.client_dict[i][j]:
+                    for k in client_data.keys():
+                        print("{} : {}".format(k, client_data[k])) 
+
+
+    def display_authentication_client_interface_all(self):
+        """
+            display all client data.
+        """
+        self.display_authentication() 
+        HEADER = ['Interface', 'mac-addr', 'user-name', 'vlan'] 
+        output = []
+        sorted_keys = sorted(self.client_dict.keys())
+        for i in sorted_keys:
+            for j in self.client_dict[i].keys():
+                output.append([i, j, self.client_dict[i][j]['user_name'], self.client_dict[i][j]['vlan_id']])
+
+        print("")
+        print(tabulate(output, HEADER))
+        print("")
+
+
+    def display_mab_interface(self):
+        """
+            display mab data.
+        """
+        HEADER = ['Interface', 'MAB Enabled', 'auth-type'] 
+        output = []
+        sorted_keys = sorted(self.display_dict.keys())
+        for i in sorted_keys:
+            if 'mab_enable' not in self.display_dict[i].keys():
+                self.display_dict[i]['mab_enable'] = False
+                continue
+
+            if 'mab_auth_type' not in self.display_dict[i].keys():
+                self.display_dict[i]['mab_auth_type'] = 'eap-md5'
+            output.append([i, self.display_dict[i]['mab_enable'], self.display_dict[i]['mab_auth_type']])
+        print("")
+        print(tabulate(output, HEADER))
+        print("")
+
+
+
+
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Display the PAC  information',
+                                     formatter_class=argparse.RawTextHelpFormatter,
+                                     epilog="""
+    Examples:
+    authentication -p -a
+    authentication -p -i
+    authentication -c -a
+    authentication -c -i 
+    authentication -d
+    authentication -m
+    authentication -m -i 
+    """)
+    parser.add_argument('-t', '--type', required=True, action='store',
+                        choices=['interface', 'client', 'dot1x', 'mab'],
+                        help='The type of pac information')
+    parser.add_argument('-a', '--all', action='store_true', help='Show all entries')
+    parser.add_argument('-i', '--interface', type=str, help='Show interface related information')
+
+    args = parser.parse_args()
+    
+    show_type = args.type
+    show_all = args.all
+    show_interface = args.interface
+
+    if show_interface:
+        show_interface = show_interface.strip()
+    try:
+        pac = pacShow()
+        if show_type == 'interface':
+            if show_all:
+                pac.fetch_authentication_interface('all')
+                pac.display_authentication_interface()
+            elif show_interface:
+                pac.fetch_authentication_interface(show_interface)
+                pac.display_authentication_interface()
+        if show_type == 'client':
+            if show_all:
+                pac.fetch_authentication_client_all()
+                pac.display_authentication_client_interface_all()
+            elif show_interface:
+                pac.fetch_authentication_client(show_interface)
+                pac.display_authentication_client_interface_all()
+        if show_type == 'dot1x':
+           pac.display_dot1x()
+        if show_type == 'mab':
+            if show_all:
+                pac.fetch_mab_interface('all')
+                pac.display_mab_interface()
+            elif show_interface:
+                pac.fetch_mab_interface(show_interface)
+                pac.display_mab_interface()
+    except Exception as e:
+        print(str(e))
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
+
