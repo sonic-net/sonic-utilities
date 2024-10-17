@@ -37,6 +37,8 @@ from sonic_py_common import multi_asic
 PORT_STATUS_TABLE_PREFIX = "PORT_TABLE:"
 PORT_STATE_TABLE_PREFIX = "PORT_TABLE|"
 PORT_TRANSCEIVER_TABLE_PREFIX = "TRANSCEIVER_INFO|"
+PORT_TABLE_PREFIX = "PORT|"
+PORT_ROLE = "role"
 PORT_LANES_STATUS = "lanes"
 PORT_ALIAS = "alias"
 PORT_OPER_STATUS = "oper_status"
@@ -54,7 +56,7 @@ PORT_INTERFACE_TYPE = 'interface_type'
 PORT_ADV_INTERFACE_TYPES = 'adv_interface_types'
 PORT_TPID = "tpid"
 OPTICS_TYPE_RJ45 = RJ45_PORT_TYPE
-TYPE_DPC = 'DPU-NPU Data Port'
+TYPE_DPC = 'Dpc'
 PORT_LINK_TRAINING = 'link_training'
 PORT_LINK_TRAINING_STATUS = 'link_training_status'
 
@@ -221,11 +223,15 @@ def port_optics_get(db, intf_name, type):
     Get optic type info for port
     """
     full_table_id = PORT_TRANSCEIVER_TABLE_PREFIX + intf_name
+    port_id = PORT_TABLE_PREFIX + intf_name
+    port_role = db.get(db.CONFIG_DB, port_id, PORT_ROLE)
     optics_type = db.get(db.STATE_DB, full_table_id, type)
     if optics_type is None:
         if is_rj45_port(intf_name):
             return OPTICS_TYPE_RJ45
         elif db.get(db.APPL_DB, PORT_STATUS_TABLE_PREFIX + intf_name, multi_asic.PORT_ROLE) == multi_asic.DPU_CONNECT_PORT:
+            return TYPE_DPC
+        elif port_role == TYPE_DPC:
             return TYPE_DPC
         else:
             return "N/A"
