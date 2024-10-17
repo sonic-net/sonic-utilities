@@ -184,14 +184,60 @@ function check_conflict_boot_in_fw_update()
     fi
 }
 
+# Function to retrieve DPU IP from CONFIG_DB
+function get_dpu_ip()
+{
+    local DPU_NAME=$1
+    dpu_ip=$(sonic-db-cli CONFIG_DB HGET "DHCP_SERVER_IPV4_PORT|bridge-midplane|${DPU_NAME}" "ips")
+    if [ $? -ne 0 ] || [ -z "$dpu_ip" ]; then
+        echo "Error: Failed to retrieve DPU IP address for ${DPU_NAME}"
+        exit ${EXIT_ERROR}
+    fi
+    debug "$DPU_NAME ip: $dpu_ip"
+}
+
+# Function to retrieve GNMI port from CONFIG_DB
+function get_gnmi_port() {
+    port=$(sonic-db-cli CONFIG_DB HGET "GNMI|gnmi" "port")
+    if [ $? -ne 0 ] || [ -z "$port" ]; then
+        echo "Error: Failed to retrieve GNMI port"
+        exit ${EXIT_ERROR}
+    fi
+    debug "$DPU_NAME GNMI port:$port"
+}
+
+# Function to get reboot status from DPU
 function get_reboot_status()
 {
+    local dpu_ip=$1
+    local port=$2
     reboot_status=$(gnoi_client -target ${dpu_ip}:${port} -logtostderr -insecure -rpc RebootStatus)
     if [ $? -ne 0 ] || [ -z "$reboot_status" ]; then
         echo "Error: Failed to send reboot status command to DPU ${DPU_NAME}"
         exit ${EXIT_ERROR}
     fi
-    echo "$reboot_status"
+    debug "$reboot_status"
+}
+
+# Function to retrieve DPU bus info from platform JSON
+function get_dpu_bus_info() {
+    local DPU_NAME=$1
+    DPU_BUS_INFO=$(jq -r --arg DPU_NAME "${DPU_NAME}" '.DPUS[] | select(has($DPU_NAME)) | .[$DPU_NAME].bus_info' "$PLATFORM_JSON_PATH")
+    if [ -z "$DPU_BUS_INFO" ]; then
+        echo "Error: bus_info not found for DPU ${DPU_NAME}"
+        exit ${EXIT_ERROR}
+    fi
+    debug "$DPU_NAME : $DPU_BUS_INFO"
+}
+
+# Function to reboot the platform module
+function reboot_platform_module() {
+    local DPU_NAME=$1
+    reboot_status=$(python3 -c "import reboot_helper; reboot_helper.reboot_module('${DPU_NAME}')")
+    if [ -z "$reboot_status" ] || [ "$reboot_status" = "false" ]; then
+        echo "Error: Failed to reboot the platform"
+        exit ${EXIT_ERROR}
+    fi
 }
 
 function reboot_dpu_module()
@@ -201,20 +247,9 @@ function reboot_dpu_module()
 
     debug "User requested rebooting device ${DPU_NAME} ..."
 
-    # Retrieve DPU IP from CONFIG_DB
-    dpu_ip=$(sonic-db-cli CONFIG_DB HGET "DHCP_SERVER_IPV4_PORT|bridge-midplane|${DPU_NAME}" "ips")
-    if [ $? -ne 0 ] || [ -z "$dpu_ip" ]; then
-        echo "Error: Failed to retrieve DPU IP address for ${DPU_NAME}"
-        exit ${EXIT_ERROR}
-    fi
-
-    # Retrieve GNMI port from CONFIG_DB
-    port=$(sonic-db-cli CONFIG_DB HGET "GNMI|gnmi" "port")
-    debug "GNMI port ${port}"
-    if [ $? -ne 0 ] || [ -z "$port" ]; then
-        echo "Error: Failed to retrieve GNMI port"
-        exit ${EXIT_ERROR}
-    fi
+    # Retrieve DPU IP and GNMI port
+    dpu_ip=$(get_dpu_ip "${DPU_NAME}")
+    port=$(get_gnmi_port)
 
     # Issue GNOI client command to reboot the DPU
     gnoi_client -target ${dpu_ip}:${port} -logtostderr -insecure -rpc Reboot -jsonin '{"method":3}'
@@ -229,60 +264,30 @@ function reboot_dpu_module()
     # Poll on reboot status response with a timeout mechanism
     poll_interval=5
     waited_time=0
-
     while true; do
-        reboot_status=$(get_reboot_status)
+        reboot_status=$(get_reboot_status "${dpu_ip}" "${port}")
         debug "GNOI RebootStatus response ${reboot_status}"
         is_reboot_active=$(echo "$reboot_status" | grep "active" | awk '{print $2}')
-
         if [ "$is_reboot_active" == "false" ]; then
             break
         fi
 
         sleep "$poll_interval"
         waited_time=$((waited_time + poll_interval))
-
-	if [ $waited_time -ge $dpu_halt_services_timeout ]; then
+	    if [ $waited_time -ge $dpu_halt_services_timeout ]; then
             echo "Error: Timeout waiting for DPU ${DPU_NAME} to finish rebooting"
             exit ${EXIT_ERROR}
         fi
     done
 
-    # Check if the given DPU_NAME exists in the JSON file
-    DPU_EXISTS=$(jq -r --arg DPU_NAME "${DPU_NAME}" '.DPUS[] | select(has($DPU_NAME)) | .[$DPU_NAME]' "$PLATFORM_JSON_PATH" 2>/dev/null)
+    # Check if DPU exists and retrieve bus info
+    DPU_BUS_INFO=$(get_dpu_bus_info "${DPU_NAME}")
 
-    if [ -n "$DPU_EXISTS" ]; then
-        # Retrieve bus_info for the given DPU_NAME
-        DPU_BUS_INFO=$(jq -r --arg DPU_NAME "${DPU_NAME}" '.DPUS[] | select(has($DPU_NAME)) | .[$DPU_NAME].bus_info' "$PLATFORM_JSON_PATH")
-
-        if [ -n "$DPU_BUS_INFO" ]; then
-            debug "DPU: ${DPU_NAME}, Bus Info: ${BUS_INFO}"
-        else
-            echo "Error: bus_info not found for DPU ${DPU_NAME}"
-            exit ${EXIT_ERROR}
-        fi
-    else
-        echo "Error: DPU ${DPU_NAME} not found in platform.json"
-        exit ${EXIT_ERROR}
-    fi
-
-    # Update STATE_DB with DPU PCIe key
-    sonic-db-cli state_db set "PCIE_DETACH_INFO|${DPU_NAME}" '{"dpu_id": "${DPU_INDEX}", "dpu_state": "detaching", "bus_info": ${DPU_BUS_INFO}}'
-
-    # Detach the DPU module PCIe
+    # Update STATE_DB and handle PCIe removal and rescan
+    sonic-db-cli state_db set "PCIE_DETACH_INFO|${DPU_NAME}" '{"dpu_id": "'${DPU_INDEX}'", "dpu_state": "detaching", "bus_info": "'${DPU_BUS_INFO}'"}'
     echo 1 > /sys/bus/pci/devices/${DPU_BUS_INFO}/remove
-
-    # Reboot the DPU via platform vendor API
-    reboot_status=$(python3 -c "import reboot_helper; reboot_helper.reboot_module('${DPU_NAME}')")
-    if [ -z "$reboot_status" ] || [ "$reboot_status" = "false" ]; then
-        echo "Error: Failed to reboot the platform"
-        exit ${EXIT_ERROR}
-    fi
-
-    # Rescan the PCIe
+    reboot_platform_module "${DPU_NAME}"
     echo 1 > /sys/bus/pci/rescan
-
-    # Update STATE_DB to delete DPU PCIe key
     sonic-db-cli state_db del "PCIE_DETACH_INFO|${DPU_NAME}"
 }
 
@@ -332,6 +337,17 @@ function linecard_reboot_notify_supervisor()
     fi
 }
 
+# Function to reboot all DPUs in parallel
+function reboot_all_dpus() {
+    local NUM_DPU=$1
+
+    for (( i=0; i<"$NUM_DPU"; i++ )); do
+        echo "Rebooting DPU module dpu$i"
+        reboot_dpu_module "dpu$i" &
+    done
+    wait
+}
+
 parse_options $@
 
 # Exit if not superuser
@@ -342,10 +358,8 @@ fi
 
 debug "User requested rebooting device ..."
 
-# Check for smart switch by parsing platform.json file
 if [ -f "$PLATFORM_JSON_PATH" ]; then
     NUM_DPU=$(jq -r '.DPUS | length' "$PLATFORM_JSON_PATH" 2>/dev/null)
-
     if [ "$NUM_DPU" -gt 0 ]; then
         SMART_SWITCH="yes"
     fi
@@ -355,12 +369,7 @@ if [[ "$REBOOT_DPU" == "yes" && "$SMART_SWITCH" == "yes" ]]; then
     echo "User requested to reboot the device ${DPU_MODULE_NAME}"
     reboot_dpu_module "$DPU_MODULE_NAME"
 elif [ "$SMART_SWITCH" == "yes" ]; then
-    # Loop to iterate over DPUs and invoke reboot_dpu_module in parallel
-    for (( i=0; i<"$NUM_DPU"; i++ )); do
-        echo "Rebooting DPU module $i"
-        reboot_dpu_module "dpu$i" &
-    done
-    wait
+    reboot_all_dpus "$NUM_DPU"
 fi
 
 check_conflict_boot_in_fw_update
