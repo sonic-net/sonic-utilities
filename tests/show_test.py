@@ -1040,6 +1040,12 @@ class TestShow(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_with(['ztp', 'status', '--verbose'], display_cmd=True)
 
+    @patch('show.main.run_command')
+    def test_show_logrotate(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands['logrotate'])
+        assert result.exit_code == 0
+
     def teardown(self):
         print('TEAR DOWN')
 
