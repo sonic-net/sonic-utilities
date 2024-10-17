@@ -5016,29 +5016,25 @@ In a FEC histogram, "bins" represent ranges of errors or specific categories of 
 - Example:
   ```
   admin@str-s6000-acs-11:/usr/bin$ show interface counters fec-histogram -i <PORT>
-
-Symbol Errors Per Codeword  Codewords
---------------------------  ---------
-BIN0:                       1000000
-BIN1:                       900000
-BIN2:                       800000
-BIN3:                       700000
-BIN4:                       600000
-BIN5:                       500000
-BIN6:                       400000
-BIN7:                       300000
-BIN8:                       0
-BIN9:                       0
-BIN10:                      0
-BIN11:                      0
-BIN12:                      0
-BIN13:                      0
-BIN14:                      0
-BIN15:                      0
-
-   ```
-
-
+  Symbol Errors Per Codeword  Codewords
+  --------------------------  ---------
+  BIN0:                       1000000
+  BIN1:                       900000
+  BIN2:                       800000
+  BIN3:                       700000
+  BIN4:                       600000
+  BIN5:                       500000
+  BIN6:                       400000
+  BIN7:                       300000
+  BIN8:                       0
+  BIN9:                       0
+  BIN10:                      0
+  BIN11:                      0
+  BIN12:                      0
+  BIN13:                      0
+  BIN14:                      0
+  BIN15:                      0
+  ```
 
 
 **show interfaces description**
