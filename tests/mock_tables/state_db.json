@@ -1681,5 +1681,8 @@
     },
     "PORT_CAPACITY_TABLE|PORT_CAPACITY_DATA" : {
         "capacity": "80000"
+    },
+    "STP_TABLE|GLOBAL": {
+        "max_stp_inst": "510"
     }
 }
