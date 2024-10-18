@@ -9,7 +9,8 @@
         "speed": "10000",
         "fec": "none",
         "autoneg": "on",
-        "adv_speeds": "10000"
+        "adv_speeds": "10000",
+        "dhcp_rate_limit": "100"
     },
     "PORT|Ethernet2": {
         "index": "0",
@@ -21,7 +22,8 @@
         "pfc_asym": "off",
         "speed": "25000",
         "fec": "none",
-        "autoneg": "off"
+        "autoneg": "off",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet4": {
         "index": "1",
@@ -32,7 +34,8 @@
         "alias": "etp2a",
         "pfc_asym": "off",
         "speed": "50000",
-        "fec": "none"
+        "fec": "none",
+        "dhcp_rate_limit": "300"
     },
     "VERSIONS|DATABASE": {
         "VERSION": "version_3_0_1"
