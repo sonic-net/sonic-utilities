@@ -25,6 +25,12 @@ class TestMultiAsicChangeApplier(unittest.TestCase):
             "/asic0123456789/PORTCHANNEL/PortChannel102/admin_status": (
                 True, "asic0123456789", "/PORTCHANNEL/PortChannel102/admin_status"
             ),
+            "/asic1/PORTCHANNEL_INTERFACE/PortChannel106|10.0.0.6/31": (
+                True, "asic1", "/PORTCHANNEL_INTERFACE/PortChannel106|10.0.0.6/31"
+            ),
+            "/asic1/PORTCHANNEL_INTERFACE/PortChannel106|10.0.0.6~131": (
+                True, "asic1", "/PORTCHANNEL_INTERFACE/PortChannel106|10.0.0.6~131"
+            ),
             "/localhost/BGP_DEVICE_GLOBAL/STATE/tsa_enabled": (
                 True, "localhost", "/BGP_DEVICE_GLOBAL/STATE/tsa_enabled"
             ),
