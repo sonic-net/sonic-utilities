@@ -1241,6 +1241,18 @@ collect_mellanox() {
         fi
     fi
 
+    # collect the sdk dump
+    local sdk_dbg_folder="/var/log/sdk_dbg"
+    for file in $(find $sdk_dbg_folder -name "sx_sdk_*")
+    do
+        if [[ $file != *.gz ]]
+        then
+            save_file $file sai_sdk_dump true
+        else
+            save_file $file sai_sdk_dump false
+        fi
+    done
+
     # run 'hw-management-generate-dump.sh' script and save the result file
     HW_DUMP_FILE=/usr/bin/hw-management-generate-dump.sh
     if [ -f "$HW_DUMP_FILE" ]; then
