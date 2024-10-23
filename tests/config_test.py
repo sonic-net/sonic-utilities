@@ -3905,3 +3905,63 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         from .mock_tables import mock_single_asic
         importlib.reload(mock_single_asic)
         dbconnector.load_database_config()
+
+
+class TestConfigBanner(object):
+    @classmethod
+    def setup_class(cls):
+        print('SETUP')
+        import config.main
+        importlib.reload(config.main)
+
+    @patch('utilities_common.cli.run_command',
+           mock.MagicMock(side_effect=mock_run_command_side_effect))
+    def test_banner_state(self):
+        runner = CliRunner()
+        obj = {'db': Db().cfgdb}
+
+        result = runner.invoke(
+            config.config.commands['banner'].commands['state'],
+            ['enabled'], obj=obj)
+
+        assert result.exit_code == 0
+
+    @patch('utilities_common.cli.run_command',
+           mock.MagicMock(side_effect=mock_run_command_side_effect))
+    def test_banner_login(self):
+        runner = CliRunner()
+        obj = {'db': Db().cfgdb}
+
+        result = runner.invoke(
+            config.config.commands['banner'].commands['login'],
+            ['Login message'], obj=obj)
+
+        assert result.exit_code == 0
+
+    @patch('utilities_common.cli.run_command',
+           mock.MagicMock(side_effect=mock_run_command_side_effect))
+    def test_banner_logout(self):
+        runner = CliRunner()
+        obj = {'db': Db().cfgdb}
+
+        result = runner.invoke(
+            config.config.commands['banner'].commands['logout'],
+            ['Logout message'], obj=obj)
+
+        assert result.exit_code == 0
+
+    @patch('utilities_common.cli.run_command',
+           mock.MagicMock(side_effect=mock_run_command_side_effect))
+    def test_banner_motd(self):
+        runner = CliRunner()
+        obj = {'db': Db().cfgdb}
+
+        result = runner.invoke(
+            config.config.commands['banner'].commands['motd'],
+            ['Motd message'], obj=obj)
+
+        assert result.exit_code == 0
+
+    @classmethod
+    def teardown_class(cls):
+        print('TEARDOWN')
