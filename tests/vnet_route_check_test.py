@@ -341,7 +341,9 @@ class Table:
 
 
 db_conns = {"APPL_DB": APPL_DB, "ASIC_DB": ASIC_DB, "COUNTERS_DB": CNTR_DB}
-def conn_side_effect(arg, _):
+
+
+def conn_side_effect(arg, _, __):
     return db_conns[arg]
 
 
