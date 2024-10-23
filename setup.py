@@ -116,6 +116,7 @@ setup(
         'scripts/buffershow',
         'scripts/coredump-compress',
         'scripts/configlet',
+        'scripts/config_validator.py',
         'scripts/db_migrator.py',
         'scripts/decode-syseeprom',
         'scripts/dropcheck',
