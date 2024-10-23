@@ -313,6 +313,7 @@ class TestConfigOverrideMultiasic(object):
             runner = CliRunner()
             result = runner.invoke(config.config.commands["override-config-table"],
                                    ['golden_config_db.json'], obj=db)
+            print("result", result.output)
             assert result.exit_code == 0
 
         for ns, config_db in cfgdb_clients.items():
