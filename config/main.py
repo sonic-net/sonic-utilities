@@ -2323,6 +2323,9 @@ def validate_config_by_cm_alerting(cm, config_json, jname):
     except Exception as ex:
         log.log_warning("Failed to validate {}. Alerting: {}".format(jname, ex))
 
+    if len(cm.tablesWithOutYang()):
+        log.log_warning("YANG failed to cover tables: {}.".format(str(cm.tablesWithOutYang)))
+
 
 def override_config_db(config_db, config_input):
     # Deserialized golden config to DB recognized format
