@@ -1689,6 +1689,45 @@ collect_nvidia_bluefield() {
 }
 
 ###############################################################################
+# Collect Pensando specific information
+# Globals:
+#  MKDIR
+#  V
+#  NOOP
+#  RM
+# Arguments:
+#  None
+# Returns:
+#  None
+###############################################################################
+collect_pensando() {
+    trap 'handle_error $? $LINENO' ERR
+    platform=$(grep 'onie_platform=' /host/machine.conf | cut -d '=' -f 2)
+    pipeline=`cat /usr/share/sonic/device/${platform}/default_pipeline`
+    if [ ${pipeline} = "polaris" ]; then
+        dpu_container_name="polaris"
+    else
+        dpu_container_name="dpu"
+    fi
+    local dpu_dump_folder="/root/dpu_dump"
+    $MKDIR $V -p $dpu_dump_folder
+    if $NOOP; then
+        echo "docker exec ${dpu_container_name} /nic/tools/collect_techsupport.sh"
+    else
+        output=$(docker exec ${dpu_container_name} /nic/tools/collect_techsupport.sh 2>&1)
+        if echo "${output}" | grep -q "Techsupport collected at"; then
+            file_path=$(echo "${output}" | grep -oP '(?<=Techsupport collected at ).*')
+            file_name=$(basename "${file_path}")
+            copy_from_docker ${dpu_container_name} ${file_path} ${dpu_dump_folder}
+            save_file ${dpu_dump_folder}/${file_name} ${dpu_container_name}_techsupport false
+        else
+            echo "Failed to collect ${dpu_container_name} container techsupport..."
+        fi
+    fi
+    $RM $V -rf $dpu_dump_folder
+}
+
+###############################################################################
 # Save log file
 # Globals:
 #  TAR, TARFILE, DUMPDIR, BASE, TARDIR, TECHSUPPORT_TIME_INFO
@@ -2120,6 +2159,10 @@ main() {
 
     if [ "$asic" = "marvell" ]; then
         collect_marvell
+    fi
+
+    if [ "$asic" = "pensando" ]; then
+        collect_pensando
     fi
 
 
