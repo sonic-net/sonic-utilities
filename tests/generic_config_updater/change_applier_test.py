@@ -72,28 +72,25 @@ DB_HANDLE = "config_db"
 def debug_print(msg):
     print(msg)
 
-
-# Mimics os.system call for sonic-cfggen -d --print-data > filename
+# Mimics os.system call for `sonic-cfggen -d --print-data` output
 def subprocess_Popen_cfggen(cmd, *args, **kwargs):
     global running_config
 
-    # Extract file name from kwargs if 'stdout' is a file object
-    stdout = kwargs.get('stdout')
-    if hasattr(stdout, 'name'):
-        fname = stdout.name
-    else:
-        raise ValueError("stdout is not a file")
+    stdout = kwargs.get('stdout', None)
 
-    # Write the running configuration to the file specified in stdout
-    with open(fname, "w") as s:
-        json.dump(running_config, s, indent=4)
-    
+    if stdout is None:
+        output = json.dumps(running_config, indent=4)
+    elif isinstance(stdout, int) and stdout == -1:
+        output = json.dumps(running_config, indent=4)
+    else:
+        raise ValueError("stdout must be set to subprocess.PIPE or omitted for capturing output")
+
     class MockPopen:
         def __init__(self):
-            self.returncode = 0  # Simulate successful command execution
+            self.returncode = 0
 
         def communicate(self):
-            return "", ""  # Simulate empty stdout and stderr
+            return output.encode(), "".encode()
 
     return MockPopen()
 
@@ -225,7 +222,7 @@ def vlan_validate(old_cfg, new_cfg, keys):
 
 class TestChangeApplier(unittest.TestCase):
 
-    @patch("generic_config_updater.change_applier.subprocess.Popen")
+    @patch("generic_config_updater.gu_common.subprocess.Popen")
     @patch("generic_config_updater.change_applier.get_config_db")
     @patch("generic_config_updater.change_applier.set_config")
     def test_change_apply(self, mock_set, mock_db, mock_subprocess_Popen):

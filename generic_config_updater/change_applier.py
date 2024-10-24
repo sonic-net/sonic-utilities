@@ -9,6 +9,7 @@ from collections import defaultdict
 from swsscommon.swsscommon import ConfigDBConnector
 from sonic_py_common import multi_asic
 from .gu_common import GenericConfigUpdaterError, genericUpdaterLogging
+from .gu_common import get_config_db_as_json
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 UPDATER_CONF_FILE = f"{SCRIPT_DIR}/gcu_services_validator.conf.json"
@@ -161,29 +162,4 @@ class ChangeApplier:
             data.pop(key, None)
 
     def _get_running_config(self):
-        _, fname = tempfile.mkstemp(suffix="_changeApplier")
-
-        if self.scope:
-            cmd = ['sonic-cfggen', '-d', '--print-data', '-n', self.scope]
-        else:
-            cmd = ['sonic-cfggen', '-d', '--print-data']
-
-        with open(fname, "w") as file:
-            result = subprocess.Popen(cmd, stdout=file, stderr=subprocess.PIPE, text=True)
-            _, err = result.communicate()
-
-        return_code = result.returncode
-        if return_code:
-            os.remove(fname)
-            raise GenericConfigUpdaterError(
-                f"Failed to get running config for scope: {self.scope}," +
-                f"Return code: {return_code}, Error: {err}")
-
-        run_data = {}
-        try:
-            with open(fname, "r") as file:
-                run_data = json.load(file)
-        finally:
-            if os.path.isfile(fname):
-                os.remove(fname)
-        return run_data
+        return get_config_db_as_json(self.scope)
