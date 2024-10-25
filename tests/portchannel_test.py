@@ -34,7 +34,7 @@ class TestPortChannel(object):
         print(result.output)
         assert result.exit_code != 0
         assert "Error: PortChan005 is invalid!, name should have prefix 'PortChannel' and suffix '<0-9999>'" in result.output
-    
+
     def test_add_portchannel_with_invalid_name_adhoc_validation(self):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
@@ -46,7 +46,15 @@ class TestPortChannel(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code != 0
-        assert "Error: PortChan005 is invalid!, name should have prefix 'PortChannel' and suffix '<0-9999>'" in result.output
+        assert "Error: PortChan005 is invalid!, name should have prefix 'PortChannel' and suffix '<0-9999>' " \
+            "and its length should not exceed 15 characters" in result.output
+
+        result = runner.invoke(config.config.commands["portchannel"].commands["add"], ["PortChanl00000"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "Error: PortChanl00000 is invalid!, name should have prefix 'PortChannel' and suffix '<0-9999>' and " \
+            "its length should not exceed 15 characters" in result.output
 
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry", mock.Mock(side_effect=JsonPatchConflict))
     @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
@@ -119,7 +127,7 @@ class TestPortChannel(object):
         runner = CliRunner()
         db = Db()
         obj = {'db':db.cfgdb}
-        
+
         # add a portchannel with invalid fats rate
         result = runner.invoke(config.config.commands["portchannel"].commands["add"], ["PortChannel0005", "--fast-rate", fast_rate], obj=obj)
         print(result.exit_code)

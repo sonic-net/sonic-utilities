@@ -3,6 +3,7 @@ import utilities_common.cli as clicommon
 
 from jsonpatch import JsonPatchConflict
 from .validated_config_db_connector import ValidatedConfigDBConnector
+from swsscommon.swsscommon import is_interface_name_valid, IFACE_NAME_MAX_LEN
 
 ADHOC_VALIDATION = True
 #
@@ -23,7 +24,9 @@ def add_vxlan(db, vxlan_name, src_ip):
 
     if ADHOC_VALIDATION:
         if not clicommon.is_ipaddress(src_ip):
-            ctx.fail("{} invalid src ip address".format(src_ip))  
+            ctx.fail("{} invalid src ip address".format(src_ip))
+        if not is_interface_name_valid(vxlan_name):
+            ctx.fail("'vxlan_name' length should not exceed {} characters".format(IFACE_NAME_MAX_LEN))
 
     vxlan_keys = db.cfgdb.get_keys('VXLAN_TUNNEL')
     if not vxlan_keys:
@@ -32,7 +35,7 @@ def add_vxlan(db, vxlan_name, src_ip):
       vxlan_count = len(vxlan_keys)
 
     if(vxlan_count > 0):
-        ctx.fail("VTEP already configured.")  
+        ctx.fail("VTEP already configured.")
 
     fvs = {'src_ip': src_ip}
     try:
@@ -59,7 +62,7 @@ def del_vxlan(db, vxlan_name):
       vxlan_count = len(vxlan_keys)
 
     if(vxlan_count > 0):
-        ctx.fail("Please delete the EVPN NVO configuration.")  
+        ctx.fail("Please delete the EVPN NVO configuration.")
 
     vxlan_keys = db.cfgdb.get_keys("VXLAN_TUNNEL_MAP|*")
     if not vxlan_keys:
@@ -68,7 +71,7 @@ def del_vxlan(db, vxlan_name):
       vxlan_count = len(vxlan_keys)
 
     if(vxlan_count > 0):
-        ctx.fail("Please delete all VLAN VNI mappings.")  
+        ctx.fail("Please delete all VLAN VNI mappings.")
 
     vnet_table = db.cfgdb.get_table('VNET')
     vnet_keys = vnet_table.keys()
@@ -100,7 +103,7 @@ def add_vxlan_evpn_nvo(db, nvo_name, vxlan_name):
       vxlan_count = len(vxlan_keys)
 
     if(vxlan_count > 0):
-        ctx.fail("EVPN NVO already configured")  
+        ctx.fail("EVPN NVO already configured")
 
     if len(db.cfgdb.get_entry('VXLAN_TUNNEL', vxlan_name)) == 0:
         ctx.fail("VTEP {} not configured".format(vxlan_name))
@@ -317,4 +320,3 @@ def del_vxlan_map_range(db, vxlan_name, vlan_start, vlan_end, vni_start):
            config_db.set_entry('VXLAN_TUNNEL_MAP', mapname, None)
        except JsonPatchConflict as e:
            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
-
