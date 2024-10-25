@@ -37,10 +37,17 @@ EXIT_NEXT_IMAGE_NOT_EXISTS=4
 EXIT_SONIC_INSTALLER_VERIFY_REBOOT=21
 EXIT_PLATFORM_FW_AU_FAILURE=22
 PLATFORM_FWUTIL_AU_REBOOT_HANDLE="platform_fw_au_reboot_handle"
+PLATFORM_JSON_FILE="platform.json"
+PLATFORM_JSON_PATH="${DEVPATH}/${PLATFORM}/${PLATFORM_JSON_FILE}"
 REBOOT_SCRIPT_NAME=$(basename $0)
 REBOOT_TYPE="${REBOOT_SCRIPT_NAME}"
 TAG_LATEST=no
 REBOOT_FLAGS=""
+FORCE_REBOOT="no"
+SMART_SWITCH="no"
+DPU_MODULE_NAME=""
+REBOOT_DPU="no"
+PRE_SHUTDOWN="no"
 
 function debug()
 {
@@ -128,6 +135,8 @@ function show_help_and_exit()
     echo " "
     echo "    Available options:"
     echo "        -h, -? : getting this help"
+    echo "        -d : DPU module name on a smart switch, option is invalid when on DPU"
+    echo "        -p : Pre-shutdown steps on DPU, invalid on NPU"
 
     exit ${EXIT_SUCCESS}
 }
@@ -154,7 +163,7 @@ function reboot_pre_check()
         ${DEVPATH}/${PLATFORM}/${PLATFORM_REBOOT_PRE_CHECK}
         [[ $? -ne 0 ]] && exit $?
     fi
-    
+
     # Verify the next image by sonic-installer
     local message=$(sonic-installer verify-next-image 2>&1)
     if [ $? -ne 0 ]; then
@@ -176,9 +185,128 @@ function check_conflict_boot_in_fw_update()
     fi
 }
 
+# Function to retrieve DPU IP from CONFIG_DB
+function get_dpu_ip()
+{
+    local DPU_NAME=$1
+    dpu_ip=$(sonic-db-cli CONFIG_DB HGET "DHCP_SERVER_IPV4_PORT|bridge-midplane|${DPU_NAME}" "ips@")
+    if [ $? -ne 0 ] || [ -z "$dpu_ip" ]; then
+        echo "Error: Failed to retrieve DPU IP address for ${DPU_NAME}"
+        exit ${EXIT_ERROR}
+    fi
+    debug "$DPU_NAME ip: $dpu_ip"
+}
+
+# Function to retrieve GNMI port from CONFIG_DB
+function get_gnmi_port() {
+    local DPU_NAME=$1
+    port=$(sonic-db-cli CONFIG_DB HGET "DPU_PORT|$DPU_NAME" "gnmi")
+    if [ $? -ne 0 ] || [ -z "$port" ]; then
+        echo "Error: Failed to retrieve GNMI port"
+        exit ${EXIT_ERROR}
+    fi
+    debug "$DPU_NAME GNMI port:$port"
+}
+
+# Function to get reboot status from DPU
+function get_reboot_status()
+{
+    local dpu_ip=$1
+    local port=$2
+    reboot_status=$(docker exec -i gnmi gnoi_client -target ${dpu_ip}:${port} -logtostderr -insecure -rpc RebootStatus)
+    if [ $? -ne 0 ] || [ -z "$reboot_status" ]; then
+        echo "Error: Failed to send reboot status command to DPU ${DPU_NAME}"
+        exit ${EXIT_ERROR}
+    fi
+    debug "$reboot_status"
+}
+
+# Function to retrieve DPU bus info from platform JSON
+function get_dpu_bus_info() {
+    local DPU_NAME=$1
+    DPU_BUS_INFO=$(jq -r --arg DPU_NAME "${DPU_NAME}" '.DPUS[] | select(has($DPU_NAME)) | .[$DPU_NAME].bus_info' "$PLATFORM_JSON_PATH")
+    if [ -z "$DPU_BUS_INFO" ]; then
+        echo "Error: bus_info not found for DPU ${DPU_NAME}"
+        exit ${EXIT_ERROR}
+    fi
+    debug "$DPU_NAME : $DPU_BUS_INFO"
+}
+
+# Function to reboot the platform module
+function reboot_platform_module() {
+    local DPU_NAME=$1
+    reboot_status=$(python3 -c "import reboot_helper; reboot_helper.reboot_module('${DPU_NAME}')")
+    if [ -z "$reboot_status" ] || [ "$reboot_status" = "false" ]; then
+        echo "Error: Failed to reboot the platform"
+        exit ${EXIT_ERROR}
+    fi
+}
+
+function reboot_dpu_module()
+{
+    local DPU_NAME=$1
+    local DPU_INDEX=${DPU_NAME//[!0-9]/}
+
+    debug "User requested rebooting device ${DPU_NAME} ..."
+
+    # Retrieve DPU IP and GNMI port
+    dpu_ip=$(get_dpu_ip "${DPU_NAME}")
+    port=$(get_gnmi_port "${DPU_NAME}")
+
+    if [ -z "$dpu_ip" ] || [ -z "$port" ]; then
+        echo "Error: Failed to retrieve DPU IP or GNMI port for ${DPU_NAME}"
+        exit ${EXIT_ERROR}
+    fi
+
+    # Issue GNOI client command to reboot the DPU
+    docker exec -i gnmi gnoi_client -target ${dpu_ip}:${port} -logtostderr -insecure -rpc Reboot -jsonin '{"method":3}'
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to send reboot command to DPU ${DPU_NAME}"
+        exit ${EXIT_ERROR}
+    fi
+
+    # Retrieve dpu_halt_services_timeout value using jq
+    dpu_halt_services_timeout=$(jq -r '.dpu_halt_services_timeout' "$PLATFORM_JSON_PATH" 2>/dev/null)
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to retrieve dpu_halt_services_timeout from ${PLATFORM_JSON_PATH}"
+        exit ${EXIT_ERROR}
+    fi
+
+    # Poll on reboot status response with a timeout mechanism
+    poll_interval=5
+    waited_time=0
+    while true; do
+        reboot_status=$(get_reboot_status "${dpu_ip}" "${port}")
+        debug "GNOI RebootStatus response ${reboot_status}"
+        is_reboot_active=$(echo "$reboot_status" | grep "active" | awk '{print $2}')
+        if [ "$is_reboot_active" == "false" ]; then
+            break
+        fi
+
+        sleep "$poll_interval"
+        waited_time=$((waited_time + poll_interval))
+	    if [ $waited_time -ge $dpu_halt_services_timeout ]; then
+            echo "Error: Timeout waiting for DPU ${DPU_NAME} to finish rebooting"
+            exit ${EXIT_ERROR}
+        fi
+    done
+
+    # Check if DPU exists and retrieve bus info
+    DPU_BUS_INFO=$(get_dpu_bus_info "${DPU_NAME}")
+
+    # Update STATE_DB and handle PCIe removal and rescan
+    sonic-db-cli state_db set "PCIE_DETACH_INFO|${DPU_NAME}" '{"dpu_id": "'${DPU_INDEX}'", "dpu_state": "detaching", "bus_info": "'${DPU_BUS_INFO}'"}'
+
+    echo 1 > /sys/bus/pci/devices/${DPU_BUS_INFO}/remove
+    reboot_platform_module "${DPU_NAME}"
+    echo 1 > /sys/bus/pci/rescan
+
+    sonic-db-cli state_db del "PCIE_DETACH_INFO|${DPU_NAME}"
+}
+
 function parse_options()
 {
-    while getopts "h?vf" opt; do
+    while getopts "h?vfpd" opt; do
         case ${opt} in
             h|\? )
                 show_help_and_exit
@@ -191,6 +319,13 @@ function parse_options()
                 ;;
             f )
                 REBOOT_FLAGS+=" -f"
+                ;;
+            d )
+                REBOOT_DPU="yes"
+                DPU_MODULE_NAME="$OPTARG"
+                ;;
+            p )
+                PRE_SHUTDOWN="yes"
                 ;;
         esac
     done
@@ -215,6 +350,55 @@ function linecard_reboot_notify_supervisor()
     fi
 }
 
+# Function to reboot all DPUs in parallel
+function reboot_all_dpus() {
+    local NUM_DPU=$1
+
+    for (( i=0; i<"$NUM_DPU"; i++ )); do
+        echo "Rebooting DPU module dpu$i"
+        reboot_dpu_module "dpu$i" &
+    done
+    wait
+}
+
+# Function to handle scenarios on smart switch
+function handle_smart_switch() {
+    if [ -f "$PLATFORM_JSON_PATH" ]; then
+        NUM_DPU=$(jq -r '.DPUS | length' "$PLATFORM_JSON_PATH" 2>/dev/null)
+        if [ "$NUM_DPU" -gt 0 ]; then
+            SMART_SWITCH="yes"
+        fi
+    fi
+
+    if [[ "$REBOOT_DPU" == "yes" ]]; then
+        if [[ "$SMART_SWITCH" == "yes" ]]; then
+            echo "User requested to reboot the device ${DPU_MODULE_NAME}"
+            reboot_dpu_module "$DPU_MODULE_NAME"
+        else
+            echo "Invalid '-d' option specified for a non-smart switch"
+            exit ${EXIT_ERROR}
+        fi
+    fi
+
+    if [[ "$SMART_SWITCH" == "yes" ]]; then
+        is_dpu=$(python3 -c "import reboot_helper; reboot_helper.is_dpu()")
+
+        # Check if system is a DPU and handle -p option accordingly
+        if [[ "$is_dpu" == "True" && "$PRE_SHUTDOWN" != "yes" ]]; then
+            echo "Invalid, '-p' option not specified for a DPU"
+            exit ${EXIT_ERROR}
+        elif [[ "$is_dpu" != "True" && "$PRE_SHUTDOWN" == "yes" ]]; then
+            echo "Invalid '-p' option specified for a non-DPU"
+            exit ${EXIT_ERROR}
+        fi
+
+        # If not a DPU, reboot all DPUs in parallel
+        if [[ "$is_dpu" != "True" ]]; then
+            reboot_all_dpus "$NUM_DPU"
+        fi
+    fi
+}
+
 parse_options $@
 
 # Exit if not superuser
@@ -224,6 +408,8 @@ if [[ "$EUID" -ne 0 ]]; then
 fi
 
 debug "User requested rebooting device ..."
+
+handle_smart_switch
 
 check_conflict_boot_in_fw_update
 
@@ -285,6 +471,11 @@ fi
 if [ -x ${WATCHDOG_UTIL} ]; then
     debug "Enabling the Watchdog before reboot"
     ${WATCHDOG_UTIL} arm
+fi
+
+if [[ "${PRE_SHUTDOWN}" == "yes" ]]; then
+    echo "${DPU_MODULE_NAME} pre-shutdown steps are completed"
+    exit ${EXIT_SUCCESS}
 fi
 
 if [ -x ${DEVPATH}/${PLATFORM}/${PLAT_REBOOT} ]; then
