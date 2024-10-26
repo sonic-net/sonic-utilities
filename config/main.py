@@ -8065,5 +8065,58 @@ def max_sessions(max_sessions):
                         {'max_sessions': max_sessions})
 
 
+#
+# 'banner' group ('config banner ...')
+#
+@config.group()
+def banner():
+    """Configuring system banner messages"""
+    pass
+
+
+@banner.command()
+@click.argument('state', metavar='<enabled|disabled>', required=True, type=click.Choice(['enabled', 'disabled']))
+def state(state):
+    """Set banner feature state"""
+
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    config_db.mod_entry(swsscommon.CFG_BANNER_MESSAGE_TABLE_NAME, 'global',
+                        {'state': state})
+
+
+@banner.command()
+@click.argument('message', metavar='<message>', required=True)
+def login(message):
+    """Set login message"""
+
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    config_db.mod_entry(swsscommon.CFG_BANNER_MESSAGE_TABLE_NAME, 'global',
+                        {'login': message})
+
+
+@banner.command()
+@click.argument('message', metavar='<message>', required=True)
+def logout(message):
+    """Set logout message"""
+
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    config_db.mod_entry(swsscommon.CFG_BANNER_MESSAGE_TABLE_NAME, 'global',
+                        {'logout': message})
+
+
+@banner.command()
+@click.argument('message', metavar='<message>', required=True)
+def motd(message):
+    """Set message of the day"""
+
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    config_db.mod_entry(swsscommon.CFG_BANNER_MESSAGE_TABLE_NAME, 'global',
+                        {'motd': message})
+
+
 if __name__ == '__main__':
     config()

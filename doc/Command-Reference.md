@@ -225,6 +225,9 @@
   * [Static DNS show command](#static-dns-show-command)
 * [Wake-on-LAN Commands](#wake-on-lan-commands)
   * [Send Wake-on-LAN Magic Packet command](#send-wake-on-lan-magic-packet-command)
+* [Banner Commands](#banner-commands)
+  * [Banner config commands](#banner-config-commands)
+  * [Banner show command](#banner-show-command)
 
 ## Document History
 
@@ -13819,3 +13822,89 @@ Sending 3 magic packet to 11:33:55:77:99:bb via interface Vlan1000
 ```
 
 For the 4th example, it specifise 2 target MAC addresses and `count` is 3. So it'll send 6 magic packets in total.
+
+# Banner Commands
+
+This sub-section explains the list of the configuration options available for Banner feature.
+
+## Banner config commands
+
+- Set banner feature state
+
+```
+admin@sonic:~$ config banner state <enabled|disabled>
+Usage: config config banner state <enabled|disabled>
+
+  Set banner feature state
+
+Options:
+  -?, -h, --help  Show this message and exit.
+```
+
+- Set login message
+
+```
+admin@sonic:~$ config banner login <message>
+Usage: config banner login <message>
+
+  Set login message
+
+Options:
+  -?, -h, --help  Show this message and exit.
+```
+
+- Set logout message
+
+```
+admin@sonic:~$ config banner logout <message>
+Usage: config banner logout <message>
+
+  Set logout message
+
+Options:
+  -?, -h, --help  Show this message and exit.
+```
+
+- Set message of the day
+
+```
+admin@sonic:~$ config banner motd <message>
+Usage: config banner motd <message>
+
+  Set message of the day
+
+Options:
+  -?, -h, --help  Show this message and exit.
+```
+
+## Banner show command
+
+- how banner messages
+
+```
+admin@sonic:~$ show banner
+Usage: show banner
+
+  Show banner messages
+
+Options:
+  -h, -?, --help  Show this message and exit.
+```
+```
+admin@sonic:~$ show banner
+state    login    motd                                              logout
+-------  -------  ------------------------------------------------  --------
+enabled  Login    You are on
+         Message    ____   ___  _   _ _  ____
+                   / ___| / _ \| \ | (_)/ ___|
+                   \___ \| | | |  \| | | |
+                    ___) | |_| | |\  | | |___
+                   |____/ \___/|_| \_|_|\____|
+
+                  -- Software for Open Networking in the Cloud --
+
+                  Unauthorized access and/or use are prohibited.
+                  All access and/or use are subject to monitoring.
+
+                  Help:    https://sonic-net.github.io/SONiC/
+```
