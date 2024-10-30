@@ -4248,6 +4248,105 @@ def del_user(db, user):
             click.echo("Restart service snmp failed with error {}".format(e))
             raise click.Abort()
 
+
+#
+# 'bmp' group ('config bmp ...')
+#
+@config.group()
+@clicommon.pass_db
+def bmp(db):
+    """BMP-related configuration"""
+    pass
+
+
+#
+# common function to update bmp config table
+#
+@clicommon.pass_db
+def update_bmp_table(db, table_name, value):
+    log.log_info(f"'bmp {value} {table_name}' executing...")
+    bmp_table = db.cfgdb.get_table('BMP')
+    if not bmp_table:
+        bmp_table = {'table': {table_name: value}}
+    else:
+        bmp_table['table'][table_name] = value
+    db.cfgdb.mod_entry('BMP', 'table', bmp_table['table'])
+
+
+#
+# 'enable' subgroup ('config bmp enable ...')
+#
+@bmp.group()
+@clicommon.pass_db
+def enable(db):
+    """Enable BMP table dump """
+    pass
+
+
+#
+# 'bgp-neighbor-table' command ('config bmp enable bgp-neighbor-table')
+#
+@enable.command('bgp-neighbor-table')
+@clicommon.pass_db
+def enable_bgp_neighbor_table(db):
+    update_bmp_table('bgp_neighbor_table', 'true')
+
+
+#
+# 'bgp-rib-out-table' command ('config bmp enable bgp-rib-out-table')
+#
+@enable.command('bgp-rib-out-table')
+@clicommon.pass_db
+def enable_bgp_rib_out_table(db):
+    update_bmp_table('bgp_rib_out_table', 'true')
+
+
+#
+# 'bgp-rib-in-table' command ('config bmp enable bgp-rib-in-table')
+#
+@enable.command('bgp-rib-in-table')
+@clicommon.pass_db
+def enable_bgp_rib_in_table(db):
+    update_bmp_table('bgp_rib_in_table', 'true')
+
+
+#
+# 'disable' subgroup ('config bmp disable ...')
+#
+@bmp.group()
+@clicommon.pass_db
+def disable(db):
+    """Disable BMP table dump """
+    pass
+
+
+#
+# 'bgp-neighbor-table' command ('config bmp disable bgp-neighbor-table')
+#
+@disable.command('bgp-neighbor-table')
+@clicommon.pass_db
+def disable_bgp_neighbor_table(db):
+    update_bmp_table('bgp_neighbor_table', 'false')
+
+
+#
+# 'bgp-rib-out-table' command ('config bmp disable bgp-rib-out-table')
+#
+@disable.command('bgp-rib-out-table')
+@clicommon.pass_db
+def diable_bgp_rib_out_table(db):
+    update_bmp_table('bgp_rib_out_table', 'false')
+
+
+#
+# 'bgp-rib-in-table' command ('config bmp disable bgp-rib-in-table')
+#
+@disable.command('bgp-rib-in-table')
+@clicommon.pass_db
+def disable_bgp_rib_in_table(db):
+    update_bmp_table('bgp_rib_in_table', 'false')
+
+
 #
 # 'bgp' group ('config bgp ...')
 #
