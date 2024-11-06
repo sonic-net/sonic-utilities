@@ -1823,7 +1823,7 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
             click.echo("Input {} config file(s) separated by comma for multiple files ".format(num_cfg_file))
             return
 
-    if filename is not None:
+    if filename is not None and filename != "/dev/stdin":
         if multi_asic.is_multi_asic():
             # Multiasic has not 100% fully validated. Thus pass here.
             pass
