@@ -229,7 +229,7 @@ class Portstat(object):
                     if counter_name not in fvs:
                         fields[pos] = STATUS_NA
                     elif fields[pos] != STATUS_NA:
-                        fields[pos] = str(int(fields[pos]) + int(fvs[counter_name]))
+                        fields[pos] = str(int(fields[pos]) + int(float(fvs[counter_name])))
 
             cntr = NStats._make(fields)._asdict()
             return cntr
