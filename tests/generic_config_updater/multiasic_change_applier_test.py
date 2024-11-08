@@ -1,7 +1,9 @@
+import jsonpointer
 import unittest
 from importlib import reload
 from unittest.mock import patch, MagicMock
 from generic_config_updater.generic_updater import extract_scope
+from generic_config_updater.generic_updater import GenericConfigUpdaterError
 import generic_config_updater.change_applier
 import generic_config_updater.services_validator
 import generic_config_updater.gu_common
@@ -49,6 +51,12 @@ class TestMultiAsicChangeApplier(unittest.TestCase):
             "/asic0123456789/PORTCHANNEL/PortChannel102/admin_status": (
                 True, "asic0123456789", "/PORTCHANNEL/PortChannel102/admin_status"
             ),
+            "/asic1/PORTCHANNEL_INTERFACE/PortChannel106|10.0.0.6/31": (
+                True, "asic1", "/PORTCHANNEL_INTERFACE/PortChannel106|10.0.0.6/31"
+            ),
+            "/asic1/PORTCHANNEL_INTERFACE/PortChannel106|10.0.0.6~131": (
+                True, "asic1", "/PORTCHANNEL_INTERFACE/PortChannel106|10.0.0.6~131"
+            ),
             "/localhost/BGP_DEVICE_GLOBAL/STATE/tsa_enabled": (
                 True, "localhost", "/BGP_DEVICE_GLOBAL/STATE/tsa_enabled"
             ),
@@ -95,7 +103,11 @@ class TestMultiAsicChangeApplier(unittest.TestCase):
                 scope, remainder = extract_scope(test_path)
                 assert(scope == expectedscope)
                 assert(remainder == expectedremainder)
-            except Exception:
+            except AssertionError:
+                assert(not result)
+            except GenericConfigUpdaterError:
+                assert(not result)
+            except jsonpointer.JsonPointerException:
                 assert(not result)
 
     @patch('sonic_py_common.multi_asic.is_multi_asic')
@@ -158,7 +170,11 @@ class TestMultiAsicChangeApplier(unittest.TestCase):
                 scope, remainder = extract_scope(test_path)
                 assert(scope == expectedscope)
                 assert(remainder == expectedremainder)
-            except Exception:
+            except AssertionError:
+                assert(not result)
+            except GenericConfigUpdaterError:
+                assert(not result)
+            except jsonpointer.JsonPointerException:
                 assert(not result)
 
     @patch('generic_config_updater.change_applier.get_config_db_as_json', autospec=True)
