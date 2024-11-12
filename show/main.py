@@ -2290,15 +2290,22 @@ def mirror_session(session_name, verbose):
 #
 @cli.command()
 @click.argument('policer_name', required=False)
+@click.option('--counter', is_flag=True, help="Show counters output")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def policer(policer_name, verbose):
-    """Show existing policers"""
-    cmd = ['acl-loader', 'show', 'policer']
+def policer(policer_name, counter, verbose):
+    if counter:
+        cmd = ['policerstat']
 
-    if policer_name is not None:
-        cmd += [str(policer_name)]
+        if policer_name is not None:
+            cmd += ["-p", str(policer_name)]  
+        run_command(cmd, display_cmd=verbose)
+    else:
+        cmd = ['acl-loader', 'show', 'policer']
 
-    run_command(cmd, display_cmd=verbose)
+        if policer_name is not None:
+            cmd += [str(policer_name)]
+
+        run_command(cmd, display_cmd=verbose)
 
 
 #
