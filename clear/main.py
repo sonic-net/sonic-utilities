@@ -218,6 +218,12 @@ def tunnelcounters():
     command = ["tunnelstat", "-c"]
     run_command(command)
 
+@cli.command()
+def policercounters():
+    """Clear Policer counters"""
+    command = ["policerstat", "-c"]
+    run_command(command)
+
 #
 # 'clear watermarks
 #

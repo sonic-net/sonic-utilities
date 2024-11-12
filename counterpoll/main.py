@@ -10,6 +10,7 @@ PORT_BUFFER_DROP = "PORT_BUFFER_DROP"
 PG_DROP = "PG_DROP"
 ACL = "ACL"
 ENI = "ENI"
+POLICER = "POLICER"
 DISABLE = "disable"
 ENABLE = "enable"
 DEFLT_60_SEC= "default (60000)"
@@ -256,6 +257,41 @@ def disable():
     configdb.mod_entry("FLEX_COUNTER_TABLE", "PG_WATERMARK", fc_info)
     configdb.mod_entry("FLEX_COUNTER_TABLE", BUFFER_POOL_WATERMARK, fc_info)
 
+# Policer counter commands
+@cli.group()
+def policer():
+    """ Policer counter commands """
+
+@policer.command()
+@click.argument('poll_interval')
+def interval(poll_interval):
+    """ Set policer counter query interval """
+    configdb = ConfigDBConnector()
+    configdb.connect()
+    policer_info = {}
+    if poll_interval is not None:
+        policer_info['POLL_INTERVAL'] = poll_interval
+    configdb.mod_entry("FLEX_COUNTER_TABLE", POLICER, policer_info)
+
+
+@policer.command()
+def enable():
+    """ Enable policer counter query """
+    configdb = ConfigDBConnector()
+    configdb.connect()
+    policer_info = {}
+    policer_info['FLEX_COUNTER_STATUS'] = ENABLE
+    configdb.mod_entry("FLEX_COUNTER_TABLE", POLICER, policer_info)
+
+@policer.command()
+def disable():
+    """ Disable policer counter query """
+    configdb = ConfigDBConnector()
+    configdb.connect()
+    policer_info = {}
+    policer_info['FLEX_COUNTER_STATUS'] = DISABLE
+    configdb.mod_entry("FLEX_COUNTER_TABLE", POLICER, policer_info)
+
 # ACL counter commands
 @cli.group()
 @click.pass_context
@@ -454,6 +490,7 @@ def show():
     trap_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'FLOW_CNT_TRAP')
     route_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'FLOW_CNT_ROUTE')
     eni_info = configdb.get_entry('FLEX_COUNTER_TABLE', ENI)
+    policer_info = configdb.get_entry('FLEX_COUNTER_TABLE', POLICER)
 
     header = ("Type", "Interval (in ms)", "Status")
     data = []
@@ -482,6 +519,8 @@ def show():
     if route_info:
         data.append(["FLOW_CNT_ROUTE_STAT", route_info.get("POLL_INTERVAL", DEFLT_10_SEC),
                      route_info.get("FLEX_COUNTER_STATUS", DISABLE)])
+    if policer_info:
+        data.append([POLICER, policer_info.get("POLL_INTERVAL", DEFLT_10_SEC), policer_info.get("FLEX_COUNTER_STATUS", DISABLE)])
 
     if is_dpu(configdb) and eni_info:
         data.append(["ENI_STAT", eni_info.get("POLL_INTERVAL", DEFLT_10_SEC),
