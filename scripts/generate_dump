@@ -2223,6 +2223,9 @@ finalize() {
         else
             echo "WARNING: gzip operation appears to have failed." >&2
         fi
+        # sometimes gzip takes more than 20 sec to finish, causing file time create validation
+        # to fail. touching the tarfile created to refresh modify time.
+        touch ${TARFILE}
     fi
 
     # Invoke the TechSupport Cleanup Hook
