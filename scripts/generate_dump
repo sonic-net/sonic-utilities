@@ -2085,6 +2085,12 @@ main() {
     fi
     wait
 
+ 	save_cmd "stpctl all" "stp.log"
+    save_cmd "show spanning_tree" "stp.show"
+    save_cmd "show spanning_tree statistics" "stp.stats"
+    save_cmd "show spanning_tree bpdu_guard" "stp.bg"
+    save_cmd "show spanning_tree root_guard" "stp.rg"
+
     save_cmd "ps aux" "ps.aux" &
     save_cmd "top -b -n 1" "top" &
     save_cmd "free" "free" &

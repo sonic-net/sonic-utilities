@@ -67,6 +67,7 @@ from . import plugins
 from . import syslog
 from . import dns
 from . import bgp_cli
+from . import stp
 
 # Global Variables
 PLATFORM_JSON = 'platform.json'
@@ -318,6 +319,7 @@ cli.add_command(vxlan.vxlan)
 cli.add_command(system_health.system_health)
 cli.add_command(warm_restart.warm_restart)
 cli.add_command(dns.dns)
+cli.add_command(stp.spanning_tree)
 
 # syslog module
 cli.add_command(syslog.syslog)
@@ -1886,6 +1888,16 @@ def syslog(verbose):
 
     click.echo(tabulate(body, header, tablefmt="simple", stralign="left", missingval=""))
 
+
+# 'spanning-tree' subcommand ("show runningconfiguration spanning_tree")
+@runningconfiguration.command()
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def spanning_tree(verbose):
+    """Show spanning_tree running configuration"""
+    stp_list = ["STP", "STP_PORT", "STP_VLAN", "STP_VLAN_PORT"]
+    for key in stp_list:
+        cmd = ['sudo', 'sonic-cfggen', '-d', '--var-json', key]
+        run_command(cmd, display_cmd=verbose)
 
 #
 # 'startupconfiguration' group ("show startupconfiguration ...")
