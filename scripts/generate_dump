@@ -1625,7 +1625,7 @@ collect_cisco_8000() {
 }
 
 ##############################################################################
-# collect_innovium
+# collect_marvell_teralynx
 # Globals:
 #   None
 # Arguments:
@@ -1633,7 +1633,7 @@ collect_cisco_8000() {
 # Retuens:
 #   None
 ##############################################################################
-collect_innovium() {
+collect_marvell_teralynx() {
     save_cmd "ivmcmd 'show techsupport -i /innovium/show_techsupport_infile'" "show_techsupport_op_ifcs.log"
     save_cmd "ivmcmd 'show techsupport -i /innovium/show_techsupport_infile_iSAI'" "show_techsupport_op_iSAI.log"
 }
@@ -2159,8 +2159,8 @@ main() {
         collect_nvidia_bluefield
     fi
 
-    if [ "$asic" = "innovium" ]; then
-        collect_innovium
+    if [ "$asic" = "marvell-teralynx" ]; then
+        collect_marvell_teralynx
     fi
 
     if [ "$asic" = "marvell" ]; then
