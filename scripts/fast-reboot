@@ -415,7 +415,23 @@ function setup_reboot_variables()
         # Handle architectures supporting Device Tree
         elif [ -f /sys/firmware/devicetree/base/chosen/bootargs ]; then
             KERNEL_IMAGE="$(ls $IMAGE_PATH/boot/vmlinuz-*)"
-            BOOT_OPTIONS="$(cat /sys/firmware/devicetree/base/chosen/bootargs | sed 's/.$//') ${KEXEC_LOAD_EXTRA_CMDLINE_LINUX} SONIC_BOOT_TYPE=${BOOT_TYPE_ARG}"
+            # Fetch next_boot variable
+            SONIC_IMAGE_NAME="$( fw_printenv boot_next | cut -d '=' -f 2- )"
+            SUFFIX=""
+            if [[ ${SONIC_IMAGE_NAME} == "run sonic_image_2" ]]; then
+                SUFFIX="_old"
+            fi
+            SONIC_BOOTARGS="$(fw_printenv sonic_bootargs${SUFFIX} | cut -d '=' -f 2- )"
+            if [[ ! -z "${SONIC_BOOTARGS}" ]]; then
+                LINUX_BOOTARGS="$( fw_printenv linuxargs${SUFFIX} | cut -d '=' -f 2- )"
+                BAUDRATE="$( fw_printenv baudrate | cut -d '=' -f 2- )"
+                BOOT_OPTIONS="$(echo $SONIC_BOOTARGS | sed -e "s/\${baudrate}/$BAUDRATE/g")"
+                BOOT_OPTIONS="$(echo $BOOT_OPTIONS | sed -e "s@\${linuxargs$SUFFIX}@$LINUX_BOOTARGS@g")"
+                BOOT_OPTIONS="$(echo $BOOT_OPTIONS | sed -e 's/.$//') ${KEXEC_LOAD_EXTRA_CMDLINE_LINUX} SONIC_BOOT_TYPE=${BOOT_TYPE_ARG}"
+            else
+                # Fetch bootargs from device tree of the current image
+                BOOT_OPTIONS="$(cat /sys/firmware/devicetree/base/chosen/bootargs | sed 's/.$//') ${KEXEC_LOAD_EXTRA_CMDLINE_LINUX} SONIC_BOOT_TYPE=${BOOT_TYPE_ARG}"
+            fi
             INITRD=$(echo $KERNEL_IMAGE | sed 's/vmlinuz/initrd.img/g')
 
             # If initrd is a U-Boot uImage, remove the uImage header
