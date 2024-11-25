@@ -4894,6 +4894,7 @@ Optional argument "-p" specify a period (in seconds) with which to gather counte
   show interfaces counters rates
   show interfaces counters rif [-p|--period <period>] [-i <interface_name>]
   show interfaces counters fec-histogram [-i <interface_name>]
+  show interfaces counters fec-stats
   ```
 
 - Example:
@@ -5037,6 +5038,18 @@ In a FEC histogram, "bins" represent ranges of errors or specific categories of 
   BIN13:                      0
   BIN14:                      0
   BIN15:                      0
+  ```
+
+The "fec-stats" subcommand is used to disply the interface fec related statistic.
+
+- Example:
+  ```
+  admin@ctd615:~$ show interfaces counters fec-stats
+        IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER
+  -----------  -------  ----------  ------------  ----------------  -------------  --------------
+   Ethernet0        U           0             0                 0    1.48e-20       0.00e+00
+   Ethernet8        U           0             0                 0    1.98e-19       0.00e+00
+  Ethernet16        U           0             0                 0    1.77e-20       0.00e+00
   ```
 
 
