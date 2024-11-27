@@ -1082,18 +1082,24 @@ save_file() {
     fi
 
     if $do_gzip; then
-        gz_path="${gz_path}.gz"
-        tar_path="${tar_path}.gz"
-        if $NOOP; then
+        if [ ! -d "$path" ]; then
+          gz_path="${gz_path}.gz"
+          tar_path="${tar_path}.gz"
+
+          if $NOOP; then
             echo "gzip -c $orig_path > $gz_path"
-        else
+          else
             gzip -c $orig_path > $gz_path
-        fi
-    else
-        if $NOOP; then
-            echo "cp $orig_path $gz_path"
+          fi
         else
-            cp $orig_path $gz_path
+          gz_path="${gz_path}.tar.gz"
+          tar_path="${tar_path}.tar.gz"
+
+          if $NOOP; then
+              echo "tar -czvf $gz_path -C $(dirname $orig_path) $(basename $orig_path)"
+          else
+              tar -czvf "$gz_path" -C "$(dirname "$orig_path")" "$(basename "$orig_path")"
+          fi
         fi
     fi
 
