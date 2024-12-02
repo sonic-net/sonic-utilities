@@ -238,6 +238,7 @@ setup(
         'filelock>=3.0.12',
         'enlighten>=1.8.0',
         'ipaddress>=1.0.23',
+        'protobuf',
         'jinja2>=2.11.3',
         'jsondiff>=1.2.0',
         'jsonpatch>=1.32.0',

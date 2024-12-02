@@ -84,6 +84,7 @@ stages:
         sudo dpkg -i libyang_1.0.73_amd64.deb
         sudo dpkg -i libyang-cpp_1.0.73_amd64.deb
         sudo dpkg -i python3-yang_1.0.73_amd64.deb
+        sudo dpkg -i libprotobuf*.deb
       workingDirectory: $(Pipeline.Workspace)/target/debs/bullseye/
       displayName: 'Install Debian dependencies'
 
@@ -103,6 +104,27 @@ stages:
         sudo dpkg -i python3-swsscommon_1.0.0_amd64.deb
       workingDirectory: $(Pipeline.Workspace)/
       displayName: 'Install swss-common dependencies'
+
+
+    - task: DownloadPipelineArtifact@2
+      inputs:
+        source: specific
+        project: build
+        pipeline: sonic-net.sonic-dash-api
+        artifact: sonic-dash-api
+        runVersion: 'latestFromBranch'
+        runBranch: 'refs/heads/$(BUILD_BRANCH)'
+        path: $(Build.ArtifactStagingDirectory)/download
+        patterns: |
+          libdashapi*.deb
+      displayName: "Download dash api"
+
+    - script: |
+        set -xe
+        sudo apt-get update
+        sudo dpkg -i $(Build.ArtifactStagingDirectory)/download/libdashapi_*.deb
+      workingDirectory: $(Pipeline.Workspace)/
+      displayName: 'Install libdashapi libraries'
 
     - script: |
         set -xe

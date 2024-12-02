@@ -6,6 +6,8 @@ from dump.helper import verbose_print
 from swsscommon.swsscommon import SonicV2Connector, SonicDBConfig
 from sonic_py_common import multi_asic
 from utilities_common.constants import DEFAULT_NAMESPACE
+import redis
+
 
 # Constants
 CONN = "conn"
@@ -60,6 +62,7 @@ class MatchRequest:
         self.just_keys = kwargs["just_keys"] if "just_keys" in kwargs else True
         self.ns = kwargs["ns"] if "ns" in kwargs else ""
         self.match_entire_list = kwargs["match_entire_list"] if "match_entire_list" in kwargs else False
+        self.PbObj = kwargs["pb"] if "pb" in kwargs else None
         err = self.__static_checks()
         verbose_print(str(err))
         if err:
@@ -194,6 +197,51 @@ class RedisSource(SourceAdapter):
         return self.conn.get_all(db, key)
 
 
+class RedisPySource(SourceAdapter):
+    """ Concrete Adaptor Class for connecting to APPL_DB using Redis library"""
+
+    def __init__(self, conn_pool, pb_obj):
+        self.conn = None
+        self.pool = conn_pool
+        self.pb_obj = pb_obj
+
+    def get_decoded_value(self, pb_obj, key_val):
+        try:
+            from dump.dash_util import get_decoded_value
+        except ModuleNotFoundError as e:
+            verbose_print("RedisPySource: decoded value cannot be obtained \
+                          since dash related library import issues\n" + str(e))
+            return
+        return get_decoded_value(pb_obj, key_val)
+
+    def connect(self, db, ns):
+        try:
+            self.conn = self.pool.get_dash_conn(ns)
+        except Exception as e:
+            verbose_print("RedisPySource: Connection Failed\n" + str(e))
+            return False
+        return True
+
+    def get_separator(self):
+        return ":"
+
+    def getKeys(self, db, table, key_pattern):
+        bin_keys = self.conn.keys(table + self.get_separator() + key_pattern)
+        return [key1.decode() for key1 in bin_keys]
+
+    def get(self, db, key):
+        key_val = self.conn.hgetall(key)
+        return self.get_decoded_value(self.pb_obj, key_val)
+
+    def hget(self, db, key, field):
+        key_val = self.conn.hgetall(key)
+        decoded_dict = self.get_decoded_value(self.pb_obj, key_val)
+        return decoded_dict.get(field)
+
+    def hgetall(self, db, key):
+        key_val = self.conn.hgetall(key)
+        return self.get_decoded_value(self.pb_obj, key_val)
+
 class JsonSource(SourceAdapter):
     """ Concrete Adaptor Class for connecting to JSON Data Sources """
 
@@ -249,16 +297,37 @@ class ConnectionPool:
                 SonicDBConfig.load_sonic_db_config()
         return SonicV2Connector(namespace=ns, use_unix_socket_path=True)
 
+    def initialize_redis_conn(self, ns):
+        """Return redis connection for APPL_DB,
+        as APPL_DB is the only one which stores data in protobuf
+        format which is not obtained fully by the SonicV2Connector
+        get_all API
+        """
+        # The get_all function for a SonicV2Connector does not support binary data due to which we
+        # have to use the redis Library. Relevant Issue: https://github.com/sonic-net/sonic-swss-common/issues/886
+        return redis.Redis(unix_socket_path=SonicDBConfig.getDbSock("APPL_DB", ns),
+                           db=SonicDBConfig.getDbId("APPL_DB", ns))
+
     def get(self, db_name, ns, update=False):
         """ Returns a SonicV2Connector Object and caches it for further requests """
         if ns not in self.cache:
             self.cache[ns] = {}
+        if CONN not in self.cache[ns]:
             self.cache[ns][CONN] = self.initialize_connector(ns)
+        if CONN_TO not in self.cache[ns]:
             self.cache[ns][CONN_TO] = set()
         if update or db_name not in self.cache[ns][CONN_TO]:
             self.cache[ns][CONN].connect(db_name)
             self.cache[ns][CONN_TO].add(db_name)
         return self.cache[ns][CONN]
+
+    def get_dash_conn(self, ns):
+        """ Returns a Redis Connection Object and caches it for further requests """
+        if ns not in self.cache:
+            self.cache[ns] = {}
+        if "DASH_"+CONN not in self.cache[ns]:
+            self.cache[ns]["DASH_"+CONN] = self.initialize_redis_conn(ns)
+        return self.cache[ns]["DASH_"+CONN]
 
     def clear(self, namespace=None):
         if not namespace:
@@ -266,9 +335,15 @@ class ConnectionPool:
         elif namespace in self.cache:
             del self.cache[namespace]
 
-    def fill(self, ns, conn, connected_to):
+    def fill(self, ns, conn, connected_to, dash_object=False):
         """ Update internal cache """
-        self.cache[ns] = {CONN: conn, CONN_TO: set(connected_to)}
+        if ns not in self.cache:
+            self.cache[ns] = {}
+        if dash_object:
+            self.cache[ns]["DASH_"+CONN] = conn
+            return
+        self.cache[ns][CONN] = conn
+        self.cache[ns][CONN_TO] = set(connected_to)
 
 
 class MatchEngine:
@@ -293,10 +368,16 @@ class MatchEngine:
     def get_json_source_adapter(self):
         return JsonSource()
 
+    def get_redis_py_adapter(self, pb_obj):
+        return RedisPySource(self.conn_pool, pb_obj)
+
     def __get_source_adapter(self, req):
         src = None
         d_src = ""
-        if req.db:
+        if req.PbObj:
+            d_src = req.db
+            src = self.get_redis_py_adapter(req.PbObj)
+        elif req.db:
             d_src = req.db
             src = self.get_redis_source_adapter()
         else:
