@@ -2847,6 +2847,13 @@ class TestConfigLoopback(object):
         assert result.exit_code != 0
         assert "Error: Loopbax1 is invalid, name should have prefix 'Loopback' and suffix '<0-999>'" in result.output
 
+        result = runner.invoke(config.config.commands["loopback"].commands["add"], ["Loopback0000"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "Error: Loopback0000 is invalid, name should have prefix 'Loopback' and suffix '<0-999>' and " \
+            "should not exceed 15 characters" in result.output
+
     def test_del_nonexistent_loopback_adhoc_validation(self):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
