@@ -128,6 +128,7 @@ setup(
         'scripts/dump_nat_entries.py',
         'scripts/debug_voq_chassis_packet_drops.sh',
         'scripts/ecnconfig',
+        'scripts/express-reboot',
         'scripts/fabricstat',
         'scripts/fanshow',
         'scripts/fast-reboot',
