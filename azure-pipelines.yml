@@ -43,7 +43,7 @@ stages:
       vmImage: ubuntu-20.04
 
     container:
-      image: sonicdev-microsoft.azurecr.io:443/sonic-slave-bullseye:$(BUILD_BRANCH)
+      image: sonicdev-microsoft.azurecr.io:443/sonic-slave-bookworm:$(BUILD_BRANCH)
 
     steps:
     - script: |
@@ -51,6 +51,7 @@ stages:
         sudo apt-get update
         sudo apt-get install -y python3-pip
         sudo pip3 install requests==2.31.0
+        sudo apt-get install -y python3-protobuf
       displayName: "Install dependencies"
 
     - script: |
@@ -84,8 +85,7 @@ stages:
         sudo dpkg -i libyang_1.0.73_amd64.deb
         sudo dpkg -i libyang-cpp_1.0.73_amd64.deb
         sudo dpkg -i python3-yang_1.0.73_amd64.deb
-        sudo dpkg -i libprotobuf*.deb
-      workingDirectory: $(Pipeline.Workspace)/target/debs/bullseye/
+      workingDirectory: $(Pipeline.Workspace)/target/debs/bookworm/
       displayName: 'Install Debian dependencies'
 
     - task: DownloadPipelineArtifact@2
@@ -93,7 +93,7 @@ stages:
         source: specific
         project: build
         pipeline: 9
-        artifact: sonic-swss-common
+        artifact: sonic-swss-common-bookworm
         runVersion: 'latestFromBranch'
         runBranch: 'refs/heads/$(sourceBranch)'
       displayName: "Download sonic swss common deb packages"
@@ -134,20 +134,22 @@ stages:
         sudo pip3 install sonic_yang_models-1.0-py3-none-any.whl
         sudo pip3 install sonic_config_engine-1.0-py3-none-any.whl
         sudo pip3 install sonic_platform_common-1.0-py3-none-any.whl
-      workingDirectory: $(Pipeline.Workspace)/target/python-wheels/bullseye/
+      workingDirectory: $(Pipeline.Workspace)/target/python-wheels/bookworm/
       displayName: 'Install Python dependencies'
 
     - script: |
         set -ex
         # Install .NET CORE
         curl -sSL https://packages.microsoft.com/keys/microsoft.asc | sudo apt-key add -
-        sudo apt-add-repository https://packages.microsoft.com/debian/11/prod
+        sudo apt-add-repository https://packages.microsoft.com/debian/12/prod
         sudo apt-get update
         sudo apt-get install -y dotnet-sdk-8.0
       displayName: "Install .NET CORE"
 
     - script: |
-        python3 setup.py test
+        pip3 install ".[testing]"
+        pip3 uninstall --yes sonic-utilities
+        pytest
       displayName: 'Test Python 3'
 
     - task: PublishTestResults@2
@@ -167,7 +169,7 @@ stages:
 
     - script: |
         set -e
-        python3 setup.py bdist_wheel
+        python3 -m build -n
       displayName: 'Build Python 3 wheel'
 
     - publish: '$(System.DefaultWorkingDirectory)/dist/'
