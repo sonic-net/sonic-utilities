@@ -51,6 +51,7 @@ SAVE_STDERR=true
 RETURN_CODE=$EXT_SUCCESS
 DEBUG_DUMP=false
 ROUTE_TAB_LIMIT_DIRECT_ITERATION=24000
+IS_SUPERVISOR=false
 
 # lock dirs/files
 LOCKDIR="/tmp/techsupport-lock"
@@ -532,8 +533,11 @@ save_bgp_neighbor() {
         save_cmd "vtysh $ns -c \"show bgp ipv6 neighbors $word advertised-routes\"" "ipv6.bgp.neighbor.$word.adv$asic_id"
         save_cmd "vtysh $ns -c \"show bgp ipv6 neighbors $word routes\"" "ipv6.bgp.neighbor.$word.rcv$asic_id"
     done
-
-    vrf_list=`${timeout_cmd} bash -c "vtysh $ns -c 'show vrf' | awk -F" " '{print \$2}'"`
+    vrf_list=""
+    vrf_output=$(${timeout_cmd} bash -c "vtysh $ns -c 'show vrf'")
+    if [ ! -z $vrf_output]; then
+        vrf_list= echo $vrf_output | awk -F" " '{print $2}'
+    fi
     for vrf in $vrf_list; do
         neighbor_list=`${timeout_cmd} bash -c "vtysh $ns -c 'show ip bgp vrf $vrf neighbors' | grep 'BGP neighbor is' | awk -F '[, ]' '{print \$4}'"`
         for word in $neighbor_list; do
@@ -651,6 +655,9 @@ save_nat_info() {
 ###############################################################################
 save_bfd_info() {
     trap 'handle_error $? $LINENO' ERR
+    if $IS_SUPERVISOR; then
+        return
+    fi
     save_vtysh "show bfd peers" "frr.bfd.peers"
     save_vtysh "show bfd peers counters" "frr.bfd.peers.counters"
     save_vtysh "show bfd peers json" "frr.bfd.peers.json"
@@ -688,6 +695,9 @@ save_ip_info() {
 ###############################################################################
 save_bgp_info() {
     trap 'handle_error $? $LINENO' ERR
+    if $IS_SUPERVISOR; then
+        return
+    fi
     save_vtysh "show ip bgp summary" "bgp.summary"
     save_vtysh "show ip bgp neighbors" "bgp.neighbors"
     save_vtysh "show ip bgp" "bgp.table"
@@ -725,6 +735,9 @@ save_bgp_info() {
 ###############################################################################
 save_evpn_info() {
     trap 'handle_error $? $LINENO' ERR
+    if $IS_SUPERVISOR; then
+        return
+    fi
     save_vtysh "show bgp l2vpn evpn" "bgp.l2vpn.evpn"
     save_vtysh "show bgp l2vpn evpn summary json" "bgp.evpn.summary.json"
     save_vtysh "show bgp l2vpn evpn route" "bgp.evpn.route"
@@ -758,6 +771,9 @@ save_evpn_info() {
 ###############################################################################
 save_frr_info() {
     trap 'handle_error $? $LINENO' ERR
+    if $IS_SUPERVISOR; then
+        return
+    fi
     save_vtysh "show running-config" "frr.running_config"
     save_vtysh "show ip route vrf all nexthop-group" "frr.ip_route.nhg"
     save_vtysh "show ipv6 route vrf all nexthop-group" "frr.ip6_route.nhg"
@@ -1141,6 +1157,9 @@ find_files() {
 #  None
 ###############################################################################
 disable_logrotate() {
+    if [ ! -f "/etc/cron.d/logrotate" ]; then
+        return
+    fi
     sed -i '/\/usr\/sbin\/logrotate/s/^/#/g' /etc/cron.d/logrotate
 }
 
@@ -1154,6 +1173,9 @@ disable_logrotate() {
 #  None
 ###############################################################################
 enable_logrotate() {
+    if [ ! -f "/etc/cron.d/logrotate" ]; then
+        return
+    fi
     sed -i '/\/usr\/sbin\/logrotate/s/^#*//g' /etc/cron.d/logrotate
 }
 
@@ -1860,6 +1882,9 @@ save_crash_files() {
 #  None
 ###############################################################################
 save_sai_failure_dump(){
+    if [ ! -d "/var/log/sai_failure_dump/" ]; then
+        return
+    fi
     for file in $(find_files "/var/log/sai_failure_dump/"); do
         if $TAR -tf $TARFILE | grep $BASE/log/$(basename $file); then
             # if the files are already collected under the log/ dir
@@ -1919,7 +1944,9 @@ save_counter_snapshot() {
 
     save_cmd "echo $counter_t" "date.counter_$idx"
     save_cmd "show interface counters" "interface.counters_$idx"
-    save_cmd_all_ns "show queue counters" "queue.counters_$idx"
+    if ! $IS_SUPERVISOR; then
+       save_cmd_all_ns "show queue counters" "queue.counters_$idx"
+    fi
     save_redis "COUNTERS_DB" "COUNTERS_DB_$idx"
 
     if [ "$asic_name" = "broadcom" ]; then
@@ -2028,6 +2055,7 @@ main() {
 
     # Save reboot cause information
     save_cmd "show reboot-cause" reboot.cause &
+    save_cmd "show reboot-cause history" "reboot.cause.history" &
     wait
 
     local asic="$(/usr/local/bin/sonic-cfggen -y /etc/sonic/sonic_version.yml -v asic_type)"
@@ -2458,7 +2486,16 @@ fi
 ##
 ## Attempt Locking
 ##
-
+platform_name=$(show platform summary --json | python -c 'import sys, json; print(json.load(sys.stdin)["platform"])')
+supervisor=0
+PLATFORM_ENV_CONF=/usr/share/sonic/device/${platform_name}/platform_env.conf
+if [ -f "$PLATFORM_ENV_CONF" ]; then
+    source $PLATFORM_ENV_CONF
+fi
+if [[ x"$supervisor" == x"1" ]]; then
+    IS_SUPERVISOR=true
+fi
+    
 if $MKDIR "${LOCKDIR}" &>/dev/null; then
     trap 'handle_exit' EXIT
     echo "$$" > "${PIDFILE}"
