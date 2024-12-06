@@ -1098,7 +1098,7 @@ save_file() {
     fi
 
     if $do_gzip; then
-        if [ ! -d "$path" ]; then
+        if [[ -f ${orig_path} ]]; then
           gz_path="${gz_path}.gz"
           tar_path="${tar_path}.gz"
 
@@ -1116,6 +1116,12 @@ save_file() {
           else
               tar -czvf "$gz_path" -C "$(dirname "$orig_path")" "$(basename "$orig_path")"
           fi
+        fi
+    else
+        if $NOOP; then
+            echo "cp $orig_path $gz_path"
+        else
+            cp $orig_path $gz_path
         fi
     fi
 
