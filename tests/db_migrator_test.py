@@ -738,7 +738,7 @@ class TestWarmUpgrade_T0_EdgeZoneAggregator(object):
         assert not diff
 
 
-class TestFastUpgrade_to_4_0_3(object):
+class TestFastUpgrade(object):
     @classmethod
     def setup_class(cls):
         os.environ['UTILITIES_UNIT_TESTING'] = "2"
@@ -761,16 +761,16 @@ class TestFastUpgrade_to_4_0_3(object):
         for table in self.config_db_tables_to_verify:
             assert result.get_table(table) == expected.get_table(table)
 
-    def test_fast_reboot_upgrade_to_4_0_3(self):
-        db_before_migrate = 'cross_branch_upgrade_to_4_0_3_input'
-        db_after_migrate = 'cross_branch_upgrade_to_4_0_3_expected'
+    def test_fast_reboot_upgrade_fc(self):
+        db_before_migrate = 'cross_branch_upgrade_flex_counters_input'
+        db_after_migrate = 'cross_branch_upgrade_flex_counters_expected'
         device_info.get_sonic_version_info = get_sonic_version_info_mlnx
         db = self.mock_dedicated_config_db(db_before_migrate)
         import db_migrator
         dbmgtr = db_migrator.DBMigrator(None)
         dbmgtr.migrate()
         expected_db = self.mock_dedicated_config_db(db_after_migrate)
-        advance_version_for_expected_database(dbmgtr.configDB, expected_db.cfgdb, 'version_4_0_3')
+        advance_version_for_expected_database(dbmgtr.configDB, expected_db.cfgdb, 'version_202411_01')
         assert not self.check_config_db(dbmgtr.configDB, expected_db.cfgdb)
         assert dbmgtr.CURRENT_VERSION == expected_db.cfgdb.get_entry('VERSIONS', 'DATABASE')['VERSION'], '{} {}'.format(dbmgtr.CURRENT_VERSION, dbmgtr.get_version())
 
@@ -929,13 +929,13 @@ class TestGNMIMigrator(object):
         dbmgtr.config_src_data = {
             'GNMI': {
                 'gnmi': {
-                    "client_auth": "true", 
-                    "log_level": "2", 
+                    "client_auth": "true",
+                    "log_level": "2",
                     "port": "50052"
-                }, 
+                },
                 'certs': {
-                    "server_key": "/etc/sonic/telemetry/streamingtelemetryserver.key", 
-                    "ca_crt": "/etc/sonic/telemetry/dsmsroot.cer", 
+                    "server_key": "/etc/sonic/telemetry/streamingtelemetryserver.key",
+                    "ca_crt": "/etc/sonic/telemetry/dsmsroot.cer",
                     "server_crt": "/etc/sonic/telemetry/streamingtelemetryserver.cer"
                 }
             }
