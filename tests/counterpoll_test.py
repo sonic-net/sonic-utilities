@@ -4,6 +4,7 @@ import os
 import pytest
 import mock
 import sys
+import importlib
 from click.testing import CliRunner
 from shutil import copyfile
 from utilities_common.db import Db
@@ -248,13 +249,15 @@ class TestCounterpoll(object):
     def test_update_eni_status(self, status):
         runner = CliRunner()
         result = runner.invoke(counterpoll.cli, ["eni", status])
-        assert result.exit_code == 1
-        assert result.output == "ENI counters are not supported on non DPU platforms\n"
+        assert 'No such command "eni"' in result.output
+        assert result.exit_code == 2
 
     @pytest.mark.parametrize("status", ["disable", "enable"])
     @mock.patch('counterpoll.main.device_info.get_platform_info')
     def test_update_eni_status_dpu(self, mock_get_platform_info, status):
         mock_get_platform_info.return_value = {'switch_type': 'dpu'}
+        importlib.reload(counterpoll)
+
         runner = CliRunner()
         db = Db()
 
@@ -267,6 +270,8 @@ class TestCounterpoll(object):
     @mock.patch('counterpoll.main.device_info.get_platform_info')
     def test_update_eni_interval(self, mock_get_platform_info):
         mock_get_platform_info.return_value = {'switch_type': 'dpu'}
+        importlib.reload(counterpoll)
+
         runner = CliRunner()
         db = Db()
         test_interval = "2000"
