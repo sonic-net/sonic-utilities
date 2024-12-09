@@ -15,9 +15,25 @@ import time
 from collections import namedtuple, OrderedDict
 from natsort import natsorted
 from tabulate import tabulate
-from utilities_common.netstat import ns_diff, table_as_json, STATUS_NA, format_number_with_comma
+
+try:
+    if os.environ["UTILITIES_UNIT_TESTING"] == "2":
+            modules_path = os.path.join(os.path.dirname(__file__), "..")
+            tests_path = os.path.join(modules_path, "tests")
+            sys.path.insert(0, modules_path)
+            sys.path.insert(0, tests_path)
+            import mock_tables.dbconnector
+    if os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] == "multi_asic":
+            import mock_tables.mock_multi_asic
+            mock_tables.dbconnector.load_namespace_config()   
+except KeyError:
+    pass  
+
+from utilities_common.netstat import ns_diff, STATUS_NA, format_number_with_comma, table_as_json
+from utilities_common import multi_asic as multi_asic_util
+from utilities_common import constants
 from utilities_common.cli import json_serial, UserCache
-from swsscommon.swsscommon import SonicV2Connector
+from swsscommon.swsscommon import ConfigDBConnector, SonicV2Connector
 
 pstat_fields = (
     "totalpacket",
@@ -82,9 +98,8 @@ COUNTERS_POLICER_NAME_MAP = "COUNTERS_POLICER_NAME_MAP"
 
 class Policerstat:
     def __init__(self):
-        self.db = SonicV2Connector(use_unix_socket_path=False)
+        self.db = SonicV2Connector(host='127.0.0.1')
         self.db.connect(self.db.COUNTERS_DB)
-        self.db.connect(self.db.APPL_DB)
 
     def get_cnstat(self, policer=None):
         """
@@ -205,7 +220,6 @@ def main():
     parser.add_argument('-c', '--clear', action='store_true', help='Copy & clear stats')
     parser.add_argument('-j', '--json', action='store_true', help='Display in JSON format')
     parser.add_argument('-p', '--policer', type=str, help='Show stats for a single policer')
-    parser.add_argument('-v', '--version', action='version', version='%(prog)s 1.0')
     args = parser.parse_args()
 
     cache = UserCache()
@@ -224,6 +238,7 @@ def main():
     if args.json:
         # JSON output handling
         print(json.dumps(build_json(cnstat_dict), default=json_serial))
+        
     else:
         if os.path.isfile(cnstat_fqn_file):
                 try:
@@ -238,6 +253,7 @@ def main():
                     print(e.errno, e)
         else:
             policerstat.cnstat_print(args.policer, cnstat_dict, args.json)
+    sys.exit(0)
 
 if __name__ == "__main__":
     main()
