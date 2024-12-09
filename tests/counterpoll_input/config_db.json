@@ -796,6 +796,9 @@
         },
         "WRED_ECN_PORT": {
             "FLEX_COUNTER_STATUS": "enable"
+        },
+        "POLICER": {
+            "FLEX_COUNTER_STATUS": "enable"
         }
     }, 
     "PORT": {
@@ -2674,5 +2677,13 @@
             "pool": "ingress_lossless_pool", 
             "size": "56368"
         }
+    },
+    "POLICER|policer0": {
+        "meter_type":"packets",
+        "mode":"sr_tcm",
+        "color": "aware",
+        "cir":"700",
+        "cbs":"700",
+        "red_packet_action":"drop"	    
     }
 }

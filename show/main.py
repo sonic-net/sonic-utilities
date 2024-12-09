@@ -2297,7 +2297,7 @@ def policer(policer_name, counter, verbose):
         cmd = ['policerstat']
 
         if policer_name is not None:
-            cmd += ["-p", str(policer_name)]  
+            cmd += ["-p", str(policer_name)]
         run_command(cmd, display_cmd=verbose)
     else:
         cmd = ['acl-loader', 'show', 'policer']
