@@ -8066,6 +8066,49 @@ def del_ntp_server(ctx, ntp_ip_address):
     except SystemExit as e:
         ctx.fail("Restart service ntp-config failed with error {}".format(e))
 
+
+#
+# 'audit' group ('config audit ...')
+#
+@config.group(cls=clicommon.AbbreviationGroup)
+def audit():
+    """audit-related configuration tasks"""
+    pass
+
+
+#
+# 'audit enable' command ('config audit enable')
+#
+@audit.command('enable')
+@click.pass_context
+def enable(ctx):
+    """Enable the security auditing feature"""
+
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db.connect()
+    try:
+        config_db.mod_entry("AUDIT", "config", {"enabled": "true"})
+        click.echo("Security auditing is enabled.")
+    except ValueError as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+
+#
+# 'audit disable' command ('config audit disable')
+#
+@audit.command('disable')
+@click.pass_context
+def disable(ctx):
+    """Disable the security auditing feature"""
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db.connect()
+    try:
+        config_db.mod_entry("AUDIT", "config", {"enabled": "false"})
+        click.echo("Security auditing is disabled.")
+    except ValueError as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+
 #
 # 'sflow' group ('config sflow ...')
 #
