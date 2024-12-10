@@ -128,7 +128,7 @@ class DBMigrator():
                             config_namespace = "localhost"
                         else:
                             config_namespace = ns
-                        golden_config_data = golden_data[config_namespace]
+                        golden_config_data = golden_data.get(config_namespace, None)
         except Exception as e:
             log.log_error('Caught exception while trying to load golden config: ' + str(e))
             pass
