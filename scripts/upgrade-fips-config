@@ -1,0 +1,50 @@
+#!/bin/bash
+
+function set_fips_option()
+{
+    GOLDEN_CONFIG=/host/old_config/golden_config_db.json
+    CUR_SONIC_IMAGE=$(sonic-installer list | grep "Current: " | cut -d ' ' -f 2)
+    NEXT_SONIC_IMAGE=$(sonic-installer list | grep "Next: " | cut -d ' ' -f 2)
+    IMAGE_NAME="image-${NEXT_SONIC_IMAGE#SONiC-OS-}"
+    IMAGE_PATH="/host/$IMAGE_NAME"
+    NEXT_IMAGE_VERSION=$(echo $NEXT_SONIC_IMAGE | cut -c 1-6)
+
+    # Skip to set fips option if not in upgrading
+    if [ "$CUR_SONIC_IMAGE" == "$NEXT_SONIC_IMAGE" ]; then
+        return
+    fi
+
+    # Skip to set fips option if the next image version is lower 202305
+    if [[ "$NEXT_IMAGE_VERSION" -lt "202305" ]];then
+        echo "Skipped to set fips for the next version $next_image_version less than 202305."
+        return
+    fi
+    # Check if config exists
+    if [ ! -f $GOLDEN_CONFIG ]; then
+        echo "Skipped to set fips for the config file $GOLDEN_CONFIG not found."
+        return
+    fi
+
+    # Check if FIPS
+    FIPS=$(cat $GOLDEN_CONFIG | python -c 'import sys, json; print(json.load(sys.stdin)["FIPS"]["global"]["enforce"].lower())' 2>/dev/null)
+    if [ -z "$FIPS" ]; then
+        echo "Skipped to set fips for the fips not enabled"
+        return
+    fi
+
+    echo "The FIPS option is $FIPS."
+    FIPS=0
+    [ "$FIPS" == "true" ] && FIPS=1
+
+    echo  "Set FIPS option to $FIPS"
+    if grep -q "Aboot=" /proc/cmdline; then
+        sed -iE -e "s/sonic_fips=.//" -e "s/$/sonic_fips=$FIPS/" $IMAGE_PATH/kernel-cmdline
+    elif [ -f /host/grub/grub.cfg ]; then
+        sed -iE -e "/^\s+linux\s+\/$IMAGE_NAME\// s/sonic_fips=. *//" -e "/^\s+linux\s+\/$IMAGE_NAME\// s/$/sonic_fips=$FIPS/" /host/grub/grub.cfg
+    elif [ -n $(which fw_setenv) ]; then
+        linuxargs=$(fw_printenv linuxargs | sed -E -e "s/sonic_fips=.//" -e "s/$/sonic_fips=$FIPS/")
+        fw_setenv linuxargs "$linuxargs"
+    fi
+}
+
+set_fips_option

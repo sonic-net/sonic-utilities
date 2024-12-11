@@ -225,6 +225,8 @@ fi
 
 debug "User requested rebooting device ..."
 
+upgrade-fips-config
+
 check_conflict_boot_in_fw_update
 
 setup_reboot_variables

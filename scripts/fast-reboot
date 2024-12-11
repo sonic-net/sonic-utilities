@@ -689,6 +689,8 @@ save_counters_folder
 
 unload_kernel
 
+upgrade-fips-config
+
 setup_reboot_variables
 
 reboot_pre_check
