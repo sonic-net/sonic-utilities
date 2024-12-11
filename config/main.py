@@ -8017,8 +8017,11 @@ def ntp(ctx):
 
 @ntp.command('add')
 @click.argument('ntp_ip_address', metavar='<ntp_ip_address>', required=True)
+@click.option('--association-type', type=click.Choice(["server", "pool"], case_sensitive=False), default="server", help="Define the association type for this NTP server")
+@click.option('--iburst', is_flag=True, help="Enable iburst for this NTP server")
+@click.option('--version', type=int, help="Specify the version for this NTP server")
 @click.pass_context
-def add_ntp_server(ctx, ntp_ip_address):
+def add_ntp_server(ctx, ntp_ip_address, association_type, iburst, version):
     """ Add NTP server IP """
     if ADHOC_VALIDATION:
         if not clicommon.is_ipaddress(ntp_ip_address):
@@ -8029,18 +8032,23 @@ def add_ntp_server(ctx, ntp_ip_address):
         click.echo("NTP server {} is already configured".format(ntp_ip_address))
         return
     else:
+        ntp_server_options = {}
+        if version:
+            ntp_server_options['version'] = version
+        if association_type != "server":
+            ntp_server_options['association_type'] = association_type
+        if iburst:
+            ntp_server_options['iburst'] = "on"
         try:
-            db.set_entry('NTP_SERVER', ntp_ip_address,
-                         {'resolve_as': ntp_ip_address,
-                          'association_type': 'server'})
+            db.set_entry('NTP_SERVER', ntp_ip_address, ntp_server_options)
         except ValueError as e:
             ctx.fail("Invalid ConfigDB. Error: {}".format(e))
         click.echo("NTP server {} added to configuration".format(ntp_ip_address))
         try:
-            click.echo("Restarting ntp-config service...")
-            clicommon.run_command(['systemctl', 'restart', 'ntp-config'], display_cmd=False)
+            click.echo("Restarting chrony service...")
+            clicommon.run_command(['systemctl', 'restart', 'chrony'], display_cmd=False)
         except SystemExit as e:
-            ctx.fail("Restart service ntp-config failed with error {}".format(e))
+            ctx.fail("Restart service chrony failed with error {}".format(e))
 
 @ntp.command('del')
 @click.argument('ntp_ip_address', metavar='<ntp_ip_address>', required=True)
@@ -8061,10 +8069,10 @@ def del_ntp_server(ctx, ntp_ip_address):
     else:
         ctx.fail("NTP server {} is not configured.".format(ntp_ip_address))
     try:
-        click.echo("Restarting ntp-config service...")
-        clicommon.run_command(['systemctl', 'restart', 'ntp-config'], display_cmd=False)
+        click.echo("Restarting chrony service...")
+        clicommon.run_command(['systemctl', 'restart', 'chrony'], display_cmd=False)
     except SystemExit as e:
-        ctx.fail("Restart service ntp-config failed with error {}".format(e))
+        ctx.fail("Restart service chrony failed with error {}".format(e))
 
 #
 # 'sflow' group ('config sflow ...')
