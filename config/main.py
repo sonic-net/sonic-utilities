@@ -1322,7 +1322,8 @@ def flush_configdb(namespace=DEFAULT_NAMESPACE):
 
 
 def delete_transceiver_tables():
-    tables = ["TRANSCEIVER_INFO", "TRANSCEIVER_STATUS", "TRANSCEIVER_PM", "TRANSCEIVER_FIRMWARE_INFO", "TRANSCEIVER_DOM_SENSOR", "TRANSCEIVER_DOM_THRESHOLD"]
+    tables = ["TRANSCEIVER_INFO", "TRANSCEIVER_STATUS", "TRANSCEIVER_PM",
+              "TRANSCEIVER_FIRMWARE_INFO", "TRANSCEIVER_DOM_SENSOR", "TRANSCEIVER_DOM_THRESHOLD"]
     state_db_del_pattern = "|*"
 
     # delete TRANSCEIVER tables from State DB
