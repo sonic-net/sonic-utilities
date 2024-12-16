@@ -4,15 +4,17 @@ import json
 import jsonpointer
 import subprocess
 from sonic_py_common import device_info
-from .gu_common import GenericConfigUpdaterError
+from .gu_common import GenericConfigUpdaterError, HOST_NAMESPACE
 from swsscommon import swsscommon
 from utilities_common.constants import DEFAULT_SUPPORTED_FECS_LIST
 
+STATE_DB_NAME = 'STATE_DB'
+REDIS_TIMEOUT_MSECS = 0
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 GCU_TABLE_MOD_CONF_FILE = f"{SCRIPT_DIR}/gcu_field_operation_validators.conf.json"
-GET_HWSKU_CMD = "sonic-cfggen -d -v DEVICE_METADATA.localhost.hwsku"
 
-def get_asic_name():
+
+def get_asic_name(scope):
     asic = "unknown"
     
     if os.path.exists(GCU_TABLE_MOD_CONF_FILE):
@@ -27,7 +29,12 @@ def get_asic_name():
     if asic_type == 'cisco-8000':
         asic = "cisco-8000"
     elif asic_type == 'mellanox' or asic_type == 'vs' or asic_type == 'broadcom':
-        proc = subprocess.Popen(GET_HWSKU_CMD, shell=True, universal_newlines=True, stdout=subprocess.PIPE)
+        get_hwsku_cmds = []
+        if scope == HOST_NAMESPACE:
+            get_hwsku_cmds = ["sonic-cfggen", "-d", "-v", "DEVICE_METADATA.localhost.hwsku"]
+        else:
+            get_hwsku_cmds = ["sonic-cfggen", "-d", "-n", scope, "-v", "DEVICE_METADATA.localhost.hwsku"]
+        proc = subprocess.Popen(get_hwsku_cmds, shell=False, universal_newlines=True, stdout=subprocess.PIPE)
         output, err = proc.communicate()
         hwsku = output.rstrip('\n')
         if asic_type == 'mellanox' or asic_type == 'vs':
@@ -60,8 +67,8 @@ def get_asic_name():
     return asic
 
 
-def rdma_config_update_validator(patch_element):
-    asic = get_asic_name()
+def rdma_config_update_validator(scope, patch_element):
+    asic = get_asic_name(scope)
     if asic == "unknown":
         return False
     version_info = device_info.get_sonic_version_info()
@@ -133,17 +140,17 @@ def rdma_config_update_validator(patch_element):
     return True
 
 
-def read_statedb_entry(table, key, field):
-    state_db = swsscommon.DBConnector("STATE_DB", 0)
+def read_statedb_entry(scope, table, key, field):
+    state_db = swsscommon.DBConnector(STATE_DB_NAME, REDIS_TIMEOUT_MSECS, True, scope)
     tbl = swsscommon.Table(state_db, table)
     return tbl.hget(key, field)[1]
 
 
-def port_config_update_validator(patch_element):
+def port_config_update_validator(scope, patch_element):
 
     def _validate_field(field, port, value):
         if field == "fec":
-            supported_fecs_str = read_statedb_entry("PORT_TABLE", port, "supported_fecs")
+            supported_fecs_str = read_statedb_entry(scope, "PORT_TABLE", port, "supported_fecs")
             if supported_fecs_str:
                 if supported_fecs_str != 'N/A':
                     supported_fecs_list = [element.strip() for element in supported_fecs_str.split(',')]
@@ -155,7 +162,7 @@ def port_config_update_validator(patch_element):
                 return False
             return True
         if field == "speed":
-            supported_speeds_str = read_statedb_entry("PORT_TABLE", port, "supported_speeds") or ''
+            supported_speeds_str = read_statedb_entry(scope, "PORT_TABLE", port, "supported_speeds") or ''
             try:
                 supported_speeds = [int(s) for s in supported_speeds_str.split(',') if s]
                 if supported_speeds and int(value) not in supported_speeds:

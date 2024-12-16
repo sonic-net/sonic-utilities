@@ -34,7 +34,8 @@ from sonic_py_common.interface import get_interface_table_name, get_port_table_n
 from sonic_yang_cfg_generator import SonicYangCfgDbGenerator
 from utilities_common import util_base
 from swsscommon import swsscommon
-from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector, ConfigDBPipeConnector
+from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector, ConfigDBPipeConnector, \
+                                isInterfaceNameValid, IFACE_NAME_MAX_LEN
 from utilities_common.db import Db
 from utilities_common.intf_filter import parse_interface_in_filter
 from utilities_common import bgp_util
@@ -106,7 +107,6 @@ CFG_LOOPBACK_NO="<0-999>"
 
 CFG_PORTCHANNEL_PREFIX = "PortChannel"
 CFG_PORTCHANNEL_PREFIX_LEN = 11
-CFG_PORTCHANNEL_NAME_TOTAL_LEN_MAX = 15
 CFG_PORTCHANNEL_MAX_VAL = 9999
 CFG_PORTCHANNEL_NO="<0-9999>"
 
@@ -439,7 +439,7 @@ def is_portchannel_name_valid(portchannel_name):
     if (portchannel_name[CFG_PORTCHANNEL_PREFIX_LEN:].isdigit() is False or
           int(portchannel_name[CFG_PORTCHANNEL_PREFIX_LEN:]) > CFG_PORTCHANNEL_MAX_VAL) :
         return False
-    if len(portchannel_name) > CFG_PORTCHANNEL_NAME_TOTAL_LEN_MAX:
+    if not isInterfaceNameValid(portchannel_name):
         return False
     return True
 
@@ -1830,7 +1830,7 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
         if multi_asic.is_multi_asic():
             # Multiasic has not 100% fully validated. Thus pass here.
             pass
-        else:
+        elif "golden" in filename.lower():
             config_file_yang_validation(filename)
 
     #Stop services before config push
@@ -2206,8 +2206,8 @@ def generate_sysinfo(cur_config, config_input, ns=None):
     if not platform:
         platform = device_info.get_platform()
 
-    device_metadata['localhost']['mac'] = mac
-    device_metadata['localhost']['platform'] = platform
+    device_metadata['localhost']['mac'] = mac.rstrip('\n')
+    device_metadata['localhost']['platform'] = platform.rstrip('\n')
 
     return
 
@@ -2484,8 +2484,9 @@ def add_portchannel(ctx, portchannel_name, min_links, fallback, fast_rate):
     db = ValidatedConfigDBConnector(ctx.obj['db'])
     if ADHOC_VALIDATION:
         if is_portchannel_name_valid(portchannel_name) != True:
-            ctx.fail("{} is invalid!, name should have prefix '{}' and suffix '{}'"
-                    .format(portchannel_name, CFG_PORTCHANNEL_PREFIX, CFG_PORTCHANNEL_NO))
+            ctx.fail("{} is invalid!, name should have prefix '{}' and suffix '{}' "
+                     "and its length should not exceed {} characters"
+                     .format(portchannel_name, CFG_PORTCHANNEL_PREFIX, CFG_PORTCHANNEL_NO, IFACE_NAME_MAX_LEN))
         if is_portchannel_present_in_db(db, portchannel_name):
             ctx.fail("{} already exists!".format(portchannel_name)) # TODO: MISSING CONSTRAINT IN YANG MODEL
 
@@ -6881,8 +6882,8 @@ def add_vrf(ctx, vrf_name):
     config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
     if not vrf_name.startswith("Vrf") and not (vrf_name == 'mgmt') and not (vrf_name == 'management'):
         ctx.fail("'vrf_name' must begin with 'Vrf' or named 'mgmt'/'management' in case of ManagementVRF.")
-    if len(vrf_name) > 15:
-        ctx.fail("'vrf_name' is too long!")
+    if not isInterfaceNameValid(vrf_name):
+        ctx.fail("'vrf_name' length should not exceed {} characters".format(IFACE_NAME_MAX_LEN))
     if is_vrf_exists(config_db, vrf_name):
         ctx.fail("VRF {} already exists!".format(vrf_name))
     elif (vrf_name == 'mgmt' or vrf_name == 'management'):
@@ -6901,8 +6902,8 @@ def del_vrf(ctx, vrf_name):
     config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
     if not vrf_name.startswith("Vrf") and not (vrf_name == 'mgmt') and not (vrf_name == 'management'):
         ctx.fail("'vrf_name' must begin with 'Vrf' or named 'mgmt'/'management' in case of ManagementVRF.")
-    if len(vrf_name) > 15:
-        ctx.fail("'vrf_name' is too long!")
+    if not isInterfaceNameValid(vrf_name):
+        ctx.fail("'vrf_name' length should not exceed {} characters".format((IFACE_NAME_MAX_LEN)))
     syslog_table = config_db.get_table("SYSLOG_SERVER")
     syslog_vrf_dev = "mgmt" if vrf_name == "management" else vrf_name
     for syslog_entry, syslog_data in syslog_table.items():
@@ -7932,8 +7933,8 @@ def add_loopback(ctx, loopback_name):
     config_db = ValidatedConfigDBConnector(ctx.obj['db'])
     if ADHOC_VALIDATION:
         if is_loopback_name_valid(loopback_name) is False:
-            ctx.fail("{} is invalid, name should have prefix '{}' and suffix '{}' "
-                    .format(loopback_name, CFG_LOOPBACK_PREFIX, CFG_LOOPBACK_NO))
+            ctx.fail("{} is invalid, name should have prefix '{}' and suffix '{}' and should not exceed {} characters"
+                    .format(loopback_name, CFG_LOOPBACK_PREFIX, CFG_LOOPBACK_NO, IFACE_NAME_MAX_LEN))
 
         lo_intfs = [k for k, v in config_db.get_table('LOOPBACK_INTERFACE').items() if type(k) != tuple]
         if loopback_name in lo_intfs:
@@ -8680,6 +8681,8 @@ def add_subinterface(ctx, subinterface_name, vid):
 
         if interface_alias is None:
             ctx.fail("{} invalid subinterface".format(interface_alias))
+        if not isInterfaceNameValid(interface_alias):
+            ctx.fail("Subinterface name length should not exceed {} characters".format(IFACE_NAME_MAX_LEN))
 
         if interface_alias.startswith("Po") is True:
             intf_table_name = CFG_PORTCHANNEL_PREFIX
