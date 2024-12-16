@@ -121,10 +121,10 @@ def is_rj45_port(port_name):
         if not platform_sfp_base:
             import sonic_platform_base
             platform_sfp_base = sonic_platform_base.sfp_base.SfpBase
-    except ModuleNotFoundError as e:
+    except (ModuleNotFoundError, FileNotFoundError) as e:
         # This method is referenced by intfutil which is called on vs image
-        # However, there is no platform API supported on vs image
-        # So False is returned in such case
+        # sonic_platform API support is added for vs image(required for chassis), it expects a metadata file, which
+        # wont be available on vs pizzabox duts, So False is returned(if either ModuleNotFound or FileNotFound)
         return False
 
     if platform_chassis and platform_sfp_base:

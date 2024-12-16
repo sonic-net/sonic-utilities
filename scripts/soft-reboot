@@ -64,8 +64,8 @@ function stop_pmon_service()
 {
      CONTAINER_STOP_RC=0
      debug "Stopping pmon docker"
-     docker kill pmon &> /dev/null || CONTAINER_STOP_RC=$?
      systemctl stop pmon || debug "Ignore stopping pmon error $?"
+     docker kill pmon &> /dev/null || CONTAINER_STOP_RC=$?
      if [[ CONTAINER_STOP_RC -ne 0 ]]; then
         debug "Failed killing container pmon RC $CONTAINER_STOP_RC ."
      fi
@@ -93,7 +93,7 @@ function clear_lingering_reboot_config()
     if [[ -f ${WARM_DIR}/${REDIS_FILE} ]]; then
         mv -f ${WARM_DIR}/${REDIS_FILE} ${WARM_DIR}/${REDIS_FILE}.${TIMESTAMP} || /bin/true
     fi
-    /sbin/kexec -u || /bin/true
+    /sbin/kexec -u -a || /bin/true
 }
 
 SCRIPT=$0
@@ -147,9 +147,17 @@ function setup_reboot_variables()
     fi
 }
 
+function invoke_kexec() {
+    /sbin/kexec -l "$KERNEL_IMAGE" --initrd="$INITRD" --append="$BOOT_OPTIONS" $@
+}
+
 function load_kernel() {
     # Load kernel into the memory
-    /sbin/kexec -l "$KERNEL_IMAGE" --initrd="$INITRD" --append="$BOOT_OPTIONS"
+    invoke_kexec -a
+}
+
+function load_kernel_secure() {
+    invoke_kexec -s
 }
 
 function reboot_pre_check()
@@ -215,7 +223,14 @@ stop_sonic_services
 
 clear_lingering_reboot_config
 
-load_kernel
+# check if secure boot is enabled 
+CHECK_SECURE_UPGRADE_ENABLED=0
+SECURE_UPGRADE_ENABLED=$(mokutil --sb-state 2>/dev/null | grep -c "enabled") || CHECK_SECURE_UPGRADE_ENABLED=$?
+if [[ CHECK_SECURE_UPGRADE_ENABLED -ne 0 ]]; then
+    load_kernel
+else
+    load_kernel_secure
+fi
 
 # Update the reboot cause file to reflect that user issued 'reboot' command
 # Upon next boot, the contents of this file will be used to determine the

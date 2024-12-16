@@ -337,6 +337,8 @@ def migrate_sonic_packages(bootloader, binary_image_version):
     new_image_docker_mount = os.path.join(new_image_mount, "var", "lib", "docker")
     docker_default_config = os.path.join(new_image_mount, "etc", "default", "docker")
     docker_default_config_backup = os.path.join(new_image_mount, TMP_DIR, "docker_config_backup")
+    custom_manifests_path = os.path.join(PACKAGE_MANAGER_DIR, "manifests")
+    new_image_package_directory_path = os.path.join(new_image_mount, "var", "lib", "sonic-package-manager")
 
     if not os.path.isdir(new_image_docker_dir):
         # NOTE: This codepath can be reached if the installation process did not
@@ -372,6 +374,8 @@ def migrate_sonic_packages(bootloader, binary_image_version):
             run_command_or_raise(["chroot", new_image_mount, DOCKER_CTL_SCRIPT, "start"])
             docker_started = True
             run_command_or_raise(["cp", packages_path, os.path.join(new_image_mount, TMP_DIR, packages_file)])
+            run_command_or_raise(["mkdir", "-p", custom_manifests_path])
+            run_command_or_raise(["cp", "-arf", custom_manifests_path, new_image_package_directory_path])
             run_command_or_raise(["touch", os.path.join(new_image_mount, "tmp", DOCKERD_SOCK)])
             run_command_or_raise(["mount", "--bind",
                                 os.path.join(VAR_RUN_PATH, DOCKERD_SOCK),
@@ -759,6 +763,7 @@ DOCKER_CONTAINER_LIST = [
     "radv",
     "restapi",
     "sflow",
+    "stp",
     "snmp",
     "swss",
     "syncd",

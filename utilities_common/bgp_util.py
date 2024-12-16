@@ -38,6 +38,15 @@ def is_bgp_neigh_present(neighbor_ip, namespace=multi_asic.DEFAULT_NAMESPACE):
     return False
 
 
+def is_bgp_feature_state_enabled(namespace=multi_asic.DEFAULT_NAMESPACE):
+    config_db = multi_asic.connect_config_db_for_ns(namespace)
+    bgp= config_db.get_entry("FEATURE","bgp")
+    if "state" in bgp:
+        if bgp["state"] == "enabled":
+            return True
+    return False
+    
+
 def is_ipv4_address(ip_address):
     """
     Checks if given ip is ipv4
@@ -188,7 +197,8 @@ def get_neighbor_dict_from_table(db, table_name):
         return neighbor_dict
 
 
-def run_bgp_command(vtysh_cmd, bgp_namespace=multi_asic.DEFAULT_NAMESPACE, vtysh_shell_cmd=constants.VTYSH_COMMAND):
+def run_bgp_command(vtysh_cmd, bgp_namespace=multi_asic.DEFAULT_NAMESPACE,
+                    vtysh_shell_cmd=constants.VTYSH_COMMAND, exit_on_fail=True):
     bgp_instance_id = []
     output = None
     if bgp_namespace is not multi_asic.DEFAULT_NAMESPACE:
@@ -199,16 +209,16 @@ def run_bgp_command(vtysh_cmd, bgp_namespace=multi_asic.DEFAULT_NAMESPACE, vtysh
         output, ret = clicommon.run_command(cmd, return_cmd=True)
         if ret != 0:
             click.echo(output.rstrip('\n'))
-            sys.exit(ret)
+            output = "" if not exit_on_fail else sys.exit(ret)
     except Exception:
         ctx = click.get_current_context()
-        ctx.fail("Unable to get summary from bgp {}".format(bgp_instance_id))
+        ctx.fail("Unable to get summary from bgp {}".format(bgp_instance_id)) if exit_on_fail else None
 
     return output
 
 
-def run_bgp_show_command(vtysh_cmd, bgp_namespace=multi_asic.DEFAULT_NAMESPACE):
-    output = run_bgp_command(vtysh_cmd, bgp_namespace, constants.RVTYSH_COMMAND)
+def run_bgp_show_command(vtysh_cmd, bgp_namespace=multi_asic.DEFAULT_NAMESPACE, exit_on_fail=True):
+    output = run_bgp_command(vtysh_cmd, bgp_namespace, constants.RVTYSH_COMMAND, exit_on_fail)
     # handle the the alias mode in the following code
     if output is not None:
         if clicommon.get_interface_naming_mode() == "alias" and re.search("show ip|ipv6 route", vtysh_cmd):
@@ -289,6 +299,10 @@ def display_bgp_summary(bgp_summary, af):
         af: IPV4 or IPV6
 
     '''
+
+    # "Neighbhor" is a known typo,
+    # but fix it will impact lots of automation scripts that the community users may have developed for years
+    # for now, let's keep it as it is.
     headers = ["Neighbhor", "V", "AS", "MsgRcvd", "MsgSent", "TblVer",
                "InQ", "OutQ", "Up/Down", "State/PfxRcd", "NeighborName"]
 

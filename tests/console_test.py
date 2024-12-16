@@ -14,9 +14,14 @@ import tests.mock_tables.dbconnector
 
 from click.testing import CliRunner
 from utilities_common.db import Db
-from consutil.lib import *
+from consutil.lib import ConsolePortProvider, ConsolePortInfo, ConsoleSession, SysInfoProvider, DbUtils, \
+    InvalidConfigurationError, LineBusyError, LineNotFoundError, ConnectionFailedError
 from sonic_py_common import device_info
 from jsonpatch import JsonPatchConflict
+
+SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
+CONSOLE_MOCK_DIR = SCRIPT_DIR + "/console_mock"
+
 
 class TestConfigConsoleCommands(object):
     @classmethod
@@ -543,17 +548,15 @@ class TestConsutilLib(object):
         with mock.patch("builtins.open", mock.mock_open(read_data="C0-")):
             SysInfoProvider.init_device_prefix()
             assert SysInfoProvider.DEVICE_PREFIX == "/dev/C0-"
-            SysInfoProvider.DEVICE_PREFIX = "/dev/ttyUSB"
 
-    @mock.patch('consutil.lib.SysInfoProvider.run_command', mock.MagicMock(return_value=("/dev/ttyUSB0\n/dev/ttyACM1", "")))
     def test_sys_info_provider_list_console_ttys(self):
-        SysInfoProvider.DEVICE_PREFIX == "/dev/ttyUSB"
+        SysInfoProvider.DEVICE_PREFIX = CONSOLE_MOCK_DIR + "/dev/ttyUSB"
         ttys = SysInfoProvider.list_console_ttys()
         print(SysInfoProvider.DEVICE_PREFIX)
         assert len(ttys) == 1
 
-    @mock.patch('consutil.lib.SysInfoProvider.run_command', mock.MagicMock(return_value=("", "ls: cannot access '/dev/ttyUSB*': No such file or directory")))
     def test_sys_info_provider_list_console_ttys_device_not_exists(self):
+        SysInfoProvider.DEVICE_PREFIX = CONSOLE_MOCK_DIR + "/dev_not_exist/ttyUSB"
         ttys = SysInfoProvider.list_console_ttys()
         assert len(ttys) == 0
 
@@ -563,7 +566,7 @@ class TestConsutilLib(object):
         """
     @mock.patch('consutil.lib.SysInfoProvider.run_command', mock.MagicMock(return_value=all_active_processes_output))
     def test_sys_info_provider_list_active_console_processes(self):
-        SysInfoProvider.DEVICE_PREFIX == "/dev/ttyUSB"
+        SysInfoProvider.DEVICE_PREFIX = "/dev/ttyUSB"
         procs = SysInfoProvider.list_active_console_processes()
         assert len(procs) == 1
         assert "0" in procs
@@ -572,7 +575,7 @@ class TestConsutilLib(object):
     active_process_output = "13751 Wed Mar  6 08:31:35 2019 /usr/bin/sudo picocom -b 9600 -f n /dev/ttyUSB1"
     @mock.patch('consutil.lib.SysInfoProvider.run_command', mock.MagicMock(return_value=active_process_output))
     def test_sys_info_provider_get_active_console_process_info_exists(self):
-        SysInfoProvider.DEVICE_PREFIX == "/dev/ttyUSB"
+        SysInfoProvider.DEVICE_PREFIX = "/dev/ttyUSB"
         proc = SysInfoProvider.get_active_console_process_info("13751")
         assert proc is not None
         assert proc == ("1", "13751",  "Wed Mar  6 08:31:35 2019")
@@ -580,7 +583,7 @@ class TestConsutilLib(object):
     active_process_empty_output = ""
     @mock.patch('consutil.lib.SysInfoProvider.run_command', mock.MagicMock(return_value=active_process_empty_output))
     def test_sys_info_provider_get_active_console_process_info_nonexists(self):
-        SysInfoProvider.DEVICE_PREFIX == "/dev/ttyUSB"
+        SysInfoProvider.DEVICE_PREFIX = "/dev/ttyUSB"
         proc = SysInfoProvider.get_active_console_process_info("2")
         assert proc is None
 

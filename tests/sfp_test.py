@@ -304,6 +304,7 @@ Ethernet4:
 
 test_qsfp_dd_status_output = """\
 Ethernet44:
+        CMIS State (SW): READY
         Tx fault flag on media lane 1: False
         Tx fault flag on media lane 2: False
         Tx fault flag on media lane 3: False
@@ -599,6 +600,12 @@ Ethernet64: SFP EEPROM detected
                                    100GAUI-2 C2M (Annex 135G) - Host Assign (0x55) - 400ZR, DWDM, amplified - Media Assign (0x1)
         CMIS Rev: 4.1
         Connector: LC
+        E1 Active Firmware: X.X
+        E1 Inactive Firmware: Y.Y
+        E1 Server Firmware: A.B.C.D
+        E2 Active Firmware: X.X
+        E2 Inactive Firmware: Y.Y
+        E2 Server Firmware: A.B.C.D
         Encoding: N/A
         Extended Identifier: Power Class 8 (20.0W Max)
         Extended RateSelect Compliance: N/A
@@ -689,6 +696,12 @@ Ethernet64: SFP EEPROM detected
                                    100GAUI-2 C2M (Annex 135G) - Host Assign (0x55) - 400ZR, DWDM, amplified - Media Assign (0x1)
         CMIS Rev: 4.1
         Connector: LC
+        E1 Active Firmware: X.X
+        E1 Inactive Firmware: Y.Y
+        E1 Server Firmware: A.B.C.D
+        E2 Active Firmware: X.X
+        E2 Inactive Firmware: Y.Y
+        E2 Server Firmware: A.B.C.D
         Encoding: N/A
         Extended Identifier: Power Class 8 (20.0W Max)
         Extended RateSelect Compliance: N/A
@@ -779,6 +792,12 @@ Ethernet64: SFP EEPROM detected
                                    100GAUI-2 C2M (Annex 135G) - Host Assign (0x55) - 400ZR, DWDM, amplified - Media Assign (0x1)
         CMIS Rev: 4.1
         Connector: LC
+        E1 Active Firmware: X.X
+        E1 Inactive Firmware: Y.Y
+        E1 Server Firmware: A.B.C.D
+        E2 Active Firmware: X.X
+        E2 Inactive Firmware: Y.Y
+        E2 Server Firmware: A.B.C.D
         Encoding: N/A
         Extended Identifier: Power Class 8 (20.0W Max)
         Extended RateSelect Compliance: N/A
@@ -883,6 +902,28 @@ Ethernet36  Present
 """
         assert result.exit_code == 0
         assert result.output == expected
+
+    def test_sfp_dpc_ports(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["presence"])
+        assert result.exit_code == 0
+        assert "Ethernet24" not in result.output
+
+        result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["eeprom"])
+        assert result.exit_code == 0
+        assert "Ethernet24" not in result.output
+
+        result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["status"])
+        assert result.exit_code == 0
+        assert "Ethernet24" not in result.output
+
+        result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["pm"])
+        assert result.exit_code == 0
+        assert "Ethernet24" not in result.output
+
+        result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["info"])
+        assert result.exit_code == 0
+        assert "Ethernet24" not in result.output
 
     def test_sfp_eeprom_with_dom(self):
         runner = CliRunner()

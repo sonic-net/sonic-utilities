@@ -1,0 +1,9 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+repos:
+-   repo: https://github.com/PyCQA/flake8
+    rev: 4.0.1
+    hooks:
+    -   id: flake8
+        entry: bash -c 'git diff HEAD^ HEAD -U0 -- "$@" | flake8 --diff "$@"' --
+        args: ["--max-line-length=120"]

@@ -56,6 +56,36 @@ class TestAclLoader(object):
         assert acl_loader.validate_actions("DATAACL", forward_packet_action)
         assert not acl_loader.validate_actions("DATAACL", drop_packet_action)
 
+    def test_load_rules_when_capability_table_is_empty(self, acl_loader):
+        """
+        Test case to verify that acl_loader can still load dataplane acl rules when skip_action_validation
+        is true, and capability table in state_db is absent
+        """
+        # Backup and empty the capability table from state_db
+        SWITCH_CAPABILITY = "SWITCH_CAPABILITY|switch"
+        if acl_loader.per_npu_statedb:
+            statedb = list(acl_loader.per_npu_statedb.values())[0]
+        else:
+            statedb = acl_loader.statedb
+        switchcapability = statedb.get_all("STATE_DB", SWITCH_CAPABILITY)
+        statedb.delete("STATE_DB", SWITCH_CAPABILITY)
+        try:
+            acl_loader.load_rules_from_file(os.path.join(test_path, 'acl_input/acl1.json'), skip_action_validation=True)
+            assert acl_loader.rules_info[("DATAACL", "RULE_2")]
+            assert acl_loader.rules_info[("DATAACL", "RULE_2")] == {
+                "VLAN_ID": 369,
+                "ETHER_TYPE": "2048",
+                "IP_PROTOCOL": 6,
+                "SRC_IP": "20.0.0.2/32",
+                "DST_IP": "30.0.0.3/32",
+                "PACKET_ACTION": "FORWARD",
+                "PRIORITY": "9998"
+            }
+        finally:
+            # Restore the capability table in state_db
+            for key, value in switchcapability.items():
+                statedb.set("STATE_DB", SWITCH_CAPABILITY, key, value)
+
     def test_vlan_id_translation(self, acl_loader):
         acl_loader.rules_info = {}
         acl_loader.load_rules_from_file(os.path.join(test_path, 'acl_input/acl1.json'))

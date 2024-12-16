@@ -1,7 +1,7 @@
 import click
-from getpass import getpass
+import getpass
 import os
-import sys
+import signal
 
 from swsscommon.swsscommon import SonicV2Connector
 
@@ -18,6 +18,8 @@ CHASSIS_MIDPLANE_INFO_ACCESS_FIELD = 'access'
 
 CHASSIS_MODULE_HOSTNAME_TABLE = 'CHASSIS_MODULE_HOSTNAME_TABLE'
 CHASSIS_MODULE_HOSTNAME = 'module_hostname'
+
+GET_PASSWORD_TIMEOUT = 10
 
 def connect_to_chassis_state_db():
     chassis_state_db = SonicV2Connector(host="127.0.0.1")
@@ -42,6 +44,20 @@ def get_linecard_module_name_from_hostname(linecard_name: str):
             return module_name
 
     return None
+
+
+def get_linecard_hostname_from_module_name(linecard_name: str):
+
+    chassis_state_db = connect_to_chassis_state_db()
+    keys = chassis_state_db.keys(chassis_state_db.CHASSIS_STATE_DB, '{}|{}'.format(CHASSIS_MODULE_HOSTNAME_TABLE, '*'))
+    for key in keys:
+        module_name = key.split('|')[1]
+        if module_name.replace('-', '').lower() == linecard_name.replace('-', '').lower():
+            hostname = chassis_state_db.get(chassis_state_db.CHASSIS_STATE_DB, key, CHASSIS_MODULE_HOSTNAME)
+            return hostname
+
+    return None
+
 
 def get_linecard_ip(linecard_name: str):
     """
@@ -68,6 +84,7 @@ def get_linecard_ip(linecard_name: str):
         click.echo('Linecard {} not accessible'.format(linecard_name))
         return None
     return module_ip
+
 
 def get_module_ip_and_access_from_state_db(module_name):
     state_db = connect_state_db()
@@ -136,8 +153,17 @@ def get_password(username=None):
     if username is None:
         username = os.getlogin()
 
-    return getpass(
+    def get_password_timeout(*args):
+        print("\nAborted! Timeout when waiting for password input.")
+        exit(1)
+
+    signal.signal(signal.SIGALRM, get_password_timeout)
+    signal.alarm(GET_PASSWORD_TIMEOUT)  # Set a timeout of 60 seconds
+    password = getpass.getpass(
         "Password for username '{}': ".format(username),
         # Pass in click stdout stream - this is similar to using click.echo
         stream=click.get_text_stream('stdout')
     )
+    signal.alarm(0)  # Cancel the alarm
+
+    return password

@@ -86,6 +86,9 @@ def test_install(run_command, run_command_or_raise, get_bootloader, swap, fs):
         call(["sh", "-c", f"echo 'DOCKER_OPTS=\"$DOCKER_OPTS {' '.join(dockerd_opts)}\"' >> {mounted_image_folder}/etc/default/docker"]), # dockerd started with added options as host dockerd
         call(["chroot", mounted_image_folder, "/usr/lib/docker/docker.sh", "start"]),
         call(["cp", "/var/lib/sonic-package-manager/packages.json", f"{mounted_image_folder}/tmp/packages.json"]),
+        call(["mkdir", "-p", "/var/lib/sonic-package-manager/manifests"]),
+        call(["cp", "-arf", "/var/lib/sonic-package-manager/manifests",
+             f"{mounted_image_folder}/var/lib/sonic-package-manager"]),
         call(["touch", f"{mounted_image_folder}/tmp/docker.sock"]),
         call(["mount", "--bind", "/var/run/docker.sock", f"{mounted_image_folder}/tmp/docker.sock"]),
         call(["cp", f"{mounted_image_folder}/etc/resolv.conf", "/tmp/resolv.conf.backup"]),

@@ -1,7 +1,6 @@
 import sys
 import syslog
 from unittest.mock import patch
-import pytest
 import subprocess
 
 sys.path.append("scripts")
@@ -178,3 +177,7 @@ class TestDiskCheck(object):
             
         assert max_log_lvl == syslog.LOG_ERR
 
+    @classmethod
+    def teardown_class(cls):
+        subprocess.run("rm -rf /tmp/tmp*", shell=True)  # cleanup the temporary dirs
+        print("TEARDOWN")

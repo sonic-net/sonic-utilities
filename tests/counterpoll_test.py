@@ -2,6 +2,7 @@ import click
 import json
 import os
 import pytest
+import mock
 import sys
 from click.testing import CliRunner
 from shutil import copyfile
@@ -31,6 +32,21 @@ FLOW_CNT_TRAP_STAT    10000               enable
 FLOW_CNT_ROUTE_STAT   10000               enable
 """
 
+expected_counterpoll_show_dpu = """Type                  Interval (in ms)    Status
+--------------------  ------------------  --------
+QUEUE_STAT            10000               enable
+PORT_STAT             1000                enable
+PORT_BUFFER_DROP      60000               enable
+QUEUE_WATERMARK_STAT  default (60000)     enable
+PG_WATERMARK_STAT     default (60000)     enable
+PG_DROP_STAT          10000               enable
+ACL                   5000                enable
+TUNNEL_STAT           3000                enable
+FLOW_CNT_TRAP_STAT    10000               enable
+FLOW_CNT_ROUTE_STAT   10000               enable
+ENI_STAT              1000                enable
+"""
+
 class TestCounterpoll(object):
     @classmethod
     def setup_class(cls):
@@ -43,6 +59,13 @@ class TestCounterpoll(object):
         result = runner.invoke(counterpoll.cli.commands["show"], [])
         print(result.output)
         assert result.output == expected_counterpoll_show
+
+    @mock.patch('counterpoll.main.device_info.get_platform_info')
+    def test_show_dpu(self, mock_get_platform_info):
+        mock_get_platform_info.return_value = {'switch_type': 'dpu'}
+        runner = CliRunner()
+        result = runner.invoke(counterpoll.cli.commands["show"], [])
+        assert result.output == expected_counterpoll_show_dpu
 
     def test_port_buffer_drop_interval(self):
         runner = CliRunner()
@@ -221,6 +244,38 @@ class TestCounterpoll(object):
         assert result.exit_code == 2
         assert expected in result.output
 
+    @pytest.mark.parametrize("status", ["disable", "enable"])
+    def test_update_eni_status(self, status):
+        runner = CliRunner()
+        result = runner.invoke(counterpoll.cli, ["eni", status])
+        assert result.exit_code == 1
+        assert result.output == "ENI counters are not supported on non DPU platforms\n"
+
+    @pytest.mark.parametrize("status", ["disable", "enable"])
+    @mock.patch('counterpoll.main.device_info.get_platform_info')
+    def test_update_eni_status_dpu(self, mock_get_platform_info, status):
+        mock_get_platform_info.return_value = {'switch_type': 'dpu'}
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(counterpoll.cli.commands["eni"].commands[status], [], obj=db.cfgdb)
+        assert result.exit_code == 0
+
+        table = db.cfgdb.get_table('FLEX_COUNTER_TABLE')
+        assert status == table["ENI"]["FLEX_COUNTER_STATUS"]
+
+    @mock.patch('counterpoll.main.device_info.get_platform_info')
+    def test_update_eni_interval(self, mock_get_platform_info):
+        mock_get_platform_info.return_value = {'switch_type': 'dpu'}
+        runner = CliRunner()
+        db = Db()
+        test_interval = "2000"
+
+        result = runner.invoke(counterpoll.cli.commands["eni"].commands["interval"], [test_interval], obj=db.cfgdb)
+        assert result.exit_code == 0
+
+        table = db.cfgdb.get_table('FLEX_COUNTER_TABLE')
+        assert test_interval == table["ENI"]["POLL_INTERVAL"]
 
     @classmethod
     def teardown_class(cls):

@@ -1,4 +1,5 @@
 import click
+from sonic_py_common import multi_asic
 
 
 FEATURE_TABLE = "FEATURE"
@@ -9,6 +10,8 @@ SYSLOG_CONFIG_FEATURE_TABLE = 'SYSLOG_CONFIG_FEATURE'
 SYSLOG_RATE_LIMIT_INTERVAL = 'rate_limit_interval'
 SYSLOG_RATE_LIMIT_BURST = 'rate_limit_burst'
 SUPPORT_RATE_LIMIT = 'support_syslog_rate_limit'
+FEATURE_HAS_GLOBAL_SCOPE = 'has_global_scope'
+FEATURE_HAS_PER_ASIC_SCOPE = 'has_per_asic_scope'
 
 
 def rate_limit_validator(interval, burst):
@@ -70,7 +73,33 @@ def save_rate_limit_to_db(db, service_name, interval, burst, log):
         data[SYSLOG_RATE_LIMIT_INTERVAL] = interval
     if burst is not None:
         data[SYSLOG_RATE_LIMIT_BURST] = burst
-    db.cfgdb.mod_entry(table, key, data)
+    db.mod_entry(table, key, data)
     log.log_notice(f"Configured syslog {service_name} rate-limits: interval={data.get(SYSLOG_RATE_LIMIT_INTERVAL, 'N/A')},\
         burst={data.get(SYSLOG_RATE_LIMIT_BURST, 'N/A')}")
 
+
+def extract_feature_data(features):
+    """Extract feature data in global scope and feature data in per ASIC namespace scope
+
+    Args:
+        features (dict): Feature data got from CONFIG DB
+
+    Returns:
+        tuple: <global feature data, per namespace feature data>
+    """
+    global_feature_data = {}
+    per_ns_feature_data = {}
+    is_multi_asic = multi_asic.is_multi_asic()
+    for feature_name, feature_config in features.items():
+        if not feature_config.get(SUPPORT_RATE_LIMIT, '').lower() == 'true':
+            continue
+        
+        if is_multi_asic:
+            if feature_config.get(FEATURE_HAS_GLOBAL_SCOPE, '').lower() == 'true':
+                global_feature_data[feature_name] = feature_config
+                
+            if feature_config.get(FEATURE_HAS_PER_ASIC_SCOPE, '').lower() == 'true':
+                per_ns_feature_data[feature_name] = feature_config
+        else:
+            global_feature_data[feature_name] = feature_config
+    return global_feature_data, per_ns_feature_data

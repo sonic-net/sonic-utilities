@@ -89,7 +89,7 @@ class UbootBootloader(OnieInstallerBootloader):
         cmdline = out.strip()
         cmdline = re.sub('^linuxargs=', '', cmdline)
         cmdline = re.sub(r' sonic_fips=[^\s]', '', cmdline) + " sonic_fips=" + fips
-        run_command(['/usr/bin/fw_setenv', 'linuxargs'] + split(cmdline))
+        run_command(['/usr/bin/fw_setenv', 'linuxargs', cmdline])
         click.echo('Done')
 
     def get_fips(self, image):

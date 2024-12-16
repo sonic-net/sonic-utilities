@@ -173,24 +173,6 @@
         "nominal_bit_rate": "N/A",
         "application_advertisement": "N/A"
     },
-    "TRANSCEIVER_INFO|Ethernet24": {
-        "type": "QSFP28 or later",
-        "hardware_rev": "AC",
-        "serial": "MT1706FT02066",
-        "manufacturer": "Mellanox",
-        "model": "MFA1A00-C003",
-        "vendor_oui": "00-02-c9",
-        "vendor_date": "2017-01-13 ",
-        "connector": "No separable connector",
-        "encoding": "64B66B",
-        "ext_identifier": "Power Class 3(2.5W max), CDR present in Rx Tx",
-        "ext_rateselect_compliance": "QSFP+ Rate Select Version 1",
-        "cable_type": "Length Cable Assembly(m)",
-        "cable_length": "3",
-        "specification_compliance": "{'10/40G Ethernet Compliance Code': '40G Active Cable (XLPPI)'}",
-        "nominal_bit_rate": "255",
-        "application_advertisement": "N/A"
-    },
     "TRANSCEIVER_INFO|Ethernet28": {
         "type": "RJ45",
         "hardware_rev": "N/A",
@@ -374,6 +356,7 @@
         "rx_sig_power_max": "40"
     },
     "TRANSCEIVER_STATUS|Ethernet44":{
+        "cmis_state": "READY",
         "DP1State": "DataPathActivated",
         "DP2State": "DataPathActivated",
         "DP3State": "DataPathActivated",
@@ -691,7 +674,13 @@
     },
     "TRANSCEIVER_FIRMWARE_INFO|Ethernet64": {
         "active_firmware": "X.X",
-        "inactive_firmware": "X.X"
+        "inactive_firmware": "X.X",
+        "e1_active_firmware" : "X.X",
+        "e1_inactive_firmware" : "Y.Y",
+        "e1_server_firmware" : "A.B.C.D",
+        "e2_active_firmware" : "X.X",
+        "e2_inactive_firmware" : "Y.Y",
+        "e2_server_firmware" : "A.B.C.D"
     },
     "TRANSCEIVER_INFO|Ethernet72": {
         "active_apsel_hostlane4": "N/A",
@@ -1682,5 +1671,18 @@
         "minimum_current": "339",
         "timestamp": "20230704 17:38:04",
         "warning_status": "False"
+    },
+    "FABRIC_CAPACITY_TABLE|FABRIC_CAPACITY_DATA" : {
+        "fabric_capacity": "88632",
+        "missing_capacity": "265896",
+        "operating_links": "2",
+        "number_of_links": "8",
+        "warning_threshold": "100"
+    },
+    "PORT_CAPACITY_TABLE|PORT_CAPACITY_DATA" : {
+        "capacity": "80000"
+    },
+    "STP_TABLE|GLOBAL": {
+        "max_stp_inst": "510"
     }
 }

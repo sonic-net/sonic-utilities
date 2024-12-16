@@ -76,6 +76,28 @@ class TestConfigWrapper(unittest.TestCase):
 
         self.assertEqual("/usr/local/yang-models", gu_common.YANG_DIR)
 
+    @patch('generic_config_updater.gu_common.subprocess.Popen')
+    def test_get_config_db_as_text(self, mock_popen):
+        config_wrapper = gu_common.ConfigWrapper()
+        mock_proc = MagicMock()
+        mock_proc.communicate = MagicMock(
+            return_value=("[]", None))
+        mock_proc.returncode = 0
+        mock_popen.return_value = mock_proc
+        actual = config_wrapper._get_config_db_as_text()
+        expected = "[]"
+        self.assertEqual(actual, expected)
+
+        config_wrapper = gu_common.ConfigWrapper(scope="asic0")
+        mock_proc = MagicMock()
+        mock_proc.communicate = MagicMock(
+            return_value=("[]", None))
+        mock_proc.returncode = 0
+        mock_popen.return_value = mock_proc
+        actual = config_wrapper._get_config_db_as_text()
+        expected = "[]"
+        self.assertEqual(actual, expected)
+
     def test_get_sonic_yang_as_json__returns_sonic_yang_as_json(self):
         # Arrange
         config_wrapper = self.config_wrapper_mock

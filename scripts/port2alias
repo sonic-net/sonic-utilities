@@ -7,6 +7,7 @@ from io import StringIO
 from portconfig import get_port_config
 from sonic_py_common import device_info
 from sonic_py_common import multi_asic
+from utilities_common.general import load_db_config
 
 # mock the redis for unit test purposes #
 try:
@@ -50,6 +51,7 @@ def translate_line(line, ports):
 def main():
     (platform, hwsku) = device_info.get_platform_and_hwsku()
     ports = {}
+    load_db_config()
     for ns in multi_asic.get_namespace_list():
         (ports_ns, _, _) = get_port_config(hwsku=hwsku, platform=platform, asic_name=ns)
         ports.update(ports_ns)

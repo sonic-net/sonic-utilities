@@ -1,0 +1,15 @@
+{
+    "AAA|accounting": {
+        "login": "tacacs+,local"
+    },
+    "AAA|authentication": {
+        "login": "tacacs+"
+    },
+    "AAA|authorization": {
+        "login": "tacacs+"
+    },
+    "TACPLUS|global": {
+        "auth_type": "login",
+        "passkey": "testpasskey"
+    }
+}

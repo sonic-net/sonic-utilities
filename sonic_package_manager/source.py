@@ -4,7 +4,7 @@ from sonic_package_manager.database import PackageDatabase, PackageEntry
 from sonic_package_manager.dockerapi import DockerApi, get_repository_from_image
 from sonic_package_manager.metadata import Metadata, MetadataResolver
 from sonic_package_manager.package import Package
-
+from typing import Optional
 
 class PackageSource(object):
     """ PackageSource abstracts the way manifest is read
@@ -105,20 +105,24 @@ class TarballSource(PackageSource):
                  tarball_path: str,
                  database: PackageDatabase,
                  docker: DockerApi,
-                 metadata_resolver: MetadataResolver):
+                 metadata_resolver: MetadataResolver,
+                 use_local_manifest: bool = False,
+                 name: Optional[str] = None):
         super().__init__(database,
                          docker,
                          metadata_resolver)
         self.tarball_path = tarball_path
+        self.use_local_manifest = use_local_manifest
+        self.name = name
 
     def get_metadata(self) -> Metadata:
         """ Returns manifest read from tarball. """
-
-        return self.metadata_resolver.from_tarball(self.tarball_path)
+        return self.metadata_resolver.from_tarball(self.tarball_path,
+                                                   use_local_manifest=self.use_local_manifest,
+                                                   name=self.name)
 
     def install_image(self, package: Package):
         """ Installs image from local tarball source. """
-
         return self.docker.load(self.tarball_path)
 
 
@@ -131,18 +135,24 @@ class RegistrySource(PackageSource):
                  reference: str,
                  database: PackageDatabase,
                  docker: DockerApi,
-                 metadata_resolver: MetadataResolver):
+                 metadata_resolver: MetadataResolver,
+                 use_local_manifest: bool = False,
+                 name: Optional[str] = None):
         super().__init__(database,
                          docker,
                          metadata_resolver)
         self.repository = repository
         self.reference = reference
+        self.use_local_manifest = use_local_manifest
+        self.name = name
 
     def get_metadata(self) -> Metadata:
         """ Returns manifest read from registry. """
 
         return self.metadata_resolver.from_registry(self.repository,
-                                                    self.reference)
+                                                    self.reference,
+                                                    self.use_local_manifest,
+                                                    self.name)
 
     def install_image(self, package: Package):
         """ Installs image from registry. """
@@ -161,11 +171,17 @@ class LocalSource(PackageSource):
                  entry: PackageEntry,
                  database: PackageDatabase,
                  docker: DockerApi,
-                 metadata_resolver: MetadataResolver):
+                 metadata_resolver: MetadataResolver,
+                 use_local_manifest: bool = False,
+                 name: Optional[str] = None,
+                 use_edit: bool = False):
         super().__init__(database,
                          docker,
                          metadata_resolver)
         self.entry = entry
+        self.use_local_manifest = use_local_manifest
+        self.name = name
+        self.use_edit = use_edit
 
     def get_metadata(self) -> Metadata:
         """ Returns manifest read from locally installed Docker. """
@@ -177,8 +193,7 @@ class LocalSource(PackageSource):
             # won't have image_id in database. Using their
             # repository name as image.
             image = f'{self.entry.repository}:latest'
-
-        return self.metadata_resolver.from_local(image)
+        return self.metadata_resolver.from_local(image, self.use_local_manifest, self.name, self.use_edit)
 
     def get_package(self) -> Package:
         return Package(self.entry, self.get_metadata())

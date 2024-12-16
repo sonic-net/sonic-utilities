@@ -1,0 +1,11 @@
+{
+    "LDAP|GLOBAL": {
+            "bind_dn": "cn=ldapadm,dc=test1,dc=test2",
+            "base_dn": "dc=test1,dc=test2",
+            "bind_password": "password",
+            "timeout": "2",
+            "bind_timeout": "3",
+            "version" : 3,
+            "port" : 389
+    }
+}

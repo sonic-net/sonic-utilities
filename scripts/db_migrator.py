@@ -6,12 +6,12 @@ import json
 import sys
 import traceback
 import re
+import subprocess
 
 from sonic_py_common import device_info, logger
-from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
+from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector, SonicDBConfig
 from minigraph import parse_xml
 from utilities_common.helper import update_config
-from utilities_common.general import load_db_config
 
 INIT_CFG_FILE = '/etc/sonic/init_cfg.json'
 MINIGRAPH_FILE = '/etc/sonic/minigraph.xml'
@@ -59,7 +59,7 @@ class DBMigrator():
                      none-zero values.
               build: sequentially increase within a minor version domain.
         """
-        self.CURRENT_VERSION = 'version_202405_01'
+        self.CURRENT_VERSION = 'version_202505_01'
 
         self.TABLE_NAME      = 'VERSIONS'
         self.TABLE_KEY       = 'DATABASE'
@@ -128,7 +128,7 @@ class DBMigrator():
                             config_namespace = "localhost"
                         else:
                             config_namespace = ns
-                        golden_config_data = golden_data[config_namespace]
+                        golden_config_data = golden_data.get(config_namespace, None)
         except Exception as e:
             log.log_error('Caught exception while trying to load golden config: ' + str(e))
             pass
@@ -509,39 +509,6 @@ class DBMigrator():
                         self.configDB.set(self.configDB.CONFIG_DB, '{}|{}'.format(table_name, key), 'adv_speeds', value['speed'])
                 elif value['autoneg'] == '0':
                     self.configDB.set(self.configDB.CONFIG_DB, '{}|{}'.format(table_name, key), 'autoneg', 'off')
-    
-
-    def migrate_config_db_switchport_mode(self):
-        port_table = self.configDB.get_table('PORT')
-        portchannel_table = self.configDB.get_table('PORTCHANNEL')
-        vlan_member_table = self.configDB.get_table('VLAN_MEMBER')
-
-        vlan_member_keys= []
-        for _,key in vlan_member_table:
-            vlan_member_keys.append(key) 
-
-        for p_key, p_value in port_table.items():
-            if 'mode' in p_value:
-                self.configDB.set(self.configDB.CONFIG_DB, '{}|{}'.format("PORT", p_key), 'mode', p_value['mode'])
-            else:
-                if p_key in vlan_member_keys:
-                    p_value["mode"] = "trunk"
-                    self.configDB.set_entry("PORT", p_key, p_value)
-                else:
-                    p_value["mode"] = "routed"
-                    self.configDB.set_entry("PORT", p_key, p_value)
-
-        for pc_key, pc_value in portchannel_table.items():
-            if 'mode' in pc_value:
-                self.configDB.set(self.configDB.CONFIG_DB, '{}|{}'.format("PORTCHANNEL", pc_key), 'mode', pc_value['mode'])
-            else:
-                if pc_key in vlan_member_keys:
-                    pc_value["mode"] = "trunk"
-                    self.configDB.set_entry("PORTCHANNEL", pc_key, pc_value)
-                else:
-                    pc_value["mode"] = "routed"
-                    self.configDB.set_entry("PORTCHANNEL", pc_key, pc_value)
-
 
     def migrate_qos_db_fieldval_reference_remove(self, table_list, db, db_num, db_delimeter):
         for pair in table_list:
@@ -841,6 +808,55 @@ class DBMigrator():
                 sflow_key = "SFLOW_SESSION_TABLE:{}".format(key)
                 self.appDB.set(self.appDB.APPL_DB, sflow_key, 'sample_direction','rx')
 
+    def migrate_tacplus(self):
+        if not self.config_src_data or 'TACPLUS' not in self.config_src_data:
+            return
+
+        tacplus_new = self.config_src_data['TACPLUS']
+        log.log_notice('Migrate TACPLUS configuration')
+
+        global_old = self.configDB.get_entry('TACPLUS', 'global')
+        if not global_old:
+            global_new = tacplus_new.get("global")
+            self.configDB.set_entry("TACPLUS", "global", global_new)
+            log.log_info('Migrate TACPLUS global: {}'.format(global_new))
+
+    def migrate_aaa(self):
+        if not self.config_src_data or 'AAA' not in self.config_src_data:
+            return
+
+        aaa_new = self.config_src_data['AAA']
+        log.log_notice('Migrate AAA configuration')
+
+        authentication = self.configDB.get_entry('AAA', 'authentication')
+        if not authentication:
+            authentication_new = aaa_new.get("authentication")
+            self.configDB.set_entry("AAA", "authentication", authentication_new)
+            log.log_info('Migrate AAA authentication: {}'.format(authentication_new))
+
+        # setup per-command accounting
+        accounting = self.configDB.get_entry('AAA', 'accounting')
+        if not accounting:
+            accounting_new = aaa_new.get("accounting")
+            self.configDB.set_entry("AAA", "accounting", accounting_new)
+            log.log_info('Migrate AAA accounting: {}'.format(accounting_new))
+
+        # setup per-command authorization
+        tacplus_config = self.configDB.get_entry('TACPLUS', 'global')
+        if 'passkey' in tacplus_config and '' != tacplus_config.get('passkey'):
+            authorization = self.configDB.get_entry('AAA', 'authorization')
+            if not authorization:
+                authorization_new = aaa_new.get("authorization")
+                self.configDB.set_entry("AAA", "authorization", authorization_new)
+                log.log_info('Migrate AAA authorization: {}'.format(authorization_new))
+        else:
+            # If no passkey, setup per-command authorization will block remote user command
+            log.log_info('TACACS passkey does not exist, disable per-command authorization.')
+            authorization_key = "AAA|authorization"
+            keys = self.configDB.keys(self.configDB.CONFIG_DB, authorization_key)
+            if keys:
+                self.configDB.delete(self.configDB.CONFIG_DB, authorization_key)
+
     def version_unknown(self):
         """
         version_unknown tracks all SONiC versions that doesn't have a version
@@ -1014,7 +1030,6 @@ class DBMigrator():
         """
         log.log_info('Handling version_3_0_0')
         self.migrate_config_db_port_table_for_auto_neg()
-        self.migrate_config_db_switchport_mode()
         self.set_version('version_3_0_1')
         return 'version_3_0_1'
 
@@ -1030,9 +1045,7 @@ class DBMigrator():
             for name, data in portchannel_table.items():
                 data['lacp_key'] = 'auto'
                 self.configDB.set_entry('PORTCHANNEL', name, data)
-        self.migrate_config_db_switchport_mode()
         self.set_version('version_3_0_2')
-
         return 'version_3_0_2'
 
     def version_3_0_2(self):
@@ -1168,7 +1181,7 @@ class DBMigrator():
         Version 4_0_3.
         """
         log.log_info('Handling version_4_0_3')
-        
+
         self.set_version('version_202305_01')
         return 'version_202305_01'
 
@@ -1216,10 +1229,26 @@ class DBMigrator():
 
     def version_202405_01(self):
         """
-        Version 202405_01, this version should be the final version for
-        master branch until 202405 branch is created.
+        Version 202405_01.
         """
         log.log_info('Handling version_202405_01')
+        self.set_version('version_202411_01')
+        return 'version_202411_01'
+
+    def version_202411_01(self):
+        """
+        Version 202411_01.
+        """
+        log.log_info('Handling version_202411_01')
+        self.set_version('version_202505_01')
+        return 'version_202505_01'
+
+    def version_202505_01(self):
+        """
+        Version 202505_01, this version should be the final version for
+        master branch until 202505 branch is created.
+        """
+        log.log_info('Handling version_202505_01')
         return None
 
     def get_version(self):
@@ -1271,6 +1300,9 @@ class DBMigrator():
         # update FRR config mode based on minigraph parser on target image
         self.migrate_routing_config_mode()
 
+        self.migrate_tacplus()
+        self.migrate_aaa()
+
     def migrate(self):
         version = self.get_version()
         log.log_info('Upgrading from version ' + version)
@@ -1281,6 +1313,34 @@ class DBMigrator():
             version = next_version
         # Perform common migration ops
         self.common_migration_ops()
+        # Perform yang validation
+        self.validate()
+
+    def validate(self):
+        config = self.configDB.get_config()
+        # Fix table key in tuple
+        for table_name, table in config.items():
+            new_table = {}
+            hit = False
+            for table_key, table_val in table.items():
+                if isinstance(table_key, tuple):
+                    new_key = "|".join(table_key)
+                    new_table[new_key] = table_val
+                    hit = True
+                else:
+                    new_table[table_key] = table_val
+            if hit:
+                config[table_name] = new_table
+        config_file = "/tmp/validate.json"
+        with open(config_file, 'w') as fp:
+            json.dump(config, fp)
+        process = subprocess.Popen(["config_validator.py", "-c", config_file])
+        # Check validation result for unit test
+        # Check validation result for end to end test
+        mark_file = "/etc/sonic/mgmt_test_mark"
+        if os.environ.get("UTILITIES_UNIT_TESTING", "0") == "2" or os.path.exists(mark_file):
+            ret = process.wait()
+            assert ret == 0, "Yang validation failed"
 
 def main():
     try:
@@ -1313,7 +1373,14 @@ def main():
         socket_path = args.socket
         namespace = args.namespace
 
-        load_db_config()
+        # Can't load global config base on the result of is_multi_asic(), because on multi-asic device, when db_migrate.py
+        # run on the local database, ASIC instance will have not created the /var/run/redis0/sonic-db/database-config.json
+        if args.namespace is not None:
+            if not SonicDBConfig.isGlobalInit():
+                SonicDBConfig.initializeGlobalConfig()
+        else:
+            if not SonicDBConfig.isInit():
+                SonicDBConfig.initialize()
 
         if socket_path:
             dbmgtr = DBMigrator(namespace, socket=socket_path)

@@ -79,7 +79,8 @@
         "pfc_asym": "off",
         "mtu": "9100",
         "tpid": "0x8100",
-        "admin_status": "up"
+        "admin_status": "up",
+        "role": "Dpc"
     },
     "PORT_TABLE:Ethernet28": {
         "index": "7",
@@ -304,6 +305,40 @@
         "type": "dynamic",
         "vni": "200"
     },
+    "_STP_VLAN_TABLE:Vlan500": {
+ 		"bridge_id": "8064b86a97e24e9c",
+ 		"max_age": "20",
+ 		"hello_time": "2",
+ 		"forward_delay": "15",
+ 		"hold_time": "1",
+		"root_bridge_id": "0064b86a97e24e9c",
+		"root_path_cost": "600",
+		"desig_bridge_id": "806480a235f281ec",
+		"root_port": "Root",
+		"root_max_age": "20",
+		"root_hello_time": "2",
+		"root_forward_delay": "15",
+		"stp_instance": "0",
+		"topology_change_count": "1",
+		"last_topology_change": "0"
+	},
+	"_STP_VLAN_PORT_TABLE:Vlan500:Ethernet4": {
+ 		"port_num": "4",
+		"priority": "128",
+ 		"path_cost": "200",
+ 		"port_state": "FORWARDING",
+ 		"desig_cost": "400",
+		"desig_root": "0064b86a97e24e9c",
+		"desig_bridge": "806480a235f281ec",
+		"desig_port": "4",
+		"bpdu_sent": "10",
+		"bpdu_received": "15",
+		"config_bpdu_sent": "10",
+		"config_bpdu_received": "2",
+		"tc_sent": "15",
+		"tc_received": "5",
+		"root_guard_timer": "0"
+	},
     "MUX_CABLE_TABLE:Ethernet32": {
         "state": "active"
     },

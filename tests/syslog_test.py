@@ -484,4 +484,73 @@ class TestSyslog:
             config.config.commands["syslog"].commands["rate-limit-feature"].commands["disable"], obj=db
         )
         assert result.exit_code == SUCCESS
-        
+
+    @mock.patch('config.syslog.clicommon.run_command')
+    def test_config_log_level(self, mock_run):
+        db = Db()
+        db.cfgdb.set_entry('LOGGER', 'log1', {'require_manual_refresh': 'true'})
+
+        runner = CliRunner()
+
+        mock_run.return_value = ('something', 0)
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["level"],
+            ['-i', 'component', '-l', 'DEBUG'], obj=db
+        )
+        assert result.exit_code == SUCCESS
+        data = db.cfgdb.get_entry('LOGGER', 'component')
+        assert data.get('LOGLEVEL') == 'DEBUG'
+
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["level"],
+            ['-i', 'component', '-l', 'DEBUG', '--pid', '123'], obj=db
+        )
+        assert result.exit_code == SUCCESS
+
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["level"],
+            ['-i', 'component', '-l', 'DEBUG', '--container', 'pmon', '--pid', '123'], obj=db
+        )
+        assert result.exit_code == SUCCESS
+
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["level"],
+            ['-i', 'component', '-l', 'DEBUG', '--container', 'pmon', '--program', 'xcvrd'], obj=db
+        )
+        assert result.exit_code == SUCCESS
+
+    @mock.patch('config.syslog.clicommon.run_command')
+    def test_config_log_level_negative(self, mock_run):
+        db = Db()
+
+        runner = CliRunner()
+
+        mock_run.return_value = ('something', 0)
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["level"],
+            ['-i', 'log1', '-l', 'DEBUG', '--container', 'pmon'], obj=db
+        )
+        assert result.exit_code != SUCCESS
+
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["level"],
+            ['-i', 'log1', '-l', 'DEBUG', '--program', 'xcvrd'], obj=db
+        )
+        assert result.exit_code != SUCCESS
+
+        mock_run.reset_mock()
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["level"],
+            ['-i', 'log1', '-l', 'DEBUG', '--container', 'swss', '--program', 'orchagent'], obj=db
+        )
+        assert result.exit_code == SUCCESS
+        # Verify it does not send signal to orchagent if require_manual_refresh is not true
+        assert mock_run.call_count == 0
+
+        mock_run.return_value = ('something', -1)
+        db.cfgdb.set_entry('LOGGER', 'log1', {'require_manual_refresh': 'true'})
+        result = runner.invoke(
+            config.config.commands["syslog"].commands["level"],
+            ['-i', 'log1', '-l', 'DEBUG', '--container', 'pmon', '--program', 'xcvrd'], obj=db
+        )
+        assert result.exit_code != SUCCESS
