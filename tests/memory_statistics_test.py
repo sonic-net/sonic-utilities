@@ -671,7 +671,6 @@ from unittest.mock import patch, MagicMock
 import click
 from click.testing import CliRunner
 import json
-import socket
 
 # Import the functions to be tested
 from show.memory_statistics import (
