@@ -333,7 +333,7 @@ class TestAdditionalMemoryStatisticsCLI(unittest.TestCase):
 
             with self.assertRaises(ValueError) as context:
                 send_data(
-                    'memory_statistics_command_request_handler', 
+                    'memory_statistics_command_request_handler',
                     {'type': 'system', 'metric_name': 'total_memory'},
                     quiet=False
                 )
@@ -353,7 +353,7 @@ class TestAdditionalMemoryStatisticsCLI(unittest.TestCase):
 
             with self.assertRaises(RuntimeError) as context:
                 send_data(
-                    'memory_statistics_command_request_handler', 
+                    'memory_statistics_command_request_handler',
                     {'type': 'system', 'metric_name': 'total_memory'},
                     quiet=False
                 )
