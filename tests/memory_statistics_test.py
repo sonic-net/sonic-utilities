@@ -450,19 +450,16 @@
 #                     conn, _ = self.server_socket.accept()
 #                     data = conn.recv(8192).decode('utf-8')
 #                     request = json.loads(data)
-                    
 #                     # Simulate response based on command
 #                     command = request.get('command', '')
 #                     response = self.responses.get(command, {
-#                         'status': False, 
+#                         'status': False,
 #                         'msg': 'Unknown command'
 #                     })
-                    
 #                     conn.sendall(json.dumps(response).encode('utf-8'))
 #                     conn.close()
 #                 except Exception:
 #                     break
-
 #         self.server_thread = threading.Thread(target=server_thread)
 #         self.server_thread.start()
 #         time.sleep(0.1)  # Give time for server to start
@@ -548,26 +545,26 @@
 #         # Create a mock socket server
 #         mock_server = MockSocketServer(self.socket_path)
 #         mock_server.set_response('test_command', {
-#             'status': True, 
+#             'status': True,
 #             'data': 'Test response'
 #         })
-        
+
 #         try:
 #             mock_server.start()
-            
+
 #             # Attempt to connect and send data
 #             self.socket_manager.connect()
 #             self.socket_manager.send(json.dumps({
 #                 'command': 'test_command',
 #                 'data': {}
 #             }))
-            
+
 #             # Add method to simulate receiving response
 #             self.socket_manager.sock.recv = MagicMock(return_value=b'{"status": true, "data": "Test response"}')
-            
+
 #             response = self.socket_manager.receive_all()
 #             self.assertEqual(response, '{"status": true, "data": "Test response"}')
-        
+
 #         finally:
 #             mock_server.stop()
 
@@ -577,7 +574,7 @@
 #         self.runner = CliRunner()
 #         self.temp_socket_dir = tempfile.mkdtemp()
 #         self.socket_path = os.path.join(self.temp_socket_dir, 'memstats.socket')
-        
+
 #         # Patch socket path for testing
 #         self.patcher = patch.object(memstats_cli.Config, 'SOCKET_PATH', self.socket_path)
 #         self.patcher.start()
@@ -602,7 +599,7 @@
 
 #         try:
 #             response = memstats_cli.send_data(
-#                 'memory_statistics_command_request_handler', 
+#                 'memory_statistics_command_request_handler',
 #                 {"type": "system"}
 #             )
 #             self.assertTrue(response.status)
@@ -620,7 +617,7 @@
 
 #         with self.assertRaises(RuntimeError):
 #             memstats_cli.send_data(
-#                 'memory_statistics_command_request_handler', 
+#                 'memory_statistics_command_request_handler',
 #                 {"type": "system"}
 #             )
 
@@ -633,7 +630,7 @@
 #         self.mock_server.set_response('memory_statistics_command_request_handler', mock_response)
 
 #         result = self.runner.invoke(
-#             memstats_cli.cli, 
+#             memstats_cli.cli,
 #             ['show', 'memory-stats', '--from', '1 hour ago', '--to', 'now']
 #         )
 #         self.assertEqual(result.exit_code, 0)
@@ -646,9 +643,9 @@
 #         with patch.object(syslog, 'syslog') as mock_syslog:
 #             with self.assertRaises(click.UsageError):
 #                 memstats_cli.main(sys.argv[:1] + ['invalid_command'])
-            
+
 #             mock_syslog.assert_called_with(
-#                 syslog.LOG_ERR, 
+#                 syslog.LOG_ERR,
 #                 "Error: Invalid command 'invalid_command'."
 #             )
 
@@ -677,12 +674,13 @@ import sys
 import json
 
 # Import the functions to be tested
-from memory_statistics import (
-    send_data, 
-    display_statistics, 
-    clean_and_print, 
+from show.memory_statistics import (
+    send_data,
+    display_statistics,
+    clean_and_print,
     memory_stats
 )
+
 
 class TestMemoryStatisticsCLI(unittest.TestCase):
     def setUp(self):
@@ -706,9 +704,9 @@ class TestMemoryStatisticsCLI(unittest.TestCase):
         with patch('sys.stdout', new_callable=MagicMock) as mock_stdout:
             # Call the function with some test parameters
             display_statistics(
-                click.Context(click.Command('memory-stats')), 
-                from_time='1 hour ago', 
-                to_time='now', 
+                click.Context(click.Command('memory-stats')),
+                from_time='1 hour ago',
+                to_time='now',
                 select_metric='total_memory'
             )
 
@@ -749,8 +747,8 @@ class TestMemoryStatisticsCLI(unittest.TestCase):
 
         # Use CliRunner to test CLI error handling
         result = self.runner.invoke(memory_stats, [
-            '--from', '1 hour ago', 
-            '--to', 'now', 
+            '--from', '1 hour ago',
+            '--to', 'now',
             '--select', 'total_memory'
         ])
 
@@ -758,13 +756,38 @@ class TestMemoryStatisticsCLI(unittest.TestCase):
         self.assertNotEqual(result.exit_code, 0)
         self.assertIn("Error:", str(result.output))
 
+    # @patch('memory_statistics.SocketManager')
+    # def test_send_data_successful(self, mock_socket_manager):
+    #     """
+    #     Test send_data function with successful socket communication
+    #     """
+    #     # Setup mock socket manager
+    #     mock_socket = MagicMock()
+    #     mock_socket_manager_instance = MagicMock()
+    #     mock_socket_manager.return_value = mock_socket_manager_instance
+    #     mock_socket_manager_instance.connect.return_value = None
+    #     mock_socket_manager_instance.receive_all.return_value = json.dumps({
+    #         'status': True,
+    #         'data': 'Test response'
+    #     })
+
+    #     # Call send_data
+    #     result = send_data(
+    #         'memory_statistics_command_request_handler',
+    #         {'type': 'system', 'metric_name': 'total_memory'}
+    #     )
+
+    #     # Verify interactions
+    #     mock_socket_manager_instance.connect.assert_called_once()
+    #     mock_socket_manager_instance.receive_all.assert_called_once()
+    #     self.assertTrue(result.status)
+
     @patch('memory_statistics.SocketManager')
     def test_send_data_successful(self, mock_socket_manager):
         """
         Test send_data function with successful socket communication
         """
         # Setup mock socket manager
-        mock_socket = MagicMock()
         mock_socket_manager_instance = MagicMock()
         mock_socket_manager.return_value = mock_socket_manager_instance
         mock_socket_manager_instance.connect.return_value = None
@@ -772,10 +795,11 @@ class TestMemoryStatisticsCLI(unittest.TestCase):
             'status': True,
             'data': 'Test response'
         })
+        mock_socket_manager_instance.sock = MagicMock()  # Add a mock socket to simulate sending
 
         # Call send_data
         result = send_data(
-            'memory_statistics_command_request_handler', 
+            'memory_statistics_command_request_handler',
             {'type': 'system', 'metric_name': 'total_memory'}
         )
 
@@ -790,14 +814,16 @@ class TestMemoryStatisticsCLI(unittest.TestCase):
         """
         with self.assertRaises(Exception):
             send_data(
-                'memory_statistics_command_request_handler', 
+                'memory_statistics_command_request_handler',
                 {'type': 'system', 'metric_name': 'total_memory'},
                 quiet=True
             )
 
+
 def main():
     """Run the tests"""
     unittest.main()
+
 
 if __name__ == '__main__':
     main()
