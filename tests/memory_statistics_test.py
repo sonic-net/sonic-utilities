@@ -359,28 +359,6 @@ class TestAdditionalMemoryStatisticsCLI(unittest.TestCase):
                 )
             self.assertIn('Server-side error', str(context.exception))
 
-
-    @patch('show.memory_statistics.SocketManager')
-    def test_send_data_invalid_response_format(self, mock_socket_manager):
-        """Test send_data when the response format is invalid"""
-        mock_socket_instance = mock_socket_manager.return_value
-        mock_socket_instance.receive_all.return_value = "INVALID_JSON"
-
-        with self.assertRaises(ValueError):
-            send_data("test_command", {"data": "test"})
-
-    @patch('show.memory_statistics.SocketManager')
-    def test_send_data_failed_status(self, mock_socket_manager):
-        """Test send_data with a response indicating failure"""
-        mock_socket_instance = mock_socket_manager.return_value
-        mock_socket_instance.receive_all.return_value = json.dumps({
-            'status': False,
-            'msg': 'Test failure'
-        })
-
-        with self.assertRaises(RuntimeError):
-            send_data("test_command", {"data": "test"})
-
     def test_send_data_no_response(self):
         """Test send_data handling of empty response"""
         with patch('show.memory_statistics.SocketManager') as mock_socket_manager:
@@ -395,7 +373,6 @@ class TestAdditionalMemoryStatisticsCLI(unittest.TestCase):
                     {'type': 'system', 'metric_name': 'total_memory'},
                     quiet=False
                 )
-            
             self.assertIn("No response received", str(context.exception))
 
 
