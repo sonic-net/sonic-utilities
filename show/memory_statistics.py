@@ -18,10 +18,10 @@
 #     BUFFER_SIZE: int = 8192
 #     MAX_RETRIES: int = 3
 #     RETRY_DELAY: float = 1.0
-#     DEFAULT_CONFIG = {         
-#         "enabled": "false",       
-#         "sampling_interval": "5",     
-#         "retention_period": "15"       
+#     DEFAULT_CONFIG = {
+#         "enabled": "false",
+#         "sampling_interval": "5",
+#         "retention_period": "15"
 #     }
 
 
@@ -405,9 +405,6 @@
 #             syslog.syslog(syslog.LOG_ERR, error_msg)
 #             raise click.UsageError(error_msg)
 #     main()
-
-
-
 
 import sys
 import socket
