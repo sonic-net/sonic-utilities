@@ -47,12 +47,14 @@ load_minigraph_platform_false_path = os.path.join(load_minigraph_input_path, "pl
 
 load_minigraph_command_output="""\
 Acquired lock on {0}
+Disabling container and routeCheck monitoring ...
 Stopping SONiC target ...
 Running command: /usr/local/bin/sonic-cfggen -H -m --write-to-db
 Running command: config qos reload --no-dynamic-buffer --no-delay
 Running command: pfcwd start_default
 Restarting SONiC target ...
 Reloading Monit configuration ...
+Enabling container and routeCheck monitoring ...
 Please note setting loaded from minigraph will be lost after system reboot. To preserve setting, run `config save`.
 Released lock on {0}
 """
@@ -917,7 +919,8 @@ class TestLoadMinigraph(object):
         importlib.reload(config.main)
 
     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs', mock.MagicMock(return_value=("dummy_path", None)))
-    def test_load_minigraph(self, get_cmd_module, setup_single_broadcom_asic):
+    @mock.patch('config.main.subprocess.check_call')
+    def test_load_minigraph(self, mock_check_call, get_cmd_module, setup_single_broadcom_asic):
         with mock.patch("utilities_common.cli.run_command", mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command:
             (config, show) = get_cmd_module
             runner = CliRunner()
@@ -930,7 +933,7 @@ class TestLoadMinigraph(object):
                 (load_minigraph_command_output.format(config.SYSTEM_RELOAD_LOCK))
             # Verify "systemctl reset-failed" is called for services under sonic.target
             mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'swss'])
-            assert mock_run_command.call_count == 12
+            assert mock_run_command.call_count == 16
 
     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs',
                 mock.MagicMock(return_value=("dummy_path", None)))
