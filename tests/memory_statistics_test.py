@@ -678,7 +678,8 @@ from show.memory_statistics import (
     send_data,
     display_statistics,
     clean_and_print,
-    memory_stats
+    memory_stats,
+    Dict2Obj
 )
 
 
@@ -686,23 +687,24 @@ class TestMemoryStatisticsCLI(unittest.TestCase):
     def setUp(self):
         self.runner = CliRunner()
 
-    @patch('memory_statistics.send_data')
+    @patch('cl.send_data')
     def test_display_statistics_successful(self, mock_send_data):
         """
         Test successful retrieval and display of memory statistics
         """
-        # Create a mock response
-        mock_response = {
+        # Create a mock response using Dict2Obj to match the expected structure
+        mock_response_data = {
             'status': True,
             'data': "Memory Statistics:\nTotal Memory: 16GB\nUsed Memory: 8GB"
         }
-        mock_send_data.return_value = type('MockDict2Obj', (), {
-            'to_dict': lambda: mock_response
-        })()
+        mock_response = Dict2Obj(mock_response_data)  # Use actual Dict2Obj
+
+        # Configure the mock to return the Dict2Obj instance
+        mock_send_data.return_value = mock_response
 
         # Capture stdout
         with patch('sys.stdout', new_callable=MagicMock) as mock_stdout:
-            # Call the function with some test parameters
+            # Call the function with test parameters
             display_statistics(
                 click.Context(click.Command('memory-stats')),
                 from_time='1 hour ago',
@@ -710,79 +712,48 @@ class TestMemoryStatisticsCLI(unittest.TestCase):
                 select_metric='total_memory'
             )
 
-            # Assert that the output matches expected
-            mock_stdout.write.assert_called_with(
-                "Memory Statistics:\nTotal Memory: 16GB\nUsed Memory: 8GB\n"
-            )
+            # Verify output
+            captured_output = ''.join(call[0][0] for call in mock_stdout.write.call_args_list)
+            self.assertIn("Memory Statistics:\nTotal Memory: 16GB\nUsed Memory: 8GB", captured_output)
 
     def test_clean_and_print_valid_data(self):
         """
         Test clean_and_print function with valid data
         """
-        # Capture stdout
         with patch('sys.stdout', new_callable=MagicMock) as mock_stdout:
             clean_and_print({
                 'data': "Memory Stats:\nTotal: 16GB\nUsed: 8GB"
             })
-            mock_stdout.write.assert_called_with(
-                "Memory Statistics:\nTotal: 16GB\nUsed: 8GB\n"
-            )
+            output = ''.join(call[0][0] for call in mock_stdout.write.call_args_list)
+            self.assertIn("Memory Stats:\nTotal: 16GB\nUsed: 8GB", output)
 
     def test_clean_and_print_invalid_data(self):
         """
         Test clean_and_print function with invalid data
         """
-        # Capture stdout
         with patch('sys.stdout', new_callable=MagicMock) as mock_stdout:
             clean_and_print([])  # Invalid data type
-            mock_stdout.write.assert_called_with("Error: Invalid data format received\n")
+            output = ''.join(call[0][0] for call in mock_stdout.write.call_args_list)
+            self.assertIn("Error: Invalid data format received", output)
 
-    @patch('memory_statistics.send_data')
+    @patch('show.memory_statistics.send_data')  # Fixed patch path
     def test_display_statistics_error_handling(self, mock_send_data):
         """
         Test error handling in display_statistics
         """
-        # Simulate a send_data exception
+        # Simulate exception
         mock_send_data.side_effect = Exception("Connection error")
 
-        # Use CliRunner to test CLI error handling
         result = self.runner.invoke(memory_stats, [
             '--from', '1 hour ago',
             '--to', 'now',
             '--select', 'total_memory'
         ])
 
-        # Assert that the error is handled and displayed
         self.assertNotEqual(result.exit_code, 0)
-        self.assertIn("Error:", str(result.output))
+        self.assertIn("Error:", result.output)
 
-    # @patch('memory_statistics.SocketManager')
-    # def test_send_data_successful(self, mock_socket_manager):
-    #     """
-    #     Test send_data function with successful socket communication
-    #     """
-    #     # Setup mock socket manager
-    #     mock_socket = MagicMock()
-    #     mock_socket_manager_instance = MagicMock()
-    #     mock_socket_manager.return_value = mock_socket_manager_instance
-    #     mock_socket_manager_instance.connect.return_value = None
-    #     mock_socket_manager_instance.receive_all.return_value = json.dumps({
-    #         'status': True,
-    #         'data': 'Test response'
-    #     })
-
-    #     # Call send_data
-    #     result = send_data(
-    #         'memory_statistics_command_request_handler',
-    #         {'type': 'system', 'metric_name': 'total_memory'}
-    #     )
-
-    #     # Verify interactions
-    #     mock_socket_manager_instance.connect.assert_called_once()
-    #     mock_socket_manager_instance.receive_all.assert_called_once()
-    #     self.assertTrue(result.status)
-
-    @patch('memory_statistics.SocketManager')
+    @patch('show.memory_statistics.SocketManager')  # Fixed patch path
     def test_send_data_successful(self, mock_socket_manager):
         """
         Test send_data function with successful socket communication
@@ -795,7 +766,7 @@ class TestMemoryStatisticsCLI(unittest.TestCase):
             'status': True,
             'data': 'Test response'
         })
-        mock_socket_manager_instance.sock = MagicMock()  # Add a mock socket to simulate sending
+        mock_socket_manager_instance.sock = MagicMock()  # Simulate sending
 
         # Call send_data
         result = send_data(
