@@ -296,6 +296,34 @@ class TestAdditionalMemoryStatisticsCLI(unittest.TestCase):
 
         self.assertIn("Connection error", result.output)
 
+    def test_dict2obj_with_list_of_dicts(self):
+            """Test Dict2Obj with a list of dictionaries"""
+            data = [{'a': 1}, {'b': 2}]
+            obj = Dict2Obj(data)
+            self.assertEqual(len(obj.items), 2)
+            self.assertEqual(obj.items[0].a, 1)
+            self.assertEqual(obj.items[1].b, 2)
+
+    def test_dict2obj_repr(self):
+        """Test the __repr__ method of Dict2Obj"""
+        data = {'a': 1, 'b': {'c': 2}}
+        obj = Dict2Obj(data)
+        repr_str = repr(obj)
+        self.assertTrue(repr_str.startswith('<Dict2Obj '))
+        self.assertIn("'a': 1", repr_str)
+        self.assertIn("'b': {'c': 2}", repr_str)
+
+    def test_socket_manager_validate_socket_path_error(self):
+        """Test SocketManager validation with non-existent directory"""
+        with patch('os.path.exists', return_value=False):
+            with patch('os.path.dirname', return_value='/nonexistent/path'):
+                with patch('syslog.syslog') as mock_syslog:
+                    with self.assertRaises(ConnectionError):
+                        SocketManager('/var/run/test.socket')
+                    
+                    # Verify syslog was called with the error message
+                    mock_syslog.assert_called_with(3, "Socket directory /nonexistent/path does not exist")
+
 
 def main():
     """Run the tests"""
