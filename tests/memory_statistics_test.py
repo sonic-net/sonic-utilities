@@ -671,6 +671,7 @@ from unittest.mock import patch, MagicMock
 import click
 from click.testing import CliRunner
 import json
+import socket
 
 # Import the functions to be tested
 from show.memory_statistics import (
@@ -678,7 +679,9 @@ from show.memory_statistics import (
     display_statistics,
     clean_and_print,
     memory_stats,
-    Dict2Obj
+    SocketManager,
+    Dict2Obj,
+    ConnectionError
 )
 
 
@@ -686,7 +689,7 @@ class TestMemoryStatisticsCLI(unittest.TestCase):
     def setUp(self):
         self.runner = CliRunner()
 
-    @patch('cl.send_data')
+    @patch('show.memory_statistics.send_data')
     def test_display_statistics_successful(self, mock_send_data):
         """
         Test successful retrieval and display of memory statistics
