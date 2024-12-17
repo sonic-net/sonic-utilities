@@ -678,9 +678,9 @@ from show.memory_statistics import (
     display_statistics,
     clean_and_print,
     memory_stats,
-    SocketManager,
+    # SocketManager,
     Dict2Obj,
-    ConnectionError
+    # ConnectionError
 )
 
 
