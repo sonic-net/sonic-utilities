@@ -889,8 +889,9 @@ def _get_disabled_services_list(config_db):
 def _stop_services():
     try:
         subprocess.check_call(['sudo', 'monit', 'status'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        click.echo("Disabling container monitoring ...")
+        click.echo("Disabling container and routeCheck monitoring ...")
         clicommon.run_command(['sudo', 'monit', 'unmonitor', 'container_checker'])
+        clicommon.run_command(['sudo', 'monit', 'unmonitor', 'routeCheck'])
     except subprocess.CalledProcessError as err:
         pass
 
@@ -949,16 +950,17 @@ def _restart_services():
     wait_service_restart_finish('interfaces-config', last_interface_config_timestamp)
     wait_service_restart_finish('networking', last_networking_timestamp)
 
-    try:
-        subprocess.check_call(['sudo', 'monit', 'status'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        click.echo("Enabling container monitoring ...")
-        clicommon.run_command(['sudo', 'monit', 'monitor', 'container_checker'])
-    except subprocess.CalledProcessError as err:
-        pass
-
     # Reload Monit configuration to pick up new hostname in case it changed
     click.echo("Reloading Monit configuration ...")
     clicommon.run_command(['sudo', 'monit', 'reload'])
+
+    try:
+        subprocess.check_call(['sudo', 'monit', 'status'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        click.echo("Enabling container and routeCheck monitoring ...")
+        clicommon.run_command(['sudo', 'monit', 'monitor', 'container_checker'])
+        clicommon.run_command(['sudo', 'monit', 'monitor', 'routeCheck'])
+    except subprocess.CalledProcessError as err:
+        pass
 
 def _per_namespace_swss_ready(service_name):
     out, _ = clicommon.run_command(['systemctl', 'show', str(service_name), '--property', 'ActiveState', '--value'], return_cmd=True)
