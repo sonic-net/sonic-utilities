@@ -670,7 +670,6 @@ import unittest
 from unittest.mock import patch, MagicMock
 import click
 from click.testing import CliRunner
-import sys
 import json
 
 # Import the functions to be tested
