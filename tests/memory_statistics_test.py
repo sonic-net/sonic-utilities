@@ -798,7 +798,7 @@ class TestAdditionalMemoryStatisticsCLI(unittest.TestCase):
     def setUp(self):
         self.runner = CliRunner()
 
-    ## ---- Tests for Dict2Obj Class ---- ##
+    # ---- Tests for Dict2Obj Class ---- #
 
     def test_dict2obj_with_empty_dict(self):
         """Test Dict2Obj with an empty dictionary"""
@@ -818,7 +818,7 @@ class TestAdditionalMemoryStatisticsCLI(unittest.TestCase):
         with self.assertRaises(ValueError):
             Dict2Obj("invalid_input")
 
-    ## ---- Tests for SocketManager ---- ##
+    # ---- Tests for SocketManager ---- #
 
     @patch('socket.socket')
     def test_socket_manager_connect_success(self, mock_socket):
@@ -865,7 +865,7 @@ class TestAdditionalMemoryStatisticsCLI(unittest.TestCase):
         with self.assertRaises(ConnectionError):
             manager.send("test data")
 
-    ## ---- Tests for send_data Function ---- ##
+    # ---- Tests for send_data Function---- #
 
     # @patch('cl.SocketManager')
     # def test_send_data_invalid_response_format(self, mock_socket_manager):
@@ -888,7 +888,7 @@ class TestAdditionalMemoryStatisticsCLI(unittest.TestCase):
     #     with self.assertRaises(RuntimeError):
     #         send_data("test_command", {"data": "test"})
 
-    ## ---- CLI Command Tests ---- ##
+    # ---- CLI Command Tests ---- #
 
     @patch('cl.send_data')
     def test_memory_stats_missing_options(self, mock_send_data):
@@ -929,7 +929,7 @@ class TestAdditionalMemoryStatisticsCLI(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertIn("Memory Stats:\nTotal: 16GB\nUsed: 12GB", result.output)
 
-    ## ---- Additional Edge Cases ---- ##
+    # ---- Additional Edge Cases ---- #
 
     @patch('cl.SocketManager')
     def test_socket_manager_close_exception(self, mock_socket_manager):
