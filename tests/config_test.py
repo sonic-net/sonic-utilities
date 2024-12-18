@@ -50,12 +50,14 @@ load_minigraph_platform_false_path = os.path.join(load_minigraph_input_path, "pl
 
 load_minigraph_command_output="""\
 Acquired lock on {0}
+Disabling container and routeCheck monitoring ...
 Stopping SONiC target ...
 Running command: /usr/local/bin/sonic-cfggen -H -m --write-to-db
 Running command: config qos reload --no-dynamic-buffer --no-delay
 Running command: pfcwd start_default
 Restarting SONiC target ...
 Reloading Monit configuration ...
+Enabling container and routeCheck monitoring ...
 Please note setting loaded from minigraph will be lost after system reboot. To preserve setting, run `config save`.
 Released lock on {0}
 """
@@ -965,7 +967,8 @@ class TestLoadMinigraph(object):
         importlib.reload(config.main)
 
     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs', mock.MagicMock(return_value=("dummy_path", None)))
-    def test_load_minigraph(self, get_cmd_module, setup_single_broadcom_asic):
+    @mock.patch('config.main.subprocess.check_call')
+    def test_load_minigraph(self, mock_check_call, get_cmd_module, setup_single_broadcom_asic):
         with mock.patch("utilities_common.cli.run_command", mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command:
             (config, show) = get_cmd_module
             runner = CliRunner()
@@ -978,7 +981,7 @@ class TestLoadMinigraph(object):
                 (load_minigraph_command_output.format(config.SYSTEM_RELOAD_LOCK))
             # Verify "systemctl reset-failed" is called for services under sonic.target
             mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'swss'])
-            assert mock_run_command.call_count == 12
+            assert mock_run_command.call_count == 16
 
     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs',
                 mock.MagicMock(return_value=("dummy_path", None)))
@@ -1231,6 +1234,7 @@ class TestLoadMinigraph(object):
 
 class TestReloadConfig(object):
     dummy_cfg_file = os.path.join(os.sep, "tmp", "config.json")
+    dummy_golden_cfg_file = os.path.join(os.sep, "tmp", "golden_config.json")
 
     @classmethod
     def setup_class(cls):
@@ -1433,7 +1437,7 @@ class TestReloadConfig(object):
                 == RELOAD_YANG_CFG_OUTPUT.format(config.SYSTEM_RELOAD_LOCK)
 
     def test_reload_config_fails_yang_validation(self, get_cmd_module, setup_single_broadcom_asic):
-        with open(self.dummy_cfg_file, 'w') as f:
+        with open(self.dummy_golden_cfg_file, 'w') as f:
             device_metadata = {
                 "DEVICE_METADATA": {
                     "localhost": {
@@ -1452,7 +1456,7 @@ class TestReloadConfig(object):
 
             result = runner.invoke(
                 config.config.commands["reload"],
-                [self.dummy_cfg_file, '-y', '-f'])
+                [self.dummy_golden_cfg_file, '-y', '-f'])
 
             print(result.exit_code)
             print(result.output)
@@ -1464,6 +1468,7 @@ class TestReloadConfig(object):
     def teardown_class(cls):
         os.environ['UTILITIES_UNIT_TESTING'] = "0"
         os.remove(cls.dummy_cfg_file)
+        os.remove(cls.dummy_golden_cfg_file)
         print("TEARDOWN")
 
 

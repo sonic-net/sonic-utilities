@@ -524,27 +524,42 @@ save_bgp_neighbor() {
     local ns=$(get_vtysh_namespace $asic_id)
 
     neighbor_list_v4=$(${timeout_cmd} bash -c "vtysh $ns -c 'show ip bgp neighbors' | grep 'BGP neighbor is' | awk -F '[, ]' '{print \$4}' | awk /\\\./")
-    for word in $neighbor_list_v4; do
-        save_cmd "vtysh $ns -c \"show ip bgp neighbors $word advertised-routes\"" "ip.bgp.neighbor.$word.adv$asic_id"
-        save_cmd "vtysh $ns -c \"show ip bgp neighbors $word routes\"" "ip.bgp.neighbor.$word.rcv$asic_id"
-    done
+    if [ ! -z "$neighbor_list_v4" ]; then
+        v4_cmd="vtysh "
+        for word in $neighbor_list_v4; do
+            v4_cmd="${v4_cmd} $ns -Ec 'show bgp ipv4 neighbors $word advertised-routes' "
+            v4_cmd="${v4_cmd} $ns -Ec 'show bgp ipv4 neighbors $word routes' "
+        done
+        save_cmd "$v4_cmd" "ip.bgp.neigh.adv.rcv.routes"
+    fi
+
     neighbor_list_v6=$(${timeout_cmd} bash -c "vtysh $ns -c 'show bgp ipv6 neighbors' | grep 'BGP neighbor is' | awk -F '[, ]' '{print \$4}' | awk /:/")
-    for word in $neighbor_list_v6; do
-        save_cmd "vtysh $ns -c \"show bgp ipv6 neighbors $word advertised-routes\"" "ipv6.bgp.neighbor.$word.adv$asic_id"
-        save_cmd "vtysh $ns -c \"show bgp ipv6 neighbors $word routes\"" "ipv6.bgp.neighbor.$word.rcv$asic_id"
-    done
+    if [ ! -z "$neighbor_list_v6" ]; then
+        v6_cmd="vtysh "
+        for word in $neighbor_list_v6; do
+            v6_cmd="${v6_cmd} $ns -Ec 'show bgp ipv6 neighbors $word advertised-routes' "
+            v6_cmd="${v6_cmd} $ns -Ec 'show bgp ipv6 neighbors $word routes' "
+        done
+        save_cmd "$v6_cmd" "ipv6.bgp.neigh.adv.rcv.routes"
+    fi
+
     vrf_list=""
     vrf_output=$(${timeout_cmd} bash -c "vtysh $ns -c 'show vrf'")
     if [ ! -z $vrf_output]; then
         vrf_list= echo $vrf_output | awk -F" " '{print $2}'
     fi
-    for vrf in $vrf_list; do
-        neighbor_list=`${timeout_cmd} bash -c "vtysh $ns -c 'show ip bgp vrf $vrf neighbors' | grep 'BGP neighbor is' | awk -F '[, ]' '{print \$4}'"`
-        for word in $neighbor_list; do
-            save_cmd "vtysh $ns -c \"show ip bgp vrf $vrf neighbors $word advertised-routes\"" "ip.bgp.neighbor.$vrf.$word.adv$asic_id"
-            save_cmd "vtysh $ns -c \"show ip bgp vrf $vrf neighbors $word routes\"" "ip.bgp.neighbor.$vrf.$word.rcv$asic_id"
+
+    if [ ! -z "$vrf_list" ]; then
+        vrf_cmd="vtysh "
+        for vrf in $vrf_list; do
+            neighbor_list=`${timeout_cmd} bash -c "vtysh $ns -c 'show ip bgp vrf $vrf neighbors' | grep 'BGP neighbor is' | awk -F '[, ]' '{print \$4}'"`
+            for word in $neighbor_list; do
+                vrf_cmd="${vrf_cmd} $ns -Ec 'show ip bgp vrf $vrf neighbors $word advertised-routes' "
+                vrf_cmd="${vrf_cmd} $ns -Ec 'show ip bgp vrf $vrf neighbors $word routes' "
+            done
         done
-    done
+        save_cmd "$vrf_cmd" "ip.bgp.neigh.vrf.adv.rcv.routes"
+    fi
 }
 
 ###############################################################################
@@ -1098,7 +1113,7 @@ save_file() {
     fi
 
     if $do_gzip; then
-        if [ ! -d "$path" ]; then
+        if [[ -f ${orig_path} ]]; then
           gz_path="${gz_path}.gz"
           tar_path="${tar_path}.gz"
 
@@ -1116,6 +1131,12 @@ save_file() {
           else
               tar -czvf "$gz_path" -C "$(dirname "$orig_path")" "$(basename "$orig_path")"
           fi
+        fi
+    else
+        if $NOOP; then
+            echo "cp $orig_path $gz_path"
+        else
+            cp $orig_path $gz_path
         fi
     fi
 
@@ -1457,7 +1478,7 @@ collect_mellanox_dfw_dumps() {
 # Returns:
 #  None
 ###############################################################################
-save_marvellcmd() {
+save_marvell_presteracmd() {
     trap 'handle_error $? $LINENO' ERR
 
     mkdir -p $LOGDIR/sdkdump
@@ -1474,37 +1495,38 @@ save_marvellcmd() {
 # Returns:
 #  None
 ###############################################################################
-collect_marvell() {
-    trap 'handle_error $? $LINENO' ERR    
+collect_marvell_prestera() {
+    trap 'handle_error $? $LINENO' ERR
 
-    save_marvellcmd "show version" "CPSS_version"
-    save_marvellcmd "debug-mode;xps-api call xpsDataIntegrityDumpSerInfo all" "SER_table"
-    save_marvellcmd "show traffic cpu rx statistic device 0" "CPU_stat"
-    save_marvellcmd "show interfaces status all" "INTERFACE_config"
-    save_marvellcmd "show port monitor" "PORT_mirror"
-    save_marvellcmd "show vlan device 0" "VLAN_table"
-    save_marvellcmd "show ip route device 0" "IP_route"
-    save_marvellcmd "show ipv6 route device 0" "IPV6_route"
-    save_marvellcmd "show ip route_fdb device 0" "IP_forward_route"
-    save_marvellcmd "show ipv6 route_fdb device 0" "IPV6_forward_route"
-    save_marvellcmd "show ip next-hop device 0" "NH_table"
-    save_marvellcmd "show mac address-table device 0" "MAC_forward"
-    save_marvellcmd "show mac address-table count device 0" "MAC_count"
-    save_marvellcmd "show tail-drop-allocated buffers all" "Tail_drop"
-    save_marvellcmd "show policy device 0" "POLICER_table"
-    save_marvellcmd "show system policy-tcam utilization device 0" "Policy_count"
-    save_marvellcmd "show access-list device 0 pcl-id 0 format ingress_udb_30" "UDB30_acl"
-    save_marvellcmd "show access-list device 0 pcl-id 0 format ingress_udb_60" "UDB60_acl"
-    save_marvellcmd "debug-mode;show drop counters 0" "Drop_count"
-    save_marvellcmd "debug-mode;dump all registers" "REGISTER_table"
-    save_marvellcmd "debug-mode;dump all tables0" "HW_table_0"
-    save_marvellcmd "debug-mode;dump all tables1" "HW_table_1"
-    save_marvellcmd "debug-mode;dump all tables2" "HW_table_2"
-    save_marvellcmd "debug-mode;dump all tables3" "HW_table_3"
-    save_marvellcmd "debug-mode;dump all tables4" "HW_table_4"
-    save_marvellcmd "debug-mode;dump all tables5" "HW_table_5"
-    save_marvellcmd "debug-mode;dump all tables6" "HW_table_6"
-    save_marvellcmd "debug-mode;dump all tables7" "HW_table_7"
+
+    save_marvell_presteracmd "show version" "CPSS_version"
+    save_marvell_presteracmd "debug-mode;xps-api call xpsDataIntegrityDumpSerInfo all" "SER_table"
+    save_marvell_presteracmd "show traffic cpu rx statistic device 0" "CPU_stat"
+    save_marvell_presteracmd "show interfaces status all" "INTERFACE_config"
+    save_marvell_presteracmd "show port monitor" "PORT_mirror"
+    save_marvell_presteracmd "show vlan device 0" "VLAN_table"
+    save_marvell_presteracmd "show ip route device 0" "IP_route"
+    save_marvell_presteracmd "show ipv6 route device 0" "IPV6_route"
+    save_marvell_presteracmd "show ip route_fdb device 0" "IP_forward_route"
+    save_marvell_presteracmd "show ipv6 route_fdb device 0" "IPV6_forward_route"
+    save_marvell_presteracmd "show ip next-hop device 0" "NH_table"
+    save_marvell_presteracmd "show mac address-table device 0" "MAC_forward"
+    save_marvell_presteracmd "show mac address-table count device 0" "MAC_count"
+    save_marvell_presteracmd "show tail-drop-allocated buffers all" "Tail_drop"
+    save_marvell_presteracmd "show policy device 0" "POLICER_table"
+    save_marvell_presteracmd "show system policy-tcam utilization device 0" "Policy_count"
+    save_marvell_presteracmd "show access-list device 0 pcl-id 0 format ingress_udb_30" "UDB30_acl"
+    save_marvell_presteracmd "show access-list device 0 pcl-id 0 format ingress_udb_60" "UDB60_acl"
+    save_marvell_presteracmd "debug-mode;show drop counters 0" "Drop_count"
+    save_marvell_presteracmd "debug-mode;dump all registers" "REGISTER_table"
+    save_marvell_presteracmd "debug-mode;dump all tables0" "HW_table_0"
+    save_marvell_presteracmd "debug-mode;dump all tables1" "HW_table_1"
+    save_marvell_presteracmd "debug-mode;dump all tables2" "HW_table_2"
+    save_marvell_presteracmd "debug-mode;dump all tables3" "HW_table_3"
+    save_marvell_presteracmd "debug-mode;dump all tables4" "HW_table_4"
+    save_marvell_presteracmd "debug-mode;dump all tables5" "HW_table_5"
+    save_marvell_presteracmd "debug-mode;dump all tables6" "HW_table_6"
+    save_marvell_presteracmd "debug-mode;dump all tables7" "HW_table_7"
 }
 
 ###############################################################################
@@ -2269,8 +2291,8 @@ main() {
         collect_marvell_teralynx
     fi
 
-    if [ "$asic" = "marvell" ]; then
-        collect_marvell
+    if [ "$asic" = "marvell-prestera" ]; then
+        collect_marvell_prestera
     fi
 
     if [ "$asic" = "pensando" ]; then
