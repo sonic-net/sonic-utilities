@@ -2023,7 +2023,7 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
             click.secho("Cannot find '{}'!".format(golden_config_path),
                         fg='magenta')
             raise click.Abort()
-        
+
         config_file_yang_validation(golden_config_path)
 
         config_to_check = read_json_file(golden_config_path)
