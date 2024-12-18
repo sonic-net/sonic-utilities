@@ -875,6 +875,42 @@ save_proc() {
 }
 
 ###############################################################################
+# Given list of proc files, saves proc files to tar.
+# Globals:
+#  V
+#  TARDIR
+#  MKDIR
+#  CP
+#  DUMPDIR
+#  TAR
+#  RM
+#  BASE
+#  TARFILE
+#  NOOP
+# Arguments:
+#  *procfiles: variable-length list of proc file paths to save
+# Returns:
+#  None
+###############################################################################
+save_proc() {
+    trap 'handle_error $? $LINENO' ERR
+    local procfiles="$@"
+    $MKDIR $V -p $TARDIR/proc
+    for f in $procfiles
+    do
+        if $NOOP; then
+            if [ -e $f ]; then
+                echo "$CP $V -r $f $TARDIR/proc"
+            fi
+        else
+            ( [ -e $f ] && $CP $V -r $f $TARDIR/proc ) || echo "$f not found" > $TARDIR/$f
+        fi
+    done
+
+    chmod ugo+rw -R $DUMPDIR/$BASE/proc
+}
+
+###############################################################################
 # Dump io stats for processes
 # Globals:
 #  V
@@ -1469,6 +1505,7 @@ collect_marvell_prestera() {
 ###############################################################################
 collect_broadcom() {
     trap 'handle_error $? $LINENO' ERR
+    local timeout_cmd="timeout --foreground ${TIMEOUT_MIN}m"
     local platform=$(show platform summary --json | python -c 'import sys, json; \
         print(json.load(sys.stdin)["platform"])')
     local hwsku=$(show platform summary --json | python -c 'import sys, json; \
@@ -1597,6 +1634,25 @@ collect_broadcom() {
 
     copy_from_masic_docker "syncd" "/var/log/diagrun.log" "/var/log/diagrun.log"
     copy_from_masic_docker "syncd" "/var/log/bcm_diag_post" "/var/log/bcm_diag_post"
+
+    # run 'hw-management-generate-dump.sh' script and save the result file
+    HW_DUMP_FILE=/usr/bin/hw-management-generate-dump.sh
+    if [ -f "$HW_DUMP_FILE" ]; then
+      ${CMD_PREFIX}${timeout_cmd} /usr/bin/hw-management-generate-dump.sh $ALLOW_PROCESS_STOP
+      ret=$?
+      if [ $ret -ne 0 ]; then
+        if [ $ret -eq $TIMEOUT_EXIT_CODE ]; then
+          echo "hw-management dump timedout after ${TIMEOUT_MIN} minutes."
+        else
+          echo "hw-management dump failed ..."
+        fi
+      else
+        save_file "/tmp/hw-mgmt-dump*" "hw-mgmt" false
+        rm -f /tmp/hw-mgmt-dump*
+      fi
+    else
+      echo "HW Mgmt dump script $HW_DUMP_FILE does not exist"
+    fi  
 }
 
 ###############################################################################
@@ -1805,6 +1861,12 @@ save_log_files() {
         file_list="${file_list} ${file_list_2}"
     fi
 
+    # save log files creation info
+    files_ts_info=/tmp/files.timestamp.info
+    ls --time-style='+%d-%m-%Y %H:%M:%S' -last /var/log/* > $files_ts_info
+    save_file $files_ts_info "log" true
+    rm -f $files_ts_info
+    
     # gzip up all log files individually before placing them in the incremental tarball
     for file in $file_list; do
         dest_dir="log"
@@ -2071,6 +2133,11 @@ main() {
     echo "[ Capture Proc State ] : $(($end_t-$start_t)) msec" >> $TECHSUPPORT_TIME_INFO
     wait
 
+    # capture /sys info - include acpi info
+    save_sys /sys/firmware/acpi/tables & 
+    end_t2=$(date +%s%3N)
+    echo "[ Capture Sys info ] : $(($end_t2-$end_t)) msec" >> $TECHSUPPORT_TIME_INFO
+    
     # Save all the processes within each docker
     save_cmd "show services" services.summary &
 
