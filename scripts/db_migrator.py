@@ -765,19 +765,17 @@ class DBMigrator():
                 # Set new cable length values
                 self.configDB.set(self.configDB.CONFIG_DB, "CABLE_LENGTH|AZURE", intf, EDGEZONE_AGG_CABLE_LENGTH)
 
-    def migrate_config_db_flex_counter_delay_status(self):
+    def migrate_flex_counter_delay_status_removal(self):
         """
-        Migrate "FLEX_COUNTER_TABLE|*": { "value": { "FLEX_COUNTER_DELAY_STATUS": "false" } }
-        Set FLEX_COUNTER_DELAY_STATUS true in case of fast-reboot
+        Remove FLEX_COUNTER_DELAY_STATUS field.
         """
 
         flex_counter_objects = self.configDB.get_keys('FLEX_COUNTER_TABLE')
         for obj in flex_counter_objects:
             flex_counter = self.configDB.get_entry('FLEX_COUNTER_TABLE', obj)
-            delay_status = flex_counter.get('FLEX_COUNTER_DELAY_STATUS')
-            if delay_status is None or delay_status == 'false':
-                flex_counter['FLEX_COUNTER_DELAY_STATUS'] = 'true'
-                self.configDB.mod_entry('FLEX_COUNTER_TABLE', obj, flex_counter)
+            flex_counter.pop('FLEX_COUNTER_DELAY_STATUS', None)
+            self.configDB.set_entry('FLEX_COUNTER_TABLE', obj, flex_counter)
+
 
     def migrate_sflow_table(self):
         """
@@ -1170,8 +1168,6 @@ class DBMigrator():
         Version 4_0_2.
         """
         log.log_info('Handling version_4_0_2')
-        if self.stateDB.keys(self.stateDB.STATE_DB, "FAST_REBOOT|system"):
-            self.migrate_config_db_flex_counter_delay_status()
 
         self.set_version('version_4_0_3')
         return 'version_4_0_3'
@@ -1302,6 +1298,7 @@ class DBMigrator():
 
         self.migrate_tacplus()
         self.migrate_aaa()
+        self.migrate_flex_counter_delay_status_removal()
 
     def migrate(self):
         version = self.get_version()
