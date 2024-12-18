@@ -331,12 +331,9 @@ def get_asicdb_routes(namespace):
 
 def is_bgp_suppress_fib_pending_enabled(namespace):
     """
-    Retruns True if FIB suppression is enabled in BGP config, False otherwise
+    On 202405 image this feature is not supported so always return False
     """
-    show_run_cmd = ['show', 'runningconfiguration', 'bgp', '-n', namespace]
-
-    output = subprocess.check_output(show_run_cmd, text=True)
-    return 'bgp suppress-fib-pending' in output
+    return False
 
 
 def is_suppress_fib_pending_enabled(namespace):
