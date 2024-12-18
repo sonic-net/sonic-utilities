@@ -524,27 +524,42 @@ save_bgp_neighbor() {
     local ns=$(get_vtysh_namespace $asic_id)
 
     neighbor_list_v4=$(${timeout_cmd} bash -c "vtysh $ns -c 'show ip bgp neighbors' | grep 'BGP neighbor is' | awk -F '[, ]' '{print \$4}' | awk /\\\./")
-    for word in $neighbor_list_v4; do
-        save_cmd "vtysh $ns -c \"show ip bgp neighbors $word advertised-routes\"" "ip.bgp.neighbor.$word.adv$asic_id"
-        save_cmd "vtysh $ns -c \"show ip bgp neighbors $word routes\"" "ip.bgp.neighbor.$word.rcv$asic_id"
-    done
+    if [ ! -z "$neighbor_list_v4" ]; then
+        v4_cmd="vtysh "
+        for word in $neighbor_list_v4; do
+            v4_cmd="${v4_cmd} $ns -Ec 'show bgp ipv4 neighbors $word advertised-routes' "
+            v4_cmd="${v4_cmd} $ns -Ec 'show bgp ipv4 neighbors $word routes' "
+        done
+        save_cmd "$v4_cmd" "ip.bgp.neigh.adv.rcv.routes"
+    fi
+
     neighbor_list_v6=$(${timeout_cmd} bash -c "vtysh $ns -c 'show bgp ipv6 neighbors' | grep 'BGP neighbor is' | awk -F '[, ]' '{print \$4}' | awk /:/")
-    for word in $neighbor_list_v6; do
-        save_cmd "vtysh $ns -c \"show bgp ipv6 neighbors $word advertised-routes\"" "ipv6.bgp.neighbor.$word.adv$asic_id"
-        save_cmd "vtysh $ns -c \"show bgp ipv6 neighbors $word routes\"" "ipv6.bgp.neighbor.$word.rcv$asic_id"
-    done
+    if [ ! -z "$neighbor_list_v6" ]; then
+        v6_cmd="vtysh "
+        for word in $neighbor_list_v6; do
+            v6_cmd="${v6_cmd} $ns -Ec 'show bgp ipv6 neighbors $word advertised-routes' "
+            v6_cmd="${v6_cmd} $ns -Ec 'show bgp ipv6 neighbors $word routes' "
+        done
+        save_cmd "$v6_cmd" "ipv6.bgp.neigh.adv.rcv.routes"
+    fi
+
     vrf_list=""
     vrf_output=$(${timeout_cmd} bash -c "vtysh $ns -c 'show vrf'")
     if [ ! -z $vrf_output]; then
         vrf_list= echo $vrf_output | awk -F" " '{print $2}'
     fi
-    for vrf in $vrf_list; do
-        neighbor_list=`${timeout_cmd} bash -c "vtysh $ns -c 'show ip bgp vrf $vrf neighbors' | grep 'BGP neighbor is' | awk -F '[, ]' '{print \$4}'"`
-        for word in $neighbor_list; do
-            save_cmd "vtysh $ns -c \"show ip bgp vrf $vrf neighbors $word advertised-routes\"" "ip.bgp.neighbor.$vrf.$word.adv$asic_id"
-            save_cmd "vtysh $ns -c \"show ip bgp vrf $vrf neighbors $word routes\"" "ip.bgp.neighbor.$vrf.$word.rcv$asic_id"
+
+    if [ ! -z "$vrf_list" ]; then
+        vrf_cmd="vtysh "
+        for vrf in $vrf_list; do
+            neighbor_list=`${timeout_cmd} bash -c "vtysh $ns -c 'show ip bgp vrf $vrf neighbors' | grep 'BGP neighbor is' | awk -F '[, ]' '{print \$4}'"`
+            for word in $neighbor_list; do
+                vrf_cmd="${vrf_cmd} $ns -Ec 'show ip bgp vrf $vrf neighbors $word advertised-routes' "
+                vrf_cmd="${vrf_cmd} $ns -Ec 'show ip bgp vrf $vrf neighbors $word routes' "
+            done
         done
-    done
+        save_cmd "$vrf_cmd" "ip.bgp.neigh.vrf.adv.rcv.routes"
+    fi
 }
 
 ###############################################################################
