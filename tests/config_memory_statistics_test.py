@@ -52,7 +52,8 @@ def test_memory_stats_sampling_interval(mock_db):
             "MEMORY_STATISTICS", "memory_statistics",
             {"sampling_interval": sampling_interval_value}
         )
-        mock_syslog.assert_any_call(syslog.LOG_INFO, f"Sampling interval set to {sampling_interval_value} minutes successfully.")
+        mock_syslog.assert_any_call(syslog.LOG_INFO,
+                                    f"Sampling interval set to {sampling_interval_value} minutes successfully.")
 
 
 def test_memory_stats_sampling_interval_invalid(mock_db):
@@ -80,7 +81,8 @@ def test_memory_stats_retention_period(mock_db):
             "MEMORY_STATISTICS", "memory_statistics",
             {"retention_period": retention_period_value}
         )
-        mock_syslog.assert_any_call(syslog.LOG_INFO, f"Retention period set to {retention_period_value} days successfully.")
+        mock_syslog.assert_any_call(syslog.LOG_INFO,
+                                    f"Retention period set to {retention_period_value} days successfully.")
 
 
 def test_memory_stats_retention_period_invalid(mock_db):
@@ -107,7 +109,8 @@ def test_memory_stats_sampling_interval_exception(mock_db):
         result = runner.invoke(config.config, ['memory-stats', 'sampling-interval', str(sampling_interval_value)])
         assert result.exit_code == 0
         mock_echo.assert_any_call("Error setting sampling interval: Simulated sampling interval error", err=True)
-        mock_syslog.assert_any_call(syslog.LOG_ERR, "Error setting sampling interval: Simulated sampling interval error")
+        mock_syslog.assert_any_call(syslog.LOG_ERR,
+                                    "Error setting sampling interval: Simulated sampling interval error")
 
 
 def test_memory_stats_retention_period_exception(mock_db):
