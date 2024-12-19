@@ -40,7 +40,7 @@ class TestValidateFieldOperation(unittest.TestCase):
         patch_element = {"path": "/PORT/Ethernet3/speed", "op": "add", "value": "235"}
         assert generic_config_updater.field_operation_validators.port_config_update_validator(patch_element) is False
 
-    @patch("generic_config_updater.field_operation_validators.read_statedb_entry", 
+    @patch("generic_config_updater.field_operation_validators.read_statedb_entry",
            mock.Mock(return_value="123,234"))
     def test_port_config_update_validator_invalid_speed_existing_state_db_nested(self):
         patch_element = {"path": "/PORT", "op": "add", "value": {"Ethernet3": {"alias": "Eth0", "speed": "235"}}}
@@ -59,7 +59,7 @@ class TestValidateFieldOperation(unittest.TestCase):
         }
         assert generic_config_updater.field_operation_validators.port_config_update_validator(patch_element) is True
 
-    @patch("generic_config_updater.field_operation_validators.read_statedb_entry", 
+    @patch("generic_config_updater.field_operation_validators.read_statedb_entry",
            mock.Mock(return_value="123,234"))
     def test_port_config_update_validator_invalid_speed_existing_state_db_nested_2(self):
         patch_element = {
@@ -90,7 +90,7 @@ class TestValidateFieldOperation(unittest.TestCase):
            mock.Mock(return_value="rs, fc"))
     def test_port_config_update_validator_invalid_fec_existing_state_db_nested(self):
         patch_element = {
-            "path": "/PORT", 
+            "path": "/PORT",
             "op": "add",
             "value": {
                 "Ethernet3": {"alias": "Eth0", "fec": "none"},
@@ -166,13 +166,14 @@ class TestValidateFieldOperation(unittest.TestCase):
         
     @patch("sonic_py_common.device_info.get_sonic_version_info",
            mock.Mock(return_value={"build_version": "SONiC.20220530"}))
-    @patch("generic_config_updater.field_operation_validators.get_asic_name", 
+    @patch("generic_config_updater.field_operation_validators.get_asic_name",
            mock.Mock(return_value="td3"))
     @patch("os.path.exists", mock.Mock(return_value=True))
     @patch("builtins.open", mock_open(read_data='''{"tables": {"BUFFER_POOL": {"validator_data": {
                                       "rdma_config_update_validator": {"Shared/headroom pool size changes": {"fields": [
-                                      "ingress_lossless_pool/xoff", "ingress_lossless_pool/size", "egress_lossy_pool/size"
-                                      ], "operations": ["replace"], "platforms": {"td3": "20221100"}}}}}}}'''))
+                                      "ingress_lossless_pool/xoff", "ingress_lossless_pool/size",
+                                      "egress_lossy_pool/size"], "operations": ["replace"],
+                                      "platforms": {"td3": "20221100"}}}}}}}'''))
     def test_rdma_config_update_validator_td3_asic_invalid_version(self):
         patch_element = {
             "path": "/BUFFER_POOL/ingress_lossless_pool/xoff",
@@ -180,8 +181,9 @@ class TestValidateFieldOperation(unittest.TestCase):
             "value": "234234"
         }
         assert generic_config_updater.field_operation_validators.rdma_config_update_validator(patch_element) is False
-    
-    @patch("sonic_py_common.device_info.get_sonic_version_info", mock.Mock(return_value={"build_version": "SONiC.20220530"}))
+
+    @patch("sonic_py_common.device_info.get_sonic_version_info",
+           mock.Mock(return_value={"build_version": "SONiC.20220530"}))
     @patch("generic_config_updater.field_operation_validators.get_asic_name", mock.Mock(return_value="spc1"))
     @patch("os.path.exists", mock.Mock(return_value=True))
     @patch("builtins.open", mock_open(read_data='''{"tables": {"PFC_WD": {"validator_data": {
@@ -195,7 +197,8 @@ class TestValidateFieldOperation(unittest.TestCase):
         }
         assert generic_config_updater.field_operation_validators.rdma_config_update_validator(patch_element) is True
 
-    @patch("sonic_py_common.device_info.get_sonic_version_info", mock.Mock(return_value={"build_version": "SONiC.20220530"}))
+    @patch("sonic_py_common.device_info.get_sonic_version_info",
+           mock.Mock(return_value={"build_version": "SONiC.20220530"}))
     @patch("generic_config_updater.field_operation_validators.get_asic_name", mock.Mock(return_value="spc1"))
     @patch("os.path.exists", mock.Mock(return_value=True))
     @patch("builtins.open", mock_open(read_data='''{"tables": {"PFC_WD": {"validator_data": {
@@ -213,7 +216,7 @@ class TestValidateFieldOperation(unittest.TestCase):
             }
         }
         assert generic_config_updater.field_operation_validators.rdma_config_update_validator(patch_element) is True
-   
+
     @patch("sonic_py_common.device_info.get_sonic_version_info",
            mock.Mock(return_value={"build_version": "SONiC.20220530"}))
     @patch("generic_config_updater.field_operation_validators.get_asic_name", mock.Mock(return_value="spc1"))
@@ -228,7 +231,7 @@ class TestValidateFieldOperation(unittest.TestCase):
             "op": "remove"
         }
         assert generic_config_updater.field_operation_validators.rdma_config_update_validator(patch_element) is True
-    
+
     @patch("sonic_py_common.device_info.get_sonic_version_info",
            mock.Mock(return_value={"build_version": "SONiC.20220530"}))
     @patch("generic_config_updater.field_operation_validators.get_asic_name", mock.Mock(return_value="spc1"))
@@ -240,7 +243,7 @@ class TestValidateFieldOperation(unittest.TestCase):
     def test_rdma_config_update_validator_spc_asic_invalid_op(self):
         patch_element = {"path": "/BUFFER_POOL/ingress_lossless_pool/xoff", "op": "remove"}
         assert generic_config_updater.field_operation_validators.rdma_config_update_validator(patch_element) is False
-    
+
     @patch("sonic_py_common.device_info.get_sonic_version_info",
            mock.Mock(return_value={"build_version": "SONiC.20220530"}))
     @patch("generic_config_updater.field_operation_validators.get_asic_name", mock.Mock(return_value="spc1"))
@@ -261,7 +264,7 @@ class TestValidateFieldOperation(unittest.TestCase):
         old_config = {"PFC_WD": {"GLOBAL": {"POLL_INTERVAL": "60"}}}
         target_config = {"PFC_WD": {"GLOBAL": {}}}
         config_wrapper = gu_common.ConfigWrapper()
-        self.assertRaises(gu_common.IllegalPatchOperationError, config_wrapper.validate_field_operation, 
+        self.assertRaises(gu_common.IllegalPatchOperationError, config_wrapper.validate_field_operation,
                           old_config, target_config)
     
     def test_validate_field_operation_legal__rm_loopback1(self):
