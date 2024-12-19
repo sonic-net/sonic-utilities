@@ -1040,6 +1040,12 @@ class TestShow(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_with(['ztp', 'status', '--verbose'], display_cmd=True)
 
+    @patch('show.main.run_command')
+    def test_show_banner(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands['banner'])
+        assert result.exit_code == 0
+
     def teardown(self):
         print('TEAR DOWN')
 
@@ -1063,6 +1069,20 @@ class TestShowRunningconfiguration(object):
 
         assert result.exit_code == 0
         assert '[1.1.1.1]' in result.output
+
+    @patch('builtins.open', mock_open(
+        read_data=open('tests/ntp.conf').read()))
+    def test_ntp(self):
+        runner = CliRunner()
+
+        result = runner.invoke(
+            show.cli.commands['runningconfiguration'].commands['ntp'])
+        print(result.exit_code)
+        print(result.output)
+
+        assert result.exit_code == 0
+        assert '10.1.1.1' in result.output
+        assert '10.22.1.12' in result.output
 
     @classmethod
     def teardown_class(cls):

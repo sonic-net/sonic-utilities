@@ -7,7 +7,7 @@
 #####################################################################
 
 import json
-import argparse
+import click
 import datetime
 import os.path
 import sys
@@ -102,23 +102,40 @@ def build_json(port, cnstat, voq=False):
         out.update(ports_stats(k))
     return out
 
+class QueuestatWrapper(object):
+    """A wrapper to execute queuestat cmd over the correct namespaces"""
+    def __init__(self, namespace, voq):
+        self.namespace = namespace
+        self.voq = voq
+
+        # Initialize the multi-asic namespace
+        self.multi_asic = multi_asic_util.MultiAsic(constants.DISPLAY_ALL, namespace_option=namespace)
+        self.db = None
+
+    @multi_asic_util.run_on_multi_asic
+    def run(self, save_fresh_stats, port_to_show_stats, json_opt, non_zero):
+        queuestat = Queuestat(self.multi_asic.current_namespace, self.db, self.voq)
+        if save_fresh_stats:
+            queuestat.save_fresh_stats()
+            return
+
+        if port_to_show_stats != None:
+            queuestat.get_print_port_stat(port_to_show_stats, json_opt, non_zero)
+        else:
+            queuestat.get_print_all_stat(json_opt, non_zero)
+
 
 class Queuestat(object):
-    def __init__(self, namespace, voq=False):
-        self.db = None
-        self.multi_asic = multi_asic_util.MultiAsic(constants.DISPLAY_ALL, namespace)
-        if namespace is not None:
-            for ns in self.multi_asic.get_ns_list_based_on_options():
-                self.db = multi_asic.connect_to_all_dbs_for_ns(ns)
-        else:
-            self.db = SonicV2Connector(use_unix_socket_path=False)
-            self.db.connect(self.db.COUNTERS_DB)
+    def __init__(self, namespace, db, voq=False):
+        self.db = db
         self.voq = voq
+        self.namespace = namespace
+        self.namespace_str = f" for {namespace}" if namespace else ''
 
         def get_queue_port(table_id):
             port_table_id = self.db.get(self.db.COUNTERS_DB, COUNTERS_QUEUE_PORT_MAP, table_id)
             if port_table_id is None:
-                print("Port is not available!", table_id)
+                print(f"Port is not available{self.namespace_str}!", table_id)
                 sys.exit(1)
 
             return port_table_id
@@ -130,7 +147,7 @@ class Queuestat(object):
             self.counter_port_name_map = self.db.get_all(self.db.COUNTERS_DB, COUNTERS_PORT_NAME_MAP)
 
         if self.counter_port_name_map is None:
-            print("COUNTERS_PORT_NAME_MAP is empty!")
+            print(f"COUNTERS_PORT_NAME_MAP is empty{self.namespace_str}!")
             sys.exit(1)
 
         self.port_queues_map = {}
@@ -148,7 +165,7 @@ class Queuestat(object):
             counter_queue_name_map = self.db.get_all(self.db.COUNTERS_DB, COUNTERS_QUEUE_NAME_MAP)
 
         if counter_queue_name_map is None:
-            print("COUNTERS_QUEUE_NAME_MAP is empty!")
+            print(f"COUNTERS_QUEUE_NAME_MAP is empty{self.namespace_str}!")
             sys.exit(1)
 
         for queue in counter_queue_name_map:
@@ -166,7 +183,7 @@ class Queuestat(object):
             def get_queue_index(table_id):
                 queue_index =  self.db.get(self.db.COUNTERS_DB, COUNTERS_QUEUE_INDEX_MAP, table_id)
                 if queue_index is None:
-                    print("Queue index is not available!", table_id)
+                    print(f"Queue index is not available{self.namespace_str}!", table_id)
                     sys.exit(1)
 
                 return queue_index
@@ -174,7 +191,7 @@ class Queuestat(object):
             def get_queue_type(table_id):
                 queue_type =  self.db.get(self.db.COUNTERS_DB, COUNTERS_QUEUE_TYPE_MAP, table_id)
                 if queue_type is None:
-                    print("Queue Type is not available!", table_id)
+                    print(f"Queue Type is not available{self.namespace_str}!", table_id)
                     sys.exit(1)
                 elif queue_type == SAI_QUEUE_TYPE_MULTICAST:
                     return QUEUE_TYPE_MC
@@ -185,7 +202,7 @@ class Queuestat(object):
                 elif queue_type == SAI_QUEUE_TYPE_ALL:
                     return QUEUE_TYPE_ALL
                 else:
-                    print("Queue Type is invalid:", table_id, queue_type)
+                    print(f"Queue Type is invalid{self.namespace_str}:", table_id, queue_type)
                     sys.exit(1)
 
             if self.voq:
@@ -255,6 +272,7 @@ class Queuestat(object):
         else:
             hdr = voq_header if self.voq else header
             if table:
+                print(f"For namespace {self.namespace}:")
                 print(tabulate(table, hdr, tablefmt='simple', stralign='right'))
                 print()
 
@@ -276,45 +294,34 @@ class Queuestat(object):
                 old_cntr = cnstat_old_dict.get(key)
             if old_cntr is not None:
                 if self.voq:
-                   if not non_zero or ns_diff(cntr['totalpacket'], old_cntr['totalpacket']) != '0' or \
+                    if not non_zero or ns_diff(cntr['totalpacket'], old_cntr['totalpacket']) != '0' or \
                                    ns_diff(cntr['totalbytes'], old_cntr['totalbytes']) != '0' or \
                                    ns_diff(cntr['droppacket'], old_cntr['droppacket']) != '0' or \
                                    ns_diff(cntr['dropbytes'], old_cntr['dropbytes']) != '0' or \
                                    ns_diff(cntr['creditWDpkts'], old_cntr['creditWDpkts']) != '0':
-                       table.append((port, cntr['queuetype'] + str(cntr['queueindex']),
+                        table.append((port, cntr['queuetype'] + str(cntr['queueindex']),
                                    ns_diff(cntr['totalpacket'], old_cntr['totalpacket']),
                                    ns_diff(cntr['totalbytes'], old_cntr['totalbytes']),
                                    ns_diff(cntr['droppacket'], old_cntr['droppacket']),
                                    ns_diff(cntr['dropbytes'], old_cntr['dropbytes']),
                                    ns_diff(cntr['creditWDpkts'], old_cntr['creditWDpkts'])))
-                   elif not non_zero or cntr['totalpacket'] != '0' or cntr['totalbytes'] != '0' or \
-                                  cntr['droppacket'] != '0' or cntr['dropbytes'] != '0' or cntr['creditWDpkts'] != '0':
-                       table.append((port, cntr['queuetype'] + str(cntr['queueindex']),
-                                  cntr['totalpacket'], cntr['totalbytes'],
-                                  cntr['droppacket'], cntr['dropbytes'], cntr['creditWDpkts']))
                 else:
-                   if not non_zero or ns_diff(cntr['totalpacket'], old_cntr['totalpacket']) != '0' or \
+                    if not non_zero or ns_diff(cntr['totalpacket'], old_cntr['totalpacket']) != '0' or \
                                    ns_diff(cntr['totalbytes'], old_cntr['totalbytes']) != '0' or \
                                    ns_diff(cntr['droppacket'], old_cntr['droppacket']) != '0' or \
                                    ns_diff(cntr['dropbytes'], old_cntr['dropbytes']) != '0':
-                      table.append((port, cntr['queuetype'] + str(cntr['queueindex']),
-                                  ns_diff(cntr['totalpacket'], old_cntr['totalpacket']),
-                                  ns_diff(cntr['totalbytes'], old_cntr['totalbytes']),
-                                  ns_diff(cntr['droppacket'], old_cntr['droppacket']),
-                                  ns_diff(cntr['dropbytes'], old_cntr['dropbytes'])))
-                   elif not non_zero or cntr['totalpacket'] != '0' or cntr['totalbytes'] != '0' or \
-                                     cntr['droppacket'] != '0' or cntr['dropbytes'] != '0':
-                      table.append((port, cntr['queuetype'] + str(cntr['queueindex']),
-                               cntr['totalpacket'], cntr['totalbytes'],
-                               cntr['droppacket'], cntr['dropbytes']))
-
+                       table.append((port, cntr['queuetype'] + str(cntr['queueindex']),
+                                   ns_diff(cntr['totalpacket'], old_cntr['totalpacket']),
+                                   ns_diff(cntr['totalbytes'], old_cntr['totalbytes']),
+                                   ns_diff(cntr['droppacket'], old_cntr['droppacket']),
+                                   ns_diff(cntr['dropbytes'], old_cntr['dropbytes'])))
         if json_opt:
             json_output[port].update(build_json(port, table, self.voq))
             return json_output
         else:
             hdr = voq_header if self.voq else header
             if table:
-                print(port + " Last cached time was " + str(cnstat_old_dict.get('time')))
+                print(port + f" Last cached time{self.namespace_str} was " + str(cnstat_old_dict.get('time')))
                 print(tabulate(table, hdr, tablefmt='simple', stralign='right'))
                 print()
 
@@ -328,8 +335,10 @@ class Queuestat(object):
         for port in natsorted(self.counter_port_name_map):
             json_output[port] = {}
             cnstat_dict = self.get_cnstat(self.port_queues_map[port])
-
-            cnstat_fqn_file_name = cnstat_fqn_file + port
+            cache_ns = ''
+            if self.voq and self.namespace is not None:
+                cache_ns = '-' + self.namespace + '-'
+            cnstat_fqn_file_name = cnstat_fqn_file + cache_ns + port
             if os.path.isfile(cnstat_fqn_file_name):
                 try:
                     cnstat_cached_dict = json.load(open(cnstat_fqn_file_name, 'r'))
@@ -360,7 +369,10 @@ class Queuestat(object):
 
         # Get stat for the port queried
         cnstat_dict = self.get_cnstat(self.port_queues_map[port])
-        cnstat_fqn_file_name = cnstat_fqn_file + port
+        cache_ns = ''
+        if self.voq and self.namespace is not None:
+            cache_ns = '-' + self.namespace + '-'
+        cnstat_fqn_file_name = cnstat_fqn_file + cache_ns + port
         json_output = {}
         json_output[port] = {}
         if os.path.isfile(cnstat_fqn_file_name):
@@ -370,7 +382,7 @@ class Queuestat(object):
                     json_output[port].update({"cached_time":cnstat_cached_dict.get('time')})
                     json_output.update(self.cnstat_diff_print(port, cnstat_dict, cnstat_cached_dict, json_opt, non_zero))
                 else:
-                    print("Last cached time was " + str(cnstat_cached_dict.get('time')))
+                    print(f"Last cached time{self.namespace_str} was " + str(cnstat_cached_dict.get('time')))
                     self.cnstat_diff_print(port, cnstat_dict, cnstat_cached_dict, json_opt, non_zero)
             except IOError as e:
                 print(e.errno, e)
@@ -385,48 +397,46 @@ class Queuestat(object):
 
     def save_fresh_stats(self):
         # Get stat for each port and save
+        cache_ns = ''
+        if self.voq and self.namespace is not None:
+            cache_ns = '-' + self.namespace + '-'
         for port in natsorted(self.counter_port_name_map):
             cnstat_dict = self.get_cnstat(self.port_queues_map[port])
             try:
-                json.dump(cnstat_dict, open(cnstat_fqn_file + port, 'w'), default=json_serial)
+                json.dump(cnstat_dict, open(cnstat_fqn_file + cache_ns + port, 'w'), default=json_serial)
             except IOError as e:
                 print(e.errno, e)
                 sys.exit(e.errno)
             else:
                 print("Clear and update saved counters for " + port)
 
-def main():
+
+@click.command()
+@click.option('-p', '--port', type=str, help='Show the queue conters for just one port', default=None)
+@click.option('-c', '--clear', is_flag=True, default=False, help='Clear previous stats and save new ones')
+@click.option('-d', '--delete', is_flag=True, default=False, help='Delete saved stats')
+@click.option('-j', '--json_opt',  is_flag=True, default=False, help='Print in JSON format')
+@click.option('-V', '--voq', is_flag=True, default=False, help='display voq stats')
+@click.option('-nz','--non_zero', is_flag=True, default=False, help='Display non-zero queue counters')
+@click.option('-n', '--namespace', type=click.Choice(multi_asic.get_namespace_list()), help='Display queuecounters for a specific namespace name or skip for all', default=None)
+@click.version_option(version='1.0')
+def main(port, clear, delete, json_opt, voq, non_zero, namespace):
+    """
+    Examples:
+      queuestat
+      queuestat -p Ethernet0
+      queuestat -c
+      queuestat -d
+      queuestat -p Ethernet0 -n asic0
+    """
+
     global cnstat_dir
     global cnstat_fqn_file
 
-    parser  = argparse.ArgumentParser(description='Display the queue state and counters',
-                                      formatter_class=argparse.RawTextHelpFormatter,
-                                      epilog="""
-Examples:
-  queuestat
-  queuestat -p Ethernet0
-  queuestat -c
-  queuestat -d
-""")
+    save_fresh_stats = clear
+    delete_stats = delete
 
-    parser.add_argument('-p', '--port', type=str, help='Show the queue conters for just one port', default=None)
-    parser.add_argument('-c', '--clear', action='store_true', help='Clear previous stats and save new ones')
-    parser.add_argument('-d', '--delete', action='store_true', help='Delete saved stats')
-    parser.add_argument('-v', '--version', action='version', version='%(prog)s 1.0')
-    parser.add_argument('-j', '--json_opt', action='store_true', help='Print in JSON format')
-    parser.add_argument('-V', '--voq', action='store_true', help='display voq stats')
-    parser.add_argument('-n','--namespace', default=None, help='Display queue counters for specific namespace')
-    parser.add_argument('-nz','--non_zero', action='store_true', help='Display non-zero queue counters')
-    args = parser.parse_args()
-
-    save_fresh_stats = args.clear
-    delete_stats = args.delete
-    voq = args.voq
-    json_opt = args.json_opt
-    namespace = args.namespace
-    non_zero = args.non_zero
-
-    port_to_show_stats = args.port
+    port_to_show_stats = port
 
     cache = UserCache()
 
@@ -436,16 +446,8 @@ Examples:
     if delete_stats:
         cache.remove()
 
-    queuestat = Queuestat( namespace, voq )
-
-    if save_fresh_stats:
-        queuestat.save_fresh_stats()
-        sys.exit(0)
-
-    if port_to_show_stats!=None:
-        queuestat.get_print_port_stat(port_to_show_stats, json_opt, non_zero)
-    else:
-        queuestat.get_print_all_stat(json_opt, non_zero)
+    queuestat_wrapper = QueuestatWrapper(namespace, voq)
+    queuestat_wrapper.run(save_fresh_stats, port_to_show_stats, json_opt, non_zero)
 
     sys.exit(0)
 

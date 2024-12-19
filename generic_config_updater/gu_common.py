@@ -53,6 +53,28 @@ class JsonChange:
             return self.patch == other.patch
         return False
 
+
+def get_config_db_as_json(scope=None):
+    text = get_config_db_as_text(scope=scope)
+    config_db_json = json.loads(text)
+    config_db_json.pop("bgpraw", None)
+    return config_db_json
+
+
+def get_config_db_as_text(scope=None):
+    if scope is not None and scope != multi_asic.DEFAULT_NAMESPACE:
+        cmd = ['sonic-cfggen', '-d', '--print-data', '-n', scope]
+    else:
+        cmd = ['sonic-cfggen', '-d', '--print-data']
+    result = subprocess.Popen(cmd, shell=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    text, err = result.communicate()
+    return_code = result.returncode
+    if return_code:
+        raise GenericConfigUpdaterError(f"Failed to get running config for namespace: {scope},"
+                                        f" Return code: {return_code}, Error: {err}")
+    return text
+
+
 class ConfigWrapper:
     def __init__(self, yang_dir=YANG_DIR, scope=multi_asic.DEFAULT_NAMESPACE):
         self.scope = scope
@@ -60,24 +82,10 @@ class ConfigWrapper:
         self.sonic_yang_with_loaded_models = None
 
     def get_config_db_as_json(self):
-        text = self._get_config_db_as_text()
-        config_db_json = json.loads(text)
-        config_db_json.pop("bgpraw", None)
-        return config_db_json
+        return get_config_db_as_json(self.scope)
 
     def _get_config_db_as_text(self):
-        if self.scope is not None and self.scope != multi_asic.DEFAULT_NAMESPACE:
-            cmd = ['sonic-cfggen', '-d', '--print-data', '-n', self.scope]
-        else:
-            cmd = ['sonic-cfggen', '-d', '--print-data']
-
-        result = subprocess.Popen(cmd, shell=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        text, err = result.communicate()
-        return_code = result.returncode
-        if return_code: # non-zero means failure
-            raise GenericConfigUpdaterError(f"Failed to get running config for namespace: {self.scope},"
-                                            f" Return code: {return_code}, Error: {err}")
-        return text
+        return get_config_db_as_text(self.scope)
 
     def get_sonic_yang_as_json(self):
         config_db_json = self.get_config_db_as_json()
@@ -173,6 +181,8 @@ class ConfigWrapper:
                 if any(op['op'] == operation and field == op['path'] for op in patch):
                     raise IllegalPatchOperationError("Given patch operation is invalid. Operation: {} is illegal on field: {}".format(operation, field))
 
+        self.illegal_dataacl_check(old_config, target_config)
+
         def _invoke_validating_function(cmd, jsonpatch_element):
             # cmd is in the format as <package/module name>.<method name>
             method_name = cmd.split(".")[-1]
@@ -181,7 +191,7 @@ class ConfigWrapper:
                 raise GenericConfigUpdaterError("Attempting to call invalid method {} in module {}. Module must be generic_config_updater.field_operation_validators, and method must be a defined validator".format(method_name, module_name))
             module = importlib.import_module(module_name, package=None)
             method_to_call = getattr(module, method_name)
-            return method_to_call(jsonpatch_element)
+            return method_to_call(self.scope, jsonpatch_element)
 
         if os.path.exists(GCU_FIELD_OP_CONF_FILE):
             with open(GCU_FIELD_OP_CONF_FILE, "r") as s:
@@ -204,6 +214,48 @@ class ConfigWrapper:
                 if not _invoke_validating_function(function, element):
                     raise IllegalPatchOperationError("Modification of {} table is illegal- validating function {} returned False".format(table, function))
 
+    def illegal_dataacl_check(self, old_config, upd_config):
+        '''
+        Block data ACL changes when patch includes:
+        1. table "type" being replaced
+        2. rule update on tables with table "type" replaced
+        This will cause race condition when swss consume the change of
+        acl table and acl rule and make the changed acl rule inactive
+        '''
+        old_acl_table = old_config.get("ACL_TABLE", {})
+        upd_acl_table = upd_config.get("ACL_TABLE", {})
+
+        # Pick data acl table with "type" field
+        old_dacl_table = [table for table, fields in old_acl_table.items()
+                          if fields.get("type") and fields["type"] != "CTRLPLANE"]
+        upd_dacl_table = [table for table, fields in upd_acl_table.items()
+                          if fields.get("type") and fields["type"] != "CTRLPLANE"]
+
+        # Pick intersect common tables that "type" being replaced
+        common_dacl_table = set(old_dacl_table).intersection(set(upd_dacl_table))
+        # Identify tables from the intersection where the "type" field differs
+        modified_common_dacl_table = [
+            table for table in common_dacl_table
+            if old_acl_table[table]["type"] != upd_acl_table[table]["type"]
+        ]
+
+        old_acl_rule = old_config.get("ACL_RULE", {})
+        upd_acl_rule = upd_config.get("ACL_RULE", {})
+
+        # Pick rules with its dependent table which has "type" replaced
+        old_dacl_rule = [rule for rule in old_acl_rule
+                         if rule.split("|")[0] in modified_common_dacl_table]
+        upd_dacl_rule = [rule for rule in upd_acl_rule
+                         if rule.split("|")[0] in modified_common_dacl_table]
+
+        # Block changes if acl rule change on tables with "type" replaced
+        for key in set(old_dacl_rule).union(set(upd_dacl_rule)):
+            if (old_acl_rule.get(key, {}) != upd_acl_rule.get(key, {})):
+                raise IllegalPatchOperationError(
+                    "Modification of dataacl rule {} is illegal: \
+                        acl table type changed in {}".format(
+                            key, modified_common_dacl_table
+                    ))
 
     def validate_lanes(self, config_db):
         if "PORT" not in config_db:

@@ -126,7 +126,13 @@ Linecard4|Asic2|PortChannel0001         2           22  Linecard4|Asic2|Ethernet
 
 
 def mock_run_command_side_effect(*args, **kwargs):
-    return '', 0
+    print("command: {}".format(*args))
+    if isinstance(*args, list):
+        return '', 0
+    else:
+        print("Expected type of command is list. Actual type is {}".format(*args))
+        assert 0
+        return '', 0
 
 
 class TestChassisModules(object):

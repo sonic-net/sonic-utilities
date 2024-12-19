@@ -3,16 +3,28 @@ import json
 from flow_counter_util.route import exit_if_route_flow_counter_not_support
 from swsscommon.swsscommon import ConfigDBConnector
 from tabulate import tabulate
+from sonic_py_common import device_info
 
 BUFFER_POOL_WATERMARK = "BUFFER_POOL_WATERMARK"
 PORT_BUFFER_DROP = "PORT_BUFFER_DROP"
 PG_DROP = "PG_DROP"
 ACL = "ACL"
+ENI = "ENI"
 DISABLE = "disable"
 ENABLE = "enable"
 DEFLT_60_SEC= "default (60000)"
 DEFLT_10_SEC= "default (10000)"
 DEFLT_1_SEC = "default (1000)"
+
+
+def is_dpu(db):
+    """ Check if the device is DPU """
+    platform_info = device_info.get_platform_info(db)
+    if platform_info.get('switch_type') == 'dpu':
+        return True
+    else:
+        return False
+
 
 @click.group()
 def cli():
@@ -125,6 +137,7 @@ def disable():
     port_info = {}
     port_info['FLEX_COUNTER_STATUS'] = DISABLE
     configdb.mod_entry("FLEX_COUNTER_TABLE", PORT_BUFFER_DROP, port_info)
+
 
 # Ingress PG drop packet stat
 @cli.group()
@@ -382,6 +395,47 @@ def disable(ctx):
     fc_info['FLEX_COUNTER_STATUS'] = 'disable'
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "FLOW_CNT_ROUTE", fc_info)
 
+
+# ENI counter commands
+@cli.group()
+@click.pass_context
+def eni(ctx):
+    """ ENI counter commands """
+    ctx.obj = ConfigDBConnector()
+    ctx.obj.connect()
+    if not is_dpu(ctx.obj):
+        click.echo("ENI counters are not supported on non DPU platforms")
+        exit(1)
+
+
+@eni.command(name='interval')
+@click.argument('poll_interval', type=click.IntRange(1000, 30000))
+@click.pass_context
+def eni_interval(ctx, poll_interval):
+    """ Set eni counter query interval """
+    eni_info = {}
+    eni_info['POLL_INTERVAL'] = poll_interval
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", ENI, eni_info)
+
+
+@eni.command(name='enable')
+@click.pass_context
+def eni_enable(ctx):
+    """ Enable eni counter query """
+    eni_info = {}
+    eni_info['FLEX_COUNTER_STATUS'] = 'enable'
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", ENI, eni_info)
+
+
+@eni.command(name='disable')
+@click.pass_context
+def eni_disable(ctx):
+    """ Disable eni counter query """
+    eni_info = {}
+    eni_info['FLEX_COUNTER_STATUS'] = 'disable'
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", ENI, eni_info)
+
+
 @cli.command()
 def show():
     """ Show the counter configuration """
@@ -399,6 +453,7 @@ def show():
     tunnel_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'TUNNEL')
     trap_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'FLOW_CNT_TRAP')
     route_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'FLOW_CNT_ROUTE')
+    eni_info = configdb.get_entry('FLEX_COUNTER_TABLE', ENI)
 
     header = ("Type", "Interval (in ms)", "Status")
     data = []
@@ -427,6 +482,10 @@ def show():
     if route_info:
         data.append(["FLOW_CNT_ROUTE_STAT", route_info.get("POLL_INTERVAL", DEFLT_10_SEC),
                      route_info.get("FLEX_COUNTER_STATUS", DISABLE)])
+
+    if is_dpu(configdb) and eni_info:
+        data.append(["ENI_STAT", eni_info.get("POLL_INTERVAL", DEFLT_10_SEC),
+                    eni_info.get("FLEX_COUNTER_STATUS", DISABLE)])
 
     click.echo(tabulate(data, headers=header, tablefmt="simple", missingval=""))
 
