@@ -1386,6 +1386,9 @@ def config_file_yang_validation(filename):
                     fg='magenta')
         raise click.Abort()
 
+    if len(sy.tablesWithOutYang):
+        log.log_warning("YANG failed to cover tables: {}.".format(list(sy.tablesWithOutYang.keys())))
+
 
 # This is our main entrypoint - the main 'config' command
 @click.group(cls=clicommon.AbbreviationGroup, context_settings=CONTEXT_SETTINGS)
