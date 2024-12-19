@@ -1,6 +1,6 @@
 
 #
-# 'spanning-tree' group ('config spanning-tree ...')
+# 'spanning-tree' group ('config  spanning-tree ...')
 #
 
 import click
