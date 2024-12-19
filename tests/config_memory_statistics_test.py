@@ -2,7 +2,7 @@ import pytest
 from unittest.mock import patch
 from click.testing import CliRunner
 import syslog
-from config import config
+from config.memory_statistics import config
 
 
 @pytest.fixture
