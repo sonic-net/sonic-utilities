@@ -575,7 +575,7 @@ def spanning_tree_enable(_db, mode):
 # Modify mode in STP GLOBAL table to None
 # Delete tables STP_MST, STP_MST_INST, STP_MST_PORT, and STP_PORT
 @spanning_tree.command('disable')
-@click.argument('mode', metavar='<pvst|mst>', required=True , type=click.Choice(["pvst", "mst"]))
+@click.argument('mode', metavar='<pvst|mst>', required=True, type=click.Choice(["pvst", "mst"]))
 @clicommon.pass_db
 def stp_disable(_db, mode):
     """disable STP """
