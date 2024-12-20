@@ -836,8 +836,7 @@ def stp_vlan_enable(_db, vid):
                    'forward_delay': get_global_stp_forward_delay(db),
                    'hello_time': get_global_stp_hello_time(db),
                    'max_age': get_global_stp_max_age(db),
-                   'priority': get_global_stp_priority(db)
-            }
+                   'priority': get_global_stp_priority(db)}
             db.set_entry('STP_VLAN', vlan_name, fvs)
         else:
             db.mod_entry('STP_VLAN', vlan_name, {'enabled': 'true'})
