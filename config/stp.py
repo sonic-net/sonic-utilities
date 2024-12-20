@@ -5,7 +5,8 @@
 
 """
 - There will be mode check in each command to check if the mode is PVST or MST
-- For PVST, priority can be set in global table but for MST, priority is associated with instance ID and will be set in the MST INSTANCE TABLE
+- For PVST, priority can be set in global table but for MST,
+  priority is associated with instance ID and will be set in the MST INSTANCE TABLE
 
 
 ***Existing PVST commands that are used for MST Commands***
@@ -33,15 +34,15 @@
     config spanning_tree interface priority <ifname> <port-priority-value>
 
     config spanning_tree interface cost <ifname> <cost-value>
-    
-    
+
+
 ***NEW MST Commands***
     config spanning_tree max_hops <value> (Not for PVST)
 
     MST GROUP:
     config spanning_tree mst region-name <region-name>
     config spanning_tree mst revision <number>
-    
+
     config spanning_tree mst instance <instance-id> priority <bridge-priority-value>
 
     config spanning_tree mst instance <instance-id> vlan add <vlan-id>
@@ -65,7 +66,7 @@ import utilities_common.cli as clicommon
 from natsort import natsorted
 import logging
 
-# MSTP parameters 
+# MSTP parameters
 
 MST_MIN_HOPS = 1
 MST_MAX_HOPS = 40
@@ -103,9 +104,9 @@ MST_MIN_INSTANCES = 0
 MST_MAX_INSTANCES = 63
 MST_DEFAULT_INSTANCE = 0
 
-MST_MIN_PORT_PATH_COST = 20000000;
-MST_MAX_PORT_PATH_COST = 20000000;
-MST_DEFAULT_PORT_PATH_COST = 1;
+MST_MIN_PORT_PATH_COST = 20000000
+MST_MAX_PORT_PATH_COST = 20000000
+MST_DEFAULT_PORT_PATH_COST = 1
 
 MST_AUTO_LINK_TYPE = 'auto'
 MST_P2P_LINK_TYPE = 'p2p'
@@ -439,7 +440,8 @@ def do_vlan_to_instance0(db):
             'bridge_priority': MST_DEFAULT_BRIDGE_PRIORITY,
             'vlan_list': vlan_list_str
         }
-        db.set_entry('STP_MST', 'MST_INSTANCE|0', mst_inst_fvs) #Is it STP_MST_INST or STP_MST?
+        db.set_entry('STP_MST', 'MST_INSTANCE|0', mst_inst_fvs)  # Is it STP_MST_INST or STP_MST?
+
 
 def enable_mst_for_interfaces(db):
     fvs = {
@@ -473,6 +475,7 @@ def disable_global_pvst(db):
     db.delete_table('STP_PORT')
     db.delete_table('STP_VLAN_PORT')
 
+
 def disable_global_mst(db):
     db.set_entry('STP', "GLOBAL", None)
     db.delete_table('STP_MST')
@@ -481,17 +484,17 @@ def disable_global_mst(db):
     db.delete_table('STP_PORT')
 
 
-#def update_mst_instance_parameters(ctx, db, param_type, new_value):
+# def update_mst_instance_parameters(ctx, db, param_type, new_value):
 #    """Update MST instance parameters in the STP_MST_INST table"""
 #
 #    allowed_params = {"max_hops", "max_age", "hello_time", "forward_delay"}
 #    if param_type not in allowed_params:
 #        ctx.fail("Invalid parameter")
-    
+
 #    db.mod_entry('STP_MST', "GLOBAL", {param_type: new_value})
 
-    #mst_inst_table = db.get_table('STP_MST_INST')
-    #for key in mst_inst_table.keys():
+    # mst_inst_table = db.get_table('STP_MST_INST')
+    # for key in mst_inst_table.keys():
     #    if key.startswith('MST_INSTANCE'):
     #        db.mod_entry('STP_MST_INST', key, {param_type: new_value})
 
@@ -528,15 +531,15 @@ def spanning_tree_enable(_db, mode):
         ctx.fail("PVST is already configured; please disable PVST before enabling MST")
 
     if mode == "pvst":
-        #disable_global_mst(db)
+        # disable_global_mst(db)
 
         fvs = {'mode': mode,
-            'rootguard_timeout': STP_DEFAULT_ROOT_GUARD_TIMEOUT,
-            'forward_delay': STP_DEFAULT_FORWARD_DELAY,
-            'hello_time': STP_DEFAULT_HELLO_INTERVAL,
-            'max_age': STP_DEFAULT_MAX_AGE,
-            'priority': STP_DEFAULT_BRIDGE_PRIORITY
-            }
+               'rootguard_timeout': STP_DEFAULT_ROOT_GUARD_TIMEOUT,
+               'forward_delay': STP_DEFAULT_FORWARD_DELAY,
+               'hello_time': STP_DEFAULT_HELLO_INTERVAL,
+               'max_age': STP_DEFAULT_MAX_AGE,
+               'priority': STP_DEFAULT_BRIDGE_PRIORITY
+        }
         db.set_entry('STP', "GLOBAL", fvs)
         
         enable_stp_for_interfaces(db)
