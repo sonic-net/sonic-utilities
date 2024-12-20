@@ -539,35 +539,35 @@ def spanning_tree_enable(_db, mode):
                'hello_time': STP_DEFAULT_HELLO_INTERVAL,
                'max_age': STP_DEFAULT_MAX_AGE,
                'priority': STP_DEFAULT_BRIDGE_PRIORITY
-        }
+               }
         db.set_entry('STP', "GLOBAL", fvs)
-        
+
         enable_stp_for_interfaces(db)
-        enable_stp_for_vlans(db) # Enable STP for VLAN by default
-    
+        enable_stp_for_vlans(db)  # Enable STP for VLAN by default
+
     elif mode == "mst":
-        #disable_global_pvst(db)
+        # disable_global_pvst(db)
 
         fvs = {'mode': mode,
                }
         db.mod_entry('STP', "GLOBAL", fvs)
 
-        #bridge_mac = get_bridge_mac_address(db)
-        #if not bridge_mac:
+        # bridge_mac = get_bridge_mac_address(db)
+        # if not bridge_mac:
         #    ctx.fail("Bridge MAC address not found in DEVICE_METADATA table")
 
         # Setting MSTP parameters in the STP_MST_TABLE
-        #mst_fvs = {
+        # mst_fvs = {
         #    'name': bridge_mac,
         #    'revision': MST_DEFAULT_REVISION,
         #    'max_hop': MST_DEFAULT_HOPS,
         #    'max_age': MST_DEFAULT_MAX_AGE,
         #    'hello_time': MST_DEFAULT_HELLO_INTERVAL,
         #    'forward_delay': MST_DEFAULT_FORWARD_DELAY
-        #}
-        #db.set_entry('STP_MST', "GLOBAL", mst_fvs)
+        # }
+        # db.set_entry('STP_MST', "GLOBAL", mst_fvs)
 
-        #do_vlan_to_instance0(db) # VLANs to Instance 0 mapping as part of global configuration
+        # do_vlan_to_instance0(db) # VLANs to Instance 0 mapping as part of global configuration
         enable_mst_for_interfaces(db)
 
 # cmd: STP disable
@@ -585,7 +585,7 @@ def stp_disable(_db, mode):
 
     if not current_mode or current_mode == "none":
         ctx.fail("STP is not configured")
-    elif mode != current_mode and current_mode!= "none":
+    elif mode != current_mode and current_mode != "none":
         ctx.fail(f"{mode.upper()} is not currently configured mode")
 
     if mode == "pvst" and current_mode == "pvst":
@@ -672,7 +672,7 @@ def stp_global_max_age(_db, max_age):
     ctx = click.get_current_context()
     db = _db.cfgdb
     current_mode = get_global_stp_mode(db)
-    if current_mode == "pvst":        
+    if current_mode == "pvst":
         check_if_global_stp_enabled(db, ctx)
         is_valid_max_age(ctx, max_age)
         is_valid_stp_global_parameters(ctx, db, "max_age", max_age)
@@ -680,7 +680,7 @@ def stp_global_max_age(_db, max_age):
         db.mod_entry('STP', "GLOBAL", {'max_age': max_age})
     elif current_mode == "mst":
         db.mod_entry('STP_MST', "GLOBAL", {'max_age': max_age})
-        #update_mst_instance_parameters(ctx, db, 'max_age', max_age)
+        # update_mst_instance_parameters(ctx, db, 'max_age', max_age)
 
 
 # cmd: STP global max hop
@@ -703,7 +703,7 @@ def stp_global_max_hops(_db, max_hops):
     db.mod_entry('STP', "GLOBAL", {'max_hops': max_hops})
     if current_mode == "mst":
         db.mod_entry('STP_MST', "GLOBAL", {'max_hops': max_hops})
-        #update_mst_instance_parameters(ctx, db, 'max_hops', max_hops)
+        # update_mst_instance_parameters(ctx, db, 'max_hops', max_hops)
 
 
 # Bridge priority cannot be set without Instance ID
@@ -727,7 +727,7 @@ def stp_global_priority(_db, priority):
         ctx.fail("Bridge priority cannot be set for MST")
 
 
-#config spanning_tree mst
+# config spanning_tree mst
 @spanning_tree.group()
 def mst():
     """Configure MSTP region, instance, show, clear & debug commands"""
@@ -747,7 +747,7 @@ def stp_mst_region_name(_db, region_name):
     ctx = click.get_current_context()
     db = _db.cfgdb
     check_if_global_stp_enabled(db, ctx)
-    
+
     current_mode = get_global_stp_mode(db)
     if current_mode == "pvst":
         ctx.fail("Configuration not supported for PVST")
@@ -773,7 +773,7 @@ def stp_global_revision(_db, revision):
     if current_mode == "pvst":
         ctx.fail("Configuration not supported for PVST")
     elif current_mode == "mst":
-        #if revision not in range(MST_MIN_REVISION, MST_MAX_REVISION + 1):
+        # if revision not in range(MST_MIN_REVISION, MST_MAX_REVISION + 1):
         if revision not in range(MST_MIN_REVISION, MST_MAX_REVISION):
             ctx.fail("STP revision number must be in range 0-65535")
         db.mod_entry('STP_MST', "GLOBAL", {'revision': revision})
@@ -819,7 +819,7 @@ def stp_vlan_enable(_db, vid):
 
     if current_mode == "mst":
         ctx.fail("Configuration not supported for MST")
-    
+
     elif current_mode == "pvst":
         check_if_vlan_exist_in_db(db, ctx, vid)
         vlan_name = 'Vlan{}'.format(vid)
@@ -833,11 +833,11 @@ def stp_vlan_enable(_db, vid):
         stp_vlan_entry = db.get_entry('STP_VLAN', vlan_name)
         if len(stp_vlan_entry) == 0:
             fvs = {'enabled': 'true',
-                'forward_delay': get_global_stp_forward_delay(db),
-                'hello_time': get_global_stp_hello_time(db),
-                'max_age': get_global_stp_max_age(db),
-                'priority': get_global_stp_priority(db)
-                }
+                   'forward_delay': get_global_stp_forward_delay(db),
+                   'hello_time': get_global_stp_hello_time(db),
+                   'max_age': get_global_stp_max_age(db),
+                   'priority': get_global_stp_priority(db)
+            }
             db.set_entry('STP_VLAN', vlan_name, fvs)
         else:
             db.mod_entry('STP_VLAN', vlan_name, {'enabled': 'true'})
