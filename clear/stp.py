@@ -5,6 +5,7 @@ import utilities_common.cli as clicommon
 # This group houses Spanning_tree commands and subgroups
 #
 
+#Adding support for MSTP parameters here
 
 @click.group(cls=clicommon.AliasedGroup)
 @click.pass_context

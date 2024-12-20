@@ -1,12 +1,117 @@
 
 #
-# 'spanning-tree' group ('config  spanning-tree ...')
+# 'spanning-tree' group ('config spanning-tree ...')
 #
+
+"""
+- There will be mode check in each command to check if the mode is PVST or MST
+- For PVST, priority can be set in global table but for MST, priority is associated with instance ID and will be set in the MST INSTANCE TABLE
+
+
+***Existing PVST commands that are used for MST Commands***
+
+    config spanning_tree enable <pvst|mst> #enable pvst or mst
+    config spanning_tree disable <pvst|mst> #disable pvst or mst
+
+    config spanning_tree hello <value> #set hello time pvst or mst
+
+    config spanning_tree max_age <value> #set max age pvst or mst
+
+    config spanning_tree forward_delay <value> #set forward delay pvst or mst
+
+
+    INTERFACE GROUP:
+    config spanning_tree interface enable <ifname> #enable pvst or mst on interface
+    config spanning_tree interface disable <ifname> #disable pvst or mst on interface
+
+    config spanning_tree interface bpdu_guard enable <ifname>
+    config spanning_tree interface bpdu_guard disable <ifname>
+
+    config spanning_tree interface root_guard enable <ifname>
+    config spanning_tree interface root_guard disable <ifname>
+
+    config spanning_tree interface priority <ifname> <port-priority-value>
+
+    config spanning_tree interface cost <ifname> <cost-value>
+    
+    
+***NEW MST Commands***
+    config spanning_tree max_hops <value> (Not for PVST)
+
+    MST GROUP:
+    config spanning_tree mst region-name <region-name>
+    config spanning_tree mst revision <number>
+    
+    config spanning_tree mst instance <instance-id> priority <bridge-priority-value>
+
+    config spanning_tree mst instance <instance-id> vlan add <vlan-id>
+    config spanning_tree mst instance <instance-id> vlan del <vlan-id>
+
+    config spanning_tree mst instance <instance-id> interface <ifname> priority <port-priority-value>
+    config spanning_tree mst instance <instance-id> interface <ifname> cost <cost-value>
+
+    INTERFACE GROUP:
+    config spanning_tree interface edgeport enable <ifname> #enable edgeport on interface for mst
+    config spanning_tree interface edgeport disable <ifname> #disable edgeport on interface for mst
+
+    config spanning_tree interface link_type point-to-point <interface_name>
+    config spanning_tree interface link_type shared <interface_name>
+    config spanning_tree interface link_type auto <interface_name>
+
+"""
 
 import click
 import utilities_common.cli as clicommon
 from natsort import natsorted
 import logging
+
+# MSTP parameters 
+
+MST_MIN_HOPS = 1
+MST_MAX_HOPS = 40
+MST_DEFAULT_HOPS = 20
+
+MST_MIN_HELLO_INTERVAL = 1
+MST_MAX_HELLO_INTERVAL = 10
+MST_DEFAULT_HELLO_INTERVAL = 2
+
+MST_MIN_MAX_AGE = 6
+MST_MAX_MAX_AGE = 40
+MST_DEFAULT_MAX_AGE = 20
+
+MST_MIN_REVISION = 0
+MST_MAX_REVISION = 65535
+MST_DEFAULT_REVISION = 0
+
+MST_MIN_BRIDGE_PRIORITY = 0
+MST_MAX_BRIDGE_PRIORITY = 61440
+MST_DEFAULT_BRIDGE_PRIORITY = 32768
+
+MST_MIN_PORT_PRIORITY = 0
+MST_MAX_PORT_PRIORITY = 240
+MST_DEFAULT_PORT_PRIORITY = 128
+
+MST_MIN_FORWARD_DELAY = 4
+MST_MAX_FORWARD_DELAY = 30
+MST_DEFAULT_FORWARD_DELAY = 15
+
+MST_MIN_ROOT_GUARD_TIMEOUT = 5
+MST_MAX_ROOT_GUARD_TIMEOUT = 600
+MST_DEFAULT_ROOT_GUARD_TIMEOUT = 30
+
+MST_MIN_INSTANCES = 0
+MST_MAX_INSTANCES = 63
+MST_DEFAULT_INSTANCE = 0
+
+MST_MIN_PORT_PATH_COST = 20000000;
+MST_MAX_PORT_PATH_COST = 20000000;
+MST_DEFAULT_PORT_PATH_COST = 1;
+
+MST_AUTO_LINK_TYPE = 'auto'
+MST_P2P_LINK_TYPE = 'p2p'
+MST_SHARED_LINK_TYPE = 'shared'
+
+# STP parameters
 
 STP_MIN_ROOT_GUARD_TIMEOUT = 5
 STP_MAX_ROOT_GUARD_TIMEOUT = 600
@@ -135,7 +240,6 @@ def update_stp_vlan_parameter(ctx, db, param_type, new_value):
         current_vlan_value = vlan_entry.get(param_type)
         if current_global_value == current_vlan_value:
             db.mod_entry('STP_VLAN', vlan, {param_type: new_value})
-
 
 def check_if_vlan_exist_in_db(db, ctx, vid):
     vlan_name = 'Vlan{}'.format(vid)
@@ -278,7 +382,7 @@ def enable_stp_for_interfaces(db):
 def is_global_stp_enabled(db):
     stp_entry = db.get_entry('STP', "GLOBAL")
     mode = stp_entry.get("mode")
-    if mode:
+    if mode and mode != "none":
         return True
     else:
         return False
@@ -319,6 +423,78 @@ def get_global_stp_priority(db):
     return priority
 
 
+def get_bridge_mac_address(db):
+    """Retrieve the bridge MAC address from the CONFIG_DB"""
+    device_metadata = db.get_entry('DEVICE_METADATA', 'localhost')
+    bridge_mac_address = device_metadata.get('mac')
+    return bridge_mac_address
+
+
+def do_vlan_to_instance0(db):
+    """Get VLAN list and create MST instance 0"""
+    vlan_list = db.get_table('VLAN').keys()
+    if vlan_list:
+        vlan_list_str = ','.join(vlan_list)
+        mst_inst_fvs = {
+            'bridge_priority': MST_DEFAULT_BRIDGE_PRIORITY,
+            'vlan_list': vlan_list_str
+        }
+        db.set_entry('STP_MST', 'MST_INSTANCE|0', mst_inst_fvs) #Is it STP_MST_INST or STP_MST?
+
+def enable_mst_for_interfaces(db):
+    fvs = {
+        'enabled': 'true',
+        'root_guard': 'false',
+        'bpdu_guard': 'false',
+        'bpdu_guard_do_disable': 'false',
+        'portfast': 'false',
+        'uplink_fast': 'false',
+        'edge_port': 'false',
+        'link_type': MST_AUTO_LINK_TYPE,
+        'path_cost': MST_DEFAULT_PORT_PATH_COST,
+        'priority': MST_DEFAULT_PORT_PRIORITY
+        }
+    port_dict = natsorted(db.get_table('PORT'))
+    intf_list_in_vlan_member_table = get_intf_list_in_vlan_member_table(db)
+
+    for port_key in port_dict:
+        if port_key in intf_list_in_vlan_member_table:
+            db.set_entry('STP_MST_PORT', f"MST_INSTANCE|0|{port_key}", fvs)
+
+    po_ch_dict = natsorted(db.get_table('PORTCHANNEL'))
+    for po_ch_key in po_ch_dict:
+        if po_ch_key in intf_list_in_vlan_member_table:
+            db.set_entry('STP_MST_PORT', f"MST_INSTANCE|0|{po_ch_key}", fvs)
+
+
+def disable_global_pvst(db):
+    db.set_entry('STP', "GLOBAL", None)
+    db.delete_table('STP_VLAN')
+    db.delete_table('STP_PORT')
+    db.delete_table('STP_VLAN_PORT')
+
+def disable_global_mst(db):
+    db.set_entry('STP', "GLOBAL", None)
+    db.delete_table('STP_MST')
+    db.delete_table('STP_MST_INST')
+    db.delete_table('STP_MST_PORT')
+    db.delete_table('STP_PORT')
+
+
+#def update_mst_instance_parameters(ctx, db, param_type, new_value):
+#    """Update MST instance parameters in the STP_MST_INST table"""
+#
+#    allowed_params = {"max_hops", "max_age", "hello_time", "forward_delay"}
+#    if param_type not in allowed_params:
+#        ctx.fail("Invalid parameter")
+    
+#    db.mod_entry('STP_MST', "GLOBAL", {param_type: new_value})
+
+    #mst_inst_table = db.get_table('STP_MST_INST')
+    #for key in mst_inst_table.keys():
+    #    if key.startswith('MST_INSTANCE'):
+    #        db.mod_entry('STP_MST_INST', key, {param_type: new_value})
+
 @click.group()
 @clicommon.pass_db
 def spanning_tree(_db):
@@ -331,45 +507,93 @@ def spanning_tree(_db):
 ###############################################
 
 # cmd: STP enable
+# Modifies & sets parameters in different tables for MST & PVST
+# config spanning_tree enable <pvst|mst>
 @spanning_tree.command('enable')
-@click.argument('mode', metavar='<pvst>', required=True, type=click.Choice(["pvst"]))
+@click.argument('mode', metavar='<pvst|mst>', required=True, type=click.Choice(["pvst","mst"]))
 @clicommon.pass_db
 def spanning_tree_enable(_db, mode):
     """enable STP """
     ctx = click.get_current_context()
     db = _db.cfgdb
-    if mode == "pvst" and get_global_stp_mode(db) == "pvst":
-        ctx.fail("PVST is already configured")
-    fvs = {'mode': mode,
-           'rootguard_timeout': STP_DEFAULT_ROOT_GUARD_TIMEOUT,
-           'forward_delay': STP_DEFAULT_FORWARD_DELAY,
-           'hello_time': STP_DEFAULT_HELLO_INTERVAL,
-           'max_age': STP_DEFAULT_MAX_AGE,
-           'priority': STP_DEFAULT_BRIDGE_PRIORITY
-           }
-    db.set_entry('STP', "GLOBAL", fvs)
-    # Enable STP for VLAN by default
-    enable_stp_for_interfaces(db)
-    enable_stp_for_vlans(db)
+    current_mode = get_global_stp_mode(db)
 
+    if mode == "pvst" and current_mode == "pvst":
+        ctx.fail("PVST is already configured")
+    elif mode == "mst" and current_mode == "mst":
+        ctx.fail("MST is already configured")
+    elif mode == "pvst" and current_mode == "mst":
+        ctx.fail("MSTP is already configured; please disable MST before enabling PVST")
+    elif mode == "mst" and current_mode == "pvst":
+        ctx.fail("PVST is already configured; please disable PVST before enabling MST")
+
+    if mode == "pvst":
+        #disable_global_mst(db)
+
+        fvs = {'mode': mode,
+            'rootguard_timeout': STP_DEFAULT_ROOT_GUARD_TIMEOUT,
+            'forward_delay': STP_DEFAULT_FORWARD_DELAY,
+            'hello_time': STP_DEFAULT_HELLO_INTERVAL,
+            'max_age': STP_DEFAULT_MAX_AGE,
+            'priority': STP_DEFAULT_BRIDGE_PRIORITY
+            }
+        db.set_entry('STP', "GLOBAL", fvs)
+        
+        enable_stp_for_interfaces(db)
+        enable_stp_for_vlans(db) # Enable STP for VLAN by default
+    
+    elif mode == "mst":
+        #disable_global_pvst(db)
+
+        fvs = {'mode': mode,
+               }
+        db.mod_entry('STP', "GLOBAL", fvs)
+
+        #bridge_mac = get_bridge_mac_address(db)
+        #if not bridge_mac:
+        #    ctx.fail("Bridge MAC address not found in DEVICE_METADATA table")
+
+        # Setting MSTP parameters in the STP_MST_TABLE
+        #mst_fvs = {
+        #    'name': bridge_mac,
+        #    'revision': MST_DEFAULT_REVISION,
+        #    'max_hop': MST_DEFAULT_HOPS,
+        #    'max_age': MST_DEFAULT_MAX_AGE,
+        #    'hello_time': MST_DEFAULT_HELLO_INTERVAL,
+        #    'forward_delay': MST_DEFAULT_FORWARD_DELAY
+        #}
+        #db.set_entry('STP_MST', "GLOBAL", mst_fvs)
+
+        #do_vlan_to_instance0(db) # VLANs to Instance 0 mapping as part of global configuration
+        enable_mst_for_interfaces(db)
 
 # cmd: STP disable
+# config spanning_tree disable <pvst|mst> (Modify mode parameter for MST or PVST and Delete tables)
+# Modify mode in STP GLOBAL table to None
+# Delete tables STP_MST, STP_MST_INST, STP_MST_PORT, and STP_PORT
 @spanning_tree.command('disable')
-@click.argument('mode', metavar='<pvst>', required=True, type=click.Choice(["pvst"]))
+@click.argument('mode', metavar='<pvst|mst>', required=True, type=click.Choice(["pvst","mst"]))
 @clicommon.pass_db
 def stp_disable(_db, mode):
     """disable STP """
+    ctx = click.get_current_context()
     db = _db.cfgdb
-    db.set_entry('STP', "GLOBAL", None)
-    # Disable STP for all VLANs and interfaces
-    db.delete_table('STP_VLAN')
-    db.delete_table('STP_PORT')
-    db.delete_table('STP_VLAN_PORT')
-    if get_global_stp_mode(db) == "pvst":
-        print("Error PVST disable failed")
+    current_mode = get_global_stp_mode(db)
+
+    if not current_mode or current_mode == "none":
+        ctx.fail("STP is not configured")
+    elif mode != current_mode and current_mode!= "none":
+        ctx.fail(f"{mode.upper()} is not currently configured mode")
+
+    if mode == "pvst" and current_mode == "pvst":
+        disable_global_pvst(db)
+    elif mode == "mst" and current_mode == "mst":
+        disable_global_mst(db)        
 
 
 # cmd: STP global root guard timeout
+# NOT VALID FOR MST
+# config spanning_tree root_guard_timeout <5-600 seconds>
 @spanning_tree.command('root_guard_timeout')
 @click.argument('root_guard_timeout', metavar='<5-600 seconds>', required=True, type=int)
 @clicommon.pass_db
@@ -378,11 +602,18 @@ def stp_global_root_guard_timeout(_db, root_guard_timeout):
     ctx = click.get_current_context()
     db = _db.cfgdb
     check_if_global_stp_enabled(db, ctx)
-    is_valid_root_guard_timeout(ctx, root_guard_timeout)
-    db.mod_entry('STP', "GLOBAL", {'rootguard_timeout': root_guard_timeout})
+
+    current_mode = get_global_stp_mode(db)
+    if current_mode == "mst":
+        ctx.fail("Root guard timeout not supported for MST")
+    elif current_mode == "pvst":
+        is_valid_root_guard_timeout(ctx, root_guard_timeout)
+        db.mod_entry('STP', "GLOBAL", {'rootguard_timeout': root_guard_timeout})
 
 
 # cmd: STP global forward delay
+# MST CONFIGURATION IN THE STP_MST GLOBAL TABLE
+# config spanning_tree forward_delay <4-30 seconds>
 @spanning_tree.command('forward_delay')
 @click.argument('forward_delay', metavar='<4-30 seconds>', required=True, type=int)
 @clicommon.pass_db
@@ -391,13 +622,20 @@ def stp_global_forward_delay(_db, forward_delay):
     ctx = click.get_current_context()
     db = _db.cfgdb
     check_if_global_stp_enabled(db, ctx)
-    is_valid_forward_delay(ctx, forward_delay)
-    is_valid_stp_global_parameters(ctx, db, "forward_delay", forward_delay)
-    update_stp_vlan_parameter(ctx, db, "forward_delay", forward_delay)
-    db.mod_entry('STP', "GLOBAL", {'forward_delay': forward_delay})
+    current_mode = get_global_stp_mode(db)
+    if current_mode == "pvst":
+        is_valid_forward_delay(ctx, forward_delay)
+        is_valid_stp_global_parameters(ctx, db, "forward_delay", forward_delay)
+        update_stp_vlan_parameter(ctx, db, "forward_delay", forward_delay)
+        db.mod_entry('STP', "GLOBAL", {'forward_delay': forward_delay})
+    elif current_mode == "mst":
+        db.mod_entry('STP_MST', "GLOBAL", {'forward_delay': forward_delay})
+        #update_mst_instance_parameters(ctx, db, 'forward_delay', forward_delay)
 
 
 # cmd: STP global hello interval
+# MST CONFIGURATION IN THE STP_MST GLOBAL TABLE
+# config spanning_tree hello <1-10 seconds>
 @spanning_tree.command('hello')
 @click.argument('hello_interval', metavar='<1-10 seconds>', required=True, type=int)
 @clicommon.pass_db
@@ -407,12 +645,22 @@ def stp_global_hello_interval(_db, hello_interval):
     db = _db.cfgdb
     check_if_global_stp_enabled(db, ctx)
     is_valid_hello_interval(ctx, hello_interval)
-    is_valid_stp_global_parameters(ctx, db, "hello_time", hello_interval)
-    update_stp_vlan_parameter(ctx, db, "hello_time", hello_interval)
-    db.mod_entry('STP', "GLOBAL", {'hello_time': hello_interval})
+    current_mode = get_global_stp_mode(db)
+
+    if current_mode == "pvst":
+        is_valid_stp_global_parameters(ctx, db, "hello_time", hello_interval)
+        update_stp_vlan_parameter(ctx, db, "hello_time", hello_interval)
+        db.mod_entry('STP', "GLOBAL", {'hello_time': hello_interval})
+    elif current_mode == "mst":
+        db.mod_entry('STP_MST', "GLOBAL", {'hello_time': hello_interval})
+        #update_mst_instance_parameters(ctx, db, 'hello_time', hello_interval)
+    else:
+        ctx.fail("Invalid STP mode configured")
 
 
 # cmd: STP global max age
+# MST CONFIGURATION IN THE STP_MST GLOBAL TABLE
+# config spanning_tree max_age <6-40 seconds>
 @spanning_tree.command('max_age')
 @click.argument('max_age', metavar='<6-40 seconds>', required=True, type=int)
 @clicommon.pass_db
@@ -420,14 +668,45 @@ def stp_global_max_age(_db, max_age):
     """Configure STP global max_age"""
     ctx = click.get_current_context()
     db = _db.cfgdb
+    current_mode = get_global_stp_mode(db)
+    if current_mode == "pvst":        
+        check_if_global_stp_enabled(db, ctx)
+        is_valid_max_age(ctx, max_age)
+        is_valid_stp_global_parameters(ctx, db, "max_age", max_age)
+        update_stp_vlan_parameter(ctx, db, "max_age", max_age)
+        db.mod_entry('STP', "GLOBAL", {'max_age': max_age})
+    elif current_mode == "mst":
+        db.mod_entry('STP_MST', "GLOBAL", {'max_age': max_age})
+        #update_mst_instance_parameters(ctx, db, 'max_age', max_age)
+
+
+# cmd: STP global max hop
+# NO GLOBAL MAX HOP FOR PVST
+# MST CONFIGURATION IN THE STP_MST GLOBAL TABLE
+# config spanning_tree max_hops <6-40 seconds>
+@spanning_tree.command('max_hops')
+@click.argument('max_hops', metavar='<1-40>', required=True, type=int)
+@clicommon.pass_db
+def stp_global_max_hops(_db, max_hops):
+    """Configure STP global max_hops"""
+    ctx = click.get_current_context()
+    db = _db.cfgdb
     check_if_global_stp_enabled(db, ctx)
-    is_valid_max_age(ctx, max_age)
-    is_valid_stp_global_parameters(ctx, db, "max_age", max_age)
-    update_stp_vlan_parameter(ctx, db, "max_age", max_age)
-    db.mod_entry('STP', "GLOBAL", {'max_age': max_age})
+    current_mode = get_global_stp_mode(db)
+    if current_mode == "pvst":
+        ctx.fail("Max hops not supported for PVST")
+    if max_hops not in range(MST_MIN_HOPS, MST_MAX_HOPS + 1):
+        ctx.fail("STP max hops must be in range 1-40")
+    db.mod_entry('STP', "GLOBAL", {'max_hops': max_hops})
+    if current_mode == "mst":
+        db.mod_entry('STP_MST', "GLOBAL", {'max_hops': max_hops})
+        #update_mst_instance_parameters(ctx, db, 'max_hops', max_hops)
 
 
+# Bridge priority cannot be set without Instance ID
 # cmd: STP global bridge priority
+# NOT SET FOR MST
+# config spanning_tree priority <0-61440>
 @spanning_tree.command('priority')
 @click.argument('priority', metavar='<0-61440>', required=True, type=int)
 @clicommon.pass_db
@@ -436,14 +715,72 @@ def stp_global_priority(_db, priority):
     ctx = click.get_current_context()
     db = _db.cfgdb
     check_if_global_stp_enabled(db, ctx)
-    is_valid_bridge_priority(ctx, priority)
-    update_stp_vlan_parameter(ctx, db, "priority", priority)
-    db.mod_entry('STP', "GLOBAL", {'priority': priority})
+    current_mode = get_global_stp_mode(db)
+    if current_mode == "pvst":
+        is_valid_bridge_priority(ctx, priority)
+        update_stp_vlan_parameter(ctx, db, "priority", priority)
+        db.mod_entry('STP', "GLOBAL", {'priority': priority})
+    elif current_mode == "mst":
+        ctx.fail("Bridge priority cannot be set for MST")
+
+
+#config spanning_tree mst
+@spanning_tree.group()
+def mst():
+    """Configure MSTP region, instance, show, clear & debug commands"""
+    pass
+
+
+# MST REGION commands implementation
+
+# cmd: MST region-name
+# MST CONFIGURATION IN THE STP_MST GLOBAL TABLE
+# config spanning_tree mst region-name <name>
+@mst.command('region-name')
+@click.argument('region_name', metavar='<name>', required=True, case_sensitive=True)
+@clicommon.pass_db
+def stp_mst_region_name(_db, region_name):
+    """Configure MSTP region name"""
+    ctx = click.get_current_context()
+    db = _db.cfgdb
+    check_if_global_stp_enabled(db, ctx)
+    
+    current_mode = get_global_stp_mode(db)
+    if current_mode == "pvst":
+        ctx.fail("Configuration not supported for PVST")
+    elif current_mode == "mst":
+        if len(region_name) >= 32:
+            ctx.fail("Region name must be less than 32 characters")
+        db.mod_entry('STP_MST', "GLOBAL", {'name': region_name})
+
+
+# cmd: MST Global revision number
+# MST CONFIGURATION IN THE STP_MST GLOBAL TABLE
+# config spanning_tree mst revision <0-65535>
+@mst.command('revision')
+@click.argument('revision', metavar='<0-65535>', required=True, type=int)
+@clicommon.pass_db
+def stp_global_revision(_db, revision):
+    """Configure STP global revision number"""
+    ctx = click.get_current_context()
+    db = _db.cfgdb
+    check_if_global_stp_enabled(db, ctx)
+
+    current_mode = get_global_stp_mode(db)
+    if current_mode == "pvst":
+        ctx.fail("Configuration not supported for PVST")
+    elif current_mode == "mst":
+        #if revision not in range(MST_MIN_REVISION, MST_MAX_REVISION + 1):
+        if revision not in range(MST_MIN_REVISION, MST_MAX_REVISION):
+            ctx.fail("STP revision number must be in range 0-65535")
+        db.mod_entry('STP_MST', "GLOBAL", {'revision': revision})
 
 
 ###############################################
 # STP VLAN commands implementation
 ###############################################
+
+# config spanning_tree vlan
 @spanning_tree.group('vlan')
 @clicommon.pass_db
 def spanning_tree_vlan(_db):
@@ -465,6 +802,8 @@ def check_if_stp_enabled_for_vlan(ctx, db, vlan_name):
         ctx.fail("STP is not enabled for VLAN")
 
 
+#Not for MST
+#config spanning_tree vlan enable <vlan-id>
 @spanning_tree_vlan.command('enable')
 @click.argument('vid', metavar='<Vlan>', required=True, type=int)
 @clicommon.pass_db
@@ -472,34 +811,42 @@ def stp_vlan_enable(_db, vid):
     """Enable STP for a VLAN"""
     ctx = click.get_current_context()
     db = _db.cfgdb
-    check_if_vlan_exist_in_db(db, ctx, vid)
-    vlan_name = 'Vlan{}'.format(vid)
-    if is_stp_enabled_for_vlan(db, vlan_name):
-        ctx.fail("STP is already enabled for " + vlan_name)
-    if get_stp_enabled_vlan_count(db) >= get_max_stp_instances():
-        ctx.fail("Exceeded maximum STP configurable VLAN instances")
-    check_if_global_stp_enabled(db, ctx)
-    # when enabled for first time, create VLAN entry with
-    # global values - else update only VLAN STP state
-    stp_vlan_entry = db.get_entry('STP_VLAN', vlan_name)
-    if len(stp_vlan_entry) == 0:
-        fvs = {'enabled': 'true',
-               'forward_delay': get_global_stp_forward_delay(db),
-               'hello_time': get_global_stp_hello_time(db),
-               'max_age': get_global_stp_max_age(db),
-               'priority': get_global_stp_priority(db)
-               }
-        db.set_entry('STP_VLAN', vlan_name, fvs)
-    else:
-        db.mod_entry('STP_VLAN', vlan_name, {'enabled': 'true'})
-    # Refresh stp_vlan_intf entry for vlan
-    for vlan, intf in db.get_table('STP_VLAN_PORT'):
-        if vlan == vlan_name:
-            vlan_intf_key = "{}|{}".format(vlan_name, intf)
-            vlan_intf_entry = db.get_entry('STP_VLAN_PORT', vlan_intf_key)
-            db.mod_entry('STP_VLAN_PORT', vlan_intf_key, vlan_intf_entry)
 
+    current_mode = get_global_stp_mode(db)
 
+    if current_mode == "mst":
+        ctx.fail("Configuration not supported for MST")
+    
+    elif current_mode == "pvst":
+        check_if_vlan_exist_in_db(db, ctx, vid)
+        vlan_name = 'Vlan{}'.format(vid)
+        if is_stp_enabled_for_vlan(db, vlan_name):
+            ctx.fail("STP is already enabled for " + vlan_name)
+        if get_stp_enabled_vlan_count(db) >= get_max_stp_instances():
+            ctx.fail("Exceeded maximum STP configurable VLAN instances")
+        check_if_global_stp_enabled(db, ctx)
+        # when enabled for first time, create VLAN entry with
+        # global values - else update only VLAN STP state
+        stp_vlan_entry = db.get_entry('STP_VLAN', vlan_name)
+        if len(stp_vlan_entry) == 0:
+            fvs = {'enabled': 'true',
+                'forward_delay': get_global_stp_forward_delay(db),
+                'hello_time': get_global_stp_hello_time(db),
+                'max_age': get_global_stp_max_age(db),
+                'priority': get_global_stp_priority(db)
+                }
+            db.set_entry('STP_VLAN', vlan_name, fvs)
+        else:
+            db.mod_entry('STP_VLAN', vlan_name, {'enabled': 'true'})
+        # Refresh stp_vlan_intf entry for vlan
+        for vlan, intf in db.get_table('STP_VLAN_PORT'):
+            if vlan == vlan_name:
+                vlan_intf_key = "{}|{}".format(vlan_name, intf)
+                vlan_intf_entry = db.get_entry('STP_VLAN_PORT', vlan_intf_key)
+                db.mod_entry('STP_VLAN_PORT', vlan_intf_key, vlan_intf_entry)
+
+#Not for MST
+# config spanning_tree vlan disable <vlan-id>
 @spanning_tree_vlan.command('disable')
 @click.argument('vid', metavar='<Vlan>', required=True, type=int)
 @clicommon.pass_db
@@ -507,11 +854,19 @@ def stp_vlan_disable(_db, vid):
     """Disable STP for a VLAN"""
     ctx = click.get_current_context()
     db = _db.cfgdb
-    check_if_vlan_exist_in_db(db, ctx, vid)
-    vlan_name = 'Vlan{}'.format(vid)
-    db.mod_entry('STP_VLAN', vlan_name, {'enabled': 'false'})
+    
+    current_mode = get_global_stp_mode(db)
+    if current_mode == "mst":
+        ctx.fail("Configuration not supported for MST")
+    
+    elif current_mode == "pvst":
+        check_if_vlan_exist_in_db(db, ctx, vid)
+        vlan_name = 'Vlan{}'.format(vid)
+        db.mod_entry('STP_VLAN', vlan_name, {'enabled': 'false'})
 
 
+#not for MST
+# config spanning_tree vlan forward_delay <vlan-id> <4-30 seconds>
 @spanning_tree_vlan.command('forward_delay')
 @click.argument('vid', metavar='<Vlan>', required=True, type=int)
 @click.argument('forward_delay', metavar='<4-30 seconds>', required=True, type=int)
@@ -520,14 +875,21 @@ def stp_vlan_forward_delay(_db, vid, forward_delay):
     """Configure STP forward delay for VLAN"""
     ctx = click.get_current_context()
     db = _db.cfgdb
-    check_if_vlan_exist_in_db(db, ctx, vid)
-    vlan_name = 'Vlan{}'.format(vid)
-    check_if_stp_enabled_for_vlan(ctx, db, vlan_name)
-    is_valid_forward_delay(ctx, forward_delay)
-    is_valid_stp_vlan_parameters(ctx, db, vlan_name, "forward_delay", forward_delay)
-    db.mod_entry('STP_VLAN', vlan_name, {'forward_delay': forward_delay})
+    
+    current_mode = get_global_stp_mode(db)
+    if current_mode == "mst":
+        ctx.fail("Configuration not supported for MST")
+    elif current_mode == "pvst":
+        check_if_vlan_exist_in_db(db, ctx, vid)
+        vlan_name = 'Vlan{}'.format(vid)
+        check_if_stp_enabled_for_vlan(ctx, db, vlan_name)
+        is_valid_forward_delay(ctx, forward_delay)
+        is_valid_stp_vlan_parameters(ctx, db, vlan_name, "forward_delay", forward_delay)
+        db.mod_entry('STP_VLAN', vlan_name, {'forward_delay': forward_delay})
 
 
+#Not for MST
+# config spanning_tree vlan hello <vlan-id> <1-10 seconds>
 @spanning_tree_vlan.command('hello')
 @click.argument('vid', metavar='<Vlan>', required=True, type=int)
 @click.argument('hello_interval', metavar='<1-10 seconds>', required=True, type=int)
@@ -536,14 +898,21 @@ def stp_vlan_hello_interval(_db, vid, hello_interval):
     """Configure STP hello interval for VLAN"""
     ctx = click.get_current_context()
     db = _db.cfgdb
-    check_if_vlan_exist_in_db(db, ctx, vid)
-    vlan_name = 'Vlan{}'.format(vid)
-    check_if_stp_enabled_for_vlan(ctx, db, vlan_name)
-    is_valid_hello_interval(ctx, hello_interval)
-    is_valid_stp_vlan_parameters(ctx, db, vlan_name, "hello_time", hello_interval)
-    db.mod_entry('STP_VLAN', vlan_name, {'hello_time': hello_interval})
+
+    current_mode = get_global_stp_mode(db)
+    if current_mode == "mst":
+        ctx.fail("Configuration not supported for MST")
+    elif current_mode == "pvst":
+        check_if_vlan_exist_in_db(db, ctx, vid)
+        vlan_name = 'Vlan{}'.format(vid)
+        check_if_stp_enabled_for_vlan(ctx, db, vlan_name)
+        is_valid_hello_interval(ctx, hello_interval)
+        is_valid_stp_vlan_parameters(ctx, db, vlan_name, "hello_time", hello_interval)
+        db.mod_entry('STP_VLAN', vlan_name, {'hello_time': hello_interval})
 
 
+#not for MST
+# config spanning_tree vlan max_age <vlan-id> <6-40 seconds>
 @spanning_tree_vlan.command('max_age')
 @click.argument('vid', metavar='<Vlan>', required=True, type=int)
 @click.argument('max_age', metavar='<6-40 seconds>', required=True, type=int)
@@ -552,14 +921,20 @@ def stp_vlan_max_age(_db, vid, max_age):
     """Configure STP max age for VLAN"""
     ctx = click.get_current_context()
     db = _db.cfgdb
-    check_if_vlan_exist_in_db(db, ctx, vid)
-    vlan_name = 'Vlan{}'.format(vid)
-    check_if_stp_enabled_for_vlan(ctx, db, vlan_name)
-    is_valid_max_age(ctx, max_age)
-    is_valid_stp_vlan_parameters(ctx, db, vlan_name, "max_age", max_age)
-    db.mod_entry('STP_VLAN', vlan_name, {'max_age': max_age})
 
+    current_mode = get_global_stp_mode(db)
+    if current_mode == "mst":
+        ctx.fail("Configuration not supported for MST")
+    elif current_mode == "pvst":
+        check_if_vlan_exist_in_db(db, ctx, vid)
+        vlan_name = 'Vlan{}'.format(vid)
+        check_if_stp_enabled_for_vlan(ctx, db, vlan_name)
+        is_valid_max_age(ctx, max_age)
+        is_valid_stp_vlan_parameters(ctx, db, vlan_name, "max_age", max_age)
+        db.mod_entry('STP_VLAN', vlan_name, {'max_age': max_age})
 
+#not for MST
+# config spanning_tree vlan priority <vlan-id> <0-61440>
 @spanning_tree_vlan.command('priority')
 @click.argument('vid', metavar='<Vlan>', required=True, type=int)
 @click.argument('priority', metavar='<0-61440>', required=True, type=int)
@@ -568,11 +943,16 @@ def stp_vlan_priority(_db, vid, priority):
     """Configure STP bridge priority for VLAN"""
     ctx = click.get_current_context()
     db = _db.cfgdb
-    check_if_vlan_exist_in_db(db, ctx, vid)
-    vlan_name = 'Vlan{}'.format(vid)
-    check_if_stp_enabled_for_vlan(ctx, db, vlan_name)
-    is_valid_bridge_priority(ctx, priority)
-    db.mod_entry('STP_VLAN', vlan_name, {'priority': priority})
+
+    current_mode = get_global_stp_mode(db)
+    if current_mode == "mst":
+        ctx.fail("Configuration not supported for MST")
+    elif current_mode == "pvst":
+        check_if_vlan_exist_in_db(db, ctx, vid)
+        vlan_name = 'Vlan{}'.format(vid)
+        check_if_stp_enabled_for_vlan(ctx, db, vlan_name)
+        is_valid_bridge_priority(ctx, priority)
+        db.mod_entry('STP_VLAN', vlan_name, {'priority': priority})
 
 
 ###############################################
@@ -609,13 +989,16 @@ def check_if_interface_is_valid(ctx, db, interface_name):
         ctx.fail(" {} has no VLAN configured - It's not a L2 interface".format(interface_name))
 
 
+# config spanning_tree interface
 @spanning_tree.group('interface')
 @clicommon.pass_db
 def spanning_tree_interface(_db):
     """Configure STP for interface"""
     pass
 
-
+# config spanning_tree interface enable <interface_name>
+# MST CONFIGURATION IN THE STP_PORT TABLE
+# It will have a check for global stp mode to figure out for which mode is it working?
 @spanning_tree_interface.command('enable')
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @clicommon.pass_db
@@ -639,7 +1022,8 @@ def stp_interface_enable(_db, interface_name):
     else:
         db.mod_entry('STP_PORT', interface_name, {'enabled': 'true'})
 
-
+# config spanning_tree interface disable <interface_name>
+# MST CONFIGURATION IN THE STP_PORT TABLE
 @spanning_tree_interface.command('disable')
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @clicommon.pass_db
@@ -662,7 +1046,7 @@ def is_valid_interface_priority(ctx, intf_priority):
     if intf_priority not in range(STP_INTERFACE_MIN_PRIORITY, STP_INTERFACE_MAX_PRIORITY + 1):
         ctx.fail("STP interface priority must be in range 0-240")
 
-
+# config spanning_tree interface priority <interface_name> <value: 0-240>
 @spanning_tree_interface.command('priority')
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @click.argument('priority', metavar='<0-240>', required=True, type=int)
@@ -698,6 +1082,7 @@ def is_valid_interface_path_cost(ctx, intf_path_cost):
         ctx.fail("STP interface path cost must be in range 1-200000000")
 
 
+# config spanning_tree interface cost <interface_name> <value: 1-200000000>
 @spanning_tree_interface.command('cost')
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @click.argument('cost', metavar='<1-200000000>', required=True, type=int)
@@ -731,6 +1116,8 @@ def spanning_tree_interface_root_guard(_db):
     pass
 
 
+# config spanning_tree interface root_guard enable <interface_name>
+# MST CONFIGURATION IN THE STP_PORT TABLE
 @spanning_tree_interface_root_guard.command('enable')
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @clicommon.pass_db
@@ -742,7 +1129,8 @@ def stp_interface_root_guard_enable(_db, interface_name):
     check_if_interface_is_valid(ctx, db, interface_name)
     db.mod_entry('STP_PORT', interface_name, {'root_guard': 'true'})
 
-
+# config spanning_tree interface root_guard disable <interface_name>
+# mst CONFIGURATION IN THE STP_PORT TABLE
 @spanning_tree_interface_root_guard.command('disable')
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @clicommon.pass_db
@@ -756,13 +1144,15 @@ def stp_interface_root_guard_disable(_db, interface_name):
 
 
 # STP interface bpdu guard
+# config spanning_tree interface bpdu_guard
 @spanning_tree_interface.group('bpdu_guard')
 @clicommon.pass_db
 def spanning_tree_interface_bpdu_guard(_db):
     """Configure STP bpdu guard for interface"""
     pass
 
-
+# config spanning_tree interface bpdu_guard enable <interface_name> [-s]
+# MST CONFIGURATION IN THE STP_PORT TABLE
 @spanning_tree_interface_bpdu_guard.command('enable')
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @click.option('-s', '--shutdown', is_flag=True)
@@ -782,6 +1172,8 @@ def stp_interface_bpdu_guard_enable(_db, interface_name, shutdown):
     db.mod_entry('STP_PORT', interface_name, fvs)
 
 
+# config spanning_tree interface bpdu_guard disable <interface_name>
+# MST CONFIGURATION IN THE STP_PORT TABLE
 @spanning_tree_interface_bpdu_guard.command('disable')
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @clicommon.pass_db
@@ -795,13 +1187,18 @@ def stp_interface_bpdu_guard_disable(_db, interface_name):
 
 
 # STP interface portfast
+# config spanning_tree interface portfast
+# Only for PVST
 @spanning_tree_interface.group('portfast')
 @clicommon.pass_db
 def spanning_tree_interface_portfast(_db):
     """Configure STP portfast for interface"""
     pass
 
-
+# config spanning_tree interface portfast enable <interface_name>
+# MST CONFIGURATION IN THE STP_PORT TABLE
+# It should the mode attribute in the STP global table
+# If the mode is MST, then it should tell that the mode if MST, and not allow to configure portfast
 @spanning_tree_interface_portfast.command('enable')
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @clicommon.pass_db
@@ -814,6 +1211,10 @@ def stp_interface_portfast_enable(_db, interface_name):
     db.mod_entry('STP_PORT', interface_name, {'portfast': 'true'})
 
 
+# config spanning_tree interface portfast disable <interface_name>
+# MST CONFIGURATION IN THE STP_PORT TABLE
+# It should the mode attribute in the STP global table
+# If the mode is MST, then it should tell that the mode if mst, and this cannot be done.
 @spanning_tree_interface_portfast.command('disable')
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @clicommon.pass_db
@@ -826,14 +1227,59 @@ def stp_interface_portfast_disable(_db, interface_name):
     db.mod_entry('STP_PORT', interface_name, {'portfast': 'false'})
 
 
+
+# config spanning_tree interface edgeport
+# Only for MST
+@spanning_tree_interface.group('edgeport')
+@clicommon.pass_db
+def spanning_tree_interface_edgeport(_db):
+    """Configure STP edgeport for interface"""
+    pass
+
+# config spanning_tree interface edgeport enable <interface_name>
+# MST CONFIGURATION IN THE STP_PORT TABLE
+# It should the mode attribute in the STP global table
+# If the mode is PVST, then it should tell that the mode if PVST, and not allow to configure edgeport
+@spanning_tree_interface_edgeport.command('enable')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@clicommon.pass_db
+def stp_interface_edgeport_enable(_db, interface_name):
+    """Enable STP edgeport for interface"""
+    ctx = click.get_current_context()
+    db = _db.cfgdb
+    check_if_stp_enabled_for_interface(ctx, db, interface_name)
+    check_if_interface_is_valid(ctx, db, interface_name)
+    db.mod_entry('STP_PORT', interface_name, {'edgeport': 'true'})
+
+# config spanning_tree interface edgeport disable <interface_name>
+# MST CONFIGURATION IN THE STP_PORT TABLE
+# It should the mode attribute in the STP global table
+# If the mode is PVST, then it should tell that the mode if PVST, and this cannot be done.
+@spanning_tree_interface_edgeport.command('disable')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@clicommon.pass_db
+def stp_interface_edgeport_disable(_db, interface_name):
+    """Disable STP edgeport for interface"""
+    ctx = click.get_current_context()
+    db = _db.cfgdb
+    check_if_stp_enabled_for_interface(ctx, db, interface_name)
+    check_if_interface_is_valid(ctx, db, interface_name)
+    db.mod_entry('STP_PORT', interface_name, {'edgeport': 'false'})
+
+
+
 # STP interface root uplink_fast
+# config spanning_tree interface uplink_fast
+# Only for PVST
+# It should also check if the mode is PVST, else not configure
 @spanning_tree_interface.group('uplink_fast')
 @clicommon.pass_db
 def spanning_tree_interface_uplink_fast(_db):
     """Configure STP uplink fast for interface"""
     pass
 
-
+# config spanning_tree interface uplink_fast enable <interface_name>
+# Not for MST
 @spanning_tree_interface_uplink_fast.command('enable')
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @clicommon.pass_db
@@ -846,6 +1292,8 @@ def stp_interface_uplink_fast_enable(_db, interface_name):
     db.mod_entry('STP_PORT', interface_name, {'uplink_fast': 'true'})
 
 
+# config spanning_tree interface uplink_fast disable <interface_name>
+# Not for MST
 @spanning_tree_interface_uplink_fast.command('disable')
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @clicommon.pass_db
@@ -858,9 +1306,57 @@ def stp_interface_uplink_fast_disable(_db, interface_name):
     db.mod_entry('STP_PORT', interface_name, {'uplink_fast': 'false'})
 
 
+
+# config spanning_tree interface link_type   
+@spanning_tree_interface.group('link_type')
+@clicommon.pass_db
+def spanning_tree_interface_link_type(_db):
+    """Configure STP link type for interface"""
+    pass
+
+# config spanning_tree interface link_type point-to-point <interface_name>
+@spanning_tree_interface_link_type.command('point-to-point')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@clicommon.pass_db
+def stp_interface_link_type_point_to_point(_db, interface_name):
+    """Configure STP link type as point-to-point for interface"""
+    ctx = click.get_current_context()
+    db = _db.cfgdb
+    check_if_stp_enabled_for_interface(ctx, db, interface_name)
+    check_if_interface_is_valid(ctx, db, interface_name)
+    db.mod_entry('STP_PORT', interface_name, {'link_type': 'point-to-point'})
+
+# config spanning_tree interface link_type shared <interface_name>
+@spanning_tree_interface_link_type.command('shared')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@clicommon.pass_db
+def stp_interface_link_type_shared(_db, interface_name):
+    """Configure STP link type as shared for interface"""
+    ctx = click.get_current_context()
+    db = _db.cfgdb
+    check_if_stp_enabled_for_interface(ctx, db, interface_name)
+    check_if_interface_is_valid(ctx, db, interface_name)
+    db.mod_entry('STP_PORT', interface_name, {'link_type': 'shared'})
+
+# config spanning_tree interface link_type auto <interface_name>
+@spanning_tree_interface_link_type.command('auto')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@clicommon.pass_db
+def stp_interface_link_type_auto(_db, interface_name):
+    """Configure STP link type as auto for interface"""
+    ctx = click.get_current_context()
+    db = _db.cfgdb
+    check_if_stp_enabled_for_interface(ctx, db, interface_name)
+    check_if_interface_is_valid(ctx, db, interface_name)
+    db.mod_entry('STP_PORT', interface_name, {'link_type': 'auto'})
+
+
+
 ###############################################
 # STP interface per VLAN commands implementation
 ###############################################
+
+# config spanning_tree vlan interface
 @spanning_tree_vlan.group('interface')
 @clicommon.pass_db
 def spanning_tree_vlan_interface(_db):
@@ -873,7 +1369,7 @@ def is_valid_vlan_interface_priority(ctx, priority):
     if priority not in range(STP_INTERFACE_MIN_PRIORITY, STP_INTERFACE_MAX_PRIORITY + 1):
         ctx.fail("STP per vlan port priority must be in range 0-240")
 
-
+# config spanning_tree vlan interface priority <Vlan> <interface_name> <value: 0-240>
 @spanning_tree_vlan_interface.command('priority')
 @click.argument('vid', metavar='<Vlan>', required=True, type=int)
 @click.argument('interface_name', metavar='<interface_name>', required=True)
@@ -893,6 +1389,7 @@ def stp_vlan_interface_priority(_db, vid, interface_name, priority):
     db.mod_entry('STP_VLAN_PORT', vlan_interface, {'priority': priority})
 
 
+# config spanning_tree vlan interface cost <Vlan> <interface_name> <value: 1-200000000>
 @spanning_tree_vlan_interface.command('cost')
 @click.argument('vid', metavar='<Vlan>', required=True, type=int)
 @click.argument('interface_name', metavar='<interface_name>', required=True)

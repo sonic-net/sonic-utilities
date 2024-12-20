@@ -1994,6 +1994,7 @@ def syslog(verbose):
     click.echo(tabulate(body, header, tablefmt="simple", stralign="left", missingval=""))
 
 
+# Add other spanning_tree tables here as well for MSTP
 # 'spanning-tree' subcommand ("show runningconfiguration spanning_tree")
 @runningconfiguration.command()
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
