@@ -856,11 +856,11 @@ def stp_vlan_disable(_db, vid):
     """Disable STP for a VLAN"""
     ctx = click.get_current_context()
     db = _db.cfgdb
-    
+
     current_mode = get_global_stp_mode(db)
     if current_mode == "mst":
         ctx.fail("Configuration not supported for MST")
-    
+
     elif current_mode == "pvst":
         check_if_vlan_exist_in_db(db, ctx, vid)
         vlan_name = 'Vlan{}'.format(vid)
@@ -877,7 +877,7 @@ def stp_vlan_forward_delay(_db, vid, forward_delay):
     """Configure STP forward delay for VLAN"""
     ctx = click.get_current_context()
     db = _db.cfgdb
-    
+
     current_mode = get_global_stp_mode(db)
     if current_mode == "mst":
         ctx.fail("Configuration not supported for MST")
@@ -1229,9 +1229,9 @@ def stp_interface_portfast_disable(_db, interface_name):
     db.mod_entry('STP_PORT', interface_name, {'portfast': 'false'})
 
 
-
 # config spanning_tree interface edgeport
 # Only for MST
+
 @spanning_tree_interface.group('edgeport')
 @clicommon.pass_db
 def spanning_tree_interface_edgeport(_db):
