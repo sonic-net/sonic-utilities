@@ -1243,6 +1243,7 @@ def spanning_tree_interface_edgeport(_db):
 # It should the mode attribute in the STP global table
 # If the mode is PVST, then it should tell that the mode if PVST, and not allow to configure edgeport
 
+
 @spanning_tree_interface_edgeport.command('enable')
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @clicommon.pass_db
@@ -1258,6 +1259,7 @@ def stp_interface_edgeport_enable(_db, interface_name):
 # MST CONFIGURATION IN THE STP_PORT TABLE
 # It should the mode attribute in the STP global table
 # If the mode is PVST, then it should tell that the mode if PVST, and this cannot be done.
+
 
 @spanning_tree_interface_edgeport.command('disable')
 @click.argument('interface_name', metavar='<interface_name>', required=True)
@@ -1318,6 +1320,7 @@ def spanning_tree_interface_link_type(_db):
     pass
 
 # config spanning_tree interface link_type point-to-point <interface_name>
+
 
 @spanning_tree_interface_link_type.command('point-to-point')
 @click.argument('interface_name', metavar='<interface_name>', required=True)
