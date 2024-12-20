@@ -268,8 +268,7 @@ def add(address, timeout, key, auth_type, port, pri, use_mgmt_vrf):
     config_db.connect()
     old_data = config_db.get_table('TACPLUS_SERVER')
     ctx = click.get_current_context()
-    
-    if address in old_data :
+    if address in old_data:
         ctx.fail('server %s already exists' % address)
     if len(old_data) == TACACS_MAXSERVERS:
         ctx.fail(f'tacacs server reached max size {TACACS_MAXSERVERS}')
