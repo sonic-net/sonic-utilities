@@ -16,14 +16,16 @@ def mock_db():
         mock_db_class.return_value = mock_db_instance
         yield mock_db_instance
 
+
 @pytest.fixture
 def cli_runner():
     """Fixture to create a CLI runner."""
     return CliRunner()
 
+
 class TestUpdateMemoryStatisticsStatus:
     """Direct tests for update_memory_statistics_status function"""
-    
+
     def test_successful_enable(self, mock_db):
         """Test successful status update to enable."""
         success, error = update_memory_statistics_status("true", mock_db)
@@ -54,14 +56,15 @@ class TestUpdateMemoryStatisticsStatus:
         assert "Error updating memory statistics status" in error
         assert "DB Error" in error
 
+
 class TestMemoryStatisticsEnable:
     def test_enable_success(self, cli_runner, mock_db):
         """Test successful enabling of memory statistics."""
         result = cli_runner.invoke(cli, ['config', 'memory-stats', 'enable'])
         assert result.exit_code == 0
         mock_db.mod_entry.assert_called_once_with(
-            MEMORY_STATISTICS_TABLE, 
-            MEMORY_STATISTICS_KEY, 
+            MEMORY_STATISTICS_TABLE,
+            MEMORY_STATISTICS_KEY,
             {"enabled": "true"}
         )
         assert "successfully" in result.output
@@ -71,8 +74,9 @@ class TestMemoryStatisticsEnable:
         """Test handling of database error when enabling."""
         mock_db.mod_entry.side_effect = Exception("DB Error")
         result = cli_runner.invoke(cli, ['config', 'memory-stats', 'enable'])
-        assert result.exit_code == 0 
+        assert result.exit_code == 0
         assert "Error" in result.output
+
 
 class TestMemoryStatisticsDisable:
     def test_disable_success(self, cli_runner, mock_db):
@@ -80,8 +84,8 @@ class TestMemoryStatisticsDisable:
         result = cli_runner.invoke(cli, ['config', 'memory-stats', 'disable'])
         assert result.exit_code == 0
         mock_db.mod_entry.assert_called_once_with(
-            MEMORY_STATISTICS_TABLE, 
-            MEMORY_STATISTICS_KEY, 
+            MEMORY_STATISTICS_TABLE,
+            MEMORY_STATISTICS_KEY,
             {"enabled": "false"}
         )
         assert "successfully" in result.output
@@ -93,6 +97,7 @@ class TestMemoryStatisticsDisable:
         result = cli_runner.invoke(cli, ['config', 'memory-stats', 'disable'])
         assert result.exit_code == 0
         assert "Error" in result.output
+
 
 class TestSamplingInterval:
     @pytest.mark.parametrize("interval", [
@@ -122,6 +127,7 @@ class TestSamplingInterval:
         result = cli_runner.invoke(cli, ['config', 'memory-stats', 'sampling-interval', str(interval)])
         assert "Error" in result.output
         assert not mock_db.mod_entry.called
+
 
 class TestRetentionPeriod:
     @pytest.mark.parametrize("period", [
@@ -168,15 +174,15 @@ class TestSyslogLogging:
         """Test syslog logging functionality."""
         with patch('syslog.syslog') as mock_syslog, \
              patch('syslog.openlog') as mock_openlog:
-            
+
             log_to_syslog("Test message", expected_level)
-            
+
             mock_openlog.assert_called_once_with(
                 "memory_statistics",
                 syslog.LOG_PID | syslog.LOG_CONS,
                 syslog.LOG_USER
             )
-            
+
             mock_syslog.assert_called_once_with(expected_level, "Test message")
 
     def test_syslog_logging_default_level(self):

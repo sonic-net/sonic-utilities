@@ -86,12 +86,15 @@ def memory_stats_disable():
 def memory_stats_sampling_interval(interval):
     """
     Set sampling interval for memory statistics.
-    
+
     The sampling interval must be between 3 and 15 minutes.
     This determines how frequently memory usage data is collected.
     """
     if not (SAMPLING_INTERVAL_MIN <= interval <= SAMPLING_INTERVAL_MAX):
-        error_msg = f"Error: Sampling interval must be between {SAMPLING_INTERVAL_MIN} and {SAMPLING_INTERVAL_MAX} minutes."
+        error_msg = (
+            f"Error: Sampling interval must be between {SAMPLING_INTERVAL_MIN} "
+            f"and {SAMPLING_INTERVAL_MAX} minutes."
+        )
         click.echo(error_msg, err=True)
         log_to_syslog(error_msg, syslog.LOG_ERR)
         return
@@ -114,7 +117,7 @@ def memory_stats_sampling_interval(interval):
 def memory_stats_retention_period(period):
     """
     Set retention period for memory statistics.
-    
+
     The retention period must be between 1 and 30 days.
     This determines how long memory usage data is stored before being purged.
     """
