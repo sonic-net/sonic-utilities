@@ -189,6 +189,6 @@ class TestSyslogLogging:
     def test_syslog_logging_default_level(self):
         """Test syslog logging with default log level."""
         with patch('syslog.syslog') as mock_syslog, \
-            patch('syslog.openlog') as _:
+             patch('syslog.openlog') as _:
             log_to_syslog("Test message")
             mock_syslog.assert_called_once_with(syslog.LOG_INFO, "Test message")
