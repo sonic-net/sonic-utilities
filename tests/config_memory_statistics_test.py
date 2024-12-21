@@ -8,10 +8,11 @@ from config.memory_statistics import (
     RETENTION_PERIOD_MIN, RETENTION_PERIOD_MAX, log_to_syslog
 )
 
+
 @pytest.fixture
 def mock_db():
     """Fixture to create a mock database connection."""
-    with patch('memory_statistics.ConfigDBConnector') as mock_db_class:
+    with patch('config.memory_statistics.ConfigDBConnector') as mock_db_class:
         mock_db_instance = Mock()
         mock_db_class.return_value = mock_db_instance
         yield mock_db_instance
@@ -188,8 +189,6 @@ class TestSyslogLogging:
     def test_syslog_logging_default_level(self):
         """Test syslog logging with default log level."""
         with patch('syslog.syslog') as mock_syslog, \
-             patch('syslog.openlog') as mock_openlog:
-            
+            patch('syslog.openlog') as _:
             log_to_syslog("Test message")
-            
             mock_syslog.assert_called_once_with(syslog.LOG_INFO, "Test message")
