@@ -1,5 +1,6 @@
 import pytest
 import syslog
+import subprocess
 from unittest.mock import Mock, patch
 from click.testing import CliRunner
 from config.memory_statistics import (
@@ -129,6 +130,26 @@ class TestSamplingInterval:
         assert "Error" in result.output
         assert not mock_db.mod_entry.called
 
+    def test_sampling_interval_specific_db_error(self, cli_runner, mock_db):
+        """Test specific database error case when setting sampling interval."""
+        mock_db.mod_entry.side_effect = Exception("Database connection lost")
+
+        with patch('config.memory_statistics.log_to_syslog') as mock_log:
+            result = cli_runner.invoke(cli, ['config', 'memory-stats', 'sampling-interval', '5'])
+
+            expected_error = "Error setting sampling interval: Database connection lost"
+            assert expected_error in result.output
+
+            mock_log.assert_called_with(expected_error, syslog.LOG_ERR)
+
+            assert result.exit_code == 0
+
+            mock_db.mod_entry.assert_called_once_with(
+                MEMORY_STATISTICS_TABLE,
+                MEMORY_STATISTICS_KEY,
+                {"sampling_interval": "5"}
+            )
+
 
 class TestRetentionPeriod:
     @pytest.mark.parametrize("period", [
@@ -192,3 +213,36 @@ class TestSyslogLogging:
              patch('syslog.openlog') as _:
             log_to_syslog("Test message")
             mock_syslog.assert_called_once_with(syslog.LOG_INFO, "Test message")
+
+def test_main_execution():
+    """Test the main execution block of the script."""
+    with patch('config.memory_statistics.cli') as mock_cli:
+        module_code = compile(
+            'if __name__ == "__main__": cli()',
+            'memory_statistics.py',
+            'exec'
+        )
+
+        namespace = {'__name__': '__main__', 'cli': mock_cli}
+        exec(module_code, namespace)
+
+        mock_cli.assert_called_once()
+
+def test_main_cli_integration():
+    """Test the main CLI integration with actual command."""
+    runner = CliRunner()
+
+    with patch('config.memory_statistics.get_db_connection') as mock_get_db:
+        mock_db = Mock()
+        mock_get_db.return_value = mock_db
+
+        result = runner.invoke(cli, ['config', 'memory-stats', 'sampling-interval', '5'])
+        assert result.exit_code == 0
+
+        mock_get_db.assert_called_once()
+
+def test_script_execution():
+    """Test that the script runs successfully."""
+    result = subprocess.run(["python3",
+                             "config/memory_statistics.py"], capture_output=True)
+    assert result.returncode == 0
