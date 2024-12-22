@@ -1,7 +1,9 @@
-import click
 import syslog
+
+import click
 from swsscommon.swsscommon import ConfigDBConnector
 
+# Constants
 MEMORY_STATISTICS_TABLE = "MEMORY_STATISTICS"
 MEMORY_STATISTICS_KEY = "memory_statistics"
 SAMPLING_INTERVAL_MIN = 3
