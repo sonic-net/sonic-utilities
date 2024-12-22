@@ -214,6 +214,7 @@ class TestSyslogLogging:
             log_to_syslog("Test message")
             mock_syslog.assert_called_once_with(syslog.LOG_INFO, "Test message")
 
+
 def test_main_execution():
     """Test the main execution block of the script."""
     with patch('config.memory_statistics.cli') as mock_cli:
@@ -228,6 +229,7 @@ def test_main_execution():
 
         mock_cli.assert_called_once()
 
+
 def test_main_cli_integration():
     """Test the main CLI integration with actual command."""
     runner = CliRunner()
@@ -240,6 +242,7 @@ def test_main_cli_integration():
         assert result.exit_code == 0
 
         mock_get_db.assert_called_once()
+
 
 def test_script_execution():
     """Test that the script runs successfully."""
