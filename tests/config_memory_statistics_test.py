@@ -1,8 +1,11 @@
-import pytest
 import syslog
 import subprocess
+
 from unittest.mock import Mock, patch
+
+import pytest
 from click.testing import CliRunner
+
 from config.memory_statistics import (
     cli, update_memory_statistics_status, MEMORY_STATISTICS_TABLE,
     MEMORY_STATISTICS_KEY, SAMPLING_INTERVAL_MIN, SAMPLING_INTERVAL_MAX,
