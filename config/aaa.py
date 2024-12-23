@@ -269,7 +269,7 @@ def add(address, timeout, key, auth_type, port, pri, use_mgmt_vrf):
     old_data = config_db.get_table('TACPLUS_SERVER')
     ctx = click.get_current_context()
     if address in old_data:
-        ctx.fail('server %s already exists' % address)
+        ctx.fail(f'server {address} already exists')
     if len(old_data) == TACACS_MAXSERVERS:
         ctx.fail(f'tacacs server reached max size {TACACS_MAXSERVERS}')
     else:
@@ -516,9 +516,9 @@ def add(address, retransmit, timeout, key, auth_type, auth_port, pri, use_mgmt_v
     old_data = config_db.get_table('RADIUS_SERVER')
     ctx = click.get_current_context()
     if address in old_data:
-        ctx.fail('server %s already exists' % address)
+        ctx.fail(f'server {address} already exists')
     if len(old_data) == RADIUS_MAXSERVERS:
-        ctx.fail('Maximum of %d can be configured' % RADIUS_MAXSERVERS)
+        ctx.fail(f'Maximum of {RADIUS_MAXSERVERS} can be configured')
     else:
         data = {
             'auth_port': str(auth_port),
