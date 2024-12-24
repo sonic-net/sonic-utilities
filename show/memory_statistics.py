@@ -233,7 +233,26 @@ class SocketManager:
 
 
 def send_data(command: str, data: Dict[str, Any], quiet: bool = False) -> Dict2Obj:
-    """Sends a command and data to the memory statistics service."""
+    """
+        Sends a command and data to the memory statistics service.
+
+        Time format for statistics retrieval are given below.
+
+        - Relative time formats:
+        - 'X days ago', 'X hours ago', 'X minutes ago'
+        - 'yesterday', 'today'
+        - Specific times and dates:
+        - 'now'
+        - 'July 23', 'July 23, 2024', '2 November 2024'
+        - '7/24', '1/2'
+        - Time expressions:
+        - '2 am', '3:15 pm'
+        - 'Aug 01 06:43:40', 'July 1 3:00:00'
+        - Named months:
+        - 'jan', 'feb', 'march', 'september', etc.
+        - Full month names: 'January', 'February', 'March', etc.
+        - ISO 8601 format (e.g., '2024-07-01T15:00:00')
+    """
     socket_manager = SocketManager()
 
     try:
