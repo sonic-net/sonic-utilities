@@ -307,6 +307,7 @@ def show():
     """Show commands for memory statistics."""
     pass
 
+
 @show.command(name="memory-stats")
 @click.option(
     '--from', 'from_time',
@@ -406,6 +407,7 @@ def main():
         click.echo(f"Error: {str(e)}", err=True)
         cleanup_resources()
         sys.exit(1)
+
 
 if __name__ == '__main__':
     main()
