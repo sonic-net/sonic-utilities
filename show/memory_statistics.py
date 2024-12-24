@@ -1,12 +1,19 @@
-import sys
-import socket
+# Standard library imports
 import json
-import click
+import os
+import signal
+import socket
+import sys
 import syslog
 import time
-import os
-from typing import Dict, Any, Union
+from typing import Any, Dict, Union
+
+# Third-party library imports
+import click
 from dataclasses import dataclass
+
+# Local application/library imports
+from swsscommon.swsscommon import ConfigDBConnector
 
 
 @dataclass
@@ -16,6 +23,12 @@ class Config:
     BUFFER_SIZE: int = 8192
     MAX_RETRIES: int = 3
     RETRY_DELAY: float = 1.0
+
+    DEFAULT_CONFIG = {
+        "enabled": "false",
+        "sampling_interval": "5",
+        "retention_period": "15"
+    }
 
 
 class ConnectionError(Exception):
@@ -63,6 +76,68 @@ class Dict2Obj:
     def __repr__(self) -> str:
         """Provides a string representation of the object for debugging."""
         return f"<{self.__class__.__name__} {self.to_dict()}>"
+
+
+class SonicDBConnector:
+    """Handles interactions with SONiC's configuration database with improved connection handling."""
+    def __init__(self) -> None:
+        """Initialize the database connector with retry mechanism."""
+        self.config_db = ConfigDBConnector()
+        self.connect_with_retry()
+
+    def connect_with_retry(self, max_retries: int = 3, retry_delay: float = 1.0) -> None:
+        """
+        Attempts to connect to the database with a retry mechanism.
+        """
+        retries = 0
+        last_error = None
+
+        while retries < max_retries:
+            try:
+                self.config_db.connect()
+                syslog.syslog(syslog.LOG_INFO, "Successfully connected to SONiC config database")
+                return
+            except Exception as e:
+                last_error = e
+                retries += 1
+                if retries < max_retries:
+                    syslog.syslog(syslog.LOG_WARNING,
+                                f"Failed to connect to database (attempt {retries}/{max_retries}): {str(e)}")
+                    time.sleep(retry_delay)
+
+        error_msg = (
+            f"Failed to connect to SONiC config database after {max_retries} attempts. "
+            f"Last error: {str(last_error)}"
+        )
+        syslog.syslog(syslog.LOG_ERR, error_msg)
+        raise ConnectionError(error_msg)
+
+    def get_memory_statistics_config(self) -> Dict[str, str]:
+        """
+        Retrieves memory statistics configuration with error handling.
+        """
+        try:
+            config = self.config_db.get_table('MEMORY_STATISTICS')
+            if not isinstance(config, dict) or 'memory_statistics' not in config:
+                return Config.DEFAULT_CONFIG.copy()
+            
+            # Handle invalid configurations by merging with defaults
+            current_config = config.get('memory_statistics', {})
+            if not isinstance(current_config, dict):
+                return Config.DEFAULT_CONFIG.copy()
+
+            result_config = Config.DEFAULT_CONFIG.copy()
+            # Only update with valid values from current config
+            for key, value in current_config.items():
+                if value is not None and value != "":
+                    result_config[key] = value
+
+            return result_config
+
+        except Exception as e:
+            error_msg = f"Error retrieving memory statistics configuration: {str(e)}"
+            syslog.syslog(syslog.LOG_ERR, error_msg)
+            raise RuntimeError(error_msg)
 
 
 class SocketManager:
@@ -196,18 +271,41 @@ def send_data(command: str, data: Dict[str, Any], quiet: bool = False) -> Dict2O
         socket_manager.close()
 
 
+def format_field_value(field_name: str, value: str) -> str:
+    """Formats configuration field values for display."""
+    if field_name == "enabled":
+        return "True" if value.lower() == "true" else "False"
+    return value if value != "Unknown" else "Not configured"
+
+
+def display_config(db_connector: SonicDBConnector) -> None:
+    """Displays memory statistics configuration."""
+    try:
+        config = db_connector.get_memory_statistics_config()
+        enabled = format_field_value("enabled", config.get("enabled", "Unknown"))
+        retention = format_field_value("retention_period", config.get("retention_period", "Unknown"))
+        sampling = format_field_value("sampling_interval", config.get("sampling_interval", "Unknown"))
+
+        click.echo(f"{'Configuration Field':<30}{'Value'}")
+        click.echo("-" * 50)
+        click.echo(f"{'Enabled':<30}{enabled}")
+        click.echo(f"{'Retention Time (days)':<30}{retention}")
+        click.echo(f"{'Sampling Interval (minutes)':<30}{sampling}")
+    except Exception as e:
+        error_msg = f"Failed to retrieve configuration: {str(e)}"
+        syslog.syslog(syslog.LOG_ERR, error_msg)
+        raise click.ClickException(error_msg)
+
 @click.group()
-@click.pass_context
-def cli(ctx: click.Context) -> None:
+def cli():
     """Main entry point for the SONiC Memory Statistics CLI."""
-    ctx.ensure_object(dict)
+    pass
 
 
-@click.group()
+@cli.group()
 def show():
     """Show commands for memory statistics."""
     pass
-
 
 @show.command(name="memory-stats")
 @click.option(
@@ -222,64 +320,90 @@ def show():
     '--select', 'select_metric',
     help='Show statistics for specific metric (e.g., total_memory, used_memory)'
 )
-@click.pass_context
-def memory_stats(ctx: click.Context, from_time: str, to_time: str, select_metric: str) -> None:
-    """Displays memory statistics."""
+def show_statistics(from_time: str, to_time: str, select_metric: str):
+    """Display memory statistics."""
     try:
-        display_statistics(ctx, from_time, to_time, select_metric)
+        request_data = {
+            "type": "system",
+            "metric_name": select_metric,
+            "from": from_time,
+            "to": to_time
+        }
+
+        response = send_data("memory_statistics_command_request_handler", request_data)
+        stats_data = response.to_dict()
+
+        if isinstance(stats_data, dict):
+            memory_stats = stats_data.get("data", "")
+            if memory_stats:
+                cleaned_output = memory_stats.replace("\n", "\n").strip()
+                click.echo(f"Memory Statistics:\n{cleaned_output}")
+            else:
+                click.echo("No memory statistics data available.")
+        else:
+            click.echo("Error: Invalid data format received")
+
     except Exception as e:
         click.echo(f"Error: {str(e)}", err=True)
         sys.exit(1)
 
-
-def display_statistics(ctx: click.Context, from_time: str, to_time: str, select_metric: str) -> None:
-    """Retrieves and displays memory statistics."""
-    request_data = {
-        "type": "system",
-        "metric_name": select_metric,
-        "from": from_time,
-        "to": to_time
-    }
-
+@show.command(name="memory-stats-config")
+def show_configuration():
+    """Display memory statistics configuration."""
     try:
-        response = send_data("memory_statistics_command_request_handler", request_data)
-        if isinstance(response, Dict2Obj):
-            clean_and_print(response.to_dict())
-        else:
-            error_msg = f"Unexpected response type: {type(response)}"
-            syslog.syslog(syslog.LOG_ERR, error_msg)
-            raise click.ClickException(error_msg)
+        db_connector = SonicDBConnector()
+        display_config(db_connector)
     except Exception as e:
-        error_msg = f"Failed to retrieve memory statistics: {str(e)}"
-        syslog.syslog(syslog.LOG_ERR, error_msg)
-        raise click.ClickException(error_msg)
+        click.echo(f"Error: {str(e)}", err=True)
+        sys.exit(1)
 
+def cleanup_resources():
+    """Performs cleanup of resources before shutdown."""
+    try:
+        if hasattr(cleanup_resources, 'db_connector'):
+            del cleanup_resources.db_connector
+        
+        if hasattr(cleanup_resources, 'socket_manager'):
+            cleanup_resources.socket_manager.close()
+            
+        syslog.syslog(syslog.LOG_INFO, "Successfully cleaned up resources during shutdown")
+    except Exception as e:
+        syslog.syslog(syslog.LOG_ERR, f"Error during cleanup: {str(e)}")
 
-def clean_and_print(data: Dict[str, Any]) -> None:
-    """Formats and prints memory statistics."""
-    if isinstance(data, dict):
-        memory_stats = data.get("data", "")
-        cleaned_output = memory_stats.replace("\n", "\n").strip()
-        print(f"Memory Statistics:\n{cleaned_output}")
-    else:
-        error_msg = "Invalid data format received"
-        syslog.syslog(syslog.LOG_ERR, error_msg)
-        print(f"Error: {error_msg}")
-
+def shutdown_handler(signum: int, frame) -> None:
+    """
+    Signal handler for graceful shutdown.
+    Handles SIGTERM signal with proper resource cleanup.
+    
+    Args:
+        signum: Signal number
+        frame: Current stack frame
+    """
+    try:
+        syslog.syslog(syslog.LOG_INFO, "Received SIGTERM signal, initiating graceful shutdown...")
+        cleanup_resources()
+        click.echo("\nShutting down gracefully...")
+        sys.exit(0)
+    except Exception as e:
+        syslog.syslog(syslog.LOG_ERR, f"Error during shutdown: {str(e)}")
+        sys.exit(1)
 
 def main():
-    """Entry point for the CLI application."""
-    cli.add_command(show)
-    cli()
-
+    """Main entry point with enhanced error handling and shutdown management."""
+    try:
+        # Register SIGTERM handler only
+        signal.signal(signal.SIGTERM, shutdown_handler)
+        
+        # Store resources that need cleanup
+        cleanup_resources.db_connector = None
+        cleanup_resources.socket_manager = None
+        
+        cli()
+    except Exception as e:
+        syslog.syslog(syslog.LOG_ERR, f"Fatal error in main: {str(e)}")
+        click.echo(f"Error: {str(e)}", err=True)
+        cleanup_resources()
+        sys.exit(1)
 
 if __name__ == '__main__':
-    valid_commands = ['show']
-    user_input = sys.argv[1:]
-    if user_input:
-        command = user_input[0]
-        if command not in valid_commands:
-            error_msg = f"Error: Invalid command '{command}'."
-            syslog.syslog(syslog.LOG_ERR, error_msg)
-            raise click.UsageError(error_msg)
     main()
