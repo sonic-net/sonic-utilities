@@ -228,6 +228,18 @@
 * [Banner Commands](#banner-commands)
   * [Banner config commands](#banner-config-commands)
   * [Banner show command](#banner-show-command)
+* [Memory Statistics CLI Commands](#memory-statistics-cli-commands)
+  * [Overview](#overview)
+  * [Enable/Disable Memory Statistics Monitoring](#enabledisable-memory-statistics-monitoring)
+  * [Set the Frequency of Memory Data Collection](#set-the-frequency-of-memory-data-collection)
+  * [Adjust the Data Retention Period](#adjust-the-data-retention-period)
+  * [View Memory Usage Statistics](#view-memory-usage-statistics)
+    * [Default Historical Memory Statistics](#default-historical-memory-statistics)
+    * [Historical Memory Statistics for Last 10 Days](#historical-memory-statistics-for-last-10-days)
+    * [Historical Memory Statistics for Last 100 Minutes](#historical-memory-statistics-for-last-100-minutes)
+    * [Historical Memory Statistics for Last 3 Hours](#historical-memory-statistics-for-last-3-hours)
+    * [Historical Memory Statistics for Specific Metric (Used Memory)](#historical-memory-statistics-for-specific-metric-used-memory)
+  * [View Memory Statistics Configuration](#view-memory-statistics-configuration)
 
 ## Document History
 
@@ -13939,7 +13951,7 @@ To enable or disable the memory statistics monitoring feature:
 admin@sonic:~$ config memory-stats enable/disable
 ```
 
-This will **disable** memory statistics monitoring.
+This will **enable/disable** memory statistics monitoring.
 
 By default, this feature is **disabled**.
 
