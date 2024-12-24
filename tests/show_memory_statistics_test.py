@@ -718,5 +718,6 @@ class TestAdditionalMemoryStatisticsCLI(unittest.TestCase):
                 )
             self.assertIn("No response received", str(context.exception))
 
+
 if __name__ == '__main__':
     unittest.main()
