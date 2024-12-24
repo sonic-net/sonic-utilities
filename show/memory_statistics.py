@@ -102,7 +102,8 @@ class SonicDBConnector:
                 retries += 1
                 if retries < max_retries:
                     syslog.syslog(syslog.LOG_WARNING,
-                                f"Failed to connect to database (attempt {retries}/{max_retries}): {str(e)}")
+                                  f"Failed to connect to database"
+                                  f"(attempt {retries}/{max_retries}): {str(e)}")
                     time.sleep(retry_delay)
 
         error_msg = (
@@ -120,14 +121,12 @@ class SonicDBConnector:
             config = self.config_db.get_table('MEMORY_STATISTICS')
             if not isinstance(config, dict) or 'memory_statistics' not in config:
                 return Config.DEFAULT_CONFIG.copy()
-            
-            # Handle invalid configurations by merging with defaults
+
             current_config = config.get('memory_statistics', {})
             if not isinstance(current_config, dict):
                 return Config.DEFAULT_CONFIG.copy()
 
             result_config = Config.DEFAULT_CONFIG.copy()
-            # Only update with valid values from current config
             for key, value in current_config.items():
                 if value is not None and value != "":
                     result_config[key] = value
@@ -296,6 +295,7 @@ def display_config(db_connector: SonicDBConnector) -> None:
         syslog.syslog(syslog.LOG_ERR, error_msg)
         raise click.ClickException(error_msg)
 
+
 @click.group()
 def cli():
     """Main entry point for the SONiC Memory Statistics CLI."""
@@ -347,6 +347,7 @@ def show_statistics(from_time: str, to_time: str, select_metric: str):
         click.echo(f"Error: {str(e)}", err=True)
         sys.exit(1)
 
+
 @show.command(name="memory-stats-config")
 def show_configuration():
     """Display memory statistics configuration."""
@@ -357,24 +358,26 @@ def show_configuration():
         click.echo(f"Error: {str(e)}", err=True)
         sys.exit(1)
 
+
 def cleanup_resources():
     """Performs cleanup of resources before shutdown."""
     try:
         if hasattr(cleanup_resources, 'db_connector'):
             del cleanup_resources.db_connector
-        
+
         if hasattr(cleanup_resources, 'socket_manager'):
             cleanup_resources.socket_manager.close()
-            
+
         syslog.syslog(syslog.LOG_INFO, "Successfully cleaned up resources during shutdown")
     except Exception as e:
         syslog.syslog(syslog.LOG_ERR, f"Error during cleanup: {str(e)}")
+
 
 def shutdown_handler(signum: int, frame) -> None:
     """
     Signal handler for graceful shutdown.
     Handles SIGTERM signal with proper resource cleanup.
-    
+
     Args:
         signum: Signal number
         frame: Current stack frame
@@ -388,16 +391,15 @@ def shutdown_handler(signum: int, frame) -> None:
         syslog.syslog(syslog.LOG_ERR, f"Error during shutdown: {str(e)}")
         sys.exit(1)
 
+
 def main():
     """Main entry point with enhanced error handling and shutdown management."""
     try:
-        # Register SIGTERM handler only
         signal.signal(signal.SIGTERM, shutdown_handler)
-        
-        # Store resources that need cleanup
+
         cleanup_resources.db_connector = None
         cleanup_resources.socket_manager = None
-        
+
         cli()
     except Exception as e:
         syslog.syslog(syslog.LOG_ERR, f"Fatal error in main: {str(e)}")
