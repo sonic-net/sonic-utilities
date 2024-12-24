@@ -13922,6 +13922,7 @@ enabled  Login    You are on
                   Help:    https://sonic-net.github.io/SONiC/
 ```
 
+---
 
 # Memory Statistics CLI Commands
 
@@ -14036,7 +14037,7 @@ The time format for `--from` and `--to` options includes:
   - '2024-07-01T15:00:00'
 
 
-### 4.1 Default Historical Memory Statistics
+### 4.1. Default Historical Memory Statistics
 
 To view the historical memory statistics:
 
@@ -14066,9 +14067,7 @@ buffers_memory     337.83MB   333.59MB   295.00MB   325.00MB    320.00MB    315.
 shared_memory      1.31GB     1.22GB     1.08GB     1.22GB      1.20GB      1.18GB      1.15GB     1.12GB      1.10GB       1.08GB      1.19GB
 ```
 
----
-
-### 4.2 Historical Memory Statistics for Last 10 Days
+### 4.2. Historical Memory Statistics for Last 10 Days
 
 To view memory statistics for the last 10 days:
 
@@ -14098,7 +14097,7 @@ buffers_memory     105.39MB   144.28MB   144.28MB   -           -           -   
 shared_memory      1.00GB     1.08GB     1.08GB     -           -           -           -           -           -           -           -           -           -           1.08GB
 ```
 
-### 4.3 Historical Memory Statistics for Last 100 Minutes
+### 4.3. Historical Memory Statistics for Last 100 Minutes
 ```
 sudo python3 cl.py show memory-stats --from '100 minutes ago' --to 'now'
 ```
@@ -14150,7 +14149,7 @@ buffers_memory     101.62MB   153.76MB   132.42MB   149.62MB    132.42MB    153.
 shared_memory      997.97MB   1020.80MB  961.19MB   971.47MB    961.19MB    1020.80MB   -
 ```
 
-### 4.5 Historical Memory Statistics for Specific Metric (Used Memory)
+### 4.5. Historical Memory Statistics for Specific Metric (Used Memory)
 ```
 sudo python3 cl.py show memory-stats --from '100 minutes ago' --to 'now' --select 'used_memory'
 ```
