@@ -14110,9 +14110,11 @@ shared_memory      1.00GB     1.08GB     1.08GB     -           -           -   
 ```
 
 ### 4.3. Historical Memory Statistics for Last 100 Minutes
+
+```bash
+admin@sonic:~$ show memory-stats --from '100 minutes ago' --to 'now'
 ```
-sudo python3 cl.py show memory-stats --from '100 minutes ago' --to 'now'
-```
+
 **Sample Output**:
 
 ```
@@ -14136,9 +14138,11 @@ shared_memory      1005.79MB  1.07GB     917.46MB   926.08MB    993.94MB    917.
 ```
 
 ### 4.4. Historical Memory Statistics for Last 3 Hours
+
+```bash
+admin@sonic:~$ show memory-stats --from '3 hours ago' --to 'now'
 ```
-sudo python3 cl.py show memory-stats --from '3 hours ago' --to 'now'
-```
+
 **Sample Output**:
 
 ```
@@ -14162,9 +14166,11 @@ shared_memory      997.97MB   1020.80MB  961.19MB   971.47MB    961.19MB    1020
 ```
 
 ### 4.5. Historical Memory Statistics for Specific Metric (Used Memory)
+
+```bash
+admin@sonic:~$ show memory-stats --from '100 minutes ago' --to 'now' --select 'used_memory'
 ```
-sudo python3 cl.py show memory-stats --from '100 minutes ago' --to 'now' --select 'used_memory'
-```
+
 **Sample Output**:
 
 ```
