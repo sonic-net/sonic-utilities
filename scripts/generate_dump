@@ -51,6 +51,7 @@ SAVE_STDERR=true
 RETURN_CODE=$EXT_SUCCESS
 DEBUG_DUMP=false
 ROUTE_TAB_LIMIT_DIRECT_ITERATION=24000
+IS_SUPERVISOR=false
 
 # lock dirs/files
 LOCKDIR="/tmp/techsupport-lock"
@@ -523,24 +524,42 @@ save_bgp_neighbor() {
     local ns=$(get_vtysh_namespace $asic_id)
 
     neighbor_list_v4=$(${timeout_cmd} bash -c "vtysh $ns -c 'show ip bgp neighbors' | grep 'BGP neighbor is' | awk -F '[, ]' '{print \$4}' | awk /\\\./")
-    for word in $neighbor_list_v4; do
-        save_cmd "vtysh $ns -c \"show ip bgp neighbors $word advertised-routes\"" "ip.bgp.neighbor.$word.adv$asic_id"
-        save_cmd "vtysh $ns -c \"show ip bgp neighbors $word routes\"" "ip.bgp.neighbor.$word.rcv$asic_id"
-    done
-    neighbor_list_v6=$(${timeout_cmd} bash -c "vtysh $ns -c 'show bgp ipv6 neighbors' | grep 'BGP neighbor is' | awk -F '[, ]' '{print \$4}' | awk /:/")
-    for word in $neighbor_list_v6; do
-        save_cmd "vtysh $ns -c \"show bgp ipv6 neighbors $word advertised-routes\"" "ipv6.bgp.neighbor.$word.adv$asic_id"
-        save_cmd "vtysh $ns -c \"show bgp ipv6 neighbors $word routes\"" "ipv6.bgp.neighbor.$word.rcv$asic_id"
-    done
-
-    vrf_list=`${timeout_cmd} bash -c "vtysh $ns -c 'show vrf' | awk -F" " '{print \$2}'"`
-    for vrf in $vrf_list; do
-        neighbor_list=`${timeout_cmd} bash -c "vtysh $ns -c 'show ip bgp vrf $vrf neighbors' | grep 'BGP neighbor is' | awk -F '[, ]' '{print \$4}'"`
-        for word in $neighbor_list; do
-            save_cmd "vtysh $ns -c \"show ip bgp vrf $vrf neighbors $word advertised-routes\"" "ip.bgp.neighbor.$vrf.$word.adv$asic_id"
-            save_cmd "vtysh $ns -c \"show ip bgp vrf $vrf neighbors $word routes\"" "ip.bgp.neighbor.$vrf.$word.rcv$asic_id"
+    if [ ! -z "$neighbor_list_v4" ]; then
+        v4_cmd="vtysh "
+        for word in $neighbor_list_v4; do
+            v4_cmd="${v4_cmd} $ns -Ec 'show bgp ipv4 neighbors $word advertised-routes' "
+            v4_cmd="${v4_cmd} $ns -Ec 'show bgp ipv4 neighbors $word routes' "
         done
-    done
+        save_cmd "$v4_cmd" "ip.bgp.neigh.adv.rcv.routes"
+    fi
+
+    neighbor_list_v6=$(${timeout_cmd} bash -c "vtysh $ns -c 'show bgp ipv6 neighbors' | grep 'BGP neighbor is' | awk -F '[, ]' '{print \$4}' | awk /:/")
+    if [ ! -z "$neighbor_list_v6" ]; then
+        v6_cmd="vtysh "
+        for word in $neighbor_list_v6; do
+            v6_cmd="${v6_cmd} $ns -Ec 'show bgp ipv6 neighbors $word advertised-routes' "
+            v6_cmd="${v6_cmd} $ns -Ec 'show bgp ipv6 neighbors $word routes' "
+        done
+        save_cmd "$v6_cmd" "ipv6.bgp.neigh.adv.rcv.routes"
+    fi
+
+    vrf_list=""
+    vrf_output=$(${timeout_cmd} bash -c "vtysh $ns -c 'show vrf'")
+    if [ ! -z $vrf_output]; then
+        vrf_list= echo $vrf_output | awk -F" " '{print $2}'
+    fi
+
+    if [ ! -z "$vrf_list" ]; then
+        vrf_cmd="vtysh "
+        for vrf in $vrf_list; do
+            neighbor_list=`${timeout_cmd} bash -c "vtysh $ns -c 'show ip bgp vrf $vrf neighbors' | grep 'BGP neighbor is' | awk -F '[, ]' '{print \$4}'"`
+            for word in $neighbor_list; do
+                vrf_cmd="${vrf_cmd} $ns -Ec 'show ip bgp vrf $vrf neighbors $word advertised-routes' "
+                vrf_cmd="${vrf_cmd} $ns -Ec 'show ip bgp vrf $vrf neighbors $word routes' "
+            done
+        done
+        save_cmd "$vrf_cmd" "ip.bgp.neigh.vrf.adv.rcv.routes"
+    fi
 }
 
 ###############################################################################
@@ -651,6 +670,9 @@ save_nat_info() {
 ###############################################################################
 save_bfd_info() {
     trap 'handle_error $? $LINENO' ERR
+    if $IS_SUPERVISOR; then
+        return
+    fi
     save_vtysh "show bfd peers" "frr.bfd.peers"
     save_vtysh "show bfd peers counters" "frr.bfd.peers.counters"
     save_vtysh "show bfd peers json" "frr.bfd.peers.json"
@@ -688,6 +710,9 @@ save_ip_info() {
 ###############################################################################
 save_bgp_info() {
     trap 'handle_error $? $LINENO' ERR
+    if $IS_SUPERVISOR; then
+        return
+    fi
     save_vtysh "show ip bgp summary" "bgp.summary"
     save_vtysh "show ip bgp neighbors" "bgp.neighbors"
     save_vtysh "show ip bgp" "bgp.table"
@@ -725,6 +750,9 @@ save_bgp_info() {
 ###############################################################################
 save_evpn_info() {
     trap 'handle_error $? $LINENO' ERR
+    if $IS_SUPERVISOR; then
+        return
+    fi
     save_vtysh "show bgp l2vpn evpn" "bgp.l2vpn.evpn"
     save_vtysh "show bgp l2vpn evpn summary json" "bgp.evpn.summary.json"
     save_vtysh "show bgp l2vpn evpn route" "bgp.evpn.route"
@@ -758,6 +786,9 @@ save_evpn_info() {
 ###############################################################################
 save_frr_info() {
     trap 'handle_error $? $LINENO' ERR
+    if $IS_SUPERVISOR; then
+        return
+    fi
     save_vtysh "show running-config" "frr.running_config"
     save_vtysh "show ip route vrf all nexthop-group" "frr.ip_route.nhg"
     save_vtysh "show ipv6 route vrf all nexthop-group" "frr.ip6_route.nhg"
@@ -1082,12 +1113,24 @@ save_file() {
     fi
 
     if $do_gzip; then
-        gz_path="${gz_path}.gz"
-        tar_path="${tar_path}.gz"
-        if $NOOP; then
+        if [[ -f ${orig_path} ]]; then
+          gz_path="${gz_path}.gz"
+          tar_path="${tar_path}.gz"
+
+          if $NOOP; then
             echo "gzip -c $orig_path > $gz_path"
-        else
+          else
             gzip -c $orig_path > $gz_path
+          fi
+        else
+          gz_path="${gz_path}.tar.gz"
+          tar_path="${tar_path}.tar.gz"
+
+          if $NOOP; then
+              echo "tar -czvf $gz_path -C $(dirname $orig_path) $(basename $orig_path)"
+          else
+              tar -czvf "$gz_path" -C "$(dirname "$orig_path")" "$(basename "$orig_path")"
+          fi
         fi
     else
         if $NOOP; then
@@ -1135,6 +1178,9 @@ find_files() {
 #  None
 ###############################################################################
 disable_logrotate() {
+    if [ ! -f "/etc/cron.d/logrotate" ]; then
+        return
+    fi
     sed -i '/\/usr\/sbin\/logrotate/s/^/#/g' /etc/cron.d/logrotate
 }
 
@@ -1148,6 +1194,9 @@ disable_logrotate() {
 #  None
 ###############################################################################
 enable_logrotate() {
+    if [ ! -f "/etc/cron.d/logrotate" ]; then
+        return
+    fi
     sed -i '/\/usr\/sbin\/logrotate/s/^#*//g' /etc/cron.d/logrotate
 }
 
@@ -1359,7 +1408,7 @@ collect_mellanox_dfw_dumps() {
 # Returns:
 #  None
 ###############################################################################
-save_marvellcmd() {
+save_marvell_presteracmd() {
     trap 'handle_error $? $LINENO' ERR
 
     mkdir -p $LOGDIR/sdkdump
@@ -1376,37 +1425,37 @@ save_marvellcmd() {
 # Returns:
 #  None
 ###############################################################################
-collect_marvell() {
+collect_marvell_prestera() {
     trap 'handle_error $? $LINENO' ERR
 
-    save_marvellcmd "show version" "CPSS_version"
-    save_marvellcmd "debug-mode;xps-api call xpsDataIntegrityDumpSerInfo all" "SER_table"
-    save_marvellcmd "show traffic cpu rx statistic device 0" "CPU_stat"
-    save_marvellcmd "show interfaces status all" "INTERFACE_config"
-    save_marvellcmd "show port monitor" "PORT_mirror"
-    save_marvellcmd "show vlan device 0" "VLAN_table"
-    save_marvellcmd "show ip route device 0" "IP_route"
-    save_marvellcmd "show ipv6 route device 0" "IPV6_route"
-    save_marvellcmd "show ip route_fdb device 0" "IP_forward_route"
-    save_marvellcmd "show ipv6 route_fdb device 0" "IPV6_forward_route"
-    save_marvellcmd "show ip next-hop device 0" "NH_table"
-    save_marvellcmd "show mac address-table device 0" "MAC_forward"
-    save_marvellcmd "show mac address-table count device 0" "MAC_count"
-    save_marvellcmd "show tail-drop-allocated buffers all" "Tail_drop"
-    save_marvellcmd "show policy device 0" "POLICER_table"
-    save_marvellcmd "show system policy-tcam utilization device 0" "Policy_count"
-    save_marvellcmd "show access-list device 0 pcl-id 0 format ingress_udb_30" "UDB30_acl"
-    save_marvellcmd "show access-list device 0 pcl-id 0 format ingress_udb_60" "UDB60_acl"
-    save_marvellcmd "debug-mode;show drop counters 0" "Drop_count"
-    save_marvellcmd "debug-mode;dump all registers" "REGISTER_table"
-    save_marvellcmd "debug-mode;dump all tables0" "HW_table_0"
-    save_marvellcmd "debug-mode;dump all tables1" "HW_table_1"
-    save_marvellcmd "debug-mode;dump all tables2" "HW_table_2"
-    save_marvellcmd "debug-mode;dump all tables3" "HW_table_3"
-    save_marvellcmd "debug-mode;dump all tables4" "HW_table_4"
-    save_marvellcmd "debug-mode;dump all tables5" "HW_table_5"
-    save_marvellcmd "debug-mode;dump all tables6" "HW_table_6"
-    save_marvellcmd "debug-mode;dump all tables7" "HW_table_7"
+    save_marvell_presteracmd "show version" "CPSS_version"
+    save_marvell_presteracmd "debug-mode;xps-api call xpsDataIntegrityDumpSerInfo all" "SER_table"
+    save_marvell_presteracmd "show traffic cpu rx statistic device 0" "CPU_stat"
+    save_marvell_presteracmd "show interfaces status all" "INTERFACE_config"
+    save_marvell_presteracmd "show port monitor" "PORT_mirror"
+    save_marvell_presteracmd "show vlan device 0" "VLAN_table"
+    save_marvell_presteracmd "show ip route device 0" "IP_route"
+    save_marvell_presteracmd "show ipv6 route device 0" "IPV6_route"
+    save_marvell_presteracmd "show ip route_fdb device 0" "IP_forward_route"
+    save_marvell_presteracmd "show ipv6 route_fdb device 0" "IPV6_forward_route"
+    save_marvell_presteracmd "show ip next-hop device 0" "NH_table"
+    save_marvell_presteracmd "show mac address-table device 0" "MAC_forward"
+    save_marvell_presteracmd "show mac address-table count device 0" "MAC_count"
+    save_marvell_presteracmd "show tail-drop-allocated buffers all" "Tail_drop"
+    save_marvell_presteracmd "show policy device 0" "POLICER_table"
+    save_marvell_presteracmd "show system policy-tcam utilization device 0" "Policy_count"
+    save_marvell_presteracmd "show access-list device 0 pcl-id 0 format ingress_udb_30" "UDB30_acl"
+    save_marvell_presteracmd "show access-list device 0 pcl-id 0 format ingress_udb_60" "UDB60_acl"
+    save_marvell_presteracmd "debug-mode;show drop counters 0" "Drop_count"
+    save_marvell_presteracmd "debug-mode;dump all registers" "REGISTER_table"
+    save_marvell_presteracmd "debug-mode;dump all tables0" "HW_table_0"
+    save_marvell_presteracmd "debug-mode;dump all tables1" "HW_table_1"
+    save_marvell_presteracmd "debug-mode;dump all tables2" "HW_table_2"
+    save_marvell_presteracmd "debug-mode;dump all tables3" "HW_table_3"
+    save_marvell_presteracmd "debug-mode;dump all tables4" "HW_table_4"
+    save_marvell_presteracmd "debug-mode;dump all tables5" "HW_table_5"
+    save_marvell_presteracmd "debug-mode;dump all tables6" "HW_table_6"
+    save_marvell_presteracmd "debug-mode;dump all tables7" "HW_table_7"
 }
 
 ###############################################################################
@@ -1625,7 +1674,7 @@ collect_cisco_8000() {
 }
 
 ##############################################################################
-# collect_innovium
+# collect_marvell_teralynx
 # Globals:
 #   None
 # Arguments:
@@ -1633,7 +1682,7 @@ collect_cisco_8000() {
 # Retuens:
 #   None
 ##############################################################################
-collect_innovium() {
+collect_marvell_teralynx() {
     save_cmd "ivmcmd 'show techsupport -i /innovium/show_techsupport_infile'" "show_techsupport_op_ifcs.log"
     save_cmd "ivmcmd 'show techsupport -i /innovium/show_techsupport_infile_iSAI'" "show_techsupport_op_iSAI.log"
 }
@@ -1854,6 +1903,9 @@ save_crash_files() {
 #  None
 ###############################################################################
 save_sai_failure_dump(){
+    if [ ! -d "/var/log/sai_failure_dump/" ]; then
+        return
+    fi
     for file in $(find_files "/var/log/sai_failure_dump/"); do
         if $TAR -tf $TARFILE | grep $BASE/log/$(basename $file); then
             # if the files are already collected under the log/ dir
@@ -1913,7 +1965,9 @@ save_counter_snapshot() {
 
     save_cmd "echo $counter_t" "date.counter_$idx"
     save_cmd "show interface counters" "interface.counters_$idx"
-    save_cmd_all_ns "show queue counters" "queue.counters_$idx"
+    if ! $IS_SUPERVISOR; then
+       save_cmd_all_ns "show queue counters" "queue.counters_$idx"
+    fi
     save_redis "COUNTERS_DB" "COUNTERS_DB_$idx"
 
     if [ "$asic_name" = "broadcom" ]; then
@@ -2022,6 +2076,7 @@ main() {
 
     # Save reboot cause information
     save_cmd "show reboot-cause" reboot.cause &
+    save_cmd "show reboot-cause history" "reboot.cause.history" &
     wait
 
     local asic="$(/usr/local/bin/sonic-cfggen -y /etc/sonic/sonic_version.yml -v asic_type)"
@@ -2159,12 +2214,12 @@ main() {
         collect_nvidia_bluefield
     fi
 
-    if [ "$asic" = "innovium" ]; then
-        collect_innovium
+    if [ "$asic" = "marvell-teralynx" ]; then
+        collect_marvell_teralynx
     fi
 
-    if [ "$asic" = "marvell" ]; then
-        collect_marvell
+    if [ "$asic" = "marvell-prestera" ]; then
+        collect_marvell_prestera
     fi
 
     if [ "$asic" = "pensando" ]; then
@@ -2452,7 +2507,16 @@ fi
 ##
 ## Attempt Locking
 ##
-
+platform_name=$(show platform summary --json | python -c 'import sys, json; print(json.load(sys.stdin)["platform"])')
+supervisor=0
+PLATFORM_ENV_CONF=/usr/share/sonic/device/${platform_name}/platform_env.conf
+if [ -f "$PLATFORM_ENV_CONF" ]; then
+    source $PLATFORM_ENV_CONF
+fi
+if [[ x"$supervisor" == x"1" ]]; then
+    IS_SUPERVISOR=true
+fi
+    
 if $MKDIR "${LOCKDIR}" &>/dev/null; then
     trap 'handle_exit' EXIT
     echo "$$" > "${PIDFILE}"

@@ -27,7 +27,7 @@
             },
             "broadcom_asics": {
                 "th": [ "Force10-S6100", "Arista-7060CX-32S-C32", "Arista-7060CX-32S-C32-T1", "Arista-7060CX-32S-D48C8", "Celestica-DX010-C32", "Seastone-DX010" ],
-                "th2": [ "Arista-7260CX3-D108C8",  "Arista-7260CX3-C64", "Arista-7260CX3-Q64" ],
+                "th2": [ "Arista-7260CX3-D108C10", "Arista-7260CX3-D108C8",  "Arista-7260CX3-C64", "Arista-7260CX3-Q64" ],
                 "th3": [ "Nokia-IXR7220-H3" ],
                 "th4": [ "Nokia-IXR7220-H4-64D", "Nokia-IXR7220-H4-32D" ],
                 "th5": [ "Nokia-IXR7220-H5-64D" ],

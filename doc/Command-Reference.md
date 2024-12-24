@@ -4894,6 +4894,7 @@ Optional argument "-p" specify a period (in seconds) with which to gather counte
   show interfaces counters rates
   show interfaces counters rif [-p|--period <period>] [-i <interface_name>]
   show interfaces counters fec-histogram [-i <interface_name>]
+  show interfaces counters fec-stats
   ```
 
 - Example:
@@ -5039,6 +5040,18 @@ In a FEC histogram, "bins" represent ranges of errors or specific categories of 
   BIN15:                      0
   ```
 
+The "fec-stats" subcommand is used to disply the interface fec related statistic.
+
+- Example:
+  ```
+  admin@ctd615:~$ show interfaces counters fec-stats
+        IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER
+  -----------  -------  ----------  ------------  ----------------  -------------  --------------
+   Ethernet0        U           0             0                 0    1.48e-20       0.00e+00
+   Ethernet8        U           0             0                 0    1.98e-19       0.00e+00
+  Ethernet16        U           0             0                 0    1.77e-20       0.00e+00
+  ```
+
 
 **show interfaces description**
 
@@ -5120,6 +5133,37 @@ This command is to display the link-training status of the selected interfaces. 
   -----------  -----------  ----------  ------  -------
     Ethernet8      trained          on      up       up
   ```
+
+**show interfaces errors**
+
+The show interface errors command provides detailed statistics and error counters for MAC-level operations on an interface. It displays the status of various operational parameters, error counts, and timestamps for when these errors occurred.
+
+- Usage:
+  ```
+  show interfaces errors [<interface_name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show interfaces errors Ethernet4
+  Port Errors                        Count           Last timestamp(UTC)
+  ---------------------------------- -----           -------------------
+  oper_error_status                  5442            2024-11-02 04:00:05
+  mac_local_fault                    2               2024-11-02 04:00:05
+  fec_sync_loss                      2               2024-11-02 04:00:05
+  fec_alignment_loss                 2               2024-11-02 04:00:05
+  high_ser_error                     2               2024-11-02 04:00:05
+  high ber_error                     2               2024-11-02 04:00:05
+  data_unit_crc_error                2               2024-11-02 04:00:05
+  data_unit_misalignment_error       2               2024-11-02 04:00:05
+  signal_local_error                 2               2024-11-02 04:00:05
+  mac_remote_fault                   2               2024-11-02 04:00:50
+  crc_rate                           2               2024-11-02 04:00:50
+  data_unit_size                     2               2024-11-02 04:00:50
+  code_group_error                   0               Never
+  no_rx_reachability                 0               Never
+  ```
+
 
 **show interfaces mpls**
 

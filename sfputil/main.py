@@ -1591,7 +1591,9 @@ def download_firmware(port_name, filepath):
                                                                1 = Hitless Reset to Inactive Image (Default)\n \
                                                                2 = Attempt non-hitless Reset to Running Image\n \
                                                                3 = Attempt Hitless Reset to Running Image\n")
-def run(port_name, mode):
+@click.option('--delay', metavar='<delay>', type=click.IntRange(0, 10), default=5,
+              help="Delay time before updating firmware information to STATE_DB")
+def run(port_name, mode, delay):
     """Run the firmware with default mode=0"""
 
     if is_port_type_rj45(port_name):
@@ -1606,6 +1608,11 @@ def run(port_name, mode):
     if status != 1:
         click.echo('Failed to run firmware in mode={}! CDB status: {}'.format(mode, status))
         sys.exit(EXIT_FAIL)
+
+    # The cable firmware can be still under initialization immediately after run_firmware
+    # We put a delay here to avoid potential error message in accessing the cable EEPROM
+    if delay:
+        time.sleep(delay)
 
     update_firmware_info_to_state_db(port_name)
     click.echo("Firmware run in mode={} success".format(mode))

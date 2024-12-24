@@ -483,7 +483,7 @@ def show():
         data.append(["FLOW_CNT_ROUTE_STAT", route_info.get("POLL_INTERVAL", DEFLT_10_SEC),
                      route_info.get("FLEX_COUNTER_STATUS", DISABLE)])
 
-    if is_dpu(config_db) and eni_info:
+    if is_dpu(configdb) and eni_info:
         data.append(["ENI_STAT", eni_info.get("POLL_INTERVAL", DEFLT_10_SEC),
                     eni_info.get("FLEX_COUNTER_STATUS", DISABLE)])
 

@@ -817,14 +817,17 @@ def check_routes(namespace):
 
         for future in concurrent.futures.as_completed(futures):
             ns = futures[future]
+            all_adds[ns] = []
+            all_deletes[ns] = []
             try:
                 result, adds, deletes = future.result()
                 if result:
                     results[ns] = result
-                all_adds[ns] = adds
-                all_deletes[ns] = deletes
+                    all_adds[ns] = adds
+                    all_deletes[ns] = deletes
             except Exception as e:
                 print_message(syslog.LOG_ERR, "Error processing namespace {}: {}".format(ns, e))
+                return -1, results
 
     if results:
         print_message(syslog.LOG_WARNING, "Failure results: {",  json.dumps(results, indent=4), "}")
