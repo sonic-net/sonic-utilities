@@ -397,15 +397,12 @@ def disable(ctx):
 
 
 # ENI counter commands
-@cli.group()
+@click.group()
 @click.pass_context
 def eni(ctx):
     """ ENI counter commands """
     ctx.obj = ConfigDBConnector()
     ctx.obj.connect()
-    if not is_dpu(ctx.obj):
-        click.echo("ENI counters are not supported on non DPU platforms")
-        exit(1)
 
 
 @eni.command(name='interval')
@@ -483,7 +480,7 @@ def show():
         data.append(["FLOW_CNT_ROUTE_STAT", route_info.get("POLL_INTERVAL", DEFLT_10_SEC),
                      route_info.get("FLEX_COUNTER_STATUS", DISABLE)])
 
-    if is_dpu(config_db) and eni_info:
+    if is_dpu(configdb) and eni_info:
         data.append(["ENI_STAT", eni_info.get("POLL_INTERVAL", DEFLT_10_SEC),
                     eni_info.get("FLEX_COUNTER_STATUS", DISABLE)])
 
@@ -534,3 +531,27 @@ def disable(filename):
 def delay(filename):
     """ Delay counters in config_db file """
     _update_config_db_flex_counter_table("delay", filename)
+
+
+"""
+The list of dynamic commands that are added on a specific condition.
+Format:
+    (click group/command, callback function)
+"""
+dynamic_commands = [
+    (eni, is_dpu)
+]
+
+
+def register_dynamic_commands(cmds):
+    """
+    Dynamically register commands based on condition callback.
+    """
+    db = ConfigDBConnector()
+    db.connect()
+    for cmd, cb in cmds:
+        if cb(db):
+            cli.add_command(cmd)
+
+
+register_dynamic_commands(dynamic_commands)

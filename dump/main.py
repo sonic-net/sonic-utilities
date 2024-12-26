@@ -93,7 +93,7 @@ def state(ctx, module, identifier, db, table, key_map, verbose, namespace):
     vidtorid = extract_rid(collected_info, namespace, ctx.obj.conn_pool)
 
     if not key_map:
-        collected_info = populate_fv(collected_info, module, namespace, ctx.obj.conn_pool)
+        collected_info = populate_fv(collected_info, module, namespace, ctx.obj.conn_pool, obj.return_pb2_obj())
 
     for id in vidtorid.keys():
         collected_info[id]["ASIC_DB"]["vidtorid"] = vidtorid[id]
@@ -145,7 +145,7 @@ def filter_out_dbs(db_list, collected_info):
     return collected_info
 
 
-def populate_fv(info, module, namespace, conn_pool):
+def populate_fv(info, module, namespace, conn_pool, dash_object):
     all_dbs = set()
     for id in info.keys():
         for db_name in info[id].keys():
@@ -157,7 +157,9 @@ def populate_fv(info, module, namespace, conn_pool):
             db_cfg_file.connect(plugins.dump_modules[module].CONFIG_FILE, namespace)
         else:
             conn_pool.get(db_name, namespace)
-    
+    if dash_object:
+        conn_pool.get_dash_conn(namespace)
+        redis_conn = conn_pool.cache.get(namespace, {}).get("DASH_"+CONN, None)
     db_conn = conn_pool.cache.get(namespace, {}).get(CONN, None)
 
     final_info = {}
@@ -170,10 +172,17 @@ def populate_fv(info, module, namespace, conn_pool):
             for key in info[id][db_name]["keys"]:
                 if db_name == "CONFIG_FILE":
                     fv = db_cfg_file.get(db_name, key)
+                elif dash_object and db_name == "APPL_DB":
+                    try:
+                        from dump.dash_util import get_decoded_value
+                        pb_data = redis_conn.hgetall(key)
+                        fv = get_decoded_value(dash_object, pb_data)
+                    except ModuleNotFoundError:
+                        print("Issue in importing dash module!")
+                        return final_info
                 else:
                     fv = db_conn.get_all(db_name, key)
                 final_info[id][db_name]["keys"].append({key: fv})
-
     return final_info
 
 

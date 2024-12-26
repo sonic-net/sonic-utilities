@@ -763,6 +763,7 @@ DOCKER_CONTAINER_LIST = [
     "radv",
     "restapi",
     "sflow",
+    "stp",
     "snmp",
     "swss",
     "syncd",
