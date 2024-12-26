@@ -949,18 +949,17 @@ def _restart_services():
     # If load_minigraph exit before eth0 restart, commands after load_minigraph may failed
     wait_service_restart_finish('interfaces-config', last_interface_config_timestamp)
     wait_service_restart_finish('networking', last_networking_timestamp)
-
-    # Reload Monit configuration to pick up new hostname in case it changed
-    click.echo("Reloading Monit configuration ...")
-    clicommon.run_command(['sudo', 'monit', 'reload'])
-
     try:
         subprocess.check_call(['sudo', 'monit', 'status'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         click.echo("Enabling container and routeCheck monitoring ...")
-        clicommon.run_command(['sudo', 'monit', 'monitor', 'container_checker'])
         clicommon.run_command(['sudo', 'monit', 'monitor', 'routeCheck'])
+        clicommon.run_command(['sudo', 'monit', 'monitor', 'container_checker'])
+        time.sleep(1)
     except subprocess.CalledProcessError as err:
         pass
+    # Reload Monit configuration to pick up new hostname in case it changed
+    click.echo("Reloading Monit configuration ...")
+    clicommon.run_command(['sudo', 'monit', 'reload'])
 
 def _per_namespace_swss_ready(service_name):
     out, _ = clicommon.run_command(['systemctl', 'show', str(service_name), '--property', 'ActiveState', '--value'], return_cmd=True)
