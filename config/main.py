@@ -1374,17 +1374,21 @@ def multiasic_write_to_db(filename, load_sysinfo):
 
 
 def config_file_yang_validation(filename):
-    config_to_check = read_json_file(filename)
+    config = read_json_file(filename)
     sy = sonic_yang.SonicYang(YANG_DIR)
     sy.loadYangModel()
-    try:
-        sy.loadData(configdbJson=config_to_check)
-        sy.validate_data_tree()
-    except sonic_yang.SonicYangException as e:
-        click.secho("{} fails YANG validation! Error: {}".format(filename, str(e)),
-                    fg='magenta')
-        raise click.Abort()
-
+    asic_list = [HOST_NAMESPACE]
+    if multi_asic.is_multi_asic():
+        asic_list.extend(multi_asic.get_namespace_list())
+    for scope in asic_list:
+        config_to_check = config.get(scope) if multi_asic.is_multi_asic() else config
+        try:
+            sy.loadData(configdbJson=config_to_check)
+            sy.validate_data_tree()
+        except sonic_yang.SonicYangException as e:
+            click.secho("{} fails YANG validation! Error: {}".format(filename, str(e)),
+                        fg='magenta')
+            raise click.Abort()
 
 # This is our main entrypoint - the main 'config' command
 @click.group(cls=clicommon.AbbreviationGroup, context_settings=CONTEXT_SETTINGS)
@@ -2019,21 +2023,18 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
                         fg='magenta')
             raise click.Abort()
 
+        config_file_yang_validation(golden_config_path)
+
         config_to_check = read_json_file(golden_config_path)
-        if multi_asic.is_multi_asic():
-            # Multiasic has not 100% fully validated. Thus pass here.
-            pass
-        else:
-            config_file_yang_validation(golden_config_path)
-
         # Dependency check golden config json
+        asic_list = [HOST_NAMESPACE]
         if multi_asic.is_multi_asic():
-            host_config = config_to_check.get('localhost', {})
-        else:
-            host_config = config_to_check
-        table_hard_dependency_check(host_config)
+            asic_list.extend(multi_asic.get_namespace_list())
+        for scope in asic_list:
+            host_config = config_to_check.get(scope) if multi_asic.is_multi_asic() else config_to_check
+            table_hard_dependency_check(host_config)
 
-    #Stop services before config push
+    # Stop services before config push
     if not no_service_restart:
         log.log_notice("'load_minigraph' stopping services...")
         _stop_services()
