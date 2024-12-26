@@ -48,9 +48,14 @@ def get_bgp_peer():
     data = config_db.get_table('BGP_NEIGHBOR')
 
     for neighbor_ip in data.keys():
-        local_addr = data[neighbor_ip]['local_addr']
-        neighbor_name = data[neighbor_ip]['name']
-        bgp_peer.setdefault(local_addr, [neighbor_name, neighbor_ip])
+        # The data collected here will only work for manually defined neighbors
+        # so we need to ignore errors when using BGP Unnumbered.
+        try:
+            local_addr = data[neighbor_ip]['local_addr']
+            neighbor_name = data[neighbor_ip]['name']
+            bgp_peer.setdefault(local_addr, [neighbor_name, neighbor_ip])
+        except KeyError:
+            pass
     return bgp_peer
 
 
