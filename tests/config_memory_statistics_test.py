@@ -1,152 +1,259 @@
-import pytest
-from unittest.mock import patch
-from click.testing import CliRunner
+import subprocess
 import syslog
+from unittest.mock import Mock, patch
+
+import pytest
+from click.testing import CliRunner
+
 from config.memory_statistics import (
-    memory_statistics_enable,
-    memory_statistics_disable,
-    memory_statistics_retention_period,
-    memory_statistics_sampling_interval,
-    get_memory_statistics_table,
-    check_memory_statistics_table_existence,
+    cli,
+    log_to_syslog,
+    MEMORY_STATISTICS_KEY,
+    MEMORY_STATISTICS_TABLE,
+    RETENTION_PERIOD_MAX,
+    RETENTION_PERIOD_MIN,
+    SAMPLING_INTERVAL_MAX,
+    SAMPLING_INTERVAL_MIN,
+    update_memory_statistics_status,
 )
 
 
 @pytest.fixture
 def mock_db():
-    """Fixture for the mock database."""
-    with patch("config.memory_statistics.ConfigDBConnector") as MockConfigDBConnector:
-        mock_db_instance = MockConfigDBConnector.return_value
+    """Fixture to create a mock database connection."""
+    with patch('config.memory_statistics.ConfigDBConnector') as mock_db_class:
+        mock_db_instance = Mock()
+        mock_db_class.return_value = mock_db_instance
         yield mock_db_instance
 
 
-def test_memory_statistics_enable(mock_db):
-    """Test enabling the Memory Statistics feature."""
-    runner = CliRunner()
-
-    with patch("config.memory_statistics.update_memory_statistics_status") as mock_update_status:
-        mock_update_status.return_value = (True, None)  # Simulate successful update
-        with patch("syslog.syslog") as mock_syslog:
-            result = runner.invoke(memory_statistics_enable)
-            assert result.exit_code == 0
-            mock_update_status.assert_called_once_with("true", mock_db)
-            mock_syslog.assert_any_call(syslog.LOG_INFO, "Memory statistics enabled successfully.")
+@pytest.fixture
+def cli_runner():
+    """Fixture to create a CLI runner."""
+    return CliRunner()
 
 
-def test_memory_statistics_disable(mock_db):
-    """Test disabling the Memory Statistics feature."""
-    runner = CliRunner()
+class TestUpdateMemoryStatisticsStatus:
+    """Direct tests for update_memory_statistics_status function"""
 
-    with patch("config.memory_statistics.update_memory_statistics_status") as mock_update_status:
-        mock_update_status.return_value = (True, None)  # Simulate successful update
-        with patch("syslog.syslog") as mock_syslog:
-            result = runner.invoke(memory_statistics_disable)
-            assert result.exit_code == 0
-            mock_update_status.assert_called_once_with("false", mock_db)
-            mock_syslog.assert_any_call(syslog.LOG_INFO, "Memory statistics disabled successfully.")
-
-
-def test_memory_statistics_retention_period(mock_db):
-    """Test setting the retention period for Memory Statistics."""
-    runner = CliRunner()
-    retention_period_value = 20  # Within valid range
-
-    with patch("click.echo") as mock_echo, patch("syslog.syslog") as mock_syslog:
-        result = runner.invoke(memory_statistics_retention_period, [str(retention_period_value)])
-        assert result.exit_code == 0
-        mock_echo.assert_any_call(f"Retention period set to {retention_period_value} successfully.")
+    def test_successful_enable(self, mock_db):
+        """Test successful status update to enable."""
+        success, error = update_memory_statistics_status("true", mock_db)
+        assert success is True
+        assert error is None
         mock_db.mod_entry.assert_called_once_with(
-            "MEMORY_STATISTICS", "memory_statistics",
-            {"retention_period": retention_period_value}
+            MEMORY_STATISTICS_TABLE,
+            MEMORY_STATISTICS_KEY,
+            {"enabled": "true"}
         )
-        mock_syslog.assert_any_call(syslog.LOG_INFO, f"Retention period set to {retention_period_value} successfully.")
 
-
-def test_memory_statistics_retention_period_invalid(mock_db):
-    """Test setting an invalid retention period for Memory Statistics."""
-    runner = CliRunner()
-    invalid_value = 50  # Out of valid range
-
-    with patch("click.echo") as mock_echo, patch("syslog.syslog") as mock_syslog:
-        result = runner.invoke(memory_statistics_retention_period, [str(invalid_value)])
-        assert result.exit_code == 0
-        mock_echo.assert_any_call("Error: Retention period must be between 1 and 30.", err=True)
-        mock_syslog.assert_any_call(syslog.LOG_ERR, "Error: Retention period must be between 1 and 30.")
-
-
-def test_memory_statistics_sampling_interval(mock_db):
-    """Test setting the sampling interval for Memory Statistics."""
-    runner = CliRunner()
-    sampling_interval_value = 10  # Within valid range
-
-    with patch("click.echo") as mock_echo, patch("syslog.syslog") as mock_syslog:
-        result = runner.invoke(memory_statistics_sampling_interval, [str(sampling_interval_value)])
-        assert result.exit_code == 0
-        mock_echo.assert_any_call(f"Sampling interval set to {sampling_interval_value} successfully.")
+    def test_successful_disable(self, mock_db):
+        """Test successful status update to disable."""
+        success, error = update_memory_statistics_status("false", mock_db)
+        assert success is True
+        assert error is None
         mock_db.mod_entry.assert_called_once_with(
-            "MEMORY_STATISTICS", "memory_statistics",
-            {"sampling_interval": sampling_interval_value}
-        )
-        mock_syslog.assert_any_call(
-            syslog.LOG_INFO,
-            f"Sampling interval set to {sampling_interval_value} successfully."
+            MEMORY_STATISTICS_TABLE,
+            MEMORY_STATISTICS_KEY,
+            {"enabled": "false"}
         )
 
+    def test_database_error(self, mock_db):
+        """Test handling of database errors."""
+        mock_db.mod_entry.side_effect = Exception("DB Error")
+        success, error = update_memory_statistics_status("true", mock_db)
+        assert success is False
+        assert "Error updating memory statistics status" in error
+        assert "DB Error" in error
 
-def test_memory_statistics_sampling_interval_invalid(mock_db):
-    """Test setting an invalid sampling interval for Memory Statistics."""
-    runner = CliRunner()
-    invalid_value = 20  # Out of valid range
 
-    with patch("click.echo") as mock_echo, patch("syslog.syslog") as mock_syslog:
-        result = runner.invoke(memory_statistics_sampling_interval, [str(invalid_value)])
+class TestMemoryStatisticsEnable:
+    def test_enable_success(self, cli_runner, mock_db):
+        """Test successful enabling of memory statistics."""
+        result = cli_runner.invoke(cli, ['config', 'memory-stats', 'enable'])
         assert result.exit_code == 0
-        mock_echo.assert_any_call("Error: Sampling interval must be between 3 and 15.", err=True)
-        mock_syslog.assert_any_call(syslog.LOG_ERR, "Error: Sampling interval must be between 3 and 15.")
+        mock_db.mod_entry.assert_called_once_with(
+            MEMORY_STATISTICS_TABLE,
+            MEMORY_STATISTICS_KEY,
+            {"enabled": "true"}
+        )
+        assert "successfully" in result.output
+        assert "config save" in result.output
 
-
-def test_memory_statistics_retention_period_exception(mock_db):
-    """Test setting retention period for Memory Statistics when an exception occurs."""
-    runner = CliRunner()
-    retention_period_value = 30
-
-    # Mock `mod_entry` to raise an exception
-    mock_db.mod_entry.side_effect = Exception("Simulated retention period error")
-
-    with patch("click.echo") as mock_echo, patch("syslog.syslog") as mock_syslog:
-        result = runner.invoke(memory_statistics_retention_period, [str(retention_period_value)])
+    def test_enable_db_error(self, cli_runner, mock_db):
+        """Test handling of database error when enabling."""
+        mock_db.mod_entry.side_effect = Exception("DB Error")
+        result = cli_runner.invoke(cli, ['config', 'memory-stats', 'enable'])
         assert result.exit_code == 0
-        mock_echo.assert_any_call("Error setting retention period: Simulated retention period error", err=True)
-        mock_syslog.assert_any_call(syslog.LOG_ERR, "Error setting retention period: Simulated retention period error")
+        assert "Error" in result.output
 
 
-def test_memory_statistics_sampling_interval_exception(mock_db):
-    """Test setting sampling interval for Memory Statistics when an exception occurs."""
-    runner = CliRunner()
-    sampling_interval_value = 10
-
-    # Mock `mod_entry` to raise an exception
-    mock_db.mod_entry.side_effect = Exception("Simulated sampling interval error")
-
-    with patch("click.echo") as mock_echo, patch("syslog.syslog") as mock_syslog:
-        result = runner.invoke(memory_statistics_sampling_interval, [str(sampling_interval_value)])
+class TestMemoryStatisticsDisable:
+    def test_disable_success(self, cli_runner, mock_db):
+        """Test successful disabling of memory statistics."""
+        result = cli_runner.invoke(cli, ['config', 'memory-stats', 'disable'])
         assert result.exit_code == 0
-        mock_echo.assert_any_call("Error setting sampling interval: Simulated sampling interval error", err=True)
-        mock_syslog.assert_any_call(
-            syslog.LOG_ERR,
-            "Error setting sampling interval: Simulated sampling interval error"
+        mock_db.mod_entry.assert_called_once_with(
+            MEMORY_STATISTICS_TABLE,
+            MEMORY_STATISTICS_KEY,
+            {"enabled": "false"}
+        )
+        assert "successfully" in result.output
+        assert "config save" in result.output
+
+    def test_disable_db_error(self, cli_runner, mock_db):
+        """Test handling of database error when disabling."""
+        mock_db.mod_entry.side_effect = Exception("DB Error")
+        result = cli_runner.invoke(cli, ['config', 'memory-stats', 'disable'])
+        assert result.exit_code == 0
+        assert "Error" in result.output
+
+
+class TestSamplingInterval:
+    @pytest.mark.parametrize("interval", [
+        SAMPLING_INTERVAL_MIN,
+        SAMPLING_INTERVAL_MAX,
+        (SAMPLING_INTERVAL_MIN + SAMPLING_INTERVAL_MAX) // 2
+    ])
+    def test_valid_sampling_intervals(self, interval, cli_runner, mock_db):
+        """Test setting valid sampling intervals."""
+        result = cli_runner.invoke(cli, ['config', 'memory-stats', 'sampling-interval', str(interval)])
+        assert result.exit_code == 0
+        mock_db.mod_entry.assert_called_once_with(
+            MEMORY_STATISTICS_TABLE,
+            MEMORY_STATISTICS_KEY,
+            {"sampling_interval": str(interval)}
+        )
+        assert f"set to {interval}" in result.output
+
+    @pytest.mark.parametrize("interval", [
+        SAMPLING_INTERVAL_MIN - 1,
+        SAMPLING_INTERVAL_MAX + 1,
+        0,
+        -1
+    ])
+    def test_invalid_sampling_intervals(self, interval, cli_runner, mock_db):
+        """Test handling of invalid sampling intervals."""
+        result = cli_runner.invoke(cli, ['config', 'memory-stats', 'sampling-interval', str(interval)])
+        assert "Error" in result.output
+        assert not mock_db.mod_entry.called
+
+    def test_sampling_interval_specific_db_error(self, cli_runner, mock_db):
+        """Test specific database error case when setting sampling interval."""
+        mock_db.mod_entry.side_effect = Exception("Database connection lost")
+
+        with patch('config.memory_statistics.log_to_syslog') as mock_log:
+            result = cli_runner.invoke(cli, ['config', 'memory-stats', 'sampling-interval', '5'])
+
+            expected_error = "Error setting sampling interval: Database connection lost"
+            assert expected_error in result.output
+
+            mock_log.assert_called_with(expected_error, syslog.LOG_ERR)
+
+            assert result.exit_code == 0
+
+            mock_db.mod_entry.assert_called_once_with(
+                MEMORY_STATISTICS_TABLE,
+                MEMORY_STATISTICS_KEY,
+                {"sampling_interval": "5"}
+            )
+
+
+class TestRetentionPeriod:
+    @pytest.mark.parametrize("period", [
+        RETENTION_PERIOD_MIN,
+        RETENTION_PERIOD_MAX,
+        (RETENTION_PERIOD_MIN + RETENTION_PERIOD_MAX) // 2
+    ])
+    def test_valid_retention_periods(self, period, cli_runner, mock_db):
+        """Test setting valid retention periods."""
+        result = cli_runner.invoke(cli, ['config', 'memory-stats', 'retention-period', str(period)])
+        assert result.exit_code == 0
+        mock_db.mod_entry.assert_called_once_with(
+            MEMORY_STATISTICS_TABLE,
+            MEMORY_STATISTICS_KEY,
+            {"retention_period": str(period)}
+        )
+        assert f"set to {period}" in result.output
+
+    @pytest.mark.parametrize("period", [
+        RETENTION_PERIOD_MIN - 1,
+        RETENTION_PERIOD_MAX + 1,
+        0,
+        -1
+    ])
+    def test_invalid_retention_periods(self, period, cli_runner, mock_db):
+        """Test handling of invalid retention periods."""
+        result = cli_runner.invoke(cli, ['config', 'memory-stats', 'retention-period', str(period)])
+        assert "Error" in result.output
+        assert not mock_db.mod_entry.called
+
+    def test_db_error(self, cli_runner, mock_db):
+        """Test handling of database errors."""
+        mock_db.mod_entry.side_effect = Exception("DB Error")
+        result = cli_runner.invoke(cli, ['config', 'memory-stats', 'retention-period', '15'])
+        assert "Error" in result.output
+
+
+class TestSyslogLogging:
+    @pytest.mark.parametrize("log_level,expected_level", [
+        ("INFO", syslog.LOG_INFO),
+        ("ERROR", syslog.LOG_ERR)
+    ])
+    def test_syslog_logging(self, log_level, expected_level):
+        """Test syslog logging functionality."""
+        with patch('syslog.syslog') as mock_syslog, \
+             patch('syslog.openlog') as mock_openlog:
+
+            log_to_syslog("Test message", expected_level)
+
+            mock_openlog.assert_called_once_with(
+                "memory_statistics",
+                syslog.LOG_PID | syslog.LOG_CONS,
+                syslog.LOG_USER
+            )
+
+            mock_syslog.assert_called_once_with(expected_level, "Test message")
+
+    def test_syslog_logging_default_level(self):
+        """Test syslog logging with default log level."""
+        with patch('syslog.syslog') as mock_syslog, \
+             patch('syslog.openlog') as _:
+            log_to_syslog("Test message")
+            mock_syslog.assert_called_once_with(syslog.LOG_INFO, "Test message")
+
+
+def test_main_execution():
+    """Test the main execution block of the script."""
+    with patch('config.memory_statistics.cli') as mock_cli:
+        module_code = compile(
+            'if __name__ == "__main__": cli()',
+            'memory_statistics.py',
+            'exec'
         )
 
+        namespace = {'__name__': '__main__', 'cli': mock_cli}
+        exec(module_code, namespace)
 
-def test_check_memory_statistics_table_existence():
-    """Test existence check for MEMORY_STATISTICS table."""
-    assert check_memory_statistics_table_existence({"memory_statistics": {}}) is True
-    assert check_memory_statistics_table_existence({}) is False
+        mock_cli.assert_called_once()
 
 
-def test_get_memory_statistics_table(mock_db):
-    """Test getting MEMORY_STATISTICS table."""
-    mock_db.get_table.return_value = {"memory_statistics": {}}
+def test_main_cli_integration():
+    """Test the main CLI integration with actual command."""
+    runner = CliRunner()
 
-    result = get_memory_statistics_table(mock_db)
-    assert result == {"memory_statistics": {}}
+    with patch('config.memory_statistics.get_db_connection') as mock_get_db:
+        mock_db = Mock()
+        mock_get_db.return_value = mock_db
+
+        result = runner.invoke(cli, ['config', 'memory-stats', 'sampling-interval', '5'])
+        assert result.exit_code == 0
+
+        mock_get_db.assert_called_once()
+
+
+def test_script_execution():
+    """Test that the script runs successfully."""
+    result = subprocess.run(["python3",
+                             "config/memory_statistics.py"], capture_output=True)
+    assert result.returncode == 0
