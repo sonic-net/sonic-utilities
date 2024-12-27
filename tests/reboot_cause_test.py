@@ -130,6 +130,7 @@ Name                 Cause        Time                          User    Comment
                 print(result.output)
                 result = runner.invoke(show.cli.commands["reboot-cause"].commands["history"], ["DPU0"])
                 print(result.output)
+                assert "Device" in result.output
 
     # Test 'show reboot-cause all on smartswitch'
     def test_reboot_cause_all_non_smartswitch(self):
@@ -151,6 +152,7 @@ Name                 Cause        Time                          User    Comment
                 print(result.output)
                 result = runner.invoke(show.cli.commands["reboot-cause"].commands["history"], ["DPU0"])
                 print(result.output)
+                assert "Device" in result.output
 
     @classmethod
     def teardown_class(cls):
