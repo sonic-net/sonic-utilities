@@ -130,8 +130,7 @@ Name                 Cause        Time                          User    Comment
                                 "cause": "reboot",
                                 "user": "admin",
                                 "time": "Thu Oct 22 03:11:08 UTC 2020"
-                            },],
-                            ):
+                            }]):
                 runner = CliRunner()
                 result = runner.invoke(show.cli.commands["reboot-cause"].commands["all"], [])
                 print(result.output)
