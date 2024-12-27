@@ -40,6 +40,8 @@ UPPER_DIR = "/run/mount/upper"
 WORK_DIR = "/run/mount/work"
 MOUNTS_FILE = "/proc/mounts"
 
+FREE_SPACE_THRESHOLD = 1024
+
 EVENTS_PUBLISHER_SOURCE = "sonic-events-host"
 EVENTS_PUBLISHER_TAG = "event-disk"
 events_handle = None
@@ -78,7 +80,13 @@ def test_writable(dirs):
             event_pub()
             return False
         else:
-            log_debug("{} is Read-Write".format(d))
+            print("{} is Read-Write".format(d))
+            space = os.statvfs(d)
+            if space.f_bavail < FREE_SPACE_THRESHOLD:
+                log_err("{} is no free space".format(d))
+                event_pub()
+                return False
+
     return True
 
 
