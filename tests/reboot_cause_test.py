@@ -117,6 +117,7 @@ Name                 Cause        Time                          User    Comment
             with mock.patch("show.reboot_cause.fetch_data_from_db",
                             return_value=[{
                                 "comment": "",
+                                "gen_time": "2020_10_22_03_14_07",
                                 "device": "NPU",
                                 "cause": "reboot",
                                 "user": "admin",
@@ -124,6 +125,7 @@ Name                 Cause        Time                          User    Comment
                             },
                             {
                                 "comment": "",
+                                "gen_time": "2020_10_22_03_14_07",
                                 "device": "DPU0",
                                 "cause": "reboot",
                                 "user": "admin",
