@@ -115,23 +115,30 @@ Name                 Cause        Time                          User    Comment
         # Mock is_smartswitch to return True
         with mock.patch("sonic_py_common.device_info.is_smartswitch", return_value=True):
             with mock.patch("show.reboot_cause.fetch_data_from_db",
-                            return_value={
+                            return_value=[{
                                 "comment": "",
-                                "gen_time": "2020_10_22_03_14_07",
+                                "device": "NPU",
+                                "cause": "reboot",
+                                "user": "admin",
+                                "time": "Thu Oct 22 03:11:08 UTC 2020"
+                            },
+                            {
+                                "comment": "",
                                 "device": "DPU0",
                                 "cause": "reboot",
                                 "user": "admin",
                                 "time": "Thu Oct 22 03:11:08 UTC 2020"
-                            }):
+                            },],
+                            ):
                 runner = CliRunner()
                 result = runner.invoke(show.cli.commands["reboot-cause"].commands["all"], [])
                 print(result.output)
                 result = runner.invoke(show.cli.commands["reboot-cause"].commands["history"], ["all"])
                 print(result.output)
+                assert "Device" in result.output
                 assert "NPU" in result.output
                 result = runner.invoke(show.cli.commands["reboot-cause"].commands["history"], ["DPU0"])
                 print(result.output)
-                assert "Device" in result.output
                 assert "DPU" in result.output
 
     # Test 'show reboot-cause all on smartswitch'
