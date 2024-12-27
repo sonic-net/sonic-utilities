@@ -128,9 +128,11 @@ Name                 Cause        Time                          User    Comment
                 print(result.output)
                 result = runner.invoke(show.cli.commands["reboot-cause"].commands["history"], ["all"])
                 print(result.output)
+                assert "NPU" in result.output
                 result = runner.invoke(show.cli.commands["reboot-cause"].commands["history"], ["DPU0"])
                 print(result.output)
                 assert "Device" in result.output
+                assert "DPU" in result.output
 
     # Test 'show reboot-cause all on smartswitch'
     def test_reboot_cause_all_non_smartswitch(self):
@@ -152,7 +154,9 @@ Name                 Cause        Time                          User    Comment
                 print(result.output)
                 result = runner.invoke(show.cli.commands["reboot-cause"].commands["history"], ["DPU0"])
                 print(result.output)
-                assert "Device" in result.output
+                expected_output = 'module option is supported only for smartswitch platform'
+                assert expected_output in result.output
+
 
     @classmethod
     def teardown_class(cls):
