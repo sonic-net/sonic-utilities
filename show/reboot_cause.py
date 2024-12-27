@@ -185,6 +185,7 @@ def all():
 def history(module_name=None):
     """Show history of reboot-cause"""
     if not is_smartswitch() and module_name:
+        click.echo("module option is supported only for smartswitch platform")
         return
     reboot_cause_history = fetch_reboot_cause_history_from_db(module_name)
     if is_smartswitch() and module_name:

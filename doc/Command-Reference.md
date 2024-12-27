@@ -11227,6 +11227,36 @@ In addition, displays a list of all current 'Services' and 'Hardware' being moni
   psu.voltage  Ignored   Device
   ```
 
+**show system-health dpu <option>**
+
+This is a smartswitch specific cli.  This cli shows the midplane, control plane and data plane health of the DPU modules in the smartswitch.
+
+This can take two forms of "<option>" 1. DPU module name (ex: DPU0) 2. all, which will list all the DPUs in the smartswitch
+
+- Usage:
+  ```
+  show system-health dpu DPU0
+  ```
+
+- Example:
+  ```
+root@MtFuji-dut:/home/cisco# show system-health dpu DPU0
+Name    Oper-Status    State-Detail             State-Value    Time                             Reason
+------  -------------  -----------------------  -------------  -------------------------------  ------------------------------------------------------------------------------------
+DPU0    Online         dpu_midplane_link_state  up             Mon Dec 23 05:12:17 PM UTC 2024
+                       dpu_control_plane_state  up             Mon Dec 23 05:12:17 PM UTC 2024 All containers are up and running, host-ethlink-status: Uplink1/1 is UP
+                       dpu_data_plane_state     up             Mon Dec 23 05:12:17 PM UTC 2024 DPU container named polaris is running, pdsagent running : OK, pciemgrd running : OK
+
+root@MtFuji-dut:/home/cisco# show system-health dpu all
+Name    Oper-Status    State-Detail             State-Value    Time                             Reason
+------  -------------  -----------------------  -------------  -------------------------------  ------------------------------------------------------------------------------------
+DPU0    Online         dpu_midplane_link_state  up             Mon Dec 23 05:12:17 PM UTC 2024
+                       dpu_control_plane_state  up             Mon Dec 23 05:12:17 PM UTC 2024 All containers are up and running, host-ethlink-status: Uplink1/1 is UP
+                       dpu_data_plane_state     up             Mon Dec 23 05:12:17 PM UTC 2024 DPU container named polaris is running, pdsagent running : OK, pciemgrd running : OK
+DPU1    Online         dpu_midplane_link_state  up             Mon Dec 23 05:12:17 PM UTC 2024
+                       dpu_control_plane_state  up             Mon Dec 23 05:12:17 PM UTC 2024 All containers are up and running, host-ethlink-status: Uplink1/1 is UP
+                       dpu_data_plane_state     up             Mon Dec 23 05:12:17 PM UTC 2024 DPU container named polaris is running, pdsagent running : OK, pciemgrd running : OK
+
 Go Back To [Beginning of the document](#) or [Beginning of this section](#System-Health)
 
 ## VLAN & FDB

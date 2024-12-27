@@ -78,6 +78,9 @@ Name                 Cause        Time                          User    Comment
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["reboot-cause"].commands["history"], ["all"])
         print(result.output)
+        assert "Device" in result.output
+        assert "Cause" in result.output
+        assert "Time" in result.output
 
     # Test 'show reboot-cause history DPU0'
     def test_reboot_cause_history_dpu(self):
