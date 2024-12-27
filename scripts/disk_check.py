@@ -80,11 +80,14 @@ def test_writable(dirs):
             event_pub()
             return False
         else:
+            log_debug("{} is Read-Write".format(d))
             space = os.statvfs(d)
             if space.f_bavail < FREE_SPACE_THRESHOLD:
                 log_err("{} is no free space".format(d))
                 event_pub()
                 return False
+            else:
+                log_debug("{} has enough disk space".format(d))
 
     return True
 
