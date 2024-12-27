@@ -78,7 +78,7 @@ Name                 Cause        Time                          User    Comment
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["reboot-cause"].commands["history"], ["all"])
         print(result.output)
-        expected_output = 'module option is supported only for smartswitch platform"
+        expected_output = 'module option is supported only for smartswitch platform'
         assert expected_output in result.output
 
     # Test 'show reboot-cause history DPU0'
