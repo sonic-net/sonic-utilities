@@ -178,16 +178,16 @@ class TestDiskCheck(object):
             
         assert max_log_lvl == syslog.LOG_ERR
 
-
     @patch("disk_check.syslog.syslog")
     @patch("disk_check.subprocess.run")
-    @patch('os.statvfs', return_value=os.statvfs_result((4096, 4096, 1909350, 1491513, 1394521, 971520, 883302, 883302, 0, 255)))
+    @patch('os.statvfs', return_value=os.statvfs_result((4096, 4096, 1909350, 1491513, 1394521,
+                                                         971520, 883302, 883302, 0, 255)))
     def test_diskfull(self, mock_proc, mock_log, os_statvfs):
         mock_proc.side_effect = mock_subproc_run
         mock_log.side_effect = report_err_msg
 
         result = disk_check.test_writable(["/etc"])
-        assert result == False
+        assert result is False
 
 
     @classmethod
