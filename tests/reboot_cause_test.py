@@ -133,7 +133,7 @@ Name                 Cause        Time                          User    Comment
                 assert "NPU" in result.output
 
     # Test 'show reboot-cause DPU0 on smartswitch'
-    def test_reboot_cause_history_dpu(self):
+    def test_reboot_cause_history_module(self):
         # Mock is_smartswitch to return True
         with mock.patch("sonic_py_common.device_info.is_smartswitch", return_value=True):
             with mock.patch(
