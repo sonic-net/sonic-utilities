@@ -117,14 +117,8 @@ Name                 Cause        Time                          User    Comment
             with mock.patch(
                 "show.reboot_cause.fetch_data_from_db",
                 return_value=[
-                    {
-                        "device": "NPU",
-                        "gen_time": "2020_10_22_03_14_07",
-                        "cause": "reboot",
-                        "user": "admin",
-                        "time": "Thu Oct 22 03:11:08 UTC 2020",
-                        "comment": "N/A"
-                    }
+                    ["NPU", "2024_12_19_14_00_33", "reboot", "Thu Dec 19 01:55:41 PM UTC 2024", "admin", "unexpected power loss"],
+                    ["DPU0", "2024_12_19_14_03_24", "reboot", "Thu Dec 19 02:03:24 PM UTC 2024", "admin", "N/A"],
                 ],
             ):
                 runner = CliRunner()
@@ -139,14 +133,7 @@ Name                 Cause        Time                          User    Comment
             with mock.patch(
                 "show.reboot_cause.fetch_data_from_db",
                 return_value=[
-                    {
-                        "device": "DPU0",
-                        "gen_time": "2020_10_22_03_14_07",
-                        "cause": "reboot",
-                        "user": "admin",
-                        "time": "Thu Oct 22 03:11:08 UTC 2020",
-                        "comment": "N/A"
-                    },
+                    ["DPU0", "2024_12_19_14_03_24", "reboot", "Thu Dec 19 02:03:24 PM UTC 2024", "admin", "N/A"],
                 ],
             ):
                 runner = CliRunner()
@@ -158,14 +145,12 @@ Name                 Cause        Time                          User    Comment
     def test_reboot_cause_all_non_smartswitch(self):
         # Mock is_smartswitch to return True
         with mock.patch("sonic_py_common.device_info.is_smartswitch", return_value=False):
-            with mock.patch("show.reboot_cause.fetch_data_from_db",
-                            return_value={
-                                "device": "DPU0",
-                                "gen_time": "2020_10_22_03_14_07",
-                                "cause": "reboot, na",
-                                "user": "admin",
-                                "time": "Thu Oct 22 03:11:08 UTC 2020"
-                            }):
+            with mock.patch(
+                "show.reboot_cause.fetch_data_from_db",
+                return_value=[
+                    ["DPU0", "2024_12_19_14_03_24", "reboot", "Thu Dec 19 02:03:24 PM UTC 2024", "admin", "N/A"],
+                ],
+            ):
                 runner = CliRunner()
                 result = runner.invoke(show.cli.commands["reboot-cause"].commands["all"], [])
                 print(result.output)
