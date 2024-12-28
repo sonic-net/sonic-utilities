@@ -67,6 +67,7 @@ from . import plugins
 from . import syslog
 from . import dns
 from . import bgp_cli
+from . import twamp_light
 from . import stp
 
 # Global Variables
@@ -319,6 +320,7 @@ cli.add_command(vxlan.vxlan)
 cli.add_command(system_health.system_health)
 cli.add_command(warm_restart.warm_restart)
 cli.add_command(dns.dns)
+cli.add_command(twamp_light.twamp_light)
 cli.add_command(stp.spanning_tree)
 
 # syslog module
