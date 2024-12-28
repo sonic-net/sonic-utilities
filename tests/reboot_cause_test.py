@@ -122,6 +122,22 @@ Name                 Cause        Time                          User    Comment
                 ],
             ):
                 runner = CliRunner()
+                result = runner.invoke(show.cli.commands["reboot-cause"], ["all"])
+                print(result.output)
+                assert "NPU" in result.output
+
+    # Test 'show reboot-cause history all on smartswitch'
+    def test_reboot_cause_history_all(self):
+        # Mock is_smartswitch to return True
+        with mock.patch("sonic_py_common.device_info.is_smartswitch", return_value=True):
+            with mock.patch(
+                "show.reboot_cause.fetch_data_from_db",
+                return_value=[
+                    ["NPU", "2024_12_19_14_00_33", "reboot", "Thu Dec 19 01:55:41 PM UTC 2024", "admin", "N/A"],
+                    ["DPU0", "2024_12_19_14_03_24", "reboot", "Thu Dec 19 02:03:24 PM UTC 2024", "admin", "N/A"]
+                ],
+            ):
+                runner = CliRunner()
                 result = runner.invoke(show.cli.commands["reboot-cause"].commands["history"], ["all"])
                 print(result.output)
                 assert "NPU" in result.output
