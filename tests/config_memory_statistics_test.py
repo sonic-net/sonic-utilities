@@ -253,8 +253,6 @@
 #                              "config/memory_statistics.py"], capture_output=True)
 #     assert result.returncode == 0
 
-
-
 import subprocess
 import syslog
 from unittest.mock import Mock, patch
@@ -477,7 +475,7 @@ class TestSyslogLogging:
              patch('syslog.openlog') as mock_openlog:
             
             log_to_syslog("Test message", expected_level)
-            
+
             mock_openlog.assert_called_once_with(
                 "memory_statistics",
                 syslog.LOG_PID | syslog.LOG_CONS,

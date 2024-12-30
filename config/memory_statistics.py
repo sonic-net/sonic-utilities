@@ -163,8 +163,8 @@ DEFAULT_RETENTION_PERIOD = 15  # days
 def log_to_syslog(message, level=syslog.LOG_INFO):
     """Log a message to syslog.
 
-    This function logs the provided message to syslog at the specified level. 
-    It opens the syslog with the application name 'memory_statistics' and the 
+    This function logs the provided message to syslog at the specified level.
+    It opens the syslog with the application name 'memory_statistics' and the
     appropriate log level (default is INFO).
 
     Args:
@@ -178,8 +178,8 @@ def log_to_syslog(message, level=syslog.LOG_INFO):
 class MemoryStatisticsDB:
     """Singleton class to handle memory statistics database connection.
 
-    This class ensures only one instance of the database connection exists using 
-    the Singleton pattern. It provides access to the database connection and 
+    This class ensures only one instance of the database connection exists using
+    the Singleton pattern. It provides access to the database connection and
     ensures that it is created only once during the application's lifetime.
     """
     _instance = None
@@ -188,8 +188,8 @@ class MemoryStatisticsDB:
     def __new__(cls):
         """Ensure only one instance of MemoryStatisticsDB is created.
 
-        This method implements the Singleton pattern to guarantee that only one 
-        instance of the MemoryStatisticsDB class exists. If no instance exists, 
+        This method implements the Singleton pattern to guarantee that only one
+        instance of the MemoryStatisticsDB class exists. If no instance exists,
         it creates one and connects to the database.
 
         Returns:
@@ -205,7 +205,7 @@ class MemoryStatisticsDB:
     def get_db(cls):
         """Get the singleton database connection instance.
 
-        Returns the existing database connection instance. If it doesn't exist, 
+        Returns the existing database connection instance. If it doesn't exist,
         a new instance is created by calling the __new__ method.
 
         Returns:
@@ -220,16 +220,16 @@ def update_memory_statistics_status(status):
     """
     Update the status of the memory statistics feature in the config DB.
 
-    This function modifies the configuration database to enable or disable 
-    memory statistics collection based on the provided status. It also logs 
+    This function modifies the configuration database to enable or disable
+    memory statistics collection based on the provided status. It also logs
     the action and returns a tuple indicating whether the operation was successful.
 
     Args:
         status (str): The status to set for memory statistics ("true" or "false").
 
     Returns:
-        tuple: A tuple (success, error_message) where `success` is a boolean 
-               indicating whether the operation was successful, and 
+        tuple: A tuple (success, error_message) where `success` is a boolean
+               indicating whether the operation was successful, and
                `error_message` contains any error details if unsuccessful.
     """
     try:
@@ -250,8 +250,8 @@ def update_memory_statistics_status(status):
 def cli():
     """Memory statistics configuration tool.
 
-    This command-line interface (CLI) allows users to configure and manage 
-    memory statistics settings such as enabling/disabling the feature and 
+    This command-line interface (CLI) allows users to configure and manage
+    memory statistics settings such as enabling/disabling the feature and
     modifying parameters like the sampling interval and retention period.
     """
     pass
@@ -273,8 +273,8 @@ def memory_stats():
 def memory_stats_enable():
     """Enable memory statistics collection.
 
-    This command enables the collection of memory statistics on the device. 
-    It updates the configuration and reminds the user to run 'config save' 
+    This command enables the collection of memory statistics on the device.
+    It updates the configuration and reminds the user to run 'config save'
     to persist changes.
     """
     success, error = update_memory_statistics_status("true")
@@ -287,8 +287,8 @@ def memory_stats_enable():
 def memory_stats_disable():
     """Disable memory statistics collection.
 
-    This command disables the collection of memory statistics on the device. 
-    It updates the configuration and reminds the user to run 'config save' 
+    This command disables the collection of memory statistics on the device.
+    It updates the configuration and reminds the user to run 'config save'
     to persist changes.
     """
     success, error = update_memory_statistics_status("false")
@@ -303,7 +303,7 @@ def memory_stats_sampling_interval(interval):
     """
     Set the sampling interval for memory statistics.
 
-    This command allows users to configure the frequency at which memory statistics 
+    This command allows users to configure the frequency at which memory statistics
     are collected. The interval must be between 3 and 15 minutes.
 
     Args:
@@ -337,7 +337,7 @@ def memory_stats_retention_period(period):
     """
     Set the retention period for memory statistics.
 
-    This command allows users to configure how long memory statistics are retained 
+    This command allows users to configure how long memory statistics are retained
     before being purged. The retention period must be between 1 and 30 days.
 
     Args:
