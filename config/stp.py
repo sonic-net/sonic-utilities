@@ -11,14 +11,14 @@
 
 ***Existing PVST commands that are used for MST Commands***
 
-    config spanning_tree enable <pvst|mst> #enable pvst or mst
-    config spanning_tree disable <pvst|mst> #disable pvst or mst
+    === config spanning_tree enable <pvst|mst> #enable pvst or mst
+    === config spanning_tree disable <pvst|mst> #disable pvst or mst
 
-    config spanning_tree hello <value> #set hello time pvst or mst
+    === config spanning_tree hello <value> #set hello time pvst or mst
 
-    config spanning_tree max_age <value> #set max age pvst or mst
+    === config spanning_tree max_age <value> #set max age pvst or mst
 
-    config spanning_tree forward_delay <value> #set forward delay pvst or mst
+    === config spanning_tree forward_delay <value> #set forward delay pvst or mst
 
 
     INTERFACE GROUP:
@@ -37,11 +37,11 @@
 
 
 ***NEW MST Commands***
-    config spanning_tree max_hops <value> (Not for PVST)
+    === config spanning_tree max_hops <value> (Not for PVST)
 
     MST GROUP:
-    config spanning_tree mst region-name <region-name>
-    config spanning_tree mst revision <number>
+    === config spanning_tree mst region-name <region-name>
+    === config spanning_tree mst revision <number>
 
     config spanning_tree mst instance <instance-id> priority <bridge-priority-value>
 
