@@ -39,6 +39,7 @@ from config.stp import (
     disable_global_mst
 )
 
+
 def test_get_intf_list_in_vlan_member_table():
     mock_db = MagicMock()
     mock_db.get_table.return_value = {
@@ -51,6 +52,7 @@ def test_get_intf_list_in_vlan_member_table():
 
     assert result == expected_interfaces
     mock_db.get_table.assert_called_once_with('VLAN_MEMBER')
+
 
 def test_is_valid_root_guard_timeout():
     mock_ctx = MagicMock()
@@ -65,6 +67,7 @@ def test_is_valid_root_guard_timeout():
     with pytest.raises(SystemExit):
         is_valid_root_guard_timeout(mock_ctx, 700)
 
+
 def test_is_valid_forward_delay():
     mock_ctx = MagicMock()
 
@@ -77,6 +80,7 @@ def test_is_valid_forward_delay():
     # Invalid case
     with pytest.raises(SystemExit):
         is_valid_forward_delay(mock_ctx, 31)
+
 
 def test_is_valid_stp_vlan_parameters():
     mock_ctx = MagicMock()
@@ -97,6 +101,7 @@ def test_is_valid_stp_vlan_parameters():
     with pytest.raises(SystemExit):
         is_valid_stp_vlan_parameters(mock_ctx, mock_db, "Vlan10", "max_age", 50)
 
+
 def test_enable_stp_for_vlans():
     mock_db = MagicMock()
     mock_db.get_table.return_value = ["Vlan10", "Vlan20"]
@@ -111,6 +116,7 @@ def test_enable_stp_for_vlans():
         'priority': mock_db.get_entry.return_value.get('priority')
     })
 
+
 def test_is_global_stp_enabled():
     mock_db = MagicMock()
 
@@ -122,6 +128,7 @@ def test_is_global_stp_enabled():
     mock_db.get_entry.return_value = {"mode": "none"}
     assert is_global_stp_enabled(mock_db) is False
 
+
 def test_disable_global_pvst():
     mock_db = MagicMock()
 
@@ -131,6 +138,7 @@ def test_disable_global_pvst():
     mock_db.delete_table.assert_any_call('STP_VLAN')
     mock_db.delete_table.assert_any_call('STP_PORT')
     mock_db.delete_table.assert_any_call('STP_VLAN_PORT')
+
 
 def test_disable_global_mst():
     mock_db = MagicMock()
@@ -142,6 +150,7 @@ def test_disable_global_mst():
     mock_db.delete_table.assert_any_call('STP_MST_INST')
     mock_db.delete_table.assert_any_call('STP_MST_PORT')
     mock_db.delete_table.assert_any_call('STP_PORT')
+
 
 def test_validate_params():
     mock_ctx = MagicMock()
@@ -156,6 +165,7 @@ def test_validate_params():
     with pytest.raises(SystemExit):
         validate_params(mock_ctx, "bridge_priority", 99999)
 
+
 def test_get_bridge_mac_address():
     mock_db = MagicMock()
     mock_db.get_entry.return_value = {"mac_address": "00:11:22:33:44:55"}
@@ -165,6 +175,7 @@ def test_get_bridge_mac_address():
     assert result == "00:11:22:33:44:55"
     mock_db.get_entry.assert_called_once_with("DEVICE_METADATA", "localhost")
 
+
 def test_get_global_stp_priority():
     mock_db = MagicMock()
     mock_db.get_entry.return_value = {"priority": "32768"}
@@ -173,6 +184,7 @@ def test_get_global_stp_priority():
 
     assert result == 32768
     mock_db.get_entry.assert_called_once_with("STP", "GLOBAL")
+
 
 def test_get_vlan_list_for_interface():
     mock_db = MagicMock()
