@@ -875,7 +875,7 @@ save_proc() {
 }
 
 ###############################################################################
-# Given list of proc files, saves proc files to tar.
+# Given list of sys files, saves sys files to tar.
 # Globals:
 #  V
 #  TARDIR
@@ -888,26 +888,26 @@ save_proc() {
 #  TARFILE
 #  NOOP
 # Arguments:
-#  *procfiles: variable-length list of proc file paths to save
+#  *sysfiles: variable-length list of sys file paths to save
 # Returns:
 #  None
 ###############################################################################
-save_proc() {
+save_sys() {
     trap 'handle_error $? $LINENO' ERR
-    local procfiles="$@"
-    $MKDIR $V -p $TARDIR/proc
-    for f in $procfiles
+    local sysfiles="$@"
+    $MKDIR $V -p $TARDIR/sys
+    for f in $sysfiles
     do
         if $NOOP; then
             if [ -e $f ]; then
-                echo "$CP $V -r $f $TARDIR/proc"
+                echo "$CP $V -r $f $TARDIR/sys"
             fi
         else
-            ( [ -e $f ] && $CP $V -r $f $TARDIR/proc ) || echo "$f not found" > $TARDIR/$f
+            ( [ -e $f ] && $CP $V -r $f $TARDIR/sys ) || echo "$f not found" > $TARDIR/$f
         fi
     done
 
-    chmod ugo+rw -R $DUMPDIR/$BASE/proc
+    chmod ugo+rw -R $DUMPDIR/$BASE/sys
 }
 
 ###############################################################################
