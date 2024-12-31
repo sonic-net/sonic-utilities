@@ -1,0 +1,8 @@
+Metadata-Version: 2.1
+Name: docker-image-py
+Version: 0.1.13
+Summary: Parse docker image as distribution does.
+Home-page: https://github.com/realityone/docker-image-py
+License-File: LICENSE
+Requires-Dist: regex >=2019.4.14
+

@@ -1,0 +1,30 @@
+Defaulting to user installation because normal site-packages is not writeable
+Collecting bcrypt==3.2.2
+  Downloading bcrypt-3.2.2-cp36-abi3-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux_2_24_x86_64.whl.metadata (8.3 kB)
+Collecting click==7.0
+  Downloading Click-7.0-py2.py3-none-any.whl.metadata (3.5 kB)
+Requirement already satisfied: cryptography in /usr/lib/python3/dist-packages (3.4.8)
+Requirement already satisfied: urllib3 in /usr/lib/python3/dist-packages (1.26.5)
+Collecting click-log
+  Downloading click_log-0.4.0-py2.py3-none-any.whl.metadata (1.2 kB)
+Collecting docker
+  Downloading docker-7.1.0-py3-none-any.whl.metadata (3.8 kB)
+Collecting docker-image-py
+  Downloading docker_image_py-0.1.13-py3-none-any.whl.metadata (223 bytes)
+Requirement already satisfied: filelock in /usr/local/lib/python3.10/dist-packages (3.15.4)
+Collecting enlighten
+  Downloading enlighten-1.13.0-py2.py3-none-any.whl.metadata (18 kB)
+Collecting ipaddress
+  Downloading ipaddress-1.0.23-py2.py3-none-any.whl.metadata (923 bytes)
+Collecting cffi>=1.1 (from bcrypt==3.2.2)
+  Downloading cffi-1.17.1-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (1.5 kB)
+Requirement already satisfied: requests>=2.26.0 in /home/kanza/.local/lib/python3.10/site-packages (from docker) (2.26.0)
+Collecting regex>=2019.4.14 (from docker-image-py)
+  Downloading regex-2024.11.6-cp310-cp310-manylinux_2_17_x86_64.manylinux2014_x86_64.whl.metadata (40 kB)
+Collecting blessed>=1.17.7 (from enlighten)
+  Downloading blessed-1.20.0-py2.py3-none-any.whl.metadata (13 kB)
+Collecting prefixed>=0.3.2 (from enlighten)
+  Downloading prefixed-0.9.0-py2.py3-none-any.whl.metadata (11 kB)
+Collecting wcwidth>=0.1.4 (from blessed>=1.17.7->enlighten)
+  Downloading wcwidth-0.2.13-py2.py3-none-any.whl.metadata (14 kB)
+Requirement already satisfied: six>=1.9.0 in /usr/lib/python3/dist-packages (from blessed>=1.17.7->enlighten) (1.16.0)
