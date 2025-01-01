@@ -12,7 +12,7 @@ from utilities_common import util_base
 from show.plugins.pbh import read_pbh_counters
 from config.plugins.pbh import serialize_pbh_counters
 from . import plugins
-
+from . import stp
 # This is from the aliases example:
 # https://github.com/pallets/click/blob/57c6f09611fc47ca80db0bd010f05998b3c0aa95/examples/aliases/aliases.py
 class Config(object):
@@ -145,6 +145,10 @@ def ipv6():
     pass
 
 
+# 'STP'
+#
+cli.add_command(stp.spanning_tree)
+
 #
 # Inserting BGP functionality into cli's clear parse-chain.
 # BGP commands are determined by the routing-stack being elected.
@@ -229,16 +233,38 @@ def watermark():
     if os.geteuid() != 0:
         sys.exit("Root privileges are required for this operation")
 
+
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
 @watermark.command('headroom')
-def clear_wm_pg_headroom():
+def clear_wm_pg_headroom(namespace):
     """Clear user headroom WM for pg"""
     command = ['watermarkstat', '-c', '-t', 'pg_headroom']
+    if namespace:
+        command += ['-n', str(namespace)]
     run_command(command)
 
+
 @watermark.command('shared')
-def clear_wm_pg_shared():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def clear_wm_pg_shared(namespace):
     """Clear user shared WM for pg"""
     command = ['watermarkstat', '-c', '-t', 'pg_shared']
+    if namespace:
+        command += ['-n', str(namespace)]
     run_command(command)
 
 @priority_group.group()
@@ -261,16 +287,38 @@ def persistent_watermark():
     if os.geteuid() != 0:
         sys.exit("Root privileges are required for this operation")
 
+
 @persistent_watermark.command('headroom')
-def clear_pwm_pg_headroom():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def clear_pwm_pg_headroom(namespace):
     """Clear persistent headroom WM for pg"""
     command = ['watermarkstat', '-c', '-p', '-t', 'pg_headroom']
+    if namespace:
+        command += ['-n', str(namespace)]
     run_command(command)
 
+
 @persistent_watermark.command('shared')
-def clear_pwm_pg_shared():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def clear_pwm_pg_shared(namespace):
     """Clear persistent shared WM for pg"""
     command = ['watermarkstat', '-c', '-p', '-t', 'pg_shared']
+    if namespace:
+        command += ['-n', str(namespace)]
     run_command(command)
 
 
@@ -285,23 +333,57 @@ def watermark():
     if os.geteuid() != 0:
         sys.exit("Root privileges are required for this operation")
 
+
 @watermark.command('unicast')
-def clear_wm_q_uni():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def clear_wm_q_uni(namespace):
     """Clear user WM for unicast queues"""
     command = ['watermarkstat', '-c', '-t', 'q_shared_uni']
+    if namespace:
+        command += ['-n', str(namespace)]
     run_command(command)
+
 
 @watermark.command('multicast')
-def clear_wm_q_multi():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def clear_wm_q_multi(namespace):
     """Clear user WM for multicast queues"""
     command = ['watermarkstat', '-c', '-t', 'q_shared_multi']
+    if namespace:
+        command += ['-n', str(namespace)]
     run_command(command)
 
+
 @watermark.command('all')
-def clear_wm_q_all():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def clear_wm_q_all(namespace):
     """Clear user WM for all queues"""
     command = ['watermarkstat', '-c', '-t', 'q_shared_all']
+    if namespace:
+        command += ['-n', str(namespace)]
     run_command(command)
+
 
 @queue.group(name='persistent-watermark')
 def persistent_watermark():
@@ -309,45 +391,101 @@ def persistent_watermark():
     if os.geteuid() != 0:
         sys.exit("Root privileges are required for this operation")
 
+
 @persistent_watermark.command('unicast')
-def clear_pwm_q_uni():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def clear_pwm_q_uni(namespace):
     """Clear persistent WM for persistent queues"""
     command = ['watermarkstat', '-c', '-p', '-t', 'q_shared_uni']
+    if namespace:
+        command += ['-n', str(namespace)]
     run_command(command)
+
 
 @persistent_watermark.command('multicast')
-def clear_pwm_q_multi():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def clear_pwm_q_multi(namespace):
     """Clear persistent WM for multicast queues"""
     command = ['watermarkstat', '-c', '-p', '-t', 'q_shared_multi']
+    if namespace:
+        command += ['-n', str(namespace)]
     run_command(command)
 
+
 @persistent_watermark.command('all')
-def clear_pwm_q_all():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def clear_pwm_q_all(namespace):
     """Clear persistent WM for all queues"""
     command = ['watermarkstat', '-c', '-p', '-t', 'q_shared_all']
+    if namespace:
+        command += ['-n', str(namespace)]
     run_command(command)
+
 
 @cli.group(name='headroom-pool')
 def headroom_pool():
     """Clear headroom pool WM"""
     pass
 
+
 @headroom_pool.command('watermark')
-def watermark():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def watermark(namespace):
     """Clear headroom pool user WM. One does not simply clear WM, root is required"""
     if os.geteuid() != 0:
         sys.exit("Root privileges are required for this operation")
 
     command = ['watermarkstat', '-c', '-t', 'headroom_pool']
+    if namespace:
+        command += ['-n', str(namespace)]
     run_command(command)
 
+
 @headroom_pool.command('persistent-watermark')
-def persistent_watermark():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def persistent_watermark(namespace):
     """Clear headroom pool persistent WM. One does not simply clear WM, root is required"""
     if os.geteuid() != 0:
         sys.exit("Root privileges are required for this operation")
 
     command = ['watermarkstat', '-c', '-p', '-t', 'headroom_pool']
+    if namespace:
+        command += ['-n', str(namespace)]
     run_command(command)
 
 #

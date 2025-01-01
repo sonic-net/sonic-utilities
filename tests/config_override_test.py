@@ -20,7 +20,6 @@ PORT_CONFIG_OVERRIDE = os.path.join(DATA_DIR, "port_config_override.json")
 EMPTY_TABLE_REMOVAL = os.path.join(DATA_DIR, "empty_table_removal.json")
 AAA_YANG_HARD_CHECK = os.path.join(DATA_DIR, "aaa_yang_hard_check.json")
 RUNNING_CONFIG_YANG_FAILURE = os.path.join(DATA_DIR, "running_config_yang_failure.json")
-GOLDEN_INPUT_YANG_FAILURE = os.path.join(DATA_DIR, "golden_input_yang_failure.json")
 FINAL_CONFIG_YANG_FAILURE = os.path.join(DATA_DIR, "final_config_yang_failure.json")
 MULTI_ASIC_MACSEC_OV = os.path.join(DATA_DIR, "multi_asic_macsec_ov.json")
 MULTI_ASIC_FEATURE_RM = os.path.join(DATA_DIR, "multi_asic_feature_rm.json")
@@ -179,7 +178,7 @@ class TestConfigOverride(object):
                                        ['golden_config_db.json'], obj=db)
 
                 assert result.exit_code != 0
-                assert "Authentication with 'tacacs+' is not allowed when passkey not exits." in result.output
+                assert "Authentication with 'tacacs+' is not allowed when passkey not exists." in result.output
 
     def check_override_config_table(self, db, config, running_config,
                                     golden_config, expected_config):
@@ -232,17 +231,6 @@ class TestConfigOverride(object):
                         mock.MagicMock(side_effect=is_yang_config_validation_enabled_side_effect)):
             self.check_yang_verification_failure(
                 db, config, read_data['running_config'], read_data['golden_config'], "running config")
-
-    def test_golden_input_yang_failure(self):
-        def is_yang_config_validation_enabled_side_effect(filename):
-            return True
-        db = Db()
-        with open(GOLDEN_INPUT_YANG_FAILURE, "r") as f:
-            read_data = json.load(f)
-        with mock.patch('config.main.device_info.is_yang_config_validation_enabled',
-                        mock.MagicMock(side_effect=is_yang_config_validation_enabled_side_effect)):
-            self.check_yang_verification_failure(
-                db, config, read_data['running_config'], read_data['golden_config'], "config_input")
 
     def test_final_config_yang_failure(self):
         def is_yang_config_validation_enabled_side_effect(filename):
@@ -398,10 +386,10 @@ class TestConfigOverrideMultiasic(object):
 
         with mock.patch('config.main.read_json_file',
                         mock.MagicMock(side_effect=read_json_file_side_effect)),\
-                mock.patch('sonic_py_common.device_info.get_platform',
+             mock.patch('sonic_py_common.device_info.get_platform',
                         return_value="multi_asic"),\
-                mock.patch('sonic_py_common.device_info.get_system_mac',
-                        return_value="11:22:33:44:55:66"):
+             mock.patch('sonic_py_common.device_info.get_system_mac',
+                        return_value="11:22:33:44:55:66\n"):
             runner = CliRunner()
             result = runner.invoke(config.config.commands["override-config-table"],
                                    ['golden_config_db.json'], obj=db)

@@ -11,7 +11,8 @@ from swsscommon.swsscommon import SonicV2Connector, CounterTable, PortCounter
 from utilities_common import constants
 import utilities_common.multi_asic as multi_asic_util
 from utilities_common.netstat import ns_diff, table_as_json, format_brate, format_prate, \
-                                     format_util, format_number_with_comma, format_util_directly
+                                     format_util, format_number_with_comma, format_util_directly, \
+                                     format_fec_ber
 
 """
 The order and count of statistics mentioned below needs to be in sync with the values in portstat script
@@ -32,11 +33,11 @@ header_all = ['IFACE', 'STATE', 'RX_OK', 'RX_BPS', 'RX_PPS', 'RX_UTIL', 'RX_ERR'
 header_std = ['IFACE', 'STATE', 'RX_OK', 'RX_BPS', 'RX_UTIL', 'RX_ERR', 'RX_DRP', 'RX_OVR',
               'TX_OK', 'TX_BPS', 'TX_UTIL', 'TX_ERR', 'TX_DRP', 'TX_OVR']
 header_errors_only = ['IFACE', 'STATE', 'RX_ERR', 'RX_DRP', 'RX_OVR', 'TX_ERR', 'TX_DRP', 'TX_OVR']
-header_fec_only = ['IFACE', 'STATE', 'FEC_CORR', 'FEC_UNCORR', 'FEC_SYMBOL_ERR']
+header_fec_only = ['IFACE', 'STATE', 'FEC_CORR', 'FEC_UNCORR', 'FEC_SYMBOL_ERR', 'FEC_PRE_BER', 'FEC_POST_BER']
 header_rates_only = ['IFACE', 'STATE', 'RX_OK', 'RX_BPS', 'RX_PPS', 'RX_UTIL', 'TX_OK', 'TX_BPS', 'TX_PPS', 'TX_UTIL']
 
-rates_key_list = ['RX_BPS', 'RX_PPS', 'RX_UTIL', 'TX_BPS', 'TX_PPS', 'TX_UTIL']
-ratestat_fields = ("rx_bps",  "rx_pps", "rx_util", "tx_bps", "tx_pps", "tx_util")
+rates_key_list = ['RX_BPS', 'RX_PPS', 'RX_UTIL', 'TX_BPS', 'TX_PPS', 'TX_UTIL', 'FEC_PRE_BER', 'FEC_POST_BER']
+ratestat_fields = ("rx_bps",  "rx_pps", "rx_util", "tx_bps", "tx_pps", "tx_util", "fec_pre_ber", "fec_post_ber")
 RateStats = namedtuple("RateStats", ratestat_fields)
 
 """
@@ -194,10 +195,13 @@ class Portstat(object):
             tx_err = self.db.get(self.db.CHASSIS_STATE_DB, key, "tx_err")
             tx_drop = self.db.get(self.db.CHASSIS_STATE_DB, key, "tx_drop")
             tx_ovr = self.db.get(self.db.CHASSIS_STATE_DB, key, "tx_ovr")
+            fec_pre_ber = self.db.get(self.db.CHASSIS_STATE_DB, key, "fec_pre_ber")
+            fec_post_ber = self.db.get(self.db.CHASSIS_STATE_DB, key, "fec_post_ber")
             port_alias = key.split("|")[-1]
             cnstat_dict[port_alias] = NStats._make([rx_ok, rx_err, rx_drop, rx_ovr, tx_ok, tx_err, tx_drop, tx_ovr] +
                                                    [STATUS_NA] * (len(NStats._fields) - 8))._asdict()
-            ratestat_dict[port_alias] = RateStats._make([rx_bps, rx_pps, rx_util, tx_bps, tx_pps, tx_util])
+            ratestat_dict[port_alias] = RateStats._make([rx_bps, rx_pps, rx_util, tx_bps,
+                                                        tx_pps, tx_util, fec_pre_ber, fec_post_ber])
         self.cnstat_dict.update(cnstat_dict)
         self.ratestat_dict.update(ratestat_dict)
 
@@ -229,7 +233,7 @@ class Portstat(object):
                     if counter_name not in fvs:
                         fields[pos] = STATUS_NA
                     elif fields[pos] != STATUS_NA:
-                        fields[pos] = str(int(fields[pos]) + int(fvs[counter_name]))
+                        fields[pos] = str(int(fields[pos]) + int(float(fvs[counter_name])))
 
             cntr = NStats._make(fields)._asdict()
             return cntr
@@ -238,7 +242,7 @@ class Portstat(object):
             """
                 Get the rates from specific table.
             """
-            fields = ["0", "0", "0", "0", "0", "0"]
+            fields = ["0", "0", "0", "0", "0", "0", "0", "0"]
             for pos, name in enumerate(rates_key_list):
                 full_table_id = RATES_TABLE_PREFIX + table_id
                 counter_data = self.db.get(self.db.COUNTERS_DB, full_table_id, name)
@@ -363,7 +367,9 @@ class Portstat(object):
                 table.append((key, self.get_port_state(key),
                               format_number_with_comma(data['fec_corr']),
                               format_number_with_comma(data['fec_uncorr']),
-                              format_number_with_comma(data['fec_symbol_err'])))
+                              format_number_with_comma(data['fec_symbol_err']),
+                              format_fec_ber(rates.fec_pre_ber),
+                              format_fec_ber(rates.fec_post_ber)))
             elif rates_only:
                 header = header_rates_only
                 table.append((key, self.get_port_state(key),

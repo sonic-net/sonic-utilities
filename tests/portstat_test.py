@@ -35,11 +35,32 @@ Ethernet8      N/A        6  1350.00 KB/s    9000.00/s        N/A       100     
 """
 
 intf_fec_counters = """\
-    IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR
----------  -------  ----------  ------------  ----------------
-Ethernet0        D     130,402             3                 4
-Ethernet4      N/A     110,412             1                 0
-Ethernet8      N/A     100,317             0                 0
+    IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER
+---------  -------  ----------  ------------  ----------------  -------------  --------------
+Ethernet0        D     130,402             3                 4            N/A             N/A
+Ethernet4      N/A     110,412             1                 0            N/A             N/A
+Ethernet8      N/A     100,317             0                 0            N/A             N/A
+"""
+
+intf_fec_counters_fec_hist = """\
+Symbol Errors Per Codeword      Codewords
+----------------------------  -----------
+BIN0                              1000000
+BIN1                               900000
+BIN2                               800000
+BIN3                               700000
+BIN4                               600000
+BIN5                               500000
+BIN6                               400000
+BIN7                               300000
+BIN8                                    0
+BIN9                                    0
+BIN10                                   0
+BIN11                                   0
+BIN12                                   0
+BIN13                                   0
+BIN14                                   0
+BIN15                                   0
 """
 
 intf_fec_counters_period = """\
@@ -251,6 +272,19 @@ intf_counters_on_sup_no_counters = "Linecard Counter Table is not available.\n"
 
 intf_counters_on_sup_partial_lc = "Not all linecards have published their counter values.\n"
 
+intf_counters_on_sup_na = """\
+       IFACE    STATE    RX_OK     RX_BPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK     TX_BPS    TX_UTIL\
+    TX_ERR    TX_DRP    TX_OVR
+------------  -------  -------  ---------  ---------  --------  --------  --------  -------  ---------  ---------\
+  --------  --------  --------
+ Ethernet1/1        U      100  10.00 B/s      0.00%         0         0         0      100  10.00 B/s      0.00%\
+         0         0         0
+ Ethernet2/1        U      100  10.00 B/s      0.00%         0         0         0      100  10.00 B/s      0.00%\
+         0         0         0
+Ethernet11/1      N/A      N/A        N/A        N/A       N/A       N/A       N/A      N/A        N/A        N/A\
+       N/A       N/A       N/A
+"""
+
 TEST_PERIOD = 3
 
 
@@ -336,6 +370,15 @@ class TestPortStat(object):
         print("result = {}".format(result))
         assert return_code == 0
         assert result == intf_fec_counters
+
+    def test_show_intf_counters_fec_histogram(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["counters"].commands["fec-histogram"], ["Ethernet0"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == intf_fec_counters_fec_hist
 
     def test_show_intf_fec_counters_period(self):
         runner = CliRunner()
@@ -477,6 +520,31 @@ class TestPortStat(object):
         print("result = {}".format(result))
         assert return_code == 0
         assert result == intf_counters_on_sup_partial_lc
+
+        os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
+        os.system("cp /tmp/chassis_state_db.json {}"
+                  .format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+
+    def test_show_intf_counters_on_sup_na(self):
+        remove_tmp_cnstat_file()
+        os.system("cp {} /tmp/".format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+        os.system("cp {} {}".format(os.path.join(test_path, "portstat_db/on_sup_na/chassis_state_db.json"),
+                                    os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+        os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "1"
+
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["counters"], [])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == intf_counters_on_sup_na
+
+        return_code, result = get_result_and_return_code(['portstat'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result == intf_counters_on_sup_na
 
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
         os.system("cp /tmp/chassis_state_db.json {}"
