@@ -6,6 +6,7 @@ from jsonpatch import JsonPatchConflict
 from time import sleep
 from .utils import log
 from .validated_config_db_connector import ValidatedConfigDBConnector
+from . import stp
 
 ADHOC_VALIDATION = True
 DHCP_RELAY_TABLE = "DHCP_RELAY"
@@ -76,6 +77,9 @@ def add_vlan(db, vid, multiple):
             if clicommon.check_if_vlanid_exist(db.cfgdb, vlan, "DHCP_RELAY"):
                 ctx.fail("DHCPv6 relay config for {} already exists".format(vlan))
 
+            # Enable STP on VLAN if PVST is enabled globally
+            stp.vlan_enable_stp(db.cfgdb, vlan)
+
             # set dhcpv4_relay table
             set_dhcp_relay_table('VLAN', config_db, vlan, {'vlanid': str(vid)})
 
@@ -96,6 +100,29 @@ def delete_db_entry(entry_name, db_connector, db_name):
     if exists:
         db_connector.delete(db_name, entry_name)
 
+
+def enable_stp_on_port(db, port):
+    if stp.is_global_stp_enabled(db) is True:
+        vlan_list_for_intf = stp.get_vlan_list_for_interface(db, port)
+        if len(vlan_list_for_intf) == 0:
+            stp.interface_enable_stp(db, port)
+
+
+def disable_stp_on_vlan_port(db, vlan, port):
+    if stp.is_global_stp_enabled(db) is True:
+        vlan_interface = str(vlan) + "|" + port
+        db.set_entry('STP_VLAN_PORT', vlan_interface, None)
+        vlan_list_for_intf = stp.get_vlan_list_for_interface(db, port)
+        if len(vlan_list_for_intf) == 0:
+            db.set_entry('STP_PORT', port, None)
+
+
+def disable_stp_on_vlan(db, vlan_interface):
+    db.set_entry('STP_VLAN', vlan_interface, None)
+    stp_intf_list = stp.get_intf_list_from_stp_vlan_intf_table(db, vlan_interface)
+    for intf_name in stp_intf_list:
+        key = vlan_interface + "|" + intf_name
+        db.set_entry('STP_VLAN_PORT', key, None)
 
 @vlan.command('del')
 @click.argument('vid', metavar='<vid>', required=True)
@@ -154,7 +181,8 @@ def del_vlan(db, vid, multiple, no_restart_dhcp_relay):
             for vxmap_key, vxmap_data in vxlan_table.items():
                 if vxmap_data['vlan'] == 'Vlan{}'.format(vid):
                     ctx.fail("vlan: {} can not be removed. "
-                             "First remove vxlan mapping '{}' assigned to VLAN".format(vid, '|'.join(vxmap_key)))
+                             "First remove vxlan mapping '{}' assigned to VLAN".format(
+                              vid, '|'.join(vxmap_key)))
 
             # set dhcpv4_relay table
             set_dhcp_relay_table('VLAN', config_db, vlan, None)
@@ -168,6 +196,9 @@ def del_vlan(db, vid, multiple, no_restart_dhcp_relay):
 
             delete_db_entry("DHCPv6_COUNTER_TABLE|{}".format(vlan), db.db, db.db.STATE_DB)
             delete_db_entry("DHCP_COUNTER_TABLE|{}".format(vlan), db.db, db.db.STATE_DB)
+
+            # Delete STP_VLAN & STP_VLAN_PORT entries when VLAN is deleted.
+            disable_stp_on_vlan(db.cfgdb, 'Vlan{}'.format(vid))
 
     vlans = db.cfgdb.get_keys('VLAN')
     if not vlans:
@@ -312,6 +343,10 @@ def add_vlan_member(db, vid, port, untagged, multiple, except_flag):
                 ctx.fail("{} is in access mode! Tagged Members cannot be added".format(port))
             elif existing_mode == mode_type or (existing_mode == "trunk" and mode_type == "access"):
                 pass
+
+            # If port is being made L2 port, enable STP
+            enable_stp_on_port(db.cfgdb, port)
+
             try:
                 config_db.set_entry('VLAN_MEMBER', (vlan, port), {'tagging_mode': "untagged" if untagged else "tagged"})
             except ValueError:
@@ -355,6 +390,9 @@ def del_vlan_member(db, vid, port, multiple, except_flag):
 
             if not clicommon.is_port_vlan_member(db.cfgdb, port, vlan):  # TODO: MISSING CONSTRAINT IN YANG MODEL
                 ctx.fail("{} is not a member of {}".format(port, vlan))
+
+            # If port is being made non-L2 port, disable STP
+            disable_stp_on_vlan_port(db.cfgdb, vlan, port)
 
             try:
                 config_db.set_entry('VLAN_MEMBER', (vlan, port), None)

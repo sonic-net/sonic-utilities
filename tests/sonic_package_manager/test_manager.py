@@ -324,7 +324,7 @@ def test_manager_installation_version_range(package_manager):
         package_manager.install(f'test-package>=1.6.0')
 
 
-def test_manager_upgrade(package_manager, sonic_fs):
+def test_manager_upgrade(package_manager, sonic_fs, mock_run_command):
     package_manager.install('test-package-6=1.5.0')
     package = package_manager.get_installed_package('test-package-6')
 
@@ -332,6 +332,15 @@ def test_manager_upgrade(package_manager, sonic_fs):
     upgraded_package = package_manager.get_installed_package('test-package-6')
     assert upgraded_package.entry.version == Version.parse('2.0.0')
     assert upgraded_package.entry.default_reference == package.entry.default_reference
+
+    mock_run_command.assert_has_calls(
+        [
+            call(['systemctl', 'stop', 'test-package-6']),
+            call(['systemctl', 'disable', 'test-package-6']),
+            call(['systemctl', 'enable', 'test-package-6']),
+            call(['systemctl', 'start', 'test-package-6']),
+        ]
+    )
 
 
 def test_manager_package_reset(package_manager, sonic_fs):
@@ -370,7 +379,7 @@ def mock_get_docker_client(dockerd_sock):
             class Image:
                 def __init__(self, image_id):
                     self.image_id = image_id
-                
+
                 def save(self, named):
                     return ["named: {}".format(named).encode()]
 

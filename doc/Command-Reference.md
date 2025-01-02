@@ -225,6 +225,9 @@
   * [Static DNS show command](#static-dns-show-command)
 * [Wake-on-LAN Commands](#wake-on-lan-commands)
   * [Send Wake-on-LAN Magic Packet command](#send-wake-on-lan-magic-packet-command)
+* [Banner Commands](#banner-commands)
+  * [Banner config commands](#banner-config-commands)
+  * [Banner show command](#banner-show-command)
 
 ## Document History
 
@@ -4891,6 +4894,7 @@ Optional argument "-p" specify a period (in seconds) with which to gather counte
   show interfaces counters rates
   show interfaces counters rif [-p|--period <period>] [-i <interface_name>]
   show interfaces counters fec-histogram [-i <interface_name>]
+  show interfaces counters fec-stats
   ```
 
 - Example:
@@ -5036,6 +5040,18 @@ In a FEC histogram, "bins" represent ranges of errors or specific categories of 
   BIN15:                      0
   ```
 
+The "fec-stats" subcommand is used to disply the interface fec related statistic.
+
+- Example:
+  ```
+  admin@ctd615:~$ show interfaces counters fec-stats
+        IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER
+  -----------  -------  ----------  ------------  ----------------  -------------  --------------
+   Ethernet0        U           0             0                 0    1.48e-20       0.00e+00
+   Ethernet8        U           0             0                 0    1.98e-19       0.00e+00
+  Ethernet16        U           0             0                 0    1.77e-20       0.00e+00
+  ```
+
 
 **show interfaces description**
 
@@ -5117,6 +5133,37 @@ This command is to display the link-training status of the selected interfaces. 
   -----------  -----------  ----------  ------  -------
     Ethernet8      trained          on      up       up
   ```
+
+**show interfaces errors**
+
+The show interface errors command provides detailed statistics and error counters for MAC-level operations on an interface. It displays the status of various operational parameters, error counts, and timestamps for when these errors occurred.
+
+- Usage:
+  ```
+  show interfaces errors [<interface_name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show interfaces errors Ethernet4
+  Port Errors                        Count           Last timestamp(UTC)
+  ---------------------------------- -----           -------------------
+  oper_error_status                  5442            2024-11-02 04:00:05
+  mac_local_fault                    2               2024-11-02 04:00:05
+  fec_sync_loss                      2               2024-11-02 04:00:05
+  fec_alignment_loss                 2               2024-11-02 04:00:05
+  high_ser_error                     2               2024-11-02 04:00:05
+  high ber_error                     2               2024-11-02 04:00:05
+  data_unit_crc_error                2               2024-11-02 04:00:05
+  data_unit_misalignment_error       2               2024-11-02 04:00:05
+  signal_local_error                 2               2024-11-02 04:00:05
+  mac_remote_fault                   2               2024-11-02 04:00:50
+  crc_rate                           2               2024-11-02 04:00:50
+  data_unit_size                     2               2024-11-02 04:00:50
+  code_group_error                   0               Never
+  no_rx_reachability                 0               Never
+  ```
+
 
 **show interfaces mpls**
 
@@ -8600,74 +8647,11 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#platfo
 
 ### Mellanox Platform Specific Commands
 
-There are few commands that are platform specific. Mellanox has used this feature and implemented Mellanox specific commands as follows.
+config platform mlnx
 
-**show platform mlnx sniffer**
+This command is valid only on mellanox devices. The sub-commands for "config platform" gets populated only on mellanox platforms. There are no other subcommands on non-Mellanox devices and hence this command appears empty and useless in other platforms. 
 
-This command shows the SDK sniffer status
-
-- Usage:
-  ```
-  show platform mlnx sniffer
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show platform mlnx sniffer
-  sdk sniffer is disabled
-  ```
-
-**show platform mlnx sniffer**
-
-Another show command available on ‘show platform mlnx’ which is the issu status.
-This means if ISSU is enabled on this SKU or not. A warm boot command can be executed only when ISSU is enabled on the SKU.
-
-- Usage:
-  ```
-  show platform mlnx issu
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show platform mlnx issu
-  ISSU is enabled
-  ```
-
-In the case ISSU is disabled and warm-boot is called, the user will get a notification message explaining that the command cannot be invoked.
-
-- Example:
-  ```
-  admin@sonic:~$ sudo warm-reboot
-  ISSU is not enabled on this HWSKU
-  Warm reboot is not supported
-  ```
-
-**config platform mlnx**
-
-This command is valid only on mellanox devices. The sub-commands for "config platform" gets populated only on mellanox platforms.
-There are no other subcommands on non-Mellanox devices and hence this command appears empty and useless in other platforms.
-The platform mellanox command currently includes a single sub command which is the SDK sniffer.
-The SDK sniffer is a troubleshooting tool which records the RPC calls from the Mellanox SDK user API library to the sx_sdk task into a .pcap file.
-This .pcap file can be replayed afterward to get the exact same configuration state on SDK and FW to reproduce and investigate issues.
-
-A new folder will be created to store the sniffer files: "/var/log/mellanox/sniffer/". The result file will be stored in a .pcap file, which includes a time stamp of the starting time in the file name, for example, "sx_sdk_sniffer_20180224081306.pcap"
-In order to have a complete .pcap file with all the RPC calls, the user should disable the SDK sniffer. Swss service will be restarted and no capturing is taken place from that moment.
-It is recommended to review the .pcap file while sniffing is disabled.
-Once SDK sniffer is enabled/disabled, the user is requested to approve that swss service will be restarted.
-For example: To change SDK sniffer status, swss service will be restarted, continue? [y/N]:
-In order to avoid that confirmation the -y / --yes option should be used.
-
-- Usage:
-  ```
-  config platform mlnx sniffer sdk [-y|--yes]
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ config platform mlnx sniffer sdk
-  To change SDK sniffer status, swss service will be restarted, continue? [y/N]: y
-  NOTE: In order to avoid that confirmation the -y / --yes option should be used.
-  ```
+The platform mellanox command currently includes no sub command.
 
 ### Barefoot Platform Specific Commands
 
@@ -13882,3 +13866,89 @@ Sending 3 magic packet to 11:33:55:77:99:bb via interface Vlan1000
 ```
 
 For the 4th example, it specifise 2 target MAC addresses and `count` is 3. So it'll send 6 magic packets in total.
+
+# Banner Commands
+
+This sub-section explains the list of the configuration options available for Banner feature.
+
+## Banner config commands
+
+- Set banner feature state
+
+```
+admin@sonic:~$ config banner state <enabled|disabled>
+Usage: config config banner state <enabled|disabled>
+
+  Set banner feature state
+
+Options:
+  -?, -h, --help  Show this message and exit.
+```
+
+- Set login message
+
+```
+admin@sonic:~$ config banner login <message>
+Usage: config banner login <message>
+
+  Set login message
+
+Options:
+  -?, -h, --help  Show this message and exit.
+```
+
+- Set logout message
+
+```
+admin@sonic:~$ config banner logout <message>
+Usage: config banner logout <message>
+
+  Set logout message
+
+Options:
+  -?, -h, --help  Show this message and exit.
+```
+
+- Set message of the day
+
+```
+admin@sonic:~$ config banner motd <message>
+Usage: config banner motd <message>
+
+  Set message of the day
+
+Options:
+  -?, -h, --help  Show this message and exit.
+```
+
+## Banner show command
+
+- how banner messages
+
+```
+admin@sonic:~$ show banner
+Usage: show banner
+
+  Show banner messages
+
+Options:
+  -h, -?, --help  Show this message and exit.
+```
+```
+admin@sonic:~$ show banner
+state    login    motd                                              logout
+-------  -------  ------------------------------------------------  --------
+enabled  Login    You are on
+         Message    ____   ___  _   _ _  ____
+                   / ___| / _ \| \ | (_)/ ___|
+                   \___ \| | | |  \| | | |
+                    ___) | |_| | |\  | | |___
+                   |____/ \___/|_| \_|_|\____|
+
+                  -- Software for Open Networking in the Cloud --
+
+                  Unauthorized access and/or use are prohibited.
+                  All access and/or use are subject to monitoring.
+
+                  Help:    https://sonic-net.github.io/SONiC/
+```
