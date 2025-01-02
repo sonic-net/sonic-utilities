@@ -1607,6 +1607,16 @@ class TestConfigQos(object):
         _clear_qos(True, False)
         _wait_until_clear.assert_called_with(['BUFFER_*_TABLE:*', 'BUFFER_*_SET'], interval=0.5, timeout=0, verbose=False)
 
+    def test_qos_wait_until_clear_not_empty_should_exit(self):
+        from config.main import _wait_until_clear
+
+        with mock.patch('swsscommon.swsscommon.SonicV2Connector.keys', side_effect=self._keys), \
+            mock.patch('sys.exit') as mock_exit:
+            TestConfigQos._keys_counter = 10
+            # timeout set to 0, so will always timeout, to trigger sys.exit(1)
+            _wait_until_clear(["BUFFER_POOL_TABLE:*"], 0.5, 0, verbose=False)
+            mock_exit.assert_called_with(1)
+
     def test_qos_reload_single(
             self, get_cmd_module, setup_qos_mock_apis,
             setup_single_broadcom_asic

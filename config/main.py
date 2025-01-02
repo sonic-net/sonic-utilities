@@ -795,6 +795,7 @@ def _wait_until_clear(tables, interval=0.5, timeout=30, verbose=False):
         empty = (non_empty_table_count == 0)
     if not empty:
         click.echo("Operation not completed successfully, please save and reload configuration.")
+        sys.exit(1)
     return empty
 
 
