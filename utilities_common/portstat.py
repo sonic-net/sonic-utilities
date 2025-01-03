@@ -408,7 +408,9 @@ class Portstat(object):
                 print(table_as_json(table, header))
             else:
                 print(tabulate(table, header, tablefmt='simple', stralign='right'))
-        if (multi_asic.is_multi_asic() or device_info.is_chassis()) and not use_json:
+        if device_info.is_voq_chassis():
+            return
+        elif (multi_asic.is_multi_asic() or device_info.is_packet_chassis()) and not use_json:
             print("\nReminder: Please execute 'show interface counters -d all' to include internal links\n")
 
     def cnstat_intf_diff_print(self, cnstat_new_dict, cnstat_old_dict, intf_list):
@@ -671,5 +673,7 @@ class Portstat(object):
                 print(table_as_json(table, header))
             else:
                 print(tabulate(table, header, tablefmt='simple', stralign='right'))
-        if (multi_asic.is_multi_asic() or device_info.is_chassis()) and not use_json:
+        if device_info.is_voq_chassis():
+            return
+        elif (multi_asic.is_multi_asic() or device_info.is_packet_chassis()) and not use_json:
             print("\nReminder: Please execute 'show interface counters -d all' to include internal links\n")
