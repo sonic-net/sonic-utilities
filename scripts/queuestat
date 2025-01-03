@@ -294,38 +294,27 @@ class Queuestat(object):
                 old_cntr = cnstat_old_dict.get(key)
             if old_cntr is not None:
                 if self.voq:
-                   if not non_zero or ns_diff(cntr['totalpacket'], old_cntr['totalpacket']) != '0' or \
+                    if not non_zero or ns_diff(cntr['totalpacket'], old_cntr['totalpacket']) != '0' or \
                                    ns_diff(cntr['totalbytes'], old_cntr['totalbytes']) != '0' or \
                                    ns_diff(cntr['droppacket'], old_cntr['droppacket']) != '0' or \
                                    ns_diff(cntr['dropbytes'], old_cntr['dropbytes']) != '0' or \
                                    ns_diff(cntr['creditWDpkts'], old_cntr['creditWDpkts']) != '0':
-                       table.append((port, cntr['queuetype'] + str(cntr['queueindex']),
+                        table.append((port, cntr['queuetype'] + str(cntr['queueindex']),
                                    ns_diff(cntr['totalpacket'], old_cntr['totalpacket']),
                                    ns_diff(cntr['totalbytes'], old_cntr['totalbytes']),
                                    ns_diff(cntr['droppacket'], old_cntr['droppacket']),
                                    ns_diff(cntr['dropbytes'], old_cntr['dropbytes']),
                                    ns_diff(cntr['creditWDpkts'], old_cntr['creditWDpkts'])))
-                   elif not non_zero or cntr['totalpacket'] != '0' or cntr['totalbytes'] != '0' or \
-                                  cntr['droppacket'] != '0' or cntr['dropbytes'] != '0' or cntr['creditWDpkts'] != '0':
-                       table.append((port, cntr['queuetype'] + str(cntr['queueindex']),
-                                  cntr['totalpacket'], cntr['totalbytes'],
-                                  cntr['droppacket'], cntr['dropbytes'], cntr['creditWDpkts']))
                 else:
-                   if not non_zero or ns_diff(cntr['totalpacket'], old_cntr['totalpacket']) != '0' or \
+                    if not non_zero or ns_diff(cntr['totalpacket'], old_cntr['totalpacket']) != '0' or \
                                    ns_diff(cntr['totalbytes'], old_cntr['totalbytes']) != '0' or \
                                    ns_diff(cntr['droppacket'], old_cntr['droppacket']) != '0' or \
                                    ns_diff(cntr['dropbytes'], old_cntr['dropbytes']) != '0':
-                      table.append((port, cntr['queuetype'] + str(cntr['queueindex']),
-                                  ns_diff(cntr['totalpacket'], old_cntr['totalpacket']),
-                                  ns_diff(cntr['totalbytes'], old_cntr['totalbytes']),
-                                  ns_diff(cntr['droppacket'], old_cntr['droppacket']),
-                                  ns_diff(cntr['dropbytes'], old_cntr['dropbytes'])))
-                   elif not non_zero or cntr['totalpacket'] != '0' or cntr['totalbytes'] != '0' or \
-                                     cntr['droppacket'] != '0' or cntr['dropbytes'] != '0':
-                      table.append((port, cntr['queuetype'] + str(cntr['queueindex']),
-                               cntr['totalpacket'], cntr['totalbytes'],
-                               cntr['droppacket'], cntr['dropbytes']))
-
+                       table.append((port, cntr['queuetype'] + str(cntr['queueindex']),
+                                   ns_diff(cntr['totalpacket'], old_cntr['totalpacket']),
+                                   ns_diff(cntr['totalbytes'], old_cntr['totalbytes']),
+                                   ns_diff(cntr['droppacket'], old_cntr['droppacket']),
+                                   ns_diff(cntr['dropbytes'], old_cntr['dropbytes'])))
         if json_opt:
             json_output[port].update(build_json(port, table, self.voq))
             return json_output
@@ -346,8 +335,10 @@ class Queuestat(object):
         for port in natsorted(self.counter_port_name_map):
             json_output[port] = {}
             cnstat_dict = self.get_cnstat(self.port_queues_map[port])
-
-            cnstat_fqn_file_name = cnstat_fqn_file + port
+            cache_ns = ''
+            if self.voq and self.namespace is not None:
+                cache_ns = '-' + self.namespace + '-'
+            cnstat_fqn_file_name = cnstat_fqn_file + cache_ns + port
             if os.path.isfile(cnstat_fqn_file_name):
                 try:
                     cnstat_cached_dict = json.load(open(cnstat_fqn_file_name, 'r'))
@@ -378,7 +369,10 @@ class Queuestat(object):
 
         # Get stat for the port queried
         cnstat_dict = self.get_cnstat(self.port_queues_map[port])
-        cnstat_fqn_file_name = cnstat_fqn_file + port
+        cache_ns = ''
+        if self.voq and self.namespace is not None:
+            cache_ns = '-' + self.namespace + '-'
+        cnstat_fqn_file_name = cnstat_fqn_file + cache_ns + port
         json_output = {}
         json_output[port] = {}
         if os.path.isfile(cnstat_fqn_file_name):
@@ -403,10 +397,13 @@ class Queuestat(object):
 
     def save_fresh_stats(self):
         # Get stat for each port and save
+        cache_ns = ''
+        if self.voq and self.namespace is not None:
+            cache_ns = '-' + self.namespace + '-'
         for port in natsorted(self.counter_port_name_map):
             cnstat_dict = self.get_cnstat(self.port_queues_map[port])
             try:
-                json.dump(cnstat_dict, open(cnstat_fqn_file + port, 'w'), default=json_serial)
+                json.dump(cnstat_dict, open(cnstat_fqn_file + cache_ns + port, 'w'), default=json_serial)
             except IOError as e:
                 print(e.errno, e)
                 sys.exit(e.errno)
