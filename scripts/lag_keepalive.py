@@ -78,14 +78,15 @@ def get_lacpdu_per_lag_member():
             active_lag_members.append(lag_member)
             # craft lacpdu packets for each lag member based on config
             port_channel_config = get_port_channel_config(lag_name)
-            lag_member_to_packet[lag_member] = craft_lacp_packet(port_channel_config, lag_member)
+            socket = conf.L2socket(iface=lag_member)
+            lag_member_to_packet[lag_member] = (socket, craft_lacp_packet(port_channel_config, lag_member))
 
     return active_lag_members, lag_member_to_packet
 
 
 def lag_keepalive(lag_member_to_packet):
     while True:
-        for lag_member, packet in lag_member_to_packet.items():
+        for lag_member, (socket, packet) in lag_member_to_packet.items():
             try:
                 sendp(packet, iface=lag_member, verbose=False)
             except Exception:
