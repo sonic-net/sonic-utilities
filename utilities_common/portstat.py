@@ -122,6 +122,8 @@ CHASSIS_MIDPLANE_INFO_TABLE = 'CHASSIS_MIDPLANE_TABLE'
 class Portstat(object):
     def __init__(self, namespace, display_option):
         self.db = None
+        self.namespace = namespace
+        self.display_option = display_option
         self.multi_asic = multi_asic_util.MultiAsic(display_option, namespace)
         if device_info.is_supervisor():
             self.db = SonicV2Connector(use_unix_socket_path=False)
@@ -132,7 +134,8 @@ class Portstat(object):
         self.cnstat_dict['time'] = datetime.datetime.now()
         self.ratestat_dict = OrderedDict()
         if device_info.is_supervisor():
-            self.collect_stat_from_lc()
+            if device_info.is_voq_chassis() or (self.namespace is None and self.display_option != 'all'):
+                self.collect_stat_from_lc()
         else:
             self.collect_stat()
         return self.cnstat_dict, self.ratestat_dict
