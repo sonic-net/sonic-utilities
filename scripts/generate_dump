@@ -2134,10 +2134,11 @@ main() {
     wait
 
     # capture /sys info - include acpi info
-    save_sys /sys/firmware/acpi/tables & 
+    save_sys /sys/firmware/acpi/tables &
     end_t2=$(date +%s%3N)
     echo "[ Capture Sys info ] : $(($end_t2-$end_t)) msec" >> $TECHSUPPORT_TIME_INFO
-    
+    wait
+
     # Save all the processes within each docker
     save_cmd "show services" services.summary &
 
