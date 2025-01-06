@@ -35,7 +35,7 @@ def get_all_dpus():
 def get_all_dpu_options():
     dpu_list = get_all_dpus()
 
-    # Add 'all' and 'SWITCH' to the list
+    # Add 'all' to the list
     dpu_list += ['all']
 
     return dpu_list
