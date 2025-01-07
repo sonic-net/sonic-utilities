@@ -1248,13 +1248,18 @@ class DBMigrator():
 
     def version_202405_01(self):
         """
-        Version 202405_01, this version should be the final version for
-        master branch until 202405 branch is created.
+        Version 202405_01.
         """
         log.log_info('Handling version_202405_01')
+        self.set_version('version_202405_02')
+        return 'version_202405_02'
 
+    def version_202405_02(self):
+        """
+        Version 202405_02.
+        """
+        log.log_info('Handling version_202405_02')
         self.migrate_ipinip_tunnel()
-
         return None
 
     def get_version(self):
