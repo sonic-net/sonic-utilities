@@ -1,5 +1,4 @@
 import syslog
-
 import click
 from swsscommon.swsscommon import ConfigDBConnector
 
@@ -19,21 +18,24 @@ def log_to_syslog(message, level=syslog.LOG_INFO):
 
     This function logs the provided message to syslog at the specified level.
     It opens the syslog with the application name 'memory_statistics' and the
-    appropriate log level (default is INFO).
+    appropriate log level, ensuring the connection is closed after logging.
 
     Args:
         message (str): The message to log.
-        level (int): The syslog log level (default is LOG_INFO).
+        level (int): The syslog log level.
     """
-    syslog.openlog("memory_statistics", syslog.LOG_PID | syslog.LOG_CONS, syslog.LOG_USER)
-    syslog.syslog(level, message)
+    try:
+        syslog.openlog("memory_statistics", syslog.LOG_PID | syslog.LOG_CONS, syslog.LOG_USER)
+        syslog.syslog(level, message)
+    finally:
+        syslog.closelog()
 
 
 class MemoryStatisticsDB:
     """Singleton class to handle memory statistics database connection.
 
-    This class ensures only one instance of the database connection exists using
-    the Singleton pattern. It provides access to the database connection and
+    This class ensures only one instance of the database connection exists using 
+    the Singleton pattern. It provides access to the database connection and 
     ensures that it is created only once during the application's lifetime.
     """
     _instance = None
@@ -42,8 +44,8 @@ class MemoryStatisticsDB:
     def __new__(cls):
         """Ensure only one instance of MemoryStatisticsDB is created.
 
-        This method implements the Singleton pattern to guarantee that only one
-        instance of the MemoryStatisticsDB class exists. If no instance exists,
+        This method implements the Singleton pattern to guarantee that only one 
+        instance of the MemoryStatisticsDB class exists. If no instance exists, 
         it creates one and connects to the database.
 
         Returns:
@@ -59,7 +61,7 @@ class MemoryStatisticsDB:
     def get_db(cls):
         """Get the singleton database connection instance.
 
-        Returns the existing database connection instance. If it doesn't exist,
+        Returns the existing database connection instance. If it doesn't exist, 
         a new instance is created by calling the __new__ method.
 
         Returns:
@@ -74,16 +76,16 @@ def update_memory_statistics_status(status):
     """
     Update the status of the memory statistics feature in the config DB.
 
-    This function modifies the configuration database to enable or disable
-    memory statistics collection based on the provided status. It also logs
+    This function modifies the configuration database to enable or disable 
+    memory statistics collection based on the provided status. It also logs 
     the action and returns a tuple indicating whether the operation was successful.
 
     Args:
         status (str): The status to set for memory statistics ("true" or "false").
 
     Returns:
-        tuple: A tuple (success, error_message) where `success` is a boolean
-               indicating whether the operation was successful, and
+        tuple: A tuple (success, error_message) where `success` is a boolean 
+               indicating whether the operation was successful, and 
                `error_message` contains any error details if unsuccessful.
     """
     try:
@@ -104,8 +106,8 @@ def update_memory_statistics_status(status):
 def cli():
     """Memory statistics configuration tool.
 
-    This command-line interface (CLI) allows users to configure and manage
-    memory statistics settings such as enabling/disabling the feature and
+    This command-line interface (CLI) allows users to configure and manage 
+    memory statistics settings such as enabling/disabling the feature and 
     modifying parameters like the sampling interval and retention period.
     """
     pass
@@ -113,13 +115,35 @@ def cli():
 
 @cli.group()
 def config():
-    """Configuration commands for managing memory statistics."""
+    """Configuration commands for managing memory statistics.
+
+    Example:
+        $ config memory-stats enable
+        $ config memory-stats sampling-interval 5
+    """
     pass
 
 
 @config.group(name='memory-stats')
 def memory_stats():
-    """Configure memory statistics collection and settings."""
+    """Configure memory statistics collection and settings.
+
+    This group contains commands to enable/disable memory statistics collection
+    and configure related parameters.
+
+    Examples:
+        Enable memory statistics:
+        $ config memory-stats enable
+
+        Set sampling interval to 5 minutes:
+        $ config memory-stats sampling-interval 5
+
+        Set retention period to 7 days:
+        $ config memory-stats retention-period 7
+
+        Disable memory statistics:
+        $ config memory-stats disable
+    """
     pass
 
 
@@ -130,6 +154,11 @@ def memory_stats_enable():
     This command enables the collection of memory statistics on the device.
     It updates the configuration and reminds the user to run 'config save'
     to persist changes.
+
+    Example:
+        $ config memory-stats enable
+        Memory statistics feature enabled successfully.
+        Reminder: Please run 'config save' to persist changes.
     """
     success, error = update_memory_statistics_status("true")
     if success:
@@ -144,6 +173,11 @@ def memory_stats_disable():
     This command disables the collection of memory statistics on the device.
     It updates the configuration and reminds the user to run 'config save'
     to persist changes.
+
+    Example:
+        $ config memory-stats disable
+        Memory statistics feature disabled successfully.
+        Reminder: Please run 'config save' to persist changes.
     """
     success, error = update_memory_statistics_status("false")
     if success:
@@ -154,14 +188,23 @@ def memory_stats_disable():
 @memory_stats.command(name='sampling-interval')
 @click.argument("interval", type=int)
 def memory_stats_sampling_interval(interval):
-    """
-    Set the sampling interval for memory statistics.
+    """Set the sampling interval for memory statistics.
 
     This command allows users to configure the frequency at which memory statistics
     are collected. The interval must be between 3 and 15 minutes.
 
     Args:
         interval (int): The sampling interval in minutes (must be between 3 and 15).
+
+    Examples:
+        Set sampling interval to 5 minutes:
+        $ config memory-stats sampling-interval 5
+        Sampling interval set to 5 minutes successfully.
+        Reminder: Please run 'config save' to persist changes.
+
+        Invalid interval example:
+        $ config memory-stats sampling-interval 20
+        Error: Sampling interval must be between 3 and 15 minutes.
     """
     if not (SAMPLING_INTERVAL_MIN <= interval <= SAMPLING_INTERVAL_MAX):
         error_msg = (
@@ -188,14 +231,23 @@ def memory_stats_sampling_interval(interval):
 @memory_stats.command(name='retention-period')
 @click.argument("period", type=int)
 def memory_stats_retention_period(period):
-    """
-    Set the retention period for memory statistics.
+    """Set the retention period for memory statistics.
 
     This command allows users to configure how long memory statistics are retained
     before being purged. The retention period must be between 1 and 30 days.
 
     Args:
         period (int): The retention period in days (must be between 1 and 30).
+
+    Examples:
+        Set retention period to 7 days:
+        $ config memory-stats retention-period 7
+        Retention period set to 7 days successfully.
+        Reminder: Please run 'config save' to persist changes.
+
+        Invalid period example:
+        $ config memory-stats retention-period 45
+        Error: Retention period must be between 1 and 30 days.
     """
     if not (RETENTION_PERIOD_MIN <= period <= RETENTION_PERIOD_MAX):
         error_msg = f"Error: Retention period must be between {RETENTION_PERIOD_MIN} and {RETENTION_PERIOD_MAX} days."
