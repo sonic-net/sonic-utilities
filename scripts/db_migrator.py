@@ -668,20 +668,20 @@ class DBMigrator():
         tunnel_decap_table = self.appDB.get_table('TUNNEL_DECAP_TABLE')
         app_db_separator = self.appDB.get_db_separator(self.appDB.APPL_DB)
         for key, attrs in tunnel_decap_table.items():
-            if "dst_ip" in attrs:
-                dst_ips = attrs["dst_ip"].split(",")
-                src_ip = attrs.get("src_ip")
-                for dst_ip in dst_ips:
-                    decap_term_table_key = app_db_separator.join(["TUNNEL_DECAP_TERM_TABLE", key, dst_ip])
+            dst_ip = attrs.pop("dst_ip", None)
+            src_ip = attrs.pop("src_ip", None)
+            if dst_ip:
+                dst_ips = dst_ip.split(",")
+                for dip in dst_ips:
+                    decap_term_table_key = app_db_separator.join(["TUNNEL_DECAP_TERM_TABLE", key, dip])
                     if src_ip:
                         self.appDB.set(self.appDB.APPL_DB, decap_term_table_key, "src_ip", src_ip)
                         self.appDB.set(self.appDB.APPL_DB, decap_term_table_key, "term_type", "P2P")
                     else:
                         self.appDB.set(self.appDB.APPL_DB, decap_term_table_key, "term_type", "P2MP")
 
-            attrs.pop("dst_ip", None)
-            attrs.pop("src_ip", None)
-            self.appDB.set_entry("TUNNEL_DECAP_TABLE", key, attrs)
+            if dst_ip or src_ip:
+                self.appDB.set_entry("TUNNEL_DECAP_TABLE", key, attrs)
 
     def migrate_port_qos_map_global(self):
         """
