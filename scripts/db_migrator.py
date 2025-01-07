@@ -1252,9 +1252,15 @@ class DBMigrator():
         Version 202405_01.
         """
         log.log_info('Handling version_202405_01')
+        self.set_version('version_202405_02')
+        return 'version_202405_02'
 
+    def version_202405_02(self):
+        """
+        Version 202405_02.
+        """
+        log.log_info('Handling version_202405_02')
         self.migrate_ipinip_tunnel()
-
         self.set_version('version_202411_01')
         return 'version_202411_01'
 

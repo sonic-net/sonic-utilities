@@ -1031,9 +1031,11 @@ class TestIPinIPTunnelMigrator(object):
     def teardown_class(cls):
         os.environ['UTILITIES_UNIT_TESTING'] = "0"
         dbconnector.dedicated_dbs['APPL_DB'] = None
+        dbconnector.dedicated_dbs['CONFIG_DB'] = None
 
     def test_tunnel_migrator(self):
         dbconnector.dedicated_dbs['APPL_DB'] = os.path.join(mock_db_path, 'appl_db', 'tunnel_table_input')
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'tunnel_table_input')
 
         import db_migrator
         dbmgtr = db_migrator.DBMigrator(None)
