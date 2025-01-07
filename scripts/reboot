@@ -254,7 +254,6 @@ is_smartswitch=$(is_smartswitch)
 if [ "$is_smartswitch" == "True" ] && [ "$REBOOT_DPU" == "yes" ]; then
     exit $smart_switch_result
 fi
-fi
 
 check_conflict_boot_in_fw_update
 
