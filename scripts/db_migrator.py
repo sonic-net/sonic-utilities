@@ -663,6 +663,26 @@ class DBMigrator():
             metadata['synchronous_mode'] = device_metadata_data.get("synchronous_mode")
             self.configDB.set_entry('DEVICE_METADATA', 'localhost', metadata)
 
+    def migrate_ipinip_tunnel(self):
+        """Migrate TUNNEL_DECAP_TABLE to add decap terms with TUNNEL_DECAP_TERM_TABLE."""
+        tunnel_decap_table = self.appDB.get_table('TUNNEL_DECAP_TABLE')
+        app_db_separator = self.appDB.get_db_separator(self.appDB.APPL_DB)
+        for key, attrs in tunnel_decap_table.items():
+            if "dst_ip" in attrs:
+                dst_ips = attrs["dst_ip"].split(",")
+                src_ip = attrs.get("src_ip")
+                for dst_ip in dst_ips:
+                    decap_term_table_key = app_db_separator.join(["TUNNEL_DECAP_TERM_TABLE", key, dst_ip])
+                    if src_ip:
+                        self.appDB.set(self.appDB.APPL_DB, decap_term_table_key, "src_ip", src_ip)
+                        self.appDB.set(self.appDB.APPL_DB, decap_term_table_key, "term_type", "P2P")
+                    else:
+                        self.appDB.set(self.appDB.APPL_DB, decap_term_table_key, "term_type", "P2MP")
+
+            attrs.pop("dst_ip", None)
+            attrs.pop("src_ip", None)
+            self.appDB.set_entry("TUNNEL_DECAP_TABLE", key, attrs)
+
     def migrate_port_qos_map_global(self):
         """
         Generate dscp_to_tc_map for switch.
@@ -1232,6 +1252,9 @@ class DBMigrator():
         master branch until 202405 branch is created.
         """
         log.log_info('Handling version_202405_01')
+
+        self.migrate_ipinip_tunnel()
+
         return None
 
     def get_version(self):
