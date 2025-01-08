@@ -9636,6 +9636,7 @@ Some of the example QOS configurations that users can modify are given below.
 
   In this example, it uses the buffers.json.j2 file and qos.json.j2 file from platform specific folders.
   When there are no changes in the platform specific configutation files, they internally use the file "/usr/share/sonic/templates/buffers_config.j2" and "/usr/share/sonic/templates/qos_config.j2" to generate the configuration.
+  When an error occurs, such as "Operation not completed successfully, please save and reload configuration," the system will record the status, after executing all the latter commands, exit with code 1.
   ```
 
 **config qos reload --ports port_list**

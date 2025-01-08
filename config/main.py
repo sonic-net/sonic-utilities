@@ -838,7 +838,7 @@ def _clear_qos(delay=False, verbose=False):
         device_metadata = config_db.get_entry('DEVICE_METADATA', 'localhost')
         # Traditional buffer manager do not remove buffer tables in any case, no need to wait.
         timeout = 120 if device_metadata and device_metadata.get('buffer_model') == 'dynamic' else 0
-        _wait_until_clear(["BUFFER_*_TABLE:*", "BUFFER_*_SET"], interval=0.5, timeout=timeout, verbose=verbose)
+        return _wait_until_clear(["BUFFER_*_TABLE:*", "BUFFER_*_SET"], interval=0.5, timeout=timeout, verbose=verbose)
 
 def _get_sonic_generated_services(num_asic):
     if not os.path.isfile(SONIC_GENERATED_SERVICE_PATH):
@@ -3161,6 +3161,7 @@ def _update_buffer_calculation_model(config_db, model):
     help="Dry run, writes config to the given file"
 )
 def reload(ctx, no_dynamic_buffer, no_delay, dry_run, json_data, ports, verbose):
+    status = True
     """Reload QoS configuration"""
     if ports:
         log.log_info("'qos reload --ports {}' executing...".format(ports))
@@ -3169,7 +3170,7 @@ def reload(ctx, no_dynamic_buffer, no_delay, dry_run, json_data, ports, verbose)
 
     log.log_info("'qos reload' executing...")
     if not dry_run:
-        _clear_qos(delay = not no_delay, verbose=verbose)
+        status = _clear_qos(delay=not no_delay, verbose=verbose)
 
     _, hwsku_path = device_info.get_paths_to_platform_and_hwsku_dirs()
     sonic_version_file = device_info.get_sonic_version_file()
@@ -3251,6 +3252,9 @@ def reload(ctx, no_dynamic_buffer, no_delay, dry_run, json_data, ports, verbose)
 
     if buffer_model_updated:
         print("Buffer calculation model updated, restarting swss is required to take effect")
+
+    if not status:
+        sys.exit(1)
 
 def _qos_update_ports(ctx, ports, dry_run, json_data):
     """Reload QoS configuration"""
