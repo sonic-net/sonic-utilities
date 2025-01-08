@@ -75,6 +75,8 @@ class ModuleHelper:
     def pci_detach_module(self, module_name):
         """
         Detach the specified module by invoking the platform API.
+        Note: Caller to make sure this method is not invoked concurrently with
+        pci_reattach_module for the same module.
 
         Args:
             module_name (str): The name of the module to detach.
@@ -103,6 +105,8 @@ class ModuleHelper:
     def pci_reattach_module(self, module_name):
         """
         Rescan the specified module by invoking the platform API.
+        Note: Caller to make sure this method is not invoked concurrently with
+        pci_detach_module for the same module.
 
         Args:
             module_name (str): The name of the module to rescan.

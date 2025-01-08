@@ -82,7 +82,7 @@ function pci_reattach_module()
     python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.pci_reattach_module('${DPU_NAME}')"
     if [ $? -ne 0 ]; then
         log_message "Error: PCI reattach vendor API is not available"
-        echo 1 > /sys/bus/pci/rescan
+        echo 1 > /sys/bus/pci/devices/${DPU_BUS_INFO}/rescan
     fi
 }
 
