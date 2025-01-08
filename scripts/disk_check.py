@@ -40,6 +40,7 @@ UPPER_DIR = "/run/mount/upper"
 WORK_DIR = "/run/mount/work"
 MOUNTS_FILE = "/proc/mounts"
 
+# Threshold of free block counts: On most file systems, the block size is 4096 bytes.
 FREE_SPACE_THRESHOLD = 1024
 
 EVENTS_PUBLISHER_SOURCE = "sonic-events-host"
@@ -66,9 +67,9 @@ def log_debug(m):
     _log_msg(syslog.LOG_DEBUG, "Debug", m)
 
 
-def event_pub():
+def event_pub(event):
     param_dict = FieldValueMap()
-    param_dict["fail_type"] = "read_only"
+    param_dict["fail_type"] = event
     event_publish(events_handle, EVENTS_PUBLISHER_TAG, param_dict)
 
 
@@ -77,14 +78,14 @@ def test_writable(dirs):
         rw = os.access(d, os.W_OK)
         if not rw:
             log_err("{} is not read-write".format(d))
-            event_pub()
+            event_pub("read_only")
             return False
         else:
             log_debug("{} is Read-Write".format(d))
             space = os.statvfs(d)
             if space.f_bavail < FREE_SPACE_THRESHOLD:
-                log_err("{} is no free space".format(d))
-                event_pub()
+                log_err("{} has no free disk space".format(d))
+                event_pub("disk_full")
                 return False
             else:
                 log_debug("{} has enough disk space".format(d))
