@@ -2059,6 +2059,14 @@
         "asn": "65200",
         "keepalive": "3"
     },
+    "BGP_NEIGHBOR|Vlan100": {
+        "rrclient": "0",
+        "peer_type": "external",
+        "nhopself": "0",
+        "admin_status": "up",
+        "holdtime": "10",
+        "keepalive": "3"
+    },
     "SCHEDULER|scheduler.0": {
         "type": "DWRR",
         "weight": "14"
