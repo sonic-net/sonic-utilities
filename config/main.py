@@ -1322,6 +1322,18 @@ def flush_configdb(namespace=DEFAULT_NAMESPACE):
     return client, config_db
 
 
+def delete_transceiver_tables():
+    tables = ["TRANSCEIVER_INFO", "TRANSCEIVER_STATUS", "TRANSCEIVER_PM",
+              "TRANSCEIVER_FIRMWARE_INFO", "TRANSCEIVER_DOM_SENSOR", "TRANSCEIVER_DOM_THRESHOLD"]
+    state_db_del_pattern = "|*"
+
+    # delete TRANSCEIVER tables from State DB
+    state_db = SonicV2Connector(use_unix_socket_path=True)
+    state_db.connect(state_db.STATE_DB, False)
+    for table in tables:
+        state_db.delete_all_by_pattern(state_db.STATE_DB, table + state_db_del_pattern)
+
+
 def migrate_db_to_lastest(namespace=DEFAULT_NAMESPACE):
     # Migrate DB contents to latest version
     db_migrator = '/usr/local/bin/db_migrator.py'
@@ -1374,17 +1386,21 @@ def multiasic_write_to_db(filename, load_sysinfo):
 
 
 def config_file_yang_validation(filename):
-    config_to_check = read_json_file(filename)
+    config = read_json_file(filename)
     sy = sonic_yang.SonicYang(YANG_DIR)
     sy.loadYangModel()
-    try:
-        sy.loadData(configdbJson=config_to_check)
-        sy.validate_data_tree()
-    except sonic_yang.SonicYangException as e:
-        click.secho("{} fails YANG validation! Error: {}".format(filename, str(e)),
-                    fg='magenta')
-        raise click.Abort()
-
+    asic_list = [HOST_NAMESPACE]
+    if multi_asic.is_multi_asic():
+        asic_list.extend(multi_asic.get_namespace_list())
+    for scope in asic_list:
+        config_to_check = config.get(scope) if multi_asic.is_multi_asic() else config
+        try:
+            sy.loadData(configdbJson=config_to_check)
+            sy.validate_data_tree()
+        except sonic_yang.SonicYangException as e:
+            click.secho("{} fails YANG validation! Error: {}".format(filename, str(e)),
+                        fg='magenta')
+            raise click.Abort()
 
 # This is our main entrypoint - the main 'config' command
 @click.group(cls=clicommon.AbbreviationGroup, context_settings=CONTEXT_SETTINGS)
@@ -1901,6 +1917,7 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
                 cfg_hwsku = output.strip()
 
             client, config_db = flush_configdb(namespace)
+            delete_transceiver_tables()
 
             if load_sysinfo:
                 if namespace is DEFAULT_NAMESPACE:
@@ -2019,23 +2036,21 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
                         fg='magenta')
             raise click.Abort()
 
+        config_file_yang_validation(golden_config_path)
+
         config_to_check = read_json_file(golden_config_path)
-        if multi_asic.is_multi_asic():
-            # Multiasic has not 100% fully validated. Thus pass here.
-            pass
-        else:
-            config_file_yang_validation(golden_config_path)
-
         # Dependency check golden config json
+        asic_list = [HOST_NAMESPACE]
         if multi_asic.is_multi_asic():
-            host_config = config_to_check.get('localhost', {})
-        else:
-            host_config = config_to_check
-        table_hard_dependency_check(host_config)
+            asic_list.extend(multi_asic.get_namespace_list())
+        for scope in asic_list:
+            host_config = config_to_check.get(scope) if multi_asic.is_multi_asic() else config_to_check
+            table_hard_dependency_check(host_config)
 
-    #Stop services before config push
+    # Stop services before config push
     if not no_service_restart:
         log.log_notice("'load_minigraph' stopping services...")
+        delete_transceiver_tables()
         _stop_services()
 
     # For Single Asic platform the namespace list has the empty string
