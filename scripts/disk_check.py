@@ -169,7 +169,7 @@ def do_check(skip_mount, dirs):
     # Check if mounted
     if (not ret) and is_mounted(dirs):
         log_err("READ-ONLY: Mounted {} to make Read-Write".format(dirs))
-        event_pub()
+        event_pub("read_only")
 
     return ret
 
