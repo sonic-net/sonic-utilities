@@ -121,6 +121,8 @@ CHASSIS_MIDPLANE_INFO_TABLE = 'CHASSIS_MIDPLANE_TABLE'
 class Portstat(object):
     def __init__(self, namespace, display_option):
         self.db = None
+        self.namespace = namespace
+        self.display_option = display_option
         self.multi_asic = multi_asic_util.MultiAsic(display_option, namespace)
         if device_info.is_supervisor():
             self.db = SonicV2Connector(use_unix_socket_path=False)
@@ -131,7 +133,8 @@ class Portstat(object):
         self.cnstat_dict['time'] = datetime.datetime.now()
         self.ratestat_dict = OrderedDict()
         if device_info.is_supervisor():
-            self.collect_stat_from_lc()
+            if device_info.is_voq_chassis() or (self.namespace is None and self.display_option != 'all'):
+                self.collect_stat_from_lc()
         else:
             self.collect_stat()
         return self.cnstat_dict, self.ratestat_dict
@@ -399,7 +402,9 @@ class Portstat(object):
                 print(table_as_json(table, header))
             else:
                 print(tabulate(table, header, tablefmt='simple', stralign='right'))
-        if (multi_asic.is_multi_asic() or device_info.is_chassis()) and not use_json:
+        if device_info.is_voq_chassis():
+            return
+        elif (multi_asic.is_multi_asic() or device_info.is_packet_chassis()) and not use_json:
             print("\nReminder: Please execute 'show interface counters -d all' to include internal links\n")
 
     def cnstat_intf_diff_print(self, cnstat_new_dict, cnstat_old_dict, intf_list):
@@ -662,5 +667,7 @@ class Portstat(object):
                 print(table_as_json(table, header))
             else:
                 print(tabulate(table, header, tablefmt='simple', stralign='right'))
-        if (multi_asic.is_multi_asic() or device_info.is_chassis()) and not use_json:
+        if device_info.is_voq_chassis():
+            return
+        elif (multi_asic.is_multi_asic() or device_info.is_packet_chassis()) and not use_json:
             print("\nReminder: Please execute 'show interface counters -d all' to include internal links\n")
