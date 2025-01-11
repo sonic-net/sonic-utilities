@@ -26,6 +26,7 @@ from mock import call, patch, mock_open, MagicMock
 from generic_config_updater.generic_updater import ConfigFormat
 
 import config.main as config
+from config.main import recover_hw_config
 import config.validated_config_db_connector as validated_config_db_connector
 
 # Add Test, module and script path.
@@ -1130,6 +1131,7 @@ class TestLoadMinigraph(object):
             assert result.exit_code != 0
             assert "Cannot find 'non_exist.json'" in result.output
 
+    @mock.patch('config.main.recover_hw_config', mock.MagicMock(return_value=True))
     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs', mock.MagicMock(return_value=("dummy_path", None)))
     def test_load_minigraph_with_specified_golden_config_path(self, get_cmd_module):
         def is_file_side_effect(filename):
@@ -1147,6 +1149,7 @@ class TestLoadMinigraph(object):
             assert result.exit_code == 0
             assert "config override-config-table golden_config.json" in result.output
 
+    @mock.patch('config.main.recover_hw_config', mock.MagicMock(return_value=True))
     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs', mock.MagicMock(return_value=("dummy_path", None)))
     def test_load_minigraph_with_default_golden_config_path(self, get_cmd_module):
         def is_file_side_effect(filename):
@@ -1163,6 +1166,80 @@ class TestLoadMinigraph(object):
             result = runner.invoke(config.config.commands["load_minigraph"], ["--override_config", "-y"])
             assert result.exit_code == 0
             assert "config override-config-table /etc/sonic/golden_config_db.json" in result.output
+    
+    @mock.patch('config.main.ConfigDBConnector')
+    @mock.patch('config.main.device_info')
+    @mock.patch('config.main.parse_hostname')
+    @mock.patch('config.main.parse_asic_sub_role')
+    @mock.patch('config.main.parse_asic_switch_type')
+    def test_recover_hw_config_single_namespace(self, mock_parse_asic_switch_type, mock_parse_asic_sub_role, mock_parse_hostname, mock_device_info, mock_ConfigDBConnector):
+        # Mock return values
+        mock_ConfigDBConnector.return_value.get_entry.return_value = {'platform': 'mock_platform'}
+        mock_device_info.get_platform.return_value = 'mock_platform'
+        mock_device_info.get_system_mac.return_value = '00:11:22:33:44:55'
+        mock_parse_hostname.return_value = 'mock_hostname'
+        mock_parse_asic_sub_role.return_value = 'mock_role'
+        mock_parse_asic_switch_type.return_value = 'mock_switch_type'
+
+        # Call the function
+        recover_hw_config(namespace_list=[''])
+
+        # Assertions
+        mock_ConfigDBConnector.assert_called_once()
+        mock_ConfigDBConnector.return_value.connect.assert_called_once()
+        mock_ConfigDBConnector.return_value.set_entry.assert_called_once_with(
+            'DEVICE_METADATA', 'localhost', {
+                'platform': 'mock_platform',
+                'mac': '00:11:22:33:44:55'
+            }
+        )
+
+    @mock.patch('config.main.ConfigDBConnector')
+    @mock.patch('config.main.device_info')
+    @mock.patch('config.main.parse_hostname')
+    @mock.patch('config.main.parse_asic_sub_role')
+    @mock.patch('config.main.parse_asic_switch_type')
+    def test_recover_hw_config_multiple_namespaces(self, mock_parse_asic_switch_type, mock_parse_asic_sub_role, mock_parse_hostname, mock_device_info, mock_ConfigDBConnector):
+        # Mock return values
+        mock_ConfigDBConnector.return_value.get_entry.return_value = {'platform': 'mock_platform'}
+        mock_ConfigDBConnector.return_value.set_entry = mock.MagicMock()
+        mock_device_info.get_platform.return_value = 'mock_platform'
+        mock_device_info.get_system_mac.return_value = '00:11:22:33:44:55'
+        mock_parse_hostname.return_value = 'mock_hostname'
+        mock_parse_asic_sub_role.return_value = 'mock_role'
+        mock_parse_asic_switch_type.return_value = 'mock_switch_type'
+
+        # Call the function
+        recover_hw_config(namespace_list=['', 'asic0', 'asic1'])
+
+        # Assertions
+        assert mock_ConfigDBConnector.call_count == 3
+        assert mock_ConfigDBConnector.return_value.connect.call_count == 3
+        assert mock_ConfigDBConnector.return_value.set_entry.call_count == 3
+
+    @mock.patch('config.main.ConfigDBConnector')
+    @mock.patch('config.main.device_info')
+    @mock.patch('config.main.parse_hostname')
+    @mock.patch('config.main.parse_asic_sub_role')
+    @mock.patch('config.main.parse_asic_switch_type')
+    def test_recover_hw_config_different_platforms(self, mock_parse_asic_switch_type, mock_parse_asic_sub_role, mock_parse_hostname, mock_device_info, mock_ConfigDBConnector):
+        # Mock return values
+        mock_ConfigDBConnector.return_value.get_entry.return_value = {'platform': 'mock_platform'}
+        mock_device_info.get_platform.return_value = 'mock_platform'
+        mock_device_info.get_system_mac.return_value = '00:11:22:33:44:55'
+        mock_parse_hostname.return_value = 'mock_hostname'
+        mock_parse_asic_sub_role.return_value = 'mock_role'
+        mock_parse_asic_switch_type.return_value = 'mock_switch_type'
+
+        # Call the function with different platforms
+        recover_hw_config(namespace_list=[''])
+        mock_device_info.get_platform.return_value = 'different_platform'
+        recover_hw_config(namespace_list=[''])
+
+        # Assertions
+        assert mock_ConfigDBConnector.call_count == 2
+        assert mock_ConfigDBConnector.return_value.connect.call_count == 2
+        assert mock_ConfigDBConnector.return_value.set_entry.call_count == 2
 
     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs',
                 mock.MagicMock(return_value=("dummy_path", None)))

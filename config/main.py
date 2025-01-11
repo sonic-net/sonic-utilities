@@ -24,7 +24,8 @@ from jsonpointer import JsonPointerException
 from collections import OrderedDict
 from generic_config_updater.generic_updater import GenericUpdater, ConfigFormat, extract_scope
 from generic_config_updater.gu_common import HOST_NAMESPACE, GenericConfigUpdaterError
-from minigraph import parse_device_desc_xml, minigraph_encoder
+from minigraph import parse_device_desc_xml, minigraph_encoder, parse_asic_sub_role, \
+                    parse_asic_switch_type, parse_hostname
 from natsort import natsorted
 from portconfig import get_child_ports
 from socket import AF_INET, AF_INET6
@@ -95,6 +96,8 @@ DEFAULT_CONFIG_YANG_FILE = '/etc/sonic/config_yang.json'
 NAMESPACE_PREFIX = 'asic'
 INTF_KEY = "interfaces"
 DEFAULT_GOLDEN_CONFIG_DB_FILE = '/etc/sonic/golden_config_db.json'
+
+MINIGRAPH_FILE = '/etc/sonic/minigraph.xml'
 
 INIT_CFG_FILE = '/etc/sonic/init_cfg.json'
 
@@ -2121,6 +2124,10 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
     if override_config:
         override_config_by(golden_config_path)
 
+        if not recover_hw_config(namespace_list=namespace_list):
+            log.log_error("Hardware configuration did not recover successfully.")
+            click.secho("[Error] Hardware configuration did not recover successfully.")
+
     # Invoke platform script if available before starting the services
     platform_path, _ = device_info.get_paths_to_platform_and_hwsku_dirs()
     platform_mg_plugin = platform_path + '/plugins/platform_mg_post_check'
@@ -2185,6 +2192,68 @@ def override_config_by(golden_config_path):
     # Override configDB with golden config
     clicommon.run_command(['config', 'override-config-table', str(golden_config_path)], display_cmd=True)
     return
+
+
+def recover_hw_config(namespace_list=None):
+    """
+    Recover hardware-related configuration from the local file and update DEVICE_METADATA.
+    Args:
+        scope_list (list): List of scopes to recover configurations for. Defaults to [DEFAULT_NAMESPACE].
+    Returns:
+        bool: True if all scopes are processed successfully, False otherwise.
+    """
+    if namespace_list is None:
+        namespace_list = [DEFAULT_NAMESPACE]
+
+    result = True
+    for scope in namespace_list:
+        try:
+            log.log_info(f"Processing scope: {scope}")
+
+            config_db = ConfigDBConnector() if scope is DEFAULT_NAMESPACE \
+                else ConfigDBConnector(use_unix_socket_path=True, scope=scope)
+            config_db.connect()
+
+            device_metadata = config_db.get_entry("DEVICE_METADATA", "localhost") or {}
+            platform = device_info.get_platform()
+            device_metadata["platform"] = platform
+
+            hostname = parse_hostname(MINIGRAPH_FILE)
+            asic_role = parse_asic_sub_role(MINIGRAPH_FILE, scope)
+            switch_type = parse_asic_switch_type(MINIGRAPH_FILE, scope, hostname)
+
+            if (switch_type and switch_type.lower() == "chassis-packet") or \
+               (asic_role and asic_role.lower() == "backend") or \
+               (platform == device_info.VS_PLATFORM):
+                mac = device_info.get_system_mac(scope=scope, hostname=hostname)
+            else:
+                mac = device_info.get_system_mac()
+            device_metadata["mac"] = mac
+
+            if scope != DEFAULT_NAMESPACE:
+                asic_name = multi_asic.get_asic_id_from_name(scope)
+                asic_id = multi_asic.get_asic_device_id(asic_name)
+                if asic_id:
+                    device_metadata["asic_id"] = asic_id
+                else:
+                    log.log_error(f"Cannot get asic_id for scope {scope}: {device_metadata}")
+
+            # Validate configuration before updating
+            if not platform or not mac:
+                log.log_error(f"Incomplete metadata for scope {scope}: {device_metadata}")
+
+            # Update the configuration in the database
+            config_db.set_entry("DEVICE_METADATA", "localhost", device_metadata)
+            log.log_info(f"Successfully updated DEVICE_METADATA for scope {scope}: {device_metadata}")
+
+        except Exception as e:
+            log.log_error(
+                f"Failed to process recover hardware configuration for scope {scope}: {e}, "
+                f"device_metadata: {device_metadata}"
+            )
+            result = False
+
+    return result
 
 
 # This funtion is to generate sysinfo if that is missing in config_input.
