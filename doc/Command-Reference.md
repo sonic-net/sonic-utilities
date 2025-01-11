@@ -5142,6 +5142,8 @@ The show interfaces flap command provides detailed insights into interface event
   ```
   show interfaces flap
   ```
+- Example:
+  ```
   admin@sonic:~$ show interfaces flap
   Interface       Link Down TimeStamp (UTC)                                      Link Up TimeStamp (UTC)                                       Flap Count  
   ---------       -------------------------------------------------------        -----------------------------------------------------------   ----------
@@ -5160,7 +5162,6 @@ The show interface errors command provides detailed statistics and error counter
 
 - Example:
   ```
-
   admin@sonic:~$ show interfaces errors Ethernet4
   Port Errors                        Count           Last timestamp(UTC)
   ---------------------------------- -----           -------------------
