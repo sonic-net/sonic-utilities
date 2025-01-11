@@ -386,10 +386,10 @@ class TestConfigOverrideMultiasic(object):
 
         with mock.patch('config.main.read_json_file',
                         mock.MagicMock(side_effect=read_json_file_side_effect)),\
-                mock.patch('sonic_py_common.device_info.get_platform',
+             mock.patch('sonic_py_common.device_info.get_platform',
                         return_value="multi_asic"),\
-                mock.patch('sonic_py_common.device_info.get_system_mac',
-                        return_value="11:22:33:44:55:66"):
+             mock.patch('sonic_py_common.device_info.get_system_mac',
+                        return_value="11:22:33:44:55:66\n"):
             runner = CliRunner()
             result = runner.invoke(config.config.commands["override-config-table"],
                                    ['golden_config_db.json'], obj=db)

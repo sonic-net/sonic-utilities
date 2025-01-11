@@ -35,11 +35,11 @@ Ethernet8      N/A        6  1350.00 KB/s    9000.00/s        N/A       100     
 """
 
 intf_fec_counters = """\
-    IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR
----------  -------  ----------  ------------  ----------------
-Ethernet0        D     130,402             3                 4
-Ethernet4      N/A     110,412             1                 0
-Ethernet8      N/A     100,317             0                 0
+    IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER
+---------  -------  ----------  ------------  ----------------  -------------  --------------
+Ethernet0        D     130,402             3                 4            N/A             N/A
+Ethernet4      N/A     110,412             1                 0            N/A             N/A
+Ethernet8      N/A     100,317             0                 0            N/A             N/A
 """
 
 intf_fec_counters_fec_hist = """\
