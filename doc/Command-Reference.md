@@ -5133,11 +5133,11 @@ The show interfaces flap command provides detailed insights into interface event
 - Example:
   ```
   admin@sonic:~$ show interfaces flap
-  Interface       Last Link Down          Flap Count  
-  ---------       -------------------     ----------  
-  Ethernet0       2024-11-21 14:32:12     5  
-  Ethernet4       2024-11-20 08:15:04     2  
-  Ethernet8       2024-11-19 23:45:16     8  
+  Interface       Link Down TimeStamp (UTC)                                      Link Up TimeStamp (UTC)                                       Flap Count  
+  ---------       -------------------------------------------------------        -----------------------------------------------------------   ----------
+  Ethernet0       Last flapped : 2024-10-01 10:00:00 (0 days 00:01:23 ago)       Last Link up: 2024-09-30 10:01:03 UTC (1 days 02:30 :15 ago)  5
+  Ethernet4       Never                                                          Last Link up: 2024-09-30 10:01:03 UTC (1 days 02:30 :15 ago)  Never
+  Ethernet8       Last flapped : 2024-10-01 10:01:00 (0 days 00:00:23 ago)       Last Link up: 2024-10-02 10:01:03 UTC (5 days 02:30 :15 ago)  1
   ```
 
 **show interfaces mpls**
