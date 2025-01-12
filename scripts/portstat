@@ -27,6 +27,7 @@ try:
             import sonic_py_common
             from swsscommon.swsscommon import SonicV2Connector
             sonic_py_common.device_info.is_supervisor = mock.MagicMock(return_value=True)
+            sonic_py_common.device_info.is_voq_chassis = mock.MagicMock(return_value=True)
             SonicV2Connector.delete_all_by_pattern = mock.MagicMock()
     if os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] == "multi_asic":
         import mock_tables.mock_multi_asic
