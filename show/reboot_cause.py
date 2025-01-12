@@ -63,14 +63,19 @@ def fetch_data_from_db(module_name, fetch_history=False, use_chassis_db=False):
             if 'device' in entry:
                 if module_name != entry['device'] and module_name != "all":
                     continue
-                if entry['device'] in d and not history:
+                if entry['device'] in d and not fetch_history:
                     append = False
                     continue
-                elif not entry['device'] in d or entry['device'] in d and history:
-                    if not entry['device'] in d:
+                elif entry['device'] not in d or (entry['device'] in d and fetch_history):
+                    if entry['device'] not in d:
                         d.append(entry['device'])
                         append = True
-            r.append(entry['device'] if 'device' in entry else "NPU")
+                r.append(entry['device'])
+            elif "DPU" in tk:
+                # Extract the module name after "REBOOT_CAUSE|"
+                r.append(tk.split('|')[1])
+            else:
+                r.append("NPU")
 
         name = tk.split('|')[-1]
         if "|" in name:
