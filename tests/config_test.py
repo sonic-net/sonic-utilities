@@ -1166,13 +1166,19 @@ class TestLoadMinigraph(object):
             result = runner.invoke(config.config.commands["load_minigraph"], ["--override_config", "-y"])
             assert result.exit_code == 0
             assert "config override-config-table /etc/sonic/golden_config_db.json" in result.output
-    
+
     @mock.patch('config.main.ConfigDBConnector')
     @mock.patch('config.main.device_info')
     @mock.patch('config.main.parse_hostname')
     @mock.patch('config.main.parse_asic_sub_role')
     @mock.patch('config.main.parse_asic_switch_type')
-    def test_recover_hw_config_single_namespace(self, mock_parse_asic_switch_type, mock_parse_asic_sub_role, mock_parse_hostname, mock_device_info, mock_ConfigDBConnector):
+    def test_recover_hw_config_single_namespace(
+                                                self,
+                                                mock_parse_asic_switch_type,
+                                                mock_parse_asic_sub_role,
+                                                mock_parse_hostname,
+                                                mock_device_info,
+                                                mock_ConfigDBConnector):
         # Mock return values
         mock_ConfigDBConnector.return_value.get_entry.return_value = {'platform': 'mock_platform'}
         mock_device_info.get_platform.return_value = 'mock_platform'
@@ -1199,7 +1205,13 @@ class TestLoadMinigraph(object):
     @mock.patch('config.main.parse_hostname')
     @mock.patch('config.main.parse_asic_sub_role')
     @mock.patch('config.main.parse_asic_switch_type')
-    def test_recover_hw_config_multiple_namespaces(self, mock_parse_asic_switch_type, mock_parse_asic_sub_role, mock_parse_hostname, mock_device_info, mock_ConfigDBConnector):
+    def test_recover_hw_config_multiple_namespaces(
+                                                self,
+                                                mock_parse_asic_switch_type,
+                                                mock_parse_asic_sub_role,
+                                                mock_parse_hostname,
+                                                mock_device_info,
+                                                mock_ConfigDBConnector):
         # Mock return values
         mock_ConfigDBConnector.return_value.get_entry.return_value = {'platform': 'mock_platform'}
         mock_ConfigDBConnector.return_value.set_entry = mock.MagicMock()
@@ -1222,7 +1234,13 @@ class TestLoadMinigraph(object):
     @mock.patch('config.main.parse_hostname')
     @mock.patch('config.main.parse_asic_sub_role')
     @mock.patch('config.main.parse_asic_switch_type')
-    def test_recover_hw_config_different_platforms(self, mock_parse_asic_switch_type, mock_parse_asic_sub_role, mock_parse_hostname, mock_device_info, mock_ConfigDBConnector):
+    def test_recover_hw_config_different_platforms(
+                                                    self,
+                                                    mock_parse_asic_switch_type,
+                                                    mock_parse_asic_sub_role,
+                                                    mock_parse_hostname,
+                                                    mock_device_info,
+                                                    mock_ConfigDBConnector):
         # Mock return values
         mock_ConfigDBConnector.return_value.get_entry.return_value = {'platform': 'mock_platform'}
         mock_device_info.get_platform.return_value = 'mock_platform'
