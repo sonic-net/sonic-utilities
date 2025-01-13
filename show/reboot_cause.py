@@ -61,21 +61,23 @@ def fetch_data_from_db(module_name, fetch_history=False, use_chassis_db=False):
 
         if module_name is not None:
             if 'device' in entry:
-                if module_name != entry['device'] and module_name != "all":
-                    continue
-                if entry['device'] in d and not fetch_history:
-                    append = False
-                    continue
-                elif entry['device'] not in d or (entry['device'] in d and fetch_history):
-                    if entry['device'] not in d:
-                        d.append(entry['device'])
-                        append = True
-                r.append(entry['device'])
+                module = entry['device']
             elif "DPU" in tk:
-                # Extract the module name after "REBOOT_CAUSE|"
-                r.append(tk.split('|')[1])
+                module = tk.split('|')[1]
             else:
-                r.append("NPU")
+                module = "NPU"
+
+            if module_name != module and module_name != "all":
+                continue
+            if module in d and not fetch_history:
+                append = False
+                continue
+            elif module not in d or (module in d and fetch_history):
+                if module not in d:
+                    d.append(module)
+                    append = True
+
+            r.append(module)
 
         name = tk.split('|')[-1]
         if "|" in name:
@@ -88,8 +90,7 @@ def fetch_data_from_db(module_name, fetch_history=False, use_chassis_db=False):
             table.append(r)
         elif fetch_history:
             r.append(entry['comment'] if 'comment' in entry else "")
-            if module_name is None or module_name == 'all' or \
-               'device' in entry and module_name == entry['device']:
+            if module_name is None or module_name == 'all' or "DPU" in module:
                 table.append(r)
 
     return table
