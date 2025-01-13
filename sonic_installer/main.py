@@ -591,7 +591,14 @@ def install(url, force, skip_platform_check=False, skip_migration=False, skip_pa
 
         echo_and_log("Installing image {} and setting it as default...".format(binary_image_version))
         with SWAPAllocator(not skip_setup_swap, swap_mem_size, total_mem_threshold, available_mem_threshold):
-            bootloader.install_image(image_path)
+            try:
+                bootloader.install_image(image_path)
+            except SystemExit as e:
+                # When install image failed with SystemExit, image is partial installed
+                echo_and_log('Install image failed with exception: {}'.format(e))
+                bootloader.remove_image(binary_image_version)
+                raise e
+
         # Take a backup of current configuration
         if skip_migration:
             echo_and_log("Skipping configuration migration as requested in the command option.")
