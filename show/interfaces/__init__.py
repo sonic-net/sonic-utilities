@@ -36,6 +36,8 @@ def readJsonFile(fileName):
         raise click.Abort()
     return result
 
+from swsssdk import ConfigDBConnector
+
 def try_convert_interfacename_from_alias(ctx, interfacename):
     """try to convert interface name from alias"""
 
