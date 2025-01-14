@@ -228,19 +228,19 @@
 * [Banner Commands](#banner-commands)
   * [Banner config commands](#banner-config-commands)
   * [Banner show command](#banner-show-command)
-* [Memory Statistics CLI Commands](#memory-statistics-cli-commands)
+* [Memory Statistics Commands](#memory-statistics-commands)
   * [Overview](#overview)
-  * [Enable/Disable Memory Statistics Monitoring](#enabledisable-memory-statistics-monitoring)
-  * [Set the Frequency of Memory Data Collection](#set-the-frequency-of-memory-data-collection)
-  * [Adjust the Data Retention Period](#adjust-the-data-retention-period)
-  * [View Memory Usage Statistics](#view-memory-usage-statistics)
+  * [Memory Statistics Config Commands](#memory-statistics-config-commands)
+    * [Enable/Disable Memory Statistics Monitoring](#enabledisable-memory-statistics-monitoring)
+    * [Set the Frequency of Memory Data Collection](#set-the-frequency-of-memory-data-collection)
+    * [Adjust the Data Retention Period](#adjust-the-data-retention-period)
+  * [Memory Statistics Show Commands](#memory-statistics-show-commands)
     * [Default Historical Memory Statistics](#default-historical-memory-statistics)
     * [Historical Memory Statistics for Last 10 Days](#historical-memory-statistics-for-last-10-days)
     * [Historical Memory Statistics for Last 100 Minutes](#historical-memory-statistics-for-last-100-minutes)
     * [Historical Memory Statistics for Last 3 Hours](#historical-memory-statistics-for-last-3-hours)
     * [Historical Memory Statistics for Specific Metric (Used Memory)](#historical-memory-statistics-for-specific-metric-used-memory)
-  * [View Memory Statistics Configuration](#view-memory-statistics-configuration)
-
+    * [View Memory Statistics Configuration](#view-memory-statistics-configuration)
 ## Document History
 
 | Version | Modification Date | Details |
@@ -13963,17 +13963,24 @@ enabled  Login    You are on
                   All access and/or use are subject to monitoring.
 
                   Help:    https://sonic-net.github.io/SONiC/
-                              
+ ```                             
 ---
 
-# Memory Statistics CLI Commands
+# Memory Statistics Commands
 
 ## Overview
 These commands allow users to enable/disable memory statistics monitoring, configure data collection intervals, adjust data retention periods, view memory statistics, and check the current configuration. Memory statistics can help administrators monitor and analyze system memory usage over time.
 
+**Common Use Cases** 
+ - Monitor system memory trends over time. 
+ - Track memory usage patterns during peak time.  
+ - Plan system capacity based on historical memory data.
+
 ---
 
-## 1. Enable/Disable Memory Statistics Monitoring
+## Memory Statistics Config Commands
+
+### Enable/Disable Memory Statistics Monitoring
 
 To enable or disable the memory statistics monitoring feature:
 
@@ -14003,7 +14010,7 @@ By default, this feature is **disabled**.
 
 ---
 
-## 2. Set the Frequency of Memory Data Collection
+### Set the Frequency of Memory Data Collection
 
 To configure the interval for memory data collection (specified in minutes):
 
@@ -14025,7 +14032,7 @@ admin@sonic:~$ config memory-stats sampling-interval <interval>
 
 ---
 
-## 3. Adjust the Data Retention Period
+### Adjust the Data Retention Period
 
 To set how long the memory data should be retained (specified in days):
 
@@ -14047,7 +14054,9 @@ admin@sonic:~$ config memory-stats retention-period <period>
 
 ---
 
-## 4. View Memory Usage Statistics
+## Memory Statistics Show Commands
+
+### View Memory Usage Statistics
 To display memory usage statistics, use the following command with optional parameters for time range and specific metrics:
 
 ```bash
@@ -14078,8 +14087,9 @@ The time format for `--from` and `--to` options includes:
 - **ISO 8601 format:**
   - '2024-07-01T15:00:00'
 
+---
 
-### 4.1. Default Historical Memory Statistics
+### Default Historical Memory Statistics
 
 To view the historical memory statistics:
 
@@ -14109,7 +14119,9 @@ buffers_memory     337.83MB   333.59MB   295.00MB   325.00MB    320.00MB    315.
 shared_memory      1.31GB     1.22GB     1.08GB     1.22GB      1.20GB      1.18GB      1.15GB     1.12GB      1.10GB       1.08GB      1.19GB
 ```
 
-### 4.2. Historical Memory Statistics for Last 10 Days
+---
+
+### Historical Memory Statistics for Last 10 Days
 
 To view memory statistics for the last 10 days:
 
@@ -14139,7 +14151,9 @@ buffers_memory     105.39MB   144.28MB   144.28MB   -           -           -   
 shared_memory      1.00GB     1.08GB     1.08GB     -           -           -           -           -           -           -           -           -           -           1.08GB
 ```
 
-### 4.3. Historical Memory Statistics for Last 100 Minutes
+---
+
+### Historical Memory Statistics for Last 100 Minutes
 
 ```bash
 admin@sonic:~$ show memory-stats --from '100 minutes ago' --to 'now'
@@ -14167,7 +14181,9 @@ buffers_memory     101.39MB   186.47MB   99.00MB    134.77MB    136.97MB    140.
 shared_memory      1005.79MB  1.07GB     917.46MB   926.08MB    993.94MB    917.46MB    1.07GB      1.01GB      1020.12MB   1.04GB      1001.18MB   1.01GB      961.13MB    -
 ```
 
-### 4.4. Historical Memory Statistics for Last 3 Hours
+---
+
+### Historical Memory Statistics for Last 3 Hours
 
 ```bash
 admin@sonic:~$ show memory-stats --from '3 hours ago' --to 'now'
@@ -14195,7 +14211,9 @@ buffers_memory     101.62MB   153.76MB   132.42MB   149.62MB    132.42MB    153.
 shared_memory      997.97MB   1020.80MB  961.19MB   971.47MB    961.19MB    1020.80MB   -
 ```
 
-### 4.5. Historical Memory Statistics for Specific Metric (Used Memory)
+---
+
+### Historical Memory Statistics for Specific Metric (Used Memory)
 
 ```bash
 admin@sonic:~$ show memory-stats --from '100 minutes ago' --to 'now' --select 'used_memory'
@@ -14221,7 +14239,7 @@ used_memory        11.69GB    11.79GB    10.55GB    11.79GB     11.35GB     10.5
 
 ---
 
-## 5. View Memory Statistics Configuration
+### View Memory Statistics Configuration
 To display the current configuration parameters such as data collection frequency, retention period, and enable/disable status, use the following command:
 
 ```bash
