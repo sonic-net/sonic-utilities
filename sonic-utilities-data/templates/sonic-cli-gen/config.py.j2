@@ -467,7 +467,7 @@ E.g:
 {{ gen_click_options(object.attrs) }}
 @clicommon.pass_db
 def {{ group }}_update(db, {{ pythonize(object["keys"] + object.attrs) }}):
-    """ Add object in {{ table.name }}. """
+    """ Update object in {{ table.name }}. """
 
     table = "{{ table.name }}"
     key = {{ pythonize(object["keys"]) }}
@@ -531,6 +531,7 @@ def {{ group }}():
 
 
 {% for table in tables %}
+{% if 'config' not in table or table['config'] == 'true' %}
 @click.group(name="{{ cli_name(table.name) }}",
              cls=clicommon.AliasedGroup)
 def {{ table.name }}():
@@ -550,6 +551,7 @@ def {{ table.name }}():
 {% endfor %}
 {% endif %}
 
+{% endif %}
 {% endfor %}
 
 def register(cli):
@@ -563,8 +565,10 @@ def register(cli):
     """
 
 {%- for table in tables %}
+{%- if 'config' not in table or table['config'] == 'true' %}
     cli_node = {{ table.name }}
     if cli_node.name in cli.commands:
         raise Exception(f"{cli_node.name} already exists in CLI")
     cli.add_command({{ table.name }})
+{%- endif %}
 {%- endfor %}
