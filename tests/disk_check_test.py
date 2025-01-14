@@ -132,10 +132,9 @@ class TestDiskCheck(object):
 
     @patch("disk_check.syslog.syslog")
     @patch("disk_check.subprocess.run")
-    @patch('os.access', return_value=True)
     @patch('os.statvfs', return_value=os.statvfs_result((4096, 4096, 1909350, 1491513, 4096,
                                                          971520, 883302, 883302, 4096, 255)))
-    def test_readonly(self, mock_os_statvfs, mock_os_access, mock_proc, mock_log):
+    def test_readonly(self, mock_os_statvfs, mock_proc, mock_log):
         global err_data, cmds, max_log_lvl
 
         mock_proc.side_effect = mock_subproc_run
