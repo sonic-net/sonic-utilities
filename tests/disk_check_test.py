@@ -202,19 +202,22 @@ class TestDiskCheck(object):
 
     @patch("disk_check.syslog.syslog")
     @patch("disk_check.subprocess.run")
+    @patch('shutil.rmtree')
     @patch('os.access', return_value=True)
     @patch('os.statvfs', return_value=os.statvfs_result((4096, 4096, 1909350, 1491513, 4096,
                                                          971520, 883302, 883302, 4096, 255)))
-    def test_unmount_disk_full(self, mock_os_statvfs, mock_os_access, mock_proc, mock_log):
+    def test_unmount_disk_full(self, mock_os_statvfs, mock_os_access, mock_rmtree, mock_proc, mock_log):
         global max_log_lvl
         max_log_lvl = -1
         mock_proc.side_effect = mock_subproc_run
         mock_log.side_effect = report_err_msg
 
         tc = {
-            "upperdir": "/tmp",
+            "upperdir": "/tmp/tmpx",
+            "workdir": "/tmp/tmpy"
         }
         swap_upper(tc)
+        swap_work(tc)
 
         with patch('sys.argv', ["", "-d", "/tmpx"]):
             disk_check.main()
@@ -232,16 +235,6 @@ class TestDiskCheck(object):
 
         result = disk_check.test_disk_full(["/etc"])
         assert result is True
-
-    @patch("disk_check.syslog.syslog")
-    @patch("disk_check.subprocess.run")
-    def test_do_unmnt(self, mock_proc, mock_log):
-        global max_log_lvl
-        max_log_lvl = -1
-        mock_proc.side_effect = mock_subproc_run
-        mock_log.side_effect = report_err_msg
-
-        disk_check.do_unmnt(["/etc"])
 
     @patch("disk_check.syslog.syslog")
     @patch("disk_check.subprocess.run")
