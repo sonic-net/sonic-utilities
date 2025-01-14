@@ -15,6 +15,7 @@ def set_verbose(verbose=False):
     else:
         logger.set_min_log_priority_notice()
 
+
 def run_command(cmd):
     try:
         subprocess.check_call(cmd)
@@ -28,7 +29,7 @@ def _service_restart(svc_name):
     if rc != 0:
         # This failure is likely due to too many restarts
         #
-        rc =run_command(['systemctl', 'reset-failed', svc_name])
+        rc = run_command(['systemctl', 'reset-failed', svc_name])
         logger.log(logger.LOG_PRIORITY_ERROR, 
                 f"Service has been reset. rc={rc}; Try restart again...",
                 print_to_console)
