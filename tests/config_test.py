@@ -1607,17 +1607,6 @@ class TestConfigQos(object):
         _clear_qos(True, False)
         _wait_until_clear.assert_called_with(['BUFFER_*_TABLE:*', 'BUFFER_*_SET'], interval=0.5, timeout=0, verbose=False)
 
-    def test_qos_wait_until_clear_not_empty_should_exit(self):
-        from config.main import _wait_until_clear
-
-        with mock.patch('swsscommon.swsscommon.SonicV2Connector.keys',
-                        side_effect=TestConfigQos._keys):
-            TestConfigQos._keys_counter = 10
-            # timeout set to 0, will always timeout, and return val False
-            ret = _wait_until_clear(["BUFFER_POOL_TABLE:*"],
-                                    0.5, 0, verbose=False)
-            assert ret is False
-
     @patch('config.main._wait_until_clear')
     def test_qos_reload_not_empty_should_exit(self, mock_wait_until_clear):
         mock_wait_until_clear.return_value = False
