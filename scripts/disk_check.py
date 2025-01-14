@@ -77,7 +77,7 @@ def event_pub(event):
     event_publish(events_handle, EVENTS_PUBLISHER_TAG, param_dict)
 
 
-def test_disk_full(dirs): 
+def test_disk_full(dirs):
     for d in dirs:
         space = os.statvfs(d)
         if space.f_bavail < FREE_SPACE_THRESHOLD:
@@ -141,7 +141,7 @@ def do_mnt(dirs, overlay_prefix):
         os.mkdir(d_upper)
         os.mkdir(d_work)
 
-        ret = run_cmd(["mount", "-t", "overlay", "{}_{}".format(overlay_prefix, d_name),\
+        ret = run_cmd(["mount", "-t", "overlay", "{}_{}".format(overlay_prefix, d_name),
                 "-o", "lowerdir={},upperdir={},workdir={}".format(d, d_upper, d_work), d])
         if ret:
             break
@@ -152,9 +152,11 @@ def do_mnt(dirs, overlay_prefix):
         log_info("{} are mounted as Read-Write".format(dirs))
     return ret
 
+
 def do_unmnt(dirs, overlay_prefix):
     for d in dirs:
         d_name = get_dname(d)
+
         ret = run_cmd(["umount", "-l", "{}_{}".format(overlay_prefix, d_name)])
         if ret:
             break
