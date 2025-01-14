@@ -1,5 +1,4 @@
 import os
-import shutil
 import sys
 import syslog
 from unittest.mock import patch
@@ -244,7 +243,7 @@ class TestDiskCheck(object):
         mock_proc.side_effect = mock_subproc_run
         mock_log.side_effect = report_err_msg
 
-        disk_check.do_unmnt(["/etc"])
+        disk_check.do_unmnt(["/etc"], "overlay_prefix")
 
 
     @classmethod
