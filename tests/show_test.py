@@ -693,7 +693,7 @@ class TestShowPlatform(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_popen.assert_called_once_with('lsblk -o NAME,TYPE -p | grep disk')
+        mock_popen.assert_called_once_with("lsblk -l -o NAME,TYPE,MOUNTPOINT -p | grep -w '/host'")
         mock_run_command.assert_called_once_with(['sudo', 'ssdutil', '-d', '/dev/sda', '-v', '-e'], display_cmd=True)
 
     @patch('utilities_common.cli.run_command')

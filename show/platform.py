@@ -104,7 +104,15 @@ def psustatus(index, json, verbose):
 def ssdhealth(device, verbose, vendor):
     """Show SSD Health information"""
     if not device:
-        device = os.popen("lsblk -o NAME,TYPE -p | grep disk").readline().strip().split()[0]
+        # Looking for the SSD disk currently used by the SONiC.
+
+        base_device = os.popen("lsblk -l -o NAME,TYPE,MOUNTPOINT -p | grep -w '/host'").readline().strip().split()[0]
+
+        # Extract the base device name, handling both 'p' and non-'p' partitioning schemes
+        # Example : /dev/sda1 => /dev/sda
+        #           /dev/nvme0n1p2 => /dev/nvme0n1
+        #           /dev/mmcblk0p1 => /dev/mmcblk0
+        device = base_device.rstrip("0123456789").split("p")[0]
     cmd = ['sudo', 'ssdutil', '-d', str(device)]
     options = ["-v"] if verbose else []
     options += ["-e"] if vendor else []
