@@ -48,7 +48,7 @@ function get_reboot_status()
     local dpu_ip=$1
     local port=$2
     local reboot_status
-    reboot_status=$(docker exec -i gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -insecure -rpc RebootStatus 2>/dev/null)
+    reboot_status=$(docker exec -i gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -insecure -notls -rpc RebootStatus 2>/dev/null)
     if [ $? -ne 0 ] || [ -z "$reboot_status" ]; then
         log_message "Error: Failed to send reboot status command to DPU ${DPU_NAME}"
         return ${EXIT_ERROR}
@@ -147,7 +147,7 @@ function gnmi_reboot_dpu()
         return ${EXIT_ERROR}
     fi
 
-    docker exec -i gnmi gnoi_client -target ${dpu_ip}:${port} -logtostderr -insecure -rpc Reboot -jsonin '{"method":3}'
+    docker exec -i gnmi gnoi_client -target ${dpu_ip}:${port} -logtostderr -insecure -notls -rpc Reboot -jsonin '{"method":3}'
     if [ $? -ne 0 ]; then
         log_message "Error: Failed to send reboot command to DPU ${DPU_NAME}"
         return ${EXIT_ERROR}
