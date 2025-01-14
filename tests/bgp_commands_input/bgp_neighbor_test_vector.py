@@ -651,6 +651,11 @@ testData = {
         'rc': 0,
         'rc_output': bgp_v4_neighbors_output
     },
+    'bgp_v4_alias_neighbors': {
+        'args': [],
+        'rc': 0,
+        'rc_output': bgp_v4_neighbors_output
+    },
     'bgp_v4_neighbor_ip_address': {
         'args': ['10.0.0.57'],
         'rc': 0,
@@ -677,6 +682,11 @@ testData = {
         'rc_output': bgp_v4_neighbor_output_recv_routes
     },
     'bgp_v6_neighbors': {
+        'args': [],
+        'rc': 0,
+        'rc_output': bgp_v6_neighbors_output
+    },
+    'bgp_v6_alias_neighbors': {
         'args': [],
         'rc': 0,
         'rc_output': bgp_v6_neighbors_output
