@@ -593,10 +593,14 @@ def install(url, force, skip_platform_check=False, skip_migration=False, skip_pa
         with SWAPAllocator(not skip_setup_swap, swap_mem_size, total_mem_threshold, available_mem_threshold):
             try:
                 bootloader.install_image(image_path)
-            except SystemExit as e:
-                # When install image failed with SystemExit, image is partial installed
-                echo_and_log('Install image failed with exception: {}'.format(e))
-                bootloader.remove_image(binary_image_version)
+            except BaseException as e:
+                # When install image failed with exception, image is partial installed
+                # Fully installed image will update SONiC environment by update_sonic_environment
+                # For partial installed image, only need delete image folder
+                echo_and_log('Image install failed with exception: {}'.format(e))
+                echo_and_log('Delete partial installed image: {}'.format(binary_image_version))
+                new_image_dir = bootloader.get_image_path(binary_image_version)
+                run_command(["rm", "-rf", new_image_dir])
                 raise e
 
         # Take a backup of current configuration
