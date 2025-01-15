@@ -148,6 +148,7 @@ def test_runtime_exception(mock_popen):
 
     assert all(v in str(sre.value) for v in ['test.sh', 'Running', 'Failed']), "Invalid message"
 
+
 @patch("sonic_installer.main.SWAPAllocator")
 @patch("sonic_installer.main.get_bootloader")
 @patch("sonic_installer.main.run_command_or_raise")
@@ -176,13 +177,19 @@ def test_install_failed(run_command, run_command_or_raise, get_bootloader, swap,
     mock_bootloader.get_installed_images = Mock(return_value=[current_image_version])
     mock_bootloader.get_image_path = Mock(return_value=new_image_folder)
     mock_bootloader.verify_image_sign = Mock(return_value=True)
+
+    def mock_install_image(arg):
+        sys.exit(1)
+
     mock_bootloader.install_image = mock_install_image
+
     @contextmanager
     def rootfs_path_mock(path):
         yield mounted_image_folder
 
     mock_bootloader.get_rootfs_path = rootfs_path_mock
-    get_bootloader.return_value=mock_bootloader
+
+    get_bootloader.return_value = mock_bootloader
 
     # Invoke CLI command
     runner = CliRunner()
