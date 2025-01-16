@@ -250,7 +250,7 @@ if [[ $smart_switch_result -ne 0 ]]; then
 fi
 
 # On a smartswitch, complete the DPU reboot and exit
-is_smartswitch=$(is_smartswitch)
+is_smartswitch=$(python3 -c 'from utilities_common.chassis import is_smartswitch; print(is_smartswitch())')
 if [ "$is_smartswitch" == "True" ] && [ "$REBOOT_DPU" == "yes" ]; then
     exit $smart_switch_result
 fi
