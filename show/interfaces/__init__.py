@@ -5,6 +5,7 @@ import subprocess
 import click
 import utilities_common.cli as clicommon
 import utilities_common.multi_asic as multi_asic_util
+from utilities_common import platform_sfputil_helper
 from natsort import natsorted
 from tabulate import tabulate
 from sonic_py_common import multi_asic
@@ -413,6 +414,64 @@ def mpls(ctx, interfacename, namespace, display):
     click.echo(tabulate(body, header))
 
 interfaces.add_command(portchannel.portchannel)
+
+@interfaces.command()
+@click.argument('interfacename', required=True)
+@click.pass_context
+def errors(ctx, interfacename):
+    """Show Interface Erorrs <interfacename>"""
+    # Try to convert interface name from alias
+    interfacename = try_convert_interfacename_from_alias(click.get_current_context(), interfacename)
+
+    db = SonicV2Connector(host=REDIS_HOSTIP)
+    db.connect(db.STATE_DB)
+
+    # Retrieve the errors data from the PORT_OPERR_TABLE
+    port_operr_table = db.get_all(db.STATE_DB, 'PORT_OPERR_TABLE|{}'.format(interfacename))
+    db.close(db.STATE_DB)
+
+    # Ensure port_operr_table is a dictionary
+    port_operr_table = port_operr_table or {}
+
+    # Define a list of all potential errors
+    all_errors = [
+        "oper_error_status",
+        "mac_local_fault",
+        "mac_remote_fault",
+        "fec_sync_loss",
+        "fec_alignment_loss",
+        "high_ser_error",
+        "high_ber_error",
+        "data_unit_crc_error",
+        "data_unit_misalignment_error",
+        "signal_local_error",
+        "crc_rate",
+        "data_unit_size",
+        "code_group_error",
+        "no_rx_reachability"
+    ]
+
+    # Prepare the table headers and body
+    header = ['Port Errors', 'Count', 'Last timestamp(UTC)']
+    body = []
+
+    # Populate the table body with all errors, defaulting missing ones to 0 and Never
+    for error in all_errors:
+        count_key = f"{error}_count"
+        time_key = f"{error}_time"
+
+        count = port_operr_table.get(count_key, "0")  # Default count to '0'
+        timestamp = port_operr_table.get(time_key, "Never")  # Default timestamp to 'Never'
+
+        # Add to table
+        body.append([error.replace('_', ' '), count, timestamp])
+
+    # Sort the body for consistent display
+    body.sort(key=lambda x: x[0])
+
+    # Display the formatted table
+    click.echo(tabulate(body, header))
+
 
 #
 # transceiver group (show interfaces trasceiver ...)
