@@ -414,6 +414,7 @@ def mpls(ctx, interfacename, namespace, display):
 
 interfaces.add_command(portchannel.portchannel)
 
+
 @interfaces.command()
 @click.argument('interfacename', required=True)
 @click.pass_context

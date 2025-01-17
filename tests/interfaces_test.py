@@ -573,50 +573,50 @@ class TestInterfaces(object):
         assert result.output == show_interfaces_switchport_config_in_alias_mode_output
 
     def test_show_intf_errors_filled_data():
-	"""Test case for an interface with filled error data."""
-	runner = CliRunner()
-	result = runner.invoke(
-	    show.cli.commands["interfaces"].commands["errors"], ["Ethernet64"]
-	)
-	print(result.exit_code)
-	print(result.output)
-	assert result.exit_code == 0
+        """Test case for an interface with filled error data."""
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["errors"], ["Ethernet64"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
         assert result.output == intf_errors_Ethernet64 
 
 
     def test_show_intf_errors_empty_data():
-	"""Test case for an interface with no error data."""
-	runner = CliRunner()
-	result = runner.invoke(
-	    show.cli.commands["interfaces"].commands["errors"], ["Ethernet16"]
-	)
-	print(result.exit_code)
-	print(result.output)
-	assert result.exit_code == 0
+        """Test case for an interface with no error data."""
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["errors"], ["Ethernet16"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
         assert result.output == intf_errors_Ethernet16 
 
 
     def test_show_intf_errors_partial_data():
-	"""Test case for an interface with partial error data."""
-	runner = CliRunner()
-	result = runner.invoke(
-	    show.cli.commands["interfaces"].commands["errors"], ["Ethernet32"]
-	)
-	print(result.exit_code)
-	print(result.output)
-	assert result.exit_code == 0
+        """Test case for an interface with partial error data."""
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["errors"], ["Ethernet32"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
         assert result.output == intf_errors_Ethernet32 
 
 
     def test_show_intf_errors_default_values():
-	"""Test case for an interface with default values."""
-	runner = CliRunner()
-	result = runner.invoke(
-	    show.cli.commands["interfaces"].commands["errors"], ["Ethernet48"]
-	)
-	print(result.exit_code)
-	print(result.output)
-	assert result.exit_code == 0 
+        """Test case for an interface with default values."""
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["errors"], ["Ethernet48"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0 
         assert result.output == intf_errors_Ethernet48 
 
     @classmethod
