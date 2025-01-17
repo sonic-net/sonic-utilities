@@ -5,14 +5,13 @@ import subprocess
 import click
 import utilities_common.cli as clicommon
 import utilities_common.multi_asic as multi_asic_util
-from utilities_common import platform_sfputil_helper
 from natsort import natsorted
 from tabulate import tabulate
 from sonic_py_common import multi_asic
 from sonic_py_common import device_info
 from swsscommon.swsscommon import ConfigDBConnector, SonicV2Connector
 from portconfig import get_child_ports
-
+import sonic_platform_base.sonic_sfp.sfputilhelper
 from . import portchannel
 from collections import OrderedDict
 
