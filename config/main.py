@@ -1402,6 +1402,13 @@ def config_file_yang_validation(filename):
                         fg='magenta')
             raise click.Abort()
 
+        sy.tablesWithOutYang.pop('bgpraw', None)
+        if len(sy.tablesWithOutYang):
+            click.secho("Config tables are missing yang models: {}".format(str(sy.tablesWithOutYang.keys())),
+                        fg='magenta')
+            raise click.Abort()
+
+
 # This is our main entrypoint - the main 'config' command
 @click.group(cls=clicommon.AbbreviationGroup, context_settings=CONTEXT_SETTINGS)
 @click.pass_context

@@ -14,7 +14,6 @@ SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "config_override_input")
 EMPTY_INPUT = os.path.join(DATA_DIR, "empty_input.json")
 PARTIAL_CONFIG_OVERRIDE = os.path.join(DATA_DIR, "partial_config_override.json")
-NEW_FEATURE_CONFIG = os.path.join(DATA_DIR, "new_feature_config.json")
 FULL_CONFIG_OVERRIDE = os.path.join(DATA_DIR, "full_config_override.json")
 PORT_CONFIG_OVERRIDE = os.path.join(DATA_DIR, "port_config_override.json")
 EMPTY_TABLE_REMOVAL = os.path.join(DATA_DIR, "empty_table_removal.json")
@@ -120,15 +119,6 @@ class TestConfigOverride(object):
         """Golden Config only modify ACL_TABLE"""
         db = Db()
         with open(PARTIAL_CONFIG_OVERRIDE, "r") as f:
-            read_data = json.load(f)
-        self.check_override_config_table(
-            db, config, read_data['running_config'], read_data['golden_config'],
-            read_data['expected_config'])
-
-    def test_golden_config_db_new_feature(self):
-        """Golden Config append NEW_FEATURE_TABLE"""
-        db = Db()
-        with open(NEW_FEATURE_CONFIG, "r") as f:
             read_data = json.load(f)
         self.check_override_config_table(
             db, config, read_data['running_config'], read_data['golden_config'],
