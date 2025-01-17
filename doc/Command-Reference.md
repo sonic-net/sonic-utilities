@@ -4612,6 +4612,7 @@ This command displays switch hash global configuration.
   |        | | INNER_SRC_IP      |             | |
   |        | | INNER_L4_DST_PORT |             | |
   |        | | INNER_L4_SRC_PORT |             | |
+  |        | | IPV6_FLOW_LABEL   |             | |
   |        | +-------------------+-------------+ |
   +--------+-------------------------------------+
   | LAG    | +-------------------+-------------+ |
@@ -4633,6 +4634,7 @@ This command displays switch hash global configuration.
   |        | | INNER_SRC_IP      |             | |
   |        | | INNER_L4_DST_PORT |             | |
   |        | | INNER_L4_SRC_PORT |             | |
+  |        | | IPV6_FLOW_LABEL   |             | |
   |        | +-------------------+-------------+ |
   +--------+-------------------------------------+
   ```
@@ -4676,6 +4678,7 @@ This command displays switch hash capabilities.
   |        | | INNER_SRC_IP      |             | |
   |        | | INNER_L4_DST_PORT |             | |
   |        | | INNER_L4_SRC_PORT |             | |
+  |        | | IPV6_FLOW_LABEL   |             | |
   |        | +-------------------+-------------+ |
   +--------+-------------------------------------+
   | LAG    | +-------------------+-------------+ |
@@ -4699,6 +4702,7 @@ This command displays switch hash capabilities.
   |        | | INNER_SRC_IP      |             | |
   |        | | INNER_L4_DST_PORT |             | |
   |        | | INNER_L4_SRC_PORT |             | |
+  |        | | IPV6_FLOW_LABEL   |             | |
   |        | +-------------------+-------------+ |
   +--------+-------------------------------------+
   ```
@@ -4738,7 +4742,8 @@ This command is used to manage switch hash global configuration.
   'INNER_DST_IP' \
   'INNER_SRC_IP' \
   'INNER_L4_DST_PORT' \
-  'INNER_L4_SRC_PORT'
+  'INNER_L4_SRC_PORT' \
+  'IPV6_FLOW_LABEL'
   admin@sonic:~$ config switch-hash global lag-hash \
   'DST_MAC' \
   'SRC_MAC' \
@@ -4755,7 +4760,8 @@ This command is used to manage switch hash global configuration.
   'INNER_DST_IP' \
   'INNER_SRC_IP' \
   'INNER_L4_DST_PORT' \
-  'INNER_L4_SRC_PORT'
+  'INNER_L4_SRC_PORT' \
+  'IPV6_FLOW_LABEL'
   ```
 
 **config switch-hash global ecmp/lag hash algorithm**
