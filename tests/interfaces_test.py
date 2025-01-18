@@ -572,7 +572,7 @@ class TestInterfaces(object):
         assert result.exit_code == 0
         assert result.output == show_interfaces_switchport_config_in_alias_mode_output
 
-    def test_show_intf_errors_filled_data():
+    def test_show_intf_errors_filled_data(self):
         """Test case for an interface with filled error data."""
         runner = CliRunner()
         result = runner.invoke(
@@ -583,7 +583,7 @@ class TestInterfaces(object):
         assert result.exit_code == 0
         assert result.output == intf_errors_Ethernet64
 
-    def test_show_intf_errors_empty_data():
+    def test_show_intf_errors_empty_data(self):
         """Test case for an interface with no error data."""
         runner = CliRunner()
         result = runner.invoke(
@@ -594,7 +594,7 @@ class TestInterfaces(object):
         assert result.exit_code == 0
         assert result.output == intf_errors_Ethernet16
 
-    def test_show_intf_errors_partial_data():
+    def test_show_intf_errors_partial_data(self):
         """Test case for an interface with partial error data."""
         runner = CliRunner()
         result = runner.invoke(
@@ -605,7 +605,7 @@ class TestInterfaces(object):
         assert result.exit_code == 0
         assert result.output == intf_errors_Ethernet32
 
-    def test_show_intf_errors_default_values():
+    def test_show_intf_errors_default_values(self):
         """Test case for an interface with default values."""
         runner = CliRunner()
         result = runner.invoke(
