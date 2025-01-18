@@ -414,6 +414,17 @@ def mpls(ctx, interfacename, namespace, display):
 
 interfaces.add_command(portchannel.portchannel)
 
+def get_all_port_errors():
+
+    port_operr_table = {}
+    db = SonicV2Connector(host=REDIS_HOSTIP)
+    db.connect(db.STATE_DB)
+
+    # Retrieve the errors data from the PORT_OPERR_TABLE
+    port_operr_table = db.get_all(db.STATE_DB, 'PORT_OPERR_TABLE|{}'.format(interfacename))
+    db.close(db.STATE_DB)
+
+    return port_operr_table
 
 @interfaces.command()
 @click.argument('interfacename', required=True)
@@ -423,18 +434,12 @@ def errors(ctx, interfacename):
     # Try to convert interface name from alias
     interfacename = try_convert_interfacename_from_alias(click.get_current_context(), interfacename)
 
-    db = SonicV2Connector(host=REDIS_HOSTIP)
-    db.connect(db.STATE_DB)
-
-    # Retrieve the errors data from the PORT_OPERR_TABLE
-    port_operr_table = db.get_all(db.STATE_DB, 'PORT_OPERR_TABLE|{}'.format(interfacename))
-    db.close(db.STATE_DB)
 
     # Ensure port_operr_table is a dictionary
-    port_operr_table = port_operr_table or {}
+    port_operr_table = get_all_port_errors()
 
     # Define a list of all potential errors
-    all_errors = [
+    ALL_PORT_ERRORS = [
         "oper_error_status",
         "mac_local_fault",
         "mac_remote_fault",
@@ -456,7 +461,7 @@ def errors(ctx, interfacename):
     body = []
 
     # Populate the table body with all errors, defaulting missing ones to 0 and Never
-    for error in all_errors:
+    for error in ALL_PORT_ERRORS:
         count_key = f"{error}_count"
         time_key = f"{error}_time"
 
