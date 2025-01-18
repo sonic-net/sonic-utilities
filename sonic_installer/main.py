@@ -1,6 +1,7 @@
 import configparser
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -600,7 +601,7 @@ def install(url, force, skip_platform_check=False, skip_migration=False, skip_pa
                 echo_and_log('Image install failed with exception: {}'.format(e))
                 echo_and_log('Delete partial installed image: {}'.format(binary_image_version))
                 new_image_dir = bootloader.get_image_path(binary_image_version)
-                run_command(["rm", "-rf", new_image_dir])
+                shutil.rmtree(new_image_dir)
                 raise
 
         # Take a backup of current configuration

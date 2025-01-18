@@ -153,7 +153,8 @@ def test_runtime_exception(mock_popen):
 @patch("sonic_installer.main.get_bootloader")
 @patch("sonic_installer.main.run_command_or_raise")
 @patch("sonic_installer.main.run_command")
-def test_install_failed(run_command, run_command_or_raise, get_bootloader, swap, fs):
+@patch('shutil.rmtree')
+def test_install_failed(rmtree, run_command, run_command_or_raise, get_bootloader, swap, fs):
     """ This test covers the "sonic-installer" install image failed handling. """
 
     sonic_image_filename = "sonic.bin"
