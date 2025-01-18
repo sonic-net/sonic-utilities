@@ -465,8 +465,12 @@ def errors(ctx, interfacename):
         count_key = f"{error}_count"
         time_key = f"{error}_time"
 
-        count = port_operr_table.get(count_key, "0")  # Default count to '0'
-        timestamp = port_operr_table.get(time_key, "Never")  # Default timestamp to 'Never'
+        if port_operr_table is not None:
+            count = port_operr_table.get(count_key, "0")  # Default count to '0'
+            timestamp = port_operr_table.get(time_key, "Never")  # Default timestamp to 'Never'
+        else:
+            count = "0"
+            timestamp = "Never"
 
         # Add to table
         body.append([error.replace('_', ' '), count, timestamp])
