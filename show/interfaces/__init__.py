@@ -434,8 +434,6 @@ def errors(ctx, interfacename):
     # Try to convert interface name from alias
     interfacename = try_convert_interfacename_from_alias(click.get_current_context(), interfacename)
 
-
-    # Ensure port_operr_table is a dictionary
     port_operr_table = get_all_port_errors()
 
     # Define a list of all potential errors
