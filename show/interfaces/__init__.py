@@ -414,7 +414,8 @@ def mpls(ctx, interfacename, namespace, display):
 
 interfaces.add_command(portchannel.portchannel)
 
-def get_all_port_errors():
+
+def get_all_port_errors(interfacename):
 
     port_operr_table = {}
     db = SonicV2Connector(host=REDIS_HOSTIP)
@@ -426,6 +427,7 @@ def get_all_port_errors():
 
     return port_operr_table
 
+
 @interfaces.command()
 @click.argument('interfacename', required=True)
 @click.pass_context
@@ -434,7 +436,7 @@ def errors(ctx, interfacename):
     # Try to convert interface name from alias
     interfacename = try_convert_interfacename_from_alias(click.get_current_context(), interfacename)
 
-    port_operr_table = get_all_port_errors()
+    port_operr_table = get_all_port_errors(interfacename)
 
     # Define a list of all potential errors
     ALL_PORT_ERRORS = [
