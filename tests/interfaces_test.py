@@ -581,8 +581,7 @@ class TestInterfaces(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        assert result.output == intf_errors_Ethernet64 
-
+        assert result.output == intf_errors_Ethernet64
 
     def test_show_intf_errors_empty_data():
         """Test case for an interface with no error data."""
@@ -593,8 +592,7 @@ class TestInterfaces(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        assert result.output == intf_errors_Ethernet16 
-
+        assert result.output == intf_errors_Ethernet16
 
     def test_show_intf_errors_partial_data():
         """Test case for an interface with partial error data."""
@@ -605,8 +603,7 @@ class TestInterfaces(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        assert result.output == intf_errors_Ethernet32 
-
+        assert result.output == intf_errors_Ethernet32
 
     def test_show_intf_errors_default_values():
         """Test case for an interface with default values."""
@@ -616,8 +613,8 @@ class TestInterfaces(object):
         )
         print(result.exit_code)
         print(result.output)
-        assert result.exit_code == 0 
-        assert result.output == intf_errors_Ethernet48 
+        assert result.exit_code == 0
+        assert result.output == intf_errors_Ethernet48
 
     @classmethod
     def teardown_class(cls):
