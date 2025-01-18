@@ -300,7 +300,7 @@ oper error status                  0    Never
 signal local error                 0    Never
 """
 
-ntf_errors_Ethernet32 = """\
+intf_errors_Ethernet32 = """\
 Port Errors                     Count  Last timestamp(UTC)
 -----------------------------  -------  ---------------------
 code group error                   0    Never
