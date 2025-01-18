@@ -265,77 +265,77 @@ PortChannel1001  trunk               4000
 
 intf_errors_Ethernet64 = """\
 Port Errors                     Count  Last timestamp(UTC)
------------------------------  -------  ---------------------
-code group error                   0    Never
-crc rate                           0    Never
-data unit crc error                0    Never
-data unit misalignment error       0    Never
-data unit size                     0    Never
-fec alignment loss                 0    Never
-fec sync loss                      0    Never
-high ber error                     0    Never
-high ser error                     0    Never
-mac local fault                   26    2025-01-17 18:40:56
-mac remote fault               14483    2025-01-17 19:51:12
-no rx reachability                 0    Never
-oper error status                  2    2025-01-17 19:51:12
-signal local error                 0    Never
+----------------------------  -------  ---------------------
+code group error                    0  Never
+crc rate                            0  Never
+data unit crc error                 0  Never
+data unit misalignment error        0  Never
+data unit size                      0  Never
+fec alignment loss                  0  Never
+fec sync loss                       0  Never
+high ber error                      0  Never
+high ser error                      0  Never
+mac local fault                    26  2025-01-17 18:40:56
+mac remote fault                14483  2025-01-17 19:51:12
+no rx reachability                  0  Never
+oper error status                   0  Never
+signal local error                  0  Never
 """
 intf_errors_Ethernet16 = """\
 Port Errors                     Count  Last timestamp(UTC)
------------------------------  -------  ---------------------
-code group error                   0    Never
-crc rate                           0    Never
-data unit crc error                0    Never
-data unit misalignment error       0    Never
-data unit size                     0    Never
-fec alignment loss                 0    Never
-fec sync loss                      0    Never
-high ber error                     0    Never
-high ser error                     0    Never
-mac local fault                    0    Never
-mac remote fault                   0    Never
-no rx reachability                 0    Never
-oper error status                  0    Never
-signal local error                 0    Never
+----------------------------  -------  ---------------------
+code group error                    0  Never
+crc rate                            0  Never
+data unit crc error                 0  Never
+data unit misalignment error        0  Never
+data unit size                      0  Never
+fec alignment loss                  0  Never
+fec sync loss                       0  Never
+high ber error                      0  Never
+high ser error                      0  Never
+mac local fault                     0  Never
+mac remote fault                    0  Never
+no rx reachability                  0  Never
+oper error status                   0  Never
+signal local error                  0  Never
 """
 
 intf_errors_Ethernet32 = """\
 Port Errors                     Count  Last timestamp(UTC)
------------------------------  -------  ---------------------
-code group error                   0    Never
-crc rate                           0    Never
-data unit crc error                0    Never
-data unit misalignment error       0    Never
-data unit size                     0    Never
-fec alignment loss                 0    Never
-fec sync loss                      3    2025-01-16 13:45:20
-high ber error                     1    2025-01-16 14:30:10
-high ser error                     0    Never
-mac local fault                    5    2025-01-16 12:05:34
-mac remote fault                   0    Never
-no rx reachability                 0    Never
-oper error status                  0    Never
-signal local error                 0    Never
+----------------------------  -------  ---------------------
+code group error                    0  Never
+crc rate                            0  Never
+data unit crc error                 0  Never
+data unit misalignment error        0  Never
+data unit size                      0  Never
+fec alignment loss                  0  Never
+fec sync loss                       3  2025-01-16 13:45:20
+high ber error                      1  2025-01-16 14:30:10
+high ser error                      0  Never
+mac local fault                     5  2025-01-16 12:05:34
+mac remote fault                    0
+no rx reachability                  0  Never
+oper error status                   0  Never
+signal local error                  0  Never
 """
 
 intf_errors_Ethernet48 = """\
 Port Errors                     Count  Last timestamp(UTC)
------------------------------  -------  ---------------------
-code group error                   0    Never
-crc rate                           0    Never
-data unit crc error                0    Never
-data unit misalignment error       0    Never
-data unit size                     0    Never
-fec alignment loss                 0    Never
-fec sync loss                      0    Never
-high ber error                     0    Never
-high ser error                     0    Never
-mac local fault                    0    Never
-mac remote fault                   0    Never
-no rx reachability                 0    Never
-oper error status                  0    Never
-signal local error                 0    Never
+----------------------------  -------  ---------------------
+code group error                    0  Never
+crc rate                            0  Never
+data unit crc error                 0  Never
+data unit misalignment error        0  Never
+data unit size                      0  Never
+fec alignment loss                  0  Never
+fec sync loss                       0  Never
+high ber error                      0  Never
+high ser error                      0  Never
+mac local fault                     0
+mac remote fault                    0
+no rx reachability                  0  Never
+oper error status                   0  Never
+signal local error                  0  Never
 """
 
 
