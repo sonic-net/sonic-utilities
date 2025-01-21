@@ -265,8 +265,10 @@ PortChannel1001  trunk               4000
 
 intf_flap_expected_output_with_data = """\
 Interface      Flap Count  Admin    Oper    Link Down TimeStamp (UTC)                Link Up TimeStamp (UTC)
------------  ------------  -------  ------  ---------------------------------------  --------------------------------------
-Ethernet0               3  Up       Down    Last flapped : Sat Jan 17 00:04:42 2025  Last Link up: Sat Jan 18 00:08:42 2025
+-----------  ------------  -------  ------  ---------------------------------------  -----------------------
+---------------
+Ethernet0               3  Up       Down    Last flapped : Sat Jan 17 00:04:42 2025  Last Link up: Sat Jan 1
+8 00:08:42 2025
 """
 
 intf_flap_expected_output_with_data_concise = """\
@@ -277,8 +279,10 @@ Ethernet4    Never         Unknown  Unknown  Never                        Never
 
 intf_flap_expected_output_all_data = """\
 Interface    Flap Count    Admin    Oper     Link Down TimeStamp (UTC)                Link Up TimeStamp (UTC)
------------  ------------  -------  -------  ---------------------------------------  --------------------------------------
-Ethernet0    3             Up       Down     Last flapped : Sat Jan 17 00:04:42 2025  Last Link up: Sat Jan 18 00:08:42 2025
+-----------  ------------  -------  -------  ---------------------------------------  -----------------------
+---------------
+Ethernet0    3             Up       Down     Last flapped : Sat Jan 17 00:04:42 2025  Last Link up: Sat Jan 1
+8 00:08:42 2025
 Ethernet100  Never         Unknown  Unknown  Never                                    Never
 Ethernet104  Never         Unknown  Unknown  Never                                    Never
 Ethernet108  Never         Unknown  Unknown  Never                                    Never
@@ -582,7 +586,7 @@ class TestInterfaces(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output.strip() == intf_flap_expected_output_all_data
- 
+
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
