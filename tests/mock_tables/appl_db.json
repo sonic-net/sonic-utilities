@@ -44,6 +44,9 @@
         "interface_type": "CR4",
         "adv_interface_types": "CR4,CR2",
         "autoneg": "on",
+        "flap_count": "3",
+        "last_up_time": "Sat Jan 18 00:08:42 2025",
+        "last_down_time": "Sat Jan 17 00:04:42 2025",
         "link_training": "on"
     },
     "PORT_TABLE:Ethernet16": {
@@ -55,6 +58,9 @@
         "oper_status": "up",
         "pfc_asym": "off",
         "mtu": "9100",
+        "flap_count": "7",
+        "last_up_time": "Sat Jan 20 00:04:42 2025",
+        "last_down_time": "Sat Jan 19 00:04:42 2025",
         "admin_status": "up"
     },
     "PORT_TABLE:Ethernet36": {
@@ -67,6 +73,8 @@
         "pfc_asym": "off",
         "mtu": "9100",
         "tpid": "0x8100",
+        "flap_count": "7",
+        "last_up_time": "Sat Jan 20 00:04:42 2025",
         "admin_status": "up"
     },
     "PORT_TABLE:Ethernet24": {

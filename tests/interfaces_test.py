@@ -263,6 +263,18 @@ PortChannel0004  routed
 PortChannel1001  trunk               4000
 """
 
+intf_flap_expected_output_no_data="""
+"""
+
+
+intf_flap_expected_output_with_data="""
+"""
+
+intf_flap_expected_output_with_data_concise="""
+"""
+
+intf_flap_expected_output_all_data="""
+"""
 
 class TestInterfaces(object):
     @classmethod
@@ -495,6 +507,46 @@ class TestInterfaces(object):
 
         assert result.exit_code == 0
         assert result.output == show_interfaces_switchport_config_in_alias_mode_output
+       
+       def test_show_intf_flap_no_data(self):
+        """Test case for an interface with no flap data."""
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["flap"], ["Ethernet5"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output.strip() == intf_flap_expected_output_no_data
+
+    def test_show_intf_flap_with_data(self):
+        """Test case for an interface with valid flap data."""
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["flap"], ["Ethernet0"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output.strip() == intf_flap_expected_output_with_data
+      
+    def test_show_intf_flap_with_data_concise(self):
+        """Test case for an interface with valid flap data."""
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["flap"], ["Ethernet4"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output.strip() == intf_flap_expected_output_with_data_concise
+ 
+    def test_show_intf_flap_with_all_portts_data(self):
+        """Test case for an interface with valid flap data."""
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["flap"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output.strip() == intf_flap_expected_output_all_data
 
     @classmethod
     def teardown_class(cls):
