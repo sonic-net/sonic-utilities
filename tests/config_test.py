@@ -1604,6 +1604,46 @@ class TestConfigQos(object):
         _clear_qos(True, False)
         _wait_until_clear.assert_called_with(['BUFFER_*_TABLE:*', 'BUFFER_*_SET'], interval=0.5, timeout=0, verbose=False)
 
+    @mock.patch('config.main._wait_until_clear')
+    def test_clear_qos_without_delay(self, mock_wait_until_clear):
+        from config.main import _clear_qos
+
+        status = _clear_qos(False, False)
+        mock_wait_until_clear.assert_not_called()
+        assert status is True
+
+    @mock.patch('config.main._wait_until_clear')
+    def test_clear_qos_with_delay_returns_true(self, mock_wait_until_clear):
+        from config.main import _clear_qos
+        mock_wait_until_clear.return_value = True
+
+        status = _clear_qos(True, False)
+        mock_wait_until_clear.assert_called_once()
+        assert status is True
+
+    @mock.patch('config.main._wait_until_clear')
+    def test_clear_qos_with_delay_returns_false(self, mock_wait_until_clear):
+        from config.main import _clear_qos
+        mock_wait_until_clear.return_value = False
+
+        status = _clear_qos(True, False)
+        mock_wait_until_clear.assert_called_once()
+        assert status is False
+
+    @patch('config.main._wait_until_clear')
+    def test_qos_reload_not_empty_should_exit(self, mock_wait_until_clear):
+        mock_wait_until_clear.return_value = False
+        runner = CliRunner()
+        output_file = os.path.join(os.sep, "tmp", "qos_config_output.json")
+        print("Saving output in {}".format(output_file))
+        result = runner.invoke(
+            config.config.commands["qos"], ["reload"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        # Expect sys.exit(1) when _wait_until_clear returns False
+        assert result.exit_code == 1
+
     def test_qos_reload_single(
             self, get_cmd_module, setup_qos_mock_apis,
             setup_single_broadcom_asic
