@@ -265,10 +265,8 @@ PortChannel1001  trunk               4000
 
 intf_flap_expected_output_with_data = """\
 Interface      Flap Count  Admin    Oper    Link Down TimeStamp (UTC)                Link Up TimeStamp (UTC)
------------  ------------  -------  ------  ---------------------------------------  -----------------------
----------------
-Ethernet0               3  Up       Down    Last flapped : Sat Jan 17 00:04:42 2025  Last Link up: Sat Jan 1
-8 00:08:42 2025
+-----------  ------------  -------  ------  ---------------------------------------  --------------------------------------
+Ethernet0               3  Up       Down    Last flapped : Sat Jan 17 00:04:42 2025  Last Link up: Sat Jan 18 00:08:42 2025
 """
 
 intf_flap_expected_output_with_data_concise = """\
@@ -279,25 +277,17 @@ Ethernet4    Never         Unknown  Unknown  Never                        Never
 
 intf_flap_expected_output_all_data = """\
 Interface    Flap Count    Admin    Oper     Link Down TimeStamp (UTC)                Link Up TimeStamp (UTC)
------------  ------------  -------  -------  ---------------------------------------  -----------------------
----------------
-Ethernet0    3             Up       Down     Last flapped : Sat Jan 17 00:04:42 2025  Last Link up: Sat Jan 1
-8 00:08:42 2025
-Ethernet100  Never         Unknown  Unknown  Never                                    Never
-Ethernet104  Never         Unknown  Unknown  Never                                    Never
-Ethernet108  Never         Unknown  Unknown  Never                                    Never
-Ethernet112  Never         Up       Up       Never                                    Never
-Ethernet116  Never         Up       Up       Never                                    Never
+-----------  ------------  -------  -------  ---------------------------------------  --------------------------------------
+Ethernet0    3             Up       Down     Last flapped : Sat Jan 17 00:04:42 2025  Last Link up: Sat Jan 18 00:08:42 2025
+Ethernet4    Never         Unknown  Unknown  Never                                    Never
+Ethernet8    Never         Unknown  Unknown  Never                                    Never
 Ethernet12   Never         Unknown  Unknown  Never                                    Never
-Ethernet120  Never         Up       Up       Never                                    Never
-Ethernet124  Never         Up       Up       Never                                    Never
 Ethernet16   7             Up       Up       Last flapped : Sat Jan 19 00:04:42 2025  Last Link up: Sat Jan 20 00:04:42 2025
 Ethernet20   Never         Unknown  Unknown  Never                                    Never
 Ethernet24   Never         Up       Up       Never                                    Never
 Ethernet28   Never         Up       Up       Never                                    Never
 Ethernet32   Never         Up       Up       Never                                    Never
 Ethernet36   7             Up       Up       Never                                    Last Link up: Sat Jan 20 00:04:42 2025
-Ethernet4    Never         Unknown  Unknown  Never                                    Never
 Ethernet40   Never         Unknown  Unknown  Never                                    Never
 Ethernet44   Never         Unknown  Unknown  Never                                    Never
 Ethernet48   Never         Unknown  Unknown  Never                                    Never
@@ -308,12 +298,14 @@ Ethernet64   Never         Unknown  Unknown  Never                              
 Ethernet68   Never         Unknown  Unknown  Never                                    Never
 Ethernet72   Never         Unknown  Unknown  Never                                    Never
 Ethernet76   Never         Unknown  Unknown  Never                                    Never
-Ethernet8    Never         Unknown  Unknown  Never                                    Never
 Ethernet80   Never         Unknown  Unknown  Never                                    Never
 Ethernet84   Never         Unknown  Unknown  Never                                    Never
 Ethernet88   Never         Unknown  Unknown  Never                                    Never
 Ethernet92   Never         Unknown  Unknown  Never                                    Never
 Ethernet96   Never         Unknown  Unknown  Never                                    Never
+Ethernet100  Never         Unknown  Unknown  Never                                    Never
+Ethernet104  Never         Unknown  Unknown  Never                                    Never
+Ethernet108  Never         Unknown  Unknown  Never                                    Never
 """
 
 class TestInterfaces(object):
