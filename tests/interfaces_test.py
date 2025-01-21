@@ -263,19 +263,19 @@ PortChannel0004  routed
 PortChannel1001  trunk               4000
 """
 
-intf_flap_expected_output_with_data="""\
+intf_flap_expected_output_with_data = """\
 Interface      Flap Count  Admin    Oper    Link Down TimeStamp (UTC)                Link Up TimeStamp (UTC)
 -----------  ------------  -------  ------  ---------------------------------------  --------------------------------------
 Ethernet0               3  Up       Down    Last flapped : Sat Jan 17 00:04:42 2025  Last Link up: Sat Jan 18 00:08:42 2025
 """
 
-intf_flap_expected_output_with_data_concise="""\
+intf_flap_expected_output_with_data_concise = """\
 Interface    Flap Count    Admin    Oper     Link Down TimeStamp (UTC)    Link Up TimeStamp (UTC)
 -----------  ------------  -------  -------  ---------------------------  -------------------------
 Ethernet4    Never         Unknown  Unknown  Never                        Never
 """
 
-intf_flap_expected_output_all_data="""\
+intf_flap_expected_output_all_data = """\
 Interface    Flap Count    Admin    Oper     Link Down TimeStamp (UTC)                Link Up TimeStamp (UTC)
 -----------  ------------  -------  -------  ---------------------------------------  --------------------------------------
 Ethernet0    3             Up       Down     Last flapped : Sat Jan 17 00:04:42 2025  Last Link up: Sat Jan 18 00:08:42 2025
@@ -543,7 +543,7 @@ class TestInterfaces(object):
 
         assert result.exit_code == 0
         assert result.output == show_interfaces_switchport_config_in_alias_mode_output
- 
+
     def test_show_intf_flap_no_data(self):
         """Test case for an interface with no flap data."""
         runner = CliRunner()
@@ -552,7 +552,7 @@ class TestInterfaces(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 2
- 
+
     def test_show_intf_flap_with_data(self):
         """Test case for an interface with valid flap data."""
         runner = CliRunner()
@@ -562,7 +562,7 @@ class TestInterfaces(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output.strip() == intf_flap_expected_output_with_data
- 
+
     def test_show_intf_flap_with_data_concise(self):
         """Test case for an interface with valid flap data."""
         runner = CliRunner()
@@ -572,7 +572,7 @@ class TestInterfaces(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output.strip() == intf_flap_expected_output_with_data_concise
- 
+
     def test_show_intf_flap_with_all_portts_data(self):
         """Test case for an interface with valid flap data."""
         runner = CliRunner()
