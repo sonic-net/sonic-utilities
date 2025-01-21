@@ -306,6 +306,10 @@ Ethernet96   Never         Unknown  Unknown  Never                              
 Ethernet100  Never         Unknown  Unknown  Never                                    Never
 Ethernet104  Never         Unknown  Unknown  Never                                    Never
 Ethernet108  Never         Unknown  Unknown  Never                                    Never
+Ethernet112  Never         Up       Up       Never                                    Never
+Ethernet116  Never         Up       Up       Never                                    Never
+Ethernet120  Never         Up       Up       Never                                    Never
+Ethernet124  Never         Up       Up       Never                                    Never
 """
 
 class TestInterfaces(object):
@@ -557,7 +561,7 @@ class TestInterfaces(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        assert result.output.strip() == intf_flap_expected_output_with_data
+        assert result.output == intf_flap_expected_output_with_data
 
     def test_show_intf_flap_with_data_concise(self):
         """Test case for an interface with valid flap data."""
@@ -567,7 +571,7 @@ class TestInterfaces(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        assert result.output.strip() == intf_flap_expected_output_with_data_concise
+        assert result.output == intf_flap_expected_output_with_data_concise
 
     def test_show_intf_flap_with_all_portts_data(self):
         """Test case for an interface with valid flap data."""
@@ -577,7 +581,7 @@ class TestInterfaces(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        assert result.output.strip() == intf_flap_expected_output_all_data
+        assert result.output == intf_flap_expected_output_all_data
 
     @classmethod
     def teardown_class(cls):
