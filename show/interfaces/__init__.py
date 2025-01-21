@@ -471,7 +471,7 @@ def flap(ctx, interfacename):
         body.append(row)
 
     # Sort the body by interface name for consistent display
-    body.sort(key=lambda x: x[0])
+    body = natsorted(body, key=lambda x: x[0])
 
     # Display the formatted table
     click.echo(tabulate(body, header))
