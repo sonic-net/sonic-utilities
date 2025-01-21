@@ -508,7 +508,7 @@ class TestInterfaces(object):
         assert result.exit_code == 0
         assert result.output == show_interfaces_switchport_config_in_alias_mode_output
        
-       def test_show_intf_flap_no_data(self):
+    def test_show_intf_flap_no_data(self):
         """Test case for an interface with no flap data."""
         runner = CliRunner()
         result = runner.invoke(
