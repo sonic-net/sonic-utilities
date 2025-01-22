@@ -814,11 +814,11 @@ fi
 trap '' EXIT HUP INT QUIT TERM KILL ABRT ALRM
 
 # start sending LACPDUs to keep the LAGs refreshed
-# this is a non-blocking call, and the process will die in 300s
+# this is a non-blocking call, and the process will die in 90s
 debug "Starting lag_keepalive to send LACPDUs ..."
-timeout 300 python ${LAG_KEEPALIVE_SCRIPT} &
+timeout 90 python3 --fork-into-background ${LAG_KEEPALIVE_SCRIPT}
 # give the lag_keepalive script a chance to send some LACPDUs
-sleep 10
+sleep 5
 
 if [ -x ${LOG_SSD_HEALTH} ]; then
     debug "Collecting logs to check ssd health before ${REBOOT_TYPE}..."

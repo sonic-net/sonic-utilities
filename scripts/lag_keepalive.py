@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
 
+import argparse
+import json
+import os
 from scapy.config import conf
 conf.ipv6_enabled = False
 from scapy.layers.l2 import Ether  # noqa: E402
 from scapy.sendrecv import sendp  # noqa: E402
 import scapy.contrib.lacp  # noqa: E402
 import subprocess  # noqa: E402
-import json  # noqa: E402
+import syslog  # noqa: E402
 import time  # noqa: E402
 import traceback  # noqa: E402
-import syslog  # noqa: E402
 from swsscommon.swsscommon import ConfigDBConnector  # noqa: E402
 
 SYSLOG_ID = 'lag_keepalive'
@@ -100,12 +102,16 @@ def lag_keepalive(lag_member_to_packet):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--fork-into-background', action='store_true')
+    args = parser.parse_args()
+
     while True:
         try:
             active_lag_members, lag_member_to_packet = get_lacpdu_per_lag_member()
             if len(active_lag_members) != len(lag_member_to_packet.keys()):
                 log_error("Failed to craft LACPDU packets for some lag members. " +
-                          "Active lag members: {}. LACPDUs craft for: {}".format(
+                          "Active lag members: {}. LACPDUs crafted for: {}".format(
                               active_lag_members, lag_member_to_packet.keys()))
 
             log_info("ready to send LACPDU packets via {}".format(lag_member_to_packet.keys()))
@@ -117,6 +123,11 @@ def main():
             continue
         # if no exceptions are thrown, break from loop as LACPDUs are ready to be sent
         break
+
+    if args.fork_into_background:
+        pid = os.fork()
+        if pid != 0:   # The parent process
+           os._exit(0)   # Exit parent of the child process
 
     if lag_member_to_packet:
         # start an infinite loop to keep sending lacpdus from lag member ports
