@@ -265,8 +265,10 @@ PortChannel1001  trunk               4000
 
 intf_flap_expected_output_with_data = """\
 Interface      Flap Count  Admin    Oper    Link Down TimeStamp (UTC)                Link Up TimeStamp (UTC)
------------  ------------  -------  ------  ---------------------------------------  --------------------------------------
-Ethernet0               3  Up       Down    Last flapped : Sat Jan 17 00:04:42 2025  Last Link up: Sat Jan 18 00:08:42 2025
+-----------  ------------  -------  ------  ---------------------------------------  ----------------------------------
+----
+Ethernet0               3  Up       Down    Last flapped : Sat Jan 17 00:04:42 2025  Last Link up: Sat Jan 18 00:08:42 
+2025
 """
 
 intf_flap_expected_output_with_data_concise = """\
@@ -573,7 +575,7 @@ class TestInterfaces(object):
         assert result.exit_code == 0
         assert result.output == intf_flap_expected_output_with_data_concise
 
-    def test_show_intf_flap_with_all_portts_data(self):
+    def test_show_intf_flap_with_all_ports_data(self):
         """Test case for an interface with valid flap data."""
         runner = CliRunner()
         result = runner.invoke(
