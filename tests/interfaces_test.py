@@ -644,11 +644,11 @@ class TestInterfaces(object):
         result = runner.invoke(
             show.cli.commands["interfaces"].commands["flap"], ["Ethernet0"])
         print(result.exit_code)
-        print(result.output)
         assert result.exit_code == 0
         wrapper = textwrap.TextWrapper(width=120)
         wrapped_output = wrapper.fill(result.output)
-        assert wrapped_output == intf_flap_expected_output_all_data
+        print(wrapped_output)
+        assert wrapped_output == intf_flap_expected_output_with_data
 
     def test_show_intf_flap_with_data_concise(self):
         """Test case for an interface with valid flap data."""
@@ -671,6 +671,7 @@ class TestInterfaces(object):
         # Wrap the result.output to 120 characters per line
         wrapper = textwrap.TextWrapper(width=120)
         wrapped_output = wrapper.fill(result.output)
+        print(wrapped_output)
         assert wrapped_output == intf_flap_expected_output_all_data
 
     def test_show_intf_errors_filled_data(self):

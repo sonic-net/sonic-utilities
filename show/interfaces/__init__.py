@@ -421,7 +421,7 @@ interfaces.add_command(portchannel.portchannel)
 def flap(ctx, interfacename):
     """Show Interface Flap Information <interfacename>"""
 
-    namespace = '' # Default namespace
+    namespace = ''  # Default namespace
     port_dict = multi_asic.get_port_table(namespace=namespace)
 
     # If interfacename is given, validate it
@@ -472,7 +472,6 @@ def flap(ctx, interfacename):
 
     # Sort the body by interface name for consistent display
     body = natsorted(body, key=lambda x: x[0])
-
 
     # Display the formatted table
     click.echo(tabulate(body, header))
