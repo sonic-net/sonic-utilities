@@ -464,8 +464,8 @@ def flap(ctx, interfacename):
             flap_count,
             admin_status,
             oper_status,
-            f"Last flap: {last_down_time}" if last_down_time != 'Never' else 'Never',
-            f"Last Link up: {last_up_time}" if last_up_time != 'Never' else 'Never'
+            f"{last_down_time}" if last_down_time != 'Never' else 'Never',
+            f"{last_up_time}" if last_up_time != 'Never' else 'Never'
         ]
 
         body.append(row)
