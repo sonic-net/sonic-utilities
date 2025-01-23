@@ -177,6 +177,7 @@ def show_dpu_state(module_name):
     key = key + suffix
     keys = chassis_state_db.keys(chassis_state_db.CHASSIS_STATE_DB, key)
     if not keys:
+        click.echo("DPU_STATE table is not present for module:{} in DB".format(module_name))
         return
 
     table = []

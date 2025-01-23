@@ -708,11 +708,16 @@ This command displays the cause of the previous reboot
   ```
 
 - Example:
+  ### Shown below is the output of the CLI when executed on the NPU
   ```
   admin@sonic:~$ show reboot-cause
   User issued reboot command [User: admin, Time: Mon Mar 25 01:02:03 UTC 2019]
   ```
-
+  ### Shown below is the output of the CLI when executed on the DPU
+  ```
+  admin@sonic:~$ show reboot-cause
+  reboot
+  ```
 ```
 Note: The CLI extensions shown in this block are applicable only to smartswitch platforms. When these extensions are used on a regular switch the extension will be ignored and the output will be the same irrespective of the options.
 
@@ -731,13 +736,23 @@ This command displays the cause of the previous reboot for the Switch and the DP
   ```
 
 - Example:
+  ### Shown below is the output of the CLI when executed on the NPU
   ```
-  root@MtFuji:~$  show reboot-cause all
-  Device    Name                 Cause                      Time    User
-  --------  -------------------  ----------                 ------  ------
-  NPU       2024_07_24_20_43_22  Power Loss                 N/A     N/A
-  DPU2      2024_07_24_20_43_22  Software causes (Reboot)   N/A     N/A
-  DPU1      2024_07_24_20_43_22  Software causes (Reboot)   N/A     N/A
+  root@MtFuji:/home/cisco# show reboot-cause all
+  Device    Name                 Cause         Time                             User
+  --------  -------------------  ------------  -------------------------------  ------
+  NPU       2025_01_21_09_01_11  Power Loss    N/A                              N/A
+  DPU1      2025_01_21_09_03_43  Non-Hardware  Tue Jan 21 09:03:43 AM UTC 2025
+  DPU0      2025_01_21_09_03_37  Non-Hardware  Tue Jan 21 09:03:37 AM UTC 2025
+
+  ```
+  ### Shown below is the output of the CLI when executed on the DPU
+  ```
+  root@sonic:/home/admin# show reboot-cause all
+  Usage: show reboot-cause [OPTIONS] COMMAND [ARGS]...
+  Try "show reboot-cause -h" for help.
+
+  Error: No such command "all".
   ```
 **show reboot-cause history**
 
@@ -749,16 +764,22 @@ This command displays the history of the previous reboots up to 10 entry
   ```
 
 - Example:
+  ### Shown below is the output of the CLI when executed on the NPU
   ```
-  admin@sonic:~$ show reboot-cause history
-  Name                 Cause        Time                          User    Comment
-  -------------------  -----------  ----------------------------  ------  ---------
-  2020_10_09_02_33_06  reboot       Fri Oct  9 02:29:44 UTC 2020  admin
+  root@MtFuji:/home/cisco# show reboot-cause history
+  Name                 Cause       Time    User    Comment
+  -------------------  ----------  ------  ------  ----------------------------------------------------------------------------------
+  2020_10_09_02_40_11  Power Loss  Fri Oct  9 02:40:11 UTC 2020     N/A     Unknown (First boot of SONiC version azure_cisco_master.308-dirty-20250120.220704)
   2020_10_09_01_56_59  reboot       Fri Oct  9 01:53:49 UTC 2020  admin
-  2020_10_09_02_00_53  fast-reboot  Fri Oct  9 01:58:04 UTC 2020  admin
-  2020_10_09_04_53_58  warm-reboot  Fri Oct  9 04:51:47 UTC 2020  admin
   ```
-
+  ### Shown below is the output of the CLI when executed on the DPU
+  ```
+  root@sonic:/home/admin# show reboot-cause history
+  Name                 Cause    Time                             User    Comment
+  -------------------  -------  -------------------------------  ------  ---------
+  2025_01_21_16_49_20  Unknown  N/A                              N/A     N/A
+  2025_01_17_11_25_58  reboot   Fri Jan 17 11:23:24 AM UTC 2025  admin   N/A
+  ```
 **show reboot-cause history all**
 
 This command displays the history of the previous reboots up to 10 entry of the Switch and the DPUs for which the midplane interfaces are up.
@@ -769,6 +790,7 @@ This command displays the history of the previous reboots up to 10 entry of the 
   ```
 
 - Example:
+  ### Shown below is the output of the CLI when executed on the NPU
   ```
   root@MtFuji:~# show reboot-cause history all
   Device    Name                 Cause                                      Time                             User    Comment
@@ -776,7 +798,14 @@ This command displays the history of the previous reboots up to 10 entry of the 
   NPU       2024_07_23_23_06_57  Kernel Panic                               Tue Jul 23 11:02:27 PM UTC 2024  N/A     N/A
   NPU       2024_07_23_11_21_32  Power Loss                                 N/A                              N/A     Unknown
   ```
+  ### Shown below is the output of the CLI when executed on the DPU
+  ```
+  root@sonic:/home/admin# show reboot-cause history all
+  Usage: show reboot-cause history [OPTIONS]
+  Try "show reboot-cause history -h" for help.
 
+  Error: Got unexpected extra argument (all)
+  ```
 **show reboot-cause history DPU1**
 
 This command displays the history of the previous reboots up to 10 entry of DPU1. If DPU1 is powered down then there won't be any data in the DB and the "show reboot-cause history DPU1" output will be blank.
@@ -787,11 +816,20 @@ This command displays the history of the previous reboots up to 10 entry of DPU1
   ```
 
 - Example:
+  ### Shown below is the output of the CLI when executed on the NPU
   ```
   root@MtFuji:~# show reboot-cause history DPU1
   Device    Name    Cause                                      Time    User    Comment
   --------  ------  -----------------------------------------  ------  ------  ---------
   DPU1      DPU1    Software causes (Hardware watchdog reset)  N/A     N/A     N/A
+  ```
+  ### Shown below is the output of the CLI when executed on the DPU
+  ```
+  root@sonic:/home/admin# show reboot-cause history DPU1
+  Usage: show reboot-cause history [OPTIONS]
+  Try "show reboot-cause history -h" for help.
+
+  Error: Got unexpected extra argument (DPU1)
   ```
 
 
