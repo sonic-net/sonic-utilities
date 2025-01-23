@@ -80,17 +80,20 @@ def get_lacpdu_per_lag_member():
             active_lag_members.append(lag_member)
             # craft lacpdu packets for each lag member based on config
             port_channel_config = get_port_channel_config(lag_name)
+            packet = craft_lacp_packet(port_channel_config, lag_member)
             socket = conf.L2socket(iface=lag_member)
-            lag_member_to_packet[lag_member] = (socket, craft_lacp_packet(port_channel_config, lag_member))
+            lag_member_to_packet[lag_member] = (socket, packet)
 
     return active_lag_members, lag_member_to_packet
 
 
 def lag_keepalive(lag_member_to_packet):
-    while True:
+    num_iterations = 300
+    current_iteration = 0
+    while current_iteration < num_iterations:
         for lag_member, (socket, packet) in lag_member_to_packet.items():
             try:
-                sendp(packet, iface=lag_member, verbose=False)
+                sendp(packet, socket=socket, verbose=False)
             except Exception:
                 # log failure and continue to send lacpdu
                 traceback_msg = traceback.format_exc()
@@ -98,6 +101,7 @@ def lag_keepalive(lag_member_to_packet):
                     lag_member, traceback_msg))
                 continue
         log_info("sent LACPDU packets via {}".format(lag_member_to_packet.keys()))
+        current_iteration += 1
         time.sleep(1)
 
 
@@ -127,10 +131,10 @@ def main():
     if args.fork_into_background:
         pid = os.fork()
         if pid != 0:   # The parent process
-           os._exit(0)   # Exit parent of the child process
+            os._exit(0)   # Exit parent of the child process
 
     if lag_member_to_packet:
-        # start an infinite loop to keep sending lacpdus from lag member ports
+        # start a loop to keep sending lacpdus from lag member ports
         lag_keepalive(lag_member_to_packet)
 
 
