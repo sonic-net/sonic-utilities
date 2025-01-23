@@ -318,7 +318,7 @@ Ethernet116  Never         Up       Up       Never                              
 Ethernet120  Never         Up       Up       Never                                    Never
 Ethernet124  Never         Up       Up       Never                                    Never
 """
-=======
+
 intf_errors_Ethernet64 = """\
 Port Errors                     Count  Last timestamp(UTC)
 ----------------------------  -------  ---------------------
@@ -337,6 +337,7 @@ no rx reachability                  0  Never
 oper error status                   0  Never
 signal local error                  0  Never
 """
+
 intf_errors_Ethernet16 = """\
 Port Errors                     Count  Last timestamp(UTC)
 ----------------------------  -------  ---------------------
@@ -671,7 +672,7 @@ class TestInterfaces(object):
         wrapper = textwrap.TextWrapper(width=120)
         wrapped_output = wrapper.fill(result.output)
         assert wrapped_output == intf_flap_expected_output_all_data
-=======
+
     def test_show_intf_errors_filled_data(self):
         """Test case for an interface with filled error data."""
         runner = CliRunner()
