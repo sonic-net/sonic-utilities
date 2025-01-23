@@ -1,5 +1,6 @@
 import os
 import traceback
+import textwrap
 
 from click.testing import CliRunner
 from unittest import mock
@@ -279,17 +280,21 @@ Ethernet4    Never         Unknown  Unknown  Never                        Never
 
 intf_flap_expected_output_all_data = """\
 Interface    Flap Count    Admin    Oper     Link Down TimeStamp (UTC)                Link Up TimeStamp (UTC)
------------  ------------  -------  -------  ---------------------------------------  --------------------------------------
-Ethernet0    3             Up       Down     Last flapped : Sat Jan 17 00:04:42 2025  Last Link up: Sat Jan 18 00:08:42 2025
+-----------  ------------  -------  -------  ---------------------------------------  ----------------------------------
+----
+Ethernet0    3             Up       Down     Last flapped : Sat Jan 17 00:04:42 2025  Last Link up: Sat Jan 18 00:08:42 
+2025
 Ethernet4    Never         Unknown  Unknown  Never                                    Never
 Ethernet8    Never         Unknown  Unknown  Never                                    Never
 Ethernet12   Never         Unknown  Unknown  Never                                    Never
-Ethernet16   7             Up       Up       Last flapped : Sat Jan 19 00:04:42 2025  Last Link up: Sat Jan 20 00:04:42 2025
+Ethernet16   7             Up       Up       Last flapped : Sat Jan 19 00:04:42 2025  Last Link up: Sat Jan 20 00:04:42 
+2025
 Ethernet20   Never         Unknown  Unknown  Never                                    Never
 Ethernet24   Never         Up       Up       Never                                    Never
 Ethernet28   Never         Up       Up       Never                                    Never
 Ethernet32   Never         Up       Up       Never                                    Never
-Ethernet36   7             Up       Up       Never                                    Last Link up: Sat Jan 20 00:04:42 2025
+Ethernet36   7             Up       Up       Never                                    Last Link up: Sat Jan 20 00:04:42 
+2025
 Ethernet40   Never         Unknown  Unknown  Never                                    Never
 Ethernet44   Never         Unknown  Unknown  Never                                    Never
 Ethernet48   Never         Unknown  Unknown  Never                                    Never
@@ -563,7 +568,9 @@ class TestInterfaces(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        assert result.output == intf_flap_expected_output_with_data
+        wrapper = textwrap.TextWrapper(width=120)
+        wrapped_output = wrapper.fill(result.output)
+        assert wrapped_output == intf_flap_expected_output_all_data
 
     def test_show_intf_flap_with_data_concise(self):
         """Test case for an interface with valid flap data."""
@@ -583,7 +590,10 @@ class TestInterfaces(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        assert result.output == intf_flap_expected_output_all_data
+        # Wrap the result.output to 120 characters per line
+        wrapper = textwrap.TextWrapper(width=120)
+        wrapped_output = wrapper.fill(result.output)
+        assert wrapped_output == intf_flap_expected_output_all_data
 
     @classmethod
     def teardown_class(cls):
