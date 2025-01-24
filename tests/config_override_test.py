@@ -399,7 +399,7 @@ class TestConfigOverrideMultiasic(object):
                         return_value="multi_asic"),\
              mock.patch('sonic_py_common.device_info.get_system_mac',
                         return_value="11:22:33:44:55:66\n"),\
-             mock.patch('sonic_py_common.device_info.get_asic_device_id',
+             mock.patch('sonic_py_common.multi_asic.get_asic_device_id',
                         return_value="06:00:00\n"):
             runner = CliRunner()
             result = runner.invoke(config.config.commands["override-config-table"],
