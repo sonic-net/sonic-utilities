@@ -118,6 +118,9 @@ PORT_MODE = "switchport_mode"
 
 DOM_CONFIG_SUPPORTED_SUBPORTS = ['0', '1']
 
+SWITCH_CAPABILITY = "SWITCH_CAPABILITY|switch"
+SWITCH_CAPABILITY_TABLE_PATH_TRACING_CAPABLE = "PATH_TRACING_CAPABLE"
+
 asic_type = None
 
 DSCP_RANGE = click.IntRange(min=0, max=63)
@@ -5245,6 +5248,93 @@ def loopback_action(ctx, interface_name, action):
 
     table_name = get_interface_table_name(interface_name)
     config_db.mod_entry(table_name, interface_name, {"loopback_action": action})
+
+
+def is_path_tracing_supported(ctx):
+    if ctx.obj['namespace'] is DEFAULT_NAMESPACE:
+        state_db = SonicV2Connector(host='127.0.0.1')
+    else:
+        state_db = SonicV2Connector(use_unix_socket_path=True, namespace=ctx.obj['namespace'])
+    state_db.connect(state_db.STATE_DB, False)
+    supported = state_db.get(state_db.STATE_DB, SWITCH_CAPABILITY, SWITCH_CAPABILITY_TABLE_PATH_TRACING_CAPABLE)
+    return supported
+
+
+#
+# 'path-tracing' subgroup ('config interface path-tracing ...')
+#
+@interface.group(cls=clicommon.AbbreviationGroup, name='path-tracing')
+@click.pass_context
+def path_tracing(ctx):
+    """Set Path Tracing attributes"""
+    pass
+
+
+#
+# 'add' subcommand
+#
+@path_tracing.command('add')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.option(
+    '--interface-id', metavar='<interface_id>', required=True,
+    type=click.IntRange(1, 4095), help='Path Tracing Interface ID'
+)
+@click.option(
+    '--ts-template', metavar='<ts_template>', required=False,
+    type=click.Choice(['template1', 'template2', 'template3', 'template4']),
+    default='template3', help='Path Tracing Timestamp Template'
+)
+@click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
+@click.pass_context
+def add_path_tracing(ctx, interface_name, interface_id, ts_template, verbose):
+    """Set Path Tracing parameters"""
+    # Get the config_db connector
+    config_db = ctx.obj['config_db']
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    log.log_info(
+        "'interface path-tracing add {} {} {}' executing...".format(
+            interface_name, interface_id, ts_template)
+    )
+
+    if not is_path_tracing_supported(ctx):
+        raise Exception("Path Tracing is not supported yet.")
+
+    config_db.mod_entry('PORT', interface_name, {'pt_interface_id': interface_id})
+    config_db.mod_entry('PORT', interface_name, {'pt_timestamp_template': ts_template})
+
+
+#
+# 'del' subcommand
+#
+@path_tracing.command('del')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
+@click.pass_context
+def del_path_tracing(ctx, interface_name, verbose):
+    """Delete Path Tracing parameters"""
+    # Get the config_db connector
+    config_db = ctx.obj['config_db']
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    log.log_info(
+        "'interface path-tracing del {}' executing...".format(interface_name)
+    )
+
+    if not is_path_tracing_supported(ctx):
+        raise Exception("Path Tracing is not supported yet.")
+
+    config_db.mod_entry('PORT', interface_name, {'pt_interface_id': None})
+    config_db.mod_entry('PORT', interface_name, {'pt_timestamp_template': None})
+
 
 #
 # buffer commands and utilities
