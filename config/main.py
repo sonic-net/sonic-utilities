@@ -24,8 +24,7 @@ from jsonpointer import JsonPointerException
 from collections import OrderedDict
 from generic_config_updater.generic_updater import GenericUpdater, ConfigFormat, extract_scope
 from generic_config_updater.gu_common import HOST_NAMESPACE, GenericConfigUpdaterError
-from minigraph import parse_device_desc_xml, minigraph_encoder, parse_asic_sub_role, \
-                    parse_asic_switch_type, parse_hostname
+from minigraph import parse_device_desc_xml, minigraph_encoder
 from natsort import natsorted
 from portconfig import get_child_ports
 from socket import AF_INET, AF_INET6

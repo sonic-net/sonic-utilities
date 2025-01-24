@@ -350,9 +350,9 @@ class TestConfigOverrideMultiasic(object):
 
         # Save original sysinfo in dict, compare later to see if it is override
         orig_sysinfo = {}
-        for ns, config_db in cfgdb_clients.items():   
+        for ns, config_db in cfgdb_clients.items():
             platform = config_db.get_config()['DEVICE_METADATA']['localhost'].get('platform')
-            mac = config_db.get_config()['DEVICE_METADATA']['localhost'].get('mac')         
+            mac = config_db.get_config()['DEVICE_METADATA']['localhost'].get('mac')
             orig_sysinfo[ns] = {}
             orig_sysinfo[ns]['platform'] = platform
             orig_sysinfo[ns]['mac'] = mac
