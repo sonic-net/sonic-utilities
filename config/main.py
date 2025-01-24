@@ -1373,6 +1373,16 @@ def multiasic_write_to_db(filename, load_sysinfo):
             else:
                 command = [str(SONIC_CFGGEN_PATH), '-H', '-k', str(cfg_hwsku), '-n', str(ns), '--write-to-db']
             clicommon.run_command(command, display_cmd=True)
+            if ns is not DEFAULT_NAMESPACE:
+                cur_device_metadata = asic_config.get('DEVICE_METADATA')
+                if cur_device_metadata is not None:
+                    localhost_metadata = cur_device_metadata.get('localhost', {})
+                    asic_id = localhost_metadata.get('asic_id')
+                    if not asic_id:
+                        asic_name = multi_asic.get_asic_id_from_name(ns)
+                        asic_id = multi_asic.get_asic_device_id(asic_name)
+                        localhost_metadata['asic_id'] = asic_id
+                        cur_device_metadata['localhost'] = localhost_metadata
 
         if ns is DEFAULT_NAMESPACE:
             config_db = ConfigDBPipeConnector(use_unix_socket_path=True)
@@ -1900,11 +1910,15 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
                 if not load_sysinfo:
                     load_sysinfo = load_sysinfo_if_missing(file_input)
 
+            metadata_dict = None
             if load_sysinfo:
                 try:
-                    command = [SONIC_CFGGEN_PATH, "-j", file, '-v', "DEVICE_METADATA.localhost.hwsku"]
+                    command = [SONIC_CFGGEN_PATH, "-j", file, '-v', "DEVICE_METADATA.localhost"]
                     proc = subprocess.Popen(command, text=True, stdout=subprocess.PIPE)
-                    output, err = proc.communicate()
+                    cur_device_metadata, err = proc.communicate()
+                    cur_device_metadata_json = cur_device_metadata.strip().replace("'", '"')
+
+                    metadata_dict = json.loads(cur_device_metadata_json)
 
                 except FileNotFoundError as e:
                     click.echo("{}".format(str(e)), err=True)
@@ -1913,11 +1927,15 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
                     click.echo("{}\n{}".format(type(e), str(e)), err=True)
                     raise click.Abort()
 
-                if not output:
-                    click.secho("Could not get the HWSKU from config file,  Exiting!!!", fg='magenta')
+                if not metadata_dict:
+                    click.secho("Could not get the DEVICE_METADATA from config file,  Exiting!!!", fg='magenta')
                     sys.exit(1)
 
-                cfg_hwsku = output.strip()
+                cfg_hwsku = metadata_dict.get("hwsku")
+
+                if not cfg_hwsku:
+                    click.secho("Could not get the HWSKU from config file,  Exiting!!!", fg='magenta')
+                    sys.exit(1)
 
             client, config_db = flush_configdb(namespace)
             delete_transceiver_tables()
@@ -1930,6 +1948,21 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
                     command = [
                         str(SONIC_CFGGEN_PATH), '-H', '-k', str(cfg_hwsku), '-n', str(namespace), '--write-to-db']
                 clicommon.run_command(command, display_cmd=True)
+
+                # populate asic_id for multi asic if it does not existing yet.
+                if namespace != DEFAULT_NAMESPACE and namespace != HOST_NAMESPACE:
+                    asic_id = metadata_dict.get('asic_id')
+                    if not asic_id:
+                        asic_name = multi_asic.get_asic_id_from_name(namespace)
+                        asic_id = multi_asic.get_asic_device_id(asic_name)
+                        metadata_dict['asic_id'] = asic_id
+
+                        configdb = ConfigDBPipeConnector(use_unix_socket_path=True, namespace=namespace)
+                        configdb.connect(False)
+
+                        # Update the configuration in the database
+                        configdb.set_entry("DEVICE_METADATA", "localhost", metadata_dict)
+                        log.log_info(f"Successfully updated DEVICE_METADATA for scope {namespace}: {metadata_dict}")
 
             # For the database service running in linux host we use the file user gives as input
             # or by default DEFAULT_CONFIG_DB_FILE. In the case of database service running in namespace,
@@ -2124,10 +2157,6 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
     if override_config:
         override_config_by(golden_config_path)
 
-        if not recover_hw_config(namespace_list=namespace_list):
-            log.log_error("Hardware configuration did not recover successfully.")
-            click.secho("[Error] Hardware configuration did not recover successfully.")
-
     # Invoke platform script if available before starting the services
     platform_path, _ = device_info.get_paths_to_platform_and_hwsku_dirs()
     platform_mg_plugin = platform_path + '/plugins/platform_mg_post_check'
@@ -2194,68 +2223,6 @@ def override_config_by(golden_config_path):
     return
 
 
-def recover_hw_config(namespace_list=None):
-    """
-    Recover hardware-related configuration from the local file and update DEVICE_METADATA.
-    Args:
-        scope_list (list): List of scopes to recover configurations for. Defaults to [DEFAULT_NAMESPACE].
-    Returns:
-        bool: True if all scopes are processed successfully, False otherwise.
-    """
-    if namespace_list is None:
-        namespace_list = [DEFAULT_NAMESPACE]
-
-    result = True
-    for scope in namespace_list:
-        try:
-            log.log_info(f"Processing scope: {scope}")
-
-            config_db = ConfigDBConnector() if scope is DEFAULT_NAMESPACE \
-                else ConfigDBConnector(use_unix_socket_path=True, scope=scope)
-            config_db.connect()
-
-            device_metadata = config_db.get_entry("DEVICE_METADATA", "localhost") or {}
-            platform = device_info.get_platform()
-            device_metadata["platform"] = platform
-
-            hostname = parse_hostname(MINIGRAPH_FILE)
-            asic_role = parse_asic_sub_role(MINIGRAPH_FILE, scope)
-            switch_type = parse_asic_switch_type(MINIGRAPH_FILE, scope, hostname)
-
-            if (switch_type and switch_type.lower() == "chassis-packet") or \
-               (asic_role and asic_role.lower() == "backend") or \
-               (platform == device_info.VS_PLATFORM):
-                mac = device_info.get_system_mac(scope=scope, hostname=hostname)
-            else:
-                mac = device_info.get_system_mac()
-            device_metadata["mac"] = mac
-
-            if scope != DEFAULT_NAMESPACE:
-                asic_name = multi_asic.get_asic_id_from_name(scope)
-                asic_id = multi_asic.get_asic_device_id(asic_name)
-                if asic_id:
-                    device_metadata["asic_id"] = asic_id
-                else:
-                    log.log_error(f"Cannot get asic_id for scope {scope}: {device_metadata}")
-
-            # Validate configuration before updating
-            if not platform or not mac:
-                log.log_error(f"Incomplete metadata for scope {scope}: {device_metadata}")
-
-            # Update the configuration in the database
-            config_db.set_entry("DEVICE_METADATA", "localhost", device_metadata)
-            log.log_info(f"Successfully updated DEVICE_METADATA for scope {scope}: {device_metadata}")
-
-        except Exception as e:
-            log.log_error(
-                f"Failed to process recover hardware configuration for scope {scope}: {e}, "
-                f"device_metadata: {device_metadata}"
-            )
-            result = False
-
-    return result
-
-
 # This funtion is to generate sysinfo if that is missing in config_input.
 # It will keep the same with sysinfo in cur_config if sysinfo exists.
 # Otherwise it will modify config_input with generated sysinfo.
@@ -2268,12 +2235,15 @@ def generate_sysinfo(cur_config, config_input, ns=None):
 
     mac = None
     platform = None
+    asic_id = None
     cur_device_metadata = cur_config.get('DEVICE_METADATA')
 
     # Reuse current config's mac and platform. Generate if absent
     if cur_device_metadata is not None:
         mac = cur_device_metadata.get('localhost', {}).get('mac')
         platform = cur_device_metadata.get('localhost', {}).get('platform')
+        if ns != DEFAULT_NAMESPACE and ns != HOST_NAMESPACE:
+            asic_id = cur_device_metadata.get('localhost', {}).get('asic_id')
 
     if not mac:
         if ns:
@@ -2291,8 +2261,14 @@ def generate_sysinfo(cur_config, config_input, ns=None):
     if not platform:
         platform = device_info.get_platform()
 
+    if not asic_id and ns != DEFAULT_NAMESPACE and ns != HOST_NAMESPACE:
+        asic_name = multi_asic.get_asic_id_from_name(ns)
+        asic_id = multi_asic.get_asic_device_id(asic_name)
+
     device_metadata['localhost']['mac'] = mac.rstrip('\n')
     device_metadata['localhost']['platform'] = platform.rstrip('\n')
+    if ns != DEFAULT_NAMESPACE and ns != HOST_NAMESPACE:
+        device_metadata['localhost']['asic_id'] = asic_id.rstrip('\n')
 
     return
 
