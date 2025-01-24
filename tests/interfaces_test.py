@@ -1,6 +1,5 @@
 import os
 import traceback
-import textwrap
 
 from click.testing import CliRunner
 from unittest import mock
@@ -637,7 +636,7 @@ class TestInterfaces(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        assert resut.output == intf_flap_expected_output_with_data
+        assert result.output == intf_flap_expected_output_with_data
 
     def test_show_intf_flap_with_data_concise(self):
         """Test case for an interface with valid flap data."""
