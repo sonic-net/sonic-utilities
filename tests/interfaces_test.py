@@ -264,6 +264,9 @@ PortChannel1001  trunk               4000
 """
 
 intf_flap_expected_output_with_data = """\
+Interface      Flap Count  Admin    Oper    Link Down TimeStamp(UTC)    Link Up TimeStamp(UTC)
+-----------  ------------  -------  ------  --------------------------  ------------------------
+Ethernet0               3  Up       Down    Sat Jan 17 00:04:42 2025    Sat Jan 18 00:08:42 2025
 """
 
 intf_flap_expected_output_with_data_concise = """\
