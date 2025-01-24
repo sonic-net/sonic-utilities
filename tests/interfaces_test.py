@@ -265,16 +265,49 @@ PortChannel1001  trunk               4000
 """
 
 intf_flap_expected_output_with_data = """\
-        Interface      Flap Count  Admin    Oper    Link Down TimeStamp (UTC)                Link Up TimeStamp (UTC) -----------\n------------  -------  ------  ---------------------------------------  -------------------------------------- Ethernet0\n3  Up       Down    Last flapped : Sat Jan 17 00:04:42 2025  Last Link up: Sat Jan 18 00:08:42 2025' == 'Interface      Flap Count  Admin    Oper    Link Down TimeStamp (UTC)                Link Up TimeStamp (UTC) -----------\n------------  -------  ------  ---------------------------------------  -------------------------------------- Ethernet0\n3  Up       Down    Last flapped : Sat Jan 17 00:04:42 2025  Last Link up: Sat Jan 18 00:08:42 2025\n
 """
 
 intf_flap_expected_output_with_data_concise = """\
-Interface    Flap Count    Admin    Oper     Link Down TimeStamp (UTC)    Link Up TimeStamp (UTC)
------------  ------------  -------  -------  ---------------------------  -------------------------
-Ethernet4    Never         Unknown  Unknown  Never                        Never
+Interface    Flap Count    Admin    Oper     Link Down TimeStamp(UTC)    Link Up TimeStamp(UTC)
+-----------  ------------  -------  -------  --------------------------  ------------------------
+Ethernet4    Never         Unknown  Unknown  Never                       Never
 """
 
 intf_flap_expected_output_all_data = """\
+Interface    Flap Count    Admin    Oper     Link Down TimeStamp(UTC)    Link Up TimeStamp(UTC)
+-----------  ------------  -------  -------  --------------------------  ------------------------
+Ethernet0    3             Up       Down     Sat Jan 17 00:04:42 2025    Sat Jan 18 00:08:42 2025
+Ethernet4    Never         Unknown  Unknown  Never                       Never
+Ethernet8    Never         Unknown  Unknown  Never                       Never
+Ethernet12   Never         Unknown  Unknown  Never                       Never
+Ethernet16   7             Up       Up       Sat Jan 19 00:04:42 2025    Sat Jan 20 00:04:42 2025
+Ethernet20   Never         Unknown  Unknown  Never                       Never
+Ethernet24   Never         Up       Up       Never                       Never
+Ethernet28   Never         Up       Up       Never                       Never
+Ethernet32   Never         Up       Up       Never                       Never
+Ethernet36   7             Up       Up       Never                       Sat Jan 20 00:04:42 2025
+Ethernet40   Never         Unknown  Unknown  Never                       Never
+Ethernet44   Never         Unknown  Unknown  Never                       Never
+Ethernet48   Never         Unknown  Unknown  Never                       Never
+Ethernet52   Never         Unknown  Unknown  Never                       Never
+Ethernet56   Never         Unknown  Unknown  Never                       Never
+Ethernet60   Never         Unknown  Unknown  Never                       Never
+Ethernet64   Never         Unknown  Unknown  Never                       Never
+Ethernet68   Never         Unknown  Unknown  Never                       Never
+Ethernet72   Never         Unknown  Unknown  Never                       Never
+Ethernet76   Never         Unknown  Unknown  Never                       Never
+Ethernet80   Never         Unknown  Unknown  Never                       Never
+Ethernet84   Never         Unknown  Unknown  Never                       Never
+Ethernet88   Never         Unknown  Unknown  Never                       Never
+Ethernet92   Never         Unknown  Unknown  Never                       Never
+Ethernet96   Never         Unknown  Unknown  Never                       Never
+Ethernet100  Never         Unknown  Unknown  Never                       Never
+Ethernet104  Never         Unknown  Unknown  Never                       Never
+Ethernet108  Never         Unknown  Unknown  Never                       Never
+Ethernet112  Never         Up       Up       Never                       Never
+Ethernet116  Never         Up       Up       Never                       Never
+Ethernet120  Never         Up       Up       Never                       Never
+Ethernet124  Never         Up       Up       Never                       Never
 """
 
 intf_errors_Ethernet64 = """\
@@ -602,11 +635,9 @@ class TestInterfaces(object):
         result = runner.invoke(
             show.cli.commands["interfaces"].commands["flap"], ["Ethernet0"])
         print(result.exit_code)
+        print(result.output)
         assert result.exit_code == 0
-        wrapper = textwrap.TextWrapper(width=120)
-        wrapped_output = wrapper.fill(result.output)
-        print(wrapped_output)
-        assert wrapped_output == intf_flap_expected_output_with_data
+        assert resut.output == intf_flap_expected_output_with_data
 
     def test_show_intf_flap_with_data_concise(self):
         """Test case for an interface with valid flap data."""
@@ -626,11 +657,7 @@ class TestInterfaces(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        # Wrap the result.output to 120 characters per line
-        wrapper = textwrap.TextWrapper(width=120)
-        wrapped_output = wrapper.fill(result.output)
-        print(wrapped_output)
-        assert wrapped_output == intf_flap_expected_output_all_data
+        assert result.output == intf_flap_expected_output_all_data
 
     def test_show_intf_errors_filled_data(self):
         """Test case for an interface with filled error data."""
