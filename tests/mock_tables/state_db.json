@@ -1617,7 +1617,13 @@
     "ACL_TABLE_TABLE|DATAACL_5" : {
         "status": "Active"
     },
+    "ACL_TABLE_TABLE|ENI" : {
+        "status": "Active"
+    },
     "ACL_RULE_TABLE|DATAACL_5|RULE_1" : {
+        "status": "Active"
+    },
+    "ACL_RULE_TABLE|ENI|Vnet100_F4939FEFC47E_OUT" : {
         "status": "Active"
     },
     "VOLTAGE_INFO|VSENSOR0": {

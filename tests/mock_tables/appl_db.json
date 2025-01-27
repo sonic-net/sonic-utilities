@@ -417,5 +417,24 @@
         "action": "set_vrf",
         "param/vrf_id": "p4rt-vrf-80",
         "controller_metadata": "my metadata"
+    },
+    "ACL_TABLE_TABLE:ENI": {
+          "PORTS": "Ethernet104,PortChannel108",
+          "STAGE": "INGRESS",
+          "TYPE": "ENI_REDIRECT",
+          "POLICY_DESC": "Contains Mock Rules for ENI Based Forwarding"
+    },
+    "ACL_RULE_TABLE:ENI:Vnet100_F4939FEFC47E_IN": {
+        "PRIORITY": "9996",
+        "DST_IP": "10.2.0.1/32",
+        "INNER_DST_MAC": "f4:93:9f:ef:c4:7e",
+        "REDIRECT_ACTION": "10.0.0.75"
+    },
+    "ACL_RULE_TABLE:ENI:Vnet100_F4939FEFC47E_OUT": {
+        "PRIORITY": "9997",
+        "DST_IP": "10.2.0.1/32",
+        "INNER_SRC_MAC": "f4:93:9f:ef:c4:7e",
+        "REDIRECT_ACTION": "10.0.0.75",
+        "TUNNEL_VNI": "4321"
     }
 }
