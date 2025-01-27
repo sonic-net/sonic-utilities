@@ -8,8 +8,8 @@
         "type": "CTRLPLANE"
     },
     "ACL_TABLE_TYPE|MY_TYPE": {
-        "matches": "ETHER_TYPE,L4_DST_PORT_RANGE,L4_SRC_PORT_RANGE ",
-        "bind_point_types": "port"
+        "MATCHES@": "ETHER_TYPE,L4_DST_PORT_RANGE,L4_SRC_PORT_RANGE",
+        "BIND_POINTS@": "PORT"
     },
     "ACL_TABLE|DATAACL": {
         "policy_desc": "Some ACL table",
