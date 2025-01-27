@@ -147,7 +147,7 @@ function gnmi_reboot_dpu()
         return ${EXIT_ERROR}
     fi
 
-    docker exec -i gnmi gnoi_client -target ${dpu_ip}:${port} -logtostderr -insecure -notls -rpc Reboot -jsonin '{"method":3}'
+    docker exec -i gnmi gnoi_client -target ${dpu_ip}:${port} -logtostderr -insecure -notls -rpc Reboot -jsonin '{"method":HALT}'
     if [ $? -ne 0 ]; then
         log_message "Error: Failed to send reboot command to DPU ${DPU_NAME}"
         return ${EXIT_ERROR}
