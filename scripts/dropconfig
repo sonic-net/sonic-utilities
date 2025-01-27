@@ -13,17 +13,24 @@
 import argparse
 import os
 import sys
+from utilities_common import constants
+from sonic_py_common import multi_asic
+from utilities_common import multi_asic as multi_asic_util
 
 from tabulate import tabulate
 
 # mock the redis for unit test purposes #
 try:
-    if os.environ["UTILITIES_UNIT_TESTING"] == "1":
+    if os.getenv("UTILITIES_UNIT_TESTING") == "1":
         modules_path = os.path.join(os.path.dirname(__file__), "..")
         test_path = os.path.join(modules_path, "tests")
         sys.path.insert(0, modules_path)
         sys.path.insert(0, test_path)
         import mock_tables.dbconnector
+        if os.getenv("UTILITIES_UNIT_TESTING_TOPOLOGY") == "multi_asic":
+            import tests.mock_tables.mock_multi_asic
+            mock_tables.dbconnector.load_namespace_config()
+
 except KeyError:
     pass
 
@@ -51,14 +58,11 @@ class InvalidArgumentError(RuntimeError):
     def __init__(self, msg):
         self.message = msg
 
-
 class DropConfig(object):
-    def __init__(self):
-        self.config_db = ConfigDBConnector()
-        self.config_db.connect()
-
-        self.state_db = SonicV2Connector(use_unix_socket_path=False)
-        self.state_db.connect(self.state_db.STATE_DB)
+    def __init__(self, namespace, db, config_db):
+        self.db = db
+        self.config_db = config_db
+        self.namespace = namespace
 
     # -c show_config
     def print_counter_config(self, group):
@@ -75,6 +79,9 @@ class DropConfig(object):
                           counter.get('type', ''),
                           counter.get('reason', ''),
                           counter.get('description', '')))
+
+        if multi_asic.is_multi_asic():
+            print("For namespace:", self.namespace)
 
         print(tabulate(table,
                        drop_counter_config_header,
@@ -95,6 +102,10 @@ class DropConfig(object):
         table = []
         for counter, capabilities in device_caps.items():
             table.append((counter, capabilities.get('count', 'N/A')))
+
+        if multi_asic.is_multi_asic():
+            print("For namespace:", self.namespace)
+
         print(tabulate(table,
                        drop_counter_capability_header,
                        tablefmt='simple',
@@ -266,7 +277,7 @@ class DropConfig(object):
             Get the device capabilities from STATE_DB
         """
 
-        capability_query = self.state_db.keys(self.state_db.STATE_DB, '{}|*'.format(DEBUG_COUNTER_CAPABILITY_TABLE))
+        capability_query = self.db.keys(self.db.STATE_DB, '{}|*'.format(DEBUG_COUNTER_CAPABILITY_TABLE))
 
         if not capability_query:
             return None
@@ -274,7 +285,7 @@ class DropConfig(object):
         counter_caps = {}
         for counter_type in capability_query:
             # Because keys returns the whole key, we trim off the DEBUG_COUNTER_CAPABILITY prefix here
-            counter_caps[counter_type[len(DEBUG_COUNTER_CAPABILITY_TABLE) + 1:]] = self.state_db.get_all(self.state_db.STATE_DB, counter_type)
+            counter_caps[counter_type[len(DEBUG_COUNTER_CAPABILITY_TABLE) + 1:]] = self.db.get_all(self.db.STATE_DB, counter_type)
         return counter_caps
 
     def counter_name_in_use(self, counter_name):
@@ -287,7 +298,7 @@ class DropConfig(object):
         if counter_type is None:
             return None
 
-        cap_query = self.state_db.get_all(self.state_db.STATE_DB, '{}|{}'.format(DEBUG_COUNTER_CAPABILITY_TABLE, counter_type))
+        cap_query = self.db.get_all(self.db.STATE_DB, '{}|{}'.format(DEBUG_COUNTER_CAPABILITY_TABLE, counter_type))
 
         if not cap_query:
             return None
@@ -298,7 +309,7 @@ class DropConfig(object):
         if counter_type is None:
             return None
 
-        cap_query = self.state_db.get_all(self.state_db.STATE_DB, '{}|{}'.format(DEBUG_COUNTER_CAPABILITY_TABLE, counter_type))
+        cap_query = self.db.get_all(self.db.STATE_DB, '{}|{}'.format(DEBUG_COUNTER_CAPABILITY_TABLE, counter_type))
 
         if not cap_query:
             return None
@@ -310,6 +321,66 @@ class DropConfig(object):
         # get_keys will normalize the table name to uppercase.
         return [key for key in self.config_db.get_keys(DROP_REASON_CONFIG_TABLE) if key[0] == counter_name]
 
+class DropConfigWrapper(object):
+    """A wrapper to execute dropconfig cmd over the correct namespaces"""
+    def __init__(self, namespace):
+        self.namespace = namespace
+        if namespace is not None and namespace not in multi_asic.get_namespace_list():
+            print('Encountered error, namespace not recognized: {}. Valid namespaces {}'.format(namespace, get_namespace_list()))
+            sys.exit(1)
+
+        # Initialize the multi-asic namespace
+        self.multi_asic = multi_asic_util.MultiAsic(constants.DISPLAY_ALL, namespace_option=namespace)
+        self.db = None
+        self.config_db = None
+
+    @multi_asic_util.run_on_multi_asic
+    def run(self,
+            command,
+            name,
+            alias,
+            group,
+            counter_type,
+            description,
+            reasons):
+
+        dconfig = DropConfig(self.multi_asic.current_namespace, self.db, self.config_db)
+
+        if command == 'install':
+            try:
+                dconfig.create_counter(name,
+                                       alias,
+                                       group,
+                                       counter_type,
+                                       description,
+                                       reasons)
+            except InvalidArgumentError as err:
+                print('Encountered error trying to install counter: {}'.format(err.message))
+                sys.exit(1)
+        elif command == 'uninstall':
+            try:
+                dconfig.delete_counter(name)
+            except InvalidArgumentError as err:
+                print('Encountered error trying to uninstall counter: {}'.format(err.message))
+                sys.exit(1)
+        elif command == 'add':
+            try:
+                dconfig.add_reasons(name, reasons)
+            except InvalidArgumentError as err:
+                print('Encountered error trying to add reasons: {}'.format(err.message))
+                sys.exit(1)
+        elif command == 'remove':
+            try:
+                dconfig.remove_reasons(name, reasons)
+            except InvalidArgumentError as err:
+                print('Encountered error trying to remove reasons: {}'.format(err.message))
+                sys.exit(1)
+        elif command == 'show_config':
+            dconfig.print_counter_config(group)
+        elif command == 'show_capabilities':
+            dconfig.print_device_capabilities()
+        else:
+            print("Command not recognized")
 
 def deserialize_reason_list(list_str):
     if list_str is None:
@@ -334,6 +405,7 @@ def main():
                                      epilog="""
 Examples:
   dropconfig
+  dropconfig -ns asic0
 """)
 
     # Version
@@ -349,6 +421,7 @@ Examples:
     parser.add_argument('-t', '--type',    type=str, help='The type of the target drop counter',                   default=None)
     parser.add_argument('-d', '--desc',    type=str, help='The description for the target drop counter',           default=None)
     parser.add_argument('-r', '--reasons', type=str, help='The list of drop reasons for the target drop counter',  default=None)
+    parser.add_argument('-ns', '--namespace', type=str, help='Perform operation on a specific namespace or skip for all',  default=None)
 
     args = parser.parse_args()
 
@@ -360,46 +433,19 @@ Examples:
     counter_type = args.type
     description = args.desc
     drop_reasons = args.reasons
+    namespace = args.namespace
 
     reasons = deserialize_reason_list(drop_reasons)
 
-    dconfig = DropConfig()
+    dropconfig_wrapper = DropConfigWrapper(namespace)
+    dropconfig_wrapper.run(command,
+                           name,
+                           alias,
+                           group,
+                           counter_type,
+                           description,
+                           reasons)
 
-    if command == 'install':
-        try:
-            dconfig.create_counter(name,
-                                   alias,
-                                   group,
-                                   counter_type,
-                                   description,
-                                   reasons)
-        except InvalidArgumentError as err:
-            print('Encountered error trying to install counter: {}'.format(err.message))
-            sys.exit(1)
-    elif command == 'uninstall':
-        try:
-            dconfig.delete_counter(name)
-        except InvalidArgumentError as err:
-            print('Encountered error trying to uninstall counter: {}'.format(err.message))
-            sys.exit(1)
-    elif command == 'add':
-        try:
-            dconfig.add_reasons(name, reasons)
-        except InvalidArgumentError as err:
-            print('Encountered error trying to add reasons: {}'.format(err.message))
-            sys.exit(1)
-    elif command == 'remove':
-        try:
-            dconfig.remove_reasons(name, reasons)
-        except InvalidArgumentError as err:
-            print('Encountered error trying to remove reasons: {}'.format(err.message))
-            sys.exit(1)
-    elif command == 'show_config':
-        dconfig.print_counter_config(group)
-    elif command == 'show_capabilities':
-        dconfig.print_device_capabilities()
-    else:
-        print("Command not recognized")
 
 if __name__ == '__main__':
     main()
