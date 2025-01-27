@@ -54,6 +54,7 @@ class ModuleHelper:
         Returns:
             bool: True if the reboot command was successfully sent, False otherwise.
         """
+        module_name = module_name.upper()
         module_index = self.try_get_args(self.platform_chassis.get_module_index, module_name,
                                          default=INVALID_MODULE_INDEX)
         if module_index < 0:
@@ -84,6 +85,7 @@ class ModuleHelper:
         Returns:
             bool: True if the detach command was successfully sent, False otherwise.
         """
+        module_name = module_name.upper()
         module_index = self.try_get_args(self.platform_chassis.get_module_index, module_name,
                                          default=INVALID_MODULE_INDEX)
         if module_index < 0:
@@ -114,6 +116,7 @@ class ModuleHelper:
         Returns:
             bool: True if the rescan command was successfully sent, False otherwise.
         """
+        module_name = module_name.upper()
         module_index = self.try_get_args(self.platform_chassis.get_module_index, module_name,
                                          default=INVALID_MODULE_INDEX)
         if module_index < 0:
