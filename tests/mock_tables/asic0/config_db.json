@@ -326,5 +326,45 @@
     "QUEUE|Ethernet4|1": {
         "scheduler": "[SCHEDULAR|scheduler.0]",
         "wred_profile": "AZURE_LOSSLESS"
-    }
+    },
+    "BUFFER_POOL|ingress_lossy_pool": {
+        "mode": "dynamic",
+        "type": "ingress"
+    },
+    "BUFFER_POOL|ingress_lossless_pool_hbm": {
+        "mode": "static",
+        "size": "139458240",
+         "type": "ingress"
+    },
+    "BUFFER_PROFILE|ingress_lossy_profile": {
+        "dynamic_th": "3",
+        "pool": "ingress_lossy_pool",
+        "size": "0"
+    },
+    "BUFFER_PROFILE|ingress_lossless_profile_hbm": {
+        "static_th": "12121212",
+        "pool": "ingress_lossless_pool_hbm",
+        "size": "0"
+    },
+    "DEBUG_COUNTER|DEBUG_0": {
+        "type": "PORT_INGRESS_DROPS"
+    },
+    "DEBUG_COUNTER|DEBUG_1": {
+        "type": "SWITCH_EGRESS_DROPS",
+        "alias": "SWITCH_DROPS",
+        "group": "PACKET_DROPS",
+        "desc": "Outgoing packet drops, tracked at the switch level"
+    },
+    "DEBUG_COUNTER|DEBUG_2": {
+        "type": "PORT_INGRESS_DROPS",
+        "desc": ""
+    },
+    "DEBUG_COUNTER|lowercase_counter": {
+        "type": "SWITCH_EGRESS_DROPS"
+    },
+    "DEBUG_COUNTER_DROP_REASON|DEBUG_0|IP_HEADER_ERROR": {},
+    "DEBUG_COUNTER_DROP_REASON|DEBUG_1|ACL_ANY": {},
+    "DEBUG_COUNTER_DROP_REASON|DEBUG_2|IP_HEADER_ERROR": {},
+    "DEBUG_COUNTER_DROP_REASON|DEBUG_2|NO_L3_HEADER": {},
+    "DEBUG_COUNTER_DROP_REASON|lowercase_counter|L2_ANY": {}
 }

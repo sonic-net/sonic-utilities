@@ -1,5 +1,6 @@
 import os
 import sys
+import importlib
 
 import shutil
 from click.testing import CliRunner
@@ -168,3 +169,50 @@ class TestDropCounters(object):
         print("TEARDOWN")
         os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
+
+
+class TestDropCountersMasic(object):
+    @classmethod
+    def setup_class(cls):
+        print("SETUP")
+        remove_tmp_dropstat_file()
+        os.environ["PATH"] += os.pathsep + scripts_path
+        os.environ['UTILITIES_UNIT_TESTING'] = "1"
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
+        import show.dropcounters
+        importlib.reload(show.dropcounters)
+        # change to multi asic config
+        from .mock_tables import dbconnector
+        from .mock_tables import mock_multi_asic
+        importlib.reload(mock_multi_asic)
+        dbconnector.load_namespace_config()
+
+    def test_show_capabilities(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["dropcounters"].commands["capabilities"], ['-n', 'asic0'])
+        print(result.output)
+        assert result.output == "For namespace: asic0\n" + expected_counter_capabilities
+
+    def test_show_configuration(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["dropcounters"].commands["configuration"], ['-n', 'asic0'])
+        print(result.output)
+        assert result.output == "For namespace: asic0\n" + expected_counter_configuration
+
+    def test_show_configuration_with_group(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["dropcounters"].commands["configuration"], ["-g", "PACKET_DROPS", '-n', 'asic0'])
+        print(result.output)
+        assert result.output == "For namespace: asic0\n" + expected_counter_configuration_with_group
+
+    @classmethod
+    def teardown_class(cls):
+        print("TEARDOWN")
+        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
+        os.environ["UTILITIES_UNIT_TESTING"] = "0"
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
+        # change back to single asic config
+        from .mock_tables import dbconnector
+        from .mock_tables import mock_single_asic
+        importlib.reload(mock_single_asic)
+        dbconnector.load_namespace_config()
