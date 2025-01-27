@@ -133,7 +133,7 @@ class Portstat(object):
         self.cnstat_dict = OrderedDict()
         self.cnstat_dict['time'] = datetime.datetime.now()
         self.ratestat_dict = OrderedDict()
-        if device_info.is_supervisor():
+        if device_info.is_supervisor() and not device_info.is_packet_chassis():
             if device_info.is_voq_chassis() or (self.namespace is None and self.display_option != 'all'):
                 self.collect_stat_from_lc()
         else:
