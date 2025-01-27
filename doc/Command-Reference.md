@@ -713,11 +713,52 @@ This command displays the cause of the previous reboot
   ```
 
 - Example:
+  ### Shown below is the output of the CLI when executed on the NPU
   ```
   admin@sonic:~$ show reboot-cause
   User issued reboot command [User: admin, Time: Mon Mar 25 01:02:03 UTC 2019]
   ```
+  ### Shown below is the output of the CLI when executed on the DPU
+  ```
+  admin@sonic:~$ show reboot-cause
+  reboot
+  ```
+```
+Note: The CLI extensions shown in this block are applicable only to smartswitch platforms. When these extensions are used on a regular switch the extension will be ignored and the output will be the same irrespective of the options.
 
+CLI Extensions Applicable to Smartswtich
+  - show reboot-cause all
+  - show reboot-cause history all
+  - show reboot-cause history DPUx
+```
+**show reboot-cause all**
+
+This command displays the cause of the previous reboot for the Switch and the DPUs for which the midplane interfaces are up.
+
+- Usage:
+  ```
+  show reboot-cause all
+  ```
+
+- Example:
+  ### Shown below is the output of the CLI when executed on the NPU
+  ```
+  root@MtFuji:/home/cisco# show reboot-cause all
+  Device    Name                 Cause         Time                             User
+  --------  -------------------  ------------  -------------------------------  ------
+  NPU       2025_01_21_09_01_11  Power Loss    N/A                              N/A
+  DPU1      2025_01_21_09_03_43  Non-Hardware  Tue Jan 21 09:03:43 AM UTC 2025
+  DPU0      2025_01_21_09_03_37  Non-Hardware  Tue Jan 21 09:03:37 AM UTC 2025
+
+  ```
+  ### Shown below is the output of the CLI when executed on the DPU
+  ```
+  root@sonic:/home/admin# show reboot-cause all
+  Usage: show reboot-cause [OPTIONS] COMMAND [ARGS]...
+  Try "show reboot-cause -h" for help.
+
+  Error: No such command "all".
+  ```
 **show reboot-cause history**
 
 This command displays the history of the previous reboots up to 10 entry
@@ -728,15 +769,74 @@ This command displays the history of the previous reboots up to 10 entry
   ```
 
 - Example:
+  ### Shown below is the output of the CLI when executed on the NPU
   ```
-  admin@sonic:~$ show reboot-cause history
-  Name                 Cause        Time                          User    Comment
-  -------------------  -----------  ----------------------------  ------  ---------
-  2020_10_09_02_33_06  reboot       Fri Oct  9 02:29:44 UTC 2020  admin
+  root@MtFuji:/home/cisco# show reboot-cause history
+  Name                 Cause       Time    User    Comment
+  -------------------  ----------  ------  ------  ----------------------------------------------------------------------------------
+  2020_10_09_02_40_11  Power Loss  Fri Oct  9 02:40:11 UTC 2020     N/A     Unknown (First boot of SONiC version azure_cisco_master.308-dirty-20250120.220704)
   2020_10_09_01_56_59  reboot       Fri Oct  9 01:53:49 UTC 2020  admin
-  2020_10_09_02_00_53  fast-reboot  Fri Oct  9 01:58:04 UTC 2020  admin
-  2020_10_09_04_53_58  warm-reboot  Fri Oct  9 04:51:47 UTC 2020  admin
   ```
+  ### Shown below is the output of the CLI when executed on the DPU
+  ```
+  root@sonic:/home/admin# show reboot-cause history
+  Name                 Cause    Time                             User    Comment
+  -------------------  -------  -------------------------------  ------  ---------
+  2025_01_21_16_49_20  Unknown  N/A                              N/A     N/A
+  2025_01_17_11_25_58  reboot   Fri Jan 17 11:23:24 AM UTC 2025  admin   N/A
+  ```
+**show reboot-cause history all**
+
+This command displays the history of the previous reboots up to 10 entry of the Switch and the DPUs for which the midplane interfaces are up.
+
+- Usage:
+  ```
+  show reboot-cause history all
+  ```
+
+- Example:
+  ### Shown below is the output of the CLI when executed on the NPU
+  ```
+  root@MtFuji:~# show reboot-cause history all
+  Device    Name                 Cause                                      Time                             User    Comment
+  --------  -------------------  -----------------------------------------  -------------------------------  ------  -------
+  NPU       2024_07_23_23_06_57  Kernel Panic                               Tue Jul 23 11:02:27 PM UTC 2024  N/A     N/A
+  NPU       2024_07_23_11_21_32  Power Loss                                 N/A                              N/A     Unknown
+  ```
+  ### Shown below is the output of the CLI when executed on the DPU
+  ```
+  root@sonic:/home/admin# show reboot-cause history all
+  Usage: show reboot-cause history [OPTIONS]
+  Try "show reboot-cause history -h" for help.
+
+  Error: Got unexpected extra argument (all)
+  ```
+**show reboot-cause history DPU1**
+
+This command displays the history of the previous reboots up to 10 entry of DPU1. If DPU1 is powered down then there won't be any data in the DB and the "show reboot-cause history DPU1" output will be blank.
+
+- Usage:
+  ```
+  show reboot-cause history DPU1
+  ```
+
+- Example:
+  ### Shown below is the output of the CLI when executed on the NPU
+  ```
+  root@MtFuji:~# show reboot-cause history DPU1
+  Device    Name    Cause                                      Time    User    Comment
+  --------  ------  -----------------------------------------  ------  ------  ---------
+  DPU1      DPU1    Software causes (Hardware watchdog reset)  N/A     N/A     N/A
+  ```
+  ### Shown below is the output of the CLI when executed on the DPU
+  ```
+  root@sonic:/home/admin# show reboot-cause history DPU1
+  Usage: show reboot-cause history [OPTIONS]
+  Try "show reboot-cause history -h" for help.
+
+  Error: Got unexpected extra argument (DPU1)
+  ```
+
 
 **show uptime**
 
@@ -11347,6 +11447,36 @@ In addition, displays a list of all current 'Services' and 'Hardware' being moni
   -----------  --------  ------
   psu.voltage  Ignored   Device
   ```
+
+**show system-health dpu <option>**
+
+This is a smartswitch specific cli.  This cli shows the midplane, control plane and data plane health of the DPU modules in the smartswitch.
+
+This can take two forms of "<option>" 1. DPU module name (ex: DPU0) 2. all, which will list all the DPUs in the smartswitch
+
+- Usage:
+  ```
+  show system-health dpu DPU0
+  ```
+
+- Example:
+  ```
+root@MtFuji-dut:/home/cisco# show system-health dpu DPU0
+Name    Oper-Status    State-Detail             State-Value    Time                             Reason
+------  -------------  -----------------------  -------------  -------------------------------  ------------------------------------------------------------------------------------
+DPU0    Online         dpu_midplane_link_state  up             Mon Dec 23 05:12:17 PM UTC 2024
+                       dpu_control_plane_state  up             Mon Dec 23 05:12:17 PM UTC 2024 All containers are up and running, host-ethlink-status: Uplink1/1 is UP
+                       dpu_data_plane_state     up             Mon Dec 23 05:12:17 PM UTC 2024 DPU container named polaris is running, pdsagent running : OK, pciemgrd running : OK
+
+root@MtFuji-dut:/home/cisco# show system-health dpu all
+Name    Oper-Status    State-Detail             State-Value    Time                             Reason
+------  -------------  -----------------------  -------------  -------------------------------  ------------------------------------------------------------------------------------
+DPU0    Online         dpu_midplane_link_state  up             Mon Dec 23 05:12:17 PM UTC 2024
+                       dpu_control_plane_state  up             Mon Dec 23 05:12:17 PM UTC 2024 All containers are up and running, host-ethlink-status: Uplink1/1 is UP
+                       dpu_data_plane_state     up             Mon Dec 23 05:12:17 PM UTC 2024 DPU container named polaris is running, pdsagent running : OK, pciemgrd running : OK
+DPU1    Online         dpu_midplane_link_state  up             Mon Dec 23 05:12:17 PM UTC 2024
+                       dpu_control_plane_state  up             Mon Dec 23 05:12:17 PM UTC 2024 All containers are up and running, host-ethlink-status: Uplink1/1 is UP
+                       dpu_data_plane_state     up             Mon Dec 23 05:12:17 PM UTC 2024 DPU container named polaris is running, pdsagent running : OK, pciemgrd running : OK
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#System-Health)
 

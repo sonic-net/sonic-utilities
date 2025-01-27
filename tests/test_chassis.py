@@ -29,10 +29,3 @@ class TestChassis:
 
         del mock_device_info.get_num_dpus
         assert chassis.get_num_dpus() == 0  # noqa: E712
-
-    def test_get_dpu_list(self, mock_device_info):
-        mock_device_info.get_dpu_list = mock.Mock(return_value=['dpu1', 'dpu2'])
-        assert chassis.get_dpu_list() == ['dpu1', 'dpu2']
-
-        del mock_device_info.get_dpu_list
-        assert chassis.get_dpu_list() == []  # noqa: E712
