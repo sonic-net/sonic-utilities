@@ -415,6 +415,70 @@ def mpls(ctx, interfacename, namespace, display):
 interfaces.add_command(portchannel.portchannel)
 
 
+@interfaces.command()
+@click.argument('interfacename', required=False)
+@click.pass_context
+def flap(ctx, interfacename):
+    """Show Interface Flap Information <interfacename>"""
+
+    namespace = ''  # Default namespace
+    port_dict = multi_asic.get_port_table(namespace=namespace)
+
+    # If interfacename is given, validate it
+    if interfacename:
+        interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
+        if interfacename not in port_dict:
+            ctx.fail("Invalid interface name {}".format(interfacename))
+
+    db = SonicV2Connector(host=REDIS_HOSTIP)
+    db.connect(db.APPL_DB)
+
+    # Prepare the table headers and body
+    header = [
+        'Interface',
+        'Flap Count',
+        'Admin',
+        'Oper',
+        'Link Down TimeStamp(UTC)',
+        'Link Up TimeStamp(UTC)'
+    ]
+    body = []
+
+    # Loop through all ports or the specified port
+    ports = [interfacename] if interfacename else natsorted(list(port_dict.keys()))
+
+    for port in ports:
+        port_data = db.get_all(db.APPL_DB, f'PORT_TABLE:{port}') or {}
+
+        flap_count = port_data.get('flap_count', 'Never')
+        admin_status = port_data.get('admin_status', 'Unknown').capitalize()
+        oper_status = port_data.get('oper_status', 'Unknown').capitalize()
+
+        # Get timestamps and convert them to UTC format if possible
+        last_up_time = port_data.get('last_up_time', 'Never')
+        last_down_time = port_data.get('last_down_time', 'Never')
+
+        # Format output row
+        row = [
+            port,
+            flap_count,
+            admin_status,
+            oper_status,
+            f"{last_down_time}" if last_down_time != 'Never' else 'Never',
+            f"{last_up_time}" if last_up_time != 'Never' else 'Never'
+        ]
+
+        body.append(row)
+
+    # Sort the body by interface name for consistent display
+    body = natsorted(body, key=lambda x: x[0])
+
+    # Display the formatted table
+    click.echo(tabulate(body, header))
+
+    db.close(db.APPL_DB)
+
+
 def get_all_port_errors(interfacename):
 
     port_operr_table = {}
