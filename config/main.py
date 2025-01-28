@@ -1916,10 +1916,6 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
 
                 cfg_hwsku = output.strip()
 
-                if not cfg_hwsku:
-                    click.secho("Could not get the HWSKU from config file,  Exiting!!!", fg='magenta')
-                    sys.exit(1)
-
             client, config_db = flush_configdb(namespace)
             delete_transceiver_tables()
 
