@@ -96,8 +96,6 @@ NAMESPACE_PREFIX = 'asic'
 INTF_KEY = "interfaces"
 DEFAULT_GOLDEN_CONFIG_DB_FILE = '/etc/sonic/golden_config_db.json'
 
-MINIGRAPH_FILE = '/etc/sonic/minigraph.xml'
-
 INIT_CFG_FILE = '/etc/sonic/init_cfg.json'
 
 DEFAULT_NAMESPACE = ''
@@ -1298,18 +1296,25 @@ def multiasic_validate_single_file(filename):
         raise click.Abort()
 
 
-def load_sysinfo_if_missing(asic_config):
-    device_metadata = asic_config.get('DEVICE_METADATA', {})
-    platform = device_metadata.get("localhost", {}).get("platform")
-    mac = device_metadata.get("localhost", {}).get("mac")
+def load_sysinfo_if_missing(asic_config, asic_name=None):
+    device_metadata = asic_config.get('DEVICE_METADATA', {}).get("localhost", {})
+    platform = device_metadata.get("platform")
+    mac = device_metadata.get("mac")
+    asic_id = device_metadata.get("asic_id") if asic_name and asic_name != HOST_NAMESPACE else None
+
     if not platform:
-        log.log_warning("platform is missing from Input file")
+        log.log_warning("Platform is missing from the input file.")
         return True
-    elif not mac:
-        log.log_warning("mac is missing from Input file")
+
+    if not mac:
+        log.log_warning("MAC address is missing from the input file.")
         return True
-    else:
-        return False
+
+    if asic_name and asic_name != HOST_NAMESPACE and not asic_id:
+        log.log_warning("ASIC ID is missing from the input file.")
+        return True
+
+    return False
 
 
 def flush_configdb(namespace=DEFAULT_NAMESPACE):
@@ -1355,7 +1360,7 @@ def multiasic_write_to_db(filename, load_sysinfo):
 
         asic_load_sysinfo = True if load_sysinfo else False
         if not asic_load_sysinfo:
-            asic_load_sysinfo = load_sysinfo_if_missing(asic_config)
+            asic_load_sysinfo = load_sysinfo_if_missing(asic_config, asic_name)
 
         if asic_load_sysinfo:
             cfg_hwsku = asic_config.get("DEVICE_METADATA", {}).\
@@ -1372,16 +1377,6 @@ def multiasic_write_to_db(filename, load_sysinfo):
             else:
                 command = [str(SONIC_CFGGEN_PATH), '-H', '-k', str(cfg_hwsku), '-n', str(ns), '--write-to-db']
             clicommon.run_command(command, display_cmd=True)
-            if ns is not DEFAULT_NAMESPACE:
-                cur_device_metadata = asic_config.get('DEVICE_METADATA')
-                if cur_device_metadata is not None:
-                    localhost_metadata = cur_device_metadata.get('localhost', {})
-                    asic_id = localhost_metadata.get('asic_id')
-                    if not asic_id:
-                        asic_name = multi_asic.get_asic_id_from_name(ns)
-                        asic_id = multi_asic.get_asic_device_id(asic_name)
-                        localhost_metadata['asic_id'] = asic_id
-                        cur_device_metadata['localhost'] = localhost_metadata
 
         if ns is DEFAULT_NAMESPACE:
             config_db = ConfigDBPipeConnector(use_unix_socket_path=True)
@@ -1909,15 +1904,11 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
                 if not load_sysinfo:
                     load_sysinfo = load_sysinfo_if_missing(file_input)
 
-            metadata_dict = None
             if load_sysinfo:
                 try:
-                    command = [SONIC_CFGGEN_PATH, "-j", file, '-v', "DEVICE_METADATA.localhost"]
+                    command = [SONIC_CFGGEN_PATH, "-j", file, '-v', "DEVICE_METADATA.localhost.hwsku"]
                     proc = subprocess.Popen(command, text=True, stdout=subprocess.PIPE)
-                    cur_device_metadata, err = proc.communicate()
-                    cur_device_metadata_json = cur_device_metadata.strip().replace("'", '"')
-
-                    metadata_dict = json.loads(cur_device_metadata_json)
+                    output, err = proc.communicate()
 
                 except FileNotFoundError as e:
                     click.echo("{}".format(str(e)), err=True)
@@ -1926,11 +1917,11 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
                     click.echo("{}\n{}".format(type(e), str(e)), err=True)
                     raise click.Abort()
 
-                if not metadata_dict:
-                    click.secho("Could not get the DEVICE_METADATA from config file,  Exiting!!!", fg='magenta')
+                if not output:
+                    click.secho("Could not get the HWSKU from config file,  Exiting!!!", fg='magenta')
                     sys.exit(1)
 
-                cfg_hwsku = metadata_dict.get("hwsku")
+                cfg_hwsku = output.strip()
 
                 if not cfg_hwsku:
                     click.secho("Could not get the HWSKU from config file,  Exiting!!!", fg='magenta')
@@ -1947,21 +1938,6 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
                     command = [
                         str(SONIC_CFGGEN_PATH), '-H', '-k', str(cfg_hwsku), '-n', str(namespace), '--write-to-db']
                 clicommon.run_command(command, display_cmd=True)
-
-                # populate asic_id for multi asic if it does not existing yet.
-                if namespace != DEFAULT_NAMESPACE and namespace != HOST_NAMESPACE:
-                    asic_id = metadata_dict.get('asic_id')
-                    if not asic_id:
-                        asic_name = multi_asic.get_asic_id_from_name(namespace)
-                        asic_id = multi_asic.get_asic_device_id(asic_name)
-                        metadata_dict['asic_id'] = asic_id
-
-                        configdb = ConfigDBPipeConnector(use_unix_socket_path=True, namespace=namespace)
-                        configdb.connect(False)
-
-                        # Update the configuration in the database
-                        configdb.set_entry("DEVICE_METADATA", "localhost", metadata_dict)
-                        log.log_info(f"Successfully updated DEVICE_METADATA for scope {namespace}: {metadata_dict}")
 
             # For the database service running in linux host we use the file user gives as input
             # or by default DEFAULT_CONFIG_DB_FILE. In the case of database service running in namespace,
