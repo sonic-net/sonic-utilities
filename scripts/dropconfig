@@ -326,7 +326,8 @@ class DropConfigWrapper(object):
     def __init__(self, namespace):
         self.namespace = namespace
         if namespace is not None and namespace not in multi_asic.get_namespace_list():
-            print('Encountered error, namespace not recognized: {}. Valid namespaces {}'.format(namespace, get_namespace_list()))
+            print('Encountered error, namespace not recognized: {}. Valid namespaces {}'.format(namespace,
+                                                                                                multi_asic.get_namespace_list()))
             sys.exit(1)
 
         # Initialize the multi-asic namespace

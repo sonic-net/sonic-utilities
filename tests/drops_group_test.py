@@ -201,7 +201,8 @@ class TestDropCountersMasic(object):
 
     def test_show_configuration_with_group(self):
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands["dropcounters"].commands["configuration"], ["-g", "PACKET_DROPS", '-n', 'asic0'])
+        result = runner.invoke(show.cli.commands["dropcounters"].commands["configuration"],
+                               ["-g", "PACKET_DROPS", '-n', 'asic0'])
         print(result.output)
         assert result.output == "For namespace: asic0\n" + expected_counter_configuration_with_group
 
