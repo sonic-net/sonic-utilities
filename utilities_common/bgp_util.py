@@ -25,16 +25,30 @@ def get_namespace_for_bgp_neighbor(neighbor_ip):
 
 def is_bgp_neigh_present(neighbor_ip, namespace=multi_asic.DEFAULT_NAMESPACE):
     config_db = multi_asic.connect_config_db_for_ns(namespace)
-    #check the internal
-    bgp_session = config_db.get_entry(multi_asic.BGP_NEIGH_CFG_DB_TABLE,
-                                      neighbor_ip)
-    if bgp_session:
-        return True
 
-    bgp_session = config_db.get_entry(
-        multi_asic.BGP_INTERNAL_NEIGH_CFG_DB_TABLE, neighbor_ip)
-    if bgp_session:
-        return True
+    tables = [
+        multi_asic.BGP_NEIGH_CFG_DB_TABLE,
+        multi_asic.BGP_INTERNAL_NEIGH_CFG_DB_TABLE,
+    ]
+    pattern = re.compile(rf".*\|{re.escape(neighbor_ip)}")
+
+    for table in tables:
+        # Check for the neighbor_ip format
+        if config_db.get_entry(table, neighbor_ip):
+            return True
+
+        # Check for any string|neighbor_ip format using regex. This is needed
+        # when unified routing config mode is enabled, as in that case
+        # vrfname|neighbor_ip is the key instead of just neighbor_ip
+        keys = config_db.get_keys(table)
+        for key in keys:
+            # Convert the key from tuple like ('default', 'x.x.x.x') to a string
+            # like 'default|x.x.x.x'
+            if isinstance(key, tuple):
+                key_str = "|".join(key)
+                if pattern.match(key_str) and config_db.get_entry(table, key):
+                    return True
+
     return False
 
 
