@@ -483,8 +483,7 @@ class TestBgpCommandsSingleAsic(object):
         assert result.output == show_error_no_v6_neighbor_single_asic
 
     @pytest.mark.parametrize('setup_single_bgp_instance',
-                            ['v4'],
-                            indirect=['setup_single_bgp_instance'])
+                             ['v4'], indirect=['setup_single_bgp_instance'])
     def test_bgp_summary_raw_missing_peergroup_count(
             self,
             setup_bgp_commands,
@@ -506,23 +505,23 @@ class TestBgpCommandsSingleAsic(object):
                 "peerMemory": 2048,
                 "ribCount": 10,
                 "ribMemory": 1024,
-                "peers":{
-                    "10.0.0.33":{
-                        "remoteAs":64001,
-                        "version":4,
-                        "msgRcvd":0,
-                        "msgSent":0,
-                        "tableVersion":0,
-                        "outq":0,
-                        "inq":0,
-                        "peerUptime":"never",
-                        "peerUptimeMsec":0,
-                        "prefixReceivedCount":0,
-                        "pfxRcd":0,
-                        "state":"Active",
-                        "connectionsEstablished":0,
-                        "connectionsDropped":0,
-                        "idType":"ipv4"
+                "peers": {
+                    "10.0.0.33": {
+                        "remoteAs": 64001,
+                        "version": 4,
+                        "msgRcvd": 0,
+                        "msgSent": 0,
+                        "tableVersion": 0,
+                        "outq": 0,
+                        "inq": 0,
+                        "peerUptime": "never",
+                        "peerUptimeMsec": 0,
+                        "prefixReceivedCount": 0,
+                        "pfxRcd": 0,
+                        "state": "Active",
+                        "connectionsEstablished": 0,
+                        "connectionsDropped": 0,
+                        "idType": "ipv4"
                     }
                 }
             }
@@ -536,8 +535,7 @@ class TestBgpCommandsSingleAsic(object):
             assert "Peer groups 0, using 0 bytes of memory" in result.output
 
     @pytest.mark.parametrize('setup_single_bgp_instance',
-                        ['v6'],
-                        indirect=['setup_single_bgp_instance'])
+                             ['v6'], indirect=['setup_single_bgp_instance'])
     def test_bgp_summary_raw_missing_peergroup_count_v6(
             self,
             setup_bgp_commands,
@@ -559,23 +557,23 @@ class TestBgpCommandsSingleAsic(object):
                 "peerMemory": 2048,
                 "ribCount": 10,
                 "ribMemory": 1024,
-                "peers":{
-                    "fc00::42":{
-                        "remoteAs":64001,
-                        "version":4,
-                        "msgRcvd":0,
-                        "msgSent":0,
-                        "tableVersion":0,
-                        "outq":0,
-                        "inq":0,
-                        "peerUptime":"never",
-                        "peerUptimeMsec":0,
-                        "prefixReceivedCount":0,
-                        "pfxRcd":0,
-                        "state":"Active",
-                        "connectionsEstablished":0,
-                        "connectionsDropped":0,
-                        "idType":"ipv6"
+                "peers": {
+                    "fc00::42": {
+                        "remoteAs": 64001,
+                        "version": 4,
+                        "msgRcvd": 0,
+                        "msgSent": 0,
+                        "tableVersion": 0,
+                        "outq": 0,
+                        "inq": 0,
+                        "peerUptime": "never",
+                        "peerUptimeMsec": 0,
+                        "prefixReceivedCount": 0,
+                        "pfxRcd": 0,
+                        "state": "Active",
+                        "connectionsEstablished": 0,
+                        "connectionsDropped": 0,
+                        "idType": "ipv6"
                     }
                 }
             }
