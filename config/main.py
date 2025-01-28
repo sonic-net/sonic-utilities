@@ -1296,25 +1296,18 @@ def multiasic_validate_single_file(filename):
         raise click.Abort()
 
 
-def load_sysinfo_if_missing(asic_config, asic_name=None):
-    device_metadata = asic_config.get('DEVICE_METADATA', {}).get("localhost", {})
-    platform = device_metadata.get("platform")
-    mac = device_metadata.get("mac")
-    asic_id = device_metadata.get("asic_id") if asic_name and asic_name != HOST_NAMESPACE else None
-
+def load_sysinfo_if_missing(asic_config):
+    device_metadata = asic_config.get('DEVICE_METADATA', {})
+    platform = device_metadata.get("localhost", {}).get("platform")
+    mac = device_metadata.get("localhost", {}).get("mac")
     if not platform:
-        log.log_warning("Platform is missing from the input file.")
+        log.log_warning("platform is missing from Input file")
         return True
-
-    if not mac:
-        log.log_warning("MAC address is missing from the input file.")
+    elif not mac:
+        log.log_warning("mac is missing from Input file")
         return True
-
-    if asic_name and asic_name != HOST_NAMESPACE and not asic_id:
-        log.log_warning("ASIC ID is missing from the input file.")
-        return True
-
-    return False
+    else:
+        return False
 
 
 def flush_configdb(namespace=DEFAULT_NAMESPACE):
@@ -1360,7 +1353,7 @@ def multiasic_write_to_db(filename, load_sysinfo):
 
         asic_load_sysinfo = True if load_sysinfo else False
         if not asic_load_sysinfo:
-            asic_load_sysinfo = load_sysinfo_if_missing(asic_config, asic_name)
+            asic_load_sysinfo = load_sysinfo_if_missing(asic_config)
 
         if asic_load_sysinfo:
             cfg_hwsku = asic_config.get("DEVICE_METADATA", {}).\
