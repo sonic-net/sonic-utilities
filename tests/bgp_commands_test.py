@@ -1,3 +1,4 @@
+import json
 import os
 
 import pytest
@@ -480,6 +481,112 @@ class TestBgpCommandsSingleAsic(object):
         print("{}".format(result.output))
         assert result.exit_code == 0
         assert result.output == show_error_no_v6_neighbor_single_asic
+
+    @pytest.mark.parametrize('setup_single_bgp_instance',
+                            ['v4'],
+                            indirect=['setup_single_bgp_instance'])
+    def test_bgp_summary_raw_missing_peergroup_count(
+            self,
+            setup_bgp_commands,
+            setup_single_bgp_instance):
+        show = setup_bgp_commands
+        runner = CliRunner()
+        # mock vtysh cli output that does not have peergroup count
+        mock_json = {
+            "ipv4Unicast": {
+                "routerId": "10.1.0.32",
+                "as": 65100,
+                "localAS": 65100,
+                "vrfId": 0,
+                "tableVersion": 1,
+                "totalPeers": 0,
+                "dynamicPeers": 0,
+                "bestPaths": 0,
+                "peerCount": 2,
+                "peerMemory": 2048,
+                "ribCount": 10,
+                "ribMemory": 1024,
+                "peers":{
+                    "10.0.0.33":{
+                        "remoteAs":64001,
+                        "version":4,
+                        "msgRcvd":0,
+                        "msgSent":0,
+                        "tableVersion":0,
+                        "outq":0,
+                        "inq":0,
+                        "peerUptime":"never",
+                        "peerUptimeMsec":0,
+                        "prefixReceivedCount":0,
+                        "pfxRcd":0,
+                        "state":"Active",
+                        "connectionsEstablished":0,
+                        "connectionsDropped":0,
+                        "idType":"ipv4"
+                    }
+                }
+            }
+        }
+
+        with patch('utilities_common.bgp_util.run_bgp_command', return_value=json.dumps(mock_json)):
+            result = runner.invoke(
+                show.cli.commands["ip"].commands["bgp"].commands["summary"], [])
+            # verify that the CLI handles missing peergroup count gracefully
+            assert result.exit_code == 0
+            assert "Peer groups 0, using 0 bytes of memory" in result.output
+
+    @pytest.mark.parametrize('setup_single_bgp_instance',
+                        ['v6'],
+                        indirect=['setup_single_bgp_instance'])
+    def test_bgp_summary_raw_missing_peergroup_count_v6(
+            self,
+            setup_bgp_commands,
+            setup_single_bgp_instance):
+        show = setup_bgp_commands
+        runner = CliRunner()
+        # mock vtysh cli output that does not have peergroup count
+        mock_json = {
+            "ipv6Unicast": {
+                "routerId": "10.1.0.32",
+                "as": 65100,
+                "localAS": 65100,
+                "vrfId": 0,
+                "tableVersion": 1,
+                "totalPeers": 0,
+                "dynamicPeers": 0,
+                "bestPaths": 0,
+                "peerCount": 2,
+                "peerMemory": 2048,
+                "ribCount": 10,
+                "ribMemory": 1024,
+                "peers":{
+                    "fc00::42":{
+                        "remoteAs":64001,
+                        "version":4,
+                        "msgRcvd":0,
+                        "msgSent":0,
+                        "tableVersion":0,
+                        "outq":0,
+                        "inq":0,
+                        "peerUptime":"never",
+                        "peerUptimeMsec":0,
+                        "prefixReceivedCount":0,
+                        "pfxRcd":0,
+                        "state":"Active",
+                        "connectionsEstablished":0,
+                        "connectionsDropped":0,
+                        "idType":"ipv6"
+                    }
+                }
+            }
+        }
+
+        with patch('utilities_common.bgp_util.run_bgp_command', return_value=json.dumps(mock_json)):
+            result = runner.invoke(
+                show.cli.commands["ipv6"].commands["bgp"].commands["summary"], [])
+            # verify that the CLI handles missing peergroup count gracefully
+            assert result.exit_code == 0
+            assert "Peer groups 0, using 0 bytes of memory" in result.output
 
     @classmethod
     def teardown_class(cls):
