@@ -3063,6 +3063,7 @@ class TestConfigDropcounters(object):
     def teardown(self):
         print("TEARDOWN")
 
+
 class TestConfigDropcountersMasic(object):
     def setup(self):
         print("SETUP")
@@ -3087,22 +3088,29 @@ class TestConfigDropcountersMasic(object):
         namespace = 'asic0'
 
         runner = CliRunner()
-        result = runner.invoke(config.config.commands['dropcounters'].commands['install'], [counter_name, counter_type, reasons, '-d', desc, '-g', group, '-a', alias, '-n', namespace])
+        result = runner.invoke(config.config.commands['dropcounters'].commands['install'],
+                               [counter_name, counter_type, reasons, '-d', desc, '-g', group, '-a',
+                               alias, '-n', namespace])
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['dropconfig', '-c', 'install', '-n', str(counter_name), '-t', str(counter_type), '-r', str(reasons), '-a', str(alias), '-g', str(group), '-d', str(desc), '-ns', str(namespace)], display_cmd=False)
+        mock_run_command.assert_called_once_with(['dropconfig', '-c', 'install', '-n', str(counter_name),
+                                                  '-t', str(counter_type), '-r', str(reasons), '-a', str(alias),
+                                                  '-g', str(group), '-d', str(desc),
+                                                  '-ns', str(namespace)], display_cmd=False)
 
     @patch('utilities_common.cli.run_command')
     def test_delete_multi_asic(self, mock_run_command):
         counter_name = 'DEBUG_2'
         namespace = 'asic0'
         runner = CliRunner()
-        result = runner.invoke(config.config.commands['dropcounters'].commands['delete'], [counter_name, '-v', '-n', namespace])
+        result = runner.invoke(config.config.commands['dropcounters'].commands['delete'],
+                               [counter_name, '-v', '-n', namespace])
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['dropconfig', '-c', 'uninstall', '-n', str(counter_name), '-ns', namespace], display_cmd=True)
+        mock_run_command.assert_called_once_with(['dropconfig', '-c', 'uninstall', '-n',
+                                                 str(counter_name), '-ns', namespace], display_cmd=True)
 
     @patch('utilities_common.cli.run_command')
     def test_add_reasons_multi_asic(self, mock_run_command):
@@ -3110,11 +3118,14 @@ class TestConfigDropcountersMasic(object):
         reasons = '[EXCEEDS_L2_MTU,DECAP_ERROR]'
         namespace = 'asic0'
         runner = CliRunner()
-        result = runner.invoke(config.config.commands['dropcounters'].commands['add-reasons'], [counter_name, reasons, '-v', '-n', namespace])
+        result = runner.invoke(config.config.commands['dropcounters'].commands['add-reasons'],
+                               [counter_name, reasons, '-v', '-n', namespace])
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['dropconfig', '-c', 'add', '-n', str(counter_name), '-r', str(reasons), '-ns', namespace], display_cmd=True)
+        mock_run_command.assert_called_once_with(['dropconfig', '-c', 'add', '-n',
+                                                 str(counter_name), '-r', str(reasons), '-ns', namespace],
+                                                 display_cmd=True)
 
     @patch('utilities_common.cli.run_command')
     def test_remove_reasons_multi_asic(self, mock_run_command):
@@ -3122,11 +3133,13 @@ class TestConfigDropcountersMasic(object):
         reasons = '[EXCEEDS_L2_MTU,DECAP_ERROR]'
         namespace = 'asic0'
         runner = CliRunner()
-        result = runner.invoke(config.config.commands['dropcounters'].commands['remove-reasons'], [counter_name, reasons, '-v', '-n', namespace])
+        result = runner.invoke(config.config.commands['dropcounters'].commands['remove-reasons'],
+                               [counter_name, reasons, '-v', '-n', namespace])
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['dropconfig', '-c', 'remove', '-n', str(counter_name), '-r', str(reasons), '-ns', namespace], display_cmd=True)
+        mock_run_command.assert_called_once_with(['dropconfig', '-c', 'remove', '-n', str(counter_name),
+                                                 '-r', str(reasons), '-ns', namespace], display_cmd=True)
 
     @classmethod
     def teardown_class(cls):
