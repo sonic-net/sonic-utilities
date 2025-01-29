@@ -2930,7 +2930,7 @@ class TestConfigNtp(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=True)
+        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
 
     @patch('utilities_common.cli.run_command')
     def test_add_ntp_server_version_3(self, mock_run_command):
@@ -2943,7 +2943,7 @@ class TestConfigNtp(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=True)
+        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
 
     @patch('utilities_common.cli.run_command')
     def test_add_ntp_server_with_iburst(self, mock_run_command):
@@ -2956,7 +2956,7 @@ class TestConfigNtp(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=True)
+        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
 
     @patch('utilities_common.cli.run_command')
     def test_add_ntp_server_with_server_association(self, mock_run_command):
@@ -2969,7 +2969,7 @@ class TestConfigNtp(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=True)
+        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
 
     @patch('utilities_common.cli.run_command')
     def test_add_ntp_server_with_pool_association(self, mock_run_command):
@@ -3019,7 +3019,7 @@ class TestConfigNtp(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=True)
+        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=Fe)
 
         mock_run_command.reset_mock()
         result = runner.invoke(config.config.commands["ntp"], ["add", "10.10.10.4"], obj=obj)
@@ -3040,14 +3040,14 @@ class TestConfigNtp(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=True)
+        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
 
         mock_run_command.reset_mock()
         result = runner.invoke(config.config.commands["ntp"], ["del", "10.10.10.4"], obj=obj)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=True)
+        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
 
     @patch('utilities_common.cli.run_command')
     def test_add_and_del_pool_ntp_server(self, mock_run_command):
@@ -3060,14 +3060,14 @@ class TestConfigNtp(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=True)
+        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
 
         mock_run_command.reset_mock()
         result = runner.invoke(config.config.commands["ntp"], ["del", "pool.ntp.org"], obj=obj)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=True)
+        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
 
     @patch('utilities_common.cli.run_command')
     def test_del_ntp_server_not_configured(self, mock_run_command):
