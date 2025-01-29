@@ -16,7 +16,8 @@ QSFP_DATA_MAP = {
     'specification_compliance': 'Specification compliance',
     'encoding': 'Encoding',
     'connector': 'Connector',
-    'application_advertisement': 'Application Advertisement'
+    'application_advertisement': 'Application Advertisement',
+    'dom_capability': 'DOM Capability'
 }
 
 QSFP_CMIS_DELTA_DATA_MAP = {
