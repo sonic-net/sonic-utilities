@@ -2208,12 +2208,16 @@ def generate_sysinfo(cur_config, config_input, ns=None):
 
     mac = None
     platform = None
+    asic_id = None
     cur_device_metadata = cur_config.get('DEVICE_METADATA')
 
-    # Reuse current config's mac and platform. Generate if absent
+    # Reuse the existing configuration's MAC address, platform, and asic_id
+    # if available; generate these values only if they are missing.
     if cur_device_metadata is not None:
         mac = cur_device_metadata.get('localhost', {}).get('mac')
         platform = cur_device_metadata.get('localhost', {}).get('platform')
+        if ns != DEFAULT_NAMESPACE and ns != HOST_NAMESPACE:
+            asic_id = cur_device_metadata.get('localhost', {}).get('asic_id')
 
     if not mac:
         if ns:
@@ -2231,8 +2235,14 @@ def generate_sysinfo(cur_config, config_input, ns=None):
     if not platform:
         platform = device_info.get_platform()
 
+    if not asic_id and ns != DEFAULT_NAMESPACE and ns != HOST_NAMESPACE:
+        asic_name = multi_asic.get_asic_id_from_name(ns)
+        asic_id = multi_asic.get_asic_device_id(asic_name)
+
     device_metadata['localhost']['mac'] = mac.rstrip('\n')
     device_metadata['localhost']['platform'] = platform.rstrip('\n')
+    if ns != DEFAULT_NAMESPACE and ns != HOST_NAMESPACE:
+        device_metadata['localhost']['asic_id'] = asic_id.rstrip('\n')
 
     return
 
