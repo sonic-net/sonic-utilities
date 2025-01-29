@@ -8025,7 +8025,7 @@ def ntp(ctx):
 def add_ntp_server(ctx, ntp_ip_address, association_type, iburst, version):
     """ Add NTP server IP """
     if ADHOC_VALIDATION:
-        if not clicommon.is_ipaddress(ntp_ip_address):
+        if not clicommon.is_ipaddress(ntp_ip_address) and association_type != "pool":
             ctx.fail('Invalid IP address')
     db = ValidatedConfigDBConnector(ctx.obj['db'])
     ntp_servers = db.get_table("NTP_SERVER")
@@ -8057,7 +8057,7 @@ def add_ntp_server(ctx, ntp_ip_address, association_type, iburst, version):
 def del_ntp_server(ctx, ntp_ip_address):
     """ Delete NTP server IP """
     if ADHOC_VALIDATION:
-        if not clicommon.is_ipaddress(ntp_ip_address):
+        if not clicommon.is_ipaddress(ntp_ip_address) and association_type != "pool":
             ctx.fail('Invalid IP address')
     db = ValidatedConfigDBConnector(ctx.obj['db'])
     ntp_servers = db.get_table("NTP_SERVER")
