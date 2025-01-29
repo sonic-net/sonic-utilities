@@ -18,6 +18,7 @@ port_files_path = os.path.join(dump_test_input, "acl")
 # Define the mock files to read from
 dedicated_dbs = {}
 dedicated_dbs['CONFIG_DB'] = os.path.join(port_files_path, "config_db.json")
+dedicated_dbs['APPL_DB'] = os.path.join(port_files_path, "appl_db.json")
 dedicated_dbs['COUNTERS_DB'] = os.path.join(port_files_path, "counters_db.json")
 dedicated_dbs['ASIC_DB'] = os.path.join(port_files_path, "asic_db.json")
 
@@ -56,7 +57,7 @@ class TestAclTableModule:
         params = {Acl_Table.ARG_NAME: "DATAACL", "namespace": ""}
         m_acl_table = Acl_Table(match_engine)
         returned = m_acl_table.execute(params)
-        expect = create_template_dict(dbs=["CONFIG_DB", "ASIC_DB"])
+        expect = create_template_dict(dbs=["CONFIG_DB", "APPL_DB", "ASIC_DB"])
         expect["CONFIG_DB"]["keys"].append("ACL_TABLE|DATAACL")
         expect["ASIC_DB"]["keys"].append("ASIC_STATE:SAI_OBJECT_TYPE_ACL_TABLE:oid:0x7000000000600")
         expect["ASIC_DB"]["keys"].append("ASIC_STATE:SAI_OBJECT_TYPE_ACL_TABLE_GROUP_MEMBER:oid:0xc000000000601")
@@ -73,7 +74,7 @@ class TestAclTableModule:
         params = {Acl_Table.ARG_NAME: "DATAACL1", "namespace": ""}
         m_acl_table = Acl_Table(match_engine)
         returned = m_acl_table.execute(params)
-        expect = create_template_dict(dbs=["CONFIG_DB", "ASIC_DB"])
+        expect = create_template_dict(dbs=["CONFIG_DB", "APPL_DB", "ASIC_DB"])
         expect["CONFIG_DB"]["keys"].append("ACL_TABLE|DATAACL1")
         ddiff = DeepDiff(sort_lists(returned), sort_lists(expect))
         assert not ddiff, ddiff
@@ -85,9 +86,9 @@ class TestAclTableModule:
         params = {Acl_Table.ARG_NAME: "DATAACL2", "namespace": ""}
         m_acl_table = Acl_Table(match_engine)
         returned = m_acl_table.execute(params)
-        expect = create_template_dict(dbs=["CONFIG_DB", "ASIC_DB"])
-        expect["CONFIG_DB"]["keys"].append("ACL_TABLE|DATAACL2")
-        expect["CONFIG_DB"]["keys"].append("ACL_TABLE_TYPE|MY_TYPE")
+        expect = create_template_dict(dbs=["CONFIG_DB", "APPL_DB", "ASIC_DB"])
+        expect["APPL_DB"]["keys"].append("ACL_TABLE_TABLE:DATAACL2")
+        expect["APPL_DB"]["keys"].append("ACL_TABLE_TYPE_TABLE:MY_TYPE")
         expect["ASIC_DB"]["keys"].append("ASIC_STATE:SAI_OBJECT_TYPE_ACL_TABLE:oid:0x7100000000600")
         expect["ASIC_DB"]["keys"].append("ASIC_STATE:SAI_OBJECT_TYPE_ACL_TABLE_GROUP_MEMBER:oid:0xc100000000601")
         expect["ASIC_DB"]["keys"].append("ASIC_STATE:SAI_OBJECT_TYPE_ACL_TABLE_GROUP_MEMBER:oid:0xc100000000602")
@@ -95,6 +96,17 @@ class TestAclTableModule:
         expect["ASIC_DB"]["keys"].append("ASIC_STATE:SAI_OBJECT_TYPE_ACL_TABLE_GROUP:oid:0xb0000000005f7")
         ddiff = DeepDiff(sort_lists(returned), sort_lists(expect))
         assert not ddiff, ddiff
+
+    def test_all_arg(self, match_engine):
+        """
+        Scenario: Test if all arg returns from config_db and appl_db
+        """
+        m_acl_table = Acl_Table(match_engine)
+        returned = m_acl_table.get_all_args()
+        returned.sort()
+        expected = ['DATAACL', 'DATAACL1', 'DATAACL2', 'SNMP_ACL']
+        assert returned == expected, returned
+
 
 @pytest.mark.usefixtures("match_engine")
 class TestAclRuleModule:
@@ -105,7 +117,7 @@ class TestAclRuleModule:
         params = {Acl_Rule.ARG_NAME: "DATAACL|R0", "namespace": ""}
         m_acl_rule = Acl_Rule(match_engine)
         returned = m_acl_rule.execute(params)
-        expect = create_template_dict(dbs=["CONFIG_DB", "ASIC_DB"])
+        expect = create_template_dict(dbs=["CONFIG_DB", "APPL_DB", "ASIC_DB"])
         expect["CONFIG_DB"]["keys"].append("ACL_RULE|DATAACL|R0")
         expect["ASIC_DB"]["keys"].append("ASIC_STATE:SAI_OBJECT_TYPE_ACL_COUNTER:oid:0x9000000000606")
         expect["ASIC_DB"]["keys"].append("ASIC_STATE:SAI_OBJECT_TYPE_ACL_ENTRY:oid:0x8000000000609")
@@ -119,11 +131,21 @@ class TestAclRuleModule:
         params = {Acl_Rule.ARG_NAME: "DATAACL2|R0", "namespace": ""}
         m_acl_rule = Acl_Rule(match_engine)
         returned = m_acl_rule.execute(params)
-        expect = create_template_dict(dbs=["CONFIG_DB", "ASIC_DB"])
-        expect["CONFIG_DB"]["keys"].append("ACL_RULE|DATAACL2|R0")
+        expect = create_template_dict(dbs=["CONFIG_DB", "APPL_DB", "ASIC_DB"])
+        expect["APPL_DB"]["keys"].append("ACL_RULE_TABLE:DATAACL2:R0")
         expect["ASIC_DB"]["keys"].append("ASIC_STATE:SAI_OBJECT_TYPE_ACL_COUNTER:oid:0x9100000000606")
         expect["ASIC_DB"]["keys"].append("ASIC_STATE:SAI_OBJECT_TYPE_ACL_ENTRY:oid:0x8100000000609")
         expect["ASIC_DB"]["keys"].append("ASIC_STATE:SAI_OBJECT_TYPE_ACL_RANGE:oid:0xa100000000607")
         expect["ASIC_DB"]["keys"].append("ASIC_STATE:SAI_OBJECT_TYPE_ACL_RANGE:oid:0xa100000000608")
         ddiff = DeepDiff(sort_lists(returned), sort_lists(expect))
         assert not ddiff, ddiff
+
+    def test_all_arg(self, match_engine):
+        """
+        Scenario: Test if all arg returns from config_db and appl_db
+        """
+        m_acl_rule = Acl_Rule(match_engine)
+        returned = m_acl_rule.get_all_args()
+        returned.sort()
+        expected = ['DATAACL2:R0', 'DATAACL|R0']
+        assert returned == expected, returned

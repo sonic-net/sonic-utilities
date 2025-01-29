@@ -44,6 +44,9 @@
         "interface_type": "CR4",
         "adv_interface_types": "CR4,CR2",
         "autoneg": "on",
+        "flap_count": "3",
+        "last_up_time": "Sat Jan 18 00:08:42 2025",
+        "last_down_time": "Sat Jan 17 00:04:42 2025",
         "link_training": "on"
     },
     "PORT_TABLE:Ethernet16": {
@@ -55,6 +58,9 @@
         "oper_status": "up",
         "pfc_asym": "off",
         "mtu": "9100",
+        "flap_count": "7",
+        "last_up_time": "Sat Jan 20 00:04:42 2025",
+        "last_down_time": "Sat Jan 19 00:04:42 2025",
         "admin_status": "up"
     },
     "PORT_TABLE:Ethernet36": {
@@ -67,6 +73,8 @@
         "pfc_asym": "off",
         "mtu": "9100",
         "tpid": "0x8100",
+        "flap_count": "7",
+        "last_up_time": "Sat Jan 20 00:04:42 2025",
         "admin_status": "up"
     },
     "PORT_TABLE:Ethernet24": {
@@ -409,5 +417,24 @@
         "action": "set_vrf",
         "param/vrf_id": "p4rt-vrf-80",
         "controller_metadata": "my metadata"
+    },
+    "ACL_TABLE_TABLE:ENI": {
+          "PORTS": "Ethernet104,PortChannel108",
+          "STAGE": "INGRESS",
+          "TYPE": "ENI_REDIRECT",
+          "POLICY_DESC": "Contains Mock Rules for ENI Based Forwarding"
+    },
+    "ACL_RULE_TABLE:ENI:Vnet100_F4939FEFC47E_IN": {
+        "PRIORITY": "9996",
+        "DST_IP": "10.2.0.1/32",
+        "INNER_DST_MAC": "f4:93:9f:ef:c4:7e",
+        "REDIRECT_ACTION": "10.0.0.75"
+    },
+    "ACL_RULE_TABLE:ENI:Vnet100_F4939FEFC47E_OUT": {
+        "PRIORITY": "9997",
+        "DST_IP": "10.2.0.1/32",
+        "INNER_SRC_MAC": "f4:93:9f:ef:c4:7e",
+        "REDIRECT_ACTION": "10.0.0.75",
+        "TUNNEL_VNI": "4321"
     }
 }
