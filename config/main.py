@@ -8018,7 +8018,8 @@ def ntp(ctx):
 
 @ntp.command('add')
 @click.argument('ntp_ip_address', metavar='<ntp_ip_address>', required=True)
-@click.option('--association-type', type=click.Choice(["server", "pool"], case_sensitive=False), default="server", help="Define the association type for this NTP server")
+@click.option('--association-type', type=click.Choice(["server", "pool"], case_sensitive=False), default="server",
+              help="Define the association type for this NTP server")
 @click.option('--iburst', is_flag=True, help="Enable iburst for this NTP server")
 @click.option('--version', type=int, help="Specify the version for this NTP server")
 @click.pass_context
@@ -8056,9 +8057,6 @@ def add_ntp_server(ctx, ntp_ip_address, association_type, iburst, version):
 @click.pass_context
 def del_ntp_server(ctx, ntp_ip_address):
     """ Delete NTP server IP """
-    if ADHOC_VALIDATION:
-        if not clicommon.is_ipaddress(ntp_ip_address) and association_type != "pool":
-            ctx.fail('Invalid IP address')
     db = ValidatedConfigDBConnector(ctx.obj['db'])
     ntp_servers = db.get_table("NTP_SERVER")
     if ntp_ip_address in ntp_servers:

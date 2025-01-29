@@ -2048,7 +2048,7 @@ def ntp(ctx, verbose):
     chronyc_tracking_cmd = ["chronyc", "tracking"]
     chronyc_sources_cmd = ["chronyc", "sources"]
     if is_mgmt_vrf_enabled(ctx) is True:
-        #ManagementVRF is enabled. Call chronyc using "ip vrf exec" based on linux version
+        # ManagementVRF is enabled. Call chronyc using "ip vrf exec" based on linux version
         chronyc_tracking_cmd = ["sudo", "ip", "vrf", "exec", "mgmt"] + chronyc_tracking_cmd
         chronyc_sources_cmd = ["sudo", "ip", "vrf", "exec", "mgmt"] + chronyc_sources_cmd
 

@@ -2924,7 +2924,7 @@ class TestConfigNtp(object):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'db': db.cfgdb}
 
         result = runner.invoke(config.config.commands["ntp"], ["add", "10.10.10.4"], obj=obj)
         print(result.exit_code)
@@ -2937,7 +2937,7 @@ class TestConfigNtp(object):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'db': db.cfgdb}
 
         result = runner.invoke(config.config.commands["ntp"], ["add", "--version", "3", "10.10.10.4"], obj=obj)
         print(result.exit_code)
@@ -2950,7 +2950,7 @@ class TestConfigNtp(object):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'db': db.cfgdb}
 
         result = runner.invoke(config.config.commands["ntp"], ["add", "--iburst", "10.10.10.4"], obj=obj)
         print(result.exit_code)
@@ -2963,7 +2963,7 @@ class TestConfigNtp(object):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'db': db.cfgdb}
 
         result = runner.invoke(config.config.commands["ntp"], ["add", "--association-type", "server", "10.10.10.4"], obj=obj)
         print(result.exit_code)
@@ -2976,7 +2976,7 @@ class TestConfigNtp(object):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'db': db.cfgdb}
 
         result = runner.invoke(config.config.commands["ntp"], ["add", "--association-type", "pool", "pool.ntp.org"], obj=obj)
         print(result.exit_code)
@@ -2990,7 +2990,7 @@ class TestConfigNtp(object):
         config.ADHOC_VALIDATION = False
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'db': db.cfgdb}
 
         result = runner.invoke(config.config.commands["ntp"], ["add", "10.10.10.x"], obj=obj)
         print(result.exit_code)
@@ -3001,7 +3001,7 @@ class TestConfigNtp(object):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'db': db.cfgdb}
 
         result = runner.invoke(config.config.commands["ntp"], ["add", "10.10.10.x"], obj=obj)
         print(result.exit_code)
@@ -3013,13 +3013,13 @@ class TestConfigNtp(object):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'db': db.cfgdb}
 
         result = runner.invoke(config.config.commands["ntp"], ["add", "10.10.10.4"], obj=obj)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=Fe)
+        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
 
         mock_run_command.reset_mock()
         result = runner.invoke(config.config.commands["ntp"], ["add", "10.10.10.4"], obj=obj)
@@ -3034,7 +3034,7 @@ class TestConfigNtp(object):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'db': db.cfgdb}
 
         result = runner.invoke(config.config.commands["ntp"], ["add", "10.10.10.4"], obj=obj)
         print(result.exit_code)
@@ -3054,9 +3054,10 @@ class TestConfigNtp(object):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'db': db.cfgdb}
 
-        result = runner.invoke(config.config.commands["ntp"], ["add", "--association-type", "pool", "pool.ntp.org"], obj=obj)
+        result = runner.invoke(config.config.commands["ntp"], ["add", "--association-type", "pool", "pool.ntp.org"],
+                               obj=obj)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
@@ -3074,7 +3075,7 @@ class TestConfigNtp(object):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'db': db.cfgdb}
 
         result = runner.invoke(config.config.commands["ntp"], ["del", "10.10.10.4"], obj=obj)
         print(result.exit_code)
@@ -3083,17 +3084,6 @@ class TestConfigNtp(object):
         assert "not configured" in result.output
         mock_run_command.assert_not_called()
 
-    def test_del_ntp_server_invalid_ip(self):
-        config.ADHOC_VALIDATION = True
-        runner = CliRunner()
-        db = Db()
-        obj = {'db':db.cfgdb}
-
-        result = runner.invoke(config.config.commands["ntp"], ["del", "10.10.10.x"], obj=obj)
-        print(result.exit_code)
-        print(result.output)
-        assert "Invalid IP address" in result.output
-
     @patch("config.main.ConfigDBConnector.get_table", mock.Mock(return_value="10.10.10.10"))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry", mock.Mock(side_effect=JsonPatchConflict))
     @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
@@ -3101,7 +3091,7 @@ class TestConfigNtp(object):
         config.ADHOC_VALIDATION = False
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'db': db.cfgdb}
 
         result = runner.invoke(config.config.commands["ntp"], ["del", "10.10.10.10"], obj=obj)
         print(result.exit_code)
