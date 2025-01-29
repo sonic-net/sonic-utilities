@@ -3,6 +3,7 @@
 import argparse
 import json
 import sys
+from natsort import natsorted
 
 from swsscommon.swsscommon import SonicV2Connector
 from tabulate import tabulate
@@ -25,12 +26,13 @@ def get_psu_status_list():
         print('Error: Failed to get the number of PSUs')
         return None
 
-    for psu_idx in range(1, int(num_psus) + 1):
+    for psu_idx, psu_key in enumerate(natsorted(db.keys(db.STATE_DB, "PSU_INFO|*")), start = 1):
+        psu_key = psu_key.replace("PSU_INFO|", "")
         psu_status = {}
 
         psu_status['index'] = str(psu_idx)
 
-        psu_name = 'PSU {}'.format(psu_idx)
+        psu_name = psu_key
         psu_status['name'] = psu_name
 
         presence = db.get(db.STATE_DB, 'PSU_INFO|{}'.format(psu_name), 'presence')
