@@ -1031,6 +1031,30 @@
         "reasons": "[ACL_ANY,L2_ANY,L3_ANY]",
         "count": "2"
     },
+    "QUEUE_COUNTER_CAPABILITIES|WRED_ECN_QUEUE_WRED_DROPPED_PKT_COUNTER": {
+        "isSupported": "true"
+    },
+    "QUEUE_COUNTER_CAPABILITIES|WRED_ECN_QUEUE_WRED_DROPPED_BYTE_COUNTER": {
+        "isSupported": "true"
+    },
+    "QUEUE_COUNTER_CAPABILITIES|WRED_ECN_QUEUE_ECN_MARKED_PKT_COUNTER": {
+        "isSupported": "true"
+    },
+    "QUEUE_COUNTER_CAPABILITIES|WRED_ECN_QUEUE_ECN_MARKED_BYTE_COUNTER": {
+        "isSupported": "true"
+    },
+    "PORT_COUNTER_CAPABILITIES|WRED_ECN_PORT_WRED_GREEN_DROP_COUNTER": {
+        "isSupported": "true"
+    },
+    "PORT_COUNTER_CAPABILITIES|WRED_ECN_PORT_WRED_YELLOW_DROP_COUNTER": {
+        "isSupported": "true"
+    },
+    "PORT_COUNTER_CAPABILITIES|WRED_ECN_PORT_WRED_RED_DROP_COUNTER": {
+        "isSupported": "true"
+    },
+    "PORT_COUNTER_CAPABILITIES|WRED_ECN_PORT_WRED_TOTAL_DROP_COUNTER": {
+        "isSupported": "true"
+    },
     "LAG_MEMBER_TABLE|PortChannel0001|Ethernet112": {
         "runner.actor_lacpdu_info.state": "5",
         "runner.state": "disabled",

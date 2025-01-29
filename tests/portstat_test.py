@@ -252,6 +252,12 @@ Total Packets Transmitted Successfully......... 40
 Unicast Packets Transmitted.................... 40
 Multicast Packets Transmitted.................. 0
 Broadcast Packets Transmitted.................. 0
+
+WRED Green Dropped Packets..................... 17
+WRED Yellow Dropped Packets.................... 33
+WRED Red Dropped Packets....................... 51
+WRED Total Dropped Packets..................... 101
+
 Time Since Counters Last Cleared............... None
 """
 
