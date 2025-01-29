@@ -1046,6 +1046,23 @@ class TestShow(object):
         result = runner.invoke(show.cli.commands['banner'])
         assert result.exit_code == 0
 
+    @patch('show.main.run_command')
+    def test_show_ntp(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands['ntp'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['chronyc', 'tracking'])
+        mock_run_command.assert_called_with(['chronyc', 'sources'])
+
+    @patch('show.main.is_mgmt_vrf_enabled', MagicMock(return_value=True))
+    @patch('show.main.run_command')
+    def test_show_ntp_mgmt_vrf(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands['ntp'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'chronyc', 'tracking'])
+        mock_run_command.assert_called_with(['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'chronyc', 'sources'])
+
     def teardown(self):
         print('TEAR DOWN')
 
