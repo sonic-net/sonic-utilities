@@ -149,8 +149,18 @@ def get_bgp_neighbor_ip_to_name(ip, static_neighbors, dynamic_neighbors):
     :param dynamic_neighbors: subnet of dynamically defined neighbors dict
     :return: name of neighbor
     """
+    # Direct IP match
     if ip in static_neighbors:
         return static_neighbors[ip]
+    # Try to find the key where IP is the second element of any tuple key.
+    # This is to handle the case where the key is a tuple like (vrfname, IP)
+    # when unified routing config mode is enabled
+    elif matching_key := next(
+        (key for key in static_neighbors.keys()
+         if isinstance(key, tuple) and len(key) == 2 and key[1] == ip),
+        None
+    ):
+        return static_neighbors[matching_key]
     elif is_ipv4_address(ip):
         for subnet in dynamic_neighbors[constants.IPV4]:
             if ipaddress.IPv4Address(ip) in ipaddress.IPv4Network(subnet):
