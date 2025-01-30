@@ -3023,7 +3023,7 @@ class TestConfigNtp(object):
         result = runner.invoke(config.config.commands["ntp"], ["add", "10.10.10.4"], obj=obj)
         print(result.exit_code)
         print(result.output)
-        assert result.exit_code != 0
+        assert result.exit_code == 0
         assert "is already configured" in result.output
         mock_run_command.assert_not_called()
 

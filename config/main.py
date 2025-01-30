@@ -8012,9 +8012,10 @@ def enable(enable):
 @click.pass_context
 def ntp(ctx):
     """NTP server configuration tasks"""
-    config_db = ConfigDBConnector()
-    config_db.connect()
-    ctx.obj = {'db': config_db}
+    if 'db' not in ctx.obj:
+        config_db = ConfigDBConnector()
+        config_db.connect()
+        ctx.obj = {'db': config_db}
 
 @ntp.command('add')
 @click.argument('ntp_ip_address', metavar='<ntp_ip_address>', required=True)
