@@ -136,6 +136,8 @@ class Portstat(object):
         if device_info.is_supervisor():
             if device_info.is_voq_chassis() or (self.namespace is None and self.display_option != 'all'):
                 self.collect_stat_from_lc()
+            else:
+                self.collect_stat()
         else:
             self.collect_stat()
         return self.cnstat_dict, self.ratestat_dict
@@ -295,8 +297,11 @@ class Portstat(object):
             Get the port state
         """
         if device_info.is_supervisor():
-            self.db.connect(self.db.CHASSIS_STATE_DB, False)
-            return self.db.get(self.db.CHASSIS_STATE_DB, LINECARD_PORT_STAT_TABLE + "|" + port_name, "state")
+            if device_info.is_voq_chassis() or (self.namespace is None and self.display_option != 'all'):
+                self.db.connect(self.db.CHASSIS_STATE_DB, False)
+                return self.db.get(self.db.CHASSIS_STATE_DB, LINECARD_PORT_STAT_TABLE + "|" + port_name, "state")
+            else:
+                pass
 
         full_table_id = PORT_STATUS_TABLE_PREFIX + port_name
         for ns in self.multi_asic.get_ns_list_based_on_options():
