@@ -1090,7 +1090,7 @@ class TestShowRunningconfiguration(object):
         assert '[1.1.1.1]' in result.output
 
     @patch('builtins.open', mock_open(
-        read_data=open('tests/ntp.conf').read()))
+        read_data=open('tests/chrony.conf').read()))
     def test_ntp(self):
         runner = CliRunner()
 
