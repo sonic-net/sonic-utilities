@@ -286,11 +286,16 @@ Ethernet11/1      N/A      N/A        N/A        N/A       N/A       N/A       N
 """
 
 intf_counters_on_sup_packet_chassis = """\
-       IFACE    STATE    RX_OK        RX_BPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK        TX_BPS    TX_UTIL    TX_ERR    TX_DRP    TX_OVR
-------------  -------  -------  ------------  ---------  --------  --------  --------  -------  ------------  ---------  --------  --------  --------
-Ethernet-BP0      N/A        8  2000.00 MB/s        N/A        10       100       N/A       10  1500.00 MB/s        N/A       N/A       N/A       N/A
-Ethernet-BP4      N/A        4   204.80 KB/s        N/A         0     1,000       N/A       40   204.85 KB/s        N/A       N/A       N/A       N/A
-Ethernet-BP8      N/A        6  1350.00 KB/s        N/A       100        10       N/A       60    13.37 MB/s        N/A       N/A       N/A       N/A
+       IFACE    STATE    RX_OK        RX_BPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK        TX_BPS\
+    TX_UTIL    TX_ERR    TX_DRP    TX_OVR
+------------  -------  -------  ------------  ---------  --------  --------  --------  -------  ------------\
+  ---------  --------  --------  --------
+Ethernet-BP0      N/A        8  2000.00 MB/s        N/A        10       100       N/A       10  1500.00 MB/s\
+        N/A       N/A       N/A       N/A
+Ethernet-BP4      N/A        4   204.80 KB/s        N/A         0     1,000       N/A       40   204.85 KB/s\
+        N/A       N/A       N/A       N/A
+Ethernet-BP8      N/A        6  1350.00 KB/s        N/A       100        10       N/A       60    13.37 MB/s\
+        N/A       N/A       N/A       N/A
 
 Reminder: Please execute 'show interface counters -d all' to include internal links
 """
