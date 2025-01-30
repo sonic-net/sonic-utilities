@@ -1051,8 +1051,8 @@ class TestShow(object):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['ntp'])
         assert result.exit_code == 0
-        mock_run_command.assert_called_with(['chronyc', 'tracking'])
-        mock_run_command.assert_called_with(['chronyc', 'sources'])
+        mock_run_command.assert_has_calls([(['chronyc', 'tracking'], display_cmd=False),
+                                           (['chronyc', 'sources'], display_cmd=False)])
 
     @patch('show.main.is_mgmt_vrf_enabled', MagicMock(return_value=True))
     @patch('show.main.run_command')
@@ -1060,8 +1060,10 @@ class TestShow(object):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['ntp'])
         assert result.exit_code == 0
-        mock_run_command.assert_called_with(['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'chronyc', 'tracking'])
-        mock_run_command.assert_called_with(['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'chronyc', 'sources'])
+        mock_run_command.assert_has_calls([(['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'chronyc', 'tracking'],
+                                            display_cmd=False),
+                                           (['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'chronyc', 'sources'],
+                                            display_cmd=False)])
 
     def teardown(self):
         print('TEAR DOWN')

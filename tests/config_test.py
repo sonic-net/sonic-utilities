@@ -2984,7 +2984,7 @@ class TestConfigNtp(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=True)
+        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
 
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry",
            mock.Mock(side_effect=ValueError))
@@ -3018,13 +3018,8 @@ class TestConfigNtp(object):
         db = Db()
         obj = {'db': db.cfgdb}
 
-        result = runner.invoke(config.config.commands["ntp"], ["add", "10.10.10.4"], obj=obj)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
+        db.cfgdb.set_entry("NTP_SERVER", "10.10.10.4", {})
 
-        mock_run_command.reset_mock()
         result = runner.invoke(config.config.commands["ntp"], ["add", "10.10.10.4"], obj=obj)
         print(result.exit_code)
         print(result.output)
@@ -3033,19 +3028,14 @@ class TestConfigNtp(object):
         mock_run_command.assert_not_called()
 
     @patch('utilities_common.cli.run_command')
-    def test_add_and_del_ntp_server(self, mock_run_command):
+    def test_del_ntp_server(self, mock_run_command):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
         obj = {'db': db.cfgdb}
 
-        result = runner.invoke(config.config.commands["ntp"], ["add", "10.10.10.4"], obj=obj)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
+        db.cfgdb.set_entry("NTP_SERVER", "10.10.10.4", {})
 
-        mock_run_command.reset_mock()
         result = runner.invoke(config.config.commands["ntp"], ["del", "10.10.10.4"], obj=obj)
         print(result.exit_code)
         print(result.output)
@@ -3053,20 +3043,14 @@ class TestConfigNtp(object):
         mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
 
     @patch('utilities_common.cli.run_command')
-    def test_add_and_del_pool_ntp_server(self, mock_run_command):
+    def test_del_pool_ntp_server(self, mock_run_command):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
         obj = {'db': db.cfgdb}
 
-        result = runner.invoke(config.config.commands["ntp"], ["add", "--association-type", "pool", "pool.ntp.org"],
-                               obj=obj)
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
+        db.cfgdb.set_entry("NTP_SERVER", "pool.ntp.org", {})
 
-        mock_run_command.reset_mock()
         result = runner.invoke(config.config.commands["ntp"], ["del", "pool.ntp.org"], obj=obj)
         print(result.exit_code)
         print(result.output)
