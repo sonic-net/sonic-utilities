@@ -1,5 +1,4 @@
 import copy
-import datetime
 import pytest
 import filecmp
 import importlib
@@ -10,7 +9,6 @@ import jsonpatch
 import sys
 import unittest
 import ipaddress
-import shutil
 
 from datetime import datetime, timezone
 from unittest import mock
@@ -28,7 +26,6 @@ from mock import call, patch, mock_open, MagicMock
 from generic_config_updater.generic_updater import ConfigFormat
 
 import config.main as config
-import config.validated_config_db_connector as validated_config_db_connector
 
 # Add Test, module and script path.
 test_path = os.path.dirname(os.path.abspath(__file__))
