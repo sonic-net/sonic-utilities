@@ -1,4 +1,5 @@
 import copy
+import datetime
 import pytest
 import filecmp
 import importlib
@@ -10,7 +11,7 @@ import sys
 import unittest
 import ipaddress
 
-from datetime import datetime, timezone
+from datetime import timezone
 from unittest import mock
 from jsonpatch import JsonPatchConflict
 
@@ -1825,9 +1826,9 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.any_target_config_as_text = json.dumps(self.any_target_config)
         self.any_checkpoint_name = "any_checkpoint_name"
         self.any_checkpoints_list = [
-            {"name": "checkpoint1", "time": datetime.now(timezone.utc).isoformat()},
-            {"name": "checkpoint2", "time": datetime.now(timezone.utc).isoformat()},
-            {"name": "checkpoint3", "time": datetime.now(timezone.utc).isoformat()}
+            {"name": "checkpoint1", "time": datetime.datetime.now(timezone.utc).isoformat()},
+            {"name": "checkpoint2", "time": datetime.datetime.now(timezone.utc).isoformat()},
+            {"name": "checkpoint3", "time": datetime.datetime.now(timezone.utc).isoformat()}
         ]
         self.any_checkpoints_list_as_text = json.dumps(self.any_checkpoints_list, indent=4)
 
