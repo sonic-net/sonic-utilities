@@ -3990,6 +3990,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         self.assertEqual(result.exit_code, 0, "Command should succeed")
         self.assertIn("Config rolled back successfully.", result.output)
 
+    @patch('os.path.getmtime', mock.Mock(return_value=1700000000.0))
     @patch('generic_config_updater.generic_updater.Util.checkpoints_dir_exist', mock.Mock(return_value=True))
     @patch('generic_config_updater.generic_updater.Util.get_checkpoint_names',
            mock.Mock(return_value=["checkpointname"]))
