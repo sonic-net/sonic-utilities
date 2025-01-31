@@ -247,7 +247,7 @@ class FileSystemConfigRollbacker:
 
         checkpoints = []
         for checkpoint_name in checkpoint_names:
-            checkpoint_path = os.path.join(CHECKPOINTS_DIR, checkpoint_name + CHECKPOINT_EXT)
+            checkpoint_path = os.path.join(self.checkpoints_dir, checkpoint_name + CHECKPOINT_EXT)
             last_modified = datetime.fromtimestamp(os.path.getmtime(checkpoint_path), tz=timezone.utc).isoformat()
             checkpoints.append({"name": checkpoint_name, "time": last_modified})
 
