@@ -3,6 +3,7 @@ import jsonpointer
 import os
 import subprocess
 
+from datetime import datetime, timezone
 from enum import Enum
 from .gu_common import HOST_NAMESPACE, GenericConfigUpdaterError, EmptyTableError, ConfigWrapper, \
                     DryRunConfigWrapper, PatchWrapper, genericUpdaterLogging
@@ -244,14 +245,23 @@ class FileSystemConfigRollbacker:
         self.logger.log_info("Getting checkpoints in checkpoints directory.")
         checkpoint_names = self.util.get_checkpoint_names()
 
-        checkpoints_len = len(checkpoint_names)
-        self.logger.log_info(f"Found {checkpoints_len} checkpoint{'s' if checkpoints_len != 1 else ''}{':' if checkpoints_len > 0 else '.'}")
+        checkpoints = []
         for checkpoint_name in checkpoint_names:
-            self.logger.log_info(f"  * {checkpoint_name}")
+            checkpoint_path = os.path.join(CHECKPOINTS_DIR, checkpoint_name + CHECKPOINT_EXT)
+            last_modified = datetime.fromtimestamp(os.path.getmtime(checkpoint_path), tz=timezone.utc).isoformat()
+            checkpoints.append({"name": checkpoint_name, "time": last_modified})
+
+        checkpoints.sort(key=lambda x: x["time"], reverse=True)
+
+        checkpoints_len = len(checkpoints)
+        self.logger.log_info(f"Found {checkpoints_len} checkpoint{'s' if checkpoints_len != 1 else ''}{':' if checkpoints_len > 0 else '.'}")
+
+        for checkpoint_name, last_modified in checkpoints:
+            self.logger.log_info(f"  * {checkpoint_name} (Last Modified: {last_modified})")
 
         self.logger.log_info("Listing checkpoints completed.")
 
-        return checkpoint_names
+        return checkpoints
 
     def delete_checkpoint(self, checkpoint_name):
         self.logger.log_notice("Deleting checkpoint starting.")
