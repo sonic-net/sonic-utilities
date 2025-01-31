@@ -40,6 +40,7 @@ except KeyError:
     pass
 
 from . import acl
+from . import audit
 from . import bgp_common
 from . import chassis_modules
 from . import dropcounters
@@ -295,6 +296,7 @@ def cli(ctx):
 
 # Add groups from other modules
 cli.add_command(acl.acl)
+cli.add_command(audit.audit)
 cli.add_command(chassis_modules.chassis)
 cli.add_command(dropcounters.dropcounters)
 cli.add_command(fabric.fabric)
