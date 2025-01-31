@@ -357,10 +357,13 @@ def process_bgp_summary_json(bgp_summary, cmd_output, device, has_bgp_neighbors=
                 'ribCount', 0) + cmd_output['ribCount']
             bgp_summary['ribMemory'] = bgp_summary.get(
                 'ribMemory', 0) + cmd_output['ribMemory']
+            # Handle the case when we have peers but no peer-groups are configured.
+            # We still want to display peer information without just showing
+            # Error: peerGroupCount missing in the bgp_summary
             bgp_summary['peerGroupCount'] = bgp_summary.get(
-                'peerGroupCount', 0) + cmd_output['peerGroupCount']
+                'peerGroupCount', 0) + cmd_output.get('peerGroupCount', 0)
             bgp_summary['peerGroupMemory'] = bgp_summary.get(
-                'peerGroupMemory', 0) + cmd_output['peerGroupMemory']
+                'peerGroupMemory', 0) + cmd_output.get('peerGroupMemory', 0)
         else:
             # when there are no bgp neighbors, all values are zero
             bgp_summary['peerCount'] = bgp_summary.get(
