@@ -1,0 +1,6 @@
+{
+    "SWITCH_CAPABILITY|switch": {
+        "SWITCH_TRIMMING_CAPABLE": "false",
+        "SWITCH|PACKET_TRIMMING_QUEUE_RESOLUTION_MODE": ""
+    }
+}
