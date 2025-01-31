@@ -228,7 +228,7 @@
     "VLAN_MEMBER|Vlan1000|PortChannel1002": {
         "tagging_mode": "tagged"
     },
-    "BGP_NEIGHBOR|10.0.0.1": {
+    "BGP_NEIGHBOR|default|10.0.0.1": {
         "rrclient": "0",
         "name": "ARISTA01T2",
         "local_addr": "10.0.0.0",
@@ -238,7 +238,7 @@
         "asn": "65200",
         "keepalive": "3"
     },
-    "BGP_NEIGHBOR|fc00::2": {
+    "BGP_NEIGHBOR|default|fc00::2": {
         "rrclient": "0",
         "name": "ARISTA01T2",
         "local_addr": "fc00::1",

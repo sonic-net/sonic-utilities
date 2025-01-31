@@ -25,16 +25,30 @@ def get_namespace_for_bgp_neighbor(neighbor_ip):
 
 def is_bgp_neigh_present(neighbor_ip, namespace=multi_asic.DEFAULT_NAMESPACE):
     config_db = multi_asic.connect_config_db_for_ns(namespace)
-    #check the internal
-    bgp_session = config_db.get_entry(multi_asic.BGP_NEIGH_CFG_DB_TABLE,
-                                      neighbor_ip)
-    if bgp_session:
-        return True
 
-    bgp_session = config_db.get_entry(
-        multi_asic.BGP_INTERNAL_NEIGH_CFG_DB_TABLE, neighbor_ip)
-    if bgp_session:
-        return True
+    tables = [
+        multi_asic.BGP_NEIGH_CFG_DB_TABLE,
+        multi_asic.BGP_INTERNAL_NEIGH_CFG_DB_TABLE,
+    ]
+    pattern = re.compile(rf".*\|{re.escape(neighbor_ip)}")
+
+    for table in tables:
+        # Check for the neighbor_ip format
+        if config_db.get_entry(table, neighbor_ip):
+            return True
+
+        # Check for any string|neighbor_ip format using regex. This is needed
+        # when unified routing config mode is enabled, as in that case
+        # vrfname|neighbor_ip is the key instead of just neighbor_ip
+        keys = config_db.get_keys(table)
+        for key in keys:
+            # Convert the key from tuple like ('default', 'x.x.x.x') to a string
+            # like 'default|x.x.x.x'
+            if isinstance(key, tuple):
+                key_str = "|".join(key)
+                if pattern.match(key_str) and config_db.get_entry(table, key):
+                    return True
+
     return False
 
 
@@ -135,8 +149,18 @@ def get_bgp_neighbor_ip_to_name(ip, static_neighbors, dynamic_neighbors):
     :param dynamic_neighbors: subnet of dynamically defined neighbors dict
     :return: name of neighbor
     """
+    # Direct IP match
     if ip in static_neighbors:
         return static_neighbors[ip]
+    # Try to find the key where IP is the second element of any tuple key.
+    # This is to handle the case where the key is a tuple like (vrfname, IP)
+    # when unified routing config mode is enabled
+    elif matching_key := next(
+        (key for key in static_neighbors.keys()
+         if isinstance(key, tuple) and len(key) == 2 and key[1] == ip),
+        None
+    ):
+        return static_neighbors[matching_key]
     elif is_ipv4_address(ip):
         for subnet in dynamic_neighbors[constants.IPV4]:
             if ipaddress.IPv4Address(ip) in ipaddress.IPv4Network(subnet):
