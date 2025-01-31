@@ -799,6 +799,18 @@ class DBMigrator():
                 flex_counter['FLEX_COUNTER_DELAY_STATUS'] = 'true'
                 self.configDB.mod_entry('FLEX_COUNTER_TABLE', obj, flex_counter)
 
+    def migrate_flex_counter_delay_status_removal(self):
+        """
+        Remove FLEX_COUNTER_DELAY_STATUS field.
+        """
+
+        flex_counter_objects = self.configDB.get_keys('FLEX_COUNTER_TABLE')
+        for obj in flex_counter_objects:
+            flex_counter = self.configDB.get_entry('FLEX_COUNTER_TABLE', obj)
+            flex_counter.pop('FLEX_COUNTER_DELAY_STATUS', None)
+            self.configDB.set_entry('FLEX_COUNTER_TABLE', obj, flex_counter)
+
+
     def migrate_sflow_table(self):
         """
         Migrate "SFLOW_TABLE" and "SFLOW_SESSION_TABLE" to update default sample_direction
@@ -1278,6 +1290,7 @@ class DBMigrator():
         master branch until 202505 branch is created.
         """
         log.log_info('Handling version_202505_01')
+        self.migrate_flex_counter_delay_status_removal()
         return None
 
     def get_version(self):
