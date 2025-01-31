@@ -10,7 +10,8 @@ import jsonpatch
 import sys
 import unittest
 import ipaddress
-import shutil
+
+from datetime import timezone
 from unittest import mock
 from jsonpatch import JsonPatchConflict
 
@@ -26,7 +27,6 @@ from mock import call, patch, mock_open, MagicMock
 from generic_config_updater.generic_updater import ConfigFormat
 
 import config.main as config
-import config.validated_config_db_connector as validated_config_db_connector
 
 # Add Test, module and script path.
 test_path = os.path.dirname(os.path.abspath(__file__))
@@ -1825,7 +1825,11 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.any_target_config = {"PORT": {}}
         self.any_target_config_as_text = json.dumps(self.any_target_config)
         self.any_checkpoint_name = "any_checkpoint_name"
-        self.any_checkpoints_list = ["checkpoint1", "checkpoint2", "checkpoint3"]
+        self.any_checkpoints_list = [
+            {"name": "checkpoint1", "time": datetime.datetime.now(timezone.utc).isoformat()},
+            {"name": "checkpoint2", "time": datetime.datetime.now(timezone.utc).isoformat()},
+            {"name": "checkpoint3", "time": datetime.datetime.now(timezone.utc).isoformat()}
+        ]
         self.any_checkpoints_list_as_text = json.dumps(self.any_checkpoints_list, indent=4)
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
@@ -3986,6 +3990,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         self.assertEqual(result.exit_code, 0, "Command should succeed")
         self.assertIn("Config rolled back successfully.", result.output)
 
+    @patch('os.path.getmtime', mock.Mock(return_value=1700000000.0))
     @patch('generic_config_updater.generic_updater.Util.checkpoints_dir_exist', mock.Mock(return_value=True))
     @patch('generic_config_updater.generic_updater.Util.get_checkpoint_names',
            mock.Mock(return_value=["checkpointname"]))
