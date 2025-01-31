@@ -1187,6 +1187,76 @@ save_file() {
 }
 
 ###############################################################################
+# generate_sai_dbg_dump_file
+# Description:
+# This function triggers the generation of a SAI debug dump file and saves the 
+# dumped file in the show techsupport output directory.
+#
+# Globals:
+#  None
+#
+# Arguments:
+#  $1 - (required) The file name (without path) the SAI debug dump will be saved under 
+#        this name in the show techsupport output directory.
+#
+# Returns:
+#  0 - On success
+#  1 - On failure
+###############################################################################
+
+generate_sai_dbg_dump_file() {
+    trap 'handle_error $? $LINENO' ERR
+    local syncd_sai_dump_filename="/var/log/dbg_gen_dump.log"
+
+    if $NOOP; then
+        echo "generate_sai_dump"
+        return 0
+    fi
+
+     # Validate the argument
+    if [ -z "$1" ]; then
+        echo "Error: No filename provided for the SAI debug dump file."
+        return 1
+    fi
+
+    # set temp file path to generate the file, Check if the directory exists; if not, create it
+    local sai_dump_dir="/tmp/saisdkdump"
+    local sai_dump_filename="${sai_dump_dir}/$1"
+    if [ ! -d "$sai_dump_dir" ]; then
+        echo "Directory '$sai_dump_dir' does not exist. Creating it..."
+        mkdir -p "$sai_dump_dir"
+        if [ $? -ne 0 ]; then
+            echo "Error: Failed to create directory '$sai_dump_dir'."
+            return 1
+        fi
+    fi    
+
+    # Generate the SAI dump file using the refactored function
+    source /usr/local/bin/gen_sai_dbg_dump.sh
+    if ! generate_sai_dump "$syncd_sai_dump_filename"; then
+        echo "Error: Failed to generate SAI debug dump."
+        return 1
+    fi
+
+    # Copy the dump file from the Docker container
+    if ! copy_from_docker syncd $syncd_sai_dump_filename $sai_dump_filename; then
+        echo "Error: Failed to copy the SAI dump file from the container."
+        return 1
+    fi
+
+    # Save the file using the save_file function
+    if ! save_file $sai_dump_filename sai_sdk_dump false; then
+        echo "Error: Failed to save the SAI dump file."
+        return 1
+    fi
+
+    # remove the dump files after saving to show techsupport package
+    rm -rf $sai_dump_filename
+    docker exec syncd rm -rf $syncd_sai_dump_filename;
+
+    return 0
+}
+###############################################################################
 # find_files routine
 # Globals:
 #  SINCE_DATE: list files only newer than given date
@@ -1463,6 +1533,7 @@ save_marvell_presteracmd() {
 ###############################################################################
 collect_marvell_prestera() {
     trap 'handle_error $? $LINENO' ERR
+
 
     save_marvell_presteracmd "show version" "CPSS_version"
     save_marvell_presteracmd "debug-mode;xps-api call xpsDataIntegrityDumpSerInfo all" "SER_table"
@@ -2262,6 +2333,8 @@ main() {
 
     save_saidump_by_route_size
 
+    generate_sai_dbg_dump_file "sai_sdk_dump_$(date +"%m_%d_%Y_%I_%M_%p")"
+
     if [ "$asic" = "barefoot" ]; then
         collect_barefoot
     fi
@@ -2293,7 +2366,6 @@ main() {
     if [ "$asic" = "pensando" ]; then
         collect_pensando
     fi
-
 
     # 2nd counter snapshot late. Need 2 snapshots to make sense of counters trend.
     save_counter_snapshot $asic 2
