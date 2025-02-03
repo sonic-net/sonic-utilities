@@ -12,21 +12,21 @@ scripts_path = os.path.join(modules_path, "scripts")
 
 show_policer_counters_output = """\
   Policer    Total Packets    Total Bytes    Green Packets    Green Bytes\
-        Yellow Packets    Yellow Bytes    Red Packets    Red Bytes
+    Yellow Packets    Yellow Bytes    Red Packets    Red Bytes
 ---------  ---------------  -------------  ---------------  -------------\
-      ----------------  --------------  -------------  -----------
+  ----------------  --------------  -------------  -----------
  policer0             4000           1000             3000           2000\
-                  8000            7000           6000         5000
+              8000            7000           6000         5000
 
 """
 
 show_policer_counters_output_diff = """\
   Policer    Total Packets    Total Bytes    Green Packets    Green Bytes\
-        Yellow Packets    Yellow Bytes    Red Packets    Red Bytes
+    Yellow Packets    Yellow Bytes    Red Packets    Red Bytes
 ---------  ---------------  -------------  ---------------  -------------\
-      ----------------  --------------  -------------  -----------
+  ----------------  --------------  -------------  -----------
  policer0                0              0                0              0\
-                     0               0              0            0
+                 0               0              0            0
 
 """
 

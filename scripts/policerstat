@@ -159,10 +159,11 @@ class Policerstat:
                 data.get('rtotalbytes', 'N/A')
             ))
         if table:
-            print(tabulate(table, header, tablefmt='simple', stralign='right'))
-            print()
-        elif use_json:
-            print(json.dumps({policer: cnstat_dict}, indent=4))
+            if use_json:
+                print(json.dumps(build_json(cnstat_dict), indent=4))
+            else:
+                print(tabulate(table, header, tablefmt='simple', stralign='right'))
+                print()
         else:
             print("No data available for the given policer.")
 
@@ -171,7 +172,6 @@ class Policerstat:
         Print the difference between two cnstat results.
         """
         table = []
-        json_output = {policer: {}}
 
         for key, cntr in cnstat_new_dict.items():
             if key == 'time':
@@ -234,21 +234,11 @@ def main():
         json.dump(cnstat_dict, open(cnstat_fqn_file, 'w'), default=json_serial)
         print("Cleared counters")
         sys.exit(0)
-
-    if args.json:
-        # JSON output handling
-        print(json.dumps(build_json(cnstat_dict), default=json_serial))
-        
     else:
         if os.path.isfile(cnstat_fqn_file):
                 try:
                     cnstat_cached_dict = json.load(open(cnstat_fqn_file, 'r'))
-                    json_output = {}
-                    if args.json:
-                        json_output[args.policer].update({"cached_time":cnstat_cached_dict.get('time')})
-                        json_output.update(policerstat.cnstat_diff_print(args.policer, cnstat_dict, cnstat_cached_dict, args.json))
-                    else:
-                        policerstat.cnstat_diff_print(args.policer, cnstat_dict, cnstat_cached_dict, args.json)
+                    policerstat.cnstat_diff_print(args.policer, cnstat_dict, cnstat_cached_dict, args.json)
                 except IOError as e:
                     print(e.errno, e)
         else:
