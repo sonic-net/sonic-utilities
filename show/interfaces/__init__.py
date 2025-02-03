@@ -414,6 +414,74 @@ def mpls(ctx, interfacename, namespace, display):
 
 interfaces.add_command(portchannel.portchannel)
 
+
+def get_all_port_errors(interfacename):
+
+    port_operr_table = {}
+    db = SonicV2Connector(host=REDIS_HOSTIP)
+    db.connect(db.STATE_DB)
+
+    # Retrieve the errors data from the PORT_OPERR_TABLE
+    port_operr_table = db.get_all(db.STATE_DB, 'PORT_OPERR_TABLE|{}'.format(interfacename))
+    db.close(db.STATE_DB)
+
+    return port_operr_table
+
+
+@interfaces.command()
+@click.argument('interfacename', required=True)
+@click.pass_context
+def errors(ctx, interfacename):
+    """Show Interface Erorrs <interfacename>"""
+    # Try to convert interface name from alias
+    interfacename = try_convert_interfacename_from_alias(click.get_current_context(), interfacename)
+
+    port_operr_table = get_all_port_errors(interfacename)
+
+    # Define a list of all potential errors
+    ALL_PORT_ERRORS = [
+        "oper_error_status",
+        "mac_local_fault",
+        "mac_remote_fault",
+        "fec_sync_loss",
+        "fec_alignment_loss",
+        "high_ser_error",
+        "high_ber_error",
+        "data_unit_crc_error",
+        "data_unit_misalignment_error",
+        "signal_local_error",
+        "crc_rate",
+        "data_unit_size",
+        "code_group_error",
+        "no_rx_reachability"
+    ]
+
+    # Prepare the table headers and body
+    header = ['Port Errors', 'Count', 'Last timestamp(UTC)']
+    body = []
+
+    # Populate the table body with all errors, defaulting missing ones to 0 and Never
+    for error in ALL_PORT_ERRORS:
+        count_key = f"{error}_count"
+        time_key = f"{error}_time"
+
+        if port_operr_table is not None:
+            count = port_operr_table.get(count_key, "0")  # Default count to '0'
+            timestamp = port_operr_table.get(time_key, "Never")  # Default timestamp to 'Never'
+        else:
+            count = "0"
+            timestamp = "Never"
+
+        # Add to table
+        body.append([error.replace('_', ' '), count, timestamp])
+
+    # Sort the body for consistent display
+    body.sort(key=lambda x: x[0])
+
+    # Display the formatted table
+    click.echo(tabulate(body, header))
+
+
 #
 # transceiver group (show interfaces trasceiver ...)
 #
