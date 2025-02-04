@@ -35,6 +35,9 @@ class ConnectionError(Exception):
     """Custom exception for connection-related errors."""
     pass
 
+class DatabaseError(Exception):
+    """Custom exception for database-related errors."""
+    pass
 
 class Dict2Obj:
     """Converts dictionaries or lists into objects with attribute-style access."""
@@ -85,37 +88,148 @@ class SonicDBConnector:
         self.config_db = ConfigDBConnector()
         self.connect_with_retry()
 
-    def connect_with_retry(self, max_retries: int = 3, retry_delay: float = 1.0) -> None:
+    # def connect_with_retry(self, max_retries: int = 3, retry_delay: float = 1.0) -> None:
+    #     """
+    #     Attempts to connect to the database with a retry mechanism.
+    #     """
+    #     retries = 0
+    #     last_error = None
+
+    #     while retries < max_retries:
+    #         try:
+    #             self.config_db.connect()
+    #             syslog.syslog(syslog.LOG_INFO, "Successfully connected to SONiC config database")
+    #             return
+    #         except Exception as e:
+    #             last_error = e
+    #             retries += 1
+    #             if retries < max_retries:
+    #                 syslog.syslog(syslog.LOG_WARNING,
+    #                               f"Failed to connect to database"
+    #                               f"(attempt {retries}/{max_retries}): {str(e)}")
+    #                 time.sleep(retry_delay)
+
+    #     error_msg = (
+    #         f"Failed to connect to SONiC config database after {max_retries} attempts. "
+    #         f"Last error: {str(last_error)}"
+    #     )
+    #     syslog.syslog(syslog.LOG_ERR, error_msg)
+    #     raise ConnectionError(error_msg)
+
+    # def _connect_with_retry(self, max_retries: int = 3, retry_delay: float = 1.0) -> None:
+    #     """
+    #     Attempts to connect to the database with a retry mechanism.
+    #     Separates exception handling from retry logic.
+    #     """
+    #     for attempt in range(max_retries):
+    #         try:
+    #             self.config_db.connect()
+    #             syslog.syslog(syslog.LOG_INFO, "Successfully connected to SONiC config database")
+    #             return
+    #         except ConfigDBError as e:
+    #             self._handle_connection_failure(attempt, max_retries, e)
+
+    #     error_msg = f"Failed to connect to SONiC config database after {max_retries} attempts"
+    #     syslog.syslog(syslog.LOG_ERR, error_msg)
+
+    # def _handle_connection_failure(self, attempt: int, max_retries: int, error: Exception) -> None:
+    #     """Handles database connection failures."""
+    #     if attempt < max_retries - 1:
+    #         syslog.syslog(
+    #             syslog.LOG_WARNING,
+    #             f"Failed to connect to database (attempt {attempt + 1}/{max_retries}): {str(error)}"
+    #         )
+    #         time.sleep(Config.RETRY_DELAY)
+
+
+
+
+    def _connect_with_retry(self, max_retries: int = 3, retry_delay: float = 1.0) -> None:
         """
         Attempts to connect to the database with a retry mechanism.
+        Separates exception handling from retry logic.
         """
-        retries = 0
         last_error = None
-
-        while retries < max_retries:
+        for attempt in range(max_retries):
             try:
                 self.config_db.connect()
                 syslog.syslog(syslog.LOG_INFO, "Successfully connected to SONiC config database")
                 return
             except Exception as e:
                 last_error = e
-                retries += 1
-                if retries < max_retries:
-                    syslog.syslog(syslog.LOG_WARNING,
-                                  f"Failed to connect to database"
-                                  f"(attempt {retries}/{max_retries}): {str(e)}")
-                    time.sleep(retry_delay)
+                self._handle_connection_failure(attempt, max_retries, e)
 
-        error_msg = (
-            f"Failed to connect to SONiC config database after {max_retries} attempts. "
-            f"Last error: {str(last_error)}"
-        )
+        error_msg = f"Failed to connect to SONiC config database after {max_retries} attempts"
         syslog.syslog(syslog.LOG_ERR, error_msg)
-        raise ConnectionError(error_msg)
+        raise ConnectionError(error_msg) from last_error
+
+    def _handle_connection_failure(self, attempt: int, max_retries: int, error: Exception) -> None:
+        """Handles database connection failures."""
+        if attempt < max_retries - 1:
+            syslog.syslog(
+                syslog.LOG_WARNING,
+                f"Failed to connect to database (attempt {attempt + 1}/{max_retries}): {str(error)}"
+            )
+            time.sleep(Config.RETRY_DELAY)
+
+
+
+    # def get_memory_statistics_config(self) -> Dict[str, str]:
+    #     """
+    #     Retrieves memory statistics configuration with error handling.
+    #     """
+    #     try:
+    #         config = self.config_db.get_table('MEMORY_STATISTICS')
+    #         if not isinstance(config, dict) or 'memory_statistics' not in config:
+    #             return Config.DEFAULT_CONFIG.copy()
+
+    #         current_config = config.get('memory_statistics', {})
+    #         if not isinstance(current_config, dict):
+    #             return Config.DEFAULT_CONFIG.copy()
+
+    #         result_config = Config.DEFAULT_CONFIG.copy()
+    #         for key, value in current_config.items():
+    #             if value is not None and value != "":
+    #                 result_config[key] = value
+
+    #         return result_config
+
+    #     except Exception as e:
+    #         error_msg = f"Error retrieving memory statistics configuration: {str(e)}"
+    #         syslog.syslog(syslog.LOG_ERR, error_msg)
+    #         raise RuntimeError(error_msg)
+
+
+
+    # def get_memory_statistics_config(self) -> Dict[str, str]:
+    #     """
+    #     Retrieves memory statistics configuration with specific error handling.
+    #     """
+    #     try:
+    #         config = self.config_db.get_table('MEMORY_STATISTICS')
+    #         if not isinstance(config, dict) or 'memory_statistics' not in config:
+    #             return Config.DEFAULT_CONFIG.copy()
+
+    #         current_config = config.get('memory_statistics', {})
+    #         if not isinstance(current_config, dict):
+    #             return Config.DEFAULT_CONFIG.copy()
+
+    #         result_config = Config.DEFAULT_CONFIG.copy()
+    #         for key, value in current_config.items():
+    #             if value is not None and value != "":
+    #                 result_config[key] = value
+
+    #         return result_config
+
+    #     except ConfigDBError as e:
+    #         # Preserve the original exception stack trace
+    #         syslog.syslog(syslog.LOG_ERR, f"Error retrieving memory statistics configuration: {str(e)}")
+    #         raise
+
 
     def get_memory_statistics_config(self) -> Dict[str, str]:
         """
-        Retrieves memory statistics configuration with error handling.
+        Retrieves memory statistics configuration with specific error handling.
         """
         try:
             config = self.config_db.get_table('MEMORY_STATISTICS')
@@ -134,9 +248,9 @@ class SonicDBConnector:
             return result_config
 
         except Exception as e:
-            error_msg = f"Error retrieving memory statistics configuration: {str(e)}"
-            syslog.syslog(syslog.LOG_ERR, error_msg)
-            raise RuntimeError(error_msg)
+            # Preserve the original exception stack trace
+            syslog.syslog(syslog.LOG_ERR, f"Error retrieving memory statistics configuration: {str(e)}")
+            raise DatabaseError("Failed to retrieve memory statistics configuration") from e
 
 
 class SocketManager:

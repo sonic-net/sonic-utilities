@@ -593,33 +593,16 @@ def test_script_execution():
                              "config/memory_statistics.py"], capture_output=True)
     assert result.returncode == 0
 
-# def test_syslog_closelog():
-#     """Test that syslog.closelog is called when the script exits."""
-#     with patch('syslog.closelog') as mock_closelog:
-#         # Simulate running the script
-#         module_code = compile(
-#             'if __name__ == "__main__": cli()',
-#             'memory_statistics.py',
-#             'exec'
-#         )
-#         namespace = {'__name__': '__main__', 'cli': Mock()}
-#         exec(module_code, namespace)
-
-#         # Verify that syslog.closelog was called
-#         mock_closelog.assert_called_once()
-
-
 def test_syslog_closelog():
     """Test that syslog.closelog is called when the script exits."""
-    with patch('syslog.closelog') as mock_closelog, \
-         patch('config.memory_statistics.cli') as mock_cli:
+    with patch('syslog.closelog') as mock_closelog:
         # Simulate running the script
         module_code = compile(
             'if __name__ == "__main__": cli()',
             'memory_statistics.py',
             'exec'
         )
-        namespace = {'__name__': '__main__', 'cli': mock_cli}
+        namespace = {'__name__': '__main__', 'cli': Mock()}
         exec(module_code, namespace)
 
         # Verify that syslog.closelog was called
