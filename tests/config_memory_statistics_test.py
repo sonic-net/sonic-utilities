@@ -330,10 +330,10 @@ class TestMemoryStatisticsDB:
         # Reset the singleton instance before test
         MemoryStatisticsDB._instance = None
         MemoryStatisticsDB._db = None
-        
+
         db1 = MemoryStatisticsDB.get_db()
         db2 = MemoryStatisticsDB.get_db()
-        
+
         assert db1 is db2
         # Check that ConfigDBConnector.connect() was called
         mock_db.connect.assert_called_once()
@@ -602,9 +602,10 @@ def test_script_execution():
 #         )
 #         namespace = {'__name__': '__main__', 'cli': Mock()}
 #         exec(module_code, namespace)
-        
+
 #         # Verify that syslog.closelog was called
 #         mock_closelog.assert_called_once()
+
 
 def test_syslog_closelog():
     """Test that syslog.closelog is called when the script exits."""
@@ -618,6 +619,6 @@ def test_syslog_closelog():
         )
         namespace = {'__name__': '__main__', 'cli': mock_cli}
         exec(module_code, namespace)
-        
+
         # Verify that syslog.closelog was called
         mock_closelog.assert_called_once()

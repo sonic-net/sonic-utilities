@@ -288,6 +288,7 @@ DEFAULT_RETENTION_PERIOD = 15  # days
 
 syslog.openlog("memory_statistics", syslog.LOG_PID | syslog.LOG_CONS, syslog.LOG_USER)
 
+
 def log_to_syslog(message: str, level: int = syslog.LOG_INFO) -> None:
     """Log a message to syslog."""
     try:
@@ -295,13 +296,16 @@ def log_to_syslog(message: str, level: int = syslog.LOG_INFO) -> None:
     except Exception as e:
         click.echo(f"Failed to log to syslog: {e}", err=True)
 
+
 def generate_error_message(error_type: str, error: Exception) -> str:
     """Generate a consistent error message for logging and user feedback."""
     return f"{error_type}: {error}"
 
+
 def validate_range(value: int, min_val: int, max_val: int) -> bool:
     """Validate if value is within the specified range."""
     return min_val <= value <= max_val
+
 
 class MemoryStatisticsDB:
     """Singleton class to handle memory statistics database connection."""
@@ -334,6 +338,7 @@ class MemoryStatisticsDB:
             raise RuntimeError("Database connection unavailable")
         return cls._db
 
+
 def update_memory_statistics_status(enabled: bool) -> Tuple[bool, Optional[str]]:
     """
     Update the status of the memory statistics feature in the config DB.
@@ -358,6 +363,7 @@ def update_memory_statistics_status(enabled: bool) -> Tuple[bool, Optional[str]]
         click.echo(error_msg, err=True)
         log_to_syslog(error_msg, syslog.LOG_ERR)
         return False, error_msg
+
 
 @click.group(help="Tool to manage memory statistics configuration.")
 def cli():
