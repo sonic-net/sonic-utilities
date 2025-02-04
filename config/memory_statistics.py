@@ -370,15 +370,18 @@ def cli():
     """Memory statistics configuration tool."""
     pass
 
+
 @cli.group(help="Commands to configure system settings.")
 def config():
     """Configuration commands for managing memory statistics."""
     pass
 
+
 @config.group(name='memory-stats', help="Manage memory statistics collection settings.")
 def memory_stats():
     """Configure memory statistics collection and settings."""
     pass
+
 
 @memory_stats.command(name='enable')
 def memory_stats_enable():
@@ -388,6 +391,7 @@ def memory_stats_enable():
         click.echo("Reminder: Please run 'config save' to persist changes.")
         log_to_syslog("Memory statistics enabled. Reminder to run 'config save'")
 
+
 @memory_stats.command(name='disable')
 def memory_stats_disable():
     """Disable memory statistics collection."""
@@ -395,6 +399,7 @@ def memory_stats_disable():
     if success:
         click.echo("Reminder: Please run 'config save' to persist changes.")
         log_to_syslog("Memory statistics disabled. Reminder to run 'config save'")
+
 
 @memory_stats.command(name='sampling-interval')
 @click.argument("interval", type=int)
@@ -428,6 +433,7 @@ def memory_stats_sampling_interval(interval: int):
         click.echo(error_msg, err=True)
         log_to_syslog(error_msg, syslog.LOG_ERR)
         return
+
 
 @memory_stats.command(name='retention-period')
 @click.argument("period", type=int)
