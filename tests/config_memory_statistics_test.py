@@ -573,6 +573,7 @@ def test_main_execution():
 
         mock_cli.assert_called_once()
 
+
 def test_main_cli_integration():
     """Test the main CLI integration with actual command."""
     runner = CliRunner()
@@ -584,6 +585,7 @@ def test_main_cli_integration():
         result = runner.invoke(cli, ['config', 'memory-stats', 'sampling-interval', '5'])
         assert result.exit_code == 0
         mock_get_db.assert_called_once()
+
 
 def test_script_execution():
     """Test that the script runs successfully."""
