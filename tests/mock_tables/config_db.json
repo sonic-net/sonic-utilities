@@ -1789,6 +1789,14 @@
         "POLL_INTERVAL": "1000",
         "FLEX_COUNTER_STATUS": "enable"
     },
+    "FLEX_COUNTER_TABLE|WRED_ECN_QUEUE": {
+        "POLL_INTERVAL": "10000",
+        "FLEX_COUNTER_STATUS": "enable"
+    },
+    "FLEX_COUNTER_TABLE|WRED_ECN_PORT": {
+        "POLL_INTERVAL": "1000",
+        "FLEX_COUNTER_STATUS": "enable"
+    },
     "PFC_WD|Ethernet0": {
         "action": "drop",
         "detection_time": "600",
