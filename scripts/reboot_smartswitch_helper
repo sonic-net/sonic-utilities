@@ -39,7 +39,7 @@ function get_dpu_ip()
 function get_gnmi_port()
 {
     local DPU_NAME=$1
-    sonic-db-cli CONFIG_DB HGET "DPU_PORT|$DPU_NAME" "gnmi"
+    sonic-db-cli CONFIG_DB HGET "DPU_PORT|$DPU_NAME" "gnmi_port"
 }
 
 # Function to get reboot status from DPU
@@ -50,13 +50,12 @@ function get_reboot_status()
     local reboot_status
     reboot_status=$(docker exec -i gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -insecure -notls -rpc RebootStatus 2>/dev/null)
     if [ $? -ne 0 ] || [ -z "$reboot_status" ]; then
-        log_message "Error: Failed to send reboot status command to DPU ${DPU_NAME}"
         return ${EXIT_ERROR}
     fi
     local is_reboot_active
     is_reboot_active=$(echo "$reboot_status" | grep "active" | awk '{print $2}')
     if [ "$is_reboot_active" == "false" ]; then
-        log_message "DPU ${DPU_NAME} has finished rebooting"
+        log_message "DPU ${DPU_NAME} has finished halting the services"
         return ${EXIT_SUCCESS}
     fi
     return ${EXIT_ERROR}
@@ -106,9 +105,10 @@ function wait_for_dpu_reboot_status()
     fi
 
     local dpu_halt_services_timeout=$(jq -r '.dpu_halt_services_timeout' "$PLATFORM_JSON_PATH" 2>/dev/null)
-    if [ $? -ne 0 ]; then
-        log_message "Error: Failed to retrieve dpu_halt_services_timeout from ${PLATFORM_JSON_PATH}"
-        return ${EXIT_ERROR}
+    if [ -z "$dpu_halt_services_timeout" ]; then
+        log_message "Info: Failed to retrieve dpu_halt_services_timeout from ${PLATFORM_JSON_PATH}"
+        # Default timeout
+        dpu_halt_services_timeout=300
     fi
 
     local poll_interval=5
@@ -124,10 +124,11 @@ function wait_for_dpu_reboot_status()
         sleep "$poll_interval"
         waited_time=$((waited_time + poll_interval))
         if [ $waited_time -ge $dpu_halt_services_timeout ]; then
-            log_message "Error: Timeout waiting for DPU ${DPU_NAME} to finish rebooting"
-            return ${EXIT_ERROR}
+            log_message "Info: Timeout waiting for DPU ${DPU_NAME} to finish rebooting"
+            return
         fi
     done
+    return
 }
 
 # Function to send reboot command to DPU
@@ -172,8 +173,10 @@ function reboot_dpu()
         return ${EXIT_ERROR}
     fi
 
-    # Update STATE_DB and handle PCIe removal and rescan
-    sonic-db-cli STATE_DB set "PCIE_DETACH_INFO|${DPU_NAME}" '{"dpu_id": "'${DPU_INDEX}'", "dpu_state": "detaching", "bus_info": "'${DPU_BUS_INFO}'"}' > /dev/null
+    if [[ "$REBOOT_TYPE" != "$MODULE_REBOOT_SMARTSWITCH" ]]; then
+        # Update STATE_DB and handle PCIe removal and rescan
+        sonic-db-cli STATE_DB set "PCIE_DETACH_INFO|${DPU_NAME}" '{"dpu_id": "'${DPU_INDEX}'", "dpu_state": "detaching", "bus_info": "'${DPU_BUS_INFO}'"}'
+    fi
 
     pci_detach_module ${DPU_NAME} ${DPU_BUS_INFO}
     if [ $? -ne 0 ]; then
@@ -187,9 +190,11 @@ function reboot_dpu()
         return ${EXIT_ERROR}
     fi
 
-    pci_reattach_module ${DPU_NAME} ${DPU_BUS_INFO}
+    if [[ "$REBOOT_TYPE" != "$MODULE_REBOOT_SMARTSWITCH" ]]; then
+        pci_reattach_module ${DPU_NAME} ${DPU_BUS_INFO}
 
-    sonic-db-cli STATE_DB del "PCIE_DETACH_INFO|${DPU_NAME}" > /dev/null
+        sonic-db-cli STATE_DB del "PCIE_DETACH_INFO|${DPU_NAME}"
+    fi
 }
 
 # Function to reboot all DPUs in parallel
