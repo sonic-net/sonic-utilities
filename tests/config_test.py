@@ -40,6 +40,9 @@ os.environ["PATH"] += os.pathsep + scripts_path
 # Config Reload input Path
 mock_db_path = os.path.join(test_path, "config_reload_input")
 
+mock_bmp_db_path = os.path.join(test_path, "bmp_input")
+
+
 # Load minigraph input Path
 load_minigraph_input_path = os.path.join(test_path, "load_minigraph_input")
 load_minigraph_platform_path = os.path.join(load_minigraph_input_path, "platform")
@@ -47,11 +50,13 @@ load_minigraph_platform_false_path = os.path.join(load_minigraph_input_path, "pl
 
 load_minigraph_command_output="""\
 Acquired lock on {0}
+Disabling container and routeCheck monitoring ...
 Stopping SONiC target ...
 Running command: /usr/local/bin/sonic-cfggen -H -m --write-to-db
 Running command: config qos reload --no-dynamic-buffer --no-delay
 Running command: pfcwd start_default
 Restarting SONiC target ...
+Enabling container and routeCheck monitoring ...
 Reloading Monit configuration ...
 Please note setting loaded from minigraph will be lost after system reboot. To preserve setting, run `config save`.
 Released lock on {0}
@@ -702,6 +707,51 @@ class TestConfigReload(object):
         dbconnector.load_namespace_config()
 
 
+class TestBMPConfig(object):
+    @classmethod
+    def setup_class(cls):
+        print("SETUP")
+        os.environ['UTILITIES_UNIT_TESTING'] = "1"
+        yield
+        print("TEARDOWN")
+        os.environ["UTILITIES_UNIT_TESTING"] = "0"
+
+    @pytest.mark.parametrize("table_name", [
+        "bgp-neighbor-table",
+        "bgp-rib-in-table",
+        "bgp-rib-out-table"
+    ])
+    @pytest.mark.parametrize("enabled", ["true", "false"])
+    @pytest.mark.parametrize("filename", ["bmp_invalid.json", "bmp.json"])
+    def test_enable_disable_table(
+            self,
+            get_cmd_module,
+            setup_single_broadcom_asic,
+            table_name,
+            enabled,
+            filename):
+        (config, show) = get_cmd_module
+        jsonfile_config = os.path.join(mock_bmp_db_path, filename)
+        config.DEFAULT_CONFIG_DB_FILE = jsonfile_config
+        runner = CliRunner()
+        db = Db()
+
+        # Enable table
+        result = runner.invoke(config.config.commands["bmp"].commands["enable"],
+                               [table_name], obj=db)
+        assert result.exit_code == 0
+
+        # Disable table
+        result = runner.invoke(config.config.commands["bmp"].commands["disable"],
+                               [table_name], obj=db)
+        assert result.exit_code == 0
+
+        # Enable table again
+        result = runner.invoke(config.config.commands["bmp"].commands["enable"],
+                               [table_name], obj=db)
+        assert result.exit_code == 0
+
+
 class TestConfigReloadMasic(object):
     @classmethod
     def setup_class(cls):
@@ -917,7 +967,8 @@ class TestLoadMinigraph(object):
         importlib.reload(config.main)
 
     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs', mock.MagicMock(return_value=("dummy_path", None)))
-    def test_load_minigraph(self, get_cmd_module, setup_single_broadcom_asic):
+    @mock.patch('config.main.subprocess.check_call')
+    def test_load_minigraph(self, mock_check_call, get_cmd_module, setup_single_broadcom_asic):
         with mock.patch("utilities_common.cli.run_command", mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command:
             (config, show) = get_cmd_module
             runner = CliRunner()
@@ -930,7 +981,7 @@ class TestLoadMinigraph(object):
                 (load_minigraph_command_output.format(config.SYSTEM_RELOAD_LOCK))
             # Verify "systemctl reset-failed" is called for services under sonic.target
             mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'swss'])
-            assert mock_run_command.call_count == 12
+            assert mock_run_command.call_count == 16
 
     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs',
                 mock.MagicMock(return_value=("dummy_path", None)))
@@ -1141,6 +1192,30 @@ class TestLoadMinigraph(object):
             assert result.exit_code != 0
             assert "Authentication with 'tacacs+' is not allowed when passkey not exists." in result.output
 
+    @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs',
+                mock.MagicMock(return_value=("dummy_path", None)))
+    def test_load_minigraph_no_yang_failure(self, get_cmd_module):
+        def is_file_side_effect(filename):
+            return True if 'golden_config' in filename else False
+
+        def read_json_file_side_effect(filename):
+            return {
+                "NEW_FEATURE": {
+                    "global": {
+                        "state": "enable"
+                    }
+                }
+            }
+
+        with mock.patch("utilities_common.cli.run_command", mock.MagicMock(side_effect=mock_run_command_side_effect)), \
+                mock.patch('os.path.isfile', mock.MagicMock(side_effect=is_file_side_effect)), \
+                mock.patch('config.main.read_json_file', mock.MagicMock(side_effect=read_json_file_side_effect)):
+            (config, _) = get_cmd_module
+            runner = CliRunner()
+            result = runner.invoke(config.config.commands["load_minigraph"], ["--override_config", "-y"])
+            assert result.exit_code != 0
+            assert "Config tables are missing yang models: dict_keys(['NEW_FEATURE'])" in result.output
+
     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs', mock.MagicMock(return_value=("dummy_path", None)))
     def test_load_minigraph_with_traffic_shift_away(self, get_cmd_module):
         with mock.patch("utilities_common.cli.run_command", mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command:
@@ -1183,6 +1258,7 @@ class TestLoadMinigraph(object):
 
 class TestReloadConfig(object):
     dummy_cfg_file = os.path.join(os.sep, "tmp", "config.json")
+    dummy_golden_cfg_file = os.path.join(os.sep, "tmp", "golden_config.json")
 
     @classmethod
     def setup_class(cls):
@@ -1384,10 +1460,39 @@ class TestReloadConfig(object):
             assert "\n".join([l.rstrip() for l in result.output.split('\n')]) \
                 == RELOAD_YANG_CFG_OUTPUT.format(config.SYSTEM_RELOAD_LOCK)
 
+    def test_reload_config_fails_yang_validation(self, get_cmd_module, setup_single_broadcom_asic):
+        with open(self.dummy_golden_cfg_file, 'w') as f:
+            device_metadata = {
+                "DEVICE_METADATA": {
+                    "localhost": {
+                        "invalid_hwsku": "some_hwsku"
+                    }
+                }
+            }
+            f.write(json.dumps(device_metadata))
+
+        with mock.patch(
+                "utilities_common.cli.run_command",
+                mock.MagicMock(side_effect=mock_run_command_side_effect)
+        ):
+            (config, _) = get_cmd_module
+            runner = CliRunner()
+
+            result = runner.invoke(
+                config.config.commands["reload"],
+                [self.dummy_golden_cfg_file, '-y', '-f'])
+
+            print(result.exit_code)
+            print(result.output)
+            traceback.print_tb(result.exc_info[2])
+            assert result.exit_code != 0
+            assert "fails YANG validation! Error" in result.output
+
     @classmethod
     def teardown_class(cls):
         os.environ['UTILITIES_UNIT_TESTING'] = "0"
         os.remove(cls.dummy_cfg_file)
+        os.remove(cls.dummy_golden_cfg_file)
         print("TEARDOWN")
 
 
@@ -1525,6 +1630,46 @@ class TestConfigQos(object):
         from config.main import _clear_qos
         _clear_qos(True, False)
         _wait_until_clear.assert_called_with(['BUFFER_*_TABLE:*', 'BUFFER_*_SET'], interval=0.5, timeout=0, verbose=False)
+
+    @mock.patch('config.main._wait_until_clear')
+    def test_clear_qos_without_delay(self, mock_wait_until_clear):
+        from config.main import _clear_qos
+
+        status = _clear_qos(False, False)
+        mock_wait_until_clear.assert_not_called()
+        assert status is True
+
+    @mock.patch('config.main._wait_until_clear')
+    def test_clear_qos_with_delay_returns_true(self, mock_wait_until_clear):
+        from config.main import _clear_qos
+        mock_wait_until_clear.return_value = True
+
+        status = _clear_qos(True, False)
+        mock_wait_until_clear.assert_called_once()
+        assert status is True
+
+    @mock.patch('config.main._wait_until_clear')
+    def test_clear_qos_with_delay_returns_false(self, mock_wait_until_clear):
+        from config.main import _clear_qos
+        mock_wait_until_clear.return_value = False
+
+        status = _clear_qos(True, False)
+        mock_wait_until_clear.assert_called_once()
+        assert status is False
+
+    @patch('config.main._wait_until_clear')
+    def test_qos_reload_not_empty_should_exit(self, mock_wait_until_clear):
+        mock_wait_until_clear.return_value = False
+        runner = CliRunner()
+        output_file = os.path.join(os.sep, "tmp", "qos_config_output.json")
+        print("Saving output in {}".format(output_file))
+        result = runner.invoke(
+            config.config.commands["qos"], ["reload"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        # Expect sys.exit(1) when _wait_until_clear returns False
+        assert result.exit_code == 1
 
     def test_qos_reload_single(
             self, get_cmd_module, setup_qos_mock_apis,
@@ -2771,6 +2916,13 @@ class TestConfigLoopback(object):
         assert result.exit_code != 0
         assert "Error: Loopbax1 is invalid, name should have prefix 'Loopback' and suffix '<0-999>'" in result.output
 
+        result = runner.invoke(config.config.commands["loopback"].commands["add"], ["Loopback0000"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "Error: Loopback0000 is invalid, name should have prefix 'Loopback' and suffix '<0-999>' and " \
+            "should not exceed 15 characters" in result.output
+
     def test_del_nonexistent_loopback_adhoc_validation(self):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
@@ -3877,3 +4029,63 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         from .mock_tables import mock_single_asic
         importlib.reload(mock_single_asic)
         dbconnector.load_database_config()
+
+
+class TestConfigBanner(object):
+    @classmethod
+    def setup_class(cls):
+        print('SETUP')
+        import config.main
+        importlib.reload(config.main)
+
+    @patch('utilities_common.cli.run_command',
+           mock.MagicMock(side_effect=mock_run_command_side_effect))
+    def test_banner_state(self):
+        runner = CliRunner()
+        obj = {'db': Db().cfgdb}
+
+        result = runner.invoke(
+            config.config.commands['banner'].commands['state'],
+            ['enabled'], obj=obj)
+
+        assert result.exit_code == 0
+
+    @patch('utilities_common.cli.run_command',
+           mock.MagicMock(side_effect=mock_run_command_side_effect))
+    def test_banner_login(self):
+        runner = CliRunner()
+        obj = {'db': Db().cfgdb}
+
+        result = runner.invoke(
+            config.config.commands['banner'].commands['login'],
+            ['Login message'], obj=obj)
+
+        assert result.exit_code == 0
+
+    @patch('utilities_common.cli.run_command',
+           mock.MagicMock(side_effect=mock_run_command_side_effect))
+    def test_banner_logout(self):
+        runner = CliRunner()
+        obj = {'db': Db().cfgdb}
+
+        result = runner.invoke(
+            config.config.commands['banner'].commands['logout'],
+            ['Logout message'], obj=obj)
+
+        assert result.exit_code == 0
+
+    @patch('utilities_common.cli.run_command',
+           mock.MagicMock(side_effect=mock_run_command_side_effect))
+    def test_banner_motd(self):
+        runner = CliRunner()
+        obj = {'db': Db().cfgdb}
+
+        result = runner.invoke(
+            config.config.commands['banner'].commands['motd'],
+            ['Motd message'], obj=obj)
+
+        assert result.exit_code == 0
+
+    @classmethod
+    def teardown_class(cls):
+        print('TEARDOWN')

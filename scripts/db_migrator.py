@@ -6,6 +6,7 @@ import json
 import sys
 import traceback
 import re
+import subprocess
 
 from sonic_py_common import device_info, logger
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector, SonicDBConfig
@@ -58,7 +59,7 @@ class DBMigrator():
                      none-zero values.
               build: sequentially increase within a minor version domain.
         """
-        self.CURRENT_VERSION = 'version_202411_01'
+        self.CURRENT_VERSION = 'version_202505_01'
 
         self.TABLE_NAME      = 'VERSIONS'
         self.TABLE_KEY       = 'DATABASE'
@@ -127,7 +128,7 @@ class DBMigrator():
                             config_namespace = "localhost"
                         else:
                             config_namespace = ns
-                        golden_config_data = golden_data[config_namespace]
+                        golden_config_data = golden_data.get(config_namespace, None)
         except Exception as e:
             log.log_error('Caught exception while trying to load golden config: ' + str(e))
             pass
@@ -674,6 +675,26 @@ class DBMigrator():
         if 'synchronous_mode' not in metadata:
             metadata['synchronous_mode'] = device_metadata_data.get("synchronous_mode")
             self.configDB.set_entry('DEVICE_METADATA', 'localhost', metadata)
+
+    def migrate_ipinip_tunnel(self):
+        """Migrate TUNNEL_DECAP_TABLE to add decap terms with TUNNEL_DECAP_TERM_TABLE."""
+        tunnel_decap_table = self.appDB.get_table('TUNNEL_DECAP_TABLE')
+        app_db_separator = self.appDB.get_db_separator(self.appDB.APPL_DB)
+        for key, attrs in tunnel_decap_table.items():
+            dst_ip = attrs.pop("dst_ip", None)
+            src_ip = attrs.pop("src_ip", None)
+            if dst_ip:
+                dst_ips = dst_ip.split(",")
+                for dip in dst_ips:
+                    decap_term_table_key = app_db_separator.join(["TUNNEL_DECAP_TERM_TABLE", key, dip])
+                    if src_ip:
+                        self.appDB.set(self.appDB.APPL_DB, decap_term_table_key, "src_ip", src_ip)
+                        self.appDB.set(self.appDB.APPL_DB, decap_term_table_key, "term_type", "P2P")
+                    else:
+                        self.appDB.set(self.appDB.APPL_DB, decap_term_table_key, "term_type", "P2MP")
+
+            if dst_ip or src_ip:
+                self.appDB.set_entry("TUNNEL_DECAP_TABLE", key, attrs)
 
     def migrate_port_qos_map_global(self):
         """
@@ -1244,15 +1265,32 @@ class DBMigrator():
         Version 202405_01.
         """
         log.log_info('Handling version_202405_01')
+        self.set_version('version_202405_02')
+        return 'version_202405_02'
+
+    def version_202405_02(self):
+        """
+        Version 202405_02.
+        """
+        log.log_info('Handling version_202405_02')
+        self.migrate_ipinip_tunnel()
         self.set_version('version_202411_01')
         return 'version_202411_01'
 
     def version_202411_01(self):
         """
-        Version 202411_01, this version should be the final version for
-        master branch until 202411 branch is created.
+        Version 202411_01.
         """
         log.log_info('Handling version_202411_01')
+        self.set_version('version_202505_01')
+        return 'version_202505_01'
+
+    def version_202505_01(self):
+        """
+        Version 202505_01, this version should be the final version for
+        master branch until 202505 branch is created.
+        """
+        log.log_info('Handling version_202505_01')
         return None
 
     def get_version(self):
@@ -1317,6 +1355,34 @@ class DBMigrator():
             version = next_version
         # Perform common migration ops
         self.common_migration_ops()
+        # Perform yang validation
+        self.validate()
+
+    def validate(self):
+        config = self.configDB.get_config()
+        # Fix table key in tuple
+        for table_name, table in config.items():
+            new_table = {}
+            hit = False
+            for table_key, table_val in table.items():
+                if isinstance(table_key, tuple):
+                    new_key = "|".join(table_key)
+                    new_table[new_key] = table_val
+                    hit = True
+                else:
+                    new_table[table_key] = table_val
+            if hit:
+                config[table_name] = new_table
+        config_file = "/tmp/validate.json"
+        with open(config_file, 'w') as fp:
+            json.dump(config, fp)
+        process = subprocess.Popen(["config_validator.py", "-c", config_file])
+        # Check validation result for unit test
+        # Check validation result for end to end test
+        mark_file = "/etc/sonic/mgmt_test_mark"
+        if os.environ.get("UTILITIES_UNIT_TESTING", "0") == "2" or os.path.exists(mark_file):
+            ret = process.wait()
+            assert ret == 0, "Yang validation failed"
 
 def main():
     try:

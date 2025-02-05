@@ -225,6 +225,9 @@
   * [Static DNS show command](#static-dns-show-command)
 * [Wake-on-LAN Commands](#wake-on-lan-commands)
   * [Send Wake-on-LAN Magic Packet command](#send-wake-on-lan-magic-packet-command)
+* [Banner Commands](#banner-commands)
+  * [Banner config commands](#banner-config-commands)
+  * [Banner show command](#banner-show-command)
 
 ## Document History
 
@@ -710,11 +713,52 @@ This command displays the cause of the previous reboot
   ```
 
 - Example:
+  ### Shown below is the output of the CLI when executed on the NPU
   ```
   admin@sonic:~$ show reboot-cause
   User issued reboot command [User: admin, Time: Mon Mar 25 01:02:03 UTC 2019]
   ```
+  ### Shown below is the output of the CLI when executed on the DPU
+  ```
+  admin@sonic:~$ show reboot-cause
+  reboot
+  ```
+```
+Note: The CLI extensions shown in this block are applicable only to smartswitch platforms. When these extensions are used on a regular switch the extension will be ignored and the output will be the same irrespective of the options.
 
+CLI Extensions Applicable to Smartswtich
+  - show reboot-cause all
+  - show reboot-cause history all
+  - show reboot-cause history DPUx
+```
+**show reboot-cause all**
+
+This command displays the cause of the previous reboot for the Switch and the DPUs for which the midplane interfaces are up.
+
+- Usage:
+  ```
+  show reboot-cause all
+  ```
+
+- Example:
+  ### Shown below is the output of the CLI when executed on the NPU
+  ```
+  root@MtFuji:/home/cisco# show reboot-cause all
+  Device    Name                 Cause         Time                             User
+  --------  -------------------  ------------  -------------------------------  ------
+  NPU       2025_01_21_09_01_11  Power Loss    N/A                              N/A
+  DPU1      2025_01_21_09_03_43  Non-Hardware  Tue Jan 21 09:03:43 AM UTC 2025
+  DPU0      2025_01_21_09_03_37  Non-Hardware  Tue Jan 21 09:03:37 AM UTC 2025
+
+  ```
+  ### Shown below is the output of the CLI when executed on the DPU
+  ```
+  root@sonic:/home/admin# show reboot-cause all
+  Usage: show reboot-cause [OPTIONS] COMMAND [ARGS]...
+  Try "show reboot-cause -h" for help.
+
+  Error: No such command "all".
+  ```
 **show reboot-cause history**
 
 This command displays the history of the previous reboots up to 10 entry
@@ -725,15 +769,74 @@ This command displays the history of the previous reboots up to 10 entry
   ```
 
 - Example:
+  ### Shown below is the output of the CLI when executed on the NPU
   ```
-  admin@sonic:~$ show reboot-cause history
-  Name                 Cause        Time                          User    Comment
-  -------------------  -----------  ----------------------------  ------  ---------
-  2020_10_09_02_33_06  reboot       Fri Oct  9 02:29:44 UTC 2020  admin
+  root@MtFuji:/home/cisco# show reboot-cause history
+  Name                 Cause       Time    User    Comment
+  -------------------  ----------  ------  ------  ----------------------------------------------------------------------------------
+  2020_10_09_02_40_11  Power Loss  Fri Oct  9 02:40:11 UTC 2020     N/A     Unknown (First boot of SONiC version azure_cisco_master.308-dirty-20250120.220704)
   2020_10_09_01_56_59  reboot       Fri Oct  9 01:53:49 UTC 2020  admin
-  2020_10_09_02_00_53  fast-reboot  Fri Oct  9 01:58:04 UTC 2020  admin
-  2020_10_09_04_53_58  warm-reboot  Fri Oct  9 04:51:47 UTC 2020  admin
   ```
+  ### Shown below is the output of the CLI when executed on the DPU
+  ```
+  root@sonic:/home/admin# show reboot-cause history
+  Name                 Cause    Time                             User    Comment
+  -------------------  -------  -------------------------------  ------  ---------
+  2025_01_21_16_49_20  Unknown  N/A                              N/A     N/A
+  2025_01_17_11_25_58  reboot   Fri Jan 17 11:23:24 AM UTC 2025  admin   N/A
+  ```
+**show reboot-cause history all**
+
+This command displays the history of the previous reboots up to 10 entry of the Switch and the DPUs for which the midplane interfaces are up.
+
+- Usage:
+  ```
+  show reboot-cause history all
+  ```
+
+- Example:
+  ### Shown below is the output of the CLI when executed on the NPU
+  ```
+  root@MtFuji:~# show reboot-cause history all
+  Device    Name                 Cause                                      Time                             User    Comment
+  --------  -------------------  -----------------------------------------  -------------------------------  ------  -------
+  NPU       2024_07_23_23_06_57  Kernel Panic                               Tue Jul 23 11:02:27 PM UTC 2024  N/A     N/A
+  NPU       2024_07_23_11_21_32  Power Loss                                 N/A                              N/A     Unknown
+  ```
+  ### Shown below is the output of the CLI when executed on the DPU
+  ```
+  root@sonic:/home/admin# show reboot-cause history all
+  Usage: show reboot-cause history [OPTIONS]
+  Try "show reboot-cause history -h" for help.
+
+  Error: Got unexpected extra argument (all)
+  ```
+**show reboot-cause history DPU1**
+
+This command displays the history of the previous reboots up to 10 entry of DPU1. If DPU1 is powered down then there won't be any data in the DB and the "show reboot-cause history DPU1" output will be blank.
+
+- Usage:
+  ```
+  show reboot-cause history DPU1
+  ```
+
+- Example:
+  ### Shown below is the output of the CLI when executed on the NPU
+  ```
+  root@MtFuji:~# show reboot-cause history DPU1
+  Device    Name    Cause                                      Time    User    Comment
+  --------  ------  -----------------------------------------  ------  ------  ---------
+  DPU1      DPU1    Software causes (Hardware watchdog reset)  N/A     N/A     N/A
+  ```
+  ### Shown below is the output of the CLI when executed on the DPU
+  ```
+  root@sonic:/home/admin# show reboot-cause history DPU1
+  Usage: show reboot-cause history [OPTIONS]
+  Try "show reboot-cause history -h" for help.
+
+  Error: Got unexpected extra argument (DPU1)
+  ```
+
 
 **show uptime**
 
@@ -4881,8 +4984,8 @@ The "current-mode" subcommand is used to display current breakout mode for all i
 
 **show interfaces counters**
 
-This show command displays packet counters for all interfaces since the last time the counters were cleared. To display l3 counters "rif" subcommand can be used. There is no facility to display counters for one specific l2 interface. For l3 interfaces a single interface output mode is present. Optional argument "-a" provides two additional columns - RX-PPS and TX_PPS.
-Optional argument "-p" specify a period (in seconds) with which to gather counters over.
+This show command displays packet counters for all interfaces(except the "show interface detailed" command) since the last time the counters were cleared. To display l3 counters "rif" subcommand can be used. There is no facility to display counters for one specific l2 interface. For l3 interfaces a single interface output mode is present.  Optional argument "-a" provides two additional columns - RX-PPS and TX_PPS. 
+Optional argument "-p" specify a period (in seconds) with which to gather counters over. To display the detailed per-interface counters "detailed <interface-name>" subcommand can be used.
 
 - Usage:
   ```
@@ -4891,6 +4994,8 @@ Optional argument "-p" specify a period (in seconds) with which to gather counte
   show interfaces counters rates
   show interfaces counters rif [-p|--period <period>] [-i <interface_name>]
   show interfaces counters fec-histogram [-i <interface_name>]
+  show interfaces counters fec-stats
+  show interfaces counters detailed <interface_name>
   ```
 
 - Example:
@@ -4996,6 +5101,56 @@ Optionally, you can specify a period (in seconds) with which to gather counters 
     Ethernet24        U      173   16.09 KB/s      0.00%         0         0         0      169   11.39 KB/s      0.00%         0         0         0
   ```
 
+The "detailed" subcommand is used to display more detailed interface counters. Along with tx/rx counters, it also displays the WRED drop counters that are supported on the platform.
+
+- Example:
+  ```
+    admin@sonic:~$ show interfaces counters detailed Ethernet8
+    Packets Received 64 Octets..................... 0
+    Packets Received 65-127 Octets................. 0
+    Packets Received 128-255 Octets................ 0
+    Packets Received 256-511 Octets................ 0
+    Packets Received 512-1023 Octets............... 0
+    Packets Received 1024-1518 Octets.............. 0
+    Packets Received 1519-2047 Octets.............. 0
+    Packets Received 2048-4095 Octets.............. 0
+    Packets Received 4096-9216 Octets.............. 0
+    Packets Received 9217-16383 Octets............. 0
+
+    Total Packets Received Without Errors.......... 0
+    Unicast Packets Received....................... 0
+    Multicast Packets Received..................... 0
+    Broadcast Packets Received..................... 0
+
+    Jabbers Received............................... N/A
+    Fragments Received............................. N/A
+    Undersize Received............................. 0
+    Overruns Received.............................. 0
+
+    Packets Transmitted 64 Octets.................. 0
+    Packets Transmitted 65-127 Octets.............. 0
+    Packets Transmitted 128-255 Octets............. 0
+    Packets Transmitted 256-511 Octets............. 0
+    Packets Transmitted 512-1023 Octets............ 0
+    Packets Transmitted 1024-1518 Octets........... 0
+    Packets Transmitted 1519-2047 Octets........... 0
+    Packets Transmitted 2048-4095 Octets........... 0
+    Packets Transmitted 4096-9216 Octets........... 0
+    Packets Transmitted 9217-16383 Octets.......... 0
+
+    Total Packets Transmitted Successfully......... 0
+    Unicast Packets Transmitted.................... 0
+    Multicast Packets Transmitted.................. 0
+    Broadcast Packets Transmitted.................. 0
+
+    WRED Green Dropped Packets..................... 0
+    WRED Yellow Dropped Packets.................... 0
+    WRED Red Dropped Packets....................... 0
+    WRED Total Dropped Packets..................... 0
+
+    Time Since Counters Last Cleared............... None
+  ```
+
 - NOTE: Interface counters can be cleared by the user with the following command:
 
   ```
@@ -5016,29 +5171,37 @@ In a FEC histogram, "bins" represent ranges of errors or specific categories of 
 - Example:
   ```
   admin@str-s6000-acs-11:/usr/bin$ show interface counters fec-histogram -i <PORT>
+  Symbol Errors Per Codeword  Codewords
+  --------------------------  ---------
+  BIN0:                       1000000
+  BIN1:                       900000
+  BIN2:                       800000
+  BIN3:                       700000
+  BIN4:                       600000
+  BIN5:                       500000
+  BIN6:                       400000
+  BIN7:                       300000
+  BIN8:                       0
+  BIN9:                       0
+  BIN10:                      0
+  BIN11:                      0
+  BIN12:                      0
+  BIN13:                      0
+  BIN14:                      0
+  BIN15:                      0
+  ```
 
-Symbol Errors Per Codeword  Codewords
---------------------------  ---------
-BIN0:                       1000000
-BIN1:                       900000
-BIN2:                       800000
-BIN3:                       700000
-BIN4:                       600000
-BIN5:                       500000
-BIN6:                       400000
-BIN7:                       300000
-BIN8:                       0
-BIN9:                       0
-BIN10:                      0
-BIN11:                      0
-BIN12:                      0
-BIN13:                      0
-BIN14:                      0
-BIN15:                      0
+The "fec-stats" subcommand is used to disply the interface fec related statistic.
 
-   ```
-
-
+- Example:
+  ```
+  admin@ctd615:~$ show interfaces counters fec-stats
+        IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER
+  -----------  -------  ----------  ------------  ----------------  -------------  --------------
+   Ethernet0        U           0             0                 0    1.48e-20       0.00e+00
+   Ethernet8        U           0             0                 0    1.98e-19       0.00e+00
+  Ethernet16        U           0             0                 0    1.77e-20       0.00e+00
+  ```
 
 
 **show interfaces description**
@@ -5121,6 +5284,54 @@ This command is to display the link-training status of the selected interfaces. 
   -----------  -----------  ----------  ------  -------
     Ethernet8      trained          on      up       up
   ```
+
+**show interfaces flap**
+
+The show interfaces flap command provides detailed insights into interface events, including the timestamp of the last link down event and the total flap count (number of times the link has gone up and down). This helps in diagnosing stability and connectivity issues.
+
+- Usage:
+  ```
+  show interfaces flap
+  ```
+- Example:
+  ```
+  admin@sonic:~$ show interfaces flap
+  Interface    Flap Count    Admin    Oper    Link Down TimeStamp (UTC)                                 Link Up TimeStamp (UTC)
+  -----------  ------------  -------  ------  --------------------------------------------------------  -----------------------------------------------------------
+  Ethernet0    5             Up       Up      Last flapped : 2024-10-01 10:00:00 (0 days 00:01:23 ago)  Last Link up: 2024-09-30 10:01:03 UTC (1 days 02:30:15 ago)
+  Ethernet4    Never         Up       Up      Never                                                     Last Link up: 2024-09-30 10:01:03 UTC (1 days 02:30:15 ago)
+  Ethernet8    1             Up       Up      Last flapped : 2024-10-01 10:01:00 (0 days 00:00:23 ago)  Last Link up: 2024-10-02 10:01:03 UTC (5 days 02:30:15 ago)
+  ```
+**show interfaces errors**
+
+The show interface errors command provides detailed statistics and error counters for MAC-level operations on an interface. It displays the status of various operational parameters, error counts, and timestamps for when these errors occurred.
+
+- Usage:
+  ```
+  show interfaces errors [<interface_name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show interfaces errors Ethernet4
+  Port Errors                        Count           Last timestamp(UTC)
+  ---------------------------------- -----           -------------------
+  oper_error_status                  5442            2024-11-02 04:00:05
+  mac_local_fault                    2               2024-11-02 04:00:05
+  fec_sync_loss                      2               2024-11-02 04:00:05
+  fec_alignment_loss                 2               2024-11-02 04:00:05
+  high_ser_error                     2               2024-11-02 04:00:05
+  high ber_error                     2               2024-11-02 04:00:05
+  data_unit_crc_error                2               2024-11-02 04:00:05
+  data_unit_misalignment_error       2               2024-11-02 04:00:05
+  signal_local_error                 2               2024-11-02 04:00:05
+  mac_remote_fault                   2               2024-11-02 04:00:50
+  crc_rate                           2               2024-11-02 04:00:50
+  data_unit_size                     2               2024-11-02 04:00:50
+  code_group_error                   0               Never
+  no_rx_reachability                 0               Never
+  ```
+
 
 **show interfaces mpls**
 
@@ -8604,74 +8815,11 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#platfo
 
 ### Mellanox Platform Specific Commands
 
-There are few commands that are platform specific. Mellanox has used this feature and implemented Mellanox specific commands as follows.
+config platform mlnx
 
-**show platform mlnx sniffer**
+This command is valid only on mellanox devices. The sub-commands for "config platform" gets populated only on mellanox platforms. There are no other subcommands on non-Mellanox devices and hence this command appears empty and useless in other platforms. 
 
-This command shows the SDK sniffer status
-
-- Usage:
-  ```
-  show platform mlnx sniffer
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show platform mlnx sniffer
-  sdk sniffer is disabled
-  ```
-
-**show platform mlnx sniffer**
-
-Another show command available on ‘show platform mlnx’ which is the issu status.
-This means if ISSU is enabled on this SKU or not. A warm boot command can be executed only when ISSU is enabled on the SKU.
-
-- Usage:
-  ```
-  show platform mlnx issu
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show platform mlnx issu
-  ISSU is enabled
-  ```
-
-In the case ISSU is disabled and warm-boot is called, the user will get a notification message explaining that the command cannot be invoked.
-
-- Example:
-  ```
-  admin@sonic:~$ sudo warm-reboot
-  ISSU is not enabled on this HWSKU
-  Warm reboot is not supported
-  ```
-
-**config platform mlnx**
-
-This command is valid only on mellanox devices. The sub-commands for "config platform" gets populated only on mellanox platforms.
-There are no other subcommands on non-Mellanox devices and hence this command appears empty and useless in other platforms.
-The platform mellanox command currently includes a single sub command which is the SDK sniffer.
-The SDK sniffer is a troubleshooting tool which records the RPC calls from the Mellanox SDK user API library to the sx_sdk task into a .pcap file.
-This .pcap file can be replayed afterward to get the exact same configuration state on SDK and FW to reproduce and investigate issues.
-
-A new folder will be created to store the sniffer files: "/var/log/mellanox/sniffer/". The result file will be stored in a .pcap file, which includes a time stamp of the starting time in the file name, for example, "sx_sdk_sniffer_20180224081306.pcap"
-In order to have a complete .pcap file with all the RPC calls, the user should disable the SDK sniffer. Swss service will be restarted and no capturing is taken place from that moment.
-It is recommended to review the .pcap file while sniffing is disabled.
-Once SDK sniffer is enabled/disabled, the user is requested to approve that swss service will be restarted.
-For example: To change SDK sniffer status, swss service will be restarted, continue? [y/N]:
-In order to avoid that confirmation the -y / --yes option should be used.
-
-- Usage:
-  ```
-  config platform mlnx sniffer sdk [-y|--yes]
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ config platform mlnx sniffer sdk
-  To change SDK sniffer status, swss service will be restarted, continue? [y/N]: y
-  NOTE: In order to avoid that confirmation the -y / --yes option should be used.
-  ```
+The platform mellanox command currently includes no sub command.
 
 ### Barefoot Platform Specific Commands
 
@@ -9338,6 +9486,7 @@ This sub-section explains the following queue parameters that can be displayed u
 2) queue watermark
 3) priority-group  watermark
 4) queue persistent-watermark
+5) queue wredcounters
 
 
 **show queue counters**
@@ -9531,6 +9680,83 @@ This command displays the user persistet-watermark for the queues (Egress shared
   admin@sonic:~$ sonic-clear priority-group drop counters
   ```
 
+**show queue wredcounters**
+
+This command displays wred-drop packet/byte and ecn-marked packet/byte counters for all queues of all ports or one specific-port given as arguement.
+This command can be used to clear the counters for all queues of all ports. Note that port specific clear is not supported.
+
+- Usage:
+  ```
+  show queue wredcounters [<interface_name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show queue wredcounters
+     Port      TxQ    WredDrp/pkts    WredDrp/bytes  EcnMarked/pkts  EcnMarked/bytes
+  ---------  -----  --------------  --------------- --------------- ----------------
+
+  Ethernet0    UC0               0                0               0                0
+  Ethernet0    UC1               0                0               0                0
+  Ethernet0    UC2               0                0               0                0
+  Ethernet0    UC3               0                0               0                0
+  Ethernet0    UC4               0                0               0                0
+  Ethernet0    UC5               0                0               0                0
+  Ethernet0    UC6               0                0               0                0
+  Ethernet0    UC7               0                0               0                0
+  Ethernet0    UC8               0                0               0                0
+  Ethernet0    UC9               0                0               0                0
+  Ethernet0    MC0               0                0               0                0
+  Ethernet0    MC1               0                0               0                0
+  Ethernet0    MC2               0                0               0                0
+  Ethernet0    MC3               0                0               0                0
+  Ethernet0    MC4               0                0               0                0
+  Ethernet0    MC5               0                0               0                0
+  Ethernet0    MC6               0                0               0                0
+  Ethernet0    MC7               0                0               0                0
+  Ethernet0    MC8               0                0               0                0
+  Ethernet0    MC9               0                0               0                0
+
+     Port      TxQ    WredDrp/pkts    WredDrp/bytes  EcnMarked/pkts  EcnMarked/bytes
+  ---------  -----  --------------  --------------- --------------- ----------------
+
+  Ethernet4    UC0               0                0               0                0
+  Ethernet4    UC1               0                0               0                0
+  Ethernet4    UC2               0                0               0                0
+  Ethernet4    UC3               0                0               0                0
+  Ethernet4    UC4               0                0               0                0
+  Ethernet4    UC5               0                0               0                0
+  Ethernet4    UC6               0                0               0                0
+  Ethernet4    UC7               0                0               0                0
+  Ethernet4    UC8               0                0               0                0
+  Ethernet4    UC9               0                0               0                0
+  Ethernet4    MC0               0                0               0                0
+  Ethernet4    MC1               0                0               0                0
+  Ethernet4    MC2               0                0               0                0
+  Ethernet4    MC3               0                0               0                0
+  Ethernet4    MC4               0                0               0                0
+  Ethernet4    MC5               0                0               0                0
+  Ethernet4    MC6               0                0               0                0
+  Ethernet4    MC7               0                0               0                0
+  Ethernet4    MC8               0                0               0                0
+  Ethernet4    MC9               0                0               0                0
+
+  ...
+  ```
+
+Optionally, you can specify an interface name in order to display only that particular interface
+
+- Example:
+  ```
+  admin@sonic:~$ show queue wredcounters Ethernet72
+  ```
+
+- NOTE: Queue counters can be cleared by the user with the following command:
+  ```
+  admin@sonic:~$ sonic-clear queue wredcounters
+  ```
+
+
 #### Buffer Pool
 
 This sub-section explains the following buffer pool parameters that can be displayed using "show buffer_pool" command.
@@ -9656,6 +9882,7 @@ Some of the example QOS configurations that users can modify are given below.
 
   In this example, it uses the buffers.json.j2 file and qos.json.j2 file from platform specific folders.
   When there are no changes in the platform specific configutation files, they internally use the file "/usr/share/sonic/templates/buffers_config.j2" and "/usr/share/sonic/templates/qos_config.j2" to generate the configuration.
+  When an error occurs, such as "Operation not completed successfully, please save and reload configuration," the system will record the status, after executing all the latter commands, exit with code 1.
   ```
 
 **config qos reload --ports port_list**
@@ -11349,6 +11576,36 @@ In addition, displays a list of all current 'Services' and 'Hardware' being moni
   -----------  --------  ------
   psu.voltage  Ignored   Device
   ```
+
+**show system-health dpu <option>**
+
+This is a smartswitch specific cli.  This cli shows the midplane, control plane and data plane health of the DPU modules in the smartswitch.
+
+This can take two forms of "<option>" 1. DPU module name (ex: DPU0) 2. all, which will list all the DPUs in the smartswitch
+
+- Usage:
+  ```
+  show system-health dpu DPU0
+  ```
+
+- Example:
+  ```
+root@MtFuji-dut:/home/cisco# show system-health dpu DPU0
+Name    Oper-Status    State-Detail             State-Value    Time                             Reason
+------  -------------  -----------------------  -------------  -------------------------------  ------------------------------------------------------------------------------------
+DPU0    Online         dpu_midplane_link_state  up             Mon Dec 23 05:12:17 PM UTC 2024
+                       dpu_control_plane_state  up             Mon Dec 23 05:12:17 PM UTC 2024 All containers are up and running, host-ethlink-status: Uplink1/1 is UP
+                       dpu_data_plane_state     up             Mon Dec 23 05:12:17 PM UTC 2024 DPU container named polaris is running, pdsagent running : OK, pciemgrd running : OK
+
+root@MtFuji-dut:/home/cisco# show system-health dpu all
+Name    Oper-Status    State-Detail             State-Value    Time                             Reason
+------  -------------  -----------------------  -------------  -------------------------------  ------------------------------------------------------------------------------------
+DPU0    Online         dpu_midplane_link_state  up             Mon Dec 23 05:12:17 PM UTC 2024
+                       dpu_control_plane_state  up             Mon Dec 23 05:12:17 PM UTC 2024 All containers are up and running, host-ethlink-status: Uplink1/1 is UP
+                       dpu_data_plane_state     up             Mon Dec 23 05:12:17 PM UTC 2024 DPU container named polaris is running, pdsagent running : OK, pciemgrd running : OK
+DPU1    Online         dpu_midplane_link_state  up             Mon Dec 23 05:12:17 PM UTC 2024
+                       dpu_control_plane_state  up             Mon Dec 23 05:12:17 PM UTC 2024 All containers are up and running, host-ethlink-status: Uplink1/1 is UP
+                       dpu_data_plane_state     up             Mon Dec 23 05:12:17 PM UTC 2024 DPU container named polaris is running, pdsagent running : OK, pciemgrd running : OK
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#System-Health)
 
@@ -13886,3 +14143,89 @@ Sending 3 magic packet to 11:33:55:77:99:bb via interface Vlan1000
 ```
 
 For the 4th example, it specifise 2 target MAC addresses and `count` is 3. So it'll send 6 magic packets in total.
+
+# Banner Commands
+
+This sub-section explains the list of the configuration options available for Banner feature.
+
+## Banner config commands
+
+- Set banner feature state
+
+```
+admin@sonic:~$ config banner state <enabled|disabled>
+Usage: config config banner state <enabled|disabled>
+
+  Set banner feature state
+
+Options:
+  -?, -h, --help  Show this message and exit.
+```
+
+- Set login message
+
+```
+admin@sonic:~$ config banner login <message>
+Usage: config banner login <message>
+
+  Set login message
+
+Options:
+  -?, -h, --help  Show this message and exit.
+```
+
+- Set logout message
+
+```
+admin@sonic:~$ config banner logout <message>
+Usage: config banner logout <message>
+
+  Set logout message
+
+Options:
+  -?, -h, --help  Show this message and exit.
+```
+
+- Set message of the day
+
+```
+admin@sonic:~$ config banner motd <message>
+Usage: config banner motd <message>
+
+  Set message of the day
+
+Options:
+  -?, -h, --help  Show this message and exit.
+```
+
+## Banner show command
+
+- how banner messages
+
+```
+admin@sonic:~$ show banner
+Usage: show banner
+
+  Show banner messages
+
+Options:
+  -h, -?, --help  Show this message and exit.
+```
+```
+admin@sonic:~$ show banner
+state    login    motd                                              logout
+-------  -------  ------------------------------------------------  --------
+enabled  Login    You are on
+         Message    ____   ___  _   _ _  ____
+                   / ___| / _ \| \ | (_)/ ___|
+                   \___ \| | | |  \| | | |
+                    ___) | |_| | |\  | | |___
+                   |____/ \___/|_| \_|_|\____|
+
+                  -- Software for Open Networking in the Cloud --
+
+                  Unauthorized access and/or use are prohibited.
+                  All access and/or use are subject to monitoring.
+
+                  Help:    https://sonic-net.github.io/SONiC/
+```

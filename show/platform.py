@@ -104,7 +104,23 @@ def psustatus(index, json, verbose):
 def ssdhealth(device, verbose, vendor):
     """Show SSD Health information"""
     if not device:
-        device = os.popen("lsblk -o NAME,TYPE -p | grep disk").readline().strip().split()[0]
+        platform_data = device_info.get_platform_json_data()
+        # Check if there is any default disk for this platform
+        # {
+        #     "chassis": {
+        #         ..........
+        #         "disk": {
+        #             "device" : "/dev/nvme0n1"
+        #         }
+        #     }
+        # }
+        if platform_data:
+            device = platform_data.get("chassis", {}).get("disk", {}).get("device", None)
+
+        if not device:
+            # Fallback to discovery
+            device = os.popen("lsblk -o NAME,TYPE -p | grep disk").readline().strip().split()[0]
+
     cmd = ['sudo', 'ssdutil', '-d', str(device)]
     options = ["-v"] if verbose else []
     options += ["-e"] if vendor else []

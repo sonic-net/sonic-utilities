@@ -1017,8 +1017,10 @@ class PackageManager:
 
     def _stop_feature(self, package: Package):
         self._systemctl_action(package, 'stop')
+        self._systemctl_action(package, 'disable')
 
     def _start_feature(self, package: Package):
+        self._systemctl_action(package, 'enable')
         self._systemctl_action(package, 'start')
 
     def _systemctl_action(self, package: Package, action: str):

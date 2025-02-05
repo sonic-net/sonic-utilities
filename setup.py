@@ -116,6 +116,7 @@ setup(
         'scripts/buffershow',
         'scripts/coredump-compress',
         'scripts/configlet',
+        'scripts/config_validator.py',
         'scripts/db_migrator.py',
         'scripts/decode-syseeprom',
         'scripts/dropcheck',
@@ -127,6 +128,7 @@ setup(
         'scripts/dump_nat_entries.py',
         'scripts/debug_voq_chassis_packet_drops.sh',
         'scripts/ecnconfig',
+        'scripts/express-reboot',
         'scripts/fabricstat',
         'scripts/fanshow',
         'scripts/fast-reboot',
@@ -189,7 +191,8 @@ setup(
         'scripts/verify_image_sign.sh',
         'scripts/verify_image_sign_common.sh',
         'scripts/check_db_integrity.py',
-        'scripts/sysreadyshow'
+        'scripts/sysreadyshow',
+        'scripts/wredstat'
     ],
     entry_points={
         'console_scripts': [
@@ -237,6 +240,7 @@ setup(
         'filelock>=3.0.12',
         'enlighten>=1.8.0',
         'ipaddress>=1.0.23',
+        'protobuf',
         'jinja2>=2.11.3',
         'jsondiff>=1.2.0',
         'jsonpatch>=1.32.0',

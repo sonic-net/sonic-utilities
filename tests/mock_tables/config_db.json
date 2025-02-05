@@ -1820,6 +1820,14 @@
         "POLL_INTERVAL": "1000",
         "FLEX_COUNTER_STATUS": "enable"
     },
+    "FLEX_COUNTER_TABLE|WRED_ECN_QUEUE": {
+        "POLL_INTERVAL": "10000",
+        "FLEX_COUNTER_STATUS": "enable"
+    },
+    "FLEX_COUNTER_TABLE|WRED_ECN_PORT": {
+        "POLL_INTERVAL": "1000",
+        "FLEX_COUNTER_STATUS": "enable"
+    },
     "PFC_WD|Ethernet0": {
         "action": "drop",
         "detection_time": "600",
@@ -2088,6 +2096,14 @@
         "admin_status": "up",
         "holdtime": "10",
         "asn": "65200",
+        "keepalive": "3"
+    },
+    "BGP_NEIGHBOR|Vlan100": {
+        "rrclient": "0",
+        "peer_type": "external",
+        "nhopself": "0",
+        "admin_status": "up",
+        "holdtime": "10",
         "keepalive": "3"
     },
     "SCHEDULER|scheduler.0": {
@@ -2829,5 +2845,28 @@
         "dhcpv6_servers": [
             "fc02:2000::1"
         ]
-    }
+    },
+    "STP|GLOBAL": {
+        "forward_delay": "15",
+        "hello_time": "2",
+        "max_age": "20",
+        "mode": "pvst",
+        "priority": "32768",
+        "rootguard_timeout": "30"
+    },
+    "STP_PORT|Ethernet4": {
+        "bpdu_guard": "true",
+        "bpdu_guard_do_disable": "false",
+        "enabled": "true",
+        "portfast": "true",
+        "root_guard": "true",
+        "uplink_fast": "false"
+    },
+    "STP_VLAN|Vlan500": {
+        "enabled": "true",
+        "forward_delay": "15",
+        "hello_time": "2",
+        "max_age": "20",
+        "priority": "32768"
+     }
 }

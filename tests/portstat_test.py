@@ -35,11 +35,11 @@ Ethernet8      N/A        6  1350.00 KB/s    9000.00/s        N/A       100     
 """
 
 intf_fec_counters = """\
-    IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR
----------  -------  ----------  ------------  ----------------
-Ethernet0        D     130,402             3                 4
-Ethernet4      N/A     110,412             1                 0
-Ethernet8      N/A     100,317             0                 0
+    IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER
+---------  -------  ----------  ------------  ----------------  -------------  --------------
+Ethernet0        D     130,402             3                 4            N/A             N/A
+Ethernet4      N/A     110,412             1                 0            N/A             N/A
+Ethernet8      N/A     100,317             0                 0            N/A             N/A
 """
 
 intf_fec_counters_fec_hist = """\
@@ -252,6 +252,12 @@ Total Packets Transmitted Successfully......... 40
 Unicast Packets Transmitted.................... 40
 Multicast Packets Transmitted.................. 0
 Broadcast Packets Transmitted.................. 0
+
+WRED Green Dropped Packets..................... 17
+WRED Yellow Dropped Packets.................... 33
+WRED Red Dropped Packets....................... 51
+WRED Total Dropped Packets..................... 101
+
 Time Since Counters Last Cleared............... None
 """
 
@@ -285,6 +291,21 @@ Ethernet11/1      N/A      N/A        N/A        N/A       N/A       N/A       N
        N/A       N/A       N/A
 """
 
+intf_counters_on_sup_packet_chassis = """\
+       IFACE    STATE    RX_OK        RX_BPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK        TX_BPS\
+    TX_UTIL    TX_ERR    TX_DRP    TX_OVR
+------------  -------  -------  ------------  ---------  --------  --------  --------  -------  ------------\
+  ---------  --------  --------  --------
+Ethernet-BP0      N/A        8  2000.00 MB/s        N/A        10       100       N/A       10  1500.00 MB/s\
+        N/A       N/A       N/A       N/A
+Ethernet-BP4      N/A        4   204.80 KB/s        N/A         0     1,000       N/A       40   204.85 KB/s\
+        N/A       N/A       N/A       N/A
+Ethernet-BP8      N/A        6  1350.00 KB/s        N/A       100        10       N/A       60    13.37 MB/s\
+        N/A       N/A       N/A       N/A
+
+Reminder: Please execute 'show interface counters -d all' to include internal links
+"""
+
 TEST_PERIOD = 3
 
 
@@ -308,6 +329,8 @@ class TestPortStat(object):
         print("SETUP")
         os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "2"
+        os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
+        os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] = "0"
         remove_tmp_cnstat_file()
 
     def test_show_intf_counters(self):
@@ -550,6 +573,36 @@ class TestPortStat(object):
         os.system("cp /tmp/chassis_state_db.json {}"
                   .format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
 
+    def test_show_intf_counters_on_sup_packet_chassis(self):
+        os.system("cp {} /tmp/".format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+        os.system("cp {} {}".format(os.path.join(test_path, "portstat_db/on_sup_packet_chassis/chassis_state_db.json"),
+                                    os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+        os.system("cp {} /tmp/".format(os.path.join(test_path, "mock_tables/counters_db.json")))
+        os.system("cp {} {}".format(os.path.join(test_path, "portstat_db/on_sup_packet_chassis/counters_db.json"),
+                                    os.path.join(test_path, "mock_tables/counters_db.json")))
+        os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "1"
+        os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] = "1"
+
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["counters"], ["-dall"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == intf_counters_on_sup_packet_chassis
+
+        return_code, result = get_result_and_return_code(['portstat', '-s', 'all'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result.rstrip() == intf_counters_on_sup_packet_chassis.rstrip()
+        os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
+        os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] = "0"
+        os.system("cp /tmp/chassis_state_db.json {}"
+                  .format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+        os.system("cp /tmp/counters_db.json {}"
+                  .format(os.path.join(test_path, "mock_tables/counters_db.json")))
+
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
@@ -557,9 +610,12 @@ class TestPortStat(object):
             os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
+        os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] = "0"
         remove_tmp_cnstat_file()
         os.system("cp /tmp/chassis_state_db.json {}"
                   .format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+        os.system("cp /tmp/counters_db.json {}"
+                  .format(os.path.join(test_path, "mock_tables/counters_db.json")))
 
 
 class TestMultiAsicPortStat(object):

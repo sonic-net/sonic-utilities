@@ -67,6 +67,7 @@ from . import plugins
 from . import syslog
 from . import dns
 from . import bgp_cli
+from . import stp
 
 # Global Variables
 PLATFORM_JSON = 'platform.json'
@@ -318,6 +319,7 @@ cli.add_command(vxlan.vxlan)
 cli.add_command(system_health.system_health)
 cli.add_command(warm_restart.warm_restart)
 cli.add_command(dns.dns)
+cli.add_command(stp.spanning_tree)
 
 # syslog module
 cli.add_command(syslog.syslog)
@@ -772,6 +774,37 @@ def counters(interfacename, namespace, display, verbose, json, voq, nonzero):
 
     run_command(cmd, display_cmd=verbose)
 
+
+# 'wredcounters' subcommand ("show queue wredcounters")
+@queue.command()
+@click.argument('interfacename', required=False)
+@multi_asic_util.multi_asic_click_options
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+@click.option('--json', is_flag=True, help="JSON output")
+@click.option('--voq', is_flag=True, help="VOQ counters")
+def wredcounters(interfacename, namespace, display, verbose, json, voq):
+    """Show queue wredcounters"""
+
+    cmd = ["wredstat"]
+
+    if interfacename is not None:
+        if clicommon.get_interface_naming_mode() == "alias":
+            interfacename = iface_alias_converter.alias_to_name(interfacename)
+
+    if interfacename is not None:
+        cmd += ['-p', str(interfacename)]
+
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
+
+    if json:
+        cmd += ["-j"]
+
+    if voq:
+        cmd += ["-V"]
+
+    run_command(cmd, display_cmd=verbose)
+
 #
 # 'watermarks' subgroup ("show queue watermarks ...")
 #
@@ -1142,6 +1175,111 @@ def route_map(route_map_name, verbose):
     if route_map_name is not None:
         cmd[-1] += ' {}'.format(route_map_name)
     run_command(cmd, display_cmd=verbose)
+
+
+#
+# 'vrrp' group ("show vrrp ...")
+#
+@cli.group(cls=clicommon.AliasedGroup, invoke_without_command="true")
+@click.pass_context
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def vrrp(ctx, verbose):
+    """Show vrrp commands"""
+    if ctx.invoked_subcommand is not None:
+        return
+
+    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp']
+    run_command(cmd, display_cmd=verbose)
+
+
+# 'interface' command
+@vrrp.command('interface')
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrid', metavar='<vrid>', required=False)
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def vrrp_interface(ctx, interface_name, vrid, verbose):
+    """show vrrp interface <interface_name> <vrid>"""
+    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp']
+    if vrid is not None:
+        cmd[-1] += ' interface {} {}'.format(interface_name, vrid)
+    else:
+        cmd[-1] += ' interface {}'.format(interface_name)
+    run_command(cmd, display_cmd=verbose)
+
+
+# 'vrid' command
+@vrrp.command('vrid')
+@click.pass_context
+@click.argument('vrid', metavar='<vrid>', required=True)
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def vrrp_vrid(ctx, vrid, verbose):
+    """show vrrp vrid <vrid>"""
+    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp {}'.format(vrid)]
+    run_command(cmd, display_cmd=verbose)
+
+
+# 'summary' command
+@vrrp.command('summary')
+@click.pass_context
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def vrrp_summary(ctx, verbose):
+    """show vrrp summary"""
+    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp summary']
+    run_command(cmd, display_cmd=verbose)
+
+
+#
+# 'vrrp6' group ("show vrrp6 ...")
+#
+@cli.group(cls=clicommon.AliasedGroup, invoke_without_command="true")
+@click.pass_context
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def vrrp6(ctx, verbose):
+    """Show vrrp6 commands"""
+    if ctx.invoked_subcommand is not None:
+        return
+
+    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp6']
+    run_command(cmd, display_cmd=verbose)
+
+
+# 'interface' command
+@vrrp6.command('interface')
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrid', metavar='<vrid>', required=False)
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def vrrp6_interface(ctx, interface_name, vrid, verbose):
+    """show vrrp6 interface <interface_name> <vrid>"""
+    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp6']
+    if vrid is not None:
+        cmd[-1] += ' interface {} {}'.format(interface_name, vrid)
+    else:
+        cmd[-1] += ' interface {}'.format(interface_name)
+    run_command(cmd, display_cmd=verbose)
+
+
+# 'vrid' command
+@vrrp6.command('vrid')
+@click.pass_context
+@click.argument('vrid', metavar='<vrid>', required=True)
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def vrrp6_vrid(ctx, vrid, verbose):
+    """show vrrp6 vrid <vrid>"""
+    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp6 {}'.format(vrid)]
+    run_command(cmd, display_cmd=verbose)
+
+
+# 'summary' command
+@vrrp6.command('summary')
+@click.pass_context
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def vrrp6_summary(ctx, verbose):
+    """show vrrp6 summary"""
+    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp6 summary']
+    run_command(cmd, display_cmd=verbose)
+
 
 #
 # 'ip' group ("show ip ...")
@@ -1887,6 +2025,16 @@ def syslog(verbose):
     click.echo(tabulate(body, header, tablefmt="simple", stralign="left", missingval=""))
 
 
+# 'spanning-tree' subcommand ("show runningconfiguration spanning_tree")
+@runningconfiguration.command()
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def spanning_tree(verbose):
+    """Show spanning_tree running configuration"""
+    stp_list = ["STP", "STP_PORT", "STP_VLAN", "STP_VLAN_PORT"]
+    for key in stp_list:
+        cmd = ['sudo', 'sonic-cfggen', '-d', '--var-json', key]
+        run_command(cmd, display_cmd=verbose)
+
 #
 # 'startupconfiguration' group ("show startupconfiguration ...")
 #
@@ -2303,8 +2451,8 @@ def bmp_neighbor_table(db):
                 values["peer_addr"],
                 values["peer_asn"],
                 values["peer_rd"],
-                values["peer_port"],
-                values["local_addr"],
+                values["remote_port"],
+                values["local_ip"],
                 values["local_asn"],
                 values["local_port"],
                 values["sent_cap"],
@@ -2614,6 +2762,26 @@ def ssh(db):
 
     configuration = [data]
     click.echo(tabulate(configuration, headers=hdrs, tablefmt='simple', missingval=''))
+
+
+#
+# 'banner' command group ("show banner ...")
+#
+@cli.group('banner', invoke_without_command=True)
+@clicommon.pass_db
+def banner(db):
+    """Show banner messages"""
+
+    banner_table = db.cfgdb.get_entry('BANNER_MESSAGE', 'global')
+
+    hdrs = ['state', 'login', 'motd', 'logout']
+    data = []
+
+    for key in hdrs:
+        data.append(banner_table.get(key, '').replace('\\n', '\n'))
+
+    messages = [data]
+    click.echo(tabulate(messages, headers=hdrs, tablefmt='simple', missingval=''))
 
 
 # Load plugins and register them

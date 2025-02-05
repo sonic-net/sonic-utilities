@@ -249,7 +249,7 @@ class TestVxlan(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output == show_vxlan_remotevni_specific_cnt_output
-    
+
     @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry", mock.Mock(side_effect=ValueError))
     @patch("config.main.ConfigDBConnector.get_entry", mock.Mock(return_value="Vlan Data"))
@@ -370,6 +370,19 @@ class TestVxlan(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output == show_vxlan_vlanvnimap_output
+
+    def test_config_vxlan_add_invalid_name(self):
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(config.config.commands["vxlan"].commands["add"], ["vtep111111111111", "1.1.1.1"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        expected_output = """\
+Error: 'vxlan_name' length should not exceed 15 characters
+"""
+        assert expected_output in result.output
+        assert result.exit_code != 0
 
     def test_config_vxlan_del(self):
         dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db')
