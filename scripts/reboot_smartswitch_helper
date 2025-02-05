@@ -48,7 +48,7 @@ function get_reboot_status()
     local dpu_ip=$1
     local port=$2
     local reboot_status
-    reboot_status=$(docker exec -i gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -insecure -notls -rpc RebootStatus 2>/dev/null)
+    reboot_status=$(docker exec -i gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -notls -rpc RebootStatus 2>/dev/null)
     if [ $? -ne 0 ] || [ -z "$reboot_status" ]; then
         return ${EXIT_ERROR}
     fi
@@ -148,7 +148,7 @@ function gnmi_reboot_dpu()
         return ${EXIT_ERROR}
     fi
 
-    docker exec -i gnmi gnoi_client -target ${dpu_ip}:${port} -logtostderr -insecure -notls -rpc Reboot -jsonin '{"method":HALT}' 2>/dev/null
+    docker exec -i gnmi gnoi_client -target ${dpu_ip}:${port} -logtostderr -notls -rpc Reboot -jsonin '{"method":HALT}' 2>/dev/null
 
     wait_for_dpu_reboot_status "${dpu_ip}" "${port}"
 }
