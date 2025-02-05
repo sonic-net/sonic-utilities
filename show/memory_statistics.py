@@ -35,9 +35,11 @@ class ConnectionError(Exception):
     """Custom exception for connection-related errors."""
     pass
 
+
 class DatabaseError(Exception):
     """Custom exception for database-related errors."""
     pass
+
 
 class Dict2Obj:
     """Converts dictionaries or lists into objects with attribute-style access."""
@@ -172,8 +174,6 @@ class SonicDBConnector:
             )
             time.sleep(Config.RETRY_DELAY)
 
-
-
     # def get_memory_statistics_config(self) -> Dict[str, str]:
     #     """
     #     Retrieves memory statistics configuration with error handling.
@@ -199,8 +199,6 @@ class SonicDBConnector:
     #         syslog.syslog(syslog.LOG_ERR, error_msg)
     #         raise RuntimeError(error_msg)
 
-
-
     # def get_memory_statistics_config(self) -> Dict[str, str]:
     #     """
     #     Retrieves memory statistics configuration with specific error handling.
@@ -225,7 +223,6 @@ class SonicDBConnector:
     #         # Preserve the original exception stack trace
     #         syslog.syslog(syslog.LOG_ERR, f"Error retrieving memory statistics configuration: {str(e)}")
     #         raise
-
 
     def get_memory_statistics_config(self) -> Dict[str, str]:
         """
