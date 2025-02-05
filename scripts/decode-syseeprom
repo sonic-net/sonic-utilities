@@ -243,7 +243,8 @@ def main():
     # Currently, kvm does not support eeprom
     platforms_without_eeprom = ['.*kvm.*']
     if any(re.match(p, platform) for p in platforms_without_eeprom):
-        support_eeprom = False
+        print('Platform {} does not support EEPROM'.format(platform))
+        return errno.ENODEV
 
     use_db = opts.db and support_eeprom_db
 
@@ -254,9 +255,6 @@ def main():
     elif opts.modelstr:
         print_model(use_db)
     else:
-        if not support_eeprom:
-            print('Platform {} does not support EEPROM'.format(platform))
-            return errno.ENODEV
         if use_db:
             tlv_dict = read_eeprom_from_db()
             if not tlv_dict:
