@@ -209,7 +209,7 @@ CRC-32               0xFE        4  0xAC518FB3
     @mock.patch.object(sys, 'argv', ["decode-syseeprom"])
     @mock.patch('decode_syseeprom.read_and_print_eeprom')
     @mock.patch('decode_syseeprom.read_eeprom_from_db')
-    def test_support_platforms_not_db_based(self, mockDbBased, mockNotDbBased):
+    def test_support_platforms_no_eeprom(self, mockDbBased, mockNotDbBased):
         ret = decode_syseeprom.main()
         assert ret == errno.ENODEV
         assert mockNotDbBased.called
