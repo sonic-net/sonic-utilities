@@ -295,11 +295,13 @@ def test_main_cli_integration():
         assert result.exit_code == 0
         mock_get_db.assert_called_once()
 
+
 def test_script_execution():
     """Test that the script runs successfully."""
     result = subprocess.run(["python3",
                              "config/memory_statistics.py"], capture_output=True)
     assert result.returncode == 0
+
 
 def test_syslog_closelog():
     """Test that syslog.closelog is called when the script exits."""
