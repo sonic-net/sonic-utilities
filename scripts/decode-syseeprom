@@ -14,6 +14,7 @@ import optparse
 import os
 import re
 import sys
+import errno
 
 import sonic_platform
 from sonic_platform_base.sonic_eeprom.eeprom_tlvinfo import TlvInfoDecoder
@@ -223,6 +224,7 @@ def get_cmdline_opts():
 
 
 def main():
+    support_eeprom = True
     support_eeprom_db = True
     if not os.geteuid() == 0:
         print('Root privileges are required for this operation')
@@ -238,6 +240,11 @@ def main():
     if any(re.match(p, platform) for p in platforms_without_eeprom_db):
         support_eeprom_db = False
 
+    # Currently, kvm does not support eeprom
+    platforms_without_eeprom = ['.*kvm.*']
+    if any(re.match(p, platform) for p in platforms_without_eeprom):
+        support_eeprom = False
+
     use_db = opts.db and support_eeprom_db
 
     if opts.mgmtmac:
@@ -247,6 +254,9 @@ def main():
     elif opts.modelstr:
         print_model(use_db)
     else:
+        if not support_eeprom:
+            print('Platform {} does not support EEPROM'.format(platform))
+            return errno.ENODEV
         if use_db:
             tlv_dict = read_eeprom_from_db()
             if not tlv_dict:
