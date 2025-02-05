@@ -55,10 +55,10 @@ class TestMemoryStatisticsDB:
         """Test that get_db returns the same database connection."""
         MemoryStatisticsDB._instance = None
         MemoryStatisticsDB._db = None
-        
+
         db1 = MemoryStatisticsDB.get_db()
         db2 = MemoryStatisticsDB.get_db()
-        
+
         assert db1 is db2
         mock_db.connect.assert_called_once()
 
@@ -324,6 +324,7 @@ finally:
         exec(module_code, namespace)
 
         mock_closelog.assert_called_once()
+
 
 def test_main_execution():
     """Test the script's main execution block including the try-finally structure."""
