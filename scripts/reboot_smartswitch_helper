@@ -180,8 +180,7 @@ function reboot_dpu()
 
     if [[ "$REBOOT_TYPE" != $MODULE_REBOOT_SMARTSWITCH ]]; then
         # Update STATE_DB and handle PCIe removal and rescan
-        sonic-db-cli STATE_DB set "PCIE_DETACH_INFO|${DPU_NAME}" \
-        '{"dpu_id": "'${DPU_INDEX}'", "dpu_state": "detaching", "bus_info": "'${DPU_BUS_INFO}'"}' /dev/null 2>&1
+        sonic-db-cli STATE_DB set "PCIE_DETACH_INFO|${DPU_NAME}" '{"dpu_id": "'${DPU_INDEX}'", "dpu_state": "detaching", "bus_info": "'${DPU_BUS_INFO}'"}' &>/dev/null
     fi
 
     pci_detach_module ${DPU_NAME} ${DPU_BUS_INFO}
