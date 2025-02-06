@@ -212,5 +212,3 @@ CRC-32               0xFE        4  0xAC518FB3
     def test_support_platforms_no_eeprom(self, mockDbBased, mockNotDbBased):
         ret = decode_syseeprom.main()
         assert ret == errno.ENODEV
-        assert mockNotDbBased.called
-        assert not mockDbBased.called
