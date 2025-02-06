@@ -224,7 +224,6 @@ def get_cmdline_opts():
 
 
 def main():
-    support_eeprom = True
     support_eeprom_db = True
     if not os.geteuid() == 0:
         print('Root privileges are required for this operation')
