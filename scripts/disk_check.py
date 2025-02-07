@@ -6,7 +6,7 @@ What:
     This utility is designed to address two specific issues:
     1. Disk becoming read-only due to kernel bugs.
     2. Disk running out of space.
-    When either of these issues occurs, the system prevents new remote user logins via TACACS. 
+    When either of these issues occurs, the system prevents new remote user logins via TACACS.
 
 How:
     Checks for read-write permissions and available disk space.
