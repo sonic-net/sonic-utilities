@@ -161,7 +161,7 @@ def cli():
 
     This command-line interface (CLI) allows users to configure and manage
     memory statistics settings such as enabling/disabling the feature and
-    modifying parameters like the sampling interval and retention period.    
+    modifying parameters like the sampling interval and retention period.
     """
     pass
 
@@ -172,7 +172,7 @@ def config():
 
     Example:
         $ config memory-stats enable
-        $ config memory-stats sampling-interval 5    
+        $ config memory-stats sampling-interval 5
     """
     pass
 

@@ -106,7 +106,7 @@ class TestDict2Obj(unittest.TestCase):
         """Test conversion of empty structures"""
         self.assertEqual(Dict2Obj({}).to_dict(), {})
         self.assertEqual(Dict2Obj([]).to_dict(), [])
-    
+
     def test_dict2obj_invalid_input(self):
         with pytest.raises(ValueError):
             Dict2Obj("invalid_input")
@@ -203,27 +203,23 @@ class TestHelperFunctions(unittest.TestCase):
         self.assertEqual(format_field_value("retention_period", "15"), "15")
         self.assertEqual(format_field_value("sampling_interval", "Unknown"), "Not configured")
 
-    # New test case for ResourceManager
     def test_resource_manager_cleanup_no_resources(self):
         """Test ResourceManager cleanup when no resources exist"""
         resource_manager = ResourceManager()
-        resource_manager.cleanup()  # Should not raise any errors
+        resource_manager.cleanup()
 
-    # New test case for shutdown_handler
     def test_shutdown_handler_cleanup(self):
         """Test shutdown_handler performs cleanup"""
         resource_manager = ResourceManager()
         resource_manager.db_connector = MagicMock()
         resource_manager.socket_manager = MagicMock()
-        
-        # Use pytest.raises to catch the SystemExit
+
         with pytest.raises(SystemExit) as exc_info:
             shutdown_handler(signal.SIGTERM, None, resource_manager)
-        
-        # Verify cleanup was called
+
         resource_manager.socket_manager.close.assert_called_once()
-        # Verify exit code is 0
         assert exc_info.value.code == 0
+
 
 class TestSendData(unittest.TestCase):
     """Tests for send_data function"""
@@ -323,7 +319,6 @@ class TestSendData(unittest.TestCase):
             send_data("test_command", {})
 
 
-
 class TestDisplayConfig(unittest.TestCase):
     """Tests for display_config function"""
 
@@ -374,6 +369,7 @@ class TestDisplayConfig(unittest.TestCase):
 
             assert mock_exit.call_count >= 1
             mock_exit.assert_any_call(1)
+
 
 class TestFormatFieldValue:
     """Tests for format_field_value function using pytest"""
@@ -505,7 +501,7 @@ class TestSonicDBConnector(unittest.TestCase):
             socket.error("Failed"),
             None
         ]
-        
+
         self.connector._connect_with_retry(max_retries=3, retry_delay=0.1)
         assert mock_instance.connect.call_count == 3
 
@@ -513,10 +509,10 @@ class TestSonicDBConnector(unittest.TestCase):
         """Test _connect_with_retry raises ConnectionError after max retries"""
         mock_instance = self.mock_config_db.return_value
         mock_instance.connect.side_effect = socket.error("Failed")
-        
+
         with pytest.raises(ConnectionError) as exc_info:
             self.connector._connect_with_retry(max_retries=2, retry_delay=0.1)
-        
+
         assert "Failed to connect to SONiC config database after 2 attempts" in str(exc_info.value)
         assert mock_instance.connect.call_count == 2
 
@@ -524,7 +520,7 @@ class TestSonicDBConnector(unittest.TestCase):
         """Test get_memory_statistics_config with missing table"""
         mock_instance = self.mock_config_db.return_value
         mock_instance.get_table.return_value = {}
-        
+
         config = self.connector.get_memory_statistics_config()
         assert config == Config.DEFAULT_CONFIG
 
@@ -532,18 +528,18 @@ class TestSonicDBConnector(unittest.TestCase):
         """Test get_memory_statistics_config with invalid table data"""
         mock_instance = self.mock_config_db.return_value
         mock_instance.get_table.return_value = {"memory_statistics": "invalid"}
-        
+
         config = self.connector.get_memory_statistics_config()
         assert config == Config.DEFAULT_CONFIG
 
     def test_send_data_database_error(self):
         """Test send_data with database error response"""
         error_response = {"status": False, "msg": "Database error"}
-        
+
         with patch('show.memory_statistics.SocketManager') as mock_socket:
             instance = mock_socket.return_value
             instance.receive_all.return_value = json.dumps(error_response)
-            
+
             with pytest.raises(DatabaseError):
                 send_data("test_command", {}, quiet=True)
 
@@ -556,7 +552,7 @@ class TestSocketValidation:
 
     def test_validate_socket_path_create_if_missing(self, tmpdir):
         socket_path = tmpdir.join("test.socket")
-        manager = SocketManager(str(socket_path))
+        # manager = SocketManager(str(socket_path))
         assert os.path.exists(str(socket_path))
         assert oct(os.stat(str(socket_path)).st_mode & 0o777) == '0o600'
 
@@ -564,7 +560,6 @@ class TestSocketValidation:
         socket_path = tmpdir.join("test.socket")
         socket_path.write("")
         os.chmod(str(socket_path), 0o777)
-        
         with pytest.raises(PermissionError):
             SocketManager(str(socket_path))
 

@@ -36,7 +36,7 @@ class Config:
     BUFFER_SIZE: int = 8192
     MAX_RETRIES: int = 3
     RETRY_DELAY: float = 1.0
-    
+
     DEFAULT_CONFIG = {
         "enabled": "false",
         "sampling_interval": "5",
@@ -118,7 +118,8 @@ class Dict2Obj:
 
 class SonicDBConnector:
     """
-    A class that handles interactions with the SONiC configuration database, including connection retries and error handling.
+    A class that handles interactions with the SONiC configuration database,
+    including connection retries and error handling.
 
     This class ensures robust connection management by retrying failed attempts to connect to the database
     and provides methods for fetching memory statistics configuration.
@@ -137,8 +138,9 @@ class SonicDBConnector:
         """
         Attempts to connect to the SONiC configuration database with a retry mechanism.
 
-        This function will attempt to connect to the database up to `max_retries` times, with a delay of `retry_delay` seconds
-        between each attempt. If the connection fails after all retries, a `ConnectionError` is raised.
+        This function will attempt to connect to the database up to `max_retries` times,
+        with a delay of `retry_delay` seconds between each attempt. If the connection
+        fails after all retries, a `ConnectionError` is raised.
 
         Args:
             max_retries (int): Maximum number of retries before raising a `ConnectionError` (default is 3).
@@ -154,7 +156,7 @@ class SonicDBConnector:
                 syslog.syslog(syslog.LOG_INFO, "Successfully connected to SONiC config database")
                 return
             except (socket.error, IOError) as e:
-                last_error = e
+                # last_error = e
                 if attempt < max_retries - 1:
                     syslog.syslog(
                         syslog.LOG_WARNING,
@@ -170,8 +172,8 @@ class SonicDBConnector:
         """
         Retrieves the memory statistics configuration from the SONiC configuration database.
 
-        This function fetches the memory statistics configuration from the database, providing default values if not found or if 
-        there are any errors. It handles potential errors and logs them.
+        This function fetches the memory statistics configuration from the database, providing
+        default values if not found or if there are any errors. It handles potential errors and logs them.
 
         Returns:
             Dict[str, str]: The memory statistics configuration as a dictionary.
@@ -226,9 +228,9 @@ class SocketManager:
         """
         Validates the socket file path and checks for the necessary permissions and ownership.
 
-        This function checks if the socket file exists and has the correct permissions (0o600), and that it is owned by root.
-        If the file does not exist and `create_if_missing` is `True`, the socket file is created. If the file exists with
-        incorrect permissions, a `PermissionError` is raised.
+        This function checks if the socket file exists and has the correct permissions (0o600),
+        and that it is owned by root. If the file does not exist and `create_if_missing` is `True`,
+        the socket file is created. If the file exists with incorrect permissions, a `PermissionError` is raised.
 
         Args:
             create_if_missing (bool): Whether to create the socket file if it does not exist (default is False).
@@ -269,14 +271,15 @@ class SocketManager:
         """
         Establishes a Unix domain socket connection with improved error handling.
 
-        This function attempts to establish a connection to the memory statistics service via a Unix domain socket. It will retry 
-        the connection up to `Config.MAX_RETRIES` times with a delay of `Config.RETRY_DELAY` seconds between attempts.
+        This function attempts to establish a connection to the memory statistics service via
+        a Unix domain socket. It will retry the connection up to `Config.MAX_RETRIES` times with
+        a delay of `Config.RETRY_DELAY` seconds between attempts.
 
         Raises:
             ConnectionError: If the connection fails after the maximum number of retries.
         """
         retries = 0
-        last_error = None
+        # last_error = None
 
         syslog.syslog(syslog.LOG_INFO, f"Attempting socket connection from PID {os.getpid()}")
 
@@ -291,7 +294,7 @@ class SocketManager:
                 syslog.syslog(syslog.LOG_INFO, "Successfully connected to memory statistics service")
                 return
             except socket.error as e:
-                last_error = e
+                # last_error = e
                 retries += 1
                 if retries < Config.MAX_RETRIES:
                     syslog.syslog(
@@ -308,8 +311,9 @@ class SocketManager:
         """
         Receives all data from the socket until the expected size is reached.
 
-        This function ensures that the complete data is received from the socket. If the expected size is not reached within
-        the specified number of attempts, it raises an exception. It also handles timeout and socket errors.
+        This function ensures that the complete data is received from the socket. If the expected
+        size is not reached within the specified number of attempts, it raises an exception. It also
+        handles timeout and socket errors.
 
         Args:
             expected_size (int): The expected size of the data to receive.
@@ -341,7 +345,7 @@ class SocketManager:
                 error_msg = f"Socket error during receive: {str(e)}"
                 syslog.syslog(syslog.LOG_ERR, error_msg)
                 raise ConnectionError(error_msg) from e
-            
+
             attempts += 1
 
         if len(data) < expected_size:
@@ -358,7 +362,8 @@ class SocketManager:
         """
         Sends data over the socket with improved error handling.
 
-        This function sends data through the socket. It raises a `ConnectionError` if the data cannot be sent due to socket issues.
+        This function sends data through the socket. It raises a `ConnectionError` if the data
+        cannot be sent due to socket issues.
 
         Args:
             data (str): The data to send.
@@ -414,7 +419,8 @@ class ResourceManager:
         """
         Performs cleanup of resources during shutdown.
 
-        This function cleans up all resources, including database connectors and socket connections, ensuring proper shutdown.
+        This function cleans up all resources, including database connectors and socket connections,
+        ensuring proper shutdown.
 
         Raises:
             None
@@ -560,8 +566,6 @@ def show():
     '--select', 'select_metric',
     help='Show statistics for specific metric (e.g., total_memory, used_memory)'
 )
-
-
 def show_statistics(from_time: str, to_time: str, select_metric: str):
     """Display memory statistics.
 
