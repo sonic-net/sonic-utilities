@@ -22,6 +22,7 @@ DEFAULT_RETENTION_PERIOD = 15  # days
 
 syslog.openlog("memory_statistics", syslog.LOG_PID | syslog.LOG_CONS, syslog.LOG_USER)
 
+
 def log_to_syslog(message: str, level: int = syslog.LOG_INFO) -> None:
     """
     Logs a message to the system log (syslog).
@@ -42,6 +43,7 @@ def log_to_syslog(message: str, level: int = syslog.LOG_INFO) -> None:
     except Exception as e:
         click.echo(f"Failed to log to syslog: {e}", err=True)
 
+
 def generate_error_message(error_type: str, error: Exception) -> str:
     """
     Generates a formatted error message for logging and user feedback.
@@ -54,6 +56,7 @@ def generate_error_message(error_type: str, error: Exception) -> str:
         str: A formatted error message string.
     """
     return f"{error_type}: {error}"
+
 
 def validate_range(value: int, min_val: int, max_val: int) -> bool:
     """
@@ -68,6 +71,7 @@ def validate_range(value: int, min_val: int, max_val: int) -> bool:
         bool: True if the value is within range, False otherwise.
     """
     return min_val <= value <= max_val
+
 
 class MemoryStatisticsDB:
     """
@@ -119,6 +123,7 @@ class MemoryStatisticsDB:
             raise RuntimeError("Database connection unavailable")
         return cls._db
 
+
 def update_memory_statistics_status(enabled: bool) -> Tuple[bool, Optional[str]]:
     """
     Updates the enable/disable status of memory statistics in the configuration database.
@@ -154,6 +159,7 @@ def update_memory_statistics_status(enabled: bool) -> Tuple[bool, Optional[str]]
         log_to_syslog(error_msg, syslog.LOG_ERR)
         return False, error_msg
 
+
 @click.group(help="Tool to manage memory statistics configuration.")
 def cli():
     """
@@ -165,6 +171,7 @@ def cli():
     """
     pass
 
+
 @cli.group(help="Commands to configure system settings.")
 def config():
     """
@@ -175,6 +182,7 @@ def config():
         $ config memory-stats sampling-interval 5
     """
     pass
+
 
 @config.group(name='memory-stats', help="Manage memory statistics collection settings.")
 def memory_stats():
@@ -198,6 +206,7 @@ def memory_stats():
     """
     pass
 
+
 @memory_stats.command(name='enable')
 def memory_stats_enable():
     """Enable memory statistics collection.
@@ -216,6 +225,7 @@ def memory_stats_enable():
         click.echo("Reminder: Please run 'config save' to persist changes.")
         log_to_syslog("Memory statistics enabled. Reminder to run 'config save'")
 
+
 @memory_stats.command(name='disable')
 def memory_stats_disable():
     """Disable memory statistics collection.
@@ -233,6 +243,7 @@ def memory_stats_disable():
     if success:
         click.echo("Reminder: Please run 'config save' to persist changes.")
         log_to_syslog("Memory statistics disabled. Reminder to run 'config save'")
+
 
 @memory_stats.command(name='sampling-interval')
 @click.argument("interval", type=int)
@@ -279,6 +290,7 @@ def memory_stats_sampling_interval(interval: int):
         click.echo(error_msg, err=True)
         log_to_syslog(error_msg, syslog.LOG_ERR)
         return
+
 
 @memory_stats.command(name='retention-period')
 @click.argument("period", type=int)

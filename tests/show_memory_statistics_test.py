@@ -263,7 +263,6 @@ class TestSendData(unittest.TestCase):
         self.assertTrue(getattr(result, 'status', True))
         self.assertEqual(result.data, "test data")
 
-
     @patch('show.memory_statistics.SocketManager')
     def test_complex_response_object_conversion(self, mock_socket_manager):
         """Test conversion of complex response object"""
@@ -286,7 +285,6 @@ class TestSendData(unittest.TestCase):
         self.assertEqual(result.data.metrics[0].name, "memory")
         self.assertEqual(result.data.metrics[1].value, 50)
         self.assertEqual(result.data.timestamp, "2024-01-01")
-
 
     @patch('show.memory_statistics.SocketManager')
     def test_send_data_json_decode_error(self, mock_socket_manager):

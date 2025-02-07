@@ -149,7 +149,7 @@ class SonicDBConnector:
         Raises:
             ConnectionError: If the connection to the database fails after all retries.
         """
-        last_error = None
+        # last_error = None
         for attempt in range(max_retries):
             try:
                 self.config_db.connect()
