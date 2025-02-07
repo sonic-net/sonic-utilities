@@ -1034,7 +1034,8 @@ Ethernet0  Present
         assert result.exit_code == 0
         assert result.output == expected
 
-        result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["presence"], ['Ethernet4'])
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["presence"], ['Ethernet4'])
         expected = """Port       Presence
 ---------  -----------
 Ethernet4  Not present
@@ -1043,7 +1044,8 @@ Ethernet4  Not present
         assert result.exit_code == 0
         assert result.output == expected
 
-        result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["presence"], ['Ethernet200'])
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["presence"], ['Ethernet200'])
         expected = """Port         Presence
 -----------  -----------
 Ethernet200  Not present
@@ -1100,9 +1102,10 @@ Ethernet200  Not present
         result = runner.invoke(
                 show.cli.commands["interfaces"].commands["transceiver"].commands["eeprom"], ['Ethernet0'])
         assert result.exit_code == 0
-        assert "\n".join([ l.rstrip() for l in result.output.split('\n')]) == test_sfp_eeprom_output
+        assert "\n".join([line.rstrip() for line in result.output.split('\n')]) == test_sfp_eeprom_output
 
-        result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["eeprom"], ['Ethernet4'])
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["eeprom"], ['Ethernet4'])
         result_lines = result.output.strip('\n')
         expected = "Ethernet4: SFP EEPROM Not detected"
         assert result_lines == expected
@@ -1151,7 +1154,7 @@ Ethernet200  Not present
         result = runner.invoke(
                 show.cli.commands["interfaces"].commands["transceiver"].commands["info"], ['Ethernet64'])
         assert result.exit_code == 0
-        assert "\n".join([ l.rstrip() for l in result.output.split('\n')]) == test_cmis_eeprom_output
+        assert "\n".join([line.rstrip() for line in result.output.split('\n')]) == test_cmis_eeprom_output
 
     def test_sfp_eeprom_all(self):
         runner = CliRunner()
