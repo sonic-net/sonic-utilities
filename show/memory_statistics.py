@@ -149,14 +149,12 @@ class SonicDBConnector:
         Raises:
             ConnectionError: If the connection to the database fails after all retries.
         """
-        # last_error = None
         for attempt in range(max_retries):
             try:
                 self.config_db.connect()
                 syslog.syslog(syslog.LOG_INFO, "Successfully connected to SONiC config database")
                 return
             except (socket.error, IOError) as e:
-                # last_error = e
                 if attempt < max_retries - 1:
                     syslog.syslog(
                         syslog.LOG_WARNING,
@@ -279,7 +277,6 @@ class SocketManager:
             ConnectionError: If the connection fails after the maximum number of retries.
         """
         retries = 0
-        # last_error = None
 
         syslog.syslog(syslog.LOG_INFO, f"Attempting socket connection from PID {os.getpid()}")
 
@@ -294,7 +291,6 @@ class SocketManager:
                 syslog.syslog(syslog.LOG_INFO, "Successfully connected to memory statistics service")
                 return
             except socket.error as e:
-                # last_error = e
                 retries += 1
                 if retries < Config.MAX_RETRIES:
                     syslog.syslog(

@@ -550,7 +550,7 @@ class TestSocketValidation:
 
     def test_validate_socket_path_create_if_missing(self, tmpdir):
         socket_path = tmpdir.join("test.socket")
-        # manager = SocketManager(str(socket_path))
+        SocketManager(str(socket_path))
         assert os.path.exists(str(socket_path))
         assert oct(os.stat(str(socket_path)).st_mode & 0o777) == '0o600'
 
@@ -626,7 +626,7 @@ class TestMainFunction(unittest.TestCase):
     def test_main_cli_failure(self, mock_cli):
         """Test main handles CLI failure"""
         mock_cli.side_effect = Exception("CLI failed")
-        with self.assertRaises(SystemExit):  # Expect SystemExit instead of Exception
+        with self.assertRaises(SystemExit):
             main()
 
     @patch('sys.exit')
