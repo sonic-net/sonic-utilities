@@ -2873,5 +2873,13 @@
     "COUNTERS:oid:0x17000000002000":{
         "SAI_COUNTER_STAT_PACKETS": 200,
         "SAI_COUNTER_STAT_BYTES": 204800
+    },
+    "PERSISTENT_DROP_ALERTS":{
+        "DEBUG_0|1746495543": {
+            "message": "Persistent packet drops detected on Ethernet0"
+        },
+        "DEBUG_0|1746495767": {
+            "message": "Persistent packet drops detected on Ethernet1"
+        }
     }
 }

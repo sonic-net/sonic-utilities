@@ -7526,6 +7526,11 @@ def dropcounters():
 @click.option("-a", "--alias", type=str, help="Alias for this counter")
 @click.option("-g", "--group", type=str, help="Group for this counter")
 @click.option("-d", "--desc",  type=str, help="Description for this counter")
+@click.option("-w", "--window", type=int, help="Window size in seconds")
+@click.option("-dct", "--drop-count-threshold",  type=int,
+              help="Minimum threshold for drop counts to be classified as an incident")
+@click.option('-ict', '--incident-count-threshold', type=int,
+              help="Minimum number of incidents to trigger a syslog entry")
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
 @click.option('--namespace',
               '-n',
@@ -7535,7 +7540,8 @@ def dropcounters():
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def install(counter_name, alias, group, counter_type, desc, reasons, verbose, namespace):
+def install(counter_name, alias, group, counter_type, desc, reasons, window,
+            incident_count_threshold, drop_count_threshold, verbose, namespace):
     """Install a new drop counter"""
     command = ['dropconfig', '-c', 'install', '-n', str(counter_name), '-t', str(counter_type), '-r', str(reasons)]
     if alias:
@@ -7546,7 +7552,73 @@ def install(counter_name, alias, group, counter_type, desc, reasons, verbose, na
         command += ['-d', str(desc)]
     if namespace:
         command += ['-ns', str(namespace)]
+    if window:
+        command += ['-w', str(window)]
+    if drop_count_threshold:
+        command += ['-dct', str(drop_count_threshold)]
+    if incident_count_threshold:
+        command += ['-ict', str(incident_count_threshold)]
 
+    clicommon.run_command(command, display_cmd=verbose)
+
+
+#
+# 'enable drop monitor' subcommand  ('config dropcounters enable_monitor')
+#
+@dropcounters.command()
+@click.option("-c", "--counter-name", type=str, help="Name of the counter", default=None)
+@click.option("-w", "--window", type=int, help="Window size in seconds")
+@click.option("-dct", "--drop-count-threshold",  type=int,
+              help="Minimum threshold for drop counts to be classified as an incident")
+@click.option('-ict', '--incident-count-threshold', type=int,
+              help="Minimum number of incidents to trigger a syslog entry")
+@click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def enable_monitor(counter_name, window, incident_count_threshold, drop_count_threshold, verbose, namespace):
+    """Enable drop monitor feature. If no counter is provided, global feature status is set to enabled."""
+    command = ['dropconfig', '-c', 'enable_drop_monitor']
+    if counter_name:
+        command += ['-n', str(counter_name)]
+    if window:
+        command += ['-w', str(window)]
+    if drop_count_threshold:
+        command += ['-dct', str(drop_count_threshold)]
+    if incident_count_threshold:
+        command += ['-ict', str(incident_count_threshold)]
+    if namespace:
+        command += ['-ns', str(namespace)]
+
+    clicommon.run_command(command, display_cmd=verbose)
+
+
+#
+# 'disable drop monitor' subcommand  ('config dropcounters disable_monitor')
+#
+@dropcounters.command()
+@click.option("-c", "--counter-name", type=str, help="Name of the counter", default=None)
+@click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def disable_monitor(counter_name, verbose, namespace):
+    """Disable drop monitor feature. If no counter is provided, gloabl feature status is set to disabled."""
+    command = ['dropconfig', '-c', 'disable_drop_monitor']
+    if counter_name:
+        command += ['-n', str(counter_name)]
+    if namespace:
+        command += ['-ns', str(namespace)]
     clicommon.run_command(command, display_cmd=verbose)
 
 

@@ -13,6 +13,16 @@ def dropcounters():
     pass
 
 
+# 'persistent_drops' subcommand ("show dropcounters persistent_drops counter_name")
+@dropcounters.command()
+@click.argument("counter_name", type=str, required=True)
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def persistent_drops(counter_name, verbose):
+    """Show device drop counter persistent drops"""
+    cmd = ['dropconfig', '-c', 'show_drop_monitor_persistent_drops', '-n', str(counter_name)]
+
+    clicommon.run_command(cmd, display_cmd=verbose)
+
 # 'configuration' subcommand ("show dropcounters configuration")
 @dropcounters.command()
 @click.option('-g', '--group', required=False)
