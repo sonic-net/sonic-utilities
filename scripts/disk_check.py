@@ -3,28 +3,34 @@
 
 """
 What:
-    There have been cases, where disk turns Read-only due to kernel bug.
-    In Read-only state, system blocks new remote user login via TACACS.
-    This utility is to check & make transient recovery as needed.
+    This utility is designed to address two specific issues:
+    1. Disk becoming read-only due to kernel bugs.
+    2. Disk running out of space.
+    When either of these issues occurs, the system prevents new remote user logins via TACACS. 
 
 How:
-    check for Read-Write permission. If Read-only, create writable overlay using tmpfs.
+    Checks for read-write permissions and available disk space.
+    If an issue is detected, create writable overlay using tmpfs.
 
-    By default "/etc" & "/home" are checked and if in Read-only state, make them Read-Write
+    By default "/etc" & "/home" are checked and if issue detected, make them Read-Write
     using overlay on top of tmpfs.
 
     Making /etc & /home as writable lets successful new remote user login.
 
-    If in Read-only state or in Read-Write state with the help of tmpfs overlay,
-    syslog ERR messages are written, to help raise alerts.
+    Write syslog ERR messages to help raise alerts in the following cases:
+    1. Disk in read-only state.
+    2. Disk out of space.
+    3. Mounted tmpfs overlay.
 
     Monit may be used to invoke it periodically, to help scan & fix and
     report via syslog.
 
 Tidbit:
-    If you would like to test this script, you could simulate a RO disk
-    with the following command. Reboot will revert the effect.
+    To test this script:
+    1. Simulate a RO disk with the following command. Reboot will revert the effect.
         sudo bash -c "echo u > /proc/sysrq-trigger"
+    2. Use up all disk space by create big file in /var/dump/:
+         dd if=/dev/zero of=/var/dump/sonic_dump_devicename_20241126_204132.tar bs=1G count=50
 
 """
 
