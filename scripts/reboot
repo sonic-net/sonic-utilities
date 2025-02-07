@@ -1,5 +1,10 @@
 #!/bin/bash
 
+declare -r EXIT_SUCCESS=0
+declare -r EXIT_ERROR=1
+declare -r WATCHDOG_UTIL="/usr/local/bin/watchdogutil"
+declare -r PRE_REBOOT_HOOK="pre_reboot_hook"
+
 REBOOT_USER=$(logname)
 REBOOT_TIME=$(date)
 PLATFORM=$(sonic-cfggen -H -v DEVICE_METADATA.localhost.platform)
@@ -13,6 +18,8 @@ PLATFORM_REBOOT_PRE_CHECK="platform_reboot_pre_check"
 VERBOSE=no
 EXIT_NEXT_IMAGE_NOT_EXISTS=4
 SSD_FW_UPDATE="ssd-fw-upgrade"
+REBOOT_FLAGS=""
+FORCE_REBOOT="no"
 
 function debug()
 {
@@ -67,7 +74,7 @@ function show_help_and_exit()
     echo "    Available options:"
     echo "        -h, -? : getting this help"
 
-    exit 0
+    exit ${EXIT_SUCCESS}
 }
 
 function setup_reboot_variables()
@@ -89,8 +96,10 @@ function reboot_pre_check()
     rm ${filename}
 
     if [ -x ${DEVPATH}/${PLATFORM}/${PLATFORM_REBOOT_PRE_CHECK} ]; then
-        ${DEVPATH}/${PLATFORM}/${PLATFORM_REBOOT_PRE_CHECK}
-        [[ $? -ne 0 ]] && exit
+        if ! ${DEVPATH}/${PLATFORM}/${PLATFORM_REBOOT_PRE_CHECK}; then
+            echo "Platform reboot pre-check failed, exiting..."
+            exit ${EXIT_ERROR}
+        fi
     fi
 
     # Make sure that the next image exists
@@ -110,6 +119,10 @@ function parse_options()
             v )
                 VERBOSE=yes
                 ;;
+            f )
+                REBOOT_FLAGS+=" -f"
+                FORCE_REBOOT="yes"
+                ;;
         esac
     done
 }
@@ -119,10 +132,27 @@ parse_options $@
 # Exit if not superuser
 if [[ "$EUID" -ne 0 ]]; then
     echo "This command must be run as root" >&2
-    exit 1
+    exit ${EXIT_ERROR}
 fi
 
 debug "User requested rebooting device ..."
+
+if [ -x ${DEVPATH}/${PLATFORM}/${PRE_REBOOT_HOOK} ]; then
+    debug "Executing the pre-reboot script"
+    ${DEVPATH}/${PLATFORM}/${PRE_REBOOT_HOOK}
+    EXIT_CODE=$?
+    if [[ ${EXIT_CODE} != ${EXIT_SUCCESS} ]]; then
+        if [[ "${FORCE_REBOOT}" != "yes" ]]; then
+            echo "Reboot is interrupted: use -f (force) to override"
+            exit ${EXIT_ERROR}
+        fi
+    fi
+fi
+
+if [ -x ${WATCHDOG_UTIL} ]; then
+    debug "Enabling the Watchdog before reboot"
+    ${WATCHDOG_UTIL} arm
+fi
 
 setup_reboot_variables
 reboot_pre_check
@@ -169,4 +199,4 @@ if [ -x ${DEVPATH}/${PLATFORM}/${PLAT_REBOOT} ]; then
 fi
 
 VERBOSE=yes debug "Issuing OS-level reboot ..." >&2
-exec /sbin/reboot $@
+exec /sbin/reboot ${REBOOT_FLAGS}
