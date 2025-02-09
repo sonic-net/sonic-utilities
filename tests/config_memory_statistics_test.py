@@ -1,11 +1,13 @@
+# Standard library imports
 import os
 import subprocess
 import syslog
-from unittest.mock import Mock, patch
 
+# Third-party imports
 import pytest
 from click.testing import CliRunner
 
+# Local imports
 from config.memory_statistics import (
     cli,
     log_to_syslog,
@@ -18,6 +20,9 @@ from config.memory_statistics import (
     SAMPLING_INTERVAL_MIN,
     update_memory_statistics_status,
 )
+
+# Testing utilities
+from unittest.mock import Mock, patch
 
 
 @pytest.fixture

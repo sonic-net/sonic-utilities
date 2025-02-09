@@ -1,3 +1,4 @@
+# Standard library imports
 import json
 import os
 import socket
@@ -6,10 +7,12 @@ import syslog
 import unittest
 from unittest.mock import MagicMock, Mock, patch
 
+# Third-party library imports
 import click
-from click.testing import CliRunner
 import pytest
+from click.testing import CliRunner
 
+# Local imports
 from show.memory_statistics import (
     Config,
     ConnectionError,
@@ -399,16 +402,6 @@ class TestMemoryStatistics(unittest.TestCase):
         obj = Dict2Obj([])
         self.assertEqual(obj.to_dict(), [])
 
-    # @patch('socket.socket')
-    # def test_socket_send_error(self, mock_socket):
-    #     """Test socket send error (line 166)"""
-    #     manager = SocketManager()
-    #     mock_socket.return_value.sendall.side_effect = socket.error("Send failed")
-    #     manager.sock = mock_socket.return_value
-
-    #     with self.assertRaises(ConnectionError):
-    #         manager.send("test data")
-
     @patch('show.memory_statistics.SonicDBConnector')
     def test_show_configuration_error(self, mock_db):
         """Test show configuration error (line 302)"""
@@ -443,19 +436,6 @@ class TestAdditionalMemoryStatisticsCLI(unittest.TestCase):
         self.assertEqual(obj.list[1].d, 2)
         self.assertEqual(obj.to_dict(), data)
 
-    # @patch('show.memory_statistics.SocketManager')
-    # def test_socket_manager_close_exception(self, mock_socket_manager):
-    #     """Test SocketManager close handles exceptions gracefully"""
-    #     mock_socket_instance = mock_socket_manager.return_value
-    #     mock_socket_instance.close.side_effect = Exception("Close error")
-
-    #     manager = SocketManager()
-    #     manager.sock = mock_socket_instance
-
-    #     with patch('syslog.syslog') as mock_syslog:
-    #         manager.close()
-    #         mock_syslog.assert_any_call(4, "Error closing socket: Close error")
-
     def test_dict2obj_repr(self):
         """Test the __repr__ method of Dict2Obj"""
         data = {'a': 1, 'b': {'c': 2}}
@@ -470,7 +450,7 @@ class TestAdditionalMemoryStatisticsCLI(unittest.TestCase):
         with patch('show.memory_statistics.SocketManager') as mock_socket_manager:
             mock_socket_instance = mock_socket_manager.return_value
             mock_socket_instance.connect.return_value = None
-            mock_socket_instance.receive_all.return_value = None  # Simulate no response
+            mock_socket_instance.receive_all.return_value = None
             mock_socket_instance.sock = MagicMock()
 
             with self.assertRaises(ConnectionError) as context:
@@ -561,197 +541,9 @@ class TestSocketValidation:
         with pytest.raises(PermissionError):
             SocketManager(str(socket_path))
 
-# class TestSocketManager:
-#     def test_socket_connect_failure(self):
-#         socket_manager = SocketManager()
-#         socket_manager.sock = MagicMock()
-#         socket_manager.sock.connect.side_effect = socket.error("Connection failed")
-
-#         with pytest.raises(ConnectionError):
-#             socket_manager.connect()
-
-#     def test_socket_receive_all_timeout(self):
-#         socket_manager = SocketManager()
-#         socket_manager.sock = MagicMock()
-#         socket_manager.sock.recv.side_effect = socket.timeout("Timeout")
-
-#         with pytest.raises(ConnectionError):
-#             socket_manager.receive_all(expected_size=1024)
-
-#     def test_socket_send_error(self):
-#         with patch('socket.socket') as mock_socket:
-#             mock_socket.return_value.sendall.side_effect = socket.error("Send failed")
-#             manager = SocketManager()
-#             manager.sock = mock_socket.return_value
-#             with pytest.raises(ConnectionError):
-#                 manager.send("test data")
-
-#     def test_socket_connect_retry_success(self):
-#         with patch('socket.socket') as mock_socket:
-#             mock_socket.return_value.connect.side_effect = [socket.error("Failed"), socket.error("Failed"), None]
-#             manager = SocketManager()
-#             manager.connect()
-#             assert mock_socket.return_value.connect.call_count == 3
-
-#     def test_socket_connect_retry_failure(self):
-#         with patch('socket.socket') as mock_socket:
-#             mock_socket.return_value.connect.side_effect = socket.error("Failed")
-#             manager = SocketManager()
-#             with pytest.raises(ConnectionError):
-#                 manager.connect()
-
-#     def test_receive_all_incomplete_data(self):
-#         with patch('socket.socket') as mock_socket:
-#             mock_socket.return_value.recv.return_value = b"partial"
-#             manager = SocketManager()
-#             manager.sock = mock_socket.return_value
-#             result = manager.receive_all(expected_size=10, max_attempts=1)
-#             assert result == "partial"
-
-#     def test_socket_close_error(self):
-#         with patch('socket.socket') as mock_socket:
-#             mock_socket.return_value.close.side_effect = Exception("Close error")
-#             manager = SocketManager()
-#             manager.sock = mock_socket.return_value
-#             with patch('syslog.syslog') as mock_syslog:
-#                 manager.close()
-#                 mock_syslog.assert_called_with(syslog.LOG_WARNING, "Error closing socket: Close error")
-
-# class TestSocketManager:
-#     @patch('os.path.exists')
-#     @patch('os.stat')
-#     def setup_method(self, method, mock_stat, mock_exists):
-#         mock_exists.return_value = True
-#         mock_stat_result = MagicMock()
-#         mock_stat_result.st_mode = 0o600
-#         mock_stat_result.st_uid = 0
-#         mock_stat.return_value = mock_stat_result
-
-#         self.socket_manager = None
-
-#     @patch('os.path.exists')
-#     @patch('os.stat')
-#     @patch('socket.socket')
-#     def test_socket_connect_failure(self, mock_socket, mock_stat, mock_exists):
-#         mock_exists.return_value = True
-#         mock_stat_result = MagicMock()
-#         mock_stat_result.st_mode = 0o600
-#         mock_stat_result.st_uid = 0
-#         mock_stat.return_value = mock_stat_result
-
-#         mock_socket.return_value.connect.side_effect = socket.error("Connection failed")
-#         socket_manager = SocketManager()
-#         socket_manager.sock = mock_socket.return_value
-
-#         with pytest.raises(ConnectionError):
-#             socket_manager.connect()
-
-#     @patch('os.path.exists')
-#     @patch('os.stat')
-#     @patch('socket.socket')
-#     def test_socket_receive_all_timeout(self, mock_socket, mock_stat, mock_exists):
-#         mock_exists.return_value = True
-#         mock_stat_result = MagicMock()
-#         mock_stat_result.st_mode = 0o600
-#         mock_stat_result.st_uid = 0
-#         mock_stat.return_value = mock_stat_result
-
-#         socket_manager = SocketManager()
-#         socket_manager.sock = mock_socket.return_value
-#         socket_manager.sock.recv.side_effect = socket.timeout("Timeout")
-
-#         with pytest.raises(ConnectionError):
-#             socket_manager.receive_all(expected_size=1024)
-
-#     @patch('os.path.exists')
-#     @patch('os.stat')
-#     @patch('socket.socket')
-#     def test_socket_send_error(self, mock_socket, mock_stat, mock_exists):
-#         mock_exists.return_value = True
-#         mock_stat_result = MagicMock()
-#         mock_stat_result.st_mode = 0o600
-#         mock_stat_result.st_uid = 0
-#         mock_stat.return_value = mock_stat_result
-
-#         mock_socket.return_value.sendall.side_effect = socket.error("Send failed")
-#         socket_manager = SocketManager()
-#         socket_manager.sock = mock_socket.return_value
-
-#         with pytest.raises(ConnectionError):
-#             socket_manager.send("test data")
-
-#     @patch('os.path.exists')
-#     @patch('os.stat')
-#     @patch('socket.socket')
-#     @patch('time.sleep')
-#     def test_socket_connect_retry_success(self, mock_sleep, mock_socket, mock_stat, mock_exists):
-#         mock_exists.return_value = True
-#         mock_stat_result = MagicMock()
-#         mock_stat_result.st_mode = 0o600
-#         mock_stat_result.st_uid = 0
-#         mock_stat.return_value = mock_stat_result
-
-#         mock_socket.return_value.connect.side_effect = [
-#             socket.error("Failed"),
-#             socket.error("Failed"),
-#             None
-#         ]
-#         socket_manager = SocketManager()
-#         socket_manager.connect()
-#         assert mock_socket.return_value.connect.call_count == 3
-
-#     @patch('os.path.exists')
-#     @patch('os.stat')
-#     @patch('socket.socket')
-#     @patch('time.sleep')
-#     def test_socket_connect_retry_failure(self, mock_sleep, mock_socket, mock_stat, mock_exists):
-#         mock_exists.return_value = True
-#         mock_stat_result = MagicMock()
-#         mock_stat_result.st_mode = 0o600
-#         mock_stat_result.st_uid = 0
-#         mock_stat.return_value = mock_stat_result
-
-#         mock_socket.return_value.connect.side_effect = socket.error("Failed")
-#         socket_manager = SocketManager()
-#         with pytest.raises(ConnectionError):
-#             socket_manager.connect()
-
-#     @patch('os.path.exists')
-#     @patch('os.stat')
-#     @patch('socket.socket')
-#     def test_receive_all_incomplete_data(self, mock_socket, mock_stat, mock_exists):
-#         mock_exists.return_value = True
-#         mock_stat_result = MagicMock()
-#         mock_stat_result.st_mode = 0o600
-#         mock_stat_result.st_uid = 0
-#         mock_stat.return_value = mock_stat_result
-
-#         socket_manager = SocketManager()
-#         socket_manager.sock = mock_socket.return_value
-#         socket_manager.sock.recv.return_value = b"partial"
-#         result = socket_manager.receive_all(expected_size=10, max_attempts=1)
-#         assert result == "partial"
-
-#     @patch('os.path.exists')
-#     @patch('os.stat')
-#     @patch('socket.socket')
-#     def test_socket_close_error(self, mock_socket, mock_stat, mock_exists):
-#         mock_exists.return_value = True
-#         mock_stat_result = MagicMock()
-#         mock_stat_result.st_mode = 0o600
-#         mock_stat_result.st_uid = 0
-#         mock_stat.return_value = mock_stat_result
-
-#         socket_manager = SocketManager()
-#         socket_manager.sock = mock_socket.return_value
-#         socket_manager.sock.close.side_effect = Exception("Close error")
-
-#         with patch('syslog.syslog') as mock_syslog:
-#             socket_manager.close()
-#             mock_syslog.assert_called_with(syslog.LOG_WARNING, "Error closing socket: Close error")
-
 
 class TestSocketManager:
+
     @patch('os.path.exists')
     @patch('os.stat')
     def setup_method(self, method, mock_stat, mock_exists):

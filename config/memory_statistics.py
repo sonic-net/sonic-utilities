@@ -4,19 +4,21 @@ import syslog
 # Third-party imports
 import click
 
-# Local imports
-from swsscommon.swsscommon import ConfigDBConnector
-
 # Type hints
 from typing import Tuple, Optional
+
+# Local imports
+from swsscommon.swsscommon import ConfigDBConnector
 
 # Constants
 MEMORY_STATISTICS_TABLE = "MEMORY_STATISTICS"
 MEMORY_STATISTICS_KEY = "memory_statistics"
+
 SAMPLING_INTERVAL_MIN = 3
 SAMPLING_INTERVAL_MAX = 15
 RETENTION_PERIOD_MIN = 1
 RETENTION_PERIOD_MAX = 30
+
 DEFAULT_SAMPLING_INTERVAL = 5  # minutes
 DEFAULT_RETENTION_PERIOD = 15  # days
 
