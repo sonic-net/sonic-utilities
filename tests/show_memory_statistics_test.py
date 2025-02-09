@@ -561,7 +561,6 @@ class TestSocketValidation:
         with pytest.raises(PermissionError):
             SocketManager(str(socket_path))
 
-
 # class TestSocketManager:
 #     def test_socket_connect_failure(self):
 #         socket_manager = SocketManager()
@@ -618,7 +617,6 @@ class TestSocketValidation:
 #                 manager.close()
 #                 mock_syslog.assert_called_with(syslog.LOG_WARNING, "Error closing socket: Close error")
 
-
 # class TestSocketManager:
 #     @patch('os.path.exists')
 #     @patch('os.stat')
@@ -628,7 +626,7 @@ class TestSocketValidation:
 #         mock_stat_result.st_mode = 0o600
 #         mock_stat_result.st_uid = 0
 #         mock_stat.return_value = mock_stat_result
-        
+
 #         self.socket_manager = None
 
 #     @patch('os.path.exists')
@@ -640,7 +638,7 @@ class TestSocketValidation:
 #         mock_stat_result.st_mode = 0o600
 #         mock_stat_result.st_uid = 0
 #         mock_stat.return_value = mock_stat_result
-        
+
 #         mock_socket.return_value.connect.side_effect = socket.error("Connection failed")
 #         socket_manager = SocketManager()
 #         socket_manager.sock = mock_socket.return_value
@@ -678,7 +676,7 @@ class TestSocketValidation:
 #         mock_socket.return_value.sendall.side_effect = socket.error("Send failed")
 #         socket_manager = SocketManager()
 #         socket_manager.sock = mock_socket.return_value
-        
+
 #         with pytest.raises(ConnectionError):
 #             socket_manager.send("test data")
 
@@ -747,10 +745,11 @@ class TestSocketValidation:
 #         socket_manager = SocketManager()
 #         socket_manager.sock = mock_socket.return_value
 #         socket_manager.sock.close.side_effect = Exception("Close error")
-        
+
 #         with patch('syslog.syslog') as mock_syslog:
 #             socket_manager.close()
 #             mock_syslog.assert_called_with(syslog.LOG_WARNING, "Error closing socket: Close error")
+
 
 class TestSocketManager:
     @patch('os.path.exists')
@@ -901,7 +900,7 @@ class TestSocketManager:
         socket_manager = SocketManager()
         socket_manager.sock = mock_socket.return_value
         socket_manager.sock.close.side_effect = Exception("Close error")
-        
+
         with patch('syslog.syslog') as mock_syslog:
             socket_manager.close()
             mock_syslog.assert_called_with(syslog.LOG_WARNING, "Error closing socket: Close error")
