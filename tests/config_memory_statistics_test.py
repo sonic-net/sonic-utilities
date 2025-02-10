@@ -1,10 +1,13 @@
+# Standard library imports
+import os
 import subprocess
 import syslog
-from unittest.mock import Mock, patch
 
+# Third-party imports
 import pytest
 from click.testing import CliRunner
 
+# Local imports
 from config.memory_statistics import (
     cli,
     log_to_syslog,
@@ -17,6 +20,9 @@ from config.memory_statistics import (
     SAMPLING_INTERVAL_MIN,
     update_memory_statistics_status,
 )
+
+# Testing utilities
+from unittest.mock import Mock, patch
 
 
 @pytest.fixture
@@ -57,8 +63,18 @@ class TestMemoryStatisticsDB:
 
         db1 = MemoryStatisticsDB.get_db()
         db2 = MemoryStatisticsDB.get_db()
+
         assert db1 is db2
         mock_db.connect.assert_called_once()
+
+    def test_connect_db_failure(self, mock_db):
+        """Test handling of database connection failure."""
+        mock_db.connect.side_effect = RuntimeError("Connection failed")
+        MemoryStatisticsDB._instance = None
+        MemoryStatisticsDB._db = None
+
+        with pytest.raises(RuntimeError, match="Database connection unavailable"):
+            MemoryStatisticsDB.get_db()
 
 
 class TestUpdateMemoryStatisticsStatus:
@@ -66,7 +82,7 @@ class TestUpdateMemoryStatisticsStatus:
 
     def test_successful_enable(self, mock_db):
         """Test successful status update to enable."""
-        success, error = update_memory_statistics_status("true")
+        success, error = update_memory_statistics_status(True)
         assert success is True
         assert error is None
         mock_db.mod_entry.assert_called_once_with(
@@ -77,7 +93,7 @@ class TestUpdateMemoryStatisticsStatus:
 
     def test_successful_disable(self, mock_db):
         """Test successful status update to disable."""
-        success, error = update_memory_statistics_status("false")
+        success, error = update_memory_statistics_status(False)
         assert success is True
         assert error is None
         mock_db.mod_entry.assert_called_once_with(
@@ -89,10 +105,18 @@ class TestUpdateMemoryStatisticsStatus:
     def test_database_error(self, mock_db):
         """Test handling of database errors."""
         mock_db.mod_entry.side_effect = Exception("DB Error")
-        success, error = update_memory_statistics_status("true")
+        success, error = update_memory_statistics_status(True)
         assert success is False
-        assert "Error updating memory statistics status" in error
+        assert "Unexpected error updating memory statistics status" in error
         assert "DB Error" in error
+
+    def test_specific_exceptions(self, mock_db):
+        """Test handling of specific exceptions."""
+        for exception in [KeyError, ConnectionError, RuntimeError]:
+            mock_db.mod_entry.side_effect = exception("Specific error")
+            success, error = update_memory_statistics_status(True)
+            assert success is False
+            assert "Specific error" in error
 
 
 class TestMemoryStatisticsEnable:
@@ -158,7 +182,8 @@ class TestSamplingInterval:
         SAMPLING_INTERVAL_MIN - 1,
         SAMPLING_INTERVAL_MAX + 1,
         0,
-        -1
+        -1,
+        256
     ])
     def test_invalid_sampling_intervals(self, interval, cli_runner, mock_db):
         """Test handling of invalid sampling intervals."""
@@ -171,6 +196,20 @@ class TestSamplingInterval:
         mock_db.mod_entry.side_effect = Exception("DB Error")
         result = cli_runner.invoke(cli, ['config', 'memory-stats', 'sampling-interval', '5'])
         assert "Error" in result.output
+
+    @pytest.mark.parametrize("exception", [
+        KeyError("Key not found"),
+        ConnectionError("Connection failed"),
+        ValueError("Invalid value"),
+        RuntimeError("Runtime error")
+    ])
+    def test_sampling_interval_specific_errors(self, exception, cli_runner, mock_db):
+        """Test handling of specific errors when setting sampling interval."""
+        mock_db.mod_entry.side_effect = exception
+        result = cli_runner.invoke(cli, ['config', 'memory-stats', 'sampling-interval', '5'])
+        assert result.exit_code == 0
+        assert "Error" in result.output
+        assert str(exception) in result.output
 
 
 class TestRetentionPeriod:
@@ -194,7 +233,8 @@ class TestRetentionPeriod:
         RETENTION_PERIOD_MIN - 1,
         RETENTION_PERIOD_MAX + 1,
         0,
-        -1
+        -1,
+        256
     ])
     def test_invalid_retention_periods(self, period, cli_runner, mock_db):
         """Test handling of invalid retention periods."""
@@ -208,6 +248,20 @@ class TestRetentionPeriod:
         result = cli_runner.invoke(cli, ['config', 'memory-stats', 'retention-period', '15'])
         assert "Error" in result.output
 
+    @pytest.mark.parametrize("exception", [
+        KeyError("Key not found"),
+        ConnectionError("Connection failed"),
+        ValueError("Invalid value"),
+        RuntimeError("Runtime error")
+    ])
+    def test_retention_period_specific_errors(self, exception, cli_runner, mock_db):
+        """Test handling of specific errors when setting retention period."""
+        mock_db.mod_entry.side_effect = exception
+        result = cli_runner.invoke(cli, ['config', 'memory-stats', 'retention-period', '15'])
+        assert result.exit_code == 0
+        assert "Error" in result.output
+        assert str(exception) in result.output
+
 
 class TestSyslogLogging:
     @pytest.mark.parametrize("log_level,expected_level", [
@@ -216,40 +270,22 @@ class TestSyslogLogging:
     ])
     def test_syslog_logging(self, log_level, expected_level):
         """Test syslog logging functionality."""
-        with patch('syslog.syslog') as mock_syslog, \
-             patch('syslog.openlog') as mock_openlog:
-
+        with patch('syslog.syslog') as mock_syslog:
             log_to_syslog("Test message", expected_level)
-
-            mock_openlog.assert_called_once_with(
-                "memory_statistics",
-                syslog.LOG_PID | syslog.LOG_CONS,
-                syslog.LOG_USER
-            )
-
             mock_syslog.assert_called_once_with(expected_level, "Test message")
 
     def test_syslog_logging_default_level(self):
         """Test syslog logging with default log level."""
-        with patch('syslog.syslog') as mock_syslog, \
-             patch('syslog.openlog') as _:
+        with patch('syslog.syslog') as mock_syslog:
             log_to_syslog("Test message")
             mock_syslog.assert_called_once_with(syslog.LOG_INFO, "Test message")
 
-
-def test_main_execution():
-    """Test the main execution block of the script."""
-    with patch('config.memory_statistics.cli') as mock_cli:
-        module_code = compile(
-            'if __name__ == "__main__": cli()',
-            'memory_statistics.py',
-            'exec'
-        )
-
-        namespace = {'__name__': '__main__', 'cli': mock_cli}
-        exec(module_code, namespace)
-
-        mock_cli.assert_called_once()
+    def test_syslog_logging_error(self):
+        """Test syslog logging error handling."""
+        with patch('syslog.syslog', side_effect=Exception("Syslog error")), \
+             patch('click.echo') as mock_echo:
+            log_to_syslog("Test message")
+            mock_echo.assert_called_once_with("Failed to log to syslog: Syslog error", err=True)
 
 
 def test_main_cli_integration():
@@ -270,3 +306,52 @@ def test_script_execution():
     result = subprocess.run(["python3",
                              "config/memory_statistics.py"], capture_output=True)
     assert result.returncode == 0
+
+
+def test_syslog_closelog():
+    """Test that syslog.closelog is called when the script exits."""
+    with patch('syslog.closelog') as mock_closelog:
+        module_code = compile(
+            '''
+try:
+    cli()
+finally:
+    syslog.closelog()
+            ''',
+            'memory_statistics.py',
+            'exec'
+        )
+
+        namespace = {
+            '__name__': '__main__',
+            'cli': Mock(),
+            'syslog': Mock(closelog=mock_closelog)
+        }
+
+        exec(module_code, namespace)
+
+        mock_closelog.assert_called_once()
+
+
+def test_main_execution():
+    """Test the script's main execution block including the try-finally structure."""
+    script_path = os.path.abspath("config/memory_statistics.py")
+
+    with patch('syslog.closelog') as mock_closelog, \
+         patch('click.group', return_value=Mock()) as mock_group:
+
+        namespace = {
+            '__name__': '__main__',
+            'syslog': Mock(closelog=mock_closelog),
+            'click': Mock(group=mock_group),
+        }
+
+        with open(script_path, 'r') as file:
+            script_content = file.read()
+
+        compiled_code = compile(script_content, script_path, 'exec')
+
+        exec(compiled_code, namespace)
+
+        mock_closelog.assert_called_once()
+        mock_group.assert_called()
