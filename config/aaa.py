@@ -16,8 +16,8 @@ def is_secret(secret):
     return bool(re.match('^' + '[^ #,]*' + '$', secret))
 
 
-def add_table_kv(table, entry, key, val):
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+def add_table_kv(db, table, entry, key, val):
+    config_db = ValidatedConfigDBConnector(db.cfgdb)
     config_db.connect()
     try:
         config_db.mod_entry(table, entry, {key:val})
@@ -26,8 +26,8 @@ def add_table_kv(table, entry, key, val):
         ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
 
-def del_table_key(table, entry, key):
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+def del_table_key(db, table, entry, key):
+    config_db = ValidatedConfigDBConnector(db.cfgdb)
     config_db.connect()
     data = config_db.get_entry(table, entry)
     if data:
@@ -56,66 +56,71 @@ aaa.add_command(authentication)
 # cmd: aaa authentication failthrough
 @click.command()
 @click.argument('option', type=click.Choice(["enable", "disable", "default"]))
-def failthrough(option):
+@clicommon.pass_db
+def failthrough(db, option):
     """Allow AAA fail-through [enable | disable | default]"""
     if option == 'default':
-        del_table_key('AAA', 'authentication', 'failthrough')
+        del_table_key(db, 'AAA', 'authentication', 'failthrough')
     else:
         if option == 'enable':
-            add_table_kv('AAA', 'authentication', 'failthrough', True)
+            add_table_kv(db, 'AAA', 'authentication', 'failthrough', True)
         elif option == 'disable':
-            add_table_kv('AAA', 'authentication', 'failthrough', False)
+            add_table_kv(db, 'AAA', 'authentication', 'failthrough', False)
 authentication.add_command(failthrough)
 
 
 # cmd: aaa authentication fallback
 @click.command()
 @click.argument('option', type=click.Choice(["enable", "disable", "default"]))
-def fallback(option):
+@clicommon.pass_db
+def fallback(db, option):
     """Allow AAA fallback [enable | disable | default]"""
     if option == 'default':
-        del_table_key('AAA', 'authentication', 'fallback')
+        del_table_key(db, 'AAA', 'authentication', 'fallback')
     else:
         if option == 'enable':
-            add_table_kv('AAA', 'authentication', 'fallback', True)
+            add_table_kv(db, 'AAA', 'authentication', 'fallback', True)
         elif option == 'disable':
-            add_table_kv('AAA', 'authentication', 'fallback', False)
+            add_table_kv(db, 'AAA', 'authentication', 'fallback', False)
 authentication.add_command(fallback)
 
 
 # cmd: aaa authentication debug
 @click.command()
 @click.argument('option', type=click.Choice(["enable", "disable", "default"]))
-def debug(option):
+@clicommon.pass_db
+def debug(db, option):
     """AAA debug [enable | disable | default]"""
     if option == 'default':
-        del_table_key('AAA', 'authentication', 'debug')
+        del_table_key(db, 'AAA', 'authentication', 'debug')
     else:
         if option == 'enable':
-            add_table_kv('AAA', 'authentication', 'debug', True)
+            add_table_kv(db, 'AAA', 'authentication', 'debug', True)
         elif option == 'disable':
-            add_table_kv('AAA', 'authentication', 'debug', False)
+            add_table_kv(db, 'AAA', 'authentication', 'debug', False)
 authentication.add_command(debug)
 
 
 # cmd: aaa authentication trace
 @click.command()
 @click.argument('option', type=click.Choice(["enable", "disable", "default"]))
-def trace(option):
+@clicommon.pass_db
+def trace(db, option):
     """AAA packet trace [enable | disable | default]"""
     if option == 'default':
-        del_table_key('AAA', 'authentication', 'trace')
+        del_table_key(db, 'AAA', 'authentication', 'trace')
     else:
         if option == 'enable':
-            add_table_kv('AAA', 'authentication', 'trace', True)
+            add_table_kv(db, 'AAA', 'authentication', 'trace', True)
         elif option == 'disable':
-            add_table_kv('AAA', 'authentication', 'trace', False)
+            add_table_kv(db, 'AAA', 'authentication', 'trace', False)
 authentication.add_command(trace)
 
 
 @click.command()
 @click.argument('auth_protocol', nargs=-1, type=click.Choice(["ldap", "radius", "tacacs+", "local", "default"]))
-def login(auth_protocol):
+@clicommon.pass_db
+def login(db, auth_protocol):
     """Switch login authentication [ {ldap, radius, tacacs+, local} | default ]"""
     if len(auth_protocol) is 0:
         click.echo('Argument "auth_protocol" is required')
@@ -128,7 +133,7 @@ def login(auth_protocol):
         if len(auth_protocol) !=1:
             click.echo('Not a valid command')
             return
-        del_table_key('AAA', 'authentication', 'login')
+        del_table_key(db, 'AAA', 'authentication', 'login')
     else:
         val = auth_protocol[0]
         if len(auth_protocol) == 2:
@@ -146,22 +151,23 @@ def login(auth_protocol):
                 click.echo('Not a valid command')
                 return
 
-        add_table_kv('AAA', 'authentication', 'login', val)
+        add_table_kv(db, 'AAA', 'authentication', 'login', val)
 authentication.add_command(login)
 
 # cmd: aaa authorization
 @click.command()
 @click.argument('protocol', nargs=-1, type=click.Choice([ "tacacs+", "local", "tacacs+ local"]))
-def authorization(protocol):
+@clicommon.pass_db
+def authorization(db, protocol):
     """Switch AAA authorization [tacacs+ | local | '\"tacacs+ local\"']"""
     if len(protocol) == 0:
         click.echo('Argument "protocol" is required')
         return
 
     if len(protocol) == 1 and (protocol[0] == 'tacacs+' or protocol[0] == 'local'):
-        add_table_kv('AAA', 'authorization', 'login', protocol[0])
+        add_table_kv(db, 'AAA', 'authorization', 'login', protocol[0])
     elif len(protocol) == 1 and protocol[0] == 'tacacs+ local':
-        add_table_kv('AAA', 'authorization', 'login', 'tacacs+,local')
+        add_table_kv(db, 'AAA', 'authorization', 'login', 'tacacs+,local')
     else:
         click.echo('Not a valid command')
 aaa.add_command(authorization)
@@ -169,7 +175,8 @@ aaa.add_command(authorization)
 # cmd: aaa accounting
 @click.command()
 @click.argument('protocol', nargs=-1, type=click.Choice(["disable", "tacacs+", "local", "tacacs+ local"]))
-def accounting(protocol):
+@clicommon.pass_db
+def accounting(db, protocol):
     """Switch AAA accounting [disable | tacacs+ | local | '\"tacacs+ local\"']"""
     if len(protocol) == 0:
         click.echo('Argument "protocol" is required')
@@ -177,11 +184,11 @@ def accounting(protocol):
 
     if len(protocol) == 1:
         if protocol[0] == 'tacacs+' or protocol[0] == 'local':
-            add_table_kv('AAA', 'accounting', 'login', protocol[0])
+            add_table_kv(db, 'AAA', 'accounting', 'login', protocol[0])
         elif protocol[0] == 'tacacs+ local':
-            add_table_kv('AAA', 'accounting', 'login', 'tacacs+,local')
+            add_table_kv(db, 'AAA', 'accounting', 'login', 'tacacs+,local')
         elif protocol[0] == 'disable':
-            del_table_key('AAA', 'accounting', 'login')
+            del_table_key(db, 'AAA', 'accounting', 'login')
         else:
             click.echo('Not a valid command')
     else:
@@ -205,12 +212,13 @@ tacacs.add_command(default)
 @click.command()
 @click.argument('second', metavar='<time_second>', type=click.IntRange(0, 60), required=False)
 @click.pass_context
-def timeout(ctx, second):
+@clicommon.pass_db
+def timeout(db, ctx, second):
     """Specify TACACS+ server global timeout <0 - 60>"""
     if ctx.obj == 'default':
-        del_table_key('TACPLUS', 'global', 'timeout')
+        del_table_key(db, 'TACPLUS', 'global', 'timeout')
     elif second:
-        add_table_kv('TACPLUS', 'global', 'timeout', second)
+        add_table_kv(db, 'TACPLUS', 'global', 'timeout', second)
     else:
         click.echo('Argument "second" is required')
 tacacs.add_command(timeout)
@@ -220,12 +228,13 @@ default.add_command(timeout)
 @click.command()
 @click.argument('type', metavar='<type>', type=click.Choice(["chap", "pap", "mschap", "login"]), required=False)
 @click.pass_context
-def authtype(ctx, type):
+@clicommon.pass_db
+def authtype(db, ctx, type):
     """Specify TACACS+ server global auth_type [chap | pap | mschap | login]"""
     if ctx.obj == 'default':
-        del_table_key('TACPLUS', 'global', 'auth_type')
+        del_table_key(db, 'TACPLUS', 'global', 'auth_type')
     elif type:
-        add_table_kv('TACPLUS', 'global', 'auth_type', type)
+        add_table_kv(db, 'TACPLUS', 'global', 'auth_type', type)
     else:
         click.echo('Argument "type" is required')
 tacacs.add_command(authtype)
@@ -235,12 +244,13 @@ default.add_command(authtype)
 @click.command()
 @click.argument('secret', metavar='<secret_string>', required=False)
 @click.pass_context
-def passkey(ctx, secret):
+@clicommon.pass_db
+def passkey(db, ctx, secret):
     """Specify TACACS+ server global passkey <STRING>"""
     if ctx.obj == 'default':
-        del_table_key('TACPLUS', 'global', 'passkey')
+        del_table_key(db, 'TACPLUS', 'global', 'passkey')
     elif secret:
-        add_table_kv('TACPLUS', 'global', 'passkey', secret)
+        add_table_kv(db, 'TACPLUS', 'global', 'passkey', secret)
     else:
         click.echo('Argument "secret" is required')
 tacacs.add_command(passkey)
@@ -256,14 +266,15 @@ default.add_command(passkey)
 @click.option('-o', '--port', help='TCP port range is 1 to 65535, default 49', type=click.IntRange(1, 65535), default=49)
 @click.option('-p', '--pri', help="Priority, default 1", type=click.IntRange(1, 64), default=1)
 @click.option('-m', '--use-mgmt-vrf', help="Management vrf, default is no vrf", is_flag=True)
-def add(address, timeout, key, auth_type, port, pri, use_mgmt_vrf):
+@clicommon.pass_db
+def add(db, address, timeout, key, auth_type, port, pri, use_mgmt_vrf):
     """Specify a TACACS+ server"""
     if ADHOC_VALIDATION:
         if not clicommon.is_ipaddress(address):
             click.echo('Invalid ip address') # TODO: MISSING CONSTRAINT IN YANG MODEL
             return
 
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(db.cfgdb)
     config_db.connect()
     old_data = config_db.get_entry('TACPLUS_SERVER', address)
     if old_data != {}:
@@ -293,14 +304,15 @@ tacacs.add_command(add)
 # 'del' is keyword, replace with 'delete'
 @click.command()
 @click.argument('address', metavar='<ip_address>')
-def delete(address):
+@clicommon.pass_db
+def delete(db, address):
     """Delete a TACACS+ server"""
     if ADHOC_VALIDATION:
         if not clicommon.is_ipaddress(address):
             click.echo('Invalid ip address')
             return
 
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(db.cfgdb)
     config_db.connect()
     try:
         config_db.set_entry('TACPLUS_SERVER', address, None)
@@ -327,12 +339,13 @@ radius.add_command(default)
 @click.command()
 @click.argument('second', metavar='<time_second>', type=click.IntRange(1, 60), required=False)
 @click.pass_context
-def timeout(ctx, second):
+@clicommon.pass_db
+def timeout(db, ctx, second):
     """Specify RADIUS server global timeout <1 - 60>"""
     if ctx.obj == 'default':
-        del_table_key('RADIUS', 'global', 'timeout')
+        del_table_key(db, 'RADIUS', 'global', 'timeout')
     elif second:
-        add_table_kv('RADIUS', 'global', 'timeout', second)
+        add_table_kv(db, 'RADIUS', 'global', 'timeout', second)
     else:
         click.echo('Not support empty argument')
 radius.add_command(timeout)
@@ -342,12 +355,13 @@ default.add_command(timeout)
 @click.command()
 @click.argument('retries', metavar='<retry_attempts>', type=click.IntRange(0, 10), required=False)
 @click.pass_context
-def retransmit(ctx, retries):
+@clicommon.pass_db
+def retransmit(db, ctx, retries):
     """Specify RADIUS server global retry attempts <0 - 10>"""
     if ctx.obj == 'default':
-        del_table_key('RADIUS', 'global', 'retransmit')
+        del_table_key(db, 'RADIUS', 'global', 'retransmit')
     elif retries != None:
-        add_table_kv('RADIUS', 'global', 'retransmit', retries)
+        add_table_kv(db, 'RADIUS', 'global', 'retransmit', retries)
     else:
         click.echo('Not support empty argument')
 radius.add_command(retransmit)
@@ -357,12 +371,13 @@ default.add_command(retransmit)
 @click.command()
 @click.argument('type', metavar='<type>', type=click.Choice(["chap", "pap", "mschapv2"]), required=False)
 @click.pass_context
-def authtype(ctx, type):
+@clicommon.pass_db
+def authtype(db, ctx, type):
     """Specify RADIUS server global auth_type [chap | pap | mschapv2]"""
     if ctx.obj == 'default':
-        del_table_key('RADIUS', 'global', 'auth_type')
+        del_table_key(db, 'RADIUS', 'global', 'auth_type')
     elif type:
-        add_table_kv('RADIUS', 'global', 'auth_type', type)
+        add_table_kv(db, 'RADIUS', 'global', 'auth_type', type)
     else:
         click.echo('Not support empty argument')
 radius.add_command(authtype)
@@ -372,10 +387,11 @@ default.add_command(authtype)
 @click.command()
 @click.argument('secret', metavar='<secret_string>', required=False)
 @click.pass_context
-def passkey(ctx, secret):
+@clicommon.pass_db
+def passkey(db, ctx, secret):
     """Specify RADIUS server global passkey <STRING>"""
     if ctx.obj == 'default':
-        del_table_key('RADIUS', 'global', 'passkey')
+        del_table_key(db, 'RADIUS', 'global', 'passkey')
     elif secret:
         if len(secret) > RADIUS_PASSKEY_MAX_LEN:
             click.echo('Maximum of %d chars can be configured' % RADIUS_PASSKEY_MAX_LEN)
@@ -383,7 +399,7 @@ def passkey(ctx, secret):
         elif not is_secret(secret):
             click.echo(VALID_CHARS_MSG)
             return
-        add_table_kv('RADIUS', 'global', 'passkey', secret)
+        add_table_kv(db, 'RADIUS', 'global', 'passkey', secret)
     else:
         click.echo('Not support empty argument')
 radius.add_command(passkey)
@@ -392,10 +408,11 @@ default.add_command(passkey)
 @click.command()
 @click.argument('src_ip', metavar='<source_ip>', required=False)
 @click.pass_context
-def sourceip(ctx, src_ip):
+@clicommon.pass_db
+def sourceip(db, ctx, src_ip):
     """Specify RADIUS server global source ip <IPAddress>"""
     if ctx.obj == 'default':
-        del_table_key('RADIUS', 'global', 'src_ip')
+        del_table_key(db, 'RADIUS', 'global', 'src_ip')
         return
     elif not src_ip:
         click.echo('Not support empty argument')
@@ -426,17 +443,18 @@ def sourceip(ctx, src_ip):
         if (ip in v6_invalid_list):
             click.echo('Invalid ip address')
             return
-    add_table_kv('RADIUS', 'global', 'src_ip', src_ip)
+    add_table_kv(db, 'RADIUS', 'global', 'src_ip', src_ip)
 radius.add_command(sourceip)
 default.add_command(sourceip)
 
 @click.command()
 @click.argument('nas_ip', metavar='<nas_ip>', required=False)
 @click.pass_context
-def nasip(ctx, nas_ip):
+@clicommon.pass_db
+def nasip(db, ctx, nas_ip):
     """Specify RADIUS server global NAS-IP|IPV6-Address <IPAddress>"""
     if ctx.obj == 'default':
-        del_table_key('RADIUS', 'global', 'nas_ip')
+        del_table_key(db, 'RADIUS', 'global', 'nas_ip')
         return
     elif not nas_ip:
         click.echo('Not support empty argument')
@@ -467,16 +485,17 @@ def nasip(ctx, nas_ip):
         if (ip in v6_invalid_list):
             click.echo('Invalid ip address')
             return
-    add_table_kv('RADIUS', 'global', 'nas_ip', nas_ip)
+    add_table_kv(db, 'RADIUS', 'global', 'nas_ip', nas_ip)
 radius.add_command(nasip)
 default.add_command(nasip)
 
 @click.command()
 @click.argument('option', type=click.Choice(["enable", "disable", "default"]))
-def statistics(option):
+@clicommon.pass_db
+def statistics(db, option):
     """Specify RADIUS server global statistics [enable | disable | default]"""
     if option == 'default':
-        del_table_key('RADIUS', 'global', 'statistics')
+        del_table_key(db, 'RADIUS', 'global', 'statistics')
     else:
         if option == 'enable':
             add_table_kv('RADIUS', 'global', 'statistics', True)
@@ -496,7 +515,8 @@ radius.add_command(statistics)
 @click.option('-p', '--pri', help="Priority, default 1", type=click.IntRange(1, 64), default=1)
 @click.option('-m', '--use-mgmt-vrf', help="Management vrf, default is no vrf", is_flag=True)
 @click.option('-s', '--source-interface', help='Source Interface')
-def add(address, retransmit, timeout, key, auth_type, auth_port, pri, use_mgmt_vrf, source_interface):
+@clicommon.pass_db
+def add(db, address, retransmit, timeout, key, auth_type, auth_port, pri, use_mgmt_vrf, source_interface):
     """Specify a RADIUS server"""
 
     if ADHOC_VALIDATION:
@@ -508,7 +528,7 @@ def add(address, retransmit, timeout, key, auth_type, auth_port, pri, use_mgmt_v
                 click.echo('--key: ' + VALID_CHARS_MSG)
                 return
 
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(db.cfgdb)
     config_db.connect()
     old_data = config_db.get_table('RADIUS_SERVER')
     if address in old_data :
@@ -556,10 +576,11 @@ radius.add_command(add)
 # 'del' is keyword, replace with 'delete'
 @click.command()
 @click.argument('address', metavar='<ip_address_or_domain_name>')
-def delete(address):
+@clicommon.pass_db
+def delete(db, address):
     """Delete a RADIUS server"""
 
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db = ValidatedConfigDBConnector(db.cfgdb)
     config_db.connect()
     try:
         config_db.set_entry('RADIUS_SERVER', address, None)
