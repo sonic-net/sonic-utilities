@@ -47,9 +47,8 @@ function get_reboot_status()
 {
     local dpu_ip=$1
     local port=$2
-    local reboot_status
-    reboot_status=$(docker exec -i gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -notls -module System -rpc RebootStatus &>/dev/null)
-    if [ $? -ne 0 ] || [ -z "$reboot_status" ]; then
+    $(docker exec -i gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -notls -module System -rpc RebootStatus &>/dev/null)
+    if [ $? -ne 0 ]; then
         return ${EXIT_ERROR}
     fi
     local is_reboot_active
@@ -148,8 +147,8 @@ function gnmi_reboot_dpu()
         return ${EXIT_ERROR}
     fi
 
-    status=docker exec -i gnmi gnoi_client -target ${dpu_ip}:${port} -logtostderr -notls -module System -rpc Reboot -jsonin '{"method":HALT}' &>/dev/null
-    if [ $? -ne 0 ] || [ -z "$status" ]; then
+    docker exec -i gnmi gnoi_client -target ${dpu_ip}:${port} -logtostderr -notls -module System -rpc Reboot -jsonin '{"method":HALT}' &>/dev/null
+    if [ $? -ne 0 ]; then
         log_message "ERROR: Failed to send gnoi command to halt services on ${DPU_NAME}"
         log_message "ERROR: proceeding without halting the services"
     fi
