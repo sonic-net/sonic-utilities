@@ -901,12 +901,6 @@ sync
 sleep 1
 sync
 
-# sync the current system time to CMOS
-if [ -x /sbin/hwclock ]; then
-    /sbin/hwclock -w || /bin/true
-fi
-
-
 if [[ -x ${DEVPATH}/${PLATFORM}/${PLATFORM_FWUTIL_AU_REBOOT_HANDLE} ]]; then
     debug "Handling task file for boot type ${REBOOT_TYPE}"
     ${DEVPATH}/${PLATFORM}/${PLATFORM_FWUTIL_AU_REBOOT_HANDLE} ${REBOOT_TYPE} || PLATFORM_FW_AU_RC=$?
