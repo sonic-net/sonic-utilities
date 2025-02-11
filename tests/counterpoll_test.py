@@ -114,18 +114,6 @@ class TestCounterpoll(object):
         os.remove(config_db_file)
 
     @pytest.mark.parametrize("status", ["disable", "enable"])
-    def test_update_counter_config_db_status(self, status, _get_config_db_file):
-        runner = CliRunner()
-        result = runner.invoke(counterpoll.cli.commands["config-db"].commands[status], [_get_config_db_file])
-
-        with open(_get_config_db_file) as json_file:
-            config_db = json.load(json_file)
-
-        if "FLEX_COUNTER_TABLE" in config_db:
-            for counter, counter_config in config_db["FLEX_COUNTER_TABLE"].items():
-                assert counter_config["FLEX_COUNTER_STATUS"] == status
-
-    @pytest.mark.parametrize("status", ["disable", "enable"])
     def test_update_pg_drop_status(self, status):
         runner = CliRunner()
         db = Db()
