@@ -1,6 +1,6 @@
 #!/bin/bash
 
-declare -r GNMI_PORT=50052
+declare -r GNMI_PORT=8080 # Default GNMI port
 declare -r MODULE_REBOOT_DPU="DPU"
 declare -r MODULE_REBOOT_SMARTSWITCH="SMARTSWITCH"
 
@@ -48,14 +48,13 @@ function get_reboot_status()
     local dpu_ip=$1
     local port=$2
     local reboot_status
-    reboot_status=$(docker exec -i gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -notls -rpc RebootStatus 2>/dev/null)
+    reboot_status=$(docker exec -i gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -notls -module System -rpc RebootStatus &>/dev/null)
     if [ $? -ne 0 ] || [ -z "$reboot_status" ]; then
         return ${EXIT_ERROR}
     fi
     local is_reboot_active
     is_reboot_active=$(echo "$reboot_status" | grep "active" | awk '{print $2}')
     if [ "$is_reboot_active" == "false" ]; then
-        log_message "INFO: ${DPU_NAME} has finished halting the services"
         return ${EXIT_SUCCESS}
     fi
     return ${EXIT_ERROR}
@@ -108,9 +107,7 @@ function wait_for_dpu_reboot_status()
 
     local dpu_halt_services_timeout=$(jq -r '.dpu_halt_services_timeout' "$PLATFORM_JSON_PATH" 2>/dev/null)
     if [ -z "$dpu_halt_services_timeout" ] || [ "$dpu_halt_services_timeout" == "null" ]; then
-        log_message "INFO: Failed to retrieve dpu_halt_services_timeout from ${PLATFORM_JSON_PATH}"
         # Default timeout
-        log_message "INFO: Setting default dpu_halt_services_timeout value to 60 seconds"
         dpu_halt_services_timeout=60
     fi
 
@@ -118,7 +115,6 @@ function wait_for_dpu_reboot_status()
     local waited_time=0
     while true; do
         local reboot_status
-        log_message "INFO: Waiting for ${DPU_NAME} to finish halting the services"
         get_reboot_status "${dpu_ip}" "${port}"
         reboot_status=$?
         if [ $reboot_status -eq ${EXIT_SUCCESS} ]; then
@@ -129,7 +125,7 @@ function wait_for_dpu_reboot_status()
         sleep "$poll_interval"
         waited_time=$((waited_time + poll_interval))
         if [ $waited_time -ge $dpu_halt_services_timeout ]; then
-            log_message "INFO: Timeout waiting for ${DPU_NAME} to finish halting the services"
+            log_message "ERROR: Timeout waiting for ${DPU_NAME} to finish halting the services"
             return
         fi
     done
@@ -141,19 +137,22 @@ function gnmi_reboot_dpu()
 {
     # Retrieve DPU IP and GNMI port
     dpu_ip=$(get_dpu_ip "${DPU_NAME}")
-    log_message "INFO: ${DPU_NAME}: $dpu_ip"
     port=$(get_gnmi_port "${DPU_NAME}")
     if [ -z "$port" ]; then
         port=$GNMI_PORT # Default GNMI port
     fi
-    log_message "INFO: GNMI port ${DPU_NAME}: $port"
+    log_message "INFO: Rebooting ${DPU_NAME}, ip:$dpu_ip gnmi_port:$port"
 
     if [ -z "$dpu_ip" ]; then
         log_message "ERROR: Failed to retrieve DPU IP for ${DPU_NAME}"
         return ${EXIT_ERROR}
     fi
 
-    docker exec -i gnmi gnoi_client -target ${dpu_ip}:${port} -logtostderr -notls -rpc Reboot -jsonin '{"method":HALT}' 2>/dev/null
+    status=docker exec -i gnmi gnoi_client -target ${dpu_ip}:${port} -logtostderr -notls -module System -rpc Reboot -jsonin '{"method":HALT}' &>/dev/null
+    if [ $? -ne 0 ] || [ -z "$status" ]; then
+        log_message "ERROR: Failed to send gnoi command to halt services on ${DPU_NAME}"
+        log_message "ERROR: proceeding without halting the services"
+    fi
 
     wait_for_dpu_reboot_status "${dpu_ip}" "${port}" "${DPU_NAME}"
 }
@@ -188,18 +187,15 @@ function reboot_dpu()
         log_message "ERROR: Failed to detach PCI module for ${DPU_NAME}"
         return ${EXIT_ERROR}
     fi
-    log_message "INFO: Detached PCI module for ${DPU_NAME}"
 
     reboot_dpu_platform ${DPU_NAME} ${REBOOT_TYPE}
     if [ $? -ne 0 ]; then
         log_message "ERROR: Failed to send platform command to reboot ${DPU_NAME}"
         return ${EXIT_ERROR}
     fi
-    log_message "INFO: Reboot ${DPU_NAME} with type ${REBOOT_TYPE} completed"
 
     if [[ "$REBOOT_TYPE" != $MODULE_REBOOT_SMARTSWITCH ]]; then
         pci_reattach_module ${DPU_NAME} ${DPU_BUS_INFO}
-        log_message "INFO: PCI rescan of ${DPU_NAME} completed"
 
         sonic-db-cli STATE_DB del "PCIE_DETACH_INFO|${DPU_NAME}" /dev/null 2>&1
     fi
@@ -216,7 +212,6 @@ function reboot_all_dpus() {
 
     local failures=0
     for (( i=0; i<"$NUM_DPU"; i++ )); do
-        log_message "INFO: Rebooting DPU module dpu$i"
         reboot_dpu "dpu$i" "$MODULE_REBOOT_SMARTSWITCH" &
         if [ $? -ne 0 ]; then
             ((failures++))
@@ -281,7 +276,6 @@ function handle_smart_switch() {
                 return $result
             fi
 
-            log_message "INFO: Rebooting device ${DPU_MODULE_NAME}"
             reboot_dpu "$DPU_MODULE_NAME" "$MODULE_REBOOT_DPU"
             result=$?
             return $result
