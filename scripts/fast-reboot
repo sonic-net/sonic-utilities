@@ -744,6 +744,13 @@ fi
 
 init_warm_reboot_states
 
+# start sending LACPDUs to keep the LAGs refreshed
+# the process will die in 30s
+debug "Starting lag_keepalive to send LACPDUs ..."
+timeout 30 python3 ${LAG_KEEPALIVE_SCRIPT} --fork-into-background
+# give the lag_keepalive script a chance to send some LACPDUs
+sleep 5
+
 setup_control_plane_assistant
 
 TEAMD_INCREASE_RETRY_COUNT=0
@@ -812,13 +819,6 @@ fi
 
 # disable trap-handlers which were set before
 trap '' EXIT HUP INT QUIT TERM KILL ABRT ALRM
-
-# start sending LACPDUs to keep the LAGs refreshed
-# this is a non-blocking call, and the process will die in 300s
-debug "Starting lag_keepalive to send LACPDUs ..."
-timeout 300 python ${LAG_KEEPALIVE_SCRIPT} &
-# give the lag_keepalive script a chance to get ready (30s) and collect one lacpdu before going down (30s)
-sleep 60
 
 if [ -x ${LOG_SSD_HEALTH} ]; then
     debug "Collecting logs to check ssd health before ${REBOOT_TYPE}..."
