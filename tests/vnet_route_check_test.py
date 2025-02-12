@@ -263,14 +263,14 @@ test_data = {
 
                 },
                 VNET_ROUTE_TUNNEL_TABLE: {
-                    "Vnet_v4_in_v4-0:150.62.191.1/32" : {"endpoint" : "100.251.7.1,100.251.7.2"},
-                    "Vnet_v6_in_v6-0:fd01:fc00::1/128" : {"endpoint" : "fc02:1000::1,fc02:1000::2"}
+                    "Vnet_v4_in_v4-0:150.62.191.1/32": {"endpoint": "100.251.7.1,100.251.7.2"},
+                    "Vnet_v6_in_v6-0:fd01:fc00::1/128": {"endpoint": "fc02:1000::1,fc02:1000::2"}
 
                 }
             },
             ASIC_DB: {
                 "ASIC_STATE:SAI_OBJECT_TYPE_VIRTUAL_ROUTER": {
-                         "oid:0x3000000000d4b" : {"":""}
+                         "oid:0x3000000000d4b": {"": ""}
                 },
                 ASIC_STATE: {
                     RT_ENTRY_KEY_PREFIX + "150.62.191.1/32" + RT_ENTRY_KEY_SUFFIX: {},
@@ -298,12 +298,12 @@ test_data = {
                     "Vnet_v4_in_v4-0": [("vxlan_tunnel", "tunnel_v4"), ("scope", "default"), ("vni", "10000"), ("peer_list", "")]
                 },
                 VNET_ROUTE_TUNNEL_TABLE: {
-                   "Vnet_v4_in_v4-0:150.62.191.1/32" : {"endpoint" : "100.251.7.1,100.251.7.2"}
+                   "Vnet_v4_in_v4-0:150.62.191.1/32": {"endpoint": "100.251.7.1,100.251.7.2"}
                 }
             },
             ASIC_DB: {
                 "ASIC_STATE:SAI_OBJECT_TYPE_VIRTUAL_ROUTER": {
-                         "oid:0x3000000000d4b" : {"":""}
+                         "oid:0x3000000000d4b": {"": ""}
                 },
                 ASIC_STATE: {
                 }
@@ -495,10 +495,11 @@ test_data = {
                     "tunnel_v6": {"src_ip": "3001:2000::1"}
                 },
                 VNET_TABLE: {
-                    "Vnet_v6": [("vxlan_tunnel", "tunnel_v6"), ("scope", "default"), ("vni", "10002"), ("peer_list", "")]
+                    "Vnet_v6": [("vxlan_tunnel", "tunnel_v6"), ("scope", "default"), ("vni", "10002"),
+                                ("peer_list", "")]
                 },
                 VNET_ROUTE_TABLE: {
-                    "Vnet_v6:fd01:fc00::1/128" : {"endpoint" : "fc02:1000::1,fc02:1000::2"}
+                    "Vnet_v6:fd01:fc00::1/128": {"endpoint": "fc02:1000::1,fc02:1000::2"}
                 }
             },
             ASIC_DB: {
@@ -525,10 +526,11 @@ test_data = {
                     "tunnel_v6": {"src_ip": "3001:2000::1"}
                 },
                 VNET_TABLE: {
-                    "Vnet_v6": [("vxlan_tunnel", "tunnel_v6"), ("scope", "default"), ("vni", "10002"), ("peer_list", "")]
+                    "Vnet_v6": [("vxlan_tunnel", "tunnel_v6"), ("scope", "default"), ("vni", "10002"),
+                                ("peer_list", "")]
                 },
                 VNET_ROUTE_TABLE: {
-                    "Vnet_v6:fd01:fc00::1/128" : {"endpoint" : "fc02:1000::1,fc02:1000::2"}
+                    "Vnet_v6:fd01:fc00::1/128": {"endpoint": "fc02:1000::1,fc02:1000::2"}
                 }
             },
             ASIC_DB: {
