@@ -15,6 +15,7 @@ RET = "return"
 APPL_DB = 0
 ASIC_DB = 1
 CNTR_DB = 2
+STATE_DB = 6
 PRE = "pre-value"
 UPD = "update"
 RESULT = "res"
@@ -40,7 +41,7 @@ tables_returned = {}
 test_data = {
     "0": {
         DESCR: "All VNET routes are configured in both APP and ASIC DBs",
-        ARGS: "vnet_route_check",
+        ARGS: "vnet_route_check --all",
         PRE: {
             APPL_DB: {
                 VXLAN_TUNNEL_TABLE: {
@@ -71,12 +72,19 @@ test_data = {
             },
             CNTR_DB: {
                 "COUNTERS_RIF_NAME_MAP": { "Vlan3001": "oid:0x6000000000d76" }
+            },
+            STATE_DB: {
+                VNET_ROUTE_TUNNEL_TABLE: {
+                    "Vnet1|30.1.10.0/24": [("active_endpoints", ""), ("state", "inactive")],
+                    "Vnet1|50.1.1.0/24": [("active_endpoints", ""), ("state", "inactive")],
+                    "Vnet1|50.2.2.0/24": [("active_endpoints", ""), ("state", "inactive")]
+                }
             }
         }
     },
     "1": {
         DESCR: "VNET route is missed in ASIC DB",
-        ARGS: "vnet_route_check",
+        ARGS: "vnet_route_check -a",
         RET: -1,
         PRE: {
             APPL_DB: {
@@ -107,7 +115,15 @@ test_data = {
             },
             CNTR_DB: {
                 "COUNTERS_RIF_NAME_MAP": { "Vlan3001": "oid:0x6000000000d76" }
+            },
+            STATE_DB: {
+                VNET_ROUTE_TUNNEL_TABLE: {
+                    "Vnet1|30.1.10.0/24": [("active_endpoints", ""), ("state", "inactive")],
+                    "Vnet1|50.1.1.0/24": [("active_endpoints", "30.1.10.10"), ("state", "active")],
+                    "Vnet1|50.2.2.0/24": [("active_endpoints", ""), ("state", "inactive")]
+                }
             }
+
         },
         RESULT: {
             "results": {
@@ -123,7 +139,7 @@ test_data = {
     },
     "2": {
         DESCR: "VNET route is missed in APP DB",
-        ARGS: "vnet_route_check",
+        ARGS: "vnet_route_check -a",
         RET: -1,
         PRE: {
             APPL_DB: {
@@ -154,6 +170,12 @@ test_data = {
             },
             CNTR_DB: {
                 "COUNTERS_RIF_NAME_MAP": { "Vlan3001": "oid:0x6000000000d76" }
+            },
+            STATE_DB: {
+                VNET_ROUTE_TUNNEL_TABLE: {
+                    "Vnet1|30.1.10.0/24": [("active_endpoints", "30.1.10.5"), ("state", "active")],
+                    "Vnet1|50.1.1.0/24": [("active_endpoints", "30.1.10.10"), ("state", "active")]
+                }
             }
         },
         RESULT: {
@@ -170,7 +192,7 @@ test_data = {
     },
     "3": {
         DESCR: "VNET routes are missed in both ASIC and APP DB",
-        ARGS: "vnet_route_check",
+        ARGS: "vnet_route_check -a",
         RET: -1,
         PRE: {
             APPL_DB: {
@@ -200,6 +222,12 @@ test_data = {
             },
             CNTR_DB: {
                 "COUNTERS_RIF_NAME_MAP": { "Vlan3001": "oid:0x6000000000d76" }
+            },
+            STATE_DB: {
+                VNET_ROUTE_TUNNEL_TABLE: {
+                    "Vnet1|30.1.10.0/24": [("active_endpoints", ""), ("state", "inactive")],
+                    "Vnet1|50.1.1.0/24": [("active_endpoints", ""), ("state", "inactive")]
+                }
             }
         },
         RESULT: {
@@ -223,7 +251,7 @@ test_data = {
     },
     "4": {
         DESCR: "All tunnel routes are configured in both APP and ASIC DB",
-        ARGS: "vnet_route_check",
+        ARGS: "vnet_route_check --all",
         PRE: {
             APPL_DB: {
                 VXLAN_TUNNEL_TABLE: {
@@ -249,12 +277,18 @@ test_data = {
                     RT_ENTRY_KEY_PREFIX + "150.62.191.1/32" + RT_ENTRY_KEY_SUFFIX: {},
                     RT_ENTRY_KEY_PREFIX + "fd01:fc00::1/128" + RT_ENTRY_KEY_SUFFIX: {}
                 }
+            },
+            STATE_DB: {
+                VNET_ROUTE_TUNNEL_TABLE: {
+                    "Vnet_v4_in_v4-0|150.62.191.1/32": [("active_endpoints", "100.251.7.1"), ("state", "active")],
+                    "Vnet_v6_in_v6-0|fd01:fc00::1/128": [("active_endpoints", "fc02:1000::1"), ("state", "active")]
+                }
             }
         }
     },
     "5": {
         DESCR: "Tunnel route present in APP DB but mssing in ASIC DB",
-        ARGS: "vnet_route_check",
+        ARGS: "vnet_route_check -a",
         RET: -1,
         PRE: {
             APPL_DB: {
@@ -274,6 +308,11 @@ test_data = {
                 },
                 ASIC_STATE: {
                 }
+            },
+            STATE_DB: {
+                VNET_ROUTE_TUNNEL_TABLE: {
+                    "Vnet_v4_in_v4-0|150.62.191.1/32": [("active_endpoints", "100.251.7.2"), ("state", "active")]
+                }
             }
         },
         RESULT: {
@@ -290,7 +329,7 @@ test_data = {
     },
     "6": {
         DESCR: "Only Vxlan tunnel configured, No routes.",
-        ARGS: "vnet_route_check",
+        ARGS: "vnet_route_check --all",
         PRE: {
             APPL_DB: {
                 VXLAN_TUNNEL_TABLE: {
@@ -305,7 +344,219 @@ test_data = {
                 },
             },
         }
-    }
+    },
+    "7": {
+        DESCR: "VNET routes are missed in both ASIC and APP DB, but routes in APP DB are inactive",
+        ARGS: "vnet_route_check",
+        RET: -1,
+        PRE: {
+            APPL_DB: {
+                VXLAN_TUNNEL_TABLE: {
+                    "tunnel_v4": { "src_ip": "10.1.0.32" }
+                },
+                VNET_TABLE: {
+                    "Vnet1": { "vxlan_tunnel": "tunnel_v4", "vni": "10001" }
+                },
+                INTF_TABLE: {
+                    "Vlan3001": { "vnet_name": "Vnet1" },
+                    "Vlan3001:30.1.10.1/24": {}
+                },
+                VNET_ROUTE_TABLE: {
+                    "Vnet1:30.1.10.0/24": { "ifname": "Vlan3001" },
+                    "Vnet1:50.1.1.0/24": { "ifname": "Vlan3001" },
+                }
+            },
+            ASIC_DB: {
+                ASIC_STATE: {
+                    RT_ENTRY_KEY_PREFIX + "30.1.10.0/24" + RT_ENTRY_KEY_SUFFIX: {},
+                    RT_ENTRY_KEY_PREFIX + "50.2.2.0/24" + RT_ENTRY_KEY_SUFFIX: {},
+                    "SAI_OBJECT_TYPE_ROUTER_INTERFACE:oid:0x6000000000d76": {
+                        "SAI_ROUTER_INTERFACE_ATTR_VIRTUAL_ROUTER_ID": "oid:0x3000000000d4b"
+                    }
+                }
+            },
+            CNTR_DB: {
+                "COUNTERS_RIF_NAME_MAP": { "Vlan3001": "oid:0x6000000000d76" }
+            },
+            STATE_DB: {
+                VNET_ROUTE_TUNNEL_TABLE: {
+                    "Vnet1|30.1.10.0/24": [("active_endpoints", ""), ("state", "inactive")],
+                    "Vnet1|50.1.1.0/24": [("active_endpoints", ""), ("state", "inactive")]
+                }
+            }
+        },
+        RESULT: {
+            "results": {
+                "missed_in_app_db_routes": {
+                    "Vnet1": {
+                        "routes": [
+                            "50.2.2.0/24"
+                        ]
+                    }
+                }
+            }
+        }
+    },
+    "8": {
+        DESCR: "A VNET route is missed in ASIC DB, but it is inactive",
+        ARGS: "vnet_route_check",
+        PRE: {
+            APPL_DB: {
+                VXLAN_TUNNEL_TABLE: {
+                    "tunnel_v4": { "src_ip": "10.1.0.32" }
+                },
+                VNET_TABLE: {
+                    "Vnet1": { "vxlan_tunnel": "tunnel_v4", "vni": "10001" }
+                },
+                INTF_TABLE: {
+                    "Vlan3001": { "vnet_name": "Vnet1" },
+                    "Vlan3001:30.1.10.1/24": {}
+                },
+                VNET_ROUTE_TABLE: {
+                    "Vnet1:30.1.10.0/24": { "ifname": "Vlan3001" },
+                    "Vnet1:50.1.1.0/24": { "ifname": "Vlan3001" },
+                }
+            },
+            ASIC_DB: {
+                ASIC_STATE: {
+                    RT_ENTRY_KEY_PREFIX + "30.1.10.0/24" + RT_ENTRY_KEY_SUFFIX: {},
+                    "SAI_OBJECT_TYPE_ROUTER_INTERFACE:oid:0x6000000000d76": {
+                        "SAI_ROUTER_INTERFACE_ATTR_VIRTUAL_ROUTER_ID": "oid:0x3000000000d4b"
+                    }
+                }
+            },
+            CNTR_DB: {
+                "COUNTERS_RIF_NAME_MAP": { "Vlan3001": "oid:0x6000000000d76" }
+            },
+            STATE_DB: {
+                VNET_ROUTE_TUNNEL_TABLE: {
+                    "Vnet1|30.1.10.0/24": [("active_endpoints", "30.1.10.5"), ("state", "active")],
+                    "Vnet1|50.1.1.0/24": [("active_endpoints", ""), ("state", "inactive")]
+                }
+            }
+        }
+    },
+    "9": {
+        DESCR: "A VNET route is missed in ASIC DB and it is active",
+        ARGS: "vnet_route_check",
+        RET: -1,
+        PRE: {
+            APPL_DB: {
+                VXLAN_TUNNEL_TABLE: {
+                    "tunnel_v4": { "src_ip": "10.1.0.32" }
+                },
+                VNET_TABLE: {
+                    "Vnet1": { "vxlan_tunnel": "tunnel_v4", "vni": "10001" }
+                },
+                INTF_TABLE: {
+                    "Vlan3001": { "vnet_name": "Vnet1" },
+                    "Vlan3001:30.1.10.1/24": {}
+                },
+                VNET_ROUTE_TABLE: {
+                    "Vnet1:30.1.10.0/24": { "ifname": "Vlan3001" },
+                    "Vnet1:50.1.1.0/24": { "ifname": "Vlan3001" },
+                }
+            },
+            ASIC_DB: {
+                ASIC_STATE: {
+                    RT_ENTRY_KEY_PREFIX + "30.1.10.0/24" + RT_ENTRY_KEY_SUFFIX: {},
+                    "SAI_OBJECT_TYPE_ROUTER_INTERFACE:oid:0x6000000000d76": {
+                        "SAI_ROUTER_INTERFACE_ATTR_VIRTUAL_ROUTER_ID": "oid:0x3000000000d4b"
+                    }
+                }
+            },
+            CNTR_DB: {
+                "COUNTERS_RIF_NAME_MAP": { "Vlan3001": "oid:0x6000000000d76" }
+            },
+            STATE_DB: {
+                VNET_ROUTE_TUNNEL_TABLE: {
+                    "Vnet1|30.1.10.0/24": [("active_endpoints", ""), ("state", "inactive")],
+                    "Vnet1|50.1.1.0/24": [("active_endpoints", "30.1.10.10"), ("state", "active")]
+                }
+            }
+        },
+        RESULT: {
+            "results": {
+                "missed_in_asic_db_routes": {
+                    "Vnet1": {
+                        "routes": [
+                            "50.1.1.0/24"
+                        ]
+                    }
+                }
+            }
+        }
+    },
+    "10": {
+        DESCR: "An IPv6 VNET route is missed in ASIC DB, but it is inactive",
+        ARGS: "vnet_route_check",
+        PRE: {
+            APPL_DB: {
+                VXLAN_TUNNEL_TABLE: {
+                    "tunnel_v6": { "src_ip": "3001:2000::1" }
+                },
+                VNET_TABLE: {
+                    "Vnet_v6": [("vxlan_tunnel", "tunnel_v6"), ("scope", "default"), ("vni", "10002"), ("peer_list", "")]
+                },
+                VNET_ROUTE_TABLE: {
+                    "Vnet_v6:fd01:fc00::1/128" : { "endpoint" : "fc02:1000::1,fc02:1000::2" }
+                }
+            },
+            ASIC_DB: {
+                ASIC_STATE: {
+                    "SAI_OBJECT_TYPE_ROUTER_INTERFACE:oid:0x6000000000d76": {
+                        "SAI_ROUTER_INTERFACE_ATTR_VIRTUAL_ROUTER_ID": "oid:0x3000000000d4b"
+                    }
+                }
+            },
+            STATE_DB: {
+                VNET_ROUTE_TUNNEL_TABLE: {
+                    "Vnet_v6|fd01:fc00::1/128": [("active_endpoints", ""), ("state", "inactive")]
+                }
+            }
+        }
+    },
+    "11": {
+        DESCR: "An IPv6 VNET route is missed in ASIC DB and it is active",
+        ARGS: "vnet_route_check",
+        RET: -1,
+        PRE: {
+            APPL_DB: {
+                VXLAN_TUNNEL_TABLE: {
+                    "tunnel_v6": { "src_ip": "3001:2000::1" }
+                },
+                VNET_TABLE: {
+                    "Vnet_v6": [("vxlan_tunnel", "tunnel_v6"), ("scope", "default"), ("vni", "10002"), ("peer_list", "")]
+                },
+                VNET_ROUTE_TABLE: {
+                    "Vnet_v6:fd01:fc00::1/128" : { "endpoint" : "fc02:1000::1,fc02:1000::2" }
+                }
+            },
+            ASIC_DB: {
+                ASIC_STATE: {
+                    "SAI_OBJECT_TYPE_ROUTER_INTERFACE:oid:0x6000000000d76": {
+                        "SAI_ROUTER_INTERFACE_ATTR_VIRTUAL_ROUTER_ID": "oid:0x3000000000d4b"
+                    }
+                }
+            },
+            STATE_DB: {
+                VNET_ROUTE_TUNNEL_TABLE: {
+                    "Vnet_v6|fd01:fc00::1/128": [("active_endpoints", "fc02:1000::2"), ("state", "active")]
+                }
+            }
+        },
+        RESULT: {
+            "results": {
+                "missed_in_asic_db_routes": {
+                    "Vnet_v6": {
+                        "routes": [
+                            "fd01:fc00::1/128"
+                        ]
+                    }
+                }
+            }
+        }
+    },
 }
 
 
@@ -340,7 +591,7 @@ class Table:
         return (True, ret)
 
 
-db_conns = {"APPL_DB": APPL_DB, "ASIC_DB": ASIC_DB, "COUNTERS_DB": CNTR_DB}
+db_conns = {"APPL_DB": APPL_DB, "ASIC_DB": ASIC_DB, "COUNTERS_DB": CNTR_DB, "STATE_DB": STATE_DB}
 
 
 def conn_side_effect(arg, _, __):
@@ -365,14 +616,6 @@ class mock_db_conn:
 
     def getDbName(self):
         return self.db_name
-
-
-def table_side_effect(db, tbl):
-    if not db in tables_returned:
-        tables_returned[db] = {}
-    if not tbl in tables_returned[db]:
-        tables_returned[db][tbl] = Table(db, tbl)
-    return tables_returned[db][tbl]
 
 
 def set_mock(mock_table, mock_conn):

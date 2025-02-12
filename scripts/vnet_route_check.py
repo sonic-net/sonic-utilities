@@ -356,7 +356,46 @@ def get_sdk_vnet_routes_diff(routes):
     return routes_diff
 
 
+def filter_active_vnet_routes(vnet_routes: dict):
+    """ Filters a dictionary containing VNet routes configured for each VNet in APP_DB.
+    For each VNet in "vnet_routes", only active routes are included in the returned dictionary.
+    Format (for both input and output):
+    { <vnet_name>: { 'routes': [ <pfx/pfx_len> ], 'vrf_oid': <oid> } }
+    """
+    state_db = swsscommon.DBConnector("STATE_DB", 0, True)
+    vnet_route_tunnel_table = swsscommon.Table(state_db, "VNET_ROUTE_TUNNEL_TABLE")
+    state_db_separator = vnet_route_tunnel_table.getTableNameSeparator()
+
+    vnet_active_routes = {}    
+    for vnet_name, vnet_info in vnet_routes.items():
+        active_routes = []
+        for prefix in vnet_info["routes"]:
+            key = f"{vnet_name}{state_db_separator}{prefix}"
+            status, fvs = vnet_route_tunnel_table.get(key)
+            if not status:
+                print_message(syslog.LOG_ERR, f"VNET_ROUTE_TUNNEL_TABLE|{key} does not exist in STATE DB.")
+                return {}
+            for field, value in fvs:
+                if field == "state" and value == "active":
+                    active_routes.append(prefix)
+                    break
+        if len(active_routes) > 0:
+            vnet_active_routes[vnet_name] = {"routes": active_routes, "vrf_oid": vnet_info["vrf_oid"]}
+    
+    return vnet_active_routes
+
+
 def main():
+
+    if len(sys.argv) > 2 or (len(sys.argv) == 2 and sys.argv[1] != "-a" and sys.argv[1] != "--all"):
+        print("Usage:\tpython vnet_route_check.py [-a|--all]")
+        print("\tWithout \"-a\" or \"--all\", only active VNet route tunnels in STATE DB will be considered.")
+        return RC_OK
+    
+    if len(sys.argv) == 2:
+        use_all_routes = True
+    else:
+        use_all_routes = False
 
     rc = RC_OK
 
@@ -370,9 +409,13 @@ def main():
         default_vrf_oid = virtual_router.getKeys()[0]
 
     app_db_vnet_routes = get_vnet_routes_from_app_db()
+    active_app_db_vnet_routes = filter_active_vnet_routes(app_db_vnet_routes)
     asic_db_vnet_routes = get_vnet_routes_from_asic_db()
 
-    missed_in_asic_db_routes = get_vnet_routes_diff(asic_db_vnet_routes, app_db_vnet_routes,True)
+    if use_all_routes or not active_app_db_vnet_routes:
+        missed_in_asic_db_routes = get_vnet_routes_diff(asic_db_vnet_routes, app_db_vnet_routes, True)
+    else:
+        missed_in_asic_db_routes = get_vnet_routes_diff(asic_db_vnet_routes, active_app_db_vnet_routes, True)
     missed_in_app_db_routes = get_vnet_routes_diff(app_db_vnet_routes, asic_db_vnet_routes)
     missed_in_sdk_routes = get_sdk_vnet_routes_diff(asic_db_vnet_routes)
 
