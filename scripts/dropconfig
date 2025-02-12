@@ -33,6 +33,7 @@ from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 # CONFIG_DB Tables
 DEBUG_COUNTER_CONFIG_TABLE = 'DEBUG_COUNTER'
 DROP_REASON_CONFIG_TABLE = 'DEBUG_COUNTER_DROP_REASON'
+DEBUG_DROP_MONITOR_TABLE = 'DEBUG_DROP_MONITOR'
 
 # STATE_DB Tables
 DEBUG_COUNTER_CAPABILITY_TABLE = 'DEBUG_COUNTER_CAPABILITIES'
@@ -59,6 +60,59 @@ class DropConfig(object):
 
         self.state_db = SonicV2Connector(use_unix_socket_path=False)
         self.state_db.connect(self.state_db.STATE_DB)
+
+    def show_drop_monitor(self):
+        """
+           The function to show the current configuration of DEBUG_DROP_MONITOR table in CONFIG_DB
+        """
+        current_config = self.config_db.get_entry(DEBUG_DROP_MONITOR_TABLE, "CONFIG")
+        if current_config == {}:
+            print("Debug drop monitoring has not been configured. Use 'config dropcounters monitor' CLI to configure it.")
+            return
+
+        print("Current configuration of debug drop monitor")
+        print("The status: ", current_config.get("status", None))
+        print("The window size: ", current_config.get("window", None))
+        print("The drop_count_threshold: ", current_config.get("drop_count_threshold", None))
+        print("The incident_count_threshold: ", current_config.get("incident_count_threshold", None))
+
+    def configure_drop_monitor(self, status, window, drop_count_threshold, incident_count_threshold):
+        """
+            The function to configure Debug Drop Monitor feature.
+        """
+        config = self.config_db.get_entry(DEBUG_DROP_MONITOR_TABLE, "CONFIG")
+
+        if status:
+            if status not in ['enabled', 'disabled']:
+                raise InvalidArgumentError('Invalid status: {}, expected: enabled/disabled'.format(status))
+            config["status"] = status
+        elif "status" not in config.keys():
+            config["status"] = "disabled"
+
+        if window:
+            if window <= 0:
+                raise InvalidArgumentError('Invalid window size. Window size should be positive, received: {}'.format(window))
+            config["window"] = str(window)
+        elif "window" not in config.keys():
+            config["window"] = "900"
+
+        if drop_count_threshold:
+            if drop_count_threshold < 0:
+                raise InvalidArgumentError('Invalid drop count threshold. Drop count threshold should be positive, received: {}'.format(drop_count_threshold))
+            config["drop_count_threshold"] = str(drop_count_threshold)
+        elif "drop_count_threshold" not in config.keys():
+            config["drop_count_threshold"] = "100"
+
+        if incident_count_threshold:
+            if incident_count_threshold < 0:
+                raise InvalidArgumentError('Invalid incident count threshold. Incident count threshold should be positive, received: {}'.format(incident_count_threshold))
+            config["incident_count_threshold"] = str(incident_count_threshold)
+        elif "incident_count_threshold" not in config.keys():
+            config["incident_count_threshold"] = "2"
+
+        # Update the DEBUG_DROP_MONITOR table
+        self.config_db.set_entry(DEBUG_DROP_MONITOR_TABLE, ("CONFIG"), config)
+        print(f"Successfully updated the DEBUG_DROP_MONITOR config")
 
     # -c show_config
     def print_counter_config(self, group):
@@ -349,6 +403,10 @@ Examples:
     parser.add_argument('-t', '--type',    type=str, help='The type of the target drop counter',                   default=None)
     parser.add_argument('-d', '--desc',    type=str, help='The description for the target drop counter',           default=None)
     parser.add_argument('-r', '--reasons', type=str, help='The list of drop reasons for the target drop counter',  default=None)
+    parser.add_argument('-s', '--status', type=str, help='To set the status of drop counter monitoring feature (enabled/disabled)',  default=None)
+    parser.add_argument('-w', '--window', type=int, help='The window for drop counter monitor in seconds',  default=None)
+    parser.add_argument('-dct', '--drop-count-threshold', type=int, help='The minimum drops needed to classify a drop as an incident by the drop count monitor',  default=None)
+    parser.add_argument('-ict', '--incident-count-threshold', type=int, help='The minimum number of incidents needed to register a syslog by drop count monitor',  default=None)
 
     args = parser.parse_args()
 
@@ -360,6 +418,13 @@ Examples:
     counter_type = args.type
     description = args.desc
     drop_reasons = args.reasons
+
+    # These arguments are used to control the Drop Counter Monitor feature
+    # This is an optional feature and more details on its usage can be found at: https://github.com/sonic-net/SONiC/blob/master/doc/drop_counters/drop_counters_HLD.md
+    status = args.status
+    window = args.window
+    drop_count_threshold = args.drop_count_threshold
+    incident_count_threshold = args.incident_count_threshold
 
     reasons = deserialize_reason_list(drop_reasons)
 
@@ -398,6 +463,14 @@ Examples:
         dconfig.print_counter_config(group)
     elif command == 'show_capabilities':
         dconfig.print_device_capabilities()
+    elif command == 'config_monitor':
+        try:
+            dconfig.configure_drop_monitor(status, window, drop_count_threshold, incident_count_threshold)
+        except InvalidArgumentError as err:
+            print('Encountered error trying to configure drop monitor: {}'.format(err.message))
+            sys.exit(1)
+    elif command == 'show_monitor':
+        dconfig.show_drop_monitor()
     else:
         print("Command not recognized")
 

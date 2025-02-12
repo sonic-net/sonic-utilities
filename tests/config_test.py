@@ -3187,6 +3187,23 @@ class TestConfigDropcounters(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['dropconfig', '-c', 'remove', '-n', str(counter_name), '-r', str(reasons)], display_cmd=True)
 
+    @patch('utilities_common.cli.run_command')
+    def test_configure_drop_monitor(self, mock_run_command):
+        status = 'enabled'
+        window = '600'
+        drop_count_threshold = '5'
+        incident_count_threshold = '3'
+        runner = CliRunner()
+        result = runner.invoke(config.config.commands['dropcounters'].commands['monitor'],
+                               ['-s', status, '-w', window, '-dct', drop_count_threshold,
+                               '-ict', incident_count_threshold, '-v'])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(['dropconfig', '-c', 'config_monitor',
+                                                  '-s', status, '-w', window, '-dct', drop_count_threshold,
+                                                  '-ict', incident_count_threshold], display_cmd=True)
+
     def teardown(self):
         print("TEARDOWN")
 
