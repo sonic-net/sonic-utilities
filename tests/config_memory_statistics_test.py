@@ -102,14 +102,6 @@ class TestUpdateMemoryStatisticsStatus:
             {"enabled": "false"}
         )
 
-    def test_database_error(self, mock_db):
-        """Test handling of database errors."""
-        mock_db.mod_entry.side_effect = Exception("DB Error")
-        success, error = update_memory_statistics_status(True)
-        assert success is False
-        assert "Unexpected error updating memory statistics status" in error
-        assert "DB Error" in error
-
     def test_specific_exceptions(self, mock_db):
         """Test handling of specific exceptions."""
         for exception in [KeyError, ConnectionError, RuntimeError]:
@@ -132,13 +124,6 @@ class TestMemoryStatisticsEnable:
         assert "successfully" in result.output
         assert "config save" in result.output
 
-    def test_enable_db_error(self, cli_runner, mock_db):
-        """Test handling of database error when enabling."""
-        mock_db.mod_entry.side_effect = Exception("DB Error")
-        result = cli_runner.invoke(cli, ['config', 'memory-stats', 'enable'])
-        assert result.exit_code == 0
-        assert "Error" in result.output
-
 
 class TestMemoryStatisticsDisable:
     def test_disable_success(self, cli_runner, mock_db):
@@ -152,13 +137,6 @@ class TestMemoryStatisticsDisable:
         )
         assert "successfully" in result.output
         assert "config save" in result.output
-
-    def test_disable_db_error(self, cli_runner, mock_db):
-        """Test handling of database error when disabling."""
-        mock_db.mod_entry.side_effect = Exception("DB Error")
-        result = cli_runner.invoke(cli, ['config', 'memory-stats', 'disable'])
-        assert result.exit_code == 0
-        assert "Error" in result.output
 
 
 class TestSamplingInterval:
@@ -190,12 +168,6 @@ class TestSamplingInterval:
         result = cli_runner.invoke(cli, ['config', 'memory-stats', 'sampling-interval', str(interval)])
         assert "Error" in result.output
         assert not mock_db.mod_entry.called
-
-    def test_sampling_interval_db_error(self, cli_runner, mock_db):
-        """Test database error case when setting sampling interval."""
-        mock_db.mod_entry.side_effect = Exception("DB Error")
-        result = cli_runner.invoke(cli, ['config', 'memory-stats', 'sampling-interval', '5'])
-        assert "Error" in result.output
 
     @pytest.mark.parametrize("exception", [
         KeyError("Key not found"),
@@ -242,12 +214,6 @@ class TestRetentionPeriod:
         assert "Error" in result.output
         assert not mock_db.mod_entry.called
 
-    def test_db_error(self, cli_runner, mock_db):
-        """Test handling of database errors."""
-        mock_db.mod_entry.side_effect = Exception("DB Error")
-        result = cli_runner.invoke(cli, ['config', 'memory-stats', 'retention-period', '15'])
-        assert "Error" in result.output
-
     @pytest.mark.parametrize("exception", [
         KeyError("Key not found"),
         ConnectionError("Connection failed"),
@@ -282,10 +248,32 @@ class TestSyslogLogging:
 
     def test_syslog_logging_error(self):
         """Test syslog logging error handling."""
-        with patch('syslog.syslog', side_effect=Exception("Syslog error")), \
+        with patch('syslog.syslog', side_effect=OSError("Syslog error")), \
              patch('click.echo') as mock_echo:
             log_to_syslog("Test message")
-            mock_echo.assert_called_once_with("Failed to log to syslog: Syslog error", err=True)
+            mock_echo.assert_called_once_with("System error while logging to syslog: Syslog error", err=True)
+
+    def test_syslog_logging_value_error(self):
+        """Test syslog logging ValueError handling."""
+        invalid_level = -999
+
+        with patch('syslog.syslog', side_effect=ValueError("Invalid log level")), \
+             patch('click.echo') as mock_echo:
+            log_to_syslog("Test message", invalid_level)
+            mock_echo.assert_called_once_with(
+                "Invalid syslog parameters: Invalid log level",
+                err=True
+            )
+
+    def test_syslog_logging_value_error_empty_message(self):
+        """Test syslog logging ValueError handling with empty message."""
+        with patch('syslog.syslog', side_effect=ValueError("Empty message not allowed")), \
+             patch('click.echo') as mock_echo:
+            log_to_syslog("")
+            mock_echo.assert_called_once_with(
+                "Invalid syslog parameters: Empty message not allowed",
+                err=True
+            )
 
 
 def test_main_cli_integration():
