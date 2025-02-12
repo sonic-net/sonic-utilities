@@ -359,6 +359,7 @@ def get_sdk_vnet_routes_diff(routes):
 def filter_active_vnet_routes(vnet_routes: dict):
     """ Filters a dictionary containing VNet routes configured for each VNet in APP_DB.
     For each VNet in "vnet_routes", only active routes are included in the returned dictionary.
+    The return value of None indicates an error, while {} means no active routes were in vnet_routes.
     Format (for both input and output):
     { <vnet_name>: { 'routes': [ <pfx/pfx_len> ], 'vrf_oid': <oid> } }
     """
@@ -374,7 +375,7 @@ def filter_active_vnet_routes(vnet_routes: dict):
             status, fvs = vnet_route_tunnel_table.get(key)
             if not status:
                 print_message(syslog.LOG_ERR, f"VNET_ROUTE_TUNNEL_TABLE|{key} does not exist in STATE DB.")
-                return {}
+                return None
             for field, value in fvs:
                 if field == "state" and value == "active":
                     active_routes.append(prefix)
@@ -412,7 +413,7 @@ def main():
     active_app_db_vnet_routes = filter_active_vnet_routes(app_db_vnet_routes)
     asic_db_vnet_routes = get_vnet_routes_from_asic_db()
 
-    if use_all_routes or not active_app_db_vnet_routes:
+    if use_all_routes or active_app_db_vnet_routes is None:
         missed_in_asic_db_routes = get_vnet_routes_diff(asic_db_vnet_routes, app_db_vnet_routes, True)
     else:
         missed_in_asic_db_routes = get_vnet_routes_diff(asic_db_vnet_routes, active_app_db_vnet_routes, True)
