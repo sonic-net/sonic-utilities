@@ -365,13 +365,12 @@ def filter_active_vnet_routes(vnet_routes: dict):
     """
     state_db = swsscommon.DBConnector("STATE_DB", 0, True)
     vnet_route_tunnel_table = swsscommon.Table(state_db, "VNET_ROUTE_TUNNEL_TABLE")
-    state_db_separator = vnet_route_tunnel_table.getTableNameSeparator()
 
     vnet_active_routes = {}
     for vnet_name, vnet_info in vnet_routes.items():
         active_routes = []
         for prefix in vnet_info["routes"]:
-            key = f"{vnet_name}{state_db_separator}{prefix}"
+            key = f"{vnet_name}|{prefix}"
             status, fvs = vnet_route_tunnel_table.get(key)
             if not status:
                 print_message(syslog.LOG_ERR, f"VNET_ROUTE_TUNNEL_TABLE|{key} does not exist in STATE DB.")
