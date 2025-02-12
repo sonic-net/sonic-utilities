@@ -30,7 +30,7 @@ def log_to_syslog(message: str, level: int = syslog.LOG_INFO) -> None:
     Logs a message to the system log (syslog) with error handling.
 
     This function logs the provided message to syslog at the specified level.
-    It handles potential errors such as system-related issues (OSError) and 
+    It handles potential errors such as system-related issues (OSError) and
     invalid parameters (ValueError) by displaying appropriate error messages.
 
     Args:

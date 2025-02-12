@@ -249,26 +249,26 @@ class TestSyslogLogging:
     def test_syslog_logging_error(self):
         """Test syslog logging error handling."""
         with patch('syslog.syslog', side_effect=OSError("Syslog error")), \
-            patch('click.echo') as mock_echo:
+             patch('click.echo') as mock_echo:
             log_to_syslog("Test message")
             mock_echo.assert_called_once_with("System error while logging to syslog: Syslog error", err=True)
 
     def test_syslog_logging_value_error(self):
         """Test syslog logging ValueError handling."""
         invalid_level = -999
-        
+
         with patch('syslog.syslog', side_effect=ValueError("Invalid log level")), \
-            patch('click.echo') as mock_echo:
+             patch('click.echo') as mock_echo:
             log_to_syslog("Test message", invalid_level)
             mock_echo.assert_called_once_with(
-                "Invalid syslog parameters: Invalid log level", 
+                "Invalid syslog parameters: Invalid log level",
                 err=True
             )
 
     def test_syslog_logging_value_error_empty_message(self):
         """Test syslog logging ValueError handling with empty message."""
         with patch('syslog.syslog', side_effect=ValueError("Empty message not allowed")), \
-            patch('click.echo') as mock_echo:
+             patch('click.echo') as mock_echo:
             log_to_syslog("")
             mock_echo.assert_called_once_with(
                 "Invalid syslog parameters: Empty message not allowed",
