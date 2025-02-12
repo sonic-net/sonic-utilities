@@ -367,7 +367,7 @@ def filter_active_vnet_routes(vnet_routes: dict):
     vnet_route_tunnel_table = swsscommon.Table(state_db, "VNET_ROUTE_TUNNEL_TABLE")
     state_db_separator = vnet_route_tunnel_table.getTableNameSeparator()
 
-    vnet_active_routes = {}    
+    vnet_active_routes = {}
     for vnet_name, vnet_info in vnet_routes.items():
         active_routes = []
         for prefix in vnet_info["routes"]:
@@ -382,7 +382,7 @@ def filter_active_vnet_routes(vnet_routes: dict):
                     break
         if len(active_routes) > 0:
             vnet_active_routes[vnet_name] = {"routes": active_routes, "vrf_oid": vnet_info["vrf_oid"]}
-    
+
     return vnet_active_routes
 
 
@@ -392,7 +392,7 @@ def main():
         print("Usage:\tpython vnet_route_check.py [-a|--all]")
         print("\tWithout \"-a\" or \"--all\", only active VNet route tunnels in STATE DB will be considered.")
         return RC_OK
-    
+
     if len(sys.argv) == 2:
         use_all_routes = True
     else:

@@ -45,19 +45,19 @@ test_data = {
         PRE: {
             APPL_DB: {
                 VXLAN_TUNNEL_TABLE: {
-                    "tunnel_v4": { "src_ip": "10.1.0.32" }
+                    "tunnel_v4": {"src_ip": "10.1.0.32"}
                 },
                 VNET_TABLE: {
-                    "Vnet1": { "vxlan_tunnel": "tunnel_v4", "vni": "10001" }
+                    "Vnet1": {"vxlan_tunnel": "tunnel_v4", "vni": "10001"}
                 },
                 INTF_TABLE: {
-                    "Vlan3001": { "vnet_name": "Vnet1" },
+                    "Vlan3001": {"vnet_name": "Vnet1"},
                     "Vlan3001:30.1.10.1/24": {}
                 },
                 VNET_ROUTE_TABLE: {
-                    "Vnet1:30.1.10.0/24": { "ifname": "Vlan3001" },
-                    "Vnet1:50.1.1.0/24": { "ifname": "Vlan3001" },
-                    "Vnet1:50.2.2.0/24": { "ifname": "Vlan3001" }
+                    "Vnet1:30.1.10.0/24": {"ifname": "Vlan3001"},
+                    "Vnet1:50.1.1.0/24": {"ifname": "Vlan3001"},
+                    "Vnet1:50.2.2.0/24": {"ifname": "Vlan3001"}
                 }
             },
             ASIC_DB: {
@@ -71,7 +71,7 @@ test_data = {
                 }
             },
             CNTR_DB: {
-                "COUNTERS_RIF_NAME_MAP": { "Vlan3001": "oid:0x6000000000d76" }
+                "COUNTERS_RIF_NAME_MAP": {"Vlan3001": "oid:0x6000000000d76"}
             },
             STATE_DB: {
                 VNET_ROUTE_TUNNEL_TABLE: {
@@ -89,19 +89,19 @@ test_data = {
         PRE: {
             APPL_DB: {
                 VXLAN_TUNNEL_TABLE: {
-                    "tunnel_v4": { "src_ip": "10.1.0.32" }
+                    "tunnel_v4": {"src_ip": "10.1.0.32"}
                 },
                 VNET_TABLE: {
-                    "Vnet1": { "vxlan_tunnel": "tunnel_v4", "vni": "10001" }
+                    "Vnet1": {"vxlan_tunnel": "tunnel_v4", "vni": "10001"}
                 },
                 INTF_TABLE: {
-                    "Vlan3001": { "vnet_name": "Vnet1" },
+                    "Vlan3001": {"vnet_name": "Vnet1"},
                     "Vlan3001:30.1.10.1/24": {}
                 },
                 VNET_ROUTE_TABLE: {
-                    "Vnet1:30.1.10.0/24": { "ifname": "Vlan3001" },
-                    "Vnet1:50.1.1.0/24": { "ifname": "Vlan3001" },
-                    "Vnet1:50.2.2.0/24": { "ifname": "Vlan3001" }
+                    "Vnet1:30.1.10.0/24": {"ifname": "Vlan3001"},
+                    "Vnet1:50.1.1.0/24": {"ifname": "Vlan3001"},
+                    "Vnet1:50.2.2.0/24": {"ifname": "Vlan3001"}
                 }
             },
             ASIC_DB: {
@@ -114,7 +114,7 @@ test_data = {
                 }
             },
             CNTR_DB: {
-                "COUNTERS_RIF_NAME_MAP": { "Vlan3001": "oid:0x6000000000d76" }
+                "COUNTERS_RIF_NAME_MAP": {"Vlan3001": "oid:0x6000000000d76"}
             },
             STATE_DB: {
                 VNET_ROUTE_TUNNEL_TABLE: {
@@ -123,7 +123,6 @@ test_data = {
                     "Vnet1|50.2.2.0/24": [("active_endpoints", ""), ("state", "inactive")]
                 }
             }
-
         },
         RESULT: {
             "results": {
@@ -144,18 +143,18 @@ test_data = {
         PRE: {
             APPL_DB: {
                 VXLAN_TUNNEL_TABLE: {
-                    "tunnel_v4": { "src_ip": "10.1.0.32" }
+                    "tunnel_v4": {"src_ip": "10.1.0.32"}
                 },
                 VNET_TABLE: {
-                    "Vnet1": { "vxlan_tunnel": "tunnel_v4", "vni": "10001" }
+                    "Vnet1": {"vxlan_tunnel": "tunnel_v4", "vni": "10001"}
                 },
                 INTF_TABLE: {
-                    "Vlan3001": { "vnet_name": "Vnet1" },
+                    "Vlan3001": {"vnet_name": "Vnet1"},
                     "Vlan3001:30.1.10.1/24": {}
                 },
                 VNET_ROUTE_TABLE: {
-                    "Vnet1:30.1.10.0/24": { "ifname": "Vlan3001" },
-                    "Vnet1:50.1.1.0/24": { "ifname": "Vlan3001" },
+                    "Vnet1:30.1.10.0/24": {"ifname": "Vlan3001"},
+                    "Vnet1:50.1.1.0/24": {"ifname": "Vlan3001"},
                 }
             },
             ASIC_DB: {
@@ -169,7 +168,7 @@ test_data = {
                 }
             },
             CNTR_DB: {
-                "COUNTERS_RIF_NAME_MAP": { "Vlan3001": "oid:0x6000000000d76" }
+                "COUNTERS_RIF_NAME_MAP": {"Vlan3001": "oid:0x6000000000d76"}
             },
             STATE_DB: {
                 VNET_ROUTE_TUNNEL_TABLE: {
@@ -197,18 +196,18 @@ test_data = {
         PRE: {
             APPL_DB: {
                 VXLAN_TUNNEL_TABLE: {
-                    "tunnel_v4": { "src_ip": "10.1.0.32" }
+                    "tunnel_v4": {"src_ip": "10.1.0.32"}
                 },
                 VNET_TABLE: {
-                    "Vnet1": { "vxlan_tunnel": "tunnel_v4", "vni": "10001" }
+                    "Vnet1": {"vxlan_tunnel": "tunnel_v4", "vni": "10001"}
                 },
                 INTF_TABLE: {
-                    "Vlan3001": { "vnet_name": "Vnet1" },
+                    "Vlan3001": {"vnet_name": "Vnet1"},
                     "Vlan3001:30.1.10.1/24": {}
                 },
                 VNET_ROUTE_TABLE: {
-                    "Vnet1:30.1.10.0/24": { "ifname": "Vlan3001" },
-                    "Vnet1:50.1.1.0/24": { "ifname": "Vlan3001" },
+                    "Vnet1:30.1.10.0/24": {"ifname": "Vlan3001"},
+                    "Vnet1:50.1.1.0/24": {"ifname": "Vlan3001"},
                 }
             },
             ASIC_DB: {
@@ -221,7 +220,7 @@ test_data = {
                 }
             },
             CNTR_DB: {
-                "COUNTERS_RIF_NAME_MAP": { "Vlan3001": "oid:0x6000000000d76" }
+                "COUNTERS_RIF_NAME_MAP": {"Vlan3001": "oid:0x6000000000d76"}
             },
             STATE_DB: {
                 VNET_ROUTE_TUNNEL_TABLE: {
@@ -255,8 +254,8 @@ test_data = {
         PRE: {
             APPL_DB: {
                 VXLAN_TUNNEL_TABLE: {
-                    "tunnel_v4": { "src_ip": "10.1.0.32" },
-                    "tunnel_v6": { "src_ip": "3001:2000::1" }
+                    "tunnel_v4": {"src_ip": "10.1.0.32"},
+                    "tunnel_v6": {"src_ip": "3001:2000::1"}
                 },
                 VNET_TABLE: {
                     "Vnet_v4_in_v4-0": [("vxlan_tunnel", "tunnel_v4"), ("scope", "default"), ("vni", "10000"), ("peer_list", "")],
@@ -264,14 +263,14 @@ test_data = {
 
                 },
                 VNET_ROUTE_TUNNEL_TABLE: {
-                    "Vnet_v4_in_v4-0:150.62.191.1/32" : { "endpoint" : "100.251.7.1,100.251.7.2" },
-                    "Vnet_v6_in_v6-0:fd01:fc00::1/128" : { "endpoint" : "fc02:1000::1,fc02:1000::2" }
+                    "Vnet_v4_in_v4-0:150.62.191.1/32" : {"endpoint" : "100.251.7.1,100.251.7.2"},
+                    "Vnet_v6_in_v6-0:fd01:fc00::1/128" : {"endpoint" : "fc02:1000::1,fc02:1000::2"}
 
                 }
             },
             ASIC_DB: {
                 "ASIC_STATE:SAI_OBJECT_TYPE_VIRTUAL_ROUTER": {
-                         "oid:0x3000000000d4b" : { "":"" }
+                         "oid:0x3000000000d4b" : {"":""}
                 },
                 ASIC_STATE: {
                     RT_ENTRY_KEY_PREFIX + "150.62.191.1/32" + RT_ENTRY_KEY_SUFFIX: {},
@@ -293,18 +292,18 @@ test_data = {
         PRE: {
             APPL_DB: {
                 VXLAN_TUNNEL_TABLE: {
-                    "tunnel_v4": { "src_ip": "10.1.0.32" }
+                    "tunnel_v4": {"src_ip": "10.1.0.32"}
                 },
                 VNET_TABLE: {
                     "Vnet_v4_in_v4-0": [("vxlan_tunnel", "tunnel_v4"), ("scope", "default"), ("vni", "10000"), ("peer_list", "")]
                 },
                 VNET_ROUTE_TUNNEL_TABLE: {
-                   "Vnet_v4_in_v4-0:150.62.191.1/32" : { "endpoint" : "100.251.7.1,100.251.7.2" }
+                   "Vnet_v4_in_v4-0:150.62.191.1/32" : {"endpoint" : "100.251.7.1,100.251.7.2"}
                 }
             },
             ASIC_DB: {
                 "ASIC_STATE:SAI_OBJECT_TYPE_VIRTUAL_ROUTER": {
-                         "oid:0x3000000000d4b" : { "":"" }
+                         "oid:0x3000000000d4b" : {"":""}
                 },
                 ASIC_STATE: {
                 }
@@ -333,13 +332,13 @@ test_data = {
         PRE: {
             APPL_DB: {
                 VXLAN_TUNNEL_TABLE: {
-                    "tunnel_v4": { "src_ip": "10.1.0.32" }
+                    "tunnel_v4": {"src_ip": "10.1.0.32"}
                 },
                 VNET_TABLE: {
-                    "Vnet1": { "vxlan_tunnel": "tunnel_v4", "vni": "10001" }
+                    "Vnet1": {"vxlan_tunnel": "tunnel_v4", "vni": "10001"}
                 },
                 INTF_TABLE: {
-                    "Vlan3001": { "vnet_name": "Vnet1" },
+                    "Vlan3001": {"vnet_name": "Vnet1"},
                     "Vlan3001:30.1.10.1/24": {}
                 },
             },
@@ -352,18 +351,18 @@ test_data = {
         PRE: {
             APPL_DB: {
                 VXLAN_TUNNEL_TABLE: {
-                    "tunnel_v4": { "src_ip": "10.1.0.32" }
+                    "tunnel_v4": {"src_ip": "10.1.0.32"}
                 },
                 VNET_TABLE: {
-                    "Vnet1": { "vxlan_tunnel": "tunnel_v4", "vni": "10001" }
+                    "Vnet1": {"vxlan_tunnel": "tunnel_v4", "vni": "10001"}
                 },
                 INTF_TABLE: {
-                    "Vlan3001": { "vnet_name": "Vnet1" },
+                    "Vlan3001": {"vnet_name": "Vnet1"},
                     "Vlan3001:30.1.10.1/24": {}
                 },
                 VNET_ROUTE_TABLE: {
-                    "Vnet1:30.1.10.0/24": { "ifname": "Vlan3001" },
-                    "Vnet1:50.1.1.0/24": { "ifname": "Vlan3001" },
+                    "Vnet1:30.1.10.0/24": {"ifname": "Vlan3001"},
+                    "Vnet1:50.1.1.0/24": {"ifname": "Vlan3001"},
                 }
             },
             ASIC_DB: {
@@ -376,7 +375,7 @@ test_data = {
                 }
             },
             CNTR_DB: {
-                "COUNTERS_RIF_NAME_MAP": { "Vlan3001": "oid:0x6000000000d76" }
+                "COUNTERS_RIF_NAME_MAP": {"Vlan3001": "oid:0x6000000000d76"}
             },
             STATE_DB: {
                 VNET_ROUTE_TUNNEL_TABLE: {
@@ -403,18 +402,18 @@ test_data = {
         PRE: {
             APPL_DB: {
                 VXLAN_TUNNEL_TABLE: {
-                    "tunnel_v4": { "src_ip": "10.1.0.32" }
+                    "tunnel_v4": {"src_ip": "10.1.0.32"}
                 },
                 VNET_TABLE: {
-                    "Vnet1": { "vxlan_tunnel": "tunnel_v4", "vni": "10001" }
+                    "Vnet1": {"vxlan_tunnel": "tunnel_v4", "vni": "10001"}
                 },
                 INTF_TABLE: {
-                    "Vlan3001": { "vnet_name": "Vnet1" },
+                    "Vlan3001": {"vnet_name": "Vnet1"},
                     "Vlan3001:30.1.10.1/24": {}
                 },
                 VNET_ROUTE_TABLE: {
-                    "Vnet1:30.1.10.0/24": { "ifname": "Vlan3001" },
-                    "Vnet1:50.1.1.0/24": { "ifname": "Vlan3001" },
+                    "Vnet1:30.1.10.0/24": {"ifname": "Vlan3001"},
+                    "Vnet1:50.1.1.0/24": {"ifname": "Vlan3001"},
                 }
             },
             ASIC_DB: {
@@ -426,7 +425,7 @@ test_data = {
                 }
             },
             CNTR_DB: {
-                "COUNTERS_RIF_NAME_MAP": { "Vlan3001": "oid:0x6000000000d76" }
+                "COUNTERS_RIF_NAME_MAP": {"Vlan3001": "oid:0x6000000000d76"}
             },
             STATE_DB: {
                 VNET_ROUTE_TUNNEL_TABLE: {
@@ -443,18 +442,18 @@ test_data = {
         PRE: {
             APPL_DB: {
                 VXLAN_TUNNEL_TABLE: {
-                    "tunnel_v4": { "src_ip": "10.1.0.32" }
+                    "tunnel_v4": {"src_ip": "10.1.0.32"}
                 },
                 VNET_TABLE: {
-                    "Vnet1": { "vxlan_tunnel": "tunnel_v4", "vni": "10001" }
+                    "Vnet1": {"vxlan_tunnel": "tunnel_v4", "vni": "10001"}
                 },
                 INTF_TABLE: {
-                    "Vlan3001": { "vnet_name": "Vnet1" },
+                    "Vlan3001": {"vnet_name": "Vnet1"},
                     "Vlan3001:30.1.10.1/24": {}
                 },
                 VNET_ROUTE_TABLE: {
-                    "Vnet1:30.1.10.0/24": { "ifname": "Vlan3001" },
-                    "Vnet1:50.1.1.0/24": { "ifname": "Vlan3001" },
+                    "Vnet1:30.1.10.0/24": {"ifname": "Vlan3001"},
+                    "Vnet1:50.1.1.0/24": {"ifname": "Vlan3001"},
                 }
             },
             ASIC_DB: {
@@ -466,7 +465,7 @@ test_data = {
                 }
             },
             CNTR_DB: {
-                "COUNTERS_RIF_NAME_MAP": { "Vlan3001": "oid:0x6000000000d76" }
+                "COUNTERS_RIF_NAME_MAP": {"Vlan3001": "oid:0x6000000000d76"}
             },
             STATE_DB: {
                 VNET_ROUTE_TUNNEL_TABLE: {
@@ -493,13 +492,13 @@ test_data = {
         PRE: {
             APPL_DB: {
                 VXLAN_TUNNEL_TABLE: {
-                    "tunnel_v6": { "src_ip": "3001:2000::1" }
+                    "tunnel_v6": {"src_ip": "3001:2000::1"}
                 },
                 VNET_TABLE: {
                     "Vnet_v6": [("vxlan_tunnel", "tunnel_v6"), ("scope", "default"), ("vni", "10002"), ("peer_list", "")]
                 },
                 VNET_ROUTE_TABLE: {
-                    "Vnet_v6:fd01:fc00::1/128" : { "endpoint" : "fc02:1000::1,fc02:1000::2" }
+                    "Vnet_v6:fd01:fc00::1/128" : {"endpoint" : "fc02:1000::1,fc02:1000::2"}
                 }
             },
             ASIC_DB: {
@@ -523,13 +522,13 @@ test_data = {
         PRE: {
             APPL_DB: {
                 VXLAN_TUNNEL_TABLE: {
-                    "tunnel_v6": { "src_ip": "3001:2000::1" }
+                    "tunnel_v6": {"src_ip": "3001:2000::1"}
                 },
                 VNET_TABLE: {
                     "Vnet_v6": [("vxlan_tunnel", "tunnel_v6"), ("scope", "default"), ("vni", "10002"), ("peer_list", "")]
                 },
                 VNET_ROUTE_TABLE: {
-                    "Vnet_v6:fd01:fc00::1/128" : { "endpoint" : "fc02:1000::1,fc02:1000::2" }
+                    "Vnet_v6:fd01:fc00::1/128" : {"endpoint" : "fc02:1000::1,fc02:1000::2"}
                 }
             },
             ASIC_DB: {
