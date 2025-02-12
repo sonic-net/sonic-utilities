@@ -22,28 +22,27 @@ RETENTION_PERIOD_MAX = 30
 DEFAULT_SAMPLING_INTERVAL = 5  # minutes
 DEFAULT_RETENTION_PERIOD = 15  # days
 
-syslog.openlog("memory_statistics", syslog.LOG_PID | syslog.LOG_CONS, syslog.LOG_USER)
+syslog.openlog("memory_statistics_config", syslog.LOG_PID | syslog.LOG_CONS, syslog.LOG_USER)
 
 
 def log_to_syslog(message: str, level: int = syslog.LOG_INFO) -> None:
     """
-    Logs a message to the system log (syslog).
+    Logs a message to the system log (syslog) with error handling.
 
     This function logs the provided message to syslog at the specified level.
-    It opens the syslog with the application name 'memory_statistics' and the
-    appropriate log level, ensuring the connection is closed after logging.
+    It handles potential errors such as system-related issues (OSError) and 
+    invalid parameters (ValueError) by displaying appropriate error messages.
 
     Args:
         message (str): The message to log.
         level (int, optional): The log level (default is syslog.LOG_INFO).
-
-    Raises:
-        Exception: If syslog logging fails.
     """
     try:
         syslog.syslog(level, message)
-    except Exception as e:
-        click.echo(f"Failed to log to syslog: {e}", err=True)
+    except OSError as e:
+        click.echo(f"System error while logging to syslog: {e}", err=True)
+    except ValueError as e:
+        click.echo(f"Invalid syslog parameters: {e}", err=True)
 
 
 def generate_error_message(error_type: str, error: Exception) -> str:
@@ -150,12 +149,6 @@ def update_memory_statistics_status(enabled: bool) -> Tuple[bool, Optional[str]]
         return True, None
     except (KeyError, ConnectionError, RuntimeError) as e:
         error_msg = generate_error_message(f"Failed to {'enable' if enabled else 'disable'} memory statistics", e)
-
-        click.echo(error_msg, err=True)
-        log_to_syslog(error_msg, syslog.LOG_ERR)
-        return False, error_msg
-    except Exception as e:
-        error_msg = generate_error_message("Unexpected error updating memory statistics status", e)
 
         click.echo(error_msg, err=True)
         log_to_syslog(error_msg, syslog.LOG_ERR)
@@ -287,11 +280,6 @@ def memory_stats_sampling_interval(interval: int):
         click.echo(error_msg, err=True)
         log_to_syslog(error_msg, syslog.LOG_ERR)
         return
-    except Exception as e:
-        error_msg = generate_error_message("Unexpected error setting sampling interval", e)
-        click.echo(error_msg, err=True)
-        log_to_syslog(error_msg, syslog.LOG_ERR)
-        return
 
 
 @memory_stats.command(name='retention-period')
@@ -331,11 +319,6 @@ def memory_stats_retention_period(period: int):
         click.echo("Reminder: Please run 'config save' to persist changes.")
     except (KeyError, ConnectionError, ValueError, RuntimeError) as e:
         error_msg = generate_error_message(f"{type(e).__name__} setting retention period", e)
-        click.echo(error_msg, err=True)
-        log_to_syslog(error_msg, syslog.LOG_ERR)
-        return
-    except Exception as e:
-        error_msg = generate_error_message("Unexpected error setting retention period", e)
         click.echo(error_msg, err=True)
         log_to_syslog(error_msg, syslog.LOG_ERR)
         return
