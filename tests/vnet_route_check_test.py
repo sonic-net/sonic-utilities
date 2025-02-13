@@ -506,7 +506,10 @@ test_data = {
                 ASIC_STATE: {
                     "SAI_OBJECT_TYPE_ROUTER_INTERFACE:oid:0x6000000000d76": {
                         "SAI_ROUTER_INTERFACE_ATTR_VIRTUAL_ROUTER_ID": "oid:0x3000000000d4b"
-                    }
+                    },
+                    "SAI_OBJECT_TYPE_VIRTUAL_ROUTER": {
+                         "oid:0x3000000000d4b": {"": ""}
+                    },
                 }
             },
             STATE_DB: {
@@ -537,7 +540,10 @@ test_data = {
                 ASIC_STATE: {
                     "SAI_OBJECT_TYPE_ROUTER_INTERFACE:oid:0x6000000000d76": {
                         "SAI_ROUTER_INTERFACE_ATTR_VIRTUAL_ROUTER_ID": "oid:0x3000000000d4b"
-                    }
+                    },
+                    "SAI_OBJECT_TYPE_VIRTUAL_ROUTER": {
+                         "oid:0x3000000000d4b": {"": ""}
+                    },
                 }
             },
             STATE_DB: {

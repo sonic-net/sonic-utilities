@@ -404,9 +404,11 @@ def main():
         return rc
     asic_db = swsscommon.DBConnector('ASIC_DB', 0, True)
     virtual_router = swsscommon.Table(asic_db, 'ASIC_STATE:SAI_OBJECT_TYPE_VIRTUAL_ROUTER')
-    if virtual_router.getKeys() != []:
-        global default_vrf_oid
-        default_vrf_oid = virtual_router.getKeys()[0]
+    global default_vrf_oid
+    default_vrf_oid = ""
+    vr_keys = virtual_router.getKeys()
+    if vr_keys:
+        default_vrf_oid = vr_keys[0]
 
     app_db_vnet_routes = get_vnet_routes_from_app_db()
     active_app_db_vnet_routes = filter_active_vnet_routes(app_db_vnet_routes)
