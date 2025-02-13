@@ -29,6 +29,7 @@ show_hash_ecmp="""\
 |        | | INNER_SRC_IP      |             | |
 |        | | INNER_L4_DST_PORT |             | |
 |        | | INNER_L4_SRC_PORT |             | |
+|        | | IPV6_FLOW_LABEL   |             | |
 |        | +-------------------+-------------+ |
 +--------+-------------------------------------+
 | LAG    | +--------------+-------------+      |
@@ -57,7 +58,8 @@ show_hash_ecmp_json="""\
             "INNER_DST_IP",
             "INNER_SRC_IP",
             "INNER_L4_DST_PORT",
-            "INNER_L4_SRC_PORT"
+            "INNER_L4_SRC_PORT",
+            "IPV6_FLOW_LABEL"
         ],
         "algorithm": "CRC"
     },
@@ -97,6 +99,7 @@ show_hash_lag="""\
 |        | | INNER_SRC_IP      |             | |
 |        | | INNER_L4_DST_PORT |             | |
 |        | | INNER_L4_SRC_PORT |             | |
+|        | | IPV6_FLOW_LABEL   |             | |
 |        | +-------------------+-------------+ |
 +--------+-------------------------------------+
 """
@@ -123,7 +126,8 @@ show_hash_lag_json="""\
             "INNER_DST_IP",
             "INNER_SRC_IP",
             "INNER_L4_DST_PORT",
-            "INNER_L4_SRC_PORT"
+            "INNER_L4_SRC_PORT",
+            "IPV6_FLOW_LABEL"
         ],
         "algorithm": "XOR"
     }
@@ -153,6 +157,7 @@ show_hash_ecmp_and_lag="""\
 |        | | INNER_SRC_IP      |             | |
 |        | | INNER_L4_DST_PORT |             | |
 |        | | INNER_L4_SRC_PORT |             | |
+|        | | IPV6_FLOW_LABEL   |             | |
 |        | +-------------------+-------------+ |
 +--------+-------------------------------------+
 | LAG    | +-------------------+-------------+ |
@@ -174,6 +179,7 @@ show_hash_ecmp_and_lag="""\
 |        | | INNER_SRC_IP      |             | |
 |        | | INNER_L4_DST_PORT |             | |
 |        | | INNER_L4_SRC_PORT |             | |
+|        | | IPV6_FLOW_LABEL   |             | |
 |        | +-------------------+-------------+ |
 +--------+-------------------------------------+
 """
@@ -196,7 +202,8 @@ show_hash_ecmp_and_lag_json="""\
             "INNER_DST_IP",
             "INNER_SRC_IP",
             "INNER_L4_DST_PORT",
-            "INNER_L4_SRC_PORT"
+            "INNER_L4_SRC_PORT",
+            "IPV6_FLOW_LABEL"
         ],
         "algorithm": "CRC"
     },
@@ -217,7 +224,8 @@ show_hash_ecmp_and_lag_json="""\
             "INNER_DST_IP",
             "INNER_SRC_IP",
             "INNER_L4_DST_PORT",
-            "INNER_L4_SRC_PORT"
+            "INNER_L4_SRC_PORT",
+            "IPV6_FLOW_LABEL"
         ],
         "algorithm": "XOR"
     }
@@ -339,6 +347,7 @@ show_hash_capabilities_ecmp="""\
 |        | | INNER_SRC_IP      |             | |
 |        | | INNER_L4_DST_PORT |             | |
 |        | | INNER_L4_SRC_PORT |             | |
+|        | | IPV6_FLOW_LABEL   |             | |
 |        | +-------------------+-------------+ |
 +--------+-------------------------------------+
 | LAG    | +---------------+---------------+   |
@@ -369,7 +378,8 @@ show_hash_capabilities_ecmp_json="""\
             "INNER_DST_IP",
             "INNER_SRC_IP",
             "INNER_L4_DST_PORT",
-            "INNER_L4_SRC_PORT"
+            "INNER_L4_SRC_PORT",
+            "IPV6_FLOW_LABEL"
         ],
         "algorithm": [
             "CRC",
@@ -419,6 +429,7 @@ show_hash_capabilities_lag="""\
 |        | | INNER_SRC_IP      |             | |
 |        | | INNER_L4_DST_PORT |             | |
 |        | | INNER_L4_SRC_PORT |             | |
+|        | | IPV6_FLOW_LABEL   |             | |
 |        | +-------------------+-------------+ |
 +--------+-------------------------------------+
 """
@@ -447,7 +458,8 @@ show_hash_capabilities_lag_json="""\
             "INNER_DST_IP",
             "INNER_SRC_IP",
             "INNER_L4_DST_PORT",
-            "INNER_L4_SRC_PORT"
+            "INNER_L4_SRC_PORT",
+            "IPV6_FLOW_LABEL"
         ],
         "algorithm": [
             "CRC",
@@ -487,6 +499,7 @@ show_hash_capabilities_ecmp_and_lag="""\
 |        | | INNER_SRC_IP      |             | |
 |        | | INNER_L4_DST_PORT |             | |
 |        | | INNER_L4_SRC_PORT |             | |
+|        | | IPV6_FLOW_LABEL   |             | |
 |        | +-------------------+-------------+ |
 +--------+-------------------------------------+
 | LAG    | +-------------------+-------------+ |
@@ -510,6 +523,7 @@ show_hash_capabilities_ecmp_and_lag="""\
 |        | | INNER_SRC_IP      |             | |
 |        | | INNER_L4_DST_PORT |             | |
 |        | | INNER_L4_SRC_PORT |             | |
+|        | | IPV6_FLOW_LABEL   |             | |
 |        | +-------------------+-------------+ |
 +--------+-------------------------------------+
 """
@@ -534,7 +548,8 @@ show_hash_capabilities_ecmp_and_lag_json="""\
             "INNER_DST_IP",
             "INNER_SRC_IP",
             "INNER_L4_DST_PORT",
-            "INNER_L4_SRC_PORT"
+            "INNER_L4_SRC_PORT",
+            "IPV6_FLOW_LABEL"
         ],
         "algorithm": [
             "CRC",
@@ -565,7 +580,8 @@ show_hash_capabilities_ecmp_and_lag_json="""\
             "INNER_DST_IP",
             "INNER_SRC_IP",
             "INNER_L4_DST_PORT",
-            "INNER_L4_SRC_PORT"
+            "INNER_L4_SRC_PORT",
+            "IPV6_FLOW_LABEL"
         ],
         "algorithm": [
             "CRC",
