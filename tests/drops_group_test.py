@@ -98,6 +98,13 @@ Ethernet8      N/A         0           0         0           0          0       
 sonic_drops_test               0                    0
 """
 
+expected_drop_monitor_config = """\
+Current configuration of debug drop monitor
+The status:  disabled
+The window size:  900
+The drop_count_threshold:  100
+The incident_count_threshold:  2
+"""
 
 def remove_tmp_dropstat_file():
     # remove the tmp portstat
@@ -162,6 +169,12 @@ class TestDropCounters(object):
         result = runner.invoke(show.cli.commands["dropcounters"].commands["counts"], [])
         print(result.output)
         assert result.output == expected_counts_with_clear
+
+    def test_show_drop_monitor_config(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["dropcounters"].commands["monitor"], [])
+        print(result.output)
+        assert result.output == expected_drop_monitor_config
 
     @classmethod
     def teardown_class(cls):

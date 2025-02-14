@@ -2837,5 +2837,11 @@
         "hello_time": "2",
         "max_age": "20",
         "priority": "32768"
+     },
+     "DEBUG_DROP_MONITOR|CONFIG": {
+        "status": "disabled",
+        "window": 900,
+        "drop_count_threshold": 100,
+        "incident_count_threshold": 2
      }
 }

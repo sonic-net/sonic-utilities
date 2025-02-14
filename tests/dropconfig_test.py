@@ -46,6 +46,44 @@ class TestDropConfig(object):
         mock_print.assert_called_once_with('Encountered error trying to remove reasons: No counter name provided')
         assert e.value.code == 1
 
+    @patch('builtins.print')
+    @patch('sys.argv', ['dropconfig', '-c', 'config_monitor', '-s', 'off'])
+    def test_config_monitor_status_error(self, mock_print):
+        with pytest.raises(SystemExit) as e:
+            dropconfig.main()
+        mock_print.assert_called_once_with('Encountered error trying to configure drop monitor: '
+                                           'Invalid status: off, expected: enabled/disabled')
+        assert e.value.code == 1
+
+    @patch('builtins.print')
+    @patch('sys.argv', ['dropconfig', '-c', 'config_monitor', '-w', '-1'])
+    def test_config_monitor_window_error(self, mock_print):
+        with pytest.raises(SystemExit) as e:
+            dropconfig.main()
+        mock_print.assert_called_once_with('Encountered error trying to configure drop monitor: '
+                                           'Invalid window size. Window size should be positive, received: -1')
+        assert e.value.code == 1
+
+    @patch('builtins.print')
+    @patch('sys.argv', ['dropconfig', '-c', 'config_monitor', '-dct', '-1'])
+    def test_config_monitor_dct_error(self, mock_print):
+        with pytest.raises(SystemExit) as e:
+            dropconfig.main()
+        mock_print.assert_called_once_with('Encountered error trying to configure drop monitor: '
+                                           'Invalid drop count threshold. '
+                                           'Drop count threshold should be positive, received: -1')
+        assert e.value.code == 1
+
+    @patch('builtins.print')
+    @patch('sys.argv', ['dropconfig', '-c', 'config_monitor', '-ict', '-1'])
+    def test_config_monitor_ict_error(self, mock_print):
+        with pytest.raises(SystemExit) as e:
+            dropconfig.main()
+        mock_print.assert_called_once_with('Encountered error trying to configure drop monitor: '
+                                           'Invalid incident count threshold. Incident count threshold '
+                                           'should be positive, received: -1')
+        assert e.value.code == 1
+
     def teardown(self):
         print('TEARDOWN')
 
