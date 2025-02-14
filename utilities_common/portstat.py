@@ -27,7 +27,8 @@ NStats = namedtuple("NStats", "rx_ok, rx_err, rx_drop, rx_ovr, tx_ok,\
                     tx_1519_2047, tx_2048_4095, tx_4096_9216, tx_9217_16383,\
                     tx_uca, tx_mca, tx_bca, tx_all,\
                     rx_jbr, rx_frag, rx_usize, rx_ovrrun,\
-                    fec_corr, fec_uncorr, fec_symbol_err")
+                    fec_corr, fec_uncorr, fec_symbol_err,\
+                    wred_grn_drp_pkt, wred_ylw_drp_pkt, wred_red_drp_pkt, wred_tot_drp_pkt")
 header_all = ['IFACE', 'STATE', 'RX_OK', 'RX_BPS', 'RX_PPS', 'RX_UTIL', 'RX_ERR', 'RX_DRP', 'RX_OVR',
               'TX_OK', 'TX_BPS', 'TX_PPS', 'TX_UTIL', 'TX_ERR', 'TX_DRP', 'TX_OVR']
 header_std = ['IFACE', 'STATE', 'RX_OK', 'RX_BPS', 'RX_UTIL', 'RX_ERR', 'RX_DRP', 'RX_OVR',
@@ -44,7 +45,15 @@ RateStats = namedtuple("RateStats", ratestat_fields)
 The order and count of statistics mentioned below needs to be in sync with the values in portstat script
 So, any fields added/deleted in here should be reflected in portstat script also
 """
-BUCKET_NUM = 45
+BUCKET_NUM = 49
+
+wred_green_pkt_stat_capable = "false"
+wred_yellow_pkt_stat_capable = "false"
+wred_red_pkt_stat_capable = "false"
+wred_total_pkt_stat_capable = "false"
+is_wred_stats_reqd = True
+
+
 counter_bucket_dict = {
         0: ['SAI_PORT_STAT_IF_IN_UCAST_PKTS', 'SAI_PORT_STAT_IF_IN_NON_UCAST_PKTS'],
         1: ['SAI_PORT_STAT_IF_IN_ERRORS'],
@@ -92,7 +101,11 @@ counter_bucket_dict = {
         41: ['SAI_PORT_STAT_IP_IN_RECEIVES'],
         42: ['SAI_PORT_STAT_IF_IN_FEC_CORRECTABLE_FRAMES'],
         43: ['SAI_PORT_STAT_IF_IN_FEC_NOT_CORRECTABLE_FRAMES'],
-        44: ['SAI_PORT_STAT_IF_IN_FEC_SYMBOL_ERRORS']
+        44: ['SAI_PORT_STAT_IF_IN_FEC_SYMBOL_ERRORS'],
+        45: ['SAI_PORT_STAT_GREEN_WRED_DROPPED_PACKETS'],
+        46: ['SAI_PORT_STAT_YELLOW_WRED_DROPPED_PACKETS'],
+        47: ['SAI_PORT_STAT_RED_WRED_DROPPED_PACKETS'],
+        48: ['SAI_PORT_STAT_WRED_DROPPED_PACKETS']
 }
 
 STATUS_NA = 'N/A'
@@ -122,6 +135,8 @@ CHASSIS_MIDPLANE_INFO_TABLE = 'CHASSIS_MIDPLANE_TABLE'
 class Portstat(object):
     def __init__(self, namespace, display_option):
         self.db = None
+        self.namespace = namespace
+        self.display_option = display_option
         self.multi_asic = multi_asic_util.MultiAsic(display_option, namespace)
         if device_info.is_supervisor():
             self.db = SonicV2Connector(use_unix_socket_path=False)
@@ -132,7 +147,10 @@ class Portstat(object):
         self.cnstat_dict['time'] = datetime.datetime.now()
         self.ratestat_dict = OrderedDict()
         if device_info.is_supervisor():
-            self.collect_stat_from_lc()
+            if device_info.is_voq_chassis() or (self.namespace is None and self.display_option != 'all'):
+                self.collect_stat_from_lc()
+            else:
+                self.collect_stat()
         else:
             self.collect_stat()
         return self.cnstat_dict, self.ratestat_dict
@@ -211,6 +229,51 @@ class Portstat(object):
         Collect the statisitics from all the asics present on the
         device and store in a dict
         """
+
+        global BUCKET_NUM
+        global wred_green_pkt_stat_capable
+        global wred_yellow_pkt_stat_capable
+        global wred_red_pkt_stat_capable
+        global wred_total_pkt_stat_capable
+        global is_wred_stats_reqd
+
+        wred_green_pkt_stat_capable = self.db.get(
+            self.db.STATE_DB,
+            "PORT_COUNTER_CAPABILITIES|WRED_ECN_PORT_WRED_GREEN_DROP_COUNTER",
+            "isSupported")
+        wred_yellow_pkt_stat_capable = self.db.get(
+            self.db.STATE_DB,
+            "PORT_COUNTER_CAPABILITIES|WRED_ECN_PORT_WRED_YELLOW_DROP_COUNTER",
+            "isSupported")
+        wred_red_pkt_stat_capable = self.db.get(
+            self.db.STATE_DB,
+            "PORT_COUNTER_CAPABILITIES|WRED_ECN_PORT_WRED_RED_DROP_COUNTER",
+            "isSupported")
+        wred_total_pkt_stat_capable = self.db.get(
+            self.db.STATE_DB,
+            "PORT_COUNTER_CAPABILITIES|WRED_ECN_PORT_WRED_TOTAL_DROP_COUNTER",
+            "isSupported")
+
+        # Remove the unsupported stats from the counter dict
+        if (is_wred_stats_reqd is False) or (wred_green_pkt_stat_capable != "true"):
+            if ('SAI_PORT_STAT_GREEN_WRED_DROPPED_PACKETS' in counter_bucket_dict.keys()):
+                del counter_bucket_dict['SAI_PORT_STAT_GREEN_WRED_DROPPED_PACKETS']
+                BUCKET_NUM = (BUCKET_NUM - 1)
+
+        if (is_wred_stats_reqd is False) or (wred_yellow_pkt_stat_capable != "true"):
+            if ('SAI_PORT_STAT_YELLOW_WRED_DROPPED_PACKETS' in counter_bucket_dict.keys()):
+                del counter_bucket_dict['SAI_PORT_STAT_YELLOW_WRED_DROPPED_PACKETS']
+                BUCKET_NUM = (BUCKET_NUM - 1)
+
+        if (is_wred_stats_reqd is False) or (wred_red_pkt_stat_capable != "true"):
+            if ('SAI_PORT_STAT_RED_WRED_DROPPED_PACKETS' in counter_bucket_dict.keys()):
+                del counter_bucket_dict['SAI_PORT_STAT_RED_WRED_DROPPED_PACKETS']
+                BUCKET_NUM = (BUCKET_NUM - 1)
+
+        if (is_wred_stats_reqd is False) or (wred_total_pkt_stat_capable != "true"):
+            if ('SAI_PORT_STAT_WRED_DROPPED_PACKETS' in counter_bucket_dict.keys()):
+                del counter_bucket_dict['SAI_PORT_STAT_WRED_DROPPED_PACKETS']
+                BUCKET_NUM = (BUCKET_NUM - 1)
 
         cnstat_dict, ratestat_dict = self.get_cnstat()
         self.cnstat_dict.update(cnstat_dict)
@@ -292,8 +355,11 @@ class Portstat(object):
             Get the port state
         """
         if device_info.is_supervisor():
-            self.db.connect(self.db.CHASSIS_STATE_DB, False)
-            return self.db.get(self.db.CHASSIS_STATE_DB, LINECARD_PORT_STAT_TABLE + "|" + port_name, "state")
+            if device_info.is_voq_chassis() or (self.namespace is None and self.display_option != 'all'):
+                self.db.connect(self.db.CHASSIS_STATE_DB, False)
+                return self.db.get(self.db.CHASSIS_STATE_DB, LINECARD_PORT_STAT_TABLE + "|" + port_name, "state")
+            else:
+                pass
 
         full_table_id = PORT_STATUS_TABLE_PREFIX + port_name
         for ns in self.multi_asic.get_ns_list_based_on_options():
@@ -405,7 +471,9 @@ class Portstat(object):
                 print(table_as_json(table, header))
             else:
                 print(tabulate(table, header, tablefmt='simple', stralign='right'))
-        if (multi_asic.is_multi_asic() or device_info.is_chassis()) and not use_json:
+        if device_info.is_voq_chassis():
+            return
+        elif (multi_asic.is_multi_asic() or device_info.is_packet_chassis()) and not use_json:
             print("\nReminder: Please execute 'show interface counters -d all' to include internal links\n")
 
     def cnstat_intf_diff_print(self, cnstat_new_dict, cnstat_old_dict, intf_list):
@@ -498,6 +566,42 @@ class Portstat(object):
                                                                                       old_cntr['tx_mca'])))
             print("Broadcast Packets Transmitted.................. {}".format(ns_diff(cntr['tx_bca'],
                                                                                       old_cntr['tx_bca'])))
+
+            if (
+                wred_green_pkt_stat_capable == "true"
+                or wred_yellow_pkt_stat_capable == "true"
+                or wred_red_pkt_stat_capable == "true"
+                or wred_total_pkt_stat_capable == "true"
+            ):
+                print("")
+                if wred_green_pkt_stat_capable == "true":
+                    print(
+                        "WRED Green Dropped Packets..................... {}".format(
+                            ns_diff(cntr['wred_grn_drp_pkt'], old_cntr['wred_grn_drp_pkt'])
+                        )
+                    )
+
+                if wred_yellow_pkt_stat_capable == "true":
+                    print(
+                        "WRED Yellow Dropped Packets.................... {}".format(
+                            ns_diff(cntr['wred_ylw_drp_pkt'], old_cntr['wred_ylw_drp_pkt'])
+                        )
+                    )
+
+                if wred_red_pkt_stat_capable == "true":
+                    print(
+                        "WRED Red Dropped Packets....................... {}".format(
+                            ns_diff(cntr['wred_red_drp_pkt'], old_cntr['wred_red_drp_pkt'])
+                        )
+                    )
+
+                if wred_total_pkt_stat_capable == "true":
+                    print(
+                        "WRED Total Dropped Packets..................... {}".format(
+                            ns_diff(cntr['wred_tot_drp_pkt'], old_cntr['wred_tot_drp_pkt'])
+                        )
+                    )
+                print("")
 
             print("Time Since Counters Last Cleared............... " + str(cnstat_old_dict.get('time')))
 
@@ -668,5 +772,7 @@ class Portstat(object):
                 print(table_as_json(table, header))
             else:
                 print(tabulate(table, header, tablefmt='simple', stralign='right'))
-        if (multi_asic.is_multi_asic() or device_info.is_chassis()) and not use_json:
+        if device_info.is_voq_chassis():
+            return
+        elif (multi_asic.is_multi_asic() or device_info.is_packet_chassis()) and not use_json:
             print("\nReminder: Please execute 'show interface counters -d all' to include internal links\n")

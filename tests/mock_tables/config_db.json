@@ -1277,7 +1277,7 @@
             "bank": "1",
             "link": "Ethernet12"
         },
-    "BGP_NEIGHBOR|10.0.0.1": {
+    "BGP_NEIGHBOR|default|10.0.0.1": {
         "asn": "65200",
         "holdtime": "10",
         "keepalive": "3",
@@ -1457,7 +1457,7 @@
         "nhopself": "0",
         "rrclient": "0"
     },
-    "BGP_NEIGHBOR|10.0.0.57": {
+    "BGP_NEIGHBOR|default|10.0.0.57": {
         "asn": "64013",
         "holdtime": "10",
         "keepalive": "3",
@@ -1682,7 +1682,7 @@
         "nhopself": "0",
         "rrclient": "0"
     },
-    "BGP_NEIGHBOR|fc00::72": {
+    "BGP_NEIGHBOR|default|fc00::72": {
         "asn": "64013",
         "holdtime": "10",
         "keepalive": "3",
@@ -1786,6 +1786,14 @@
         "FLEX_COUNTER_STATUS": "enable"
     },
     "FLEX_COUNTER_TABLE|ENI": {
+        "POLL_INTERVAL": "1000",
+        "FLEX_COUNTER_STATUS": "enable"
+    },
+    "FLEX_COUNTER_TABLE|WRED_ECN_QUEUE": {
+        "POLL_INTERVAL": "10000",
+        "FLEX_COUNTER_STATUS": "enable"
+    },
+    "FLEX_COUNTER_TABLE|WRED_ECN_PORT": {
         "POLL_INTERVAL": "1000",
         "FLEX_COUNTER_STATUS": "enable"
     },
@@ -2057,6 +2065,14 @@
         "admin_status": "up",
         "holdtime": "10",
         "asn": "65200",
+        "keepalive": "3"
+    },
+    "BGP_NEIGHBOR|Vlan100": {
+        "rrclient": "0",
+        "peer_type": "external",
+        "nhopself": "0",
+        "admin_status": "up",
+        "holdtime": "10",
         "keepalive": "3"
     },
     "SCHEDULER|scheduler.0": {

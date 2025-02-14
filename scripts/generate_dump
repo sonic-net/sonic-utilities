@@ -524,27 +524,42 @@ save_bgp_neighbor() {
     local ns=$(get_vtysh_namespace $asic_id)
 
     neighbor_list_v4=$(${timeout_cmd} bash -c "vtysh $ns -c 'show ip bgp neighbors' | grep 'BGP neighbor is' | awk -F '[, ]' '{print \$4}' | awk /\\\./")
-    for word in $neighbor_list_v4; do
-        save_cmd "vtysh $ns -c \"show ip bgp neighbors $word advertised-routes\"" "ip.bgp.neighbor.$word.adv$asic_id"
-        save_cmd "vtysh $ns -c \"show ip bgp neighbors $word routes\"" "ip.bgp.neighbor.$word.rcv$asic_id"
-    done
+    if [ ! -z "$neighbor_list_v4" ]; then
+        v4_cmd="vtysh "
+        for word in $neighbor_list_v4; do
+            v4_cmd="${v4_cmd} $ns -Ec 'show bgp ipv4 neighbors $word advertised-routes' "
+            v4_cmd="${v4_cmd} $ns -Ec 'show bgp ipv4 neighbors $word routes' "
+        done
+        save_cmd "$v4_cmd" "ip.bgp.neigh.adv.rcv.routes"
+    fi
+
     neighbor_list_v6=$(${timeout_cmd} bash -c "vtysh $ns -c 'show bgp ipv6 neighbors' | grep 'BGP neighbor is' | awk -F '[, ]' '{print \$4}' | awk /:/")
-    for word in $neighbor_list_v6; do
-        save_cmd "vtysh $ns -c \"show bgp ipv6 neighbors $word advertised-routes\"" "ipv6.bgp.neighbor.$word.adv$asic_id"
-        save_cmd "vtysh $ns -c \"show bgp ipv6 neighbors $word routes\"" "ipv6.bgp.neighbor.$word.rcv$asic_id"
-    done
+    if [ ! -z "$neighbor_list_v6" ]; then
+        v6_cmd="vtysh "
+        for word in $neighbor_list_v6; do
+            v6_cmd="${v6_cmd} $ns -Ec 'show bgp ipv6 neighbors $word advertised-routes' "
+            v6_cmd="${v6_cmd} $ns -Ec 'show bgp ipv6 neighbors $word routes' "
+        done
+        save_cmd "$v6_cmd" "ipv6.bgp.neigh.adv.rcv.routes"
+    fi
+
     vrf_list=""
     vrf_output=$(${timeout_cmd} bash -c "vtysh $ns -c 'show vrf'")
     if [ ! -z $vrf_output]; then
         vrf_list= echo $vrf_output | awk -F" " '{print $2}'
     fi
-    for vrf in $vrf_list; do
-        neighbor_list=`${timeout_cmd} bash -c "vtysh $ns -c 'show ip bgp vrf $vrf neighbors' | grep 'BGP neighbor is' | awk -F '[, ]' '{print \$4}'"`
-        for word in $neighbor_list; do
-            save_cmd "vtysh $ns -c \"show ip bgp vrf $vrf neighbors $word advertised-routes\"" "ip.bgp.neighbor.$vrf.$word.adv$asic_id"
-            save_cmd "vtysh $ns -c \"show ip bgp vrf $vrf neighbors $word routes\"" "ip.bgp.neighbor.$vrf.$word.rcv$asic_id"
+
+    if [ ! -z "$vrf_list" ]; then
+        vrf_cmd="vtysh "
+        for vrf in $vrf_list; do
+            neighbor_list=`${timeout_cmd} bash -c "vtysh $ns -c 'show ip bgp vrf $vrf neighbors' | grep 'BGP neighbor is' | awk -F '[, ]' '{print \$4}'"`
+            for word in $neighbor_list; do
+                vrf_cmd="${vrf_cmd} $ns -Ec 'show ip bgp vrf $vrf neighbors $word advertised-routes' "
+                vrf_cmd="${vrf_cmd} $ns -Ec 'show ip bgp vrf $vrf neighbors $word routes' "
+            done
         done
-    done
+        save_cmd "$vrf_cmd" "ip.bgp.neigh.vrf.adv.rcv.routes"
+    fi
 }
 
 ###############################################################################
@@ -857,6 +872,87 @@ save_proc() {
     done
 
     chmod ugo+rw -R $DUMPDIR/$BASE/proc
+}
+
+###############################################################################
+# Given list of sys files, saves sys files to tar.
+# Globals:
+#  V
+#  TARDIR
+#  MKDIR
+#  CP
+#  DUMPDIR
+#  TAR
+#  RM
+#  BASE
+#  TARFILE
+#  NOOP
+# Arguments:
+#  *sysfiles: variable-length list of sys file paths to save
+# Returns:
+#  None
+###############################################################################
+save_sys() {
+    trap 'handle_error $? $LINENO' ERR
+    local sysfiles="$@"
+    local cp_cmd="sudo cp"
+    
+    $MKDIR $V -p $TARDIR/sys
+    for f in $sysfiles
+    do
+        if $NOOP; then
+            if [ -e $f ]; then
+                echo "$cp_cmd $V -r -p $f $TARDIR/sys"
+            fi
+        else
+            ( [ -e $f ] && $cp_cmd $V -r -p $f $TARDIR/sys ) || echo "$f not found" > $TARDIR/$f
+        fi
+    done
+
+    chmod ugo+rw -R $DUMPDIR/$BASE/sys
+}
+
+###############################################################################
+# Given list of pstore directories or files, saves subdirectories and files to tar.
+# Globals:
+#  V
+#  TARDIR
+#  MKDIR
+#  CP
+#  DUMPDIR
+#  TAR
+#  RM
+#  BASE
+#  TARFILE
+#  NOOP
+# Arguments:
+#  *pstorefiles: variable-length list of pstore file paths to save
+# Returns:
+#  None
+###############################################################################
+save_pstore() {
+    trap 'handle_error $? $LINENO' ERR
+    local pstorefiles="$@"
+    PSTORE_DIR_LIST_INFO_FILE="techsupport_pstore_dir_listing_info"
+    $MKDIR $V -p $TARDIR/pstore
+    
+    echo "==================================" > $TARDIR/pstore/$PSTORE_DIR_LIST_INFO_FILE
+    echo "/var/lib/systemd/pstore files info" >> $TARDIR/pstore/$PSTORE_DIR_LIST_INFO_FILE
+    echo "==================================" >> $TARDIR/pstore/$PSTORE_DIR_LIST_INFO_FILE
+    for f in $pstorefiles
+    do
+        if $NOOP; then
+            if [ -e $f ]; then
+                echo "$CP $V -r -p $f/* $TARDIR/pstore"
+            fi
+        else
+            ls --time-style='+%d-%m-%Y %H:%M:%S' -last $f >> $TARDIR/pstore/$PSTORE_DIR_LIST_INFO_FILE
+            ls --time-style='+%d-%m-%Y %H:%M:%S' -last $f/* >> $TARDIR/pstore/$PSTORE_DIR_LIST_INFO_FILE
+            ( [ -e $f ] && $CP $V -r -p $f/* $TARDIR/pstore ) || echo "$f not found" > $TARDIR/$f
+        fi
+    done
+
+    chmod ugo+rw -R $DUMPDIR/$BASE/pstore
 }
 
 ###############################################################################
@@ -1393,7 +1489,7 @@ collect_mellanox_dfw_dumps() {
 # Returns:
 #  None
 ###############################################################################
-save_marvellcmd() {
+save_marvell_presteracmd() {
     trap 'handle_error $? $LINENO' ERR
 
     mkdir -p $LOGDIR/sdkdump
@@ -1410,37 +1506,37 @@ save_marvellcmd() {
 # Returns:
 #  None
 ###############################################################################
-collect_marvell() {
+collect_marvell_prestera() {
     trap 'handle_error $? $LINENO' ERR
 
-    save_marvellcmd "show version" "CPSS_version"
-    save_marvellcmd "debug-mode;xps-api call xpsDataIntegrityDumpSerInfo all" "SER_table"
-    save_marvellcmd "show traffic cpu rx statistic device 0" "CPU_stat"
-    save_marvellcmd "show interfaces status all" "INTERFACE_config"
-    save_marvellcmd "show port monitor" "PORT_mirror"
-    save_marvellcmd "show vlan device 0" "VLAN_table"
-    save_marvellcmd "show ip route device 0" "IP_route"
-    save_marvellcmd "show ipv6 route device 0" "IPV6_route"
-    save_marvellcmd "show ip route_fdb device 0" "IP_forward_route"
-    save_marvellcmd "show ipv6 route_fdb device 0" "IPV6_forward_route"
-    save_marvellcmd "show ip next-hop device 0" "NH_table"
-    save_marvellcmd "show mac address-table device 0" "MAC_forward"
-    save_marvellcmd "show mac address-table count device 0" "MAC_count"
-    save_marvellcmd "show tail-drop-allocated buffers all" "Tail_drop"
-    save_marvellcmd "show policy device 0" "POLICER_table"
-    save_marvellcmd "show system policy-tcam utilization device 0" "Policy_count"
-    save_marvellcmd "show access-list device 0 pcl-id 0 format ingress_udb_30" "UDB30_acl"
-    save_marvellcmd "show access-list device 0 pcl-id 0 format ingress_udb_60" "UDB60_acl"
-    save_marvellcmd "debug-mode;show drop counters 0" "Drop_count"
-    save_marvellcmd "debug-mode;dump all registers" "REGISTER_table"
-    save_marvellcmd "debug-mode;dump all tables0" "HW_table_0"
-    save_marvellcmd "debug-mode;dump all tables1" "HW_table_1"
-    save_marvellcmd "debug-mode;dump all tables2" "HW_table_2"
-    save_marvellcmd "debug-mode;dump all tables3" "HW_table_3"
-    save_marvellcmd "debug-mode;dump all tables4" "HW_table_4"
-    save_marvellcmd "debug-mode;dump all tables5" "HW_table_5"
-    save_marvellcmd "debug-mode;dump all tables6" "HW_table_6"
-    save_marvellcmd "debug-mode;dump all tables7" "HW_table_7"
+    save_marvell_presteracmd "show version" "CPSS_version"
+    save_marvell_presteracmd "debug-mode;xps-api call xpsDataIntegrityDumpSerInfo all" "SER_table"
+    save_marvell_presteracmd "show traffic cpu rx statistic device 0" "CPU_stat"
+    save_marvell_presteracmd "show interfaces status all" "INTERFACE_config"
+    save_marvell_presteracmd "show port monitor" "PORT_mirror"
+    save_marvell_presteracmd "show vlan device 0" "VLAN_table"
+    save_marvell_presteracmd "show ip route device 0" "IP_route"
+    save_marvell_presteracmd "show ipv6 route device 0" "IPV6_route"
+    save_marvell_presteracmd "show ip route_fdb device 0" "IP_forward_route"
+    save_marvell_presteracmd "show ipv6 route_fdb device 0" "IPV6_forward_route"
+    save_marvell_presteracmd "show ip next-hop device 0" "NH_table"
+    save_marvell_presteracmd "show mac address-table device 0" "MAC_forward"
+    save_marvell_presteracmd "show mac address-table count device 0" "MAC_count"
+    save_marvell_presteracmd "show tail-drop-allocated buffers all" "Tail_drop"
+    save_marvell_presteracmd "show policy device 0" "POLICER_table"
+    save_marvell_presteracmd "show system policy-tcam utilization device 0" "Policy_count"
+    save_marvell_presteracmd "show access-list device 0 pcl-id 0 format ingress_udb_30" "UDB30_acl"
+    save_marvell_presteracmd "show access-list device 0 pcl-id 0 format ingress_udb_60" "UDB60_acl"
+    save_marvell_presteracmd "debug-mode;show drop counters 0" "Drop_count"
+    save_marvell_presteracmd "debug-mode;dump all registers" "REGISTER_table"
+    save_marvell_presteracmd "debug-mode;dump all tables0" "HW_table_0"
+    save_marvell_presteracmd "debug-mode;dump all tables1" "HW_table_1"
+    save_marvell_presteracmd "debug-mode;dump all tables2" "HW_table_2"
+    save_marvell_presteracmd "debug-mode;dump all tables3" "HW_table_3"
+    save_marvell_presteracmd "debug-mode;dump all tables4" "HW_table_4"
+    save_marvell_presteracmd "debug-mode;dump all tables5" "HW_table_5"
+    save_marvell_presteracmd "debug-mode;dump all tables6" "HW_table_6"
+    save_marvell_presteracmd "debug-mode;dump all tables7" "HW_table_7"
 }
 
 ###############################################################################
@@ -1454,6 +1550,7 @@ collect_marvell() {
 ###############################################################################
 collect_broadcom() {
     trap 'handle_error $? $LINENO' ERR
+    local timeout_cmd="timeout --foreground ${TIMEOUT_MIN}m"
     local platform=$(show platform summary --json | python -c 'import sys, json; \
         print(json.load(sys.stdin)["platform"])')
     local hwsku=$(show platform summary --json | python -c 'import sys, json; \
@@ -1582,6 +1679,25 @@ collect_broadcom() {
 
     copy_from_masic_docker "syncd" "/var/log/diagrun.log" "/var/log/diagrun.log"
     copy_from_masic_docker "syncd" "/var/log/bcm_diag_post" "/var/log/bcm_diag_post"
+
+    # run 'hw-management-generate-dump.sh' script and save the result file
+    HW_DUMP_FILE=/usr/bin/hw-management-generate-dump.sh
+    if [ -f "$HW_DUMP_FILE" ]; then
+      ${CMD_PREFIX}${timeout_cmd} /usr/bin/hw-management-generate-dump.sh $ALLOW_PROCESS_STOP
+      ret=$?
+      if [ $ret -ne 0 ]; then
+        if [ $ret -eq $TIMEOUT_EXIT_CODE ]; then
+          echo "hw-management dump timedout after ${TIMEOUT_MIN} minutes."
+        else
+          echo "hw-management dump failed ..."
+        fi
+      else
+        save_file "/tmp/hw-mgmt-dump*" "hw-mgmt" false
+        rm -f /tmp/hw-mgmt-dump*
+      fi
+    else
+      echo "HW Mgmt dump script $HW_DUMP_FILE does not exist"
+    fi  
 }
 
 ###############################################################################
@@ -1790,6 +1906,12 @@ save_log_files() {
         file_list="${file_list} ${file_list_2}"
     fi
 
+    # save log files creation info
+    files_ts_info=/tmp/files.timestamp.info
+    ls --time-style='+%d-%m-%Y %H:%M:%S' -last /var/log/* > $files_ts_info
+    save_file $files_ts_info "log" true
+    rm -f $files_ts_info
+    
     # gzip up all log files individually before placing them in the incremental tarball
     for file in $file_list; do
         dest_dir="log"
@@ -2056,6 +2178,19 @@ main() {
     echo "[ Capture Proc State ] : $(($end_t-$start_t)) msec" >> $TECHSUPPORT_TIME_INFO
     wait
 
+    # capture /sys info - include acpi info and pre-process pstore info
+    save_sys /sys/firmware/acpi/tables /sys/fs/pstore &
+    end_t2=$(date +%s%3N)
+    echo "[ Capture Sys info ] : $(($end_t2-$end_t)) msec" >> $TECHSUPPORT_TIME_INFO
+    wait
+
+    # capture /var/lib/systemd/pstore info
+    start_t=$(date +%s%3N)
+    save_pstore /var/lib/systemd/pstore &
+    end_t=$(date +%s%3N)
+    echo "[ Capture pstore info ] : $(($end_t-$start_t)) msec" >> $TECHSUPPORT_TIME_INFO
+    wait
+    
     # Save all the processes within each docker
     save_cmd "show services" services.summary &
 
@@ -2126,10 +2261,10 @@ main() {
     wait
 
  	save_cmd "stpctl all" "stp.log"
-    save_cmd "show spanning_tree" "stp.show"
-    save_cmd "show spanning_tree statistics" "stp.stats"
-    save_cmd "show spanning_tree bpdu_guard" "stp.bg"
-    save_cmd "show spanning_tree root_guard" "stp.rg"
+    save_cmd "show spanning-tree" "stp.show"
+    save_cmd "show spanning-tree statistics" "stp.stats"
+    save_cmd "show spanning-tree bpdu_guard" "stp.bg"
+    save_cmd "show spanning-tree root_guard" "stp.rg"
 
     save_cmd "ps aux" "ps.aux" &
     save_cmd "top -b -n 1" "top" &
@@ -2203,8 +2338,8 @@ main() {
         collect_marvell_teralynx
     fi
 
-    if [ "$asic" = "marvell" ]; then
-        collect_marvell
+    if [ "$asic" = "marvell-prestera" ]; then
+        collect_marvell_prestera
     fi
 
     if [ "$asic" = "pensando" ]; then

@@ -14,6 +14,7 @@ import optparse
 import os
 import re
 import sys
+import errno
 
 import sonic_platform
 from sonic_platform_base.sonic_eeprom.eeprom_tlvinfo import TlvInfoDecoder
@@ -237,6 +238,12 @@ def main():
     platforms_without_eeprom_db = ['.*arista.*', '.*kvm.*']
     if any(re.match(p, platform) for p in platforms_without_eeprom_db):
         support_eeprom_db = False
+
+    # Currently, kvm does not support eeprom
+    platforms_without_eeprom = ['.*kvm.*']
+    if any(re.match(p, platform) for p in platforms_without_eeprom):
+        print('Platform {} does not support EEPROM'.format(platform))
+        return errno.ENODEV
 
     use_db = opts.db and support_eeprom_db
 
