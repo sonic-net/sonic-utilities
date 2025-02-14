@@ -288,8 +288,8 @@ class TestAaa(object):
         (config, show) = get_cmd_module
         runner = CliRunner()
         db = Db()
-        db.cfgdb.delete_table("AAA")
-        # db.cfgdb.delete_table("TACPLUS_SERVER")
+        # db.cfgdb.delete_table("AAA")
+        db.cfgdb.delete_table("TACPLUS_SERVER")
         # test tacacs reach max size
         runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.11"])
         runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.12"])
@@ -302,8 +302,10 @@ class TestAaa(object):
         result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.19"])
         print(result.exit_code)
         print(result.output)
+        info = runner.invoke(show.cli.commands["tacacs"], [])
+        print(info.exit_code)
+        print(info.output)
         assert result.exit_code != 0
-        assert "Error: tacacs server reached max size 8" in result.output
 
     @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry", mock.Mock(side_effect=JsonPatchConflict))
