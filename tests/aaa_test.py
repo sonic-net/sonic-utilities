@@ -291,16 +291,17 @@ class TestAaa(object):
         db.cfgdb.delete_table("AAA")
         # db.cfgdb.delete_table("TACPLUS_SERVER")
         # test tacacs reach max size
-        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.11"], obj=db)
-        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.12"], obj=db)
-        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.13"], obj=db)
-        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.14"], obj=db)
-        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.15"], obj=db)
-        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.16"], obj=db)
-        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.17"], obj=db)
-        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.18"], obj=db)
-        result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.19"], obj=db)
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.11"])
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.12"])
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.13"])
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.14"])
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.15"])
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.16"])
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.17"])
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.18"])
+        result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.19"])
         print(result.exit_code)
+        print(result.output)
         assert result.exit_code != 0
         assert "Error: tacacs server reached max size 8" in result.output
 
