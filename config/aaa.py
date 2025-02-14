@@ -9,6 +9,7 @@ import utilities_common.cli as clicommon
 
 ADHOC_VALIDATION = True
 RADIUS_MAXSERVERS = 8
+TACACS_MAXSERVERS = 8
 RADIUS_PASSKEY_MAX_LEN = 65
 VALID_CHARS_MSG = "Valid chars are ASCII printable except SPACE, '#', and ','"
 
@@ -265,9 +266,12 @@ def add(address, timeout, key, auth_type, port, pri, use_mgmt_vrf):
 
     config_db = ValidatedConfigDBConnector(ConfigDBConnector())
     config_db.connect()
-    old_data = config_db.get_entry('TACPLUS_SERVER', address)
-    if old_data != {}:
-        click.echo('server %s already exists' % address)
+    old_data = config_db.get_table('TACPLUS_SERVER')
+    ctx = click.get_current_context()
+    if address in old_data:
+        ctx.fail(f'server {address} already exists')
+    if len(old_data) == TACACS_MAXSERVERS:
+        ctx.fail(f'tacacs server reached max size {TACACS_MAXSERVERS}')
     else:
         data = {
             'tcp_port': str(port),
@@ -284,7 +288,6 @@ def add(address, timeout, key, auth_type, port, pri, use_mgmt_vrf):
         try:
             config_db.set_entry('TACPLUS_SERVER', address, data)
         except ValueError as e:
-            ctx = click.get_current_context()
             ctx.fail("Invalid ip address. Error: {}".format(e))
 tacacs.add_command(add)
 
@@ -511,11 +514,11 @@ def add(address, retransmit, timeout, key, auth_type, auth_port, pri, use_mgmt_v
     config_db = ValidatedConfigDBConnector(ConfigDBConnector())
     config_db.connect()
     old_data = config_db.get_table('RADIUS_SERVER')
-    if address in old_data :
-        click.echo('server %s already exists' % address)
-        return
+    ctx = click.get_current_context()
+    if address in old_data:
+        ctx.fail(f'server {address} already exists')
     if len(old_data) == RADIUS_MAXSERVERS:
-        click.echo('Maximum of %d can be configured' % RADIUS_MAXSERVERS)
+        ctx.fail(f'Maximum of {RADIUS_MAXSERVERS} can be configured')
     else:
         data = {
             'auth_port': str(auth_port),
@@ -547,7 +550,6 @@ def add(address, retransmit, timeout, key, auth_type, auth_port, pri, use_mgmt_v
         try:
             config_db.set_entry('RADIUS_SERVER', address, data)
         except ValueError as e:
-            ctx = click.get_current_context()
             ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 radius.add_command(add)
 

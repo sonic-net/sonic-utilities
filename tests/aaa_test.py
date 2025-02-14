@@ -284,6 +284,31 @@ class TestAaa(object):
         assert result.exit_code == 0
         assert result.output == show_aaa_disable_accounting_output
 
+    def test_config_aaa_tacacs_reach_maxsize(self, get_cmd_module):
+        (config, show) = get_cmd_module
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.delete_table("AAA")
+        runner.invoke(config.config.commands["aaa"], ["authentication", "login", "local tacacs+"], obj=db)
+
+        db.cfgdb.delete_table("TACPLUS_SERVER")
+        # test tacacs reach max size
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.11"])
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.12"])
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.13"])
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.14"])
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.15"])
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.16"])
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.17"])
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.18"])
+        result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.19"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        info = runner.invoke(show.cli.commands["tacacs"], [])
+        print(info.exit_code)
+        print(info.output)
+        assert result.exit_code != 0
+
     @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry", mock.Mock(side_effect=JsonPatchConflict))
     def test_config_aaa_tacacs_delete_yang_validation(self):
