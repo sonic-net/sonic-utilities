@@ -288,7 +288,9 @@ class TestAaa(object):
         (config, show) = get_cmd_module
         runner = CliRunner()
         db = Db()
-        # db.cfgdb.delete_table("AAA")
+        db.cfgdb.delete_table("AAA")
+        runner.invoke(config.config.commands["aaa"], ["authentication", "login", "local tacacs+"], obj=db)
+
         db.cfgdb.delete_table("TACPLUS_SERVER")
         # test tacacs reach max size
         runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.11"])
@@ -299,7 +301,7 @@ class TestAaa(object):
         runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.16"])
         runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.17"])
         runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.18"])
-        result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.19"])
+        result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.19"], obj=db)
         print(result.exit_code)
         print(result.output)
         info = runner.invoke(show.cli.commands["tacacs"], [])
