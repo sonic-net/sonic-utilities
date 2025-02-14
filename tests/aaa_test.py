@@ -288,8 +288,8 @@ class TestAaa(object):
         (config, show) = get_cmd_module
         runner = CliRunner()
         db = Db()
-        db.cfgdb.delete_table("TACPLUS_SERVER")
-
+        db.cfgdb.delete_table("AAA")
+        # db.cfgdb.delete_table("TACPLUS_SERVER")
         # test tacacs reach max size
         runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.11"], obj=db)
         runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.12"], obj=db)
