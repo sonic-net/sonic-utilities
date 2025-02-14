@@ -291,14 +291,14 @@ class TestAaa(object):
         db.cfgdb.delete_table("TACPLUS_SERVER")
 
         # test tacacs reach max size
-        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.11"], obj=obj)
-        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.12"], obj=obj)
-        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.13"], obj=obj)
-        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.14"], obj=obj)
-        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.15"], obj=obj)
-        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.16"], obj=obj)
-        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.17"], obj=obj)
-        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.18"], obj=obj)
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.11"], obj=db)
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.12"], obj=db)
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.13"], obj=db)
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.14"], obj=db)
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.15"], obj=db)
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.16"], obj=db)
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.17"], obj=db)
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.18"], obj=db)
         result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.19"], obj=db)
         print(result.exit_code)
         assert result.exit_code != 0
