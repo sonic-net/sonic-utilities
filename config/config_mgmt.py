@@ -8,7 +8,6 @@ import re
 import shutil
 import syslog
 import tempfile
-import yang as ly
 from json import load
 from sys import flags
 from time import sleep as tsleep
@@ -35,8 +34,7 @@ class ConfigMgmt():
     to verify config for the commands which are capable of change in config DB.
     '''
 
-    def __init__(self, source="configDB", debug=False, allowTablesWithoutYang=True,
-                 sonicYangOptions=0, configdb=None):
+    def __init__(self, source="configDB", debug=False, allowTablesWithoutYang=True, configdb=None):
         '''
         Initialise the class, --read the config, --load in data tree.
 
@@ -55,7 +53,6 @@ class ConfigMgmt():
             self.configdbJsonOut = None
             self.source = source
             self.allowTablesWithoutYang = allowTablesWithoutYang
-            self.sonicYangOptions = sonicYangOptions
             self.configdb = configdb
 
             # logging vars
@@ -71,7 +68,7 @@ class ConfigMgmt():
         return
 
     def __init_sonic_yang(self):
-        self.sy = sonic_yang.SonicYang(YANG_DIR, debug=self.DEBUG, sonic_yang_options=self.sonicYangOptions)
+        self.sy = sonic_yang.SonicYang(YANG_DIR, debug=self.DEBUG)
         # load yang models
         self.sy.loadYangModel()
         # load jIn from config DB or from config DB json file.
@@ -291,8 +288,7 @@ class ConfigMgmt():
 
         # Instantiate new context since parse_module_mem() loads the module into context.
         sy = sonic_yang.SonicYang(YANG_DIR)
-        module = sy.ctx.parse_module_mem(yang_module_str, ly.LYS_IN_YANG)
-        return module.name()
+        return sy.load_module_str_name(yang_module_str);
 
 
 # End of Class ConfigMgmt
