@@ -301,7 +301,7 @@ class TestAaa(object):
         runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.16"])
         runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.17"])
         runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.18"])
-        result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.19"], obj=db)
+        result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.19"])
         print(result.exit_code)
         print(result.output)
         info = runner.invoke(show.cli.commands["tacacs"], [])
