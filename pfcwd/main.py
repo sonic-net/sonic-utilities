@@ -105,17 +105,6 @@ def get_server_facing_ports(db):
     return server_facing_ports
 
 
-def get_bp_ports(db):
-    """    Get all the backplane ports.    """
-    candidates = db.get_table('PORT')
-    bp_ports = []
-    for port in candidates:
-        if candidates[port].get('admin_status') == 'up' \
-           and candidates[port].get('role') == 'Int':
-            bp_ports.append(port)
-    return bp_ports
-
-
 class PfcwdCli(object):
     def __init__(
         self, db=None, namespace=None, display=constants.DISPLAY_ALL
@@ -376,10 +365,9 @@ class PfcwdCli(object):
         )
 
         # Get active ports from Config DB
-        external_ports = list(self.config_db.get_table('DEVICE_NEIGHBOR').keys())
-        bp_ports = get_bp_ports(self.config_db)
-
-        active_ports = natsorted(list(set(external_ports + bp_ports)))
+        active_ports = natsorted(
+            list(self.config_db.get_table('DEVICE_NEIGHBOR').keys())
+        )
 
         if not enable or enable.lower() != "enable":
             return
