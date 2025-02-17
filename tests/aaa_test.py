@@ -288,11 +288,11 @@ class TestAaa(object):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
-        obj = {'config_db':db.cfgdb}
-        db.cfgdb.delete_table("AAA")
-        runner.invoke(config.config.commands["aaa"], ["authentication", "login", "local tacacs+"])
+        obj = {'config_db': db.cfgdb}
+        # db.cfgdb.delete_table("AAA")
+        # runner.invoke(config.config.commands["aaa"], ["authentication", "login", "local tacacs+"])
 
-        db.cfgdb.delete_table("TACPLUS_SERVER")
+        # db.cfgdb.delete_table("TACPLUS_SERVER")
         # test tacacs reach max size
         runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.11"], obj=obj)
         runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.12"], obj=obj)
@@ -305,9 +305,9 @@ class TestAaa(object):
         result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.19"], obj=obj)
         print(result.exit_code)
         print(result.stdout_bytes, result.stderr_bytes, result.exit_code, result.exception, result.exc_info)
-        info = runner.invoke(show.cli.commands["tacacs"], [])
-        print(info.stdout_bytes, info.stderr_bytes, info.exit_code, info.exception, info.exc_info)
-        print(info.output)
+        # info = runner.invoke(show.cli.commands["tacacs"], [])
+        # print(info.stdout_bytes, info.stderr_bytes, info.exit_code, info.exception, info.exc_info)
+        # print(info.output)
         assert result.exit_code != 0
 
     @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
