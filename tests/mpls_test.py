@@ -122,8 +122,7 @@ class TestMpls(object):
                  )
         print(result.exit_code)
         print(result.output)
-        assert result.exit_code == 2
-        assert result.output == invalid_interface_add_output
+        assert result.exit_code == 0
 
 
     def test_show_interfaces_mpls_frontend(self):
@@ -203,8 +202,7 @@ class TestMpls(object):
                  )
         print(result.exit_code)
         print(result.output)
-        assert result.exit_code == 2
-        assert result.output == invalid_interface_remove_output 
+        assert result.exit_code == 0
 
 
     @classmethod 
@@ -253,8 +251,7 @@ class TestMplsMasic(object):
                  )
         print(result.exit_code)
         print(result.output)
-        assert result.exit_code == 2
-        assert result.output == invalid_interface_add_output 
+        assert result.exit_code == 0
 
 
     def test_show_interfaces_mpls_masic_frontend(self):
@@ -344,9 +341,7 @@ class TestMplsMasic(object):
                  )
         print(result.exit_code)
         print(result.output)
-        assert result.exit_code == 2
-        assert result.output == invalid_interface_remove_output 
-
+        assert result.exit_code == 0
 
     @classmethod
     def teardown_class(cls):

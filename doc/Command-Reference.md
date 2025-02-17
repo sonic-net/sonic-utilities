@@ -29,6 +29,10 @@
 * [ARP & NDP](#arp--ndp)
   * [ARP show commands](#arp-show-commands)
   * [NDP show commands](#ndp-show-commands)
+* [ASIC SDK health event](#asic-sdk-health-event)
+  * [ASIC SDK health event config commands](#asic-sdk-health-event-config-commands)
+  * [ASIC SDK health event show commands](#asic-sdk-health-event-show-commands)
+  * [ASIC SDK health event clear commands](#asic-sdk-health-event-clear-commands)
 * [BFD](#bfd)
   * [BFD show commands](#bfd-show-commands)
 * [BGP](#bgp)
@@ -39,10 +43,13 @@
   * [Console config commands](#console-config-commands)
   * [Console connect commands](#console-connect-commands)
   * [Console clear commands](#console-clear-commands)
+  * [DPU serial console utility](#dpu-serial-console-utility)
 * [CMIS firmware upgrade](#cmis-firmware-upgrade)
   * [CMIS firmware version show commands](#cmis-firmware-version-show-commands)
   * [CMIS firmware upgrade commands](#cmis-firmware-upgrade-commands)
   * [CMIS firmware target mode commands](#cmis-firmware-target-mode-commands)
+* [CMIS debug](#cmis-debug)
+* [CMIS debug loopback](#cmis-debug-loopback)
 * [DHCP Relay](#dhcp-relay)
   * [DHCP Relay show commands](#dhcp-relay-show-commands)
   * [DHCP Relay clear commands](#dhcp-relay-clear-commands)
@@ -92,6 +99,11 @@
 * [Linux Kernel Dump](#linux-kernel-dump)
   * [Linux Kernel Dump show commands](#Linux-Kernel-Dump-show-commands)
   * [Linux Kernel Dump config commands](#Linux-Kernel-Dump-config-commands)
+* [LDAP](#LDAP)
+  * [show LDAP global commands](#LDAP-global-show-commands)
+  * [LDAP global config commands](#LDAP-global-config-commands)
+  * [show LDAP server commands](#LDAP-server-show-commands)
+  * [LDAP server config commands](#LDAP-server-config-commands)
 * [LLDP](#lldp)
   * [LLDP show commands](#lldp-show-commands)
 * [Loading, Reloading And Saving Configuration](#loading-reloading-and-saving-configuration)
@@ -162,7 +174,7 @@
 * [Subinterfaces](#subinterfaces)
   * [Subinterfaces Show Commands](#subinterfaces-show-commands)
   * [Subinterfaces Config Commands](#subinterfaces-config-commands)
-* [Switchport Modes](#switchport-modes)
+  * [Switchport Modes](#switchport-modes)
   * [Switchport Modes Config Commands](#switchportmodes-config-commands)
 * [Syslog](#syslog)
   * [Syslog show commands](#syslog-show-commands)
@@ -213,11 +225,15 @@
   * [Static DNS show command](#static-dns-show-command)
 * [Wake-on-LAN Commands](#wake-on-lan-commands)
   * [Send Wake-on-LAN Magic Packet command](#send-wake-on-lan-magic-packet-command)
+* [Banner Commands](#banner-commands)
+  * [Banner config commands](#banner-config-commands)
+  * [Banner show command](#banner-show-command)
 
 ## Document History
 
 | Version | Modification Date | Details |
 | --- | --- | --- |
+| v9 | Sep-19-2024 | Add DPU serial console utility |
 | v8 | Oct-09-2023 | Add CMIS firmware upgrade commands |
 | v7 | Jun-22-2023 | Add static DNS show and config commands |
 | v6 | May-06-2021 | Add SNMP show and config commands |
@@ -697,11 +713,52 @@ This command displays the cause of the previous reboot
   ```
 
 - Example:
+  ### Shown below is the output of the CLI when executed on the NPU
   ```
   admin@sonic:~$ show reboot-cause
   User issued reboot command [User: admin, Time: Mon Mar 25 01:02:03 UTC 2019]
   ```
+  ### Shown below is the output of the CLI when executed on the DPU
+  ```
+  admin@sonic:~$ show reboot-cause
+  reboot
+  ```
+```
+Note: The CLI extensions shown in this block are applicable only to smartswitch platforms. When these extensions are used on a regular switch the extension will be ignored and the output will be the same irrespective of the options.
 
+CLI Extensions Applicable to Smartswtich
+  - show reboot-cause all
+  - show reboot-cause history all
+  - show reboot-cause history DPUx
+```
+**show reboot-cause all**
+
+This command displays the cause of the previous reboot for the Switch and the DPUs for which the midplane interfaces are up.
+
+- Usage:
+  ```
+  show reboot-cause all
+  ```
+
+- Example:
+  ### Shown below is the output of the CLI when executed on the NPU
+  ```
+  root@MtFuji:/home/cisco# show reboot-cause all
+  Device    Name                 Cause         Time                             User
+  --------  -------------------  ------------  -------------------------------  ------
+  NPU       2025_01_21_09_01_11  Power Loss    N/A                              N/A
+  DPU1      2025_01_21_09_03_43  Non-Hardware  Tue Jan 21 09:03:43 AM UTC 2025
+  DPU0      2025_01_21_09_03_37  Non-Hardware  Tue Jan 21 09:03:37 AM UTC 2025
+
+  ```
+  ### Shown below is the output of the CLI when executed on the DPU
+  ```
+  root@sonic:/home/admin# show reboot-cause all
+  Usage: show reboot-cause [OPTIONS] COMMAND [ARGS]...
+  Try "show reboot-cause -h" for help.
+
+  Error: No such command "all".
+  ```
 **show reboot-cause history**
 
 This command displays the history of the previous reboots up to 10 entry
@@ -712,15 +769,74 @@ This command displays the history of the previous reboots up to 10 entry
   ```
 
 - Example:
+  ### Shown below is the output of the CLI when executed on the NPU
   ```
-  admin@sonic:~$ show reboot-cause history
-  Name                 Cause        Time                          User    Comment
-  -------------------  -----------  ----------------------------  ------  ---------
-  2020_10_09_02_33_06  reboot       Fri Oct  9 02:29:44 UTC 2020  admin
+  root@MtFuji:/home/cisco# show reboot-cause history
+  Name                 Cause       Time    User    Comment
+  -------------------  ----------  ------  ------  ----------------------------------------------------------------------------------
+  2020_10_09_02_40_11  Power Loss  Fri Oct  9 02:40:11 UTC 2020     N/A     Unknown (First boot of SONiC version azure_cisco_master.308-dirty-20250120.220704)
   2020_10_09_01_56_59  reboot       Fri Oct  9 01:53:49 UTC 2020  admin
-  2020_10_09_02_00_53  fast-reboot  Fri Oct  9 01:58:04 UTC 2020  admin
-  2020_10_09_04_53_58  warm-reboot  Fri Oct  9 04:51:47 UTC 2020  admin
   ```
+  ### Shown below is the output of the CLI when executed on the DPU
+  ```
+  root@sonic:/home/admin# show reboot-cause history
+  Name                 Cause    Time                             User    Comment
+  -------------------  -------  -------------------------------  ------  ---------
+  2025_01_21_16_49_20  Unknown  N/A                              N/A     N/A
+  2025_01_17_11_25_58  reboot   Fri Jan 17 11:23:24 AM UTC 2025  admin   N/A
+  ```
+**show reboot-cause history all**
+
+This command displays the history of the previous reboots up to 10 entry of the Switch and the DPUs for which the midplane interfaces are up.
+
+- Usage:
+  ```
+  show reboot-cause history all
+  ```
+
+- Example:
+  ### Shown below is the output of the CLI when executed on the NPU
+  ```
+  root@MtFuji:~# show reboot-cause history all
+  Device    Name                 Cause                                      Time                             User    Comment
+  --------  -------------------  -----------------------------------------  -------------------------------  ------  -------
+  NPU       2024_07_23_23_06_57  Kernel Panic                               Tue Jul 23 11:02:27 PM UTC 2024  N/A     N/A
+  NPU       2024_07_23_11_21_32  Power Loss                                 N/A                              N/A     Unknown
+  ```
+  ### Shown below is the output of the CLI when executed on the DPU
+  ```
+  root@sonic:/home/admin# show reboot-cause history all
+  Usage: show reboot-cause history [OPTIONS]
+  Try "show reboot-cause history -h" for help.
+
+  Error: Got unexpected extra argument (all)
+  ```
+**show reboot-cause history DPU1**
+
+This command displays the history of the previous reboots up to 10 entry of DPU1. If DPU1 is powered down then there won't be any data in the DB and the "show reboot-cause history DPU1" output will be blank.
+
+- Usage:
+  ```
+  show reboot-cause history DPU1
+  ```
+
+- Example:
+  ### Shown below is the output of the CLI when executed on the NPU
+  ```
+  root@MtFuji:~# show reboot-cause history DPU1
+  Device    Name    Cause                                      Time    User    Comment
+  --------  ------  -----------------------------------------  ------  ------  ---------
+  DPU1      DPU1    Software causes (Hardware watchdog reset)  N/A     N/A     N/A
+  ```
+  ### Shown below is the output of the CLI when executed on the DPU
+  ```
+  root@sonic:/home/admin# show reboot-cause history DPU1
+  Usage: show reboot-cause history [OPTIONS]
+  Try "show reboot-cause history -h" for help.
+
+  Error: Got unexpected extra argument (DPU1)
+  ```
+
 
 **show uptime**
 
@@ -1930,6 +2046,158 @@ This command is used to display: ACL rules, tables and their priority, ACL packe
 
   If the `PACKETS COUNT` and `BYTES COUNT` fields have some numeric value it means that it is a SONiC ACL's and those counters are created in SONiC `COUNTERS_DB`.
 
+## ASIC SDK health event
+
+### ASIC SDK health event config commands
+
+**config asic-sdk-health-event suppress **
+
+This command is for a customer to configure the categories that he/she wants to suppress for a certain severity.
+
+- Usage:
+  ```
+  config config asic-sdk-health-event suppress <severity> [--category-list <category-list>|<none>|<all>] [--max-events <max-events>]
+  ```
+
+  - Parameters:
+    - severity: Specify the severity whose ASIC/SDK health events to be suppressed. It can be one of `fatal`, `warning`, and `notice`.
+    - category-list: Specify the categories from which the ASIC/SDK health events to be suppressed. It is a list whose element is one of `software`, `firmware`, `cpu_hw`, `asic_hw` separated by a comma.
+      If the category-list is `none`, none category is suppressed and all the categories will be notified for `severity`. In this case, it will not be stored in the CONFIG_DB.
+      If the category-list is `all`, all the categories are suppressed and none category will be notified for `severity`.
+    - max-events: Specify the maximum number of events of the severity to be stored in the STATE_DB.
+      There is no limitation if the max-events is 0. In this case, it will not be stored in the CONFIG_DB.
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config asic-sdk-health-event suppress fatal --category-list cpu_hw,software --max-events 10240
+  ```
+
+  This command will suppress ASIC/SDK health events whose severity is fatal and cagetory is cpu_hw or software. Maximum number of such events in the STATE_DB is 10240.
+
+### ASIC SDK health event show commands
+
+**show asic-sdk-health-event received**
+
+This command displays the received ASIC/SDK health events.
+
+- Usage:
+  ```
+  show asic-sdk-health-event received [-n <asicname>]
+  ```
+
+- Details:
+  - show asic-sdk-health-event received: Display the ASIC/SDK health events received on all ASICs
+  - show asic-sdk-health-event received -n asic0: Display all the ASIC/SDK health events received on asic0
+
+
+- Example:
+  ```
+  admin@sonic:~$ show asic-sdk-health-event received
+  Time                 Severity     Category   Description
+  -------------------  -----------  ---------  -----------------
+  2023-10-20 05:07:34  fatal        firmware   Command timeout
+  2023-10-20 03:06:25  fatal        software   SDK daemon keep alive failed
+  2023-10-20 05:07:34  fatal        asic_hw    Uncorrectable ECC error
+  2023-10-20 01:58:43  notice       asic_hw    Correctable ECC error
+  ```
+
+- Example on a multi ASIC system:
+  ```
+  admin@sonic:~$ show asic-sdk-health-event received
+  asic0:
+  Time                 Severity     Category   Description
+  -------------------  -----------  ---------  -----------------
+  2023-10-20 05:07:34  fatal        firmware   Command timeout
+  2023-10-20 03:06:25  fatal        software   SDK daemon keep alive failed
+  asic1:
+  Time                 Severity     Category   Description
+  -------------------  -----------  ---------  -----------------
+  2023-10-20 05:07:34  fatal        asic_hw    Uncorrectable ECC error
+  2023-10-20 01:58:43  notice       asic_hw    Correctable ECC error
+  ```
+
+Optionally, you can specify the asic name in order to display the ASIC/SDK health events received on that particular ASIC on a multi ASIC system
+
+- Example:
+  ```
+  admin@sonic:~$ show asic-sdk-health-event received -n asic1
+  asic1:
+  Time                 Severity     Category   Description
+  -------------------  -----------  ---------  -----------------
+  2023-10-20 05:07:34  fatal        firmware   Command timeout
+  ```
+
+**show asic-sdk-health-event suppress-configuration**
+
+This command displays the suppressed category list and maximum number of events of ASIC/SDK health events.
+
+- Usage:
+  ```
+  show asic-sdk-health-event suppressed-category-list [-n <asicname>]
+  ```
+
+- Details:
+  - show asic-sdk-health-event suppress-configuration: Display the ASIC/SDK health event suppress category list and maximum number of events on all ASICs
+  - show asic-sdk-health-event suppress-configuration -n asic0: Display all the ASIC/SDK health event suppress category list and maximum number of events on asic0
+
+
+- Example:
+  ```
+  admin@sonic:~$ show asic-sdk-health-event suppress-configuration
+  Severity    Suppressed category-list    Max events
+  ----------  --------------------------  ------------
+  fatal       software                    unlimited
+  notice      none                        1024
+  warning     firmware,asic_hw            10240
+  ```
+
+- Example on a multi ASIC system:
+  ```
+  admin@sonic:~$ show asic-sdk-health-event suppress-configuration
+  asic0:
+  Severity    Suppressed category-list    Max events
+  ----------  --------------------------  ------------
+  notice      none                        1024
+  warning     firmware,asic_hw            10240
+  asic1:
+  Severity    Suppressed category-list    Max events
+  ----------  --------------------------  ------------
+  fatal       software                    unlimited
+  ```
+
+Optionally, you can specify the asic name in order to display the ASIC/SDK health event suppress category list on that particular ASIC on a multi ASIC system
+
+- Example:
+  ```
+  admin@sonic:~$ show asic-sdk-health-event suppress-configuration -n asic1
+  asic1:
+  Severity    Suppressed category-list    Max events
+  ----------  --------------------------  ------------
+  fatal       software                    unlimited
+  ```
+
+### ASIC SDK health event clear commands
+
+**sonic-clear asic-sdk-health-event**
+
+This command clears all the received ASIC/SDK health events.
+
+- Usage:
+  ```
+  sonic-clear asic-sdk-health-event [-n <asicname>]
+  ```
+
+- Details:
+  - sonic-clear asic-sdk-health-event: Clear the ASIC/SDK health events received on all ASICs
+  - sonic-clear asic-sdk-health-event -n asic0: Display all the ASIC/SDK health events received on asic0
+
+
+- Example:
+  ```
+  admin@sonic:~$ sonic-clear asic-sdk-health-event
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#asic-sdk-health-event)
 
 ## ARP & NDP
 
@@ -2469,6 +2737,26 @@ When enabled, BGP will not advertise routes which aren't yet offloaded.
   Disabled
   ```
 
+**show bgp device-global**
+
+This command displays BGP device global configuration.
+
+- Usage:
+  ```bash
+  show bgp device-global
+  ```
+
+- Options:
+  - _-j,--json_: display in JSON format
+
+- Example:
+  ```bash
+  admin@sonic:~$ show bgp device-global
+  TSA      W-ECMP
+  -------  -------
+  enabled  enabled
+  ```
+
 Go Back To [Beginning of the document](#) or [Beginning of this section](#bgp)
 
 ### BGP config commands
@@ -2579,6 +2867,26 @@ Once enabled, BGP will not advertise routes which aren't yet offloaded.
   admin@sonic:~$ sudo config suppress-fib-pending disabled 
   ```
 
+**config bgp device-global tsa/w-ecmp**
+
+This command is used to manage BGP device global configuration.
+
+Feature list:
+1. TSA - Traffic-Shift-Away
+2. W-ECMP - Weighted-Cost Multi-Path
+
+- Usage:
+  ```bash
+  config bgp device-global tsa <enabled|disabled>
+  config bgp device-global w-ecmp <enabled|disabled>
+  ```
+
+- Examples:
+  ```bash
+  admin@sonic:~$ config bgp device-global tsa enabled
+  admin@sonic:~$ config bgp device-global w-ecmp enabled
+  ```
+
 Go Back To [Beginning of the document](#) or [Beginning of this section](#bgp)
 
 ## Console
@@ -2622,7 +2930,7 @@ Optionally, you can display configured console ports only by specifying the `-b`
        1    9600         Enabled      -             -   switch1
   ```
 
-## Console config commands
+### Console config commands
 
 This sub-section explains the list of configuration options available for console management module.
 
@@ -2798,6 +3106,88 @@ Optionally, you can clear with a remote device name by specifying the `-d` or `-
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#console)
 
+### DPU serial console utility
+
+**dpu-tty.py**
+
+This command allows user to connect to a DPU serial console via TTY device with
+interactive CLI program: picocom. The configuration is from platform.json. The
+utility works only on smart switch that provides DPU UART connections through
+/dev/ttyS* devices.
+
+- Usage:
+  ```
+  dpu-tty.py (-n|--name) <DPU_NAME> [(-b|-baud) <BAUD_RATE>] [(-t|-tty) <TTY>]
+  ```
+
+- Example:
+  ```
+  root@MtFuji:/home/cisco# dpu-tty.py -n dpu0
+  picocom v3.1
+
+  port is        : /dev/ttyS4
+  flowcontrol    : none
+  baudrate is    : 115200
+  parity is      : none
+  databits are   : 8
+  stopbits are   : 1
+  escape is      : C-a
+  local echo is  : no
+  noinit is      : no
+  noreset is     : no
+  hangup is      : no
+  nolock is      : no
+  send_cmd is    : sz -vv
+  receive_cmd is : rz -vv -E
+  imap is        : 
+  omap is        : 
+  emap is        : crcrlf,delbs,
+  logfile is     : none
+  initstring     : none
+  exit_after is  : not set
+  exit is        : no
+
+  Type [C-a] [C-h] to see available commands
+  Terminal ready
+
+  sonic login: admin
+  Password: 
+  Linux sonic 6.1.0-11-2-arm64 #1 SMP Debian 6.1.38-4 (2023-08-08) aarch64
+  You are on
+    ____   ___  _   _ _  ____
+   / ___| / _ \| \ | (_)/ ___|
+   \___ \| | | |  \| | | |
+    ___) | |_| | |\  | | |___
+   |____/ \___/|_| \_|_|\____|
+
+  -- Software for Open Networking in the Cloud --
+
+  Unauthorized access and/or use are prohibited.
+  All access and/or use are subject to monitoring.
+
+  Help:    https://sonic-net.github.io/SONiC/
+
+  Last login: Mon Sep  9 21:39:44 UTC 2024 on ttyS0
+  admin@sonic:~$ 
+  Terminating...
+  Thanks for using picocom
+  root@MtFuji:/home/cisco#
+  ```
+
+Optionally, user may overwrite baud rate for experiment.
+
+- Example:
+  ```
+  root@MtFuji:/home/cisco# dpu-tty.py -n dpu1 -b 9600
+  ```
+
+Optionally, user may overwrite TTY device for experiment.
+
+- Example:
+  ```
+  root@MtFuji:/home/cisco# dpu-tty.py -n dpu2 -t ttyS4
+  ```
+
 ## CMIS firmware upgrade
 
 ### CMIS firmware version show commands
@@ -2929,6 +3319,31 @@ Example of the module supporting target mode
   ```
   admin@sonic:~$ sfputil firmware target Ethernet180 1
   Target Mode set to 1
+  ```
+
+## CMIS debug
+
+### CMIS debug loopback
+
+This command is the standard CMIS diagnostic control used for troubleshooting link and performance issues between the host switch and transceiver module.
+
+**sfputil debug loopback**
+
+- Usage:
+  ```
+  sfputil debug loopback PORT_NAME LOOPBACK_MODE <enable/disable>
+
+  Valid values for loopback mode
+  host-side-input: host side input loopback mode
+  host-side-output: host side output loopback mode
+  media-side-input: media side input loopback mode
+  media-side-output: media side output loopback mode
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sfputil debug loopback Ethernet88 host-side-input enable
+  admin@sonic:~$ sfputil debug loopback Ethernet88 media-side-output disable
   ```
 
 ## DHCP Relay
@@ -3846,6 +4261,21 @@ This command sets the number of consecutive polls in which no error is detected 
   admin@sonic:~$ config fabric port monitor poll threshold recovery 5 -n asic0
   ```
 
+**config fabric port monitor state <enable/disable>**
+
+This command sets the monitor state in CONFIG_DB to enable/disable the fabric monitor feature.
+
+- Usage:
+  ```
+  config fabric port monitor state [OPTIONS] <state>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ config fabric port monitor state enable
+  admin@sonic:~$ config fabric port monitor state disable
+  ```
+
 ## Feature
 
 SONiC includes a capability in which Feature state can be enabled/disabled
@@ -4554,8 +4984,8 @@ The "current-mode" subcommand is used to display current breakout mode for all i
 
 **show interfaces counters**
 
-This show command displays packet counters for all interfaces since the last time the counters were cleared. To display l3 counters "rif" subcommand can be used. There is no facility to display counters for one specific l2 interface. For l3 interfaces a single interface output mode is present. Optional argument "-a" provides two additional columns - RX-PPS and TX_PPS.
-Optional argument "-p" specify a period (in seconds) with which to gather counters over.
+This show command displays packet counters for all interfaces(except the "show interface detailed" command) since the last time the counters were cleared. To display l3 counters "rif" subcommand can be used. There is no facility to display counters for one specific l2 interface. For l3 interfaces a single interface output mode is present.  Optional argument "-a" provides two additional columns - RX-PPS and TX_PPS. 
+Optional argument "-p" specify a period (in seconds) with which to gather counters over. To display the detailed per-interface counters "detailed <interface-name>" subcommand can be used.
 
 - Usage:
   ```
@@ -4563,6 +4993,9 @@ Optional argument "-p" specify a period (in seconds) with which to gather counte
   show interfaces counters errors
   show interfaces counters rates
   show interfaces counters rif [-p|--period <period>] [-i <interface_name>]
+  show interfaces counters fec-histogram [-i <interface_name>]
+  show interfaces counters fec-stats
+  show interfaces counters detailed <interface_name>
   ```
 
 - Example:
@@ -4668,6 +5101,56 @@ Optionally, you can specify a period (in seconds) with which to gather counters 
     Ethernet24        U      173   16.09 KB/s      0.00%         0         0         0      169   11.39 KB/s      0.00%         0         0         0
   ```
 
+The "detailed" subcommand is used to display more detailed interface counters. Along with tx/rx counters, it also displays the WRED drop counters that are supported on the platform.
+
+- Example:
+  ```
+    admin@sonic:~$ show interfaces counters detailed Ethernet8
+    Packets Received 64 Octets..................... 0
+    Packets Received 65-127 Octets................. 0
+    Packets Received 128-255 Octets................ 0
+    Packets Received 256-511 Octets................ 0
+    Packets Received 512-1023 Octets............... 0
+    Packets Received 1024-1518 Octets.............. 0
+    Packets Received 1519-2047 Octets.............. 0
+    Packets Received 2048-4095 Octets.............. 0
+    Packets Received 4096-9216 Octets.............. 0
+    Packets Received 9217-16383 Octets............. 0
+
+    Total Packets Received Without Errors.......... 0
+    Unicast Packets Received....................... 0
+    Multicast Packets Received..................... 0
+    Broadcast Packets Received..................... 0
+
+    Jabbers Received............................... N/A
+    Fragments Received............................. N/A
+    Undersize Received............................. 0
+    Overruns Received.............................. 0
+
+    Packets Transmitted 64 Octets.................. 0
+    Packets Transmitted 65-127 Octets.............. 0
+    Packets Transmitted 128-255 Octets............. 0
+    Packets Transmitted 256-511 Octets............. 0
+    Packets Transmitted 512-1023 Octets............ 0
+    Packets Transmitted 1024-1518 Octets........... 0
+    Packets Transmitted 1519-2047 Octets........... 0
+    Packets Transmitted 2048-4095 Octets........... 0
+    Packets Transmitted 4096-9216 Octets........... 0
+    Packets Transmitted 9217-16383 Octets.......... 0
+
+    Total Packets Transmitted Successfully......... 0
+    Unicast Packets Transmitted.................... 0
+    Multicast Packets Transmitted.................. 0
+    Broadcast Packets Transmitted.................. 0
+
+    WRED Green Dropped Packets..................... 0
+    WRED Yellow Dropped Packets.................... 0
+    WRED Red Dropped Packets....................... 0
+    WRED Total Dropped Packets..................... 0
+
+    Time Since Counters Last Cleared............... None
+  ```
+
 - NOTE: Interface counters can be cleared by the user with the following command:
 
   ```
@@ -4679,6 +5162,47 @@ Optionally, you can specify a period (in seconds) with which to gather counters 
   ```
   admin@sonic:~$ sonic-clear rifcounters
   ```
+
+The "fec-histogram" subcommand is used to display the fec histogram for the port.
+
+When data is transmitted, it's broken down into units called codewords. FEC algorithms add extra data to each codeword that can be used to detect and correct errors in transmission.
+In a FEC histogram, "bins" represent ranges of errors or specific categories of errors. For instance, Bin0 might represent codewords with no errors, while Bin1 could represent codewords with a single bit error, and so on. The histogram shows how many codewords fell into each bin. A high number in the higher bins might indicate a problem with the transmission link, such as signal degradation.
+
+- Example:
+  ```
+  admin@str-s6000-acs-11:/usr/bin$ show interface counters fec-histogram -i <PORT>
+  Symbol Errors Per Codeword  Codewords
+  --------------------------  ---------
+  BIN0:                       1000000
+  BIN1:                       900000
+  BIN2:                       800000
+  BIN3:                       700000
+  BIN4:                       600000
+  BIN5:                       500000
+  BIN6:                       400000
+  BIN7:                       300000
+  BIN8:                       0
+  BIN9:                       0
+  BIN10:                      0
+  BIN11:                      0
+  BIN12:                      0
+  BIN13:                      0
+  BIN14:                      0
+  BIN15:                      0
+  ```
+
+The "fec-stats" subcommand is used to disply the interface fec related statistic.
+
+- Example:
+  ```
+  admin@ctd615:~$ show interfaces counters fec-stats
+        IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER
+  -----------  -------  ----------  ------------  ----------------  -------------  --------------
+   Ethernet0        U           0             0                 0    1.48e-20       0.00e+00
+   Ethernet8        U           0             0                 0    1.98e-19       0.00e+00
+  Ethernet16        U           0             0                 0    1.77e-20       0.00e+00
+  ```
+
 
 **show interfaces description**
 
@@ -4760,6 +5284,54 @@ This command is to display the link-training status of the selected interfaces. 
   -----------  -----------  ----------  ------  -------
     Ethernet8      trained          on      up       up
   ```
+
+**show interfaces flap**
+
+The show interfaces flap command provides detailed insights into interface events, including the timestamp of the last link down event and the total flap count (number of times the link has gone up and down). This helps in diagnosing stability and connectivity issues.
+
+- Usage:
+  ```
+  show interfaces flap
+  ```
+- Example:
+  ```
+  admin@sonic:~$ show interfaces flap
+  Interface    Flap Count    Admin    Oper    Link Down TimeStamp (UTC)                                 Link Up TimeStamp (UTC)
+  -----------  ------------  -------  ------  --------------------------------------------------------  -----------------------------------------------------------
+  Ethernet0    5             Up       Up      Last flapped : 2024-10-01 10:00:00 (0 days 00:01:23 ago)  Last Link up: 2024-09-30 10:01:03 UTC (1 days 02:30:15 ago)
+  Ethernet4    Never         Up       Up      Never                                                     Last Link up: 2024-09-30 10:01:03 UTC (1 days 02:30:15 ago)
+  Ethernet8    1             Up       Up      Last flapped : 2024-10-01 10:01:00 (0 days 00:00:23 ago)  Last Link up: 2024-10-02 10:01:03 UTC (5 days 02:30:15 ago)
+  ```
+**show interfaces errors**
+
+The show interface errors command provides detailed statistics and error counters for MAC-level operations on an interface. It displays the status of various operational parameters, error counts, and timestamps for when these errors occurred.
+
+- Usage:
+  ```
+  show interfaces errors [<interface_name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show interfaces errors Ethernet4
+  Port Errors                        Count           Last timestamp(UTC)
+  ---------------------------------- -----           -------------------
+  oper_error_status                  5442            2024-11-02 04:00:05
+  mac_local_fault                    2               2024-11-02 04:00:05
+  fec_sync_loss                      2               2024-11-02 04:00:05
+  fec_alignment_loss                 2               2024-11-02 04:00:05
+  high_ser_error                     2               2024-11-02 04:00:05
+  high ber_error                     2               2024-11-02 04:00:05
+  data_unit_crc_error                2               2024-11-02 04:00:05
+  data_unit_misalignment_error       2               2024-11-02 04:00:05
+  signal_local_error                 2               2024-11-02 04:00:05
+  mac_remote_fault                   2               2024-11-02 04:00:50
+  crc_rate                           2               2024-11-02 04:00:50
+  data_unit_size                     2               2024-11-02 04:00:50
+  code_group_error                   0               Never
+  no_rx_reachability                 0               Never
+  ```
+
 
 **show interfaces mpls**
 
@@ -4981,8 +5553,8 @@ This command displays switchport modes configuration of the interfaces
   ```
 
 
-For details please refer [Switchport Mode HLD](https://github.com/sonic-net/SONiC/pull/912/files#diff-03597c34684d527192f76a6e975792fcfc83f54e20dde63f159399232d148397) to know more about this command.
-
+For details please refer [Switchport Mode HLD](https://github.com/sonic-net/SONiC/pull/912/files#diff-03597c34684d527192f76a6e975792fcfc83f54e20dde63f159399232d148397) to know more about th
+is command.
 
 
 
@@ -6127,6 +6699,86 @@ This command displays the kubernetes server status.
   ```
 Go Back To [Beginning of the document](#) or [Beginning of this section](#Kubernetes)
 
+## LDAP
+
+### show LDAP global commands
+
+This command displays the global LDAP configuration that includes the following parameters: base_dn, bind_password, bind_timeout, version, port, timeout.
+
+- Usage:
+  ```
+  show ldap global
+  ```
+- Example:
+
+  ```
+  admin@sonic:~$ show ldap global
+  		base-dn        Ldap user base dn <string>
+  		bind-dn        LDAP global bind dn <string>
+  		bind-password  Shared secret used for encrypting the communication <password>
+  		bind-timeout   Ldap bind timeout <0-120>
+  		port           TCP port to communicate with LDAP server <1-65535>
+  		timeout        Ldap timeout duration in sec <1-60>
+  		version        Ldap version <1-3>
+
+  ```
+
+### LDAP global config commands
+
+These commands are used to configure the LDAP global parameters
+
+ - Usage:
+  ```
+  config ldap global
+  ```
+- Example:
+  ```
+  admin@sonic:~$ config ldap global
+
+  host 		 <ADDRESS> --prio <1 - 8>
+  base-dn        Ldap user base dn <string>
+  bind-dn        LDAP global bind dn <string>
+  bind-password  Shared secret used for encrypting the communication <password>
+  bind-timeout   Ldap bind timeout <0-120>
+  port           TCP port to communicate with LDAP server <1-65535>
+  timeout        Ldap timeout duration in sec <1-60>
+  version        Ldap version <1-3>
+  ```
+
+### show LDAP server commands
+
+This command displays the global LDAP configuration that includes the following parameters: base_dn, bind_password, bind_timeout, version, port, timeout.
+
+- Usage:
+  ```
+  show ldap-server
+  ```
+- Example:
+
+  ```
+  admin@sonic:~$ show ldap-server
+  		hostname        Ldap hostname or IP of the configured LDAP server
+  		priority        priority for the relevant LDAP server <1-8>
+  ```
+
+### LDAP server config commands
+
+These commands are used to manage the LDAP servers in the system, they are created in correspondance to the global config parameters mentioned earlier.
+
+ - Usage:
+  ```
+  config ldap-server
+  ```
+- Example:
+  ```
+  admin@sonic:~$ config ldap-server
+
+  add 		 Add a new LDAP server <ip> --priority <1-8>
+  delete         Delete an existing LDAP server from the list <ip> --priority <1-8>
+  update         Update and existing LDAP server
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#LDAP)
+  
 ## Linux Kernel Dump
 
 This section demonstrates the show commands and configuration commands of Linux kernel dump mechanism in SONiC.
@@ -8163,74 +8815,11 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#platfo
 
 ### Mellanox Platform Specific Commands
 
-There are few commands that are platform specific. Mellanox has used this feature and implemented Mellanox specific commands as follows.
+config platform mlnx
 
-**show platform mlnx sniffer**
+This command is valid only on mellanox devices. The sub-commands for "config platform" gets populated only on mellanox platforms. There are no other subcommands on non-Mellanox devices and hence this command appears empty and useless in other platforms. 
 
-This command shows the SDK sniffer status
-
-- Usage:
-  ```
-  show platform mlnx sniffer
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show platform mlnx sniffer
-  sdk sniffer is disabled
-  ```
-
-**show platform mlnx sniffer**
-
-Another show command available on ‘show platform mlnx’ which is the issu status.
-This means if ISSU is enabled on this SKU or not. A warm boot command can be executed only when ISSU is enabled on the SKU.
-
-- Usage:
-  ```
-  show platform mlnx issu
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show platform mlnx issu
-  ISSU is enabled
-  ```
-
-In the case ISSU is disabled and warm-boot is called, the user will get a notification message explaining that the command cannot be invoked.
-
-- Example:
-  ```
-  admin@sonic:~$ sudo warm-reboot
-  ISSU is not enabled on this HWSKU
-  Warm reboot is not supported
-  ```
-
-**config platform mlnx**
-
-This command is valid only on mellanox devices. The sub-commands for "config platform" gets populated only on mellanox platforms.
-There are no other subcommands on non-Mellanox devices and hence this command appears empty and useless in other platforms.
-The platform mellanox command currently includes a single sub command which is the SDK sniffer.
-The SDK sniffer is a troubleshooting tool which records the RPC calls from the Mellanox SDK user API library to the sx_sdk task into a .pcap file.
-This .pcap file can be replayed afterward to get the exact same configuration state on SDK and FW to reproduce and investigate issues.
-
-A new folder will be created to store the sniffer files: "/var/log/mellanox/sniffer/". The result file will be stored in a .pcap file, which includes a time stamp of the starting time in the file name, for example, "sx_sdk_sniffer_20180224081306.pcap"
-In order to have a complete .pcap file with all the RPC calls, the user should disable the SDK sniffer. Swss service will be restarted and no capturing is taken place from that moment.
-It is recommended to review the .pcap file while sniffing is disabled.
-Once SDK sniffer is enabled/disabled, the user is requested to approve that swss service will be restarted.
-For example: To change SDK sniffer status, swss service will be restarted, continue? [y/N]:
-In order to avoid that confirmation the -y / --yes option should be used.
-
-- Usage:
-  ```
-  config platform mlnx sniffer sdk [-y|--yes]
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ config platform mlnx sniffer sdk
-  To change SDK sniffer status, swss service will be restarted, continue? [y/N]: y
-  NOTE: In order to avoid that confirmation the -y / --yes option should be used.
-  ```
+The platform mellanox command currently includes no sub command.
 
 ### Barefoot Platform Specific Commands
 
@@ -8897,6 +9486,7 @@ This sub-section explains the following queue parameters that can be displayed u
 2) queue watermark
 3) priority-group  watermark
 4) queue persistent-watermark
+5) queue wredcounters
 
 
 **show queue counters**
@@ -9090,6 +9680,83 @@ This command displays the user persistet-watermark for the queues (Egress shared
   admin@sonic:~$ sonic-clear priority-group drop counters
   ```
 
+**show queue wredcounters**
+
+This command displays wred-drop packet/byte and ecn-marked packet/byte counters for all queues of all ports or one specific-port given as arguement.
+This command can be used to clear the counters for all queues of all ports. Note that port specific clear is not supported.
+
+- Usage:
+  ```
+  show queue wredcounters [<interface_name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show queue wredcounters
+     Port      TxQ    WredDrp/pkts    WredDrp/bytes  EcnMarked/pkts  EcnMarked/bytes
+  ---------  -----  --------------  --------------- --------------- ----------------
+
+  Ethernet0    UC0               0                0               0                0
+  Ethernet0    UC1               0                0               0                0
+  Ethernet0    UC2               0                0               0                0
+  Ethernet0    UC3               0                0               0                0
+  Ethernet0    UC4               0                0               0                0
+  Ethernet0    UC5               0                0               0                0
+  Ethernet0    UC6               0                0               0                0
+  Ethernet0    UC7               0                0               0                0
+  Ethernet0    UC8               0                0               0                0
+  Ethernet0    UC9               0                0               0                0
+  Ethernet0    MC0               0                0               0                0
+  Ethernet0    MC1               0                0               0                0
+  Ethernet0    MC2               0                0               0                0
+  Ethernet0    MC3               0                0               0                0
+  Ethernet0    MC4               0                0               0                0
+  Ethernet0    MC5               0                0               0                0
+  Ethernet0    MC6               0                0               0                0
+  Ethernet0    MC7               0                0               0                0
+  Ethernet0    MC8               0                0               0                0
+  Ethernet0    MC9               0                0               0                0
+
+     Port      TxQ    WredDrp/pkts    WredDrp/bytes  EcnMarked/pkts  EcnMarked/bytes
+  ---------  -----  --------------  --------------- --------------- ----------------
+
+  Ethernet4    UC0               0                0               0                0
+  Ethernet4    UC1               0                0               0                0
+  Ethernet4    UC2               0                0               0                0
+  Ethernet4    UC3               0                0               0                0
+  Ethernet4    UC4               0                0               0                0
+  Ethernet4    UC5               0                0               0                0
+  Ethernet4    UC6               0                0               0                0
+  Ethernet4    UC7               0                0               0                0
+  Ethernet4    UC8               0                0               0                0
+  Ethernet4    UC9               0                0               0                0
+  Ethernet4    MC0               0                0               0                0
+  Ethernet4    MC1               0                0               0                0
+  Ethernet4    MC2               0                0               0                0
+  Ethernet4    MC3               0                0               0                0
+  Ethernet4    MC4               0                0               0                0
+  Ethernet4    MC5               0                0               0                0
+  Ethernet4    MC6               0                0               0                0
+  Ethernet4    MC7               0                0               0                0
+  Ethernet4    MC8               0                0               0                0
+  Ethernet4    MC9               0                0               0                0
+
+  ...
+  ```
+
+Optionally, you can specify an interface name in order to display only that particular interface
+
+- Example:
+  ```
+  admin@sonic:~$ show queue wredcounters Ethernet72
+  ```
+
+- NOTE: Queue counters can be cleared by the user with the following command:
+  ```
+  admin@sonic:~$ sonic-clear queue wredcounters
+  ```
+
+
 #### Buffer Pool
 
 This sub-section explains the following buffer pool parameters that can be displayed using "show buffer_pool" command.
@@ -9215,6 +9882,7 @@ Some of the example QOS configurations that users can modify are given below.
 
   In this example, it uses the buffers.json.j2 file and qos.json.j2 file from platform specific folders.
   When there are no changes in the platform specific configutation files, they internally use the file "/usr/share/sonic/templates/buffers_config.j2" and "/usr/share/sonic/templates/qos_config.j2" to generate the configuration.
+  When an error occurs, such as "Operation not completed successfully, please save and reload configuration," the system will record the status, after executing all the latter commands, exit with code 1.
   ```
 
 **config qos reload --ports port_list**
@@ -10139,37 +10807,27 @@ This sub-section explains how to configure subinterfaces.
 Go Back To [Beginning of the document](#) or [Beginning of this section](#subinterfaces)
 
 
-
 ## Switchport Modes
-
 ### Switchport Modes Config Commands
-
 This subsection explains how to configure switchport modes on a Port/PortChannel.
-
 **config switchport mode **
-
 Usage:
   ```
   config switchport mode <access|trunk|routed> <member_portname/member_portchannel>
   ```
-
 - Example (Config switchport mode access on "Ethernet0):
   ```
   admin@sonic:~$ sudo config switchport mode access Ethernet0
   ```
-
 - Example (Config switchport mode trunk on "Ethernet4"):
   ```
   admin@sonic:~$ sudo config switchport mode trunk Ethernet4
   ```
-
 - Example (Config switchport mode routed on "Ethernet12"):
   ```
   admin@sonic:~$ sudo config switchport mode routed Ethernet12
-  ```
-
-
-
+  `
+``
 Go Back To [Beginning of the document](#) or [Beginning of this section](#switchport-modes)
 
 
@@ -10219,7 +10877,7 @@ This command displays rate limit configuration for containers.
 
 - Usage
   ```
-  show syslog rate-limit-container [<service_name>]
+  show syslog rate-limit-container [<service_name>] -n [<namespace>]
   ```
 
 - Example:
@@ -10243,6 +10901,37 @@ This command displays rate limit configuration for containers.
   SERVICE         INTERVAL    BURST
   --------------  ----------  -------
   bgp             0           0
+
+  # Multi ASIC
+  show syslog rate-limit-container
+  SERVICE    INTERVAL     BURST
+  --------   ----------   --------
+  bgp        500          N/A
+  snmp       300          20000
+  swss       2000         12000
+  Namespace asic0:
+  SERVICE    INTERVAL     BURST
+  --------   ----------   --------
+  bgp        500          N/A
+  snmp       300          20000
+  swss       2000         12000
+
+  # Multi ASIC
+  show syslog rate-limit-container bgp
+  SERVICE    INTERVAL     BURST
+  --------   ----------   --------
+  bgp        500          5000
+  Namespace asic0:
+  SERVICE    INTERVAL     BURST
+  --------   ----------   --------
+  bgp        500          5000
+
+  # Multi ASIC
+  show syslog rate-limit-container bgp -n asic1
+  Namespace asic1:
+  SERVICE    INTERVAL     BURST
+  --------   ----------   --------
+  bgp        500          5000
   ```
 
 ### Syslog Config Commands
@@ -10321,10 +11010,19 @@ This command is used to configure syslog rate limit for containers.
 - Parameters:
   - _interval_: determines the amount of time that is being measured for rate limiting.
   - _burst_: defines the amount of messages, that have to occur in the time limit of interval, to trigger rate limiting
+  - _namespace_: namespace name or all. Value "default" indicates global namespace.
 
 - Example:
   ```
+  # Config bgp for all namespaces. For multi ASIC platforms, bgp service in all namespaces will be affected.
+  # For single ASIC platforms, bgp service in global namespace will be affected.
   admin@sonic:~$ sudo config syslog rate-limit-container bgp --interval 300 --burst 20000
+
+  # Config bgp for global namespace only.
+  config syslog rate-limit-container bgp --interval 300 --burst 20000 -n default
+
+  # Config bgp for asic0 namespace only.
+  config syslog rate-limit-container bgp --interval 300 --burst 20000 -n asic0
   ```
 
 **config syslog rate-limit-feature enable**
@@ -10333,12 +11031,28 @@ This command is used to enable syslog rate limit feature.
 
 - Usage:
   ```
-  config syslog rate-limit-feature enable
+  config syslog rate-limit-feature enable [<service_name>] -n [<namespace>]
   ```
 
 - Example:
   ```
+  # Enable syslog rate limit for all services in all namespaces
   admin@sonic:~$ sudo config syslog rate-limit-feature enable
+
+  # Enable syslog rate limit for all services in global namespace
+  config syslog rate-limit-feature enable -n default
+
+  # Enable syslog rate limit for all services in asic0 namespace
+  config syslog rate-limit-feature enable -n asic0
+
+  # Enable syslog rate limit for database in all namespaces
+  config syslog rate-limit-feature enable database
+
+  # Enable syslog rate limit for database in default namespace
+  config syslog rate-limit-feature enable database -n default
+
+  # Enable syslog rate limit for database in asci0 namespace
+  config syslog rate-limit-feature enable database -n asci0
   ```
 
 **config syslog rate-limit-feature disable**
@@ -10347,12 +11061,57 @@ This command is used to disable syslog rate limit feature.
 
 - Usage:
   ```
-  config syslog rate-limit-feature disable
+  config syslog rate-limit-feature disable [<service_name>] -n [<namespace>]
   ```
 
 - Example:
   ```
+  # Disable syslog rate limit for all services in all namespaces
   admin@sonic:~$ sudo config syslog rate-limit-feature disable
+
+  # Disable syslog rate limit for all services in global namespace
+  config syslog rate-limit-feature disable -n default
+
+  # Disable syslog rate limit for all services in asic0 namespace
+  config syslog rate-limit-feature disable -n asic0
+
+  # Disable syslog rate limit for database in all namespaces
+  config syslog rate-limit-feature disable database
+
+  # Disable syslog rate limit for database in default namespace
+  config syslog rate-limit-feature disable database -n default
+
+  # Disable syslog rate limit for database in asci0 namespace
+  config syslog rate-limit-feature disable database -n asci0
+  ```
+
+**config syslog level**
+
+This command is used to configure log level for a given log identifier.
+
+- Usage:
+  ```
+  config syslog level -i <log_identifier> -l <log_level> --container [<container_name>] --program [<program_name>]
+
+  config syslog level -i <log_identifier> -l <log_level> --container [<container_name>] --pid [<process_id>]
+
+  config syslog level -i <log_identifier> -l <log_level> ---pid [<process_id>]
+  ```
+
+- Example:
+
+  ```
+  # Update the log level without refresh the configuration
+  config syslog level -i xcvrd -l DEBUG
+
+  # Update the log level and send SIGHUP to xcvrd running in PMON
+  config syslog level -i xcvrd -l DEBUG --container pmon --program xcvrd
+
+  # Update the log level and send SIGHUP to PID 20 running in PMON
+  config syslog level -i xcvrd -l DEBUG --container pmon --pid 20
+
+  # Update the log level and send SIGHUP to PID 20 running in host
+  config syslog level -i xcvrd -l DEBUG --pid 20
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#syslog)
@@ -10818,6 +11577,36 @@ In addition, displays a list of all current 'Services' and 'Hardware' being moni
   psu.voltage  Ignored   Device
   ```
 
+**show system-health dpu <option>**
+
+This is a smartswitch specific cli.  This cli shows the midplane, control plane and data plane health of the DPU modules in the smartswitch.
+
+This can take two forms of "<option>" 1. DPU module name (ex: DPU0) 2. all, which will list all the DPUs in the smartswitch
+
+- Usage:
+  ```
+  show system-health dpu DPU0
+  ```
+
+- Example:
+  ```
+root@MtFuji-dut:/home/cisco# show system-health dpu DPU0
+Name    Oper-Status    State-Detail             State-Value    Time                             Reason
+------  -------------  -----------------------  -------------  -------------------------------  ------------------------------------------------------------------------------------
+DPU0    Online         dpu_midplane_link_state  up             Mon Dec 23 05:12:17 PM UTC 2024
+                       dpu_control_plane_state  up             Mon Dec 23 05:12:17 PM UTC 2024 All containers are up and running, host-ethlink-status: Uplink1/1 is UP
+                       dpu_data_plane_state     up             Mon Dec 23 05:12:17 PM UTC 2024 DPU container named polaris is running, pdsagent running : OK, pciemgrd running : OK
+
+root@MtFuji-dut:/home/cisco# show system-health dpu all
+Name    Oper-Status    State-Detail             State-Value    Time                             Reason
+------  -------------  -----------------------  -------------  -------------------------------  ------------------------------------------------------------------------------------
+DPU0    Online         dpu_midplane_link_state  up             Mon Dec 23 05:12:17 PM UTC 2024
+                       dpu_control_plane_state  up             Mon Dec 23 05:12:17 PM UTC 2024 All containers are up and running, host-ethlink-status: Uplink1/1 is UP
+                       dpu_data_plane_state     up             Mon Dec 23 05:12:17 PM UTC 2024 DPU container named polaris is running, pdsagent running : OK, pciemgrd running : OK
+DPU1    Online         dpu_midplane_link_state  up             Mon Dec 23 05:12:17 PM UTC 2024
+                       dpu_control_plane_state  up             Mon Dec 23 05:12:17 PM UTC 2024 All containers are up and running, host-ethlink-status: Uplink1/1 is UP
+                       dpu_data_plane_state     up             Mon Dec 23 05:12:17 PM UTC 2024 DPU container named polaris is running, pdsagent running : OK, pciemgrd running : OK
+
 Go Back To [Beginning of the document](#) or [Beginning of this section](#System-Health)
 
 ## VLAN & FDB
@@ -10887,28 +11676,19 @@ This command is used to add or delete the vlan.
 
 
 **config vlan add/del -m**
-
 This command is used to add or delete multiple vlans via single command.
-
 - Usage:
   ```
   config vlan (add | del) -m <vlan_id>
   ```
-
 - Example01 (Create the VLAN "Vlan100, Vlan101, Vlan102, Vlan103" if these does not already exist)
-
   ```
   admin@sonic:~$ sudo config vlan add -m 100-103
   ```
-
-
 - Example02 (Create the VLAN "Vlan105, Vlan106, Vlan107, Vlan108" if these does not already exist):
-
   ```
   admin@sonic:~$ sudo config vlan add -m 105,106,107,108
   ```
-
-
 
 **config vlan member add/del**
 
@@ -10931,48 +11711,36 @@ This command is to add or delete a member port into the already created vlan.
   This command will add Ethernet4 as member of the vlan 100.
   ```
 
-
 **config vlan member add/del -m -e**
-
 This command is to add or delete a member port into multiple already created vlans.
-
 - Usage:
   ```
   config vlan member add/del [-m] [-e] <vlan_id> <member_portname>
   ```
-
 *NOTE: -m flag multiple Vlans in range or comma separted list can be added as a member port.*
-
-
 *NOTE: -e is used as an except flag as explained with examples below.*
-
-
 - Example:
   ```
   admin@sonic:~$ sudo config vlan member add -m 100-103 Ethernet0
   This command will add Ethernet0 as member of the vlan 100, vlan 101, vlan 102, vlan 103
    ```
-
    ```
   admin@sonic:~$ sudo config vlan member add -m 100,101,102 Ethernet4
   This command will add Ethernet4 as member of the vlan 100, vlan 101, vlan 102
    ```
-
    ```
   admin@sonic:~$ sudo config vlan member add -e -m 104,105 Ethernet8
   Suppose vlan 100, vlan 101, vlan 102, vlan 103, vlan 104, vlan 105 are exisiting vlans. This command will add Ethernet8 as member of  vlan 100, vlan 101, vlan 102, vlan 103
   ```
-
   ```
   admin@sonic:~$ sudo config vlan member add -e 100 Ethernet12
   Suppose vlan 100, vlan 101, vlan 102, vlan 103, vlan 104, vlan 105 are exisiting vlans. This command will add Ethernet12 as member of vlan 101, vlan 102, vlan 103, vlan 104, vlan 105
   ```
-
    ```
   admin@sonic:~$ sudo config vlan member add all Ethernet20
-  Suppose vlan 100, vlan 101, vlan 102, vlan 103, vlan 104, vlan 105 are exisiting vlans. This command will add Ethernet20 as member of vlan 100, vlan 101, vlan 102, vlan 103, vlan 104, vlan 105
+  Suppose vlan 100, vlan 101, vlan 102, vlan 103, vlan 104, vlan 105 are exisiting vlans. This command will add Ethernet20 as member of vlan 100, vlan 101, vlan 102, vlan 103, vlan 104, vlan 1
+05
   ```
-
 
 **config proxy_arp enabled/disabled**
 
@@ -13375,3 +14143,89 @@ Sending 3 magic packet to 11:33:55:77:99:bb via interface Vlan1000
 ```
 
 For the 4th example, it specifise 2 target MAC addresses and `count` is 3. So it'll send 6 magic packets in total.
+
+# Banner Commands
+
+This sub-section explains the list of the configuration options available for Banner feature.
+
+## Banner config commands
+
+- Set banner feature state
+
+```
+admin@sonic:~$ config banner state <enabled|disabled>
+Usage: config config banner state <enabled|disabled>
+
+  Set banner feature state
+
+Options:
+  -?, -h, --help  Show this message and exit.
+```
+
+- Set login message
+
+```
+admin@sonic:~$ config banner login <message>
+Usage: config banner login <message>
+
+  Set login message
+
+Options:
+  -?, -h, --help  Show this message and exit.
+```
+
+- Set logout message
+
+```
+admin@sonic:~$ config banner logout <message>
+Usage: config banner logout <message>
+
+  Set logout message
+
+Options:
+  -?, -h, --help  Show this message and exit.
+```
+
+- Set message of the day
+
+```
+admin@sonic:~$ config banner motd <message>
+Usage: config banner motd <message>
+
+  Set message of the day
+
+Options:
+  -?, -h, --help  Show this message and exit.
+```
+
+## Banner show command
+
+- how banner messages
+
+```
+admin@sonic:~$ show banner
+Usage: show banner
+
+  Show banner messages
+
+Options:
+  -h, -?, --help  Show this message and exit.
+```
+```
+admin@sonic:~$ show banner
+state    login    motd                                              logout
+-------  -------  ------------------------------------------------  --------
+enabled  Login    You are on
+         Message    ____   ___  _   _ _  ____
+                   / ___| / _ \| \ | (_)/ ___|
+                   \___ \| | | |  \| | | |
+                    ___) | |_| | |\  | | |___
+                   |____/ \___/|_| \_|_|\____|
+
+                  -- Software for Open Networking in the Cloud --
+
+                  Unauthorized access and/or use are prohibited.
+                  All access and/or use are subject to monitoring.
+
+                  Help:    https://sonic-net.github.io/SONiC/
+```

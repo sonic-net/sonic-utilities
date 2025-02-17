@@ -90,7 +90,6 @@
         "lanes": "41,42,43,44",
         "mtu": "9100",
         "tpid": "0x9200",
-        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -104,7 +103,8 @@
         "tpid": "0x8100",
         "mode": "trunk",
         "pfc_asym": "off",
-        "speed": "1000"
+        "speed": "1000",
+        "role": "Dpc"
     },
     "PORT|Ethernet28": {
         "admin_status": "up",
@@ -703,8 +703,7 @@
         "members@": "Ethernet32",
         "min_links": "1",
         "tpid": "0x8100",
-        "mtu": "9100",
-        "mode": "trunk"
+        "mtu": "9100"
     },
     "PORTCHANNEL|PortChannel0001": {
         "admin_status": "up",
@@ -826,13 +825,19 @@
         "state": "enabled",
         "auto_restart": "enabled",
         "high_mem_alert": "disabled",
-        "set_owner": "local"
+        "set_owner": "local",
+        "support_syslog_rate_limit": "true",
+        "has_global_scope": "false",
+        "has_per_asic_scope": "true"
     },
     "FEATURE|database": {
         "state": "always_enabled",
         "auto_restart": "always_enabled",
         "high_mem_alert": "disabled",
-        "set_owner": "local"
+        "set_owner": "local",
+        "support_syslog_rate_limit": "true",
+        "has_global_scope": "true",
+        "has_per_asic_scope": "true"
     },
     "FEATURE|dhcp_relay": {
         "state": "enabled",
@@ -843,6 +848,8 @@
     "FEATURE|lldp": {
         "state": "enabled",
         "auto_restart": "enabled",
+        "has_global_scope": "False",
+        "has_per_asic_scope": "True",
         "high_mem_alert": "disabled",
         "set_owner": "kube"
     },
@@ -856,7 +863,10 @@
         "state": "enabled",
         "auto_restart": "enabled",
         "high_mem_alert": "disabled",
-        "set_owner": "kube"
+        "set_owner": "kube",
+        "support_syslog_rate_limit": "true",
+        "has_global_scope": "true",
+        "has_per_asic_scope": "false"
     },
     "FEATURE|radv": {
         "state": "enabled",
@@ -905,6 +915,14 @@
         "auto_restart": "enabled",
         "high_mem_alert": "disabled",
         "set_owner": "kube"
+    },
+    "SYSLOG_CONFIG_FEATURE|database": {
+        "rate_limit_interval": "200",
+        "rate_limit_burst": "20000"
+    },
+    "SYSLOG_CONFIG_FEATURE|pmon": {
+        "rate_limit_interval": "100",
+        "rate_limit_burst": "10000"
     },
     "DEVICE_METADATA|localhost": {
         "default_bgp_status": "down",
@@ -1259,7 +1277,7 @@
             "bank": "1",
             "link": "Ethernet12"
         },
-    "BGP_NEIGHBOR|10.0.0.1": {
+    "BGP_NEIGHBOR|default|10.0.0.1": {
         "asn": "65200",
         "holdtime": "10",
         "keepalive": "3",
@@ -1439,7 +1457,7 @@
         "nhopself": "0",
         "rrclient": "0"
     },
-    "BGP_NEIGHBOR|10.0.0.57": {
+    "BGP_NEIGHBOR|default|10.0.0.57": {
         "asn": "64013",
         "holdtime": "10",
         "keepalive": "3",
@@ -1664,7 +1682,7 @@
         "nhopself": "0",
         "rrclient": "0"
     },
-    "BGP_NEIGHBOR|fc00::72": {
+    "BGP_NEIGHBOR|default|fc00::72": {
         "asn": "64013",
         "holdtime": "10",
         "keepalive": "3",
@@ -1765,6 +1783,18 @@
     },
     "FLEX_COUNTER_TABLE|FLOW_CNT_ROUTE": {
         "POLL_INTERVAL": "10000",
+        "FLEX_COUNTER_STATUS": "enable"
+    },
+    "FLEX_COUNTER_TABLE|ENI": {
+        "POLL_INTERVAL": "1000",
+        "FLEX_COUNTER_STATUS": "enable"
+    },
+    "FLEX_COUNTER_TABLE|WRED_ECN_QUEUE": {
+        "POLL_INTERVAL": "10000",
+        "FLEX_COUNTER_STATUS": "enable"
+    },
+    "FLEX_COUNTER_TABLE|WRED_ECN_PORT": {
+        "POLL_INTERVAL": "1000",
         "FLEX_COUNTER_STATUS": "enable"
     },
     "PFC_WD|Ethernet0": {
@@ -2035,6 +2065,14 @@
         "admin_status": "up",
         "holdtime": "10",
         "asn": "65200",
+        "keepalive": "3"
+    },
+    "BGP_NEIGHBOR|Vlan100": {
+        "rrclient": "0",
+        "peer_type": "external",
+        "nhopself": "0",
+        "admin_status": "up",
+        "holdtime": "10",
         "keepalive": "3"
     },
     "SCHEDULER|scheduler.0": {
@@ -2718,6 +2756,7 @@
         "direction": "RX"
     },
     "FABRIC_MONITOR|FABRIC_MONITOR_DATA": {
+        "monCapacityThreshWarn": "100",
         "monErrThreshCrcCells": "1",
         "monErrThreshRxCells": "61035156",
         "monPollThreshIsolation": "1",
@@ -2725,22 +2764,78 @@
     },
     "FABRIC_PORT|Fabric0": {
         "alias": "Fabric0",
+        "forceUnisolateStatus": "0",
         "isolateStatus": "False",
         "lanes": "0"
     },
     "FABRIC_PORT|Fabric1": {
         "alias": "Fabric1",
+        "forceUnisolateStatus": "0",
         "isolateStatus": "False",
         "lanes": "1"
     },
     "FABRIC_PORT|Fabric2": {
         "alias": "Fabric2",
+        "forceUnisolateStatus": "0",
         "isolateStatus": "False",
         "lanes": "2"
+    },
+    "FABRIC_PORT|Fabric3": {
+        "alias": "Fabric3",
+        "forceUnisolateStatus": "0",
+        "isolateStatus": "False",
+        "lanes": "3"
+    },
+    "FABRIC_PORT|Fabric4": {
+        "alias": "Fabric4",
+        "forceUnisolateStatus": "0",
+        "isolateStatus": "False",
+        "lanes": "4"
+    },
+    "FABRIC_PORT|Fabric5": {
+        "alias": "Fabric5",
+        "forceUnisolateStatus": "0",
+        "isolateStatus": "False",
+        "lanes": "5"
+    },
+    "FABRIC_PORT|Fabric6": {
+        "alias": "Fabric6",
+        "forceUnisolateStatus": "0",
+        "isolateStatus": "False",
+        "lanes": "6"
+    },
+    "FABRIC_PORT|Fabric7": {
+        "alias": "Fabric7",
+        "forceUnisolateStatus": "0",
+        "isolateStatus": "False",
+        "lanes": "7"
     },
     "DHCP_RELAY|Vlan1000": {
         "dhcpv6_servers": [
             "fc02:2000::1"
         ]
-    }
+    },
+    "STP|GLOBAL": {
+        "forward_delay": "15",
+        "hello_time": "2",
+        "max_age": "20",
+        "mode": "pvst",
+        "priority": "32768",
+        "rootguard_timeout": "30"
+    },
+    "STP_PORT|Ethernet4": {
+        "bpdu_guard": "true",
+        "bpdu_guard_do_disable": "false",
+        "enabled": "true",
+        "portfast": "true",
+        "root_guard": "true",
+        "uplink_fast": "false"
+    },
+    "STP_VLAN|Vlan500": {
+        "enabled": "true",
+        "forward_delay": "15",
+        "hello_time": "2",
+        "max_age": "20",
+        "priority": "32768"
+     }
 }

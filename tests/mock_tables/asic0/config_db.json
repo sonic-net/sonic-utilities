@@ -228,7 +228,7 @@
     "VLAN_MEMBER|Vlan1000|PortChannel1002": {
         "tagging_mode": "tagged"
     },
-    "BGP_NEIGHBOR|10.0.0.1": {
+    "BGP_NEIGHBOR|default|10.0.0.1": {
         "rrclient": "0",
         "name": "ARISTA01T2",
         "local_addr": "10.0.0.0",
@@ -238,7 +238,7 @@
         "asn": "65200",
         "keepalive": "3"
     },
-    "BGP_NEIGHBOR|fc00::2": {
+    "BGP_NEIGHBOR|default|fc00::2": {
         "rrclient": "0",
         "name": "ARISTA01T2",
         "local_addr": "fc00::1",
@@ -288,5 +288,62 @@
         "ports@": "Ethernet124",
         "type": "L3",
         "stage": "ingress"
+    },
+    "FABRIC_MONITOR|FABRIC_MONITOR_DATA": {
+        "monCapacityThreshWarn": "100",
+        "monErrThreshCrcCells": "1",
+        "monErrThreshRxCells": "61035156",
+        "monPollThreshIsolation": "1",
+        "monPollThreshRecovery": "8"
+    },
+    "SYSLOG_CONFIG_FEATURE|bgp": {
+        "rate_limit_interval": "111",
+        "rate_limit_burst": "33333"
+    },
+    "SYSLOG_CONFIG_FEATURE|database": {
+        "rate_limit_interval": "222",
+        "rate_limit_burst": "22222"
+    },
+    "WRED_PROFILE|AZURE_LOSSLESS": {
+        "red_max_threshold": "2097152",
+        "ecn": "ecn_all",
+        "green_min_threshold": "1048576",
+        "red_min_threshold": "1048576",
+        "yellow_min_threshold": "1048576",
+        "green_max_threshold": "2097152",
+        "green_drop_probability": "5",
+        "yellow_max_threshold": "2097152",
+        "yellow_drop_probability": "5",
+        "red_drop_probability": "5"
+    },
+    "DEVICE_NEIGHBOR|Ethernet4": {
+        "name": "Serverss0",
+        "port": "eth0"
+    },
+    "QUEUE|Ethernet4|0": {
+        "scheduler": "[SCHEDULAR|scheduler.0]"
+    },
+    "QUEUE|Ethernet4|1": {
+        "scheduler": "[SCHEDULAR|scheduler.0]",
+        "wred_profile": "AZURE_LOSSLESS"
+    },
+    "BUFFER_POOL|ingress_lossy_pool": {
+        "mode": "dynamic",
+        "type": "ingress"
+    },
+    "BUFFER_POOL|ingress_lossless_pool_hbm": {
+        "mode": "static",
+        "size": "139458240",
+         "type": "ingress"
+    },
+    "BUFFER_PROFILE|ingress_lossy_profile": {
+        "dynamic_th": "3",
+        "pool": "ingress_lossy_pool",
+        "size": "0"
+    },
+    "BUFFER_PROFILE|ingress_lossless_profile_hbm": {
+        "static_th": "12121212",
+        "pool": "ingress_lossless_pool_hbm",
+        "size": "0"
     }
 }

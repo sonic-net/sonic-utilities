@@ -4,8 +4,9 @@ import sys
 import argparse
 from unittest import mock
 from deepdiff import DeepDiff
+import json
 
-from swsscommon.swsscommon import SonicV2Connector
+from swsscommon.swsscommon import SonicV2Connector, SonicDBConfig
 from sonic_py_common import device_info
 
 from .mock_tables import dbconnector
@@ -73,24 +74,27 @@ class TestVersionComparison(object):
     def setup_class(cls):
         cls.version_comp_list = [
                                   # Old format v.s old format
-                                  { 'v1' : 'version_1_0_1', 'v2' : 'version_1_0_2', 'result' : False },
-                                  { 'v1' : 'version_1_0_2', 'v2' : 'version_1_0_1', 'result' : True  },
-                                  { 'v1' : 'version_1_0_1', 'v2' : 'version_2_0_1', 'result' : False },
-                                  { 'v1' : 'version_2_0_1', 'v2' : 'version_1_0_1', 'result' : True  },
+                                  {'v1': 'version_1_0_1', 'v2': 'version_1_0_2', 'result': False},
+                                  {'v1': 'version_1_0_2', 'v2': 'version_1_0_1', 'result': True},
+                                  {'v1': 'version_1_0_1', 'v2': 'version_2_0_1', 'result': False},
+                                  {'v1': 'version_2_0_1', 'v2': 'version_1_0_1', 'result': True},
                                   # New format v.s old format
-                                  { 'v1' : 'version_1_0_1', 'v2' : 'version_202311_01', 'result' : False },
-                                  { 'v1' : 'version_202311_01', 'v2' : 'version_1_0_1', 'result' : True  },
-                                  { 'v1' : 'version_1_0_1', 'v2' : 'version_master_01', 'result' : False },
-                                  { 'v1' : 'version_master_01', 'v2' : 'version_1_0_1', 'result' : True  },
+                                  {'v1': 'version_1_0_1', 'v2': 'version_202311_01', 'result': False},
+                                  {'v1': 'version_202311_01', 'v2': 'version_1_0_1', 'result': True},
+                                  {'v1': 'version_1_0_1', 'v2': 'version_master_01', 'result': False},
+                                  {'v1': 'version_master_01', 'v2': 'version_1_0_1', 'result': True},
                                   # New format v.s new format
-                                  { 'v1' : 'version_202311_01', 'v2' : 'version_202311_02', 'result' : False },
-                                  { 'v1' : 'version_202311_02', 'v2' : 'version_202311_01', 'result' : True  },
-                                  { 'v1' : 'version_202305_01', 'v2' : 'version_202311_01', 'result' : False },
-                                  { 'v1' : 'version_202311_01', 'v2' : 'version_202305_01', 'result' : True  },
-                                  { 'v1' : 'version_202311_01', 'v2' : 'version_master_01', 'result' : False },
-                                  { 'v1' : 'version_master_01', 'v2' : 'version_202311_01', 'result' : True  },
-                                  { 'v1' : 'version_master_01', 'v2' : 'version_master_02', 'result' : False },
-                                  { 'v1' : 'version_master_02', 'v2' : 'version_master_01', 'result' : True  },
+                                  {'v1': 'version_202311_01', 'v2': 'version_202311_02', 'result': False},
+                                  {'v1': 'version_202311_02', 'v2': 'version_202311_01', 'result': True},
+                                  {'v1': 'version_202305_01', 'v2': 'version_202311_01', 'result': False},
+                                  {'v1': 'version_202311_01', 'v2': 'version_202305_01', 'result': True},
+                                  {'v1': 'version_202405_01', 'v2': 'version_202411_01', 'result': False},
+                                  {'v1': 'version_202411_01', 'v2': 'version_202405_01', 'result': True},
+                                  {'v1': 'version_202411_01', 'v2': 'version_master_01', 'result': False},
+                                  {'v1': 'version_202311_01', 'v2': 'version_master_01', 'result': False},
+                                  {'v1': 'version_master_01', 'v2': 'version_202311_01', 'result': True},
+                                  {'v1': 'version_master_01', 'v2': 'version_master_02', 'result': False},
+                                  {'v1': 'version_master_02', 'v2': 'version_master_01', 'result': True},
                                 ]
 
     def test_version_comparison(self):
@@ -156,6 +160,7 @@ class TestMellanoxBufferMigrator(object):
                              ['empty-config',
                               'empty-config-with-device-info-generic',
                               'empty-config-with-device-info-traditional',
+                              'empty-config-with-device-info-nvidia',
                               'non-default-config',
                               'non-default-xoff',
                               'non-default-lossless-profile-in-pg',
@@ -309,33 +314,6 @@ class TestAutoNegMigrator(object):
         assert dbmgtr.configDB.get_table('PORT') == expected_db.cfgdb.get_table('PORT')
         assert dbmgtr.configDB.get_table('VERSIONS') == expected_db.cfgdb.get_table('VERSIONS')
 
-
-
-class TestSwitchPortMigrator(object):
-    @classmethod
-    def setup_class(cls):
-        os.environ['UTILITIES_UNIT_TESTING'] = "2"
-
-    @classmethod
-    def teardown_class(cls):
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
-        dbconnector.dedicated_dbs['CONFIG_DB'] = None
-
-    def test_switchport_mode_migrator(self):
-        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'switchport-input')
-        import db_migrator
-        dbmgtr = db_migrator.DBMigrator(None)
-        dbmgtr.migrate()
-
-        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'switchport-expected')
-        expected_db = Db()
-        advance_version_for_expected_database(dbmgtr.configDB, expected_db.cfgdb, 'version_3_0_1')
-
-        assert dbmgtr.configDB.get_table('PORT') == expected_db.cfgdb.get_table('PORT')
-        assert dbmgtr.configDB.get_table('PORTCHANNEL') == expected_db.cfgdb.get_table('PORTCHANNEL')
-        assert dbmgtr.configDB.get_table('VERSIONS') == expected_db.cfgdb.get_table('VERSIONS')
-
-
 class TestInitConfigMigrator(object):
     @classmethod
     def setup_class(cls):
@@ -408,7 +386,7 @@ class TestDnsNameserverMigrator(object):
         dbmgtr.migrate()
         dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'dns-nameserver-expected')
         expected_db = Db()
-        advance_version_for_expected_database(dbmgtr.configDB, expected_db.cfgdb, 'version_202405_01')
+        advance_version_for_expected_database(dbmgtr.configDB, expected_db.cfgdb, 'version_202411_01')
         resulting_keys = dbmgtr.configDB.keys(dbmgtr.configDB.CONFIG_DB, 'DNS_NAMESERVER*')
         expected_keys = expected_db.cfgdb.keys(expected_db.cfgdb.CONFIG_DB, 'DNS_NAMESERVER*')
 
@@ -878,6 +856,13 @@ class TestGoldenConfig(object):
         # hostname is from golden_config_db.json
         assert hostname == 'SONiC-Golden-Config'
 
+    def test_golden_config_ns(self):
+        # golden_config_db.json.test has no namespace
+        import db_migrator
+        dbmgtr = db_migrator.DBMigrator("asic0")
+        result = json.dumps(dbmgtr.config_src_data)
+        assert 'SONiC-Golden-Config' not in result
+
 class TestGoldenConfigInvalid(object):
     @classmethod
     def setup_class(cls):
@@ -901,7 +886,6 @@ class TestGoldenConfigInvalid(object):
         # hostname is from minigraph.xml
         assert hostname == 'SONiC-Dummy'
 
-
 class TestMain(object):
     @classmethod
     def setup_class(cls):
@@ -914,6 +898,22 @@ class TestMain(object):
     @mock.patch('argparse.ArgumentParser.parse_args')
     def test_init(self, mock_args):
         mock_args.return_value=argparse.Namespace(namespace=None, operation='get_version', socket=None)
+        import db_migrator
+        db_migrator.main()
+
+    @mock.patch('argparse.ArgumentParser.parse_args')
+    @mock.patch('swsscommon.swsscommon.SonicDBConfig.isInit', mock.MagicMock(return_value=False))
+    @mock.patch('swsscommon.swsscommon.SonicDBConfig.initialize', mock.MagicMock())
+    def test_init_no_namespace(self, mock_args):
+        mock_args.return_value = argparse.Namespace(namespace=None, operation='version_202411_01', socket=None)
+        import db_migrator
+        db_migrator.main()
+
+    @mock.patch('argparse.ArgumentParser.parse_args')
+    @mock.patch('swsscommon.swsscommon.SonicDBConfig.isGlobalInit', mock.MagicMock(return_value=False))
+    @mock.patch('swsscommon.swsscommon.SonicDBConfig.initializeGlobalConfig', mock.MagicMock())
+    def test_init_namespace(self, mock_args):
+        mock_args.return_value = argparse.Namespace(namespace="asic0", operation='version_202411_01', socket=None)
         import db_migrator
         db_migrator.main()
 
@@ -950,7 +950,7 @@ class TestGNMIMigrator(object):
         dbmgtr.migrate()
         dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'gnmi-minigraph-expected')
         expected_db = Db()
-        advance_version_for_expected_database(dbmgtr.configDB, expected_db.cfgdb, 'version_202405_01')
+        advance_version_for_expected_database(dbmgtr.configDB, expected_db.cfgdb, 'version_202411_01')
         resulting_table = dbmgtr.configDB.get_table("GNMI")
         expected_table = expected_db.cfgdb.get_table("GNMI")
 
@@ -966,9 +966,91 @@ class TestGNMIMigrator(object):
         dbmgtr.migrate()
         dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'gnmi-configdb-expected')
         expected_db = Db()
-        advance_version_for_expected_database(dbmgtr.configDB, expected_db.cfgdb, 'version_202405_01')
+        advance_version_for_expected_database(dbmgtr.configDB, expected_db.cfgdb, 'version_202411_01')
         resulting_table = dbmgtr.configDB.get_table("GNMI")
         expected_table = expected_db.cfgdb.get_table("GNMI")
 
         diff = DeepDiff(resulting_table, expected_table, ignore_order=True)
         assert not diff
+
+class TestAAAMigrator(object):
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "2"
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+        dbconnector.dedicated_dbs['CONFIG_DB'] = None
+
+    def load_golden_config(self, dbmgtr, test_json):
+        dbmgtr.config_src_data = {}
+
+        json_path = os.path.join(mock_db_path, 'config_db', test_json + ".json")
+        if os.path.exists(json_path):
+            with open(json_path) as f:
+                dbmgtr.config_src_data = json.load(f)
+                print("test_per_command_aaa load golden config success, config_src_data: {}".format(dbmgtr.config_src_data))
+        else:
+            print("test_per_command_aaa load golden config failed, file {} does not exist.".format(test_json))
+
+
+    @pytest.mark.parametrize('test_json', ['per_command_aaa_enable',
+                                           'per_command_aaa_no_passkey',
+                                           'per_command_aaa_disable',
+                                           'per_command_aaa_no_change',
+                                           'per_command_aaa_no_tacplus',
+                                           'per_command_aaa_no_authentication'])
+    def test_per_command_aaa(self, test_json):
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', test_json)
+        import db_migrator
+        dbmgtr = db_migrator.DBMigrator(None)
+        self.load_golden_config(dbmgtr, test_json + '_golden')
+        dbmgtr.migrate_tacplus()
+        dbmgtr.migrate_aaa()
+        resulting_table = dbmgtr.configDB.get_table("AAA")
+
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', test_json + '_expected')
+        expected_db = Db()
+        expected_table = expected_db.cfgdb.get_table("AAA")
+
+        print("test_per_command_aaa: {}".format(test_json))
+        print("test_per_command_aaa, resulting_table: {}".format(resulting_table))
+        print("test_per_command_aaa, expected_table: {}".format(expected_table))
+
+        diff = DeepDiff(resulting_table, expected_table, ignore_order=True)
+        assert not diff
+
+
+class TestIPinIPTunnelMigrator(object):
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "2"
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+        dbconnector.dedicated_dbs['APPL_DB'] = None
+        dbconnector.dedicated_dbs['CONFIG_DB'] = None
+
+    def test_tunnel_migrator(self):
+        dbconnector.dedicated_dbs['APPL_DB'] = os.path.join(mock_db_path, 'appl_db', 'tunnel_table_input')
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'tunnel_table_input')
+
+        import db_migrator
+        dbmgtr = db_migrator.DBMigrator(None)
+        dbmgtr.migrate()
+
+        dbconnector.dedicated_dbs['APPL_DB'] = os.path.join(mock_db_path, 'appl_db', 'tunnel_table_expected')
+        expected_appl_db = SonicV2Connector(host='127.0.0.1')
+        expected_appl_db.connect(expected_appl_db.APPL_DB)
+        expected_keys = expected_appl_db.keys(expected_appl_db.APPL_DB, "*")
+        resulting_keys = dbmgtr.appDB.keys(dbmgtr.appDB.APPL_DB, "*")
+        expected_keys.sort()
+        resulting_keys.sort()
+        assert expected_keys == resulting_keys
+        for key in expected_keys:
+            resulting_keys = dbmgtr.appDB.get_all(dbmgtr.appDB.APPL_DB, key)
+            expected_keys = expected_appl_db.get_all(expected_appl_db.APPL_DB, key)
+            diff = DeepDiff(resulting_keys, expected_keys, ignore_order=True)
+            assert not diff

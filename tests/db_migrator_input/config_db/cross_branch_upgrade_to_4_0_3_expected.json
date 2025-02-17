@@ -3,17 +3,14 @@
         "VERSION": "version_4_0_3"
     },
     "FLEX_COUNTER_TABLE|ACL": {
-        "FLEX_COUNTER_STATUS": "true",
-        "FLEX_COUNTER_DELAY_STATUS": "true",
+        "FLEX_COUNTER_STATUS": "enable",
         "POLL_INTERVAL": "10000"
     },
     "FLEX_COUNTER_TABLE|QUEUE": {
-        "FLEX_COUNTER_STATUS": "true",
-        "FLEX_COUNTER_DELAY_STATUS": "true",
+        "FLEX_COUNTER_STATUS": "enable",
         "POLL_INTERVAL": "10000"
     },
     "FLEX_COUNTER_TABLE|PG_WATERMARK": {
-        "FLEX_COUNTER_STATUS": "false",
-        "FLEX_COUNTER_DELAY_STATUS": "true"
+        "FLEX_COUNTER_STATUS": "disable"
     }
 }

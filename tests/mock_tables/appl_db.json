@@ -44,6 +44,9 @@
         "interface_type": "CR4",
         "adv_interface_types": "CR4,CR2",
         "autoneg": "on",
+        "flap_count": "3",
+        "last_up_time": "Sat Jan 18 00:08:42 2025",
+        "last_down_time": "Sat Jan 17 00:04:42 2025",
         "link_training": "on"
     },
     "PORT_TABLE:Ethernet16": {
@@ -55,6 +58,9 @@
         "oper_status": "up",
         "pfc_asym": "off",
         "mtu": "9100",
+        "flap_count": "7",
+        "last_up_time": "Sat Jan 20 00:04:42 2025",
+        "last_down_time": "Sat Jan 19 00:04:42 2025",
         "admin_status": "up"
     },
     "PORT_TABLE:Ethernet36": {
@@ -67,6 +73,8 @@
         "pfc_asym": "off",
         "mtu": "9100",
         "tpid": "0x8100",
+        "flap_count": "7",
+        "last_up_time": "Sat Jan 20 00:04:42 2025",
         "admin_status": "up"
     },
     "PORT_TABLE:Ethernet24": {
@@ -79,7 +87,8 @@
         "pfc_asym": "off",
         "mtu": "9100",
         "tpid": "0x8100",
-        "admin_status": "up"
+        "admin_status": "up",
+        "role": "Dpc"
     },
     "PORT_TABLE:Ethernet28": {
         "index": "7",
@@ -304,6 +313,40 @@
         "type": "dynamic",
         "vni": "200"
     },
+    "_STP_VLAN_TABLE:Vlan500": {
+ 		"bridge_id": "8064b86a97e24e9c",
+ 		"max_age": "20",
+ 		"hello_time": "2",
+ 		"forward_delay": "15",
+ 		"hold_time": "1",
+		"root_bridge_id": "0064b86a97e24e9c",
+		"root_path_cost": "600",
+		"desig_bridge_id": "806480a235f281ec",
+		"root_port": "Root",
+		"root_max_age": "20",
+		"root_hello_time": "2",
+		"root_forward_delay": "15",
+		"stp_instance": "0",
+		"topology_change_count": "1",
+		"last_topology_change": "0"
+	},
+	"_STP_VLAN_PORT_TABLE:Vlan500:Ethernet4": {
+ 		"port_num": "4",
+		"priority": "128",
+ 		"path_cost": "200",
+ 		"port_state": "FORWARDING",
+ 		"desig_cost": "400",
+		"desig_root": "0064b86a97e24e9c",
+		"desig_bridge": "806480a235f281ec",
+		"desig_port": "4",
+		"bpdu_sent": "10",
+		"bpdu_received": "15",
+		"config_bpdu_sent": "10",
+		"config_bpdu_received": "2",
+		"tc_sent": "15",
+		"tc_received": "5",
+		"root_guard_timer": "0"
+	},
     "MUX_CABLE_TABLE:Ethernet32": {
         "state": "active"
     },
@@ -374,5 +417,24 @@
         "action": "set_vrf",
         "param/vrf_id": "p4rt-vrf-80",
         "controller_metadata": "my metadata"
+    },
+    "ACL_TABLE_TABLE:ENI": {
+          "PORTS": "Ethernet104,PortChannel108",
+          "STAGE": "INGRESS",
+          "TYPE": "ENI_REDIRECT",
+          "POLICY_DESC": "Contains Mock Rules for ENI Based Forwarding"
+    },
+    "ACL_RULE_TABLE:ENI:Vnet100_F4939FEFC47E_IN": {
+        "PRIORITY": "9996",
+        "DST_IP": "10.2.0.1/32",
+        "INNER_DST_MAC": "f4:93:9f:ef:c4:7e",
+        "REDIRECT_ACTION": "10.0.0.75"
+    },
+    "ACL_RULE_TABLE:ENI:Vnet100_F4939FEFC47E_OUT": {
+        "PRIORITY": "9997",
+        "DST_IP": "10.2.0.1/32",
+        "INNER_SRC_MAC": "f4:93:9f:ef:c4:7e",
+        "REDIRECT_ACTION": "10.0.0.75",
+        "TUNNEL_VNI": "4321"
     }
 }

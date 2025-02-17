@@ -66,11 +66,14 @@ from . import warm_restart
 from . import plugins
 from . import syslog
 from . import dns
+from . import bgp_cli
+from . import stp
 
 # Global Variables
 PLATFORM_JSON = 'platform.json'
 HWSKU_JSON = 'hwsku.json'
 PORT_STR = "Ethernet"
+BMP_STATE_DB = 'BMP_STATE_DB'
 
 VLAN_SUB_INTERFACE_SEPARATOR = '.'
 
@@ -164,7 +167,7 @@ def get_config_json_by_namespace(namespace):
 iface_alias_converter = lazy_object_proxy.Proxy(lambda: clicommon.InterfaceAliasConverter())
 
 #
-# Display all storm-control data 
+# Display all storm-control data
 #
 def display_storm_all():
     """ Show storm-control """
@@ -290,7 +293,6 @@ def cli(ctx):
     load_db_config()
     ctx.obj = Db()
 
-
 # Add groups from other modules
 cli.add_command(acl.acl)
 cli.add_command(chassis_modules.chassis)
@@ -317,6 +319,7 @@ cli.add_command(vxlan.vxlan)
 cli.add_command(system_health.system_health)
 cli.add_command(warm_restart.warm_restart)
 cli.add_command(dns.dns)
+cli.add_command(stp.spanning_tree)
 
 # syslog module
 cli.add_command(syslog.syslog)
@@ -325,6 +328,8 @@ cli.add_command(syslog.syslog)
 if is_gearbox_configured():
     cli.add_command(gearbox.gearbox)
 
+# bgp module
+cli.add_command(bgp_cli.BGP)
 
 #
 # 'vrf' command ("show vrf")
@@ -462,7 +467,7 @@ def is_mgmt_vrf_enabled(ctx):
     return False
 
 #
-# 'storm-control' group 
+# 'storm-control' group
 # "show storm-control [interface <interface>]"
 #
 @cli.group('storm-control', invoke_without_command=True)
@@ -645,7 +650,8 @@ def counters(namespace, display, verbose):
 
 @pfc.command()
 @click.argument('interface', type=click.STRING, required=False)
-def priority(interface):
+@multi_asic_util.multi_asic_click_option_namespace
+def priority(interface, namespace):
     """Show pfc priority"""
     cmd = ['pfc', 'show', 'priority']
     if interface is not None and clicommon.get_interface_naming_mode() == "alias":
@@ -653,12 +659,15 @@ def priority(interface):
 
     if interface is not None:
         cmd += [str(interface)]
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
 
     run_command(cmd)
 
 @pfc.command()
 @click.argument('interface', type=click.STRING, required=False)
-def asymmetric(interface):
+@multi_asic_util.multi_asic_click_option_namespace
+def asymmetric(interface, namespace):
     """Show asymmetric pfc"""
     cmd = ['pfc', 'show', 'asymmetric']
     if interface is not None and clicommon.get_interface_naming_mode() == "alias":
@@ -666,6 +675,8 @@ def asymmetric(interface):
 
     if interface is not None:
         cmd += [str(interface)]
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
 
     run_command(cmd)
 
@@ -763,6 +774,37 @@ def counters(interfacename, namespace, display, verbose, json, voq, nonzero):
 
     run_command(cmd, display_cmd=verbose)
 
+
+# 'wredcounters' subcommand ("show queue wredcounters")
+@queue.command()
+@click.argument('interfacename', required=False)
+@multi_asic_util.multi_asic_click_options
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+@click.option('--json', is_flag=True, help="JSON output")
+@click.option('--voq', is_flag=True, help="VOQ counters")
+def wredcounters(interfacename, namespace, display, verbose, json, voq):
+    """Show queue wredcounters"""
+
+    cmd = ["wredstat"]
+
+    if interfacename is not None:
+        if clicommon.get_interface_naming_mode() == "alias":
+            interfacename = iface_alias_converter.alias_to_name(interfacename)
+
+    if interfacename is not None:
+        cmd += ['-p', str(interfacename)]
+
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
+
+    if json:
+        cmd += ["-j"]
+
+    if voq:
+        cmd += ["-V"]
+
+    run_command(cmd, display_cmd=verbose)
+
 #
 # 'watermarks' subgroup ("show queue watermarks ...")
 #
@@ -774,23 +816,53 @@ def watermark():
 
 # 'unicast' subcommand ("show queue watermarks unicast")
 @watermark.command('unicast')
-def wm_q_uni():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def wm_q_uni(namespace):
     """Show user WM for unicast queues"""
     command = ['watermarkstat', '-t', 'q_shared_uni']
+    if namespace is not None:
+        command += ['-n', str(namespace)]
     run_command(command)
 
 # 'multicast' subcommand ("show queue watermarks multicast")
 @watermark.command('multicast')
-def wm_q_multi():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def wm_q_multi(namespace):
     """Show user WM for multicast queues"""
     command = ['watermarkstat', '-t', 'q_shared_multi']
+    if namespace is not None:
+        command += ['-n', str(namespace)]
     run_command(command)
 
 # 'all' subcommand ("show queue watermarks all")
 @watermark.command('all')
-def wm_q_all():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def wm_q_all(namespace):
     """Show user WM for all queues"""
     command = ['watermarkstat', '-t', 'q_shared_all']
+    if namespace is not None:
+        command += ['-n', str(namespace)]
     run_command(command)
 
 #
@@ -804,23 +876,53 @@ def persistent_watermark():
 
 # 'unicast' subcommand ("show queue persistent-watermarks unicast")
 @persistent_watermark.command('unicast')
-def pwm_q_uni():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def pwm_q_uni(namespace):
     """Show persistent WM for unicast queues"""
     command = ['watermarkstat', '-p', '-t', 'q_shared_uni']
+    if namespace is not None:
+        command += ['-n', str(namespace)]
     run_command(command)
 
 # 'multicast' subcommand ("show queue persistent-watermarks multicast")
 @persistent_watermark.command('multicast')
-def pwm_q_multi():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def pwm_q_multi(namespace):
     """Show persistent WM for multicast queues"""
     command = ['watermarkstat', '-p', '-t', 'q_shared_multi']
+    if namespace is not None:
+        command += ['-n', str(namespace)]
     run_command(command)
 
 # 'all' subcommand ("show queue persistent-watermarks all")
 @persistent_watermark.command('all')
-def pwm_q_all():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def pwm_q_all(namespace):
     """Show persistent WM for all queues"""
     command = ['watermarkstat', '-p', '-t', 'q_shared_all']
+    if namespace is not None:
+        command += ['-n', str(namespace)]
     run_command(command)
 
 #
@@ -837,15 +939,35 @@ def watermark():
     pass
 
 @watermark.command('headroom')
-def wm_pg_headroom():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def wm_pg_headroom(namespace):
     """Show user headroom WM for pg"""
     command = ['watermarkstat', '-t', 'pg_headroom']
+    if namespace is not None:
+        command += ['-n', str(namespace)]
     run_command(command)
 
 @watermark.command('shared')
-def wm_pg_shared():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def wm_pg_shared(namespace):
     """Show user shared WM for pg"""
     command = ['watermarkstat', '-t', 'pg_shared']
+    if namespace is not None:
+        command += ['-n', str(namespace)]
     run_command(command)
 
 @priority_group.group()
@@ -854,9 +976,12 @@ def drop():
     pass
 
 @drop.command('counters')
-def pg_drop_counters():
+@multi_asic_util.multi_asic_click_option_namespace
+def pg_drop_counters(namespace):
     """Show dropped packets for priority-group"""
     command = ['pg-drop', '-c', 'show']
+    if namespace is not None:
+        command += ['-n', str(namespace)]
     run_command(command)
 
 @priority_group.group(name='persistent-watermark')
@@ -865,15 +990,36 @@ def persistent_watermark():
     pass
 
 @persistent_watermark.command('headroom')
-def pwm_pg_headroom():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def pwm_pg_headroom(namespace):
     """Show persistent headroom WM for pg"""
     command = ['watermarkstat', '-p', '-t', 'pg_headroom']
+    if namespace is not None:
+        command += ['-n', str(namespace)]
     run_command(command)
 
+
 @persistent_watermark.command('shared')
-def pwm_pg_shared():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def pwm_pg_shared(namespace):
     """Show persistent shared WM for pg"""
     command = ['watermarkstat', '-p', '-t', 'pg_shared']
+    if namespace is not None:
+        command += ['-n', str(namespace)]
     run_command(command)
 
 
@@ -886,15 +1032,36 @@ def buffer_pool():
     """Show details of the buffer pools"""
 
 @buffer_pool.command('watermark')
-def wm_buffer_pool():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def wm_buffer_pool(namespace):
     """Show user WM for buffer pools"""
-    command = ['watermarkstat', '-t' ,'buffer_pool']
+    command = ['watermarkstat', '-t', 'buffer_pool']
+    if namespace is not None:
+        command += ['-n', str(namespace)]
     run_command(command)
 
+
 @buffer_pool.command('persistent-watermark')
-def pwm_buffer_pool():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def pwm_buffer_pool(namespace):
     """Show persistent WM for buffer pools"""
     command = ['watermarkstat', '-p', '-t', 'buffer_pool']
+    if namespace is not None:
+        command += ['-n', str(namespace)]
     run_command(command)
 
 
@@ -907,15 +1074,36 @@ def headroom_pool():
     """Show details of headroom pool"""
 
 @headroom_pool.command('watermark')
-def wm_headroom_pool():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def wm_headroom_pool(namespace):
     """Show user WM for headroom pool"""
     command = ['watermarkstat', '-t', 'headroom_pool']
+    if namespace is not None:
+        command += ['-n', str(namespace)]
     run_command(command)
 
+
 @headroom_pool.command('persistent-watermark')
-def pwm_headroom_pool():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def pwm_headroom_pool(namespace):
     """Show persistent WM for headroom pool"""
     command = ['watermarkstat', '-p', '-t', 'headroom_pool']
+    if namespace is not None:
+        command += ['-n', str(namespace)]
     run_command(command)
 
 
@@ -987,6 +1175,111 @@ def route_map(route_map_name, verbose):
     if route_map_name is not None:
         cmd[-1] += ' {}'.format(route_map_name)
     run_command(cmd, display_cmd=verbose)
+
+
+#
+# 'vrrp' group ("show vrrp ...")
+#
+@cli.group(cls=clicommon.AliasedGroup, invoke_without_command="true")
+@click.pass_context
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def vrrp(ctx, verbose):
+    """Show vrrp commands"""
+    if ctx.invoked_subcommand is not None:
+        return
+
+    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp']
+    run_command(cmd, display_cmd=verbose)
+
+
+# 'interface' command
+@vrrp.command('interface')
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrid', metavar='<vrid>', required=False)
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def vrrp_interface(ctx, interface_name, vrid, verbose):
+    """show vrrp interface <interface_name> <vrid>"""
+    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp']
+    if vrid is not None:
+        cmd[-1] += ' interface {} {}'.format(interface_name, vrid)
+    else:
+        cmd[-1] += ' interface {}'.format(interface_name)
+    run_command(cmd, display_cmd=verbose)
+
+
+# 'vrid' command
+@vrrp.command('vrid')
+@click.pass_context
+@click.argument('vrid', metavar='<vrid>', required=True)
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def vrrp_vrid(ctx, vrid, verbose):
+    """show vrrp vrid <vrid>"""
+    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp {}'.format(vrid)]
+    run_command(cmd, display_cmd=verbose)
+
+
+# 'summary' command
+@vrrp.command('summary')
+@click.pass_context
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def vrrp_summary(ctx, verbose):
+    """show vrrp summary"""
+    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp summary']
+    run_command(cmd, display_cmd=verbose)
+
+
+#
+# 'vrrp6' group ("show vrrp6 ...")
+#
+@cli.group(cls=clicommon.AliasedGroup, invoke_without_command="true")
+@click.pass_context
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def vrrp6(ctx, verbose):
+    """Show vrrp6 commands"""
+    if ctx.invoked_subcommand is not None:
+        return
+
+    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp6']
+    run_command(cmd, display_cmd=verbose)
+
+
+# 'interface' command
+@vrrp6.command('interface')
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrid', metavar='<vrid>', required=False)
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def vrrp6_interface(ctx, interface_name, vrid, verbose):
+    """show vrrp6 interface <interface_name> <vrid>"""
+    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp6']
+    if vrid is not None:
+        cmd[-1] += ' interface {} {}'.format(interface_name, vrid)
+    else:
+        cmd[-1] += ' interface {}'.format(interface_name)
+    run_command(cmd, display_cmd=verbose)
+
+
+# 'vrid' command
+@vrrp6.command('vrid')
+@click.pass_context
+@click.argument('vrid', metavar='<vrid>', required=True)
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def vrrp6_vrid(ctx, vrid, verbose):
+    """show vrrp6 vrid <vrid>"""
+    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp6 {}'.format(vrid)]
+    run_command(cmd, display_cmd=verbose)
+
+
+# 'summary' command
+@vrrp6.command('summary')
+@click.pass_context
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def vrrp6_summary(ctx, verbose):
+    """show vrrp6 summary"""
+    cmd = ['sudo', constants.RVTYSH_COMMAND, '-c', 'show vrrp6 summary']
+    run_command(cmd, display_cmd=verbose)
+
 
 #
 # 'ip' group ("show ip ...")
@@ -1184,7 +1477,11 @@ elif routing_stack == "frr":
     ip.add_command(bgp)
     from .bgp_frr_v6 import bgp
     ipv6.add_command(bgp)
-
+elif device_info.is_supervisor():
+    from .bgp_frr_v4 import bgp
+    ip.add_command(bgp)
+    from .bgp_frr_v6 import bgp
+    ipv6.add_command(bgp)
 #
 # 'link-local-mode' subcommand ("show ipv6 link-local-mode")
 #
@@ -1437,11 +1734,12 @@ def all(verbose):
         ns_list = multi_asic.get_namespace_list()
         for ns in ns_list:
             ns_config = get_config_json_by_namespace(ns)
-            ns_config['bgpraw'] = bgp_util.run_bgp_show_command(bgpraw_cmd, ns)
+            if bgp_util.is_bgp_feature_state_enabled(ns):
+                ns_config['bgpraw'] = bgp_util.run_bgp_show_command(bgpraw_cmd, ns, exit_on_fail=False)
             output[ns] = ns_config
         click.echo(json.dumps(output, indent=4))
     else:
-        host_config['bgpraw'] = bgp_util.run_bgp_show_command(bgpraw_cmd)
+        host_config['bgpraw'] = bgp_util.run_bgp_show_command(bgpraw_cmd, exit_on_fail=False)
         click.echo(json.dumps(output['localhost'], indent=4))
 
 
@@ -1528,7 +1826,7 @@ def ntp(verbose):
     """Show NTP running configuration"""
     ntp_servers = []
     ntp_dict = {}
-    with open("/etc/ntp.conf") as ntp_file:
+    with open("/etc/ntpsec/ntp.conf") as ntp_file:
         data = ntp_file.readlines()
     for line in data:
         if line.startswith("server "):
@@ -1726,6 +2024,16 @@ def syslog(verbose):
 
     click.echo(tabulate(body, header, tablefmt="simple", stralign="left", missingval=""))
 
+
+# 'spanning-tree' subcommand ("show runningconfiguration spanning_tree")
+@runningconfiguration.command()
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def spanning_tree(verbose):
+    """Show spanning_tree running configuration"""
+    stp_list = ["STP", "STP_PORT", "STP_VLAN", "STP_VLAN_PORT"]
+    for key in stp_list:
+        cmd = ['sudo', 'sonic-cfggen', '-d', '--var-json', key]
+        run_command(cmd, display_cmd=verbose)
 
 #
 # 'startupconfiguration' group ("show startupconfiguration ...")
@@ -1997,10 +2305,13 @@ def policer(policer_name, verbose):
 # 'ecn' command ("show ecn")
 #
 @cli.command('ecn')
+@multi_asic_util.multi_asic_click_option_namespace
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def ecn(verbose):
+def ecn(namespace, verbose):
     """Show ECN configuration"""
     cmd = ['ecnconfig', '-l']
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
     run_command(cmd, display_cmd=verbose)
 
 
@@ -2019,9 +2330,22 @@ def boot():
 # 'mmu' command ("show mmu")
 #
 @cli.command('mmu')
-def mmu():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+@click.option('--verbose', '-vv', is_flag=True, help="Enable verbose output")
+def mmu(namespace, verbose):
     """Show mmu configuration"""
     cmd = ['mmuconfig', '-l']
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
+    if verbose:
+        cmd += ['-vv']
     run_command(cmd)
 
 #
@@ -2035,10 +2359,25 @@ def buffer():
 #
 # 'configuration' command ("show buffer command")
 #
+
+
 @buffer.command()
-def configuration():
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+@click.option('--verbose', '-vv', is_flag=True, help="Enable verbose output")
+def configuration(namespace, verbose):
     """show buffer configuration"""
     cmd = ['mmuconfig', '-l']
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
+    if verbose:
+        cmd += ['-vv']
     run_command(cmd)
 
 #
@@ -2082,6 +2421,138 @@ def ztp(status, verbose):
 
 
 #
+# 'bmp' group ("show bmp ...")
+#
+@cli.group(cls=clicommon.AliasedGroup)
+def bmp():
+    """Show details of the bmp dataset"""
+    pass
+
+
+# 'bgp-neighbor-table' subcommand ("show bmp bgp-neighbor-table")
+@bmp.command('bgp-neighbor-table')
+@clicommon.pass_db
+def bmp_neighbor_table(db):
+    """Show bmp bgp-neighbor-table information"""
+    bmp_headers = ["Neighbor_Address", "Peer_Address", "Peer_ASN", "Peer_RD", "Peer_Port",
+                   "Local_Address", "Local_ASN", "Local_Port", "Advertised_Capabilities", "Received_Capabilities"]
+
+    # BGP_NEIGHBOR_TABLE|10.0.1.2
+    bmp_keys = db.db.keys(BMP_STATE_DB, "BGP_NEIGHBOR_TABLE|*")
+
+    click.echo("Total number of bmp neighbors: {}".format(0 if bmp_keys is None else len(bmp_keys)))
+
+    bmp_body = []
+    if bmp_keys is not None:
+        for key in bmp_keys:
+            values = db.db.get_all(BMP_STATE_DB, key)
+            bmp_body.append([
+                values["peer_addr"],  # Neighbor_Address
+                values["peer_addr"],
+                values["peer_asn"],
+                values["peer_rd"],
+                values["remote_port"],
+                values["local_ip"],
+                values["local_asn"],
+                values["local_port"],
+                values["sent_cap"],
+                values["recv_cap"]
+            ])
+
+    click.echo(tabulate(bmp_body, bmp_headers))
+
+
+# 'bmp-rib-out-table' subcommand ("show bmp bgp-rib-out-table")
+@bmp.command('bgp-rib-out-table')
+@clicommon.pass_db
+def bmp_rib_out_table(db):
+    """Show bmp bgp-rib-out-table information"""
+    bmp_headers = ["Neighbor_Address", "NLRI", "Origin", "AS_Path", "Origin_AS", "Next_Hop", "Local_Pref",
+                   "Originator_ID",  "Community_List", "Ext_Community_List"]
+
+    # BGP_RIB_OUT_TABLE|192.181.168.0/25|10.0.0.59
+    bmp_keys = db.db.keys(BMP_STATE_DB, "BGP_RIB_OUT_TABLE|*")
+    delimiter = db.db.get_db_separator(BMP_STATE_DB)
+
+    click.echo("Total number of bmp bgp-rib-out-table: {}".format(0 if bmp_keys is None else len(bmp_keys)))
+
+    bmp_body = []
+    if bmp_keys is not None:
+        for key in bmp_keys:
+            key_values = key.split(delimiter)
+            if len(key_values) < 3:
+                continue
+            values = db.db.get_all(BMP_STATE_DB, key)
+            bmp_body.append([
+                key_values[2],  # Neighbor_Address
+                key_values[1],  # NLRI
+                values["origin"],
+                values["as_path"],
+                values["origin_as"],
+                values["next_hop"],
+                values["local_pref"],
+                values["originator_id"],
+                values["community_list"],
+                values["ext_community_list"]
+            ])
+
+    click.echo(tabulate(bmp_body, bmp_headers))
+
+
+# 'bgp-rib-in-table' subcommand ("show bmp bgp-rib-in-table")
+@bmp.command('bgp-rib-in-table')
+@clicommon.pass_db
+def bmp_rib_in_table(db):
+    """Show bmp bgp-rib-in-table information"""
+    bmp_headers = ["Neighbor_Address", "NLRI", "Origin", "AS_Path", "Origin_AS", "Next_Hop", "Local_Pref",
+                   "Originator_ID",  "Community_List", "Ext_Community_List"]
+
+    # BGP_RIB_IN_TABLE|20c0:ef50::/64|10.0.0.57
+    bmp_keys = db.db.keys(BMP_STATE_DB, "BGP_RIB_IN_TABLE|*")
+    delimiter = db.db.get_db_separator(BMP_STATE_DB)
+
+    click.echo("Total number of bmp bgp-rib-in-table: {}".format(0 if bmp_keys is None else len(bmp_keys)))
+
+    bmp_body = []
+    if bmp_keys is not None:
+        for key in bmp_keys:
+            key_values = key.split(delimiter)
+            if len(key_values) < 3:
+                continue
+            values = db.db.get_all(BMP_STATE_DB, key)
+            bmp_body.append([
+                key_values[2],  # Neighbor_Address
+                key_values[1],  # NLRI
+                values["origin"],
+                values["as_path"],
+                values["origin_as"],
+                values["next_hop"],
+                values["local_pref"],
+                values["originator_id"],
+                values["community_list"],
+                values["ext_community_list"]
+            ])
+
+    click.echo(tabulate(bmp_body, bmp_headers))
+
+
+# 'tables' subcommand ("show bmp tables")
+@bmp.command('tables')
+@clicommon.pass_db
+def tables(db):
+    """Show bmp table status information"""
+    bmp_headers = ["Table_Name", "Enabled"]
+    bmp_body = []
+    click.echo("BMP tables: ")
+    bmp_keys = db.cfgdb.get_table('BMP')
+    if bmp_keys['table']:
+        bmp_body.append(['bgp_neighbor_table', bmp_keys['table']['bgp_neighbor_table']])
+        bmp_body.append(['bgp_rib_in_table', bmp_keys['table']['bgp_rib_in_table']])
+        bmp_body.append(['bgp_rib_out_table', bmp_keys['table']['bgp_rib_out_table']])
+    click.echo(tabulate(bmp_body, bmp_headers))
+
+
+#
 # 'bfd' group ("show bfd ...")
 #
 @cli.group(cls=clicommon.AliasedGroup)
@@ -2107,7 +2578,7 @@ def summary(db):
             key_values = key.split('|')
             values = db.db.get_all(db.db.STATE_DB, key)
             if "local_discriminator" not in values.keys():
-                values["local_discriminator"] = "NA"            
+                values["local_discriminator"] = "NA"
             bfd_body.append([key_values[3], key_values[2], key_values[1], values["state"], values["type"], values["local_addr"],
                                 values["tx_interval"], values["rx_interval"], values["multiplier"], values["multihop"], values["local_discriminator"]])
 
@@ -2138,7 +2609,7 @@ def peer(db, peer_ip):
             key_values = key.split(delimiter)
             values = db.db.get_all(db.db.STATE_DB, key)
             if "local_discriminator" not in values.keys():
-                values["local_discriminator"] = "NA"            
+                values["local_discriminator"] = "NA"
             bfd_body.append([key_values[3], key_values[2], key_values[1], values.get("state"), values.get("type"), values.get("local_addr"),
                                 values.get("tx_interval"), values.get("rx_interval"), values.get("multiplier"), values.get("multihop"), values.get("local_discriminator")])
 
@@ -2154,6 +2625,163 @@ def suppress_pending_fib(db):
     field_values = db.cfgdb.get_entry('DEVICE_METADATA', 'localhost')
     state = field_values.get('suppress-fib-pending', 'disabled').title()
     click.echo(state)
+
+
+# asic-sdk-health-event subcommand ("show asic-sdk-health-event")
+@cli.group(cls=clicommon.AliasedGroup)
+def asic_sdk_health_event():
+    """"""
+    pass
+
+
+@asic_sdk_health_event.command()
+@clicommon.pass_db
+@click.option('--namespace', '-n', 'namespace', default=None, show_default=True,
+              type=click.Choice(multi_asic_util.multi_asic_ns_choices()), help='Namespace name or all')
+def suppress_configuration(db, namespace):
+    """ Show the suppress configuration """
+    if multi_asic.get_num_asics() > 1:
+        namespace_list = multi_asic.get_namespaces_from_linux()
+        masic = True
+    else:
+        namespace_list = [multi_asic.DEFAULT_NAMESPACE]
+        masic = False
+
+    header = ['Severity', 'Suppressed category-list', "Max events"]
+    body = []
+
+    supported = False
+
+    for ns in namespace_list:
+        if namespace and namespace != ns:
+            continue
+
+        state_db = db.db_clients[ns]
+        if "true" != state_db.get(db.db.STATE_DB, "SWITCH_CAPABILITY|switch", "ASIC_SDK_HEALTH_EVENT"):
+            continue
+
+        supported = True
+
+        if masic:
+            click.echo("{}:".format(ns));
+
+        config_db = db.cfgdb_clients[ns]
+        suppressSeverities = config_db.get_table('SUPPRESS_ASIC_SDK_HEALTH_EVENT')
+
+        for severity in natsorted(suppressSeverities):
+            body.append([severity,
+                         ','.join(suppressSeverities[severity].get('categories', ['none'])),
+                         suppressSeverities[severity].get('max_events', 'unlimited')])
+
+        click.echo(tabulate(body, header))
+
+    if not supported:
+        ctx = click.get_current_context()
+        ctx.fail("ASIC/SDK health event is not supported on the platform")
+
+
+@asic_sdk_health_event.command()
+@clicommon.pass_db
+@click.option('--namespace', '-n', 'namespace', default=None, show_default=True,
+              type=click.Choice(multi_asic_util.multi_asic_ns_choices()), help='Namespace name or all')
+def received(db, namespace):
+    """ Show the received ASIC/SDK health event """
+    if multi_asic.get_num_asics() > 1:
+        namespace_list = multi_asic.get_namespaces_from_linux()
+        masic = True
+    else:
+        namespace_list = [multi_asic.DEFAULT_NAMESPACE]
+        masic = False
+
+    header = ['Date', 'Severity', 'Category', 'Description']
+    body = []
+
+    supported = False
+
+    for ns in namespace_list:
+        if namespace and namespace != ns:
+            continue
+
+        state_db = db.db_clients[ns]
+        if "true" != state_db.get(db.db.STATE_DB, "SWITCH_CAPABILITY|switch", "ASIC_SDK_HEALTH_EVENT"):
+            continue
+
+        supported = True
+
+        if masic:
+            click.echo("{}:".format(ns));
+
+        event_keys = state_db.keys(db.db.STATE_DB, "ASIC_SDK_HEALTH_EVENT_TABLE|*")
+
+        for key in natsorted(event_keys):
+            event = state_db.get_all(state_db.STATE_DB, key)
+            body.append([key.split('|')[1], event.get('severity'), event.get('category'), event.get('description')])
+
+        click.echo(tabulate(body, header))
+
+    if not supported:
+        ctx = click.get_current_context()
+        ctx.fail("ASIC/SDK health event is not supported on the platform")
+
+
+#
+# 'serial_console' command group ("show serial_console ...")
+#
+@cli.group('serial_console', invoke_without_command=True)
+@clicommon.pass_db
+def serial_console(db):
+    """Show serial_console configuration"""
+
+    serial_console_table = db.cfgdb.get_entry('SERIAL_CONSOLE', 'POLICIES')
+
+    hdrs = ['inactivity-timeout', 'sysrq-capabilities']
+    data = []
+
+    data.append(serial_console_table.get('inactivity_timeout', '900 <default>'))
+    data.append(serial_console_table.get('sysrq_capabilities', 'disabled <default>'))
+
+    configuration = [data]
+    click.echo(tabulate(configuration, headers=hdrs, tablefmt='simple', missingval=''))
+
+
+#
+# 'ssh' command group ("show ssh ...")
+#
+@cli.group('ssh', invoke_without_command=True)
+@clicommon.pass_db
+def ssh(db):
+    """Show ssh configuration"""
+
+    serial_console_table = db.cfgdb.get_entry('SSH_SERVER', 'POLICIES')
+
+    hdrs = ['inactivity-timeout', 'max-sessions']
+    data = []
+
+    data.append(serial_console_table.get('inactivity_timeout', '900 <default>'))
+    data.append(serial_console_table.get('max_session', '0 <default>'))
+
+    configuration = [data]
+    click.echo(tabulate(configuration, headers=hdrs, tablefmt='simple', missingval=''))
+
+
+#
+# 'banner' command group ("show banner ...")
+#
+@cli.group('banner', invoke_without_command=True)
+@clicommon.pass_db
+def banner(db):
+    """Show banner messages"""
+
+    banner_table = db.cfgdb.get_entry('BANNER_MESSAGE', 'global')
+
+    hdrs = ['state', 'login', 'motd', 'logout']
+    data = []
+
+    for key in hdrs:
+        data.append(banner_table.get(key, '').replace('\\n', '\n'))
+
+    messages = [data]
+    click.echo(tabulate(messages, headers=hdrs, tablefmt='simple', missingval=''))
 
 
 # Load plugins and register them

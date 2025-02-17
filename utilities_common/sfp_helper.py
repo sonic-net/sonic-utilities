@@ -38,7 +38,13 @@ QSFP_CMIS_DELTA_DATA_MAP = {
     'supported_max_tx_power': 'Supported Max TX Power',
     'supported_min_tx_power': 'Supported Min TX Power',
     'supported_max_laser_freq': 'Supported Max Laser Frequency',
-    'supported_min_laser_freq': 'Supported Min Laser Frequency'
+    'supported_min_laser_freq': 'Supported Min Laser Frequency',
+    'e1_active_firmware': 'E1 Active Firmware',
+    'e1_inactive_firmware': 'E1 Inactive Firmware',
+    'e1_server_firmware': 'E1 Server Firmware',
+    'e2_active_firmware': 'E2 Active Firmware',
+    'e2_inactive_firmware': 'E2 Inactive Firmware',
+    'e2_server_firmware': 'E2 Server Firmware'
 }
 
 CMIS_DATA_MAP = {**QSFP_DATA_MAP, **QSFP_CMIS_DELTA_DATA_MAP}
@@ -47,6 +53,7 @@ CMIS_DATA_MAP = {**QSFP_DATA_MAP, **QSFP_CMIS_DELTA_DATA_MAP}
 # For non-CMIS, only first 1 or 4 lanes are applicable.
 # For CMIS, all 8 lanes are applicable.
 QSFP_STATUS_MAP = {
+    'cmis_state': 'CMIS State (SW)',
     'txfault1': 'Tx fault flag on media lane 1',
     'txfault2': 'Tx fault flag on media lane 2',
     'txfault3': 'Tx fault flag on media lane 3',

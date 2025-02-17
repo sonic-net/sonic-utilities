@@ -8,7 +8,7 @@ import sys
 import termios
 import tty
 
-from .utils import get_linecard_ip
+from .utils import get_linecard_ip, get_linecard_hostname_from_module_name, get_linecard_module_name_from_hostname
 from paramiko.py3compat import u
 from paramiko import Channel
 
@@ -31,7 +31,17 @@ class Linecard:
         if not self.ip:
             sys.exit(1)
 
-        self.linecard_name = linecard_name
+        # if the user passes linecard hostname, then try to get the module name for that linecard
+        module_name = get_linecard_module_name_from_hostname(linecard_name)
+        if module_name is None:
+            # if the module name cannot be found from host, assume the user has passed module name
+            self.module_name = linecard_name
+            self.hostname = get_linecard_hostname_from_module_name(linecard_name)
+        else:
+            # the user has passed linecard hostname
+            self.hostname = linecard_name
+            self.module_name = module_name
+
         self.username = username
         self.password = password
 

@@ -4,6 +4,11 @@
             "hostname" : "227.0.0.1",
             "port" : 6379,
             "unix_socket_path" : "/var/run/redis/redis.sock"
+        },
+        "redis_bmp": {
+            "hostname" : "127.0.0.1",
+            "port" : 6400,
+            "unix_socket_path" : "/var/run/redis/redis_bmp.sock"
         }
     },
     "DATABASES" : {
@@ -61,6 +66,11 @@
             "id" : 13,
             "separator": "|",
             "instance" : "redis"
+        },
+        "BMP_STATE_DB" : {
+            "id" : 20,
+            "separator": "|",
+            "instance" : "redis_bmp"
         }
     },
     "VERSION" : "1.1"

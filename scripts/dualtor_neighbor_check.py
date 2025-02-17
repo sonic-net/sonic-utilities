@@ -304,12 +304,21 @@ def read_tables_from_db(appl_db):
     """Reads required tables from db."""
     # NOTE: let's cache the db read script sha1 in APPL_DB under
     # key "_DUALTOR_NEIGHBOR_CHECK_SCRIPT_SHA1"
-    db_read_script_sha1 = appl_db.get(DB_READ_SCRIPT_CONFIG_DB_KEY)
-    if not db_read_script_sha1:
+    def _load_script():
         redis_load_cmd = "SCRIPT LOAD \"%s\"" % DB_READ_SCRIPT
         db_read_script_sha1 = redis_cli(redis_load_cmd).strip()
         WRITE_LOG_INFO("loaded script sha1: %s", db_read_script_sha1)
         appl_db.set(DB_READ_SCRIPT_CONFIG_DB_KEY, db_read_script_sha1)
+        return db_read_script_sha1
+
+    def _is_script_existed(script_sha1):
+        redis_script_exists_cmd = "SCRIPT EXISTS %s" % script_sha1
+        cmd_output = redis_cli(redis_script_exists_cmd).strip()
+        return "1" in cmd_output
+
+    db_read_script_sha1 = appl_db.get(DB_READ_SCRIPT_CONFIG_DB_KEY)
+    if ((not db_read_script_sha1) or (not _is_script_existed(db_read_script_sha1))):
+        db_read_script_sha1 = _load_script()
 
     redis_run_cmd = "EVALSHA %s 0" % db_read_script_sha1
     result = redis_cli(redis_run_cmd).strip()
