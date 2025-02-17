@@ -59,7 +59,7 @@ class DBMigrator():
                      none-zero values.
               build: sequentially increase within a minor version domain.
         """
-        self.CURRENT_VERSION = 'version_202411_01'
+        self.CURRENT_VERSION = 'version_202411_02'
 
         self.TABLE_NAME      = 'VERSIONS'
         self.TABLE_KEY       = 'DATABASE'
@@ -857,6 +857,17 @@ class DBMigrator():
             if keys:
                 self.configDB.delete(self.configDB.CONFIG_DB, authorization_key)
 
+    def migrate_flex_counter_delay_status_removal(self):
+        """
+        Remove FLEX_COUNTER_DELAY_STATUS field.
+        """
+
+        flex_counter_objects = self.configDB.get_keys('FLEX_COUNTER_TABLE')
+        for obj in flex_counter_objects:
+            flex_counter = self.configDB.get_entry('FLEX_COUNTER_TABLE', obj)
+            flex_counter.pop('FLEX_COUNTER_DELAY_STATUS', None)
+            self.configDB.set_entry('FLEX_COUNTER_TABLE', obj, flex_counter)
+
     def version_unknown(self):
         """
         version_unknown tracks all SONiC versions that doesn't have a version
@@ -1237,10 +1248,19 @@ class DBMigrator():
 
     def version_202411_01(self):
         """
-        Version 202411_01, this version should be the final version for
-        master branch until 202411 branch is created.
+        Version 202411_01.
         """
         log.log_info('Handling version_202411_01')
+        self.migrate_flex_counter_delay_status_removal()
+        self.set_version('version_202411_02')
+        return 'version_202411_02'
+
+    def version_202411_02(self):
+        """
+        Version 202411_02
+        This is current last version for 202411 branch
+        """
+        log.log_info('Handling version_202411_02')
         return None
 
     def get_version(self):
