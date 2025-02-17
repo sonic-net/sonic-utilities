@@ -284,8 +284,8 @@ class TestAaa(object):
         assert result.exit_code == 0
         assert result.output == show_aaa_disable_accounting_output
 
-    def test_config_aaa_tacacs_reach_maxsize(self, get_cmd_module):
-        (config, show) = get_cmd_module
+    def test_config_aaa_tacacs_reach_maxsize(self):
+        config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
         db.cfgdb.delete_table("AAA")
@@ -293,15 +293,15 @@ class TestAaa(object):
 
         db.cfgdb.delete_table("TACPLUS_SERVER")
         # test tacacs reach max size
-        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.11"])
-        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.12"])
-        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.13"])
-        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.14"])
-        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.15"])
-        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.16"])
-        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.17"])
-        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.18"])
-        result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.19"])
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.11"], obj=db)
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.12"], obj=db)
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.13"], obj=db)
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.14"], obj=db)
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.15"], obj=db)
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.16"], obj=db)
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.17"], obj=db)
+        runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.18"], obj=db)
+        result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.19"], obj=db)
         print(result.exit_code)
         print(result.output)
         info = runner.invoke(show.cli.commands["tacacs"], [])
