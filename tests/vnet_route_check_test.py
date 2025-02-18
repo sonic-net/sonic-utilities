@@ -605,7 +605,7 @@ test_data = {
         }
     },
     "13": {
-        DESCR: "A VNET route is missing in ASIC DB and STATE DB, and another inactive route is missing in ASIC DB",
+        DESCR: "A VNET route is missing in STATE DB and another inactive route is missing in ASIC DB",
         ARGS: "vnet_route_check",
         PRE: {
             APPL_DB: {
@@ -672,8 +672,13 @@ class Table:
         return list(self.data.keys())
 
     def get(self, key):
-        ret = copy.deepcopy(self.data.get(key, self.data))
-        return (True, ret)
+        result = self.data.get(key)
+        if result:
+            ret = copy.deepcopy(result)
+            return (True, ret)
+        else:
+            ret = copy.deepcopy(self.data)
+            return (False, ret)
 
 
 db_conns = {"APPL_DB": APPL_DB, "ASIC_DB": ASIC_DB, "COUNTERS_DB": CNTR_DB, "STATE_DB": STATE_DB}

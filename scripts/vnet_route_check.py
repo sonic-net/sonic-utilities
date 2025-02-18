@@ -370,8 +370,8 @@ def filter_active_vnet_routes(vnet_routes: dict):
         active_routes = []
         for prefix in vnet_info["routes"]:
             key = f"{vnet_name}|{prefix}"
-            status, fvs = vnet_route_tunnel_table.get(key)
-            if not status:
+            exists, fvs = vnet_route_tunnel_table.get(key)
+            if not exists:
                 print_message(syslog.LOG_WARNING, f"VNET_ROUTE_TUNNEL_TABLE|{key} does not exist in STATE DB.")
                 active_routes.append(prefix)  # Treating "prefix" as an active route
                 continue
