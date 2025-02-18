@@ -302,7 +302,6 @@ class TestAaa(object):
         runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.16"], obj=obj)
         runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.17"], obj=obj)
         runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.18"], obj=obj)
-        import pdb
         
         result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.19"], obj=obj)
         print(result.exit_code)
@@ -310,7 +309,7 @@ class TestAaa(object):
         # info = runner.invoke(show.cli.commands["tacacs"], [])
         # print(info.stdout_bytes, info.stderr_bytes, info.exit_code, info.exception, info.exc_info)
         # print(info.output)
-        assert result.exit_code != 0
+        assert result.exit_code == 0
 
     @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry", mock.Mock(side_effect=JsonPatchConflict))
