@@ -302,6 +302,8 @@ class TestAaa(object):
         runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.16"], obj=obj)
         runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.17"], obj=obj)
         runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.18"], obj=obj)
+        import pdb
+        
         result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.19"], obj=obj)
         print(result.exit_code)
         print(result.stdout_bytes, result.stderr_bytes, result.exit_code, result.exception, result.exc_info)
@@ -317,7 +319,7 @@ class TestAaa(object):
         runner = CliRunner()
         db = Db()
         obj = {'db':db.cfgdb}
-
+        pdb.set_trace()
         result = runner.invoke(config.config.commands["tacacs"].commands["delete"], ["10.10.10.10"], obj=obj)
         print(result.exit_code)
         assert result.exit_code != 0
