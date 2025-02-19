@@ -38,6 +38,11 @@ class TestConfigInterface(object):
         result = self.basic_check("link-training", ["PortChannel0001", "on"], ctx, operator.ne)
         assert 'Invalid port PortChannel0001' in result.output
 
+        result = self.basic_check("link-training", ["Ethernet16", "on"], ctx, operator.ne)
+        assert "Setting RJ45 ports' link-training is not supported" in result.output
+        result = self.basic_check("link-training", ["Ethernet16", "off"], ctx, operator.ne)
+        assert "Setting RJ45 ports' link-training is not supported" in result.output
+
     def basic_check(self, command_name, para_list, ctx, op=operator.eq, expect_result=0):
         runner = CliRunner()
         result = runner.invoke(config.config.commands["interface"].commands[command_name], para_list, obj = ctx)
