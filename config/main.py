@@ -1396,15 +1396,15 @@ def config_file_yang_validation(filename):
     # Check if the config is empty
     if not config:
         return
-    
+
     # Check if the config is not a dictionary
     if not isinstance(config, dict):
         return
-    
+
     # Check if the config is an empty dictionary
     if not config:
         return
-    
+
     # If the device is multi-ASIC, check if all required namespaces exist
     if multi_asic.is_multi_asic():
         required_namespaces = [HOST_NAMESPACE, *multi_asic.get_namespace_list()]
