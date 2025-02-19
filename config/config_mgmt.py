@@ -416,7 +416,7 @@ class ConfigMgmtDPB(ConfigMgmt):
         return True
 
     def breakOutPort(self, delPorts=list(), portJson=dict(), force=False, \
-            loadDefConfig=True):
+            loadDefConfig=True, addPorts=list()):
         '''
         This is the main function for port breakout. Exposed to caller.
 
@@ -445,6 +445,11 @@ class ConfigMgmtDPB(ConfigMgmt):
             # return if ret is False, Great thing, no change is done in Config
             if ret == False:
                 return None, ret
+
+            # generate queue config for addPorts
+            for newPort in addPorts:
+                queue_cfg = self._generate_queue_cfg(self.configDeps, newPort)
+                self._mergeConfigs(addConfigtoLoad, queue_cfg, True)
 
             # Save Port OIDs Mapping Before Deleting Port
             dataBase = SonicV2Connector(host="127.0.0.1")
@@ -483,6 +488,8 @@ class ConfigMgmtDPB(ConfigMgmt):
             and success/fail.
         '''
         configToLoad = None; deps = None
+        self.configDeps = {}
+        self._searchKeysInConfig(self.configdbJsonIn, self.configDeps, [ports[0]])
         try:
             self.sysLog(msg="delPorts ports:{} force:{}".format(ports, force))
 
@@ -591,6 +598,23 @@ class ConfigMgmtDPB(ConfigMgmt):
             return configToLoad, False
 
         return configToLoad, True
+
+    def _generate_queue_cfg(self, cfgIn, new_port):
+        cfgOut = {}
+        for cfg_key in ['BUFFER_QUEUE', 'PORT_QOS_MAP', 'QUEUE']:
+            if cfg_key in cfgIn:
+                cfgOut[cfg_key] = {}
+                for k in cfgIn[cfg_key]:
+                    new_k = re.sub(r"Ethernet[\w]+", new_port, k)
+                    cfgOut[cfg_key][new_k] = cfgIn[cfg_key][k]
+        if 'CABLE_LENGTH' in cfgIn:
+            if 'AZURE' in cfgIn['CABLE_LENGTH']:
+                cfgOut['CABLE_LENGTH'] = {}
+                cfgOut['CABLE_LENGTH']['AZURE'] = {}
+                for k in cfgIn['CABLE_LENGTH']['AZURE']:
+                    new_k = re.sub(r"Ethernet[\w]+", new_port, k)
+                    cfgOut['CABLE_LENGTH']['AZURE'][new_k] = cfgIn['CABLE_LENGTH']['AZURE'][k]
+        return cfgOut
 
     def _shutdownIntf(self, ports):
         """
