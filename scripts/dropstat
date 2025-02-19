@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 
 #####################################################################
 #
@@ -89,6 +89,7 @@ std_port_headers_map = {
 std_switch_description_header = ['DEVICE']
 
 std_switch_dflt_drop_headers= [ 'SWITCH-ID']
+std_switch_drop_counters = ['SAI_SWITCH_STAT_PACKET_INTEGRITY_DROP']
 std_switch_drop_headers_map = {
     'SAI_SWITCH_STAT_PACKET_INTEGRITY_DROP':    'PKT_INTEGRITY_ERR'
 }
@@ -198,9 +199,9 @@ class DropStat(object):
         counters = self.get_configured_counters(DEBUG_COUNTER_SWITCH_STAT_MAP, True)
         if not counters:
             return
-        switch_id = self.get_switch_id()
-        switch_std_stats = self.get_counts(counters, switch_id)
 
+        switch_id = self.get_switch_id()
+        switch_std_stats = self.get_counts(std_switch_drop_counters, switch_id)
         if not switch_std_stats:
             return
 
@@ -211,10 +212,9 @@ class DropStat(object):
            row = [cfg_switch_id]
 
         headers = std_switch_dflt_drop_headers
-        for cntr in counters:
-            if cntr in std_switch_drop_headers_map:
-               row.append(switch_std_stats.get(cntr, 0) - switch_std_drop_ckpt.get(cntr, 0))
-               headers.append(std_switch_drop_headers_map[cntr])
+        for cntr in std_switch_drop_counters:
+             row.append(switch_std_stats.get(cntr, 0) - switch_std_drop_ckpt.get(cntr, 0))
+             headers.append(std_switch_drop_headers_map[cntr])
         if row:
             print(tabulate([row], headers, tablefmt='simple', stralign='right'))
             print('')
