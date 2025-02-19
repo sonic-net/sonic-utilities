@@ -27,6 +27,7 @@ from generic_config_updater.generic_updater import ConfigFormat
 
 import config.main as config
 import config.validated_config_db_connector as validated_config_db_connector
+from config.main import config_file_yang_validation
 
 # Add Test, module and script path.
 test_path = os.path.dirname(os.path.abspath(__file__))
@@ -1250,6 +1251,74 @@ class TestLoadMinigraph(object):
                 assert result.exit_code == 0
                 assert "TSA" in result.output
                 assert "[WARNING] Golden configuration may override Traffic-shift-away state" in result.output
+
+    def test_config_file_yang_validation(self):
+        # Test with empty config
+        with mock.patch('config.main.read_json_file', return_value={}) as mock_read_json_file:
+            with mock.patch('config.main.sonic_yang.SonicYang.loadYangModel') as mock_load_yang_model:
+                config_file_yang_validation('dummy_file.json')
+                mock_read_json_file.assert_called_once_with('dummy_file.json')
+                mock_load_yang_model.assert_not_called()
+
+        # Test with non-dict config
+        with mock.patch('config.main.read_json_file', return_value=[]) as mock_read_json_file:
+            with mock.patch('config.main.sonic_yang.SonicYang.loadYangModel') as mock_load_yang_model:
+                config_file_yang_validation('dummy_file.json')
+                mock_read_json_file.assert_called_once_with('dummy_file.json')
+                mock_load_yang_model.assert_not_called()
+
+        # Test with empty dict config
+        with mock.patch('config.main.read_json_file', return_value={}) as mock_read_json_file:
+            with mock.patch('config.main.sonic_yang.SonicYang.loadYangModel') as mock_load_yang_model:
+                config_file_yang_validation('dummy_file.json')
+                mock_read_json_file.assert_called_once_with('dummy_file.json')
+                mock_load_yang_model.assert_not_called()
+
+        # Test with missing namespaces in multi-ASIC config
+        with mock.patch('config.main.read_json_file', return_value={'localhost': {}}) as mock_read_json_file:
+            with mock.patch('config.main.multi_asic.is_multi_asic', return_value=True):
+                with mock.patch('config.main.multi_asic.get_namespace_list', return_value=['asic0', 'asic1']):
+                    with mock.patch('config.main.sonic_yang.SonicYang.loadYangModel') as mock_load_yang_model:
+                        config_file_yang_validation('dummy_file.json')
+                        mock_read_json_file.assert_called_once_with('dummy_file.json')
+                        mock_load_yang_model.assert_not_called()
+
+        # Test with valid config
+        valid_config = {
+            'localhost': {
+                'DEVICE_METADATA': {
+                    'localhost': {
+                        'platform': 'x86_64-mlnx_msn2700-r0',
+                        'mac': '00:02:03:04:05:06'
+                    }
+                }
+            },
+            'asic0': {
+                'DEVICE_METADATA': {
+                    'localhost': {
+                        'platform': 'x86_64-mlnx_msn2700-r0',
+                        'mac': '00:02:03:04:05:07'
+                    }
+                }
+            },
+            'asic1': {
+                'DEVICE_METADATA': {
+                    'localhost': {
+                        'platform': 'x86_64-mlnx_msn2700-r0',
+                        'mac': '00:02:03:04:05:08'
+                    }
+                }
+            }
+        }
+        with mock.patch('config.main.read_json_file', return_value=valid_config) as mock_read_json_file:
+            with mock.patch('config.main.sonic_yang.SonicYang.loadYangModel') as mock_load_yang_model:
+                with mock.patch('config.main.sonic_yang.SonicYang.loadData') as mock_load_data:
+                    with mock.patch('config.main.sonic_yang.SonicYang.validate_data_tree') as mock_validate_data_tree:
+                        config_file_yang_validation('dummy_file.json')
+                        mock_read_json_file.assert_called_once_with('dummy_file.json')
+                        mock_load_yang_model.assert_called_once()
+                        mock_load_data.assert_called_once_with(configdbJson=valid_config)
+                        mock_validate_data_tree.assert_called_once()
 
     @classmethod
     def teardown_class(cls):
