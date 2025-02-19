@@ -311,7 +311,7 @@ class TestAaa(object):
         db.cfgdb.mod_entry("TACPLUS_SERVER", "10.10.10.16", {'tcp_port': '49', 'priority': '1'})
         db.cfgdb.mod_entry("TACPLUS_SERVER", "10.10.10.17", {'tcp_port': '49', 'priority': '1'})
         db.cfgdb.mod_entry("TACPLUS_SERVER", "10.10.10.18", {'tcp_port': '49', 'priority': '1'})
-        result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.19"])
+        result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.19"], obj=obj)
         print(result.exit_code)
         assert result.exit_code != 0, "tacacs server reach maxsize"
 
