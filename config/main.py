@@ -3574,6 +3574,7 @@ def vrf_add_management_vrf(config_db):
         return None
     try:
         config_db.mod_entry('MGMT_VRF_CONFIG', "vrf_global", {"mgmtVrfEnabled": "true"})
+        config_db.mod_entry('NTP', "global", {"vrf": "mgmt"})
     except ValueError as e:
         ctx = click.get_current_context()
         ctx.fail("Invalid ConfigDB. Error: {}".format(e))
@@ -3588,6 +3589,7 @@ def vrf_delete_management_vrf(config_db):
         return None
     try:
         config_db.mod_entry('MGMT_VRF_CONFIG', "vrf_global", {"mgmtVrfEnabled": "false"})
+        config_db.mod_entry('NTP', "global", {"vrf": "default"})
     except ValueError as e:
         ctx = click.get_current_context()
         ctx.fail("Invalid ConfigDB. Error: {}".format(e))
