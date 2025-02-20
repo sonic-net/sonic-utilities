@@ -335,6 +335,10 @@ def convert_sfp_info_to_output_string(sfp_info_dict):
     if sfp_type.startswith('QSFP-DD') or sfp_type.startswith('OSFP'):
         sorted_qsfp_data_map_keys = sorted(QSFP_DD_DATA_MAP, key=QSFP_DD_DATA_MAP.get)
         for key in sorted_qsfp_data_map_keys:
+            # Skip the keys with N/A value
+            if sfp_info_dict.get(key) == 'N/A':
+                continue
+
             if key == 'cable_type':
                 output += '{}{}: {}\n'.format(indent, sfp_info_dict['cable_type'], sfp_info_dict['cable_length'])
             elif key == 'cable_length':
