@@ -376,10 +376,9 @@ def filter_active_vnet_routes(vnet_routes: dict):
                 print_message(syslog.LOG_WARNING, f"VNET_ROUTE_TUNNEL_TABLE|{key} does not exist in STATE DB.")
                 active_routes.append(prefix)  # Treating "prefix" as an active route
                 continue
-            for field, value in fvs:
-                if field == "state" and value == "active":
-                    active_routes.append(prefix)
-                    break
+            fvs_dict = dict(fvs)
+            if fvs_dict.get("state") == "active":
+                active_routes.append(prefix)
         if len(active_routes) > 0:
             vnet_active_routes[vnet_name] = {"routes": active_routes, "vrf_oid": vnet_info["vrf_oid"]}
 
