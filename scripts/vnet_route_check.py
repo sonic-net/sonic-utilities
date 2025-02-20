@@ -4,6 +4,7 @@ import sys
 import json
 import syslog
 import subprocess
+import argparse
 from swsscommon import swsscommon
 
 ''' vnet_route_check.py: tool that verifies VNET routes consistancy between SONiC and vendor SDK DBs.
@@ -386,16 +387,11 @@ def filter_active_vnet_routes(vnet_routes: dict):
 
 
 def main():
-
-    if len(sys.argv) > 2 or (len(sys.argv) == 2 and sys.argv[1] != "-a" and sys.argv[1] != "--all"):
-        print("Usage:\tpython vnet_route_check.py [-a|--all]")
-        print("\tWithout \"-a\" or \"--all\", only active VNet route tunnels in STATE DB will be considered.")
-        return RC_OK
-
-    if len(sys.argv) == 2:
-        use_all_routes = True
-    else:
-        use_all_routes = False
+    parser = argparse.ArgumentParser(
+        description="A script that checks for VNet route mismatches between APP DB, ASIC DB, and SDK.")
+    parser.add_argument("-a", "--all", action="store_true",
+                        help="Find routes missed in ASIC DB by checking both active and inactive routes in APP DB.")
+    args = parser.parse_args()
 
     rc = RC_OK
 
@@ -414,7 +410,7 @@ def main():
     active_app_db_vnet_routes = filter_active_vnet_routes(app_db_vnet_routes)
     asic_db_vnet_routes = get_vnet_routes_from_asic_db()
 
-    if use_all_routes:
+    if args.all:
         missed_in_asic_db_routes = get_vnet_routes_diff(asic_db_vnet_routes, app_db_vnet_routes, True)
     else:
         missed_in_asic_db_routes = get_vnet_routes_diff(asic_db_vnet_routes, active_app_db_vnet_routes, True)
