@@ -270,7 +270,7 @@ def add(address, timeout, key, auth_type, port, pri, use_mgmt_vrf):
     ctx = click.get_current_context()
     if address in old_data:
         ctx.fail(f'server {address} already exists')
-    if len(old_data) == TACACS_MAXSERVERS:
+    elif len(old_data) >= TACACS_MAXSERVERS:
         ctx.fail(f'tacacs server reached max size {TACACS_MAXSERVERS}')
     else:
         data = {
