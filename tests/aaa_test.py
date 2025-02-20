@@ -288,29 +288,17 @@ class TestAaa(object):
         (config, show) = get_cmd_module
         runner = CliRunner()
         db = Db()
-        obj = {'config_db': db.cfgdb}
+        obj = {'db': db.cfgdb}
         db.cfgdb.delete_table("AAA")
-        runner.invoke(config.config.commands["aaa"], ["authentication", "login", "local", "tacacs+"])
-        db.cfgdb.mod_entry("AAA", "authentication", {'login': 'tacacs+'})
         db.cfgdb.delete_table("TACPLUS_SERVER")
 
-        # test tacacs reach max size
-        # runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.11"])
-        # runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.12"])
-        # runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.13"])
-        # runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.14"])
-        # runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.15"])
-        # runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.16"])
-        # runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.17"])
-        # runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.18"])
-        db.cfgdb.mod_entry("TACPLUS_SERVER", "10.10.10.11", {'tcp_port': '49', 'priority': '1'})
-        db.cfgdb.mod_entry("TACPLUS_SERVER", "10.10.10.12", {'tcp_port': '49', 'priority': '1'})
-        db.cfgdb.mod_entry("TACPLUS_SERVER", "10.10.10.13", {'tcp_port': '49', 'priority': '1'})
-        db.cfgdb.mod_entry("TACPLUS_SERVER", "10.10.10.14", {'tcp_port': '49', 'priority': '1'})
-        db.cfgdb.mod_entry("TACPLUS_SERVER", "10.10.10.15", {'tcp_port': '49', 'priority': '1'})
-        db.cfgdb.mod_entry("TACPLUS_SERVER", "10.10.10.16", {'tcp_port': '49', 'priority': '1'})
-        db.cfgdb.mod_entry("TACPLUS_SERVER", "10.10.10.17", {'tcp_port': '49', 'priority': '1'})
-        db.cfgdb.mod_entry("TACPLUS_SERVER", "10.10.10.18", {'tcp_port': '49', 'priority': '1'})
+        servers = ("1.1.1.1", "1.1.1.2", "1.1.1.3", "1.1.1.4", "1.1.1.5", "1.1.1.6", "1.1.1.7", "1.1.1.8")
+		for ip in servers:
+			# config tacacs add <ip>
+			result = runner.invoke(config.config.commands["tacacs"].commands["add"], [ip], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+
         result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["10.10.10.19"], obj=obj)
         print(result.exit_code)
         assert result.exit_code != 0, "tacacs server reach maxsize"
