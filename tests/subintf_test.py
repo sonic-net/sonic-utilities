@@ -87,6 +87,12 @@ class TestSubinterface(object):
         assert result.exit_code != 0
         assert ('Eth0.1002') not in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
 
+        #Check if interface name length doesn't exceed 15 characters
+        result = runner.invoke(config.config.commands["subinterface"].commands["add"], ["Ethernet0.000002", "2"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code != 0
+        assert "Error: Subinterface name length should not exceed 15 characters" in result.output
+        assert ('Ethernet0.000002') not in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
 
     def test_delete_non_existing_subintf(self):
         runner = CliRunner()
