@@ -10,7 +10,8 @@ import jsonpatch
 import sys
 import unittest
 import ipaddress
-import shutil
+
+from datetime import timezone
 from unittest import mock
 from jsonpatch import JsonPatchConflict
 
@@ -26,7 +27,6 @@ from mock import call, patch, mock_open, MagicMock
 from generic_config_updater.generic_updater import ConfigFormat
 
 import config.main as config
-import config.validated_config_db_connector as validated_config_db_connector
 
 # Add Test, module and script path.
 test_path = os.path.dirname(os.path.abspath(__file__))
@@ -1834,7 +1834,14 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.any_target_config_as_text = json.dumps(self.any_target_config)
         self.any_checkpoint_name = "any_checkpoint_name"
         self.any_checkpoints_list = ["checkpoint1", "checkpoint2", "checkpoint3"]
+        self.any_checkpoints_list_with_time = [
+            {"name": "checkpoint1", "time": datetime.datetime.now(timezone.utc).isoformat()},
+            {"name": "checkpoint2", "time": datetime.datetime.now(timezone.utc).isoformat()},
+            {"name": "checkpoint3", "time": datetime.datetime.now(timezone.utc).isoformat()}
+        ]
         self.any_checkpoints_list_as_text = json.dumps(self.any_checkpoints_list, indent=4)
+        self.any_checkpoints_list_with_time_as_text = json.dumps(self.any_checkpoints_list_with_time, indent=4)
+
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch__no_params__get_required_params_error_msg(self):
@@ -2420,15 +2427,15 @@ class TestGenericUpdateCommands(unittest.TestCase):
     def test_list_checkpoints__all_optional_params_non_default__non_default_values_used(self):
         # Arrange
         expected_exit_code = 0
-        expected_output = self.any_checkpoints_list_as_text
+        expected_output = self.any_checkpoints_list_with_time_as_text
         expected_call_with_non_default_values = mock.call(True)
         mock_generic_updater = mock.Mock()
-        mock_generic_updater.list_checkpoints.return_value = self.any_checkpoints_list
+        mock_generic_updater.list_checkpoints.return_value = self.any_checkpoints_list_with_time
         with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
 
             # Act
             result = self.runner.invoke(config.config.commands["list-checkpoints"],
-                                        ["--verbose"],
+                                        ["--time", "--verbose"],
                                         catch_exceptions=False)
 
         # Assert
@@ -2436,6 +2443,46 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.assertTrue(expected_output in result.output)
         mock_generic_updater.list_checkpoints.assert_called_once()
         mock_generic_updater.list_checkpoints.assert_has_calls([expected_call_with_non_default_values])
+
+    def test_list_checkpoints__time_param_true__time_included_in_output(self):
+        # Arrange
+        expected_exit_code = 0
+        expected_output = self.any_checkpoints_list_with_time_as_text
+        expected_call_with_time_param = mock.call(True)
+        mock_generic_updater = mock.Mock()
+        mock_generic_updater.list_checkpoints.return_value = self.any_checkpoints_list_with_time
+        with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
+
+            # Act
+            result = self.runner.invoke(config.config.commands["list-checkpoints"],
+                                        ["--time"],
+                                        catch_exceptions=False)
+
+        # Assert
+        self.assertEqual(expected_exit_code, result.exit_code)
+        self.assertTrue(expected_output in result.output)
+        mock_generic_updater.list_checkpoints.assert_called_once()
+        mock_generic_updater.list_checkpoints.assert_has_calls([expected_call_with_time_param])
+
+    def test_list_checkpoints__time_param_false__time_not_included_in_output(self):
+        # Arrange
+        expected_exit_code = 0
+        expected_output = json.dumps([{"name": cp["name"]} for cp in self.any_checkpoints_list], indent=4)
+        expected_call_with_time_param = mock.call(False)
+        mock_generic_updater = mock.Mock()
+        mock_generic_updater.list_checkpoints.return_value = [{"name": cp["name"]} for cp in self.any_checkpoints_list]
+        with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
+
+            # Act
+            result = self.runner.invoke(config.config.commands["list-checkpoints"],
+                                        [],
+                                        catch_exceptions=False)
+
+        # Assert
+        self.assertEqual(expected_exit_code, result.exit_code)
+        self.assertTrue(expected_output in result.output)
+        mock_generic_updater.list_checkpoints.assert_called_once()
+        mock_generic_updater.list_checkpoints.assert_has_calls([expected_call_with_time_param])
 
     def test_list_checkpoints__exception_thrown__error_displayed_error_code_returned(self):
         # Arrange
@@ -3994,6 +4041,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         self.assertEqual(result.exit_code, 0, "Command should succeed")
         self.assertIn("Config rolled back successfully.", result.output)
 
+    @patch('os.path.getmtime', mock.Mock(return_value=1700000000.0))
     @patch('generic_config_updater.generic_updater.Util.checkpoints_dir_exist', mock.Mock(return_value=True))
     @patch('generic_config_updater.generic_updater.Util.get_checkpoint_names',
            mock.Mock(return_value=["checkpointname"]))
