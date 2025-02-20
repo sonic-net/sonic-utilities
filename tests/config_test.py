@@ -1240,7 +1240,8 @@ class TestLoadMinigraph(object):
                 return True if 'golden_config' in filename else False
 
             with mock.patch('os.path.isfile', mock.MagicMock(side_effect=is_file_side_effect)), \
-                    mock.patch('config.main.read_json_file', mock.MagicMock(side_effect=self.read_json_file_side_effect)):
+                    mock.patch('config.main.read_json_file', mock.MagicMock(
+                        side_effect=self.read_json_file_side_effect)):
                 (config, show) = get_cmd_module
                 db = Db()
                 golden_config = {}
@@ -1304,7 +1305,6 @@ class TestLoadMinigraph(object):
             mock_load_yang_model.assert_called_once()
             mock_load_data.assert_called_once_with(configdbJson=valid_config)
             mock_validate_data_tree.assert_called_once()
-
 
         valid_config = {
             'localhost': {
