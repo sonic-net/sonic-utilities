@@ -208,7 +208,20 @@ class TestFileSystemConfigRollbacker(unittest.TestCase):
         # 'assertCountEqual' does check same count, same elements ignoring order
         self.assertCountEqual(expected, actual)
 
-    def test_list_checkpoints__checkpoints_dir_has_multiple_files__multiple_files(self):
+    def test_list_checkpoints__checkpoints_dir_has_multiple_files(self):
+        # Arrange
+        self.create_checkpoints_dir()
+        rollbacker = self.create_rollbacker()
+        expected = [self.any_checkpoint_name, self.any_other_checkpoint_name]
+
+        # Act
+        actual = rollbacker.list_checkpoints()
+
+        # Assert
+        # 'assertCountEqual' does check same count, same elements ignoring order
+        self.assertCountEqual(expected, actual)
+
+    def test_list_checkpoints__checkpoints_dir_has_multiple_files_with_time(self):
         # Arrange
         self.create_checkpoints_dir()
         mod_time1 = self.add_checkpoint(self.any_checkpoint_name, self.any_config)
@@ -220,13 +233,29 @@ class TestFileSystemConfigRollbacker(unittest.TestCase):
         ]
 
         # Act
+        actual = rollbacker.list_checkpoints(includes_time=True)
+
+        # Assert
+        # 'assertCountEqual' does check same count, same elements ignoring order
+        self.assertCountEqual(expected, actual)
+
+    def test_list_checkpoints__checkpoints_names_have_special_characters_multiple_files(self):
+        # Arrange
+        self.create_checkpoints_dir()
+        self.add_checkpoint("check.point1", self.any_config)
+        self.add_checkpoint(".checkpoint2", self.any_config)
+        self.add_checkpoint("checkpoint3.", self.any_config)
+        rollbacker = self.create_rollbacker()
+        expected = ["check.point1", ".checkpoint2", "checkpoint3."]
+
+        # Act
         actual = rollbacker.list_checkpoints()
 
         # Assert
         # 'assertCountEqual' does check same count, same elements ignoring order
         self.assertCountEqual(expected, actual)
 
-    def test_list_checkpoints__checkpoints_names_have_special_characters__multiple_files(self):
+    def test_list_checkpoints__checkpoints_names_have_special_characters_multiple_files_with_time(self):
         # Arrange
         self.create_checkpoints_dir()
         mod_time1 = self.add_checkpoint("check.point1", self.any_config)
@@ -240,7 +269,7 @@ class TestFileSystemConfigRollbacker(unittest.TestCase):
         ]
 
         # Act
-        actual = rollbacker.list_checkpoints()
+        actual = rollbacker.list_checkpoints(includes_time=True)
 
         # Assert
         # 'assertCountEqual' does check same count, same elements ignoring order
@@ -296,6 +325,38 @@ class TestFileSystemConfigRollbacker(unittest.TestCase):
 
         rollbacker.delete_checkpoint(self.any_other_checkpoint_name)
         self.assertCountEqual([], rollbacker.list_checkpoints())
+
+    def test_multiple_operations_with_time(self):
+        rollbacker = self.create_rollbacker()
+
+        # 'assertCountEqual' does check same count, same elements ignoring order
+        self.assertCountEqual([], rollbacker.list_checkpoints(includes_time=True))
+
+        rollbacker.checkpoint(self.any_checkpoint_name)
+        self.assertCountEqual(
+            [self.any_checkpoint_name],
+            self.extract_checkpoint_names(rollbacker.list_checkpoints(includes_time=True))
+        )
+        self.assertEqual(self.any_config, self.get_checkpoint(self.any_checkpoint_name))
+
+        rollbacker.rollback(self.any_checkpoint_name)
+        rollbacker.config_replacer.replace.assert_has_calls([call(self.any_config)])
+
+        rollbacker.checkpoint(self.any_other_checkpoint_name)
+        self.assertCountEqual(
+            [self.any_checkpoint_name, self.any_other_checkpoint_name],
+            self.extract_checkpoint_names(rollbacker.list_checkpoints(includes_time=True))
+        )
+        self.assertEqual(self.any_config, self.get_checkpoint(self.any_other_checkpoint_name))
+
+        rollbacker.delete_checkpoint(self.any_checkpoint_name)
+        self.assertCountEqual(
+            [self.any_other_checkpoint_name],
+            self.extract_checkpoint_names(rollbacker.list_checkpoints(includes_time=True))
+        )
+
+        rollbacker.delete_checkpoint(self.any_other_checkpoint_name)
+        self.assertCountEqual([], rollbacker.list_checkpoints(includes_time=True))
 
     def extract_checkpoint_names(self, checkpoint_list):
         """Extract checkpoint names from the list of dictionaries."""
@@ -546,13 +607,15 @@ class TestGenericUpdater(unittest.TestCase):
     def setUp(self):
         self.any_checkpoint_name = "anycheckpoint"
         self.any_other_checkpoint_name = "anyothercheckpoint"
-        self.any_checkpoints_list = [
+        self.any_checkpoints_list = [self.any_checkpoint_name, self.any_other_checkpoint_name]
+        self.any_checkpoints_list_with_time = [
             {"name": self.any_checkpoint_name, "time": datetime.now(timezone.utc).isoformat()},
             {"name": self.any_other_checkpoint_name, "time": datetime.now(timezone.utc).isoformat()}
         ]
 
         self.any_config_format = gu.ConfigFormat.SONICYANG
         self.any_verbose = True
+        self.list_checkpoints_includes_time = True
         self.any_dry_run = True
         self.any_ignore_non_yang_tables = True
         self.any_ignore_paths = ["", "/ACL_TABLE"]
@@ -684,6 +747,25 @@ class TestGenericUpdater(unittest.TestCase):
 
         # Act
         actual = generic_updater.list_checkpoints(self.any_verbose)
+
+        # Assert
+        self.assertCountEqual(expected, actual)
+
+    def test_list_checkpoints__creates_rollbacker_and_list_checkpoints_with_time(self):
+        # Arrange
+        config_rollbacker = Mock()
+        config_rollbacker.list_checkpoints.return_value = self.any_checkpoints_list_with_time
+
+        factory = Mock()
+        factory.create_config_rollbacker.side_effect = \
+            create_side_effect_dict({(str(self.any_verbose),): config_rollbacker})
+
+        generic_updater = gu.GenericUpdater(factory)
+
+        expected = self.any_checkpoints_list_with_time
+
+        # Act
+        actual = generic_updater.list_checkpoints(self.list_checkpoints_includes_time, self.any_verbose)
 
         # Assert
         self.assertCountEqual(expected, actual)
