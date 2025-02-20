@@ -284,13 +284,11 @@ class TestAaa(object):
         assert result.exit_code == 0
         assert result.output == show_aaa_disable_accounting_output
 
-    def test_config_aaa_tacacs_reach_maxsize(self, get_cmd_module):
-        (config, show) = get_cmd_module
+    def test_config_aaa_tacacs_reach_maxsize(self):
         runner = CliRunner()
         db = Db()
         obj = {'db': db.cfgdb}
-        db.cfgdb.delete_table("AAA")
-        db.cfgdb.delete_table("TACPLUS_SERVER")
+
         servers = ("1.1.1.1", "1.1.1.2", "1.1.1.3", "1.1.1.4", "1.1.1.5", "1.1.1.6", "1.1.1.7", "1.1.1.8")
         for ip in servers:
             # config tacacs add <ip>
@@ -300,6 +298,12 @@ class TestAaa(object):
         result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["1.1.1.9"], obj=obj)
         print(result.exit_code)
         assert result.exit_code != 0, "tacacs server reach maxsize"
+
+        for ip in servers:
+            # config tacacs del <ip>
+            result = runner.invoke(config.config.commands["tacacs"].commands["del"], [ip], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
 
     @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry", mock.Mock(side_effect=JsonPatchConflict))
