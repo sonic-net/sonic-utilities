@@ -967,6 +967,16 @@ class TestLoadMinigraph(object):
         import config.main
         importlib.reload(config.main)
 
+    def read_json_file_side_effect(filename):
+        return {
+            'DEVICE_METADATA': {
+                'localhost': {
+                    'platform': 'x86_64-mlnx_msn2700-r0',
+                    'mac': '00:02:03:04:05:07'
+                }
+            }
+        }
+
     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs', mock.MagicMock(return_value=("dummy_path", None)))
     @mock.patch('config.main.subprocess.check_call')
     def test_load_minigraph(self, mock_check_call, get_cmd_module, setup_single_broadcom_asic):
@@ -1136,12 +1146,9 @@ class TestLoadMinigraph(object):
         def is_file_side_effect(filename):
             return True if 'golden_config' in filename else False
 
-        def read_json_file_side_effect(filename):
-            return {}
-
         with mock.patch("utilities_common.cli.run_command", mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command, \
                 mock.patch('os.path.isfile', mock.MagicMock(side_effect=is_file_side_effect)), \
-                mock.patch('config.main.read_json_file', mock.MagicMock(side_effect=read_json_file_side_effect)):
+                mock.patch('config.main.read_json_file', mock.MagicMock(side_effect=self.read_json_file_side_effect)):
             (config, show) = get_cmd_module
             runner = CliRunner()
             result = runner.invoke(config.config.commands["load_minigraph"], ["--override_config", "--golden_config_path",  "golden_config.json", "-y"])
@@ -1153,12 +1160,9 @@ class TestLoadMinigraph(object):
         def is_file_side_effect(filename):
             return True if 'golden_config' in filename else False
 
-        def read_json_file_side_effect(filename):
-            return {}
-
         with mock.patch("utilities_common.cli.run_command", mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command, \
                 mock.patch('os.path.isfile', mock.MagicMock(side_effect=is_file_side_effect)), \
-                mock.patch('config.main.read_json_file', mock.MagicMock(side_effect=read_json_file_side_effect)):
+                mock.patch('config.main.read_json_file', mock.MagicMock(side_effect=self.read_json_file_side_effect)):
             (config, show) = get_cmd_module
             runner = CliRunner()
             result = runner.invoke(config.config.commands["load_minigraph"], ["--override_config", "-y"])
@@ -1235,11 +1239,8 @@ class TestLoadMinigraph(object):
             def is_file_side_effect(filename):
                 return True if 'golden_config' in filename else False
 
-            def read_json_file_side_effect(filename):
-                return {}
-
             with mock.patch('os.path.isfile', mock.MagicMock(side_effect=is_file_side_effect)), \
-                    mock.patch('config.main.read_json_file', mock.MagicMock(side_effect=read_json_file_side_effect)):
+                    mock.patch('config.main.read_json_file', mock.MagicMock(side_effect=self.read_json_file_side_effect)):
                 (config, show) = get_cmd_module
                 db = Db()
                 golden_config = {}
@@ -1285,6 +1286,27 @@ class TestLoadMinigraph(object):
 
         # Test with valid config
         valid_config = {
+                'DEVICE_METADATA': {
+                    'localhost': {
+                        'platform': 'x86_64-mlnx_msn2700-r0',
+                        'mac': '00:02:03:04:05:07'
+                    }
+                }
+            }
+
+        with mock.patch('config.main.read_json_file', return_value=valid_config) as mock_read_json_file, \
+                mock.patch('config.main.multi_asic.is_multi_asic', return_value=False), \
+                mock.patch('config.main.sonic_yang.SonicYang.loadYangModel') as mock_load_yang_model, \
+                mock.patch('config.main.sonic_yang.SonicYang.loadData') as mock_load_data, \
+                mock.patch('config.main.sonic_yang.SonicYang.validate_data_tree') as mock_validate_data_tree:
+            assert config_file_yang_validation('dummy_file.json')
+            mock_read_json_file.assert_called_once_with('dummy_file.json')
+            mock_load_yang_model.assert_called_once()
+            mock_load_data.assert_called_once_with(configdbJson=valid_config)
+            mock_validate_data_tree.assert_called_once()
+
+
+        valid_config = {
             'localhost': {
                 'DEVICE_METADATA': {
                     'localhost': {
@@ -1310,15 +1332,16 @@ class TestLoadMinigraph(object):
                 }
             }
         }
-        with mock.patch('config.main.read_json_file', return_value=valid_config) as mock_read_json_file:
-            with mock.patch('config.main.sonic_yang.SonicYang.loadYangModel') as mock_load_yang_model:
-                with mock.patch('config.main.sonic_yang.SonicYang.loadData') as mock_load_data:
-                    with mock.patch('config.main.sonic_yang.SonicYang.validate_data_tree') as mock_validate_data_tree:
-                        assert config_file_yang_validation('dummy_file.json')
-                        mock_read_json_file.assert_called_once_with('dummy_file.json')
-                        mock_load_yang_model.assert_called_once()
-                        mock_load_data.assert_called_once_with(configdbJson=valid_config)
-                        mock_validate_data_tree.assert_called_once()
+        with mock.patch('config.main.read_json_file', return_value=valid_config) as mock_read_json_file, \
+                mock.patch('config.main.multi_asic.is_multi_asic', return_value=True), \
+                mock.patch('config.main.sonic_yang.SonicYang.loadYangModel') as mock_load_yang_model, \
+                mock.patch('config.main.sonic_yang.SonicYang.loadData') as mock_load_data, \
+                mock.patch('config.main.sonic_yang.SonicYang.validate_data_tree') as mock_validate_data_tree:
+            assert config_file_yang_validation('dummy_file.json')
+            mock_read_json_file.assert_called_once_with('dummy_file.json')
+            mock_load_yang_model.assert_called_once()
+            mock_load_data.assert_called_once_with(configdbJson=valid_config)
+            mock_validate_data_tree.assert_called_once()
 
     @classmethod
     def teardown_class(cls):
