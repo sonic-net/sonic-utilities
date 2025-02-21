@@ -7396,6 +7396,31 @@ def install(counter_name, alias, group, counter_type, desc, reasons, verbose):
 
 
 #
+# 'monitor' subcommand ('config dropcounters monitor')
+#
+@dropcounters.command()
+@click.option("-s", "--status", type=str, help="Status can be set to enabled/disabled")
+@click.option("-w", "--window", type=int, help="Window size in seconds")
+@click.option("-dct", "--drop-count-threshold",  type=int,
+              help="Minimum threshold for drop counts to be classified as an incident")
+@click.option('-ict', '--incident-count-threshold', type=int,
+              help="Minimum number of incidents to trigger a syslog entry")
+@click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
+def monitor(status, window, drop_count_threshold, incident_count_threshold, verbose):
+    """Update configurations of drop counter monitor"""
+    command = ['dropconfig', '-c', 'config_monitor']
+    if status:
+        command += ['-s', str(status)]
+    if window:
+        command += ['-w', str(window)]
+    if drop_count_threshold:
+        command += ['-dct', str(drop_count_threshold)]
+    if incident_count_threshold:
+        command += ['-ict', str(incident_count_threshold)]
+
+    clicommon.run_command(command, display_cmd=verbose)
+
+#
 # 'delete' subcommand ('config dropcounters delete')
 #
 @dropcounters.command()

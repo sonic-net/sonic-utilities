@@ -37,6 +37,15 @@ def capabilities(verbose):
     clicommon.run_command(cmd, display_cmd=verbose)
 
 
+# 'monitor' subcommand ("show dropcounters monitor")
+@dropcounters.command()
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def monitor(verbose):
+    """Show device drop counter capabilities"""
+    cmd = ['dropconfig', '-c', 'show_monitor']
+
+    clicommon.run_command(cmd, display_cmd=verbose)
+
 # 'counts' subcommand ("show dropcounters counts")
 @dropcounters.command()
 @click.option('-g', '--group', required=False)
