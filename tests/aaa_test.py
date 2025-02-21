@@ -300,8 +300,30 @@ class TestAaa(object):
         assert result.exit_code != 0, "tacacs server reach maxsize"
 
         for ip in servers:
-            # config tacacs del <ip>
-            result = runner.invoke(config.config.commands["tacacs"].commands["del"], [ip], obj=obj)
+            # config tacacs delete <ip>
+            result = runner.invoke(config.config.commands["tacacs"].commands["delete"], [ip], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+
+    def test_config_aaa_radius_reach_maxsize(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        servers = ("1.1.1.1", "1.1.1.2", "1.1.1.3", "1.1.1.4", "1.1.1.5", "1.1.1.6", "1.1.1.7", "1.1.1.8")
+        for ip in servers:
+            # config radius add <ip>
+            result = runner.invoke(config.config.commands["radius"].commands["add"], [ip], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+
+        result = runner.invoke(config.config.commands["radius"].commands["add"], ["1.1.1.9"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code != 0, "radius server reach maxsize"
+
+        for ip in servers:
+            # config radius delete <ip>
+            result = runner.invoke(config.config.commands["radius"].commands["delete"], [ip], obj=obj)
             print(result.exit_code, result.output)
             assert result.exit_code == 0
 
