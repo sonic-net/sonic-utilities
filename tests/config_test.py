@@ -1306,7 +1306,7 @@ class TestLoadMinigraph(object):
             mock_load_data.assert_called_once_with(configdbJson=valid_config)
             mock_validate_data_tree.assert_called_once()
 
-        valid_config = {
+        valid_multi_asic_config = {
             'localhost': {
                 'DEVICE_METADATA': {
                     'localhost': {
@@ -1332,16 +1332,18 @@ class TestLoadMinigraph(object):
                 }
             }
         }
-        with mock.patch('config.main.read_json_file', return_value=valid_config) as mock_read_json_file, \
+        with mock.patch('config.main.read_json_file', return_value=valid_multi_asic_config) \
+                as mock_multiasic_read_json_file, \
                 mock.patch('config.main.multi_asic.is_multi_asic', return_value=True), \
-                mock.patch('config.main.sonic_yang.SonicYang.loadYangModel') as mock_load_yang_model, \
-                mock.patch('config.main.sonic_yang.SonicYang.loadData') as mock_load_data, \
-                mock.patch('config.main.sonic_yang.SonicYang.validate_data_tree') as mock_validate_data_tree:
+                mock.patch('config.main.sonic_yang.SonicYang.loadYangModel') as mock_multiasic_load_yang_model, \
+                mock.patch('config.main.sonic_yang.SonicYang.loadData') as mock_multiasic_load_data, \
+                mock.patch('config.main.sonic_yang.SonicYang.validate_data_tree') \
+                as mock_multiasic_validate_data_tree:
             assert config_file_yang_validation('dummy_file.json')
-            mock_read_json_file.assert_called_once_with('dummy_file.json')
-            mock_load_yang_model.assert_called_once()
-            mock_load_data.assert_called_once_with(configdbJson=valid_config)
-            mock_validate_data_tree.assert_called_once()
+            mock_multiasic_read_json_file.assert_called_once_with('dummy_file.json')
+            mock_multiasic_load_yang_model.assert_called_once()
+            mock_multiasic_load_data.assert_called_once_with(configdbJson=valid_config)
+            mock_multiasic_validate_data_tree.assert_called_once()
 
     @classmethod
     def teardown_class(cls):
