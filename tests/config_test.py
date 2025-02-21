@@ -1306,6 +1306,8 @@ class TestLoadMinigraph(object):
             mock_load_data.assert_called_once_with(configdbJson=valid_config)
             mock_validate_data_tree.assert_called_once()
 
+        mock_load_data.reset_mock()
+
         valid_multi_asic_config = {
             'localhost': {
                 'DEVICE_METADATA': {
