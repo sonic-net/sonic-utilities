@@ -1342,7 +1342,7 @@ class TestLoadMinigraph(object):
             assert config_file_yang_validation('dummy_file.json')
             mock_multiasic_read_json_file.assert_called_once_with('dummy_file.json')
             mock_multiasic_load_yang_model.assert_called_once()
-            mock_multiasic_load_data.assert_called_once_with(configdbJson=valid_config)
+            mock_multiasic_load_data.assert_called_once_with(configdbJson=valid_multi_asic_config)
             mock_multiasic_validate_data_tree.assert_called_once()
 
     @classmethod
