@@ -22,6 +22,17 @@ def is_smartswitch():
     return hasattr(device_info, 'is_smartswitch') and device_info.is_smartswitch()
 
 
+def is_dpu():
+    return hasattr(device_info, 'is_dpu') and device_info.is_dpu()
+
+
+# Utility to get the number of DPUs
+def get_num_dpus():
+    if hasattr(device_info, 'get_num_dpus'):
+        return device_info.get_num_dpus()
+    return 0
+
+
 # utility to get dpu module name list
 def get_all_dpus():
     try:
