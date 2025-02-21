@@ -468,10 +468,20 @@ function setup_reboot_variables()
 function check_docker_exec()
 {
     containers="radv bgp lldp swss database teamd syncd"
+    timeout=1s
+    max_retries=5
     for container in $containers; do
-        STATE=$(timeout 1s docker exec $container echo "success"; if [[ $? == 124 ]]; then echo "timed out"; fi)
-        if [[ x"${STATE}" == x"timed out" ]]; then
-            error "Docker exec on $container timedout"
+        success=false
+        for ((i=1; i<=max_retries; i++)); do
+            STATE=$(timeout $timeout docker exec $container echo "success"; if [[ $? == 124 ]]; then echo "timed out"; fi)
+            if [[ x"${STATE}" != x"timed out" ]]; then
+                debug "docker exec for $container succeeeded in $i tries"
+                success=true
+                break
+            fi
+        done
+        if [[ $success == false ]]; then
+            error "Docker exec on $container timed out after $max_retries retries"
             exit "${EXIT_FAILURE}"
         fi
     done
