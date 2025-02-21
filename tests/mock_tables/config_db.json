@@ -1797,6 +1797,10 @@
         "POLL_INTERVAL": "1000",
         "FLEX_COUNTER_STATUS": "enable"
     },
+    "FLEX_COUNTER_TABLE|POLICER": {
+        "POLL_INTERVAL": "10000",
+        "FLEX_COUNTER_STATUS": "enable"
+    },
     "PFC_WD|Ethernet0": {
         "action": "drop",
         "detection_time": "600",
@@ -2754,6 +2758,14 @@
         "dst_port": "Ethernet44",
         "src_port": "Ethernet40,Ethernet48",
         "direction": "RX"
+    },
+    "POLICER|policer0": {
+        "meter_type":"packets",
+        "mode":"sr_tcm",
+        "color": "aware",
+        "cir":"700",
+        "cbs":"700",
+        "red_packet_action":"drop"	    
     },
     "FABRIC_MONITOR|FABRIC_MONITOR_DATA": {
         "monCapacityThreshWarn": "100",
