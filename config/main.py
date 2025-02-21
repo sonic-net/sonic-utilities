@@ -1392,6 +1392,23 @@ def multiasic_write_to_db(filename, load_sysinfo):
 
 def config_file_yang_validation(filename):
     config = read_json_file(filename)
+
+    # Check if the config is empty
+    if not config:
+        return False
+
+    # Check if the config is not a dictionary
+    if not isinstance(config, dict):
+        return False
+
+    # If the device is multi-ASIC, check if all required namespaces exist
+    if multi_asic.is_multi_asic():
+        required_namespaces = [HOST_NAMESPACE, *multi_asic.get_namespace_list()]
+        for ns in required_namespaces:
+            asic_name = HOST_NAMESPACE if ns == DEFAULT_NAMESPACE else ns
+            if asic_name not in config:
+                return False
+
     sy = sonic_yang.SonicYang(YANG_DIR)
     sy.loadYangModel()
     asic_list = [HOST_NAMESPACE]
@@ -1412,6 +1429,7 @@ def config_file_yang_validation(filename):
             click.secho("Config tables are missing yang models: {}".format(str(sy.tablesWithOutYang.keys())),
                         fg='magenta')
             raise click.Abort()
+    return True
 
 
 # This is our main entrypoint - the main 'config' command
@@ -2048,7 +2066,10 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
                         fg='magenta')
             raise click.Abort()
 
-        config_file_yang_validation(golden_config_path)
+        if not config_file_yang_validation(golden_config_path):
+            click.secho("Invalid golden config file:'{}'!".format(golden_config_path),
+                        fg='magenta')
+            raise click.Abort()
 
         config_to_check = read_json_file(golden_config_path)
         # Dependency check golden config json
