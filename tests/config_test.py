@@ -967,7 +967,7 @@ class TestLoadMinigraph(object):
         import config.main
         importlib.reload(config.main)
 
-    def read_json_file_side_effect(filename):
+    def read_json_file_side_effect(self, filename):
         return {
             'DEVICE_METADATA': {
                 'localhost': {
