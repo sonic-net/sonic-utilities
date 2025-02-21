@@ -219,28 +219,23 @@ def FG_NHG():
 )
 @click.option(
     "--bucket-size",
-    help="total hash bucket size desired, recommended value of Lowest Common Multiple of 1..\
-          {max # of next-hops}[mandatory]",
+    help="total hash bucket size desired, recommended value of Lowest Common
+Multiple of 1..{max # of next-hops}[mandatory]",
 )
 @click.option(
     "--match-mode",
-    help="The filtering method used to identify when to use Fine Grained vs regular route handling. \
-          nexthop-based looks to next-hop IP to filter routes and uses fine grained ecmp when nexthop \
-          IPs matches FG_NHG_MEMBER IPs. route-based looks to prefix to filter routes, and uses fine \
-          grained ecmp when the route prefix matches the FG_NHG_PREFIX prefix.[mandatory]",
-)
-@click.option(
-    "--nhg-mode",
-    help="static-nhg : List of nexthops needs to be statically configured in FG_NHG_MEMBER table. \
-          dynamic-nhg : List of nexthops will be dynamically derived from the route updates.",
+    help="The filtering method used to identify when to use Fine Grained vs regular route handling.
+   -- nexthop-based filters on nexthop IPs only.
+   -- route-based filters on both prefix and nexthop IPs.
+   -- prefix-based filters on prefix only.[mandatory]",
 )
 @click.option(
     "--max-next-hops",
-    help="Applicable only when nhg_mode = dynamic-nhg. Maximum number of nexthops that will be \
-          received in route updates for any of the prefixes that match FG_NHG_PREFIX for this FG_NHG.",
+    help="Applicable only for match_mode = prefix-based. Maximum number of nexthops that will be
+received in route updates for any of the prefixes that match FG_NHG_PREFIX for this FG_NHG.[mandatory]",
 )
 @clicommon.pass_db
-def FG_NHG_add(db, name, bucket_size, match_mode, nhg_mode, max_next_hops):
+def FG_NHG_add(db, name, bucket_size, match_mode, max_next_hops):
     """ Add object in FG_NHG. """
 
     table = "FG_NHG"
@@ -250,8 +245,6 @@ def FG_NHG_add(db, name, bucket_size, match_mode, nhg_mode, max_next_hops):
         data["bucket_size"] = bucket_size
     if match_mode is not None:
         data["match_mode"] = match_mode
-    if nhg_mode is not None:
-        data["nhg_mode"] = nhg_mode
     if max_next_hops is not None:
         data["max_next_hops"] = max_next_hops
 
@@ -269,28 +262,23 @@ def FG_NHG_add(db, name, bucket_size, match_mode, nhg_mode, max_next_hops):
 )
 @click.option(
     "--bucket-size",
-    help="total hash bucket size desired, recommended value of Lowest Common Multiple of 1..\
-          {max # of next-hops}[mandatory]",
+    help="total hash bucket size desired, recommended value of Lowest Common
+Multiple of 1..{max # of next-hops}[mandatory]",
 )
 @click.option(
     "--match-mode",
-    help="The filtering method used to identify when to use Fine Grained vs regular route handling. \
-          nexthop-based looks to next-hop IP to filter routes and uses fine grained ecmp when nexthop \
-          IPs matches FG_NHG_MEMBER IPs. route-based looks to prefix to filter routes, and uses fine grained \
-          ecmp when the route prefix matches the FG_NHG_PREFIX prefix.[mandatory]",
-)
-@click.option(
-    "--nhg-mode",
-    help="static-nhg : List of nexthops needs to be statically configured in FG_NHG_MEMBER table. \
-          dynamic-nhg : List of nexthops will be dynamically derived from the route updates.",
+    help="The filtering method used to identify when to use Fine Grained vs regular route handling.
+   -- nexthop-based filters on nexthop IPs only.
+   -- route-based filters on both prefix and nexthop IPs.
+   -- prefix-based filters on prefix only.[mandatory]",
 )
 @click.option(
     "--max-next-hops",
-    help="Applicable only when nhg_mode = dynamic-nhg. Maximum number of nexthops that will be received in \
-          route updates for any of the prefixes that match FG_NHG_PREFIX for this FG_NHG.",
+    help="Applicable only for match_mode = prefix-based. Maximum number of nexthops that will be
+received in route updates for any of the prefixes that match FG_NHG_PREFIX for this FG_NHG.[mandatory]",
 )
 @clicommon.pass_db
-def FG_NHG_update(db, name, bucket_size, match_mode, nhg_mode, max_next_hops):
+def FG_NHG_update(db, name, bucket_size, match_mode, max_next_hops):
     """ Add object in FG_NHG. """
 
     table = "FG_NHG"
@@ -300,8 +288,6 @@ def FG_NHG_update(db, name, bucket_size, match_mode, nhg_mode, max_next_hops):
         data["bucket_size"] = bucket_size
     if match_mode is not None:
         data["match_mode"] = match_mode
-    if nhg_mode is not None:
-        data["nhg_mode"] = nhg_mode
     if max_next_hops is not None:
         data["max_next_hops"] = max_next_hops
 
