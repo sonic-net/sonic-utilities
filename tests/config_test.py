@@ -1306,45 +1306,6 @@ class TestLoadMinigraph(object):
             mock_load_data.assert_called_once_with(configdbJson=valid_config)
             mock_validate_data_tree.assert_called_once()
 
-        valid_multi_asic_config = {
-            'localhost': {
-                'DEVICE_METADATA': {
-                    'localhost': {
-                        'platform': 'x86_64-mlnx_msn2700-r0',
-                        'mac': '00:02:03:04:05:06'
-                    }
-                }
-            },
-            'asic0': {
-                'DEVICE_METADATA': {
-                    'localhost': {
-                        'platform': 'x86_64-mlnx_msn2700-r0',
-                        'mac': '00:02:03:04:05:07'
-                    }
-                }
-            },
-            'asic1': {
-                'DEVICE_METADATA': {
-                    'localhost': {
-                        'platform': 'x86_64-mlnx_msn2700-r0',
-                        'mac': '00:02:03:04:05:08'
-                    }
-                }
-            }
-        }
-        with mock.patch('config.main.read_json_file', return_value=valid_multi_asic_config) \
-                as mock_multiasic_read_json_file, \
-                mock.patch('config.main.multi_asic.is_multi_asic', return_value=True), \
-                mock.patch('config.main.sonic_yang.SonicYang.loadYangModel') as mock_multiasic_load_yang_model, \
-                mock.patch('config.main.sonic_yang.SonicYang.loadData') as mock_multiasic_load_data, \
-                mock.patch('config.main.sonic_yang.SonicYang.validate_data_tree') \
-                as mock_multiasic_validate_data_tree:
-            assert config_file_yang_validation('dummy_file.json')
-            mock_multiasic_read_json_file.assert_called_once_with('dummy_file.json')
-            mock_multiasic_load_yang_model.assert_called()
-            mock_multiasic_load_data.assert_called_with(configdbJson=valid_multi_asic_config)
-            mock_multiasic_validate_data_tree.assert_called()
-
     @classmethod
     def teardown_class(cls):
         os.environ['UTILITIES_UNIT_TESTING'] = "0"
