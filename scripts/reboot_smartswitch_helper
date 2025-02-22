@@ -176,11 +176,6 @@ function reboot_dpu()
         return ${EXIT_ERROR}
     fi
 
-    if [[ "$REBOOT_TYPE" != $MODULE_REBOOT_SMARTSWITCH ]]; then
-        # Update STATE_DB and handle PCIe removal and rescan
-        sonic-db-cli STATE_DB set "PCIE_DETACH_INFO|${DPU_NAME}" '{"dpu_id": "'${DPU_INDEX}'", "dpu_state": "detaching", "bus_info": "'${DPU_BUS_INFO}'"}' &>/dev/null
-    fi
-
     pci_detach_module ${DPU_NAME} ${DPU_BUS_INFO}
     if [ $? -ne 0 ]; then
         log_message "ERROR: Failed to detach PCI module for ${DPU_NAME}"
@@ -195,8 +190,6 @@ function reboot_dpu()
 
     if [[ "$REBOOT_TYPE" != $MODULE_REBOOT_SMARTSWITCH ]]; then
         pci_reattach_module ${DPU_NAME} ${DPU_BUS_INFO}
-
-        sonic-db-cli STATE_DB del "PCIE_DETACH_INFO|${DPU_NAME}" /dev/null 2>&1
     fi
 }
 

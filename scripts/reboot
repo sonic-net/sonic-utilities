@@ -45,7 +45,6 @@ REBOOT_SCRIPT_NAME=$(basename $0)
 REBOOT_TYPE="${REBOOT_SCRIPT_NAME}"
 TAG_LATEST=no
 REBOOT_FLAGS=""
-FORCE_REBOOT="no"
 SMART_SWITCH="no"
 DPU_MODULE_NAME=""
 REBOOT_DPU="no"
@@ -253,8 +252,8 @@ if [[ $smart_switch_result -ne 0 ]]; then
 fi
 
 # On a smartswitch, complete the DPU reboot and exit
-is_smartswitch=$(python3 -c 'from utilities_common.chassis import is_smartswitch; print(is_smartswitch())')
-if [ "$is_smartswitch" == "True" ] && [ "$REBOOT_DPU" == "yes" ]; then
+smartswitch=$(is_smartswitch)
+if [ "$smartswitch" == "True" ] && [ "$REBOOT_DPU" == "yes" ]; then
     exit $smart_switch_result
 fi
 
