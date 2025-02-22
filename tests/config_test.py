@@ -1169,12 +1169,15 @@ class TestLoadMinigraph(object):
             assert result.exit_code == 0
             assert "config override-config-table /etc/sonic/golden_config_db.json" in result.output
 
-    @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs', mock.MagicMock(return_value=("dummy_path", None)))
+    @mock.patch(
+            'sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs',
+            mock.MagicMock(return_value=("dummy_path", None)))
     def test_load_minigraph_with_invalid_golden_config(self, get_cmd_module):
         def is_file_side_effect(filename):
             return True if 'golden_config' in filename else False
 
-        with mock.patch("utilities_common.cli.run_command", mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command, \
+        with mock.patch("utilities_common.cli.run_command",
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)), \
                 mock.patch('os.path.isfile', mock.MagicMock(side_effect=is_file_side_effect)), \
                 mock.patch('config.main.read_json_file', mock.MagicMock(return_value={})):
             (config, show) = get_cmd_module
