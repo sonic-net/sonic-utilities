@@ -1393,8 +1393,8 @@ def multiasic_write_to_db(filename, load_sysinfo):
 def config_file_yang_validation(filename):
     config = read_json_file(filename)
 
-    # Check if the config is empty
-    if not config or not isinstance(config, dict):
+    # Check if the config is not a dictionary
+    if not isinstance(config, dict):
         return False
 
     # If the device is multi-ASIC, check if all required namespaces exist
