@@ -44,7 +44,6 @@ EXIT_FILE_SYSTEM_FULL=3
 EXIT_NEXT_IMAGE_NOT_EXISTS=4
 EXIT_ORCHAGENT_SHUTDOWN=10
 EXIT_SYNCD_SHUTDOWN=11
-EXIT_COUNTERPOLL_DELAY_FAILURE=14
 EXIT_DB_INTEGRITY_FAILURE=15
 EXIT_NO_CONTROL_PLANE_ASSISTANT=20
 EXIT_SONIC_INSTALLER_VERIFY_REBOOT=21
@@ -786,17 +785,6 @@ if [[ "$REBOOT_TYPE" = "warm-reboot" || "$REBOOT_TYPE" = "fastfast-reboot" || "$
         else
             exit "${EXIT_ORCHAGENT_SHUTDOWN}"
         fi
-    fi
-fi
-
-if [[ "$REBOOT_TYPE" = "fast-reboot" ]]; then
-    COUNTERPOLL_DELAY_RC=0
-    # Delay counters in config_db.json
-    /usr/local/bin/counterpoll config-db delay $CONFIG_DB_FILE || COUNTERPOLL_DELAY_RC=$?
-    if [[ COUNTERPOLL_DELAY_RC -ne 0 ]]; then
-        error "Failed to delay counterpoll. Exit code: $COUNTERPOLL_DELAY_RC"
-        unload_kernel
-        exit "${EXIT_COUNTERPOLL_DELAY_FAILURE}"
     fi
 fi
 

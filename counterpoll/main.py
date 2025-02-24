@@ -486,53 +486,6 @@ def show():
 
     click.echo(tabulate(data, headers=header, tablefmt="simple", missingval=""))
 
-def _update_config_db_flex_counter_table(status, filename):
-    """ Update counter configuration in config_db file """
-    with open(filename) as config_db_file:
-        config_db = json.load(config_db_file)
-
-    write_config_db = False
-    if "FLEX_COUNTER_TABLE" in config_db:
-        if status != "delay":
-            for counter, counter_config in config_db["FLEX_COUNTER_TABLE"].items():
-                if "FLEX_COUNTER_STATUS" in counter_config and \
-                    counter_config["FLEX_COUNTER_STATUS"] is not status:
-                    counter_config["FLEX_COUNTER_STATUS"] = status
-                    write_config_db = True
-
-        elif status == "delay":
-            write_config_db = True
-            for key in config_db["FLEX_COUNTER_TABLE"].keys():
-                config_db["FLEX_COUNTER_TABLE"][key].update({"FLEX_COUNTER_DELAY_STATUS":"true"})
-
-    if write_config_db:
-        with open(filename, 'w') as config_db_file:
-            json.dump(config_db, config_db_file, indent=4)
-
-# Working on Config DB
-@cli.group()
-def config_db():
-    """ Config DB counter commands """
-
-@config_db.command()
-@click.argument("filename", default="/etc/sonic/config_db.json", type=click.Path(exists=True))
-def enable(filename):
-    """ Enable counter configuration in config_db file """
-    _update_config_db_flex_counter_table("enable", filename)
-
-@config_db.command()
-@click.argument("filename", default="/etc/sonic/config_db.json", type=click.Path(exists=True))
-def disable(filename):
-    """ Disable counter configuration in config_db file """
-    _update_config_db_flex_counter_table("disable", filename)
-
-@config_db.command()
-@click.argument("filename", default="/etc/sonic/config_db.json", type=click.Path(exists=True))
-def delay(filename):
-    """ Delay counters in config_db file """
-    _update_config_db_flex_counter_table("delay", filename)
-
-
 """
 The list of dynamic commands that are added on a specific condition.
 Format:
