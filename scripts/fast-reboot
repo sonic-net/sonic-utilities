@@ -475,7 +475,7 @@ function check_docker_exec()
         for ((i=1; i<=max_retries; i++)); do
             STATE=$(timeout $timeout docker exec $container echo "success"; if [[ $? == 124 ]]; then echo "timed out"; fi)
             if [[ x"${STATE}" != x"timed out" ]]; then
-                debug "docker exec for $container succeeeded in $i tries"
+                debug "docker exec for $container succeeded in $i tries"
                 success=true
                 break
             fi
