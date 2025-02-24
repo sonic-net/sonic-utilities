@@ -143,26 +143,36 @@ def print_message(lvl, *args, write_to_stdout=True):
     return msg
 
 
+def normalize_ip_network(ip):
+    """
+    Helper to normalize an IP network string using the ipaddress module.
+    For IPv4 mapped IPv6 addresses (e.g. "::ffff:a1b:bd10/128"), this will
+    return the canonical form (e.g. "::ffff:10.27.189.16/128").
+    """
+    net = ipaddress.ip_network(ip, strict=False)
+    return str(net)
+
+
 def add_prefix(ip):
     """
     helper add static prefix based on IP type
     :param ip: IP to add prefix as string.
-    :return ip + "/32 or /128"
+    :return ip + "/32 or /128" (normalized)
     """
     if ip.find(IPV6_SEPARATOR) == -1:
         ip = ip + PREFIX_SEPARATOR + "32"
     else:
         ip = ip + PREFIX_SEPARATOR + "128"
-    return str(ip_network(ip))
+    return normalize_ip_network(ip)
 
 
 def add_prefix_ifnot(ip):
     """
     helper add static prefix if absent
     :param ip: IP to add prefix as string.
-    :return ip with prefix
+    :return ip with prefix (normalized)
     """
-    return str(ip_network(ip)) if ip.find(PREFIX_SEPARATOR) != -1 else add_prefix(ip)
+    return normalize_ip_network(ip) if ip.find(PREFIX_SEPARATOR) != -1 else add_prefix(ip)
 
 
 def is_local(ip):
@@ -242,7 +252,7 @@ def checkout_rt_entry(k):
     if k.startswith(ASIC_KEY_PREFIX):
         e = k.lower().split("\"", -1)[3]
         if not is_local(e):
-            return True, e
+            return True, normalize_ip_network(e)
     return False, None
 
 
