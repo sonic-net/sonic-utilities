@@ -293,16 +293,17 @@ class TestAaa(object):
         servers = ("1.1.1.1", "1.1.1.2", "1.1.1.3", "1.1.1.4", "1.1.1.5", "1.1.1.6", "1.1.1.7", "1.1.1.8")
         for ip in servers:
             # config tacacs add <ip>
-            result = runner.invoke(config.config.commands["tacacs"].commands["add"], [ip], obj=obj)
+            result = runner.invoke(config.config.commands["tacacs"].commands["add"], [ip], obj=db)
             print(result.exit_code, result.output)
             assert result.exit_code == 0
             result = runner.invoke(show.cli.commands["tacacs"], [])
             assert result.exit_code == 0
             print(result.exit_code, result.output)
-        result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["1.1.1.9"], obj=obj)
-        info = runner.invoke(config.config.commands["tacacs"].commands["add"], ["1.1.1.9"], obj=db)
-        print(result.exit_code)
-        print(info.exit_code)
+        result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["1.1.1.9"], obj=db)
+        info = runner.invoke(config.config.commands["tacacs"].commands["add"], ["1.1.1.9"])
+        print(f"{config.config.commands["tacacs"].commands["add"]} 1.1.1.10")
+        print(result.exit_code, result.output)
+        print(info.exit_code, info.output)
         assert result.exit_code != 0, "tacacs server reach maxsize"
 
         for ip in servers:
