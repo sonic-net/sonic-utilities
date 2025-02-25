@@ -1412,13 +1412,14 @@ def config_file_yang_validation(filename):
         asic_list.extend(multi_asic.get_namespace_list())
     for scope in asic_list:
         config_to_check = config.get(scope) if multi_asic.is_multi_asic() else config
-        try:
-            sy.loadData(configdbJson=config_to_check)
-            sy.validate_data_tree()
-        except sonic_yang.SonicYangException as e:
-            click.secho("{} fails YANG validation! Error: {}".format(filename, str(e)),
-                        fg='magenta')
-            raise click.Abort()
+        if not config_to_check:
+            try:
+                sy.loadData(configdbJson=config_to_check)
+                sy.validate_data_tree()
+            except sonic_yang.SonicYangException as e:
+                click.secho("{} fails YANG validation! Error: {}".format(filename, str(e)),
+                            fg='magenta')
+                raise click.Abort()
 
         sy.tablesWithOutYang.pop('bgpraw', None)
         if len(sy.tablesWithOutYang):
@@ -2074,7 +2075,8 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
             asic_list.extend(multi_asic.get_namespace_list())
         for scope in asic_list:
             host_config = config_to_check.get(scope) if multi_asic.is_multi_asic() else config_to_check
-            table_hard_dependency_check(host_config)
+            if not host_config:
+                table_hard_dependency_check(host_config)
 
     # Stop services before config push
     if not no_service_restart:
