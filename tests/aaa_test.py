@@ -284,7 +284,8 @@ class TestAaa(object):
         assert result.exit_code == 0
         assert result.output == show_aaa_disable_accounting_output
 
-    def test_config_aaa_tacacs_reach_maxsize(self):
+    def test_config_aaa_tacacs_reach_maxsize(self, get_cmd_module):
+        (config, show) = get_cmd_module
         runner = CliRunner()
         db = Db()
         obj = {'db': db.cfgdb}
@@ -295,8 +296,13 @@ class TestAaa(object):
             result = runner.invoke(config.config.commands["tacacs"].commands["add"], [ip], obj=obj)
             print(result.exit_code, result.output)
             assert result.exit_code == 0
+            result = runner.invoke(show.cli.commands["tacacs"], [])
+            assert result.exit_code == 0
+            print(result.exit_code, result.output)
         result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["1.1.1.9"], obj=obj)
+        info = runner.invoke(config.config.commands["tacacs"].commands["add"], ["1.1.1.9"], obj=db)
         print(result.exit_code)
+        print(info.exit_code)
         assert result.exit_code != 0, "tacacs server reach maxsize"
 
         for ip in servers:
