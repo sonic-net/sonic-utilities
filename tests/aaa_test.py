@@ -301,7 +301,7 @@ class TestAaa(object):
             print(result.exit_code, result.output)
         result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["1.1.1.9"], obj=db)
         info = runner.invoke(config.config.commands["tacacs"].commands["add"], ["1.1.1.9"])
-        print(f"{config.config.commands["tacacs"].commands["add"]} 1.1.1.10")
+        print(f"{config.config.commands['tacacs'].commands['add']} 1.1.1.10")
         print(result.exit_code, result.output)
         print(info.exit_code, info.output)
         assert result.exit_code != 0, "tacacs server reach maxsize"
