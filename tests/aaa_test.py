@@ -10,7 +10,7 @@ from mock import patch
 
 import config.main as config
 from swsscommon.swsscommon import ConfigDBConnector
-import config.validated_config_db_connector as validated_config_db_connector
+import config.validated_config_db_connector as ValidatedConfigDBConnector
 import show.main as show
 
 test_path = os.path.dirname(os.path.abspath(__file__))
