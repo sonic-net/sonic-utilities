@@ -287,8 +287,8 @@ class TestAaa(object):
 
     def test_config_aaa_tacacs_reach_maxsize(self, get_cmd_module):
         (config, show) = get_cmd_module
-        config_db = ValidatedConfigDBConnector(ConfigDBConnector())
-        config_db.connect()
+        # config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+        # config_db.connect()
         runner = CliRunner()
         db = Db()
         obj = {'db': db.cfgdb}
