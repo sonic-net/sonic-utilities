@@ -69,7 +69,7 @@ def run_command(cmd, use_shell=False):
                 shcmd = shlex.split(cmd)
             else:
                 shcmd = cmd
-        proc = subprocess.Popen(shcmd, shell=use_shell, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=1, close_fds=True)
+        proc = subprocess.Popen(shcmd, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, bufsize=1, close_fds=True)
         output_stdout, output_stderr = proc.communicate()
         list_stdout = output_stdout.splitlines()
         list_stderr = output_stderr.splitlines()
