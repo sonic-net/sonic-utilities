@@ -68,46 +68,24 @@ def FG_NHG(db):
         row = [*key] + [
             format_attr_value(
                 entry,
-                {'name': 'bucket_size', 'description': 'total hash bucket size desired, \
-                  recommended value of Lowest Common Multiple of 1..{max # of next-hops}',
-                 'is-leaf-list': False, 'is-mandatory': True, 'group': ''}
+                {'name': 'bucket_size', 'description': 'total hash bucket size desired, recommended value of Lowest Common\
+                  Multiple of 1..max-next-hops', 'is-leaf-list': False, 'is-mandatory': True, 'group': ''}
             ),
             format_attr_value(
                 entry,
-                {'name': 'match_mode', 'description': 'The filtering method used to identify \
-                  when to use Fine Grained vs regular route handling. nexthop-based looks to next-hop IP \
-                  to filter routes and uses fine grained ecmp when nexthop IPs matches FG_NHG_MEMBER IPs. \
-                  route-based looks to prefix to filter routes, and uses fine grained ecmp when the route \
-                  prefix matches the FG_NHG_PREFIX prefix.',
-                 'is-leaf-list': False, 'is-mandatory': True, 'group': ''}
+                {'name': 'match_mode', 'description': 'The filtering method used to identify when to use Fine Grained vs \
+                  regular route handling. \
+                    -- nexthop-based filters on nexthop IPs only. \
+                    -- route-based filters on both prefix and nexthop IPs. \
+                    -- prefix-based filters on prefix only.', 'is-leaf-list': False, 'is-mandatory': True, 'group': ''}
             ),
             format_attr_value(
                 entry,
-                {'name': 'nhg_mode', 'description': 'static-nhg : List of nexthops needs to be statically \
-                  configured in FG_NHG_MEMBER table. dynamic-nhg : List of nexthops will be dynamically \
-                  derived from the route updates.',
-                 'is-leaf-list': False, 'is-mandatory': False, 'group': ''}
-            ),
-            format_attr_value(
-                entry,
-                {'name': 'max_next_hops', 'description': 'Applicable only when nhg_mode = dynamic-nhg. \
-                 Maximum number of nexthops that will be received in route updates for any of the prefixes \
-                 that match FG_NHG_PREFIX for this FG_NHG.', 'is-leaf-list': False, 'is-mandatory': False, 'group': ''}
+                {'name': 'max_next_hops', 'description': 'Applicable only for match_mode = prefix-based. Maximum number \
+                  of nexthops that will be\nreceived in route updates for any of the prefixes that match FG_NHG_PREFIX \
+                  for this FG_NHG.', 'is-leaf-list': False, 'is-mandatory': True, 'group': ''}
             ),
         ]
-    format_attr_value(
-        entry,
-        {'name': 'bucket_size', 'description': 'total hash bucket size desired, recommended value of Lowest Common\nMultiple of 1..{max # of next-hops}', 'is-leaf-list': False, 'is-mandatory': True, 'group': ''}
-    ),
-    format_attr_value(
-        entry,
-        {'name': 'match_mode', 'description': 'The filtering method used to identify when to use Fine Grained vs regular route handling.\n   -- nexthop-based filters on nexthop IPs only.\n   -- route-based filters on both prefix and nexthop IPs.\n   -- prefix-based filters on prefix only.', 'is-leaf-list': False, 'is-mandatory': True, 'group': ''}
-    ),
-    format_attr_value(
-        entry,
-        {'name': 'max_next_hops', 'description': 'Applicable only for match_mode = prefix-based. Maximum number of nexthops that will be\nreceived in route updates for any of the prefixes that match FG_NHG_PREFIX for this FG_NHG.', 'is-leaf-list': False, 'is-mandatory': True, 'group': ''}
-    ),
-]
 
         body.append(row)
 

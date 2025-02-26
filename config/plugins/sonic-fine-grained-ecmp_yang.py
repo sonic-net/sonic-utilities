@@ -219,20 +219,21 @@ def FG_NHG():
 )
 @click.option(
     "--bucket-size",
-    help="total hash bucket size desired, recommended value of Lowest Common
-Multiple of 1..{max # of next-hops}[mandatory]",
+    help="total hash bucket size desired, recommended value of Lowest Common Multiple of \
+          1..max-next-hops.[mandatory]",
 )
 @click.option(
     "--match-mode",
-    help="The filtering method used to identify when to use Fine Grained vs regular route handling.
-   -- nexthop-based filters on nexthop IPs only.
-   -- route-based filters on both prefix and nexthop IPs.
-   -- prefix-based filters on prefix only.[mandatory]",
+    help="The filtering method used to identify when to use Fine Grained vs regular route handling. \
+          -- nexthop-based filters on nexthop IPs only. \
+          -- route-based filters on both prefix and nexthop IPs. \
+          -- prefix-based filters on prefix only.[mandatory]",
 )
 @click.option(
     "--max-next-hops",
-    help="Applicable only for match_mode = prefix-based. Maximum number of nexthops that will be
-received in route updates for any of the prefixes that match FG_NHG_PREFIX for this FG_NHG.[mandatory]",
+    help="Applicable only for match_mode = prefix-based. Maximum number of nexthops that will be \
+          received in route updates for any of the prefixes that match FG_NHG_PREFIX for \
+          this FG_NHG.[mandatory]",
 )
 @clicommon.pass_db
 def FG_NHG_add(db, name, bucket_size, match_mode, max_next_hops):
@@ -262,20 +263,20 @@ def FG_NHG_add(db, name, bucket_size, match_mode, max_next_hops):
 )
 @click.option(
     "--bucket-size",
-    help="total hash bucket size desired, recommended value of Lowest Common
-Multiple of 1..{max # of next-hops}[mandatory]",
+    help="total hash bucket size desired, recommended value is Lowest Common Multiple of \
+          1..max-next-hops[mandatory]",
 )
 @click.option(
     "--match-mode",
-    help="The filtering method used to identify when to use Fine Grained vs regular route handling.
-   -- nexthop-based filters on nexthop IPs only.
-   -- route-based filters on both prefix and nexthop IPs.
-   -- prefix-based filters on prefix only.[mandatory]",
+    help="The filtering method used to identify when to use Fine Grained vs regular route handling. \
+          -- nexthop-based filters on nexthop IPs only. \
+          -- route-based filters on both prefix and nexthop IPs. \
+          -- prefix-based filters on prefix only.[mandatory]",
 )
 @click.option(
     "--max-next-hops",
-    help="Applicable only for match_mode = prefix-based. Maximum number of nexthops that will be
-received in route updates for any of the prefixes that match FG_NHG_PREFIX for this FG_NHG.[mandatory]",
+    help="Applicable only for match_mode = prefix-based. Maximum number of nexthops that will be \
+          received in route updates for any of the prefixes that match FG_NHG_PREFIX for this FG_NHG.[mandatory]",
 )
 @clicommon.pass_db
 def FG_NHG_update(db, name, bucket_size, match_mode, max_next_hops):
