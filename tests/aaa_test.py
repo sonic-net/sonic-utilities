@@ -295,13 +295,13 @@ class TestAaa(object):
         for ip in servers:
             # config tacacs add <ip>
             db.cfgdb.set_entry('TACPLUS_SERVER', ip, data)
-            # result = runner.invoke(config.config.commands["tacacs"].commands["add"], [ip], obj=db)
+            # result = runner.invoke(config.config.commands["tacacs"].commands["add"], [ip], obj=obj)
             # print(result.exit_code, result.output)
             # assert result.exit_code == 0
             result = runner.invoke(show.cli.commands["tacacs"], [])
             assert result.exit_code == 0
             print(result.exit_code, result.output)
-        result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["1.1.1.9"], obj=db)
+        result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["1.1.1.9"], obj=obj)
         info = runner.invoke(config.config.commands["tacacs"].commands["add"], ["1.1.1.9"])
         print(f"{config.config.commands['tacacs'].commands['add']} 1.1.1.10")
         print(result.exit_code, result.output)
