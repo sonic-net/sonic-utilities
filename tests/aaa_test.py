@@ -9,6 +9,7 @@ from unittest import mock
 from mock import patch
 
 import config.main as config
+from swsscommon.swsscommon import ConfigDBConnector
 import config.validated_config_db_connector as validated_config_db_connector
 import show.main as show
 
@@ -286,15 +287,17 @@ class TestAaa(object):
 
     def test_config_aaa_tacacs_reach_maxsize(self, get_cmd_module):
         (config, show) = get_cmd_module
+        config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+        config_db.connect()
         runner = CliRunner()
         db = Db()
         obj = {'db': db.cfgdb}
-        db.cfgdb.delete_table("TACPLUS_SERVER")
+        config_db.delete_table("TACPLUS_SERVER")
         data = {'tcp_port': '49', 'priority': '1'}
         servers = ("1.1.1.1", "1.1.1.2", "1.1.1.3", "1.1.1.4", "1.1.1.5", "1.1.1.6", "1.1.1.7", "1.1.1.8")
         for ip in servers:
             # config tacacs add <ip>
-            db.cfgdb.set_entry('TACPLUS_SERVER', ip, data)
+            config_db.set_entry('TACPLUS_SERVER', ip, data)
             # result = runner.invoke(config.config.commands["tacacs"].commands["add"], [ip], obj=obj)
             # print(result.exit_code, result.output)
             # assert result.exit_code == 0
