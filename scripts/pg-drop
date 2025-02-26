@@ -109,12 +109,11 @@ class PgDropStat(object):
     def get_counters_mapall(self, tablemap):
         mapdata = {}
         for ns in self.ns_list:
-            mapdata[ns] = {}
             counters_db = SonicV2Connector(namespace=ns)
             counters_db.connect(counters_db.COUNTERS_DB)
             map_result = counters_db.get_all(counters_db.COUNTERS_DB, tablemap)
             if map_result:
-                mapdata[ns].update(map_result)
+                mapdata[ns] = map_result
         return mapdata
 
     def get_pg_index(self, oid, namespace):
