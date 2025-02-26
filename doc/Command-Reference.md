@@ -1231,26 +1231,30 @@ This command displays information for all the interfaces for the transceiver req
 
 - Example (Display performance monitoring info of SFP transceiver connected to Ethernet100):
   ```
-  admin@sonic:~$ show interfaces transceiver pm Ethernet100
+  admin@sonic:~$ show interfaces transceiver pm current 60sec Ethernet100
+  Wed Jul 31 17:13:51 UTC 2023
+  PM window: 60sec
   Ethernet100:
+      PM window start time: Mon Jul 31 17:12:49 UTC 2023
+      PM window end time:   Mon Jul 31 17:13:50 UTC 2023
       Parameter        Unit    Min       Avg       Max       Threshold    Threshold    Threshold     Threshold    Threshold    Threshold
-                                                             High         High         Crossing      Low          Low          Crossing
-                                                             Alarm        Warning      Alert-High    Alarm        Warning      Alert-Low
+                                                              High         High         Crossing      Low          Low          Crossing
+                                                              Alarm        Warning      Alert-High    Alarm        Warning      Alert-Low
       ---------------  ------  --------  --------  --------  -----------  -----------  ------------  -----------  -----------  -----------
-      Tx Power         dBm     -8.22     -8.23     -8.24     -5.0         -6.0         False         -16.99       -16.003      False
-      Rx Total Power   dBm     -10.61    -10.62    -10.62    2.0          0.0          False         -21.0        -18.0        False
-      Rx Signal Power  dBm     -40.0     0.0       40.0      13.0         10.0         True          -18.0        -15.0        True
-      CD-short link    ps/nm   0.0       0.0       0.0       1000.0       500.0        False         -1000.0      -500.0       False
-      PDL              dB      0.5       0.6       0.6       4.0          4.0          False         0.0          0.0          False
-      OSNR             dB      36.5      36.5      36.5      99.0         99.0         False         0.0          0.0          False
-      eSNR             dB      30.5      30.5      30.5      99.0         99.0         False         0.0          0.0          False
-      CFO              MHz     54.0      70.0      121.0     3800.0       3800.0       False         -3800.0      -3800.0      False
-      DGD              ps      5.37      5.56      5.81      7.0          7.0          False         0.0          0.0          False
-      SOPMD            ps^2    0.0       0.0       0.0       655.35       655.35       False         0.0          0.0          False
-      SOP ROC          krad/s  1.0       1.0       2.0       N/A          N/A          N/A           N/A          N/A          N/A
-      Pre-FEC BER      N/A     4.58E-04  4.66E-04  5.76E-04  1.25E-02     1.10E-02     0.0           0.0          0.0          0.0
-      Post-FEC BER     N/A     0.0       0.0       0.0       1000.0       1.0          False         0.0          0.0          False
-      EVM              %       100.0     100.0     100.0     N/A          N/A          N/A           N/A          N/A          N/A
+      Tx Power         dBm     -8.19     -8.17     -8.15     -5           -6           False         -16.99       -16.003      False
+      Rx Total Power   dBm     -8.61     -8.56     -8.51     2            0            False         -21          -18          False
+      Rx Signal Power  dBm     -9.12     -9.09     -9.07     13           10           False         -18          -15          False
+      CD-short link    ps/nm   -2        -1        0         1000         500          False         -1000        -500         False
+      PDL              dB      0.3       0.3       0.4       4            4            False         0            0            False
+      OSNR             dB      36.4      36.4      36.4      99           99           False         0            0            False
+      eSNR             dB      17.9      18        18.2      99           99           False         0            0            False
+      CFO              MHz     -776      -659      -546      3800         3800         False         -3800        -3800        False
+      DGD              ps      2         2         2         7            7            False         0            0            False
+      SOPMD            ps^2    26        34        44        655.35       655.35       False         0            0            False
+      SOP ROC          krad/s  0         0         0         N/A          N/A          N/A           N/A          N/A          N/A
+      Pre-FEC BER      N/A     5.37E-04  5.55E-04  5.80E-04  1.25E-02     1.10E-02     False         0            0            False
+      Post-FEC BER     N/A     0         0         0         1.00E+03     1.00E+00     False         0            0            False
+      EVM              %       0         0         0         N/A          N/A          N/A           N/A          N/A          N/A
   ```
 
 - Example (Display status info of SFP transceiver connected to Ethernet100):

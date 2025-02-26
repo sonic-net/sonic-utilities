@@ -10,7 +10,9 @@ import ast
 import os
 import re
 import sys
+import time
 from typing import Dict
+from datetime import datetime
 
 import click
 from natsort import natsorted
@@ -236,6 +238,9 @@ ZR_PM_INFO_MAP = {
     'EVM': ['%', 'evm']
 }
 
+ZR_PM_NOT_AVAILABLE_STR = \
+'Transceiver performance monitoring data not available for the requested window'
+
 ZR_PM_NOT_APPLICABLE_STR = 'Transceiver performance monitoring not applicable'
 
 QSFP_STATUS_NOT_APPLICABLE_STR = 'Transceiver status info not applicable'
@@ -261,7 +266,12 @@ def display_invalid_intf_status(intf_name):
     click.echo(output)
 
 class SFPShow(object):
-    def __init__(self, intf_name, namespace_option, dump_dom=False):
+    PM_WINDOW_NUM_IN_DB = {'60sec': 15, '15min': 12, '24hrs': 2}
+    PM_WINDOW_START_INDEX_IN_DB = {'60sec': 1, '15min': 16, '24hrs': 28}
+    PM_TABLE_NAME_IN_DB = 'TRANSCEIVER_PM_WINDOW_STATS'
+
+    def __init__(self, intf_name, namespace_option, dump_dom=False,
+                 pm_window_size=None, pm_window_index=None):
         super(SFPShow, self).__init__()
         self.db = None
         self.intf_name = intf_name
@@ -271,6 +281,8 @@ class SFPShow(object):
         self.intf_pm: Dict[str, str] = {}
         self.intf_status: Dict[str, str] = {}
         self.multi_asic = multi_asic_util.MultiAsic(namespace_option=namespace_option)
+        self.pm_window_size = pm_window_size
+        self.pm_window_index = pm_window_index
 
     # Convert dict values to cli output string
     def format_dict_value_to_string(self, sorted_key_table,
@@ -492,19 +504,106 @@ class SFPShow(object):
         else:
             return pm_prefix.replace('_', '')
 
+    def beautify_number_with_max_decimal_places(self, number, max_num_decimal_places):
+        '''
+        Format a number to have no more than the specified number of decimal places.
+
+        Args:
+        - number: A float or integer to be formatted.
+        - max_num_decimal_places: An integer representing the maximum number of decimal places allowed.
+
+        Returns:
+        - A string representation of the formatted number.
+
+        Example:
+        - beautify_number_with_max_decimal_places(3.14159, 3) returns "3.142"
+        '''
+        # Convert the number to a string and split it into whole and decimal
+        # parts
+        str_number = str(number).split('.')
+
+        # Check if the number has a decimal part
+        if len(str_number) == 1:
+            # If no decimal part, return the number as-is
+            return str_number
+
+        decimal_part = str_number[1]
+        if decimal_part == '0':
+            # If the decimal part is zero, return the whole part only
+            return str_number[0]
+
+        # Determine the number of decimal places to use based on the length of
+        # the decimal part
+        actual_num_decimal_places = len(decimal_part)
+        num_decimal_places = min(actual_num_decimal_places, max_num_decimal_places)
+
+        # Apply the formatting
+        format_specifier = "{:." + str(num_decimal_places) + "f}"
+        return format_specifier.format(number)
+
     def beautify_pm_field(self, prefix, field):
         if field is None:
             return 'N/A'
-        elif prefix in {'prefec_ber'}:
-            return "{:.2E}".format(field) if field != 0 else '0.0'
+        elif prefix in {'prefec_ber', 'uncorr_frames'} and isinstance(field, float):
+            return "{:.2E}".format(field) if field != 0 else '0'
+        elif isinstance(field, float):
+            return self.beautify_number_with_max_decimal_places(field, 3)
         else:
             return str(field)
 
-    def convert_interface_sfp_pm_to_cli_output_string(self, state_db, interface_name):
-        sfp_pm_dict = state_db.get_all(
-            self.db.STATE_DB, 'TRANSCEIVER_PM|{}'.format(interface_name))
-        sfp_threshold_dict = state_db.get_all(
-            state_db.STATE_DB, 'TRANSCEIVER_DOM_THRESHOLD|{}'.format(interface_name))
+    def beautify_pm_timestamp(self, secs_since_epoch):
+        if secs_since_epoch is None:
+            return 'N/A'
+        dt_object = datetime.utcfromtimestamp(secs_since_epoch)
+        formatted_time = dt_object.strftime("%a %b %d %H:%M:%S UTC %Y")
+        return formatted_time
+
+    def get_pm_dict_for_specified_window(self, db, interface_name,
+                                         window_size, window_index):
+        """
+        Get PM dict for specified window size and index
+
+        Returns:
+            dict: PM dict for specified window size and index.
+                return None if PM data is not applicable for this interface;
+                return {} if PM data is applicable for this interface,
+                but not avaiable for this specified window.
+        """
+        pm_windows_dict = db.get_all(
+            db.STATE_DB, '{}|{}'.format(self.PM_TABLE_NAME_IN_DB, interface_name))
+        if not pm_windows_dict:
+            return None
+        window_num = self.PM_WINDOW_NUM_IN_DB[window_size]
+        start_win_idx_in_db = self.PM_WINDOW_START_INDEX_IN_DB[window_size]
+        end_win_idx_in_db = start_win_idx_in_db + window_num - 1
+        pm_windows_for_win_size = []
+        cur_win_idx = -1
+        for i in range(start_win_idx_in_db, end_win_idx_in_db + 1):
+            win_name = 'window' + str(i)
+            if (win_name not in pm_windows_dict or
+                pm_windows_dict[win_name] == 'N/A'):
+                pm_dict = {}
+            else:
+                # Convert string to dict
+                pm_dict = ast.literal_eval(pm_windows_dict[win_name])
+            pm_windows_for_win_size.append(pm_dict)
+            if (pm_dict is not None and
+                'pm_win_current' in pm_dict and
+                pm_dict['pm_win_current'] == 'true'):
+                cur_win_idx = i
+        if cur_win_idx == -1:
+            return {}
+        return pm_windows_for_win_size[(cur_win_idx -
+                                        start_win_idx_in_db -
+                                        window_index +
+                                        window_num) % window_num]
+
+    def convert_interface_sfp_pm_to_cli_output_string(self, db, interface_name,
+                                                      window_size, window_index):
+        sfp_pm_dict = self.get_pm_dict_for_specified_window(
+            db, interface_name, window_size, window_index)
+        sfp_threshold_dict = db.get_all(
+            db.STATE_DB, 'TRANSCEIVER_DOM_THRESHOLD|{}'.format(interface_name))
         table = []
         indent_num = 4
         indent = ' ' * indent_num
@@ -541,10 +640,18 @@ class SFPShow(object):
 
             output += tabulate(table,
                                ZR_PM_HEADER, disable_numparse=True).replace('\n', '\n' + indent)
-            output += '\n'
+            start_timestamp = self.beautify_pm_timestamp(
+                float(sfp_pm_dict.get('pm_win_start_time', None)))
+            end_timestamp = self.beautify_pm_timestamp(
+                float(sfp_pm_dict.get('pm_win_end_time', None)))
+            start_timestamp_output = '\n{}PM window start time: {}'.format(indent, start_timestamp)
+            end_timestamp_output = '\n{}PM window end time:   {}'.format(indent, end_timestamp)
+            output = start_timestamp_output + end_timestamp_output + output
+        elif sfp_pm_dict is None:
+            output = ZR_PM_NOT_APPLICABLE_STR
         else:
-            output = ZR_PM_NOT_APPLICABLE_STR + '\n'
-        return output
+            output = ZR_PM_NOT_AVAILABLE_STR
+        return output + '\n'
 
     def is_valid_physical_port(self, port_name):
         role = self.db.get(self.db.APPL_DB, 'PORT_TABLE:{}'.format(port_name), multi_asic.PORT_ROLE)
@@ -593,14 +700,14 @@ class SFPShow(object):
     def get_pm(self):
         if self.intf_name is not None:
             self.intf_pm[self.intf_name] = self.convert_interface_sfp_pm_to_cli_output_string(
-                self.db, self.intf_name)
+                self.db, self.intf_name, self.pm_window_size, self.pm_window_index)
         else:
             port_table_keys = self.db.keys(self.db.APPL_DB, "PORT_TABLE:*")
             for i in port_table_keys:
                 interface = re.split(':', i, maxsplit=1)[-1].strip()
                 if interface and self.is_valid_physical_port(interface):
                     self.intf_pm[interface] = self.convert_interface_sfp_pm_to_cli_output_string(
-                        self.db, interface)
+                        self.db, interface, self.pm_window_size, self.pm_window_index)
 
     @multi_asic_util.run_on_multi_asic
     def get_status(self):
@@ -624,8 +731,10 @@ class SFPShow(object):
         click.echo(tabulate(sorted_port_table, header))
 
     def display_pm(self):
-        click.echo(
-            "\n".join([f"{k}: {v}" for k, v in natsorted(self.intf_pm.items())]))
+        output = self.beautify_pm_timestamp(time.time()) + '\n'
+        output += 'PM window: {}\n'.format(self.pm_window_size)
+        output += "\n".join([f"{k}: {v}" for k, v in natsorted(self.intf_pm.items())])
+        click.echo(output)
 
     def display_status(self):
         click.echo(
@@ -695,10 +804,26 @@ def presence(port, namespace):
 # 'pm' subcommand
 
 
-@cli.command()
-@click.option('-p', '--port', metavar='<port_name>', help="Display SFP PM for port <port_name> only")
+@cli.command(help="Display performance monitoring information")
+@click.option('-s', '--window_size',
+              type=click.Choice(['60sec', '15min', '24hrs']),
+              required=True,
+              help="Display data for the specified window size")
+@click.option('-i', '--window_index',
+              type=int,
+              required=True,
+              help="Display data for the specified window index")
+@click.option('-p', '--port', metavar='<port_name>', help="Display data for port <port_name> only")
 @click.option('-n', '--namespace', default=None, help="Display interfaces for specific namespace")
-def pm(port, namespace):
+def pm(window_size, window_index, port, namespace):
+     # Validate window_index based on window_size
+    if window_size == '60sec' and not 0 <= window_index <= 14:
+        raise click.BadArgumentUsage("For 60sec window size, window_index should be between 0 and 14.")
+    elif window_size == '15min' and not 0 <= window_index <= 11:
+        raise click.BadArgumentUsage("For 15min window size, window_index should be between 0 and 11.")
+    elif window_size == '24hrs' and not 0 <= window_index <= 1:
+        raise click.BadArgumentUsage("For 24hrs window size, window_index should be between 0 and 1.")
+
     if port and multi_asic.is_multi_asic() and namespace is None:
         try:
             namespace = multi_asic.get_namespace_for_port(port)
@@ -706,7 +831,7 @@ def pm(port, namespace):
             display_invalid_intf_pm(port)
             sys.exit(1)
 
-    sfp = SFPShow(port, namespace)
+    sfp = SFPShow(port, namespace, False, window_size, window_index)
     sfp.get_pm()
     sfp.display_pm()
 

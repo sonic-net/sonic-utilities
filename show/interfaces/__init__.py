@@ -580,16 +580,25 @@ def eeprom(interfacename, dump_dom, namespace, verbose):
 
     clicommon.run_command(cmd, display_cmd=verbose)
 
-@transceiver.command()
-@click.argument('interfacename', required=False)
-@click.option('--namespace', '-n', 'namespace', default=None, show_default=True,
-              type=click.Choice(multi_asic_util.multi_asic_ns_choices()), help='Namespace name or all')
-@click.option('--verbose', is_flag=True, help="Enable verbose output")
-def pm(interfacename, namespace, verbose):
+@transceiver.group(help="Display performance monitoring information")
+def pm():
     """Show interface transceiver performance monitoring information"""
+    pass
 
-    ctx = click.get_current_context()
+def cli_pm_helper(window_size, window_index, interfacename, namespace, verbose, ctx):
+    """
+    Helper function for pm subcommand
 
+    Parameters:
+    interfacename (str): Name of the port to retrieve PM information for.
+    namespace (str): Name of the namespace in which the port resides.
+    window_size (str): Size of the window to consider for PM information.
+    window_index (int): Index of the window to consider for PM information.
+                                  Starts from 0, which typically denotes the most
+                                  recent window.
+    verbose (bool): Whether to display verbose output.
+    ctx (click.Context): Click context object.
+    """
     cmd = ['sfpshow', 'pm']
 
     if interfacename is not None:
@@ -601,7 +610,47 @@ def pm(interfacename, namespace, verbose):
     if namespace is not None:
         cmd += ['-n', str(namespace)]
 
+    cmd += ['-s', window_size, '-i', str(window_index)]
     clicommon.run_command(cmd, display_cmd=verbose)
+
+@pm.command(help="Show PM stats of progressing window for the given window size")
+@click.argument('window_size', type=click.Choice(['60sec', '15min', '24hrs']))
+@click.argument('interfacename', required=False)
+@click.option('--namespace', '-n', 'namespace', default=None, show_default=True,
+              type=click.Choice(multi_asic_util.multi_asic_ns_choices()),
+              help='Namespace name or all')
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def current(window_size, interfacename, namespace, verbose):
+    """Show interface transceiver pm current subcommand"""
+    ctx = click.get_current_context()
+    cli_pm_helper(window_size, 0, interfacename, namespace, verbose, ctx)
+
+@pm.group(help="Show PM stats of a given window number for the given window size")
+@click.argument('window_size', type=click.Choice(['60sec', '15min', '24hrs']))
+def history(window_size):
+    """Show interface transceiver pm history subcommand <window_size>"""
+    ctx = click.get_current_context()
+    ctx.obj = {'window_size': window_size}
+
+@history.command(help="PM window number; 60sec: (1 to 14), 15min: (1 to 11), 24hrs: (1)")
+@click.argument('window_index',  type=int)
+@click.argument('interfacename', required=False)
+@click.option('--namespace', '-n', 'namespace', default=None, show_default=True,
+              type=click.Choice(multi_asic_util.multi_asic_ns_choices()),
+              help='Namespace name or all')
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def window(window_index, interfacename, namespace, verbose):
+    """Show interface transceiver pm history <window_size> window <window_indx> subcommand"""
+    ctx = click.get_current_context()
+    window_size = ctx.obj['window_size']
+    if window_size == '60sec' and not 1 <= window_index <= 14:
+        raise click.BadArgumentUsage("For 60sec window size, window_index should be between 1 and 14.")
+    elif window_size == '15min' and not 1 <= window_index <= 11:
+        raise click.BadArgumentUsage("For 15min window size, window_index should be between 1 and 11.")
+    elif window_size == '24hrs' and window_index != 1:
+        raise click.BadArgumentUsage("For 24hrs window size, window_index should be 1.")
+    cli_pm_helper(window_size, window_index, interfacename, namespace, verbose, ctx)
+
 
 @transceiver.command('status') # 'status' is the actual sub-command name under 'transceiver' command
 @click.argument('interfacename', required=False)
