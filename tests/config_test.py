@@ -1179,7 +1179,7 @@ class TestLoadMinigraph(object):
         with mock.patch("utilities_common.cli.run_command",
                         mock.MagicMock(side_effect=mock_run_command_side_effect)), \
                 mock.patch('os.path.isfile', mock.MagicMock(side_effect=is_file_side_effect)), \
-                mock.patch('config.main.read_json_file', mock.MagicMock(return_value={})):
+                mock.patch('config.main.read_json_file', mock.MagicMock(return_value=[])):
             (config, show) = get_cmd_module
             runner = CliRunner()
             result = runner.invoke(config.config.commands["load_minigraph"], ["--override_config", "-y"])
