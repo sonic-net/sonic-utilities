@@ -5,7 +5,6 @@ Module holding the correct values for show CLI command outputs for the fine_grai
 show_fg_nhg = """\
 NAME        BUCKET SIZE  MATCH MODE     MAX NEXT HOPS
 --------  -------------  -------------  ---------------
-fg_grp_1             60  prefix-based   6
 fg_grp_2             30  nexthop-based  N/A
 """
 
