@@ -304,6 +304,7 @@ def get_kdump_num_dumps():
 #  @return The integer value X from USE_KDUMP=X in /etc/default/kdump-tools
 def read_use_kdump():
     (rc, lines, err_str) = run_command("grep 'USE_KDUMP=.*' %s | cut -d = -f 2" % kdump_cfg, use_shell=True);
+    (rc, lines, err_str) = run_command("grep 'USE_KDUMP=.*' %s | cut -d = -f 2" % kdump_cfg, use_shell=True);
     if rc == 0 and type(lines) == list and len(lines) >= 1:
         try:
             return int(lines[0])
