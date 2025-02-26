@@ -306,7 +306,7 @@ class TestAaa(object):
             print(result.exit_code, result.output)
         result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["1.1.1.9"], obj=obj)
         info = runner.invoke(config.config.commands["tacacs"].commands["add"], ["1.1.1.9"], obj=db)
-        print(f"{config.config.commands['tacacs'].commands['add']} 1.1.1.10")
+        print(f"{str(config.config.commands['tacacs'].commands['add'])} 1.1.1.10")
         print(result.exit_code, result.output)
         print(info.exit_code, info.output)
         assert result.exit_code != 0, "tacacs server reach maxsize"
@@ -329,11 +329,11 @@ class TestAaa(object):
             # print(result.exit_code, result.output)
             # assert result.exit_code == 0
             db.cfgdb.set_entry('TACPLUS_SERVER', ip, data)
-            result = runner.invoke(show.cli.commands["radius"], [], obj=obj)
+            result = runner.invoke(show.cli.commands["radius"], [], obj=db)
             print(result.exit_code, result.output)
             assert result.exit_code == 0
 
-        result = runner.invoke(config.config.commands["radius"].commands["add"], ["1.1.1.9"], obj=obj)
+        result = runner.invoke(config.config.commands["radius"].commands["add"], ["1.1.1.9"], obj=db)
         print(result.exit_code, result.output)
         assert result.exit_code != 0, "radius server reach maxsize"
 
