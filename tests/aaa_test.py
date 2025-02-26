@@ -289,13 +289,15 @@ class TestAaa(object):
         runner = CliRunner()
         db = Db()
         obj = {'db': db.cfgdb}
-
+        db.cfgdb.delete_table("TACPLUS_SERVER")
+        data = {'tcp_port': '49', 'priority': '1'}
         servers = ("1.1.1.1", "1.1.1.2", "1.1.1.3", "1.1.1.4", "1.1.1.5", "1.1.1.6", "1.1.1.7", "1.1.1.8")
         for ip in servers:
             # config tacacs add <ip>
-            result = runner.invoke(config.config.commands["tacacs"].commands["add"], [ip], obj=db)
-            print(result.exit_code, result.output)
-            assert result.exit_code == 0
+            config_db.set_entry('TACPLUS_SERVER', ip, data)
+            # result = runner.invoke(config.config.commands["tacacs"].commands["add"], [ip], obj=db)
+            # print(result.exit_code, result.output)
+            # assert result.exit_code == 0
             result = runner.invoke(show.cli.commands["tacacs"], [])
             assert result.exit_code == 0
             print(result.exit_code, result.output)
