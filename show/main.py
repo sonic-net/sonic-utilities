@@ -2189,6 +2189,7 @@ def aaa(db):
 
 
 @cli.command()
+@clicommon.pass_db
 def tacacs():
     """Show TACACS+ configuration"""
     config_db = ConfigDBConnector()
