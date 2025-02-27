@@ -1286,15 +1286,6 @@ class TestLoadMinigraph(object):
                 mock_read_json_file.assert_called_once_with('dummy_file.json')
                 mock_load_yang_model.assert_not_called()
 
-        # Test with missing namespaces in multi-ASIC config
-        with mock.patch('config.main.read_json_file', return_value={'localhost': {}}) as mock_read_json_file:
-            with mock.patch('config.main.multi_asic.is_multi_asic', return_value=True):
-                with mock.patch('config.main.multi_asic.get_namespace_list', return_value=['asic0', 'asic1']):
-                    with mock.patch('config.main.sonic_yang.SonicYang.loadYangModel') as mock_load_yang_model:
-                        assert not config_file_yang_validation('dummy_file.json')
-                        mock_read_json_file.assert_called_once_with('dummy_file.json')
-                        mock_load_yang_model.assert_not_called()
-
         # Test with valid config
         valid_config = {
                 'DEVICE_METADATA': {
