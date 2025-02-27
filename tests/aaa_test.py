@@ -283,22 +283,21 @@ class TestAaa(object):
         assert result.exit_code == 0
         assert result.output == show_aaa_disable_accounting_output
 
-    def test_config_aaa_tacacs_reach_maxsize(self, get_cmd_module):
-        (config, show) = get_cmd_module
+    def test_config_aaa_tacacs_reach_maxsize(self):
         runner = CliRunner()
         db = Db()
         obj = {'db': db.cfgdb}
         db.cfgdb.delete_table("TACPLUS_SERVER")
-        data = {'tcp_port': '49', 'priority': '1'}
+        # data = {'tcp_port': '49', 'priority': '1'}
         servers = ("1.1.1.1", "1.1.1.2", "1.1.1.3", "1.1.1.4", "1.1.1.5", "1.1.1.6", "1.1.1.7", "1.1.1.8")
         for ip in servers:
             # config tacacs add <ip>
             # db.cfgdb.set_entry('TACPLUS_SERVER', ip, data)
-            result = runner.invoke(config.config.commands["tacacs"].commands["add"], [ip], obj=obj)
-            # print(result.exit_code, result.output)
+            result = runner.invoke(config.config.commands["tacacs"].commands["add"], [ip], obj=db)
+            print(result.exit_code, result.output)
             # assert result.exit_code == 0
             print(db.cfgdb.get_table('TACPLUS_SERVER'))
-            result = runner.invoke(show.cli.commands["tacacs"], [], obj=obj)
+            result = runner.invoke(show.cli.commands["tacacs"], [], obj=db)
             assert result.exit_code == 0
             print(result.exit_code, result.output)
         result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["1.1.1.9"], obj=obj)
@@ -322,19 +321,19 @@ class TestAaa(object):
         servers = ("1.1.1.1", "1.1.1.2", "1.1.1.3", "1.1.1.4", "1.1.1.5", "1.1.1.6", "1.1.1.7", "1.1.1.8")
         for ip in servers:
             # config radius add <ip>
-            # result = runner.invoke(config.config.commands["radius"].commands["add"], [ip], obj=obj)
-            # print(result.exit_code, result.output)
+            result = runner.invoke(config.config.commands["radius"].commands["add"], [ip])
+            print(result.exit_code, result.output)
             # assert result.exit_code == 0
-            db.cfgdb.set_entry('RADIUS_SERVER', ip, data)
+            # db.cfgdb.set_entry('RADIUS_SERVER', ip, data)
             print(db.cfgdb.get_table('RADIUS_SERVER'))
             result = runner.invoke(show.cli.commands["radius"], [], obj=obj)
             print(result.exit_code, result.output)
             assert result.exit_code == 0
-
-        result = runner.invoke(config.config.commands["radius"].commands["add"], ["1.1.1.9"], obj=obj)
+        print(obj)
+        result = runner.invoke(config.config.commands["radius"].commands["add"], ["1.1.1.9"])
         print(result.exit_code, result.output)
         assert result.exit_code != 0, "radius server reach maxsize"
-        print(obj)
+
         for ip in servers:
             # config radius delete <ip>
             result = runner.invoke(config.config.commands["radius"].commands["delete"], [ip], obj=obj)
