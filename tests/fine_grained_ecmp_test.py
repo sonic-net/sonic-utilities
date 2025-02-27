@@ -66,8 +66,50 @@ class TestFineGrainedEcmp:
         logger.debug(result.exit_code)
         assert result.exit_code == SUCCESS
 
+        # try to add a duplicate fg-nhg
+        result = runner.invoke(
+            config.config.commands["fg-nhg"].commands["add"],
+            ["fg_grp_2", "--bucket-size", "30", "--match-mode", "route-based"], obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+        assert result.exit_code == ERROR
+
+        # try to add a fg-nhg with missing args
+        result = runner.invoke(
+            config.config.commands["fg-nhg"].commands["add"],
+            ["fg_grp_3", "--match-mode", "route-based"], obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+        assert result.exit_code == ERROR
+
+        result = runner.invoke(
+            config.config.commands["fg-nhg"].commands["add"],
+            ["fg_grp_2", "--bucket-size", "30"], obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+        assert result.exit_code == ERROR
+
         # verify
         self.verify_output(db, runner, "fg-nhg", assert_show_output.show_fg_nhg)
+
+        # update
+        result = runner.invoke(
+            config.config.commands["fg-nhg"].commands["update"],
+            ["fg_grp_2", "--bucket-size", "120", "--match-mode", "route-based"], obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+        assert result.exit_code == SUCCESS
+
+        # verify
+        self.verify_output(db, runner, "fg-nhg", assert_show_output.show_fg_nhg_after_update)
 
         # delete
 #        result = runner.invoke(
@@ -88,6 +130,16 @@ class TestFineGrainedEcmp:
         logger.debug(result.exit_code)
         assert result.exit_code == SUCCESS
 
+        # Delete a non-existent fg-nhg
+        result = runner.invoke(
+            config.config.commands["fg-nhg"].commands["delete"],
+            ["fg_grp_2"], obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+        assert result.exit_code == ERROR
+
         # verify
         self.verify_output(db, runner, "fg-nhg", assert_show_output.show_fg_nhg_empty)
 
@@ -98,7 +150,7 @@ class TestFineGrainedEcmp:
         db = Db()
         runner = CliRunner()
 
-        # add
+        # add a fg-nhg
         result = runner.invoke(
             config.config.commands["fg-nhg"].commands["add"],
             ["fg_grp_1", "--bucket-size", "30", "--match-mode", "route-based"], obj=db
@@ -108,6 +160,7 @@ class TestFineGrainedEcmp:
         logger.debug(result.exit_code)
         assert result.exit_code == SUCCESS
 
+        # add a fg-nhg-prefix
         result = runner.invoke(
             config.config.commands["fg-nhg-prefix"].commands["add"],
             ["192.168.11.0/24", "--fg-nhg", "fg_grp_1"], obj=db
@@ -117,10 +170,62 @@ class TestFineGrainedEcmp:
         logger.debug(result.exit_code)
         assert result.exit_code == SUCCESS
 
+        # try to add a duplicate fg-nhg-prefix
+        result = runner.invoke(
+            config.config.commands["fg-nhg-prefix"].commands["add"],
+            ["192.168.11.0/24", "--fg-nhg", "fg_grp_1"], obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+        assert result.exit_code == ERROR
+
+        # try to add a fg-nhg-prefix with missing args
+        result = runner.invoke(
+            config.config.commands["fg-nhg-prefix"].commands["add"],
+            ["192.168.11.0/24"], obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+        assert result.exit_code == ERROR
+
         # verify
         self.verify_output(db, runner, "fg-nhg-prefix", assert_show_output.show_fg_nhg_prefix)
 
-        # delete
+        # Update
+        result = runner.invoke(
+            config.config.commands["fg-nhg"].commands["add"],
+            ["fg_grp_2", "--bucket-size", "120", "--match-mode", "route-based"], obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+        assert result.exit_code == SUCCESS
+
+        result = runner.invoke(
+            config.config.commands["fg-nhg-prefix"].commands["update"],
+            ["192.168.11.0/24", "--fg-nhg", "fg_grp_2"], obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+        assert result.exit_code == SUCCESS
+
+        # verify
+        self.verify_output(db, runner, "fg-nhg-prefix", assert_show_output.show_fg_nhg_prefix_after_update)
+
+        # attempt to delete a fg-nhg that is in use
+        result = runner.invoke(
+            config.config.commands["fg-nhg"].commands["delete"],
+            ["fg_grp_2"], obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+        assert result.exit_code == ERROR
+
+        # delete fg-nhg and fg-nhg-prefix in the right order
         result = runner.invoke(
             config.config.commands["fg-nhg-prefix"].commands["delete"],
             ["192.168.11.0/24"], obj=db
@@ -149,7 +254,17 @@ class TestFineGrainedEcmp:
         db = Db()
         runner = CliRunner()
 
-        # add
+        # attempt to add fg-nhg members without a fg-nhg
+        result = runner.invoke(
+            config.config.commands["fg-nhg-member"].commands["add"],
+            ["10.10.20.1", "--fg-nhg", "fg_grp_1", "--bank", "0"], obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+        assert result.exit_code == ERROR
+
+        # add fg-nhg and fg-nhg-members in the right order
         result = runner.invoke(
             config.config.commands["fg-nhg"].commands["add"],
             ["fg_grp_1", "--bucket-size", "30", "--match-mode", "nexthop-based"], obj=db
@@ -177,8 +292,49 @@ class TestFineGrainedEcmp:
         logger.debug(result.exit_code)
         assert result.exit_code == SUCCESS
 
+        # try to add a duplicate fg-nhg-member
+        result = runner.invoke(
+            config.config.commands["fg-nhg-member"].commands["add"],
+            ["10.10.20.1", "--fg-nhg", "fg_grp_1", "--bank", "0"], obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+        assert result.exit_code == ERROR
+
         # verify
         self.verify_output(db, runner, "fg-nhg-member", assert_show_output.show_fg_nhg_members)
+
+        # update
+        result = runner.invoke(
+            config.config.commands["fg-nhg"].commands["add"],
+            ["fg_grp_2", "--bucket-size", "120", "--match-mode", "route-based"], obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+        assert result.exit_code == SUCCESS
+
+        result = runner.invoke(
+            config.config.commands["fg-nhg-member"].commands["update"],
+            ["10.10.20.1", "--fg-nhg", "fg_grp_2", "--bank", "1"], obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+        assert result.exit_code == SUCCESS
+
+        result = runner.invoke(
+            config.config.commands["fg-nhg-member"].commands["update"],
+            ["10.10.20.2", "--fg-nhg", "fg_grp_2", "--bank", "0"], obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+        assert result.exit_code == SUCCESS
+
+        # verify
+        self.verify_output(db, runner, "fg-nhg-member", assert_show_output.show_fg_nhg_members_after_update)
 
         # delete
         result = runner.invoke(

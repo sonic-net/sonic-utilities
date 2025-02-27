@@ -35,3 +35,22 @@ show_fg_nhg_prefix_empty = """\
 IP PREFIX    FG NHG
 -----------  --------
 """
+
+show_fg_nhg_after_update = """\
+NAME        BUCKET SIZE  MATCH MODE    MAX NEXT HOPS
+--------  -------------  ------------  ---------------
+fg_grp_2            120  route-based   N/A
+"""
+
+show_fg_nhg_members_after_update = """\
+NEXT HOP IP    FG NHG      BANK  LINK
+-------------  --------  ------  ------
+10.10.20.1     fg_grp_2       1  N/A
+10.10.20.2     fg_grp_2       0  N/A
+"""
+
+show_fg_nhg_prefix_after_update = """\
+IP PREFIX        FG NHG
+---------------  --------
+192.168.11.0/24  fg_grp_2
+"""
