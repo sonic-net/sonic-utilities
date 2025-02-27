@@ -9,8 +9,6 @@ from unittest import mock
 from mock import patch
 
 import config.main as config
-from swsscommon.swsscommon import ConfigDBConnector
-import config.validated_config_db_connector as ValidatedConfigDBConnector
 import show.main as show
 
 test_path = os.path.dirname(os.path.abspath(__file__))
@@ -287,8 +285,6 @@ class TestAaa(object):
 
     def test_config_aaa_tacacs_reach_maxsize(self, get_cmd_module):
         (config, show) = get_cmd_module
-        # config_db = ValidatedConfigDBConnector(ConfigDBConnector())
-        # config_db.connect()
         runner = CliRunner()
         db = Db()
         obj = {'db': db.cfgdb}
@@ -298,6 +294,7 @@ class TestAaa(object):
         for ip in servers:
             # config tacacs add <ip>
             db.cfgdb.set_entry('TACPLUS_SERVER', ip, data)
+            print(db.cfgdb.get_table('TACPLUS_SERVER'))
             # result = runner.invoke(config.config.commands["tacacs"].commands["add"], [ip], obj=obj)
             # print(result.exit_code, result.output)
             # assert result.exit_code == 0
@@ -306,7 +303,7 @@ class TestAaa(object):
             print(result.exit_code, result.output)
         result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["1.1.1.9"], obj=obj)
         info = runner.invoke(config.config.commands["tacacs"].commands["add"], ["1.1.1.9"], obj=db)
-        print(f"{str(config.config.commands['tacacs'].commands['add'])} 1.1.1.10")
+        print(config.config.commands['tacacs'].commands['add'])
         print(result.exit_code, result.output)
         print(info.exit_code, info.output)
         assert result.exit_code != 0, "tacacs server reach maxsize"
@@ -328,8 +325,9 @@ class TestAaa(object):
             # result = runner.invoke(config.config.commands["radius"].commands["add"], [ip], obj=obj)
             # print(result.exit_code, result.output)
             # assert result.exit_code == 0
-            db.cfgdb.set_entry('TACPLUS_SERVER', ip, data)
-            result = runner.invoke(show.cli.commands["radius"], [], obj=db)
+            db.cfgdb.set_entry('RADIUS_SERVER', ip, data)
+            print(db.cfgdb.get_table('RADIUS_SERVER'))
+            result = runner.invoke(show.cli.commands["radius"], [], obj=obj)
             print(result.exit_code, result.output)
             assert result.exit_code == 0
 
