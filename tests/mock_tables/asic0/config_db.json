@@ -278,6 +278,10 @@
         "asn": "65200",
         "keepalive": "3"
     },
+    "FLEX_COUNTER_TABLE|PFC_STAT_HISTORY": {
+        "POLL_INTERVAL": "1000",
+        "FLEX_COUNTER_STATUS": "disable"
+    },
     "ACL_RULE|DATAACL_5|RULE_1": {
         "IP_PROTOCOL": "126",
         "PACKET_ACTION": "FORWARD",
