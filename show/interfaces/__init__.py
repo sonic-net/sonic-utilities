@@ -281,12 +281,13 @@ def neighbor():
 # 'expected' subcommand ("show interface neighbor expected")
 @neighbor.command()
 @click.argument('interfacename', required=False)
-@click.option('--namespace', '-n', 'namespace', default='',
-              type=str, show_default=True, help='Namespace name or all',
-              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+@multi_asic_util.multi_asic_click_option_namespace
 @clicommon.pass_db
 def expected(db, interfacename, namespace):
     """Show expected neighbor information by interfaces"""
+
+    if not namespace:
+        namespace = multi_asic_util.constants.DEFAULT_NAMESPACE
 
     neighbor_dict = db.cfgdb_clients[namespace].get_table("DEVICE_NEIGHBOR")
     if neighbor_dict is None:
