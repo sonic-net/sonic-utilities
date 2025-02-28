@@ -271,7 +271,8 @@ def add(address, timeout, key, auth_type, port, pri, use_mgmt_vrf):
     if address in old_data:
         ctx.fail(f'server {address} already exists')
     elif len(old_data) >= TACACS_MAXSERVERS:
-        ctx.fail(f'tacacs server reached max size {TACACS_MAXSERVERS}')
+        click.echo('Maximum of %d can be configured' % TACACS_MAXSERVERS)
+        return
     else:
         data = {
             'tcp_port': str(port),
@@ -518,7 +519,8 @@ def add(address, retransmit, timeout, key, auth_type, auth_port, pri, use_mgmt_v
     if address in old_data:
         ctx.fail(f'server {address} already exists')
     if len(old_data) == RADIUS_MAXSERVERS:
-        ctx.fail(f'Maximum of {RADIUS_MAXSERVERS} can be configured')
+        click.echo('Maximum of %d can be configured' % RADIUS_MAXSERVERS)
+        return
     else:
         data = {
             'auth_port': str(auth_port),
