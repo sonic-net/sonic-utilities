@@ -2420,7 +2420,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         # Arrange
         expected_exit_code = 0
         expected_output = self.any_checkpoints_list_with_time_as_text
-        expected_call_with_non_default_values = mock.call(True)
+        expected_call_with_non_default_values = mock.call(False, True)
         mock_generic_updater = mock.Mock()
         mock_generic_updater.list_checkpoints.return_value = self.any_checkpoints_list_with_time
         with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
@@ -2440,7 +2440,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         # Arrange
         expected_exit_code = 0
         expected_output = self.any_checkpoints_list_with_time_as_text
-        expected_call_with_time_param = mock.call(True)
+        expected_call_with_time_param = mock.call(True, False)
         mock_generic_updater = mock.Mock()
         mock_generic_updater.list_checkpoints.return_value = self.any_checkpoints_list_with_time
         with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
@@ -2448,26 +2448,6 @@ class TestGenericUpdateCommands(unittest.TestCase):
             # Act
             result = self.runner.invoke(config.config.commands["list-checkpoints"],
                                         ["--time"],
-                                        catch_exceptions=False)
-
-        # Assert
-        self.assertEqual(expected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
-        mock_generic_updater.list_checkpoints.assert_called_once()
-        mock_generic_updater.list_checkpoints.assert_has_calls([expected_call_with_time_param])
-
-    def test_list_checkpoints__time_param_false__time_not_included_in_output(self):
-        # Arrange
-        expected_exit_code = 0
-        expected_output = json.dumps([{"name": cp["name"]} for cp in self.any_checkpoints_list], indent=4)
-        expected_call_with_time_param = mock.call(False)
-        mock_generic_updater = mock.Mock()
-        mock_generic_updater.list_checkpoints.return_value = [{"name": cp["name"]} for cp in self.any_checkpoints_list]
-        with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
-
-            # Act
-            result = self.runner.invoke(config.config.commands["list-checkpoints"],
-                                        [],
                                         catch_exceptions=False)
 
         # Assert
@@ -2495,7 +2475,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
     def test_list_checkpoints__optional_parameters_passed_correctly(self):
         self.validate_list_checkpoints_optional_parameter(
             ["--verbose"],
-            mock.call(True))
+            mock.call(True, True))
 
     def validate_list_checkpoints_optional_parameter(self, param_args, expected_call):
         # Arrange

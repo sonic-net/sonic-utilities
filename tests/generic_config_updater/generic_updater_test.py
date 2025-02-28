@@ -211,6 +211,8 @@ class TestFileSystemConfigRollbacker(unittest.TestCase):
     def test_list_checkpoints__checkpoints_dir_has_multiple_files(self):
         # Arrange
         self.create_checkpoints_dir()
+        self.add_checkpoint(self.any_checkpoint_name, self.any_config)
+        self.add_checkpoint(self.any_other_checkpoint_name, self.any_config)
         rollbacker = self.create_rollbacker()
         expected = [self.any_checkpoint_name, self.any_other_checkpoint_name]
 
@@ -301,27 +303,18 @@ class TestFileSystemConfigRollbacker(unittest.TestCase):
         self.assertCountEqual([], rollbacker.list_checkpoints())
 
         rollbacker.checkpoint(self.any_checkpoint_name)
-        self.assertCountEqual(
-            [self.any_checkpoint_name],
-            self.extract_checkpoint_names(rollbacker.list_checkpoints())
-        )
+        self.assertCountEqual([self.any_checkpoint_name], rollbacker.list_checkpoints())
         self.assertEqual(self.any_config, self.get_checkpoint(self.any_checkpoint_name))
 
         rollbacker.rollback(self.any_checkpoint_name)
         rollbacker.config_replacer.replace.assert_has_calls([call(self.any_config)])
 
         rollbacker.checkpoint(self.any_other_checkpoint_name)
-        self.assertCountEqual(
-            [self.any_checkpoint_name, self.any_other_checkpoint_name],
-            self.extract_checkpoint_names(rollbacker.list_checkpoints())
-        )
+        self.assertCountEqual([self.any_checkpoint_name, self.any_other_checkpoint_name], rollbacker.list_checkpoints())
         self.assertEqual(self.any_config, self.get_checkpoint(self.any_other_checkpoint_name))
 
         rollbacker.delete_checkpoint(self.any_checkpoint_name)
-        self.assertCountEqual(
-            [self.any_other_checkpoint_name],
-            self.extract_checkpoint_names(rollbacker.list_checkpoints())
-        )
+        self.assertCountEqual([self.any_other_checkpoint_name], rollbacker.list_checkpoints())
 
         rollbacker.delete_checkpoint(self.any_other_checkpoint_name)
         self.assertCountEqual([], rollbacker.list_checkpoints())
@@ -746,7 +739,7 @@ class TestGenericUpdater(unittest.TestCase):
         expected = self.any_checkpoints_list
 
         # Act
-        actual = generic_updater.list_checkpoints(self.any_verbose)
+        actual = generic_updater.list_checkpoints(includes_time=False, self.any_verbose)
 
         # Assert
         self.assertCountEqual(expected, actual)
@@ -824,7 +817,7 @@ class TestDecorator(unittest.TestCase):
         expected = self.any_checkpoints_list
 
         # Act
-        actual = self.decorator.list_checkpoints()
+        actual = self.decorator.list_checkpoints(includes_time=False)
 
         # Assert
         self.decorated_config_rollbacker.list_checkpoints.assert_called_once()
