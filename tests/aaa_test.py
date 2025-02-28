@@ -296,7 +296,7 @@ class TestAaa(object):
             # result = runner.invoke(config.config.commands["tacacs"].commands["add"], [ip], obj=obj)
             # print(result.exit_code, result.output)
             # assert result.exit_code == 0
-            print(obj.get_table('TACPLUS_SERVER'))
+            print(obj['db'].get_table('TACPLUS_SERVER'))
             result = runner.invoke(show.cli.commands["tacacs"], [], obj=obj)
             print(result.exit_code, result.output)
             assert result.exit_code == 0
