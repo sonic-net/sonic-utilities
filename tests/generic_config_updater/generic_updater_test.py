@@ -739,7 +739,7 @@ class TestGenericUpdater(unittest.TestCase):
         expected = self.any_checkpoints_list
 
         # Act
-        actual = generic_updater.list_checkpoints(includes_time=False, self.any_verbose)
+        actual = generic_updater.list_checkpoints(False, self.any_verbose)
 
         # Assert
         self.assertCountEqual(expected, actual)
