@@ -228,7 +228,19 @@
 * [Banner Commands](#banner-commands)
   * [Banner config commands](#banner-config-commands)
   * [Banner show command](#banner-show-command)
-
+* [Memory Statistics Commands](#memory-statistics-commands)
+  * [Overview](#overview)
+  * [Memory Statistics Config Commands](#memory-statistics-config-commands)
+    * [Enable/Disable Memory Statistics Monitoring](#enabledisable-memory-statistics-monitoring)
+    * [Set the Frequency of Memory Data Collection](#set-the-frequency-of-memory-data-collection)
+    * [Adjust the Data Retention Period](#adjust-the-data-retention-period)
+  * [Memory Statistics Show Commands](#memory-statistics-show-commands)
+    * [Default Historical Memory Statistics](#default-historical-memory-statistics)
+    * [Historical Memory Statistics for Last 10 Days](#historical-memory-statistics-for-last-10-days)
+    * [Historical Memory Statistics for Last 100 Minutes](#historical-memory-statistics-for-last-100-minutes)
+    * [Historical Memory Statistics for Last 3 Hours](#historical-memory-statistics-for-last-3-hours)
+    * [Historical Memory Statistics for Specific Metric (Used Memory)](#historical-memory-statistics-for-specific-metric-used-memory)
+    * [View Memory Statistics Configuration](#view-memory-statistics-configuration)
 ## Document History
 
 | Version | Modification Date | Details |
@@ -4984,8 +4996,8 @@ The "current-mode" subcommand is used to display current breakout mode for all i
 
 **show interfaces counters**
 
-This show command displays packet counters for all interfaces since the last time the counters were cleared. To display l3 counters "rif" subcommand can be used. There is no facility to display counters for one specific l2 interface. For l3 interfaces a single interface output mode is present. Optional argument "-a" provides two additional columns - RX-PPS and TX_PPS.
-Optional argument "-p" specify a period (in seconds) with which to gather counters over.
+This show command displays packet counters for all interfaces(except the "show interface detailed" command) since the last time the counters were cleared. To display l3 counters "rif" subcommand can be used. There is no facility to display counters for one specific l2 interface. For l3 interfaces a single interface output mode is present.  Optional argument "-a" provides two additional columns - RX-PPS and TX_PPS. 
+Optional argument "-p" specify a period (in seconds) with which to gather counters over. To display the detailed per-interface counters "detailed <interface-name>" subcommand can be used.
 
 - Usage:
   ```
@@ -4995,6 +5007,7 @@ Optional argument "-p" specify a period (in seconds) with which to gather counte
   show interfaces counters rif [-p|--period <period>] [-i <interface_name>]
   show interfaces counters fec-histogram [-i <interface_name>]
   show interfaces counters fec-stats
+  show interfaces counters detailed <interface_name>
   ```
 
 - Example:
@@ -5098,6 +5111,56 @@ Optionally, you can specify a period (in seconds) with which to gather counters 
     Ethernet16        U      377   32.64 KB/s      0.00%         0         0         0      214   18.01 KB/s      0.00%         0         0         0
     Ethernet20        U      284   36.81 KB/s      0.00%         0         0         0      138  8758.25 B/s      0.00%         0         0         0
     Ethernet24        U      173   16.09 KB/s      0.00%         0         0         0      169   11.39 KB/s      0.00%         0         0         0
+  ```
+
+The "detailed" subcommand is used to display more detailed interface counters. Along with tx/rx counters, it also displays the WRED drop counters that are supported on the platform.
+
+- Example:
+  ```
+    admin@sonic:~$ show interfaces counters detailed Ethernet8
+    Packets Received 64 Octets..................... 0
+    Packets Received 65-127 Octets................. 0
+    Packets Received 128-255 Octets................ 0
+    Packets Received 256-511 Octets................ 0
+    Packets Received 512-1023 Octets............... 0
+    Packets Received 1024-1518 Octets.............. 0
+    Packets Received 1519-2047 Octets.............. 0
+    Packets Received 2048-4095 Octets.............. 0
+    Packets Received 4096-9216 Octets.............. 0
+    Packets Received 9217-16383 Octets............. 0
+
+    Total Packets Received Without Errors.......... 0
+    Unicast Packets Received....................... 0
+    Multicast Packets Received..................... 0
+    Broadcast Packets Received..................... 0
+
+    Jabbers Received............................... N/A
+    Fragments Received............................. N/A
+    Undersize Received............................. 0
+    Overruns Received.............................. 0
+
+    Packets Transmitted 64 Octets.................. 0
+    Packets Transmitted 65-127 Octets.............. 0
+    Packets Transmitted 128-255 Octets............. 0
+    Packets Transmitted 256-511 Octets............. 0
+    Packets Transmitted 512-1023 Octets............ 0
+    Packets Transmitted 1024-1518 Octets........... 0
+    Packets Transmitted 1519-2047 Octets........... 0
+    Packets Transmitted 2048-4095 Octets........... 0
+    Packets Transmitted 4096-9216 Octets........... 0
+    Packets Transmitted 9217-16383 Octets.......... 0
+
+    Total Packets Transmitted Successfully......... 0
+    Unicast Packets Transmitted.................... 0
+    Multicast Packets Transmitted.................. 0
+    Broadcast Packets Transmitted.................. 0
+
+    WRED Green Dropped Packets..................... 0
+    WRED Yellow Dropped Packets.................... 0
+    WRED Red Dropped Packets....................... 0
+    WRED Total Dropped Packets..................... 0
+
+    Time Since Counters Last Cleared............... None
   ```
 
 - NOTE: Interface counters can be cleared by the user with the following command:
@@ -9435,6 +9498,7 @@ This sub-section explains the following queue parameters that can be displayed u
 2) queue watermark
 3) priority-group  watermark
 4) queue persistent-watermark
+5) queue wredcounters
 
 
 **show queue counters**
@@ -9627,6 +9691,83 @@ This command displays the user persistet-watermark for the queues (Egress shared
 
   admin@sonic:~$ sonic-clear priority-group drop counters
   ```
+
+**show queue wredcounters**
+
+This command displays wred-drop packet/byte and ecn-marked packet/byte counters for all queues of all ports or one specific-port given as arguement.
+This command can be used to clear the counters for all queues of all ports. Note that port specific clear is not supported.
+
+- Usage:
+  ```
+  show queue wredcounters [<interface_name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show queue wredcounters
+     Port      TxQ    WredDrp/pkts    WredDrp/bytes  EcnMarked/pkts  EcnMarked/bytes
+  ---------  -----  --------------  --------------- --------------- ----------------
+
+  Ethernet0    UC0               0                0               0                0
+  Ethernet0    UC1               0                0               0                0
+  Ethernet0    UC2               0                0               0                0
+  Ethernet0    UC3               0                0               0                0
+  Ethernet0    UC4               0                0               0                0
+  Ethernet0    UC5               0                0               0                0
+  Ethernet0    UC6               0                0               0                0
+  Ethernet0    UC7               0                0               0                0
+  Ethernet0    UC8               0                0               0                0
+  Ethernet0    UC9               0                0               0                0
+  Ethernet0    MC0               0                0               0                0
+  Ethernet0    MC1               0                0               0                0
+  Ethernet0    MC2               0                0               0                0
+  Ethernet0    MC3               0                0               0                0
+  Ethernet0    MC4               0                0               0                0
+  Ethernet0    MC5               0                0               0                0
+  Ethernet0    MC6               0                0               0                0
+  Ethernet0    MC7               0                0               0                0
+  Ethernet0    MC8               0                0               0                0
+  Ethernet0    MC9               0                0               0                0
+
+     Port      TxQ    WredDrp/pkts    WredDrp/bytes  EcnMarked/pkts  EcnMarked/bytes
+  ---------  -----  --------------  --------------- --------------- ----------------
+
+  Ethernet4    UC0               0                0               0                0
+  Ethernet4    UC1               0                0               0                0
+  Ethernet4    UC2               0                0               0                0
+  Ethernet4    UC3               0                0               0                0
+  Ethernet4    UC4               0                0               0                0
+  Ethernet4    UC5               0                0               0                0
+  Ethernet4    UC6               0                0               0                0
+  Ethernet4    UC7               0                0               0                0
+  Ethernet4    UC8               0                0               0                0
+  Ethernet4    UC9               0                0               0                0
+  Ethernet4    MC0               0                0               0                0
+  Ethernet4    MC1               0                0               0                0
+  Ethernet4    MC2               0                0               0                0
+  Ethernet4    MC3               0                0               0                0
+  Ethernet4    MC4               0                0               0                0
+  Ethernet4    MC5               0                0               0                0
+  Ethernet4    MC6               0                0               0                0
+  Ethernet4    MC7               0                0               0                0
+  Ethernet4    MC8               0                0               0                0
+  Ethernet4    MC9               0                0               0                0
+
+  ...
+  ```
+
+Optionally, you can specify an interface name in order to display only that particular interface
+
+- Example:
+  ```
+  admin@sonic:~$ show queue wredcounters Ethernet72
+  ```
+
+- NOTE: Queue counters can be cleared by the user with the following command:
+  ```
+  admin@sonic:~$ sonic-clear queue wredcounters
+  ```
+
 
 #### Buffer Pool
 
@@ -14099,4 +14240,294 @@ enabled  Login    You are on
                   All access and/or use are subject to monitoring.
 
                   Help:    https://sonic-net.github.io/SONiC/
+ ```                             
+---
+
+# Memory Statistics Commands
+
+## Overview
+These commands allow users to enable/disable memory statistics monitoring, configure data collection intervals, adjust data retention periods, view memory statistics, and check the current configuration. Memory statistics can help administrators monitor and analyze system memory usage over time.
+
+**Common Use Cases** 
+ - Monitor system memory trends over time. 
+ - Track memory usage patterns during peak time.  
+ - Plan system capacity based on historical memory data.
+
+---
+
+## Memory Statistics Config Commands
+
+### Enable/Disable Memory Statistics Monitoring
+
+To enable or disable the memory statistics monitoring feature:
+
+```bash
+admin@sonic:~$ config memory-stats enable/disable
+```
+
+This will **enable/disable** memory statistics monitoring.
+
+By default, this feature is **disabled**.
+
+**Examples**:
+
+- To enable memory statistics monitoring:
+
+  ```bash
+  admin@sonic:~$ config memory-stats enable
+  Memory statistics monitoring enabled.
+  ```
+
+- To disable memory statistics monitoring:
+
+  ```bash
+  admin@sonic:~$ config memory-stats disable
+  Memory statistics monitoring disabled.
+  ```
+
+---
+
+### Set the Frequency of Memory Data Collection
+
+To configure the interval for memory data collection (specified in minutes):
+
+```bash
+admin@sonic:~$ config memory-stats sampling-interval <interval>
+```
+
+- `<interval>` is the sampling interval in minutes.
+- The default sampling interval is **5 minutes**.
+
+**Example**:
+
+- To set the sampling interval to 10 minutes:
+
+  ```bash
+  admin@sonic:~$ config memory-stats sampling-interval 10
+  Sampling interval set to 10 minutes.
+  ```
+
+---
+
+### Adjust the Data Retention Period
+
+To set how long the memory data should be retained (specified in days):
+
+```bash
+admin@sonic:~$ config memory-stats retention-period <period>
+```
+
+- `<period>` is the retention period in days.
+- The default retention period is **15 days**.
+
+**Example**:
+
+- To set the retention period to 30 days:
+
+  ```bash
+  admin@sonic:~$ config memory-stats retention-period 30
+  Retention period set to 30 days.
+  ```
+
+---
+
+## Memory Statistics Show Commands
+
+### View Memory Usage Statistics
+To display memory usage statistics, use the following command with optional parameters for time range and specific metrics:
+
+```bash
+admin@sonic:~$ show memory-stats [--from <date-time>] [--to <date-time>] [--select <metric>]
+```
+
+**Command Options:**
+- `show memory-stats`: Display basic memory usage statistics.
+- `--from <date-time>`: Display memory statistics from the specified start date-time.
+- `--to <date-time>`: Display memory statistics up to the specified end date-time.
+- `--select <metric>`: Display specific memory statistics, such as total memory.
+
+**Time Format for Statistics Retrieval:**
+The time format for `--from` and `--to` options includes:
+- **Relative time formats:**
+  - 'X days ago', 'X hours ago', 'X minutes ago'
+  - 'yesterday', 'today'
+- **Specific times and dates:**
+  - 'now'
+  - 'July 23', 'July 23, 2024', '2 November 2024'
+  - '7/24', '1/2'
+- **Time expressions:**
+  - '2 am', '3:15 pm'
+  - 'Aug 01 06:43:40', 'July 1 3:00:00'
+- **Named months:**
+  - 'jan', 'feb', 'march', 'september', etc.
+  - Full month names: 'January', 'February', 'March', etc.
+- **ISO 8601 format:**
+  - '2024-07-01T15:00:00'
+
+---
+
+### Default Historical Memory Statistics
+
+To view the historical memory statistics:
+
+```bash
+admin@sonic:~$ show memory-stats
+```
+
+**Sample Output**:
+
+```bash
+Memory Statistics:
+Codes: M - minutes, H - hours, D - days
+--------------------------------------------------------------------------------
+Report Generated:    2024-12-04 15:49:52
+Analysis Period:     From 2024-11-19 15:49:52 to 2024-12-04 15:49:52
+Interval:            2 Days
+--------------------------------------------------------------------------------------------------------------------------------------------------
+Metric             Current    High       Low        D19-D21     D21-D23     D23-D25     D25-D27     D27-D29     D29-D01     D01-D03     D03-D05    
+                   Value      Value      Value      19Nov24     21Nov24     23Nov24     25Nov24     27Nov24     29Nov24     01Dec24     03Dec24    
+--------------------------------------------------------------------------------------------------------------------------------------------------
+total_memory       15.29GB    15.29GB    15.29GB    15.29GB     15.29GB     15.29GB     15.29GB     15.29GB    15.29GB      15.29GB     15.29GB    
+used_memory        8.87GB     9.35GB     8.15GB     8.15GB      9.10GB      8.15GB      8.20GB      9.05GB     8.30GB       9.35GB      9.12GB     
+free_memory        943.92MB   906.28MB   500.00MB   800.00MB    750.00MB    906.2MB     650.00MB    600.00MB   550.00MB     500.00MB    725.92MB   
+available_memory   4.78GB     4.74GB     4.35GB     4.65GB      4.60GB      4.55GB      4.74GB      4.45GB     4.40GB       4.35GB      4.57GB     
+cached_memory      5.17GB     5.08GB     4.96GB     5.08GB      5.06GB      5.04GB      5.02GB     5.00GB      4.98GB       4.96GB      5.05GB     
+buffers_memory     337.83MB   333.59MB   295.00MB   325.00MB    320.00MB    315.00MB    333.59MB   305.00MB    300.00MB     295.00MB    317.84MB   
+shared_memory      1.31GB     1.22GB     1.08GB     1.22GB      1.20GB      1.18GB      1.15GB     1.12GB      1.10GB       1.08GB      1.19GB
+```
+
+---
+
+### Historical Memory Statistics for Last 10 Days
+
+To view memory statistics for the last 10 days:
+
+```bash
+admin@sonic:~$ show memory-stats --from '10 days ago' --to 'now'
+```
+
+**Sample Output**:
+
+```
+Memory Statistics:
+Codes: M - minutes, H - hours, D - days
+--------------------------------------------------------------------------------
+Report Generated:    2024-12-24 17:29:19
+Analysis Period:     From 2024-12-14 17:29:19 to 2024-12-24 17:29:19
+Interval:            1 Days
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Metric             Current    High       Low        D14-D15     D15-D16     D16-D17     D17-D18     D18-D19     D19-D20     D20-D21     D21-D22     D22-D23     D23-D24     D24-D25    
+                   Value      Value      Value      14Dec24     15Dec24     16Dec24     17Dec24     18Dec24     19Dec24     20Dec24     21Dec24     22Dec24     23Dec24     24Dec24    
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+total_memory       15.29GB    15.29GB    15.29GB    -           -           -           -           -           -           -           -           -           -           15.29GB    
+used_memory        11.74GB    9.14GB     9.14GB     -           -           -           -           -           -           -           -           -           -           9.14GB     
+free_memory        704.33MB   2.61GB     2.61GB     -           -           -           -           -           -           -           -           -           -           2.61GB     
+available_memory   2.21GB     4.73GB     4.73GB     -           -           -           -           -           -           -           -           -           -           4.73GB     
+cached_memory      2.76GB     3.40GB     3.40GB     -           -           -           -           -           -           -           -           -           -           3.40GB     
+buffers_memory     105.39MB   144.28MB   144.28MB   -           -           -           -           -           -           -           -           -           -           144.28MB   
+shared_memory      1.00GB     1.08GB     1.08GB     -           -           -           -           -           -           -           -           -           -           1.08GB
+```
+
+---
+
+### Historical Memory Statistics for Last 100 Minutes
+
+```bash
+admin@sonic:~$ show memory-stats --from '100 minutes ago' --to 'now'
+```
+
+**Sample Output**:
+
+```
+Memory Statistics:
+Codes: M - minutes, H - hours, D - days
+--------------------------------------------------------------------------------
+Report Generated:    2024-12-24 17:24:08
+Analysis Period:     From 2024-12-24 15:44:08 to 2024-12-24 17:24:08
+Interval:            10 Minutes
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Metric             Current    High       Low        M44-M54     M54-M04     M04-M14     M14-M24     M24-M34     M34-M44     M44-M54     M54-M04     M04-M14     M14-M24     M24-M34    
+                   Value      Value      Value      15:44       15:54       16:04       16:14       16:24       16:34       16:44       16:54       17:04       17:14       17:24      
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+total_memory       15.29GB    15.29GB    15.29GB    15.29GB     15.29GB     15.29GB     15.29GB     15.29GB     15.29GB     15.29GB     15.29GB     15.29GB     15.29GB     -          
+used_memory        11.62GB    11.81GB    10.69GB    11.81GB     11.74GB     10.69GB     10.93GB     11.31GB     11.31GB     11.38GB     11.40GB     11.44GB     11.50GB     -          
+free_memory        888.46MB   1.65GB     514.18MB   514.18MB    525.77MB    1.65GB      1.15GB      802.98MB    818.78MB    680.81MB    716.42MB    533.82MB    1.07GB      -          
+available_memory   2.35GB     3.37GB     2.25GB     2.25GB      2.25GB      3.37GB      2.96GB      2.62GB      2.64GB      2.52GB      2.57GB      2.49GB      2.52GB      -          
+cached_memory      2.70GB     3.15GB     2.63GB     2.85GB      2.91GB      2.82GB      3.07GB      3.05GB      3.03GB      3.09GB      3.03GB      3.15GB      2.63GB      -          
+buffers_memory     101.39MB   186.47MB   99.00MB    134.77MB    136.97MB    140.94MB    148.42MB    153.82MB    157.19MB    160.90MB    165.18MB    186.47MB    99.00MB     -          
+shared_memory      1005.79MB  1.07GB     917.46MB   926.08MB    993.94MB    917.46MB    1.07GB      1.01GB      1020.12MB   1.04GB      1001.18MB   1.01GB      961.13MB    -
+```
+
+---
+
+### Historical Memory Statistics for Last 3 Hours
+
+```bash
+admin@sonic:~$ show memory-stats --from '3 hours ago' --to 'now'
+```
+
+**Sample Output**:
+
+```
+Memory Statistics:
+Codes: M - minutes, H - hours, D - days
+--------------------------------------------------------------------------------
+Report Generated:    2024-12-24 17:24:51
+Analysis Period:     From 2024-12-24 14:24:51 to 2024-12-24 17:24:51
+Interval:            1 Hours
+--------------------------------------------------------------------------------------------------
+Metric             Current    High       Low        H14-H15     H15-H16     H16-H17     H17-H18    
+                   Value      Value      Value      14:24       15:24       16:24       17:24      
+--------------------------------------------------------------------------------------------------
+total_memory       15.29GB    15.29GB    15.29GB    15.29GB     15.29GB     15.29GB     -          
+used_memory        11.59GB    11.52GB    11.39GB    11.42GB     11.52GB     11.39GB     -          
+free_memory        928.18MB   826.58MB   774.48MB   780.43MB    826.58MB    774.48MB    -          
+available_memory   2.39GB     2.56GB     2.50GB     2.53GB      2.50GB      2.56GB      -          
+cached_memory      2.70GB     3.00GB     2.83GB     2.89GB      2.83GB      3.00GB      -          
+buffers_memory     101.62MB   153.76MB   132.42MB   149.62MB    132.42MB    153.76MB    -          
+shared_memory      997.97MB   1020.80MB  961.19MB   971.47MB    961.19MB    1020.80MB   -
+```
+
+---
+
+### Historical Memory Statistics for Specific Metric (Used Memory)
+
+```bash
+admin@sonic:~$ show memory-stats --from '100 minutes ago' --to 'now' --select 'used_memory'
+```
+
+**Sample Output**:
+
+```
+Memory Statistics:
+Codes: M - minutes, H - hours, D - days
+--------------------------------------------------------------------------------
+Report Generated:    2024-12-24 17:27:58
+Analysis Period:     From 2024-12-24 15:47:58 to 2024-12-24 17:27:58
+Interval:            10 Minutes
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Metric             Current    High       Low        M47-M57     M57-M07     M07-M17     M17-M27     M27-M37     M37-M47     M47-M57     M57-M07     M07-M17     M17-M27     M27-M37    
+                   Value      Value      Value      15:47       15:57       16:07       16:17       16:27       16:37       16:47       16:57       17:07       17:17       17:27      
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+used_memory        11.69GB    11.79GB    10.55GB    11.79GB     11.35GB     10.55GB     11.24GB     11.30GB     11.33GB     11.40GB     11.39GB     11.46GB     11.62GB     -
+     
+
+```
+
+---
+
+### View Memory Statistics Configuration
+To display the current configuration parameters such as data collection frequency, retention period, and enable/disable status, use the following command:
+
+```bash
+admin@sonic:~$ show memory-stats-config
+```
+**Example:**
+```bash
+admin@sonic:~$ show memory-stats-config
+Memory Statistics Configuration:
+--------------------------------
+Enabled:            false
+Sampling Interval:  5
+Retention Period:   15
 ```

@@ -36,6 +36,7 @@ def get_asic_name():
             spc2_hwskus = asic_mapping["mellanox_asics"]["spc2"]
             spc3_hwskus = asic_mapping["mellanox_asics"]["spc3"]
             spc4_hwskus = asic_mapping["mellanox_asics"]["spc4"]
+            spc5_hwskus = asic_mapping["mellanox_asics"]["spc5"]
             if hwsku.lower() in [spc1_hwsku.lower() for spc1_hwsku in spc1_hwskus]:
                 asic = "spc1"
                 return asic
@@ -47,6 +48,9 @@ def get_asic_name():
                 return asic
             if hwsku.lower() in [spc4_hwsku.lower() for spc4_hwsku in spc4_hwskus]:
                 asic = "spc4"
+                return asic
+            if hwsku.lower() in [spc5_hwsku.lower() for spc5_hwsku in spc5_hwskus]:
+                asic = "spc5"
                 return asic
         if asic_type == 'broadcom' or asic_type == 'vs':
             broadcom_asics = asic_mapping["broadcom_asics"]

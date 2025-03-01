@@ -114,7 +114,9 @@ def ssdhealth(device, verbose, vendor):
         #         }
         #     }
         # }
-        device = platform_data.get("chassis", {}).get("disk", {}).get("device", None)
+        if platform_data:
+            device = platform_data.get("chassis", {}).get("disk", {}).get("device", None)
+
         if not device:
             # Fallback to discovery
             device = os.popen("lsblk -o NAME,TYPE -p | grep disk").readline().strip().split()[0]
