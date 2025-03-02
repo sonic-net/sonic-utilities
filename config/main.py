@@ -8873,7 +8873,7 @@ def add_subinterface(ctx, subinterface_name, vid):
 
         if interface_alias is None:
             ctx.fail("{} invalid subinterface".format(interface_alias))
-        if not isInterfaceNameValid(interface_alias):
+        if not isInterfaceNameValid(subinterface_name):
             ctx.fail("Subinterface name length should not exceed {} characters".format(IFACE_NAME_MAX_LEN))
 
         if interface_alias.startswith("Po") is True:
