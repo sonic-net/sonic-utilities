@@ -2485,7 +2485,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         # Arrange
         expected_exit_code = 0
         expected_output = self.any_checkpoints_list_with_time_as_text
-        expected_call_with_non_default_values = mock.call(False, True)
+        expected_call_with_non_default_values = mock.call(True, True)
         mock_generic_updater = mock.Mock()
         mock_generic_updater.list_checkpoints.return_value = self.any_checkpoints_list_with_time
         with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
@@ -2540,7 +2540,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
     def test_list_checkpoints__optional_parameters_passed_correctly(self):
         self.validate_list_checkpoints_optional_parameter(
             ["--verbose"],
-            mock.call(True, True))
+            mock.call(False, True))
 
     def validate_list_checkpoints_optional_parameter(self, param_args, expected_call):
         # Arrange
