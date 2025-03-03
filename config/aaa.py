@@ -266,7 +266,7 @@ def add(address, timeout, key, auth_type, port, pri, use_mgmt_vrf):
             click.echo('Invalid ip address') # TODO: MISSING CONSTRAINT IN YANG MODEL
             return
 
-    old_data = db.get_table('TACPLUS_SERVER')
+    old_data = config_db.get_table('TACPLUS_SERVER')
     ctx = click.get_current_context()
     if address in old_data:
         ctx.fail(f'server {address} already exists')
@@ -287,7 +287,7 @@ def add(address, timeout, key, auth_type, port, pri, use_mgmt_vrf):
         if use_mgmt_vrf :
             data['vrf'] = "mgmt"
         try:
-            db.set_entry('TACPLUS_SERVER', address, data)
+            config_db.set_entry('TACPLUS_SERVER', address, data)
         except ValueError as e:
             ctx.fail("Invalid ip address. Error: {}".format(e))
 tacacs.add_command(add)
