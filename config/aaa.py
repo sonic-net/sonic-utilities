@@ -259,7 +259,7 @@ default.add_command(passkey)
 @click.option('-o', '--port', help='TCP port range is 1 to 65535, default 49', type=click.IntRange(1, 65535), default=49)
 @click.option('-p', '--pri', help="Priority, default 1", type=click.IntRange(1, 64), default=1)
 @click.option('-m', '--use-mgmt-vrf', help="Management vrf, default is no vrf", is_flag=True)
-def add(address, timeout, key, auth_type, port, pri, use_mgmt_vrf):
+def add(ctx, address, timeout, key, auth_type, port, pri, use_mgmt_vrf):
     """Specify a TACACS+ server"""
     if ADHOC_VALIDATION:
         if not clicommon.is_ipaddress(address):
