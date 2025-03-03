@@ -291,7 +291,7 @@ class TestAaa(object):
         result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["1.1.1.1"], obj=db)
         print(result.exit_code, result.output)
         assert result.exit_code == 0
-        db.cfgdb.mod_entry("TACPLUS_SERVER", "accounting", {'login' : 'tacacs+,local'})
+        db.cfgdb.mod_entry("TACPLUS_SERVER", "1.1.1.1", {'tcp_port': '49', 'priority': '1'}})
         result = runner.invoke(show.cli.commands["aaa"], [], obj=db)
         assert result.exit_code == 0
         print(result.exit_code, result.output)
