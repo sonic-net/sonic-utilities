@@ -5236,7 +5236,7 @@ This command is used to display the list of expected neighbors for all interface
 
 - Usage:
   ```
-  show interfaces neighbor expected [<interface_name>]
+  show interfaces neighbor expected [<interface_name>] -n [<namespace>]
   ```
 
 - Example:
