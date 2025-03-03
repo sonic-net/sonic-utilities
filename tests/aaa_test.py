@@ -283,8 +283,7 @@ class TestAaa(object):
         assert result.exit_code == 0
         assert result.output == show_aaa_disable_accounting_output
 
-    def test_config_aaa_tacacs_exist_server(self, get_cmd_module):
-        (config, show) = get_cmd_module
+    def test_config_aaa_tacacs_exist_server(self):
         runner = CliRunner()
         db = Db()
         db.cfgdb.delete_table("TACPLUS_SERVER")
@@ -292,7 +291,7 @@ class TestAaa(object):
         print(result.exit_code, result.output)
         assert result.exit_code == 0
         db.cfgdb.mod_entry("TACPLUS_SERVER", "1.1.1.1", {'tcp_port': '49', 'priority': '1'}})
-        result = runner.invoke(show.cli.commands["aaa"], [], obj=db)
+        result = runner.invoke(show.cli.commands["tacacs"], [], obj=db)
         assert result.exit_code == 0
         print(result.exit_code, result.output)
         result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["1.1.1.1"], obj=db)
