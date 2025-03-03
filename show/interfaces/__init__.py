@@ -297,16 +297,20 @@ def neighbor():
 # 'expected' subcommand ("show interface neighbor expected")
 @neighbor.command()
 @click.argument('interfacename', required=False)
+@multi_asic_util.multi_asic_click_option_namespace
 @clicommon.pass_db
-def expected(db, interfacename):
+def expected(db, interfacename, namespace):
     """Show expected neighbor information by interfaces"""
 
-    neighbor_dict = db.cfgdb.get_table("DEVICE_NEIGHBOR")
+    if not namespace:
+        namespace = multi_asic_util.constants.DEFAULT_NAMESPACE
+
+    neighbor_dict = db.cfgdb_clients[namespace].get_table("DEVICE_NEIGHBOR")
     if neighbor_dict is None:
         click.echo("DEVICE_NEIGHBOR information is not present.")
         return
 
-    neighbor_metadata_dict = db.cfgdb.get_table("DEVICE_NEIGHBOR_METADATA")
+    neighbor_metadata_dict = db.cfgdb_clients[namespace].get_table("DEVICE_NEIGHBOR_METADATA")
     if neighbor_metadata_dict is None:
         click.echo("DEVICE_NEIGHBOR_METADATA information is not present.")
         return
