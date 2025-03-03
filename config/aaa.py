@@ -190,11 +190,11 @@ def accounting(protocol):
 aaa.add_command(accounting)
 
 @click.group()
-def tacacs(ctx):
+@click.pass_context
+def tacacs():
     """TACACS+ server configuration"""
     config_db = ValidatedConfigDBConnector(ConfigDBConnector())
     config_db.connect()
-    ctx.obj = {'db': config_db}
 
 
 @click.group()
@@ -259,16 +259,13 @@ default.add_command(passkey)
 @click.option('-o', '--port', help='TCP port range is 1 to 65535, default 49', type=click.IntRange(1, 65535), default=49)
 @click.option('-p', '--pri', help="Priority, default 1", type=click.IntRange(1, 64), default=1)
 @click.option('-m', '--use-mgmt-vrf', help="Management vrf, default is no vrf", is_flag=True)
-def add(ctx, address, timeout, key, auth_type, port, pri, use_mgmt_vrf):
+def add(address, timeout, key, auth_type, port, pri, use_mgmt_vrf):
     """Specify a TACACS+ server"""
     if ADHOC_VALIDATION:
         if not clicommon.is_ipaddress(address):
             click.echo('Invalid ip address') # TODO: MISSING CONSTRAINT IN YANG MODEL
             return
 
-    # config_db = ValidatedConfigDBConnector(ConfigDBConnector())
-    # config_db.connect()
-    db = ctx.obj['db']
     old_data = db.get_table('TACPLUS_SERVER')
     ctx = click.get_current_context()
     if address in old_data:
