@@ -118,7 +118,7 @@ authentication.add_command(trace)
 @click.argument('auth_protocol', nargs=-1, type=click.Choice(["ldap", "radius", "tacacs+", "local", "default"]))
 def login(auth_protocol):
     """Switch login authentication [ {ldap, radius, tacacs+, local} | default ]"""
-    if len(auth_protocol) is 0:
+    if len(auth_protocol) == 0:
         click.echo('Argument "auth_protocol" is required')
         return
     elif len(auth_protocol) > 2:
@@ -190,9 +190,11 @@ def accounting(protocol):
 aaa.add_command(accounting)
 
 @click.group()
-def tacacs():
+def tacacs(ctx):
     """TACACS+ server configuration"""
-    pass
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    config_db.connect()
+    ctx.obj = {'db': config_db}
 
 
 @click.group()
@@ -264,9 +266,10 @@ def add(address, timeout, key, auth_type, port, pri, use_mgmt_vrf):
             click.echo('Invalid ip address') # TODO: MISSING CONSTRAINT IN YANG MODEL
             return
 
-    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
-    config_db.connect()
-    old_data = config_db.get_table('TACPLUS_SERVER')
+    # config_db = ValidatedConfigDBConnector(ConfigDBConnector())
+    # config_db.connect()
+    db = ctx.obj['db']
+    old_data = db.get_table('TACPLUS_SERVER')
     ctx = click.get_current_context()
     if address in old_data:
         ctx.fail(f'server {address} already exists')
@@ -287,7 +290,7 @@ def add(address, timeout, key, auth_type, port, pri, use_mgmt_vrf):
         if use_mgmt_vrf :
             data['vrf'] = "mgmt"
         try:
-            config_db.set_entry('TACPLUS_SERVER', address, data)
+            db.set_entry('TACPLUS_SERVER', address, data)
         except ValueError as e:
             ctx.fail("Invalid ip address. Error: {}".format(e))
 tacacs.add_command(add)
