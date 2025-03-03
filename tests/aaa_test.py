@@ -286,17 +286,18 @@ class TestAaa(object):
     def test_config_aaa_tacacs_exist_server(self):
         runner = CliRunner()
         db = Db()
+        obj = {'db':db.cfgdb}
         db.cfgdb.delete_table("TACPLUS_SERVER")
-        result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["1.1.1.1"], obj=db)
+        result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["1.1.1.1"], obj=obj)
         print(result.exit_code, result.output)
         assert result.exit_code == 0
-        result = runner.invoke(show.cli.commands["tacacs"], [], obj=db)
+        result = runner.invoke(show.cli.commands["tacacs"], [], obj=obj)
         print(result.exit_code, result.output)
         db.cfgdb.mod_entry("TACPLUS_SERVER", "1.1.1.1", {'tcp_port': '49', 'priority': '1'})
         result = runner.invoke(show.cli.commands["tacacs"], [], obj=db)
         assert result.exit_code == 0
         print(result.exit_code, result.output)
-        result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["1.1.1.1"], obj=db)
+        result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["1.1.1.1"], obj=obj)
         print(result.exit_code, result.output)
         assert result.exit_code != 0
 
