@@ -283,6 +283,22 @@ class TestAaa(object):
         assert result.exit_code == 0
         assert result.output == show_aaa_disable_accounting_output
 
+    def test_config_aaa_tacacs_exist_server(self, get_cmd_module):
+        (config, show) = get_cmd_module
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.delete_table("TACPLUS_SERVER")
+        result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["1.1.1.1"], obj=db)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        db.cfgdb.mod_entry("TACPLUS_SERVER", "accounting", {'login' : 'tacacs+,local'})
+        result = runner.invoke(show.cli.commands["aaa"], [], obj=db)
+        assert result.exit_code == 0
+        print(result.exit_code, result.output)
+        result = runner.invoke(config.config.commands["tacacs"].commands["add"], ["1.1.1.1"], obj=db)
+        print(result.exit_code, result.output)
+        assert result.exit_code != 0
+
     @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry", mock.Mock(side_effect=JsonPatchConflict))
     def test_config_aaa_tacacs_delete_yang_validation(self):
