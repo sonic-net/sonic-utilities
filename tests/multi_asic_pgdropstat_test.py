@@ -35,10 +35,10 @@ Ingress PG dropped packets:
        0       0
   Ethernet-BP4      0      0      0      0      0      0      0      0      0      0       0       0       0       0\
        0       0
-Ethernet-BP256      0      0      0      0      0      0      0      0      0      0       0       0       0       0\
-       0       0
-Ethernet-BP260      0      0      0      0      0      0      0      0      0      0       0       0       0       0\
-       0       0
+Ethernet-BP256    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A     N/A     N/A     N/A     N/A\
+     N/A     N/A
+Ethernet-BP260    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A     N/A     N/A     N/A     N/A\
+     N/A     N/A
 """
 
 
