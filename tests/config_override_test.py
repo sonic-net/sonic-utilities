@@ -6,6 +6,7 @@ import config.main as config
 
 from click.testing import CliRunner
 from unittest import mock
+from generic_config_updater.gu_common import HOST_NAMESPACE
 from utilities_common.db import Db
 from utilities_common.general import load_module_from_source
 from minigraph import minigraph_encoder
@@ -14,7 +15,6 @@ SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 DATA_DIR = os.path.join(SCRIPT_DIR, "config_override_input")
 EMPTY_INPUT = os.path.join(DATA_DIR, "empty_input.json")
 PARTIAL_CONFIG_OVERRIDE = os.path.join(DATA_DIR, "partial_config_override.json")
-NEW_FEATURE_CONFIG = os.path.join(DATA_DIR, "new_feature_config.json")
 FULL_CONFIG_OVERRIDE = os.path.join(DATA_DIR, "full_config_override.json")
 PORT_CONFIG_OVERRIDE = os.path.join(DATA_DIR, "port_config_override.json")
 EMPTY_TABLE_REMOVAL = os.path.join(DATA_DIR, "empty_table_removal.json")
@@ -120,15 +120,6 @@ class TestConfigOverride(object):
         """Golden Config only modify ACL_TABLE"""
         db = Db()
         with open(PARTIAL_CONFIG_OVERRIDE, "r") as f:
-            read_data = json.load(f)
-        self.check_override_config_table(
-            db, config, read_data['running_config'], read_data['golden_config'],
-            read_data['expected_config'])
-
-    def test_golden_config_db_new_feature(self):
-        """Golden Config append NEW_FEATURE_TABLE"""
-        db = Db()
-        with open(NEW_FEATURE_CONFIG, "r") as f:
             read_data = json.load(f)
         self.check_override_config_table(
             db, config, read_data['running_config'], read_data['golden_config'],
@@ -355,6 +346,9 @@ class TestConfigOverrideMultiasic(object):
             orig_sysinfo[ns] = {}
             orig_sysinfo[ns]['platform'] = platform
             orig_sysinfo[ns]['mac'] = mac
+            if ns != config.DEFAULT_NAMESPACE and ns != HOST_NAMESPACE:
+                asic_id = config_db.get_config()['DEVICE_METADATA']['localhost'].get('asic_id')
+                orig_sysinfo[ns]['asic_id'] = asic_id
 
         with mock.patch('config.main.read_json_file',
                 mock.MagicMock(side_effect=read_json_file_side_effect)):
@@ -368,6 +362,9 @@ class TestConfigOverrideMultiasic(object):
             mac = config_db.get_config()['DEVICE_METADATA']['localhost'].get('mac')
             assert platform == orig_sysinfo[ns]['platform']
             assert mac == orig_sysinfo[ns]['mac']
+            if ns != config.DEFAULT_NAMESPACE and ns != HOST_NAMESPACE:
+                asic_id = config_db.get_config()['DEVICE_METADATA']['localhost'].get('asic_id')
+                assert asic_id == orig_sysinfo[ns]['asic_id']
 
     def test_device_metadata_gen_sysinfo(self):
         def read_json_file_side_effect(filename):
@@ -382,6 +379,8 @@ class TestConfigOverrideMultiasic(object):
             metadata = config_db.get_config()['DEVICE_METADATA']['localhost']
             metadata.pop('platform', None)
             metadata.pop('mac', None)
+            if ns != config.DEFAULT_NAMESPACE and ns != HOST_NAMESPACE:
+                metadata.pop('asic_id', None)
             config_db.set_entry('DEVICE_METADATA', 'localhost', metadata)
 
         with mock.patch('config.main.read_json_file',
@@ -389,7 +388,9 @@ class TestConfigOverrideMultiasic(object):
              mock.patch('sonic_py_common.device_info.get_platform',
                         return_value="multi_asic"),\
              mock.patch('sonic_py_common.device_info.get_system_mac',
-                        return_value="11:22:33:44:55:66\n"):
+                        return_value="11:22:33:44:55:66\n"),\
+             mock.patch('sonic_py_common.multi_asic.get_asic_device_id',
+                        return_value="06:00:00\n"):
             runner = CliRunner()
             result = runner.invoke(config.config.commands["override-config-table"],
                                    ['golden_config_db.json'], obj=db)
@@ -400,6 +401,9 @@ class TestConfigOverrideMultiasic(object):
             mac = config_db.get_config()['DEVICE_METADATA']['localhost'].get('mac')
             assert platform == "multi_asic"
             assert mac == "11:22:33:44:55:66"
+            if ns != config.DEFAULT_NAMESPACE and ns != HOST_NAMESPACE:
+                asic_id = config_db.get_config()['DEVICE_METADATA']['localhost'].get('asic_id')
+                assert asic_id == "06:00:00"
 
     def test_masic_missig_localhost_override(self):
         def read_json_file_side_effect(filename):

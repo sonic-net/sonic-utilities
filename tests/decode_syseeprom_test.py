@@ -1,5 +1,6 @@
 import os
 import sys
+import errno
 from unittest import mock
 
 import pytest
@@ -202,3 +203,12 @@ CRC-32               0xFE        4  0xAC518FB3
         decode_syseeprom.main()
         assert mockNotDbBased.called
         assert not mockDbBased.called
+
+    @mock.patch('os.geteuid', lambda: 0)
+    @mock.patch('sonic_py_common.device_info.get_platform', lambda: 'kvm')
+    @mock.patch.object(sys, 'argv', ["decode-syseeprom"])
+    @mock.patch('decode_syseeprom.read_and_print_eeprom')
+    @mock.patch('decode_syseeprom.read_eeprom_from_db')
+    def test_support_platforms_no_eeprom(self, mockDbBased, mockNotDbBased):
+        ret = decode_syseeprom.main()
+        assert ret == errno.ENODEV

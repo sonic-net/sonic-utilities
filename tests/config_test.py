@@ -27,6 +27,7 @@ from generic_config_updater.generic_updater import ConfigFormat
 
 import config.main as config
 import config.validated_config_db_connector as validated_config_db_connector
+from config.main import config_file_yang_validation
 
 # Add Test, module and script path.
 test_path = os.path.dirname(os.path.abspath(__file__))
@@ -966,6 +967,16 @@ class TestLoadMinigraph(object):
         import config.main
         importlib.reload(config.main)
 
+    def read_json_file_side_effect(self, filename):
+        return {
+            'DEVICE_METADATA': {
+                'localhost': {
+                    'platform': 'x86_64-mlnx_msn2700-r0',
+                    'mac': '00:02:03:04:05:07'
+                }
+            }
+        }
+
     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs', mock.MagicMock(return_value=("dummy_path", None)))
     @mock.patch('config.main.subprocess.check_call')
     def test_load_minigraph(self, mock_check_call, get_cmd_module, setup_single_broadcom_asic):
@@ -1135,12 +1146,9 @@ class TestLoadMinigraph(object):
         def is_file_side_effect(filename):
             return True if 'golden_config' in filename else False
 
-        def read_json_file_side_effect(filename):
-            return {}
-
         with mock.patch("utilities_common.cli.run_command", mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command, \
                 mock.patch('os.path.isfile', mock.MagicMock(side_effect=is_file_side_effect)), \
-                mock.patch('config.main.read_json_file', mock.MagicMock(side_effect=read_json_file_side_effect)):
+                mock.patch('config.main.read_json_file', mock.MagicMock(side_effect=self.read_json_file_side_effect)):
             (config, show) = get_cmd_module
             runner = CliRunner()
             result = runner.invoke(config.config.commands["load_minigraph"], ["--override_config", "--golden_config_path",  "golden_config.json", "-y"])
@@ -1152,17 +1160,31 @@ class TestLoadMinigraph(object):
         def is_file_side_effect(filename):
             return True if 'golden_config' in filename else False
 
-        def read_json_file_side_effect(filename):
-            return {}
-
         with mock.patch("utilities_common.cli.run_command", mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command, \
                 mock.patch('os.path.isfile', mock.MagicMock(side_effect=is_file_side_effect)), \
-                mock.patch('config.main.read_json_file', mock.MagicMock(side_effect=read_json_file_side_effect)):
+                mock.patch('config.main.read_json_file', mock.MagicMock(side_effect=self.read_json_file_side_effect)):
             (config, show) = get_cmd_module
             runner = CliRunner()
             result = runner.invoke(config.config.commands["load_minigraph"], ["--override_config", "-y"])
             assert result.exit_code == 0
             assert "config override-config-table /etc/sonic/golden_config_db.json" in result.output
+
+    @mock.patch(
+            'sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs',
+            mock.MagicMock(return_value=("dummy_path", None)))
+    def test_load_minigraph_with_invalid_golden_config(self, get_cmd_module):
+        def is_file_side_effect(filename):
+            return True if 'golden_config' in filename else False
+
+        with mock.patch("utilities_common.cli.run_command",
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)), \
+                mock.patch('os.path.isfile', mock.MagicMock(side_effect=is_file_side_effect)), \
+                mock.patch('config.main.read_json_file', mock.MagicMock(return_value=[])):
+            (config, show) = get_cmd_module
+            runner = CliRunner()
+            result = runner.invoke(config.config.commands["load_minigraph"], ["--override_config", "-y"])
+            assert result.exit_code != 0
+            assert "Invalid golden config file:" in result.output
 
     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs',
                 mock.MagicMock(return_value=("dummy_path", None)))
@@ -1192,6 +1214,30 @@ class TestLoadMinigraph(object):
             assert result.exit_code != 0
             assert "Authentication with 'tacacs+' is not allowed when passkey not exists." in result.output
 
+    @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs',
+                mock.MagicMock(return_value=("dummy_path", None)))
+    def test_load_minigraph_no_yang_failure(self, get_cmd_module):
+        def is_file_side_effect(filename):
+            return True if 'golden_config' in filename else False
+
+        def read_json_file_side_effect(filename):
+            return {
+                "NEW_FEATURE": {
+                    "global": {
+                        "state": "enable"
+                    }
+                }
+            }
+
+        with mock.patch("utilities_common.cli.run_command", mock.MagicMock(side_effect=mock_run_command_side_effect)), \
+                mock.patch('os.path.isfile', mock.MagicMock(side_effect=is_file_side_effect)), \
+                mock.patch('config.main.read_json_file', mock.MagicMock(side_effect=read_json_file_side_effect)):
+            (config, _) = get_cmd_module
+            runner = CliRunner()
+            result = runner.invoke(config.config.commands["load_minigraph"], ["--override_config", "-y"])
+            assert result.exit_code != 0
+            assert "Config tables are missing yang models: dict_keys(['NEW_FEATURE'])" in result.output
+
     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs', mock.MagicMock(return_value=("dummy_path", None)))
     def test_load_minigraph_with_traffic_shift_away(self, get_cmd_module):
         with mock.patch("utilities_common.cli.run_command", mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command:
@@ -1210,11 +1256,9 @@ class TestLoadMinigraph(object):
             def is_file_side_effect(filename):
                 return True if 'golden_config' in filename else False
 
-            def read_json_file_side_effect(filename):
-                return {}
-
             with mock.patch('os.path.isfile', mock.MagicMock(side_effect=is_file_side_effect)), \
-                    mock.patch('config.main.read_json_file', mock.MagicMock(side_effect=read_json_file_side_effect)):
+                    mock.patch('config.main.read_json_file', mock.MagicMock(
+                        side_effect=self.read_json_file_side_effect)):
                 (config, show) = get_cmd_module
                 db = Db()
                 golden_config = {}
@@ -1226,6 +1270,42 @@ class TestLoadMinigraph(object):
                 assert result.exit_code == 0
                 assert "TSA" in result.output
                 assert "[WARNING] Golden configuration may override Traffic-shift-away state" in result.output
+
+    def test_config_file_yang_validation(self):
+        # Test with empty config
+        with mock.patch('config.main.read_json_file', return_value="") as mock_read_json_file:
+            with mock.patch('config.main.sonic_yang.SonicYang.loadYangModel') as mock_load_yang_model:
+                assert not config_file_yang_validation('dummy_file.json')
+                mock_read_json_file.assert_called_once_with('dummy_file.json')
+                mock_load_yang_model.assert_not_called()
+
+        # Test with non-dict config
+        with mock.patch('config.main.read_json_file', return_value=[]) as mock_read_json_file:
+            with mock.patch('config.main.sonic_yang.SonicYang.loadYangModel') as mock_load_yang_model:
+                assert not config_file_yang_validation('dummy_file.json')
+                mock_read_json_file.assert_called_once_with('dummy_file.json')
+                mock_load_yang_model.assert_not_called()
+
+        # Test with valid config
+        valid_config = {
+                'DEVICE_METADATA': {
+                    'localhost': {
+                        'platform': 'x86_64-mlnx_msn2700-r0',
+                        'mac': '00:02:03:04:05:07'
+                    }
+                }
+            }
+
+        with mock.patch('config.main.read_json_file', return_value=valid_config) as mock_read_json_file, \
+                mock.patch('config.main.multi_asic.is_multi_asic', return_value=False), \
+                mock.patch('config.main.sonic_yang.SonicYang.loadYangModel') as mock_load_yang_model, \
+                mock.patch('config.main.sonic_yang.SonicYang.loadData') as mock_load_data, \
+                mock.patch('config.main.sonic_yang.SonicYang.validate_data_tree') as mock_validate_data_tree:
+            assert config_file_yang_validation('dummy_file.json')
+            mock_read_json_file.assert_called_once_with('dummy_file.json')
+            mock_load_yang_model.assert_called_once()
+            mock_load_data.assert_called_once_with(configdbJson=valid_config)
+            mock_validate_data_tree.assert_called_once()
 
     @classmethod
     def teardown_class(cls):
@@ -1601,11 +1681,59 @@ class TestConfigQos(object):
             empty = _wait_until_clear(["BUFFER_POOL_TABLE:*"], 0.5,2)
         assert not empty
 
+    @patch('click.echo')
+    @patch('swsscommon.swsscommon.SonicV2Connector.keys')
+    def test_qos_wait_until_clear_no_timeout(self, mock_keys, mock_echo):
+        from config.main import _wait_until_clear
+        assert _wait_until_clear(["BUFFER_POOL_TABLE:*"], 0.5, 0)
+        mock_keys.assert_not_called()
+        mock_echo.assert_not_called()
+
     @mock.patch('config.main._wait_until_clear')
     def test_qos_clear_no_wait(self, _wait_until_clear):
         from config.main import _clear_qos
         _clear_qos(True, False)
         _wait_until_clear.assert_called_with(['BUFFER_*_TABLE:*', 'BUFFER_*_SET'], interval=0.5, timeout=0, verbose=False)
+
+    @mock.patch('config.main._wait_until_clear')
+    def test_clear_qos_without_delay(self, mock_wait_until_clear):
+        from config.main import _clear_qos
+
+        status = _clear_qos(False, False)
+        mock_wait_until_clear.assert_not_called()
+        assert status is True
+
+    @mock.patch('config.main._wait_until_clear')
+    def test_clear_qos_with_delay_returns_true(self, mock_wait_until_clear):
+        from config.main import _clear_qos
+        mock_wait_until_clear.return_value = True
+
+        status = _clear_qos(True, False)
+        mock_wait_until_clear.assert_called_once()
+        assert status is True
+
+    @mock.patch('config.main._wait_until_clear')
+    def test_clear_qos_with_delay_returns_false(self, mock_wait_until_clear):
+        from config.main import _clear_qos
+        mock_wait_until_clear.return_value = False
+
+        status = _clear_qos(True, False)
+        mock_wait_until_clear.assert_called_once()
+        assert status is False
+
+    @patch('config.main._wait_until_clear')
+    def test_qos_reload_not_empty_should_exit(self, mock_wait_until_clear):
+        mock_wait_until_clear.return_value = False
+        runner = CliRunner()
+        output_file = os.path.join(os.sep, "tmp", "qos_config_output.json")
+        print("Saving output in {}".format(output_file))
+        result = runner.invoke(
+            config.config.commands["qos"], ["reload"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        # Expect sys.exit(1) when _wait_until_clear returns False
+        assert result.exit_code == 1
 
     def test_qos_reload_single(
             self, get_cmd_module, setup_qos_mock_apis,
@@ -3235,6 +3363,94 @@ class TestConfigDropcounters(object):
     def teardown(self):
         print("TEARDOWN")
 
+
+class TestConfigDropcountersMasic(object):
+    def setup(self):
+        print("SETUP")
+        os.environ['UTILITIES_UNIT_TESTING'] = "1"
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
+        import config.main
+        importlib.reload(config.main)
+        # change to multi asic config
+        from .mock_tables import dbconnector
+        from .mock_tables import mock_multi_asic
+        importlib.reload(mock_multi_asic)
+        dbconnector.load_namespace_config()
+
+    @patch('utilities_common.cli.run_command')
+    def test_install_multi_asic(self, mock_run_command):
+        counter_name = 'DEBUG_2'
+        counter_type = 'PORT_INGRESS_DROPS'
+        reasons = '[EXCEEDS_L2_MTU,DECAP_ERROR]'
+        alias = 'BAD_DROPS'
+        group = 'BAD'
+        desc = 'more port ingress drops'
+        namespace = 'asic0'
+
+        runner = CliRunner()
+        result = runner.invoke(config.config.commands['dropcounters'].commands['install'],
+                               [counter_name, counter_type, reasons, '-d', desc, '-g', group, '-a',
+                               alias, '-n', namespace])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(['dropconfig', '-c', 'install', '-n', str(counter_name),
+                                                  '-t', str(counter_type), '-r', str(reasons), '-a', str(alias),
+                                                  '-g', str(group), '-d', str(desc),
+                                                  '-ns', str(namespace)], display_cmd=False)
+
+    @patch('utilities_common.cli.run_command')
+    def test_delete_multi_asic(self, mock_run_command):
+        counter_name = 'DEBUG_2'
+        namespace = 'asic0'
+        runner = CliRunner()
+        result = runner.invoke(config.config.commands['dropcounters'].commands['delete'],
+                               [counter_name, '-v', '-n', namespace])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(['dropconfig', '-c', 'uninstall', '-n',
+                                                 str(counter_name), '-ns', namespace], display_cmd=True)
+
+    @patch('utilities_common.cli.run_command')
+    def test_add_reasons_multi_asic(self, mock_run_command):
+        counter_name = 'DEBUG_2'
+        reasons = '[EXCEEDS_L2_MTU,DECAP_ERROR]'
+        namespace = 'asic0'
+        runner = CliRunner()
+        result = runner.invoke(config.config.commands['dropcounters'].commands['add-reasons'],
+                               [counter_name, reasons, '-v', '-n', namespace])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(['dropconfig', '-c', 'add', '-n',
+                                                 str(counter_name), '-r', str(reasons), '-ns', namespace],
+                                                 display_cmd=True)
+
+    @patch('utilities_common.cli.run_command')
+    def test_remove_reasons_multi_asic(self, mock_run_command):
+        counter_name = 'DEBUG_2'
+        reasons = '[EXCEEDS_L2_MTU,DECAP_ERROR]'
+        namespace = 'asic0'
+        runner = CliRunner()
+        result = runner.invoke(config.config.commands['dropcounters'].commands['remove-reasons'],
+                               [counter_name, reasons, '-v', '-n', namespace])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(['dropconfig', '-c', 'remove', '-n', str(counter_name),
+                                                 '-r', str(reasons), '-ns', namespace], display_cmd=True)
+
+    @classmethod
+    def teardown_class(cls):
+        print("TEARDOWN")
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
+        # change back to single asic config
+        from .mock_tables import dbconnector
+        from .mock_tables import mock_single_asic
+        importlib.reload(mock_single_asic)
+        dbconnector.load_namespace_config()
 
 class TestConfigWatermarkTelemetry(object):
     def setup(self):

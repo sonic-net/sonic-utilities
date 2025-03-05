@@ -774,6 +774,37 @@ def counters(interfacename, namespace, display, verbose, json, voq, nonzero):
 
     run_command(cmd, display_cmd=verbose)
 
+
+# 'wredcounters' subcommand ("show queue wredcounters")
+@queue.command()
+@click.argument('interfacename', required=False)
+@multi_asic_util.multi_asic_click_options
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+@click.option('--json', is_flag=True, help="JSON output")
+@click.option('--voq', is_flag=True, help="VOQ counters")
+def wredcounters(interfacename, namespace, display, verbose, json, voq):
+    """Show queue wredcounters"""
+
+    cmd = ["wredstat"]
+
+    if interfacename is not None:
+        if clicommon.get_interface_naming_mode() == "alias":
+            interfacename = iface_alias_converter.alias_to_name(interfacename)
+
+    if interfacename is not None:
+        cmd += ['-p', str(interfacename)]
+
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
+
+    if json:
+        cmd += ["-j"]
+
+    if voq:
+        cmd += ["-V"]
+
+    run_command(cmd, display_cmd=verbose)
+
 #
 # 'watermarks' subgroup ("show queue watermarks ...")
 #

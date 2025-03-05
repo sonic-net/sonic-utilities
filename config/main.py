@@ -778,6 +778,8 @@ def storm_control_delete_entry(port_name, storm_type):
 
 
 def _wait_until_clear(tables, interval=0.5, timeout=30, verbose=False):
+    if timeout == 0:
+        return True
     start = time.time()
     empty = False
     app_db = SonicV2Connector(host='127.0.0.1')
@@ -793,12 +795,14 @@ def _wait_until_clear(tables, interval=0.5, timeout=30, verbose=False):
                     click.echo("Some entries matching {} still exist: {}".format(table, keys[0]))
                 time.sleep(interval)
         empty = (non_empty_table_count == 0)
+
     if not empty:
         click.echo("Operation not completed successfully, please save and reload configuration.")
     return empty
 
 
 def _clear_qos(delay=False, verbose=False):
+    status = True
     QOS_TABLE_NAMES = [
             'PORT_QOS_MAP',
             'QUEUE',
@@ -838,7 +842,8 @@ def _clear_qos(delay=False, verbose=False):
         device_metadata = config_db.get_entry('DEVICE_METADATA', 'localhost')
         # Traditional buffer manager do not remove buffer tables in any case, no need to wait.
         timeout = 120 if device_metadata and device_metadata.get('buffer_model') == 'dynamic' else 0
-        _wait_until_clear(["BUFFER_*_TABLE:*", "BUFFER_*_SET"], interval=0.5, timeout=timeout, verbose=verbose)
+        status = _wait_until_clear(["BUFFER_*_TABLE:*", "BUFFER_*_SET"], interval=0.5, timeout=timeout, verbose=verbose)
+    return status
 
 def _get_sonic_generated_services(num_asic):
     if not os.path.isfile(SONIC_GENERATED_SERVICE_PATH):
@@ -1322,6 +1327,18 @@ def flush_configdb(namespace=DEFAULT_NAMESPACE):
     return client, config_db
 
 
+def delete_transceiver_tables():
+    tables = ["TRANSCEIVER_INFO", "TRANSCEIVER_STATUS", "TRANSCEIVER_PM",
+              "TRANSCEIVER_FIRMWARE_INFO", "TRANSCEIVER_DOM_SENSOR", "TRANSCEIVER_DOM_THRESHOLD"]
+    state_db_del_pattern = "|*"
+
+    # delete TRANSCEIVER tables from State DB
+    state_db = SonicV2Connector(use_unix_socket_path=True)
+    state_db.connect(state_db.STATE_DB, False)
+    for table in tables:
+        state_db.delete_all_by_pattern(state_db.STATE_DB, table + state_db_del_pattern)
+
+
 def migrate_db_to_lastest(namespace=DEFAULT_NAMESPACE):
     # Migrate DB contents to latest version
     db_migrator = '/usr/local/bin/db_migrator.py'
@@ -1374,16 +1391,34 @@ def multiasic_write_to_db(filename, load_sysinfo):
 
 
 def config_file_yang_validation(filename):
-    config_to_check = read_json_file(filename)
+    config = read_json_file(filename)
+
+    # Check if the config is not a dictionary
+    if not isinstance(config, dict):
+        return False
+
     sy = sonic_yang.SonicYang(YANG_DIR)
     sy.loadYangModel()
-    try:
-        sy.loadData(configdbJson=config_to_check)
-        sy.validate_data_tree()
-    except sonic_yang.SonicYangException as e:
-        click.secho("{} fails YANG validation! Error: {}".format(filename, str(e)),
-                    fg='magenta')
-        raise click.Abort()
+    asic_list = [HOST_NAMESPACE]
+    if multi_asic.is_multi_asic():
+        asic_list.extend(multi_asic.get_namespace_list())
+    for scope in asic_list:
+        config_to_check = config.get(scope) if multi_asic.is_multi_asic() else config
+        if config_to_check:
+            try:
+                sy.loadData(configdbJson=config_to_check)
+                sy.validate_data_tree()
+            except sonic_yang.SonicYangException as e:
+                click.secho("{} fails YANG validation! Error: {}".format(filename, str(e)),
+                            fg='magenta')
+                raise click.Abort()
+
+        sy.tablesWithOutYang.pop('bgpraw', None)
+        if len(sy.tablesWithOutYang):
+            click.secho("Config tables are missing yang models: {}".format(str(sy.tablesWithOutYang.keys())),
+                        fg='magenta')
+            raise click.Abort()
+    return True
 
 
 # This is our main entrypoint - the main 'config' command
@@ -1901,6 +1936,7 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
                 cfg_hwsku = output.strip()
 
             client, config_db = flush_configdb(namespace)
+            delete_transceiver_tables()
 
             if load_sysinfo:
                 if namespace is DEFAULT_NAMESPACE:
@@ -2019,23 +2055,25 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
                         fg='magenta')
             raise click.Abort()
 
+        if not config_file_yang_validation(golden_config_path):
+            click.secho("Invalid golden config file:'{}'!".format(golden_config_path),
+                        fg='magenta')
+            raise click.Abort()
+
         config_to_check = read_json_file(golden_config_path)
-        if multi_asic.is_multi_asic():
-            # Multiasic has not 100% fully validated. Thus pass here.
-            pass
-        else:
-            config_file_yang_validation(golden_config_path)
-
         # Dependency check golden config json
+        asic_list = [HOST_NAMESPACE]
         if multi_asic.is_multi_asic():
-            host_config = config_to_check.get('localhost', {})
-        else:
-            host_config = config_to_check
-        table_hard_dependency_check(host_config)
+            asic_list.extend(multi_asic.get_namespace_list())
+        for scope in asic_list:
+            host_config = config_to_check.get(scope) if multi_asic.is_multi_asic() else config_to_check
+            if host_config:
+                table_hard_dependency_check(host_config)
 
-    #Stop services before config push
+    # Stop services before config push
     if not no_service_restart:
         log.log_notice("'load_minigraph' stopping services...")
+        delete_transceiver_tables()
         _stop_services()
 
     # For Single Asic platform the namespace list has the empty string
@@ -2184,12 +2222,16 @@ def generate_sysinfo(cur_config, config_input, ns=None):
 
     mac = None
     platform = None
+    asic_id = None
     cur_device_metadata = cur_config.get('DEVICE_METADATA')
 
-    # Reuse current config's mac and platform. Generate if absent
+    # Reuse the existing configuration's MAC address, platform, and asic_id
+    # if available; generate these values only if they are missing.
     if cur_device_metadata is not None:
         mac = cur_device_metadata.get('localhost', {}).get('mac')
         platform = cur_device_metadata.get('localhost', {}).get('platform')
+        if ns != DEFAULT_NAMESPACE and ns != HOST_NAMESPACE:
+            asic_id = cur_device_metadata.get('localhost', {}).get('asic_id')
 
     if not mac:
         if ns:
@@ -2207,8 +2249,14 @@ def generate_sysinfo(cur_config, config_input, ns=None):
     if not platform:
         platform = device_info.get_platform()
 
+    if not asic_id and ns != DEFAULT_NAMESPACE and ns != HOST_NAMESPACE:
+        asic_name = multi_asic.get_asic_id_from_name(ns)
+        asic_id = multi_asic.get_asic_device_id(asic_name)
+
     device_metadata['localhost']['mac'] = mac.rstrip('\n')
     device_metadata['localhost']['platform'] = platform.rstrip('\n')
+    if ns != DEFAULT_NAMESPACE and ns != HOST_NAMESPACE:
+        device_metadata['localhost']['asic_id'] = asic_id.rstrip('\n')
 
     return
 
@@ -3161,6 +3209,7 @@ def _update_buffer_calculation_model(config_db, model):
     help="Dry run, writes config to the given file"
 )
 def reload(ctx, no_dynamic_buffer, no_delay, dry_run, json_data, ports, verbose):
+    status = True
     """Reload QoS configuration"""
     if ports:
         log.log_info("'qos reload --ports {}' executing...".format(ports))
@@ -3169,7 +3218,7 @@ def reload(ctx, no_dynamic_buffer, no_delay, dry_run, json_data, ports, verbose)
 
     log.log_info("'qos reload' executing...")
     if not dry_run:
-        _clear_qos(delay = not no_delay, verbose=verbose)
+        status = _clear_qos(delay=not no_delay, verbose=verbose)
 
     _, hwsku_path = device_info.get_paths_to_platform_and_hwsku_dirs()
     sonic_version_file = device_info.get_sonic_version_file()
@@ -3251,6 +3300,9 @@ def reload(ctx, no_dynamic_buffer, no_delay, dry_run, json_data, ports, verbose)
 
     if buffer_model_updated:
         print("Buffer calculation model updated, restarting swss is required to take effect")
+
+    if not status:
+        sys.exit(1)
 
 def _qos_update_ports(ctx, ports, dry_run, json_data):
     """Reload QoS configuration"""
@@ -5217,6 +5269,105 @@ def loopback_action(ctx, interface_name, action):
 
     table_name = get_interface_table_name(interface_name)
     config_db.mod_entry(table_name, interface_name, {"loopback_action": action})
+
+#
+# 'dhcp-mitigation-rate' subgroup ('config interface dhcp-mitigation-rate ...')
+#
+
+
+@interface.group(cls=clicommon.AbbreviationGroup, name='dhcp-mitigation-rate')
+@click.pass_context
+def dhcp_mitigation_rate(ctx):
+    """Set interface DHCP rate limit attribute"""
+    pass
+
+#
+# 'add' subcommand
+#
+
+
+@dhcp_mitigation_rate.command(name='add')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('packet_rate', metavar='<DHCP packet rate>', required=True, type=int)
+@click.pass_context
+@clicommon.pass_db
+def add_dhcp_mitigation_rate(db, ctx, interface_name, packet_rate):
+    """Add a new DHCP mitigation rate on an interface"""
+    # Get the config_db connector
+    config_db = ValidatedConfigDBConnector(db.cfgdb)
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+
+    if clicommon.is_valid_port(config_db, interface_name):
+        pass
+    elif clicommon.is_valid_portchannel(config_db, interface_name):
+        ctx.fail("{} is a PortChannel!".format(interface_name))
+    else:
+        ctx.fail("{} does not exist".format(interface_name))
+
+    if packet_rate <= 0:
+        ctx.fail("DHCP rate limit is not valid. \nIt must be greater than 0.")
+
+    port_data = config_db.get_entry('PORT', interface_name)
+
+    if 'dhcp_rate_limit' in port_data:
+        rate = port_data["dhcp_rate_limit"]
+    else:
+        rate = '0'
+
+    if rate != '0':
+        ctx.fail("{} has DHCP rate limit configured. \nRemove it to add new DHCP rate limit.".format(interface_name))
+
+    try:
+        config_db.mod_entry('PORT', interface_name, {"dhcp_rate_limit": "{}".format(str(packet_rate))})
+    except ValueError as e:
+        ctx.fail("{} invalid or does not exist. Error: {}".format(interface_name, e))
+
+#
+# 'del' subcommand
+#
+
+
+@dhcp_mitigation_rate.command(name='del')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('packet_rate', metavar='<DHCP packet rate>', required=True, type=int)
+@click.pass_context
+@clicommon.pass_db
+def del_dhcp_mitigation_rate(db, ctx, interface_name, packet_rate):
+    """Delete an existing DHCP mitigation rate on an interface"""
+    # Get the config_db connector
+    config_db = ValidatedConfigDBConnector(db.cfgdb)
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+
+    if clicommon.is_valid_port(config_db, interface_name):
+        pass
+    elif clicommon.is_valid_portchannel(config_db, interface_name):
+        ctx.fail("{} is a PortChannel!".format(interface_name))
+    else:
+        ctx.fail("{} does not exist".format(interface_name))
+
+    if packet_rate <= 0:
+        ctx.fail("DHCP rate limit is not valid. \nIt must be greater than 0.")
+
+    port_data = config_db.get_entry('PORT', interface_name)
+
+    if 'dhcp_rate_limit' in port_data:
+        rate = port_data["dhcp_rate_limit"]
+    else:
+        rate = '0'
+
+    if rate != str(packet_rate):
+        ctx.fail("{} DHCP rate limit does not exist on {}.".format(packet_rate, interface_name))
+
+    port_data["dhcp_rate_limit"] = "0"
+
+    try:
+        config_db.mod_entry('PORT', interface_name, {"dhcp_rate_limit": "0"})
+    except ValueError as e:
+        ctx.fail("{} invalid or does not exist. Error: {}".format(interface_name, e))
 
 #
 # buffer commands and utilities
@@ -7341,7 +7492,15 @@ def dropcounters():
 @click.option("-g", "--group", type=str, help="Group for this counter")
 @click.option("-d", "--desc",  type=str, help="Description for this counter")
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
-def install(counter_name, alias, group, counter_type, desc, reasons, verbose):
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def install(counter_name, alias, group, counter_type, desc, reasons, verbose, namespace):
     """Install a new drop counter"""
     command = ['dropconfig', '-c', 'install', '-n', str(counter_name), '-t', str(counter_type), '-r', str(reasons)]
     if alias:
@@ -7350,6 +7509,8 @@ def install(counter_name, alias, group, counter_type, desc, reasons, verbose):
         command += ['-g', str(group)]
     if desc:
         command += ['-d', str(desc)]
+    if namespace:
+        command += ['-ns', str(namespace)]
 
     clicommon.run_command(command, display_cmd=verbose)
 
@@ -7360,9 +7521,19 @@ def install(counter_name, alias, group, counter_type, desc, reasons, verbose):
 @dropcounters.command()
 @click.argument("counter_name", type=str, required=True)
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
-def delete(counter_name, verbose):
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def delete(counter_name, verbose, namespace):
     """Delete an existing drop counter"""
     command = ['dropconfig', '-c', 'uninstall', '-n', str(counter_name)]
+    if namespace:
+        command += ['-ns', str(namespace)]
     clicommon.run_command(command, display_cmd=verbose)
 
 
@@ -7373,9 +7544,19 @@ def delete(counter_name, verbose):
 @click.argument("counter_name", type=str, required=True)
 @click.argument("reasons",      type=str, required=True)
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
-def add_reasons(counter_name, reasons, verbose):
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def add_reasons(counter_name, reasons, verbose, namespace):
     """Add reasons to an existing drop counter"""
     command = ['dropconfig', '-c', 'add', '-n', str(counter_name), '-r', str(reasons)]
+    if namespace:
+        command += ['-ns', str(namespace)]
     clicommon.run_command(command, display_cmd=verbose)
 
 
@@ -7386,9 +7567,19 @@ def add_reasons(counter_name, reasons, verbose):
 @click.argument("counter_name", type=str, required=True)
 @click.argument("reasons",      type=str, required=True)
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
-def remove_reasons(counter_name, reasons, verbose):
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def remove_reasons(counter_name, reasons, verbose, namespace):
     """Remove reasons from an existing drop counter"""
     command = ['dropconfig', '-c', 'remove', '-n', str(counter_name), '-r', str(reasons)]
+    if namespace:
+        command += ['-ns', str(namespace)]
     clicommon.run_command(command, display_cmd=verbose)
 
 
@@ -8689,7 +8880,7 @@ def add_subinterface(ctx, subinterface_name, vid):
 
         if interface_alias is None:
             ctx.fail("{} invalid subinterface".format(interface_alias))
-        if not isInterfaceNameValid(interface_alias):
+        if not isInterfaceNameValid(subinterface_name):
             ctx.fail("Subinterface name length should not exceed {} characters".format(IFACE_NAME_MAX_LEN))
 
         if interface_alias.startswith("Po") is True:

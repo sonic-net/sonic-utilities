@@ -1,9 +1,10 @@
 import sys
 import os
+import json
+from unittest import mock
 
 import click
 from click.testing import CliRunner
-
 from .mock_tables import dbconnector
 
 test_path = os.path.dirname(os.path.abspath(__file__))
@@ -63,11 +64,15 @@ class MockerChassis(object):
 import show.main as show
 
 class TestHealth(object):
+    original_cli = None
+
     @classmethod
     def setup_class(cls):
         print("SETUP")
         os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "1"
+        global original_cli
+        original_cli = show.cli
 
     def test_health_summary(self):
         runner = CliRunner()
@@ -343,9 +348,92 @@ pmon            OK                OK                  -              -
 swss            OK                OK                  -              -
 """
 
+    def test_health_dpu(self):
+        # Mock is_smartswitch to return True
+        with mock.patch("sonic_py_common.device_info.is_smartswitch", return_value=True):
+
+            # Check if 'dpu' command is available under system-health
+            available_commands = show.cli.commands["system-health"].commands
+            assert "dpu" in available_commands, f"'dpu' command not found: {available_commands}"
+
+            conn = dbconnector.SonicV2Connector()
+            conn.connect(conn.CHASSIS_STATE_DB)
+            conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "id", "0")
+            conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "dpu_midplane_link_reason", "OK")
+            conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "dpu_midplane_link_state", "UP")
+            conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "dpu_data_plane_time", "20240607 15:08:51")
+            conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "dpu_control_plane_time", "20240608 09:11:13")
+            conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "dpu_data_plane_state", "UP")
+            conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "dpu_control_plane_reason", "Uplink is UP")
+            conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "dpu_control_plane_state", "UP")
+            conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "dpu_data_plane_reason", "Polaris is UP")
+            conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "dpu_midplane_link_time", "20240608 09:11:13")
+
+            with mock.patch("show.system_health.SonicV2Connector", return_value=conn):
+                runner = CliRunner()
+                result = runner.invoke(show.cli.commands["system-health"].commands["dpu"], ["DPU0"])
+
+                # Assert the output and exit code
+                assert result.exit_code == 0, f"Expected exit code 0, got {result.exit_code}. Output: {result.output}"
+                assert "DPU0" in result.output, f"Expected 'DPU0' in output, got: {result.output}"
+
+                # check -h option
+                result = runner.invoke(show.cli.commands["system-health"].commands["dpu"], ["-h"])
+                print(result.output)
+
+    def test_health_dpu_non_smartswitch(self):
+        # Mock is_smartswitch to return True
+        with mock.patch("sonic_py_common.device_info.is_smartswitch", return_value=False):
+
+            # Check if 'dpu' command is available under system-health
+            available_commands = show.cli.commands["system-health"].commands
+            assert "dpu" in available_commands, f"'dpu' command not found: {available_commands}"
+
+            conn = dbconnector.SonicV2Connector()
+            conn.connect(conn.CHASSIS_STATE_DB)
+            conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "id", "0")
+            conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "dpu_midplane_link_reason", "OK")
+            conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "dpu_midplane_link_state", "UP")
+            conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "dpu_data_plane_time", "20240607 15:08:51")
+            conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "dpu_control_plane_time", "20240608 09:11:13")
+            conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "dpu_data_plane_state", "UP")
+            conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "dpu_control_plane_reason", "Uplink is UP")
+            conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "dpu_control_plane_state", "UP")
+            conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "dpu_data_plane_reason", "Polaris is UP")
+            conn.set(conn.CHASSIS_STATE_DB, 'DPU_STATE|DPU0', "dpu_midplane_link_time", "20240608 09:11:13")
+
+            with mock.patch("show.system_health.SonicV2Connector", return_value=conn):
+                runner = CliRunner()
+                result = runner.invoke(show.cli.commands["system-health"].commands["dpu"], ["DPU0"])
+
+                # Assert the output and exit code
+                assert result.exit_code == 0, f"Expected exit code 0, got {result.exit_code}. Output: {result.output}"
+                assert "DPU0" not in result.output, f"Output contained DPU0: {result.output}"
+
+    # Test 'get_all_dpu_options' function
+    def test_get_all_dpu_options(self):
+        # Mock is_smartswitch to return True
+        with mock.patch("sonic_py_common.device_info.is_smartswitch", return_value=True):
+
+            # Mock platform info to simulate a valid platform returned from get_platform_info
+            mock_platform_info = {'platform': 'mock_platform'}
+            with mock.patch("sonic_py_common.device_info.get_platform_info", return_value=mock_platform_info):
+
+                # Mock open to simulate reading a platform.json file
+                mock_platform_data = '{"DPUS": {"dpu0": {}, "dpu1": {}}}'
+                with mock.patch("builtins.open", mock.mock_open(read_data=mock_platform_data)):
+
+                    # Mock json.load to return parsed JSON content from the mocked file
+                    with mock.patch("json.load", return_value=json.loads(mock_platform_data)):
+
+                        # Import the actual get_all_dpu_options function and invoke it
+                        from show.system_health import get_all_dpu_options
+                        dpu_list = get_all_dpu_options()
+                        print(dpu_list)
+
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
         os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
-
+        show.cli = original_cli
