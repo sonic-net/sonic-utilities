@@ -1108,4 +1108,40 @@ TEST_DATA = {
             },
         },
     },
+    "24": {
+        DESCR: "IPv4 mapped IPv6 address route check",
+        MULTI_ASIC: False,
+        NAMESPACE: [''],
+        ARGS: "route_check",
+        PRE: {
+            DEFAULTNS: {
+                CONFIG_DB: {
+                    DEVICE_METADATA: {
+                        LOCALHOST: {"subtype": "DualToR"}
+                    },
+                    FEATURE_TABLE: {
+                        "bgp": {
+                            "state": "enabled"
+                        }
+                    }
+                },
+                APPL_DB: {
+                    ROUTE_TABLE: {
+                        "::ffff:10.27.189.16/127": {"ifname": "Ethernet0"},
+                        "::ffff:10.27.189.17": {"ifname": "Ethernet0"}
+                    },
+                    INTF_TABLE: {
+                        "Ethernet0:::ffff:a1b:bd11/127": {},
+                        "Ethernet0": {}
+                    }
+                },
+                ASIC_DB: {
+                    RT_ENTRY_TABLE: {
+                        RT_ENTRY_KEY_PREFIX + "::ffff:10.27.189.17/128" + RT_ENTRY_KEY_SUFFIX: {},
+                        RT_ENTRY_KEY_PREFIX + "::ffff:10.27.189.16/127" + RT_ENTRY_KEY_SUFFIX: {}
+                    }
+                }
+            }
+        }
+    },
 }
