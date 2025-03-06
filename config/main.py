@@ -8205,7 +8205,7 @@ def ntp(ctx):
     """NTP server configuration tasks"""
     # This is checking to see if ctx.obj is a dictionary, to differentiate it
     # between unit test scenario and runtime scenario.
-    if isinstance(ctx.obj, dict):
+    if not isinstance(ctx.obj, dict):
         config_db = ConfigDBConnector()
         config_db.connect()
         ctx.obj = {'db': config_db}
