@@ -379,7 +379,7 @@ class PfcwdCli(object):
         external_ports = list(self.config_db.get_table('DEVICE_NEIGHBOR').keys())
         bp_ports = get_bp_ports(self.config_db)
 
-        active_ports = natsorted(list(set(external_ports + bp_ports)))
+        active_ports = natsorted(set(external_ports + bp_ports))
 
         if not enable or enable.lower() != "enable":
             return
