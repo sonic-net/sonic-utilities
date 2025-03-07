@@ -130,9 +130,8 @@ class ConfigWrapper:
         sy = self.create_sonic_yang_with_loaded_models()
 
         try:
+            # Loading data automatically does full validation
             sy.loadData(config_db_as_json)
-
-            sy.validate_data_tree()
             return True, None
         except sonic_yang.SonicYangException as ex:
             return False, ex
@@ -145,10 +144,8 @@ class ConfigWrapper:
                                         self.validate_lanes]
 
         try:
+            # Loading data automatically does full validation
             sy.loadData(config_db_as_json)
-
-            sy.validate_data_tree()
-
             for supplemental_yang_validator in supplemental_yang_validators:
                 success, error = supplemental_yang_validator(config_db_as_json)
                 if not success:
