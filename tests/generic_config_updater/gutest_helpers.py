@@ -19,8 +19,20 @@ class MockSideEffectDict:
 
         return value
 
+    def side_effect_skiplastarg_func(self, *args):
+        l = [str(args[i]) for i in range(len(args)-1)]
+        key = tuple(l)
+        value = self.map.get(key)
+        if value is None:
+            raise ValueError(f"Given arguments were not found in arguments map.\n  Arguments: {key}\n  Map: {self.map}")
+
+        return value
+
 def create_side_effect_dict(map):
     return MockSideEffectDict(map).side_effect_func
+
+def create_side_effect_skiplastarg_dict(map):
+    return MockSideEffectDict(map).side_effect_skiplastarg_func
 
 class FilesLoader:
     def __init__(self):
