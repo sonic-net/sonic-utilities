@@ -1837,6 +1837,8 @@ collect_nvidia_bluefield() {
     else
       echo "Platform dump script $DUMP_FILE does not exist"
     fi
+
+    save_cmd "get_component_versions.py" "component_versions"
 }
 
 ###############################################################################
