@@ -1,6 +1,6 @@
 import time
 from .gu_common import genericUpdaterLogging
-from subprocess import call 
+from subprocess import call
 
 logger = genericUpdaterLogging.get_logger(title="Service Validator")
 
