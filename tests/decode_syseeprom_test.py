@@ -194,6 +194,11 @@ CRC-32               0xFE        4  0xAC518FB3
         captured = capsys.readouterr()
         assert captured.out == 'S6100-ON\n'
 
+    def test_print_vendor(self, capsys):
+        decode_syseeprom.print_vendor(True)
+        captured = capsys.readouterr()
+        assert captured.out == 'DELL\n'
+
     @mock.patch('os.geteuid', lambda: 0)
     @mock.patch('sonic_py_common.device_info.get_platform', lambda: 'arista')
     @mock.patch.object(sys, 'argv', ["decode-syseeprom"])
