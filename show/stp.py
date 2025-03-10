@@ -44,7 +44,7 @@ def connect_to_appl_db():
     return appl_db
 
 
-# Redis DB only supports limiter pattern search wildcards.
+# Redis  DB only supports limiter pattern search wildcards.
 # check https://redis.io/commands/KEYS before using this api
 # Redis-db uses glob-style patterns not regex
 def stp_get_key_from_pattern(db_connect, db, pattern):
