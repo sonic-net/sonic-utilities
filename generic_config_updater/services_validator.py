@@ -1,6 +1,6 @@
 import time
 from .gu_common import genericUpdaterLogging
-import subprocess
+from subprocess import call 
 
 logger = genericUpdaterLogging.get_logger(title="Service Validator")
 
@@ -16,25 +16,17 @@ def set_verbose(verbose=False):
         logger.set_min_log_priority_notice()
 
 
-def run_command(cmd):
-    try:
-        subprocess.check_call(cmd)
-    except Exception as e:
-        return e.returncode
-    return 0
-
-
 def _service_restart(svc_name):
-    rc = run_command(['systemctl', 'restart', svc_name])
+    rc = call(['systemctl', 'restart', svc_name])
     if rc != 0:
         # This failure is likely due to too many restarts
         #
-        rc = run_command(['systemctl', 'reset-failed', svc_name])
+        rc = call(['systemctl', 'reset-failed', svc_name])
         logger.log(logger.LOG_PRIORITY_ERROR, 
                 f"Service has been reset. rc={rc}; Try restart again...",
                 print_to_console)
 
-        rc = run_command(['systemctl', 'restart', svc_name])
+        rc = call(['systemctl', 'restart', svc_name])
         if rc != 0:
             # Even with reset-failed, restart fails.
             # Give a pause before retry.
@@ -43,7 +35,7 @@ def _service_restart(svc_name):
                     f"Restart failed for {svc_name} rc={rc} after reset; Pause for 10s & retry",
                     print_to_console)
             time.sleep(10)
-            rc = run_command(['systemctl', 'restart', svc_name])
+            rc = call(['systemctl', 'restart', svc_name])
 
     if rc == 0:
         logger.log(logger.LOG_PRIORITY_NOTICE,
@@ -61,8 +53,8 @@ def rsyslog_validator(old_config, upd_config, keys):
     upd_syslog = upd_config.get("SYSLOG_SERVER", {})
 
     if old_syslog != upd_syslog:
-        run_command(['systemctl', 'reset-failed', 'rsyslog-config', 'rsyslog'])
-        rc = run_command(['systemctl', 'restart', 'rsyslog-config'])
+        call(['systemctl', 'reset-failed', 'rsyslog-config', 'rsyslog'])
+        rc = call(['systemctl', 'restart', 'rsyslog-config'])
         if rc != 0:
             return False
     return True
@@ -130,7 +122,7 @@ def vlanintf_validator(old_config, upd_config, keys):
     deleted_keys = list(set(old_keys) - set(upd_keys))
     for key in deleted_keys:
         iface, iface_ip = key
-        rc = run_command(['ip', 'neigh', 'flush', 'dev', iface, iface_ip])
+        rc = call(['ip', 'neigh', 'flush', 'dev', iface, iface_ip])
         if rc:
             return False
     return True
