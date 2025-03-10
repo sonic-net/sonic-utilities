@@ -27,6 +27,76 @@ AAA accounting login disable (default)
 
 """
 
+show_aaa_failthrough_enable_output = """\
+AAA authentication login local (default)
+AAA authentication failthrough True
+AAA authorization login local (default)
+AAA accounting login disable (default)
+
+"""
+
+show_aaa_failthrough_disable_output = """\
+AAA authentication login local (default)
+AAA authentication failthrough False
+AAA authorization login local (default)
+AAA accounting login disable (default)
+
+"""
+
+show_aaa_fallback_enable_output = """\
+AAA authentication login local (default)
+AAA authentication failthrough False (default)
+AAA authentication fallback True
+AAA authorization login local (default)
+AAA accounting login disable (default)
+
+"""
+
+show_aaa_fallback_disable_output = """\
+AAA authentication login local (default)
+AAA authentication failthrough False (default)
+AAA authentication fallback False
+AAA authorization login local (default)
+AAA accounting login disable (default)
+
+"""
+
+show_aaa_debug_enable_output = """\
+AAA authentication login local (default)
+AAA authentication failthrough False (default)
+AAA authentication debug True
+AAA authorization login local (default)
+AAA accounting login disable (default)
+
+"""
+
+show_aaa_debug_disable_output = """\
+AAA authentication login local (default)
+AAA authentication failthrough False (default)
+AAA authentication debug False
+AAA authorization login local (default)
+AAA accounting login disable (default)
+
+"""
+
+show_aaa_trace_enable_output = """\
+AAA authentication login local (default)
+AAA authentication failthrough False (default)
+AAA authentication trace True
+AAA authorization login local (default)
+AAA accounting login disable (default)
+
+"""
+
+show_aaa_trace_disable_output = """\
+AAA authentication login local (default)
+AAA authentication failthrough False (default)
+AAA authentication trace False
+AAA authorization login local (default)
+AAA accounting login disable (default)
+
+"""
+
 show_aaa_radius_output="""\
 AAA authentication login radius
 AAA authentication failthrough False (default)
@@ -94,7 +164,7 @@ show_aaa_disable_accounting_output="""\
 AAA authentication login tacacs+
 AAA authentication failthrough False (default)
 AAA authorization login tacacs+,local
-AAA accounting login disable
+AAA accounting login disable (default)
 
 """
 
@@ -121,11 +191,162 @@ class TestAaa(object):
         assert result.exit_code == 0
         assert result.output == show_aaa_default_output
 
+    def test_config_aaa_failthrough(self, get_cmd_module):
+        (config, show) = get_cmd_module
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(config.config.commands["aaa"],
+                               ["authentication", "failthrough", "enable"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == config_aaa_empty_output
+
+        result = runner.invoke(show.cli.commands["aaa"], [], obj=db)
+        assert result.exit_code == 0
+        assert result.output == show_aaa_failthrough_enable_output
+
+        result = runner.invoke(config.config.commands["aaa"],
+                               ["authentication", "failthrough", "disable"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == config_aaa_empty_output
+
+        result = runner.invoke(show.cli.commands["aaa"], [], obj=db)
+        assert result.exit_code == 0
+        assert result.output == show_aaa_failthrough_disable_output
+
+        result = runner.invoke(config.config.commands["aaa"],
+                               ["authentication", "failthrough", "default"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == config_aaa_empty_output
+
+        result = runner.invoke(show.cli.commands["aaa"], [], obj=db)
+        assert result.exit_code == 0
+        assert result.output == show_aaa_default_output
+
+    def test_config_aaa_fallback(self, get_cmd_module):
+        (config, show) = get_cmd_module
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(config.config.commands["aaa"],
+                               ["authentication", "fallback", "enable"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == config_aaa_empty_output
+
+        result = runner.invoke(show.cli.commands["aaa"], [], obj=db)
+        assert result.exit_code == 0
+        assert result.output == show_aaa_fallback_enable_output
+
+        result = runner.invoke(config.config.commands["aaa"],
+                               ["authentication", "fallback", "disable"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == config_aaa_empty_output
+
+        result = runner.invoke(show.cli.commands["aaa"], [], obj=db)
+        assert result.exit_code == 0
+        assert result.output == show_aaa_fallback_disable_output
+
+        result = runner.invoke(config.config.commands["aaa"],
+                               ["authentication", "fallback", "default"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == config_aaa_empty_output
+
+        result = runner.invoke(show.cli.commands["aaa"], [], obj=db)
+        assert result.exit_code == 0
+        assert result.output == show_aaa_default_output
+
+    def test_config_aaa_debug(self, get_cmd_module):
+        (config, show) = get_cmd_module
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(config.config.commands["aaa"],
+                               ["authentication", "debug", "enable"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == config_aaa_empty_output
+
+        result = runner.invoke(show.cli.commands["aaa"], [], obj=db)
+        assert result.exit_code == 0
+        assert result.output == show_aaa_debug_enable_output
+
+        result = runner.invoke(config.config.commands["aaa"],
+                               ["authentication", "debug", "disable"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == config_aaa_empty_output
+
+        result = runner.invoke(show.cli.commands["aaa"], [], obj=db)
+        assert result.exit_code == 0
+        assert result.output == show_aaa_debug_disable_output
+
+        result = runner.invoke(config.config.commands["aaa"],
+                               ["authentication", "debug", "default"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == config_aaa_empty_output
+
+        result = runner.invoke(show.cli.commands["aaa"], [], obj=db)
+        assert result.exit_code == 0
+        assert result.output == show_aaa_default_output
+
+    def test_config_aaa_trace(self, get_cmd_module):
+        (config, show) = get_cmd_module
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(config.config.commands["aaa"],
+                               ["authentication", "trace", "enable"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == config_aaa_empty_output
+
+        result = runner.invoke(show.cli.commands["aaa"], [], obj=db)
+        assert result.exit_code == 0
+        assert result.output == show_aaa_trace_enable_output
+
+        result = runner.invoke(config.config.commands["aaa"],
+                               ["authentication", "trace", "disable"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == config_aaa_empty_output
+
+        result = runner.invoke(show.cli.commands["aaa"], [], obj=db)
+        assert result.exit_code == 0
+        assert result.output == show_aaa_trace_disable_output
+
+        result = runner.invoke(config.config.commands["aaa"],
+                               ["authentication", "trace", "default"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == config_aaa_empty_output
+
+        result = runner.invoke(show.cli.commands["aaa"], [], obj=db)
+        assert result.exit_code == 0
+        assert result.output == show_aaa_default_output
+
     def test_config_aaa_radius(self, get_cmd_module):
         (config, show) = get_cmd_module
         runner = CliRunner()
         db = Db()
-        db.cfgdb.delete_table("AAA")
 
         result = runner.invoke(config.config.commands["aaa"],\
                                ["authentication", "login", "radius"], obj=db)
@@ -133,8 +354,6 @@ class TestAaa(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output == config_aaa_empty_output
-
-        db.cfgdb.mod_entry("AAA", "authentication", {'login' : 'radius'})
 
         result = runner.invoke(show.cli.commands["aaa"], [], obj=db)
         assert result.exit_code == 0
@@ -147,8 +366,6 @@ class TestAaa(object):
         assert result.exit_code == 0
         assert result.output == config_aaa_empty_output
 
-        db.cfgdb.delete_table("AAA")
-
         result = runner.invoke(show.cli.commands["aaa"], [], obj=db)
         assert result.exit_code == 0
         assert result.output == show_aaa_default_output
@@ -157,7 +374,6 @@ class TestAaa(object):
         (config, show) = get_cmd_module
         runner = CliRunner()
         db = Db()
-        db.cfgdb.delete_table("AAA")
 
         result = runner.invoke(config.config.commands["aaa"],\
                                ["authentication", "login", "radius", "local"], obj=db)
@@ -165,8 +381,6 @@ class TestAaa(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output == config_aaa_empty_output
-
-        db.cfgdb.mod_entry("AAA", "authentication", {'login' : 'radius,local'})
 
         result = runner.invoke(show.cli.commands["aaa"], [], obj=db)
         assert result.exit_code == 0
@@ -178,8 +392,6 @@ class TestAaa(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output == config_aaa_empty_output
-
-        db.cfgdb.delete_table("AAA")
 
         result = runner.invoke(show.cli.commands["aaa"], [], obj=db)
         assert result.exit_code == 0
@@ -198,7 +410,6 @@ class TestAaa(object):
         (config, show) = get_cmd_module
         runner = CliRunner()
         db = Db()
-        db.cfgdb.delete_table("AAA")
 
         # test tacacs authentication
         result = runner.invoke(config.config.commands["aaa"],\
@@ -207,8 +418,6 @@ class TestAaa(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output == config_aaa_empty_output
-
-        db.cfgdb.mod_entry("AAA", "authentication", {'login' : 'tacacs+'})
 
         result = runner.invoke(show.cli.commands["aaa"], [], obj=db)
         assert result.exit_code == 0
@@ -222,8 +431,6 @@ class TestAaa(object):
         assert result.exit_code == 0
         assert result.output == config_aaa_empty_output
 
-        db.cfgdb.mod_entry("AAA", "authorization", {'login' : 'tacacs+'})
-
         result = runner.invoke(show.cli.commands["aaa"], [], obj=db)
         assert result.exit_code == 0
         assert result.output == show_aaa_tacacs_authorization_output
@@ -235,8 +442,6 @@ class TestAaa(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output == config_aaa_empty_output
-
-        db.cfgdb.mod_entry("AAA", "authorization", {'login' : 'tacacs+,local'})
 
         result = runner.invoke(show.cli.commands["aaa"], [], obj=db)
         assert result.exit_code == 0
@@ -250,8 +455,6 @@ class TestAaa(object):
         assert result.exit_code == 0
         assert result.output == config_aaa_empty_output
 
-        db.cfgdb.mod_entry("AAA", "accounting", {'login' : 'tacacs+'})
-
         result = runner.invoke(show.cli.commands["aaa"], [], obj=db)
         assert result.exit_code == 0
         assert result.output == show_aaa_tacacs_accounting_output
@@ -264,8 +467,6 @@ class TestAaa(object):
         assert result.exit_code == 0
         assert result.output == config_aaa_empty_output
 
-        db.cfgdb.mod_entry("AAA", "accounting", {'login' : 'tacacs+,local'})
-
         result = runner.invoke(show.cli.commands["aaa"], [], obj=db)
         assert result.exit_code == 0
         assert result.output == show_aaa_tacacs_local_accounting_output
@@ -277,8 +478,6 @@ class TestAaa(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output == config_aaa_empty_output
-
-        db.cfgdb.mod_entry("AAA", "accounting", {'login' : 'disable'})
 
         result = runner.invoke(show.cli.commands["aaa"], [], obj=db)
         assert result.exit_code == 0
