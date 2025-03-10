@@ -5,6 +5,8 @@ declare -r EXIT_ERROR=1
 declare -r WATCHDOG_UTIL="/usr/local/bin/watchdogutil"
 declare -r PRE_REBOOT_HOOK="pre_reboot_hook"
 
+source reboot_smartswitch_helper
+
 DEVPATH="/usr/share/sonic/device"
 PLAT_REBOOT="platform_reboot"
 PLATFORM_UPDATE_REBOOT_CAUSE="platform_update_reboot_cause"
@@ -37,10 +39,16 @@ EXIT_NEXT_IMAGE_NOT_EXISTS=4
 EXIT_SONIC_INSTALLER_VERIFY_REBOOT=21
 EXIT_PLATFORM_FW_AU_FAILURE=22
 PLATFORM_FWUTIL_AU_REBOOT_HANDLE="platform_fw_au_reboot_handle"
+PLATFORM_JSON_FILE="platform.json"
+PLATFORM_JSON_PATH="${DEVPATH}/${PLATFORM}/${PLATFORM_JSON_FILE}"
 REBOOT_SCRIPT_NAME=$(basename $0)
 REBOOT_TYPE="${REBOOT_SCRIPT_NAME}"
 TAG_LATEST=no
 REBOOT_FLAGS=""
+SMART_SWITCH="no"
+DPU_MODULE_NAME=""
+REBOOT_DPU="no"
+PRE_SHUTDOWN="no"
 
 function debug()
 {
@@ -64,6 +72,9 @@ function stop_pmon_service()
 {
      CONTAINER_STOP_RC=0
      debug "Stopping pmon docker"
+     if [[ "${PRE_SHUTDOWN}" == "yes" ]]; then
+         systemctl disable pmon
+     fi
      systemctl stop pmon || debug "Ignore stopping pmon error $?"
      docker kill pmon &> /dev/null || CONTAINER_STOP_RC=$?
      if [[ CONTAINER_STOP_RC -ne 0 ]]; then
@@ -128,6 +139,8 @@ function show_help_and_exit()
     echo " "
     echo "    Available options:"
     echo "        -h, -? : getting this help"
+    echo "        -d : DPU module name on a smart switch, option is invalid when on DPU"
+    echo "        -p : Pre-shutdown steps on DPU, invalid on NPU"
 
     exit ${EXIT_SUCCESS}
 }
@@ -154,7 +167,7 @@ function reboot_pre_check()
         ${DEVPATH}/${PLATFORM}/${PLATFORM_REBOOT_PRE_CHECK}
         [[ $? -ne 0 ]] && exit $?
     fi
-    
+
     # Verify the next image by sonic-installer
     local message=$(sonic-installer verify-next-image 2>&1)
     if [ $? -ne 0 ]; then
@@ -178,7 +191,7 @@ function check_conflict_boot_in_fw_update()
 
 function parse_options()
 {
-    while getopts "h?vf" opt; do
+    while getopts "h?vfpd:" opt; do
         case ${opt} in
             h|\? )
                 show_help_and_exit
@@ -191,6 +204,13 @@ function parse_options()
                 ;;
             f )
                 REBOOT_FLAGS+=" -f"
+                ;;
+            d )
+                REBOOT_DPU="yes"
+                DPU_MODULE_NAME="$OPTARG"
+                ;;
+            p )
+                PRE_SHUTDOWN="yes"
                 ;;
         esac
     done
@@ -224,6 +244,18 @@ if [[ "$EUID" -ne 0 ]]; then
 fi
 
 debug "User requested rebooting device ..."
+
+handle_smart_switch "$REBOOT_DPU" "$PRE_SHUTDOWN" "$DPU_MODULE_NAME"
+smart_switch_result=$?
+if [[ $smart_switch_result -ne 0 ]]; then
+    exit $smart_switch_result
+fi
+
+# On a smartswitch, complete the DPU reboot and exit
+smartswitch=$(is_smartswitch)
+if [ "$smartswitch" == "True" ] && [ "$REBOOT_DPU" == "yes" ]; then
+    exit $smart_switch_result
+fi
 
 check_conflict_boot_in_fw_update
 
@@ -285,6 +317,11 @@ fi
 if [ -x ${WATCHDOG_UTIL} ]; then
     debug "Enabling the Watchdog before reboot"
     ${WATCHDOG_UTIL} arm
+fi
+
+if [[ "${PRE_SHUTDOWN}" == "yes" ]]; then
+    echo "${DPU_MODULE_NAME} pre-shutdown steps are completed"
+    exit ${EXIT_SUCCESS}
 fi
 
 if [ -x ${DEVPATH}/${PLATFORM}/${PLAT_REBOOT} ]; then
