@@ -228,6 +228,10 @@
         "asn": "65200",
         "keepalive": "3"
     },
+    "FLEX_COUNTER_TABLE|PFC_STAT_HISTORY": {
+        "POLL_INTERVAL": "1000",
+        "FLEX_COUNTER_STATUS": "disable"
+    },
     "FABRIC_MONITOR|FABRIC_MONITOR_DATA": {
         "monCapacityThreshWarn": "100",
         "monErrThreshCrcCells": "1",
