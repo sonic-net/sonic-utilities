@@ -13,13 +13,13 @@ function log_message() {
 # Function to check if running on smart switch
 function is_smartswitch()
 {
-    python3 -c "from utilities_common.chassis import is_smartswitch; print(is_smartswitch())" | grep -q "True"
+    python3 -c "from utilities_common.chassis import is_smartswitch; print(is_smartswitch())" | grep "True"
 }
 
 # Function to check if running on DPU
 function is_dpu()
 {
-    python3 -c "from utilities_common.chassis import is_dpu; print(is_dpu())" | grep -q "True"
+    python3 -c "from utilities_common.chassis import is_dpu; print(is_dpu())" | grep "True"
 }
 
 # Function to retrieve number of DPUs
@@ -147,7 +147,7 @@ function gnmi_reboot_dpu()
         return ${EXIT_ERROR}
     fi
 
-    $(docker exec gnmi gnoi_client -target ${dpu_ip}:${port} -logtostderr -notls -module System -rpc Reboot -jsonin '{"method":HALT}' &>/dev/null)
+    $(docker exec gnmi gnoi_client -target ${dpu_ip}:${port} -logtostderr -notls -module System -rpc Reboot -jsonin '{"method":3, "message":"User initiated reboot"}' &>/dev/null)
     if [ $? -ne 0 ]; then
         log_message "ERROR: Failed to send gnoi command to halt services on ${DPU_NAME}"
         log_message "ERROR: proceeding without halting the services"
