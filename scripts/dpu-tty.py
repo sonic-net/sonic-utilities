@@ -45,7 +45,10 @@ def get_dpu_tty(dpu, tty, baud):
 
     if baud is None:
         baud = dpus[dpu]["serial-console"]["baud-rate"]
-    return dev, baud
+
+    post_cmds = dpus[dpu].get("tty-post-cmds")
+
+    return dev, baud, post_cmds
 
 
 def main():
@@ -56,7 +59,7 @@ def main():
     parser.add_argument('-b', '--baud')
     args = parser.parse_args()
 
-    dpu_tty, dpu_baud = get_dpu_tty(args.name, args.tty, args.baud)
+    dpu_tty, dpu_baud, post_cmds = get_dpu_tty(args.name, args.tty, args.baud)
     # Use UART console utility for error checking of dpu_tty and dpu_baud.
 
     p = subprocess.run([UART_CON, '-b', dpu_baud, '/dev/%s' % dpu_tty])
@@ -66,8 +69,16 @@ def main():
             print(p.stdout)
         if p.stderr:
             print(p.stderr)
-    return p.returncode
+        return p.returncode
 
+    # Execute tty-post-cmds only if it exists
+    if post_cmds:
+        print(f"Executing post commands: {post_cmds}")
+        for cmd in post_cmds:
+            if cmd:
+                subprocess.run(cmd, shell=True, check=False)
+
+    return 0
 
 if __name__ == "__main__":
     exit(main())
