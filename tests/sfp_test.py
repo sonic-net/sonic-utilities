@@ -1040,7 +1040,6 @@ Ethernet0  Present
 ---------  -----------
 Ethernet4  Not present
 """
-        print(result.output)
         assert result.exit_code == 0
         assert result.output == expected
 
