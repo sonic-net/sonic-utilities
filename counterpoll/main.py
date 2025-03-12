@@ -505,6 +505,41 @@ def wredport_disable(ctx):
     wred_port_info['FLEX_COUNTER_STATUS'] = 'disable'
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "WRED_ECN_PORT", wred_port_info)
 
+
+# SRv6 counter commands
+@cli.group()
+@click.pass_context
+def srv6(ctx):
+    """ SRv6 counter commands """
+    ctx.obj = ConfigDBConnector()
+    ctx.obj.connect()
+
+
+@srv6.command()
+@click.pass_context
+@click.argument('poll_interval', type=click.IntRange(1000, 30000))
+def interval(ctx, poll_interval):  # noqa: F811
+    """ Set SRv6 counter query interval """
+    srv6_info = {'POLL_INTERVAL': poll_interval}
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "SRV6", srv6_info)
+
+
+@srv6.command()
+@click.pass_context
+def enable(ctx):  # noqa: F811
+    """ Enable SRv6 counter query """
+    srv6_info = {'FLEX_COUNTER_STATUS': ENABLE}
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "SRV6", srv6_info)
+
+
+@srv6.command()
+@click.pass_context
+def disable(ctx):  # noqa: F811
+    """ Disable SRv6 counter query """
+    srv6_info = {'FLEX_COUNTER_STATUS': DISABLE}
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "SRV6", srv6_info)
+
+
 @cli.command()
 def show():
     """ Show the counter configuration """
@@ -525,6 +560,7 @@ def show():
     eni_info = configdb.get_entry('FLEX_COUNTER_TABLE', ENI)
     wred_queue_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'WRED_ECN_QUEUE')
     wred_port_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'WRED_ECN_PORT')
+    srv6_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'SRV6')
 
     header = ("Type", "Interval (in ms)", "Status")
     data = []
@@ -559,6 +595,9 @@ def show():
     if wred_port_info:
         data.append(["WRED_ECN_PORT_STAT", wred_port_info.get("POLL_INTERVAL", DEFLT_1_SEC),
                     wred_port_info.get("FLEX_COUNTER_STATUS", DISABLE)])
+    if srv6_info:
+        data.append(["SRV6_STAT", srv6_info.get("POLL_INTERVAL", DEFLT_10_SEC),
+                    srv6_info.get("FLEX_COUNTER_STATUS", DISABLE)])
 
     if is_dpu(configdb) and eni_info:
         data.append(["ENI_STAT", eni_info.get("POLL_INTERVAL", DEFLT_10_SEC),

@@ -1112,3 +1112,29 @@ class TestShowRunningconfiguration(object):
     @classmethod
     def teardown_class(cls):
         print('TEARDOWN')
+
+
+class TestShowSRv6Counters(object):
+    def setup(self):
+        print('SETUP')
+
+    @patch('utilities_common.cli.run_command')
+    def test_srv6_stats(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands['srv6'].commands['stats'], ['--verbose'])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(['srv6stat'], display_cmd=True)
+
+    @patch('utilities_common.cli.run_command')
+    def test_srv6_stats_with_sid(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands['srv6'].commands['stats'], ['1000:2:30::/48', '--verbose'])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(['srv6stat', '-s', '1000:2:30::/48'], display_cmd=True)
+
+    def teardown(self):
+        print('TEAR DOWN')
