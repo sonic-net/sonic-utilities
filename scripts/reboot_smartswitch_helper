@@ -151,9 +151,10 @@ function gnmi_reboot_dpu()
     if [ $? -ne 0 ]; then
         log_message "ERROR: Failed to send gnoi command to halt services on ${DPU_NAME}"
         log_message "ERROR: proceeding without halting the services"
+    else
+        # Wait for DPU to halt services, if reboot command is successful
+        wait_for_dpu_reboot_status "${dpu_ip}" "${port}" "${DPU_NAME}"
     fi
-
-    wait_for_dpu_reboot_status "${dpu_ip}" "${port}" "${DPU_NAME}"
 }
 
 function reboot_dpu()
