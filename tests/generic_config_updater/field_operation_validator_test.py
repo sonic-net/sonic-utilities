@@ -354,7 +354,7 @@ class TestGetAsicName(unittest.TestCase):
         mock_popen.return_value = mock.Mock()
         mock_popen.return_value.communicate.return_value = ["Mellanox-SN2700-D48C8", 0]
         for scope in ["localhost", "asic0"]:
-            self.assertEqual(fov.get_asic_name(scope), "spc1")
+            self.assertEqual(fov.get_asic_name(), "spc1")
 
     @patch('sonic_py_common.device_info.get_sonic_version_info')
     @patch('subprocess.Popen')
@@ -363,7 +363,7 @@ class TestGetAsicName(unittest.TestCase):
         mock_popen.return_value = mock.Mock()
         mock_popen.return_value.communicate.return_value = ["ACS-MSN3800", 0]
         for scope in ["localhost", "asic0"]:
-            self.assertEqual(fov.get_asic_name(scope), "spc2")
+            self.assertEqual(fov.get_asic_name(), "spc2")
 
     @patch('sonic_py_common.device_info.get_sonic_version_info')
     @patch('subprocess.Popen')
@@ -372,7 +372,7 @@ class TestGetAsicName(unittest.TestCase):
         mock_popen.return_value = mock.Mock()
         mock_popen.return_value.communicate.return_value = ["Mellanox-SN4600C-C64", 0]
         for scope in ["localhost", "asic0"]:
-            self.assertEqual(fov.get_asic_name(scope), "spc3")
+            self.assertEqual(fov.get_asic_name(), "spc3")
 
     @patch('sonic_py_common.device_info.get_sonic_version_info')
     @patch('subprocess.Popen')
@@ -381,7 +381,7 @@ class TestGetAsicName(unittest.TestCase):
         mock_popen.return_value = mock.Mock()
         mock_popen.return_value.communicate.return_value = ["ACS-SN5600", 0]
         for scope in ["localhost", "asic0"]:
-            self.assertEqual(fov.get_asic_name(scope), "spc4")
+            self.assertEqual(fov.get_asic_name(), "spc4")
 
     @patch('sonic_py_common.device_info.get_sonic_version_info')
     @patch('subprocess.Popen')
@@ -390,7 +390,7 @@ class TestGetAsicName(unittest.TestCase):
         mock_popen.return_value = mock.Mock()
         mock_popen.return_value.communicate.return_value = ["Mellanox-SN2700-A1", 0]
         for scope in ["localhost", "asic0"]:
-            self.assertEqual(fov.get_asic_name(scope), "spc1")
+            self.assertEqual(fov.get_asic_name(), "spc1")
 
     @patch('sonic_py_common.device_info.get_sonic_version_info')
     @patch('subprocess.Popen')
@@ -399,7 +399,7 @@ class TestGetAsicName(unittest.TestCase):
         mock_popen.return_value = mock.Mock()
         mock_popen.return_value.communicate.return_value = ["Mellanox-SN5640-C512S2", 0]
         for scope in ["localhost", "asic0"]:
-            self.assertEqual(fov.get_asic_name(scope), "spc5")
+            self.assertEqual(fov.get_asic_name(), "spc5")
 
     @patch('sonic_py_common.device_info.get_sonic_version_info')
     @patch('subprocess.Popen')
@@ -408,7 +408,7 @@ class TestGetAsicName(unittest.TestCase):
         mock_popen.return_value = mock.Mock()
         mock_popen.return_value.communicate.return_value = ["Force10-S6100", 0]
         for scope in ["localhost", "asic0"]:
-            self.assertEqual(fov.get_asic_name(scope), "th")
+            self.assertEqual(fov.get_asic_name(), "th")
 
     @patch('sonic_py_common.device_info.get_sonic_version_info')
     @patch('subprocess.Popen')
@@ -417,7 +417,7 @@ class TestGetAsicName(unittest.TestCase):
         mock_popen.return_value = mock.Mock()
         mock_popen.return_value.communicate.return_value = ["Arista-7260CX3-D108C8", 0]
         for scope in ["localhost", "asic0"]:
-            self.assertEqual(fov.get_asic_name(scope), "th2")
+            self.assertEqual(fov.get_asic_name(), "th2")
 
     @patch('sonic_py_common.device_info.get_sonic_version_info')
     @patch('subprocess.Popen')
@@ -426,7 +426,7 @@ class TestGetAsicName(unittest.TestCase):
         mock_popen.return_value = mock.Mock()
         mock_popen.return_value.communicate.return_value = ["Force10-S6000", 0]
         for scope in ["localhost", "asic0"]:
-            self.assertEqual(fov.get_asic_name(scope), "td2")
+            self.assertEqual(fov.get_asic_name(), "td2")
 
     @patch('sonic_py_common.device_info.get_sonic_version_info')
     @patch('subprocess.Popen')
@@ -435,11 +435,11 @@ class TestGetAsicName(unittest.TestCase):
         mock_popen.return_value = mock.Mock()
         mock_popen.return_value.communicate.return_value = ["Arista-7050CX3-32S-C32", 0]
         for scope in ["localhost", "asic0"]:
-            self.assertEqual(fov.get_asic_name(scope), "td3")
+            self.assertEqual(fov.get_asic_name(), "td3")
 
     @patch('sonic_py_common.device_info.get_sonic_version_info')
     @patch('subprocess.Popen')
     def test_get_asic_cisco(self, mock_popen, mock_get_sonic_version_info):
         mock_get_sonic_version_info.return_value = {'asic_type': 'cisco-8000'}
         for scope in ["localhost", "asic0"]:
-            self.assertEqual(fov.get_asic_name(scope), "cisco-8000")
+            self.assertEqual(fov.get_asic_name(), "cisco-8000")
