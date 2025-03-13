@@ -43,6 +43,8 @@ target_config: {self.target_config}"""
     def __repr__(self):
         return str(self)
 
+
+
 class JsonMove:
     """
     A class similar to JsonPatch operation, but it allows the path to refer to non-existing middle elements.
@@ -289,6 +291,63 @@ class JsonMove:
     def __hash__(self):
         return hash((self.op_type, self.path, json.dumps(self.value)))
 
+
+class JsonMoveGroup:
+    """
+    Group of JsonMove objects to be applied together
+    """
+    def __init__(self, move: JsonMove=None):
+        self.patches = []
+        if move is not None:
+            self.append(move)
+
+    def append(self, move: JsonMove):
+        self.patches.append(move)
+
+    def apply(self, config):
+        update = config
+        for i, patch in enumerate(self.patches):
+            in_place = True
+            if i == 0:
+                in_place = False
+            update = patch.patch.apply(update, in_place=in_place)
+            if update is None:
+                return None
+        return update
+
+    def get_jsonpatch(self):
+        raw_patches = []
+        for move in self.patches:
+            raw_patches.extend(move.patch.patch)
+        return JsonPatch(raw_patches)
+
+    def __str__(self):
+        return ",".join([ str(patch) for patch in self.patches ])
+
+    def __repr__(self):
+        return str(self)
+
+    def __eq__(self, other):
+        if isinstance(other, JsonMoveGroup):
+            if len(other) != len(self.patches):
+                return False
+            for i, patch in enumerate(self.patches):
+                if patch.patch != other.patches[i].patch:
+                    return False
+            return True
+        return False
+
+    def __hash__(self):
+        return hash(str(self))
+
+    def __len__(self):
+        return len(self.patches)
+
+    def __iter__(self):
+        for patch in self.patches:
+            yield patch
+
+
 class MoveWrapper:
     def __init__(self, move_generators, move_non_extendable_generators, move_extenders, move_validators):
         self.move_generators = move_generators
@@ -312,7 +371,6 @@ class MoveWrapper:
         processed_moves = set()
         extended_moves = set()
         moves = deque([])
-
         for move in self._generate_non_extendable_moves(diff):
             if not(move in processed_moves):
                 processed_moves.add(move)
@@ -359,10 +417,14 @@ class MoveWrapper:
             for move in generator.generate(diff):
                 yield move
 
-    def _extend_moves(self, move, diff):
-        for extender in self.move_extenders:
-            for newmove in extender.extend(move, diff):
-                yield newmove
+    def _extend_moves(self, moveGroup: JsonMoveGroup, diff) -> JsonMoveGroup:
+        # The enxtender only operates on JsonMove, so iterate across the individual
+        # moves within the group to generate the new moves.  In theory there
+        # should be at most one move per group if we're running extenders.
+        for move in moveGroup:
+            for extender in self.move_extenders:
+                for newmove in extender.extend(move, diff):
+                    yield JsonMoveGroup(newmove)
 
 class JsonPointerFilter:
     """
@@ -589,7 +651,8 @@ class RemoveCreateOnlyDependencyMoveValidator:
         self.path_addressing = path_addressing
         self.create_only_filter = CreateOnlyFilter(path_addressing).get_filter()
 
-    def validate(self, move, diff, simulated_config):
+    def validate(self, group: JsonMoveGroup, diff, simulated_config):
+        # Note: group is not used by this validator
         current_config = diff.current_config
         target_config = diff.target_config # Final config after applying whole patch
 
@@ -669,8 +732,8 @@ class DeleteWholeConfigMoveValidator:
     """
     A class to validate not deleting whole config as it is not supported by JsonPatch lib.
     """
-    def validate(self, move, diff, simulated_config):
-        if move.op_type == OperationType.REMOVE and move.path == "":
+    def validate(self, group: JsonMoveGroup, diff, simulated_config):
+        if group.patches[0].op_type == OperationType.REMOVE and group.patches[0].path == "":
             return False
         return True
 
@@ -698,7 +761,9 @@ class CreateOnlyMoveValidator:
         # TODO: create-only fields are hard-coded for now, it should be moved to YANG models
         self.create_only_filter = CreateOnlyFilter(path_addressing).get_filter()
 
-    def validate(self, move, diff, simulated_config):
+    def validate(self, group: JsonMoveGroup, diff, simulated_config):
+        # NOTE: group not used by this validator
+
         # get create-only paths from current config, simulated config and also target config
         # simulated config is the result of the move
         # target config is the final config
@@ -795,7 +860,13 @@ class NoDependencyMoveValidator:
         self.path_addressing = path_addressing
         self.config_wrapper = config_wrapper
 
-    def validate(self, move, diff, simulated_config):
+    def validate(self, group: JsonMoveGroup, diff, simulated_config):
+        for move in group:
+            if not self.__validate_move(move, diff, simulated_config):
+                return False
+        return True
+
+    def __validate_move(self, move, diff, simulated_config):
         operation_type = move.op_type
         path = move.path
 
@@ -944,7 +1015,13 @@ class NoEmptyTableMoveValidator:
     def __init__(self, path_addressing):
         self.path_addressing = path_addressing
 
-    def validate(self, move, diff, simulated_config):
+    def validate(self, group, diff, simulated_config):
+        for move in group:
+            if not self.__validate_move(move, diff, simulated_config):
+                return False
+        return True
+
+    def __validate_move(self, move, diff, simulated_config):
         op_path = move.path
 
         if op_path == "": # If updating whole file
@@ -980,9 +1057,9 @@ class RequiredValueMoveValidator:
         self.path_addressing = path_addressing
         self.identifier = RequiredValueIdentifier(path_addressing)
 
-    def validate(self, move, diff, simulated_config):
+    def validate(self, group: JsonMoveGroup, diff, simulated_config):
         # ignore full config removal because it is not possible by JsonPatch lib
-        if move.op_type == OperationType.REMOVE and move.path == "":
+        if group.patches[0].op_type == OperationType.REMOVE and group.patches[0].path == "":
             return
 
         current_config = diff.current_config
@@ -1041,11 +1118,11 @@ class TableLevelMoveGenerator:
     def generate(self, diff):
         # Removing tables in current but not target
         for tokens in self._get_non_existing_tables_tokens(diff.current_config, diff.target_config, False):
-            yield JsonMove(diff, OperationType.REMOVE, tokens)
+            yield JsonMoveGroup(JsonMove(diff, OperationType.REMOVE, tokens))
 
         # Adding tables in target but not current
         for tokens in self._get_non_existing_tables_tokens(diff.target_config, diff.current_config, True):
-            yield JsonMove(diff, OperationType.ADD, tokens, tokens)
+            yield JsonMoveGroup(JsonMove(diff, OperationType.ADD, tokens, tokens))
 
     def _get_non_existing_tables_tokens(self, config1, config2, reverse):
         for table in self.path_addressing.configdb_sorted_keys_by_backlinks("/", config1, reverse=reverse):
@@ -1075,13 +1152,13 @@ class KeyLevelMoveGenerator:
             table = tokens[0]
             # if table has a single key, delete the whole table because empty tables are not allowed in ConfigDB
             if len(diff.current_config[table]) == 1:
-                yield JsonMove(diff, OperationType.REMOVE, [table])
+                yield JsonMoveGroup(JsonMove(diff, OperationType.REMOVE, [table]))
             else:
-                yield JsonMove(diff, OperationType.REMOVE, tokens)
+                yield JsonMoveGroup(JsonMove(diff, OperationType.REMOVE, tokens))
 
         # Adding keys in target but not current
         for tokens in self._get_non_existing_keys_tokens(diff.target_config, diff.current_config, reverse=True):
-            yield JsonMove(diff, OperationType.ADD, tokens, tokens)
+            yield JsonMoveGroup(JsonMove(diff, OperationType.ADD, tokens, tokens))
 
     def _get_non_existing_keys_tokens(self, config1, config2, reverse):
         for table in self.path_addressing.configdb_sorted_keys_by_backlinks("/", config1, reverse=reverse):
@@ -1152,8 +1229,8 @@ class RemoveCreateOnlyDependencyMoveGenerator:
                 member_path = f"/{table_to_check}/{member_name}"
 
                 for ref_path in self.path_addressing.find_ref_paths(member_path, current_config):
-                    yield JsonMove(diff, OperationType.REMOVE,
-                                   self.path_addressing.get_path_tokens(ref_path))
+                    yield JsonMoveGroup(JsonMove(diff, OperationType.REMOVE,
+                                        self.path_addressing.get_path_tokens(ref_path)))
 
     def _get_create_only_field(self, config, table_to_check,
                                member_name, create_only_field):
@@ -1275,7 +1352,7 @@ class SingleRunLowLevelMoveGenerator:
         if current_value == target_value:
             return
 
-        yield JsonMove(self.diff, OperationType.REPLACE, current_tokens, target_tokens)
+        yield JsonMoveGroup(JsonMove(self.diff, OperationType.REPLACE, current_tokens, target_tokens))
 
     def _traverse_current(self, ptr, current_tokens):
         if isinstance(ptr, list):
@@ -1285,7 +1362,7 @@ class SingleRunLowLevelMoveGenerator:
 
         if isinstance(ptr, dict):
             if len(ptr) == 0:
-                yield JsonMove(self.diff, OperationType.REMOVE, current_tokens)
+                yield JsonMoveGroup(JsonMove(self.diff, OperationType.REMOVE, current_tokens))
                 return
 
             for key in ptr:
@@ -1302,7 +1379,7 @@ class SingleRunLowLevelMoveGenerator:
 
     def _traverse_current_list(self, ptr, current_tokens):
         if len(ptr) == 0:
-            yield JsonMove(self.diff, OperationType.REMOVE, current_tokens)
+            yield JsonMoveGroup(JsonMove(self.diff, OperationType.REMOVE, current_tokens))
             return
 
         for index, val in enumerate(ptr):
@@ -1312,7 +1389,7 @@ class SingleRunLowLevelMoveGenerator:
             current_tokens.pop()
 
     def _traverse_current_value(self, val, current_tokens):
-        yield JsonMove(self.diff, OperationType.REMOVE, current_tokens)
+        yield JsonMoveGroup(JsonMove(self.diff, OperationType.REMOVE, current_tokens))
 
     def _traverse_target(self, ptr, current_tokens, target_tokens):
         if isinstance(ptr, list):
@@ -1322,7 +1399,7 @@ class SingleRunLowLevelMoveGenerator:
 
         if isinstance(ptr, dict):
             if len(ptr) == 0:
-                yield JsonMove(self.diff, OperationType.ADD, current_tokens, target_tokens)
+                yield JsonMoveGroup(JsonMove(self.diff, OperationType.ADD, current_tokens, target_tokens))
                 return
 
             for key in ptr:
@@ -1341,7 +1418,7 @@ class SingleRunLowLevelMoveGenerator:
 
     def _traverse_target_list(self, ptr, current_tokens, target_tokens):
         if len(ptr) == 0:
-            yield JsonMove(self.diff, OperationType.ADD, current_tokens, target_tokens)
+            yield JsonMoveGroup(JsonMove(self.diff, OperationType.ADD, current_tokens, target_tokens))
             return
 
         for index, val in enumerate(ptr):
@@ -1355,7 +1432,7 @@ class SingleRunLowLevelMoveGenerator:
             current_tokens.pop()
 
     def _traverse_target_value(self, val, current_tokens, target_tokens):
-        yield JsonMove(self.diff, OperationType.ADD, current_tokens, target_tokens)
+        yield JsonMoveGroup(JsonMove(self.diff, OperationType.ADD, current_tokens, target_tokens))
 
     def _list_to_dict_with_count(self, items):
         counts = dict()
@@ -1387,7 +1464,7 @@ class RequiredValueMoveExtender:
         self.identifier = RequiredValueIdentifier(path_addressing)
         self.operation_wrapper = operation_wrapper
 
-    def extend(self, move, diff):
+    def extend(self, move: JsonMove, diff):
         # ignore full config removal because it is not possible by JsonPatch lib
         if move.op_type == OperationType.REMOVE and move.path == "":
             return
@@ -1440,7 +1517,7 @@ class RequiredValueMoveExtender:
             extended_move = self._flip(move, flip_path_value_tuples)
             yield extended_move
 
-    def _flip(self, move, flip_path_value_tuples):
+    def _flip(self, move: JsonMove, flip_path_value_tuples):
         new_value = copy.deepcopy(move.value)
         move_tokens = self.path_addressing.get_path_tokens(move.path)
         for field_path, field_value in flip_path_value_tuples:
@@ -1470,7 +1547,7 @@ class UpperLevelMoveExtender:
       2) If parent was in current but not target, then delete the parent
       3) If parent was in target but not current, then add the parent
     """
-    def extend(self, move, diff):
+    def extend(self, move: JsonMove, diff):
         # if no tokens i.e. whole config
         if not move.current_config_tokens:
             return
@@ -1503,7 +1580,7 @@ class DeleteInsteadOfReplaceMoveExtender:
     """
     A class to extend the given REPLACE move by adding a REMOVE move.
     """
-    def extend(self, move, diff):
+    def extend(self, move: JsonMove, diff):
         operation_type = move.op_type
 
         if operation_type != OperationType.REPLACE:
@@ -1524,7 +1601,7 @@ class DeleteRefsMoveExtender:
     def __init__(self, path_addressing):
         self.path_addressing = path_addressing
 
-    def extend(self, move, diff):
+    def extend(self, move: JsonMove, diff):
         operation_type = move.op_type
 
         if operation_type != OperationType.REMOVE:
@@ -1726,11 +1803,11 @@ class IgnorePathsFromYangConfigSplitter:
 
             # Add to config_without_yang from config_with_yang
             tokens = self.path_addressing.get_path_tokens(path)
-            add_move = JsonMove(Diff(config_without_yang, config_with_yang), OperationType.ADD, tokens, tokens)
+            add_move = JsonMoveGroup(JsonMove(Diff(config_without_yang, config_with_yang), OperationType.ADD, tokens, tokens))
             config_without_yang = add_move.apply(config_without_yang)
 
             # Remove from config_with_yang
-            remove_move = JsonMove(Diff(config_with_yang, {}), OperationType.REMOVE, tokens)
+            remove_move = JsonMoveGroup(JsonMove(Diff(config_with_yang, {}), OperationType.REMOVE, tokens))
             config_with_yang = remove_move.apply(config_with_yang)
 
         # Splitting the config based on 'ignore_paths_from_yang_list' can result in empty tables.
@@ -1934,6 +2011,6 @@ class PatchSorter:
         if moves is None:
             raise GenericConfigUpdaterError("There is no possible sorting")
 
-        changes = [JsonChange(move.patch) for move in moves]
+        changes = [JsonChange(move.get_jsonpatch()) for move in moves]
 
         return changes
