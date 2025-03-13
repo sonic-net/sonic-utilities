@@ -44,7 +44,6 @@ target_config: {self.target_config}"""
         return str(self)
 
 
-
 class JsonMove:
     """
     A class similar to JsonPatch operation, but it allows the path to refer to non-existing middle elements.
@@ -558,6 +557,26 @@ class RequiredValueIdentifier:
                     setting["common_key_index"] = index
             setting["requiring_filter"] = JsonPointerFilter(setting["requiring_patterns"], path_addressing)
 
+    """
+    Simple function to determine if the path tokens match any of the required patterns.
+    This is used to avoid grouping such changes in bulk operations.
+    """
+    def target_in_required_pattern(self, configdb_path_tokens):
+        for setting in self.settings:
+            if len(setting["required_pattern"]) != len(configdb_path_tokens):
+                continue
+
+            is_match = True
+
+            for idx, token in enumerate(setting["required_pattern"]):
+                if token not in [ "*", "@", configdb_path_tokens[idx] ]:
+                    is_match = False
+                    break
+
+            if is_match:
+                return True
+
+        return False
 
     def get_required_value_data(self, configs):
         data = {}
@@ -1171,17 +1190,130 @@ class KeyLevelMoveGenerator:
                 if not(table in config2) or not (key in config2[table]):
                     yield [table, key]
 
-class LowLevelMoveGenerator:
+
+class BulkLowLevelMoveGenerator:
     """
-    A class to generate the low level moves i.e. moves corresponding to differences between current/target config
-    where the path of the move does not have children.
+    A class that generates low level moves that can be grouped together as a single patch.
+    These are moves where the path of the move has no children, these are the end leafs.
+    We are going to use this as a non-extendable generator as the normal LowLevelMoveGenerator
+    will generate the extendable moves.
     """
     def __init__(self, path_addressing):
+        self.diff = None
         self.path_addressing = path_addressing
+        self.requiredval = RequiredValueIdentifier(path_addressing)
+
     def generate(self, diff):
-        single_run_generator = SingleRunLowLevelMoveGenerator(diff, self.path_addressing)
-        for move in single_run_generator.generate():
+        self.diff = diff
+        current_ptr = self.diff.current_config
+        target_ptr = self.diff.target_config
+        tokens = []
+
+        # Handle removals first
+        for move in self.__traverse(OperationType.REMOVE, current_ptr, target_ptr, tokens):
             yield move
+
+        # Handle replacements next
+        for move in self.__traverse(OperationType.REPLACE, current_ptr, target_ptr, tokens):
+            yield move
+
+        # Finally handle additions
+        for move in self.__traverse(OperationType.ADD, current_ptr, target_ptr, tokens):
+            yield move
+
+    def __restricted_key(self, tokens, key):
+        tokens.append(key)
+        rv = self.requiredval.target_in_required_pattern(tokens)
+        tokens.pop()
+        return rv
+
+    def __traverse(self, op, current_ptr, target_ptr, tokens):
+        if isinstance(current_ptr, dict):
+            if self.__children_are_leafs(current_ptr) and self.__children_are_leafs(target_ptr):
+                for move in self.__output_bulk_move(op, current_ptr, target_ptr, tokens):
+                    yield move
+                return
+
+            # If current and target are different types, skip
+            if not isinstance(target_ptr, dict):
+                return
+
+            # Recurse across children, sorted by backlinks
+            reverse = True
+            if op == OperationType.REMOVE:
+                reverse = False
+
+            for key in self.path_addressing.configdb_sorted_keys_by_backlinks(
+                self.path_addressing.create_path(tokens), current_ptr, reverse=reverse, configdb_relative=True):
+
+                # Does not exist in target, skip
+                if target_ptr.get(key) is None:
+                    continue
+
+                tokens.append(key)
+                for move in self.__traverse(op, current_ptr[key], target_ptr[key], tokens):
+                    yield move
+                tokens.pop()
+            return
+
+        # TODO: implement list support
+        return
+
+    def __children_are_leafs(self, config_ptr):
+        for key in config_ptr:
+            if isinstance(config_ptr[key], dict) or isinstance(config_ptr[key], list):
+                return False
+        return True
+
+    def __output_bulk_move(self, op, current_ptr, target_ptr, tokens):
+        match op:
+            case OperationType.REMOVE:
+                for move in self.__output_bulk_remove(current_ptr, target_ptr, tokens):
+                    yield move
+            case OperationType.REPLACE:
+                for move in self.__output_bulk_replace(current_ptr, target_ptr, tokens):
+                    yield move
+            case OperationType.ADD:
+                for move in self.__output_bulk_add(current_ptr, target_ptr, tokens):
+                    yield move
+
+    def __output_bulk_add(self, current_ptr, target_ptr, tokens):
+        group = JsonMoveGroup()
+        for key in target_ptr:
+            if current_ptr.get(key) is None and not self.__restricted_key(tokens, key):
+                tokens.append(key)
+                group.append(JsonMove(self.diff, OperationType.ADD, tokens, tokens))
+                tokens.pop()
+
+        # Not a bulk move if there's not more than one action to take
+        if len(group) > 1:
+            yield group
+
+    def __output_bulk_remove(self, current_ptr, target_ptr, tokens):
+        group = JsonMoveGroup()
+        for key in current_ptr:
+            if target_ptr.get(key) is None and not self.__restricted_key(tokens, key):
+                tokens.append(key)
+                group.append(JsonMove(self.diff, OperationType.REMOVE, tokens))
+                tokens.pop()
+
+        # Not a bulk move if there's not more than one action to take
+        if len(group) > 1:
+            yield group
+
+    def __output_bulk_replace(self, current_ptr, target_ptr, tokens):
+        group = JsonMoveGroup()
+        for key in current_ptr:
+            target_val = target_ptr.get(key)
+            if target_val is not None and target_val != current_ptr.get(key) and not self.__restricted_key(tokens, key):
+                tokens.append(key)
+                group.append(JsonMove(self.diff, OperationType.REPLACE, tokens, tokens))
+                tokens.pop()
+
+        # Not a bulk move if there's not more than one action to take
+        if len(group) > 1:
+            yield group
+
 
 class RemoveCreateOnlyDependencyMoveGenerator:
     """
@@ -1246,15 +1378,17 @@ class RemoveCreateOnlyDependencyMoveGenerator:
         return config[table_to_check][member_name].get(create_only_field, None)
 
 
-class SingleRunLowLevelMoveGenerator:
+class LowLevelMoveGenerator:
     """
-    A class that can only run once to assist LowLevelMoveGenerator with generating the moves.
+    A class to generate the low level moves i.e. moves corresponding to differences between current/target config
+    where the path of the move does not have children.
     """
-    def __init__(self, diff, path_addressing):
-        self.diff = diff
+    def __init__(self,path_addressing):
+        self.diff = None
         self.path_addressing = path_addressing
 
-    def generate(self):
+    def generate(self, diff):
+        self.diff = diff
         current_ptr = self.diff.current_config
         target_ptr = self.diff.target_config
         current_tokens = []
@@ -1453,6 +1587,7 @@ class SingleRunLowLevelMoveGenerator:
             counts[item] = counts.get(item, 0) + 1
 
         return counts
+
 
 class RequiredValueMoveExtender:
     """
@@ -1724,7 +1859,8 @@ class SortAlgorithmFactory:
         move_generators = [RemoveCreateOnlyDependencyMoveGenerator(self.path_addressing),
                            LowLevelMoveGenerator(self.path_addressing)]
         # TODO: Enable TableLevelMoveGenerator once it is confirmed whole table can be updated at the same time
-        move_non_extendable_generators = [KeyLevelMoveGenerator(self.path_addressing)]
+        move_non_extendable_generators = [KeyLevelMoveGenerator(self.path_addressing),
+                                          BulkLowLevelMoveGenerator(self.path_addressing)]
         move_extenders = [RequiredValueMoveExtender(self.path_addressing, self.operation_wrapper),
                           UpperLevelMoveExtender(),
                           DeleteInsteadOfReplaceMoveExtender(),
