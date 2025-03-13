@@ -3282,7 +3282,8 @@ class TestSortAlgorithmFactory(unittest.TestCase):
         factory = ps.SortAlgorithmFactory(OperationWrapper(), config_wrapper, PathAddressing(config_wrapper))
         expected_generators = [ps.RemoveCreateOnlyDependencyMoveGenerator,
                                ps.LowLevelMoveGenerator]
-        expected_non_extendable_generators = [ps.KeyLevelMoveGenerator]
+        expected_non_extendable_generators = [ps.KeyLevelMoveGenerator,
+                                              ps.BulkLowLevelMoveGenerator]
         expected_extenders = [ps.RequiredValueMoveExtender,
                               ps.UpperLevelMoveExtender,
                               ps.DeleteInsteadOfReplaceMoveExtender,
