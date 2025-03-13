@@ -5,6 +5,7 @@ import shutil
 import sys
 import unittest
 from unittest.mock import MagicMock, Mock, call
+from generic_config_updater.patch_sorter import JsonMoveGroup
 
 class MockSideEffectDict:
     def __init__(self, map):
@@ -28,11 +29,27 @@ class MockSideEffectDict:
 
         return value
 
+    def side_effect_jsonmovegroup_func(self, *args):
+        l = [str(arg) for arg in args]
+        key = tuple(l)
+        value = self.map.get(key)
+        if value is None:
+            raise ValueError(f"Given arguments were not found in arguments map.\n  Arguments: {key}\n  Map: {self.map}")
+
+        rv = []
+        for val in value:
+            rv.append(JsonMoveGroup(val))
+        return rv
+
 def create_side_effect_dict(map):
     return MockSideEffectDict(map).side_effect_func
 
 def create_side_effect_skiplastarg_dict(map):
     return MockSideEffectDict(map).side_effect_skiplastarg_func
+
+def create_side_effect_jsonmovegroup_dict(map):
+    return MockSideEffectDict(map).side_effect_jsonmovegroup_func
+
 
 class FilesLoader:
     def __init__(self):
