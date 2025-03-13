@@ -165,6 +165,21 @@ function reboot_dpu()
 
     debug "User requested rebooting device ${DPU_NAME} ..."
 
+    # Check if the DPU operation status is online before rebooting
+    local oper_status
+    oper_status=$(show chassis modules status "${DPU_NAME^^}" | sed -n '/^ *DPU/ s/.*\s\+\(Online\|Offline\)\s\+.*/\1/p')
+    if [ $? -ne 0 ]; then
+        log_message "ERROR: Failed to retrieve DPU status."
+        return ${EXIT_ERROR}
+    fi
+
+    log_message "INFO: DPU ${DPU_NAME} is in '$oper_status' state before reboot."
+    oper_status=$(echo "$oper_status" | tr '[:upper:]' '[:lower:]')
+    if [ "$oper_status" != "online" ]; then
+        log_message "INFO: ${DPU_NAME} is not online. Current status: $oper_status"
+        return ${EXIT_ERROR}
+    fi
+
     # Send reboot command to DPU
     gnmi_reboot_dpu "${DPU_NAME}"
     if [ $? -ne 0 ]; then
