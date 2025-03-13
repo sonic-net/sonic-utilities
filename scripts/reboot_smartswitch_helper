@@ -4,6 +4,8 @@ declare -r GNMI_PORT=8080 # Default GNMI port
 declare -r MODULE_REBOOT_DPU="DPU"
 declare -r MODULE_REBOOT_SMARTSWITCH="SMARTSWITCH"
 
+declare -r EXIT_DPU_DOWN=2
+
 # Function to print debug message
 function log_message() {
     local message=$1
@@ -170,14 +172,13 @@ function reboot_dpu()
     oper_status=$(show chassis modules status "${DPU_NAME^^}" | sed -n '/^ *DPU/ s/.*\s\+\(Online\|Offline\)\s\+.*/\1/p')
     if [ $? -ne 0 ]; then
         log_message "ERROR: Failed to retrieve DPU status."
-        return ${EXIT_ERROR}
-    fi
-
-    log_message "INFO: DPU ${DPU_NAME} is in '$oper_status' state before reboot."
-    oper_status=$(echo "$oper_status" | tr '[:upper:]' '[:lower:]')
-    if [ "$oper_status" != "online" ]; then
-        log_message "INFO: ${DPU_NAME} is not online. Current status: $oper_status"
-        return ${EXIT_ERROR}
+    else
+        log_message "INFO: DPU ${DPU_NAME} is in '$oper_status' state before reboot."
+        oper_status=$(echo "$oper_status" | tr '[:upper:]' '[:lower:]')
+        if [ "$oper_status" != "online" ]; then
+            log_message "INFO: ${DPU_NAME} is not online. Current status: $oper_status"
+            return ${EXIT_DPU_DOWN}
+        fi
     fi
 
     # Send reboot command to DPU
