@@ -806,6 +806,7 @@ save_frr_info() {
     save_vtysh "show mpls table" "frr.mpls.table"
     save_vtysh "show mpls fec" "frr.mpls.fec"
     save_vtysh "show nexthop-group rib" "frr.nhg.rib"
+    save_vtysh "show route-map" "frr.route_map"
     save_vtysh "show thread cpu" "frr.thread_cpu"
     save_vtysh "show thread poll" "frr.thread_poll"
     save_vtysh "show debugging hashtable" "frr.debugging_hashtable"
