@@ -663,6 +663,26 @@ class DBMigrator():
             metadata['synchronous_mode'] = device_metadata_data.get("synchronous_mode")
             self.configDB.set_entry('DEVICE_METADATA', 'localhost', metadata)
 
+    def migrate_ipinip_tunnel(self):
+        """Migrate TUNNEL_DECAP_TABLE to add decap terms with TUNNEL_DECAP_TERM_TABLE."""
+        tunnel_decap_table = self.appDB.get_table('TUNNEL_DECAP_TABLE')
+        app_db_separator = self.appDB.get_db_separator(self.appDB.APPL_DB)
+        for key, attrs in tunnel_decap_table.items():
+            dst_ip = attrs.pop("dst_ip", None)
+            src_ip = attrs.pop("src_ip", None)
+            if dst_ip:
+                dst_ips = dst_ip.split(",")
+                for dip in dst_ips:
+                    decap_term_table_key = app_db_separator.join(["TUNNEL_DECAP_TERM_TABLE", key, dip])
+                    if src_ip:
+                        self.appDB.set(self.appDB.APPL_DB, decap_term_table_key, "src_ip", src_ip)
+                        self.appDB.set(self.appDB.APPL_DB, decap_term_table_key, "term_type", "P2P")
+                    else:
+                        self.appDB.set(self.appDB.APPL_DB, decap_term_table_key, "term_type", "P2MP")
+
+            if dst_ip or src_ip:
+                self.appDB.set_entry("TUNNEL_DECAP_TABLE", key, attrs)
+
     def migrate_port_qos_map_global(self):
         """
         Generate dscp_to_tc_map for switch.
@@ -1242,6 +1262,15 @@ class DBMigrator():
         Version 202405_01.
         """
         log.log_info('Handling version_202405_01')
+        self.set_version('version_202405_02')
+        return 'version_202405_02'
+
+    def version_202405_02(self):
+        """
+        Version 202405_02.
+        """
+        log.log_info('Handling version_202405_02')
+        self.migrate_ipinip_tunnel()
         self.set_version('version_202411_01')
         return 'version_202411_01'
 
