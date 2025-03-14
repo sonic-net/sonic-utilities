@@ -1023,6 +1023,35 @@ class Test_multiAsic_SFP(object):
         os.environ["UTILITIES_UNIT_TESTING"] = "2"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
 
+    def test_sfp_presence_without_ns(self):
+        runner = CliRunner()
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["presence"], ['Ethernet0'])
+        expected = """Port       Presence
+---------  ----------
+Ethernet0  Present
+"""
+        assert result.exit_code == 0
+        assert result.output == expected
+
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["presence"], ['Ethernet4'])
+        expected = """Port       Presence
+---------  -----------
+Ethernet4  Not present
+"""
+        assert result.exit_code == 0
+        assert result.output == expected
+
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["presence"], ['Ethernet200'])
+        expected = """Port         Presence
+-----------  -----------
+Ethernet200  Not present
+"""
+        assert result.exit_code == 1
+        assert result.output == expected
+
     @patch.object(show_module.interfaces.click.Choice, 'convert', MagicMock(return_value='asic0'))
     def test_sfp_presence_with_ns(self):
         runner = CliRunner()
@@ -1067,10 +1096,31 @@ Ethernet200  Not present
         expected = "Ethernet200: SFP EEPROM Not detected"
         assert result_lines == expected
 
+    def test_sfp_eeprom_without_ns(self):
+        runner = CliRunner()
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["eeprom"], ['Ethernet0'])
+        assert result.exit_code == 0
+        assert "\n".join([line.rstrip() for line in result.output.split('\n')]) == test_sfp_eeprom_output
+
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["eeprom"], ['Ethernet4'])
+        result_lines = result.output.strip('\n')
+        expected = "Ethernet4: SFP EEPROM Not detected"
+        assert result_lines == expected
+
     @patch.object(show_module.interfaces.click.Choice, 'convert', MagicMock(return_value='asic0'))
     def test_qsfp_dd_pm_with_ns(self):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["pm"], ['Ethernet0', '-n', 'asic0'])
+        result_lines = result.output.strip('\n')
+        expected = "Ethernet0: Transceiver performance monitoring not applicable"
+        assert result_lines == expected
+
+    def test_qsfp_dd_pm_without_ns(self):
+        runner = CliRunner()
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["pm"], ['Ethernet0'])
         result_lines = result.output.strip('\n')
         expected = "Ethernet0: Transceiver performance monitoring not applicable"
         assert result_lines == expected
@@ -1083,12 +1133,27 @@ Ethernet200  Not present
         expected = "Ethernet0: Transceiver status info not applicable"
         assert result_lines == expected
 
+    def test_qsfp_dd_status_without_ns(self):
+        runner = CliRunner()
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["status"], ['Ethernet0'])
+        result_lines = result.output.strip('\n')
+        expected = "Ethernet0: Transceiver status info not applicable"
+        assert result_lines == expected
+
     @patch.object(show_module.interfaces.click.Choice, 'convert', MagicMock(return_value='asic1'))
     def test_cmis_sfp_info_with_ns(self):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["info"], ['Ethernet64', '-n', 'asic1'])
         assert result.exit_code == 0
         assert "\n".join([ l.rstrip() for l in result.output.split('\n')]) == test_cmis_eeprom_output
+
+    def test_cmis_sfp_info_without_ns(self):
+        runner = CliRunner()
+        result = runner.invoke(
+                show.cli.commands["interfaces"].commands["transceiver"].commands["info"], ['Ethernet64'])
+        assert result.exit_code == 0
+        assert "\n".join([line.rstrip() for line in result.output.split('\n')]) == test_cmis_eeprom_output
 
     def test_sfp_eeprom_all(self):
         runner = CliRunner()
