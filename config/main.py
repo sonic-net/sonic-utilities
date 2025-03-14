@@ -8224,6 +8224,8 @@ def add_ntp_server(ctx, ntp_ip_address):
         return
     else:
         try:
+            if len(ntp_servers) >= 10:
+                ctx.fail('Max elements limit 10 reached.')
             db.set_entry('NTP_SERVER', ntp_ip_address,
                          {'resolve_as': ntp_ip_address,
                           'association_type': 'server'})
