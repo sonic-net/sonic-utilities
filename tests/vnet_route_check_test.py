@@ -606,24 +606,24 @@ test_data = {
     },
     "13": {
         DESCR: "A VNET route is missing in STATE DB and another inactive route is missing in ASIC DB",
-         ARGS: "vnet_route_check",
-         PRE: {
-             APPL_DB: {
-                 VXLAN_TUNNEL_TABLE: {
+        ARGS: "vnet_route_check",
+        PRE: {
+            APPL_DB: {
+                VXLAN_TUNNEL_TABLE: {
                     "tunnel_v4": {"src_ip": "10.1.0.32"}
-                 },
-                 VNET_TABLE: {
+                },
+                VNET_TABLE: {
                     "Vnet1": {"vxlan_tunnel": "tunnel_v4", "vni": "10001"}
-                 },
-                 INTF_TABLE: {
+                },
+                INTF_TABLE: {
                     "Vlan3001": {"vnet_name": "Vnet1"},
                     "Vlan3001:30.1.10.1/24": {}
-                 },
+                },
                 VNET_ROUTE_TABLE: {
                     "Vnet1:30.1.10.0/24": {"ifname": "Vlan3001"},
                     "Vnet1:50.1.1.0/24": {"ifname": "Vlan3001"},
                 }
-             },
+            },
             ASIC_DB: {
                 ASIC_STATE: {
                     RT_ENTRY_KEY_PREFIX + "30.1.10.0/24" + RT_ENTRY_KEY_SUFFIX: {},
