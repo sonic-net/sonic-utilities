@@ -9264,5 +9264,82 @@ def motd(message):
                         {'motd': message})
 
 
+#
+# 'logrotate' group ('config logrotate ...')
+#
+@config.group(invoke_without_command=True)
+@click.pass_context
+@click.argument('file', required=True, type=click.Choice(['syslog', 'debug']))
+def logrotate(ctx, file):
+    """Configuring logrotate"""
+    # If invoking subcomand, no need to do anything
+    if ctx.invoked_subcommand is not None:
+        return
+
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    config_db.mod_entry(swsscommon.CFG_LOGGING_TABLE_NAME, file, None)
+
+
+@logrotate.command()
+@click.pass_context
+@click.argument('disk_percentage', metavar='<disk-percentage>',
+                required=True,  type=float)
+def disk_percentage(ctx, disk_percentage):
+    """Configuring logrotate disk-precentage"""
+    file = ctx.parent.params.get('file')
+    if disk_percentage <= 0 or disk_percentage > 100:
+        click.echo(f'Disk percentage {disk_percentage} is not in range (0 - 100]')
+        sys.exit(1)
+
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    config_db.mod_entry(swsscommon.CFG_LOGGING_TABLE_NAME, file,
+                        {'disk_percentage': disk_percentage})
+
+
+@logrotate.command(name='frequency')
+@click.pass_context
+@click.argument('frequency', metavar='<daily|weekly|monthly|yearly>',
+                required=True,
+                type=click.Choice(['daily', 'weekly', 'monthly', 'yearly']))
+def logrotate_frequency(ctx, frequency):
+    """Configuring logrotate rotation frequency"""
+    file = ctx.parent.params.get('file')
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    config_db.mod_entry(swsscommon.CFG_LOGGING_TABLE_NAME, file,
+                        {'frequency': frequency})
+
+
+@logrotate.command()
+@click.pass_context
+@click.argument('max_number', metavar='<max-number>',
+                type=click.IntRange(0, 999999), required=True)
+def max_number(ctx, max_number):
+    """Configuring logrotate max-number of files"""
+    file = ctx.parent.params.get('file')
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    config_db.mod_entry(swsscommon.CFG_LOGGING_TABLE_NAME, file,
+                        {'max_number': max_number})
+
+
+@logrotate.command(name='size')
+@click.pass_context
+@click.argument('size', metavar='<size>', type=float, required=True)
+def logrotate_size(ctx, size):
+    """Configuring logrotate size of file"""
+    file = ctx.parent.params.get('file')
+    if size < 0.001 or size > 3500.0:
+        click.echo(f'Size {size} is not in range [0.001 - 3500.0]')
+        sys.exit(1)
+
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    config_db.mod_entry(swsscommon.CFG_LOGGING_TABLE_NAME, file,
+                        {'size': size})
+
+
 if __name__ == '__main__':
     config()

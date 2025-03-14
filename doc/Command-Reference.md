@@ -112,7 +112,10 @@
   * [Reloading Configuration](#reloading-configuration)
   * [Loading Management Configuration](#loading-management-configuration)
   * [Saving Configuration to a File for Persistence](#saving-configuration-to-a-file-for-persistence)
- * [Loopback Interfaces](#loopback-interfaces)
+* [Logrotate](#logrotate)
+  * [Logrotate config commands](#logrotate-config-commands)
+  * [Logrotate show command](#logrotate-show-command)
+* [Loopback Interfaces](#loopback-interfaces)
   * [Loopback show commands](#loopback-show-commands)
   * [Loopback config commands](#loopback-config-commands)
 * [VRF Configuration](#vrf-configuration)
@@ -14536,4 +14539,67 @@ Memory Statistics Configuration:
 Enabled:            false
 Sampling Interval:  5
 Retention Period:   15
+```
+
+# Logrotate Commands
+This sub-section explains the list of the configuration options available for logrotate feature.
+## Logrotate config commands
+- Rotate logs when they surpass a specified percentage of disk
+```
+admin@sonic:~$ config logrotate disk-percentage <> <>
+Usage: config logrotate disk-precentage [OPTIONS] <syslog|debug> <disk-percentage>
+
+  Configuring logrotate disk-precentage file <syslog|debug> <disk_percentage>
+
+Options:
+  -?, -h, --help  Show this message and exit.
+```
+- Log files rotation frequency
+```
+admin@sonic:~$ config logrotate frequency <syslog|debug> <daily|weekly|monthly|yearly>
+Usage: config logrotate frequency [OPTIONS] <syslog|debug> <daily|weekly|monthly|yearly>
+
+  Configuring logrotate frequency file <syslog|debug> <frequency>
+
+Options:
+  -?, -h, --help  Show this message and exit.
+```
+- Max number of log files to keep
+```
+admin@sonic:~$ config logrotate max-number <syslog|debug> <max-number>
+Usage: config logrotate max-number [OPTIONS] <syslog|debug> <max-number>
+
+  Configuring logrotate max-number file <syslog|debug> <max_number>
+
+Options:
+  -?, -h, --help  Show this message and exit.
+```
+- Rotate logs if they grow bigger then size in Mebibytes
+```
+admin@sonic:~$ config logrotate size <syslog|debug> <size>
+Usage: config logrotate size [OPTIONS] <syslog|debug> <size>
+
+  Configuring logrotate size file <syslog|debug> <size>
+
+Options:
+  -h, -?, --help  Show this message and exit.
+```
+## Logrotate show command
+- Show logrotate configuration
+```
+admin@sonic:~$ show logrotate
+Usage: show logrotate [OPTIONS] COMMAND [ARGS]...
+
+  Show logrotate configuration
+
+Options:
+  -?, -h, --help  Show this message and exit.
+```
+```
+admin@sonic:~$ show logrotate
+file      disk-percentage  frequency      max-number    size
+------  -----------------  -----------  ------------  ------
+syslog             10.2    daily                  10    20.0
+debug              50.5    weekly                 20    10.0
+
 ```
