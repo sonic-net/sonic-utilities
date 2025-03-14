@@ -188,6 +188,92 @@ class TestValidateFieldOperation(unittest.TestCase):
         config_wrapper = gu_common.ConfigWrapper()
         self.assertRaises(gu_common.IllegalPatchOperationError, config_wrapper.validate_field_operation, old_config, target_config)
 
+    def test_validate_field_operation_illegal__dataacl_table_type_update_and_rule_change(self):
+        old_config = {
+            "ACL_TABLE": {
+                "TEST_INGRESS": {
+                    "type": "L2"
+                }
+            },
+            "ACL_RULE": {
+                "TEST_INGRESS|RULE_1": {
+                    "ETHER_TYPE": "2048"
+                }
+            }
+        }
+        target_config = {
+            "ACL_TABLE": {
+                "TEST_INGRESS": {
+                    "type": "L3V6"
+                }
+            },
+            "ACL_RULE": {
+                "TEST_INGRESS|RULE_1": {
+                    "IP_TYPE": "IPV6ANY"
+                }
+            }
+        }
+        config_wrapper = gu_common.ConfigWrapper()
+        self.assertRaises(gu_common.IllegalPatchOperationError,
+                          config_wrapper.validate_field_operation, old_config, target_config)
+
+    def test_validate_field_operation_legal__only_dataacl_table_type_update(self):
+        old_config = {
+            "ACL_TABLE": {
+                "TEST_INGRESS": {
+                    "type": "L3"
+                }
+            },
+            "ACL_RULE": {
+                "TEST_INGRESS|RULE_1": {
+                    "IP_TYPE": "IPV6ANY"
+                }
+            }
+        }
+        target_config = {
+            "ACL_TABLE": {
+                "TEST_INGRESS": {
+                    "type": "L3V6"
+                }
+            },
+            "ACL_RULE": {
+                "TEST_INGRESS|RULE_1": {
+                    "IP_TYPE": "IPV6ANY"
+                }
+            }
+        }
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_legal__only_dataacl_rule_update(self):
+        old_config = {
+            "ACL_TABLE": {
+                "TEST_INGRESS": {
+                    "type": "L3"
+                }
+            },
+            "ACL_RULE": {
+                "TEST_INGRESS|RULE_1": {
+                    "IP_TYPE": "IPV6ANY"
+                }
+            }
+        }
+        target_config = {
+            "ACL_TABLE": {
+                "TEST_INGRESS": {
+                    "type": "L3"
+                }
+            },
+            "ACL_RULE": {
+                "TEST_INGRESS|RULE_1": {
+                    "IP_TYPE": "IPV4ANY"
+                }
+            }
+        }
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+
 class TestGetAsicName(unittest.TestCase):
 
     @patch('sonic_py_common.device_info.get_sonic_version_info')
