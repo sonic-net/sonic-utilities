@@ -363,7 +363,7 @@ def filter_active_vnet_routes(vnet_routes: dict):
     Format (for both input and output):
     { <vnet_name>: { 'routes': [ <pfx/pfx_len> ], 'vrf_oid': <oid> } }
     """
-    state_db = swsscommon.DBConnector("STATE_DB", 0, True)
+    state_db = swsscommon.DBConnector("STATE_DB", 0)
     vnet_route_tunnel_table = swsscommon.Table(state_db, "VNET_ROUTE_TUNNEL_TABLE")
 
     vnet_active_routes = {}
