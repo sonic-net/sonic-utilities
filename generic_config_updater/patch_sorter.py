@@ -1035,18 +1035,20 @@ class TableLevelMoveGenerator:
     This class will generate moves to remove tables if they are in current, but not target. It also add tables
     if they are in target but not current configs.
     """
+    def __init__(self, path_addressing):
+        self.path_addressing = path_addressing
 
     def generate(self, diff):
         # Removing tables in current but not target
-        for tokens in self._get_non_existing_tables_tokens(diff.current_config, diff.target_config):
+        for tokens in self._get_non_existing_tables_tokens(diff.current_config, diff.target_config, False):
             yield JsonMove(diff, OperationType.REMOVE, tokens)
 
         # Adding tables in target but not current
-        for tokens in self._get_non_existing_tables_tokens(diff.target_config, diff.current_config):
+        for tokens in self._get_non_existing_tables_tokens(diff.target_config, diff.current_config, True):
             yield JsonMove(diff, OperationType.ADD, tokens, tokens)
 
-    def _get_non_existing_tables_tokens(self, config1, config2):
-        for table in config1:
+    def _get_non_existing_tables_tokens(self, config1, config2, reverse):
+        for table in self.path_addressing.configdb_sorted_keys_by_backlinks("/", config1, reverse=reverse):
             if not(table in config2):
                 yield [table]
 
@@ -1065,9 +1067,11 @@ class KeyLevelMoveGenerator:
     This class will generate moves to remove keys if they are in current, but not target. It also add keys
     if they are in target but not current configs.
     """
+    def __init__(self, path_addressing):
+        self.path_addressing = path_addressing
     def generate(self, diff):
         # Removing keys in current but not target
-        for tokens in self._get_non_existing_keys_tokens(diff.current_config, diff.target_config):
+        for tokens in self._get_non_existing_keys_tokens(diff.current_config, diff.target_config, reverse=False):
             table = tokens[0]
             # if table has a single key, delete the whole table because empty tables are not allowed in ConfigDB
             if len(diff.current_config[table]) == 1:
@@ -1076,12 +1080,12 @@ class KeyLevelMoveGenerator:
                 yield JsonMove(diff, OperationType.REMOVE, tokens)
 
         # Adding keys in target but not current
-        for tokens in self._get_non_existing_keys_tokens(diff.target_config, diff.current_config):
+        for tokens in self._get_non_existing_keys_tokens(diff.target_config, diff.current_config, reverse=True):
             yield JsonMove(diff, OperationType.ADD, tokens, tokens)
 
-    def _get_non_existing_keys_tokens(self, config1, config2):
-        for table in config1:
-            for key in config1[table]:
+    def _get_non_existing_keys_tokens(self, config1, config2, reverse):
+        for table in self.path_addressing.configdb_sorted_keys_by_backlinks("/", config1, reverse=reverse):
+            for key in self.path_addressing.configdb_sorted_keys_by_backlinks("/" + table, config1, reverse=reverse):
                 if not(table in config2) or not (key in config2[table]):
                     yield [table, key]
 
@@ -1634,7 +1638,7 @@ class SortAlgorithmFactory:
         move_generators = [RemoveCreateOnlyDependencyMoveGenerator(self.path_addressing),
                            LowLevelMoveGenerator(self.path_addressing)]
         # TODO: Enable TableLevelMoveGenerator once it is confirmed whole table can be updated at the same time
-        move_non_extendable_generators = [KeyLevelMoveGenerator()]
+        move_non_extendable_generators = [KeyLevelMoveGenerator(self.path_addressing)]
         move_extenders = [RequiredValueMoveExtender(self.path_addressing, self.operation_wrapper),
                           UpperLevelMoveExtender(),
                           DeleteInsteadOfReplaceMoveExtender(),

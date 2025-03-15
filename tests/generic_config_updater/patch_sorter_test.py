@@ -2079,7 +2079,8 @@ class RemoveCreateOnlyDependencyMoveValidator(unittest.TestCase):
 
 class TestTableLevelMoveGenerator(unittest.TestCase):
     def setUp(self):
-        self.generator = ps.TableLevelMoveGenerator()
+        path_addressing = PathAddressing()
+        self.generator = ps.TableLevelMoveGenerator(path_addressing)
 
     def test_generate__tables_in_current_but_not_target__tables_deleted_moves(self):
         self.verify(current = {"ExistingTable": {}, "NonExistingTable1": {}, "NonExistingTable2": {}},
@@ -2121,7 +2122,8 @@ class TestTableLevelMoveGenerator(unittest.TestCase):
 
 class TestKeyLevelMoveGenerator(unittest.TestCase):
     def setUp(self):
-        self.generator = ps.KeyLevelMoveGenerator()
+        path_addressing = PathAddressing()
+        self.generator = ps.KeyLevelMoveGenerator(path_addressing)
 
     def test_generate__keys_in_current_but_not_target__keys_deleted_moves(self):
         self.verify(current = {
