@@ -11,6 +11,7 @@ import re
 import os
 from sonic_py_common import logger, multi_asic
 from enum import Enum
+from functools import cmp_to_key
 
 YANG_DIR = "/usr/local/yang-models"
 SYSLOG_IDENTIFIER = "GenericConfigUpdater"
@@ -584,6 +585,82 @@ class PathAddressing:
             sy = self._create_sonic_yang_with_loaded_models()
         return sy.xpath_to_configdb_path(xpath, config)
 
+    def configdb_sort_cmp(self, a, b):
+        # Order first by number of backlinks
+        cmp = a["backlinks"] - b["backlinks"]
+        if cmp != 0:
+            return cmp
+
+        # Then order (in reverse!) by musts
+        cmp = b["musts"] - a["musts"]
+        if cmp != 0:
+            return cmp
+
+        # Finally, if we differ by number of separators, a lot of times the
+        # one with fewer separators wins.  Hopefully the 'musts' will catch
+        # this anyhow.
+        cmp = a["nsep"] - b["nsep"]
+        return cmp
+
+    def configdb_sorted_keys_by_backlinks(self, configdb_path: str, configdb: dict, reverse: bool = False, configdb_relative: bool = False, sy = None):
+        """
+        Given a path and a config, iterates across all keys at the path location
+        to look up the number of backlinks per key, then returns the keys sorted
+        by backlinks in acending order by default (set reverse=True to use descending order)
+
+        The configdb is only used to look up the keys at the given path, it is not
+        loaded into the context.  The sort is not performed by actual references
+        to the key in data, but rather the "potential" number of references based
+        on the schema alone.
+
+        If configdb_relative=True then we will use the provided configdb ptr
+        directly instead of using the configdb_path parameter to find the proper
+        position.
+        """
+
+        if sy is None and self.config_wrapper is not None:
+            sy = self._create_sonic_yang_with_loaded_models()
+
+        # Traverse configdb to find the right pointer
+        ptr = configdb
+        tokens = self.get_path_tokens(configdb_path)
+        if not configdb_relative:
+            for token in tokens:
+                ptr = ptr[token]
+
+        # Test cases expect non-sorted and config_wrapper isn't set.
+        if self.config_wrapper is None:
+            return [ key for key in ptr ]
+
+        keys = []
+        # Enumerate all keys and retrieve backlinks, store in a list of dictionaries for sorting
+        for key in ptr:
+            tokens.append(key)
+            path = self.create_path(tokens)
+            try:
+                xpath = sy.configdb_path_to_xpath(path, schema_xpath=True)
+            except KeyError:
+                # Test cases use invalid tables, so we have to handle that even
+                # though it shouldn't be possible in live code as tables without
+                # yang are trimmed
+                keys.append({ "key": key,
+                              "backlinks": 0,
+                              "musts": 0,
+                              "nsep": 0
+                            })
+            else:
+                keys.append({ "key": key,
+                              "backlinks": len(sy.find_schema_dependencies(xpath, match_ancestors=True)),
+                              "musts": sy.find_schema_must_count(xpath, match_ancestors=True),
+                              "nsep": str(key).count("|")
+                            })
+            tokens.pop()
+
+        # Sort list of keys by count
+        keys = sorted(keys, key=cmp_to_key(self.configdb_sort_cmp), reverse=reverse)
+
+        # Caller doesn't care about the count, just that the list of keys is ordered
+        return [d['key'] for d in keys]
 
 class TitledLogger(logger.Logger):
     def __init__(self, syslog_identifier, title, verbose, print_all_to_console):
