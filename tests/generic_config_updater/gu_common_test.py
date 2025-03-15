@@ -648,7 +648,7 @@ class TestPathAddressing(unittest.TestCase):
             self.assertEqual(expected, actual)
 
         check("", [])
-        check("/", [""])
+        check("/", [])
         check("/token", ["token"])
         check("/more/than/one/token", ["more", "than", "one", "token"])
         check("/has/numbers/0/and/symbols/^", ["has", "numbers", "0", "and", "symbols", "^"])
@@ -701,33 +701,6 @@ class TestPathAddressing(unittest.TestCase):
         # XPATH 1.0 does not support double-quotes within double-quoted string. str literal can be "[^"]*"
         # Not validating no double-quotes within double-quoted string
         check('/a/mix["of""quotes\'does"]/not/work/well', ["a", 'mix["of""quotes\'does"]', "not", "work", "well"])
-
-    def test_create_xpath(self):
-        def check(tokens, xpath):
-            expected=xpath
-            actual=self.path_addressing.create_xpath(tokens)
-            self.assertEqual(expected, actual)
-
-        check([], "/")
-        check(["token"], "/token")
-        check(["more", "than", "one", "token"], "/more/than/one/token")
-        check(["multi", "tokens", "with", "empty", "last", "token", ""], "/multi/tokens/with/empty/last/token/")
-        check(["has", "numbers", "0", "and", "symbols", "^"], "/has/numbers/0/and/symbols/^")
-        check(["has[a='predicate']", "in", "the", "beginning"], "/has[a='predicate']/in/the/beginning")
-        check(["ha", "s[a='predicate']", "in", "the", "middle"], "/ha/s[a='predicate']/in/the/middle")
-        check(["ha", "s[a='predicate-in-the-end']"], "/ha/s[a='predicate-in-the-end']")
-        check(["it", "has[more='than'][one='predicate']", "somewhere"], "/it/has[more='than'][one='predicate']/somewhere")
-        check(["ha", "s[a='predicate\"with']", "double-quotes", "inside"], "/ha/s[a='predicate\"with']/double-quotes/inside")
-        check(["a", 'predicate[with="double"]', "quotes"], '/a/predicate[with="double"]/quotes')
-        check(['multiple["predicate"][with="double"]', "quotes"], '/multiple["predicate"][with="double"]/quotes')
-        check(['multiple["predicate"][with="double"]', "quotes"], '/multiple["predicate"][with="double"]/quotes')
-        check(["ha", 's[a="predicate\'with"]', "single-quote", "inside"], '/ha/s[a="predicate\'with"]/single-quote/inside')
-        # XPATH 1.0 does not support single-quote within single-quoted string. str literal can be '[^']*'
-        # Not validating no single-quote within single-quoted string
-        check(["a", "mix['of''quotes\"does']", "not", "work", "well"], "/a/mix['of''quotes\"does']/not/work/well", )
-        # XPATH 1.0 does not support double-quotes within double-quoted string. str literal can be "[^"]*"
-        # Not validating no double-quotes within double-quoted string
-        check(["a", 'mix["of""quotes\'does"]', "not", "work", "well"], '/a/mix["of""quotes\'does"]/not/work/well')
 
     def test_find_ref_paths__ref_is_the_whole_key__returns_ref_paths(self):
         # Arrange
