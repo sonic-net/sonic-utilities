@@ -1,6 +1,7 @@
 #!/usr/bin/env python
 
 from dataclasses import dataclass
+from typing import Optional
 
 from sonic_package_manager.database import PackageEntry
 from sonic_package_manager.metadata import Metadata
@@ -21,11 +22,13 @@ class Package:
                   It is set to None if package is not installed.
         installed: Boolean flag whether package is installed or not.
         build_in: Boolean flag whether package is built in or not.
+        tag: The actual tag being used for this package
 
     """
 
     entry: PackageEntry
     metadata: Metadata
+    tag: Optional[str] = None
 
     @property
     def name(self): return self.entry.name
