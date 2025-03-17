@@ -37,7 +37,7 @@ def get_chassis_info():
         click.echo("Error retrieving chassis info from STATE_DB: {}".format(str(e)), err=True)
         chassis_info = {k: 'N/A' for k in keys}
 
-    if all(v is [None, 'N/A'] for v in chassis_info.values()):
+    if all(v is None or v == 'N/A' for v in chassis_info.values()):
         platform_cache = {"chassis": None}
         chassis_info = {k: try_get(platform_cache, k) for k in keys}
 
