@@ -12,6 +12,19 @@ platform_porttab_mapping_read = False
 
 RJ45_PORT_TYPE = 'RJ45'
 
+def load_chassis():
+    """Load the platform chassis if not already loaded"""
+    global platform_chassis
+    
+    if platform_chassis is None:
+        try:
+            import sonic_platform
+            platform_chassis = sonic_platform.platform.Platform().get_chassis()
+        except Exception as e:
+            click.echo(f"Failed to load platform chassis: {str(e)}")
+            sys.exit(1)
+    return platform_chassis
+
 def load_platform_sfputil():
 
     global platform_sfputil
@@ -51,6 +64,18 @@ def platform_sfputil_read_porttab_mappings():
 
     return 0
 
+def logical_port_to_physical_port_index(port_name):
+    if not platform_sfputil.is_logical_port(port_name):
+        click.echo("Error: invalid port '{}'\n".format(port_name))
+        print_all_valid_port_values()
+        sys.exit(ERROR_INVALID_PORT)
+    
+    physical_port = logical_port_name_to_physical_port_list(port_name)[0]
+    if physical_port is None:
+        click.echo("Error: No physical port found for logical port '{}'".format(port_name))
+        sys.exit(EXIT_FAIL)
+            
+    return physical_port
 
 def logical_port_name_to_physical_port_list(port_name):
     try:
@@ -107,6 +132,18 @@ def get_interface_alias(port, db):
 
     return port
 
+
+def is_sfp_present(port_name):
+    physical_port = logical_port_to_physical_port_index(port_name)
+    sfp = platform_chassis.get_sfp(physical_port)
+
+    try:
+        presence = sfp.get_presence()
+    except NotImplementedError:
+        click.echo("sfp get_presence() NOT implemented!", err=True)
+        sys.exit(ERROR_NOT_IMPLEMENTED)
+        
+    return bool(presence)
 
 def is_rj45_port(port_name):
     global platform_sfputil
