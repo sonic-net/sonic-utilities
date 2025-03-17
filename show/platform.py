@@ -58,7 +58,17 @@ def platform():
 @click.option('--json', is_flag=True, help="Output in JSON format")
 def summary(json):
     """Show hardware platform information"""
-    platform_info = device_info.get_platform_info()
+    try:
+        platform_info = device_info.get_platform_info()
+    except Exception as e:
+        click.echo("Error retrieving platform info: {}".format(str(e)), err=True)
+        platform_info = {
+            'platform': 'N/A',
+            'hwsku': 'N/A',
+            'asic_type': 'N/A',
+            'asic_count': 'N/A'
+        }
+
     chassis_info = get_chassis_info()
 
     if json:
