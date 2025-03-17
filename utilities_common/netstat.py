@@ -1,5 +1,6 @@
 # network statistics utility functions #
 
+import datetime
 import json
 
 STATUS_NA = 'N/A'
@@ -80,6 +81,14 @@ def format_number_with_comma(number_in_str):
     else:
         return number_in_str
 
+def format_ms_as_datetime(number_in_str):
+    """
+        Format the number of milliseconds since epoch to a date.
+    """
+    if number_in_str.isdecimal():
+        return datetime.datetime.fromtimestamp(int(number_in_str)/1000).strftime("%m/%d/%Y, %H:%M:%S")
+    else:
+        return number_in_str
 
 def format_brate(rate):
     """
