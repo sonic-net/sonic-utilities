@@ -12,27 +12,34 @@ from sonic_py_common import device_info
 
 def get_chassis_info():
     """
-    Attempts to retrieve chassis information from CHASSIS_INFO table in STATE_DB if this table does
-    not exist then we assume pmon has crashed and will attempt to call the platform API directly. If this
-    call fails we simply return N/A.
+    Attempts to retrieve chassis information from CHASSIS_INFO table in STATE_DB. If this table does
+    not exist, then we assume pmon has crashed and will attempt to call the platform API directly. If this
+    call fails, we simply return N/A.
     """
 
     keys = ["serial", "model", "revision"]
 
-    def try_get(platform, attr, fallback):
+    def try_get(platform, attr):
         try:
             if platform["chassis"] is None:
                 import sonic_platform
                 platform["chassis"] = sonic_platform.platform.Platform().get_chassis()
             return getattr(platform["chassis"], "get_{}".format(attr))()
-        except Exception:
+        except (AttributeError, ImportError, KeyError) as e:
+            click.echo(f"Error retrieving {attr}: {e}", err=True)
+        except Exception as e:
+            click.echo("Error retrieving {}: {}".format(attr, str(e)), err=True)
             return 'N/A'
 
-    chassis_info = device_info.get_chassis_info()
+    try:
+        chassis_info = device_info.get_chassis_info()
+    except Exception as e:
+        click.echo("Error retrieving chassis info from STATE_DB: {}".format(str(e)), err=True)
+        chassis_info = {k: 'N/A' for k in keys}
 
-    if all(v is None for k, v in chassis_info.items()):
+    if all(v is [None, 'N/A'] for v in chassis_info.values()):
         platform_cache = {"chassis": None}
-        chassis_info = {k:try_get(platform_cache, k, "N/A") for k in keys}
+        chassis_info = {k: try_get(platform_cache, k) for k in keys}
 
     return chassis_info
 
