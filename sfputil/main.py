@@ -17,6 +17,7 @@ import subprocess
 import click
 import sonic_platform
 import sonic_platform_base.sonic_sfp.sfputilhelper
+from sfputil.debug import debug
 from sonic_platform_base.sfp_base import SfpBase
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from natsort import natsorted
@@ -604,6 +605,7 @@ def cli():
     if not load_port_config():
         sys.exit(ERROR_PORT_CONFIG_LOAD)
 
+cli.add_command(debug)
 
 # 'show' subgroup
 @cli.group()
