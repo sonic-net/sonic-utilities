@@ -1795,12 +1795,14 @@ def delete_checkpoint(ctx, checkpoint_name, verbose):
         ctx.fail(ex)
 
 @config.command('list-checkpoints')
+@click.option('-t', '--time', is_flag=True, default=False,
+              help='Add extra last modified time information for each checkpoint')
 @click.option('-v', '--verbose', is_flag=True, default=False, help='print additional details of what the operation is doing')
 @click.pass_context
-def list_checkpoints(ctx, verbose):
+def list_checkpoints(ctx, time, verbose):
     """List the config checkpoints available."""
     try:
-        checkpoints_list = GenericUpdater().list_checkpoints(verbose)
+        checkpoints_list = GenericUpdater().list_checkpoints(time, verbose)
         formatted_output = json.dumps(checkpoints_list, indent=4)
         click.echo(formatted_output)
     except Exception as ex:
