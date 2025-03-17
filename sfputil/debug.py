@@ -18,7 +18,9 @@ from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 platform_sfputil = None
 platform_chassis = None
 
-# Utility methods re-added to debug.py
+EXIT_FAIL = 1  # Exit code for failure
+ERROR_NOT_IMPLEMENTED = 2  # Error code for unimplemented functionality
+
 
 def get_subport_lane_mask(subport, lane_count):
     """
