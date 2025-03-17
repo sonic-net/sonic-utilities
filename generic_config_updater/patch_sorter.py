@@ -1206,6 +1206,7 @@ class KeyLevelMoveGenerator:
     """
     def __init__(self, path_addressing):
         self.path_addressing = path_addressing
+
     def generate(self, diff):
         # Removing keys in current but not target
         for tokens in self._get_non_existing_keys_tokens(diff.current_config, diff.target_config, reverse=False):
@@ -1219,6 +1220,81 @@ class KeyLevelMoveGenerator:
         # Adding keys in target but not current
         for tokens in self._get_non_existing_keys_tokens(diff.target_config, diff.current_config, reverse=True):
             yield JsonMoveGroup(JsonMove(diff, OperationType.ADD, tokens, tokens))
+
+    def _get_non_existing_keys_tokens(self, config1, config2, reverse):
+        for table in self.path_addressing.configdb_sorted_keys_by_backlinks("/", config1, reverse=reverse):
+            for key in self.path_addressing.configdb_sorted_keys_by_backlinks("/" + table, config1, reverse=reverse):
+                if not(table in config2) or not (key in config2[table]):
+                    yield [table, key]
+
+class BulkKeyLevelMoveGenerator:
+    """
+    Same concept as KeyLevelMoveGenerator, but groups additions and removals of sibling keys.
+    """
+    def __init__(self, path_addressing):
+        self.path_addressing = path_addressing
+    def generate(self, diff):
+        prev_num_separators = -1
+        group = None
+        prev_table = ""
+
+        # Removing keys in current but not target
+        for tokens in self._get_non_existing_keys_tokens(diff.current_config, diff.target_config, reverse=False):
+            table = tokens[0]
+            key = tokens[1]
+
+            # If the number of separators changed, do not group these operations with the previous ones.
+            num_separators = key.count("|")
+            if group is not None and (prev_num_separators != num_separators or table != prev_table):
+                # Special case if we are deleting all the current keys in a table to emit a table delete too
+                if len(list(group)) == len(diff.current_config[table if prev_table == "" else prev_table]):
+                    group.append(JsonMove(diff, OperationType.REMOVE, [table]))
+                yield group
+                group = None
+
+            prev_table = table
+            prev_num_separators = num_separators
+            if group is None:
+                group = JsonMoveGroup()
+
+            group.append(JsonMove(diff, OperationType.REMOVE, tokens))
+
+        # Pending group, emit
+        if group is not None:
+            # Special case if we are deleting all the current keys in a table to emit a table delete too
+            if len(list(group)) == len(diff.current_config[table]):
+                group.append(JsonMove(diff, OperationType.REMOVE, [table]))
+            yield group
+
+        prev_num_separators = -1
+        group = None
+        prev_table = ""
+
+        # Adding keys in target but not current
+        for tokens in self._get_non_existing_keys_tokens(diff.target_config, diff.current_config, reverse=True):
+            table = tokens[0]
+            key = tokens[1]
+
+            # We do not support adding the whole table, only grouping key entry creation.
+            if table not in diff.current_config:
+                continue
+
+            # If the number of separators changed, do not group these operations with the previous ones.
+            num_separators = key.count("|")
+            if group is not None and (prev_num_separators != num_separators or table != prev_table):
+                yield group
+                group = None
+
+            prev_table = table
+            prev_num_separators = num_separators
+            if group is None:
+                group = JsonMoveGroup()
+
+            group.append(JsonMove(diff, OperationType.ADD, tokens, tokens))
+
+        # Pending group, emit
+        if group is not None:
+            yield group
 
     def _get_non_existing_keys_tokens(self, config1, config2, reverse):
         for table in self.path_addressing.configdb_sorted_keys_by_backlinks("/", config1, reverse=reverse):
@@ -1897,7 +1973,8 @@ class SortAlgorithmFactory:
         move_generators = [RemoveCreateOnlyDependencyMoveGenerator(self.path_addressing),
                            LowLevelMoveGenerator(self.path_addressing)]
         # TODO: Enable TableLevelMoveGenerator once it is confirmed whole table can be updated at the same time
-        move_non_extendable_generators = [KeyLevelMoveGenerator(self.path_addressing),
+        move_non_extendable_generators = [BulkKeyLevelMoveGenerator(self.path_addressing),
+                                          KeyLevelMoveGenerator(self.path_addressing),
                                           BulkLowLevelMoveGenerator(self.path_addressing)]
         move_extenders = [RequiredValueMoveExtender(self.path_addressing, self.operation_wrapper),
                           UpperLevelMoveExtender(),

@@ -3282,7 +3282,8 @@ class TestSortAlgorithmFactory(unittest.TestCase):
         factory = ps.SortAlgorithmFactory(OperationWrapper(), config_wrapper, PathAddressing(config_wrapper))
         expected_generators = [ps.RemoveCreateOnlyDependencyMoveGenerator,
                                ps.LowLevelMoveGenerator]
-        expected_non_extendable_generators = [ps.KeyLevelMoveGenerator,
+        expected_non_extendable_generators = [ps.BulkKeyLevelMoveGenerator,
+                                              ps.KeyLevelMoveGenerator,
                                               ps.BulkLowLevelMoveGenerator]
         expected_extenders = [ps.RequiredValueMoveExtender,
                               ps.UpperLevelMoveExtender,
@@ -3354,6 +3355,7 @@ class TestPatchSorter(unittest.TestCase):
             simulated_config = change.apply(simulated_config)
             is_valid, error = self.config_wrapper.validate_config_db_config(simulated_config)
             self.assertTrue(is_valid, f"Change will produce invalid config. Error: {error}")
+
         self.assertEqual(target_config, simulated_config)
 
     def test_patch_sorter_failure(self):

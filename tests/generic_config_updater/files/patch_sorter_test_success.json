@@ -410,9 +410,7 @@
                         "stage": "ingress",
                         "type": "L3"
                     }
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/ACL_TABLE/EVERFLOW",
@@ -424,9 +422,7 @@
                         "stage": "ingress",
                         "type": "MIRROR"
                     }
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/ACL_TABLE/EVERFLOWV6",
@@ -606,9 +602,7 @@
                     "op": "add",
                     "path": "/LOOPBACK_INTERFACE/Loopback0|10.1.0.32~132",
                     "value": {}
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/LOOPBACK_INTERFACE/Loopback0|1100:1::32~1128",
@@ -806,9 +800,7 @@
                         "description": "",
                         "speed": "10000"
                     }
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/PORT/Ethernet2",
@@ -818,9 +810,7 @@
                         "description": "",
                         "speed": "10000"
                     }
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/PORT/Ethernet1",
@@ -850,18 +840,14 @@
                     "value": {
                         "tagging_mode": "untagged"
                     }
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/VLAN_MEMBER/Vlan100|Ethernet3",
                     "value": {
                         "tagging_mode": "untagged"
                     }
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/VLAN_MEMBER/Vlan100|Ethernet2",
@@ -1032,15 +1018,11 @@
                 {
                     "op": "remove",
                     "path": "/VLAN_MEMBER/Vlan100|Ethernet1"
-                }
-            ],
-            [
+                },
                 {
                     "op": "remove",
                     "path": "/VLAN_MEMBER/Vlan100|Ethernet2"
-                }
-            ],
-            [
+                },
                 {
                     "op": "remove",
                     "path": "/VLAN_MEMBER/Vlan100|Ethernet3"
@@ -1411,9 +1393,7 @@
                     "op": "add",
                     "path": "/VLAN_INTERFACE/Vlan1000|fc02:1000::1~164",
                     "value": {}
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/VLAN_INTERFACE/Vlan1000|192.168.0.1~121",
@@ -1451,9 +1431,7 @@
                     "op": "replace",
                     "path": "/CRM/Config/acl_counter_high_threshold",
                     "value": "80"
-                }
-            ],
-            [
+                },
                 {
                     "op": "replace",
                     "path": "/CRM/Config/acl_counter_low_threshold",
@@ -2146,21 +2124,19 @@
                 {
                     "op": "remove",
                     "path": "/ACL_TABLE/NO-NSW-PACL-V4"
-                }
-            ],
-            [
+                },
                 {
                     "op": "remove",
                     "path": "/ACL_TABLE/DATAACL"
-                }
-            ],
-            [
+                },
                 {
                     "op": "remove",
                     "path": "/ACL_TABLE/EVERFLOW"
-                }
-            ],
-            [
+                },
+                {
+                    "op": "remove",
+                    "path": "/ACL_TABLE/EVERFLOWV6"
+                },
                 {
                     "op": "remove",
                     "path": "/ACL_TABLE"
@@ -2223,9 +2199,7 @@
                     "op": "add",
                     "path": "/LOOPBACK_INTERFACE/Loopback1|20.2.0.32~132",
                     "value": {}
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/LOOPBACK_INTERFACE/Loopback1|2200:2::32~1128",
@@ -2512,9 +2486,7 @@
                     "op": "add",
                     "path": "/LOOPBACK_INTERFACE/Loopback0|10.1.0.32~132",
                     "value": {}
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/LOOPBACK_INTERFACE/Loopback0|1100:1::32~1128",
@@ -2583,9 +2555,7 @@
                         "nhopself": "0",
                         "rrclient": "0"
                     }
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/BGP_NEIGHBOR/10.0.0.61",
@@ -3923,9 +3893,7 @@
                         "nhopself": "0",
                         "rrclient": "0"
                     }
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/BGP_NEIGHBOR/fc00::42",
@@ -3948,9 +3916,7 @@
                     "value": {
                         "profile": "pg_lossless_40000_40m_profile"
                     }
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/BUFFER_PG/Ethernet64|0",
@@ -3966,18 +3932,14 @@
                     "value": {
                         "profile": "egress_lossy_profile"
                     }
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/BUFFER_QUEUE/Ethernet64|3-4",
                     "value": {
                         "profile": "egress_lossless_profile"
                     }
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/BUFFER_QUEUE/Ethernet64|5-6",
@@ -3999,6 +3961,19 @@
             [
                 {
                     "op": "add",
+                    "path": "/PORT_QOS_MAP/Ethernet64",
+                    "value": {
+                        "dscp_to_tc_map": "AZURE",
+                        "pfc_enable": "3,4",
+                        "pfc_to_queue_map": "AZURE",
+                        "tc_to_pg_map": "AZURE",
+                        "tc_to_queue_map": "AZURE"
+                    }
+                }
+            ],
+            [
+                {
+                    "op": "add",
                     "path": "/INTERFACE/Ethernet64",
                     "value": {}
                 }
@@ -4008,26 +3983,11 @@
                     "op": "add",
                     "path": "/INTERFACE/Ethernet64|10.0.0.32~131",
                     "value": {}
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/INTERFACE/Ethernet64|FC00::41~1126",
                     "value": {}
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/PORT_QOS_MAP/Ethernet64",
-                    "value": {
-                        "dscp_to_tc_map": "AZURE",
-                        "pfc_enable": "3,4",
-                        "pfc_to_queue_map": "AZURE",
-                        "tc_to_pg_map": "AZURE",
-                        "tc_to_queue_map": "AZURE"
-                    }
                 }
             ],
             [
@@ -5545,13 +5505,17 @@
             [
                 {
                     "op": "remove",
-                    "path": "/BGP_NEIGHBOR/10.0.0.33"
+                    "path": "/INTERFACE/Ethernet64|10.0.0.32~131"
+                },
+                {
+                    "op": "remove",
+                    "path": "/INTERFACE/Ethernet64|FC00::41~1126"
                 }
             ],
             [
                 {
                     "op": "remove",
-                    "path": "/BGP_NEIGHBOR/fc00::42"
+                    "path": "/INTERFACE/Ethernet64"
                 }
             ],
             [
@@ -5563,19 +5527,11 @@
             [
                 {
                     "op": "remove",
-                    "path": "/INTERFACE/Ethernet64|10.0.0.32~131"
-                }
-            ],
-            [
+                    "path": "/BGP_NEIGHBOR/10.0.0.33"
+                },
                 {
                     "op": "remove",
-                    "path": "/INTERFACE/Ethernet64|FC00::41~1126"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/INTERFACE/Ethernet64"
+                    "path": "/BGP_NEIGHBOR/fc00::42"
                 }
             ],
             [
@@ -5889,9 +5845,7 @@
                 {
                     "op": "remove",
                     "path": "/BUFFER_PG/Ethernet64|3-4"
-                }
-            ],
-            [
+                },
                 {
                     "op": "remove",
                     "path": "/BUFFER_PG/Ethernet64|0"
@@ -5901,15 +5855,11 @@
                 {
                     "op": "remove",
                     "path": "/BUFFER_QUEUE/Ethernet64|0-2"
-                }
-            ],
-            [
+                },
                 {
                     "op": "remove",
                     "path": "/BUFFER_QUEUE/Ethernet64|3-4"
-                }
-            ],
-            [
+                },
                 {
                     "op": "remove",
                     "path": "/BUFFER_QUEUE/Ethernet64|5-6"
