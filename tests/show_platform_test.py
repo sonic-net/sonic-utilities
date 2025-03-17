@@ -21,6 +21,26 @@ def config_env():
     os.environ["UTILITIES_UNIT_TESTING"] = "0"
 
 
+class TestGetChassisInfo(object):
+    TEST_SERIAL = "MT1822K07815"
+    TEST_MODEL = "MSN2700-CS2FO"
+    TEST_REV = "A1"
+
+    def test_get_chassis_info_from_platform_api(self):
+        with mock.patch("show.platform.get_chassis_info",
+                        return_value={"serial": self.TEST_SERIAL, "model": self.TEST_MODEL, "revision": self.TEST_REV}):
+            result = show.platform.get_chassis_info()
+            assert result["serial"] == "MT1822K07815"
+            assert result["model"] == "MSN2700-CS2FO"
+            assert result["revision"] == "A1"
+
+    def test_get_chassis_info_failure(self):
+        result = show.platform.get_chassis_info()
+        assert result["serial"] == None
+        assert result["model"] == None
+        assert result["revision"] == None
+
+
 @pytest.mark.usefixtures('config_env')
 class TestShowPlatform(object):
     TEST_PLATFORM = "x86_64-mlnx_msn2700-r0"
@@ -47,6 +67,27 @@ class TestShowPlatform(object):
                 return_value={"platform": self.TEST_PLATFORM, "hwsku": self.TEST_HWSKU, "asic_type": self.TEST_ASIC_TYPE, "asic_count": self.TEST_ASIC_COUNT}):
             with mock.patch("show.platform.get_chassis_info",
                             return_value={"serial": self.TEST_SERIAL, "model": self.TEST_MODEL, "revision": self.TEST_REV}):
+                result = CliRunner().invoke(show.cli.commands["platform"].commands["summary"], [])
+                assert result.output == textwrap.dedent(expected_output)
+
+    # Test 'show platform summary' with platform info retrieval failure
+    def test_summary_platform_info_failure(self):
+        expected_output = """\
+            Error retrieving platform info
+            Platform: N/A
+            HwSKU: N/A
+            ASIC: N/A
+            ASIC Count: N/A
+            Serial Number: {}
+            Model Number: {}
+            Hardware Revision: {}
+            """.format(self.TEST_SERIAL, self.TEST_MODEL, self.TEST_REV)
+
+        with mock.patch("sonic_py_common.device_info.get_platform_info",
+                        side_effect=Exception("Error retrieving platform info")):
+            with mock.patch("show.platform.get_chassis_info",
+                            return_value={"serial": self.TEST_SERIAL, "model": self.TEST_MODEL,
+                                          "revision": self.TEST_REV}):
                 result = CliRunner().invoke(show.cli.commands["platform"].commands["summary"], [])
                 assert result.output == textwrap.dedent(expected_output)
 

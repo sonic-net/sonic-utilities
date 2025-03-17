@@ -61,7 +61,7 @@ def summary(json):
     try:
         platform_info = device_info.get_platform_info()
     except Exception as e:
-        click.echo("Error retrieving platform info: {}".format(str(e)), err=True)
+        click.echo("{}".format(str(e)), err=True)
         platform_info = {
             'platform': 'N/A',
             'hwsku': 'N/A',
