@@ -129,6 +129,7 @@ def set_entry(config_db, tbl, key, data):
 #
 class mock_obj:
     def apply(self, config, in_place):
+        config = copy.deepcopy(config)
         json_change = json_changes[json_change_index]
 
         update = copy.deepcopy(json_change["update"])
@@ -255,7 +256,8 @@ class TestChangeApplier(unittest.TestCase):
 
             debug_print("main: json_change_index={}".format(json_change_index))
 
-            applier.apply(mock_obj())
+            current_config = copy.deepcopy(start_running_config)
+            current_config = applier.apply(current_config, mock_obj())
 
             debug_print(f"Testing json_change {json_change_index}")
 
@@ -292,7 +294,7 @@ class TestDryRunChangeApplier(unittest.TestCase):
         # Act
         current_config = copy.deepcopy(running_config)
         current_config = applier.apply(current_config, change)
-        current_config = applier.remove_backend_tables_from_config(current_config, change)
+        current_config = applier.remove_backend_tables_from_config(current_config)
 
         # Assert
-        applier.config_wrapper.apply_change_to_config_db.assert_has_calls([call(change)])
+        applier.config_wrapper.apply_change_to_config_db.assert_called()

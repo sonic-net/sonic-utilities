@@ -29,6 +29,15 @@ class MockSideEffectDict:
 
         return value
 
+    def side_effect_skipfirstarg_func(self, *args):
+        l = [str(args[i+1]) for i in range(len(args)-1)]
+        key = tuple(l)
+        value = self.map.get(key)
+        if value is None:
+            raise ValueError(f"Given arguments were not found in arguments map.\n  Arguments: {key}\n  Map: {self.map}")
+
+        return value
+
     def side_effect_jsonmovegroup_func(self, *args):
         l = [str(arg) for arg in args]
         key = tuple(l)
@@ -46,6 +55,9 @@ def create_side_effect_dict(map):
 
 def create_side_effect_skiplastarg_dict(map):
     return MockSideEffectDict(map).side_effect_skiplastarg_func
+
+def create_side_effect_skipfirstarg_dict(map):
+    return MockSideEffectDict(map).side_effect_skipfirstarg_func
 
 def create_side_effect_jsonmovegroup_dict(map):
     return MockSideEffectDict(map).side_effect_jsonmovegroup_func
