@@ -36,9 +36,16 @@ class TestGetChassisInfo(object):
 
     def test_get_chassis_info_failure(self):
         result = show.platform.get_chassis_info()
-        assert result["serial"] == None
-        assert result["model"] == None
-        assert result["revision"] == None
+        assert result["serial"] is None
+        assert result["model"] is None
+        assert result["revision"] is None
+
+    def test_get_chassis_info_with_exception(self):
+        with mock.patch("sonic_py_common.device_info.get_chassis_info",
+                        side_effect=Exception("Error retrieving chassis info")):
+            with mock.patch("click.echo") as mock_echo:
+                result = show.platform.get_chassis_info()
+                mock_echo.assert_any_call("Error retrieving chassis info from STATE_DB: Error retrieving chassis info", err=True)
 
 
 @pytest.mark.usefixtures('config_env')
