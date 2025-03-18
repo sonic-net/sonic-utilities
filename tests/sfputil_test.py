@@ -1630,7 +1630,7 @@ EEPROM hexdump for port Ethernet4
         mock_is_multi_asic.return_value = False
         assert sfputil.load_port_config() == True
 
-    @patch('utilities_common.platform_sfputil_helper.is_port_type_rj45', MagicMock(return_value=False))
+    @patch('utilities_common.platform_sfputil_helper.is_rj45_port', MagicMock(return_value=False))
     @patch('sfputil.debug.platform_chassis')
     @patch('sfputil.debug.ConfigDBConnector')
     @patch('sfputil.debug.SonicV2Connector')
@@ -1712,12 +1712,12 @@ EEPROM hexdump for port Ethernet4
         assert result.exit_code == EXIT_FAIL
 
     # Test for 'tx-output' command
-    @patch('utilities_common.platform_sfputil_helper.is_port_type_rj45', MagicMock(return_value=False))
+    @patch('utilities_common.platform_sfputil_helper.is_rj45_port', MagicMock(return_value=False))
     @patch('sfputil.debug.platform_chassis')
     @patch('sfputil.debug.ConfigDBConnector')
     @patch('sfputil.debug.SonicV2Connector')
     @patch('sfputil.debug.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
-    @patch('utilities_common.platform_sfputil_helper.logical_port_to_physical_port_list', MagicMock(return_value=[1]))
+    @patch('utilities_common.platform_sfputil_helper.logical_port_name_to_physical_port_list', MagicMock(return_value=[1]))
     @patch('sonic_py_common.multi_asic.get_front_end_namespaces', MagicMock(return_value=['']))
     def test_tx_output(self, mock_sonic_v2_connector, mock_config_db_connector, mock_chassis):
         """Test for tx-output command"""
@@ -1763,12 +1763,12 @@ EEPROM hexdump for port Ethernet4
 
 
     # Test for 'rx-output' command
-    @patch('utilities_common.platform_sfputil_helper.is_port_type_rj45', MagicMock(return_value=False))
+    @patch('utilities_common.platform_sfputil_helper.is_rj45_port', MagicMock(return_value=False))
     @patch('sfputil.debug.platform_chassis')
     @patch('sfputil.debug.ConfigDBConnector')
     @patch('sfputil.debug.SonicV2Connector')
     @patch('sfputil.debug.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
-    @patch('utilities_common.platform_sfputil_helper.logical_port_to_physical_port_list', MagicMock(return_value=[1]))
+    @patch('utilities_common.platform_sfputil_helper.logical_port_name_to_physical_port_list', MagicMock(return_value=[1]))
     @patch('sonic_py_common.multi_asic.get_front_end_namespaces', MagicMock(return_value=['']))
     def test_rx_output(self, mock_sonic_v2_connector, mock_config_db_connector, mock_chassis):
         """Test for rx-output command"""
