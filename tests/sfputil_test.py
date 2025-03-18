@@ -15,6 +15,7 @@ sys.path.insert(0, modules_path)
 
 sys.modules['sonic_platform'] = mock.MagicMock()
 import sfputil.main as sfputil
+import sfputil.debug as sfputil_debug
 
 EXIT_FAIL = -1
 ERROR_NOT_IMPLEMENTED = 5
@@ -1820,4 +1821,4 @@ EEPROM hexdump for port Ethernet4
         (4, 1, 0x8),
     ])
     def test_get_subport_lane_mask(self, subport, lane_count, expected_mask):
-        assert sfputil.get_subport_lane_mask(subport, lane_count) == expected_mask
+        assert sfputil_debug.get_subport_lane_mask(subport, lane_count) == expected_mask
