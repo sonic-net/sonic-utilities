@@ -39,8 +39,8 @@ class JsonChange:
     def __init__(self, patch):
         self.patch = patch
 
-    def apply(self, config):
-        return self.patch.apply(config)
+    def apply(self, config, in_place: bool=False):
+        return self.patch.apply(config, in_place)
 
     def __repr__(self):
         return str(self)
@@ -356,10 +356,11 @@ class DryRunConfigWrapper(ConfigWrapper):
         self.logger = genericUpdaterLogging.get_logger(title="** DryRun", print_all_to_console=True)
         self.imitated_config_db = copy.deepcopy(initial_imitated_config_db)
 
-    def apply_change_to_config_db(self, change):
+    def apply_change_to_config_db(self, current_config_db: dict, change):
         self._init_imitated_config_db_if_none()
         self.logger.log_notice(f"Would apply {change}")
-        self.imitated_config_db = change.apply(self.imitated_config_db)
+        self.imitated_config_db = change.apply(current_config_db, in_place=True)
+        return self.imitated_config_db
 
     def get_config_db_as_json(self):
         self._init_imitated_config_db_if_none()

@@ -56,11 +56,10 @@ class TestDryRunConfigWrapper(unittest.TestCase):
                   ]
 
         expected = imitated_config_db
+        actual = config_wrapper.get_config_db_as_json()
         for change in changes:
             # Act
-            config_wrapper.apply_change_to_config_db(change)
-
-            actual = config_wrapper.get_config_db_as_json()
+            actual = config_wrapper.apply_change_to_config_db(actual, change)
             expected = change.apply(expected)
 
             # Assert
