@@ -10,6 +10,15 @@ platform_chassis = None
 platform_sfp_base = None
 platform_porttab_mapping_read = False
 
+EXIT_FAIL = -1
+EXIT_SUCCESS = 0
+ERROR_PERMISSIONS = 1
+ERROR_CHASSIS_LOAD = 2
+ERROR_SFPUTILHELPER_LOAD = 3
+ERROR_PORT_CONFIG_LOAD = 4
+ERROR_NOT_IMPLEMENTED = 5
+ERROR_INVALID_PORT = 6
+
 RJ45_PORT_TYPE = 'RJ45'
 
 def load_chassis():
@@ -131,6 +140,92 @@ def get_interface_alias(port, db):
                 sys.exit(1)
 
     return port
+
+
+def get_subport_lane_mask(subport, lane_count):
+    """
+    Get the lane mask for the given subport and lane count.
+
+    This method calculates the lane mask based on the subport and lane count.
+
+    Args:
+        subport (int): The subport number to calculate the lane mask for.
+        lane_count (int): The number of lanes per subport.
+
+    Returns:
+        int: The lane mask calculated for the given subport and lane count.
+    """
+    # Calculating the lane mask using bitwise operations.
+    return ((1 << lane_count) - 1) << ((subport - 1) * lane_count)
+
+
+def get_sfp_object(port_name):
+    """
+    Retrieve the SFP object for a given port.
+
+    This function checks whether the port is a valid RJ45 port or if an SFP is present.
+    If valid, it retrieves the SFP object for further operations.
+
+    Args:
+        port_name (str): The name of the logical port to fetch the SFP object for.
+
+    Returns:
+        SfpBase: The SFP object associated with the port.
+
+    Raises:
+        SystemExit: If the port is an RJ45 or the SFP EEPROM is not present.
+    """
+    # Retrieve the physical port corresponding to the logical port.
+    physical_port = logical_port_to_physical_port_index(port_name)
+    # Fetch the SFP object for the physical port.
+    sfp = platform_chassis.get_sfp(physical_port)
+
+    # Check if the port is an RJ45 port and exit if so.
+    if is_rj45_port(port_name):
+        click.echo(f"{port_name}: This functionality is not applicable for RJ45 port")
+        sys.exit(EXIT_FAIL)
+
+    # Check if the SFP EEPROM is present and exit if not.
+    if not is_sfp_present(port_name):
+        click.echo(f"{port_name}: SFP EEPROM not detected")
+        sys.exit(EXIT_FAIL)
+
+    return sfp
+
+
+def get_subport(port_name, config_db):
+    """
+    Retrieve subport from the CONFIG_DB.
+
+    This function fetches the subport value from the configuration database. If no subport is specified, it defaults to 1.
+
+    Args:
+        port_name (str): The logical port name to retrieve the subport for.
+
+    Returns:
+        int: The subport associated with the port (default is 1 if not found).
+
+    Raises:
+        SystemExit: If the subport value is not found in the CONFIG_DB or there is a failure connecting to it.
+    """
+
+    if config_db is not None:
+        config_db.connect()
+        try:
+            # Try to fetch the subport for the given port.
+            subport = int(config_db.get(config_db.CONFIG_DB, f'PORT|{port_name}', 'subport'))
+        except TypeError:
+            # If no subport value is found, exit with an error.
+            click.echo(f"{port_name}: subport is not present in CONFIG_DB")
+            sys.exit(EXIT_FAIL)
+
+        # Ensure subport is valid (non-zero).
+        return max(subport, 1)
+    
+    # Exit if unable to connect to CONFIG_DB.
+    click.echo(f"{port_name}: Failed to connect to CONFIG_DB")
+    sys.exit(EXIT_FAIL)
+
 
 
 def is_sfp_present(port_name):
