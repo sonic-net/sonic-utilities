@@ -17,9 +17,6 @@ from utilities_common.platform_sfputil_helper import (
 )
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 
-# Global variables for platform-specific utilities
-platform_sfputil = None
-platform_chassis = None
 
 EXIT_FAIL = -1
 EXIT_SUCCESS = 0
@@ -39,8 +36,6 @@ def debug():
     
     This command group loads platform-specific utilities and prepares them for use in diagnostic commands.
     """
-    global platform_sfputil
-    global platform_chassis
     # Load platform-specific sfputil class to interact with platform-specific hardware.
     platform_sfputil_helper.load_platform_sfputil()
     # Load platform chassis information for further interaction.
@@ -49,8 +44,6 @@ def debug():
     # Load port information for further diagnostic operations.
     platform_sfputil_helper.platform_sfputil_read_porttab_mappings()
 
-    platform_sfputil = platform_sfputil_helper.platform_sfputil
-    platform_chassis = platform_sfputil_helper.platform_chassis
 
 
 # 'loopback' subcommand for setting diagnostic loopback mode
@@ -79,7 +72,7 @@ def loopback(port_name, loopback_mode, enable):
     # Get the physical port corresponding to the logical port.
     physical_port = logical_port_to_physical_port_index(port_name)
     # Retrieve the SFP object for the physical port.
-    sfp = platform_chassis.get_sfp(physical_port)
+    sfp = get_sfp_object(port_name)
     # Check if the port is RJ45, and exit if so.
     if is_rj45_port(port_name):
         click.echo(f"{port_name}: This functionality is not applicable for RJ45 port")

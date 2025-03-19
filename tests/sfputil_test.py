@@ -1631,22 +1631,21 @@ EEPROM hexdump for port Ethernet4
         assert sfputil.load_port_config() == True
 
     @patch('sfputil.debug.is_rj45_port', MagicMock(return_value=False))
+    @patch('sfputil.debug.get_sfp_object')
     @patch('sfputil.debug.is_sfp_present')
-    @patch('sfputil.debug.platform_chassis')
     @patch('sfputil.debug.ConfigDBConnector')
     @patch('sfputil.debug.SonicV2Connector')
-    @patch('sfputil.debug.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
     @patch('sfputil.debug.logical_port_to_physical_port_index', MagicMock(return_value=1))
     @patch('sonic_py_common.multi_asic.get_front_end_namespaces', MagicMock(return_value=['']))
-    def test_debug_loopback(self, mock_sonic_v2_connector, mock_config_db_connector, mock_chassis, sfp_presence):
+    def test_debug_loopback(self, mock_sonic_v2_connector, mock_config_db_connector, sfp_presence, mock_get_sfp_object):
         mock_sfp = MagicMock()
         mock_api = MagicMock()
         mock_config_db_connector.return_value = MagicMock()
         mock_sonic_v2_connector.return_value = MagicMock()
-        mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
         mock_sfp.get_presence.return_value = True
         mock_sfp.get_xcvr_api = MagicMock(return_value=mock_api)
         sfp_presence.return_value = False
+        mock_get_sfp_object.return_value = mock_sfp  # Ensure get_sfp_object returns the mock
 
         runner = CliRunner()
         mock_sfp.get_presence.return_value = False
@@ -1719,16 +1718,13 @@ EEPROM hexdump for port Ethernet4
     @patch('sfputil.debug.is_rj45_port', MagicMock(return_value=False))
     @patch('sfputil.debug.get_sfp_object')
     @patch('sfputil.debug.is_sfp_present')
-    @patch('sfputil.debug.platform_chassis')
     @patch('sfputil.debug.ConfigDBConnector')
     @patch('sfputil.debug.SonicV2Connector')
-    @patch('sfputil.debug.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
     @patch('sfputil.debug.logical_port_to_physical_port_index', MagicMock(return_value=1))
     @patch('sonic_py_common.multi_asic.get_front_end_namespaces', MagicMock(return_value=['']))
-    def test_tx_output(self, mock_sonic_v2_connector, mock_config_db_connector, mock_chassis, sfp_presence, mock_get_sfp_object):
+    def test_tx_output(self, mock_sonic_v2_connector, mock_config_db_connector, sfp_presence, mock_get_sfp_object):
         """Test for tx-output command"""
         mock_sfp = MagicMock()
-        mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
         mock_get_sfp_object.return_value = mock_sfp  # Ensure get_sfp_object returns the mock
 
         # Mock state database
@@ -1768,16 +1764,13 @@ EEPROM hexdump for port Ethernet4
     @patch('sfputil.debug.is_rj45_port', MagicMock(return_value=False))
     @patch('sfputil.debug.get_sfp_object')
     @patch('sfputil.debug.is_sfp_present')
-    @patch('sfputil.debug.platform_chassis')
     @patch('sfputil.debug.ConfigDBConnector')
     @patch('sfputil.debug.SonicV2Connector')
-    @patch('sfputil.debug.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
     @patch('sfputil.debug.logical_port_to_physical_port_index', MagicMock(return_value=1))
     @patch('sonic_py_common.multi_asic.get_front_end_namespaces', MagicMock(return_value=['']))
-    def test_rx_output(self, mock_sonic_v2_connector, mock_config_db_connector, mock_chassis, sfp_presence, mock_get_sfp_object):
+    def test_rx_output(self, mock_sonic_v2_connector, mock_config_db_connector, sfp_presence, mock_get_sfp_object):
         """Test for rx-output command"""
         mock_sfp = MagicMock()
-        mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
         mock_get_sfp_object.return_value = mock_sfp  # Ensure get_sfp_object returns the mock
 
         # Mock state database
