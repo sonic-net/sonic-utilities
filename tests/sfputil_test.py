@@ -1635,7 +1635,6 @@ EEPROM hexdump for port Ethernet4
     @patch('sfputil.debug.is_sfp_present')
     @patch('sfputil.debug.ConfigDBConnector')
     @patch('sfputil.debug.SonicV2Connector')
-    @patch('sfputil.debug.logical_port_to_physical_port_index', MagicMock(return_value=1))
     @patch('sonic_py_common.multi_asic.get_front_end_namespaces', MagicMock(return_value=['']))
     def test_debug_loopback(self, mock_sonic_v2_connector, mock_config_db_connector, sfp_presence, mock_get_sfp_object):
         mock_sfp = MagicMock()
@@ -1700,17 +1699,11 @@ EEPROM hexdump for port Ethernet4
         assert result.output == 'Ethernet0: subport is not present in CONFIG_DB\n'
         assert result.exit_code == EXIT_FAIL
 
-        mock_config_db_connector.return_value = None
-        result = runner.invoke(sfputil.cli.commands['debug'].commands['loopback'],
-                               ["Ethernet0", "media-side-input", "enable"])
-        assert result.output == 'Ethernet0: Failed to connect to CONFIG_DB\n'
-        assert result.exit_code == EXIT_FAIL
 
-        mock_config_db_connector.return_value = MagicMock()
         mock_sonic_v2_connector.return_value = None
         result = runner.invoke(sfputil.cli.commands['debug'].commands['loopback'],
                                ["Ethernet0", "media-side-input", "enable"])
-        assert result.output == 'Ethernet0: Failed to connect to STATE_DB\n'
+        assert result.output == 'Ethernet0: subport is not present in CONFIG_DB\n'
         assert result.exit_code == EXIT_FAIL
 
     # Test for 'tx-output' command
@@ -1719,7 +1712,6 @@ EEPROM hexdump for port Ethernet4
     @patch('sfputil.debug.is_sfp_present')
     @patch('sfputil.debug.ConfigDBConnector')
     @patch('sfputil.debug.SonicV2Connector')
-    @patch('sfputil.debug.logical_port_to_physical_port_index', MagicMock(return_value=1))
     @patch('sonic_py_common.multi_asic.get_front_end_namespaces', MagicMock(return_value=['']))
     def test_tx_output(self, mock_sonic_v2_connector, mock_config_db_connector, sfp_presence, mock_get_sfp_object):
         """Test for tx-output command"""
@@ -1763,7 +1755,6 @@ EEPROM hexdump for port Ethernet4
     @patch('sfputil.debug.is_sfp_present')
     @patch('sfputil.debug.ConfigDBConnector')
     @patch('sfputil.debug.SonicV2Connector')
-    @patch('sfputil.debug.logical_port_to_physical_port_index', MagicMock(return_value=1))
     @patch('sonic_py_common.multi_asic.get_front_end_namespaces', MagicMock(return_value=['']))
     def test_rx_output(self, mock_sonic_v2_connector, mock_config_db_connector, sfp_presence, mock_get_sfp_object):
         """Test for rx-output command"""

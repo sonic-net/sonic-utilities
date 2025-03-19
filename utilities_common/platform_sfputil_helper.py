@@ -72,8 +72,7 @@ def platform_sfputil_read_porttab_mappings():
 
 def logical_port_to_physical_port_index(port_name):
     if not platform_sfputil.is_logical_port(port_name):
-        click.echo("Error: invalid port '{}'
-".format(port_name))
+        click.echo("Error: invalid port {} ".format(port_name))
         sys.exit(ERROR_INVALID_PORT)
 
     physical_port = logical_port_name_to_physical_port_list(port_name)[0]
@@ -97,8 +96,101 @@ def logical_port_name_to_physical_port_list(port_name):
     click.echo("Invalid port '{}'".format(port_name))
     return None
 
+def get_logical_list():
+
+    return platform_sfputil.logical
+
+
+def get_asic_id_for_logical_port(port):
+
+    return platform_sfputil.get_asic_id_for_logical_port(port)
+
+
+def get_physical_to_logical():
+
+    return platform_sfputil.physical_to_logical
+
+
+def get_interface_name(port, db):
+
+    if port != "all" and port is not None:
+        alias = port
+        iface_alias_converter = clicommon.InterfaceAliasConverter(db)
+        if clicommon.get_interface_naming_mode() == "alias":
+            port = iface_alias_converter.alias_to_name(alias)
+            if port is None:
+                click.echo("cannot find port name for alias {}".format(alias))
+                sys.exit(1)
+
+    return port
+
+def get_interface_alias(port, db):
+
+    if port != "all" and port is not None:
+        alias = port
+        iface_alias_converter = clicommon.InterfaceAliasConverter(db)
+        if clicommon.get_interface_naming_mode() == "alias":
+            port = iface_alias_converter.name_to_alias(alias)
+            if port is None:
+                click.echo("cannot find port name for alias {}".format(alias))
+                sys.exit(1)
+
+    return port
+
+def get_subport_lane_mask(subport, lane_count):
+    """
+    Get the lane mask for the given subport and lane count.
+    This method calculates the lane mask based on the subport and lane count.
+    Args:
+        subport (int): The subport number to calculate the lane mask for.
+        lane_count (int): The number of lanes per subport.
+    Returns:
+        int: The lane mask calculated for the given subport and lane count.
+    """
+    # Calculating the lane mask using bitwise operations.
+    return ((1 << lane_count) - 1) << ((subport - 1) * lane_count)
+
+
+def get_sfp_object(port_name):
+    """
+    Retrieve the SFP object for a given port.
+    This function checks whether the port is a valid RJ45 port or if an SFP is present.
+    If valid, it retrieves the SFP object for further operations.
+    Args:
+        port_name (str): The name of the logical port to fetch the SFP object for.
+    Returns:
+        SfpBase: The SFP object associated with the port.
+    Raises:
+        SystemExit: If the port is an RJ45 or the SFP EEPROM is not present.
+    """
+    # Retrieve the physical port corresponding to the logical port.
+    physical_port = logical_port_to_physical_port_index(port_name)
+    # Fetch the SFP object for the physical port.
+    sfp = platform_chassis.get_sfp(physical_port)
+
+    # Check if the port is an RJ45 port and exit if so.
+    if is_rj45_port(port_name):
+        click.echo(f"{port_name}: This functionality is not applicable for RJ45 port")
+        sys.exit(EXIT_FAIL)
+
+    # Check if the SFP EEPROM is present and exit if not.
+    if not is_sfp_present(port_name):
+        click.echo(f"{port_name}: SFP EEPROM not detected")
+        sys.exit(EXIT_FAIL)
+
+    return sfp
 
 def get_value_from_db_by_field(db, table_name, field, key):
+    """
+    Retrieve a specific field value from a given table in the CONFIG_DB.
+    Args:
+        db: Database connection object.
+        table_name (str): The table to query.
+        field (str): The field whose value is needed.
+        key (str): The specific key within the table.
+    Returns:
+        The retrieved value if found, otherwise None.
+    """
     if db is not None:
         db.connect()
         try:
