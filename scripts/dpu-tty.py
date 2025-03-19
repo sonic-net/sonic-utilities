@@ -75,9 +75,10 @@ def main():
     if post_cmds:
         print(f"Executing post commands: {post_cmds}")
         for cmd in post_cmds:
-            if cmd:
-                subprocess.run(cmd, shell=True, check=False)
-
+            if 'echo' in cmd:
+                subprocess.run(['bash', '-c', cmd])
+            else:
+                subprocess.run(cmd.split())
     return 0
 
 if __name__ == "__main__":
