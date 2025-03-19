@@ -3124,6 +3124,24 @@ class TestConfigNtp(object):
         print(result.output)
         assert "Invalid ConfigDB. Error" in result.output
 
+    def test_add_ntp_server_max_limit(self):
+        config.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+        # Assume 10 NTP Servers has been configured to verify the Maximum NTP Server Limit.
+        with mock.patch('config.main.ConfigDBConnector.get_table',
+                        mock.MagicMock(return_value=["10.10.10.1", "10.10.10.2", "10.10.10.3",
+                                                     "10.10.10.4", "10.10.10.5", "10.10.10.6",
+                                                     "10.10.10.7", "10.10.10.8", "10.10.10.9",
+                                                     "10.10.10.0"])):
+            with mock.patch('utilities_common.cli.run_command',
+                            mock.MagicMock(side_effect=mock_run_command_side_effect)):
+                result = runner.invoke(config.config.commands["ntp"], ["add", "10.10.10.11"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert "Max elements limit 10 reached." in result.output
+
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
