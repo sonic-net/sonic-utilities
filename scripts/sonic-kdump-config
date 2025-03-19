@@ -24,6 +24,8 @@ import shlex
 import sys
 import syslog
 import subprocess
+import platform
+import tempfile
 
 from swsscommon.swsscommon import ConfigDBConnector
 from sonic_installer.bootloader import get_bootloader
@@ -378,7 +380,6 @@ def kdump_enable(verbose, kdump_enabled, memory, num_dumps, image, cmdline_file)
     img_index = locate_image(lines, "loop=image-"+image)
     if verbose:
         print("Image index in %s=%d" % (cmdline_file, img_index))
-
     changed = False
     crash_kernel_in_cmdline = search_for_crash_kernel_in_cmdline()
     if verbose:
@@ -412,7 +413,6 @@ def kdump_enable(verbose, kdump_enabled, memory, num_dumps, image, cmdline_file)
         if rc != 0:
             print_err("Error Unable to unload Kdump the kernel '%s'", err_str)
             sys.exit(1)
-
     return changed
 
 ## Read kdump configuration saved in the startup configuration file
@@ -438,6 +438,76 @@ def get_kdump_config_json(config_param):
             print_err("Error [%s] while reading startup configuration" % e)
             return None
 
+def kdump_disable_uboot(verbose, image, tmp_dir):
+    bootloader = get_bootloader()
+    installed_images = bootloader.get_installed_images()
+    if any(image in installed_image for installed_image in installed_images):
+        if image in installed_images[0]:
+            proc = subprocess.Popen(["/usr/bin/fw_printenv", "-n", "linuxargs"], text=True, stdout=subprocess.PIPE)
+            (out, _) = proc.communicate()
+            linuxargs = out.rstrip()
+            tmp_file_path = os.path.join(tmp_dir, "linuxargs.txt")
+            with open(tmp_file_path, 'w') as file:
+                file.write(linuxargs)
+            retval = kdump_disable(verbose, image, tmp_file_path)
+            if retval:
+                with open(tmp_file_path, 'r') as file:
+                    linuxargs = file.read().strip()
+                run_command(['/usr/bin/fw_setenv', 'linuxargs', linuxargs])
+            return retval
+
+        else:
+            proc = subprocess.Popen(["/usr/bin/fw_printenv", "-n", "linuxargs_old"], text=True, stdout=subprocess.PIPE)
+            (out, _) = proc.communicate()
+            linuxargs_old = out.rstrip()
+            tmp_file_path = os.path.join(tmp_dir, "linuxargs_old.txt")
+            with open(tmp_file_path, 'w') as file:
+                file.write(linuxargs_old)
+            retval = kdump_disable(verbose, image, tmp_file_path)
+            if retval:
+                with open(tmp_file_path, 'r') as file:
+                    linuxargs_old = file.read().strip()
+                run_command(['/usr/bin/fw_setenv', 'linuxargs_old', linuxargs_old])
+            return retval
+    else:
+        print("Current image is not part of any installed images")
+        return False
+
+def kdump_enable_uboot(verbose, kdump_enabled, memory, num_dumps, image, tmp_dir):
+    bootloader = get_bootloader()
+    installed_images = bootloader.get_installed_images()
+    if any(image in installed_image for installed_image in installed_images):
+        if image in installed_images[0]:
+            proc = subprocess.Popen(["/usr/bin/fw_printenv", "-n", "linuxargs"], text=True, stdout=subprocess.PIPE)
+            (out, _) = proc.communicate()
+            linuxargs = out.rstrip()
+            tmp_file_path = os.path.join(tmp_dir, "linuxargs.txt")
+            with open(tmp_file_path, 'w') as file:
+                file.write(linuxargs)
+            retval = kdump_enable(verbose, kdump_enabled, memory, num_dumps, image, tmp_file_path)
+            if retval:
+                with open(tmp_file_path, 'r') as file:
+                    linuxargs = file.read().strip()
+                run_command(['/usr/bin/fw_setenv', 'linuxargs', linuxargs])
+            return retval
+
+        else:
+            proc = subprocess.Popen(["/usr/bin/fw_printenv", "-n", "linuxargs_old"], text=True, stdout=subprocess.PIPE)
+            (out, _) = proc.communicate()
+            linuxargs_old = out.rstrip()
+            tmp_file_path = os.path.join(tmp_dir, "linuxargs_old.txt")
+            with open(tmp_file_path, 'w') as file:
+                file.write(linuxargs_old)
+            retval = kdump_enable(verbose, kdump_enabled, memory, num_dumps, image, tmp_file_path)
+            if retval:
+                with open(tmp_file_path, 'r') as file:
+                    linuxargs_old = file.read().strip()
+                run_command(['/usr/bin/fw_setenv', 'linuxargs_old', linuxargs_old])
+            return retval
+    else:
+        print("Current image is not part of any installed images")
+        return False
+
 ## Command: Enable kdump
 #
 #  @param verbose If True, the function will display a few additinal information
@@ -448,6 +518,7 @@ def cmd_kdump_enable(verbose, image):
     kdump_enabled = get_kdump_administrative_mode()
     memory = get_kdump_memory()
     num_dumps = get_kdump_num_dumps()
+    arch = platform.machine()
     if verbose:
         print("configDB: kdump_enabled=%d memory=[%s] num_nums=%d" % (kdump_enabled, memory, num_dumps))
 
@@ -456,6 +527,11 @@ def cmd_kdump_enable(verbose, image):
     elif open(machine_cfg, 'r').read().find('aboot_platform') >= 0:
         aboot_cfg = aboot_cfg_template % image
         return kdump_enable(verbose, kdump_enabled, memory, num_dumps, image, aboot_cfg)
+    elif ("aarch64" in arch):
+        tmp_dir_obj = tempfile.TemporaryDirectory()
+        tmp_dir = tmp_dir_obj.name
+        return kdump_enable_uboot(verbose, kdump_enabled, memory, num_dumps, image, tmp_dir)
+        tmp_dir_obj.cleanup()
     else:
         print("Feature not supported on this platform")
         return False
@@ -527,6 +603,7 @@ def cmd_kdump_disable(verbose):
     kdump_enabled = get_kdump_administrative_mode()
     memory = get_kdump_memory()
     num_dumps = get_kdump_num_dumps()
+    arch = platform.machine()
 
     if verbose:
         print("configDB: kdump_enabled=%d memory=[%s] num_nums=%d" % (kdump_enabled, memory, num_dumps))
@@ -536,6 +613,11 @@ def cmd_kdump_disable(verbose):
     elif open(machine_cfg, 'r').read().find('aboot_platform') >= 0:
         aboot_cfg = aboot_cfg_template % image
         return kdump_disable(verbose, image, aboot_cfg)
+    elif ("aarch64" in arch):
+        tmp_dir_obj = tempfile.TemporaryDirectory()
+        tmp_dir = tmp_dir_obj.name
+        return kdump_disable_uboot(verbose, image, tmp_dir)
+        tmp_dir_obj.cleanup()
     else:
         print("Feature not supported on this platform")
         return False
