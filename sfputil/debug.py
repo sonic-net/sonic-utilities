@@ -4,7 +4,6 @@ from sonic_py_common import multi_asic
 import utilities_common.cli as clicommon
 from utilities_common import platform_sfputil_helper
 from utilities_common.platform_sfputil_helper import (
-    logical_port_to_physical_port_index,
     is_rj45_port,
     is_sfp_present,
     get_subport,
@@ -22,8 +21,6 @@ ERROR_PORT_CONFIG_LOAD = 4
 ERROR_NOT_IMPLEMENTED = 5
 ERROR_INVALID_PORT = 6
 
-
-# 'debug' command group
 @click.group(cls=clicommon.AliasedGroup)
 def debug():
     """
@@ -35,8 +32,6 @@ def debug():
     platform_sfputil_helper.load_chassis()
     platform_sfputil_helper.platform_sfputil_read_porttab_mappings()
 
-
-# 'loopback' subcommand for setting diagnostic loopback mode
 @debug.command()
 @click.argument('port_name', required=True)
 @click.argument(
@@ -48,14 +43,6 @@ def debug():
 def loopback(port_name, loopback_mode, enable):
     """
     Set module diagnostic loopback mode.
-    
-    Args:
-        port_name (str): The logical port name where the loopback is to be set.
-        loopback_mode (str): The loopback mode to set.
-        enable (str): Whether to enable or disable the loopback mode.
-
-    Raises:
-        SystemExit: If any error occurs.
     """
     sfp = get_sfp_object(port_name)
 
@@ -117,19 +104,9 @@ def loopback(port_name, loopback_mode, enable):
         click.echo(f"{port_name}: {enable} {loopback_mode} loopback failed")
         sys.exit(EXIT_FAIL)
 
-
-# Common function to enable/disable TX or RX output
 def set_output(port_name, enable, direction):
     """
     Enable or disable TX/RX output based on direction ('tx' or 'rx').
-
-    Args:
-        port_name (str): The port name.
-        enable (str): 'enable' or 'disable'.
-        direction (str): 'tx' or 'rx'.
-
-    Raises:
-        SystemExit: If there is an error.
     """
     sfp = get_sfp_object(port_name)
     namespace = multi_asic.get_namespace_for_port(port_name)
@@ -150,8 +127,6 @@ def set_output(port_name, enable, direction):
         click.echo(f"{port_name}: {direction.upper()} disable failed due to {str(e)}")
         sys.exit(EXIT_FAIL)
 
-
-# 'tx-output' subcommand
 @debug.command()
 @click.argument('port_name', required=True)
 @click.argument('enable', required=True, type=click.Choice(["enable", "disable"]))
@@ -159,8 +134,6 @@ def tx_output(port_name, enable):
     """Enable or disable TX output on a port."""
     set_output(port_name, enable, "tx")
 
-
-# 'rx-output' subcommand
 @debug.command()
 @click.argument('port_name', required=True)
 @click.argument('enable', required=True, type=click.Choice(["enable", "disable"]))
