@@ -141,7 +141,6 @@ def get_interface_alias(port, db):
 
     return port
 
-
 def get_subport_lane_mask(subport, lane_count):
     """
     Get the lane mask for the given subport and lane count.
@@ -192,6 +191,48 @@ def get_sfp_object(port_name):
 
     return sfp
 
+def get_value_from_db_by_field(db, table_name, field, key):
+    """
+    Retrieve a specific field value from a given table in the CONFIG_DB.
+
+    Args:
+        db: Database connection object.
+        table_name (str): The table to query.
+        field (str): The field whose value is needed.
+        key (str): The specific key within the table.
+
+    Returns:
+        The retrieved value if found, otherwise None.
+    """
+    if db is not None:
+        db.connect()
+        try:
+            return db.get(db.CONFIG_DB, f"{table_name}|{key}", field)
+        except TypeError:
+            return None
+    return None
+
+def get_subport(port_name, config_db):
+    """
+    Retrieve subport from the CONFIG_DB.
+
+    Args:
+        port_name (str): The logical port name to retrieve the subport for.
+        config_db: Database connection object.
+
+    Returns:
+        int: The subport associated with the port (default is 1 if not found).
+
+    Raises:
+        SystemExit: If the subport value is not found or there is a failure connecting to CONFIG_DB.
+    """
+    subport = get_value_from_db_by_field(config_db, "PORT", "subport", port_name)
+    
+    if subport is None:
+        click.echo(f"{port_name}: subport is not present in CONFIG_DB")
+        sys.exit(EXIT_FAIL)
+    
+    return max(int(subport), 1)
 
 def get_subport(port_name, config_db):
     """
@@ -225,8 +266,6 @@ def get_subport(port_name, config_db):
     # Exit if unable to connect to CONFIG_DB.
     click.echo(f"{port_name}: Failed to connect to CONFIG_DB")
     sys.exit(EXIT_FAIL)
-
-
 
 def is_sfp_present(port_name):
     physical_port = logical_port_to_physical_port_index(port_name)
