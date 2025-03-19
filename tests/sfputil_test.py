@@ -6,6 +6,7 @@ from unittest.mock import MagicMock, patch
 from .mock_tables import dbconnector
 
 import pytest
+import sfputil.debug as sfputil_debug
 from click.testing import CliRunner
 from utilities_common.db import Db
 
@@ -15,7 +16,6 @@ sys.path.insert(0, modules_path)
 
 sys.modules['sonic_platform'] = mock.MagicMock()
 import sfputil.main as sfputil
-import sfputil.debug as sfputil_debug
 
 EXIT_FAIL = -1
 ERROR_NOT_IMPLEMENTED = 5
@@ -1714,7 +1714,6 @@ EEPROM hexdump for port Ethernet4
         assert result.exit_code == EXIT_FAIL
 
     # Test for 'tx-output' command
-
     @patch('sfputil.debug.is_rj45_port', MagicMock(return_value=False))
     @patch('sfputil.debug.get_sfp_object')
     @patch('sfputil.debug.is_sfp_present')
@@ -1758,9 +1757,7 @@ EEPROM hexdump for port Ethernet4
         assert result.output == 'Ethernet0: TX disable failed due to TX disable failed\n'
         assert result.exit_code == EXIT_FAIL
 
-
     # Test for 'rx-output' command
-
     @patch('sfputil.debug.is_rj45_port', MagicMock(return_value=False))
     @patch('sfputil.debug.get_sfp_object')
     @patch('sfputil.debug.is_sfp_present')
@@ -1803,9 +1800,6 @@ EEPROM hexdump for port Ethernet4
         result = runner.invoke(sfputil.cli.commands['debug'].commands['rx-output'], ["Ethernet0", "disable"])
         assert result.output == 'Ethernet0: RX disable failed due to RX disable failed\n'
         assert result.exit_code == EXIT_FAIL
-
-
-
 
     @pytest.mark.parametrize("subport, lane_count, expected_mask", [
         (1, 1, 0x1),
