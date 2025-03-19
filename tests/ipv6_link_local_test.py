@@ -190,7 +190,7 @@ class TestIPv6LinkLocal(object):
         runner = CliRunner()
         db = Db()
         obj = {'db':db.cfgdb}
-        
+
         # Enable ipv6 link local on Ethernet32
         result = runner.invoke(config.config.commands["interface"].commands["ipv6"].commands["enable"].commands["use-link-local-only"], ["Ethernet32"], obj=obj)
         print(result.exit_code)
@@ -233,6 +233,54 @@ class TestIPv6LinkLocal(object):
         print(result.output)
         assert result.exit_code != 0
         assert 'Error: Ethernet40 is a router interface!' in result.output
+
+    def test_config_enable_disable_ipv6_link_local_on_nonexistent_vlan(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        # Enable ipv6 link local on nonexistent Vlan10
+        result = runner.invoke(
+            config.config.commands["interface"].commands["ipv6"].commands["enable"].commands["use-link-local-only"],
+            ["Vlan10"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert 'Error: Vlan10 is nonexistent. Please create vlan first!!' in result.output
+
+        # Disable ipv6 link local on nonexistent Vlan10
+        result = runner.invoke(
+            config.config.commands["interface"].commands["ipv6"].commands["disable"].commands["use-link-local-only"],
+            ["Vlan10"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert 'Error: Vlan10 is nonexistent. Please create vlan first!!' in result.output
+
+    def test_config_enable_disable_ipv6_link_local_on_vlan_no_member_joined(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        # Enable ipv6 link local on Vlan3000 no member joined
+        result = runner.invoke(
+            config.config.commands["interface"].commands["ipv6"].commands["enable"].commands["use-link-local-only"],
+            ["Vlan3000"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert 'Error: Vlan3000 has no member joined. Please make sure at least one vlan member joined the vlan!!' \
+               in result.output
+
+        # Disable ipv6 link local on Vlan3000 no member joined
+        result = runner.invoke(
+            config.config.commands["interface"].commands["ipv6"].commands["disable"].commands["use-link-local-only"],
+            ["Vlan3000"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert 'Error: Vlan3000 has no member joined. Please make sure at least one vlan member joined the vlan!!' \
+               in result.output
 
     @classmethod
     def teardown_class(cls):
