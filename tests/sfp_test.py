@@ -1145,13 +1145,14 @@ Ethernet200  Not present
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
 
+
 class TestMultiAsicSFP(object):
-    
+ 
     @patch('utilities_common.platform_sfputil_helper.platform_chassis', None)
     def test_load_platform_sfputil(self):
         # Test that the function returns 0 as expected
         assert load_platform_sfputil() == 0
-   
+
     @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
         MagicMock(is_logical_port=MagicMock(return_value=1)))
     @patch('utilities_common.platform_sfputil_helper.logical_port_name_to_physical_port_list',
@@ -1184,7 +1185,7 @@ class TestMultiAsicSFP(object):
         port_name = "Ethernet0"
         result = logical_port_name_to_physical_port_list(port_name)
         assert result is not None
-    
+ 
     @patch('utilities_common.platform_sfputil_helper.logical_port_to_physical_port_index', MagicMock(return_value=1))
     @patch('utilities_common.platform_sfputil_helper.platform_chassis')
     @patch('utilities_common.platform_sfputil_helper.is_rj45_port')
@@ -1196,7 +1197,6 @@ class TestMultiAsicSFP(object):
 
         result = is_sfp_present("Ethernet0")
         assert result is True  # or whatever the expected result is
-
 
     @patch('utilities_common.platform_sfputil_helper.logical_port_to_physical_port_index', MagicMock(return_value=1))
     @patch('utilities_common.platform_sfputil_helper.is_sfp_present')
@@ -1229,7 +1229,7 @@ class TestMultiAsicSFP(object):
     @patch('utilities_common.platform_sfputil_helper.get_value_from_db_by_field')
     def test_get_subport(self, mock_get_value_from_db_by_field):
         mock_get_value_from_db_by_field.return_value = '2'
-        
+
         # assuming config_db is passed or mocked elsewhere
         result = get_subport("Ethernet0", Mock())
         assert result == 2
