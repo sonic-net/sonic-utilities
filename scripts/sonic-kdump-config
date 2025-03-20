@@ -371,7 +371,7 @@ def get_kdump_ssh_path():
 #
 #  @return The integer value X from USE_KDUMP=X in /etc/default/kdump-tools
 def read_use_kdump():
-    (rc, lines, err_str) = run_command("grep 'USE_KDUMP=.*' %s | cut -d = -f 2" % kdump_cfg, use_shell=True);
+    (rc, lines, err_str) = run_command("grep 'USE_KDUMP=.*' %s | cut -d = -f 2" % kdump_cfg, use_shell=False);
     if rc == 0 and type(lines) == list and len(lines) >= 1:
         try:
             return int(lines[0])
@@ -405,7 +405,7 @@ def write_use_kdump(use_kdump):
 #
 #  @return The integer value X from KDUMP_NUM_DUMPS=X in /etc/default/kdump-tools
 def read_num_dumps():
-    (rc, lines, err_str) = run_command("grep '#*KDUMP_NUM_DUMPS=.*' %s | cut -d = -f 2" % kdump_cfg, use_shell=True);
+    (rc, lines, err_str) = run_command("grep '#*KDUMP_NUM_DUMPS=.*' %s | cut -d = -f 2" % kdump_cfg, use_shell=False);
     if rc == 0 and type(lines) == list and len(lines) >= 1:
         try:
             return int(lines[0])
@@ -438,17 +438,17 @@ def write_kdump_remote():
 
     if remote:
         # Uncomment SSH and SSH_KEY in the /etc/default/kdump-tools file
-        run_command("/bin/sed -i 's/#SSH/SSH/' %s" % kdump_cfg, use_shell=True)
-        run_command("/bin/sed -i 's/#SSH_KEY/SSH_KEY/' %s" % kdump_cfg, use_shell=True)
+        run_command("/bin/sed -i 's/#SSH/SSH/' %s" % kdump_cfg, use_shell=False)
+        run_command("/bin/sed -i 's/#SSH_KEY/SSH_KEY/' %s" % kdump_cfg, use_shell=False)
         print("SSH and SSH_KEY uncommented for remote configuration.")
     else:
         # Comment out SSH and SSH_KEY in the /etc/default/kdump-tools file
-        run_command("/bin/sed -i 's/SSH/#SSH/' %s" % kdump_cfg, use_shell=True)
-        run_command("/bin/sed -i 's/SSH_KEY/#SSH_KEY/' %s" % kdump_cfg, use_shell=True)
+        run_command("/bin/sed -i 's/SSH/#SSH/' %s" % kdump_cfg, use_shell=False)
+        run_command("/bin/sed -i 's/SSH_KEY/#SSH_KEY/' %s" % kdump_cfg, use_shell=False)
         print("SSH and SSH_KEY commented out for local configuration.")
 
 def read_ssh_string():
-    (rc, lines, err_str) = run_command("grep '#*SSH=.*' %s | cut -d '=' -f 2 | tr -d '\"'" % kdump_cfg, use_shell=True)
+    (rc, lines, err_str) = run_command("grep '#*SSH=.*' %s | cut -d '=' -f 2 | tr -d '\"'" % kdump_cfg, use_shell=False)
     if rc == 0 and type(lines) == list and len(lines) >= 1:
         try:
             return lines[0].strip()  # Return the SSH string (e.g., user@ip_address)
@@ -474,7 +474,7 @@ def write_ssh_string(ssh_string):
         sys.exit(1)
 
 def read_ssh_path():
-    (rc, lines, err_str) = run_command("grep '#*SSH_KEY=.*' %s | cut -d '=' -f 2 | tr -d '\"'" % kdump_cfg, use_shell=True)
+    (rc, lines, err_str) = run_command("grep '#*SSH_KEY=.*' %s | cut -d '=' -f 2 | tr -d '\"'" % kdump_cfg, use_shell=False)
     if rc == 0 and type(lines) == list and len(lines) >= 1:
         try:
             ssh_path = lines[0].strip()
@@ -491,7 +491,7 @@ def read_ssh_path():
 def write_ssh_path(ssh_path):
     cmd = "/bin/sed -i -e 's/#*SSH_KEY=.*/SSH_KEY=\"%s\"/' %s" % (ssh_path, kdump_cfg)
 
-    (rc, lines, err_str) = run_command(cmd, use_shell=True)  # Make sure to set use_shell=True
+    (rc, lines, err_str) = run_command(cmd, use_shell=False)  # Make sure to set use_shell=True
     if rc == 0 and type(lines) == list and len(lines) == 0:
         ssh_path_in_cfg = read_ssh_path()
         if ssh_path_in_cfg != ssh_path:
@@ -748,14 +748,14 @@ def cmd_kdump_remote(verbose):
 
     if remote:
         # Uncomment SSH and SSH_KEY in the /etc/default/kdump-tools file
-        run_command("/bin/sed -i 's/#SSH/SSH/' /etc/default/kdump-tools", use_shell=True)
-        run_command("/bin/sed -i 's/#SSH_KEY/SSH_KEY/' /etc/default/kdump-tools", use_shell=True)
+        run_command("/bin/sed -i 's/#SSH/SSH/' /etc/default/kdump-tools", use_shell=False)
+        run_command("/bin/sed -i 's/#SSH_KEY/SSH_KEY/' /etc/default/kdump-tools", use_shell=False)
         if verbose:
             print("SSH and SSH_KEY uncommented for remote configuration.")
     else:
         # Comment out SSH and SSH_KEY in the /etc/default/kdump-tools file
-        run_command("/bin/sed -i 's/SSH/#SSH/' /etc/default/kdump-tools", use_shell=True)
-        run_command("/bin/sed -i 's/SSH_KEY/#SSH_KEY/' /etc/default/kdump-tools", use_shell=True)
+        run_command("/bin/sed -i 's/SSH/#SSH/' /etc/default/kdump-tools", use_shell=False)
+        run_command("/bin/sed -i 's/SSH_KEY/#SSH_KEY/' /etc/default/kdump-tools", use_shell=False)
         if verbose:
             print("SSH and SSH_KEY commented out for local configuration.")
 

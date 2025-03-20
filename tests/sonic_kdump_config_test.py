@@ -337,8 +337,8 @@ class TestSonicKdumpConfig(unittest.TestCase):
         sonic_kdump_config.write_kdump_remote()  # Call the function
 
         # Ensure the correct commands were run to uncomment SSH and SSH_KEY
-        mock_run_command.assert_any_call("/bin/sed -i 's/#SSH/SSH/' /etc/default/kdump-tools", use_shell=True)
-        mock_run_command.assert_any_call("/bin/sed -i 's/#SSH_KEY/SSH_KEY/' /etc/default/kdump-tools", use_shell=True)
+        mock_run_command.assert_any_call("/bin/sed -i 's/#SSH/SSH/' /etc/default/kdump-tools", use_shell=False)
+        mock_run_command.assert_any_call("/bin/sed -i 's/#SSH_KEY/SSH_KEY/' /etc/default/kdump-tools", use_shell=False)
         self.assertEqual(mock_run_command.call_count, 2)  # Ensure both commands were called
 
     @patch("sonic_kdump_config.run_command")
@@ -350,8 +350,8 @@ class TestSonicKdumpConfig(unittest.TestCase):
         sonic_kdump_config.write_kdump_remote()  # Call the function
 
         # Ensure the correct commands were run to comment SSH and SSH_KEY
-        mock_run_command.assert_any_call("/bin/sed -i 's/SSH/#SSH/' /etc/default/kdump-tools", use_shell=True)
-        mock_run_command.assert_any_call("/bin/sed -i 's/SSH_KEY/#SSH_KEY/' /etc/default/kdump-tools", use_shell=True)
+        mock_run_command.assert_any_call("/bin/sed -i 's/SSH/#SSH/' /etc/default/kdump-tools", use_shell=False)
+        mock_run_command.assert_any_call("/bin/sed -i 's/SSH_KEY/#SSH_KEY/' /etc/default/kdump-tools", use_shell=False)
         self.assertEqual(mock_run_command.call_count, 2)
 
     @patch("sonic_kdump_config.get_kdump_remote")
@@ -364,16 +364,16 @@ class TestSonicKdumpConfig(unittest.TestCase):
         sonic_kdump_config.cmd_kdump_remote(verbose=True)
 
         # Ensure the correct commands are being run
-        mock_run_command.assert_any_call("/bin/sed -i 's/#SSH/SSH/' /etc/default/kdump-tools", use_shell=True)
-        mock_run_command.assert_any_call("/bin/sed -i 's/#SSH_KEY/SSH_KEY/' /etc/default/kdump-tools", use_shell=True)
+        mock_run_command.assert_any_call("/bin/sed -i 's/#SSH/SSH/' /etc/default/kdump-tools", use_shell=False)
+        mock_run_command.assert_any_call("/bin/sed -i 's/#SSH_KEY/SSH_KEY/' /etc/default/kdump-tools", use_shell=False)
 
         # Test case: Remote is False
         mock_read_remote.return_value = False
         sonic_kdump_config.cmd_kdump_remote(verbose=True)
 
         # Ensure the correct commands are being run
-        mock_run_command.assert_any_call("/bin/sed -i 's/SSH/#SSH/' /etc/default/kdump-tools", use_shell=True)
-        mock_run_command.assert_any_call("/bin/sed -i 's/SSH_KEY/#SSH_KEY/' /etc/default/kdump-tools", use_shell=True)
+        mock_run_command.assert_any_call("/bin/sed -i 's/SSH/#SSH/' /etc/default/kdump-tools", use_shell=False)
+        mock_run_command.assert_any_call("/bin/sed -i 's/SSH_KEY/#SSH_KEY/' /etc/default/kdump-tools", use_shell=False)
 
         # Test case: Checking output messages
         with patch("builtins.print") as mock_print:
@@ -424,7 +424,7 @@ class TestSonicKdumpConfig(unittest.TestCase):
 
         # Verify that run_command was called with the correct command
         expected_cmd = '/bin/sed -i -e \'s/#*SSH=.*/SSH="user@ip_address"/\' %s' % sonic_kdump_config.kdump_cfg
-        mock_run_cmd.assert_called_once_with(expected_cmd, use_shell=True)
+        mock_run_cmd.assert_called_once_with(expected_cmd, use_shell=False)
 
         # Test case where write fails
         mock_run_cmd.return_value = (1, [], None)  # Simulate command failure
@@ -475,7 +475,7 @@ class TestSonicKdumpConfig(unittest.TestCase):
             "/bin/sed -i -e 's/#*SSH_KEY=.*/SSH_KEY=\"/path/to/keys\"/' %s"
             % sonic_kdump_config.kdump_cfg
         )
-        mock_run_cmd.assert_called_once_with(expected_cmd, use_shell=True)
+        mock_run_cmd.assert_called_once_with(expected_cmd, use_shell=False)
 
         # Test case: SSH path in config doesn't match the provided one
         mock_read_ssh_path.return_value = '/wrong/path'
