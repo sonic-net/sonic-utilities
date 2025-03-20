@@ -1,6 +1,7 @@
 import copy
 import json
 import jsonpatch
+import sonic_yang
 from collections import deque, OrderedDict
 from enum import Enum
 from .gu_common import OperationWrapper, OperationType, GenericConfigUpdaterError, \
@@ -29,8 +30,12 @@ class Diff:
     # TODO: Can be optimized to apply the move in place. JsonPatch supports that using the option 'in_place=True'
     # Check: https://python-json-patch.readthedocs.io/en/latest/tutorial.html#applying-a-patch
     # NOTE: in case move is applied in place, we will need to support `undo_move` as well.
-    def apply_move(self, move):
-        new_current_config = move.apply(self.current_config)
+    def apply_move(self, move, in_place: bool = False):
+        new_current_config = move.apply(self.current_config, in_place)
+        return Diff(new_current_config, self.target_config)
+
+    def undo_move(self, move, in_place: bool = False):
+        new_current_config = move.undo(self.current_config, in_place)
         return Diff(new_current_config, self.target_config)
 
     def has_no_diff(self):
@@ -59,7 +64,10 @@ class JsonMove:
     and current_config_tokens i.e. current_config path where the update needs to happen.
     """
     def __init__(self, diff, op_type, current_config_tokens, target_config_tokens=None):
-        operation = JsonMove._to_jsonpatch_operation(diff, op_type, current_config_tokens, target_config_tokens)
+        # Support for undo
+        self.orig_value = None
+
+        operation = self._to_jsonpatch_operation(diff, op_type, current_config_tokens, target_config_tokens)
         self.patch = jsonpatch.JsonPatch([operation])
         self.op_type = operation[OperationWrapper.OP_KEYWORD]
         self.path = operation[OperationWrapper.PATH_KEYWORD]
@@ -69,8 +77,8 @@ class JsonMove:
         self.current_config_tokens = current_config_tokens
         self.target_config_tokens = target_config_tokens
 
-    @staticmethod
-    def _to_jsonpatch_operation(diff, op_type, current_config_tokens, target_config_tokens):
+
+    def _to_jsonpatch_operation(self, diff, op_type, current_config_tokens, target_config_tokens):
         operation_wrapper = OperationWrapper()
         path_addressing = PathAddressing()
 
@@ -91,6 +99,8 @@ class JsonMove:
     @staticmethod
     def _get_value(config, tokens):
         for token in tokens:
+            if isinstance(token, str) and token.isnumeric():
+                token = int(token)
             config = config[token]
 
         return copy.deepcopy(config)
@@ -272,8 +282,22 @@ class JsonMove:
 
         return JsonMove(diff, op_type, current_config_tokens, target_config_tokens)
 
-    def apply(self, config):
-        return self.patch.apply(config)
+    def apply(self, config, in_place: bool=False):
+        if self.op_type == OperationType.REMOVE or self.op_type == OperationType.REPLACE:
+            self.orig_value = JsonMove._get_value(config, sonic_yang.SonicYang.configdb_path_split(self.path))
+
+        return self.patch.apply(config, in_place = in_place)
+
+    def undo(self, config, in_place: bool=False):
+        # Create new patch to undo previous application
+        if self.patch.patch[0]['op'] == 'add':
+            patch = jsonpatch.JsonPatch([ { 'op': 'remove', 'path': self.patch.patch[0]['path'] } ])
+        elif self.patch.patch[0]['op'] == 'replace':
+            patch = jsonpatch.JsonPatch([ { 'op': 'replace', 'path': self.patch.patch[0]['path'], 'value': self.orig_value } ])
+        elif self.patch.patch[0]['op'] == 'remove':
+            patch = jsonpatch.JsonPatch([ { 'op': 'add', 'path': self.patch.patch[0]['path'], 'value': self.orig_value } ])
+
+        return patch.apply(config, in_place = in_place)
 
     def __str__(self):
         return str(self.patch)
@@ -303,13 +327,22 @@ class JsonMoveGroup:
     def append(self, move: JsonMove):
         self.patches.append(move)
 
-    def apply(self, config):
+    def apply(self, config, in_place: bool=False):
         update = config
         for i, patch in enumerate(self.patches):
-            in_place = True
-            if i == 0:
-                in_place = False
-            update = patch.patch.apply(update, in_place=in_place)
+            if i != 0:
+                in_place = True
+            update = patch.apply(update, in_place=in_place)
+            if update is None:
+                return None
+        return update
+
+    def undo(self, config, in_place: bool=False):
+        update = config
+        for i, patch in enumerate(reversed(self.patches)):
+            if i != 0:
+                in_place = True
+            update = patch.undo(update, in_place=in_place)
             if update is None:
                 return None
         return update
@@ -318,7 +351,7 @@ class JsonMoveGroup:
         raw_patches = []
         for move in self.patches:
             raw_patches.extend(move.patch.patch)
-        return JsonPatch(raw_patches)
+        return jsonpatch.JsonPatch(raw_patches)
 
     def __str__(self):
         return ",".join([ str(patch) for patch in self.patches ])
@@ -403,8 +436,11 @@ class MoveWrapper:
                 return False
         return True
 
-    def simulate(self, move, diff):
-        return diff.apply_move(move)
+    def simulate(self, move, diff, in_place: bool=False):
+        return diff.apply_move(move, in_place)
+
+    def undo_simulate(self, move, diff, in_place: bool=False):
+        return diff.undo_move(move, in_place)
 
     def _generate_moves(self, diff):
         for generator in self.move_generators:
@@ -1772,7 +1808,9 @@ class DfsSorter:
 
         for move in moves:
             if self.move_wrapper.validate(move, diff):
-                new_diff = self.move_wrapper.simulate(move, diff)
+                # NOTE: due to the recursive nature, we can't modify in-place as on error we will
+                #       receive "RuntimeError: dictionary changed size during iteration"
+                new_diff = self.move_wrapper.simulate(move, diff, in_place=False)
                 new_moves = self.sort(new_diff)
                 if new_moves is not None:
                     return [move] + new_moves
@@ -2148,7 +2186,7 @@ class PatchSorter:
         current_config = preloaded_current_config if preloaded_current_config else self.config_wrapper.get_config_db_as_json()
         target_config = self.patch_wrapper.simulate_patch(patch, current_config)
 
-        diff = Diff(current_config, target_config)
+        diff = Diff(copy.deepcopy(current_config), target_config)
 
         sort_algorithm = self.sort_algorithm_factory.create(algorithm)
         moves = sort_algorithm.sort(diff)

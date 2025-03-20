@@ -128,7 +128,7 @@ def set_entry(config_db, tbl, key, data):
 # mimics JsonChange.apply
 #
 class mock_obj:
-    def apply(self, config):
+    def apply(self, config, in_place):
         json_change = json_changes[json_change_index]
 
         update = copy.deepcopy(json_change["update"])
@@ -290,8 +290,9 @@ class TestDryRunChangeApplier(unittest.TestCase):
         applier = generic_config_updater.change_applier.DryRunChangeApplier(config_wrapper)
 
         # Act
-        applier.apply(change)
-        applier.remove_backend_tables_from_config(change)
+        current_config = copy.deepcopy(running_config)
+        current_config = applier.apply(current_config, change)
+        current_config = applier.remove_backend_tables_from_config(current_config, change)
 
         # Assert
         applier.config_wrapper.apply_change_to_config_db.assert_has_calls([call(change)])
