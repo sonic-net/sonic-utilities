@@ -6,8 +6,8 @@ from unittest.mock import patch, MagicMock
 from unittest.mock import Mock
 
 from utilities_common.platform_sfputil_helper import (
-    load_platform_sfputil, logical_port_to_physical_port_index, 
-    logical_port_name_to_physical_port_list, is_sfp_present, 
+    load_platform_sfputil, logical_port_to_physical_port_index,
+    logical_port_name_to_physical_port_list, is_sfp_present,
     get_subport, get_sfp_object
 )
 
@@ -1145,8 +1145,6 @@ Ethernet200  Not present
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
 
-
-
 class TestMultiAsicSFP(object):
     
     @patch('utilities_common.platform_sfputil_helper.platform_chassis', None)
@@ -1154,8 +1152,10 @@ class TestMultiAsicSFP(object):
         # Test that the function returns 0 as expected
         assert load_platform_sfputil() == 0
    
-    @patch('utilities_common.platform_sfputil_helper.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
-    @patch('utilities_common.platform_sfputil_helper.logical_port_name_to_physical_port_list', MagicMock(return_value=[1]))
+    @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
+        MagicMock(is_logical_port=MagicMock(return_value=1)))
+    @patch('utilities_common.platform_sfputil_helper.logical_port_name_to_physical_port_list',
+        MagicMock(return_value=[1]))
     @patch('utilities_common.platform_sfputil_helper.platform_chassis')
     @patch('utilities_common.platform_sfputil_helper.is_rj45_port')
     def test_logical_port_to_physical_port_index(self, mock_is_rj45_port, mock_chassis):
@@ -1168,8 +1168,10 @@ class TestMultiAsicSFP(object):
         result = logical_port_to_physical_port_index(port_name)
         assert result == 1
 
-    @patch('utilities_common.platform_sfputil_helper.logical_port_to_physical_port_index', MagicMock(return_value=1))
-    @patch('utilities_common.platform_sfputil_helper.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
+    @patch('utilities_common.platform_sfputil_helper.logical_port_to_physical_port_index',
+        MagicMock(return_value=1))
+    @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
+        MagicMock(is_logical_port=MagicMock(return_value=1)))
     @patch('utilities_common.platform_sfputil_helper.platform_chassis')
     @patch('utilities_common.platform_sfputil_helper.is_rj45_port')
     def test_logical_port_name_to_physical_port_list(self, mock_is_rj45_port, mock_chassis):
@@ -1207,7 +1209,7 @@ class TestMultiAsicSFP(object):
         mock_is_rj45_port.return_value = False
 
         result = get_sfp_object(1)
-        assert result == mock_sfp  
+        assert result == mock_sfp
         mock_is_rj45_port.return_value = True
         sfp_present.return_value = True
 
