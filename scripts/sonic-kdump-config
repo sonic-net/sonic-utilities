@@ -395,6 +395,7 @@ def kdump_enable(verbose, kdump_enabled, memory, num_dumps, image, cmdline_file)
         if crash_kernel_mem == memory:
             if crash_kernel_mem == crash_kernel_in_cmdline:
                 print("kdump is already enabled")
+                return changed
             else:
                 changed = True
         else:
@@ -405,6 +406,11 @@ def kdump_enable(verbose, kdump_enabled, memory, num_dumps, image, cmdline_file)
 
     if changed:
         rewrite_cfg(lines, cmdline_file)
+
+    # if kdump is enabled but cfg is changed, unload kdump before re-writng kdump memory
+    if get_kdump_oper_mode(get_kdump_administrative_mode()) == 'Ready' and changed:
+        print("unload kdump before re-writng kdump memory")
+        write_use_kdump(0)
 
     write_use_kdump(1)
     if crash_kernel_in_cmdline is not None:
