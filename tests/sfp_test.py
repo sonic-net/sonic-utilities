@@ -1147,16 +1147,16 @@ Ethernet200  Not present
 
 
 class TestMultiAsicSFP(object):
- 
+
     @patch('utilities_common.platform_sfputil_helper.platform_chassis', None)
     def test_load_platform_sfputil(self):
         # Test that the function returns 0 as expected
         assert load_platform_sfputil() == 0
 
     @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
-        MagicMock(is_logical_port=MagicMock(return_value=1)))
+           MagicMock(is_logical_port=MagicMock(return_value=1)))
     @patch('utilities_common.platform_sfputil_helper.logical_port_name_to_physical_port_list',
-        MagicMock(return_value=[1]))
+           MagicMock(return_value=[1]))
     @patch('utilities_common.platform_sfputil_helper.platform_chassis')
     @patch('utilities_common.platform_sfputil_helper.is_rj45_port')
     def test_logical_port_to_physical_port_index(self, mock_is_rj45_port, mock_chassis):
@@ -1170,9 +1170,9 @@ class TestMultiAsicSFP(object):
         assert result == 1
 
     @patch('utilities_common.platform_sfputil_helper.logical_port_to_physical_port_index',
-        MagicMock(return_value=1))
+           MagicMock(return_value=1))
     @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
-        MagicMock(is_logical_port=MagicMock(return_value=1)))
+           MagicMock(is_logical_port=MagicMock(return_value=1)))
     @patch('utilities_common.platform_sfputil_helper.platform_chassis')
     @patch('utilities_common.platform_sfputil_helper.is_rj45_port')
     def test_logical_port_name_to_physical_port_list(self, mock_is_rj45_port, mock_chassis):
@@ -1185,7 +1185,8 @@ class TestMultiAsicSFP(object):
         port_name = "Ethernet0"
         result = logical_port_name_to_physical_port_list(port_name)
         assert result is not None
- 
+        mock_is_rj45_port.return_value = False
+
     @patch('utilities_common.platform_sfputil_helper.logical_port_to_physical_port_index', MagicMock(return_value=1))
     @patch('utilities_common.platform_sfputil_helper.platform_chassis')
     @patch('utilities_common.platform_sfputil_helper.is_rj45_port')
