@@ -26,7 +26,7 @@ ERROR_INVALID_PORT = 6
 def debug():
     """
     Group for debugging and diagnostic control commands.
- 
+
     This command group loads platform-specific utilities and prepares them for use in diagnostic commands.
     """
     platform_sfputil_helper.load_platform_sfputil()
@@ -123,7 +123,8 @@ def set_output(port_name, enable, direction):
             sfp.rx_disable_channel(subport, enable == "disable")
 
         click.echo(f"{port_name}: {direction.upper()} output "
-                   f"status is {'enabled' if is_enabled else 'disabled'}")
+                  f"{'disabled' if enable == 'disable' else 'enabled'} on subport {subport}")
+
 
     except AttributeError:
         click.echo(f"{port_name}: {direction.upper()} disable is not applicable for this module")
