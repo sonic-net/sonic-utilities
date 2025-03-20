@@ -4,6 +4,7 @@ import config.main as config
 
 from click.testing import CliRunner
 from config.main import expand_vlan_ports, parse_acl_table_info
+from unittest.mock import patch
 
 
 class TestConfigAcl(object):
@@ -79,3 +80,16 @@ class TestConfigAcl(object):
 
         assert result.exit_code != 0
         assert "Cannot bind empty VLAN Vlan3000" in result.output
+    
+    @patch('utilities_common.cli.run_command')
+    def test_acl_remove_table(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(
+            config.config.commands["acl"].commands["add"].commands["table"],
+            ["TEST", "L3"])
+        assert result.exit_code == 0
+
+        result = runner.invoke(
+            config.config.commands["acl"].commands["remove"].commands["table"],
+            ["TEST"])
+        assert result.exit_code == 0
