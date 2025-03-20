@@ -137,6 +137,7 @@ def get_interface_alias(port, db):
 
     return port
 
+
 def get_subport_lane_mask(subport, lane_count):
     """
     Get the lane mask for the given subport and lane count.
@@ -179,6 +180,7 @@ def get_sfp_object(port_name):
         sys.exit(EXIT_FAIL)
 
     return sfp
+
 
 def get_value_from_db_by_field(db, table_name, field, key):
     """

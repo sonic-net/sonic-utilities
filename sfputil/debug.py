@@ -21,16 +21,18 @@ ERROR_PORT_CONFIG_LOAD = 4
 ERROR_NOT_IMPLEMENTED = 5
 ERROR_INVALID_PORT = 6
 
+
 @click.group(cls=clicommon.AliasedGroup)
 def debug():
     """
     Group for debugging and diagnostic control commands.
-    
+ 
     This command group loads platform-specific utilities and prepares them for use in diagnostic commands.
     """
     platform_sfputil_helper.load_platform_sfputil()
     platform_sfputil_helper.load_chassis()
     platform_sfputil_helper.platform_sfputil_read_porttab_mappings()
+
 
 @debug.command()
 @click.argument('port_name', required=True)
@@ -104,6 +106,7 @@ def loopback(port_name, loopback_mode, enable):
         click.echo(f"{port_name}: {enable} {loopback_mode} loopback failed")
         sys.exit(EXIT_FAIL)
 
+
 def set_output(port_name, enable, direction):
     """
     Enable or disable TX/RX output based on direction ('tx' or 'rx').
@@ -119,13 +122,15 @@ def set_output(port_name, enable, direction):
         elif direction == "rx":
             sfp.rx_disable_channel(subport, enable == "disable")
 
-        click.echo(f"{port_name}: {direction.upper()} output {'disabled' if enable == 'disable' else 'enabled'} on subport {subport}")
+        click.echo(f"{port_name}: {direction.upper()} output 
+                {'disabled' if enable == 'disable' else 'enabled'} on subport {subport}")
     except AttributeError:
         click.echo(f"{port_name}: {direction.upper()} disable is not applicable for this module")
         sys.exit(ERROR_NOT_IMPLEMENTED)
     except Exception as e:
         click.echo(f"{port_name}: {direction.upper()} disable failed due to {str(e)}")
         sys.exit(EXIT_FAIL)
+
 
 @debug.command()
 @click.argument('port_name', required=True)
@@ -134,10 +139,10 @@ def tx_output(port_name, enable):
     """Enable or disable TX output on a port."""
     set_output(port_name, enable, "tx")
 
+
 @debug.command()
 @click.argument('port_name', required=True)
 @click.argument('enable', required=True, type=click.Choice(["enable", "disable"]))
 def rx_output(port_name, enable):
     """Enable or disable RX output on a port."""
     set_output(port_name, enable, "rx")
-
