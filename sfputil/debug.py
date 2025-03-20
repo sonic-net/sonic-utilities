@@ -122,8 +122,9 @@ def set_output(port_name, enable, direction):
         elif direction == "rx":
             sfp.rx_disable_channel(subport, enable == "disable")
 
-        click.echo(f"{port_name}: {direction.upper()} output 
-                {'disabled' if enable == 'disable' else 'enabled'} on subport {subport}")
+        click.echo(f"{port_name}: {direction.upper()} output "
+                   f"status is {'enabled' if is_enabled else 'disabled'}")
+
     except AttributeError:
         click.echo(f"{port_name}: {direction.upper()} disable is not applicable for this module")
         sys.exit(ERROR_NOT_IMPLEMENTED)

@@ -605,6 +605,7 @@ def cli():
     if not load_port_config():
         sys.exit(ERROR_PORT_CONFIG_LOAD)
 
+
 cli.add_command(debug)
 
 # 'show' subgroup
