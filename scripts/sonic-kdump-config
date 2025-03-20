@@ -461,8 +461,13 @@ def read_ssh_string():
 
 def write_ssh_string(ssh_string):
     ssh_string = ssh_string.replace('/', '\/')  # Escape any slashes in the SSH string
-    cmd = "/bin/sed -i -e 's/#*SSH=.*/SSH=\"%s\"/' %s" % (ssh_string, kdump_cfg)
-
+    cmd = [
+        "/bin/sed",
+        "-i",
+        "-e",
+        f"s/#*SSH=.*/SSH=\"{ssh_string}\"/",
+        kdump_cfg
+    ]
     (rc, lines, err_str) = run_command(cmd, use_shell=False)
     if rc == 0 and type(lines) == list and len(lines) == 0:
         ssh_string_in_cfg = read_ssh_string()
