@@ -150,29 +150,25 @@ static_object_complex_1 = {
                         "name":"OBJ_1_LEAF_1",
                         "description": "OBJ_1_LEAF_1 description",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": '',
+                        "is-leaf-list": False
                     },
                     {
                         "name":"OBJ_1_LEAF_LIST_1",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": True,
-                        "group": '',
+                        "is-leaf-list": True
                     },
                     {
                         "name":"OBJ_1_CHOICE_1_LEAF_1",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": '',
+                        "is-leaf-list": False
                     },
                     {
                         "name":"OBJ_1_CHOICE_1_LEAF_2",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": '',
+                        "is-leaf-list": False
                     }
                 ]
             }
@@ -195,57 +191,49 @@ static_object_complex_2 = {
                         "name":"OBJ_1_LEAF_1",
                         "description": "OBJ_1_LEAF_1 description",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": '',
+                        "is-leaf-list": False
                     },
                     {
                         "name":"OBJ_1_LEAF_2",
                         "description": "OBJ_1_LEAF_2 description",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": '',
+                        "is-leaf-list": False
                     },
                     {
                         "name":"OBJ_1_LEAF_LIST_1",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": True,
-                        "group": '',
+                        "is-leaf-list": True
                     },
                     {
                         "name":"OBJ_1_LEAF_LIST_2",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": True,
-                        "group": '',
+                        "is-leaf-list": True
                     },
                     {
                         "name":"OBJ_1_CHOICE_1_LEAF_1",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": '',
+                        "is-leaf-list": False
                     },
                     {
                         "name":"OBJ_1_CHOICE_1_LEAF_2",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": '',
+                        "is-leaf-list": False
                     },
                     {
                         "name":"OBJ_1_CHOICE_2_LEAF_1",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": '',
+                        "is-leaf-list": False
                     },
                     {
                         "name":"OBJ_1_CHOICE_2_LEAF_2",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": '',
+                        "is-leaf-list": False
                     },
                 ]
             }
@@ -268,29 +256,25 @@ dynamic_object_complex_1 = {
                         "name":"OBJ_1_LEAF_1",
                         "description": "OBJ_1_LEAF_1 description",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": '',
+                        "is-leaf-list": False
                     },
                     {
                         "name":"OBJ_1_LEAF_LIST_1",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": True,
-                        "group": '',
+                        "is-leaf-list": True
                     },
                     {
                         "name":"OBJ_1_CHOICE_1_LEAF_1",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": '',
+                        "is-leaf-list": False
                     },
                     {
                         "name":"OBJ_1_CHOICE_1_LEAF_2",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": '',
+                        "is-leaf-list": False
                     }
                 ],
                 "keys":[
@@ -319,57 +303,49 @@ dynamic_object_complex_2 = {
                         "name":"OBJ_1_LEAF_1",
                         "description": "OBJ_1_LEAF_1 description",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": '',
+                        "is-leaf-list": False
                     },
                     {
                         "name":"OBJ_1_LEAF_2",
                         "description": "OBJ_1_LEAF_2 description",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": '',
+                        "is-leaf-list": False
                     },
                     {
                         "name":"OBJ_1_LEAF_LIST_1",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": True,
-                        "group": '',
+                        "is-leaf-list": True
                     },
                     {
                         "name":"OBJ_1_LEAF_LIST_2",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": True,
-                        "group": '',
+                        "is-leaf-list": True
                     },
                     {
                         "name":"OBJ_1_CHOICE_1_LEAF_1",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": '',
+                        "is-leaf-list": False
                     },
                     {
                         "name":"OBJ_1_CHOICE_1_LEAF_2",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": '',
+                        "is-leaf-list": False
                     },
                     {
                         "name":"OBJ_1_CHOICE_2_LEAF_1",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": '',
+                        "is-leaf-list": False
                     },
                     {
                         "name":"OBJ_1_CHOICE_2_LEAF_2",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": '',
+                        "is-leaf-list": False
                     }
                 ],
                 "keys":[
@@ -402,99 +378,85 @@ choice_complex = {
                         "name":"LEAF_1",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": '',
-                    },
-                    {
-                        "name":"LEAF_LIST_1",
-                        "description": "",
-                        "is-mandatory": False,
-                        "is-leaf-list": True,
-                        "group": '',
+                        "is-leaf-list": False
                     },
                     {
                         "name":"GR_1_LEAF_1",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": "GR_1",
+                        "is-leaf-list": False
                     },
                     {
                         "name":"GR_1_LEAF_2",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": 'GR_1',
+                        "is-leaf-list": False
+                    },
+                    {
+                        "name":"LEAF_LIST_1",
+                        "description": "",
+                        "is-mandatory": False,
+                        "is-leaf-list": True
                     },
                     {
                         "name":"LEAF_2",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": '',
+                        "is-leaf-list": False
                     },
                     {
                         "name":"LEAF_3",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": '',
-                    },
-                    {
-                        "name":"LEAF_LIST_2",
-                        "description": "",
-                        "is-mandatory": False,
-                        "is-leaf-list": True,
-                        "group": '',
-                    },
-                    {
-                        "name":"LEAF_LIST_3",
-                        "description": "",
-                        "is-mandatory": False,
-                        "is-leaf-list": True,
-                        "group": '',
+                        "is-leaf-list": False
                     },
                     {
                         "name":"GR_5_LEAF_1",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": 'GR_5',
+                        "is-leaf-list": False
                     },
                     {
                         "name":"GR_5_LEAF_2",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": 'GR_5',
+                        "is-leaf-list": False
                     },
                     {
                         "name":"GR_2_LEAF_1",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": 'GR_2',
+                        "is-leaf-list": False
                     },
                     {
                         "name":"GR_2_LEAF_2",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": 'GR_2',
+                        "is-leaf-list": False
                     },
                     {
                         "name":"GR_3_LEAF_1",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": 'GR_3',
+                        "is-leaf-list": False
                     },
                     {
                         "name":"GR_3_LEAF_2",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": 'GR_3',
+                        "is-leaf-list": False
+                    },
+                    {
+                        "name":"LEAF_LIST_2",
+                        "description": "",
+                        "is-mandatory": False,
+                        "is-leaf-list": True
+                    },
+                    {
+                        "name":"LEAF_LIST_3",
+                        "description": "",
+                        "is-mandatory": False,
+                        "is-leaf-list": True
                     },
                 ]
             }
@@ -517,15 +479,13 @@ grouping_complex = {
                         "name":"GR_1_LEAF_1",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": "GR_1",
+                        "is-leaf-list": False
                     },
                     {
                         "name":"GR_1_LEAF_2",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": 'GR_1',
+                        "is-leaf-list": False
                     },
                 ]
             },
@@ -537,85 +497,73 @@ grouping_complex = {
                         "name":"GR_5_LEAF_1",
                         "description": "GR_5_LEAF_1 refine description",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": "GR_5",
-                    },
-                    {
-                        "name":"GR_5_LEAF_LIST_1",
-                        "description": "GR_5_LEAF_LIST_1 refine description",
-                        "is-mandatory": False,
-                        "is-leaf-list": True,
-                        "group": "GR_5",
+                        "is-leaf-list": False
                     },
                     {
                         "name":"GR_6_LEAF_1",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": "GR_6",
+                        "is-leaf-list": False
                     },
                     {
                         "name":"GR_6_LEAF_2",
                         "description": "GR_6_LEAF_2 refine description",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": "GR_6",
-                    },
-                    {
-                        "name":"GR_6_CASE_1_LEAF_1",
-                        "description": "",
-                        "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": "GR_6",
-                    },
-                    {
-                        "name":"GR_6_CASE_1_LEAF_LIST_1",
-                        "description": "",
-                        "is-mandatory": False,
-                        "is-leaf-list": True,
-                        "group": "GR_6",
-                    },
-                    {
-                        "name":"GR_6_CASE_2_LEAF_1",
-                        "description": "",
-                        "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": "GR_6",
-                    },
-                    {
-                        "name":"GR_6_CASE_2_LEAF_2",
-                        "description": "",
-                        "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": "GR_6",
-                    },
-                    {
-                        "name":"GR_6_CASE_2_LEAF_LIST_1",
-                        "description": "",
-                        "is-mandatory": False,
-                        "is-leaf-list": True,
-                        "group": "GR_6",
-                    },
-                    {
-                        "name":"GR_6_CASE_2_LEAF_LIST_2",
-                        "description": "",
-                        "is-mandatory": False,
-                        "is-leaf-list": True,
-                        "group": "GR_6",
+                        "is-leaf-list": False
                     },
                     {
                         "name":"GR_4_LEAF_1",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": "GR_4",
+                        "is-leaf-list": False
                     },
                     {
                         "name":"GR_4_LEAF_2",
                         "description": "",
                         "is-mandatory": False,
-                        "is-leaf-list": False,
-                        "group": "GR_4",
+                        "is-leaf-list": False
+                    },
+                    {
+                        "name":"GR_5_LEAF_LIST_1",
+                        "description": "GR_5_LEAF_LIST_1 refine description",
+                        "is-mandatory": False,
+                        "is-leaf-list": True
+                    },
+                    {
+                        "name":"GR_6_CASE_1_LEAF_1",
+                        "description": "",
+                        "is-mandatory": False,
+                        "is-leaf-list": False
+                    },
+                    {
+                        "name":"GR_6_CASE_1_LEAF_LIST_1",
+                        "description": "",
+                        "is-mandatory": False,
+                        "is-leaf-list": True
+                    },
+                    {
+                        "name":"GR_6_CASE_2_LEAF_1",
+                        "description": "",
+                        "is-mandatory": False,
+                        "is-leaf-list": False
+                    },
+                    {
+                        "name":"GR_6_CASE_2_LEAF_2",
+                        "description": "",
+                        "is-mandatory": False,
+                        "is-leaf-list": False
+                    },
+                    {
+                        "name":"GR_6_CASE_2_LEAF_LIST_1",
+                        "description": "",
+                        "is-mandatory": False,
+                        "is-leaf-list": True
+                    },
+                    {
+                        "name":"GR_6_CASE_2_LEAF_LIST_2",
+                        "description": "",
+                        "is-mandatory": False,
+                        "is-leaf-list": True
                     },
                 ]
             }
