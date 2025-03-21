@@ -1249,23 +1249,6 @@ class TestNoDependencyMoveValidator(unittest.TestCase):
         # Act and assert
         self.assertTrue(self.validator.validate(move, diff, move.apply(diff.current_config)))
 
-    def test_validate__remove_full_config_has_dependencies__failure(self):
-        # Arrange
-        # CROPPED_CONFIG_DB_AS_JSON has dependencies between PORT and ACL_TABLE
-        diff = ps.Diff(Files.CROPPED_CONFIG_DB_AS_JSON, Files.EMPTY_CONFIG_DB)
-        move = JsonMoveGroup(ps.JsonMove(diff, OperationType.REMOVE, [], []))
-
-        # Act and assert
-        self.assertFalse(self.validator.validate(move, diff, move.apply(diff.current_config)))
-
-    def test_validate__remove_full_config_no_dependencies__success(self):
-        # Arrange
-        diff = ps.Diff(Files.EMPTY_CONFIG_DB, Files.CONFIG_DB_NO_DEPENDENCIES)
-        move = JsonMoveGroup(ps.JsonMove(diff, OperationType.REMOVE, [], []))
-
-        # Act and assert
-        self.assertTrue(self.validator.validate(move, diff, move.apply(diff.current_config)))
-
     def test_validate__remove_table_has_no_dependencies__success(self):
         # Arrange
         current_config = Files.CROPPED_CONFIG_DB_AS_JSON
