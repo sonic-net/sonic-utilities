@@ -331,8 +331,7 @@ def on_leaf(leaf: OrderedDict,
     attr = {'name': leaf.get('@name'),
             'description': get_description(leaf),
             'is-leaf-list': is_leaf_list,
-            'is-mandatory': get_mandatory(leaf)
-           }
+            'is-mandatory': get_mandatory(leaf)}
 
     return attr
 
