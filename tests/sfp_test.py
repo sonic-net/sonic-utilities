@@ -8,7 +8,7 @@ from unittest.mock import Mock
 from utilities_common.platform_sfputil_helper import (
     load_platform_sfputil, logical_port_to_physical_port_index,
     logical_port_name_to_physical_port_list, is_sfp_present,
-    get_subport, get_sfp_object
+    get_subport, get_sfp_object, get_value_from_db_by_field
 )
 
 test_path = os.path.dirname(os.path.abspath(__file__))
@@ -1234,6 +1234,37 @@ class TestMultiAsicSFP(object):
         # assuming config_db is passed or mocked elsewhere
         result = get_subport("Ethernet0")
         assert result == 2
+
+
+    @patch('utilities_common.platform_sfputil_helper.SonicV2Connector')
+    @patch('utilities_common.platform_sfputil_helper.ConfigDBConnector')
+    @patch('utilities_common.platform_sfputil_helper.multi_asic.get_namespace_for_port', return_value='asic0')
+    def test_get_value_from_db_by_field(self, mock_get_namespace, mock_config_db, mock_sonic_db):
+        # Mock CONFIG_DB case
+        mock_config_instance = MagicMock()
+        mock_config_instance.get.return_value = "test_value"
+        mock_config_instance.connect.return_value = None  # No actual connection
+        mock_config_db.return_value = mock_config_instance
+
+        # Mock for SonicV2Connector case
+        mock_sonic_instance = MagicMock()
+        mock_sonic_instance.get.return_value = "test_value"
+        mock_sonic_instance.connect.return_value = None  # Mock connect to not do anything
+        mock_sonic_db.return_value = mock_sonic_instance
+
+        # Now call function
+        result = get_value_from_db_by_field("CONFIG_DB", "TEST_TABLE", "test_field", "Ethernet0")
+        assert result == "test_value"
+        mock_config_instance.connect.assert_called_once()
+        mock_config_instance.get.assert_called_once_with("CONFIG_DB", "TEST_TABLE|Ethernet0", "test_field")
+        
+        # Mock STATE_DB case
+        mock_sonic_instance.get.return_value = "state_value"
+        
+        result = get_value_from_db_by_field("STATE_DB", "TEST_TABLE", "test_field", "Ethernet0")
+        assert result == "state_value"
+        mock_sonic_instance.get.assert_called_once_with("STATE_DB", "TEST_TABLE|Ethernet0", "test_field")
+        mock_sonic_instance.close.assert_called_once()
 
     @classmethod
     def teardown_class(cls):

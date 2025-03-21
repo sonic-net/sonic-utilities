@@ -204,13 +204,20 @@ def get_value_from_db_by_field(db_name, table_name, field, key):
         db = SonicV2Connector(use_unix_socket_path=False, namespace=namespace)
 
     try:
-        db.connect(db_name) if isinstance(db, SonicV2Connector) else db.connect()
+        if db_name == "CONFIG_DB":
+            db.connect()  # CONFIG_DB doesn't need the db_name passed explicitly
+        else:
+            db.connect(getattr(db, db_name))  # Get the corresponding attribute (e.g., STATE_DB) from the connector
+
+        # Retrieve the value from the database
         return db.get(db_name, f"{table_name}|{key}", field)
-    except (TypeError, KeyError, AttributeError):
+    except (TypeError, KeyError, AttributeError) as e:
+        click.echo(f"Error: {e}")
         return None
     finally:
-        if isinstance(db, SonicV2Connector):
-            db.disconnect()
+        # Ensure to close the connection if it's valid
+        if db is not None:
+            db.close()
 
 
 def get_subport(port_name):
