@@ -182,16 +182,17 @@ def get_sfp_object(port_name):
 
     return sfp
 
+
 def get_value_from_db_by_field(db_name, table_name, field, key):
     """
     Retrieve a specific field value from a given table in the specified DB.
-    
+
     Args:
         db_name (str): The database to query (CONFIG_DB, STATE_DB, etc.).
         table_name (str): The table to query.
         field (str): The field whose value is needed.
         key (str): The specific key within the table (typically a port name).
-    
+
     Returns:
         The retrieved value if found, otherwise None.
     """

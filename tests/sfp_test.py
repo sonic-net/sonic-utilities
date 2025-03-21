@@ -3,7 +3,6 @@ import os
 from click.testing import CliRunner
 from .mock_tables import dbconnector
 from unittest.mock import patch, MagicMock
-from unittest.mock import Mock
 
 from utilities_common.platform_sfputil_helper import (
     load_platform_sfputil, logical_port_to_physical_port_index,
@@ -1235,7 +1234,6 @@ class TestMultiAsicSFP(object):
         result = get_subport("Ethernet0")
         assert result == 2
 
-
     @patch('utilities_common.platform_sfputil_helper.SonicV2Connector')
     @patch('utilities_common.platform_sfputil_helper.ConfigDBConnector')
     @patch('utilities_common.platform_sfputil_helper.multi_asic.get_namespace_for_port', return_value='asic0')
@@ -1257,10 +1255,9 @@ class TestMultiAsicSFP(object):
         assert result == "test_value"
         mock_config_instance.connect.assert_called_once()
         mock_config_instance.get.assert_called_once_with("CONFIG_DB", "TEST_TABLE|Ethernet0", "test_field")
-        
         # Mock STATE_DB case
+
         mock_sonic_instance.get.return_value = "state_value"
-        
         result = get_value_from_db_by_field("STATE_DB", "TEST_TABLE", "test_field", "Ethernet0")
         assert result == "state_value"
         mock_sonic_instance.get.assert_called_once_with("STATE_DB", "TEST_TABLE|Ethernet0", "test_field")
