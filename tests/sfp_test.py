@@ -1232,7 +1232,7 @@ class TestMultiAsicSFP(object):
         mock_get_value_from_db_by_field.return_value = '2'
 
         # assuming config_db is passed or mocked elsewhere
-        result = get_subport("Ethernet0", Mock())
+        result = get_subport("Ethernet0")
         assert result == 2
 
     @classmethod

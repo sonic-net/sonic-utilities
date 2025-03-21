@@ -1710,7 +1710,7 @@ EEPROM hexdump for port Ethernet4
     @patch('sfputil.debug.is_rj45_port', MagicMock(return_value=False))
     @patch('sfputil.debug.get_sfp_object')
     @patch('sfputil.debug.is_sfp_present')
-    @patch('sfputil.debug.ConfigDBConnector')
+    @patch('utilities_common.platform_sfputil_helper.ConfigDBConnector')
     @patch('sfputil.debug.SonicV2Connector')
     @patch('sonic_py_common.multi_asic.get_front_end_namespaces', MagicMock(return_value=['']))
     def test_tx_output(self, mock_sonic_v2_connector, mock_config_db_connector, sfp_presence, mock_get_sfp_object):
@@ -1753,7 +1753,7 @@ EEPROM hexdump for port Ethernet4
     @patch('sfputil.debug.is_rj45_port', MagicMock(return_value=False))
     @patch('sfputil.debug.get_sfp_object')
     @patch('sfputil.debug.is_sfp_present')
-    @patch('sfputil.debug.ConfigDBConnector')
+    @patch('utilities_common.platform_sfputil_helper.ConfigDBConnector')
     @patch('sfputil.debug.SonicV2Connector')
     @patch('sonic_py_common.multi_asic.get_front_end_namespaces', MagicMock(return_value=['']))
     def test_rx_output(self, mock_sonic_v2_connector, mock_config_db_connector, sfp_presence, mock_get_sfp_object):
