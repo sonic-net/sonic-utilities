@@ -422,17 +422,25 @@ class TestSonicKdumpConfig(unittest.TestCase):
         # Call the function to test
         sonic_kdump_config.write_ssh_string('user@ip_address')
 
-        # Verify that run_command was called with the correct command
-        expected_cmd = '/bin/sed -i -e \'s/#*SSH=.*/SSH="user@ip_address"/\' %s' % sonic_kdump_config.kdump_cfg
+        # Verify that run_command was called with the correct command list
+        expected_cmd = [
+            "/bin/sed",
+            "-i",
+            "-e",
+            's/#*SSH=.*/SSH="user@ip_address"/',
+            sonic_kdump_config.kdump_cfg
+        ]
         mock_run_cmd.assert_called_once_with(expected_cmd, use_shell=False)
 
         # Test case where write fails
+        mock_run_cmd.reset_mock()  # Reset the mock for new test
         mock_run_cmd.return_value = (1, [], None)  # Simulate command failure
         with self.assertRaises(SystemExit) as sys_exit:
             sonic_kdump_config.write_ssh_string('user@ip_address')
         self.assertEqual(sys_exit.exception.code, 1)
 
         # Test case where the written SSH string doesn't match the expected value
+        mock_run_cmd.reset_mock()  # Reset the mock for new test
         mock_run_cmd.return_value = (0, [], None)
         mock_read_ssh_string.return_value = 'different_user@ip_address'  # Simulate reading a different SSH string
         with self.assertRaises(SystemExit) as sys_exit:
