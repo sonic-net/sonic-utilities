@@ -483,7 +483,7 @@ class PathAddressing:
     def _create_sonic_yang_with_loaded_models(self):
         return self.config_wrapper.create_sonic_yang_with_loaded_models()
 
-    def find_ref_paths(self, path, config):
+    def find_ref_paths(self, paths, config, reload_config: bool = True):
         """
         Finds the paths referencing any line under the given 'path' within the given 'config'.
         Example:
@@ -521,23 +521,28 @@ class PathAddressing:
             /ACL_TABLE/EVERFLOW6/ports/1
         """
         # TODO: Also fetch references by must statement (check similar statements)
-        return self._find_leafref_paths(path, config)
-
-    def _find_leafref_paths(self, path, config):
         sy = self._create_sonic_yang_with_loaded_models()
 
-        sy.loadData(config)
+        if reload_config:
+            sy.loadData(config)
 
-        xpath = self.convert_path_to_xpath(path, config, sy)
-
-        leaf_xpaths = self._get_inner_leaf_xpaths(xpath, sy)
-
-        ref_xpaths = []
-        for xpath in leaf_xpaths:
-            ref_xpaths.extend(sy.find_data_dependencies(xpath))
+        # Force to be a list
+        if not isinstance(paths, list):
+            paths = [ paths ]
 
         ref_paths = []
         ref_paths_set = set()
+        ref_xpaths = []
+
+        # Iterate across all paths fetching references
+        for path in paths:
+            xpath = self.convert_path_to_xpath(path, config, sy)
+
+            leaf_xpaths = self._get_inner_leaf_xpaths(xpath, sy)
+            for xpath in leaf_xpaths:
+                ref_xpaths.extend(sy.find_data_dependencies(xpath))
+
+        # For each xpath, convert to configdb path
         for ref_xpath in ref_xpaths:
             ref_path = self.convert_xpath_to_path(ref_xpath, config, sy)
             if ref_path not in ref_paths_set:
