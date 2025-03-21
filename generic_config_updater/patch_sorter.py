@@ -655,6 +655,7 @@ class RemoveCreateOnlyDependencyMoveValidator:
         # Note: group is not used by this validator
         current_config = diff.current_config
         target_config = diff.target_config # Final config after applying whole patch
+        reload_config = True
 
         processed_tables = set()
         for path in self.create_only_filter.get_paths(current_config):
@@ -685,12 +686,16 @@ class RemoveCreateOnlyDependencyMoveValidator:
                     continue
 
                 if not self._validate_member(tokens, member_name,
-                                             current_config, target_config, simulated_config):
+                                             current_config, target_config, simulated_config,
+                                             reload_config = reload_config):
                     return False
+
+                # After first call, no need to reload again
+                reload_config = False
 
         return True
 
-    def _validate_member(self, tokens, member_name, current_config, target_config, simulated_config):
+    def _validate_member(self, tokens, member_name, current_config, target_config, simulated_config, reload_config: bool = True):
         table_to_check, create_only_field = tokens[0], tokens[-1]
 
         current_field = self._get_create_only_field(
@@ -718,7 +723,7 @@ class RemoveCreateOnlyDependencyMoveValidator:
                 return False
 
         member_path = f"/{table_to_check}/{member_name}"
-        for ref_path in self.path_addressing.find_ref_paths(member_path, simulated_config):
+        for ref_path in self.path_addressing.find_ref_paths(member_path, simulated_config, reload_config = reload_config):
             if not self.path_addressing.has_path(current_config, ref_path):
                 return False
 
@@ -861,22 +866,25 @@ class NoDependencyMoveValidator:
         self.config_wrapper = config_wrapper
 
     def validate(self, group: JsonMoveGroup, diff, simulated_config):
+        reload_config = True
+        # Note: all moves in a group are guaranteed to be the same operation type
         for move in group:
-            if not self.__validate_move(move, diff, simulated_config):
+            if not self.__validate_move(move, diff, simulated_config, reload_config = reload_config):
                 return False
+            reload_config = False
         return True
 
-    def __validate_move(self, move, diff, simulated_config):
+    def __validate_move(self, move, diff, simulated_config, reload_config: bool = True):
         operation_type = move.op_type
         path = move.path
 
         if operation_type == OperationType.ADD:
             # For add operation, we check the simulated config has no dependencies between nodes under the added path
-            if not self._validate_paths_config([path], simulated_config):
+            if not self._validate_paths_config([path], simulated_config, reload_config):
                 return False
         elif operation_type == OperationType.REMOVE:
             # For remove operation, we check the current config has no dependencies between nodes under the removed path
-            if not self._validate_paths_config([path], diff.current_config):
+            if not self._validate_paths_config([path], diff.current_config, reload_config):
                 return False
         elif operation_type == OperationType.REPLACE:
             if not self._validate_replace(move, diff, simulated_config):
@@ -918,12 +926,15 @@ class NoDependencyMoveValidator:
         """
         deleted_paths, added_paths = self._get_paths(diff.current_config, simulated_config, [])
 
+        # Note: on replace operations we are loading both current and simulated configs so we have to
+        #       load twice :(
+
         # For deleted paths, we check the current config has no dependencies between nodes under the removed path
-        if not self._validate_paths_config(deleted_paths, diff.current_config):
+        if not self._validate_paths_config(deleted_paths, diff.current_config, reload_config = True):
             return False
 
         # For added paths, we check the simulated config has no dependencies between nodes under the added path
-        if not self._validate_paths_config(added_paths, simulated_config):
+        if not self._validate_paths_config(added_paths, simulated_config, reload_config = True):
             return False
 
         return True
@@ -990,23 +1001,17 @@ class NoDependencyMoveValidator:
 
         return deleted_paths, added_paths
 
-    def _validate_paths_config(self, paths, config):
+    def _validate_paths_config(self, paths, config, reload_config: bool = True):
         """
         validates all config under paths do not have config and its references
         """
-        refs = self._find_ref_paths(paths, config)
+        refs = self.path_addressing.find_ref_paths(paths, config, reload_config = reload_config)
         for ref in refs:
             for path in paths:
                 if ref.startswith(path):
                     return False
 
         return True
-
-    def _find_ref_paths(self, paths, config):
-        refs = []
-        for path in paths:
-            refs.extend(self.path_addressing.find_ref_paths(path, config))
-        return refs
 
 class NoEmptyTableMoveValidator:
     """
@@ -1189,6 +1194,7 @@ class RemoveCreateOnlyDependencyMoveGenerator:
     def generate(self, diff):
         current_config = diff.current_config
         target_config = diff.target_config # Final config after applying whole patch
+        reload_config = True
 
         processed_tables = set()
         for path in self.create_only_filter.get_paths(current_config):
@@ -1228,9 +1234,12 @@ class RemoveCreateOnlyDependencyMoveGenerator:
 
                 member_path = f"/{table_to_check}/{member_name}"
 
-                for ref_path in self.path_addressing.find_ref_paths(member_path, current_config):
+                for ref_path in self.path_addressing.find_ref_paths(member_path, current_config, reload_config = reload_config):
                     yield JsonMoveGroup(JsonMove(diff, OperationType.REMOVE,
                                         self.path_addressing.get_path_tokens(ref_path)))
+
+                # No need to reload config after first call
+                reload_config = False
 
     def _get_create_only_field(self, config, table_to_check,
                                member_name, create_only_field):
@@ -1607,7 +1616,7 @@ class DeleteRefsMoveExtender:
         if operation_type != OperationType.REMOVE:
             return
 
-        for ref_path in self.path_addressing.find_ref_paths(move.path, diff.current_config):
+        for ref_path in self.path_addressing.find_ref_paths(move.path, diff.current_config, reload_config = True):
             yield JsonMove(diff, OperationType.REMOVE, self.path_addressing.get_path_tokens(ref_path))
 
 class DfsSorter:
