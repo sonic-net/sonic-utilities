@@ -1868,7 +1868,7 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
         if multi_asic.is_multi_asic():
             # Multiasic has not 100% fully validated. Thus pass here.
             pass
-        elif "golden" in filename.lower():
+        else:
             config_file_yang_validation(filename)
 
     #Stop services before config push
