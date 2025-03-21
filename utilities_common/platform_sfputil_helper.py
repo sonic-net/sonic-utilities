@@ -4,6 +4,7 @@ import click
 
 from . import cli as clicommon
 from sonic_py_common import multi_asic, device_info
+from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 
 platform_sfputil = None
 platform_chassis = None
@@ -181,29 +182,39 @@ def get_sfp_object(port_name):
 
     return sfp
 
-
-def get_value_from_db_by_field(db, table_name, field, key):
+def get_value_from_db_by_field(db_name, table_name, field, key):
     """
-    Retrieve a specific field value from a given table in the CONFIG_DB.
+    Retrieve a specific field value from a given table in the specified DB.
+    
     Args:
-        db: Database connection object.
+        db_name (str): The database to query (CONFIG_DB, STATE_DB, etc.).
         table_name (str): The table to query.
         field (str): The field whose value is needed.
-        key (str): The specific key within the table.
+        key (str): The specific key within the table (typically a port name).
+    
     Returns:
         The retrieved value if found, otherwise None.
     """
-    if db is not None:
-        db.connect()
-        try:
-            return db.get(db.CONFIG_DB, f"{table_name}|{key}", field)
-        except TypeError:
-            return None
-    return None
+    namespace = multi_asic.get_namespace_for_port(key)  # Use key (port) for namespace lookup
+
+    # Choose the appropriate connector
+    if db_name == "CONFIG_DB":
+        db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
+    else:
+        db = SonicV2Connector(use_unix_socket_path=False, namespace=namespace)
+
+    try:
+        db.connect(db_name) if isinstance(db, SonicV2Connector) else db.connect()
+        return db.get(db_name, f"{table_name}|{key}", field)
+    except (TypeError, KeyError, AttributeError):
+        return None
+    finally:
+        if isinstance(db, SonicV2Connector):
+            db.disconnect()
 
 
-def get_subport(port_name, config_db):
-    subport = get_value_from_db_by_field(config_db, "PORT", "subport", port_name)
+def get_subport(port_name):
+    subport = get_value_from_db_by_field("CONFIG_DB", "PORT", "subport", port_name)
 
     if subport is None:
         click.echo(f"{port_name}: subport is not present in CONFIG_DB")

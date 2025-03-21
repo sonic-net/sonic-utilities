@@ -112,9 +112,7 @@ def set_output(port_name, enable, direction):
     Enable or disable TX/RX output based on direction ('tx' or 'rx').
     """
     sfp = get_sfp_object(port_name)
-    namespace = multi_asic.get_namespace_for_port(port_name)
-    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
-    subport = get_subport(port_name, config_db)
+    subport = get_subport(port_name)
 
     try:
         if direction == "tx":
