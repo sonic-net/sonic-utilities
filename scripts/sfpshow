@@ -648,7 +648,6 @@ def cli():
 @click.option('-n', '--namespace', default=None, help="Display interfaces for specific namespace")
 def eeprom(port, dump_dom, namespace):
     if port and multi_asic.is_multi_asic() and namespace is None:
-        load_db_config()
         try:
             namespace = multi_asic.get_namespace_for_port(port)
         except Exception:
@@ -666,7 +665,6 @@ def eeprom(port, dump_dom, namespace):
 @click.option('-n', '--namespace', default=None, help="Display interfaces for specific namespace")
 def info(port, namespace):
     if port and multi_asic.is_multi_asic() and namespace is None:
-        load_db_config()
         try:
             namespace = multi_asic.get_namespace_for_port(port)
         except Exception:
@@ -685,7 +683,6 @@ def info(port, namespace):
 @click.option('-n', '--namespace', default=None, help="Display interfaces for specific namespace")
 def presence(port, namespace):
     if port and multi_asic.is_multi_asic() and namespace is None:
-        load_db_config()
         try:
             namespace = multi_asic.get_namespace_for_port(port)
         except Exception:
@@ -704,7 +701,6 @@ def presence(port, namespace):
 @click.option('-n', '--namespace', default=None, help="Display interfaces for specific namespace")
 def pm(port, namespace):
     if port and multi_asic.is_multi_asic() and namespace is None:
-        load_db_config()
         try:
             namespace = multi_asic.get_namespace_for_port(port)
         except Exception:
@@ -723,7 +719,6 @@ def pm(port, namespace):
 @click.option('-n', '--namespace', default=None, help="Display interfaces for specific namespace")
 def status(port, namespace):
     if port and multi_asic.is_multi_asic() and namespace is None:
-        load_db_config()
         try:
             namespace = multi_asic.get_namespace_for_port(port)
         except Exception:
@@ -736,4 +731,5 @@ def status(port, namespace):
 
 
 if __name__ == "__main__":
+    load_db_config()
     cli()
