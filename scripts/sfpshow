@@ -15,6 +15,7 @@ from typing import Dict
 import click
 from natsort import natsorted
 from sonic_py_common import multi_asic
+from utilities_common.general import load_db_config
 from utilities_common.sfp_helper import covert_application_advertisement_to_output_string
 from utilities_common.sfp_helper import (
         QSFP_DATA_MAP,
@@ -738,4 +739,5 @@ def status(port, namespace):
 
 
 if __name__ == "__main__":
+    load_db_config()
     cli()
