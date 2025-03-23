@@ -1052,6 +1052,12 @@ class TestShow(object):
         result = runner.invoke(show.cli.commands['banner'])
         assert result.exit_code == 0
 
+    @patch('show.main.run_command')
+    def test_show_logrotate(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands['logrotate'])
+        assert result.exit_code == 0
+
     def teardown(self):
         print('TEAR DOWN')
 

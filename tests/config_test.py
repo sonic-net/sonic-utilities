@@ -4268,3 +4268,75 @@ class TestConfigBanner(object):
     @classmethod
     def teardown_class(cls):
         print('TEARDOWN')
+
+
+class TestConfigLogrotate(object):
+    @classmethod
+    def setup_class(cls):
+        print('SETUP')
+        import config.main
+        importlib.reload(config.main)
+
+    @patch('utilities_common.cli.run_command',
+           mock.MagicMock(side_effect=mock_run_command_side_effect))
+    def test_logrotate_disk_percentage(self):
+        runner = CliRunner()
+        obj = {'db': Db().cfgdb}
+
+        result = runner.invoke(config.config.commands['logrotate'],
+                               ['debug', 'disk-percentage', '24.25'], obj=obj)
+        assert result.exit_code == 0
+
+    @patch('utilities_common.cli.run_command',
+           mock.MagicMock(side_effect=mock_run_command_side_effect))
+    def test_logrotate_disk_percentage_invalid(self):
+        runner = CliRunner()
+        obj = {'db': Db().cfgdb}
+
+        result = runner.invoke(config.config.commands['logrotate'],
+                               ['debug', 'disk-percentage', '150'], obj=obj)
+        assert result.exit_code != 0
+
+    @patch('utilities_common.cli.run_command',
+           mock.MagicMock(side_effect=mock_run_command_side_effect))
+    def test_logrotate_frequency(self):
+        runner = CliRunner()
+        obj = {'db': Db().cfgdb}
+
+        result = runner.invoke(config.config.commands['logrotate'],
+                               ['debug', 'frequency', 'daily'], obj=obj)
+        assert result.exit_code == 0
+
+    @patch('utilities_common.cli.run_command',
+           mock.MagicMock(side_effect=mock_run_command_side_effect))
+    def test_logrotate_max_number(self):
+        runner = CliRunner()
+        obj = {'db': Db().cfgdb}
+
+        result = runner.invoke(config.config.commands['logrotate'],
+                               ['syslog', 'max-number', '2024'], obj=obj)
+        assert result.exit_code == 0
+
+    @patch('utilities_common.cli.run_command',
+           mock.MagicMock(side_effect=mock_run_command_side_effect))
+    def test_logrotate_size(self):
+        runner = CliRunner()
+        obj = {'db': Db().cfgdb}
+
+        result = runner.invoke(config.config.commands['logrotate'],
+                               ['syslog', 'size', '30.0'], obj=obj)
+        assert result.exit_code == 0
+
+    @patch('utilities_common.cli.run_command',
+           mock.MagicMock(side_effect=mock_run_command_side_effect))
+    def test_logrotate_size_invalid(self):
+        runner = CliRunner()
+        obj = {'db': Db().cfgdb}
+
+        result = runner.invoke(config.config.commands['logrotate'],
+                               ['syslog', 'size', '10000'], obj=obj)
+        assert result.exit_code != 0
+
+    @classmethod
+    def teardown_class(cls):
+        print('TEARDOWN')
