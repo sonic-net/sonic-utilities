@@ -81,13 +81,18 @@ def set_output(port_name, enable, direction):
     Enable or disable TX/RX output based on direction ('tx' or 'rx').
     """
     sfp = get_sfp_object(port_name)
+
     subport = get_subport(port_name)
+
+    media_lane_count = get_value_from_db_by_field("STATE_DB", "TRANSCEIVER_INFO", "media_lane_count", port_name)
+
+    lane_mask = get_subport_lane_mask(int(subport), int(media_lane_count))
 
     try:
         if direction == "tx":
-            sfp.tx_disable_channel(subport, enable == "disable")
+            sfp.tx_disable_channel(lane_mask, enable == "disable")
         elif direction == "rx":
-            sfp.rx_disable_channel(subport, enable == "disable")
+            sfp.rx_disable_channel(lane_mask, enable == "disable")
 
         click.echo(
             f"{port_name}: {direction.upper()} output "
