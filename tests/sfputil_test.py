@@ -1717,11 +1717,13 @@ EEPROM hexdump for port Ethernet4
     # Test for 'tx-output' command
     @patch('sfputil.debug.get_sfp_object')
     @patch('utilities_common.platform_sfputil_helper.ConfigDBConnector')
+    @patch('utilities_common.platform_sfputil_helper.SonicV2Connector')
     @patch('sonic_py_common.multi_asic.get_front_end_namespaces', MagicMock(return_value=['']))
-    def test_tx_output(self, mock_config_db_connector, mock_get_sfp_object):
+    def test_tx_output(self, mock_sonic_v2_connector, mock_config_db_connector, mock_get_sfp_object):
         """Test for tx-output command"""
         mock_sfp = MagicMock()
         mock_get_sfp_object.return_value = mock_sfp  # Ensure get_sfp_object returns the mock
+        mock_sonic_v2_connector.return_value = MagicMock()
 
         mock_sfp.get_presence.return_value = False
         runner = CliRunner()
@@ -1753,11 +1755,13 @@ EEPROM hexdump for port Ethernet4
     # Test for 'rx-output' command
     @patch('sfputil.debug.get_sfp_object')
     @patch('utilities_common.platform_sfputil_helper.ConfigDBConnector')
+    @patch('utilities_common.platform_sfputil_helper.SonicV2Connector')
     @patch('sonic_py_common.multi_asic.get_front_end_namespaces', MagicMock(return_value=['']))
-    def test_rx_output(self, mock_config_db_connector, mock_get_sfp_object):
+    def test_rx_output(self, mock_sonic_v2_connector, mock_config_db_connector, mock_get_sfp_object):
         """Test for rx-output command"""
         mock_sfp = MagicMock()
         mock_get_sfp_object.return_value = mock_sfp  # Ensure get_sfp_object returns the mock
+        mock_sonic_v2_connector.return_value = MagicMock()
 
         mock_sfp.get_presence.return_value = False
         runner = CliRunner()
