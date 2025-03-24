@@ -57,7 +57,8 @@ def loopback(port_name, loopback_mode, enable):
 
     media_lane_count = get_value_from_db_by_field("STATE_DB", "TRANSCEIVER_INFO", "media_lane_count", port_name)
 
-    lane_mask = get_subport_lane_mask(int(subport), int(host_lane_count) if 'host-side' in loopback_mode else int(media_lane_count))
+    lane_count = int(host_lane_count) if 'host-side' in loopback_mode else int(media_lane_count)
+    lane_mask = get_subport_lane_mask(int(subport), lane_count)
 
     try:
         status = api.set_loopback_mode(loopback_mode, lane_mask=lane_mask, enable=(enable == 'enable'))
