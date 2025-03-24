@@ -55,7 +55,7 @@ def loopback(port_name, loopback_mode, enable):
 
     host_lane_count = get_value_from_db_by_field("STATE_DB", "TRANSCEIVER_INFO", "host_lane_count", port_name)
 
-    media_lane_count = get_value_from_db_by_field("STATE_DB", "TRANSCEIVER_INFO", "media_lane_count", port_name) 
+    media_lane_count = get_value_from_db_by_field("STATE_DB", "TRANSCEIVER_INFO", "media_lane_count", port_name)
 
     lane_mask = get_subport_lane_mask(subport, host_lane_count if 'host-side' in loopback_mode else media_lane_count)
 

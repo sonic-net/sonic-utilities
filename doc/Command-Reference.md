@@ -50,6 +50,8 @@
   * [CMIS firmware target mode commands](#cmis-firmware-target-mode-commands)
 * [CMIS debug](#cmis-debug)
 * [CMIS debug loopback](#cmis-debug-loopback)
+* [CMIS debug rx-output](#cmis-debug-rx-output)
+* [CMIS debug tx-output](#cmis-debug-tx-output)
 * [DHCP Relay](#dhcp-relay)
   * [DHCP Relay show commands](#dhcp-relay-show-commands)
   * [DHCP Relay clear commands](#dhcp-relay-clear-commands)
@@ -3356,6 +3358,41 @@ This command is the standard CMIS diagnostic control used for troubleshooting li
   ```
   admin@sonic:~$ sfputil debug loopback Ethernet88 host-side-input enable
   admin@sonic:~$ sfputil debug loopback Ethernet88 media-side-output disable
+  ```
+
+### CMIS debug rx-output
+
+This command enables or disables RX output on a specified port. It is a standard CMIS diagnostic control used for controlling rx-side link between the host switch and the transceiver module.
+
+**sfputil debug rx-ouput**
+
+- Usage:
+  ```
+  sfputil debug rx-output PORT_NAME <enable/disable>
+
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sfputil debug rx-output Ethernet88 enable
+  admin@sonic:~$ sfputil debug rx-output Ethernet88 disable
+  ```
+
+### CMIS debug tx-output
+
+This command enables or disables TX output on a specified port. It is a standard CMIS diagnostic control used for controlling tx-side link between the host switch and the transceiver module.
+
+**sfputil debug tx-ouput**
+
+- Usage:
+  ```
+  sfputil debug tx-output PORT_NAME <enable/disable>
+
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sfputil debug tx-output Ethernet88 enable
   ```
 
 ## DHCP Relay
