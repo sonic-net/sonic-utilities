@@ -180,6 +180,11 @@ def get_sfp_object(port_name):
         click.echo(f"{port_name}: SFP EEPROM not detected")
         sys.exit(EXIT_FAIL)
 
+    if sfp is None:
+        click.echo(f"{port_name}: SFP object is not retreived")
+        sys.exit(EXIT_FAIL)
+
+
     return sfp
 
 

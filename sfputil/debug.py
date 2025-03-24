@@ -4,10 +4,9 @@ from sonic_py_common import multi_asic
 import utilities_common.cli as clicommon
 from utilities_common import platform_sfputil_helper
 from utilities_common.platform_sfputil_helper import (
-    is_rj45_port,
-    is_sfp_present,
     get_subport,
     get_sfp_object,
+    get_value_from_db_by_field,
     get_subport_lane_mask
 )
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
@@ -48,46 +47,18 @@ def loopback(port_name, loopback_mode, enable):
     """
     sfp = get_sfp_object(port_name)
 
-    if is_rj45_port(port_name):
-        click.echo(f"{port_name}: This functionality is not applicable for RJ45 port")
-        sys.exit(EXIT_FAIL)
-
-    if not is_sfp_present(port_name):
-        click.echo(f"{port_name}: SFP EEPROM not detected")
-        sys.exit(EXIT_FAIL)
-
     try:
         api = sfp.get_xcvr_api()
     except NotImplementedError:
         click.echo(f"{port_name}: This functionality is not implemented")
         sys.exit(ERROR_NOT_IMPLEMENTED)
 
-    namespace = multi_asic.get_namespace_for_port(port_name)
-    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
-    config_db.connect()
 
-    try:
-        subport = int(config_db.get(config_db.CONFIG_DB, f'PORT|{port_name}', 'subport'))
-    except TypeError:
-        click.echo(f"{port_name}: subport is not present in CONFIG_DB")
-        sys.exit(EXIT_FAIL)
+    subport = get_subport(port_name)
 
-    subport = max(subport, 1)
+    host_lane_count = get_value_from_db_by_field("STATE_DB", "TRANSCEIVER_INFO", "host_lane_count", port_name)
 
-    state_db = SonicV2Connector(use_unix_socket_path=False, namespace=namespace)
-    state_db.connect(state_db.STATE_DB)
-
-    try:
-        host_lane_count = int(state_db.get(state_db.STATE_DB, f'TRANSCEIVER_INFO|{port_name}', 'host_lane_count'))
-    except TypeError:
-        click.echo(f"{port_name}: host_lane_count is not present in STATE_DB")
-        sys.exit(EXIT_FAIL)
-
-    try:
-        media_lane_count = int(state_db.get(state_db.STATE_DB, f'TRANSCEIVER_INFO|{port_name}', 'media_lane_count'))
-    except TypeError:
-        click.echo(f"{port_name}: media_lane_count is not present in STATE_DB")
-        sys.exit(EXIT_FAIL)
+    media_lane_count = get_value_from_db_by_field("STATE_DB", "TRANSCEIVER_INFO", "media_lane_count", port_name) 
 
     lane_mask = get_subport_lane_mask(subport, host_lane_count if 'host-side' in loopback_mode else media_lane_count)
 
