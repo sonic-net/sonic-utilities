@@ -1,6 +1,5 @@
 import sys
 import click
-from sonic_py_common import multi_asic
 import utilities_common.cli as clicommon
 from utilities_common import platform_sfputil_helper
 from utilities_common.platform_sfputil_helper import (
@@ -9,7 +8,6 @@ from utilities_common.platform_sfputil_helper import (
     get_value_from_db_by_field,
     get_subport_lane_mask
 )
-from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 
 EXIT_FAIL = -1
 EXIT_SUCCESS = 0
@@ -52,7 +50,6 @@ def loopback(port_name, loopback_mode, enable):
     except NotImplementedError:
         click.echo(f"{port_name}: This functionality is not implemented")
         sys.exit(ERROR_NOT_IMPLEMENTED)
-
 
     subport = get_subport(port_name)
 

@@ -184,7 +184,6 @@ def get_sfp_object(port_name):
         click.echo(f"{port_name}: SFP object is not retreived")
         sys.exit(EXIT_FAIL)
 
-
     return sfp
 
 

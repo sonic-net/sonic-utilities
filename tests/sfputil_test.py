@@ -1631,7 +1631,6 @@ EEPROM hexdump for port Ethernet4
         assert sfputil.load_port_config() == True
 
     @patch('utilities_common.platform_sfputil_helper.is_rj45_port', MagicMock(return_value=False))
-    #@patch('sfputil.debug.get_value_from_db_by_field')
     @patch('sfputil.debug.get_sfp_object')
     @patch('utilities_common.platform_sfputil_helper.is_sfp_present')
     @patch('utilities_common.platform_sfputil_helper.ConfigDBConnector')
@@ -1664,7 +1663,6 @@ EEPROM hexdump for port Ethernet4
         assert result.exit_code == ERROR_NOT_IMPLEMENTED
 
         mock_sfp.get_xcvr_api = MagicMock(return_value=mock_api)
-        #mock_get_value_from_db_by_field.return_value = '0'
         mock_config_db = MagicMock()
         mock_config_db.get.return_value = 0
         mock_config_db_connector.return_value = mock_config_db
@@ -1731,7 +1729,6 @@ EEPROM hexdump for port Ethernet4
 
         mock_sfp.get_presence.return_value = False
         runner = CliRunner()
-        #sfp_presence.return_value = True
 
         # Test the case where the module is not applicable
         mock_sfp.get_presence.return_value = True
