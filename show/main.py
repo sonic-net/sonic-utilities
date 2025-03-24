@@ -2076,8 +2076,8 @@ def bgp(verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def ntp(ctx, verbose):
     """Show NTP information"""
-    chronyc_tracking_cmd = ["chronyc", "tracking"]
-    chronyc_sources_cmd = ["chronyc", "sources"]
+    chronyc_tracking_cmd = ["chronyc", "-n", "tracking"]
+    chronyc_sources_cmd = ["chronyc", "-n", "sources"]
     if is_mgmt_vrf_enabled(ctx) is True:
         # ManagementVRF is enabled. Call chronyc using "ip vrf exec" based on linux version
         chronyc_tracking_cmd = ["sudo", "ip", "vrf", "exec", "mgmt"] + chronyc_tracking_cmd
