@@ -1057,8 +1057,8 @@ class TestShow(object):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['ntp'])
         assert result.exit_code == 0
-        expected_calls = [call(['chronyc', 'tracking'], display_cmd=False),
-                          call(['chronyc', 'sources'], display_cmd=False)]
+        expected_calls = [call(['chronyc', '-n', 'tracking'], display_cmd=False),
+                          call(['chronyc', '-n', 'sources'], display_cmd=False)]
         mock_run_command.assert_has_calls(expected_calls)
 
     @patch('show.main.is_mgmt_vrf_enabled', MagicMock(return_value=True))
@@ -1067,8 +1067,8 @@ class TestShow(object):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['ntp'])
         assert result.exit_code == 0
-        expected_calls = [call(['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'chronyc', 'tracking'], display_cmd=False),
-                          call(['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'chronyc', 'sources'], display_cmd=False)]
+        expected_calls = [call(['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'chronyc', '-n', 'tracking'], display_cmd=False),
+                          call(['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'chronyc', '-n', 'sources'], display_cmd=False)]
         mock_run_command.assert_has_calls(expected_calls)
 
     def teardown(self):
