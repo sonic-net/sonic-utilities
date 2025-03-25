@@ -194,7 +194,7 @@ def get_host_lane_count(port_name):
     if lane_count == 0 or lane_count is None:
         click.echo(f"{port_name}: unable to retreive correct host lane count")
         sys.exit(EXIT_FAIL)
-    
+
     return lane_count
 
 
@@ -205,7 +205,7 @@ def get_media_lane_count(port_name):
     if lane_count == 0 or lane_count is None:
         click.echo(f"{port_name}: unable to retreive correct media lane count")
         sys.exit(EXIT_FAIL)
-    
+
     return lane_count
 
 
