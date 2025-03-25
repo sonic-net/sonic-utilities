@@ -6,7 +6,9 @@ from utilities_common.platform_sfputil_helper import (
     get_subport,
     get_sfp_object,
     get_value_from_db_by_field,
-    get_subport_lane_mask
+    get_subport_lane_mask,
+    get_media_lane_count,
+    get_host_lane_count,
 )
 
 EXIT_FAIL = -1
@@ -53,9 +55,9 @@ def loopback(port_name, loopback_mode, enable):
 
     subport = get_subport(port_name)
 
-    host_lane_count = get_value_from_db_by_field("STATE_DB", "TRANSCEIVER_INFO", "host_lane_count", port_name)
+    host_lane_count = get_host_lane_count(port_name)
 
-    media_lane_count = get_value_from_db_by_field("STATE_DB", "TRANSCEIVER_INFO", "media_lane_count", port_name)
+    media_lane_count = get_media_lane_count(port_name)
 
     lane_count = int(host_lane_count) if 'host-side' in loopback_mode else int(media_lane_count)
     lane_mask = get_subport_lane_mask(int(subport), lane_count)
@@ -84,7 +86,7 @@ def set_output(port_name, enable, direction):
 
     subport = get_subport(port_name)
 
-    media_lane_count = get_value_from_db_by_field("STATE_DB", "TRANSCEIVER_INFO", "media_lane_count", port_name)
+    media_lane_count = get_media_lane_count(port_name)
 
     lane_mask = get_subport_lane_mask(int(subport), int(media_lane_count))
 
