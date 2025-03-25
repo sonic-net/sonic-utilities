@@ -7330,7 +7330,6 @@ def get_acl_bound_ports():
 
     return list(ports)
 
-
 def expand_vlan_ports(port_name):
     """
     Expands a given VLAN interface into its member ports.
@@ -7355,9 +7354,20 @@ def expand_vlan_ports(port_name):
 
     return members
 
+def get_acl_valid_vlans():
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    vlans = set()
+    vlan_dict = config_db.get_table("VLAN")
+    for key in vlan_dict:
+        vlans.add(key)
+    return list(vlans)
 
 def parse_acl_table_info(table_name, table_type, description, ports, stage):
     table_info = {"type": table_type}
+
+    expand_vlan_asic = ["mellanox"]
+    is_expand_vlan = True if asic_type in expand_vlan_asic else False
 
     if description:
         table_info["policy_desc"] = description
@@ -7369,16 +7379,25 @@ def parse_acl_table_info(table_name, table_type, description, ports, stage):
 
     port_list = []
     valid_acl_ports = get_acl_bound_ports()
+    valid_acl_vlans = get_acl_valid_vlans()
+
     if ports:
         for port in ports.split(","):
-            port_list += expand_vlan_ports(port)
+            if is_expand_vlan:
+                port_list += expand_vlan_ports(port)
+            else:
+                port_list.append(port)
         port_list = list(set(port_list))  # convert to set first to remove duplicate ifaces
     else:
         port_list = valid_acl_ports
 
     for port in port_list:
-        if port not in valid_acl_ports:
-            raise ValueError("Cannot bind ACL to specified port {}".format(port))
+        if is_expand_vlan:
+            if port not in valid_acl_ports:
+                raise ValueError("Cannot bind ACL to specified port {}".format(port))
+        else:
+            if port not in valid_acl_ports and port not in valid_acl_vlans:
+                raise ValueError("Cannot bind ACL to specified port {}".format(port))
 
     table_info["ports"] = port_list
 
