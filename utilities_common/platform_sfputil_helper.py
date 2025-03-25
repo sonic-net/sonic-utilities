@@ -209,7 +209,6 @@ def get_media_lane_count(port_name):
     return lane_count
 
 
-def get_media_lane_count(port_name):
 def get_value_from_db_by_field(db_name, table_name, field, key):
     """
     Retrieve a specific field value from a given table in the specified DB.

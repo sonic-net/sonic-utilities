@@ -1664,10 +1664,10 @@ EEPROM hexdump for port Ethernet4
 
         mock_sfp.get_xcvr_api = MagicMock(return_value=mock_api)
         mock_config_db = MagicMock()
-        mock_config_db.get.return_value = 0
+        mock_config_db.get.return_value = 1
         mock_config_db_connector.return_value = mock_config_db
         mock_state_db = MagicMock()
-        mock_state_db.get.return_value = 0
+        mock_state_db.get.return_value = 1
         mock_sonic_v2_connector.return_value = mock_state_db
         result = runner.invoke(sfputil.cli.commands['debug'].commands['loopback'],
                                ["Ethernet0", "host-side-input", "enable"])
