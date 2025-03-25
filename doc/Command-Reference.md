@@ -3362,7 +3362,7 @@ This command is the standard CMIS diagnostic control used for troubleshooting li
 
 ### CMIS debug rx-output
 
-This command enables or disables RX output on a specified port. It is a standard CMIS diagnostic control used for controlling rx-side link between the host switch and the transceiver module.
+The command disables RX input by muting the optical receiver on the module, preventing it from detecting incoming signals.
 
 **sfputil debug rx-ouput**
 
@@ -3380,7 +3380,7 @@ This command enables or disables RX output on a specified port. It is a standard
 
 ### CMIS debug tx-output
 
-This command enables or disables TX output on a specified port. It is a standard CMIS diagnostic control used for controlling tx-side link between the host switch and the transceiver module.
+The command disables TX output by turning off the laser on the module, effectively blocking the optical signal.
 
 **sfputil debug tx-ouput**
 
