@@ -5,7 +5,6 @@ from utilities_common import platform_sfputil_helper
 from utilities_common.platform_sfputil_helper import (
     get_subport,
     get_sfp_object,
-    get_value_from_db_by_field,
     get_subport_lane_mask,
     get_media_lane_count,
     get_host_lane_count,
