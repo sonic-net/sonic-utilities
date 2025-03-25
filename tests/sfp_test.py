@@ -4,6 +4,12 @@ from click.testing import CliRunner
 from .mock_tables import dbconnector
 from unittest.mock import patch, MagicMock
 
+from utilities_common.platform_sfputil_helper import (
+    load_platform_sfputil, logical_port_to_physical_port_index,
+    logical_port_name_to_physical_port_list, is_sfp_present,
+    get_subport, get_sfp_object, get_value_from_db_by_field
+)
+
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
 scripts_path = os.path.join(modules_path, "scripts")
@@ -11,6 +17,10 @@ sys.path.insert(0, modules_path)
 
 import show.main as show
 import show as show_module
+
+ERROR_INVALID_PORT = 1
+EXIT_FAIL = -1
+ERROR_NOT_IMPLEMENTED = 2
 
 test_sfp_eeprom_with_dom_output = """\
 Ethernet0: SFP EEPROM detected
@@ -1191,6 +1201,132 @@ Ethernet200  Not present
         result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["status"])
         assert result.exit_code == 0
         assert "\n".join([ l.rstrip() for l in result.output.split('\n')]) == test_qsfp_dd_status_all_output
+
+    @classmethod
+    def teardown_class(cls):
+        print("TEARDOWN")
+        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
+        os.environ["UTILITIES_UNIT_TESTING"] = "0"
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
+
+
+class TestMultiAsicSFP(object):
+
+    @patch('utilities_common.platform_sfputil_helper.platform_chassis', None)
+    def test_load_platform_sfputil(self):
+        # Test that the function returns 0 as expected
+        assert load_platform_sfputil() == 0
+
+    @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
+           MagicMock(is_logical_port=MagicMock(return_value=1)))
+    @patch('utilities_common.platform_sfputil_helper.logical_port_name_to_physical_port_list',
+           MagicMock(return_value=[1]))
+    @patch('utilities_common.platform_sfputil_helper.platform_chassis')
+    @patch('utilities_common.platform_sfputil_helper.is_rj45_port')
+    def test_logical_port_to_physical_port_index(self, mock_is_rj45_port, mock_chassis):
+        mock_sfp = MagicMock()
+        mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
+        # Test for sfp presence
+        mock_is_rj45_port.return_value = False
+
+        port_name = "Ethernet0"
+        result = logical_port_to_physical_port_index(port_name)
+        assert result == 1
+
+    @patch('utilities_common.platform_sfputil_helper.logical_port_to_physical_port_index',
+           MagicMock(return_value=1))
+    @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
+           MagicMock(is_logical_port=MagicMock(return_value=1)))
+    @patch('utilities_common.platform_sfputil_helper.platform_chassis')
+    @patch('utilities_common.platform_sfputil_helper.is_rj45_port')
+    def test_logical_port_name_to_physical_port_list(self, mock_is_rj45_port, mock_chassis):
+        # Set up mocks
+        mock_sfp = MagicMock()
+        mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
+        # Test for sfp presence
+        mock_is_rj45_port.return_value = False
+
+        port_name = "Ethernet0"
+        result = logical_port_name_to_physical_port_list(port_name)
+        assert result is not None
+        mock_is_rj45_port.return_value = False
+
+    @patch('utilities_common.platform_sfputil_helper.logical_port_to_physical_port_index', MagicMock(return_value=1))
+    @patch('utilities_common.platform_sfputil_helper.platform_chassis')
+    @patch('utilities_common.platform_sfputil_helper.is_rj45_port')
+    def test_is_sfp_present(self, mock_is_rj45_port, mock_chassis):
+        mock_sfp = MagicMock()
+        mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
+        # Test for sfp presence
+        mock_is_rj45_port.return_value = False
+
+        result = is_sfp_present("Ethernet0")
+        assert result is True  # or whatever the expected result is
+
+    @patch('utilities_common.platform_sfputil_helper.logical_port_to_physical_port_index', MagicMock(return_value=1))
+    @patch('utilities_common.platform_sfputil_helper.is_sfp_present')
+    @patch('utilities_common.platform_sfputil_helper.platform_chassis')
+    @patch('utilities_common.platform_sfputil_helper.is_rj45_port')
+    def test_get_sfp_object(self, mock_is_rj45_port, mock_chassis, sfp_present):
+        mock_sfp = MagicMock()
+        mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
+        # Test for sfp presence
+        mock_is_rj45_port.return_value = False
+
+        result = get_sfp_object(1)
+        assert result == mock_sfp
+        mock_is_rj45_port.return_value = True
+        sfp_present.return_value = True
+
+        try:
+            get_sfp_object(1)
+            assert False, "Expected SystemExit but it did not occur"
+        except SystemExit as e:
+            assert e.code == EXIT_FAIL
+        mock_is_rj45_port.return_value = False
+        sfp_present.return_value = False
+        try:
+            get_sfp_object(1)
+            assert False, "Expected SystemExit but it did not occur"
+        except SystemExit as e:
+            assert e.code == EXIT_FAIL
+
+    @patch('utilities_common.platform_sfputil_helper.get_value_from_db_by_field')
+    def test_get_subport(self, mock_get_value_from_db_by_field):
+        mock_get_value_from_db_by_field.return_value = '2'
+
+        # assuming config_db is passed or mocked elsewhere
+        result = get_subport("Ethernet0")
+        assert result == 2
+
+    @patch('utilities_common.platform_sfputil_helper.SonicV2Connector')
+    @patch('utilities_common.platform_sfputil_helper.ConfigDBConnector')
+    @patch('utilities_common.platform_sfputil_helper.multi_asic.get_namespace_for_port', return_value='asic0')
+    def test_get_value_from_db_by_field(self, mock_get_namespace, mock_config_db, mock_sonic_db):
+        # Mock CONFIG_DB case
+        mock_config_instance = MagicMock()
+        mock_config_instance.get.return_value = "test_value"
+        mock_config_instance.connect.return_value = None  # No actual connection
+        mock_config_db.return_value = mock_config_instance
+
+        # Mock for SonicV2Connector case
+        mock_sonic_instance = MagicMock()
+        mock_sonic_instance.get.return_value = "test_value"
+        mock_sonic_instance.connect.return_value = None  # Mock connect to not do anything
+        mock_sonic_db.return_value = mock_sonic_instance
+
+        # Now call function
+        result = get_value_from_db_by_field("CONFIG_DB", "TEST_TABLE", "test_field", "Ethernet0")
+        assert result == "test_value"
+        mock_config_instance.connect.assert_called_once()
+        mock_config_instance.get.assert_called_once_with("CONFIG_DB", "TEST_TABLE|Ethernet0", "test_field")
+        # Mock STATE_DB case
+
+        mock_sonic_instance.get.return_value = "state_value"
+        result = get_value_from_db_by_field("STATE_DB", "TEST_TABLE", "test_field", "Ethernet0")
+        assert result == "state_value"
+        mock_sonic_instance.get.assert_called_once_with("STATE_DB", "TEST_TABLE|Ethernet0", "test_field")
+        mock_sonic_instance.close.assert_called_once()
 
     @classmethod
     def teardown_class(cls):

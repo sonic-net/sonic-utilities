@@ -50,6 +50,8 @@
   * [CMIS firmware target mode commands](#cmis-firmware-target-mode-commands)
 * [CMIS debug](#cmis-debug)
 * [CMIS debug loopback](#cmis-debug-loopback)
+* [CMIS debug rx-output](#cmis-debug-rx-output)
+* [CMIS debug tx-output](#cmis-debug-tx-output)
 * [DHCP Relay](#dhcp-relay)
   * [DHCP Relay show commands](#dhcp-relay-show-commands)
   * [DHCP Relay clear commands](#dhcp-relay-clear-commands)
@@ -3356,6 +3358,41 @@ This command is the standard CMIS diagnostic control used for troubleshooting li
   ```
   admin@sonic:~$ sfputil debug loopback Ethernet88 host-side-input enable
   admin@sonic:~$ sfputil debug loopback Ethernet88 media-side-output disable
+  ```
+
+### CMIS debug rx-output
+
+The command disables RX input by muting the optical receiver on the module, preventing it from detecting incoming signals.
+
+**sfputil debug rx-ouput**
+
+- Usage:
+  ```
+  sfputil debug rx-output PORT_NAME <enable/disable>
+
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sfputil debug rx-output Ethernet88 enable
+  admin@sonic:~$ sfputil debug rx-output Ethernet88 disable
+  ```
+
+### CMIS debug tx-output
+
+The command disables TX output by turning off the laser on the module, effectively blocking the optical signal.
+
+**sfputil debug tx-ouput**
+
+- Usage:
+  ```
+  sfputil debug tx-output PORT_NAME <enable/disable>
+
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sfputil debug tx-output Ethernet88 enable
   ```
 
 ## DHCP Relay
