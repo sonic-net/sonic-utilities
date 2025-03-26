@@ -188,8 +188,10 @@ class TestConfigMgmt(TestCase):
             args = args[0]
         assert "PORT" in args
 
-        # {"admin_status": "down"} should be set for all ports in dPorts
-        assert len(args["PORT"]) == len(dPorts)
+        # {"admin_status": "down"} should be set for Ethernet8
+        # The admin_status of Ethernet8 is 'up'.
+        # Only need to shutdown Ethernet8
+        assert len(args["PORT"]) == 1
         # each port should have {"admin_status": "down"}
         for port in args["PORT"].keys():
             assert args["PORT"][port]['admin_status'] == 'down'
@@ -227,6 +229,7 @@ class TestConfigMgmt(TestCase):
         # mock funcs
         cmdpb.writeConfigDB = mock.MagicMock(return_value=True)
         cmdpb._verifyAsicDB = mock.MagicMock(return_value=True)
+        cmdpb._verifyPortShutdown = mock.MagicMock(return_value=True)
         from .mock_tables import dbconnector
         return cmdpb
 
