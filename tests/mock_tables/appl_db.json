@@ -252,8 +252,8 @@
     },
     "_GEARBOX_TABLE:phy:1:ports:200": {
         "index": "200",
-        "line_speed": "50000",
-        "system_speed": "25000"
+        "line_speed": "100000",
+        "system_speed": "100000"
     },
     "LAG_MEMBER_TABLE:PortChannel0001:Ethernet112": {
         "status": "disabled"
