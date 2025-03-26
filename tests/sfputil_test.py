@@ -149,6 +149,12 @@ class TestSfputil(object):
             # expected_output
             "        Application Advertisement: N/A\n"
             "        Connector: No separable connector\n"
+            "        DOM Capability: {\n"
+            "            'Tx_power_support': 'no',\n"
+            "            'Rx_power_support': 'no',\n"
+            "            'Voltage_support': 'no',\n"
+            "            'Temp_support': 'no'\n"
+            "        }"
             "        Encoding: 64B66B\n"
             "        Extended Identifier: Power Class 1(1.5W max)\n"
             "        Extended RateSelect Compliance: QSFP+ Rate Select Version 1\n"

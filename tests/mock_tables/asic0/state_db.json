@@ -10,6 +10,7 @@
         "connector": "No separable connector",
         "encoding": "64B66B",
         "ext_identifier": "Power Class 3(2.5W max), CDR present in Rx Tx",
+        "dom_capability": "{'sff8472_dom_support': 'yes'}",
         "ext_rateselect_compliance": "QSFP+ Rate Select Version 1",
         "cable_type": "Length Cable Assembly(m)",
         "cable_length": "3",
