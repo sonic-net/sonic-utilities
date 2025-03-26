@@ -7126,6 +7126,38 @@ def del_vrf_vni_map(ctx, vrfname):
 
     config_db.mod_entry('VRF', vrfname, {"vni": 0})
 
+
+#
+# 'neigh-suppress' group ('config neigh-suppress vlan...')
+#
+
+@config.group(cls=clicommon.AbbreviationGroup, name='neigh-suppress')
+@click.pass_context
+def neigh_suppress(ctx):
+    """ Neighbour Suppress VLAN-related configuration """
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    ctx.obj = {'db': config_db}
+
+@neigh_suppress.command('vlan')
+@click.argument('vid', metavar='<vid>', required=True, type=int)
+@click.argument('state', metavar='<on|off>', required=True, type=click.Choice(["on", "off"]))
+@click.pass_context
+def set_neigh_suppress(ctx, vid, state):
+    db = ctx.obj['db']
+    if vid<1 or vid>4094:
+        ctx.fail(" Invalid Vlan Id , Valid Range : 1 to 4094 ")
+    vlan = 'Vlan{}'.format(vid)
+    if len(db.get_entry('VLAN', vlan)) == 0:
+        click.echo("{} doesn't exist".format(vlan))
+        return
+    if state == "on":
+        fvs = {'suppress': "on"}
+        db.set_entry('SUPPRESS_VLAN_NEIGH', vlan, fvs)
+    else:
+        db.set_entry('SUPPRESS_VLAN_NEIGH', vlan, None)
+
+
 #
 # 'route' group ('config route ...')
 #
