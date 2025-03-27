@@ -192,8 +192,9 @@
   * [FDB](#fdb)
     * [FDB show commands](#fdb-show-commands)
 * [VxLAN & Vnet](#vxlan--vnet)
-  * [VxLAN](#vxlan)
+  * [VxLAN (includes EVPN)](#vxlan-includes-evpn)
     * [VxLAN show commands](#vxlan-show-commands)
+    * [VxLAN config commands](#vxlan-config-commands)
   * [Vnet](#vnet)
     * [Vnet show commands](#vnet-show-commands)
 * [Warm Reboot](#warm-reboot)
@@ -595,7 +596,7 @@ This command displays the current date and time configured on the system
   ```
 
 **config clock date**
-	
+
 This command will set the date-time of the systetm, given strings with date-time format <YYYY-MM-DD> <HH:MM:SS>
 
 - Usage:
@@ -613,7 +614,7 @@ This command will set the date-time of the systetm, given strings with date-time
   ```
 
 **config clock timezone**
-	
+
 This command will set the timezone of the systetm, given a string of a valid timezone.
 
 - Usage:
@@ -623,13 +624,13 @@ This command will set the timezone of the systetm, given a string of a valid tim
 
 - Parameters:
   - _timezone_: valid timezone to be configured
-	
-	
+
+
 - Example:
   ```
   admin@sonic:~$ config clock timezone Africa/Accra
 
-	
+
 **show clock timezones**
 
 This command Will display list of all valid timezones to be configured.
@@ -3260,7 +3261,7 @@ This command is used for downloading firmware tp upgrade the transciever module.
   ```
 **sfputil firmware run**
 
-This command is used to start and run a downloaded image. This command transfers control from the currently running firmware to a new firmware. 
+This command is used to start and run a downloaded image. This command transfers control from the currently running firmware to a new firmware.
 
 - Usage:
   ```
@@ -3285,7 +3286,7 @@ This command is used to start and run a downloaded image. This command transfers
 
 **sfputil firmware commit**
 
-This command to commit the running image so that the module will boot from it on future boots. 
+This command to commit the running image so that the module will boot from it on future boots.
 
 - Usage:
   ```
@@ -5297,7 +5298,7 @@ This command is to display the FEC status of the selected interfaces. If **inter
   show interfaces fec status [<interface_name>]
   ```
 
-- Example:  
+- Example:
 ```
   admin@sonic:~$ show interfaces fec status
   Interface    FEC Oper    FEC Admin
@@ -7740,7 +7741,7 @@ in order to detemine whether the health of the cable is Ok
 the following are checked
 - the vendor name is correct able to be read
 - the FW is correctly loaded for SerDes by reading the appropriate register val
-- the Counters for UART are displaying healthy status 
+- the Counters for UART are displaying healthy status
        i.e Error Counters , retry Counters for UART or internal xfer protocols are below a threshold
 
 
@@ -7796,7 +7797,7 @@ the result will be displayed like this, each item in the dictionary shows the he
            {
                "uart_stat1": "2",
                "uart_stat2": "1",
-                 
+
            }
     ```
 
@@ -11959,7 +11960,7 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#vlan--
 
 ## VxLAN & Vnet
 
-### VxLAN
+### VxLAN (includes EVPN)
 
 #### VxLAN show commands
 
@@ -11977,16 +11978,15 @@ This command displays brief information about all the vxlans configured in the d
 
   ```
   admin@sonic:~$ show vxlan tunnel
-  vxlan tunnel name    source ip    destination ip    tunnel map name    tunnel map mapping(vni -> vlan)
-  -------------------  -----------  ----------------  -----------------  ---------------------------------
-  tunnel1              10.10.10.10
-  tunnel2              10.10.10.10  20.10.10.10       tmap1              1234 -> 100
-  tunnel3              10.10.10.10  30.10.10.10       tmap2              1235 -> 200
+  vxlan tunnel name    source ip    destination ip    tunnel map name     tunnel map mapping(vni -> vlan)
+  -------------------  -----------  ----------------  ------------------  ---------------------------------
+  vtep                 1.1.1.1                        map_3000_Vlan30     3000 -> Vlan30
   ```
 
 **show vxlan name <vxlan_name>**
 
-This command displays <vlan_name> configuration.
+This command displays brief information for a specified VxLAN tunnel. It displays VxLAN tunnel name, source IP address, destination IP address and VLAN VNI tunnel mappings.
+
 
 - Usage:
 
@@ -11997,13 +11997,254 @@ This command displays <vlan_name> configuration.
 - Example:
 
   ```
-  admin@sonic:~$ show vxlan name tunnel3
-  vxlan tunnel name    source ip    destination ip    tunnel map name    tunnel map mapping(vni -> vlan)
-  -------------------  -----------  ----------------  -----------------  ---------------------------------
-  tunnel3              10.10.10.10  30.10.10.10       tmap2              1235 -> 200
+  admin@sonic:~$ show vxlan name vtep
+  vxlan tunnel name    source ip    destination ip    tunnel map name     tunnel map mapping(vni -> vlan)
+  -------------------  -----------  ----------------  ------------------  ---------------------------------
+  vtep                 1.1.1.1                        map_3000_Vlan30     3000 -> Vlan30
   ```
 
-Go Back To [Beginning of the document](#) or [Beginning of this section](#vxlan--vnet)
+**show vxlan interface**
+
+This command displays brief VTEP information.
+
+- Usage:
+
+  ```
+  show vxlan interface
+  ```
+
+- Example:
+
+  ```
+  admin@sonic:~$ show vxlan interface
+  VTEP Information:
+
+          VTEP Name : vtep, SIP  : 1.1.1.1
+          NVO Name  : nvo,  VTEP : vtep
+          Source interface  : Loopback0
+  ```
+
+**show vxlan vlanvnimap**
+
+This command displays all the VLAN VNI mappings.
+
+- Usage:
+
+  ```
+  show vxlan vlanvnimap
+  ```
+
+- Example:
+
+  ```
+    admin@sonic:~$ show vxlan vlanvnimap
+    +--------+-------+
+    | VLAN   | VNI   |
+    +========+=======+
+    | Vlan30 | 3000  |
+    +--------+-------+
+    Total count : 1
+  ```
+
+**show vxlan vrfvnimap**
+
+This command displays all the VRF VNI mappings.
+
+- Usage:
+
+  ```
+  show vxlan vrfvnimap
+  ```
+
+- Example:
+
+  ```
+  admin@sonic:~$ show vxlan vrfvnimap
+  +-------+-------+
+  | VRF   |   VNI |
+  +=======+=======+
+  | Vrf-1 |   104 |
+  +-------+-------+
+  Total count : 1
+  ```
+
+**show vxlan remote_mac <remoteip/all>**
+
+This command displays all MACs learnt from a specified remote VTEP IP, or from all of the remote VTEP IPs for all VNIs.
+
+- Usage:
+
+  ```
+  show vxlan remote_mac <remoteip/all>
+  ```
+
+- Example:
+
+  ```
+  admin@sonic:~$ show vxlan remotemac 2.2.2.2
+  +---------+-------------------+--------------+-------+---------+
+  | VLAN    | MAC               | RemoteVTEP   |   VNI | Type    |
+  +=========+===================+==============+=======+=========+
+  | Vlan200 | 00:02:00:00:47:e2 | 2.2.2.2      |   200 | dynamic |
+  +---------+-------------------+--------------+-------+---------+
+  Total count : 1
+
+  admin@sonic:~$ show vxlan remotemac all
+  +---------+-------------------+--------------+-------+---------+
+  | VLAN    | MAC               | RemoteVTEP   |   VNI | Type    |
+  +=========+===================+==============+=======+=========+
+  | Vlan200 | 00:02:00:00:47:e2 | 2.2.2.2      |   200 | dynamic |
+  +---------+-------------------+--------------+-------+---------+
+  | Vlan200 | 00:02:00:00:47:e3 | 2.2.2.3      |   200 | dynamic |
+  +---------+-------------------+--------------+-------+---------+
+  Total count : 2
+  ```
+
+**show vxlan remote_vni <remoteip/all>**
+
+This command displays all the VNIs learnt from the specified remote VTEP, or all the VNIs learnt from all of the remote VTEPs.
+
+- Usage:
+
+  ```
+  show vxlan remote_vni <remoteip/all>
+  ```
+
+- Example:
+
+  ```
+  admin@sonic:~$ show vxlan remote_vni 3.3.3.3
+  +---------+--------------+-------+
+  | VLAN    | RemoteVTEP   |   VNI |
+  +=========+==============+=======+
+  | Vlan101 | 3.3.3.3      |  1001 |
+  +---------+--------------+-------+
+  Total count : 1
+  ```
+
+**show vxlan remotevtep**
+
+This command displays all remote VTEPs (a.k.a. VxLAN tunnels) learnt by EVPN/VxLAN.
+
+- Usage:
+
+  ```
+  show vxlan remotevtep
+  ```
+
+- Example:
+
+  ```
+  admin@sonic:~$ show vxlan remotevtep
+  +-------------+-------------+-------------------+--------------+
+  | SIP         | DIP         | Creation Source   | OperStatus   |
+  +=============+=============+===================+==============+
+  | 11.11.11.11 | 22.22.22.22 | EVPN              | oper_up      |
+  +-------------+-------------+-------------------+--------------+
+  Total count : 1
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#vxlan-show-commands)
+
+#### VxLAN config commands
+
+**config vxlan add \<vxlan_name\> \<src_ipv4\>**
+
+This command is for VTEP Source IP configuration.  The **vxlan_name** is a string, and **src_ipv4** is an IPV4 address in dotted notation A.B.C.D .
+
+- Usage:
+
+  ```
+  config vxlan add <vxlan_name> <src_ipv4>
+  ```
+
+- Example:
+
+  ```
+  sudo config vxlan add vtep 1.1.1.1
+  ```
+
+**config vxlan evpn_nvo add \<nvoname\> \<vxlan_name\>**
+
+This command is for NVO configuration.
+
+- Usage:
+
+  ```
+  config vxlan evpn_nvo add <nvoname> <vxlan_name>
+  ```
+
+- Example:
+
+  ```
+  sudo config vxlan evpn_nvo add nvo vtep
+  ```
+
+**config vxlan map add \<vxlan_name\> \<vlanid\> \<vnid\>**
+
+This command creates VLAN-VNI mapping on the VTEP with name **vxlan_name**.
+
+- Usage:
+
+  ```
+  config vxlan map add <vxlan_name> <vlanid> <vnid>
+  ```
+
+- Example:
+
+  ```
+  sudo config vxlan map add vtep 30 3000
+  ```
+
+**config vxlan del \<vxlan_name\>**
+
+This command deletes a VTEP with name **vxlan_name**.
+
+- Usage:
+
+  ```
+  config vxlan del <vxlan_name>
+  ```
+
+- Example:
+
+  ```
+  sudo config vxlan del vtep
+  ```
+
+**config vxlan evpn_nvo del \<nvoname\>**
+
+This command deletes NVO with name **nvoname**.
+
+- Usage:
+
+  ```
+  config vxlan evpn_nvo del <nvoname>
+  ```
+
+- Example:
+
+  ```
+  sudo config vxlan evpn_nvo del nvo
+  ```
+
+**config vxlan map del \<vxlan_name\> \<vlanid\> \<vnid\>**
+
+This command deletes specific VLAN-VNI mapping on the VTEP with name **vxlan_name**.
+
+- Usage:
+
+  ```
+  config vxlan map del <vxlan_name> <vlanid> <vnid>
+  ```
+
+- Example:
+
+  ```
+  sudo config vxlan map del vtep 30 3000
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#vxlan-config-commands)
 
 ### Vnet
 
@@ -13937,7 +14178,7 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#macsec
  This sub-section explains the list of commands available for SFP utilities feature.
 
 ## SFP Utilities show commands
- 
+
 - Show SFP EEPROM hex dump
 
 ```
