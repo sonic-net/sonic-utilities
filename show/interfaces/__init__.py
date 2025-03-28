@@ -3,6 +3,7 @@ import os
 
 import subprocess
 import click
+from utilities_common import constants
 import utilities_common.cli as clicommon
 import utilities_common.multi_asic as multi_asic_util
 from natsort import natsorted
@@ -816,35 +817,21 @@ def fec_stats(verbose, period, namespace, display):
     clicommon.run_command(cmd, display_cmd=verbose)
 
 
-def get_port_oid_mapping():
+def get_port_oid_mapping(db, namespace):
     ''' Returns dictionary of all ports interfaces and their OIDs. '''
-    db = SonicV2Connector(host=REDIS_HOSTIP)
-    db.connect(db.COUNTERS_DB)
-
-    port_oid_map = db.get_all(db.COUNTERS_DB, 'COUNTERS_PORT_NAME_MAP')
-
-    db.close(db.COUNTERS_DB)
-
+    port_oid_map = db.db_clients[namespace].get_all(db.db.COUNTERS_DB, 'COUNTERS_PORT_NAME_MAP')
     return port_oid_map
 
 
-def fetch_fec_histogram(port_oid_map, target_port):
+def fetch_fec_histogram(db, namespace, port_oid_map, target_port):
     ''' Fetch and display FEC histogram for the given port. '''
-    asic_db = SonicV2Connector(host=REDIS_HOSTIP)
-    asic_db.connect(asic_db.ASIC_DB)
-
-    config_db = ConfigDBConnector()
-    config_db.connect()
-
-    counter_db = SonicV2Connector(host=REDIS_HOSTIP)
-    counter_db.connect(counter_db.COUNTERS_DB)
 
     if target_port not in port_oid_map:
         click.echo('Port {} not found in COUNTERS_PORT_NAME_MAP'.format(target_port), err=True)
         raise click.Abort()
 
     port_oid = port_oid_map[target_port]
-    asic_db_kvp = counter_db.get_all(counter_db.COUNTERS_DB, 'COUNTERS:{}'.format(port_oid))
+    asic_db_kvp = db.db_clients[namespace].get_all(db.db.COUNTERS_DB, 'COUNTERS:{}'.format(port_oid))
 
     if asic_db_kvp is not None:
 
@@ -863,24 +850,26 @@ def fetch_fec_histogram(port_oid_map, target_port):
         click.echo('No kvp found in ASIC DB for port {}, exiting'.format(target_port), err=True)
         raise click.Abort()
 
-    asic_db.close(asic_db.ASIC_DB)
-    config_db.close(config_db.CONFIG_DB)
-    counter_db.close(counter_db.COUNTERS_DB)
 
 
 # 'fec-histogram' subcommand ("show interfaces counters fec-histogram")
 @counters.command('fec-histogram')
 @multi_asic_util.multi_asic_click_options
 @click.argument('interfacename', required=True)
-def fec_histogram(interfacename, namespace, display):
+@clicommon.pass_db
+def fec_histogram(db, interfacename, namespace, display):
     """Show interface counters fec-histogram"""
-    port_oid_map = get_port_oid_mapping()
+
+    if namespace is None:
+        namespace = constants.DEFAULT_NAMESPACE
+
+    port_oid_map = get_port_oid_mapping(db, namespace)
 
     # Try to convert interface name from alias
     interfacename = try_convert_interfacename_from_alias(click.get_current_context(), interfacename)
 
     # Fetch and display the FEC histogram
-    fetch_fec_histogram(port_oid_map, interfacename)
+    fetch_fec_histogram(db, namespace, port_oid_map, interfacename)
 
 
 # 'rates' subcommand ("show interfaces counters rates")
