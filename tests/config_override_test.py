@@ -442,7 +442,7 @@ class TestConfigOverrideMultiasic(object):
             assert mac == "11:22:33:44:55:66"
             if ns != config.DEFAULT_NAMESPACE and ns != HOST_NAMESPACE:
                 asic_id = config_db.get_config()['DEVICE_METADATA']['localhost'].get('asic_id')
-                assert asic_id == None
+                assert asic_id is None
 
     def test_masic_missig_localhost_override(self):
         def read_json_file_side_effect(filename):
