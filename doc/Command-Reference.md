@@ -2879,7 +2879,7 @@ Once enabled, BGP will not advertise routes which aren't yet offloaded.
   admin@sonic:~$ sudo config suppress-fib-pending enabled
   ```
   ```
-  admin@sonic:~$ sudo config suppress-fib-pending disabled 
+  admin@sonic:~$ sudo config suppress-fib-pending disabled
   ```
 
 **config bgp device-global tsa/w-ecmp**
@@ -3154,8 +3154,8 @@ utility works only on smart switch that provides DPU UART connections through
   nolock is      : no
   send_cmd is    : sz -vv
   receive_cmd is : rz -vv -E
-  imap is        : 
-  omap is        : 
+  imap is        :
+  omap is        :
   emap is        : crcrlf,delbs,
   logfile is     : none
   initstring     : none
@@ -3166,7 +3166,7 @@ utility works only on smart switch that provides DPU UART connections through
   Terminal ready
 
   sonic login: admin
-  Password: 
+  Password:
   Linux sonic 6.1.0-11-2-arm64 #1 SMP Debian 6.1.38-4 (2023-08-08) aarch64
   You are on
     ____   ___  _   _ _  ____
@@ -3183,7 +3183,7 @@ utility works only on smart switch that provides DPU UART connections through
   Help:    https://sonic-net.github.io/SONiC/
 
   Last login: Mon Sep  9 21:39:44 UTC 2024 on ttyS0
-  admin@sonic:~$ 
+  admin@sonic:~$
   Terminating...
   Thanks for using picocom
   root@MtFuji:/home/cisco#
@@ -5040,7 +5040,7 @@ The "current-mode" subcommand is used to display current breakout mode for all i
 
 **show interfaces counters**
 
-This show command displays packet counters for all interfaces(except the "show interface detailed" command) since the last time the counters were cleared. To display l3 counters "rif" subcommand can be used. There is no facility to display counters for one specific l2 interface. For l3 interfaces a single interface output mode is present.  Optional argument "-a" provides two additional columns - RX-PPS and TX_PPS. 
+This show command displays packet counters for all interfaces(except the "show interface detailed" command) since the last time the counters were cleared. To display l3 counters "rif" subcommand can be used. There is no facility to display counters for one specific l2 interface. For l3 interfaces a single interface output mode is present.  Optional argument "-a" provides two additional columns - RX-PPS and TX_PPS.
 Optional argument "-p" specify a period (in seconds) with which to gather counters over. To display the detailed per-interface counters "detailed <interface-name>" subcommand can be used.
 
 - Usage:
@@ -5580,11 +5580,11 @@ This command displays switchport modes status of the interfaces
 - Example (show interface switchport status of all interfaces):
   ```
   admin@sonic:~$ show interfaces switchport status
-  Interface     Mode                   
-  -----------  --------          
-  Ethernet0     access                  
-  Ethernet4     trunk                 
-  Ethernet8     routed          
+  Interface     Mode
+  -----------  --------
+  Ethernet0     access
+  Ethernet4     trunk
+  Ethernet8     routed
   <contiues to display all the interfaces>
   ```
 
@@ -5600,11 +5600,11 @@ This command displays switchport modes configuration of the interfaces
 - Example (show interface switchport config of all interfaces):
   ```
   admin@sonic:~$ show interfaces switchport config
-  Interface     Mode        Untagged   Tagged              
-  -----------  --------     --------   -------     
-  Ethernet0     access      2             
-  Ethernet4     trunk       3          4,5,6      
-  Ethernet8     routed          
+  Interface     Mode        Untagged   Tagged
+  -----------  --------     --------   -------
+  Ethernet0     access      2
+  Ethernet4     trunk       3          4,5,6
+  Ethernet8     routed
   <contiues to display all the interfaces>
   ```
 
@@ -6834,7 +6834,7 @@ These commands are used to manage the LDAP servers in the system, they are creat
   update         Update and existing LDAP server
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#LDAP)
-  
+
 ## Linux Kernel Dump
 
 This section demonstrates the show commands and configuration commands of Linux kernel dump mechanism in SONiC.
@@ -8873,7 +8873,7 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#platfo
 
 config platform mlnx
 
-This command is valid only on mellanox devices. The sub-commands for "config platform" gets populated only on mellanox platforms. There are no other subcommands on non-Mellanox devices and hence this command appears empty and useless in other platforms. 
+This command is valid only on mellanox devices. The sub-commands for "config platform" gets populated only on mellanox platforms. There are no other subcommands on non-Mellanox devices and hence this command appears empty and useless in other platforms.
 
 The platform mellanox command currently includes no sub command.
 
@@ -12068,14 +12068,14 @@ This command displays all the VRF VNI mappings.
   Total count : 1
   ```
 
-**show vxlan remote_mac <remoteip/all>**
+**show vxlan remotemac <remoteip/all>**
 
 This command displays all MACs learnt from a specified remote VTEP IP, or from all of the remote VTEP IPs for all VNIs.
 
 - Usage:
 
   ```
-  show vxlan remote_mac <remoteip/all>
+  show vxlan remotemac <remoteip/all>
   ```
 
 - Example:
@@ -12100,20 +12100,20 @@ This command displays all MACs learnt from a specified remote VTEP IP, or from a
   Total count : 2
   ```
 
-**show vxlan remote_vni <remoteip/all>**
+**show vxlan remotevni <remoteip/all>**
 
 This command displays all the VNIs learnt from the specified remote VTEP, or all the VNIs learnt from all of the remote VTEPs.
 
 - Usage:
 
   ```
-  show vxlan remote_vni <remoteip/all>
+  show vxlan remotevni <remoteip/all>
   ```
 
 - Example:
 
   ```
-  admin@sonic:~$ show vxlan remote_vni 3.3.3.3
+  admin@sonic:~$ show vxlan remotevni 3.3.3.3
   +---------+--------------+-------+
   | VLAN    | RemoteVTEP   |   VNI |
   +=========+==============+=======+
@@ -14524,7 +14524,7 @@ enabled  Login    You are on
                   All access and/or use are subject to monitoring.
 
                   Help:    https://sonic-net.github.io/SONiC/
- ```                             
+ ```
 ---
 
 # Memory Statistics Commands
@@ -14532,9 +14532,9 @@ enabled  Login    You are on
 ## Overview
 These commands allow users to enable/disable memory statistics monitoring, configure data collection intervals, adjust data retention periods, view memory statistics, and check the current configuration. Memory statistics can help administrators monitor and analyze system memory usage over time.
 
-**Common Use Cases** 
- - Monitor system memory trends over time. 
- - Track memory usage patterns during peak time.  
+**Common Use Cases**
+ - Monitor system memory trends over time.
+ - Track memory usage patterns during peak time.
  - Plan system capacity based on historical memory data.
 
 ---
@@ -14668,15 +14668,15 @@ Report Generated:    2024-12-04 15:49:52
 Analysis Period:     From 2024-11-19 15:49:52 to 2024-12-04 15:49:52
 Interval:            2 Days
 --------------------------------------------------------------------------------------------------------------------------------------------------
-Metric             Current    High       Low        D19-D21     D21-D23     D23-D25     D25-D27     D27-D29     D29-D01     D01-D03     D03-D05    
-                   Value      Value      Value      19Nov24     21Nov24     23Nov24     25Nov24     27Nov24     29Nov24     01Dec24     03Dec24    
+Metric             Current    High       Low        D19-D21     D21-D23     D23-D25     D25-D27     D27-D29     D29-D01     D01-D03     D03-D05
+                   Value      Value      Value      19Nov24     21Nov24     23Nov24     25Nov24     27Nov24     29Nov24     01Dec24     03Dec24
 --------------------------------------------------------------------------------------------------------------------------------------------------
-total_memory       15.29GB    15.29GB    15.29GB    15.29GB     15.29GB     15.29GB     15.29GB     15.29GB    15.29GB      15.29GB     15.29GB    
-used_memory        8.87GB     9.35GB     8.15GB     8.15GB      9.10GB      8.15GB      8.20GB      9.05GB     8.30GB       9.35GB      9.12GB     
-free_memory        943.92MB   906.28MB   500.00MB   800.00MB    750.00MB    906.2MB     650.00MB    600.00MB   550.00MB     500.00MB    725.92MB   
-available_memory   4.78GB     4.74GB     4.35GB     4.65GB      4.60GB      4.55GB      4.74GB      4.45GB     4.40GB       4.35GB      4.57GB     
-cached_memory      5.17GB     5.08GB     4.96GB     5.08GB      5.06GB      5.04GB      5.02GB     5.00GB      4.98GB       4.96GB      5.05GB     
-buffers_memory     337.83MB   333.59MB   295.00MB   325.00MB    320.00MB    315.00MB    333.59MB   305.00MB    300.00MB     295.00MB    317.84MB   
+total_memory       15.29GB    15.29GB    15.29GB    15.29GB     15.29GB     15.29GB     15.29GB     15.29GB    15.29GB      15.29GB     15.29GB
+used_memory        8.87GB     9.35GB     8.15GB     8.15GB      9.10GB      8.15GB      8.20GB      9.05GB     8.30GB       9.35GB      9.12GB
+free_memory        943.92MB   906.28MB   500.00MB   800.00MB    750.00MB    906.2MB     650.00MB    600.00MB   550.00MB     500.00MB    725.92MB
+available_memory   4.78GB     4.74GB     4.35GB     4.65GB      4.60GB      4.55GB      4.74GB      4.45GB     4.40GB       4.35GB      4.57GB
+cached_memory      5.17GB     5.08GB     4.96GB     5.08GB      5.06GB      5.04GB      5.02GB     5.00GB      4.98GB       4.96GB      5.05GB
+buffers_memory     337.83MB   333.59MB   295.00MB   325.00MB    320.00MB    315.00MB    333.59MB   305.00MB    300.00MB     295.00MB    317.84MB
 shared_memory      1.31GB     1.22GB     1.08GB     1.22GB      1.20GB      1.18GB      1.15GB     1.12GB      1.10GB       1.08GB      1.19GB
 ```
 
@@ -14700,15 +14700,15 @@ Report Generated:    2024-12-24 17:29:19
 Analysis Period:     From 2024-12-14 17:29:19 to 2024-12-24 17:29:19
 Interval:            1 Days
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-Metric             Current    High       Low        D14-D15     D15-D16     D16-D17     D17-D18     D18-D19     D19-D20     D20-D21     D21-D22     D22-D23     D23-D24     D24-D25    
-                   Value      Value      Value      14Dec24     15Dec24     16Dec24     17Dec24     18Dec24     19Dec24     20Dec24     21Dec24     22Dec24     23Dec24     24Dec24    
+Metric             Current    High       Low        D14-D15     D15-D16     D16-D17     D17-D18     D18-D19     D19-D20     D20-D21     D21-D22     D22-D23     D23-D24     D24-D25
+                   Value      Value      Value      14Dec24     15Dec24     16Dec24     17Dec24     18Dec24     19Dec24     20Dec24     21Dec24     22Dec24     23Dec24     24Dec24
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-total_memory       15.29GB    15.29GB    15.29GB    -           -           -           -           -           -           -           -           -           -           15.29GB    
-used_memory        11.74GB    9.14GB     9.14GB     -           -           -           -           -           -           -           -           -           -           9.14GB     
-free_memory        704.33MB   2.61GB     2.61GB     -           -           -           -           -           -           -           -           -           -           2.61GB     
-available_memory   2.21GB     4.73GB     4.73GB     -           -           -           -           -           -           -           -           -           -           4.73GB     
-cached_memory      2.76GB     3.40GB     3.40GB     -           -           -           -           -           -           -           -           -           -           3.40GB     
-buffers_memory     105.39MB   144.28MB   144.28MB   -           -           -           -           -           -           -           -           -           -           144.28MB   
+total_memory       15.29GB    15.29GB    15.29GB    -           -           -           -           -           -           -           -           -           -           15.29GB
+used_memory        11.74GB    9.14GB     9.14GB     -           -           -           -           -           -           -           -           -           -           9.14GB
+free_memory        704.33MB   2.61GB     2.61GB     -           -           -           -           -           -           -           -           -           -           2.61GB
+available_memory   2.21GB     4.73GB     4.73GB     -           -           -           -           -           -           -           -           -           -           4.73GB
+cached_memory      2.76GB     3.40GB     3.40GB     -           -           -           -           -           -           -           -           -           -           3.40GB
+buffers_memory     105.39MB   144.28MB   144.28MB   -           -           -           -           -           -           -           -           -           -           144.28MB
 shared_memory      1.00GB     1.08GB     1.08GB     -           -           -           -           -           -           -           -           -           -           1.08GB
 ```
 
@@ -14730,15 +14730,15 @@ Report Generated:    2024-12-24 17:24:08
 Analysis Period:     From 2024-12-24 15:44:08 to 2024-12-24 17:24:08
 Interval:            10 Minutes
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-Metric             Current    High       Low        M44-M54     M54-M04     M04-M14     M14-M24     M24-M34     M34-M44     M44-M54     M54-M04     M04-M14     M14-M24     M24-M34    
-                   Value      Value      Value      15:44       15:54       16:04       16:14       16:24       16:34       16:44       16:54       17:04       17:14       17:24      
+Metric             Current    High       Low        M44-M54     M54-M04     M04-M14     M14-M24     M24-M34     M34-M44     M44-M54     M54-M04     M04-M14     M14-M24     M24-M34
+                   Value      Value      Value      15:44       15:54       16:04       16:14       16:24       16:34       16:44       16:54       17:04       17:14       17:24
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-total_memory       15.29GB    15.29GB    15.29GB    15.29GB     15.29GB     15.29GB     15.29GB     15.29GB     15.29GB     15.29GB     15.29GB     15.29GB     15.29GB     -          
-used_memory        11.62GB    11.81GB    10.69GB    11.81GB     11.74GB     10.69GB     10.93GB     11.31GB     11.31GB     11.38GB     11.40GB     11.44GB     11.50GB     -          
-free_memory        888.46MB   1.65GB     514.18MB   514.18MB    525.77MB    1.65GB      1.15GB      802.98MB    818.78MB    680.81MB    716.42MB    533.82MB    1.07GB      -          
-available_memory   2.35GB     3.37GB     2.25GB     2.25GB      2.25GB      3.37GB      2.96GB      2.62GB      2.64GB      2.52GB      2.57GB      2.49GB      2.52GB      -          
-cached_memory      2.70GB     3.15GB     2.63GB     2.85GB      2.91GB      2.82GB      3.07GB      3.05GB      3.03GB      3.09GB      3.03GB      3.15GB      2.63GB      -          
-buffers_memory     101.39MB   186.47MB   99.00MB    134.77MB    136.97MB    140.94MB    148.42MB    153.82MB    157.19MB    160.90MB    165.18MB    186.47MB    99.00MB     -          
+total_memory       15.29GB    15.29GB    15.29GB    15.29GB     15.29GB     15.29GB     15.29GB     15.29GB     15.29GB     15.29GB     15.29GB     15.29GB     15.29GB     -
+used_memory        11.62GB    11.81GB    10.69GB    11.81GB     11.74GB     10.69GB     10.93GB     11.31GB     11.31GB     11.38GB     11.40GB     11.44GB     11.50GB     -
+free_memory        888.46MB   1.65GB     514.18MB   514.18MB    525.77MB    1.65GB      1.15GB      802.98MB    818.78MB    680.81MB    716.42MB    533.82MB    1.07GB      -
+available_memory   2.35GB     3.37GB     2.25GB     2.25GB      2.25GB      3.37GB      2.96GB      2.62GB      2.64GB      2.52GB      2.57GB      2.49GB      2.52GB      -
+cached_memory      2.70GB     3.15GB     2.63GB     2.85GB      2.91GB      2.82GB      3.07GB      3.05GB      3.03GB      3.09GB      3.03GB      3.15GB      2.63GB      -
+buffers_memory     101.39MB   186.47MB   99.00MB    134.77MB    136.97MB    140.94MB    148.42MB    153.82MB    157.19MB    160.90MB    165.18MB    186.47MB    99.00MB     -
 shared_memory      1005.79MB  1.07GB     917.46MB   926.08MB    993.94MB    917.46MB    1.07GB      1.01GB      1020.12MB   1.04GB      1001.18MB   1.01GB      961.13MB    -
 ```
 
@@ -14760,15 +14760,15 @@ Report Generated:    2024-12-24 17:24:51
 Analysis Period:     From 2024-12-24 14:24:51 to 2024-12-24 17:24:51
 Interval:            1 Hours
 --------------------------------------------------------------------------------------------------
-Metric             Current    High       Low        H14-H15     H15-H16     H16-H17     H17-H18    
-                   Value      Value      Value      14:24       15:24       16:24       17:24      
+Metric             Current    High       Low        H14-H15     H15-H16     H16-H17     H17-H18
+                   Value      Value      Value      14:24       15:24       16:24       17:24
 --------------------------------------------------------------------------------------------------
-total_memory       15.29GB    15.29GB    15.29GB    15.29GB     15.29GB     15.29GB     -          
-used_memory        11.59GB    11.52GB    11.39GB    11.42GB     11.52GB     11.39GB     -          
-free_memory        928.18MB   826.58MB   774.48MB   780.43MB    826.58MB    774.48MB    -          
-available_memory   2.39GB     2.56GB     2.50GB     2.53GB      2.50GB      2.56GB      -          
-cached_memory      2.70GB     3.00GB     2.83GB     2.89GB      2.83GB      3.00GB      -          
-buffers_memory     101.62MB   153.76MB   132.42MB   149.62MB    132.42MB    153.76MB    -          
+total_memory       15.29GB    15.29GB    15.29GB    15.29GB     15.29GB     15.29GB     -
+used_memory        11.59GB    11.52GB    11.39GB    11.42GB     11.52GB     11.39GB     -
+free_memory        928.18MB   826.58MB   774.48MB   780.43MB    826.58MB    774.48MB    -
+available_memory   2.39GB     2.56GB     2.50GB     2.53GB      2.50GB      2.56GB      -
+cached_memory      2.70GB     3.00GB     2.83GB     2.89GB      2.83GB      3.00GB      -
+buffers_memory     101.62MB   153.76MB   132.42MB   149.62MB    132.42MB    153.76MB    -
 shared_memory      997.97MB   1020.80MB  961.19MB   971.47MB    961.19MB    1020.80MB   -
 ```
 
@@ -14790,11 +14790,11 @@ Report Generated:    2024-12-24 17:27:58
 Analysis Period:     From 2024-12-24 15:47:58 to 2024-12-24 17:27:58
 Interval:            10 Minutes
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
-Metric             Current    High       Low        M47-M57     M57-M07     M07-M17     M17-M27     M27-M37     M37-M47     M47-M57     M57-M07     M07-M17     M17-M27     M27-M37    
-                   Value      Value      Value      15:47       15:57       16:07       16:17       16:27       16:37       16:47       16:57       17:07       17:17       17:27      
+Metric             Current    High       Low        M47-M57     M57-M07     M07-M17     M17-M27     M27-M37     M37-M47     M47-M57     M57-M07     M07-M17     M17-M27     M27-M37
+                   Value      Value      Value      15:47       15:57       16:07       16:17       16:27       16:37       16:47       16:57       17:07       17:17       17:27
 --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
 used_memory        11.69GB    11.79GB    10.55GB    11.79GB     11.35GB     10.55GB     11.24GB     11.30GB     11.33GB     11.40GB     11.39GB     11.46GB     11.62GB     -
-     
+
 
 ```
 
