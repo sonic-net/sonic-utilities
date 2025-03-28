@@ -70,7 +70,7 @@ def name(vnet_name):
     """Show vnet name <vnet name> information"""
     config_db = ConfigDBConnector()
     config_db.connect()
-    header = ['vnet name', 'vxlan tunnel', 'vni', 'peer list']
+    header = ['vnet name', 'vxlan tunnel', 'vni', 'peer list', 'guid']
 
     # Fetching data from config_db for VNET
     vnet_data = config_db.get_entry('VNET', vnet_name)
@@ -83,10 +83,34 @@ def name(vnet_name):
             r.append(vnet_data.get('vxlan_tunnel'))
             r.append(vnet_data.get('vni'))
             r.append(vnet_data.get('peer_list'))
+            r.append(vnet_data.get('guid'))
             table.append(r)
         return table
 
     click.echo(tabulate(tablelize(vnet_name, vnet_data), header))
+
+
+@vnet.command()
+def all():
+    """Show vnet all"""
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    header = ['vnet name', 'guid']
+
+    # Fetching data from config_db for VNET
+    vnet_data = config_db.get_table('VNET')
+    vnet_keys = natsorted(list(vnet_data.keys()))
+
+    def tablelize(vnet_keys, vnet_data):
+        table = []
+        for k in vnet_keys:
+            r = []
+            r.append(k)
+            r.append(vnet_data[k].get('guid'))
+            table.append(r)
+        return table
+
+    click.echo(tabulate(tablelize(vnet_keys, vnet_data), header))
 
 
 @vnet.command()
