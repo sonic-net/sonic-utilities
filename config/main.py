@@ -2257,7 +2257,7 @@ def generate_sysinfo(cur_config, config_input, ns=None):
 
     device_metadata['localhost']['mac'] = mac.rstrip('\n')
     device_metadata['localhost']['platform'] = platform.rstrip('\n')
-    if ns != DEFAULT_NAMESPACE and ns != HOST_NAMESPACE:
+    if ns != DEFAULT_NAMESPACE and ns != HOST_NAMESPACE and asic_id:
         device_metadata['localhost']['asic_id'] = asic_id.rstrip('\n')
 
     return
