@@ -19,6 +19,7 @@ from utilities_common.db import Db
 from datetime import datetime
 import utilities_common.constants as constants
 from utilities_common.general import load_db_config
+from utilities_common import pfc_stat_history
 from json.decoder import JSONDecodeError
 from sonic_py_common.general import getstatusoutput_noshell_pipe
 
@@ -317,6 +318,7 @@ cli.add_command(vlan.vlan)
 cli.add_command(vnet.vnet)
 cli.add_command(vxlan.vxlan)
 cli.add_command(system_health.system_health)
+cli.add_command(pfc_stat_history.show_pfc_stat_history)
 cli.add_command(warm_restart.warm_restart)
 cli.add_command(dns.dns)
 cli.add_command(stp.spanning_tree)

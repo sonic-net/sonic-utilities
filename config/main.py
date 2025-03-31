@@ -45,6 +45,7 @@ from utilities_common.general import load_db_config, load_module_from_source
 from .validated_config_db_connector import ValidatedConfigDBConnector
 import utilities_common.multi_asic as multi_asic_util
 from utilities_common.flock import try_lock
+from utilities_common import pfc_stat_history
 
 from .utils import log
 
@@ -1467,6 +1468,7 @@ config.add_command(kdump.kdump)
 config.add_command(kube.kubernetes)
 config.add_command(muxcable.muxcable)
 config.add_command(nat.nat)
+config.add_command(pfc_stat_history.config_pfc_stat_history)
 config.add_command(vlan.vlan)
 config.add_command(vxlan.vxlan)
 

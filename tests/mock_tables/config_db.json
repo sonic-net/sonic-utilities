@@ -1793,6 +1793,10 @@
     "FLEX_COUNTER_TABLE|QUEUE_WATERMARK": {
         "FLEX_COUNTER_STATUS": "enable"
     },
+    "FLEX_COUNTER_TABLE|PFC_STAT_HISTORY": {
+        "POLL_INTERVAL": "1000",
+        "FLEX_COUNTER_STATUS": "disable"
+    },
     "FLEX_COUNTER_TABLE|PG_WATERMARK": {
         "FLEX_COUNTER_STATUS": "enable"
     },
