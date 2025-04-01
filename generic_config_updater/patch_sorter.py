@@ -353,6 +353,42 @@ class JsonMoveGroup:
             raw_patches.extend(move.patch.patch)
         return jsonpatch.JsonPatch(raw_patches)
 
+
+    def parentTableName(self):
+        """
+        This extracts the parent table name from the first patch associated
+        with this grouping.  This is a bit special-cased for grouping purposes
+        where it evaluates both '/' and '|' to look for parents to group.
+
+        Examples:
+         * /PORT/Ethernet0/description -> /PORT
+         * /PORTCHANNEL_MEMBER/PortChannel0001|Ethernet16 -> /PORTCHANNEL_MEMBER/PortChannel0001
+         * /ACL_RULE/V4-ACL-TABLE|Rule_20/DST_IP -> /ACL_RULE/V4-ACL-TABLE
+        """
+        tokens = sonic_yang.SonicYang.configdb_path_split(self.patches[0].path)
+
+        # See if the last token has a |, if so just truncate and return
+        token = tokens[-1]
+        if "|" in token:
+            tokens[-1] = token.rsplit("|", 1)[0]
+            return sonic_yang.SonicYang.configdb_path_join(tokens)
+
+        # Pop off the last element as we don't need it, its not a key
+        tokens.pop()
+
+        # See if the last token has a |, if so just truncate and return
+        token = tokens[-1]
+        if "|" in token:
+            tokens[-1] = token.rsplit("|", 1)[0]
+            return sonic_yang.SonicYang.configdb_path_join(tokens)
+
+        # If we're here it means we're on a key to be removed, pop and return
+        tokens.pop()
+        return sonic_yang.SonicYang.configdb_path_join(tokens)
+
+    def merge(self, group):
+        self.patches.extend(group.patches)
+
     def __str__(self):
         return ",".join([ str(patch) for patch in self.patches ])
 
@@ -1302,13 +1338,65 @@ class BulkKeyLevelMoveGenerator:
                 if not(table in config2) or not (key in config2[table]):
                     yield [table, key]
 
+class BulkKeyGroupLowLevelMoveGenerator:
+    """
+    This is a Wrapper around BulkLowLevelMoveGenerator that groups the leaf
+    operations together spanning multiple table keys.  For example if someone
+    wants to update PORT/Ethernet0/description and PORT/Ethernet1/description
+    at the same time, it is safe to do so in the same patch group. This grouping
+    exists in order to attempt to optimize the fast path when there are a lot
+    of changes to the same table and there are often very few
+    cross-dependencies.  This will bring down the patch set count considerably
+    for a lot of change operations.  We do still fall back to other more
+    primitive generators if the validators fail so this is an optimization that
+    otherwise doesn't have any impact on the overall outcome, only performance.
+    """
+    def __init__(self, path_addressing):
+        self.generator = BulkLowLevelMoveGenerator(path_addressing)
+
+    def generate(self, diff):
+        # Handle removals first
+        for move in self.generate_groups(diff, self.generator.generate_remove):
+            yield move
+
+        # Handle replacements next
+        for move in self.generate_groups(diff, self.generator.generate_replace):
+            yield move
+
+        # Handle additions last
+        for move in self.generate_groups(diff, self.generator.generate_add):
+            yield move
+
+    def generate_groups(self, diff, cb):
+        group = None
+        for move in cb(diff, min_moves=1):
+            if group is None:
+                group = move
+                continue
+
+            if move.parentTableName() != group.parentTableName():
+                # Don't yield if one entry, we will let the extendable move generator
+                # generate it.
+                if len(group) > 1:
+                    yield group
+                group = move
+                continue
+
+            # group matches move, merge them.
+            group.merge(move)
+
+        # Don't yield if one entry, we will let the extendable move generator
+        # generate it.
+        if group is not None and len(group) > 1:
+            yield group
+
 
 class BulkLowLevelMoveGenerator:
     """
-    A class that generates low level moves that can be grouped together as a single patch.
-    These are moves where the path of the move has no children, these are the end leafs.
-    We are going to use this as a non-extendable generator as the normal LowLevelMoveGenerator
-    will generate the extendable moves.
+    A class that generates low level moves that can be grouped together as a single patch
+    that operate on at most one key at a time. These are moves where the path of the move
+    has no children, these are the end leafs. We are going to use this as a non-extendable
+    generator as the normal LowLevelMoveGenerator will generate the extendable moves.
     """
     def __init__(self, path_addressing):
         self.diff = None
@@ -1316,21 +1404,40 @@ class BulkLowLevelMoveGenerator:
         self.requiredval = RequiredValueIdentifier(path_addressing)
 
     def generate(self, diff):
-        self.diff = diff
-        current_ptr = self.diff.current_config
-        target_ptr = self.diff.target_config
-        tokens = []
-
         # Handle removals first
-        for move in self.__traverse(OperationType.REMOVE, current_ptr, target_ptr, tokens):
+        for move in self.generate_remove(diff):
             yield move
 
         # Handle replacements next
-        for move in self.__traverse(OperationType.REPLACE, current_ptr, target_ptr, tokens):
+        for move in self.generate_replace(diff):
             yield move
 
         # Finally handle additions
-        for move in self.__traverse(OperationType.ADD, current_ptr, target_ptr, tokens):
+        for move in self.generate_add(diff):
+            yield move
+
+    def generate_remove(self, diff, min_moves: int = 2):
+        self.diff = diff
+        tokens = []
+
+        for move in self.__traverse(OperationType.REMOVE, self.diff.current_config, self.diff.target_config, tokens,
+                                    min_moves):
+            yield move
+
+    def generate_replace(self, diff, min_moves: int = 2):
+        self.diff = diff
+        tokens = []
+
+        for move in self.__traverse(OperationType.REPLACE, self.diff.current_config, self.diff.target_config, tokens,
+                                    min_moves):
+            yield move
+
+    def generate_add(self, diff, min_moves: int = 2):
+        self.diff = diff
+        tokens = []
+
+        for move in self.__traverse(OperationType.ADD, self.diff.current_config, self.diff.target_config, tokens,
+                                    min_moves):
             yield move
 
     def __restricted_key(self, tokens, key):
@@ -1339,10 +1446,10 @@ class BulkLowLevelMoveGenerator:
         tokens.pop()
         return rv
 
-    def __traverse(self, op, current_ptr, target_ptr, tokens):
+    def __traverse(self, op, current_ptr, target_ptr, tokens, min_moves):
         if isinstance(current_ptr, dict):
             if self.__children_are_leafs(current_ptr) and self.__children_are_leafs(target_ptr):
-                for move in self.__output_bulk_move(op, current_ptr, target_ptr, tokens):
+                for move in self.__output_bulk_move(op, current_ptr, target_ptr, tokens, min_moves):
                     yield move
                 return
 
@@ -1363,7 +1470,7 @@ class BulkLowLevelMoveGenerator:
                     continue
 
                 tokens.append(key)
-                for move in self.__traverse(op, current_ptr[key], target_ptr[key], tokens):
+                for move in self.__traverse(op, current_ptr[key], target_ptr[key], tokens, min_moves):
                     yield move
                 tokens.pop()
             return
@@ -1377,19 +1484,19 @@ class BulkLowLevelMoveGenerator:
                 return False
         return True
 
-    def __output_bulk_move(self, op, current_ptr, target_ptr, tokens):
+    def __output_bulk_move(self, op, current_ptr, target_ptr, tokens, min_moves):
         match op:
             case OperationType.REMOVE:
-                for move in self.__output_bulk_remove(current_ptr, target_ptr, tokens):
+                for move in self.__output_bulk_remove(current_ptr, target_ptr, tokens, min_moves):
                     yield move
             case OperationType.REPLACE:
-                for move in self.__output_bulk_replace(current_ptr, target_ptr, tokens):
+                for move in self.__output_bulk_replace(current_ptr, target_ptr, tokens, min_moves):
                     yield move
             case OperationType.ADD:
-                for move in self.__output_bulk_add(current_ptr, target_ptr, tokens):
+                for move in self.__output_bulk_add(current_ptr, target_ptr, tokens, min_moves):
                     yield move
 
-    def __output_bulk_add(self, current_ptr, target_ptr, tokens):
+    def __output_bulk_add(self, current_ptr, target_ptr, tokens, min_moves):
         group = JsonMoveGroup()
         for key in target_ptr:
             if current_ptr.get(key) is None and not self.__restricted_key(tokens, key):
@@ -1398,10 +1505,10 @@ class BulkLowLevelMoveGenerator:
                 tokens.pop()
 
         # Not a bulk move if there's not more than one action to take
-        if len(group) > 1:
+        if len(group) >= min_moves:
             yield group
 
-    def __output_bulk_remove(self, current_ptr, target_ptr, tokens):
+    def __output_bulk_remove(self, current_ptr, target_ptr, tokens, min_moves):
         group = JsonMoveGroup()
         for key in current_ptr:
             if target_ptr.get(key) is None and not self.__restricted_key(tokens, key):
@@ -1410,10 +1517,10 @@ class BulkLowLevelMoveGenerator:
                 tokens.pop()
 
         # Not a bulk move if there's not more than one action to take
-        if len(group) > 1:
+        if len(group) >= min_moves:
             yield group
 
-    def __output_bulk_replace(self, current_ptr, target_ptr, tokens):
+    def __output_bulk_replace(self, current_ptr, target_ptr, tokens, min_moves):
         group = JsonMoveGroup()
         for key in current_ptr:
             target_val = target_ptr.get(key)
@@ -1423,7 +1530,7 @@ class BulkLowLevelMoveGenerator:
                 tokens.pop()
 
         # Not a bulk move if there's not more than one action to take
-        if len(group) > 1:
+        if len(group) >= min_moves:
             yield group
 
 
@@ -1975,6 +2082,7 @@ class SortAlgorithmFactory:
         # TODO: Enable TableLevelMoveGenerator once it is confirmed whole table can be updated at the same time
         move_non_extendable_generators = [BulkKeyLevelMoveGenerator(self.path_addressing),
                                           KeyLevelMoveGenerator(self.path_addressing),
+                                          BulkKeyGroupLowLevelMoveGenerator(self.path_addressing),
                                           BulkLowLevelMoveGenerator(self.path_addressing)]
         move_extenders = [RequiredValueMoveExtender(self.path_addressing, self.operation_wrapper),
                           UpperLevelMoveExtender(),

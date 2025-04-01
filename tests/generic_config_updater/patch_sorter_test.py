@@ -3267,6 +3267,7 @@ class TestSortAlgorithmFactory(unittest.TestCase):
                                ps.LowLevelMoveGenerator]
         expected_non_extendable_generators = [ps.BulkKeyLevelMoveGenerator,
                                               ps.KeyLevelMoveGenerator,
+                                              ps.BulkKeyGroupLowLevelMoveGenerator,
                                               ps.BulkLowLevelMoveGenerator]
         expected_extenders = [ps.RequiredValueMoveExtender,
                               ps.UpperLevelMoveExtender,
