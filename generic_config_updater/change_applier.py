@@ -5,6 +5,7 @@ import jsondiff
 import importlib
 import os
 import tempfile
+import time
 from collections import defaultdict
 from swsscommon.swsscommon import ConfigDBConnector
 from sonic_py_common import multi_asic
@@ -150,17 +151,26 @@ class ChangeApplier:
         if ret != 0:
             log_error("Failed to apply Json change")
 
-# This sanity check appears to be a development time debug to ensure this code
-# was operating correctly in general, but is not something that is normally
-# needed post-development.  It is an expensive operation to re-retrieve the
-# entire configdb from Redis with data that is in a known state.
-#        if ret == 0:
-#            run_data = get_config_db_as_json(self.scope)
-#            self.remove_backend_tables_from_config(upd_data)
-#            self.remove_backend_tables_from_config(run_data)
-#            if upd_data != run_data:
-#                self._report_mismatch(run_data, upd_data)
-#                ret = -1
+        # There was a sanity check in this position originally that appeared
+        # to be development-time code to ensure things were operating correctly.
+        # It would retrieve the configdb from Redis and perform transformation
+        # and comparison.  Its not possible for the configuration to not be what
+        # we expect since we have a known state we are mutating with a lock.
+        # That said we are leaving in the final configuration comparison in
+        # PatchApplier "just in case".
+        #
+        # However, this code did hide a pretty nasty race condition since there
+        # is no feedback loop for when config_db changes are actually consumed.
+        # This check would consume high CPU and would take a good amount of
+        # time (0.5s - 1s).
+        #
+        # The below sleep is functionally equivalent in terms of preventing the
+        # race condition (without the high CPU that might cause other control
+        # plane issues), but is of course not the proper fix.
+        #
+        # An upstream SONiC issue will be opened for the race condition, and
+        # until resolved leaving this comment in place for future reference.
+        time.sleep(1)
 
         # Interestingly this function returns the updated data and doesn't
         # propagate an error.  Maybe it should?  Or are exceptions thrown
