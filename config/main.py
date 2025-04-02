@@ -1865,11 +1865,7 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
             return
 
     if filename is not None and filename != "/dev/stdin":
-        if multi_asic.is_multi_asic():
-            # Multiasic has not 100% fully validated. Thus pass here.
-            pass
-        else:
-            config_file_yang_validation(filename)
+        config_file_yang_validation(filename)
 
     #Stop services before config push
     if not no_service_restart:
