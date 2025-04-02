@@ -1350,6 +1350,11 @@ class BulkKeyGroupLowLevelMoveGenerator:
     for a lot of change operations.  We do still fall back to other more
     primitive generators if the validators fail so this is an optimization that
     otherwise doesn't have any impact on the overall outcome, only performance.
+
+    As a secondary optimization, restricted keys (primarily PORT/*/admin_status)
+    operations are grouped together as typically it is ok for all restricted keys
+    to change at the same time for the same table.  If its not, the validator
+    will simply fail it and the generator will move on and "try" something else.
     """
     def __init__(self, path_addressing):
         self.generator = BulkLowLevelMoveGenerator(path_addressing)
@@ -1359,17 +1364,29 @@ class BulkKeyGroupLowLevelMoveGenerator:
         for move in self.generate_groups(diff, self.generator.generate_remove):
             yield move
 
+        # Handle removals for restricted keys in bulk independently
+        for move in self.generate_groups(diff, self.generator.generate_remove, restricted_only=True):
+            yield move
+
         # Handle replacements next
         for move in self.generate_groups(diff, self.generator.generate_replace):
+            yield move
+
+        # Handle replacements for restricted keys in bulk independently
+        for move in self.generate_groups(diff, self.generator.generate_replace, restricted_only=True):
             yield move
 
         # Handle additions last
         for move in self.generate_groups(diff, self.generator.generate_add):
             yield move
 
-    def generate_groups(self, diff, cb):
+        # Handle additions for restricted keys in bulk independently
+        for move in self.generate_groups(diff, self.generator.generate_add, restricted_only=True):
+            yield move
+
+    def generate_groups(self, diff, cb, restricted_only: bool=False):
         group = None
-        for move in cb(diff, min_moves=1):
+        for move in cb(diff, min_moves=1, restricted_only=restricted_only):
             if group is None:
                 group = move
                 continue
@@ -1416,40 +1433,44 @@ class BulkLowLevelMoveGenerator:
         for move in self.generate_add(diff):
             yield move
 
-    def generate_remove(self, diff, min_moves: int = 2):
+    def generate_remove(self, diff, min_moves: int = 2, restricted_only: bool = False):
         self.diff = diff
         tokens = []
 
         for move in self.__traverse(OperationType.REMOVE, self.diff.current_config, self.diff.target_config, tokens,
-                                    min_moves):
+                                    min_moves, restricted_only):
             yield move
 
-    def generate_replace(self, diff, min_moves: int = 2):
+    def generate_replace(self, diff, min_moves: int = 2, restricted_only: bool = False):
         self.diff = diff
         tokens = []
 
         for move in self.__traverse(OperationType.REPLACE, self.diff.current_config, self.diff.target_config, tokens,
-                                    min_moves):
+                                    min_moves, restricted_only):
             yield move
 
-    def generate_add(self, diff, min_moves: int = 2):
+    def generate_add(self, diff, min_moves: int = 2, restricted_only: bool = False):
         self.diff = diff
         tokens = []
 
         for move in self.__traverse(OperationType.ADD, self.diff.current_config, self.diff.target_config, tokens,
-                                    min_moves):
+                                    min_moves, restricted_only):
             yield move
 
-    def __restricted_key(self, tokens, key):
+    def __restricted_key(self, tokens, key, invert: bool=False):
         tokens.append(key)
         rv = self.requiredval.target_in_required_pattern(tokens)
         tokens.pop()
+        if invert:
+            if rv:
+                return False
+            return True
         return rv
 
-    def __traverse(self, op, current_ptr, target_ptr, tokens, min_moves):
+    def __traverse(self, op, current_ptr, target_ptr, tokens, min_moves, restricted_only: bool = False):
         if isinstance(current_ptr, dict):
             if self.__children_are_leafs(current_ptr) and self.__children_are_leafs(target_ptr):
-                for move in self.__output_bulk_move(op, current_ptr, target_ptr, tokens, min_moves):
+                for move in self.__output_bulk_move(op, current_ptr, target_ptr, tokens, min_moves, restricted_only):
                     yield move
                 return
 
@@ -1470,7 +1491,7 @@ class BulkLowLevelMoveGenerator:
                     continue
 
                 tokens.append(key)
-                for move in self.__traverse(op, current_ptr[key], target_ptr[key], tokens, min_moves):
+                for move in self.__traverse(op, current_ptr[key], target_ptr[key], tokens, min_moves, restricted_only):
                     yield move
                 tokens.pop()
             return
@@ -1484,22 +1505,22 @@ class BulkLowLevelMoveGenerator:
                 return False
         return True
 
-    def __output_bulk_move(self, op, current_ptr, target_ptr, tokens, min_moves):
+    def __output_bulk_move(self, op, current_ptr, target_ptr, tokens, min_moves, restricted_only):
         match op:
             case OperationType.REMOVE:
-                for move in self.__output_bulk_remove(current_ptr, target_ptr, tokens, min_moves):
+                for move in self.__output_bulk_remove(current_ptr, target_ptr, tokens, min_moves, restricted_only):
                     yield move
             case OperationType.REPLACE:
-                for move in self.__output_bulk_replace(current_ptr, target_ptr, tokens, min_moves):
+                for move in self.__output_bulk_replace(current_ptr, target_ptr, tokens, min_moves, restricted_only):
                     yield move
             case OperationType.ADD:
-                for move in self.__output_bulk_add(current_ptr, target_ptr, tokens, min_moves):
+                for move in self.__output_bulk_add(current_ptr, target_ptr, tokens, min_moves, restricted_only):
                     yield move
 
-    def __output_bulk_add(self, current_ptr, target_ptr, tokens, min_moves):
+    def __output_bulk_add(self, current_ptr, target_ptr, tokens, min_moves, restricted_only):
         group = JsonMoveGroup()
         for key in target_ptr:
-            if current_ptr.get(key) is None and not self.__restricted_key(tokens, key):
+            if current_ptr.get(key) is None and not self.__restricted_key(tokens, key, invert=restricted_only):
                 tokens.append(key)
                 group.append(JsonMove(self.diff, OperationType.ADD, tokens, tokens))
                 tokens.pop()
@@ -1508,10 +1529,10 @@ class BulkLowLevelMoveGenerator:
         if len(group) >= min_moves:
             yield group
 
-    def __output_bulk_remove(self, current_ptr, target_ptr, tokens, min_moves):
+    def __output_bulk_remove(self, current_ptr, target_ptr, tokens, min_moves, restricted_only):
         group = JsonMoveGroup()
         for key in current_ptr:
-            if target_ptr.get(key) is None and not self.__restricted_key(tokens, key):
+            if target_ptr.get(key) is None and not self.__restricted_key(tokens, key, invert=restricted_only):
                 tokens.append(key)
                 group.append(JsonMove(self.diff, OperationType.REMOVE, tokens))
                 tokens.pop()
@@ -1520,11 +1541,12 @@ class BulkLowLevelMoveGenerator:
         if len(group) >= min_moves:
             yield group
 
-    def __output_bulk_replace(self, current_ptr, target_ptr, tokens, min_moves):
+    def __output_bulk_replace(self, current_ptr, target_ptr, tokens, min_moves, restricted_only):
         group = JsonMoveGroup()
         for key in current_ptr:
             target_val = target_ptr.get(key)
-            if target_val is not None and target_val != current_ptr.get(key) and not self.__restricted_key(tokens, key):
+            if (target_val is not None and target_val != current_ptr.get(key) and
+                not self.__restricted_key(tokens, key, invert=restricted_only)):
                 tokens.append(key)
                 group.append(JsonMove(self.diff, OperationType.REPLACE, tokens, tokens))
                 tokens.pop()
