@@ -5134,7 +5134,6 @@ This command is to display the link-training status of the selected interfaces. 
     Ethernet8      trained          on      up       up
   ```
 
-=======
 **show interfaces flap**
 
 The show interfaces flap command provides detailed insights into interface events, including the timestamp of the last link down event and the total flap count (number of times the link has gone up and down). This helps in diagnosing stability and connectivity issues.
