@@ -16,7 +16,7 @@ def format_attr_value(entry, attr):
         attr (Dict): Attribute metadata.
 
     Returns:
-        str: fomatted attribute value.
+        str: formatted attribute value.
     """
 
     if attr["is-leaf-list"]:
@@ -32,7 +32,7 @@ def format_group_value(entry, attrs):
         attrs (List[Dict]): Attributes metadata that belongs to the same group.
 
     Returns:
-        str: fomatted group attributes.
+        str: formatted group attributes.
     """
 
     data = []
@@ -51,7 +51,6 @@ def FG_NHG(db):
 
     header = [
         "NAME",
-
         "BUCKET SIZE",
         "MATCH MODE",
         "MAX NEXT HOPS",
@@ -101,9 +100,7 @@ def FG_NHG_PREFIX(db):
 
     header = [
         "IP PREFIX",
-
-        "FG NHG",
-
+        "FG NHG"
     ]
 
     body = []
@@ -136,11 +133,9 @@ def FG_NHG_MEMBER(db):
 
     header = [
         "NEXT HOP IP",
-
         "FG NHG",
         "BANK",
-        "LINK",
-
+        "LINK"
     ]
 
     body = []
@@ -184,15 +179,8 @@ def register(cli):
         Exception: when root CLI already has a command
                    we are trying to register.
     """
-    cli_node = FG_NHG
-    if cli_node.name in cli.commands:
-        raise Exception(f"{cli_node.name} already exists in CLI")
-    cli.add_command(FG_NHG)
-    cli_node = FG_NHG_PREFIX
-    if cli_node.name in cli.commands:
-        raise Exception(f"{cli_node.name} already exists in CLI")
-    cli.add_command(FG_NHG_PREFIX)
-    cli_node = FG_NHG_MEMBER
-    if cli_node.name in cli.commands:
-        raise Exception(f"{cli_node.name} already exists in CLI")
-    cli.add_command(FG_NHG_MEMBER)
+    cli_nodes = [FG_NHG, FG_NHG_PREFIX, FG_NHG_MEMBER]
+    for cli_node in cli_nodes:
+        if cli_node.name in cli.commands:
+            raise Exception(f"{cli_node.name} already exists in CLI")
+        cli.add_command(cli_node)

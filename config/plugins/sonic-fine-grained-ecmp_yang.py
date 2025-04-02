@@ -507,15 +507,8 @@ def register(cli):
         Exception: when root CLI already has a command
                    we are trying to register.
     """
-    cli_node = FG_NHG
-    if cli_node.name in cli.commands:
-        raise Exception(f"{cli_node.name} already exists in CLI")
-    cli.add_command(FG_NHG)
-    cli_node = FG_NHG_PREFIX
-    if cli_node.name in cli.commands:
-        raise Exception(f"{cli_node.name} already exists in CLI")
-    cli.add_command(FG_NHG_PREFIX)
-    cli_node = FG_NHG_MEMBER
-    if cli_node.name in cli.commands:
-        raise Exception(f"{cli_node.name} already exists in CLI")
-    cli.add_command(FG_NHG_MEMBER)
+    cli_nodes = [FG_NHG, FG_NHG_PREFIX, FG_NHG_MEMBER]
+    for cli_node in cli_nodes:
+        if cli_node.name in cli.commands:
+            raise Exception(f"{cli_node.name} already exists in CLI")
+        cli.add_command(cli_node)
