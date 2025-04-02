@@ -2126,6 +2126,57 @@ class TestMuxcable(object):
         assert result.output == show_muxcable_resetcause_expected_port_output_json
 
 
+    def test_config_muxcable_reset_heartbeat_suspend_all(self):
+        runner = CliRunner()
+        db = Db()
+
+        os.environ['SONIC_CLI_IFACE_MODE'] = "alias"
+        result = runner.invoke(config.config.commands["muxcable"].commands["reset-heartbeat-suspend"], ["all"], obj=db)
+        os.environ['SONIC_CLI_IFACE_MODE'] = "default"
+
+        assert result.exit_code == 0
+        assert result.output == "Success in resetting heartbeat suspend for mux ports: Ethernet0, Ethernet4, Ethernet8, Ethernet12, Ethernet16, Ethernet28\n"
+
+
+    @mock.patch('sonic_platform_base.sonic_sfp.sfputilhelper.SfpUtilHelper.get_asic_id_for_logical_port', mock.MagicMock(return_value=0))
+    def test_config_muxcable_reset_heartbeat_suspend_active_standby_port(self):
+        runner = CliRunner()
+        db = Db()
+
+        os.environ['SONIC_CLI_IFACE_MODE'] = "alias"
+        result = runner.invoke(config.config.commands["muxcable"].commands["reset-heartbeat-suspend"], ["Ethernet28"], obj=db)
+        os.environ['SONIC_CLI_IFACE_MODE'] = "default"
+
+        assert result.exit_code == 0
+        assert result.output == "Success in resetting heartbeat suspend for mux ports: Ethernet28\n"
+
+
+    @mock.patch('sonic_platform_base.sonic_sfp.sfputilhelper.SfpUtilHelper.get_asic_id_for_logical_port', mock.MagicMock(return_value=0))
+    def test_config_muxcable_reset_heartbeat_suspend_active_active_port(self):
+        runner = CliRunner()
+        db = Db()
+
+        os.environ['SONIC_CLI_IFACE_MODE'] = "alias"
+        result = runner.invoke(config.config.commands["muxcable"].commands["reset-heartbeat-suspend"], ["Ethernet32"], obj=db)
+        os.environ['SONIC_CLI_IFACE_MODE'] = "default"
+
+        assert result.exit_code == 1
+        assert result.output == "Got invalid port Ethernet32, can't reset heartbeat suspend on active-active mux port\n"
+
+
+    @mock.patch('sonic_platform_base.sonic_sfp.sfputilhelper.SfpUtilHelper.get_asic_id_for_logical_port', mock.MagicMock(return_value=0))
+    def test_config_muxcable_reset_heartbeat_suspend_invalid_port(self):
+        runner = CliRunner()
+        db = Db()
+
+        os.environ['SONIC_CLI_IFACE_MODE'] = "alias"
+        result = runner.invoke(config.config.commands["muxcable"].commands["reset-heartbeat-suspend"], ["Ethernet40"], obj=db)
+        os.environ['SONIC_CLI_IFACE_MODE'] = "default"
+
+        assert result.exit_code == 1
+        assert result.output == "Got invalid port Ethernet40, can't reset heartbeat suspend'\n"
+
+
     @classmethod
     def teardown_class(cls):
         os.environ['UTILITIES_UNIT_TESTING'] = "0"

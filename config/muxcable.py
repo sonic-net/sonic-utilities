@@ -5,6 +5,7 @@ import time
 
 import click
 import re
+from natsort import natsorted
 import utilities_common.cli as clicommon
 from sonic_py_common import multi_asic
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
@@ -1297,6 +1298,7 @@ def reset_heartbeat_suspend(db, port):
         mux_linkmgrd_tables[asic_index] = config_dbs[asic_index].get_table("MUX_LINKMGR")
         mux_config_tables[asic_index] = config_dbs[asic_index].get_table("MUX_CABLE")
 
+    mux_ports = []
     if port == "all":
         for asic_index, mux_config_table in mux_config_tables.items():
             config_db = config_dbs[asic_index]
@@ -1327,13 +1329,12 @@ def reset_heartbeat_suspend(db, port):
             if port not in mux_config_table:
                 click.echo("Got invalid port {}, can't reset heartbeat suspend'".format(port))
                 sys.exit(CONFIG_FAIL)
-            else:
-                if mux_config_table[port].get("cable_type", "active-standby") != "active-standby":
-                    click.echo(
-                        "Got invalid port {}, can't reset heartbeat suspend on active-active mux port".format(port)
-                    )
-                    sys.exit(CONFIG_FAIL)
-
+            elif mux_config_table[port].get("cable_type", "active-standby") != "active-standby":
+                click.echo(
+                    "Got invalid port {}, can't reset heartbeat suspend on active-active mux port".format(port)
+                )
+                sys.exit(CONFIG_FAIL)
+            mux_ports.append(port)
             # trigger one-shot heartbeat suspend reset
             config_db.mod_entry("MUX_LINKMGR", "LINK_PROBER", {"reset_suspend_timer": port})
             # restore config db to the original
@@ -1341,3 +1342,10 @@ def reset_heartbeat_suspend(db, port):
         else:
             click.echo("Got invalid asic index for port {}, can't reset heartbeat suspend'".format(port))
             sys.exit(CONFIG_FAIL)
+
+    if not mux_ports:
+        click.echo("No mux ports found to reset heartbeat suspend")
+        sys.exit(CONFIG_FAIL)
+
+    mux_ports = natsorted(mux_ports)
+    click.echo("Success in resetting heartbeat suspend for mux ports: {}".format(", ".join(mux_ports)))
