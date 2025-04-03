@@ -435,9 +435,7 @@ def is_interface_bind_to_vrf(config_db, interface_name):
     if table_name == "":
         return False
     entry = config_db.get_entry(table_name, interface_name)
-    if entry and entry.get("vrf_name"):
-        return True
-    elif entry and entry.get("vnet_name"):
+    if entry and (entry.get("vrf_name") or entry.get("vnet_name")):
         return True
     return False
 

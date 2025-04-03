@@ -11770,6 +11770,8 @@ This command displays vnet interfaces information about all the vnets configured
   -----------  ------------
   Vnet_2000    Ethernet1
   Vnet_3000    Vlan2000
+  Vnet_1000    PortChannel0002
+  Vnet_5000    Po0002.101
   ```
 
 **show vnet neighbors**

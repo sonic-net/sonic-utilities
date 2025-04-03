@@ -11,6 +11,7 @@ import threading
 DEFAULT_NAMESPACE = ''
 test_path = os.path.dirname(os.path.abspath(__file__))
 mock_db_path = os.path.join(test_path, "vrf_input")
+mock_db_path_vnet = os.path.join(test_path, "vnet_input")
 
 class TestShowVrf(object):
     @classmethod
@@ -209,6 +210,156 @@ Vrf103  Ethernet4
         assert result.exit_code == 0
         assert result.output == expected_output
 
+    def test_vnet_bind_unbind(self):
+        from .mock_tables import dbconnector
+        jsonfile_config = os.path.join(mock_db_path_vnet, "config_db")
+        dbconnector.dedicated_dbs['CONFIG_DB'] = jsonfile_config
+        runner = CliRunner()
+        db = Db()
+        expected_output = """\
+vnet name    interfaces
+-----------  -------------------------------
+Vnet_103     Ethernet4,Loopback0,Po0002.101
+Vnet_102     Eth36.10,PortChannel0002,Vlan40
+Vnet_101     Ethernet0.10
+"""
+
+        result = runner.invoke(show.cli.commands['vnet'].commands['interfaces'], [], obj=db)
+        dbconnector.dedicated_dbs = {}
+        assert result.exit_code == 0
+        assert result.output == expected_output
+
+        vnet_obj = {'config_db':db.cfgdb, 'namespace':db.db.namespace}
+
+        expected_output_unbind = "Interface Ethernet4 IP disabled and address(es) removed due to unbinding VRF.\n"
+        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["unbind"], ["Ethernet4"], obj=vnet_obj)
+
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert 'Ethernet4' not in db.cfgdb.get_table('INTERFACE')
+        assert result.output == expected_output_unbind
+
+        expected_output_unbind = "Interface Loopback0 IP disabled and address(es) removed due to unbinding VRF.\n"
+
+        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["unbind"], ["Loopback0"], obj=vnet_obj)
+
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert 'Loopback0' not in db.cfgdb.get_table('LOOPBACK_INTERFACE')
+        assert result.output == expected_output_unbind
+
+        expected_output_unbind = "Interface Vlan40 IP disabled and address(es) removed due to unbinding VRF.\n"
+
+        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["unbind"], ["Vlan40"], obj=vnet_obj)
+
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert 'Vlan40' not in db.cfgdb.get_table('VLAN_INTERFACE')
+        assert result.output == expected_output_unbind
+
+        expected_output_unbind = "Interface PortChannel0002 IP disabled and address(es) removed due to unbinding VRF.\n"
+
+        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["unbind"], ["PortChannel0002"], obj=vnet_obj)
+
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert 'PortChannel002' not in db.cfgdb.get_table('PORTCHANNEL_INTERFACE')
+        assert result.output == expected_output_unbind
+
+        vrf_obj = {'config_db':db.cfgdb, 'namespace':DEFAULT_NAMESPACE}
+        state_db = SonicV2Connector(use_unix_socket_path=True, namespace='')
+        state_db.connect(state_db.STATE_DB, False)
+        _hash = "INTERFACE_TABLE|Eth36.10"
+        state_db.set(db.db.STATE_DB, _hash, "state", "ok")
+        vrf_obj['state_db'] = state_db
+
+        expected_output_unbind = "Interface Eth36.10 IP disabled and address(es) removed due to unbinding VRF.\n"
+        T1 = threading.Thread( target = self.update_statedb, args = (state_db, db.db.STATE_DB, _hash))  
+        T1.start()
+        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["unbind"], ["Eth36.10"], obj=vnet_obj)
+        T1.join()
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert ('vnet_name', 'Vnet_102') not in db.cfgdb.get_table('VLAN_SUB_INTERFACE')['Eth36.10']
+        assert result.output == expected_output_unbind
+
+        vrf_obj = {'config_db':db.cfgdb, 'namespace':DEFAULT_NAMESPACE}
+
+        expected_output_unbind = "Interface Ethernet0.10 IP disabled and address(es) removed due to unbinding VRF.\n"
+
+        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["unbind"], ["Ethernet0.10"], obj=vnet_obj)
+
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert ('vnet_name', 'Vnet_101') not in db.cfgdb.get_table('VLAN_SUB_INTERFACE')['Ethernet0.10']
+        assert result.output == expected_output_unbind
+
+        expected_output_unbind = "Interface Po0002.101 IP disabled and address(es) removed due to unbinding VRF.\n"
+
+        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["unbind"], ["Po0002.101"], obj=vnet_obj)
+
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert ('vnet_name', 'Vnet_103') not in db.cfgdb.get_table('VLAN_SUB_INTERFACE')['Po0002.101']
+        assert result.output == expected_output_unbind
+
+        expected_output_bind = "Interface Ethernet0 IP disabled and address(es) removed due to binding VRF Vnet_1.\n"
+        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["bind"], ["Ethernet0", "Vnet_1"], obj=vnet_obj)
+        assert result.exit_code == 0
+        assert result.output == expected_output_bind
+        assert ('Vnet_1') in db.cfgdb.get_table('INTERFACE')['Ethernet0']['vnet_name']
+
+        expected_output_bind = "Interface Loopback0 IP disabled and address(es) removed due to binding VRF Vnet_101.\n"
+        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["bind"], ["Loopback0", "Vnet_101"], obj=vnet_obj)
+        assert result.exit_code == 0
+        assert result.output == expected_output_bind
+        assert ('Vnet_101') in db.cfgdb.get_table('LOOPBACK_INTERFACE')['Loopback0']['vnet_name']
+
+        expected_output_bind = "Interface Vlan40 IP disabled and address(es) removed due to binding VRF Vnet_101.\n"
+        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["bind"], ["Vlan40", "Vnet_101"], obj=vnet_obj)
+        assert result.exit_code == 0
+        assert result.output == expected_output_bind
+        assert ('Vnet_101') in db.cfgdb.get_table('VLAN_INTERFACE')['Vlan40']['vnet_name']
+
+        expected_output_bind = "Interface PortChannel0002 IP disabled and address(es) removed due to binding VRF Vnet_101.\n"
+        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["bind"], ["PortChannel0002", "Vnet_101"], obj=vnet_obj)
+        assert result.exit_code == 0
+        assert result.output == expected_output_bind
+        assert ('Vnet_101') in db.cfgdb.get_table('PORTCHANNEL_INTERFACE')['PortChannel0002']['vnet_name']
+
+        expected_output_bind = "Interface Eth36.10 IP disabled and address(es) removed due to binding VRF Vnet_102.\n"
+        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["bind"], ["Eth36.10", "Vnet_102"], obj=vnet_obj)
+        assert result.exit_code == 0
+        assert result.output == expected_output_bind
+        assert ('Vnet_102') in db.cfgdb.get_table('VLAN_SUB_INTERFACE')['Eth36.10']['vnet_name']
+
+        expected_output_bind = "Interface Ethernet0.10 IP disabled and address(es) removed due to binding VRF Vnet_103.\n"
+        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["bind"], ["Ethernet0.10", "Vnet_103"], obj=vnet_obj)
+        assert result.exit_code == 0
+        assert result.output == expected_output_bind
+        assert ('Vnet_103') in db.cfgdb.get_table('VLAN_SUB_INTERFACE')['Ethernet0.10']['vnet_name']
+
+        expected_output_bind = "Interface Po0002.101 IP disabled and address(es) removed due to binding VRF Vnet_1.\n"
+        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["bind"], ["Po0002.101", "Vnet_1"], obj=vnet_obj)
+        assert result.exit_code == 0
+        assert result.output == expected_output_bind
+        assert ('Vnet_1') in db.cfgdb.get_table('VLAN_SUB_INTERFACE')['Po0002.101']['vnet_name']
+
+        jsonfile_config = os.path.join(mock_db_path_vnet, "config_db")
+        dbconnector.dedicated_dbs['CONFIG_DB'] = jsonfile_config
+
+        expected_output = """\
+vnet name    interfaces
+-----------  -------------------------------
+Vnet_103     Ethernet4,Loopback0,Po0002.101
+Vnet_102     Eth36.10,PortChannel0002,Vlan40
+Vnet_101     Ethernet0.10
+"""
+        result = runner.invoke(show.cli.commands["vnet"].commands["interfaces"], [], obj=db)
+        dbconnector.dedicated_dbs = {}
+        assert result.exit_code == 0
+        assert result.output == expected_output
+
     def test_vrf_add_del(self):
         runner = CliRunner()
         db = Db()
@@ -322,9 +473,9 @@ Error: 'vnet_name' must begin with 'Vnet_' .
 
         # Test vnet del with long vnet name
         expected_output_del = "'vnet_name' length should not exceed 200 characters"
-        result = runner.invoke(config.config.commands["vnet"].commands["del"], ["Vnet_lwdabvkkietwdkskeahlujbtzkeiqwaxhbmerrqdvkehmfdwwicvssddksofzwvxslakiveoyzduquqjobdpnbzksabyhzlnlzhqybhxamqjfmxpllrmxfjiyukaxmpjfukgyceoyldxgwhrltrevamyvbrgqbhiblssuissxlzsiooprqqesrbgkcqtpecpzbwuqbueoxsicaanaeutyhoqlohcidpgpuyaxidtkjaufryazbdlofibrofxlschycithrrasptsbeygdurgvtboqmkvvxvtfoczjdqfdchmzrsphysiwwwajjwshhpqssniwgtsxkacbthxzvtjhlbwanseaburmkgsamtqwbnpplvachprdzjnontiskwaecetnebozxxfuezcqymivaemiouyrrbeczglhcpcxajvnouwpoddzxqvuatakdwtyxmwjhdefocsxbthzhwldpbfsjesvwypqorvjmkfitjnvprhxgaxwthzyayasjgtznpytiskjikoxezkftmggsoihyzpnvfqpdcsipbwlsylexnenosekafwxrrzuzljtmkdatyguwzebfqnozwnchdvumwbiisxdtwaifqtxoxmwnyqrlbtaqsiyulilxhfohygzkewsrqujnxofdriumomdosqzpiipscpjdhqrxooqfhysrnxwewukjtebxahdsuxoqpngwcvypwlqbrfkzabnvpfcnhpcazrgogxuuvlmomzqonresjvrtyahzogzgaojrsvvwchsthxwlnhypsgomhriryodlaanqlenfkqarmuogmxmjiwpeiwqsvvrshbytfwasciafaovcypfbjjhyzivanmyxingdclbrsrleieqhvysblutyinythuaxlbcibgdgjkqgapedmiosjgsvddqlfuahoqxhczirpqwfseawhwlwrupaormdmbwigghkbpccbzjrhefrcdeqkvgmubxxnkgbvjpgpn"], obj=vnet_obj)
+        result = runner.invoke(config.config.commands["vnet"].commands["del"], ["Vnet_ypfbjjhyzivaythuaxlbcibgdgjkqgapedmiosjgsvddqaalformdmbwigddddddddghkbpccbzjrhefrcdeqkvgmubxxnkgbvjpgpnypfbjjhyzivaythuaxlbcibgdgjkqgapedmiosjgsvddqlformdmbwigghkbpccbzjrhefrcdeqkvgmubxxnkgbvjpgpn"], obj=vnet_obj)
         assert result.exit_code != 0
-        assert ('Vnet_lwdabvkkietwdkskeahlujbtzkeiqwaxhbmerrqdvkehmfdwwicvssddksofzwvxslakiveoyzduquqjobdpnbzksabyhzlnlzhqybhxamqjfmxpllrmxfjiyukaxmpjfukgyceoyldxgwhrltrevamyvbrgqbhiblssuissxlzsiooprqqesrbgkcqtpecpzbwuqbueoxsicaanaeutyhoqlohcidpgpuyaxidtkjaufryazbdlofibrofxlschycithrrasptsbeygdurgvtboqmkvvxvtfoczjdqfdchmzrsphysiwwwajjwshhpqssniwgtsxkacbthxzvtjhlbwanseaburmkgsamtqwbnpplvachprdzjnontiskwaecetnebozxxfuezcqymivaemiouyrrbeczglhcpcxajvnouwpoddzxqvuatakdwtyxmwjhdefocsxbthzhwldpbfsjesvwypqorvjmkfitjnvprhxgaxwthzyayasjgtznpytiskjikoxezkftmggsoihyzpnvfqpdcsipbwlsylexnenosekafwxrrzuzljtmkdatyguwzebfqnozwnchdvumwbiisxdtwaifqtxoxmwnyqrlbtaqsiyulilxhfohygzkewsrqujnxofdriumomdosqzpiipscpjdhqrxooqfhysrnxwewukjtebxahdsuxoqpngwcvypwlqbrfkzabnvpfcnhpcazrgogxuuvlmomzqonresjvrtyahzogzgaojrsvvwchsthxwlnhypsgomhriryodlaanqlenfkqarmuogmxmjiwpeiwqsvvrshbytfwasciafaovcypfbjjhyzivanmyxingdclbrsrleieqhvysblutyinythuaxlbcibgdgjkqgapedmiosjgsvddqlfuahoqxhczirpqwfseawhwlwrupaormdmbwigghkbpccbzjrhefrcdeqkvgmubxxnkgbvjpgpn') not in db.cfgdb.get_table('VNET')
+        assert ('Vnet_ypfbjjhyzivaythuaxlbcibgdgjkqgapedmiosjgsvddqaalformdmbwigddddddddghkbpccbzjrhefrcdeqkvgmubxxnkgbvjpgpnypfbjjhyzivaythuaxlbcibgdgjkqgapedmiosjgsvddqlformdmbwigghkbpccbzjrhefrcdeqkvgmubxxnkgbvjpgpn') not in db.cfgdb.get_table('VNET')
         assert expected_output_del in result.output
 
         # Test vnet del 
