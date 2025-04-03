@@ -1488,6 +1488,8 @@ class TestReloadConfig(object):
         self.add_sysinfo_to_cfg_file()
 
         def read_json_file_side_effect(filename):
+            with open(filename, "w") as f:
+                f.write('{}')
             return {}
 
         with mock.patch("utilities_common.cli.run_command",
@@ -1516,6 +1518,12 @@ class TestReloadConfig(object):
             assert result.exit_code == 0
             assert "\n".join([l.rstrip() for l in result.output.split('\n')]) \
                 == RELOAD_MASIC_CONFIG_DB_OUTPUT.format(config.SYSTEM_RELOAD_LOCK)
+
+            for f in [self.dummy_cfg_file_localhost,
+                      self.dummy_cfg_file_asic0,
+                      self.dummy_cfg_file_asic1]:
+                if os.path.exists(f):
+                    os.remove(f)
 
     def test_reload_yang_config(self, get_cmd_module,
                                         setup_single_broadcom_asic):
