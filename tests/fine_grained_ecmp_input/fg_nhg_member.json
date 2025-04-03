@@ -1,0 +1,14 @@
+{
+    "FG_NHG|fg_grp_1": {
+        "bucket_size": "30",
+        "match_mode": "nexthop-based"
+    },
+    "FG_NHG_MEMBER|10.10.20.1": {
+        "FG_NHG": "fg_grp_1",
+        "bank": "0"
+    },
+    "FG_NHG_MEMBER|10.10.20.2": {
+        "FG_NHG": "fg_grp_1",
+        "bank": "1"
+    }
+}
