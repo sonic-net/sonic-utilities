@@ -654,7 +654,7 @@ class ConfigMgmtDPB(ConfigMgmt):
             # if uniqueKeys are needed, merge rest of the keys of D2 in D1
             if uniqueKeys:
                 D1.update(D2)
-        except Exce as e:
+        except Exception as e:
             self.sysLog(doPrint=True, logLevel=syslog.LOG_ERR, \
                 msg="Merge Config failed")
             self.sysLog(doPrint=True, logLevel=syslog.LOG_ERR, msg=str(e))

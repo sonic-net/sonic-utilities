@@ -2924,6 +2924,22 @@ class TestConfigCableLength(object):
         importlib.reload(config.main)
 
     @patch("config.main.is_dynamic_buffer_enabled", mock.Mock(return_value=True))
+    @patch("config.main.ConfigDBConnector.get_entry", mock.Mock(return_value="Port Info"))
+    @patch("config.main.ConfigDBConnector.get_keys", mock.Mock(return_value=["sample_key"]))
+    def test_add_cablelength_with_valid_name_valid_length(self):
+        config.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands["interface"].commands["cable-length"],
+                               ["Ethernet0", "40m"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_table('CABLE_LENGTH') == {'sample_key': {'Ethernet0': '40m'}}
+
+    @patch("config.main.is_dynamic_buffer_enabled", mock.Mock(return_value=True))
     @patch("config.main.ConfigDBConnector.get_entry", mock.Mock(return_value=False))
     def test_add_cablelength_with_nonexistent_name_valid_length(self):
         config.ADHOC_VALIDATION = True

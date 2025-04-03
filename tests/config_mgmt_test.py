@@ -6,6 +6,7 @@ from unittest import mock, TestCase
 
 import pytest
 from utilities_common.general import load_module_from_source
+import syslog
 
 # Import file under test i.e., config_mgmt.py
 config_mgmt_py_path = os.path.join(os.path.dirname(__file__), '..', 'config', 'config_mgmt.py')
@@ -64,6 +65,39 @@ class TestConfigMgmt(TestCase):
             # only ports must be chosen
             len(out['ACL_TABLE'][k]) == 1
         return
+
+    def test_ConfigMgmtDPB_merge_config_with_invalid_config(self):
+        # create ARGS
+        curConfig = deepcopy(configDbJson)
+        self.writeJson(curConfig, config_mgmt.CONFIG_DB_JSON_FILE)
+        cmdpb = config_mgmt.ConfigMgmtDPB(source=config_mgmt.CONFIG_DB_JSON_FILE)
+        dPorts, pJson = self.generate_args(portIdx=8, laneIdx=73,
+                                           curMode='1x100G', newMode='4x25G')
+
+        # Add invalid default_configdb_json
+        invalid_default_config_json = {
+            "PORT": {
+                'Ethernet11': {
+                    'speed': {
+                        'speed': '25000',
+                        'lanes': '75'
+                    }
+                }
+            }
+        }
+        self.writeJson(invalid_default_config_json,
+                       config_mgmt.DEFAULT_CONFIG_DB_JSON_FILE)
+
+        # Try to breakout
+        cmdpb.sysLog = mock.MagicMock(side_effect=cmdpb.sysLog)
+        deps, ret = cmdpb.breakOutPort(delPorts=dPorts, portJson=pJson,
+                                       force=True, loadDefConfig=True)
+
+        # Expected merge failed
+        cmdpb.sysLog.assert_any_call(doPrint=True, logLevel=syslog.LOG_ERR, msg="Merge Config failed")
+        cmdpb.sysLog.assert_any_call(doPrint=True, logLevel=syslog.LOG_ERR, msg="Port Addition Failed")
+        assert deps is None
+        assert ret is False
 
     def test_upper_case_mac_fix(self):
         '''
