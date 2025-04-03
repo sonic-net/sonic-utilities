@@ -2,9 +2,12 @@
 
 import contextlib
 import os
+import glob
 import sys
+import shutil
 import stat
 import subprocess
+import tempfile
 from collections import defaultdict
 from typing import Dict, Type, List
 
@@ -26,11 +29,15 @@ from sonic_package_manager.service_creator.feature import FeatureRegistry
 from sonic_package_manager.service_creator.sonic_db import SonicDB
 from sonic_package_manager.service_creator.utils import in_chroot
 
+from sonic_py_common import device_info
+
 
 SERVICE_FILE_TEMPLATE = 'sonic.service.j2'
-TIMER_UNIT_TEMPLATE = 'timer.unit.j2'
 
 SYSTEMD_LOCATION = '/usr/lib/systemd/system'
+ETC_SYSTEMD_LOCATION = '/etc/systemd/system'
+
+GENERATED_SERVICES_CONF_FILE = '/etc/sonic/generated_services.conf'
 
 SERVICE_MGMT_SCRIPT_TEMPLATE = 'service_mgmt.sh.j2'
 SERVICE_MGMT_SCRIPT_LOCATION = '/usr/local/bin'
@@ -88,17 +95,29 @@ def set_executable_bit(filepath):
     os.chmod(filepath, st.st_mode | stat.S_IEXEC)
 
 
-def remove_if_exists(path):
+def remove_file(path):
     """ Remove filepath if it exists """
 
-    if not os.path.exists(path):
-        return
+    try:
+        os.remove(path)
+        log.info(f'removed {path}')
+    except FileNotFoundError:
+        pass
 
-    os.remove(path)
-    log.info(f'removed {path}')
+
+def remove_dir(path):
+    """ Remove filepath if it exists """
+
+    try:
+        shutil.rmtree(path)
+        log.info(f'removed {path}')
+    except FileNotFoundError:
+        pass
+
 
 def is_list_of_strings(command):
     return isinstance(command, list) and all(isinstance(item, str) for item in command)
+
 
 def run_command(command: List[str]):
     """ Run arbitrary bash command.
@@ -163,6 +182,7 @@ class ServiceCreator:
             self.generate_service_mgmt(package)
             self.update_dependent_list_file(package)
             self.generate_systemd_service(package)
+            self.update_generated_services_conf_file(package)
             self.generate_dump_script(package)
             self.generate_service_reconciliation_file(package)
             self.install_yang_module(package)
@@ -192,13 +212,24 @@ class ServiceCreator:
         """
 
         name = package.manifest['service']['name']
-        remove_if_exists(os.path.join(SYSTEMD_LOCATION, f'{name}.service'))
-        remove_if_exists(os.path.join(SYSTEMD_LOCATION, f'{name}@.service'))
-        remove_if_exists(os.path.join(SERVICE_MGMT_SCRIPT_LOCATION, f'{name}.sh'))
-        remove_if_exists(os.path.join(DOCKER_CTL_SCRIPT_LOCATION, f'{name}.sh'))
-        remove_if_exists(os.path.join(DEBUG_DUMP_SCRIPT_LOCATION, f'{name}'))
-        remove_if_exists(os.path.join(ETC_SONIC_PATH, f'{name}_reconcile'))
+        remove_file(os.path.join(SYSTEMD_LOCATION, f'{name}.service'))
+        remove_file(os.path.join(SYSTEMD_LOCATION, f'{name}@.service'))
+        remove_file(os.path.join(SERVICE_MGMT_SCRIPT_LOCATION, f'{name}.sh'))
+        remove_file(os.path.join(DOCKER_CTL_SCRIPT_LOCATION, f'{name}.sh'))
+        remove_file(os.path.join(DEBUG_DUMP_SCRIPT_LOCATION, f'{name}'))
+        remove_file(os.path.join(ETC_SONIC_PATH, f'{name}_reconcile'))
+
+        # remove symlinks and configuration directories created by featured
+        remove_file(os.path.join(ETC_SYSTEMD_LOCATION, f'{name}.service'))
+        for unit_file in glob.glob(os.path.join(ETC_SYSTEMD_LOCATION, f'{name}@*.service')):
+            remove_file(unit_file)
+
+        remove_dir(os.path.join(ETC_SYSTEMD_LOCATION, f'{name}.service.d'))
+        for unit_dir in glob.glob(os.path.join(ETC_SYSTEMD_LOCATION, f'{name}@*.service.d')):
+            remove_dir(unit_dir)
+
         self.update_dependent_list_file(package, remove=True)
+        self.update_generated_services_conf_file(package, remove=True)
 
         if deregister_feature and not keep_config:
             self.remove_config(package)
@@ -225,6 +256,9 @@ class ServiceCreator:
         script_path = os.path.join(DOCKER_CTL_SCRIPT_LOCATION, f'{name}.sh')
         script_template = get_tmpl_path(DOCKER_CTL_SCRIPT_TEMPLATE)
         run_opt = []
+        sonic_asic_platform = os.environ.get("CONFIGURED_PLATFORM")
+        if sonic_asic_platform is None:
+            sonic_asic_platform = device_info.get_platform_info().get('asic_type', None)
 
         if container_spec['privileged']:
             run_opt.append('--privileged')
@@ -248,7 +282,9 @@ class ServiceCreator:
         render_ctx = {
             'docker_container_name': name,
             'docker_image_id': image_id,
+            'docker_image_name': package.entry.repository,
             'docker_image_run_opt': run_opt,
+            'sonic_asic_platform': sonic_asic_platform
         }
         render_template(script_template, script_path, render_ctx, executable=True)
         log.info(f'generated {script_path}')
@@ -275,7 +311,7 @@ class ServiceCreator:
         log.info(f'generated {script_path}')
 
     def generate_systemd_service(self, package: Package):
-        """ Generates systemd service(s) file and timer(s) (if needed) for package.
+        """ Generates systemd service(s) file for package.
 
         Args:
             package: Package object to generate service for.
@@ -303,22 +339,36 @@ class ServiceCreator:
             render_template(template, output_file, template_vars)
             log.info(f'generated {output_file}')
 
-        if package.manifest['service']['delayed']:
-            template_vars = {
-                'source': get_tmpl_path(TIMER_UNIT_TEMPLATE),
-                'manifest': package.manifest.unmarshal(),
-                'multi_instance': False,
-            }
-            output_file = os.path.join(SYSTEMD_LOCATION, f'{name}.timer')
-            template = os.path.join(TEMPLATES_PATH, TIMER_UNIT_TEMPLATE)
-            render_template(template, output_file, template_vars)
-            log.info(f'generated {output_file}')
+    def update_generated_services_conf_file(self, package: Package, remove=False):
+        """ Updates generated_services.conf file.
 
-            if package.manifest['service']['asic-service']:
-                output_file = os.path.join(SYSTEMD_LOCATION, f'{name}@.timer')
-                template_vars['multi_instance'] = True
-                render_template(template, output_file, template_vars)
-                log.info(f'generated {output_file}')
+        Args:
+            package: Package to update generated_services.conf with.
+            remove: True if update for removal process.
+        Returns:
+            None.
+        """
+        name = package.manifest['service']['name']
+        asic_service= package.manifest['service']['asic-service']
+
+        with open(GENERATED_SERVICES_CONF_FILE, 'r') as generated_services_conf_file:
+            list_of_services = set(generated_services_conf_file.read().split())
+
+        if not remove:
+            list_of_services.add(f'{name}.service')
+            if asic_service:
+                list_of_services.add(f'{name}@.service')
+        else:
+            list_of_services.discard(f'{name}.service')
+            list_of_services.discard(f'{name}@.service')
+
+        # Write to tmp file and replace the original file with it
+        with tempfile.NamedTemporaryFile('w', delete=False) as tmp:
+            tmp.write('\n'.join(list_of_services))
+            tmp.write('\n')
+            tmp.flush()
+
+            shutil.move(tmp.name, GENERATED_SERVICES_CONF_FILE)
 
     def update_dependent_list_file(self, package: Package, remove=False):
         """ This function updates dependent list file for packages listed in "dependent-of"

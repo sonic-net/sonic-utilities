@@ -2,8 +2,10 @@ import os
 import sys
 import click
 import pytest
+import importlib
 import subprocess
 import show.main as show
+import utilities_common.bgp_util as bgp_util
 from unittest import mock
 from click.testing import CliRunner
 from utilities_common import constants
@@ -32,6 +34,12 @@ class TestShowRunAllCommands(object):
     def setup_class(cls):
         print("SETUP")
         os.environ["UTILITIES_UNIT_TESTING"] = "1"
+        cls._old_run_bgp_command = bgp_util.run_bgp_command
+        bgp_util.run_bgp_command = mock.MagicMock(
+            return_value=cls.mock_run_bgp_command())
+
+    def mock_run_bgp_command():
+        return ""
 
     def test_show_runningconfiguration_all_json_loads_failure(self):
         def get_cmd_output_side_effect(*args, **kwargs):
@@ -55,16 +63,63 @@ class TestShowRunAllCommands(object):
         with mock.patch('show.main.get_cmd_output',
                 mock.MagicMock(side_effect=get_cmd_output_side_effect)) as mock_get_cmd_output:
             result = CliRunner().invoke(show.cli.commands['runningconfiguration'].commands['all'], [])
-        assert mock_get_cmd_output.call_count == 2
+        assert result.exit_code == 0
+        assert mock_get_cmd_output.call_count == 1
         assert mock_get_cmd_output.call_args_list == [
-            call(['sonic-cfggen', '-d', '--print-data']),
-            call(['rvtysh', '-c', 'show running-config'])]
+            call(['sonic-cfggen', '-d', '--print-data'])]
 
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
+        bgp_util.run_bgp_command = cls._old_run_bgp_command
         os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
+
+
+class TestShowRunAllCommandsMasic(object):
+    @classmethod
+    def setup_class(cls):
+        print("SETUP")
+        os.environ['UTILITIES_UNIT_TESTING'] = "2"
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
+        cls._old_run_bgp_command = bgp_util.run_bgp_command
+        bgp_util.run_bgp_command = mock.MagicMock(
+            return_value=cls.mock_run_bgp_command())
+        # change to multi asic config
+        from .mock_tables import dbconnector
+        from .mock_tables import mock_multi_asic
+        importlib.reload(mock_multi_asic)
+        dbconnector.load_namespace_config()
+
+    def mock_run_bgp_command():
+        return ""
+
+    def test_show_runningconfiguration_all_masic(self):
+        def get_cmd_output_side_effect(*args, **kwargs):
+            return "{}", 0
+        with mock.patch('show.main.get_cmd_output',
+                mock.MagicMock(side_effect=get_cmd_output_side_effect)) as mock_get_cmd_output:
+            result = CliRunner().invoke(show.cli.commands['runningconfiguration'].commands['all'], [])
+        assert result.exit_code == 0
+        assert mock_get_cmd_output.call_count == 3
+        assert mock_get_cmd_output.call_args_list == [
+            call(['sonic-cfggen', '-d', '--print-data']),
+            call(['sonic-cfggen', '-d', '--print-data', '-n', 'asic0']),
+            call(['sonic-cfggen', '-d', '--print-data', '-n', 'asic1'])]
+
+    @classmethod
+    def teardown_class(cls):
+        print("TEARDOWN")
+        bgp_util.run_bgp_command = cls._old_run_bgp_command
+        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
+        os.environ["UTILITIES_UNIT_TESTING"] = "0"
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
+        # change back to single asic config
+        from .mock_tables import dbconnector
+        from .mock_tables import mock_single_asic
+        importlib.reload(mock_single_asic)
+        dbconnector.load_namespace_config()
+
 
 @patch('show.main.run_command')
 @pytest.mark.parametrize(
@@ -629,9 +684,15 @@ class TestShowPlatform(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['sudo', 'decode-syseeprom', '-d'], display_cmd=True)
 
+    @mock.patch('sonic_py_common.device_info.get_platform_json_data')
     @patch('utilities_common.cli.run_command')
     @patch('os.popen')
-    def test_ssdhealth(self, mock_popen, mock_run_command):
+    def test_ssdhealth(self, mock_popen, mock_run_command, mock_plat_json):
+        mock_plat_json.return_value = {
+            "chassis": {
+                 "name": "mock_platform"
+            }
+        }
         mock_popen.return_value.readline.return_value = '/dev/sda\n'
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['platform'].commands['ssdhealth'], ['--verbose', '--vendor'])
@@ -985,6 +1046,31 @@ class TestShow(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_with(['ztp', 'status', '--verbose'], display_cmd=True)
 
+    @patch('show.main.run_command')
+    def test_show_banner(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands['banner'])
+        assert result.exit_code == 0
+
+    @patch('show.main.run_command')
+    def test_show_ntp(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands['ntp'])
+        assert result.exit_code == 0
+        expected_calls = [call(['chronyc', '-n', 'tracking'], display_cmd=False),
+                          call(['chronyc', '-n', 'sources'], display_cmd=False)]
+        mock_run_command.assert_has_calls(expected_calls)
+
+    @patch('show.main.is_mgmt_vrf_enabled', MagicMock(return_value=True))
+    @patch('show.main.run_command')
+    def test_show_ntp_mgmt_vrf(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands['ntp'])
+        assert result.exit_code == 0
+        expected_calls = [call(['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'chronyc', '-n', 'tracking'], display_cmd=False),
+                          call(['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'chronyc', '-n', 'sources'], display_cmd=False)]
+        mock_run_command.assert_has_calls(expected_calls)
+
     def teardown(self):
         print('TEAR DOWN')
 
@@ -1008,6 +1094,20 @@ class TestShowRunningconfiguration(object):
 
         assert result.exit_code == 0
         assert '[1.1.1.1]' in result.output
+
+    @patch('builtins.open', mock_open(
+        read_data=open('tests/chrony.conf').read()))
+    def test_ntp(self):
+        runner = CliRunner()
+
+        result = runner.invoke(
+            show.cli.commands['runningconfiguration'].commands['ntp'])
+        print(result.exit_code)
+        print(result.output)
+
+        assert result.exit_code == 0
+        assert '10.1.1.1' in result.output
+        assert '10.22.1.12' in result.output
 
     @classmethod
     def teardown_class(cls):

@@ -14,16 +14,19 @@ import optparse
 import os
 import re
 import sys
+import errno
 
 import sonic_platform
 from sonic_platform_base.sonic_eeprom.eeprom_tlvinfo import TlvInfoDecoder
-from sonic_py_common import device_info
+from sonic_py_common import device_info, logger
 from swsscommon.swsscommon import SonicV2Connector
 from tabulate import tabulate
 
 
 EEPROM_INFO_TABLE = 'EEPROM_INFO'
+SYSLOG_IDENTIFIER = 'decode-syseeprom'
 
+log = logger.Logger(SYSLOG_IDENTIFIER)
 
 def instantiate_eeprom_object():
     eeprom = None
@@ -235,6 +238,12 @@ def main():
     platforms_without_eeprom_db = ['.*arista.*', '.*kvm.*']
     if any(re.match(p, platform) for p in platforms_without_eeprom_db):
         support_eeprom_db = False
+
+    # Currently, kvm does not support eeprom
+    platforms_without_eeprom = ['.*kvm.*']
+    if any(re.match(p, platform) for p in platforms_without_eeprom):
+        print('Platform {} does not support EEPROM'.format(platform))
+        return errno.ENODEV
 
     use_db = opts.db and support_eeprom_db
 

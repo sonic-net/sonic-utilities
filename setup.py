@@ -120,11 +120,14 @@ setup(
         'scripts/decode-syseeprom',
         'scripts/dropcheck',
         'scripts/disk_check.py',
+        'scripts/dpu-tty.py',
         'scripts/dropconfig',
         'scripts/dropstat',
         'scripts/dualtor_neighbor_check.py',
         'scripts/dump_nat_entries.py',
+        'scripts/debug_voq_chassis_packet_drops.sh',
         'scripts/ecnconfig',
+        'scripts/express-reboot',
         'scripts/fabricstat',
         'scripts/fanshow',
         'scripts/fast-reboot',
@@ -159,6 +162,7 @@ setup(
         'scripts/psushow',
         'scripts/queuestat',
         'scripts/reboot',
+        'scripts/reboot_smartswitch_helper',
         'scripts/route_check.py',
         'scripts/route_check_test.sh',
         'scripts/vnet_route_check.py',
@@ -187,7 +191,8 @@ setup(
         'scripts/verify_image_sign.sh',
         'scripts/verify_image_sign_common.sh',
         'scripts/check_db_integrity.py',
-        'scripts/sysreadyshow'
+        'scripts/sysreadyshow',
+        'scripts/wredstat'
     ],
     entry_points={
         'console_scripts': [
@@ -227,7 +232,7 @@ setup(
     install_requires=[
         'bcrypt==3.2.2',
         'click==7.0',
-        'cryptography==3.3.2',
+        'cryptography>=3.3.2',
         'urllib3>=2',
         'click-log>=0.3.2',
         'docker>=4.4.4',
@@ -235,6 +240,7 @@ setup(
         'filelock>=3.0.12',
         'enlighten>=1.8.0',
         'ipaddress>=1.0.23',
+        'protobuf',
         'jinja2>=2.11.3',
         'jsondiff>=1.2.0',
         'jsonpatch>=1.32.0',
@@ -247,13 +253,15 @@ setup(
         'pexpect>=4.8.0',
         'semantic-version>=2.8.5',
         'prettyprinter>=0.18.0',
-        'pyroute2>=0.5.14, <0.6.1',
-        'requests>=2.25.0',
-        'tabulate==0.8.2',
+        'pyroute2==0.7.12',
+        'requests>=2.25.0, <=2.31.0',
+        'tabulate==0.9.0',
         'toposort==1.6',
         'www-authenticate==0.9.2',
         'xmltodict==0.12.0',
         'lazy-object-proxy',
+        'six==1.16.0',
+        'scp==0.14.5',
     ] + sonic_dependencies,
     setup_requires= [
         'pytest-runner',
@@ -264,8 +272,17 @@ setup(
         'responses',
         'pytest',
         'mockredispy>=2.9.3',
-        'deepdiff==5.2.3'
+        'deepdiff==6.2.2'
     ],
+    extras_require = {
+        'testing': [
+            'pyfakefs',
+            'responses',
+            'pytest',
+            'mockredispy>=2.9.3',
+            'deepdiff==6.2.2'
+        ],
+    },
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Environment :: Console',

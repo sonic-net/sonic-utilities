@@ -3,6 +3,7 @@ import os
 
 import subprocess
 import click
+from utilities_common import constants
 import utilities_common.cli as clicommon
 import utilities_common.multi_asic as multi_asic_util
 from natsort import natsorted
@@ -18,8 +19,11 @@ from collections import OrderedDict
 
 HWSKU_JSON = 'hwsku.json'
 
+REDIS_HOSTIP = "127.0.0.1"
+
 # Read given JSON file
 def readJsonFile(fileName):
+
     try:
         with open(fileName) as f:
             result = json.load(f)
@@ -33,6 +37,7 @@ def readJsonFile(fileName):
         click.echo("{}\n{}".format(type(e), str(e)), err=True)
         raise click.Abort()
     return result
+
 
 def try_convert_interfacename_from_alias(ctx, interfacename):
     """try to convert interface name from alias"""
@@ -50,10 +55,13 @@ def try_convert_interfacename_from_alias(ctx, interfacename):
 #
 # 'interfaces' group ("show interfaces ...")
 #
+
+
 @click.group(cls=clicommon.AliasedGroup)
 def interfaces():
     """Show details of the network interfaces"""
     pass
+
 
 # 'alias' subcommand ("show interfaces alias")
 @interfaces.command()
@@ -94,6 +102,7 @@ def alias(interfacename, namespace, display):
 
     click.echo(tabulate(body, header))
 
+
 @interfaces.command()
 @click.argument('interfacename', required=False)
 @multi_asic_util.multi_asic_click_options
@@ -105,7 +114,7 @@ def description(interfacename, namespace, display, verbose):
 
     cmd = ['intfutil', '-c', 'description']
 
-    #ignore the display option when interface name is passed
+    # ignore the display option when interface name is passed
     if interfacename is not None:
         interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
 
@@ -119,12 +128,15 @@ def description(interfacename, namespace, display, verbose):
     clicommon.run_command(cmd, display_cmd=verbose)
 
 # 'naming_mode' subcommand ("show interfaces naming_mode")
+
+
 @interfaces.command('naming_mode')
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def naming_mode(verbose):
     """Show interface naming_mode status"""
 
     click.echo(clicommon.get_interface_naming_mode())
+
 
 @interfaces.command()
 @click.argument('interfacename', required=False)
@@ -141,6 +153,7 @@ def status(interfacename, namespace, display, verbose):
         interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
 
         cmd += ['-i', str(interfacename)]
+
     else:
         cmd += ['-d', str(display)]
 
@@ -148,6 +161,7 @@ def status(interfacename, namespace, display, verbose):
         cmd += ['-n', str(namespace)]
 
     clicommon.run_command(cmd, display_cmd=verbose)
+
 
 @interfaces.command()
 @click.argument('interfacename', required=False)
@@ -171,6 +185,7 @@ def tpid(interfacename, namespace, display, verbose):
         cmd += ['-n', str(namespace)]
 
     clicommon.run_command(cmd, display_cmd=verbose)
+
 
 #
 # 'breakout' group ###
@@ -232,8 +247,10 @@ def breakout(ctx):
             platform_dict[port_name]["child port speeds"] = ",".join(speeds)
 
         # Sorted keys by name in natural sort Order for human readability
+
         parsed = OrderedDict((k, platform_dict[k]) for k in natsorted(list(platform_dict.keys())))
         click.echo(json.dumps(parsed, indent=4))
+
 
 # 'breakout current-mode' subcommand ("show interfaces breakout current-mode")
 @breakout.command('current-mode')
@@ -268,6 +285,7 @@ def currrent_mode(ctx, interface):
         body.append([name, str(cur_brkout_tbl[name]['brkout_mode'])])
     click.echo(tabulate(body, header, tablefmt="grid"))
 
+
 #
 # 'neighbor' group ###
 #
@@ -276,19 +294,24 @@ def neighbor():
     """Show neighbor related information"""
     pass
 
+
 # 'expected' subcommand ("show interface neighbor expected")
 @neighbor.command()
 @click.argument('interfacename', required=False)
+@multi_asic_util.multi_asic_click_option_namespace
 @clicommon.pass_db
-def expected(db, interfacename):
+def expected(db, interfacename, namespace):
     """Show expected neighbor information by interfaces"""
 
-    neighbor_dict = db.cfgdb.get_table("DEVICE_NEIGHBOR")
+    if not namespace:
+        namespace = multi_asic_util.constants.DEFAULT_NAMESPACE
+
+    neighbor_dict = db.cfgdb_clients[namespace].get_table("DEVICE_NEIGHBOR")
     if neighbor_dict is None:
         click.echo("DEVICE_NEIGHBOR information is not present.")
         return
 
-    neighbor_metadata_dict = db.cfgdb.get_table("DEVICE_NEIGHBOR_METADATA")
+    neighbor_metadata_dict = db.cfgdb_clients[namespace].get_table("DEVICE_NEIGHBOR_METADATA")
     if neighbor_metadata_dict is None:
         click.echo("DEVICE_NEIGHBOR_METADATA information is not present.")
         return
@@ -298,8 +321,8 @@ def expected(db, interfacename):
         if clicommon.get_interface_naming_mode() == "alias":
             port = clicommon.InterfaceAliasConverter().name_to_alias(port)
             neighbor_dict[port] = neighbor_dict.pop(temp_port)
-
-    header = ['LocalPort', 'Neighbor', 'NeighborPort', 'NeighborLoopback', 'NeighborMgmt', 'NeighborType']
+    header = ['LocalPort', 'Neighbor', 'NeighborPort',
+              'NeighborLoopback', 'NeighborMgmt', 'NeighborType']
     body = []
     if interfacename:
         try:
@@ -307,9 +330,12 @@ def expected(db, interfacename):
             body.append([interfacename,
                          device,
                          neighbor_dict[interfacename]['port'],
-                         neighbor_metadata_dict[device]['lo_addr'] if 'lo_addr' in neighbor_metadata_dict[device] else 'None',
-                         neighbor_metadata_dict[device]['mgmt_addr'] if 'mgmt_addr' in neighbor_metadata_dict[device] else 'None',
-                         neighbor_metadata_dict[device]['type'] if 'type' in neighbor_metadata_dict[device] else 'None'])
+                         neighbor_metadata_dict[device]['lo_addr'] if 'lo_addr'
+                         in neighbor_metadata_dict[device] else 'None',
+                         neighbor_metadata_dict[device]['mgmt_addr'] if 'mgmt_addr'
+                         in neighbor_metadata_dict[device] else 'None',
+                         neighbor_metadata_dict[device]['type'] if 'type'
+                         in neighbor_metadata_dict[device] else 'None'])
         except KeyError:
             click.echo("No neighbor information available for interface {}".format(interfacename))
             return
@@ -320,13 +346,17 @@ def expected(db, interfacename):
                 body.append([port,
                              device,
                              neighbor_dict[port]['port'],
-                             neighbor_metadata_dict[device]['lo_addr'] if 'lo_addr' in neighbor_metadata_dict[device] else 'None',
-                             neighbor_metadata_dict[device]['mgmt_addr'] if 'mgmt_addr' in neighbor_metadata_dict[device] else 'None',
-                             neighbor_metadata_dict[device]['type'] if 'type' in neighbor_metadata_dict[device] else 'None'])
+                             neighbor_metadata_dict[device]['lo_addr'] if 'lo_addr'
+                             in neighbor_metadata_dict[device] else 'None',
+                             neighbor_metadata_dict[device]['mgmt_addr'] if 'mgmt_addr'
+                             in neighbor_metadata_dict[device] else 'None',
+                             neighbor_metadata_dict[device]['type'] if 'type'
+                             in neighbor_metadata_dict[device] else 'None'])
             except KeyError:
                 pass
 
     click.echo(tabulate(body, header))
+
 
 @interfaces.command()
 @click.argument('interfacename', required=False)
@@ -336,10 +366,10 @@ def expected(db, interfacename):
 @click.option('--display', '-d', 'display', default=None, show_default=False,
               type=str, help='all|frontend')
 @click.pass_context
+
 def mpls(ctx, interfacename, namespace, display):
     """Show Interface MPLS status"""
-
-    #Edge case: Force show frontend interfaces on single asic
+    # Edge case: Force show frontend interfaces on single asic
     if not (multi_asic.is_multi_asic()):
        if (display == 'frontend' or display == 'all' or display is None):
            display = None
@@ -385,7 +415,6 @@ def mpls(ctx, interfacename, namespace, display):
                 if ifname.startswith("PortChannel") and multi_asic.is_port_channel_internal(ifname, ns):
                     continue
 
-
             mpls_intf = appl_db.get_all(appl_db.APPL_DB, key)
 
             if 'mpls' not in mpls_intf or mpls_intf['mpls'] == 'disable':
@@ -410,7 +439,140 @@ def mpls(ctx, interfacename, namespace, display):
 
     click.echo(tabulate(body, header))
 
+
 interfaces.add_command(portchannel.portchannel)
+
+
+
+@interfaces.command()
+@click.argument('interfacename', required=False)
+@click.pass_context
+def flap(ctx, interfacename):
+    """Show Interface Flap Information <interfacename>"""
+
+    namespace = ''  # Default namespace
+    port_dict = multi_asic.get_port_table(namespace=namespace)
+
+    # If interfacename is given, validate it
+    if interfacename:
+        interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
+        if interfacename not in port_dict:
+            ctx.fail("Invalid interface name {}".format(interfacename))
+
+    db = SonicV2Connector(host=REDIS_HOSTIP)
+    db.connect(db.APPL_DB)
+
+    # Prepare the table headers and body
+    header = [
+        'Interface',
+        'Flap Count',
+        'Admin',
+        'Oper',
+        'Link Down TimeStamp(UTC)',
+        'Link Up TimeStamp(UTC)'
+    ]
+    body = []
+
+    # Loop through all ports or the specified port
+    ports = [interfacename] if interfacename else natsorted(list(port_dict.keys()))
+
+    for port in ports:
+        port_data = db.get_all(db.APPL_DB, f'PORT_TABLE:{port}') or {}
+
+        flap_count = port_data.get('flap_count', 'Never')
+        admin_status = port_data.get('admin_status', 'Unknown').capitalize()
+        oper_status = port_data.get('oper_status', 'Unknown').capitalize()
+
+        # Get timestamps and convert them to UTC format if possible
+        last_up_time = port_data.get('last_up_time', 'Never')
+        last_down_time = port_data.get('last_down_time', 'Never')
+
+        # Format output row
+        row = [
+            port,
+            flap_count,
+            admin_status,
+            oper_status,
+            f"{last_down_time}" if last_down_time != 'Never' else 'Never',
+            f"{last_up_time}" if last_up_time != 'Never' else 'Never'
+        ]
+
+        body.append(row)
+
+    # Sort the body by interface name for consistent display
+    body = natsorted(body, key=lambda x: x[0])
+
+    # Display the formatted table
+    click.echo(tabulate(body, header))
+
+    db.close(db.APPL_DB)
+
+
+def get_all_port_errors(interfacename):
+
+    port_operr_table = {}
+    db = SonicV2Connector(host=REDIS_HOSTIP)
+    db.connect(db.STATE_DB)
+
+    # Retrieve the errors data from the PORT_OPERR_TABLE
+    port_operr_table = db.get_all(db.STATE_DB, 'PORT_OPERR_TABLE|{}'.format(interfacename))
+    db.close(db.STATE_DB)
+
+    return port_operr_table
+
+
+@interfaces.command()
+@click.argument('interfacename', required=True)
+@click.pass_context
+def errors(ctx, interfacename):
+    """Show Interface Erorrs <interfacename>"""
+    # Try to convert interface name from alias
+    interfacename = try_convert_interfacename_from_alias(click.get_current_context(), interfacename)
+
+    port_operr_table = get_all_port_errors(interfacename)
+
+    # Define a list of all potential errors
+    ALL_PORT_ERRORS = [
+        "oper_error_status",
+        "mac_local_fault",
+        "mac_remote_fault",
+        "fec_sync_loss",
+        "fec_alignment_loss",
+        "high_ser_error",
+        "high_ber_error",
+        "data_unit_crc_error",
+        "data_unit_misalignment_error",
+        "signal_local_error",
+        "crc_rate",
+        "data_unit_size",
+        "code_group_error",
+        "no_rx_reachability"
+    ]
+
+    # Prepare the table headers and body
+    header = ['Port Errors', 'Count', 'Last timestamp(UTC)']
+    body = []
+
+    # Populate the table body with all errors, defaulting missing ones to 0 and Never
+    for error in ALL_PORT_ERRORS:
+        count_key = f"{error}_count"
+        time_key = f"{error}_time"
+
+        if port_operr_table is not None:
+            count = port_operr_table.get(count_key, "0")  # Default count to '0'
+            timestamp = port_operr_table.get(time_key, "Never")  # Default timestamp to 'Never'
+        else:
+            count = "0"
+            timestamp = "Never"
+
+        # Add to table
+        body.append([error.replace('_', ' '), count, timestamp])
+
+    # Sort the body for consistent display
+    body.sort(key=lambda x: x[0])
+
+    # Display the formatted table
+    click.echo(tabulate(body, header))
 
 #
 # transceiver group (show interfaces trasceiver ...)
@@ -419,6 +581,7 @@ interfaces.add_command(portchannel.portchannel)
 def transceiver():
     """Show SFP Transceiver information"""
     pass
+
 
 @transceiver.command()
 @click.argument('interfacename', required=False)
@@ -446,6 +609,7 @@ def eeprom(interfacename, dump_dom, namespace, verbose):
 
     clicommon.run_command(cmd, display_cmd=verbose)
 
+
 @transceiver.command()
 @click.argument('interfacename', required=False)
 @click.option('--namespace', '-n', 'namespace', default=None, show_default=True,
@@ -469,7 +633,8 @@ def pm(interfacename, namespace, verbose):
 
     clicommon.run_command(cmd, display_cmd=verbose)
 
-@transceiver.command('status') # 'status' is the actual sub-command name under 'transceiver' command
+
+@transceiver.command('status')  # 'status' is the actual sub-command name under 'transceiver' command
 @click.argument('interfacename', required=False)
 @click.option('--namespace', '-n', 'namespace', default=None, show_default=True,
               type=click.Choice(multi_asic_util.multi_asic_ns_choices()), help='Namespace name or all')
@@ -491,6 +656,7 @@ def transceiver_status(interfacename, namespace, verbose):
         cmd += ['-n', str(namespace)]
 
     clicommon.run_command(cmd, display_cmd=verbose)
+
 
 @transceiver.command()
 @click.argument('interfacename', required=False)
@@ -514,6 +680,7 @@ def info(interfacename, namespace, verbose):
 
     clicommon.run_command(cmd, display_cmd=verbose)
 
+
 @transceiver.command()
 @click.argument('interfacename', required=False)
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
@@ -530,6 +697,7 @@ def lpmode(interfacename, verbose):
         cmd += ['-p', str(interfacename)]
 
     clicommon.run_command(cmd, display_cmd=verbose)
+
 
 @transceiver.command()
 @click.argument('interfacename', required=False)
@@ -612,6 +780,7 @@ def counters(ctx, verbose, period, interface, printall, namespace, display):
 
         clicommon.run_command(cmd, display_cmd=verbose)
 
+
 # 'errors' subcommand ("show interfaces counters errors")
 @counters.command()
 @click.option('-p', '--period')
@@ -628,6 +797,7 @@ def errors(verbose, period, namespace, display):
         cmd += ['-n', str(namespace)]
 
     clicommon.run_command(cmd, display_cmd=verbose)
+
 
 # 'fec-stats' subcommand ("show interfaces counters errors")
 @counters.command('fec-stats')
@@ -646,6 +816,62 @@ def fec_stats(verbose, period, namespace, display):
 
     clicommon.run_command(cmd, display_cmd=verbose)
 
+
+def get_port_oid_mapping(db, namespace):
+    ''' Returns dictionary of all ports interfaces and their OIDs. '''
+    port_oid_map = db.db_clients[namespace].get_all(db.db.COUNTERS_DB, 'COUNTERS_PORT_NAME_MAP')
+    return port_oid_map
+
+
+def fetch_fec_histogram(db, namespace, port_oid_map, target_port):
+    ''' Fetch and display FEC histogram for the given port. '''
+
+    if target_port not in port_oid_map:
+        click.echo('Port {} not found in COUNTERS_PORT_NAME_MAP'.format(target_port), err=True)
+        raise click.Abort()
+
+    port_oid = port_oid_map[target_port]
+    asic_db_kvp = db.db_clients[namespace].get_all(db.db.COUNTERS_DB, 'COUNTERS:{}'.format(port_oid))
+
+    if asic_db_kvp is not None:
+
+        fec_errors = {f'BIN{i}': asic_db_kvp.get
+                      (f'SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S{i}', '0') for i in range(16)}
+
+        # Prepare the data for tabulation
+        table_data = [(bin_label, error_value) for bin_label, error_value in fec_errors.items()]
+
+        # Define headers
+        headers = ["Symbol Errors Per Codeword", "Codewords"]
+
+        # Print FEC histogram using tabulate
+        click.echo(tabulate(table_data, headers=headers))
+    else:
+        click.echo('No kvp found in ASIC DB for port {}, exiting'.format(target_port), err=True)
+        raise click.Abort()
+
+
+
+# 'fec-histogram' subcommand ("show interfaces counters fec-histogram")
+@counters.command('fec-histogram')
+@multi_asic_util.multi_asic_click_options
+@click.argument('interfacename', required=True)
+@clicommon.pass_db
+def fec_histogram(db, interfacename, namespace, display):
+    """Show interface counters fec-histogram"""
+
+    if namespace is None:
+        namespace = constants.DEFAULT_NAMESPACE
+
+    port_oid_map = get_port_oid_mapping(db, namespace)
+
+    # Try to convert interface name from alias
+    interfacename = try_convert_interfacename_from_alias(click.get_current_context(), interfacename)
+
+    # Fetch and display the FEC histogram
+    fetch_fec_histogram(db, namespace, port_oid_map, interfacename)
+
+
 # 'rates' subcommand ("show interfaces counters rates")
 @counters.command()
 @click.option('-p', '--period')
@@ -660,6 +886,7 @@ def rates(verbose, period, namespace, display):
     if namespace is not None:
         cmd += ['-n', str(namespace)]
     clicommon.run_command(cmd, display_cmd=verbose)
+
 
 # 'counters' subcommand ("show interfaces counters rif")
 @counters.command()
@@ -678,6 +905,7 @@ def rif(interface, period, verbose):
         cmd += ['-i', str(interface)]
 
     clicommon.run_command(cmd, display_cmd=verbose)
+
 
 # 'counters' subcommand ("show interfaces counters detailed")
 @counters.command()
@@ -719,7 +947,7 @@ def autoneg_status(interfacename, namespace, display, verbose):
 
     cmd = ['intfutil', '-c', 'autoneg']
 
-    #ignore the display option when interface name is passed
+    # ignore the display option when interface name is passed
     if interfacename is not None:
         interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
 
@@ -732,13 +960,17 @@ def autoneg_status(interfacename, namespace, display, verbose):
 
     clicommon.run_command(cmd, display_cmd=verbose)
 
+
 #
 # link-training group (show interfaces link-training ...)
 #
+
+
 @interfaces.group(name='link-training', cls=clicommon.AliasedGroup)
 def link_training():
     """Show interface link-training information"""
     pass
+
 
 # 'link-training status' subcommand ("show interfaces link-training status")
 @link_training.command(name='status')
@@ -752,7 +984,7 @@ def link_training_status(interfacename, namespace, display, verbose):
 
     cmd = ['intfutil', '-c', 'link_training']
 
-    #ignore the display option when interface name is passed
+    # ignore the display option when interface name is passed
     if interfacename is not None:
         interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
 
@@ -764,9 +996,12 @@ def link_training_status(interfacename, namespace, display, verbose):
         cmd += ['-n', str(namespace)]
 
     clicommon.run_command(cmd, display_cmd=verbose)
+
 #
 # fec group (show interfaces fec ...)
 #
+
+
 @interfaces.group(name='fec', cls=clicommon.AliasedGroup)
 def fec():
     """Show interface fec information"""
@@ -785,7 +1020,7 @@ def fec_status(interfacename, namespace, display, verbose):
 
     cmd = ['intfutil', '-c', 'fec']
 
-    #ignore the display option when interface name is passed
+    # ignore the display option when interface name is passed
     if interfacename is not None:
         interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
 
@@ -797,3 +1032,117 @@ def fec_status(interfacename, namespace, display, verbose):
         cmd += ['-n', str(namespace)]
 
     clicommon.run_command(cmd, display_cmd=verbose)
+
+#
+# switchport group (show interfaces switchport ...)
+#
+
+
+@interfaces.group(name='switchport', cls=clicommon.AliasedGroup)
+def switchport():
+    """Show interface switchport information"""
+    pass
+
+
+@switchport.command(name="config")
+@clicommon.pass_db
+def switchport_mode_config(db):
+    """Show interface switchport config information"""
+
+    port_data = list(db.cfgdb.get_table('PORT').keys())
+    portchannel_data = list(db.cfgdb.get_table('PORTCHANNEL').keys())
+
+    portchannel_member_table = db.cfgdb.get_table('PORTCHANNEL_MEMBER')
+
+    for interface in port_data:
+        if clicommon.interface_is_in_portchannel(portchannel_member_table, interface):
+            port_data.remove(interface)
+
+    keys = port_data + portchannel_data
+
+    def tablelize(keys):
+        table = []
+
+        for key in natsorted(keys):
+            r = [clicommon.get_interface_name_for_display(db, key),
+                 clicommon.get_interface_switchport_mode(db, key),
+                 clicommon.get_interface_untagged_vlan_members(db, key),
+                 clicommon.get_interface_tagged_vlan_members(db, key)]
+            table.append(r)
+
+        return table
+
+    header = ['Interface', 'Mode', 'Untagged', 'Tagged']
+    click.echo(tabulate(tablelize(keys), header, tablefmt="simple", stralign='left'))
+
+
+@switchport.command(name="status")
+@clicommon.pass_db
+def switchport_mode_status(db):
+    """Show interface switchport status information"""
+
+    port_data = list(db.cfgdb.get_table('PORT').keys())
+    portchannel_data = list(db.cfgdb.get_table('PORTCHANNEL').keys())
+
+    portchannel_member_table = db.cfgdb.get_table('PORTCHANNEL_MEMBER')
+
+    for interface in port_data:
+        if clicommon.interface_is_in_portchannel(portchannel_member_table, interface):
+            port_data.remove(interface)
+
+    keys = port_data + portchannel_data
+
+    def tablelize(keys):
+        table = []
+
+        for key in natsorted(keys):
+            r = [clicommon.get_interface_name_for_display(db, key),
+                 clicommon.get_interface_switchport_mode(db, key)]
+            table.append(r)
+
+        return table
+
+    header = ['Interface', 'Mode']
+    click.echo(tabulate(tablelize(keys), header, tablefmt="simple", stralign='left'))
+
+#
+#  dhcp-mitigation-rate group (show interfaces dhcp-mitigation-rate ...)
+#
+
+
+@interfaces.command(name='dhcp-mitigation-rate')
+@click.argument('interfacename', required=False)
+@clicommon.pass_db
+def dhcp_mitigation_rate(db, interfacename):
+    """Show interface dhcp-mitigation-rate information"""
+
+    ctx = click.get_current_context()
+
+    keys = []
+
+    if interfacename is None:
+        port_data = list(db.cfgdb.get_table('PORT').keys())
+        keys = port_data
+
+    else:
+        if clicommon.is_valid_port(db.cfgdb, interfacename):
+            pass
+        elif clicommon.is_valid_portchannel(db.cfgdb, interfacename):
+            ctx.fail("{} is a PortChannel!".format(interfacename))
+        else:
+            ctx.fail("{} does not exist".format(interfacename))
+
+        keys.append(interfacename)
+
+    def tablelize(keys):
+        table = []
+        for key in natsorted(keys):
+            r = [
+                clicommon.get_interface_name_for_display(db, key),
+                clicommon.get_interface_dhcp_mitigation_rate(db.cfgdb, key)
+                ]
+            table.append(r)
+        return table
+
+    header = ['Interface', 'DHCP Mitigation Rate']
+    click.echo(tabulate(tablelize(keys), header, tablefmt="simple", stralign='left'))

@@ -1,0 +1,11 @@
+{
+    "CHASSIS_MODULE_HOSTNAME_TABLE|LINE-CARD0": {
+        "module_hostname": "sonic-lc1"
+    }, 
+    "CHASSIS_MODULE_HOSTNAME_TABLE|LINE-CARD1": {
+        "module_hostname": "sonic-lc2"
+    },
+    "CHASSIS_MODULE_HOSTNAME_TABLE|LINE-CARD2": {
+        "module_hostname": "sonic-lc3"
+    }
+}

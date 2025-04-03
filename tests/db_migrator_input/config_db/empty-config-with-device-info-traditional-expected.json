@@ -1,0 +1,12 @@
+{
+    "VERSIONS|DATABASE": {
+        "VERSION": "version_3_0_3"
+    },
+    "DEVICE_METADATA|localhost": {
+        "buffer_model": "traditional",
+        "synchronous_mode": "enable",
+        "docker_routing_config_mode": "separated",
+        "platform": "x86_64-mlnx_msn2700-r0",
+        "hwsku": "Mellanox-SN2700"
+    }
+}

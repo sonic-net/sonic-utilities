@@ -29,6 +29,7 @@ try:
             mock_tables.dbconnector.load_namespace_config()
         else:
             import mock_tables.mock_single_asic
+            mock_tables.mock_single_asic.add_unknown_intf=True
 except KeyError:
     pass
 
@@ -47,9 +48,14 @@ def get_bgp_peer():
     data = config_db.get_table('BGP_NEIGHBOR')
 
     for neighbor_ip in data.keys():
-        local_addr = data[neighbor_ip]['local_addr']
-        neighbor_name = data[neighbor_ip]['name']
-        bgp_peer.setdefault(local_addr, [neighbor_name, neighbor_ip])
+        # The data collected here will only work for manually defined neighbors
+        # so we need to ignore errors when using BGP Unnumbered.
+        try:
+            local_addr = data[neighbor_ip]['local_addr']
+            neighbor_name = data[neighbor_ip]['name']
+            bgp_peer.setdefault(local_addr, [neighbor_name, neighbor_ip])
+        except KeyError:
+            pass
     return bgp_peer
 
 
@@ -150,7 +156,10 @@ def get_ip_intfs_in_namespace(af, namespace, display):
         ip_intf_attr = []
         if namespace != constants.DEFAULT_NAMESPACE and skip_ip_intf_display(iface, display):
             continue
-        ipaddresses = multi_asic_util.multi_asic_get_ip_intf_addr_from_ns(namespace, iface)
+        try:
+            ipaddresses = multi_asic_util.multi_asic_get_ip_intf_addr_from_ns(namespace, iface)
+        except ValueError:
+            continue
         if af in ipaddresses:
             ifaddresses = []
             bgp_neighs = {}

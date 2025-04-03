@@ -7,7 +7,7 @@ from click.testing import CliRunner
 import config.main as config
 import show.main as show
 from utilities_common.db import Db
-from .mmuconfig_input.mmuconfig_test_vectors import *
+from .mmuconfig_input.mmuconfig_test_vectors import testData
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
@@ -16,24 +16,12 @@ sys.path.insert(0, test_path)
 sys.path.insert(0, modules_path)
 
 
-class Testmmuconfig(object):
+class TestMmuConfigBase(object):
     @classmethod
     def setup_class(cls):
+        print('SETUP')
         os.environ["PATH"] += os.pathsep + scripts_path
         os.environ['UTILITIES_UNIT_TESTING'] = "2"
-        print("SETUP")
-
-    def test_mmu_show_config(self):
-        self.executor(testData['mmuconfig_list'])
-
-    def test_mmu_alpha_config(self):
-        self.executor(testData['mmu_cfg_alpha'])
-
-    def test_mmu_alpha_invalid_config(self):
-        self.executor(testData['mmu_cfg_alpha_invalid'])
-
-    def test_mmu_staticth_config(self):
-        self.executor(testData['mmu_cfg_static_th'])
 
     def executor(self, input):
         runner = CliRunner()
@@ -48,6 +36,7 @@ class Testmmuconfig(object):
             result = runner.invoke(exec_cmd, input['args'])
             exit_code = result.exit_code
             output = result.output
+
         elif 'config' in input['cmd']:
             exec_cmd = config.config.commands["mmu"]
             result = runner.invoke(exec_cmd, input['args'], catch_exceptions=False)
@@ -66,8 +55,8 @@ class Testmmuconfig(object):
             fd = open('/tmp/mmuconfig', 'r')
             cmp_data = json.load(fd)
             for args in input['cmp_args']:
-                profile, name, value = args.split(',')
-                assert(cmp_data[profile][name] == value)
+                namespace, profile, name, value = args.split(',')
+                assert(cmp_data[namespace][profile][name] == value)
             fd.close()
 
         if 'rc_msg' in input:
@@ -76,7 +65,6 @@ class Testmmuconfig(object):
         if 'rc_output' in input:
             assert output == input['rc_output']
 
-
     @classmethod
     def teardown_class(cls):
         os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
@@ -84,3 +72,17 @@ class Testmmuconfig(object):
         if os.path.isfile('/tmp/mmuconfig'):
             os.remove('/tmp/mmuconfig')
         print("TEARDOWN")
+
+
+class TestMmuConfig(TestMmuConfigBase):
+    def test_mmu_show_config(self):
+        self.executor(testData['mmuconfig_list'])
+
+    def test_mmu_alpha_config(self):
+        self.executor(testData['mmu_cfg_alpha'])
+
+    def test_mmu_alpha_invalid_config(self):
+        self.executor(testData['mmu_cfg_alpha_invalid'])
+
+    def test_mmu_staticth_config(self):
+        self.executor(testData['mmu_cfg_static_th'])

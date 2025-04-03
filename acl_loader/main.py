@@ -73,8 +73,10 @@ class AclLoader(object):
     ACL_TABLE = "ACL_TABLE"
     ACL_RULE = "ACL_RULE"
     CFG_ACL_TABLE = "ACL_TABLE"
+    APPL_ACL_TABLE = "ACL_TABLE_TABLE"
     STATE_ACL_TABLE = "ACL_TABLE_TABLE"
     CFG_ACL_RULE = "ACL_RULE"
+    APPL_ACL_RULE = "ACL_RULE_TABLE"
     STATE_ACL_RULE = "ACL_RULE_TABLE"
     ACL_TABLE_TYPE_MIRROR = "MIRROR"
     ACL_TABLE_TYPE_CTRLPLANE = "CTRLPLANE"
@@ -135,6 +137,8 @@ class AclLoader(object):
         self.configdb.connect()
         self.statedb = SonicV2Connector(host="127.0.0.1")
         self.statedb.connect(self.statedb.STATE_DB)
+        self.appldb = SonicV2Connector(host="127.0.0.1")
+        self.appldb.connect(self.statedb.APPL_DB)
 
         # For multi-npu architecture we will have both global and per front asic namespace.
         # Global namespace will be used for Control plane ACL which are via IPTables.
@@ -165,8 +169,8 @@ class AclLoader(object):
         self.read_rules_info()
         self.read_sessions_info()
         self.read_policers_info()
-        self.acl_table_status = self.read_acl_object_status_info(self.CFG_ACL_TABLE, self.STATE_ACL_TABLE)
-        self.acl_rule_status = self.read_acl_object_status_info(self.CFG_ACL_RULE, self.STATE_ACL_RULE)
+        self.acl_table_status = self.read_acl_object_status_info(self.tables_db_info.keys(), self.STATE_ACL_TABLE)
+        self.acl_rule_status = self.read_acl_object_status_info(self.rules_db_info.keys(), self.STATE_ACL_RULE)
 
     def read_tables_info(self):
         """
@@ -199,15 +203,50 @@ class AclLoader(object):
                         self.tables_db_info[table]['ports'] += entry.get(
                             'ports', [])
 
+        if self.per_npu_configdb:
+            # Note: Ability to read table information from APPL_DB is not yet supported for masic devices
+            return
+
+        appl_db_keys = self.appldb.keys(self.appldb.APPL_DB, "{}:*".format(self.APPL_ACL_TABLE))
+        if not appl_db_keys:
+            return
+
+        for app_acl_tbl in appl_db_keys:
+            key = app_acl_tbl.split(":")[-1]
+            if key in self.tables_db_info:
+                # Shouldn't be hit, table is either programmed to APPL or CONFIG DB
+                continue
+            self.tables_db_info[key] = dict()
+            for f, v in self.appldb.get_all(self.appldb.APPL_DB, app_acl_tbl).items():
+                if f.lower() == "ports":
+                    v = v.split(",")
+                self.tables_db_info[key][f.lower()] = v
+
     def get_tables_db_info(self):
         return self.tables_db_info
 
     def read_rules_info(self):
         """
-        Read ACL_RULE table from configuration database
+        Read ACL_RULE table from CFG_DB and APPL_DB database
         :return:
         """
         self.rules_db_info = self.configdb.get_table(self.ACL_RULE)
+
+        if self.per_npu_configdb:
+            # Note: Ability to read table information from APPL_DB is not yet supported for masic devices
+            return
+
+        # Read rule information from APPL_DB
+        appl_db_keys = self.appldb.keys(self.appldb.APPL_DB, "{}:*".format(self.APPL_ACL_RULE))
+        if not appl_db_keys:
+            return
+
+        for app_acl_rule in appl_db_keys:
+            _, tid, rid = app_acl_rule.split(":")
+            if (tid, rid) in self.rules_db_info:
+                # Shouldn't be hit, table is either programmed to APPL or CONFIG DB
+                continue
+            self.rules_db_info[(tid, rid)] = self.appldb.get_all(self.appldb.APPL_DB, app_acl_rule)
 
     def get_rules_db_info(self):
         return self.rules_db_info
@@ -259,16 +298,10 @@ class AclLoader(object):
                 self.sessions_db_info[key]["status"] = state_db_info.get("status", "inactive") if state_db_info else "error"
                 self.sessions_db_info[key]["monitor_port"] = state_db_info.get("monitor_port", "") if state_db_info else ""
 
-    def read_acl_object_status_info(self, cfg_db_table_name, state_db_table_name):
+    def read_acl_object_status_info(self, keys, state_db_table_name):
         """
         Read ACL_TABLE status or ACL_RULE status from STATE_DB
         """
-        if self.per_npu_configdb:
-            namespace_configdb = list(self.per_npu_configdb.values())[0]
-            keys = namespace_configdb.get_table(cfg_db_table_name).keys()
-        else:
-            keys = self.configdb.get_table(cfg_db_table_name).keys()
-
         status = {}
         for key in keys:
             # For ACL_RULE, the key is (acl_table_name, acl_rule_name)
@@ -413,7 +446,7 @@ class AclLoader(object):
                 raise AclLoaderException("Invalid input file %s" % filename)
         return yang_acl
 
-    def load_rules_from_file(self, filename):
+    def load_rules_from_file(self, filename, skip_action_validation=False):
         """
         Load file with ACL rules configuration in openconfig ACL format. Convert rules
         to Config DB schema.
@@ -421,9 +454,9 @@ class AclLoader(object):
         :return:
         """
         self.yang_acl = AclLoader.parse_acl_json(filename)
-        self.convert_rules()
+        self.convert_rules(skip_action_validation)
 
-    def convert_action(self, table_name, rule_idx, rule):
+    def convert_action(self, table_name, rule_idx, rule, skip_validation=False):
         rule_props = {}
 
         if rule.actions.config.forwarding_action == "ACCEPT":
@@ -452,13 +485,13 @@ class AclLoader(object):
             raise AclLoaderException("Unknown rule action {} in table {}, rule {}".format(
                 rule.actions.config.forwarding_action, table_name, rule_idx))
 
-        if not self.validate_actions(table_name, rule_props):
+        if not self.validate_actions(table_name, rule_props, skip_validation):
             raise AclLoaderException("Rule action {} is not supported in table {}, rule {}".format(
                 rule.actions.config.forwarding_action, table_name, rule_idx))
 
         return rule_props
 
-    def validate_actions(self, table_name, action_props):
+    def validate_actions(self, table_name, action_props, skip_validation=False):
         if self.is_table_control_plane(table_name):
             return True
 
@@ -481,6 +514,11 @@ class AclLoader(object):
         else:
             aclcapability = self.statedb.get_all(self.statedb.STATE_DB, "{}|{}".format(self.ACL_STAGE_CAPABILITY_TABLE, stage.upper()))
             switchcapability = self.statedb.get_all(self.statedb.STATE_DB, "{}|switch".format(self.SWITCH_CAPABILITY_TABLE))
+        # In the load_minigraph path, it's possible that the STATE_DB entry haven't pop up because orchagent is stopped
+        # before loading acl.json. So we skip the validation if any table is empty
+        if skip_validation and (not aclcapability or not switchcapability):
+            warning("Skipped action validation as capability table is not present in STATE_DB")
+            return True
         for action_key in dict(action_props):
             action_list_key = self.ACL_ACTIONS_CAPABILITY_FIELD
             if action_list_key not in aclcapability:
@@ -699,7 +737,7 @@ class AclLoader(object):
             if ("ICMPV6_TYPE" in rule_props or "ICMPV6_CODE" in rule_props) and protocol != 58:
                 raise AclLoaderException("IP_PROTOCOL={} is not ICMPV6, but ICMPV6 fields were provided".format(protocol))
 
-    def convert_rule_to_db_schema(self, table_name, rule):
+    def convert_rule_to_db_schema(self, table_name, rule, skip_action_validation=False):
         """
         Convert rules format from openconfig ACL to Config DB schema
         :param table_name: ACL table name to which rule belong
@@ -729,7 +767,7 @@ class AclLoader(object):
         elif self.is_table_l3(table_name):
             rule_props["ETHER_TYPE"] = str(self.ethertype_map["ETHERTYPE_IPV4"])
 
-        deep_update(rule_props, self.convert_action(table_name, rule_idx, rule))
+        deep_update(rule_props, self.convert_action(table_name, rule_idx, rule, skip_action_validation))
         deep_update(rule_props, self.convert_l2(table_name, rule_idx, rule))
         deep_update(rule_props, self.convert_ip(table_name, rule_idx, rule))
         deep_update(rule_props, self.convert_icmp(table_name, rule_idx, rule))
@@ -761,7 +799,7 @@ class AclLoader(object):
             return {}  # Don't add default deny rule if table is not [L3, L3V6]
         return rule_data
 
-    def convert_rules(self):
+    def convert_rules(self, skip_aciton_validation=False):
         """
         Convert rules in openconfig ACL format to Config DB schema
         :return:
@@ -780,7 +818,7 @@ class AclLoader(object):
             for acl_entry_name in acl_set.acl_entries.acl_entry:
                 acl_entry = acl_set.acl_entries.acl_entry[acl_entry_name]
                 try:
-                    rule = self.convert_rule_to_db_schema(table_name, acl_entry)
+                    rule = self.convert_rule_to_db_schema(table_name, acl_entry, skip_aciton_validation)
                     deep_update(self.rules_info, rule)
                 except AclLoaderException as ex:
                     error("Error processing rule %s: %s. Skipped." % (acl_entry_name, ex))
@@ -917,19 +955,19 @@ class AclLoader(object):
                 status = self.acl_table_status[key]['status']
             else:
                 status = 'N/A'
-            if val["type"] == AclLoader.ACL_TABLE_TYPE_CTRLPLANE:
+            if val.get("type", "N/A") == AclLoader.ACL_TABLE_TYPE_CTRLPLANE:
                 services = natsorted(val["services"])
-                data.append([key, val["type"], services[0], val["policy_desc"], stage, status])
+                data.append([key, val.get("type", "N/A"), services[0], val.get("policy_desc", ""), stage, status])
 
                 if len(services) > 1:
                     for service in services[1:]:
                         data.append(["", "", service, "", "", ""])
             else:
-                if not val["ports"]:
-                    data.append([key, val["type"], "", val["policy_desc"], stage, status])
+                if not val.get("ports", []):
+                    data.append([key, val["type"], "", val.get("policy_desc", ""), stage, status])
                 else:
                     ports = natsorted(val["ports"])
-                    data.append([key, val["type"], ports[0], val["policy_desc"], stage, status])
+                    data.append([key, val["type"], ports[0], val.get("policy_desc", ""), stage, status])
 
                     if len(ports) > 1:
                         for port in ports[1:]:
@@ -1149,8 +1187,9 @@ def update(ctx):
 @click.option('--session_name', type=click.STRING, required=False)
 @click.option('--mirror_stage', type=click.Choice(["ingress", "egress"]), default="ingress")
 @click.option('--max_priority', type=click.INT, required=False)
+@click.option('--skip_action_validation', is_flag=True, default=False, help="Skip action validation")
 @click.pass_context
-def full(ctx, filename, table_name, session_name, mirror_stage, max_priority):
+def full(ctx, filename, table_name, session_name, mirror_stage, max_priority, skip_action_validation):
     """
     Full update of ACL rules configuration.
     If a table_name is provided, the operation will be restricted in the specified table.
@@ -1168,7 +1207,7 @@ def full(ctx, filename, table_name, session_name, mirror_stage, max_priority):
     if max_priority:
         acl_loader.set_max_priority(max_priority)
 
-    acl_loader.load_rules_from_file(filename)
+    acl_loader.load_rules_from_file(filename, skip_action_validation)
     acl_loader.full_update()
 
 

@@ -1,6 +1,8 @@
 import click
+import sys
+import subprocess
 
-from sonic_py_common import multi_asic
+from sonic_py_common import multi_asic, device_info
 from show.main import ip
 import utilities_common.bgp_util as bgp_util
 import utilities_common.cli as clicommon
@@ -17,7 +19,14 @@ import utilities_common.multi_asic as multi_asic_util
 @ip.group(cls=clicommon.AliasedGroup)
 def bgp():
     """Show IPv4 BGP (Border Gateway Protocol) information"""
-    pass
+    if device_info.is_supervisor():
+        subcommand = sys.argv[3]
+        if subcommand not in "network":
+            # the command will be executed directly by rexec if it is not "show ip bgp network"
+            click.echo("Since the current device is a chassis supervisor, " +
+                       "this command will be executed remotely on all linecards")
+            proc = subprocess.run(["rexec", "all"] + ["-c", " ".join(sys.argv)])
+            sys.exit(proc.returncode)
 
 
 # 'summary' subcommand ("show ip bgp summary")
@@ -84,7 +93,7 @@ def neighbors(ipaddress, info_type, namespace):
 @bgp.command()
 @click.argument('ipaddress',
                 metavar='[<ipv4-address>|<ipv4-prefix>]',
-                required=False)
+                required=True if device_info.is_supervisor() else False)
 @click.argument('info_type',
                 metavar='[bestpath|json|longer-prefixes|multipath]',
                 type=click.Choice(
@@ -95,17 +104,26 @@ def neighbors(ipaddress, info_type, namespace):
                 'namespace',
                 type=str,
                 show_default=True,
-                required=True if multi_asic.is_multi_asic is True else False,
+                required=False,
                 help='Namespace name or all',
-                default=multi_asic.DEFAULT_NAMESPACE,
+                default="all",
                 callback=multi_asic_util.multi_asic_namespace_validation_callback)
 def network(ipaddress, info_type, namespace):
     """Show IP (IPv4) BGP network"""
 
-    if multi_asic.is_multi_asic() and namespace not in multi_asic.get_namespace_list():
-        ctx = click.get_current_context()
-        ctx.fail('-n/--namespace option required. provide namespace from list {}'\
-            .format(multi_asic.get_namespace_list()))
+    if device_info.is_supervisor():
+        # the command will be executed by rexec
+        click.echo("Since the current device is a chassis supervisor, " +
+                   "this command will be executed remotely on all linecards")
+        proc = subprocess.run(["rexec", "all"] + ["-c", " ".join(sys.argv)])
+        sys.exit(proc.returncode)
+
+    namespace = namespace.strip()
+    if multi_asic.is_multi_asic():
+        if namespace != "all" and namespace not in multi_asic.get_namespace_list():
+            ctx = click.get_current_context()
+            ctx.fail('invalid namespace {}. provide namespace from list {}'
+                     .format(namespace, multi_asic.get_namespace_list()))
 
     command = 'show ip bgp'
     if ipaddress is not None:
@@ -125,5 +143,15 @@ def network(ipaddress, info_type, namespace):
         if info_type is not None:
             command += ' {}'.format(info_type)
 
-    output  =  bgp_util.run_bgp_show_command(command, namespace)
-    click.echo(output.rstrip('\n'))
+    if namespace == "all":
+        if multi_asic.is_multi_asic():
+            for ns in multi_asic.get_namespace_list():
+                click.echo("\n======== namespace {} ========".format(ns))
+                output = bgp_util.run_bgp_show_command(command, ns)
+                click.echo(output.rstrip('\n'))
+        else:
+            output = bgp_util.run_bgp_show_command(command, "")
+            click.echo(output.rstrip('\n'))
+    else:
+        output = bgp_util.run_bgp_show_command(command, namespace)
+        click.echo(output.rstrip('\n'))

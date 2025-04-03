@@ -1,4 +1,12 @@
 #!/bin/bash
+
+declare -r EXIT_SUCCESS=0
+declare -r EXIT_ERROR=1
+declare -r WATCHDOG_UTIL="/usr/local/bin/watchdogutil"
+declare -r PRE_REBOOT_HOOK="pre_reboot_hook"
+
+source reboot_smartswitch_helper
+
 DEVPATH="/usr/share/sonic/device"
 PLAT_REBOOT="platform_reboot"
 PLATFORM_UPDATE_REBOOT_CAUSE="platform_update_reboot_cause"
@@ -31,9 +39,16 @@ EXIT_NEXT_IMAGE_NOT_EXISTS=4
 EXIT_SONIC_INSTALLER_VERIFY_REBOOT=21
 EXIT_PLATFORM_FW_AU_FAILURE=22
 PLATFORM_FWUTIL_AU_REBOOT_HANDLE="platform_fw_au_reboot_handle"
+PLATFORM_JSON_FILE="platform.json"
+PLATFORM_JSON_PATH="${DEVPATH}/${PLATFORM}/${PLATFORM_JSON_FILE}"
 REBOOT_SCRIPT_NAME=$(basename $0)
 REBOOT_TYPE="${REBOOT_SCRIPT_NAME}"
 TAG_LATEST=no
+REBOOT_FLAGS=""
+SMART_SWITCH="no"
+DPU_MODULE_NAME=""
+REBOOT_DPU="no"
+PRE_SHUTDOWN="no"
 
 function debug()
 {
@@ -57,8 +72,11 @@ function stop_pmon_service()
 {
      CONTAINER_STOP_RC=0
      debug "Stopping pmon docker"
-     docker kill pmon &> /dev/null || CONTAINER_STOP_RC=$?
+     if [[ "${PRE_SHUTDOWN}" == "yes" ]]; then
+         systemctl disable pmon
+     fi
      systemctl stop pmon || debug "Ignore stopping pmon error $?"
+     docker kill pmon &> /dev/null || CONTAINER_STOP_RC=$?
      if [[ CONTAINER_STOP_RC -ne 0 ]]; then
         debug "Failed killing container pmon RC $CONTAINER_STOP_RC ."
      fi
@@ -121,9 +139,10 @@ function show_help_and_exit()
     echo " "
     echo "    Available options:"
     echo "        -h, -? : getting this help"
-    echo "        -f     : execute reboot force"
+    echo "        -d : DPU module name on a smart switch, option is invalid when on DPU"
+    echo "        -p : Pre-shutdown steps on DPU, invalid on NPU"
 
-    exit 0
+    exit ${EXIT_SUCCESS}
 }
 
 function setup_reboot_variables()
@@ -148,7 +167,7 @@ function reboot_pre_check()
         ${DEVPATH}/${PLATFORM}/${PLATFORM_REBOOT_PRE_CHECK}
         [[ $? -ne 0 ]] && exit $?
     fi
-    
+
     # Verify the next image by sonic-installer
     local message=$(sonic-installer verify-next-image 2>&1)
     if [ $? -ne 0 ]; then
@@ -166,13 +185,13 @@ function check_conflict_boot_in_fw_update()
     FW_AU_TASK_FILE=$(compgen -G ${FW_AU_TASK_FILE_REGEX}) || true
     if [[ -n "${FW_AU_TASK_FILE}" ]] && [[ ! -f "${FW_AU_TASK_FILE_EXP}" ]]; then
         VERBOSE=yes debug "Firmware auto update scheduled for a different reboot: ${FW_AU_TASK_FILE}"
-        exit 1
+        exit ${EXIT_ERROR}
     fi
 }
 
 function parse_options()
 {
-    while getopts "h?vf" opt; do
+    while getopts "h?vfpd:" opt; do
         case ${opt} in
             h|\? )
                 show_help_and_exit
@@ -183,8 +202,37 @@ function parse_options()
             t )
                 TAG_LATEST=no
                 ;;
+            f )
+                REBOOT_FLAGS+=" -f"
+                ;;
+            d )
+                REBOOT_DPU="yes"
+                DPU_MODULE_NAME="$OPTARG"
+                ;;
+            p )
+                PRE_SHUTDOWN="yes"
+                ;;
         esac
     done
+}
+
+function linecard_reboot_notify_supervisor()
+{
+    is_linecard=$(python3 -c 'from sonic_py_common import device_info; print("True") if device_info.is_chassis() == True and device_info.is_supervisor() == False else print("False")')
+    if [ $is_linecard == "True" ]; then
+        key=$(sonic-db-cli STATE_DB keys "CHASSIS_MODULE_TABLE|LINE-CARD*")
+        status=$?
+        if [ $status -eq 0 ]; then
+            module="${key#CHASSIS_MODULE_TABLE}"
+            if [ ! -z module ]; then
+                sonic-db-cli CHASSIS_STATE_DB hset "CHASSIS_MODULE_REBOOT_INFO_TABLE${module}" "reboot" "expected"
+                status=$?
+                if [ $status -ne 0 ]; then
+                    debug "Failed to notify Supervisor: Linecard reboot is expected"
+                fi
+            fi
+        fi
+    fi
 }
 
 parse_options $@
@@ -192,10 +240,22 @@ parse_options $@
 # Exit if not superuser
 if [[ "$EUID" -ne 0 ]]; then
     echo "This command must be run as root" >&2
-    exit 1
+    exit ${EXIT_ERROR}
 fi
 
 debug "User requested rebooting device ..."
+
+handle_smart_switch "$REBOOT_DPU" "$PRE_SHUTDOWN" "$DPU_MODULE_NAME"
+smart_switch_result=$?
+if [[ $smart_switch_result -ne 0 ]]; then
+    exit $smart_switch_result
+fi
+
+# On a smartswitch, complete the DPU reboot and exit
+smartswitch=$(is_smartswitch)
+if [ "$smartswitch" == "True" ] && [ "$REBOOT_DPU" == "yes" ]; then
+    exit $smart_switch_result
+fi
 
 check_conflict_boot_in_fw_update
 
@@ -204,6 +264,9 @@ reboot_pre_check
 
 # Tag remotely deployed images as local
 tag_images
+
+# Linecard reboot notify supervisor
+linecard_reboot_notify_supervisor
 
 # Stop SONiC services gracefully.
 stop_sonic_services
@@ -223,11 +286,6 @@ sync
 /sbin/fstrim -av
 sleep 3
 
-# sync the current system time to CMOS
-if [ -x /sbin/hwclock ]; then
-    /sbin/hwclock -w || /bin/true
-fi
-
 if [[ -x ${DEVPATH}/${PLATFORM}/${PLATFORM_FWUTIL_AU_REBOOT_HANDLE} ]]; then
     debug "Handling task file for boot type ${REBOOT_TYPE}"
     ${DEVPATH}/${PLATFORM}/${PLATFORM_FWUTIL_AU_REBOOT_HANDLE} ${REBOOT_TYPE} || PLATFORM_FW_AU_RC=$?
@@ -240,6 +298,25 @@ fi
 if [ -x ${DEVPATH}/${PLATFORM}/${PLATFORM_UPDATE_REBOOT_CAUSE} ]; then
     debug "updating reboot cause for ${PLATFORM}"
     ${DEVPATH}/${PLATFORM}/${PLATFORM_UPDATE_REBOOT_CAUSE}
+fi
+
+if [ -x ${DEVPATH}/${PLATFORM}/${PRE_REBOOT_HOOK} ]; then
+    debug "Executing the pre-reboot script"
+    ${DEVPATH}/${PLATFORM}/${PRE_REBOOT_HOOK}
+    EXIT_CODE="$?"
+    if [[ "${EXIT_CODE}" != "${EXIT_SUCCESS}" ]]; then
+        debug "WARNING: Failed to handle pre-reboot script: rc=${EXIT_CODE}"
+    fi
+fi
+
+if [ -x ${WATCHDOG_UTIL} ]; then
+    debug "Enabling the Watchdog before reboot"
+    ${WATCHDOG_UTIL} arm
+fi
+
+if [[ "${PRE_SHUTDOWN}" == "yes" ]]; then
+    echo "${DPU_MODULE_NAME} pre-shutdown steps are completed"
+    exit ${EXIT_SUCCESS}
 fi
 
 if [ -x ${DEVPATH}/${PLATFORM}/${PLAT_REBOOT} ]; then
@@ -260,4 +337,4 @@ if [ -x ${DEVPATH}/${PLATFORM}/${PLAT_REBOOT} ]; then
 fi
 
 VERBOSE=yes debug "Issuing OS-level reboot ..." >&2
-exec /sbin/reboot $@
+exec /sbin/reboot ${REBOOT_FLAGS}

@@ -173,24 +173,6 @@
         "nominal_bit_rate": "N/A",
         "application_advertisement": "N/A"
     },
-    "TRANSCEIVER_INFO|Ethernet24": {
-        "type": "QSFP28 or later",
-        "hardware_rev": "AC",
-        "serial": "MT1706FT02066",
-        "manufacturer": "Mellanox",
-        "model": "MFA1A00-C003",
-        "vendor_oui": "00-02-c9",
-        "vendor_date": "2017-01-13 ",
-        "connector": "No separable connector",
-        "encoding": "64B66B",
-        "ext_identifier": "Power Class 3(2.5W max), CDR present in Rx Tx",
-        "ext_rateselect_compliance": "QSFP+ Rate Select Version 1",
-        "cable_type": "Length Cable Assembly(m)",
-        "cable_length": "3",
-        "specification_compliance": "{'10/40G Ethernet Compliance Code': '40G Active Cable (XLPPI)'}",
-        "nominal_bit_rate": "255",
-        "application_advertisement": "N/A"
-    },
     "TRANSCEIVER_INFO|Ethernet28": {
         "type": "RJ45",
         "hardware_rev": "N/A",
@@ -374,6 +356,7 @@
         "rx_sig_power_max": "40"
     },
     "TRANSCEIVER_STATUS|Ethernet44":{
+        "cmis_state": "READY",
         "DP1State": "DataPathActivated",
         "DP2State": "DataPathActivated",
         "DP3State": "DataPathActivated",
@@ -684,16 +667,23 @@
         "media_interface_technology" : "1550 nm DFB",
         "vendor_rev" : "XX",
         "cmis_rev" : "4.1",
-        "active_firmware" : "X.X",
-        "inactive_firmware" : "X.X",
         "supported_max_tx_power" : "4.0",
         "supported_min_tx_power" : "-22.9",
         "supported_max_laser_freq" : "196100",
         "supported_min_laser_freq" : "191300"
     },
+    "TRANSCEIVER_FIRMWARE_INFO|Ethernet64": {
+        "active_firmware": "X.X",
+        "inactive_firmware": "X.X",
+        "e1_active_firmware" : "X.X",
+        "e1_inactive_firmware" : "Y.Y",
+        "e1_server_firmware" : "A.B.C.D",
+        "e2_active_firmware" : "X.X",
+        "e2_inactive_firmware" : "Y.Y",
+        "e2_server_firmware" : "A.B.C.D"
+    },
     "TRANSCEIVER_INFO|Ethernet72": {
         "active_apsel_hostlane4": "N/A",
-        "active_firmware": "0.0",
         "is_replaceable": "True",
         "application_advertisement": "{1: {'host_electrical_interface_id': 'IB NDR', 'module_media_interface_id': 'Copper cable', 'media_lane_count': 4, 'host_lane_count': 4, 'host_lane_assignment_options': 17}, 2: {'host_electrical_interface_id': 'IB SDR (Arch.Spec.Vol.2)', 'module_media_interface_id': 'Copper cable', 'media_lane_count': 4, 'host_lane_count': 4, 'host_lane_assignment_options': 17}}",
         "host_electrical_interface": "N/A",
@@ -710,7 +700,6 @@
         "supported_min_laser_freq": "N/A",
         "serial": "serial1   ",
         "active_apsel_hostlane7": "N/A",
-        "inactive_firmware": "N/A",
         "active_apsel_hostlane1": "N/A",
         "type": "OSFP 8X Pluggable Transceiver",
         "cable_length": "1.0",
@@ -795,6 +784,10 @@
         "txbiashighwarning": "N/A",
         "txbiaslowalarm": "N/A",
         "txbiaslowwarning": "N/A"
+    },
+    "TRANSCEIVER_FIRMWARE_INFO|Ethernet72": {
+        "active_firmware": "0.0",
+        "inactive_firmware": "N/A"
     },
     "TRANSCEIVER_STATUS|Ethernet0": {
         "status": "67",
@@ -1037,6 +1030,30 @@
     "DEBUG_COUNTER_CAPABILITIES|SWITCH_EGRESS_DROPS": {
         "reasons": "[ACL_ANY,L2_ANY,L3_ANY]",
         "count": "2"
+    },
+    "QUEUE_COUNTER_CAPABILITIES|WRED_ECN_QUEUE_WRED_DROPPED_PKT_COUNTER": {
+        "isSupported": "true"
+    },
+    "QUEUE_COUNTER_CAPABILITIES|WRED_ECN_QUEUE_WRED_DROPPED_BYTE_COUNTER": {
+        "isSupported": "true"
+    },
+    "QUEUE_COUNTER_CAPABILITIES|WRED_ECN_QUEUE_ECN_MARKED_PKT_COUNTER": {
+        "isSupported": "true"
+    },
+    "QUEUE_COUNTER_CAPABILITIES|WRED_ECN_QUEUE_ECN_MARKED_BYTE_COUNTER": {
+        "isSupported": "true"
+    },
+    "PORT_COUNTER_CAPABILITIES|WRED_ECN_PORT_WRED_GREEN_DROP_COUNTER": {
+        "isSupported": "true"
+    },
+    "PORT_COUNTER_CAPABILITIES|WRED_ECN_PORT_WRED_YELLOW_DROP_COUNTER": {
+        "isSupported": "true"
+    },
+    "PORT_COUNTER_CAPABILITIES|WRED_ECN_PORT_WRED_RED_DROP_COUNTER": {
+        "isSupported": "true"
+    },
+    "PORT_COUNTER_CAPABILITIES|WRED_ECN_PORT_WRED_TOTAL_DROP_COUNTER": {
+        "isSupported": "true"
     },
     "LAG_MEMBER_TABLE|PortChannel0001|Ethernet112": {
         "runner.actor_lacpdu_info.state": "5",
@@ -1624,7 +1641,13 @@
     "ACL_TABLE_TABLE|DATAACL_5" : {
         "status": "Active"
     },
+    "ACL_TABLE_TABLE|ENI" : {
+        "status": "Active"
+    },
     "ACL_RULE_TABLE|DATAACL_5|RULE_1" : {
+        "status": "Active"
+    },
+    "ACL_RULE_TABLE|ENI|Vnet100_F4939FEFC47E_OUT" : {
         "status": "Active"
     },
     "VOLTAGE_INFO|VSENSOR0": {
@@ -1678,5 +1701,45 @@
         "minimum_current": "339",
         "timestamp": "20230704 17:38:04",
         "warning_status": "False"
+    },
+    "FABRIC_CAPACITY_TABLE|FABRIC_CAPACITY_DATA" : {
+        "fabric_capacity": "88632",
+        "missing_capacity": "265896",
+        "operating_links": "2",
+        "number_of_links": "8",
+        "warning_threshold": "100"
+    },
+    "PORT_CAPACITY_TABLE|PORT_CAPACITY_DATA" : {
+        "capacity": "80000"
+    },
+    "STP_TABLE|GLOBAL": {
+        "max_stp_inst": "510"
+    },
+    "PORT_OPERR_TABLE|Ethernet72": {
+    },
+    "PORT_OPERR_TABLE|Ethernet64": {
+        "oper_error_status": "2",
+        "mac_remote_fault_count": "14483",
+        "mac_remote_fault_time": "2025-01-17 19:51:12",
+        "mac_local_fault_count": "26",
+        "mac_local_fault_time": "2025-01-17 18:40:56"
+    },
+    "PORT_OPERR_TABLE|Ethernet32": {
+        "oper_error_status": "0",
+        "mac_remote_fault_count": "0",
+        "mac_remote_fault_time": "",
+        "mac_local_fault_count": "5",
+        "mac_local_fault_time": "2025-01-16 12:05:34",
+        "fec_sync_loss_count": "3",
+        "fec_sync_loss_time": "2025-01-16 13:45:20",
+        "high_ber_error_count": "1",
+        "high_ber_error_time": "2025-01-16 14:30:10"
+    },
+    "PORT_OPERR_TABLE|Ethernet48": {
+        "oper_error_status": "0",
+        "mac_remote_fault_count": "0",
+        "mac_remote_fault_time": "",
+        "mac_local_fault_count": "0",
+        "mac_local_fault_time": ""
     }
 }

@@ -2,15 +2,13 @@ import sys
 import os
 from click.testing import CliRunner
 
-test_path = os.path.dirname(os.path.abspath(__file__))
-modules_path = os.path.dirname(test_path)
-sys.path.insert(0, modules_path)
-
 import show.main as show
 import config.main as config
 import tests.mock_tables.dbconnector
 from utilities_common.db import Db
 from .utils import get_result_and_return_code
+from unittest import mock
+sys.modules['clicommon'] = mock.Mock()
 
 show_linecard0_shutdown_output="""\
 LINE-CARD0 line-card 1 Empty down LC1000101
@@ -19,6 +17,15 @@ LINE-CARD0 line-card 1 Empty down LC1000101
 show_linecard0_startup_output="""\
 LINE-CARD0 line-card 1 Empty up LC1000101
 """
+
+show_fabriccard0_shutdown_output = """\
+FABRIC-CARD0 fabric-card 17 Online down FC1000101
+"""
+
+show_fabriccard0_startup_output = """\
+FABRIC-CARD0 fabric-card 17 Online up FC1000101
+"""
+
 header_lines = 2
 warning_lines = 0
 
@@ -117,6 +124,17 @@ show_chassis_system_lags_output_lc4="""\
 Linecard4|Asic2|PortChannel0001         2           22  Linecard4|Asic2|Ethernet29, Linecard4|Asic2|Ethernet30
 """
 
+
+def mock_run_command_side_effect(*args, **kwargs):
+    print("command: {}".format(*args))
+    if isinstance(*args, list):
+        return '', 0
+    else:
+        print("Expected type of command is list. Actual type is {}".format(*args))
+        assert 0
+        return '', 0
+
+
 class TestChassisModules(object):
     @classmethod
     def setup_class(cls):
@@ -190,6 +208,47 @@ class TestChassisModules(object):
         #db.cfgdb.set_entry("CHASSIS_MODULE", "LINE-CARD0", { "admin_status" : "down" })
         #db.get_data("CHASSIS_MODULE", "LINE-CARD0")
 
+    def test_config_shutdown_module_fabric(self):
+        with mock.patch("utilities_common.cli.run_command",
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command:
+            runner = CliRunner()
+            db = Db()
+
+            chassisdb = db.db
+            chassisdb.connect("CHASSIS_STATE_DB")
+            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic6", "asic_id_in_module", "0")
+            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic6", "asic_pci_address", "nokia-bdb:4:0")
+            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic6", "name", "FABRIC-CARD0")
+            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic7", "asic_id_in_module", "1")
+            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic7", "asic_pci_address", "nokia-bdb:4:1")
+            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic7", "name", "FABRIC-CARD0")
+            chassisdb.close("CHASSIS_STATE_DB")
+
+            result = runner.invoke(config.config.commands["chassis"].commands["modules"].commands["shutdown"],
+                                   ["FABRIC-CARD0"], obj=db)
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+
+            result = runner.invoke(show.cli.commands["chassis"].commands["modules"].commands["status"],
+                                   ["FABRIC-CARD0"], obj=db)
+            print(result.exit_code)
+            print(result.output)
+            result_lines = result.output.strip('\n').split('\n')
+            assert result.exit_code == 0
+            header_lines = 2
+            result_out = " ".join((result_lines[header_lines]).split())
+            assert result_out.strip('\n') == show_fabriccard0_shutdown_output.strip('\n')
+
+            fvs = {'admin_status': 'down'}
+            db.cfgdb.set_entry('CHASSIS_MODULE', "FABRIC-CARD0", fvs)
+            result = runner.invoke(config.config.commands["chassis"].commands["modules"].commands["shutdown"],
+                                   ["FABRIC-CARD0"], obj=db)
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 6
+
     def test_config_startup_module(self):
         runner = CliRunner()
         db = Db()
@@ -205,6 +264,62 @@ class TestChassisModules(object):
         assert result.exit_code == 0
         result_out = " ".join((result_lines[header_lines]).split())
         assert result_out.strip('\n') == show_linecard0_startup_output.strip('\n')
+
+    def test_config_startup_module_fabric(self):
+        with mock.patch("utilities_common.cli.run_command",
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command:
+            runner = CliRunner()
+            db = Db()
+
+            chassisdb = db.db
+            chassisdb.connect("CHASSIS_STATE_DB")
+            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic6", "asic_id_in_module", "0")
+            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic6", "asic_pci_address", "nokia-bdb:4:0")
+            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic6", "name", "FABRIC-CARD0")
+            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic7", "asic_id_in_module", "1")
+            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic7", "asic_pci_address", "nokia-bdb:4:1")
+            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic7", "name", "FABRIC-CARD0")
+            chassisdb.close("CHASSIS_STATE_DB")
+
+            # FC is down and doing startup
+            fvs = {'admin_status': 'down'}
+            db.cfgdb.set_entry('CHASSIS_MODULE', "FABRIC-CARD0", fvs)
+
+            result = runner.invoke(config.config.commands["chassis"].commands["modules"].commands["startup"],
+                                   ["FABRIC-CARD0"], obj=db)
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+
+            result = runner.invoke(show.cli.commands["chassis"].commands["modules"].commands["status"],
+                                   ["FABRIC-CARD0"], obj=db)
+            print(result.exit_code)
+            print(result.output)
+            result_lines = result.output.strip('\n').split('\n')
+            assert result.exit_code == 0
+            result_out = " ".join((result_lines[header_lines]).split())
+            assert result_out.strip('\n') == show_fabriccard0_startup_output.strip('\n')
+            assert mock_run_command.call_count == 2
+
+            # FC is up and doing startup
+            fvs = {'admin_status': 'up'}
+            db.cfgdb.set_entry('CHASSIS_MODULE', "FABRIC-CARD0", fvs)
+
+            result = runner.invoke(config.config.commands["chassis"].commands["modules"].commands["startup"],
+                                   ["FABRIC-CARD0"], obj=db)
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+
+            result = runner.invoke(show.cli.commands["chassis"].commands["modules"].commands["status"],
+                                   ["FABRIC-CARD0"], obj=db)
+            print(result.exit_code)
+            print(result.output)
+            result_lines = result.output.strip('\n').split('\n')
+            assert result.exit_code == 0
+            result_out = " ".join((result_lines[header_lines]).split())
+            assert result_out.strip('\n') == show_fabriccard0_startup_output.strip('\n')
+            assert mock_run_command.call_count == 2
 
     def test_config_incorrect_module(self):
         runner = CliRunner()

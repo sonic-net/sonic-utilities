@@ -44,7 +44,10 @@ from sonic_package_manager.progress import ProgressManager
 from sonic_package_manager.reference import PackageReference
 from sonic_package_manager.registry import RegistryResolver
 from sonic_package_manager.service_creator import SONIC_CLI_COMMANDS
-from sonic_package_manager.service_creator.creator import ServiceCreator
+from sonic_package_manager.service_creator.creator import (
+    ServiceCreator,
+    run_command
+)
 from sonic_package_manager.service_creator.feature import FeatureRegistry
 from sonic_package_manager.service_creator.sonic_db import (
     INIT_CFG_JSON,
@@ -62,7 +65,15 @@ from sonic_package_manager.version import (
     version_to_tag,
     tag_to_version
 )
-
+import click
+import json
+import requests
+import getpass
+import paramiko
+import urllib.parse
+from scp import SCPClient
+from sonic_package_manager.manifest import Manifest, MANIFESTS_LOCATION, DEFAULT_MANIFEST_FILE
+LOCAL_JSON = "/tmp/local_json"
 
 @contextlib.contextmanager
 def failure_ignore(ignore: bool):
@@ -341,6 +352,8 @@ class PackageManager:
                 expression: Optional[str] = None,
                 repotag: Optional[str] = None,
                 tarball: Optional[str] = None,
+                use_local_manifest: bool = False,
+                name: Optional[str] = None,
                 **kwargs):
         """ Install/Upgrade SONiC Package from either an expression
         representing the package and its version, repository and tag or
@@ -355,7 +368,7 @@ class PackageManager:
             PackageManagerError
         """
 
-        source = self.get_package_source(expression, repotag, tarball)
+        source = self.get_package_source(expression, repotag, tarball, use_local_manifest=use_local_manifest, name=name)
         package = source.get_package()
 
         if self.is_installed(package.name):
@@ -444,6 +457,37 @@ class PackageManager:
         self.database.commit()
 
     @under_lock
+    def update(self,
+               name: str,
+               **kwargs):
+        """ Update SONiC Package referenced by name. The update
+        can be forced if force argument is True.
+
+        Args:
+            name: SONiC Package name.
+        Raises:
+            PackageManagerError
+        """
+        if self.is_installed(name):
+            edit_name = name + '.edit'
+            edit_file = os.path.join(MANIFESTS_LOCATION, edit_name)
+            if os.path.exists(edit_file):
+                self.upgrade_from_source(None, name=name, **kwargs)
+            else:
+                click.echo("Package manifest {}.edit file does not exists to update".format(name))
+                return
+        else:
+            click.echo("Package {} is not installed".format(name))
+            return
+
+    def remove_unused_docker_image(self, package):
+        image_id_used = any(entry.image_id == package.image_id for entry in self.database if entry.name != package.name)
+        if not image_id_used:
+            self.docker.rmi(package.image_id, force=True)
+        else:
+            log.info(f'Image with ID {package.image_id} is in use by other package(s). Skipping deletion')
+
+    @under_lock
     @opt_check
     def uninstall(self, name: str,
                   force: bool = False,
@@ -483,14 +527,15 @@ class PackageManager:
         # After all checks are passed we proceed to actual uninstallation
 
         try:
-            self._stop_feature(package)
+            self._disable_feature(package)
             self._uninstall_cli_plugins(package)
             self.service_creator.remove(package, keep_config=keep_config)
             self.service_creator.generate_shutdown_sequence_files(
                 self._get_installed_packages_except(package)
             )
             self.docker.rm_by_ancestor(package.image_id, force=True)
-            self.docker.rmi(package.image_id, force=True)
+            # Delete image if it is not in use, otherwise skip deletion
+            self.remove_unused_docker_image(package)
             package.entry.image_id = None
         except Exception as err:
             raise PackageUninstallationError(
@@ -501,6 +546,13 @@ class PackageManager:
         package.entry.version = None
         self.database.update_package(package.entry)
         self.database.commit()
+        manifest_path = os.path.join(MANIFESTS_LOCATION, name)
+        edit_path = os.path.join(MANIFESTS_LOCATION, name + ".edit")
+        if os.path.exists(manifest_path):
+            os.remove(manifest_path)
+        if os.path.exists(edit_path):
+            os.remove(edit_path)
+
 
     @under_lock
     @opt_check
@@ -508,7 +560,9 @@ class PackageManager:
                             source: PackageSource,
                             force=False,
                             skip_host_plugins=False,
-                            allow_downgrade=False):
+                            allow_downgrade=False,
+                            update_only: Optional[bool] = False,
+                            name: Optional[str] = None):
         """ Upgrade SONiC Package to a version the package reference
         expression specifies. Can force the upgrade if force parameter
         is True. Force can allow a package downgrade.
@@ -518,12 +572,17 @@ class PackageManager:
             force: Force the upgrade.
             skip_host_plugins: Skip host OS plugins installation.
             allow_downgrade: Flag to allow package downgrade.
+            update_only: Perform package update with new manifest.
+            name: name of package.
         Raises:
             PackageManagerError
         """
 
-        new_package = source.get_package()
-        name = new_package.name
+        if update_only:
+            new_package = self.get_installed_package(name, use_edit=True)
+        else:
+            new_package = source.get_package()
+            name = new_package.name
 
         with failure_ignore(force):
             if not self.is_installed(name):
@@ -540,19 +599,20 @@ class PackageManager:
         old_version = old_package.manifest['package']['version']
         new_version = new_package.manifest['package']['version']
 
-        with failure_ignore(force):
-            if old_version == new_version:
-                raise PackageUpgradeError(f'{new_version} is already installed')
+        if not update_only:
+            with failure_ignore(force):
+                if old_version == new_version:
+                    raise PackageUpgradeError(f'{new_version} is already installed')
 
-            # TODO: Not all packages might support downgrade.
-            # We put a check here but we understand that for some packages
-            # the downgrade might be safe to do. There can be a variable in manifest
-            # describing package downgrade ability or downgrade-able versions.
-            if new_version < old_version and not allow_downgrade:
-                raise PackageUpgradeError(
-                    f'Request to downgrade from {old_version} to {new_version}. '
-                    f'Downgrade might be not supported by the package'
-                )
+                # TODO: Not all packages might support downgrade.
+                # We put a check here but we understand that for some packages
+                # the downgrade might be safe to do. There can be a variable in manifest
+                # describing package downgrade ability or downgrade-able versions.
+                if new_version < old_version and not allow_downgrade:
+                    raise PackageUpgradeError(
+                        f'Request to downgrade from {old_version} to {new_version}. '
+                        f'Downgrade might be not supported by the package'
+                    )
 
         # remove currently installed package from the list
         installed_packages = self._get_installed_packages_and(new_package)
@@ -576,8 +636,9 @@ class PackageManager:
                 self._uninstall_cli_plugins(old_package)
                 exits.callback(rollback(self._install_cli_plugins, old_package))
 
-                source.install(new_package)
-                exits.callback(rollback(source.uninstall, new_package))
+                if not update_only:
+                    source.install(new_package)
+                    exits.callback(rollback(source.uninstall, new_package))
 
                 feature_enabled = self.feature_registry.is_feature_enabled(old_feature)
 
@@ -617,7 +678,8 @@ class PackageManager:
                     self._install_cli_plugins(new_package)
                     exits.callback(rollback(self._uninstall_cli_plugin, new_package))
 
-                self.docker.rmi(old_package.image_id, force=True)
+                if old_package.image_id != new_package.image_id:
+                    self.remove_unused_docker_image(old_package)
 
                 exits.pop_all()
         except Exception as err:
@@ -630,6 +692,10 @@ class PackageManager:
         new_package_entry.version = new_version
         self.database.update_package(new_package_entry)
         self.database.commit()
+        if update_only:
+            manifest_path = os.path.join(MANIFESTS_LOCATION, name)
+            edit_path = os.path.join(MANIFESTS_LOCATION, name + ".edit")
+            os.rename(edit_path, manifest_path)
 
     @under_lock
     @opt_check
@@ -715,7 +781,7 @@ class PackageManager:
                         file.write(chunk)
                     file.flush()
 
-                    self.install(tarball=file.name)
+                    self.install(tarball=file.name, name=name)
             else:
                 log.info(f'installing {name} version {version}')
 
@@ -752,7 +818,9 @@ class PackageManager:
                     new_package.version = old_package.version
                     migrate_package(old_package, new_package)
                 else:
-                    self.install(f'{new_package.name}={new_package_default_version}')
+                    # self.install(f'{new_package.name}={new_package_default_version}')
+                    repo_tag_formed = "{}:{}".format(new_package.repository, new_package.default_reference)
+                    self.install(None, repo_tag_formed, name=new_package.name)
             else:
                 # No default version and package is not installed.
                 # Migrate old package same version.
@@ -761,7 +829,7 @@ class PackageManager:
 
             self.database.commit()
 
-    def get_installed_package(self, name: str) -> Package:
+    def get_installed_package(self, name: str, use_local_manifest: bool = False, use_edit: bool = False) -> Package:
         """ Get installed package by name.
 
         Args:
@@ -774,14 +842,19 @@ class PackageManager:
         source = LocalSource(package_entry,
                              self.database,
                              self.docker,
-                             self.metadata_resolver)
+                             self.metadata_resolver,
+                             use_local_manifest=use_local_manifest,
+                             name=name,
+                             use_edit=use_edit)
         return source.get_package()
 
     def get_package_source(self,
                            package_expression: Optional[str] = None,
                            repository_reference: Optional[str] = None,
                            tarboll_path: Optional[str] = None,
-                           package_ref: Optional[PackageReference] = None):
+                           package_ref: Optional[PackageReference] = None,
+                           use_local_manifest: bool = False,
+                           name: Optional[str] = None):
         """ Returns PackageSource object based on input source.
 
         Args:
@@ -797,7 +870,7 @@ class PackageManager:
 
         if package_expression:
             ref = parse_reference_expression(package_expression)
-            return self.get_package_source(package_ref=ref)
+            return self.get_package_source(package_ref=ref, name=name)
         elif repository_reference:
             repo_ref = utils.DockerReference.parse(repository_reference)
             repository = repo_ref['name']
@@ -807,15 +880,19 @@ class PackageManager:
                                   reference,
                                   self.database,
                                   self.docker,
-                                  self.metadata_resolver)
+                                  self.metadata_resolver,
+                                  use_local_manifest,
+                                  name)
         elif tarboll_path:
             return TarballSource(tarboll_path,
                                  self.database,
                                  self.docker,
-                                 self.metadata_resolver)
+                                 self.metadata_resolver,
+                                 use_local_manifest,
+                                 name)
         elif package_ref:
             package_entry = self.database.get_package(package_ref.name)
-
+            name = package_ref.name
             # Determine the reference if not specified.
             # If package is installed assume the installed
             # one is requested, otherwise look for default
@@ -826,7 +903,9 @@ class PackageManager:
                     return LocalSource(package_entry,
                                        self.database,
                                        self.docker,
-                                       self.metadata_resolver)
+                                       self.metadata_resolver,
+                                       use_local_manifest,
+                                       name)
                 if package_entry.default_reference is not None:
                     package_ref.reference = package_entry.default_reference
                 else:
@@ -837,7 +916,9 @@ class PackageManager:
                                   package_ref.reference,
                                   self.database,
                                   self.docker,
-                                  self.metadata_resolver)
+                                  self.metadata_resolver,
+                                  use_local_manifest,
+                                  name)
         else:
             raise ValueError('No package source provided')
 
@@ -934,18 +1015,31 @@ class PackageManager:
         packages.pop(package.name)
         return packages
 
-    def _start_feature(self, package: Package, block: bool = True):
-        """ Starts the feature and blocks till operation is finished if
-        block argument is set to True.
+    def _stop_feature(self, package: Package):
+        self._systemctl_action(package, 'stop')
+        self._systemctl_action(package, 'disable')
 
-        Args:
-            package: Package object of the feature that will be started.
-            block: Whether to block for operation completion.
-        """
+    def _start_feature(self, package: Package):
+        self._systemctl_action(package, 'enable')
+        self._systemctl_action(package, 'start')
 
-        self._set_feature_state(package, 'enabled', block)
+    def _systemctl_action(self, package: Package, action: str):
+        """ Execute systemctl action for a service. """
 
-    def _stop_feature(self, package: Package, block: bool = True):
+        name = package.manifest['service']['name']
+        log.info('Execute systemctl action {} on {} service'.format(action, name))
+
+        host_service = package.manifest['service']['host-service']
+        asic_service = package.manifest['service']['asic-service']
+        single_instance = host_service or (asic_service and not self.is_multi_npu)
+        multi_instance = asic_service and self.is_multi_npu
+        if single_instance:
+            run_command(['systemctl', action, name])
+        if multi_instance:
+            for npu in range(self.num_npus):
+                run_command(['systemctl', action, f'{name}@{npu}'])
+
+    def _disable_feature(self, package: Package, block: bool = True):
         """ Stops the feature and blocks till operation is finished if
         block argument is set to True.
 
@@ -1003,6 +1097,196 @@ class PackageManager:
             host_plugin_path = get_cli_plugin_path(package, index, command)
             if os.path.exists(host_plugin_path):
                 os.remove(host_plugin_path)
+
+    def download_file(self, url, local_path):
+        # Parse information from the URL
+        parsed_url = urllib.parse.urlparse(url)
+        protocol = parsed_url.scheme
+        username = parsed_url.username
+        password = parsed_url.password
+        hostname = parsed_url.hostname
+        remote_path = parsed_url.path
+        supported_protocols = ['http', 'https', 'scp', 'sftp']
+
+        # clear the temporary local file
+        if os.path.exists(local_path):
+            os.remove(local_path)
+
+        if not protocol:
+            # check for local file
+            if os.path.exists(url):
+                os.rename(url, local_path)
+                return True
+            else:
+                click.echo("Local file not present")
+                return False
+        if protocol not in supported_protocols:
+            click.echo("Protocol not supported")
+            return False
+
+        # If the protocol is HTTP and no username or password is provided, proceed with the download using requests
+        if (protocol == 'http' or protocol == 'https') and not username and not password:
+            try:
+                with requests.get(url, stream=True) as response:
+                    response.raise_for_status()
+                    with open(local_path, 'wb') as f:
+                        for chunk in response.iter_content(chunk_size=8192):
+                            if chunk:
+                                f.write(chunk)
+            except requests.exceptions.RequestException as e:
+                click.echo("Download error", e)
+                return False
+        else:
+            # If password is not provided, prompt the user for it securely
+            if password is None:
+                password = getpass.getpass(prompt=f"Enter password for {username}@{hostname}: ")
+
+            # Create an SSH client
+            client = paramiko.SSHClient()
+            # Automatically add the server's host key (this is insecure and should be handled differently in production)
+            client.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+            try:
+                # Connect to the SSH server
+                client.connect(hostname, username=username, password=password)
+
+                if protocol == 'scp':
+                    # Create an SCP client
+                    scp = SCPClient(client.get_transport())
+                    # Download the file
+                    scp.get(remote_path, local_path)
+                elif protocol == 'sftp':
+                    # Open an SFTP channel
+                    with client.open_sftp() as sftp:
+                        # Download the file
+                        sftp.get(remote_path, local_path)
+                elif protocol == 'http' or protocol == 'https':
+                    # Download using HTTP for URLs without credentials
+                    try:
+                        with requests.get(url, auth=(username, password), stream=True) as response:
+                            response.raise_for_status()  # Raise an exception if the request was not successful
+                            with open(local_path, 'wb') as f:
+                                for chunk in response.iter_content(chunk_size=8192):
+                                    if chunk:
+                                        f.write(chunk)
+                    except requests.exceptions.RequestException as e:
+                        click.echo("Download error", e)
+                        return False
+                else:
+                    click.echo(f"Error: Source file '{remote_path}' does not exist.")
+
+            finally:
+                # Close the SSH connection
+                client.close()
+
+    def create_package_manifest(self, name, from_json):
+        if name == "default_manifest":
+            click.echo("Default Manifest creation is not allowed by user")
+            return
+        if self.is_installed(name):
+            click.echo("Error: A package with the same name {} is already installed".format(name))
+            return
+        mfile_name = os.path.join(MANIFESTS_LOCATION, name)
+        if os.path.exists(mfile_name):
+            click.echo("Error: Manifest file '{}' already exists.".format(name))
+            return
+
+        if from_json:
+            ret = self.download_file(from_json, LOCAL_JSON)
+            if ret is False:
+                return
+            from_json = LOCAL_JSON
+        else:
+            from_json = DEFAULT_MANIFEST_FILE
+        data = {}
+        with open(from_json, 'r') as file:
+            data = json.load(file)
+            # Validate with manifest scheme
+            Manifest.marshal(data)
+
+            # Make sure the 'name' is overwritten into the dict
+            data['package']['name'] = name
+            data['service']['name'] = name
+
+            with open(mfile_name, 'w') as file:
+                json.dump(data, file, indent=4)
+        click.echo(f"Manifest '{name}' created successfully.")
+
+    def update_package_manifest(self, name, from_json):
+        if name == "default_manifest":
+            click.echo("Default Manifest updation is not allowed")
+            return
+
+        original_file = os.path.join(MANIFESTS_LOCATION, name)
+        if not os.path.exists(original_file):
+            click.echo(f'Local Manifest file for {name} does not exists to update')
+            return
+        # download json file from remote/local path
+        ret = self.download_file(from_json, LOCAL_JSON)
+        if ret is False:
+            return
+        from_json = LOCAL_JSON
+
+        with open(from_json, 'r') as file:
+            data = json.load(file)
+
+        # Validate with manifest scheme
+        Manifest.marshal(data)
+
+        # Make sure the 'name' is overwritten into the dict
+        data['package']['name'] = name
+        data['service']['name'] = name
+
+        if self.is_installed(name):
+            edit_name = name + '.edit'
+            edit_file = os.path.join(MANIFESTS_LOCATION, edit_name)
+            with open(edit_file, 'w') as edit_file:
+                json.dump(data, edit_file, indent=4)
+            click.echo(f"Manifest '{name}' updated successfully.")
+        else:
+            # If package is not installed,
+            # update the name file directly
+            with open(original_file, 'w') as orig_file:
+                json.dump(data, orig_file, indent=4)
+            click.echo(f"Manifest '{name}' updated successfully.")
+
+    def delete_package_manifest(self, name):
+        if name == "default_manifest":
+            click.echo("Default Manifest deletion is not allowed")
+            return
+        # Check if the manifest file exists
+        mfile_name = "{}/{}".format(MANIFESTS_LOCATION, name)
+        if not os.path.exists(mfile_name):
+            click.echo("Error: Manifest file '{}' not found.".format(name))
+            return
+        # Confirm deletion with user input
+        confirm = click.prompt("Are you sure you want to delete the manifest file '{}'? (y/n)".format(name), type=str)
+        if confirm.lower() == 'y':
+            os.remove(mfile_name)
+            click.echo("Manifest '{}' deleted successfully.".format(name))
+        else:
+            click.echo("Deletion cancelled.")
+            return
+
+    def show_package_manifest(self, name):
+        mfile_name = "{}/{}".format(MANIFESTS_LOCATION, name)
+        edit_file_name = "{}.edit".format(mfile_name)
+        if os.path.exists(edit_file_name):
+            mfile_name = edit_file_name
+        with open(mfile_name, 'r') as file:
+            data = json.load(file)
+            click.echo("Manifest file: {}".format(name))
+            click.echo(json.dumps(data, indent=4))
+
+    def list_package_manifest(self):
+        # Get all files in the manifest location
+        manifest_files = os.listdir(MANIFESTS_LOCATION)
+        if not manifest_files:
+            click.echo("No custom local manifest files found.")
+        else:
+            click.echo("Custom Local Manifest files:")
+            for file in manifest_files:
+                click.echo("- {}".format(file))
 
     @staticmethod
     def get_manager() -> 'PackageManager':

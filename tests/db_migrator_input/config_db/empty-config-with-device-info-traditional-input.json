@@ -1,0 +1,6 @@
+{
+    "DEVICE_METADATA|localhost": {
+        "platform": "x86_64-mlnx_msn2700-r0",
+        "hwsku": "Mellanox-SN2700"
+    }
+}

@@ -155,7 +155,7 @@ return redis.status_reply(cjson.encode(result))
 
 DB_READ_SCRIPT_CONFIG_DB_KEY = "_DUALTOR_NEIGHBOR_CHECK_SCRIPT_SHA1"
 ZERO_MAC = "00:00:00:00:00:00"
-NEIGHBOR_ATTRIBUTES = ["NEIGHBOR", "MAC", "PORT", "MUX_STATE", "IN_MUX_TOGGLE", "NEIGHBOR_IN_ASIC", "TUNNERL_IN_ASIC", "HWSTATUS"]
+NEIGHBOR_ATTRIBUTES = ["NEIGHBOR", "MAC", "PORT", "MUX_STATE", "IN_MUX_TOGGLE", "NEIGHBOR_IN_ASIC", "TUNNEL_IN_ASIC", "HWSTATUS"]
 NOT_AVAILABLE = "N/A"
 
 
@@ -304,12 +304,21 @@ def read_tables_from_db(appl_db):
     """Reads required tables from db."""
     # NOTE: let's cache the db read script sha1 in APPL_DB under
     # key "_DUALTOR_NEIGHBOR_CHECK_SCRIPT_SHA1"
-    db_read_script_sha1 = appl_db.get(DB_READ_SCRIPT_CONFIG_DB_KEY)
-    if not db_read_script_sha1:
+    def _load_script():
         redis_load_cmd = "SCRIPT LOAD \"%s\"" % DB_READ_SCRIPT
         db_read_script_sha1 = redis_cli(redis_load_cmd).strip()
         WRITE_LOG_INFO("loaded script sha1: %s", db_read_script_sha1)
         appl_db.set(DB_READ_SCRIPT_CONFIG_DB_KEY, db_read_script_sha1)
+        return db_read_script_sha1
+
+    def _is_script_existed(script_sha1):
+        redis_script_exists_cmd = "SCRIPT EXISTS %s" % script_sha1
+        cmd_output = redis_cli(redis_script_exists_cmd).strip()
+        return "1" in cmd_output
+
+    db_read_script_sha1 = appl_db.get(DB_READ_SCRIPT_CONFIG_DB_KEY)
+    if ((not db_read_script_sha1) or (not _is_script_existed(db_read_script_sha1))):
+        db_read_script_sha1 = _load_script()
 
     redis_run_cmd = "EVALSHA %s 0" % db_read_script_sha1
     result = redis_cli(redis_run_cmd).strip()
@@ -400,9 +409,12 @@ def check_neighbor_consistency(neighbors, mux_states, hw_mux_states, mac_to_port
             continue
 
         check_result["NEIGHBOR_IN_ASIC"] = neighbor_ip in asic_neighs
-        check_result["TUNNERL_IN_ASIC"] = neighbor_ip in asic_route_destinations
+        check_result["TUNNEL_IN_ASIC"] = neighbor_ip in asic_route_destinations
         if is_zero_mac:
-            check_result["HWSTATUS"] = ((not check_result["NEIGHBOR_IN_ASIC"]) and check_result["TUNNERL_IN_ASIC"])
+            # NOTE: for zero-mac neighbors, two situations:
+            # 1. new neighbor just learnt, no neighbor entry in ASIC, tunnel route present in ASIC.
+            # 2. neighbor expired, neighbor entry still present in ASIC, no tunnel route in ASIC.
+            check_result["HWSTATUS"] = check_result["NEIGHBOR_IN_ASIC"] or check_result["TUNNEL_IN_ASIC"]
         else:
             port_name = mac_to_port_name_map[mac]
             # NOTE: mux server ips are always fixed to the mux port
@@ -415,9 +427,9 @@ def check_neighbor_consistency(neighbors, mux_states, hw_mux_states, mac_to_port
             check_result["IN_MUX_TOGGLE"] = mux_state != hw_mux_state
 
             if mux_state == "active":
-                check_result["HWSTATUS"] = (check_result["NEIGHBOR_IN_ASIC"] and (not check_result["TUNNERL_IN_ASIC"]))
+                check_result["HWSTATUS"] = (check_result["NEIGHBOR_IN_ASIC"] and (not check_result["TUNNEL_IN_ASIC"]))
             elif mux_state == "standby":
-                check_result["HWSTATUS"] = ((not check_result["NEIGHBOR_IN_ASIC"]) and check_result["TUNNERL_IN_ASIC"])
+                check_result["HWSTATUS"] = ((not check_result["NEIGHBOR_IN_ASIC"]) and check_result["TUNNEL_IN_ASIC"])
             else:
                 # skip as unknown mux state
                 continue
@@ -442,7 +454,7 @@ def parse_check_results(check_results):
         if not is_zero_mac:
             check_result["IN_MUX_TOGGLE"] = bool_to_yes_no[in_toggle]
         check_result["NEIGHBOR_IN_ASIC"] = bool_to_yes_no[check_result["NEIGHBOR_IN_ASIC"]]
-        check_result["TUNNERL_IN_ASIC"] = bool_to_yes_no[check_result["TUNNERL_IN_ASIC"]]
+        check_result["TUNNEL_IN_ASIC"] = bool_to_yes_no[check_result["TUNNEL_IN_ASIC"]]
         check_result["HWSTATUS"] = bool_to_consistency[hwstatus]
         if (not hwstatus):
             if is_zero_mac:

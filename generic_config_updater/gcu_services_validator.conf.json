@@ -31,6 +31,9 @@
         "PORT": {
             "services_to_validate": [ "port_service" ]
         },
+        "SYSLOG_SERVER":{
+            "services_to_validate": [ "rsyslog" ]
+        },
         "DHCP_RELAY": {
             "services_to_validate": [ "dhcp-relay" ]
         },
@@ -56,6 +59,9 @@
         },
         "port_service": {
             "validate_commands": [ ]
+        },
+        "rsyslog": {
+            "validate_commands": [ "generic_config_updater.services_validator.rsyslog_validator" ]
         },
         "dhcp-relay": {
             "validate_commands": [ "generic_config_updater.services_validator.dhcp_validator" ]

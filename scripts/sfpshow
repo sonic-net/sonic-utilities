@@ -14,12 +14,13 @@ from typing import Dict
 
 import click
 from natsort import natsorted
-from sonic_py_common.interface import front_panel_prefix, backplane_prefix, inband_prefix, recirc_prefix
 from sonic_py_common import multi_asic
+from utilities_common.general import load_db_config
 from utilities_common.sfp_helper import covert_application_advertisement_to_output_string
 from utilities_common.sfp_helper import (
         QSFP_DATA_MAP,
         CMIS_DATA_MAP,
+        C_CMIS_DATA_MAP,
         QSFP_STATUS_MAP,
         CMIS_STATUS_MAP,
         CCMIS_STATUS_MAP,
@@ -305,12 +306,19 @@ class SFPShow(object):
         return output
 
     # Convert sfp info in DB to cli output string
-    def convert_sfp_info_to_output_string(self, sfp_info_dict):
+    def convert_sfp_info_to_output_string(self, sfp_info_dict, sfp_firmware_info_dict):
         indent = ' ' * 8
         output = ''
         is_sfp_cmis = 'cmis_rev' in sfp_info_dict
+        is_sfp_c_cmis = 'supported_max_tx_power' in sfp_info_dict
 
-        data_map = CMIS_DATA_MAP if is_sfp_cmis else QSFP_DATA_MAP
+        if is_sfp_c_cmis:
+            data_map = C_CMIS_DATA_MAP
+        elif is_sfp_cmis:
+            data_map = CMIS_DATA_MAP
+        else:
+            data_map = QSFP_DATA_MAP
+
         sorted_data_map_keys = sorted(data_map, key=data_map.get)
         for key in sorted_data_map_keys:
             if key == 'cable_type':
@@ -333,6 +341,11 @@ class SFPShow(object):
                         output += '{}N/A\n'.format((indent * 2))
             elif key == 'application_advertisement':
                 output += covert_application_advertisement_to_output_string(indent, sfp_info_dict)
+            elif key == 'active_firmware' or key == 'inactive_firmware':
+                output += '{}{}: {}\n'.format(indent, data_map[key], sfp_firmware_info_dict[key] if key in sfp_firmware_info_dict else 'N/A')
+            elif key.startswith(('e1_', 'e2_')):
+                if key in sfp_firmware_info_dict:
+                    output += '{}{}: {}\n'.format(indent, data_map[key], sfp_firmware_info_dict[key])
             else:
                 output += '{}{}: {}\n'.format(indent, data_map[key], sfp_info_dict[key])
 
@@ -441,12 +454,13 @@ class SFPShow(object):
         output = ''
 
         sfp_info_dict = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_INFO|{}'.format(interface_name))
+        sfp_firmware_info_dict = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_FIRMWARE_INFO|{}'.format(interface_name))
         if sfp_info_dict:
             if sfp_info_dict['type'] == RJ45_PORT_TYPE:
                 output = 'SFP EEPROM is not applicable for RJ45 port\n'
             else:
                 output = 'SFP EEPROM detected\n'
-                sfp_info_output = self.convert_sfp_info_to_output_string(sfp_info_dict)
+                sfp_info_output = self.convert_sfp_info_to_output_string(sfp_info_dict, sfp_firmware_info_dict)
                 output += sfp_info_output
 
                 if dump_dom:
@@ -517,8 +531,10 @@ class SFPShow(object):
                 for suffix in ZR_PM_THRESHOLD_KEY_SUFFIXS:
                     key = self.convert_pm_prefix_to_threshold_prefix(
                         prefix) + suffix
-                    thresholds.append(
-                        float(sfp_threshold_dict[key]) if key in sfp_threshold_dict else None)
+                    if key in sfp_threshold_dict and sfp_threshold_dict[key] != 'N/A':
+                        thresholds.append(float(sfp_threshold_dict[key]))
+                    else:
+                        thresholds.append(None)
 
                 tca_high, tca_low = None, None
                 if values[2] is not None and thresholds[0] is not None:
@@ -539,6 +555,10 @@ class SFPShow(object):
             output = ZR_PM_NOT_APPLICABLE_STR + '\n'
         return output
 
+    def is_valid_physical_port(self, port_name):
+        role = self.db.get(self.db.APPL_DB, 'PORT_TABLE:{}'.format(port_name), multi_asic.PORT_ROLE)
+        return multi_asic.is_front_panel_port(port_name, role)
+
     @multi_asic_util.run_on_multi_asic
     def get_eeprom(self):
         if self.intf_name is not None:
@@ -548,7 +568,7 @@ class SFPShow(object):
             port_table_keys = self.db.keys(self.db.APPL_DB, "PORT_TABLE:*")
             for i in port_table_keys:
                 interface = re.split(':', i, maxsplit=1)[-1].strip()
-                if interface and interface.startswith(front_panel_prefix()) and not interface.startswith((backplane_prefix(), inband_prefix(), recirc_prefix())):
+                if interface and self.is_valid_physical_port(interface):
                     self.intf_eeprom[interface] = self.convert_interface_sfp_info_to_cli_output_string(
                         self.db, interface, self.dump_dom)
 
@@ -572,7 +592,7 @@ class SFPShow(object):
             port_table_keys = self.db.keys(self.db.APPL_DB, "PORT_TABLE:*")
             for i in port_table_keys:
                 key = re.split(':', i, maxsplit=1)[-1].strip()
-                if key and key.startswith(front_panel_prefix()) and not key.startswith((backplane_prefix(), inband_prefix(), recirc_prefix())):
+                if key and self.is_valid_physical_port(key):
                     presence_string = self.convert_interface_sfp_presence_state_to_cli_output_string(self.db, key)
                     port_table.append((key, presence_string))
 
@@ -587,7 +607,7 @@ class SFPShow(object):
             port_table_keys = self.db.keys(self.db.APPL_DB, "PORT_TABLE:*")
             for i in port_table_keys:
                 interface = re.split(':', i, maxsplit=1)[-1].strip()
-                if interface and interface.startswith(front_panel_prefix()) and not interface.startswith((backplane_prefix(), inband_prefix(), recirc_prefix())):
+                if interface and self.is_valid_physical_port(interface):
                     self.intf_pm[interface] = self.convert_interface_sfp_pm_to_cli_output_string(
                         self.db, interface)
 
@@ -600,7 +620,7 @@ class SFPShow(object):
             port_table_keys = self.db.keys(self.db.APPL_DB, "PORT_TABLE:*")
             for i in port_table_keys:
                 interface = re.split(':', i, maxsplit=1)[-1].strip()
-                if interface and interface.startswith(front_panel_prefix()) and not interface.startswith((backplane_prefix(), inband_prefix(), recirc_prefix())):
+                if interface and self.is_valid_physical_port(interface):
                     self.intf_status[interface] = self.convert_interface_sfp_status_to_cli_output_string(
                         self.db, interface)
 
@@ -719,4 +739,5 @@ def status(port, namespace):
 
 
 if __name__ == "__main__":
+    load_db_config()
     cli()

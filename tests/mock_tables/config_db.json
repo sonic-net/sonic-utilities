@@ -30,8 +30,10 @@
         "lanes": "25,26,27,28",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet4": {
         "admin_status": "up",
@@ -41,8 +43,10 @@
         "lanes": "29,30,31,32",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "trunk",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet8": {
         "admin_status": "up",
@@ -52,8 +56,10 @@
         "lanes": "33,34,35,36",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet12": {
         "admin_status": "up",
@@ -63,8 +69,10 @@
         "lanes": "37,38,39,40",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet16": {
         "admin_status": "up",
@@ -74,8 +82,10 @@
         "lanes": "16",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "trunk",
         "pfc_asym": "off",
-        "speed": "100"
+        "speed": "100",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet20": {
         "admin_status": "up",
@@ -86,7 +96,8 @@
         "mtu": "9100",
         "tpid": "0x9200",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet24": {
         "admin_status": "up",
@@ -96,8 +107,11 @@
         "lanes": "1,2,3,4",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "trunk",
         "pfc_asym": "off",
-        "speed": "1000"
+        "speed": "1000",
+        "role": "Dpc",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet28": {
         "admin_status": "up",
@@ -107,8 +121,10 @@
         "lanes": "5,6,7,8",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "trunk",
         "pfc_asym": "off",
-        "speed": "1000"
+        "speed": "1000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet32": {
         "admin_status": "up",
@@ -118,8 +134,10 @@
         "lanes": "13,14,15,16",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet36": {
         "admin_status": "up",
@@ -129,8 +147,10 @@
         "lanes": "9,10,11,12",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
-        "speed": "10"
+        "speed": "10",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet40": {
         "admin_status": "up",
@@ -140,8 +160,10 @@
         "lanes": "17,18,19,20",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet44": {
         "admin_status": "up",
@@ -151,8 +173,10 @@
         "lanes": "21,22,23,24",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet48": {
         "admin_status": "up",
@@ -162,8 +186,10 @@
         "lanes": "53,54,55,56",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet52": {
         "admin_status": "up",
@@ -173,8 +199,10 @@
         "lanes": "49,50,51,52",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet56": {
         "admin_status": "up",
@@ -184,8 +212,10 @@
         "lanes": "57,58,59,60",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet60": {
         "admin_status": "up",
@@ -195,8 +225,10 @@
         "lanes": "61,62,63,64",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet64": {
         "admin_status": "up",
@@ -206,8 +238,10 @@
         "lanes": "69,70,71,72",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet68": {
         "admin_status": "up",
@@ -217,8 +251,10 @@
         "lanes": "65,66,67,68",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet72": {
         "admin_status": "up",
@@ -228,6 +264,7 @@
         "lanes": "73,74,75,76",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000"
     },
@@ -239,8 +276,10 @@
         "lanes": "77,78,79,80",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet80": {
         "admin_status": "up",
@@ -250,8 +289,10 @@
         "lanes": "109,110,111,112",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet84": {
         "admin_status": "up",
@@ -261,8 +302,10 @@
         "lanes": "105,106,107,108",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet88": {
         "admin_status": "up",
@@ -272,8 +315,10 @@
         "lanes": "113,114,115,116",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet92": {
         "admin_status": "up",
@@ -283,8 +328,10 @@
         "lanes": "117,118,119,120",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet96": {
         "admin_status": "up",
@@ -294,8 +341,10 @@
         "lanes": "125,126,127,128",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet100": {
         "alias": "etp26",
@@ -304,8 +353,10 @@
         "lanes": "121,122,123,124",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet104": {
         "alias": "etp27",
@@ -314,8 +365,10 @@
         "lanes": "81,82,83,84",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet108": {
         "alias": "etp28",
@@ -324,8 +377,10 @@
         "lanes": "85,86,87,88",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet112": {
         "admin_status": "up",
@@ -335,8 +390,10 @@
         "lanes": "93,94,95,96",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet116": {
         "admin_status": "up",
@@ -346,8 +403,10 @@
         "lanes": "89,90,91,92",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet120": {
         "admin_status": "up",
@@ -357,8 +416,10 @@
         "lanes": "101,102,103,104",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
-        "speed": "40000"
+        "speed": "40000",
+        "dhcp_rate_limit": "300"
     },
     "PORT|Ethernet124": {
         "admin_status": "up",
@@ -368,8 +429,10 @@
         "lanes": "97,98,99,100",
         "mtu": "9100",
         "tpid": "0x8100",
+        "mode": "routed",
         "pfc_asym": "off",
         "speed": "40000",
+        "dhcp_rate_limit": "300",
         "fec" : "auto"
     },
     "VLAN_SUB_INTERFACE|Ethernet0.10": {
@@ -793,13 +856,19 @@
         "state": "enabled",
         "auto_restart": "enabled",
         "high_mem_alert": "disabled",
-        "set_owner": "local"
+        "set_owner": "local",
+        "support_syslog_rate_limit": "true",
+        "has_global_scope": "false",
+        "has_per_asic_scope": "true"
     },
     "FEATURE|database": {
         "state": "always_enabled",
         "auto_restart": "always_enabled",
         "high_mem_alert": "disabled",
-        "set_owner": "local"
+        "set_owner": "local",
+        "support_syslog_rate_limit": "true",
+        "has_global_scope": "true",
+        "has_per_asic_scope": "true"
     },
     "FEATURE|dhcp_relay": {
         "state": "enabled",
@@ -810,6 +879,8 @@
     "FEATURE|lldp": {
         "state": "enabled",
         "auto_restart": "enabled",
+        "has_global_scope": "False",
+        "has_per_asic_scope": "True",
         "high_mem_alert": "disabled",
         "set_owner": "kube"
     },
@@ -823,7 +894,10 @@
         "state": "enabled",
         "auto_restart": "enabled",
         "high_mem_alert": "disabled",
-        "set_owner": "kube"
+        "set_owner": "kube",
+        "support_syslog_rate_limit": "true",
+        "has_global_scope": "true",
+        "has_per_asic_scope": "false"
     },
     "FEATURE|radv": {
         "state": "enabled",
@@ -872,6 +946,14 @@
         "auto_restart": "enabled",
         "high_mem_alert": "disabled",
         "set_owner": "kube"
+    },
+    "SYSLOG_CONFIG_FEATURE|database": {
+        "rate_limit_interval": "200",
+        "rate_limit_burst": "20000"
+    },
+    "SYSLOG_CONFIG_FEATURE|pmon": {
+        "rate_limit_interval": "100",
+        "rate_limit_burst": "10000"
     },
     "DEVICE_METADATA|localhost": {
         "default_bgp_status": "down",
@@ -1226,7 +1308,7 @@
             "bank": "1",
             "link": "Ethernet12"
         },
-    "BGP_NEIGHBOR|10.0.0.1": {
+    "BGP_NEIGHBOR|default|10.0.0.1": {
         "asn": "65200",
         "holdtime": "10",
         "keepalive": "3",
@@ -1406,7 +1488,7 @@
         "nhopself": "0",
         "rrclient": "0"
     },
-    "BGP_NEIGHBOR|10.0.0.57": {
+    "BGP_NEIGHBOR|default|10.0.0.57": {
         "asn": "64013",
         "holdtime": "10",
         "keepalive": "3",
@@ -1631,7 +1713,7 @@
         "nhopself": "0",
         "rrclient": "0"
     },
-    "BGP_NEIGHBOR|fc00::72": {
+    "BGP_NEIGHBOR|default|fc00::72": {
         "asn": "64013",
         "holdtime": "10",
         "keepalive": "3",
@@ -1732,6 +1814,18 @@
     },
     "FLEX_COUNTER_TABLE|FLOW_CNT_ROUTE": {
         "POLL_INTERVAL": "10000",
+        "FLEX_COUNTER_STATUS": "enable"
+    },
+    "FLEX_COUNTER_TABLE|ENI": {
+        "POLL_INTERVAL": "1000",
+        "FLEX_COUNTER_STATUS": "enable"
+    },
+    "FLEX_COUNTER_TABLE|WRED_ECN_QUEUE": {
+        "POLL_INTERVAL": "10000",
+        "FLEX_COUNTER_STATUS": "enable"
+    },
+    "FLEX_COUNTER_TABLE|WRED_ECN_PORT": {
+        "POLL_INTERVAL": "1000",
         "FLEX_COUNTER_STATUS": "enable"
     },
     "PFC_WD|Ethernet0": {
@@ -1951,7 +2045,8 @@
         "profile": "egress_lossless_profile"
     },
     "PORT_QOS_MAP|Ethernet0": {
-        "pfc_enable": "3,4"
+        "pfc_enable": "3,4",
+        "scheduler": "port_scheduler"
     },
     "PORT_QOS_MAP|Ethernet4": {
         "pfc_enable": "3,4"
@@ -2001,6 +2096,14 @@
         "admin_status": "up",
         "holdtime": "10",
         "asn": "65200",
+        "keepalive": "3"
+    },
+    "BGP_NEIGHBOR|Vlan100": {
+        "rrclient": "0",
+        "peer_type": "external",
+        "nhopself": "0",
+        "admin_status": "up",
+        "holdtime": "10",
         "keepalive": "3"
     },
     "SCHEDULER|scheduler.0": {
@@ -2684,6 +2787,7 @@
         "direction": "RX"
     },
     "FABRIC_MONITOR|FABRIC_MONITOR_DATA": {
+        "monCapacityThreshWarn": "100",
         "monErrThreshCrcCells": "1",
         "monErrThreshRxCells": "61035156",
         "monPollThreshIsolation": "1",
@@ -2691,22 +2795,78 @@
     },
     "FABRIC_PORT|Fabric0": {
         "alias": "Fabric0",
+        "forceUnisolateStatus": "0",
         "isolateStatus": "False",
         "lanes": "0"
     },
     "FABRIC_PORT|Fabric1": {
         "alias": "Fabric1",
+        "forceUnisolateStatus": "0",
         "isolateStatus": "False",
         "lanes": "1"
     },
     "FABRIC_PORT|Fabric2": {
         "alias": "Fabric2",
+        "forceUnisolateStatus": "0",
         "isolateStatus": "False",
         "lanes": "2"
+    },
+    "FABRIC_PORT|Fabric3": {
+        "alias": "Fabric3",
+        "forceUnisolateStatus": "0",
+        "isolateStatus": "False",
+        "lanes": "3"
+    },
+    "FABRIC_PORT|Fabric4": {
+        "alias": "Fabric4",
+        "forceUnisolateStatus": "0",
+        "isolateStatus": "False",
+        "lanes": "4"
+    },
+    "FABRIC_PORT|Fabric5": {
+        "alias": "Fabric5",
+        "forceUnisolateStatus": "0",
+        "isolateStatus": "False",
+        "lanes": "5"
+    },
+    "FABRIC_PORT|Fabric6": {
+        "alias": "Fabric6",
+        "forceUnisolateStatus": "0",
+        "isolateStatus": "False",
+        "lanes": "6"
+    },
+    "FABRIC_PORT|Fabric7": {
+        "alias": "Fabric7",
+        "forceUnisolateStatus": "0",
+        "isolateStatus": "False",
+        "lanes": "7"
     },
     "DHCP_RELAY|Vlan1000": {
         "dhcpv6_servers": [
             "fc02:2000::1"
         ]
-    }
+    },
+    "STP|GLOBAL": {
+        "forward_delay": "15",
+        "hello_time": "2",
+        "max_age": "20",
+        "mode": "pvst",
+        "priority": "32768",
+        "rootguard_timeout": "30"
+    },
+    "STP_PORT|Ethernet4": {
+        "bpdu_guard": "true",
+        "bpdu_guard_do_disable": "false",
+        "enabled": "true",
+        "portfast": "true",
+        "root_guard": "true",
+        "uplink_fast": "false"
+    },
+    "STP_VLAN|Vlan500": {
+        "enabled": "true",
+        "forward_delay": "15",
+        "hello_time": "2",
+        "max_age": "20",
+        "priority": "32768"
+     }
 }

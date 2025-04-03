@@ -46,10 +46,15 @@ def run_command_or_raise(argv, raise_exception=True, capture=True):
 
     stdout = subprocess.PIPE if capture else None
     proc = subprocess.Popen(argv, text=True, stdout=stdout)
-    out, _ = proc.communicate()
+    out, err = proc.communicate()
 
     if proc.returncode != 0 and raise_exception:
-        raise SonicRuntimeException("Failed to run command '{0}'".format(argv))
+        sre = SonicRuntimeException("Failed to run command '{0}'".format(argv))
+        if out:
+            sre.add_note("\nSTDOUT:\n{}".format(out.rstrip("\n")))
+        if err:
+            sre.add_note("\nSTDERR:\n{}".format(err.rstrip("\n")))
+        raise sre
 
     if out is not None:
         out = out.rstrip("\n")

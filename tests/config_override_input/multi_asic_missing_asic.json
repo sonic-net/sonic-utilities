@@ -1,8 +1,8 @@
 {
     "localhost": {
-        "DEVICE_METADATA": {}
+        "FEATURE": {}
     },
     "asic0": {
-        "DEVICE_METADATA": {}
+        "FEATURE": {}
     }
 }

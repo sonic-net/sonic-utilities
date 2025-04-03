@@ -899,7 +899,7 @@ class ComponentUpdateProvider(PlatformDataProvider):
             if status_file is not None:
                 data = self.read_au_status_file_if_exists(FW_AU_STATUS_FILE_PATH)
                 if data is not None:
-                    if boot is "none" or boot in data:
+                    if boot == "none" or boot in data:
                         click.echo("Allow firmware auto-update with boot_type {} again".format(boot))
                         return True
 

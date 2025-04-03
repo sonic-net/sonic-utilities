@@ -10,11 +10,16 @@ from utilities_common.switch_hash import (
     CFG_SWITCH_HASH,
     STATE_SWITCH_CAPABILITY,
     SW_CAP_HASH_FIELD_LIST_KEY,
-    SW_CAP_ECMP_HASH_KEY,
-    SW_CAP_LAG_HASH_KEY,
+    SW_CAP_ECMP_HASH_ALGORITHM_KEY,
+    SW_CAP_LAG_HASH_ALGORITHM_KEY,
+    SW_CAP_ECMP_HASH_CAPABLE_KEY,
+    SW_CAP_LAG_HASH_CAPABLE_KEY,
+    SW_CAP_ECMP_HASH_ALGORITHM_CAPABLE_KEY,
+    SW_CAP_LAG_HASH_ALGORITHM_CAPABLE_KEY,
     SW_HASH_KEY,
     SW_CAP_KEY,
     HASH_FIELD_LIST,
+    HASH_ALGORITHM,
     SYSLOG_IDENTIFIER,
     get_param,
     get_param_hint,
@@ -47,6 +52,22 @@ def hash_field_validator(ctx, param, value):
     return list(value)
 
 
+def hash_algorithm_validator(ctx, param, value):
+    """
+    Check if hash algorithm argument is valid
+    Args:
+        ctx: click context
+        param: click parameter context
+        value: value of parameter
+    Returns:
+        str: validated parameter
+    """
+
+    click.Choice(HASH_ALGORITHM).convert(value, param, ctx)
+
+    return value
+
+
 def ecmp_hash_validator(ctx, db, ecmp_hash):
     """
     Check if ECMP hash argument is valid
@@ -66,9 +87,9 @@ def ecmp_hash_validator(ctx, db, ecmp_hash):
     entry = db.get_all(db.STATE_DB, "{}|{}".format(STATE_SWITCH_CAPABILITY, SW_CAP_KEY))
 
     entry.setdefault(SW_CAP_HASH_FIELD_LIST_KEY, 'N/A')
-    entry.setdefault(SW_CAP_ECMP_HASH_KEY, 'false')
+    entry.setdefault(SW_CAP_ECMP_HASH_CAPABLE_KEY, 'false')
 
-    if entry[SW_CAP_ECMP_HASH_KEY] == 'false':
+    if entry[SW_CAP_ECMP_HASH_CAPABLE_KEY] == 'false':
         raise click.UsageError("Failed to configure {}: operation is not supported".format(
             get_param_hint(ctx, "ecmp_hash")), ctx
         )
@@ -106,9 +127,9 @@ def lag_hash_validator(ctx, db, lag_hash):
     entry = db.get_all(db.STATE_DB, "{}|{}".format(STATE_SWITCH_CAPABILITY, SW_CAP_KEY))
 
     entry.setdefault(SW_CAP_HASH_FIELD_LIST_KEY, 'N/A')
-    entry.setdefault(SW_CAP_LAG_HASH_KEY, 'false')
+    entry.setdefault(SW_CAP_LAG_HASH_CAPABLE_KEY, 'false')
 
-    if entry[SW_CAP_LAG_HASH_KEY] == 'false':
+    if entry[SW_CAP_LAG_HASH_CAPABLE_KEY] == 'false':
         raise click.UsageError("Failed to configure {}: operation is not supported".format(
             get_param_hint(ctx, "lag_hash")), ctx
         )
@@ -125,6 +146,72 @@ def lag_hash_validator(ctx, db, lag_hash):
 
     for hash_field in lag_hash:
         click.Choice(cap_list).convert(hash_field, get_param(ctx, "lag_hash"), ctx)
+
+
+def ecmp_hash_algorithm_validator(ctx, db, ecmp_hash_algorithm):
+    """
+    Check if ECMP hash algorithm argument is valid
+
+    Args:
+        ctx: click context
+        db: State DB connector object
+        ecmp_hash_algorithm: ECMP hash algorithm
+    """
+
+    entry = db.get_all(db.STATE_DB, "{}|{}".format(STATE_SWITCH_CAPABILITY, SW_CAP_KEY))
+
+    entry.setdefault(SW_CAP_ECMP_HASH_ALGORITHM_KEY, 'N/A')
+    entry.setdefault(SW_CAP_ECMP_HASH_ALGORITHM_CAPABLE_KEY, 'false')
+
+    if entry[SW_CAP_ECMP_HASH_ALGORITHM_CAPABLE_KEY] == 'false':
+        raise click.UsageError("Failed to configure {}: operation is not supported".format(
+            get_param_hint(ctx, "ecmp_hash_algorithm")), ctx
+        )
+
+    if not entry[SW_CAP_ECMP_HASH_ALGORITHM_KEY]:
+        raise click.UsageError("Failed to configure {}: no hash algorithm capabilities".format(
+            get_param_hint(ctx, "ecmp_hash_algorithm")), ctx
+        )
+
+    if entry[SW_CAP_ECMP_HASH_ALGORITHM_KEY] == 'N/A':
+        return
+
+    cap_list = entry[SW_CAP_ECMP_HASH_ALGORITHM_KEY].split(',')
+
+    click.Choice(cap_list).convert(ecmp_hash_algorithm, get_param(ctx, "ecmp_hash_algorithm"), ctx)
+
+
+def lag_hash_algorithm_validator(ctx, db, lag_hash_algorithm):
+    """
+    Check if LAG hash algorithm argument is valid
+
+    Args:
+        ctx: click context
+        db: State DB connector object
+        lag_hash_algorithm: LAG hash algorithm
+    """
+
+    entry = db.get_all(db.STATE_DB, "{}|{}".format(STATE_SWITCH_CAPABILITY, SW_CAP_KEY))
+
+    entry.setdefault(SW_CAP_LAG_HASH_ALGORITHM_KEY, 'N/A')
+    entry.setdefault(SW_CAP_LAG_HASH_ALGORITHM_CAPABLE_KEY, 'false')
+
+    if entry[SW_CAP_LAG_HASH_ALGORITHM_CAPABLE_KEY] == 'false':
+        raise click.UsageError("Failed to configure {}: operation is not supported".format(
+            get_param_hint(ctx, "lag_hash_algorithm")), ctx
+        )
+
+    if not entry[SW_CAP_LAG_HASH_ALGORITHM_KEY]:
+        raise click.UsageError("Failed to configure {}: no hash algorithm capabilities".format(
+            get_param_hint(ctx, "lag_hash_algorithm")), ctx
+        )
+
+    if entry[SW_CAP_LAG_HASH_ALGORITHM_KEY] == 'N/A':
+        return
+
+    cap_list = entry[SW_CAP_LAG_HASH_ALGORITHM_KEY].split(',')
+
+    click.Choice(cap_list).convert(lag_hash_algorithm, get_param(ctx, "lag_hash_algorithm"), ctx)
 
 #
 # Hash DB interface ---------------------------------------------------------------------------------------------------
@@ -256,6 +343,66 @@ def SWITCH_HASH_GLOBAL_lag_hash(ctx, db, lag_hash):
     except Exception as err:
         log.log_error("Failed to configure switch global LAG hash: {}".format(str(err)))
         ctx.fail(str(err))
+
+
+@SWITCH_HASH_GLOBAL.command(
+    name="ecmp-hash-algorithm"
+)
+@click.argument(
+    "ecmp-hash-algorithm",
+    nargs=1,
+    required=True,
+    callback=hash_algorithm_validator,
+)
+@clicommon.pass_db
+@click.pass_context
+def SWITCH_HASH_GLOBAL_ecmp_hash_algorithm(ctx, db, ecmp_hash_algorithm):
+    """ Hash algorithm for hashing packets going through ECMP """
+
+    ecmp_hash_algorithm_validator(ctx, db.db, ecmp_hash_algorithm)
+
+    table = CFG_SWITCH_HASH
+    key = SW_HASH_KEY
+    data = {
+        "ecmp_hash_algorithm": ecmp_hash_algorithm,
+    }
+
+    try:
+        update_entry_validated(db.cfgdb, table, key, data, create_if_not_exists=True)
+        log.log_notice("Configured switch global ECMP hash algorithm: {}".format(ecmp_hash_algorithm))
+    except Exception as e:
+        log.log_error("Failed to configure switch global ECMP hash algorithm: {}".format(str(e)))
+        ctx.fail(str(e))
+
+
+@SWITCH_HASH_GLOBAL.command(
+    name="lag-hash-algorithm"
+)
+@click.argument(
+    "lag-hash-algorithm",
+    nargs=1,
+    required=True,
+    callback=hash_algorithm_validator,
+)
+@clicommon.pass_db
+@click.pass_context
+def SWITCH_HASH_GLOBAL_lag_hash_algorithm(ctx, db, lag_hash_algorithm):
+    """ Hash algorithm for hashing packets going through LAG """
+
+    lag_hash_algorithm_validator(ctx, db.db, lag_hash_algorithm)
+
+    table = CFG_SWITCH_HASH
+    key = SW_HASH_KEY
+    data = {
+        "lag_hash_algorithm": lag_hash_algorithm,
+    }
+
+    try:
+        update_entry_validated(db.cfgdb, table, key, data, create_if_not_exists=True)
+        log.log_notice("Configured switch global LAG hash algorithm: {}".format(lag_hash_algorithm))
+    except Exception as e:
+        log.log_error("Failed to configure switch global LAG hash algorithm: {}".format(str(e)))
+        ctx.fail(str(e))
 
 
 def register(cli):

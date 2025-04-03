@@ -1,6 +1,7 @@
 import configparser
 import os
 import re
+import shutil
 import subprocess
 import sys
 import time
@@ -337,6 +338,8 @@ def migrate_sonic_packages(bootloader, binary_image_version):
     new_image_docker_mount = os.path.join(new_image_mount, "var", "lib", "docker")
     docker_default_config = os.path.join(new_image_mount, "etc", "default", "docker")
     docker_default_config_backup = os.path.join(new_image_mount, TMP_DIR, "docker_config_backup")
+    custom_manifests_path = os.path.join(PACKAGE_MANAGER_DIR, "manifests")
+    new_image_package_directory_path = os.path.join(new_image_mount, "var", "lib", "sonic-package-manager")
 
     if not os.path.isdir(new_image_docker_dir):
         # NOTE: This codepath can be reached if the installation process did not
@@ -372,6 +375,8 @@ def migrate_sonic_packages(bootloader, binary_image_version):
             run_command_or_raise(["chroot", new_image_mount, DOCKER_CTL_SCRIPT, "start"])
             docker_started = True
             run_command_or_raise(["cp", packages_path, os.path.join(new_image_mount, TMP_DIR, packages_file)])
+            run_command_or_raise(["mkdir", "-p", custom_manifests_path])
+            run_command_or_raise(["cp", "-arf", custom_manifests_path, new_image_package_directory_path])
             run_command_or_raise(["touch", os.path.join(new_image_mount, "tmp", DOCKERD_SOCK)])
             run_command_or_raise(["mount", "--bind",
                                 os.path.join(VAR_RUN_PATH, DOCKERD_SOCK),
@@ -587,7 +592,18 @@ def install(url, force, skip_platform_check=False, skip_migration=False, skip_pa
 
         echo_and_log("Installing image {} and setting it as default...".format(binary_image_version))
         with SWAPAllocator(not skip_setup_swap, swap_mem_size, total_mem_threshold, available_mem_threshold):
-            bootloader.install_image(image_path)
+            try:
+                bootloader.install_image(image_path)
+            except SystemExit as e:
+                # When install image failed with exception, image is partial installed
+                # Fully installed image will update SONiC environment by update_sonic_environment
+                # For partial installed image, only need delete image folder
+                echo_and_log('Image install failed with exception: {}'.format(e))
+                echo_and_log('Delete partial installed image: {}'.format(binary_image_version))
+                new_image_dir = bootloader.get_image_path(binary_image_version)
+                shutil.rmtree(new_image_dir)
+                raise
+
         # Take a backup of current configuration
         if skip_migration:
             echo_and_log("Skipping configuration migration as requested in the command option.")
@@ -759,6 +775,7 @@ DOCKER_CONTAINER_LIST = [
     "radv",
     "restapi",
     "sflow",
+    "stp",
     "snmp",
     "swss",
     "syncd",

@@ -4,6 +4,7 @@ import operator
 import os
 import pytest
 import sys
+import importlib
 
 from click.testing import CliRunner
 from utilities_common.db import Db
@@ -41,21 +42,34 @@ class TestConfigFabric(object):
         expect_result = 0
         assert operator.eq(result.exit_code, expect_result)
 
-        # Issue command "config fabric port isolate 1",
-        # check if the result has the error message as port 1 is not in use.
-        result = self.basic_check("port", ["isolate", "1"], ctx)
-        assert "Port 1 is not in use" in result.output
-
         # Issue command "config fabric port unisolate 0",
         # check if the result is expected.
         result = self.basic_check("port", ["unisolate", "0"], ctx)
         expect_result = 0
         assert operator.eq(result.exit_code, expect_result)
 
+        # Issue command "config fabric port unisolate 0",
+        # check if the result is expected.
+        result = self.basic_check("port", ["unisolate", "0", "--force"], ctx)
+        expect_result = 0
+        assert operator.eq(result.exit_code, expect_result)
+        assert "Force unisolate the link" in result.output
+
+        # Issue command "config fabric port isolate 1",
+        # check if the result has the error message as port 1 is not in use.
+        result = self.basic_check("port", ["isolate", "1"], ctx)
+        assert "Port 1 is not in use" in result.output
+
         # Issue command "config fabric port unisolate 1",
         # check if the result has the error message as port 1 is not in use.
         result = self.basic_check("port", ["unisolate", "1"], ctx)
         assert "Port 1 is not in use" in result.output
+
+        # Issue command "config fabric port unisolate all -n asic1"
+        # check if the result has the warning message
+        result = self.basic_check("port", ["unisolate", "all", "--force"], ctx)
+        expect_result = 0
+        assert operator.eq(result.exit_code, expect_result)
 
     def test_config_fabric_monitor_threshold(self, ctx):
         # Issue command "config fabric port monitor error threshold <#> <#>"
@@ -93,3 +107,84 @@ class TestConfigFabric(object):
         result = self.basic_check("port", ["monitor", "poll", "threshold", "recovery", "8"], ctx)
         expect_result = 0
         assert operator.eq(result.exit_code, expect_result)
+
+    def test_config_fabric_monitor_state(self, ctx):
+        # Issue command "config fabric port monitor state <enable/disable>"
+        result = self.basic_check("port", ["monitor", "state", "enable"], ctx)
+        expect_result = 0
+        assert operator.eq(result.exit_code, expect_result)
+
+        result = self.basic_check("port", ["monitor", "state", "disable"], ctx)
+        expect_result = 0
+        assert operator.eq(result.exit_code, expect_result)
+
+    def test_config_capacity(self, ctx):
+        # Issue command "config fabric monitor capacity threshold 90",
+        # check if the result is expected.
+        result = self.basic_check("monitor", ["capacity", "threshold", "90"], ctx)
+        expect_result=0
+        assert operator.eq(result.exit_code, expect_result)
+
+        # Issue command "config fabric monitor capacity threshold 3",
+        # check if the result has the warning message.
+        result = self.basic_check("monitor", ["capacity", "threshold", "3"], ctx)
+        assert "threshold must be in range 5...250" in result.output
+
+    @classmethod
+    def teardown_class(cls):
+        print("TEARDOWN")
+        os.environ["PATH"] = os.pathsep.join(
+            os.environ["PATH"].split(os.pathsep)[:-1])
+        os.environ["UTILITIES_UNIT_TESTING"] = "0"
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
+
+class TestMultiAsicConfigFabric(object):
+    @classmethod
+    def setup_class(cls):
+        print("SETUP")
+        os.environ["PATH"] += os.pathsep + scripts_path
+        os.environ["UTILITIES_UNIT_TESTING"] = "2"
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
+        # change to multi asic config
+        from .mock_tables import dbconnector
+        from .mock_tables import mock_multi_asic
+        importlib.reload(mock_multi_asic)
+        dbconnector.load_namespace_config()
+
+    def basic_check(self, command_name, para_list, ctx):
+        # This function issues command of "config fabric xxxx",
+        # and returns the result of the command.
+        runner = CliRunner()
+        result = runner.invoke(config.config.commands["fabric"].commands[command_name], para_list, obj = ctx)
+        print(result.output)
+        return result
+
+    def test_multi_config_fabric_monitor_state(self, ctx):
+        result = self.basic_check("port", ["monitor", "state", "disable"], ctx)
+        expect_result = 0
+        assert operator.eq(result.exit_code, expect_result)
+
+    def test_config_capacity_multi(self, ctx):
+        # Issue command "config fabric monitor capacity threshold 80",
+        # check if the result is expected.
+        result = self.basic_check("monitor", ["capacity", "threshold", "80"], ctx)
+        expect_result=0
+        assert operator.eq(result.exit_code, expect_result)
+
+        # Issue command "config fabric monitor capacity threshold 4",
+        # check if the result has the warning message.
+        result = self.basic_check("monitor", ["capacity", "threshold", "4"], ctx)
+        assert "threshold must be in range 5...250" in result.output
+
+    @classmethod
+    def teardown_class(cls):
+        print("TEARDOWN_TEST")
+        os.environ["PATH"] = os.pathsep.join(
+            os.environ["PATH"].split(os.pathsep)[:-1])
+        os.environ["UTILITIES_UNIT_TESTING"] = "0"
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
+        # change back to single asic config
+        from .mock_tables import dbconnector
+        from .mock_tables import mock_single_asic
+        importlib.reload(mock_single_asic)
+        dbconnector.load_namespace_config()
