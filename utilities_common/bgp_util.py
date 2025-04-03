@@ -261,6 +261,56 @@ def run_bgp_show_command(vtysh_cmd, bgp_namespace=multi_asic.DEFAULT_NAMESPACE, 
             output= json.dumps(route_info)
     return output
 
+def get_bgp_summary_from_per_vrf_bgp_instance(af, namespace, display, vrf):
+
+    device = multi_asic_util.MultiAsic(display, namespace)
+    ctx = click.get_current_context()
+    if af is constants.IPV4:
+        vtysh_cmd = f"show ip bgp vrf {vrf} summary json"
+        key = 'ipv4Unicast'
+    else:
+        vtysh_cmd = f"show bgp ipv6 vrf {vrf} summary json"
+        key = 'ipv6Unicast'
+
+    bgp_summary = {}
+    cmd_output_json = {}
+
+    for ns in device.get_ns_list_based_on_options():
+        has_bgp_neighbors = True
+        cmd_output = run_bgp_show_command(vtysh_cmd, ns)
+        device.current_namespace = ns
+        try:
+            cmd_output_json = json.loads(cmd_output)
+        except ValueError:
+            ctx.fail("bgp summary from bgp container not in json format")
+
+        # no bgp neighbors found so print basic device bgp info
+        if key not in cmd_output_json:
+            has_bgp_neighbors = False
+        else:
+            # for multi asic devices or chassis linecards, the output of 'show ip bgp summary json'
+            # will have both internal and external bgp neighbors
+            # So, check if the current namespace has external bgp neighbors.
+            # If not, treat it as no bgp neighbors
+            if (device.get_display_option() == constants.DISPLAY_EXTERNAL and
+                (device_info.is_chassis() or multi_asic.is_multi_asic())):
+                external_peers_list_in_cfg_db = get_external_bgp_neighbors_dict(
+                    device.current_namespace).keys()
+                if not external_peers_list_in_cfg_db:
+                    has_bgp_neighbors = False
+
+        if not has_bgp_neighbors:
+            vtysh_bgp_json_cmd = "show ip bgp json"
+            no_neigh_cmd_output = run_bgp_show_command(vtysh_bgp_json_cmd, ns)
+            try:
+                no_neigh_cmd_output_json = json.loads(no_neigh_cmd_output)
+            except ValueError:
+                ctx.fail("bgp summary from bgp container not in json format")
+
+        out_cmd = cmd_output_json[key] if has_bgp_neighbors else no_neigh_cmd_output_json
+        process_bgp_summary_json(bgp_summary, out_cmd, device, has_bgp_neighbors=has_bgp_neighbors)
+
+    return bgp_summary
 
 def get_bgp_summary_from_all_bgp_instances(af, namespace, display):
 
