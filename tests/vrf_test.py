@@ -364,6 +364,7 @@ Vnet_101     Ethernet0.10
         runner = CliRunner()
         db = Db()
         vrf_obj = {'config_db':db.cfgdb, 'namespace':db.db.namespace}
+        
         result = runner.invoke(config.config.commands["vrf"].commands["add"], ["Vrf100"], obj=vrf_obj)
         assert ('Vrf100') in db.cfgdb.get_table('VRF')
         assert result.exit_code == 0

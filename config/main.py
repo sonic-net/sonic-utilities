@@ -533,7 +533,7 @@ def del_interface_bind_to_vnet(config_db, vnet_name):
         interface_dict = config_db.get_table(table_name)
         if interface_dict:
             for interface_name in interface_dict:
-                if 'vnet_name' in interface_dict[interface_name] and vrf_name == interface_dict[interface_name]['vnet_name']:
+                if 'vnet_name' in interface_dict[interface_name] and vnet_name == interface_dict[interface_name]['vnet_name']:
                     interface_ipaddresses = get_interface_ipaddresses(config_db, interface_name)
                     for ipaddress in interface_ipaddresses:
                         remove_router_interface_ip_address(config_db, interface_name, ipaddress)
@@ -9195,3 +9195,6 @@ def del_vnet(ctx, vnet_name):
         except JsonPatchConflict as e:
             ctx.fail("Invalid ConfigDB. Error: {}".format(e))
         click.echo("VNET {} deleted and all associated IP addresses removed.".format(vnet_name))
+
+if __name__ == '__main__':
+    config()
