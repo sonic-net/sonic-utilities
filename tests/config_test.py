@@ -836,6 +836,8 @@ class TestConfigReloadMasic(object):
                         mock.MagicMock(side_effect=mock_run_command_side_effect)),\
             mock.patch('config.main.read_json_file',
                        mock.MagicMock(side_effect=read_json_file_side_effect)),\
+            mock.patch('config.main.sonic_yang.SonicYang.loadData',
+                       return_value=True),\
             mock.patch('config.main.sonic_yang.SonicYang.validate_data_tree',
                        return_value=True):
 
@@ -913,6 +915,8 @@ class TestConfigReloadMasic(object):
                         mock.MagicMock(side_effect=mock_run_command_side_effect)),\
             mock.patch('config.main.read_json_file',
                        mock.MagicMock(side_effect=read_json_file_side_effect)),\
+            mock.patch('config.main.sonic_yang.SonicYang.loadData',
+                       return_value=True),\
             mock.patch('config.main.sonic_yang.SonicYang.validate_data_tree',
                        return_value=True):
 
@@ -1490,6 +1494,8 @@ class TestReloadConfig(object):
                         mock.MagicMock(side_effect=mock_run_command_side_effect)),\
             mock.patch('config.main.read_json_file',
                        mock.MagicMock(side_effect=read_json_file_side_effect)),\
+            mock.patch('config.main.sonic_yang.SonicYang.loadData',
+                       return_value=True),\
             mock.patch('config.main.sonic_yang.SonicYang.validate_data_tree',
                        return_value=True):
             (config, show) = get_cmd_module
