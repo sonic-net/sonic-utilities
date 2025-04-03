@@ -96,8 +96,8 @@ class TestConfigMgmt(TestCase):
         # Expected merge failed
         cmdpb.sysLog.assert_any_call(doPrint=True, logLevel=syslog.LOG_ERR, msg="Merge Config failed")
         cmdpb.sysLog.assert_any_call(doPrint=True, logLevel=syslog.LOG_ERR, msg="Port Addition Failed")
-        assert deps == None
-        assert ret == False
+        assert deps is None
+        assert ret is False
 
     def test_upper_case_mac_fix(self):
         '''

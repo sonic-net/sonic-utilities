@@ -2930,9 +2930,10 @@ class TestConfigCableLength(object):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
-        obj = {'config_db':db.cfgdb}
+        obj = {'config_db': db.cfgdb}
 
-        result = runner.invoke(config.config.commands["interface"].commands["cable-length"], ["Ethernet0","40m"], obj=obj)
+        result = runner.invoke(config.config.commands["interface"].commands["cable-length"],
+                               ["Ethernet0", "40m"], obj=obj)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0

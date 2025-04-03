@@ -342,8 +342,8 @@ class TestStaticRoutes(object):
         print(result.exit_code, result.output)
         # config route del prefix vrf Vrf-BLUE 17.2.3.4/32 nexthop 30.0.0.6
         print(result.exit_code, result.output)
-        result = runner.invoke(config.config.commands["route"].commands["del"], \
-        ["prefix", "vrf", "Vrf-BLUE", "17.2.3.4/32", "nexthop", "30.0.0.6"], obj=obj)
+        result = runner.invoke(config.config.commands["route"].commands["del"],
+                               ["prefix", "vrf", "Vrf-BLUE", "17.2.3.4/32", "nexthop", "30.0.0.6"], obj=obj)
         print(result.exit_code, result.output)
         assert result.exit_code != 0
         assert ERROR_DEL_NONEXIST_KEY_STR.format("Vrf-BLUE|17.2.3.4/32") in result.output
