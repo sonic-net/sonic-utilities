@@ -125,6 +125,7 @@ TTL_RANGE = click.IntRange(min=0, max=255)
 QUEUE_RANGE = click.IntRange(min=0, max=255)
 GRE_TYPE_RANGE = click.IntRange(min=0, max=65535)
 ADHOC_VALIDATION = True
+VNET_NAME_MAX_LEN = 200
 
 if os.environ.get("UTILITIES_UNIT_TESTING", "0") in ("1", "2"):
     temp_system_reload_lockfile = tempfile.NamedTemporaryFile()
@@ -418,6 +419,15 @@ def is_vrf_exists(config_db, vrf_name):
 
     return False
 
+def is_vnet_exists(config_db, vnet_name):
+    """Check if VNET exists
+    """
+    keys = config_db.get_keys("VNET")
+    if vnet_name in keys:
+        return True
+
+    return False
+
 def is_interface_bind_to_vrf(config_db, interface_name):
     """Get interface if bind to vrf or not
     """
@@ -426,6 +436,8 @@ def is_interface_bind_to_vrf(config_db, interface_name):
         return False
     entry = config_db.get_entry(table_name, interface_name)
     if entry and entry.get("vrf_name"):
+        return True
+    elif entry and entry.get("vnet_name"):
         return True
     return False
 
@@ -514,7 +526,21 @@ def del_interface_bind_to_vrf(config_db, vrf_name):
                     for ipaddress in interface_ipaddresses:
                         remove_router_interface_ip_address(config_db, interface_name, ipaddress)
                     config_db.set_entry(table_name, interface_name, None)
-
+                
+def del_interface_bind_to_vnet(config_db, vnet_name):
+    """del interface bind to vnet
+    """
+    tables = ['INTERFACE', 'PORTCHANNEL_INTERFACE', 'VLAN_INTERFACE', 'LOOPBACK_INTERFACE']
+    for table_name in tables:
+        interface_dict = config_db.get_table(table_name)
+        if interface_dict:
+            for interface_name in interface_dict:
+                if 'vnet_name' in interface_dict[interface_name] and vrf_name == interface_dict[interface_name]['vnet_name']:
+                    interface_ipaddresses = get_interface_ipaddresses(config_db, interface_name)
+                    for ipaddress in interface_ipaddresses:
+                        remove_router_interface_ip_address(config_db, interface_name, ipaddress)
+                    config_db.set_entry(table_name, interface_name, None)
+                
 def set_interface_naming_mode(mode):
     """Modify SONIC_CLI_IFACE_MODE env variable in user .bashrc
     """
@@ -5802,23 +5828,40 @@ def bind(ctx, interface_name, vrf_name):
         if interface_name is None:
             ctx.fail("'interface_name' is None!")
 
-    if not is_vrf_exists(config_db, vrf_name):
-        ctx.fail("VRF %s does not exist!"%(vrf_name))
+    isVnet = False
+    if (vrf_name.startswith('Vnet_')):
+        isVnet= True
+
+    if (not isVnet):
+        if not is_vrf_exists(config_db, vrf_name):
+            ctx.fail("VRF %s does not exist!"%(vrf_name))
+    else:
+        if not is_vnet_exists(config_db, vrf_name):
+            ctx.fail("VNET %s does not exist!"%(vrf_name))
 
     table_name = get_interface_table_name(interface_name)
     if table_name == "":
         ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan/Loopback]")
-    if is_interface_bind_to_vrf(config_db, interface_name) is True and \
-        config_db.get_entry(table_name, interface_name).get('vrf_name') == vrf_name:
-        return
+    if is_interface_bind_to_vrf(config_db, interface_name) is True:
+        if (not isVnet):
+            if (config_db.get_entry(table_name, interface_name).get('vrf_name') == vrf_name):
+                return
+        else:
+            if (config_db.get_entry(table_name, interface_name).get('vnet_name') == vrf_name):
+                return
+    
     # Clean ip addresses if interface configured
     interface_addresses = get_interface_ipaddresses(config_db, interface_name)
     for ipaddress in interface_addresses:
         remove_router_interface_ip_address(config_db, interface_name, ipaddress)
     if table_name == "VLAN_SUB_INTERFACE":
         subintf_entry = config_db.get_entry(table_name, interface_name)
-        if 'vrf_name' in subintf_entry:
-            subintf_entry.pop('vrf_name')
+        if (not isVnet):
+            if 'vrf_name' in subintf_entry:
+                subintf_entry.pop('vrf_name')
+        else:
+            if 'vnet_name' in subintf_entry:
+                subintf_entry.pop('vnet_name')
 
     config_db.set_entry(table_name, interface_name, None)
     # When config_db del entry and then add entry with same key, the DEL will lost.
@@ -5832,10 +5875,18 @@ def bind(ctx, interface_name, vrf_name):
         time.sleep(0.01)
     state_db.close(state_db.STATE_DB)
     if table_name == "VLAN_SUB_INTERFACE":
-        subintf_entry['vrf_name'] = vrf_name
-        config_db.set_entry(table_name, interface_name, subintf_entry)
+        if (not isVnet):
+            subintf_entry['vrf_name'] = vrf_name
+            config_db.set_entry(table_name, interface_name, subintf_entry)
+        else:
+            subintf_entry['vnet_name'] = vrf_name
+            config_db.set_entry(table_name, interface_name, subintf_entry)
     else:
-        config_db.set_entry(table_name, interface_name, {"vrf_name": vrf_name})
+        if (not isVnet):
+            config_db.set_entry(table_name, interface_name, {"vrf_name": vrf_name})
+        else:
+            config_db.set_entry(table_name, interface_name, {"vnet_name": vrf_name})
+
 
     click.echo("Interface {} IP disabled and address(es) removed due to binding VRF {}.".format(interface_name, vrf_name))
 #
@@ -5865,6 +5916,8 @@ def unbind(ctx, interface_name):
         subintf_entry = config_db.get_entry(table_name, interface_name)
         if 'vrf_name' in subintf_entry:
             subintf_entry.pop('vrf_name')
+        elif 'vnet_name' in subintf_entry:
+            subintf_entry.pop('vnet_name')
 
     interface_ipaddresses = get_interface_ipaddresses(config_db, interface_name)
     for ipaddress in interface_ipaddresses:
@@ -9070,6 +9123,77 @@ def motd(message):
     config_db.mod_entry(swsscommon.CFG_BANNER_MESSAGE_TABLE_NAME, 'global',
                         {'motd': message})
 
+#
+# 'vnet' group ('config vnet ...')
+#
 
-if __name__ == '__main__':
-    config()
+@config.group(cls=clicommon.AbbreviationGroup, name='vnet')
+@click.pass_context
+def vnet(ctx):
+    """VNET-related configuration tasks"""
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    ctx.obj = {}
+    ctx.obj['config_db'] = config_db
+
+@vnet.command('add')
+@click.argument('vnet_name', metavar='<vnet_name>', type=str, required=True)
+@click.argument('vni', metavar='<vni>', required=True)
+@click.argument('vxlan_tunnel', metavar='<vxlan_tunnel>', required=True)
+@click.argument('peer_list', metavar='<peer_list>', required=False)
+@click.argument('guid', metavar='<guid>', type=str, required=False)
+@click.argument('scope', metavar='<scope>', required=False)
+@click.argument('advertise_prefix', metavar='<advertise_prefix>',type=bool, required=False)
+@click.argument('overlay_dmac', metavar='<overlay_dmac>', required=False)
+@click.argument('src_mac', metavar='<src_mac>', required=False)
+@click.pass_context
+def add_vnet(ctx, vnet_name, vni, vxlan_tunnel, peer_list, guid, scope, advertise_prefix, overlay_dmac, src_mac):
+    """Add Vnet"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+
+    if not vnet_name.startswith("Vnet_"):
+        ctx.fail("'vnet_name' must begin with 'Vnet_' .")
+    if len(vnet_name) > VNET_NAME_MAX_LEN:
+        ctx.fail("'vnet_name' length should not exceed {} characters.".format(VNET_NAME_MAX_LEN))
+    if is_vnet_exists(config_db, vnet_name):
+        ctx.fail("VNET {} already exists!".format(vnet_name))
+    else:
+        subvnet_dict={}
+        subvnet_dict["vni"] = vni
+        subvnet_dict["vxlan_tunnel"] = vxlan_tunnel
+        if peer_list is not None:
+            subvnet_dict["peer_list"] = peer_list
+        if guid is not None:
+            subvnet_dict["guid"] = guid
+        if scope is not None:
+            subvnet_dict["scope"] = scope
+        if advertise_prefix is not None:
+            subvnet_dict["advertise_prefix"] = advertise_prefix
+        if overlay_dmac is not None:
+            subvnet_dict["overlay_dmac"] = overlay_dmac
+        if src_mac is not None:
+            subvnet_dict["src_mac"] = src_mac
+        try:
+            config_db.set_entry('VNET', vnet_name, subvnet_dict)
+        except ValueError as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+@vnet.command('del')
+@click.argument('vnet_name', metavar='<vnet_name>', required=True)
+@click.pass_context
+def del_vnet(ctx, vnet_name):
+    """Del vrf"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+    if not vnet_name.startswith("Vnet_"):
+        ctx.fail("'vnet_name' must begin with 'Vnet_' .")
+    if len(vnet_name) > VNET_NAME_MAX_LEN:
+        ctx.fail("'vnet_name' length should not exceed {} characters".format(VNET_NAME_MAX_LEN))
+    if not is_vnet_exists(config_db, vnet_name):
+        ctx.fail("VNET {} does not exist!".format(vnet_name))
+    else:
+        del_interface_bind_to_vnet(config_db, vnet_name)
+        try:
+            config_db.set_entry('VNET', vnet_name, None)
+        except JsonPatchConflict as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+        click.echo("VNET {} deleted and all associated IP addresses removed.".format(vnet_name))
