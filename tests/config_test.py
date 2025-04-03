@@ -835,7 +835,9 @@ class TestConfigReloadMasic(object):
         with mock.patch("utilities_common.cli.run_command",
                         mock.MagicMock(side_effect=mock_run_command_side_effect)),\
             mock.patch('config.main.read_json_file',
-                       mock.MagicMock(side_effect=read_json_file_side_effect)):
+                       mock.MagicMock(side_effect=read_json_file_side_effect)),\
+            mock.patch('config.main.sonic_yang.SonicYang.validate_data_tree',
+                       return_value=True):
 
             runner = CliRunner()
 
@@ -910,7 +912,9 @@ class TestConfigReloadMasic(object):
         with mock.patch("utilities_common.cli.run_command",
                         mock.MagicMock(side_effect=mock_run_command_side_effect)),\
             mock.patch('config.main.read_json_file',
-                       mock.MagicMock(side_effect=read_json_file_side_effect)):
+                       mock.MagicMock(side_effect=read_json_file_side_effect)),\
+            mock.patch('config.main.sonic_yang.SonicYang.validate_data_tree',
+                       return_value=True):
 
             runner = CliRunner()
 
@@ -1315,6 +1319,9 @@ class TestLoadMinigraph(object):
 
 class TestReloadConfig(object):
     dummy_cfg_file = os.path.join(os.sep, "tmp", "config.json")
+    dummy_cfg_file_localhost = os.path.join(os.sep, "tmp", "config.json")
+    dummy_cfg_file_asic0 = os.path.join(os.sep, "tmp", "config0.json")
+    dummy_cfg_file_asic1 = os.path.join(os.sep, "tmp", "config1.json")
 
     @classmethod
     def setup_class(cls):
@@ -1475,17 +1482,24 @@ class TestReloadConfig(object):
 
     def test_reload_config_masic(self, get_cmd_module, setup_multi_broadcom_masic):
         self.add_sysinfo_to_cfg_file()
-        with mock.patch(
-                "utilities_common.cli.run_command",
-                mock.MagicMock(side_effect=mock_run_command_side_effect)
-        ) as mock_run_command:
+
+        def read_json_file_side_effect(filename):
+            return {}
+
+        with mock.patch("utilities_common.cli.run_command",
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)) as mock_run_command,\
+            mock.patch('config.main.read_json_file',
+                       mock.MagicMock(side_effect=read_json_file_side_effect)),\
+            mock.patch('config.main.sonic_yang.SonicYang.validate_data_tree',
+                       return_value=True):
             (config, show) = get_cmd_module
             runner = CliRunner()
             # 3 config files: 1 for host and 2 for asic
             cfg_files = "{},{},{}".format(
-                            self.dummy_cfg_file,
-                            self.dummy_cfg_file,
-                            self.dummy_cfg_file)
+                            self.dummy_cfg_file_localhost,
+                            self.dummy_cfg_file_asic0,
+                            self.dummy_cfg_file_asic1)
+
             result = runner.invoke(
                 config.config.commands["reload"],
                 [cfg_files, '-y', '-f'])
