@@ -19,7 +19,7 @@ def get_chassis_info():
 
     keys = ["serial", "model", "revision"]
 
-    def try_get(platform, attr):
+    def try_get(platform, attr, fallback):
         try:
             if platform["chassis"] is None:
                 import sonic_platform
@@ -39,7 +39,7 @@ def get_chassis_info():
 
     if all(v is None or v == 'N/A' for v in chassis_info.values()):
         platform_cache = {"chassis": None}
-        chassis_info = {k: try_get(platform_cache, k) for k in keys}
+        chassis_info = {k:try_get(platform_cache, k, "N/A") for k in keys}
 
     return chassis_info
 
