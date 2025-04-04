@@ -70,24 +70,45 @@ def name(vnet_name):
     """Show vnet name <vnet name> information"""
     config_db = ConfigDBConnector()
     config_db.connect()
-    header = ['vnet name', 'vxlan tunnel', 'vni', 'peer list', 'guid']
+    header = ['vnet name', 'vxlan tunnel', 'vni', 'peer list', 'guid', 'interfaces']
 
     # Fetching data from config_db for VNET
     vnet_data = config_db.get_entry('VNET', vnet_name)
 
-    def tablelize(vnet_key, vnet_data):
+    if not vnet_data:
+        click.echo(f"VNET '{vnet_name}' not found!")
+        return
+
+    # Fetching interfaces bound to this VNET
+    interfaces = []
+    intfs_data = config_db.get_table("INTERFACE")
+    vlan_intfs_data = config_db.get_table("VLAN_INTERFACE")
+
+    # Check regular interfaces
+    for intf, data in intfs_data.items():
+        if data.get('vnet_name') == vnet_name:
+            interfaces.append(intf)
+
+    # Check VLAN interfaces
+    for intf, data in vlan_intfs_data.items():
+        if data.get('vnet_name') == vnet_name:
+            interfaces.append(intf)
+
+    # Function to create tabulated output
+    def tablelize(vnet_key, vnet_data, interfaces):
         table = []
-        if vnet_data:
-            r = []
-            r.append(vnet_key)
-            r.append(vnet_data.get('vxlan_tunnel'))
-            r.append(vnet_data.get('vni'))
-            r.append(vnet_data.get('peer_list'))
-            r.append(vnet_data.get('guid'))
-            table.append(r)
+        row = [
+            vnet_key,
+            vnet_data.get('vxlan_tunnel', 'N/A'),
+            vnet_data.get('vni', 'N/A'),
+            vnet_data.get('peer_list', 'N/A'),
+            vnet_data.get('guid', 'N/A'),
+            ", ".join(interfaces) if interfaces else "No Interfaces"
+        ]
+        table.append(row)
         return table
 
-    click.echo(tabulate(tablelize(vnet_name, vnet_data), header))
+    click.echo(tabulate(tablelize(vnet_name, vnet_data, interfaces), headers=header))
 
 
 @vnet.command()
@@ -147,6 +168,62 @@ def alias(vnet_alias):
         return table
 
     click.echo(tabulate(tablelize(vnet_keys, vnet_data, vnet_alias), header))
+
+@vnet.command()
+@click.argument('guid', required=True)
+def guid(guid):
+    """Show vnet details using GUID"""
+    config_db = ConfigDBConnector()
+    config_db.connect()
+
+    header = ['VNET Name', 'VXLAN Tunnel', 'VNI', 'Peer List', 'GUID', 'Interfaces']
+
+    # Fetch all VNETs from CONFIG_DB
+    vnet_table = config_db.get_table('VNET')
+
+    # Find VNET by GUID
+    vnet_name = None
+    vnet_data = None
+    for name, data in vnet_table.items():
+        if data.get('guid') == guid:
+            vnet_name = name
+            vnet_data = data
+            break
+
+    if not vnet_name:
+        click.echo(f"No VNET found with GUID '{guid}'")
+        return
+
+    # Fetch interfaces bound to this VNET
+    interfaces = []
+    intfs_data = config_db.get_table("INTERFACE")
+    vlan_intfs_data = config_db.get_table("VLAN_INTERFACE")
+
+    # Check regular interfaces
+    for intf, data in intfs_data.items():
+        if data.get('vnet_name') == vnet_name:
+            interfaces.append(intf)
+
+    # Check VLAN interfaces
+    for intf, data in vlan_intfs_data.items():
+        if data.get('vnet_name') == vnet_name:
+            interfaces.append(intf)
+
+    # Function to create tabulated output
+    def tablelize(vnet_key, vnet_data, interfaces):
+        table = []
+        row = [
+            vnet_key,
+            vnet_data.get('vxlan_tunnel', 'N/A'),
+            vnet_data.get('vni', 'N/A'),
+            vnet_data.get('peer_list', 'N/A'),
+            vnet_data.get('guid', 'N/A'),
+            ", ".join(interfaces) if interfaces else "No Interfaces"
+        ]
+        table.append(row)
+        return table
+
+    click.echo(tabulate(tablelize(vnet_name, vnet_data, interfaces), headers=header))
 
 
 @vnet.command()

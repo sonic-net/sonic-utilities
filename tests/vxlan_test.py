@@ -406,3 +406,39 @@ Error: 'vxlan_name' length should not exceed 15 characters
     def teardown_class(cls):
         os.environ['UTILITIES_UNIT_TESTING'] = "0"
         print("TEARDOWN")
+
+class TestVxlan(object):
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "1"
+        print("SETUP")
+
+    def test_show_vnet_brief(self):
+        from .mock_tables import dbconnector
+        jsonfile_config = os.path.join(mock_db_path, "config_db")
+        dbconnector.dedicated_dbs['CONFIG_DB'] = jsonfile_config
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(show.cli.commands["vnet"].commands["brief"], [])
+        assert result.exit_code != 0
+        assert "Vnet_2000" in result.output
+        assert "1234-56-7890-1234" in result.output
+        assert "tunnel1" in result.output
+
+    def test_show_vnet_name(self):
+        from .mock_tables import dbconnector
+        jsonfile_config = os.path.join(mock_db_path, "config_db")
+        dbconnector.dedicated_dbs['CONFIG_DB'] = jsonfile_config
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(show.cli.commands["vnet"].commands["name"], ["Vnet_2000"])
+        assert result.exit_code != 0
+        assert "Vnet_2000" in result.output
+        assert "1234-56-7890-1234" in result.output
+    
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+        print("TEARDOWN")
