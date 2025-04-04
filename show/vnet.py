@@ -169,6 +169,7 @@ def alias(vnet_alias):
 
     click.echo(tabulate(tablelize(vnet_keys, vnet_data, vnet_alias), header))
 
+
 @vnet.command()
 @click.argument('guid', required=True)
 def guid(guid):
