@@ -196,9 +196,12 @@ Released lock on {0}
 RELOAD_MASIC_CONFIG_DB_OUTPUT = """\
 Acquired lock on {0}
 Stopping SONiC target ...
+Running command: /usr/local/bin/sonic-cfggen -H -k  --write-to-db
 Running command: /usr/local/bin/sonic-cfggen -j /tmp/config.json --write-to-db
-Running command: /usr/local/bin/sonic-cfggen -j /tmp/config.json -n asic0 --write-to-db
-Running command: /usr/local/bin/sonic-cfggen -j /tmp/config.json -n asic1 --write-to-db
+Running command: /usr/local/bin/sonic-cfggen -H -k  -n asic0 --write-to-db
+Running command: /usr/local/bin/sonic-cfggen -j /tmp/config0.json -n asic0 --write-to-db
+Running command: /usr/local/bin/sonic-cfggen -H -k  -n asic1 --write-to-db
+Running command: /usr/local/bin/sonic-cfggen -j /tmp/config1.json -n asic1 --write-to-db
 Restarting SONiC target ...
 Reloading Monit configuration ...
 Released lock on {0}
@@ -835,7 +838,11 @@ class TestConfigReloadMasic(object):
         with mock.patch("utilities_common.cli.run_command",
                         mock.MagicMock(side_effect=mock_run_command_side_effect)),\
             mock.patch('config.main.read_json_file',
-                       mock.MagicMock(side_effect=read_json_file_side_effect)):
+                       mock.MagicMock(side_effect=read_json_file_side_effect)),\
+            mock.patch('config.main.sonic_yang.SonicYang.loadData',
+                       return_value=True),\
+            mock.patch('config.main.sonic_yang.SonicYang.validate_data_tree',
+                       return_value=True):
 
             runner = CliRunner()
 
@@ -910,7 +917,11 @@ class TestConfigReloadMasic(object):
         with mock.patch("utilities_common.cli.run_command",
                         mock.MagicMock(side_effect=mock_run_command_side_effect)),\
             mock.patch('config.main.read_json_file',
-                       mock.MagicMock(side_effect=read_json_file_side_effect)):
+                       mock.MagicMock(side_effect=read_json_file_side_effect)),\
+            mock.patch('config.main.sonic_yang.SonicYang.loadData',
+                       return_value=True),\
+            mock.patch('config.main.sonic_yang.SonicYang.validate_data_tree',
+                       return_value=True):
 
             runner = CliRunner()
 
@@ -1315,6 +1326,8 @@ class TestLoadMinigraph(object):
 
 class TestReloadConfig(object):
     dummy_cfg_file = os.path.join(os.sep, "tmp", "config.json")
+    dummy_cfg_file_asic0 = os.path.join(os.sep, "tmp", "config0.json")
+    dummy_cfg_file_asic1 = os.path.join(os.sep, "tmp", "config1.json")
 
     @classmethod
     def setup_class(cls):
@@ -1325,6 +1338,26 @@ class TestReloadConfig(object):
 
     def add_sysinfo_to_cfg_file(self):
         with open(self.dummy_cfg_file, 'w') as f:
+            device_metadata = {
+                "DEVICE_METADATA": {
+                    "localhost": {
+                        "platform": "some_platform",
+                        "mac": "02:42:f0:7f:01:05"
+                    }
+                }
+            }
+            f.write(json.dumps(device_metadata))
+        with open(self.dummy_cfg_file_asic0, 'w') as f:
+            device_metadata = {
+                "DEVICE_METADATA": {
+                    "localhost": {
+                        "platform": "some_platform",
+                        "mac": "02:42:f0:7f:01:05"
+                    }
+                }
+            }
+            f.write(json.dumps(device_metadata))
+        with open(self.dummy_cfg_file_asic1, 'w') as f:
             device_metadata = {
                 "DEVICE_METADATA": {
                     "localhost": {
@@ -1474,18 +1507,24 @@ class TestReloadConfig(object):
                 reload_config_with_disabled_service_output.format(config.SYSTEM_RELOAD_LOCK)
 
     def test_reload_config_masic(self, get_cmd_module, setup_multi_broadcom_masic):
-        self.add_sysinfo_to_cfg_file()
-        with mock.patch(
-                "utilities_common.cli.run_command",
-                mock.MagicMock(side_effect=mock_run_command_side_effect)
-        ) as mock_run_command:
+        def read_json_file_side_effect(filename):
+            return {}
+
+        with mock.patch("utilities_common.cli.run_command",
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)),\
+            mock.patch('config.main.read_json_file',
+                       mock.MagicMock(side_effect=read_json_file_side_effect)),\
+            mock.patch('config.main.sonic_yang.SonicYang.loadData', return_value=True),\
+            mock.patch('config.main.sonic_yang.SonicYang.validate_data_tree',
+                       return_value=True):
             (config, show) = get_cmd_module
             runner = CliRunner()
             # 3 config files: 1 for host and 2 for asic
             cfg_files = "{},{},{}".format(
                             self.dummy_cfg_file,
-                            self.dummy_cfg_file,
-                            self.dummy_cfg_file)
+                            self.dummy_cfg_file_asic0,
+                            self.dummy_cfg_file_asic1)
+
             result = runner.invoke(
                 config.config.commands["reload"],
                 [cfg_files, '-y', '-f'])
