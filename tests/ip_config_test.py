@@ -357,13 +357,13 @@ class TestConfigIP(object):
         assert ('Vnet_1000') in db.cfgdb.get_table('VNET')
         assert result.exit_code == 0
 
-        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["bind"],\
-        ["Ethernet64", "Vnet_1000"], obj=obj)
+        bind_command = config.config.commands["interface"].commands["vrf"].commands["bind"]
+        interfaces = ["Ethernet64", "Vnet_1000"]
+        result = runner.invoke(bind_command, interfaces, obj=obj) 
         print(result.exit_code, result.output)
         assert result.exit_code == 0
 
-        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["unbind"],\
-        ["Ethernet64"], obj=obj)
+        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["unbind"],["Ethernet64"], obj=obj)
         print(result.exit_code, result.output)
         assert result.exit_code == 0
 
@@ -377,8 +377,9 @@ class TestConfigIP(object):
         assert result.exit_code != 0
         assert result.output == INVALID_VRF_MSG
 
-        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["bind"],\
-        ["Ethernet64", "Vnet_2000"], obj=obj)
+        bind_command = config.config.commands["interface"].commands["vrf"].commands["bind"]
+        interfaces = ["Ethernet64", "Vnet_2000"]
+        result = runner.invoke(bind_command, interfaces, obj=obj)
         print(result.exit_code, result.output)
         assert result.exit_code != 0
         assert result.output == INVALID_VNET_MSG
