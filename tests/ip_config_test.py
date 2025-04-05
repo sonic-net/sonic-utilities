@@ -29,7 +29,7 @@ Try "bind --help" for help.
 Error: VRF mgmt does not exist!
 """
 
-INVALID_VNET_MSG ="""\
+INVALID_VNET_MSG = """\
 Usage: bind [OPTIONS] <interface_name> <vrf_name>
 Try "bind --help" for help.
 
@@ -349,7 +349,7 @@ class TestConfigIP(object):
     def test_intf_vnet_bind_unbind(self):
         runner = CliRunner()
         db = Db()
-        obj = {'config_db':db.cfgdb, 'namespace':db.db.namespace}
+        obj = {'config_db': db.cfgdb, 'namespace': db.db.namespace}
 
         # Create vnet
         result = runner.invoke(config.config.commands["vnet"].commands["add"], ["Vnet_1000", "222", "tunnel1"], obj=obj)
@@ -357,11 +357,13 @@ class TestConfigIP(object):
         assert ('Vnet_1000') in db.cfgdb.get_table('VNET')
         assert result.exit_code == 0
 
-        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["bind"], ["Ethernet64", "Vnet_1000"], obj=obj)
+        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["bind"],\
+        ["Ethernet64", "Vnet_1000"], obj=obj)
         print(result.exit_code, result.output)
         assert result.exit_code == 0
 
-        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["unbind"], ["Ethernet64"], obj=obj)
+        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["unbind"],\
+        ["Ethernet64"], obj=obj)
         print(result.exit_code, result.output)
         assert result.exit_code == 0
 
@@ -375,7 +377,8 @@ class TestConfigIP(object):
         assert result.exit_code != 0
         assert result.output == INVALID_VRF_MSG
 
-        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["bind"], ["Ethernet64", "Vnet_2000"], obj=obj)
+        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["bind"],\
+        ["Ethernet64", "Vnet_2000"], obj=obj)
         print(result.exit_code, result.output)
         assert result.exit_code != 0
         assert result.output == INVALID_VNET_MSG
