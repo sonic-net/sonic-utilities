@@ -1504,12 +1504,14 @@ class TestReloadConfig(object):
                 reload_config_with_disabled_service_output.format(config.SYSTEM_RELOAD_LOCK)
 
     def test_reload_config_masic(self, get_cmd_module, setup_multi_broadcom_masic):
-        self.add_sysinfo_to_cfg_file()
+        def read_json_file_side_effect(filename):
+            return {}
 
         with mock.patch("utilities_common.cli.run_command",
                         mock.MagicMock(side_effect=mock_run_command_side_effect)),\
-            mock.patch('config.main.sonic_yang.SonicYang.loadData',
-                       return_value=True),\
+            mock.patch('config.main.read_json_file',
+                       mock.MagicMock(side_effect=read_json_file_side_effect)),\
+            mock.patch('config.main.sonic_yang.SonicYang.loadData', return_value=True),\
             mock.patch('config.main.sonic_yang.SonicYang.validate_data_tree',
                        return_value=True):
             (config, show) = get_cmd_module
