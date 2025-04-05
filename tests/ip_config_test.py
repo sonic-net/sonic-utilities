@@ -359,11 +359,13 @@ class TestConfigIP(object):
 
         bind_command = config.config.commands["interface"].commands["vrf"].commands["bind"]
         interfaces = ["Ethernet64", "Vnet_1000"]
-        result = runner.invoke(bind_command, interfaces, obj=obj) 
+        result = runner.invoke(bind_command, interfaces, obj=obj)
         print(result.exit_code, result.output)
         assert result.exit_code == 0
 
-        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["unbind"],["Ethernet64"], obj=obj)
+        unbind_command = config.config.commands["interface"].commands["vrf"].commands["unbind"]
+        interfaces = ["Ethernet64"]
+        result = runner.invoke(unbind_command, interfaces, obj=obj)
         print(result.exit_code, result.output)
         assert result.exit_code == 0
 
