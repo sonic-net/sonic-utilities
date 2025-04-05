@@ -44,7 +44,6 @@ EXIT_FILE_SYSTEM_FULL=3
 EXIT_NEXT_IMAGE_NOT_EXISTS=4
 EXIT_ORCHAGENT_SHUTDOWN=10
 EXIT_SYNCD_SHUTDOWN=11
-EXIT_COUNTERPOLL_DELAY_FAILURE=14
 EXIT_DB_INTEGRITY_FAILURE=15
 EXIT_NO_CONTROL_PLANE_ASSISTANT=20
 EXIT_SONIC_INSTALLER_VERIFY_REBOOT=21
@@ -744,6 +743,13 @@ fi
 
 init_warm_reboot_states
 
+# start sending LACPDUs to keep the LAGs refreshed
+# the process will die in 30s
+debug "Starting lag_keepalive to send LACPDUs ..."
+timeout 30 python3 ${LAG_KEEPALIVE_SCRIPT} --fork-into-background
+# give the lag_keepalive script a chance to send some LACPDUs
+sleep 5
+
 setup_control_plane_assistant
 
 TEAMD_INCREASE_RETRY_COUNT=0
@@ -779,17 +785,6 @@ if [[ "$REBOOT_TYPE" = "warm-reboot" || "$REBOOT_TYPE" = "fastfast-reboot" || "$
     fi
 fi
 
-if [[ "$REBOOT_TYPE" = "fast-reboot" ]]; then
-    COUNTERPOLL_DELAY_RC=0
-    # Delay counters in config_db.json
-    /usr/local/bin/counterpoll config-db delay $CONFIG_DB_FILE || COUNTERPOLL_DELAY_RC=$?
-    if [[ COUNTERPOLL_DELAY_RC -ne 0 ]]; then
-        error "Failed to delay counterpoll. Exit code: $COUNTERPOLL_DELAY_RC"
-        unload_kernel
-        exit "${EXIT_COUNTERPOLL_DELAY_FAILURE}"
-    fi
-fi
-
 if [[ ( "${REBOOT_TYPE}" = "warm-reboot" || "${REBOOT_TYPE}" = "fastfast-reboot" || "${REBOOT_TYPE}" = "express-reboot" ) && "${TEAMD_INCREASE_RETRY_COUNT}" -eq 1 ]]; then
     /usr/local/bin/teamd_increase_retry_count.py
 fi
@@ -812,13 +807,6 @@ fi
 
 # disable trap-handlers which were set before
 trap '' EXIT HUP INT QUIT TERM KILL ABRT ALRM
-
-# start sending LACPDUs to keep the LAGs refreshed
-# this is a non-blocking call, and the process will die in 300s
-debug "Starting lag_keepalive to send LACPDUs ..."
-timeout 300 python ${LAG_KEEPALIVE_SCRIPT} &
-# give the lag_keepalive script a chance to get ready (30s) and collect one lacpdu before going down (30s)
-sleep 60
 
 if [ -x ${LOG_SSD_HEALTH} ]; then
     debug "Collecting logs to check ssd health before ${REBOOT_TYPE}..."
@@ -912,12 +900,6 @@ echo "User issued '${REBOOT_SCRIPT_NAME}' command [User: ${REBOOT_USER}, Time: $
 sync
 sleep 1
 sync
-
-# sync the current system time to CMOS
-if [ -x /sbin/hwclock ]; then
-    /sbin/hwclock -w || /bin/true
-fi
-
 
 if [[ -x ${DEVPATH}/${PLATFORM}/${PLATFORM_FWUTIL_AU_REBOOT_HANDLE} ]]; then
     debug "Handling task file for boot type ${REBOOT_TYPE}"

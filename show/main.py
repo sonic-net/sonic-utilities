@@ -776,6 +776,37 @@ def counters(interfacename, namespace, display, verbose, json, voq, nonzero):
 
     run_command(cmd, display_cmd=verbose)
 
+
+# 'wredcounters' subcommand ("show queue wredcounters")
+@queue.command()
+@click.argument('interfacename', required=False)
+@multi_asic_util.multi_asic_click_options
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+@click.option('--json', is_flag=True, help="JSON output")
+@click.option('--voq', is_flag=True, help="VOQ counters")
+def wredcounters(interfacename, namespace, display, verbose, json, voq):
+    """Show queue wredcounters"""
+
+    cmd = ["wredstat"]
+
+    if interfacename is not None:
+        if clicommon.get_interface_naming_mode() == "alias":
+            interfacename = iface_alias_converter.alias_to_name(interfacename)
+
+    if interfacename is not None:
+        cmd += ['-p', str(interfacename)]
+
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
+
+    if json:
+        cmd += ["-j"]
+
+    if voq:
+        cmd += ["-V"]
+
+    run_command(cmd, display_cmd=verbose)
+
 #
 # 'watermarks' subgroup ("show queue watermarks ...")
 #
@@ -1797,7 +1828,7 @@ def ntp(verbose):
     """Show NTP running configuration"""
     ntp_servers = []
     ntp_dict = {}
-    with open("/etc/ntpsec/ntp.conf") as ntp_file:
+    with open("/etc/chrony/chrony.conf") as ntp_file:
         data = ntp_file.readlines()
     for line in data:
         if line.startswith("server "):
@@ -2047,22 +2078,15 @@ def bgp(verbose):
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 def ntp(ctx, verbose):
     """Show NTP information"""
-    from pkg_resources import parse_version
-    ntpstat_cmd = ["ntpstat"]
-    ntpcmd = ["ntpq", "-p", "-n"]
+    chronyc_tracking_cmd = ["chronyc", "-n", "tracking"]
+    chronyc_sources_cmd = ["chronyc", "-n", "sources"]
     if is_mgmt_vrf_enabled(ctx) is True:
-        #ManagementVRF is enabled. Call ntpq using "ip vrf exec" or cgexec based on linux version
-        os_info =  os.uname()
-        release = os_info[2].split('-')
-        if parse_version(release[0]) > parse_version("4.9.0"):
-            ntpstat_cmd = ['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'ntpstat']
-            ntpcmd = ['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'ntpq', '-p', '-n']
-        else:
-            ntpstat_cmd = ['sudo', 'cgexec', '-g', 'l3mdev:mgmt', 'ntpstat']
-            ntpcmd = ['sudo', 'cgexec', '-g', 'l3mdev:mgmt', 'ntpq', '-p', '-n']
+        # ManagementVRF is enabled. Call chronyc using "ip vrf exec" based on linux version
+        chronyc_tracking_cmd = ["sudo", "ip", "vrf", "exec", "mgmt"] + chronyc_tracking_cmd
+        chronyc_sources_cmd = ["sudo", "ip", "vrf", "exec", "mgmt"] + chronyc_sources_cmd
 
-    run_command(ntpstat_cmd, display_cmd=verbose)
-    run_command(ntpcmd, display_cmd=verbose)
+    run_command(chronyc_tracking_cmd, display_cmd=verbose)
+    run_command(chronyc_sources_cmd, display_cmd=verbose)
 
 #
 # 'uptime' command ("show uptime")

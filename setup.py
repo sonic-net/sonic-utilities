@@ -116,7 +116,6 @@ setup(
         'scripts/buffershow',
         'scripts/coredump-compress',
         'scripts/configlet',
-        'scripts/config_validator.py',
         'scripts/db_migrator.py',
         'scripts/decode-syseeprom',
         'scripts/dropcheck',
@@ -163,6 +162,7 @@ setup(
         'scripts/psushow',
         'scripts/queuestat',
         'scripts/reboot',
+        'scripts/reboot_smartswitch_helper',
         'scripts/route_check.py',
         'scripts/route_check_test.sh',
         'scripts/vnet_route_check.py',
@@ -192,7 +192,8 @@ setup(
         'scripts/verify_image_sign_common.sh',
         'scripts/check_db_integrity.py',
         'scripts/sysreadyshow',
-        'scripts/twamp-light'
+        'scripts/twamp-light',
+        'scripts/wredstat'
     ],
     entry_points={
         'console_scripts': [

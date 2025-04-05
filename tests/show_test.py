@@ -684,9 +684,15 @@ class TestShowPlatform(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['sudo', 'decode-syseeprom', '-d'], display_cmd=True)
 
+    @mock.patch('sonic_py_common.device_info.get_platform_json_data')
     @patch('utilities_common.cli.run_command')
     @patch('os.popen')
-    def test_ssdhealth(self, mock_popen, mock_run_command):
+    def test_ssdhealth(self, mock_popen, mock_run_command, mock_plat_json):
+        mock_plat_json.return_value = {
+            "chassis": {
+                 "name": "mock_platform"
+            }
+        }
         mock_popen.return_value.readline.return_value = '/dev/sda\n'
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['platform'].commands['ssdhealth'], ['--verbose', '--vendor'])
@@ -1046,6 +1052,25 @@ class TestShow(object):
         result = runner.invoke(show.cli.commands['banner'])
         assert result.exit_code == 0
 
+    @patch('show.main.run_command')
+    def test_show_ntp(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands['ntp'])
+        assert result.exit_code == 0
+        expected_calls = [call(['chronyc', '-n', 'tracking'], display_cmd=False),
+                          call(['chronyc', '-n', 'sources'], display_cmd=False)]
+        mock_run_command.assert_has_calls(expected_calls)
+
+    @patch('show.main.is_mgmt_vrf_enabled', MagicMock(return_value=True))
+    @patch('show.main.run_command')
+    def test_show_ntp_mgmt_vrf(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands['ntp'])
+        assert result.exit_code == 0
+        expected_calls = [call(['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'chronyc', '-n', 'tracking'], display_cmd=False),
+                          call(['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'chronyc', '-n', 'sources'], display_cmd=False)]
+        mock_run_command.assert_has_calls(expected_calls)
+
     def teardown(self):
         print('TEAR DOWN')
 
@@ -1071,7 +1096,7 @@ class TestShowRunningconfiguration(object):
         assert '[1.1.1.1]' in result.output
 
     @patch('builtins.open', mock_open(
-        read_data=open('tests/ntp.conf').read()))
+        read_data=open('tests/chrony.conf').read()))
     def test_ntp(self):
         runner = CliRunner()
 

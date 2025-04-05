@@ -29,6 +29,8 @@ from sonic_package_manager.service_creator.feature import FeatureRegistry
 from sonic_package_manager.service_creator.sonic_db import SonicDB
 from sonic_package_manager.service_creator.utils import in_chroot
 
+from sonic_py_common import device_info
+
 
 SERVICE_FILE_TEMPLATE = 'sonic.service.j2'
 
@@ -254,6 +256,9 @@ class ServiceCreator:
         script_path = os.path.join(DOCKER_CTL_SCRIPT_LOCATION, f'{name}.sh')
         script_template = get_tmpl_path(DOCKER_CTL_SCRIPT_TEMPLATE)
         run_opt = []
+        sonic_asic_platform = os.environ.get("CONFIGURED_PLATFORM")
+        if sonic_asic_platform is None:
+            sonic_asic_platform = device_info.get_platform_info().get('asic_type', None)
 
         if container_spec['privileged']:
             run_opt.append('--privileged')
@@ -277,7 +282,9 @@ class ServiceCreator:
         render_ctx = {
             'docker_container_name': name,
             'docker_image_id': image_id,
+            'docker_image_name': package.entry.repository,
             'docker_image_run_opt': run_opt,
+            'sonic_asic_platform': sonic_asic_platform
         }
         render_template(script_template, script_path, render_ctx, executable=True)
         log.info(f'generated {script_path}')

@@ -1031,6 +1031,30 @@
         "reasons": "[ACL_ANY,L2_ANY,L3_ANY]",
         "count": "2"
     },
+    "QUEUE_COUNTER_CAPABILITIES|WRED_ECN_QUEUE_WRED_DROPPED_PKT_COUNTER": {
+        "isSupported": "true"
+    },
+    "QUEUE_COUNTER_CAPABILITIES|WRED_ECN_QUEUE_WRED_DROPPED_BYTE_COUNTER": {
+        "isSupported": "true"
+    },
+    "QUEUE_COUNTER_CAPABILITIES|WRED_ECN_QUEUE_ECN_MARKED_PKT_COUNTER": {
+        "isSupported": "true"
+    },
+    "QUEUE_COUNTER_CAPABILITIES|WRED_ECN_QUEUE_ECN_MARKED_BYTE_COUNTER": {
+        "isSupported": "true"
+    },
+    "PORT_COUNTER_CAPABILITIES|WRED_ECN_PORT_WRED_GREEN_DROP_COUNTER": {
+        "isSupported": "true"
+    },
+    "PORT_COUNTER_CAPABILITIES|WRED_ECN_PORT_WRED_YELLOW_DROP_COUNTER": {
+        "isSupported": "true"
+    },
+    "PORT_COUNTER_CAPABILITIES|WRED_ECN_PORT_WRED_RED_DROP_COUNTER": {
+        "isSupported": "true"
+    },
+    "PORT_COUNTER_CAPABILITIES|WRED_ECN_PORT_WRED_TOTAL_DROP_COUNTER": {
+        "isSupported": "true"
+    },
     "LAG_MEMBER_TABLE|PortChannel0001|Ethernet112": {
         "runner.actor_lacpdu_info.state": "5",
         "runner.state": "disabled",
@@ -1617,7 +1641,13 @@
     "ACL_TABLE_TABLE|DATAACL_5" : {
         "status": "Active"
     },
+    "ACL_TABLE_TABLE|ENI" : {
+        "status": "Active"
+    },
     "ACL_RULE_TABLE|DATAACL_5|RULE_1" : {
+        "status": "Active"
+    },
+    "ACL_RULE_TABLE|ENI|Vnet100_F4939FEFC47E_OUT" : {
         "status": "Active"
     },
     "VOLTAGE_INFO|VSENSOR0": {
@@ -1684,5 +1714,32 @@
     },
     "STP_TABLE|GLOBAL": {
         "max_stp_inst": "510"
+    },
+    "PORT_OPERR_TABLE|Ethernet72": {
+    },
+    "PORT_OPERR_TABLE|Ethernet64": {
+        "oper_error_status": "2",
+        "mac_remote_fault_count": "14483",
+        "mac_remote_fault_time": "2025-01-17 19:51:12",
+        "mac_local_fault_count": "26",
+        "mac_local_fault_time": "2025-01-17 18:40:56"
+    },
+    "PORT_OPERR_TABLE|Ethernet32": {
+        "oper_error_status": "0",
+        "mac_remote_fault_count": "0",
+        "mac_remote_fault_time": "",
+        "mac_local_fault_count": "5",
+        "mac_local_fault_time": "2025-01-16 12:05:34",
+        "fec_sync_loss_count": "3",
+        "fec_sync_loss_time": "2025-01-16 13:45:20",
+        "high_ber_error_count": "1",
+        "high_ber_error_time": "2025-01-16 14:30:10"
+    },
+    "PORT_OPERR_TABLE|Ethernet48": {
+        "oper_error_status": "0",
+        "mac_remote_fault_count": "0",
+        "mac_remote_fault_time": "",
+        "mac_local_fault_count": "0",
+        "mac_local_fault_time": ""
     }
 }
