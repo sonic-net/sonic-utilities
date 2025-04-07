@@ -1,4 +1,5 @@
 import os
+import subprocess
 from sonic_py_common import device_info
 
 def get_chassis_local_interfaces():
@@ -32,6 +33,46 @@ def get_num_dpus():
         return device_info.get_num_dpus()
     return 0
 
+def is_midplane_reachable(ip):
+    """
+    Check if the given IP is reachable via ping.
+
+    Args:
+        ip: IP address to ping.
+
+    Returns:
+        True if reachable, False otherwise.
+    """
+    try:
+        subprocess.check_output(["ping", "-c", "1", "-W", "1", ip], stderr=subprocess.DEVNULL)
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+def get_dpu_ip_list(dpulist):
+    """
+    Retrieve DPU IPs from the platform.json structure.
+
+    Args:
+        dpulist: List of DPU names (e.g., ['dpu0', 'dpu1']) or "all"
+
+    Returns:
+        List of tuples: (dpu_name, ip)
+    """
+    dpu_ips = []
+    platform_data = device_info.get_platform_json_data()
+    if not platform_data:
+        return []
+
+    dhcp_data = platform_data.get("DHCP_SERVER_IPV4_PORT", {})
+
+    for bridge_key, config in dhcp_data.items():
+        dpu_name = bridge_key.split('|')[-1]
+        if dpulist == "all" or dpu_name in dpulist:
+            for ip in config.get("ips", []):
+                dpu_ips.append((dpu_name, ip))
+
+    return dpu_ips
 
 # utility to get dpu module name list
 def get_all_dpus():
