@@ -9,9 +9,9 @@
         "src_ip": "10.10.10.10"
     },
     "INTERFACE|Ethernet0": {
-        "vnet": "Vnet_2000"
+        "vnet_name": "Vnet_2000"
     },
     "VLAN_INTERFACE|Vlan100": {
-        "vnet": "Vnet_2000"
+        "vnet_name": "Vnet_2000"
     }
 }

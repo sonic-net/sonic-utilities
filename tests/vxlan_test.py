@@ -18,8 +18,8 @@ mock_db_path = os.path.join(test_path, "vnet_input")
 show_vxlan_interface_output="""\
 VTEP Information:
 
-    VTEP Name : vtep1, SIP  : 1.1.1.1
-    NVO Name  : nvo1,  VTEP : vtep1
+	VTEP Name : vtep1, SIP  : 1.1.1.1
+	NVO Name  : nvo1,  VTEP : vtep1
 """
 
 show_vxlan_vlanvnimap_output="""\
@@ -421,6 +421,7 @@ class TestVnet(object):
         runner = CliRunner()
 
         result = runner.invoke(show.cli.commands["vnet"].commands["brief"], [])
+        print(result.output)
         assert result.exit_code == 0
         assert "Vnet_2000" in result.output
         assert "1234-56-7890-1234" in result.output
@@ -433,6 +434,7 @@ class TestVnet(object):
         runner = CliRunner()
 
         result = runner.invoke(show.cli.commands["vnet"].commands["name"], ["Vnet_2000"])
+        print(result.output)
         assert result.exit_code == 0
         assert "Vnet_2000" in result.output
         assert "1234-56-7890-1234" in result.output
@@ -446,6 +448,7 @@ class TestVnet(object):
         runner = CliRunner()
 
         result = runner.invoke(show.cli.commands["vnet"].commands["guid"], ["1234-56-7890-1234"])
+        print(result.output)
         assert result.exit_code == 0
         assert "Vnet_2000" in result.output
         assert "1234-56-7890-1234" in result.output
