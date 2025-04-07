@@ -419,6 +419,7 @@ def is_vrf_exists(config_db, vrf_name):
 
     return False
 
+
 def is_vnet_exists(config_db, vnet_name):
     """Check if VNET exists
     """
@@ -524,7 +525,7 @@ def del_interface_bind_to_vrf(config_db, vrf_name):
                     for ipaddress in interface_ipaddresses:
                         remove_router_interface_ip_address(config_db, interface_name, ipaddress)
                     config_db.set_entry(table_name, interface_name, None)
-                
+
 def del_interface_bind_to_vnet(config_db, vnet_name):
     """del interface bind to vnet
     """
@@ -538,7 +539,7 @@ def del_interface_bind_to_vnet(config_db, vnet_name):
                     for ipaddress in interface_ipaddresses:
                         remove_router_interface_ip_address(config_db, interface_name, ipaddress)
                     config_db.set_entry(table_name, interface_name, None)
-                
+            
 def set_interface_naming_mode(mode):
     """Modify SONIC_CLI_IFACE_MODE env variable in user .bashrc
     """
@@ -5988,7 +5989,7 @@ def enable_use_link_local_only(ctx, interface_name):
         interface_type = "PORTCHANNEL_INTERFACE"
     elif interface_name.startswith("Vlan"):
         interface_type = "VLAN_INTERFACE"
-    else:
+    else :
         ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
 
     if (interface_type == "INTERFACE" ) or (interface_type == "PORTCHANNEL_INTERFACE"):
@@ -6000,7 +6001,7 @@ def enable_use_link_local_only(ctx, interface_name):
             ctx.fail("Interface name %s is invalid. Please enter a valid interface name!!" %(interface_name))
 
     portchannel_member_table = db.get_table('PORTCHANNEL_MEMBER')
-
+ 
     if interface_is_in_portchannel(portchannel_member_table, interface_name):
         ctx.fail("{} is configured as a member of portchannel. Cannot configure the IPv6 link local mode!"
                 .format(interface_name))
