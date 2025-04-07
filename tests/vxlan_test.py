@@ -18,8 +18,8 @@ mock_db_path = os.path.join(test_path, "vnet_input")
 show_vxlan_interface_output="""\
 VTEP Information:
 
-	VTEP Name : vtep1, SIP  : 1.1.1.1
-	NVO Name  : nvo1,  VTEP : vtep1
+       VTEP Name : vtep1, SIP  : 1.1.1.1
+       NVO Name  : nvo1,  VTEP : vtep1
 """
 
 show_vxlan_vlanvnimap_output="""\
@@ -438,7 +438,7 @@ class TestVnet(object):
         assert result.exit_code == 0
         assert "Vnet_2000" in result.output
         assert "1234-56-7890-1234" in result.output
-        assert "Ethernet0" in result.output
+        assert "Ethernet4" in result.output
         assert "Vlan100" in result.output
 
     def test_show_vnet_guid(self):
@@ -453,7 +453,7 @@ class TestVnet(object):
         assert "Vnet_2000" in result.output
         assert "1234-56-7890-1234" in result.output
         assert "tunnel1" in result.output
-        assert "Ethernet0" in result.output
+        assert "Ethernet4" in result.output
         assert "Vlan100" in result.output
 
     @classmethod
