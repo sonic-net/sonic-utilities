@@ -295,6 +295,7 @@ def monitor_list(module_name, reachable_only):
     if module_name and module_name.startswith("DPU") or module_name == "all":
         display_module_health_summary(module_name, "monitor-list", reachable_only)
 
+
 @system_health.command()
 @click.argument('module', metavar='MODULE', required=True)
 @click.option('--username', prompt=True, help='SSH login username (e.g., admin)')
