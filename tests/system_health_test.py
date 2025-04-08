@@ -437,3 +437,73 @@ swss            OK                OK                  -              -
         os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         show.cli = original_cli
+
+    @mock.patch("show.system_health.display_module_health_summary")
+    def test_summary_switch_and_dpu(mock_display_module_health_summary):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["system-health"].commands["summary"], ["--reachable-only", "--module-name", "all"])
+        assert "SWITCH" in result.output
+        assert mock_display_module_health_summary.called
+        assert mock_display_module_health_summary.call_args[0][0] == "all"
+        assert mock_display_module_health_summary.call_args[0][1] == "summary"
+        assert mock_display_module_health_summary.call_args[1]["reachable_only"] is True
+
+
+    @mock.patch("show.system_health.display_module_health_summary")
+    def test_detail_dpu(mock_display_module_health_summary):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["system-health"].commands["detail"], ["--module-name", "DPU0"])
+        assert mock_display_module_health_summary.called
+        assert mock_display_module_health_summary.call_args[0][0] == "DPU0"
+        assert mock_display_module_health_summary.call_args[0][1] == "detail"
+
+
+    @mock.patch("show.system_health.display_module_health_summary")
+    def test_monitor_list_dpu(mock_display_module_health_summary):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["system-health"].commands["monitor-list"], ["--module-name", "all"])
+        assert "SWITCH" in result.output
+        assert mock_display_module_health_summary.called
+        assert mock_display_module_health_summary.call_args[0][1] == "monitor_list"
+
+class TestSystemHealthSSH:
+
+    @mock.patch("show.system_health.subprocess.run")
+    def test_disable_auto_ssh_key(self, mock_run):
+        from show.system_health import disable_auto_ssh_key
+        disable_auto_ssh_key()
+        assert mock_run.called
+
+    @mock.patch("show.system_health.subprocess.run")
+    def test_ensure_ssh_key_exists(self, mock_run):
+        from show.system_health import ensure_ssh_key_exists
+        with mock.patch("os.path.exists", return_value=False):
+            ensure_ssh_key_exists()
+            assert mock_run.called
+
+    @mock.patch("show.system_health.setup_ssh_key")
+    @mock.patch("show.system_health.getpass.getpass", return_value="dummy")
+    def test_ensure_ssh_key_setup(self, mock_getpass, mock_setup_ssh_key):
+        from show.system_health import ensure_ssh_key_setup
+        with mock.patch("show.system_health.os.path.exists", return_value=True):
+            ensure_ssh_key_setup("1.2.3.4", "admin")
+            assert mock_setup_ssh_key.called
+
+    @mock.patch("show.system_health.subprocess.run")
+    def test_setup_ssh_key_for_remote(self, mock_run):
+        from show.system_health import setup_ssh_key_for_remote
+        setup_ssh_key_for_remote("hostname", "admin", "dummy", "/home/test/.ssh/id_rsa.pub")
+        assert mock_run.call_count >= 1
+
+    @mock.patch("show.system_health.subprocess.run")
+    def test_setup_ssh_key(self, mock_run):
+        from show.system_health import setup_ssh_key
+        setup_ssh_key("module", "admin", "password")
+        assert mock_run.call_count >= 1
+
+    @mock.patch("show.system_health.subprocess.check_output")
+    def test_get_module_health(self, mock_check_output):
+        from show.system_health import get_module_health
+        mock_check_output.return_value = b'{"SystemStatus": {"LED": "green"}}'
+        result = get_module_health("10.0.0.1", "summary")
+        assert "SystemStatus" in result
