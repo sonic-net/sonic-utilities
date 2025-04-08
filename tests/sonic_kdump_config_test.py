@@ -366,7 +366,7 @@ class TestSonicKdumpConfig(unittest.TestCase):
         # Ensure the correct commands were run to comment SSH and SSH_KEY
         mock_run_command.assert_any_call("/bin/sed -i 's/SSH/#SSH/' /etc/default/kdump-tools", use_shell=False)
         mock_run_command.assert_any_call("/bin/sed -i 's/SSH_KEY/#SSH_KEY/' /etc/default/kdump-tools", use_shell=False)
-        self.assertEqual(mock_run_command.call_count, 2e)
+        self.assertEqual(mock_run_command.call_count, 2)
 
     @patch("sonic_kdump_config.get_kdump_remote")
     @patch("sonic_kdump_config.run_command")
