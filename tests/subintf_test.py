@@ -228,8 +228,8 @@ class TestSubinterface(object):
     def test_subintf_vnet_bind_unbind(self):
         runner = CliRunner()
         db = Db()
-        obj = {'config_db':db.cfgdb, 'namespace':db.db.namespace}
-        intf_obj = {'db':db.cfgdb, 'namespace':db.db.namespace}
+        obj = {'config_db': db.cfgdb, 'namespace': db.db.namespace}
+        intf_obj = {'db': db.cfgdb, 'namespace': db.db.namespace}
     
         # Add Vnet_1000
         result = runner.invoke(config.config.commands["vnet"].commands["add"], ["Vnet_1000", "222", "tunnel1"], obj=obj)
