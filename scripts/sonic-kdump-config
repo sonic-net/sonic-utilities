@@ -433,7 +433,7 @@ def write_num_dumps(num_dumps):
 def write_kdump_remote():
     # Assuming there's a function that retrieves the remote value from the config database
     remote = get_kdump_remote()  # This function needs to be implemented
-    
+
     kdump_cfg = '/etc/default/kdump-tools'
 
     if remote:
@@ -641,7 +641,7 @@ def cmd_kdump_config_next(verbose):
 
 
 def kdump_disable(verbose, image, booter_config_file_path):
-    """Unloads Kdump kernel and remove parameter `crashkernel=*` from configuration file of 
+    """Unloads Kdump kernel and remove parameter `crashkernel=*` from configuration file of
     kernel boot loader.
 
     Args:
@@ -825,6 +825,9 @@ def main():
     # Maximum number of kernel core dumps
     parser.add_argument('--num_dumps', nargs='?', type=int, action='store', default=False,
         help='Maximum number of kernel dump files stored')
+
+    parser.add_argument('--remote', action='store_true',
+        help='Remote kdump via ssh')
 
     parser.add_argument('--ssh_string', nargs='?', type=str, action='store', default=False,
             help='ssh_string for remote kdump')
