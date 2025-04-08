@@ -1,4 +1,5 @@
 import pytest
+import subprocess
 from unittest import mock
 from utilities_common import chassis
 
