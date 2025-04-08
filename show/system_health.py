@@ -259,15 +259,16 @@ def summary(module_name, reachable_only):
     if module_name and module_name.startswith("DPU") or module_name == "all":
         display_module_health_summary(module_name, "summary", reachable_only)
 
-
 @system_health.command()
 @click.argument('module_name', required=False)
 @click.option('--reachable-only', is_flag=True, help="Only include modules reachable via midplane.")
 def detail(module_name, reachable_only):
-    _, chassis, stat = get_system_health_status()
-    display_system_health_summary(stat, chassis.get_status_led())
-    display_monitor_list(stat)
-    display_ignore_list(_)
+    if not module_name or module_name == "all":
+        print("SWITCH")
+        _, chassis, stat = get_system_health_status()
+        display_system_health_summary(stat, chassis.get_status_led())
+        display_monitor_list(stat)
+        display_ignore_list(_)
     if module_name and module_name.startswith("DPU") or module_name == "all":
         display_module_health_summary(module_name, "detail", reachable_only)
 
@@ -275,8 +276,10 @@ def detail(module_name, reachable_only):
 @click.argument('module_name', required=False)
 @click.option('--reachable-only', is_flag=True, help="Only include modules reachable via midplane.")
 def monitor_list(module_name, reachable_only):
-    _, _, stat = get_system_health_status()
-    display_monitor_list(stat)
+    if not module_name or module_name == "all":
+        print("SWITCH")
+        _, _, stat = get_system_health_status()
+        display_monitor_list(stat)
     if module_name and module_name.startswith("DPU") or module_name == "all":
         display_module_health_summary(module_name, "monitor-list", reachable_only)
 

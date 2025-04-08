@@ -11486,7 +11486,67 @@ If any of the elements under each of these two sections is 'Not OK' a proper mes
   Hardware:
     Status: OK
   ```
+**show system-health summary \<module/all\>**
+  ```
+  admin@sonic:~$ show system-health summary DPU0
+  System status summary
 
+  System status LED  red
+  Services:
+    Status: Not OK
+    Not Running: 'syncd'
+  Hardware:
+    Status: OK
+  ```
+  ```
+  admin@sonic:~$ show system-health summary all
+  SWITCH
+  System status summary
+
+    System status LED  green
+    Services:
+      Status: OK
+    Hardware:
+      Status: OK
+
+  Module: dpu5
+  Module: 169.254.200.6 down
+
+  Module: dpu6
+  Module: 169.254.200.7 down
+
+  Module: dpu7
+  Module: 169.254.200.8 down
+
+  Module: dpu3
+  Module: 169.254.200.4 down
+
+  Module: dpu4
+  Module: 169.254.200.5 down
+
+  Module: dpu2
+  Module: 169.254.200.3 down
+
+  Module: dpu0
+
+  System status summary
+
+    System status LED  green
+    Services:
+      Status: OK
+    Hardware:
+      Status: OK
+
+  Module: dpu1
+
+  System status summary
+
+    System status LED  green
+    Services:
+      Status: OK
+    Hardware:
+      Status: OK
+  ```
 **show system-health monitor-list**
 
 This command displays a list of all current 'Services' and 'Hardware' being monitored, their status and type.
@@ -11549,6 +11609,269 @@ This command displays a list of all current 'Services' and 'Hardware' being moni
   fan6            OK        Fan
   fan9            OK        Fan
   fan8            OK        Fan
+  ```
+
+**show system-health monitor-list \<module/all\>**
+
+This command displays a list of all current 'Services' and 'Hardware' being monitored, their status and type of specified module(s).
+
+- Usage:
+  ```
+  show system-health monitor-list DPU0
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show system-health monitor-list DPU0
+
+  Module: dpu0
+
+
+  System services and devices monitor list
+
+  Name                      Status    Type
+  ------------------------  --------  ----------
+  sonic                     OK        System
+  rsyslog                   OK        Process
+  root-overlay              OK        Filesystem
+  var-log                   OK        Filesystem
+  routeCheck                OK        Program
+  dualtorNeighborCheck      OK        Program
+  diskCheck                 OK        Program
+  container_checker         OK        Program
+  vnetRouteCheck            OK        Program
+  memory_check              OK        Program
+  arp_update_checker        OK        Program
+  controlPlaneDropCheck     OK        Program
+  mgmtOperStatus            OK        Program
+  container_memory_snmp     OK        Program
+  container_memory_gnmi     OK        Program
+  container_memory_bmp      OK        Program
+  dpu-db-util               OK        Program
+  database:redis            OK        Process
+  bgp:zebra                 OK        Process
+  bgp:staticd               OK        Process
+  bgp:bgpd                  OK        Process
+  bgp:fpmsyncd              OK        Process
+  bgp:bgpcfgd               OK        Process
+  syncd:syncd               OK        Process
+  swss:orchagent            OK        Process
+  swss:portsyncd            OK        Process
+  swss:neighsyncd           OK        Process
+  swss:fdbsyncd             OK        Process
+  swss:intfmgrd             OK        Process
+  swss:portmgrd             OK        Process
+  swss:fabricmgrd           OK        Process
+  swss:buffermgrd           OK        Process
+  swss:vrfmgrd              OK        Process
+  swss:nbrmgrd              OK        Process
+  swss:coppmgrd             OK        Process
+  swss:tunnelmgrd           OK        Process
+  snmp:snmpd                OK        Process
+  snmp:snmp-subagent        OK        Process
+  lldp:lldpd                OK        Process
+  lldp:lldp-syncd           OK        Process
+  lldp:lldpmgrd             OK        Process
+  gnmi:gnmi-native          OK        Process
+  dpu-pdsagent              OK        UserDefine
+  dpu-pciemgrd              OK        UserDefine
+  dpu-eth_Uplink1/1_status  OK        UserDefine
+  dpu-pcie_link             OK        UserDefine
+  ```
+- Usage:
+  ```
+  show system-health monitor-list all
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show system-health monitor-list all
+
+  SWITCH
+  System services and devices monitor list
+
+  Name                   Status    Type
+  ---------------------  --------  ----------
+  MtFuji                 OK        System
+  rsyslog                OK        Process
+  root-overlay           OK        Filesystem
+  var-log                OK        Filesystem
+  routeCheck             OK        Program
+  dualtorNeighborCheck   OK        Program
+  diskCheck              OK        Program
+  container_checker      OK        Program
+  vnetRouteCheck         OK        Program
+  memory_check           OK        Program
+  arp_update_checker     OK        Program
+  controlPlaneDropCheck  OK        Program
+  mgmtOperStatus         OK        Program
+  container_memory_snmp  OK        Program
+  container_memory_gnmi  OK        Program
+  container_eventd       OK        Program
+  container_memory_bmp   OK        Program
+  swss:orchagent         OK        Process
+  swss:portsyncd         OK        Process
+  swss:neighsyncd        OK        Process
+  swss:fdbsyncd          OK        Process
+  swss:vlanmgrd          OK        Process
+  swss:intfmgrd          OK        Process
+  swss:portmgrd          OK        Process
+  swss:fabricmgrd        OK        Process
+  swss:buffermgrd        OK        Process
+  swss:vrfmgrd           OK        Process
+  swss:nbrmgrd           OK        Process
+  swss:vxlanmgrd         OK        Process
+  swss:coppmgrd          OK        Process
+  swss:tunnelmgrd        OK        Process
+  teamd:teammgrd         OK        Process
+  teamd:teamsyncd        OK        Process
+  teamd:tlm_teamd        OK        Process
+  syncd:syncd            OK        Process
+  database:redis         OK        Process
+  database:redis_bmp     OK        Process
+  lldp:lldpd             OK        Process
+  lldp:lldp-syncd        OK        Process
+  lldp:lldpmgrd          OK        Process
+  gnmi:gnmi-native       OK        Process
+  eventd:eventd          OK        Process
+  bgp:zebra              OK        Process
+  bgp:staticd            OK        Process
+  bgp:bgpd               OK        Process
+  bgp:fpmsyncd           OK        Process
+  bgp:bgpcfgd            OK        Process
+  snmp:snmpd             OK        Process
+  snmp:snmp-subagent     OK        Process
+  PSU0.fan0              OK        Fan
+  PSU1.fan0              OK        Fan
+  fantray0.fan0          OK        Fan
+  fantray1.fan0          OK        Fan
+  fantray2.fan0          OK        Fan
+  fantray3.fan0          OK        Fan
+  PSU 1                  OK        PSU
+  PSU 2                  OK        PSU
+
+  Module: dpu5
+  Module: 169.254.200.6 down
+
+  Module: dpu2
+  Module: 169.254.200.3 down
+
+  Module: dpu6
+  Module: 169.254.200.7 down
+
+  Module: dpu7
+  Module: 169.254.200.8 down
+
+  Module: dpu3
+  Module: 169.254.200.4 down
+
+  Module: dpu4
+  Module: 169.254.200.5 down
+
+  Module: dpu0
+
+
+  System services and devices monitor list
+
+  Name                      Status    Type
+  ------------------------  --------  ----------
+  sonic                     OK        System
+  rsyslog                   OK        Process
+  root-overlay              OK        Filesystem
+  var-log                   OK        Filesystem
+  routeCheck                OK        Program
+  dualtorNeighborCheck      OK        Program
+  diskCheck                 OK        Program
+  container_checker         OK        Program
+  vnetRouteCheck            OK        Program
+  memory_check              OK        Program
+  arp_update_checker        OK        Program
+  controlPlaneDropCheck     OK        Program
+  mgmtOperStatus            OK        Program
+  container_memory_snmp     OK        Program
+  container_memory_gnmi     OK        Program
+  container_memory_bmp      OK        Program
+  dpu-db-util               OK        Program
+  database:redis            OK        Process
+  bgp:zebra                 OK        Process
+  bgp:staticd               OK        Process
+  bgp:bgpd                  OK        Process
+  bgp:fpmsyncd              OK        Process
+  bgp:bgpcfgd               OK        Process
+  syncd:syncd               OK        Process
+  swss:orchagent            OK        Process
+  swss:portsyncd            OK        Process
+  swss:neighsyncd           OK        Process
+  swss:fdbsyncd             OK        Process
+  swss:intfmgrd             OK        Process
+  swss:portmgrd             OK        Process
+  swss:fabricmgrd           OK        Process
+  swss:buffermgrd           OK        Process
+  swss:vrfmgrd              OK        Process
+  swss:nbrmgrd              OK        Process
+  swss:coppmgrd             OK        Process
+  swss:tunnelmgrd           OK        Process
+  snmp:snmpd                OK        Process
+  snmp:snmp-subagent        OK        Process
+  lldp:lldpd                OK        Process
+  lldp:lldp-syncd           OK        Process
+  lldp:lldpmgrd             OK        Process
+  gnmi:gnmi-native          OK        Process
+  dpu-pdsagent              OK        UserDefine
+  dpu-pciemgrd              OK        UserDefine
+  dpu-eth_Uplink1/1_status  OK        UserDefine
+  dpu-pcie_link             OK        UserDefine
+
+  Module: dpu1
+
+
+  System services and devices monitor list
+
+  Name                      Status    Type
+  ------------------------  --------  ----------
+  sonic                     OK        System
+  rsyslog                   OK        Process
+  root-overlay              OK        Filesystem
+  var-log                   OK        Filesystem
+  routeCheck                OK        Program
+  dualtorNeighborCheck      OK        Program
+  diskCheck                 OK        Program
+  container_checker         OK        Program
+  vnetRouteCheck            OK        Program
+  memory_check              OK        Program
+  arp_update_checker        OK        Program
+  controlPlaneDropCheck     OK        Program
+  mgmtOperStatus            OK        Program
+  container_memory_snmp     OK        Program
+  container_memory_gnmi     OK        Program
+  container_memory_bmp      OK        Program
+  dpu-db-util               OK        Program
+  database:redis            OK        Process
+  syncd:syncd               OK        Process
+  bgp:zebra                 OK        Process
+  bgp:staticd               OK        Process
+  bgp:bgpd                  OK        Process
+  bgp:fpmsyncd              OK        Process
+  bgp:bgpcfgd               OK        Process
+  swss:orchagent            OK        Process
+  swss:portsyncd            OK        Process
+  swss:neighsyncd           OK        Process
+  swss:fdbsyncd             OK        Process
+  swss:vlanmgrd             OK        Process
+  swss:intfmgrd             OK        Process
+  swss:portmgrd             OK        Process
+  swss:fabricmgrd           OK        Process
+  swss:buffermgrd           OK        Process
+  swss:vrfmgrd              OK        Process
+  swss:nbrmgrd              OK        Process
+  swss:vxlanmgrd            OK        Process
+  swss:coppmgrd             OK        Process
+  swss:tunnelmgrd           OK        Process
+  gnmi:gnmi-native          OK        Process
+  dpu-pdsagent              OK        UserDefine
+  dpu-pciemgrd              OK        UserDefine
+  dpu-eth_Uplink1/1_status  OK        UserDefine
+  dpu-pcie_link             OK        UserDefine
   ```
 
 **show system-health detail**
@@ -11630,6 +11953,333 @@ In addition, displays a list of all current 'Services' and 'Hardware' being moni
   Name         Status    Type
   -----------  --------  ------
   psu.voltage  Ignored   Device
+  ```
+
+**show system-health detail \<module/all\>**
+
+This command displays the current status of 'Services' and 'Hardware' under monitoring.
+If any of the elements under each of these two sections is 'Not OK' a proper message will appear under the relevant section.
+In addition, displays a list of all current 'Services' and 'Hardware' being monitored and a list of ignored elements.
+
+Depening on the input "DPUx or all" the corresponing output will be disaplyed.
+
+- Usage:
+  ```
+  show system-health detail DPU0
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show system-health detail DPU0
+
+  Module: dpu0
+
+  System status summary
+
+    System status LED  green
+    Services:
+      Status: OK
+    Hardware:
+      Status: OK
+
+  System services and devices monitor list
+
+  Name                      Status    Type
+  ------------------------  --------  ----------
+  sonic                     OK        System
+  rsyslog                   OK        Process
+  root-overlay              OK        Filesystem
+  var-log                   OK        Filesystem
+  routeCheck                OK        Program
+  dualtorNeighborCheck      OK        Program
+  diskCheck                 OK        Program
+  container_checker         OK        Program
+  vnetRouteCheck            OK        Program
+  memory_check              OK        Program
+  arp_update_checker        OK        Program
+  controlPlaneDropCheck     OK        Program
+  mgmtOperStatus            OK        Program
+  container_memory_snmp     OK        Program
+  container_memory_gnmi     OK        Program
+  container_memory_bmp      OK        Program
+  dpu-db-util               OK        Program
+  database:redis            OK        Process
+  bgp:zebra                 OK        Process
+  bgp:staticd               OK        Process
+  bgp:bgpd                  OK        Process
+  bgp:fpmsyncd              OK        Process
+  bgp:bgpcfgd               OK        Process
+  syncd:syncd               OK        Process
+  swss:orchagent            OK        Process
+  swss:portsyncd            OK        Process
+  swss:neighsyncd           OK        Process
+  swss:fdbsyncd             OK        Process
+  swss:intfmgrd             OK        Process
+  swss:portmgrd             OK        Process
+  swss:fabricmgrd           OK        Process
+  swss:buffermgrd           OK        Process
+  swss:vrfmgrd              OK        Process
+  swss:nbrmgrd              OK        Process
+  swss:coppmgrd             OK        Process
+  swss:tunnelmgrd           OK        Process
+  snmp:snmpd                OK        Process
+  snmp:snmp-subagent        OK        Process
+  lldp:lldpd                OK        Process
+  lldp:lldp-syncd           OK        Process
+  lldp:lldpmgrd             OK        Process
+  gnmi:gnmi-native          OK        Process
+  dpu-pdsagent              OK        UserDefine
+  dpu-pciemgrd              OK        UserDefine
+  dpu-eth_Uplink1/1_status  OK        UserDefine
+  dpu-pcie_link             OK        UserDefine
+
+  System services and devices ignore list
+
+  Name       Status    Type
+  ---------  --------  -------
+  vxlanmgrd  Ignored   Service
+  vlanmgrd   Ignored   Service
+  psu        Ignored   Device
+  fan        Ignored   Device
+  ```
+
+- Usage:
+  ```
+  show system-health detail all
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show system-health detail all
+
+  SWITCH
+  System status summary
+
+    System status LED  green
+    Services:
+      Status: OK
+    Hardware:
+      Status: OK
+
+  System services and devices monitor list
+
+  Name                   Status    Type
+  ---------------------  --------  ----------
+  MtFuji                 OK        System
+  rsyslog                OK        Process
+  root-overlay           OK        Filesystem
+  var-log                OK        Filesystem
+  routeCheck             OK        Program
+  dualtorNeighborCheck   OK        Program
+  diskCheck              OK        Program
+  container_checker      OK        Program
+  vnetRouteCheck         OK        Program
+  memory_check           OK        Program
+  arp_update_checker     OK        Program
+  controlPlaneDropCheck  OK        Program
+  mgmtOperStatus         OK        Program
+  container_memory_snmp  OK        Program
+  container_memory_gnmi  OK        Program
+  container_eventd       OK        Program
+  container_memory_bmp   OK        Program
+  swss:orchagent         OK        Process
+  swss:portsyncd         OK        Process
+  swss:neighsyncd        OK        Process
+  swss:fdbsyncd          OK        Process
+  swss:vlanmgrd          OK        Process
+  swss:intfmgrd          OK        Process
+  swss:portmgrd          OK        Process
+  swss:fabricmgrd        OK        Process
+  swss:buffermgrd        OK        Process
+  swss:vrfmgrd           OK        Process
+  swss:nbrmgrd           OK        Process
+  swss:vxlanmgrd         OK        Process
+  swss:coppmgrd          OK        Process
+  swss:tunnelmgrd        OK        Process
+  teamd:teammgrd         OK        Process
+  teamd:teamsyncd        OK        Process
+  teamd:tlm_teamd        OK        Process
+  syncd:syncd            OK        Process
+  database:redis         OK        Process
+  database:redis_bmp     OK        Process
+  lldp:lldpd             OK        Process
+  lldp:lldp-syncd        OK        Process
+  lldp:lldpmgrd          OK        Process
+  gnmi:gnmi-native       OK        Process
+  eventd:eventd          OK        Process
+  bgp:zebra              OK        Process
+  bgp:staticd            OK        Process
+  bgp:bgpd               OK        Process
+  bgp:fpmsyncd           OK        Process
+  bgp:bgpcfgd            OK        Process
+  snmp:snmpd             OK        Process
+  snmp:snmp-subagent     OK        Process
+  PSU0.fan0              OK        Fan
+  PSU1.fan0              OK        Fan
+  fantray0.fan0          OK        Fan
+  fantray1.fan0          OK        Fan
+  fantray2.fan0          OK        Fan
+  fantray3.fan0          OK        Fan
+  PSU 1                  OK        PSU
+  PSU 2                  OK        PSU
+
+  System services and devices ignore list
+
+  Name    Status    Type
+  ------  --------  ------
+
+  Module: dpu5
+  Module: 169.254.200.6 down
+
+  Module: dpu6
+  Module: 169.254.200.7 down
+
+  Module: dpu7
+  Module: 169.254.200.8 down
+
+  Module: dpu2
+  Module: 169.254.200.3 down
+
+  Module: dpu4
+  Module: 169.254.200.5 down
+
+  Module: dpu3
+  Module: 169.254.200.4 down
+
+  Module: dpu0
+
+  System status summary
+
+    System status LED  green
+    Services:
+      Status: OK
+    Hardware:
+      Status: OK
+
+  System services and devices monitor list
+
+  Name                      Status    Type
+  ------------------------  --------  ----------
+  sonic                     OK        System
+  rsyslog                   OK        Process
+  root-overlay              OK        Filesystem
+  var-log                   OK        Filesystem
+  routeCheck                OK        Program
+  dualtorNeighborCheck      OK        Program
+  diskCheck                 OK        Program
+  container_checker         OK        Program
+  vnetRouteCheck            OK        Program
+  memory_check              OK        Program
+  arp_update_checker        OK        Program
+  controlPlaneDropCheck     OK        Program
+  mgmtOperStatus            OK        Program
+  container_memory_snmp     OK        Program
+  container_memory_gnmi     OK        Program
+  container_memory_bmp      OK        Program
+  dpu-db-util               OK        Program
+  database:redis            OK        Process
+  bgp:zebra                 OK        Process
+  bgp:staticd               OK        Process
+  bgp:bgpd                  OK        Process
+  bgp:fpmsyncd              OK        Process
+  bgp:bgpcfgd               OK        Process
+  syncd:syncd               OK        Process
+  swss:orchagent            OK        Process
+  swss:portsyncd            OK        Process
+  swss:neighsyncd           OK        Process
+  swss:fdbsyncd             OK        Process
+  swss:intfmgrd             OK        Process
+  swss:portmgrd             OK        Process
+  swss:fabricmgrd           OK        Process
+  swss:buffermgrd           OK        Process
+  swss:vrfmgrd              OK        Process
+  swss:nbrmgrd              OK        Process
+  swss:coppmgrd             OK        Process
+  swss:tunnelmgrd           OK        Process
+  snmp:snmpd                OK        Process
+  snmp:snmp-subagent        OK        Process
+  lldp:lldpd                OK        Process
+  lldp:lldp-syncd           OK        Process
+  lldp:lldpmgrd             OK        Process
+  gnmi:gnmi-native          OK        Process
+  dpu-pdsagent              OK        UserDefine
+  dpu-pciemgrd              OK        UserDefine
+  dpu-eth_Uplink1/1_status  OK        UserDefine
+  dpu-pcie_link             OK        UserDefine
+
+  System services and devices ignore list
+
+  Name       Status    Type
+  ---------  --------  -------
+  vxlanmgrd  Ignored   Service
+  vlanmgrd   Ignored   Service
+  fan        Ignored   Device
+  psu        Ignored   Device
+
+  Module: dpu1
+
+  System status summary
+
+    System status LED  green
+    Services:
+      Status: OK
+    Hardware:
+      Status: OK
+
+  System services and devices monitor list
+
+  Name                      Status    Type
+  ------------------------  --------  ----------
+  sonic                     OK        System
+  rsyslog                   OK        Process
+  root-overlay              OK        Filesystem
+  var-log                   OK        Filesystem
+  routeCheck                OK        Program
+  dualtorNeighborCheck      OK        Program
+  diskCheck                 OK        Program
+  container_checker         OK        Program
+  vnetRouteCheck            OK        Program
+  memory_check              OK        Program
+  arp_update_checker        OK        Program
+  controlPlaneDropCheck     OK        Program
+  mgmtOperStatus            OK        Program
+  container_memory_snmp     OK        Program
+  container_memory_gnmi     OK        Program
+  container_memory_bmp      OK        Program
+  dpu-db-util               OK        Program
+  database:redis            OK        Process
+  syncd:syncd               OK        Process
+  bgp:zebra                 OK        Process
+  bgp:staticd               OK        Process
+  bgp:bgpd                  OK        Process
+  bgp:fpmsyncd              OK        Process
+  bgp:bgpcfgd               OK        Process
+  swss:orchagent            OK        Process
+  swss:portsyncd            OK        Process
+  swss:neighsyncd           OK        Process
+  swss:fdbsyncd             OK        Process
+  swss:vlanmgrd             OK        Process
+  swss:intfmgrd             OK        Process
+  swss:portmgrd             OK        Process
+  swss:fabricmgrd           OK        Process
+  swss:buffermgrd           OK        Process
+  swss:vrfmgrd              OK        Process
+  swss:nbrmgrd              OK        Process
+  swss:vxlanmgrd            OK        Process
+  swss:coppmgrd             OK        Process
+  swss:tunnelmgrd           OK        Process
+  gnmi:gnmi-native          OK        Process
+  dpu-pdsagent              OK        UserDefine
+  dpu-pciemgrd              OK        UserDefine
+  dpu-eth_Uplink1/1_status  OK        UserDefine
+  dpu-pcie_link             OK        UserDefine
+
+  System services and devices ignore list
+
+  Name    Status    Type
+  ------  --------  ------
+  psu     Ignored   Device
+  fan     Ignored   Device
   ```
 
 **show system-health dpu <option>**
