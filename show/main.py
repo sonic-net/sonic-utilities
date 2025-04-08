@@ -644,13 +644,16 @@ def pfc():
 # 'counters' subcommand ("show interfaces pfccounters")
 @pfc.command()
 @multi_asic_util.multi_asic_click_options
+@click.option('--history', is_flag=True, help="Display historical PFC statistics")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def counters(namespace, display, verbose):
+def counters(namespace, history, display, verbose):
     """Show pfc counters"""
 
     cmd = ['pfcstat', '-s', str(display)]
     if namespace is not None:
         cmd += ['-n', str(namespace)]
+    if history:
+        cmd += ['--history']
 
     run_command(cmd, display_cmd=verbose)
 
