@@ -556,7 +556,7 @@ class TestStaticRoutes(object):
 
         # config route add prefix 2.2.3.5/32 nexthop dev Ethernet0,null
         result = runner.invoke(config.config.commands["route"].commands["add"],
-        ["prefix", "2.2.3.5/32", "nexthop", "dev", "Ethernet0,null"], obj=obj)
+                               ["prefix", "2.2.3.5/32", "nexthop", "dev", "Ethernet0,null"], obj=obj)
         print(result.exit_code, result.output)
         assert ('default', '2.2.3.5/32') in db.cfgdb.get_table('STATIC_ROUTE')
         assert db.cfgdb.get_entry('STATIC_ROUTE', 'default|2.2.3.5/32') == \
