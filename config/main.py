@@ -526,6 +526,7 @@ def del_interface_bind_to_vrf(config_db, vrf_name):
                         remove_router_interface_ip_address(config_db, interface_name, ipaddress)
                     config_db.set_entry(table_name, interface_name, None)
 
+
 def del_interface_bind_to_vnet(config_db, vnet_name):
     """del interface bind to vnet
     """
@@ -536,7 +537,7 @@ def del_interface_bind_to_vnet(config_db, vnet_name):
             for interface_name in interface_dict:
                 if 'vnet_name' in interface_dict[interface_name] and vnet_name == interface_dict[interface_name]['vnet_name']:
                     interface_ipaddresses = get_interface_ipaddresses(config_db, interface_name)
-                    for ipaddress in interface_ipaddresses :
+                    for ipaddress in interface_ipaddresses:
                         remove_router_interface_ip_address(config_db, interface_name, ipaddress)
                     config_db.set_entry(table_name, interface_name, None)
             
@@ -5989,7 +5990,7 @@ def enable_use_link_local_only(ctx, interface_name):
         interface_type = "PORTCHANNEL_INTERFACE"
     elif interface_name.startswith("Vlan"):
         interface_type = "VLAN_INTERFACE"
-    else :
+    else:
         ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
 
     if (interface_type == "INTERFACE" ) or (interface_type == "PORTCHANNEL_INTERFACE"):
@@ -6142,7 +6143,7 @@ def add_vrrp_ip(ctx, interface_name, vrrp_id, ip_addr):
     if check_vrrp_ip_exist(config_db, ip_addr):
         ctx.abort()
 
-    if "/" not in ip_addr :
+    if "/" not in ip_addr:
         ctx.fail("IP address {} is missing a mask. Such as xx.xx.xx.xx/yy or xx:xx::xx/yy".format(str(ip_addr)))
 
     # check vip exist

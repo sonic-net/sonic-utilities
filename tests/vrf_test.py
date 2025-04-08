@@ -444,7 +444,7 @@ Error: 'vnet_name' must begin with 'Vnet_' .
 """
         # Test vnet add using length of vnet name
         vnet_name = "Vnet_ypfbjjhyzivaythuaxlbcibgdgjkqgapedmiosjgsvddqaalformdmbwigddddddddghkbpccbzjrhefrcdeqkvgmu \
-                 bxxnkgbvjpgpnypfbjjhyzivaythuaxlbcibgdgjkqgapedmiosjgsvddqlformdmbwigghkbpccbzjrhefrcdeqkvgmubxxnkgbvjpgpn"
+                 bxxnkgbvjpgpnypfbjjhyzivaythuaxlbcibgdgjkqgapedmiosjgsvddqlformdmbwigghkbpccbzjrhefrcdeqkvgmubxxnkgbvj"
         args = [vnet_name, "222", "tunnel1"]
         result = runner.invoke(config.config.commands["vnet"].commands["add"], args, obj=vnet_obj)
         assert result.exit_code != 0
@@ -474,7 +474,7 @@ Error: 'vnet_name' must begin with 'Vnet_' .
         assert result.exit_code == 0
 
         # Test vnet add with all optional argument all other optional arguments
-        args2 = ["10.0.0.0/32", "559c6ce8-26ab-4193-b946-b2", "default", 'true', "11:22:33:44:55:66", "66:55:44:33:22:11"]
+        args2 = ["10.0.0.0/32", "559c6ce8-26ab-419-b46-b2", "default", 'true', "11:22:33:44:55:66", "66:55:44:33:22:11"]
         args = ["Vnet_3000", "455", "tunnel1"] + args2
         result = runner.invoke(config.config.commands["vnet"].commands["add"], args, obj=vnet_obj)
         assert ('Vnet_3000') in db.cfgdb.get_table('VNET')
@@ -489,7 +489,7 @@ Error: 'vnet_name' must begin with 'Vnet_' .
         # Test vnet del with long vnet name
         expected_output_del = "'vnet_name' length should not exceed 200 characters"
         vnet_name = ["Vnet_ypfbjjhyzivaythuaxlbcibgdgjkqgapedmiosjgsvddqaalformdmbwigddddddddghkbpccbzjrhefrcdeqkv \
-                     gmubxxnkgbvjpgpnypfbjjhyzivaythuaxlbcibgdgjkqgapedmiosjgsvddqlformdmbwigghkbpccbzjrhefrcdeqkvgmubxxnkgbvjpgpn"]
+                     gmubxxnkgbvjpgpnypfbjjhyzivaythuaxlbcibgdgjkqgapedmiosjgsvddqlformdmbwigghkbpccbzjrhefrcdeqkvgmu"]
         result = runner.invoke(config.config.commands["vnet"].commands["del"], vnet_name, obj=vnet_obj)
         assert result.exit_code != 0
         assert (vnet_name[0]) not in db.cfgdb.get_table('VNET')
