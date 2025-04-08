@@ -33,6 +33,7 @@ def get_num_dpus():
         return device_info.get_num_dpus()
     return 0
 
+
 def is_midplane_reachable(ip):
     """
     Check if the given IP is reachable via ping.
@@ -48,6 +49,7 @@ def is_midplane_reachable(ip):
         return True
     except subprocess.CalledProcessError:
         return False
+
 
 def get_dpu_ip_list(dpulist):
     """
@@ -73,6 +75,7 @@ def get_dpu_ip_list(dpulist):
                 dpu_ips.append((dpu_name, ip))
 
     return dpu_ips
+
 
 # utility to get dpu module name list
 def get_all_dpus():

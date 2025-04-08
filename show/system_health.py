@@ -6,7 +6,12 @@ from tabulate import tabulate
 import utilities_common.cli as clicommon
 from swsscommon.swsscommon import SonicV2Connector
 from natsort import natsorted
-from utilities_common.chassis import is_smartswitch, get_all_dpus, get_all_dpu_options, is_midplane_reachable, get_dpu_ip_list
+from utilities_common.chassis import (
+    is_smartswitch,
+    get_all_dpu_options,
+    is_midplane_reachable,
+    get_dpu_ip_list
+)
 import subprocess
 import paramiko
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -117,11 +122,13 @@ def display_ignore_list(manager):
             table.append(entry)
     click.echo(tabulate(table, header))
 
+
 def ensure_ssh_key_exists():
     if not os.path.exists(DEFAULT_PUBLIC_KEY_PATH):
         click.echo("SSH key not found. Generating...")
-        subprocess.run(["ssh-keygen", "-t", "rsa", "-b", "4096", "-N", "", "-f", key_path],
+        subprocess.run(["ssh-keygen", "-t", "rsa", "-b", "4096", "-N", "", "-f", DEFAULT_KEY_PATH],
                        check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
 
 # define the function to set up SSH key for remote module
 def setup_ssh_key_for_remote(module_host, username, password, public_key_path):
@@ -151,6 +158,7 @@ def setup_ssh_key_for_remote(module_host, username, password, public_key_path):
 
     # Close the SSH connection
     ssh.close()
+
 
 def ensure_ssh_key_setup(ip, username="admin"):
     if not AUTO_SSH_KEY_SETUP_ENABLED or ip in _ssh_key_cache:
@@ -208,6 +216,7 @@ def get_module_health(ip, command_type, timeout=60):
         if "Permission denied" in err or "Too many authentication failures" in err:
             return ip, f"Module: {ip} authentication failed"
         return ip, f"Module: {ip} error: {err}"
+
 
 def display_module_health_summary(module_name, command_type, reachable_only=False):
     dpulist = []
@@ -272,6 +281,7 @@ def detail(module_name, reachable_only):
     if module_name and module_name.startswith("DPU") or module_name == "all":
         display_module_health_summary(module_name, "detail", reachable_only)
 
+
 @system_health.command()
 @click.argument('module_name', required=False)
 @click.option('--reachable-only', is_flag=True, help="Only include modules reachable via midplane.")
@@ -304,6 +314,7 @@ def setup_ssh_key(module_host, username, password, public_key_path):
         click.echo(f"SSH key setup completed for {module_host}")
     except Exception as e:
         click.echo(f"Failed to set up SSH key for {module_host}: {str(e)}")
+
 
 @system_health.command()
 def disable_auto_ssh_key():
