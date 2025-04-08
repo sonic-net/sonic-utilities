@@ -256,6 +256,7 @@ def system_health():
     """Show system-health information"""
     return
 
+
 @system_health.command()
 @click.argument('module_name', required=False)
 @click.option('--reachable-only', is_flag=True, help="Only include modules reachable via midplane.")
@@ -267,6 +268,7 @@ def summary(module_name, reachable_only):
         display_system_health_summary(stat, chassis.get_status_led())
     if module_name and module_name.startswith("DPU") or module_name == "all":
         display_module_health_summary(module_name, "summary", reachable_only)
+
 
 @system_health.command()
 @click.argument('module_name', required=False)
