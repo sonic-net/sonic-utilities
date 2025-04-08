@@ -827,7 +827,7 @@ def main():
         help='Maximum number of kernel dump files stored')
 
     parser.add_argument('--remote', action='store_true',
-        help='Remote kdump via ssh')
+        help='Remote kdump via ssh ')
 
     parser.add_argument('--ssh_string', nargs='?', type=str, action='store', default=False,
             help='ssh_string for remote kdump')
