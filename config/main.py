@@ -3125,10 +3125,11 @@ def pfcwd():
 @pfcwd.command()
 @click.option('--action', '-a', type=click.Choice(['drop', 'forward', 'alert']))
 @click.option('--restoration-time', '-r', type=click.IntRange(100, 60000))
+@click.option('--pfc-stat-history', is_flag=True, help="Enable historical statistics tracking")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 @click.argument('ports', nargs=-1)
 @click.argument('detection-time', type=click.IntRange(100, 5000))
-def start(action, restoration_time, ports, detection_time, verbose):
+def start(action, restoration_time, pfc_stat_history, ports, detection_time, verbose):
     """
     Start PFC watchdog on port(s). To config all ports, use all as input.
 
@@ -3149,6 +3150,9 @@ def start(action, restoration_time, ports, detection_time, verbose):
 
     if restoration_time:
         cmd += ['--restoration-time', str(restoration_time)]
+
+    if pfc_stat_history:
+        cmd += ['--pfc-stat-history']
 
     clicommon.run_command(cmd, display_cmd=verbose)
 
@@ -3190,6 +3194,21 @@ def big_red_switch(big_red_switch, verbose):
     cmd = ['pfcwd', 'big_red_switch', str(big_red_switch)]
 
     clicommon.run_command(cmd, display_cmd=verbose)
+
+
+@pfcwd.command('pfc_stat_history')
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+@click.argument('pfc_stat_history', type=click.Choice(['enable', 'disable']))
+@click.argument('ports', nargs=-1)
+def pfc_stat_history(ports, pfc_stat_history, verbose):
+    """ Enable/disable PFC Historical Statistics mode on ports"""
+
+    cmd = ['pfcwd', 'pfc_stat_history', pfc_stat_history]
+    ports = set(ports) - set(['ports'])
+    cmd += list(ports)
+
+    clicommon.run_command(cmd, display_cmd=verbose)
+
 
 @pfcwd.command('start_default')
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
