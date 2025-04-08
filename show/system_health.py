@@ -332,6 +332,7 @@ def setup_ssh_key(module, username, password):
         for future in as_completed(futures):
             click.echo(future.result())
 
+
 @system_health.command()
 def disable_auto_ssh_key():
     """Disable automatic SSH key setup for modules"""
