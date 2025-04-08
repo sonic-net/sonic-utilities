@@ -301,7 +301,7 @@ def get_kdump_memory():
                 if mem:
                     memory = mem
     return memory
-
+ 
 ## Query current configuration for kdump num_dumps
 #
 #  @return The maximum number of kernel dump files stored locally
