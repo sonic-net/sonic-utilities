@@ -34,16 +34,18 @@ try:
 except KeyError:
     pass
 
-from utilities_common.netstat import ns_diff, STATUS_NA, format_number_with_comma
+from utilities_common.netstat import ns_diff, STATUS_NA, format_number_with_comma, format_microseconds_as_datetime
 from utilities_common import multi_asic as multi_asic_util
 from utilities_common import constants
 from utilities_common.cli import json_serial, UserCache
 
 
 PStats = namedtuple("PStats", "pfc0, pfc1, pfc2, pfc3, pfc4, pfc5, pfc6, pfc7")
-header_Rx = ['Port Rx', 'PFC0', 'PFC1', 'PFC2', 'PFC3', 'PFC4', 'PFC5', 'PFC6', 'PFC7']
 
-header_Tx = ['Port Tx', 'PFC0', 'PFC1', 'PFC2', 'PFC3', 'PFC4', 'PFC5', 'PFC6', 'PFC7']
+pfc_titles = ['PFC0', 'PFC1', 'PFC2', 'PFC3', 'PFC4', 'PFC5', 'PFC6', 'PFC7']
+
+header_Rx = ['Port Rx'] + pfc_titles
+header_Tx = ['Port Tx'] + pfc_titles
 
 counter_bucket_rx_dict = {
     'SAI_PORT_STAT_PFC_0_RX_PKTS': 0,
@@ -68,6 +70,27 @@ counter_bucket_tx_dict = {
 }
 
 
+HistStats = namedtuple("HistStats", "numTransitions, totalPauseTime, recentPauseTimestamp, recentPauseTime")
+
+SAI_PREFIX = "SAI"
+EST_PREFIX = "EST"
+
+total_stat_fields = [
+    "_PORT_STAT_PFC_*_ON2OFF_RX_PKTS",
+    "_PORT_STAT_PFC_*_RX_PAUSE_DURATION_US"
+]
+
+recent_stat_fields = [
+    "EST_PORT_STAT_PFC_*_RECENT_PAUSE_TIMESTAMP",
+    "EST_PORT_STAT_PFC_*_RECENT_PAUSE_TIME_US"
+]
+
+header_hist = ['Port', 'Priority',
+               'RX Pause Transitions',
+               'Total RX Pause Time US',
+               'Recent RX Pause Time US',
+               'Recent RX Pause Timestamp']
+
 COUNTER_TABLE_PREFIX = "COUNTERS:"
 COUNTERS_PORT_NAME_MAP = "COUNTERS_PORT_NAME_MAP"
 
@@ -77,6 +100,7 @@ class Pfcstat(object):
         self.db = None
         self.config_db = None
         self.cnstat_dict = OrderedDict()
+        self.hist_dict = OrderedDict()
 
     @multi_asic_util.run_on_multi_asic
     def collect_cnstat(self, rx):
@@ -126,6 +150,74 @@ class Pfcstat(object):
                     )
             self.cnstat_dict.update(cnstat_dict)
 
+    @multi_asic_util.run_on_multi_asic
+    def collect_history(self):
+        """
+            Get the history stats from database.
+        """
+        def get_history_stats(table_id):
+            """
+                Get the history from specific table.
+            """
+            pfc_dict = OrderedDict()
+            full_table_id = COUNTER_TABLE_PREFIX + table_id
+
+            for pfc_index, pfc in enumerate(pfc_titles):
+                def get_stat(stat_name, prefix = ""):
+                    full_stat_name = prefix + stat_name.replace('*', str(pfc_index))
+                    stat =  self.db.get(
+                        self.db.COUNTERS_DB, full_table_id, full_stat_name
+                    )
+                    return stat
+
+                fields = [STATUS_NA] * (len(total_stat_fields) + len(recent_stat_fields))
+                stat_index = 0
+                # SAI or EST options
+                for stat_name in total_stat_fields:
+                    hist_data = get_stat(stat_name, SAI_PREFIX)
+
+                    if hist_data is None:
+                        hist_data = get_stat(stat_name, EST_PREFIX)
+
+                    if hist_data is not None:
+                        fields[stat_index] = str(hist_data)
+                    stat_index += 1
+
+                # EST options only
+                for stat_name in recent_stat_fields:
+                    hist_data = get_stat(stat_name)
+
+                    if hist_data is not None:
+                        fields[stat_index] = str(hist_data)
+                    stat_index += 1
+
+                stats = HistStats._make(fields)._asdict()
+                pfc_dict[pfc] = stats
+            return pfc_dict
+
+        # get the port name : oid map
+        counter_port_name_map = self.db.get_all(
+            self.db.COUNTERS_DB, COUNTERS_PORT_NAME_MAP
+        )
+        if counter_port_name_map is None:
+            return
+
+        display_ports_set = set(counter_port_name_map.keys())
+        if self.multi_asic.display_option == constants.DISPLAY_EXTERNAL:
+            display_ports_set = get_external_ports(
+                display_ports_set, self.multi_asic.current_namespace
+            )
+        # Build a dictionary of the stats
+        hist_dict = OrderedDict()
+        hist_dict['time'] = datetime.datetime.now()
+        if counter_port_name_map is not None:
+            for port in natsorted(counter_port_name_map):
+                if port in display_ports_set:
+                    hist_dict[port] = get_history_stats(
+                        counter_port_name_map[port]
+                    )
+            self.hist_dict.update(hist_dict)
+
     def get_cnstat(self, rx):
         """
             Get the counters info from database.
@@ -133,6 +225,14 @@ class Pfcstat(object):
         self.cnstat_dict.clear()
         self.collect_cnstat(rx)
         return self.cnstat_dict
+
+    def get_history(self):
+        """
+            Get the history stats from database. These values are populated by the pfcwd detect script.
+        """
+        self.hist_dict.clear()
+        self.collect_history()
+        return self.hist_dict
 
     def cnstat_print(self, cnstat_dict, rx):
         """
@@ -197,6 +297,51 @@ class Pfcstat(object):
         else:
             print(tabulate(table, header_Tx, tablefmt='simple', stralign='right'))
 
+    def history_diff_print(self, headers, hist_new_dict, hist_old_dict={}, ):
+        """
+            Print the difference between two cnstat history results.
+        """
+        table = []
+        # time : <>, ethernet0 : { pfc0: {}, pfc1: {} }, ethernet1 :{}
+        for key, pfc_dict in hist_new_dict.items():
+            if key == 'time':
+                continue
+            # old dict has this port
+            if key in hist_old_dict:
+                for pfc, stat in pfc_dict.items():
+                    old_stat = None
+                    if pfc in hist_old_dict.get(key):
+                        old_stat = hist_old_dict.get(key).get(pfc)
+                    # old dict [ port ] has this priority data
+                    if old_stat is not None:
+                        table.append((key,
+                                    pfc,
+                                    ns_diff(stat['numTransitions'], old_stat['numTransitions']),
+                                    ns_diff(stat['totalPauseTime'], old_stat['totalPauseTime']),
+                                    format_number_with_comma(stat['recentPauseTime']),
+                                    format_microseconds_as_datetime(stat['recentPauseTimestamp'])))
+                    # use the new data only for this port for this priority
+                    else:
+                        table.append((key,
+                                    pfc,
+                                    format_number_with_comma(stat['numTransitions']),
+                                    format_number_with_comma(stat['totalPauseTime']),
+                                    format_number_with_comma(stat['recentPauseTime']),
+                                    format_microseconds_as_datetime(stat['recentPauseTimestamp'])))
+            # use the new data only for this port
+            else:
+                for pfc, stat in pfc_dict.items():
+                    table.append((key,
+                                pfc,
+                                format_number_with_comma(stat['numTransitions']),
+                                format_number_with_comma(stat['totalPauseTime']),
+                                format_number_with_comma(stat['recentPauseTime']),
+                                format_microseconds_as_datetime(stat['recentPauseTimestamp'])))
+            # empty line between interfaces
+            table.append([])
+
+        print(tabulate(table, headers, tablefmt='simple', stralign='right'))
+
 def main():
     parser  = argparse.ArgumentParser(description='Display the pfc counters',
                                       formatter_class=argparse.RawTextHelpFormatter,
@@ -207,6 +352,9 @@ Examples:
   pfcstat -d
   pfcstat -n asic1
   pfcstat -s all -n asic0
+  pfcstat --history
+  pfcstat -n asic1 --history
+  pfcstat -s all -n asic0 --history
 """)
 
     parser.add_argument( '-c', '--clear', action='store_true',
@@ -221,11 +369,18 @@ Examples:
     parser.add_argument('-n', '--namespace', default=None,
         help='Display interfaces for specific namespace'
     )
-    parser.add_argument('-v', '--version', action='version', version='%(prog)s 1.0')
+    parser.add_argument(
+        '-v', '--version', action='version', version='%(prog)s 1.0'
+    )
+    parser.add_argument(
+        '--history', action="store_true", help="Display historical PFC statistics, must be supported by the platform-specific PFCWD detect script."
+    )
+
     args = parser.parse_args()
 
     save_fresh_stats = args.clear
     delete_all_stats = args.delete
+    show_pfc_history = args.history
 
     cache = UserCache()
     cnstat_file = 'pfcstat'
@@ -233,6 +388,7 @@ Examples:
     cnstat_dir = cache.get_directory()
     cnstat_fqn_file_rx = os.path.join(cnstat_dir, "{}rx".format(cnstat_file))
     cnstat_fqn_file_tx = os.path.join(cnstat_dir, "{}tx".format(cnstat_file))
+    hist_fqn_file = cnstat_fqn_file_rx + "_hist"
 
     # if '-c' option is provided get stats from all (frontend and backend) ports
     if save_fresh_stats:
@@ -244,55 +400,87 @@ Examples:
     if delete_all_stats:
         cache.remove()
 
-    """
-        Get the counters of pfc rx counter
-    """
-    cnstat_dict_rx = deepcopy(pfcstat.get_cnstat(True))
-
-    """
-        Get the counters of pfc tx counter
-    """
-    cnstat_dict_tx = deepcopy(pfcstat.get_cnstat(False))
-
+    # clear both counters + history
     if save_fresh_stats:
+        # Get the counters of pfc rx counter
+        cnstat_dict_rx = deepcopy(pfcstat.get_cnstat(True))
+        # Get the counters of pfc tx counter
+        cnstat_dict_tx = deepcopy(pfcstat.get_cnstat(False))
+        # Get the history stats of pfc rx
+        hist_dict = deepcopy(pfcstat.get_history())
+
         try:
             json.dump(cnstat_dict_rx, open(cnstat_fqn_file_rx, 'w'), default=json_serial)
             json.dump(cnstat_dict_tx, open(cnstat_fqn_file_tx, 'w'), default=json_serial)
+            json.dump(hist_dict, open(hist_fqn_file, 'w'), default=json_serial)
         except IOError as e:
             print(e.errno, e)
             sys.exit(e.errno)
         else:
-            print("Clear saved counters")
+            print("Clear saved PFC counters and history")
             sys.exit(0)
 
+    # save history stats separately
+    if show_pfc_history:
+        """
+            Get the history stats of pfc rx
+        """
+        hist_dict = deepcopy(pfcstat.get_history())
 
-    """
-        Print the counters of pfc rx counter
-    """
-    if os.path.isfile(cnstat_fqn_file_rx):
-        try:
-            cnstat_cached_dict = json.load(open(cnstat_fqn_file_rx, 'r'))
-            print("Last cached time was " + str(cnstat_cached_dict.get('time')))
-            pfcstat.cnstat_diff_print(cnstat_dict_rx, cnstat_cached_dict, True)
-        except IOError as e:
-            print(e.errno, e)
+        """
+            Print the pfc history stats
+        """
+        if os.path.isfile(hist_fqn_file):
+            try:
+                hist_cached_dict = json.load(open(hist_fqn_file, 'r'))
+                print("Last cached time was " + str(hist_cached_dict.get('time')))
+                pfcstat.history_diff_print(header_hist, hist_dict, hist_cached_dict)
+            except IOError as e:
+                print(e.errno, e)
+                sys.exit(e.errno)
+        else:
+            pfcstat.history_diff_print(header_hist, hist_dict)
+
     else:
-        pfcstat.cnstat_print(cnstat_dict_rx, True)
+        """
+            Get the counters of pfc rx counter
+        """
+        cnstat_dict_rx = deepcopy(pfcstat.get_cnstat(True))
 
-    print("")
+        """
+            Get the counters of pfc tx counter
+        """
+        cnstat_dict_tx = deepcopy(pfcstat.get_cnstat(False))
 
-    """
-        Print the counters of pfc tx counter
-    """
-    if os.path.isfile(cnstat_fqn_file_tx):
-        try:
-            cnstat_cached_dict = json.load(open(cnstat_fqn_file_tx, 'r'))
-            print("Last cached time was " + str(cnstat_cached_dict.get('time')))
-            pfcstat.cnstat_diff_print(cnstat_dict_tx, cnstat_cached_dict, False)
-        except IOError as e:
-            print(e.errno, e)
-    else:
-        pfcstat.cnstat_print(cnstat_dict_tx, False)
+        """
+            Print the counters of pfc rx counter
+        """
+        if os.path.isfile(cnstat_fqn_file_rx):
+            try:
+                cnstat_cached_dict = json.load(open(cnstat_fqn_file_rx, 'r'))
+                print("Last cached time was " + str(cnstat_cached_dict.get('time')))
+                pfcstat.cnstat_diff_print(cnstat_dict_rx, cnstat_cached_dict, True)
+            except IOError as e:
+                print(e.errno, e)
+                sys.exit(e.errno)
+        else:
+            pfcstat.cnstat_print(cnstat_dict_rx, True)
+
+        print("")
+
+        """
+            Print the counters of pfc tx counter
+        """
+        if os.path.isfile(cnstat_fqn_file_tx):
+            try:
+                cnstat_cached_dict = json.load(open(cnstat_fqn_file_tx, 'r'))
+                print("Last cached time was " + str(cnstat_cached_dict.get('time')))
+                pfcstat.cnstat_diff_print(cnstat_dict_tx, cnstat_cached_dict, False)
+            except IOError as e:
+                print(e.errno, e)
+                sys.exit(e.errno)
+        else:
+            pfcstat.cnstat_print(cnstat_dict_tx, False)
 
     sys.exit(0)
 
