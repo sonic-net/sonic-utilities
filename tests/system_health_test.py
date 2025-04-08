@@ -452,7 +452,6 @@ swss            OK                OK                  -              -
         assert result.exit_code == 0
         assert mock_display.called
 
-
     @mock.patch("show.system_health.display_module_health_summary", return_value=None)
     def test_detail_dpu(self, mock_display):
         runner = CliRunner()
@@ -462,7 +461,6 @@ swss            OK                OK                  -              -
         )
         assert result.exit_code == 0
         assert mock_display.called
-
 
     @mock.patch("show.system_health.display_module_health_summary", return_value=None)
     def test_monitor_list_dpu(self, mock_display):
