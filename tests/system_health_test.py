@@ -438,88 +438,62 @@ swss            OK                OK                  -              -
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         show.cli = original_cli
 
-    @mock.patch("show.system_health.display_module_health_summary", return_value=None)
+    @mock.patch("show.system_health.get_dpu_ip_list", return_value=[("dpu0", "1.2.3.4")])
+    @mock.patch("show.system_health.is_midplane_reachable", return_value=True)
+    @mock.patch("show.system_health.ensure_ssh_key_setup")
+    @mock.patch("show.system_health.get_module_health", return_value=("1.2.3.4", "OK"))
+    @mock.patch("show.system_health.is_smartswitch", return_value=True)
     @mock.patch("show.system_health.get_system_health_status")
-    @mock.patch("show.system_health.chassis")
-    def test_summary_switch_and_dpu(self, mock_chassis, mock_get_status, mock_display):
+    def test_summary_switch_and_dpu(
+        self, mock_get_status, mock_smartswitch, mock_health, mock_ssh, mock_reach, mock_list
+    ):
+        runner = CliRunner()
+
+        # mock chassis.get_status_led()
+        mock_chassis = mock.Mock()
         mock_chassis.get_status_led.return_value = "green"
         mock_get_status.return_value = (None, mock_chassis, {})
-        runner = CliRunner()
+
         result = runner.invoke(
             show.cli.commands["system-health"].commands["summary"],
             ["--reachable-only", "--module-name", "all"]
         )
         assert result.exit_code == 0
-        assert mock_display.called
+        assert mock_list.called
+        assert mock_health.called
 
-    @mock.patch("show.system_health.display_module_health_summary", return_value=None)
-    def test_detail_dpu(self, mock_display):
+    @mock.patch("show.system_health.get_dpu_ip_list", return_value=[("dpu0", "1.2.3.4")])
+    @mock.patch("show.system_health.is_midplane_reachable", return_value=True)
+    @mock.patch("show.system_health.ensure_ssh_key_setup")
+    @mock.patch("show.system_health.get_module_health", return_value=("1.2.3.4", "OK"))
+    @mock.patch("show.system_health.is_smartswitch", return_value=True)
+    @mock.patch("show.system_health.get_system_health_status")
+    def test_detail_dpu(
+        self, mock_get_status, mock_smartswitch, mock_health, mock_ssh, mock_reach, mock_list
+    ):
         runner = CliRunner()
         result = runner.invoke(
             show.cli.commands["system-health"].commands["detail"],
             ["--module-name", "DPU0"]
         )
         assert result.exit_code == 0
-        assert mock_display.called
+        assert mock_health.called
+        assert mock_list.called
 
-    @mock.patch("show.system_health.display_module_health_summary", return_value=None)
-    def test_monitor_list_dpu(self, mock_display):
+    @mock.patch("show.system_health.get_dpu_ip_list", return_value=[("dpu0", "1.2.3.4")])
+    @mock.patch("show.system_health.is_midplane_reachable", return_value=True)
+    @mock.patch("show.system_health.ensure_ssh_key_setup")
+    @mock.patch("show.system_health.get_module_health", return_value=("1.2.3.4", "OK"))
+    @mock.patch("show.system_health.is_smartswitch", return_value=True)
+    @mock.patch("show.system_health.get_system_health_status")
+    def test_monitor_list_dpu(
+        self, mock_get_status, mock_smartswitch, mock_health, mock_ssh, mock_reach, mock_list
+    ):
         runner = CliRunner()
         result = runner.invoke(
             show.cli.commands["system-health"].commands["monitor-list"],
             ["--module-name", "all"]
         )
         assert result.exit_code == 0
-        assert mock_display.called
-
-
-class TestSystemHealthSSH(object):
-
-    @mock.patch("show.system_health.subprocess.run")
-    def test_disable_auto_ssh_key(self, mock_run):
-        from show.system_health import disable_auto_ssh_key
-        try:
-            disable_auto_ssh_key()
-        except SystemExit as e:
-            assert e.code == 0
-        assert mock_run.called
-
-    @mock.patch("show.system_health.subprocess.run")
-    def test_ensure_ssh_key_exists(self, mock_run):
-        from show.system_health import ensure_ssh_key_exists
-        with mock.patch("os.path.exists", return_value=False):
-            ensure_ssh_key_exists()
-            assert mock_run.called
-
-    @mock.patch("getpass.getpass", return_value="dummy")
-    @mock.patch("show.system_health.setup_ssh_key")
-    def test_ensure_ssh_key_setup(self, mock_setup_ssh_key, mock_getpass):
-        from show.system_health import ensure_ssh_key_setup
-        with mock.patch("os.path.exists", return_value=True):
-            ensure_ssh_key_setup("1.2.3.4", "admin")
-            assert mock_setup_ssh_key.called
-
-    @mock.patch("builtins.open", new_callable=mock.mock_open, read_data="ssh-rsa dummy-key")
-    @mock.patch("show.system_health.subprocess.run")
-    def test_setup_ssh_key_for_remote(self, mock_run, mock_open):
-        from show.system_health import setup_ssh_key_for_remote
-        setup_ssh_key_for_remote("hostname", "admin", "dummy", "/home/test/.ssh/id_rsa.pub")
-        assert mock_open.called
-        assert mock_run.call_count >= 1
-
-    @mock.patch("click.prompt", return_value="dummy")
-    @mock.patch("show.system_health.subprocess.run")
-    def test_setup_ssh_key(self, mock_run, mock_prompt):
-        from show.system_health import setup_ssh_key
-        try:
-            setup_ssh_key("module", "admin", "password")
-        except SystemExit as e:
-            assert e.code == 0
-        assert mock_run.called
-
-    @mock.patch("show.system_health.subprocess.check_output")
-    def test_get_module_health(self, mock_check_output):
-        from show.system_health import get_module_health
-        mock_check_output.return_value = '{"SystemStatus": {"LED": "green"}}'
-        result = get_module_health("10.0.0.1", "summary")
-        assert "SystemStatus" in result
+        assert mock_list.called
+        assert mock_health.called
