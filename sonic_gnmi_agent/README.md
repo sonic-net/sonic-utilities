@@ -4,8 +4,7 @@ make SONIC_BUILD_JOBS=4 NOBULLSEYE=1 NOBUSTER=1 target/docker-sonic-gnmi.gz
 make SONIC_BUILD_JOBS=4 NOBULLSEYE=1 NOBUSTER=1 target/debs/bookworm/libdashapi_1.0.0_amd64.deb
 
 Then you can use this command to build the sonic gnmi agent docker:
-cd src/sonic-utilities/sonic_gnmi_agent
-make SONIC_BUILD_JOBS=4 NOBULLSEYE=1 NOBUSTER=1 clean all
+make -C SONIC_BUILD_JOBS=4 NOBULLSEYE=1 NOBUSTER=1 src/sonic-utilities/sonic_gnmi_agent clean all
 
 The generated file will be located here:
 ./target/docker-sonic-gnmi-agent.gz
@@ -36,7 +35,7 @@ sudo config load
 
 
 Installing and using the agent
-1. Copy the docker-sonic-gnmi-agent.gz file and instal it on the switch:
+1. Copy the ocker-sonic-gnmi-agent.gz file and instal it on the switch:
    docker load -i docker-sonic-gnmi-agent.gz
 
 2. Launch the docker container:
@@ -44,14 +43,6 @@ Installing and using the agent
 
 3. Push configurations to the DPU from inside the docker
    gnmi_client.py -i <dpu_id> -n 8 -t 127.0.0.1:8080 <op> -f <template_name>
+      dpu_id=0,1…7
       op=update|delete|replace
-      Arguments:
-	-d, --debug,	 default=False, turn on debug log
-    	-i, --dpu_index, default=0, DPU index [0-7]
-    	-n, --num_dpus,  default=1, required=False, help="Number of DPUs")
-    	-s, --sleep_secs,default=0, Delay before each gnmi batch operation in seconds
-    	-b, --batch_val, default=10, Batch operation size
-   	-u, --username,  default="admin", GNMI server user name
-    	-p, --password,  default="password", GNMI server password
- The example templates files are located in the  /sonic/templates directory
 
