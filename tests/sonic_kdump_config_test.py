@@ -328,16 +328,20 @@ class TestSonicKdumpConfig(unittest.TestCase):
             return_result = sonic_kdump_config.get_next_image()
         self.assertEqual(sys_exit.exception.code, 1)
 
+    @patch('os.geteuid')
     @patch('sonic_kdump_config.cmd_kdump_remote')
-    def test_cmd_remote(self, mock_cmd_kdump_remote):
+    def test_cmd_remote(self, mock_cmd_kdump_remote, mock_geteuid):
         """Tests the function `cmd_kdump_remote(...)` in script `sonic-kdump-config`.
         """
         # Mock the output of cmd_kdump_remote
         mock_cmd_kdump_remote.return_value = None  # Assuming the function prints directly
 
+        # Mock os.geteuid to return 0 (root user)
+        mock_geteuid.return_value = 0
+
         # Call the function with the --remote argument
         with patch('sys.argv', ['sonic-kdump-config', '--remote']):
-            sonic_kdump_config.main()
+            main()
 
         # Verify that cmd_kdump_remote was called
         mock_cmd_kdump_remote.assert_called_once()
