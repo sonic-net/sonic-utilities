@@ -273,7 +273,8 @@ def summary(module_name, reachable_only):
 @click.option('--reachable-only', is_flag=True, help="Only include modules reachable via midplane.")
 def detail(module_name, reachable_only):
     if not module_name or module_name == "all":
-        print("SWITCH")
+        if module_name == "all":
+            print("SWITCH")
         _, chassis, stat = get_system_health_status()
         display_system_health_summary(stat, chassis.get_status_led())
         display_monitor_list(stat)
@@ -287,34 +288,49 @@ def detail(module_name, reachable_only):
 @click.option('--reachable-only', is_flag=True, help="Only include modules reachable via midplane.")
 def monitor_list(module_name, reachable_only):
     if not module_name or module_name == "all":
-        print("SWITCH")
+        if module_name == "all":
+            print("SWITCH")
         _, _, stat = get_system_health_status()
         display_monitor_list(stat)
     if module_name and module_name.startswith("DPU") or module_name == "all":
         display_module_health_summary(module_name, "monitor-list", reachable_only)
 
 @system_health.command()
-@click.argument('module_host')
-@click.argument('username')
-@click.argument('password')
-@click.argument('public_key_path', required=False)
-def setup_ssh_key(module_host, username, password, public_key_path):
-    """Manually set up SSH key authentication for the remote module"""
-    click.echo(f"Setting up SSH key for module: {module_host}")
-    if not public_key_path:
-        public_key_path = DEFAULT_PUBLIC_KEY_PATH
-    public_key_path = os.path.expanduser(public_key_path)
+@click.argument('module', metavar='MODULE', required=True)
+@click.option('--username', prompt=True, help='SSH login username (e.g., admin)')
+@click.option('--password', prompt=True, hide_input=True, help='SSH login password')
+def setup_ssh_key(module, username, password):
+    """Set up SSH key authentication for a specific DPU or all DPUs in parallel."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    public_key_path = os.path.expanduser(DEFAULT_PUBLIC_KEY_PATH)
 
     if not os.path.exists(public_key_path):
         click.echo(f"Public key not found at {public_key_path}. Please generate it first.")
         return
 
-    try:
-        setup_ssh_key_for_remote(module_host, username, password, public_key_path)
-        click.echo(f"SSH key setup completed for {module_host}")
-    except Exception as e:
-        click.echo(f"Failed to set up SSH key for {module_host}: {str(e)}")
+    dpulist = "all" if module.lower() == "all" else [module.lower()]
+    targets = get_dpu_ip_list(dpulist)
 
+    if not targets:
+        click.echo(f"No IPs found for module(s): {module}")
+        return
+
+    def setup(ip_info):
+        mod_name, ip = ip_info
+        if not is_midplane_reachable(ip):
+            return f"Skipping unreachable {mod_name} ({ip})"
+        try:
+            setup_ssh_key_for_remote(ip, username, password, public_key_path)
+            return f"SSH key setup completed for {mod_name} ({ip})"
+        except Exception as e:
+            return f"Failed for {mod_name} ({ip}): {e}"
+
+    click.echo(f"Starting SSH key setup for {len(targets)} module(s)...")
+    with ThreadPoolExecutor(max_workers=len(targets)) as executor:
+        futures = {executor.submit(setup, item): item for item in targets}
+        for future in as_completed(futures):
+            click.echo(future.result())
 
 @system_health.command()
 def disable_auto_ssh_key():

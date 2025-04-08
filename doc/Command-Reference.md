@@ -11453,6 +11453,61 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#System
 ### System-Health
 
 These commands are used to monitor the system current running services and hardware state.
+**The new extensions to the "show system-health \<summary/detail/monitor-list\>" CLIs require the SSH Keys to be copied to the modules before these CLI extensions are used**
+In order to support that two new CLI extensions are introduced. The "setup-ssh-key" option to setup the key and "disable-auto-ssh-key" option to disable the keys
+
+**show system-health setup-ssh-key \<module\>**
+
+- Usage:
+  ```
+  show system-health setup-ssh-key all
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show system-health setup-ssh-key all
+  Username: admin
+  Password: 
+  Starting SSH key setup for 8 module(s)...
+  SSH key copied to 169.254.200.1 successfully!
+  SSH key setup completed for dpu0 (169.254.200.1)
+  SSH key copied to 169.254.200.2 successfully!
+  SSH key setup completed for dpu1 (169.254.200.2)
+  Skipping unreachable dpu4 (169.254.200.5)
+  Skipping unreachable dpu3 (169.254.200.4)
+  Skipping unreachable dpu2 (169.254.200.3)
+  Skipping unreachable dpu5 (169.254.200.6)
+  Skipping unreachable dpu7 (169.254.200.8)
+  Skipping unreachable dpu6 (169.254.200.7)
+  ```
+
+- Usage:
+  ```
+  show system-health setup-ssh-key DPU0
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show system-health setup-ssh-key DPU0
+  Username: admin
+  Password: 
+  Starting SSH key setup for 1 module(s)...
+  SSH key copied to 169.254.200.1 successfully!
+  SSH key setup completed for dpu0 (169.254.200.1)
+  ```
+
+**show system-health disable-auto-ssh-key**
+
+- Usage:
+  ```
+  show system-health disable-auto-ssh-key
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show system-health disable-auto-ssh-key
+  Auto SSH key setup has been disabled.
+  ```
 
 **show system-health summary**
 
