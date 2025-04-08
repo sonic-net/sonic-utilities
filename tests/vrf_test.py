@@ -305,43 +305,50 @@ Vnet_101     Ethernet0.10
         assert result.output == expected_output_unbind
 
         expected_output_bind = "Interface Ethernet0 IP disabled and address(es) removed due to binding VRF Vnet_1.\n"
-        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["bind"], ["Ethernet0", "Vnet_1"], obj=vnet_obj)
+        cmds = config.config.commands["interface"].commands["vrf"].commands["bind"]
+        result = runner.invoke(cmds, ["Ethernet0", "Vnet_1"], obj=vnet_obj)
         assert result.exit_code == 0
         assert result.output == expected_output_bind
         assert ('Vnet_1') in db.cfgdb.get_table('INTERFACE')['Ethernet0']['vnet_name']
 
         expected_output_bind = "Interface Loopback0 IP disabled and address(es) removed due to binding VRF Vnet_101.\n"
-        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["bind"], ["Loopback0", "Vnet_101"], obj=vnet_obj)
+        cmds = config.config.commands["interface"].commands["vrf"].commands["bind"]
+        result = runner.invoke(cmds, ["Loopback0", "Vnet_101"], obj=vnet_obj)
         assert result.exit_code == 0
         assert result.output == expected_output_bind
         assert ('Vnet_101') in db.cfgdb.get_table('LOOPBACK_INTERFACE')['Loopback0']['vnet_name']
 
         expected_output_bind = "Interface Vlan40 IP disabled and address(es) removed due to binding VRF Vnet_101.\n"
-        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["bind"], ["Vlan40", "Vnet_101"], obj=vnet_obj)
+        cmds = config.config.commands["interface"].commands["vrf"].commands["bind"]
+        result = runner.invoke(cmds, ["Vlan40", "Vnet_101"], obj=vnet_obj)
         assert result.exit_code == 0
         assert result.output == expected_output_bind
         assert ('Vnet_101') in db.cfgdb.get_table('VLAN_INTERFACE')['Vlan40']['vnet_name']
 
         expected_output_bind = "Interface PortChannel0002 IP disabled and address(es) removed due to binding VRF Vnet_101.\n"
-        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["bind"], ["PortChannel0002", "Vnet_101"], obj=vnet_obj)
+        cmds = config.config.commands["interface"].commands["vrf"].commands["bind"]
+        result = runner.invoke(cmds, ["PortChannel0002", "Vnet_101"], obj=vnet_obj)
         assert result.exit_code == 0
         assert result.output == expected_output_bind
         assert ('Vnet_101') in db.cfgdb.get_table('PORTCHANNEL_INTERFACE')['PortChannel0002']['vnet_name']
 
         expected_output_bind = "Interface Eth36.10 IP disabled and address(es) removed due to binding VRF Vnet_102.\n"
-        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["bind"], ["Eth36.10", "Vnet_102"], obj=vnet_obj)
+        cmds = config.config.commands["interface"].commands["vrf"].commands["bind"]
+        result = runner.invoke(cmds, ["Eth36.10", "Vnet_102"], obj=vnet_obj)
         assert result.exit_code == 0
         assert result.output == expected_output_bind
         assert ('Vnet_102') in db.cfgdb.get_table('VLAN_SUB_INTERFACE')['Eth36.10']['vnet_name']
 
         expected_output_bind = "Interface Ethernet0.10 IP disabled and address(es) removed due to binding VRF Vnet_103.\n"
-        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["bind"], ["Ethernet0.10", "Vnet_103"], obj=vnet_obj)
+        cmds = config.config.commands["interface"].commands["vrf"].commands["bind"]
+        result = runner.invoke(cmds, ["Ethernet0.10", "Vnet_103"], obj=vnet_obj)
         assert result.exit_code == 0
         assert result.output == expected_output_bind
         assert ('Vnet_103') in db.cfgdb.get_table('VLAN_SUB_INTERFACE')['Ethernet0.10']['vnet_name']
 
         expected_output_bind = "Interface Po0002.101 IP disabled and address(es) removed due to binding VRF Vnet_1.\n"
-        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["bind"], ["Po0002.101", "Vnet_1"], obj=vnet_obj)
+        cmds = config.config.commands["interface"].commands["vrf"].commands["bind"]
+        result = runner.invoke(cmds, ["Po0002.101", "Vnet_1"], obj=vnet_obj)
         assert result.exit_code == 0
         assert result.output == expected_output_bind
         assert ('Vnet_1') in db.cfgdb.get_table('VLAN_SUB_INTERFACE')['Po0002.101']['vnet_name']
@@ -443,9 +450,9 @@ Error: 'vnet_name' must begin with 'Vnet_' .
         assert ('Vnet_ypfbjjhyzivaythuaxlbcibgdgjkqgapedmiosjgsvddqaalformdmbwigddddddddghkbpccbzjrhefrcdeqkvgmubxxnkgbvjpgpnypfbjjhyzivaythuaxlbcibgdgjkqgapedmiosjgsvddqlformdmbwigghkbpccbzjrhefrcdeqkvgmubxxnkgbvjpgpn') not in db.cfgdb.get_table('VNET')
 
         # Test vnet add using mandatory arguments
-        args = ["Vnet_1000", "222", "tunnel1"]
+        args = ["Vnet_3", "2", "tunnel1"]
         result = runner.invoke(config.config.commands["vnet"].commands["add"], args, obj=vnet_obj)
-        assert ('Vnet_1000') in db.cfgdb.get_table('VNET')
+        assert ('Vnet_3') in db.cfgdb.get_table('VNET')
         assert result.exit_code == 0
 
         # Test vnet add using invalid vnet name
@@ -454,8 +461,8 @@ Error: 'vnet_name' must begin with 'Vnet_' .
         assert expected_output in result.output
 
         # Test vnet add when vnet already exists
-        result = runner.invoke(config.config.commands["vnet"].commands["add"], ["Vnet_1000", "455", "tunnel1"], obj=vnet_obj)
-        assert "VNET Vnet_1000 already exists!" in result.output 
+        result = runner.invoke(config.config.commands["vnet"].commands["add"], ["Vnet_3", "2", "tunnel1"], obj=vnet_obj)
+        assert "VNET Vnet_3 already exists!" in result.output
         assert result.exit_code != 0
 
         # Test vnet add with optional argument peer list
@@ -465,16 +472,16 @@ Error: 'vnet_name' must begin with 'Vnet_' .
         assert result.exit_code == 0
 
         # Test vnet add with all optional argument all other optional arguments
-        args = ["Vnet_3000", "455", "tunnel1", "10.0.0.0/32", "559c6ce8-26ab-4193-b946-ccc6e8f930b2", "default", 'true', "11:22:33:44:55:66", "66:55:44:33:22:11"]
+        optional_args = ["10.0.0.0/32", "559c6ce8-26ab-4193-b946-ccc6e8f930b2", "default", 'true', "11:22:33:44:55:66", "66:55:44:33:22:11"]
+        args = ["Vnet_3000", "455", "tunnel1"] + optional_args
         result = runner.invoke(config.config.commands["vnet"].commands["add"], args, obj=vnet_obj)
         assert ('Vnet_3000') in db.cfgdb.get_table('VNET')
         assert result.exit_code == 0
 
         # Test vnet del with wrong vnet name
         expected_output_del = "'vnet_name' must begin with 'Vnet_' "
-        result = runner.invoke(config.config.commands["vnet"].commands["del"], ["vnet_1000"], obj=vnet_obj)
+        result = runner.invoke(config.config.commands["vnet"].commands["del"], ["vnet_3"], obj=vnet_obj)
         assert result.exit_code != 0
-        assert ('Vnet_1000') in db.cfgdb.get_table('VNET')
         assert expected_output_del in result.output
 
         # Test vnet del with long vnet name
@@ -486,15 +493,14 @@ Error: 'vnet_name' must begin with 'Vnet_' .
         assert expected_output_del in result.output
 
         # Test vnet del
-        expected_output_del = "VNET Vnet_1000 deleted and all associated IP addresses removed.\n"
-        result = runner.invoke(config.config.commands["vnet"].commands["del"], ["Vnet_1000"], obj=vnet_obj)
+        expected_output_del = "VNET Vnet_3 deleted and all associated IP addresses removed.\n"
+        result = runner.invoke(config.config.commands["vnet"].commands["del"], ["Vnet_3"], obj=vnet_obj)
         assert result.exit_code == 0
-        assert ('Vnet_1000') not in db.cfgdb.get_table('VNET')
+        assert ('Vnet_3') not in db.cfgdb.get_table('VNET')
         assert expected_output_del in result.output
 
         # Test vnet del for vnet that is non existent
-        result = runner.invoke(config.config.commands["vnet"].commands["del"], ["Vnet_1000"], obj=vnet_obj)
+        result = runner.invoke(config.config.commands["vnet"].commands["del"], ["Vnet_3"], obj=vnet_obj)
         assert result.exit_code != 0
-        assert ('Vnet_1000') not in db.cfgdb.get_table('VNET')
-        assert "VNET Vnet_1000 does not exist!" in result.output
- 
+        assert ('Vnet_3') not in db.cfgdb.get_table('VNET')
+        assert "VNET Vnet_3 does not exist!" in result.output

@@ -536,7 +536,7 @@ def del_interface_bind_to_vnet(config_db, vnet_name):
             for interface_name in interface_dict:
                 if 'vnet_name' in interface_dict[interface_name] and vnet_name == interface_dict[interface_name]['vnet_name']:
                     interface_ipaddresses = get_interface_ipaddresses(config_db, interface_name)
-                    for ipaddress in interface_ipaddresses:
+                    for ipaddress in interface_ipaddresses :
                         remove_router_interface_ip_address(config_db, interface_name, ipaddress)
                     config_db.set_entry(table_name, interface_name, None)
             
@@ -6001,7 +6001,7 @@ def enable_use_link_local_only(ctx, interface_name):
             ctx.fail("Interface name %s is invalid. Please enter a valid interface name!!" %(interface_name))
 
     portchannel_member_table = db.get_table('PORTCHANNEL_MEMBER')
- 
+
     if interface_is_in_portchannel(portchannel_member_table, interface_name):
         ctx.fail("{} is configured as a member of portchannel. Cannot configure the IPv6 link local mode!"
                 .format(interface_name))
@@ -6142,7 +6142,7 @@ def add_vrrp_ip(ctx, interface_name, vrrp_id, ip_addr):
     if check_vrrp_ip_exist(config_db, ip_addr):
         ctx.abort()
 
-    if "/" not in ip_addr:
+    if "/" not in ip_addr :
         ctx.fail("IP address {} is missing a mask. Such as xx.xx.xx.xx/yy or xx:xx::xx/yy".format(str(ip_addr)))
 
     # check vip exist
