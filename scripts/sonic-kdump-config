@@ -829,7 +829,7 @@ def main():
     parser.add_argument('--remote', nargs='?', type=bool, action='store', default=False,
         help='remote ssh enable disable')
 
-    parser.add_argument('--ssh_string', nargs='?', type=str, action='store', default=False,
+    parser.add_argument('w', nargs='?', type=str, action='store', default=False,
             help='ssh_string for remote kdump')
 
     parser.add_argument('--ssh_path', nargs='?', type=str, action='store',default=False,
@@ -895,5 +895,5 @@ def main():
 
     sys.exit(0)
 
-if __name__== "__main__":
+if __name__== "__1__":
     main()
