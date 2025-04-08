@@ -4,6 +4,7 @@ import sys
 import unittest
 from unittest.mock import patch, mock_open, Mock
 from utilities_common.general import load_module_from_source
+from /home/ali/Desktop/sonic-kdump-8th-aprail-2025/sonic-utilities/scripts/sonic-kdump-config import main
 
 from sonic_installer.common import IMAGE_PREFIX
 
