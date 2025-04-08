@@ -441,30 +441,39 @@ swss            OK                OK                  -              -
     @mock.patch("show.system_health.display_module_health_summary")
     def test_summary_switch_and_dpu(mock_display_module_health_summary):
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands["system-health"].commands["summary"], ["--reachable-only", "--module-name", "all"])
+        result = runner.invoke(
+            show.cli.commands["system-health"].commands["summary"],
+            ["--reachable-only", "--module-name", "all"]
+        )
         assert "SWITCH" in result.output
         assert mock_display_module_health_summary.called
         assert mock_display_module_health_summary.call_args[0][0] == "all"
         assert mock_display_module_health_summary.call_args[0][1] == "summary"
         assert mock_display_module_health_summary.call_args[1]["reachable_only"] is True
 
-
     @mock.patch("show.system_health.display_module_health_summary")
     def test_detail_dpu(mock_display_module_health_summary):
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands["system-health"].commands["detail"], ["--module-name", "DPU0"])
+        result = runner.invoke(
+            show.cli.commands["system-health"].commands["detail"],
+            ["--module-name", "DPU0"]
+        )
+        assert result.exit_code == 0
         assert mock_display_module_health_summary.called
         assert mock_display_module_health_summary.call_args[0][0] == "DPU0"
         assert mock_display_module_health_summary.call_args[0][1] == "detail"
 
-
     @mock.patch("show.system_health.display_module_health_summary")
     def test_monitor_list_dpu(mock_display_module_health_summary):
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands["system-health"].commands["monitor-list"], ["--module-name", "all"])
+        result = runner.invoke(
+            show.cli.commands["system-health"].commands["monitor-list"],
+            ["--module-name", "all"]
+        )
         assert "SWITCH" in result.output
         assert mock_display_module_health_summary.called
         assert mock_display_module_health_summary.call_args[0][1] == "monitor_list"
+
 
 class TestSystemHealthSSH:
 
