@@ -1087,7 +1087,8 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
 
 def cli_sroute_to_config(ctx, command_str, strict_nh = True):
     if len(command_str) < 2 or len(command_str) > 10:
-        ctx.fail("argument is not in pattern prefix [vrf <vrf_name>] <A.B.C.D/M> nexthop [vrf <vrf_name>] <A.B.C.D>|<dev <dev_name>>|<A.B.C.D dev <dev_name>>!")
+        ctx.fail("argument is not in pattern prefix [vrf <vrf_name>] <A.B.C.D/M> nexthop [vrf <vrf_name>] \
+                 <A.B.C.D>|<dev <dev_name>>|<A.B.C.D dev <dev_name>>!")
     if "prefix" not in command_str:
         ctx.fail("argument is incomplete, prefix not found!")
     if "nexthop" not in command_str and strict_nh:
@@ -1125,7 +1126,7 @@ def cli_sroute_to_config(ctx, command_str, strict_nh = True):
             # extract nexthop vrf
             for vrf in nexthop_str[2].split(','):
                 if not is_vrf_exists(config_db, vrf):
-                    ctx.fail("Nexthop VRF %s does not exist!"%(vrf))
+                    ctx.fail("Nexthop VRF %s does not exist!" % (vrf))
             config_entry["nexthop-vrf"] = nexthop_str[2]
             idx = 3
 
@@ -1155,14 +1156,14 @@ def cli_sroute_to_config(ctx, command_str, strict_nh = True):
         ifname_list = config_entry['ifname'].split(',')
         for ifname in ifname_list:
             if ifname.startswith('PortChannel'):
-                if not ifname in config_db.get_keys('PORTCHANNEL'):
+                if ifname not in config_db.get_keys('PORTCHANNEL'):
                     ctx.fail("portchannel does not exist.")
             elif ifname.startswith("Vlan"):
-                if not ifname in config_db.get_keys('VLAN_INTERFACE'):
+                if ifname not in config_db.get_keys('VLAN_INTERFACE'):
                     ctx.fail("vlan interface does not exist.")
-            elif not ifname in config_db.get_keys('INTERFACE') and \
-                 not ifname in config_db.get_keys('VLAN_SUB_INTERFACE') and \
-                 not ifname == 'null':
+            elif ifname not in config_db.get_keys('INTERFACE') and \
+                ifname not in config_db.get_keys('VLAN_SUB_INTERFACE') and \
+                    ifname != 'null':
                 ctx.fail("interface {} does not exist.".format(ifname))
 
     if not vrf_name == "":
@@ -7154,8 +7155,10 @@ def route(ctx):
     ctx.obj = {}
     ctx.obj['config_db'] = config_db
 
+
 @route.command('add', context_settings={"ignore_unknown_options": True})
-@click.argument('command_str', metavar='prefix [vrf <vrf_name>] <A.B.C.D/M> nexthop [vrf <vrf_name>] <A.B.C.D>|<dev <dev_name>>|<A.B.C.D dev <dev_name>>', nargs=-1, type=click.Path())
+@click.argument('command_str', metavar='prefix [vrf <vrf_name>] <A.B.C.D/M> nexthop [vrf <vrf_name>] \
+                <A.B.C.D>|<dev <dev_name>>|<A.B.C.D dev <dev_name>>', nargs=-1, type=click.Path())
 @click.pass_context
 def add_route(ctx, command_str):
     """Add route command"""
@@ -7219,7 +7222,7 @@ def add_route(ctx, command_str):
         current_entry = config_db.get_entry('STATIC_ROUTE', key)
 
         for item in ['nexthop', 'nexthop-vrf', 'ifname', 'distance', 'blackhole']:
-            if not item in current_entry:
+            if item not in current_entry:
                 current_entry[item] = ''
             if item in route:
                 current_entry[item] += ',' + route[item]
@@ -7230,8 +7233,10 @@ def add_route(ctx, command_str):
     else:
         config_db.set_entry("STATIC_ROUTE", key, route)
 
+
 @route.command('del', context_settings={"ignore_unknown_options": True})
-@click.argument('command_str', metavar='prefix [vrf <vrf_name>] <A.B.C.D/M> nexthop [vrf <vrf_name>] <A.B.C.D>|<dev <dev_name>>|<A.B.C.D dev <dev_name>>', nargs=-1, type=click.Path())
+@click.argument('command_str', metavar='prefix [vrf <vrf_name>] <A.B.C.D/M> nexthop [vrf <vrf_name>] \
+                <A.B.C.D>|<dev <dev_name>>|<A.B.C.D dev <dev_name>>', nargs=-1, type=click.Path())
 @click.pass_context
 def del_route(ctx, command_str):
     """Del route command"""

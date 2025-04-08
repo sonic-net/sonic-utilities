@@ -1,11 +1,9 @@
 import pytest
-import os, sys
-from unittest.mock import MagicMock, patch
-import mock
+import os
+import sys
 from click.testing import CliRunner
 
 from .mock_tables import dbconnector
-from utilities_common.db import Db
 from config.main import config
 
 
