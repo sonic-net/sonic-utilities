@@ -1835,17 +1835,20 @@
     "PFC_WD|Ethernet0": {
         "action": "drop",
         "detection_time": "600",
-        "restoration_time": "600"
+        "restoration_time": "600",
+        "pfc_stat_history": "disable"
     },
     "PFC_WD|Ethernet4": {
         "action": "drop",
         "detection_time": "600",
-        "restoration_time": "600"
+        "restoration_time": "600",
+        "pfc_stat_history": "disable"
     },
     "PFC_WD|Ethernet8": {
         "action": "drop",
         "detection_time": "600",
-        "restoration_time": "600"
+        "restoration_time": "600",
+        "pfc_stat_history": "disable"
     },
     "PFC_WD|GLOBAL": {
         "POLL_INTERVAL": "600"
