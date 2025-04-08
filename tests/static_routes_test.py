@@ -61,7 +61,7 @@ class TestStaticRoutes(object):
 
         # config route add prefix 1.2.3.4/32 nexthop PortChannel0101
         result = runner.invoke(config.config.commands["route"].commands["add"], \
-        ["prefix", "1.2.3.4/32", "nexthop", "dev", "PortChannel0101"], obj=obj)
+                               ["prefix", "1.2.3.4/32", "nexthop", "dev", "PortChannel0101"], obj=obj)
         print(result.exit_code, result.output)
         assert ERROR_INVALID_PORTCHANNEL in result.output
 
@@ -131,14 +131,14 @@ class TestStaticRoutes(object):
     def test_multiple_nexthops_with_vrf_static_route(self):
         db = Db()
         runner = CliRunner()
-        obj = {'config_db':db.cfgdb}
+        obj = {'config_db': db.cfgdb}
 
         ''' Add '''
         result = runner.invoke(config.config.commands["vrf"].commands["add"], ["Vrf-RED"], obj=obj)
         print(result.exit_code, result.output)
         # config route add prefix 6.2.3.4/32 nexthop vrf Vrf-RED "30.0.0.6,30.0.0.7"
-        result = runner.invoke(config.config.commands["route"].commands["add"], \
-        ["prefix", "6.2.3.4/32", "nexthop", "vrf", "Vrf-RED", "30.0.0.6,30.0.0.7"], obj=obj)
+        result = runner.invoke(config.config.commands["route"].commands["add"],
+                               ["prefix", "6.2.3.4/32", "nexthop", "vrf", "Vrf-RED", "30.0.0.6,30.0.0.7"], obj=obj)
         print(result.exit_code, result.output)
         assert ('default', '6.2.3.4/32') in db.cfgdb.get_table('STATIC_ROUTE')
         assert db.cfgdb.get_entry('STATIC_ROUTE', 'default|6.2.3.4/32') == \
@@ -147,15 +147,16 @@ class TestStaticRoutes(object):
 
         ''' Del '''
         # config route del prefix 6.2.3.4/32 nexthop vrf Vrf-RED 30.0.0.7
-        result = runner.invoke(config.config.commands["route"].commands["del"], \
-        ["prefix", "6.2.3.4/32", "nexthop", "30.0.0.7"], obj=obj)
+        result = runner.invoke(config.config.commands["route"].commands["del"],
+                               ["prefix", "6.2.3.4/32", "nexthop", "30.0.0.7"], obj=obj)
         print(result.exit_code, result.output)
         assert ('default', '6.2.3.4/32') in db.cfgdb.get_table('STATIC_ROUTE')
-        assert db.cfgdb.get_entry('STATIC_ROUTE', 'default|6.2.3.4/32') == {'nexthop': '30.0.0.6', 'blackhole': 'false', 'distance': '0', 'ifname': '', 'nexthop-vrf': 'Vrf-RED'}
+        assert db.cfgdb.get_entry('STATIC_ROUTE', 'default|6.2.3.4/32') == \
+            {'nexthop': '30.0.0.6', 'blackhole': 'false', 'distance': '0', 'ifname': '', 'nexthop-vrf': 'Vrf-RED'}
 
         # config route del prefix 6.2.3.4/32 nexthop vrf Vrf-RED 30.0.0.6
-        result = runner.invoke(config.config.commands["route"].commands["del"], \
-        ["prefix", "6.2.3.4/32", "nexthop", "vrf", "Vrf-RED", "30.0.0.6"], obj=obj)
+        result = runner.invoke(config.config.commands["route"].commands["del"],
+                               ["prefix", "6.2.3.4/32", "nexthop", "vrf", "Vrf-RED", "30.0.0.6"], obj=obj)
         print(result.exit_code, result.output)
         assert not ('default', '6.2.3.4/32') in db.cfgdb.get_table('STATIC_ROUTE')
 
