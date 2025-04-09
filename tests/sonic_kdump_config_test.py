@@ -234,6 +234,7 @@ class TestSonicKdumpConfig(unittest.TestCase):
             main()
             mock_write_remote.assert_called_once_with()
 
+
     @patch('sys.argv', ['sonic-kdump-config', '--remote', 'False'])
     @patch('sonic_kdump_config.get_kdump_remote')
     def test_remote_disable(self, mock_get_remote):
