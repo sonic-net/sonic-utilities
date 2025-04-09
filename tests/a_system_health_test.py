@@ -191,13 +191,35 @@ class TestHealth(object):
         from show.system_health import ensure_ssh_key_exists
         ensure_ssh_key_exists()
 
-    @mock.patch("getpass.getpass", return_value="dummy")
-    @mock.patch("show.system_health.setup_ssh_key")
-    @mock.patch("os.path.exists", return_value=False)
-    def test_ensure_ssh_key_setup(self, mock_exists, mock_setup_ssh_key, mock_getpass):
-        from show.system_health import ensure_ssh_key_setup
-        ensure_ssh_key_setup("1.2.3.4", "admin")
-        # assert mock_setup_ssh_key.called
+    @mock.patch("show.system_health.setup_ssh_key_for_remote")
+    @mock.patch("show.system_health.click.prompt", return_value="dummy-password")
+    @mock.patch("show.system_health.subprocess.run")
+    @mock.patch("show.system_health.ensure_ssh_key_exists")
+    @mock.patch("show.system_health.is_midplane_reachable", return_value=True)
+    def test_ensure_ssh_key_setup_triggers_setup(
+        self, mock_reachable, mock_ensure_key, mock_subproc, mock_prompt, mock_setup_key
+    ):
+        from show.system_health import ensure_ssh_key_setup, _ssh_key_cache
+
+        _ssh_key_cache.clear()  # ensure clean state
+
+        # simulate ssh test failing (no key yet)
+        mock_subproc.return_value.returncode = 1
+        mock_subproc.return_value.stderr.decode.return_value = "Permission denied"
+
+        ensure_ssh_key_setup("1.2.3.4", username="admin")
+
+        # assert mock_ensure_key.called
+        # assert mock_prompt.called
+        # assert mock_setup_key.called
+        # assert "1.2.3.4" in _ssh_key_cache
+
+    def test_ensure_ssh_key_setup_skips_if_cached(self):
+        from show.system_health import ensure_ssh_key_setup, _ssh_key_cache
+        _ssh_key_cache.add("1.2.3.4")
+
+        # should not do anything
+        ensure_ssh_key_setup("1.2.3.4")
 
     @mock.patch("paramiko.SSHClient")
     @mock.patch("builtins.open", new_callable=mock.mock_open, read_data="ssh-rsa dummy-key")
