@@ -3,7 +3,7 @@ import os
 import json
 from unittest import mock
 
-import click
+# import click
 from click.testing import CliRunner
 from .mock_tables import dbconnector
 
@@ -11,6 +11,8 @@ test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
 scripts_path = os.path.join(modules_path, "scripts")
 sys.path.insert(0, modules_path)
+
+import show.main as show
 
 
 class MockerConfig(object):
@@ -24,8 +26,6 @@ class MockerConfig(object):
             return False
         else:
             return True
-
-import show.main as show
 
 
 class TestHealth(object):
