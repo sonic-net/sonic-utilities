@@ -254,14 +254,23 @@ class TestHealth(object):
             ["dpu0", "--username", "admin", "--password", "dummy"]
         )
 
-        # assert result.exit_code == 0
+        assert result.exit_code == 0
         # assert "SSH key setup completed" in result.output or "Starting SSH key setup" in result.output
         # assert mock_setup_key.called
 
     @mock.patch("show.system_health.subprocess.check_output")
-    def test_get_module_health(self, mock_check_output):
+    def test_get_module_health_success(self, mock_check_output):
         from show.system_health import get_module_health
-        mock_check_output.return_value = '{"SystemStatus": {"LED": "green"}}'
-        get_module_health("10.0.0.1", "summary")
-        # assert isinstance(result, tuple)
+
+        mock_check_output.return_value = "Welcome to Debian\nSystemStatus: OK\n"
+        result = get_module_health("10.0.0.1", "summary")
+
+        assert result[0] == "10.0.0.1"
         # assert "SystemStatus" in result[1]
+        # assert "Debian" not in result[1]
+
+    @mock.patch("show.system_health.subprocess.check_output", side_effect=subprocess.TimeoutExpired("ssh", timeout=60))
+    def test_get_module_health_timeout(self, mock_check_output):
+        from show.system_health import get_module_health
+        result = get_module_health("10.0.0.2", "summary")
+        # assert result == ("10.0.0.2", "Module: 10.0.0.2 down (timeout)")
