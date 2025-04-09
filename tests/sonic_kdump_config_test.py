@@ -4,7 +4,7 @@ import sys
 import unittest
 from unittest.mock import patch, mock_open, Mock
 from utilities_common.general import load_module_from_source
-from sonic_kdump_config import main 
+from sonic_kdump_config import main
 from sonic_installer.common import IMAGE_PREFIX
 
 TESTS_DIR_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -233,7 +233,6 @@ class TestSonicKdumpConfig(unittest.TestCase):
         with patch('sonic_kdump_config.write_kdump_remote') as mock_write_remote:
             main()
             mock_write_remote.assert_called_once_with()
-
 
     @patch('sys.argv', ['sonic-kdump-config', '--remote', 'False'])
     @patch('sonic_kdump_config.get_kdump_remote')
