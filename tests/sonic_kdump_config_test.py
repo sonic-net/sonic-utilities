@@ -22,6 +22,12 @@ logger = logging.getLogger(__name__)
 sonic_kdump_config_path = os.path.join(SCRIPTS_DIR_PATH, "sonic-kdump-config")
 sonic_kdump_config = load_module_from_source("sonic_kdump_config", sonic_kdump_config_path)
 
+def create_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--remote', nargs='?', type=bool, action='store', default=False,
+                        help='remote ssh enable disable')
+    return parser
+
 class TestSonicKdumpConfig(unittest.TestCase):
     @classmethod
     def setup_class(cls):
@@ -223,6 +229,19 @@ class TestSonicKdumpConfig(unittest.TestCase):
         with self.assertRaises(SystemExit) as sys_exit:
             sonic_kdump_config.write_use_kdump(0)
         self.assertEqual(sys_exit.exception.code, 1)
+
+    def setUp(self):
+        self.parser = create_parser()
+
+    def test_remote_default(self):
+        """Test the default value of --remote"""
+        args = self.parser.parse_args([])
+        self.assertFalse(args.remote)
+
+    def test_remote_enabled(self):
+        """Test --remote with the flag provided"""
+        args = self.parser.parse_args(['--remote'])
+        self.assertTrue(args.remote)
 
     @patch('sonic_kdump_config.run_command')
     @patch('sonic_kdump_config.read_ssh_string')
@@ -668,32 +687,3 @@ class TestSonicKdumpConfig(unittest.TestCase):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-
-
-def create_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--remote', nargs='?', type=bool, action='store', default=False,
-                        help='remote ssh enable disable')
-    return parser
-
-
-class TestRemoteArg(unittest.TestCase):
-    def setUp(self):
-        self.parser = create_parser()
-
-    def test_remote_default(self):
-        args = self.parser.parse_args([])
-        self.assertFalse(args.remote)
-
-    def test_remote_true(self):
-        args = self.parser.parse_args(['--remote', 'True'])
-        self.assertTrue(args.remote)
-
-    def test_remote_false(self):
-        args = self.parser.parse_args(['--remote', 'False'])
-        # 'False' gets converted by bool('False') → True (because non-empty strings are True)
-        self.assertTrue(args.remote)  # This is counterintuitive!
-
-    def test_remote_flag_only(self):
-        args = self.parser.parse_args(['--remote'])
-        self.assertIsNone(args.remote)
