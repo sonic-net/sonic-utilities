@@ -4,7 +4,6 @@ import sys
 import unittest
 from unittest.mock import patch, mock_open, Mock
 from utilities_common.general import load_module_from_source
-from sonic-kdump-config import main
 from sonic_installer.common import IMAGE_PREFIX
 
 TESTS_DIR_PATH = os.path.dirname(os.path.abspath(__file__))
@@ -22,6 +21,7 @@ logger = logging.getLogger(__name__)
 sonic_kdump_config_path = os.path.join(SCRIPTS_DIR_PATH, "sonic-kdump-config")
 sonic_kdump_config = load_module_from_source("sonic_kdump_config", sonic_kdump_config_path)
 
+from sonic_kdump_config import main
 
 class TestSonicKdumpConfig(unittest.TestCase):
     @classmethod
