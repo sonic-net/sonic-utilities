@@ -222,6 +222,6 @@ class TestHealth(object):
     def test_get_module_health(self, mock_check_output):
         from show.system_health import get_module_health
         mock_check_output.return_value = '{"SystemStatus": {"LED": "green"}}'
-        result = get_module_health("10.0.0.1", "summary")
+        get_module_health("10.0.0.1", "summary")
         # assert isinstance(result, tuple)
         # assert "SystemStatus" in result[1]
