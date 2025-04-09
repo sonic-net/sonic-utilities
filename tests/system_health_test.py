@@ -2,6 +2,7 @@ import sys
 import os
 import json
 from unittest import mock
+import show.main as show_main
 
 import click
 from click.testing import CliRunner
@@ -61,7 +62,6 @@ class MockerChassis(object):
             MockerChassis.counter += 1
             return "red"
 
-import show.main as show_main
 
 class TestHealth(object):
     original_cli = None
@@ -327,14 +327,14 @@ pmon            OK                OK                  -
 swss            OK                OK                  -
 """
         assert result.output == expected
-        result = runner.invoke(show_main.cli.commands["system-health"].commands["sysready-status"],["brief"])
+        result = runner.invoke(show_main.cli.commands["system-health"].commands["sysready-status"], ["brief"])
         click.echo(result.output)
         print("myresult:{}".format(result.output))
         expected = """\
 System is not ready - one or more services are not up
 """
         assert result.output == expected
-        result = runner.invoke(show_main.cli.commands["system-health"].commands["sysready-status"],["detail"])
+        result = runner.invoke(show_main.cli.commands["system-health"].commands["sysready-status"], ["detail"])
         click.echo(result.output)
         print("myresult:{}".format(result.output))
         expected = """\
