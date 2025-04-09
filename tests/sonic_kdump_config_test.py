@@ -32,6 +32,7 @@ def create_parser():
                         help='ssh_string for remote kdump')
     return parser
 
+
 class TestSonicKdumpConfig(unittest.TestCase):
     def setUp(self):
         self.parser = create_parser()
