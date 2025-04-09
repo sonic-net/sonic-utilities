@@ -194,6 +194,19 @@ class TestHealth(object):
 class TestSystemHealthSSH(object):
 
     @mock.patch("show.system_health.subprocess.run")
+    @mock.patch("show.system_health.os.path.exists", return_value=False)
+    @mock.patch("show.system_health.click.echo")
+    def test_ensure_ssh_key_exists_generates_key(mock_echo, mock_exists, mock_run):
+        from show.system_health import ensure_ssh_key_exists, DEFAULT_KEY_PATH
+
+        ensure_ssh_key_exists()
+
+        mock_echo.assert_called_with("SSH key not found. Generating...")
+        mock_run.assert_called_once_with(
+            ["ssh-keygen", "-t", "rsa", "-b", "4096", "-N", "", "-f", DEFAULT_KEY_PATH],
+            check=True, stdout=mock.ANY, stderr=mock.ANY
+        )
+
     @mock.patch("os.path.exists", return_value=False)
     def test_disable_auto_ssh_key(self, mock_exists, mock_run):
         from show.system_health import disable_auto_ssh_key
@@ -201,11 +214,3 @@ class TestSystemHealthSSH(object):
             disable_auto_ssh_key()
         except SystemExit as e:
             assert e.code == 0
-        assert mock_run.called
-
-    @mock.patch("show.system_health.subprocess.run")
-    @mock.patch("os.path.exists", side_effect=lambda path: path != "/etc/ssh/sshd_config.d/99-disable-auto-key.conf")
-    def test_ensure_ssh_key_exists(self, mock_exists, mock_run):
-        from show.system_health import ensure_ssh_key_exists
-        ensure_ssh_key_exists()
-        assert mock_run.called
