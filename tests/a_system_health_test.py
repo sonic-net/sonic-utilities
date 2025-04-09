@@ -185,7 +185,7 @@ class TestHealth(object):
         print(result)
 
     @mock.patch("show.system_health.subprocess.run")
-    @mock.patch("show.system_health.os.path.exists", return_value=True)
+    @mock.patch("show.system_health.os.path.exists", return_value=False)
     @mock.patch("show.system_health.click.echo")
     def test_ensure_ssh_key_exists(self, mock_echo, mock_exists, mock_run):
         from show.system_health import ensure_ssh_key_exists
