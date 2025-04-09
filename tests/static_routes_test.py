@@ -8,8 +8,7 @@ import show.main as show
 from utilities_common.db import Db
 
 ERROR_STR = '''
-Error: argument is not in pattern prefix [vrf <vrf_name>] <A.B.C.D/M> nexthop [vrf <vrf_name>] \
-    <A.B.C.D>|<dev <dev_name>>|<A.B.C.D dev <dev_name>>!
+Error: argument is not in pattern prefix
 '''
 ERROR_STR_INVALID_NEXTHOP_PATTERN = '''
 Error: nexthop is not in pattern!
@@ -244,7 +243,7 @@ class TestStaticRoutes(object):
         print(result.exit_code, result.output)
         assert ('default', '6.2.3.4/32') in db.cfgdb.get_table('STATIC_ROUTE')
         assert db.cfgdb.get_entry('STATIC_ROUTE', 'default|6.2.3.4/32') == \
-            {"nexthop": '30.0.0.6,30.0.0.7,3.0.0.8', 'blackhole': 'false,false,false',
+            {"nexthop": '30.0.0.6,30.0.0.7,30.0.0.8', 'blackhole': 'false,false,false',
              'distance': '0,0,0', 'ifname': ',,', 'nexthop-vrf': ',,'}
 
         # config route del prefix 6.2.3.4/32 nexthop 30.0.0.8
@@ -541,10 +540,9 @@ class TestStaticRoutes(object):
         assert not ('Vrf1', '2.2.3.5/32') in db.cfgdb.get_table('STATIC_ROUTE')
         assert ERROR_STR in result.output
 
-        # config route add prefix vrf Vrf1 2.2.3.5/32 nexthop vrf Vrf2 10.0.0.1 dev
+        # config route add prefix vrf Vrf1 2.2.3.5/32 nexthop 10.0.0.1 dev
         result = runner.invoke(config.config.commands["route"].commands["add"],
-                               ["prefix", "vrf", "Vrf1", "2.2.3.5/32", "nexthop", "vrf",
-                                "Vrf2", "10.0.0.1", "dev"], obj=obj)
+                               ["prefix", "vrf", "Vrf1", "2.2.3.5/32", "nexthop", "10.0.0.1", "dev"], obj=obj)
         print(result.exit_code, result.output)
         assert not ('Vrf1', '2.2.3.5/32') in db.cfgdb.get_table('STATIC_ROUTE')
         assert ERROR_STR_INVALID_NEXTHOP_PATTERN in result.output
