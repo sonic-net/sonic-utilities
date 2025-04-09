@@ -457,9 +457,6 @@ swss            OK                OK                  -              -
             show_main.cli.commands["system-health"].commands["summary"], ["all"]
         )
         print(result)
-        # assert result.exit_code == 0
-        # assert mock_list.called
-        # assert mock_health.called
 
     @mock.patch("show.system_health.get_dpu_ip_list", return_value=[("dpu0", "1.2.3.4")])
     @mock.patch("show.system_health.is_midplane_reachable", return_value=True)
@@ -517,11 +514,6 @@ swss            OK                OK                  -              -
 
         ensure_ssh_key_setup("1.2.3.4", username="admin")
 
-        # assert mock_ensure_key.called
-        # assert mock_prompt.called
-        # assert mock_setup_key.called
-        # assert "1.2.3.4" in _ssh_key_cache
-
     def test_ensure_ssh_key_setup_skips_if_cached(self):
         from show.system_health import ensure_ssh_key_setup, _ssh_key_cache
         _ssh_key_cache.add("1.2.3.4")
@@ -543,11 +535,6 @@ swss            OK                OK                  -              -
 
         setup_ssh_key_for_remote("hostname", "admin", "dummy", "/dummy/path")
 
-        # mock_open.assert_called_once_with("/dummy/path", "r")
-        # mock_ssh.connect.assert_called_once_with("hostname", username="admin", password="dummy")
-        # assert mock_ssh.exec_command.call_count == 3  # mkdir, echo, chmod
-        # mock_ssh.close.assert_called_once()
-
     @mock.patch("show.system_health.setup_ssh_key_for_remote")
     @mock.patch("show.system_health.is_midplane_reachable", return_value=True)
     @mock.patch("show.system_health.get_dpu_ip_list", return_value=[("dpu0", "1.2.3.4")])
@@ -563,8 +550,6 @@ swss            OK                OK                  -              -
         )
 
         assert result.exit_code == 0
-        # assert "SSH key setup completed" in result.output or "Starting SSH key setup" in result.output
-        # assert mock_setup_key.called
 
     @mock.patch("show.system_health.subprocess.check_output")
     def test_get_module_health_success(self, mock_check_output):
@@ -574,5 +559,3 @@ swss            OK                OK                  -              -
         result = get_module_health("10.0.0.1", "summary")
 
         assert result[0] == "10.0.0.1"
-        # assert "SystemStatus" in result[1]
-        # assert "Debian" not in result[1]
