@@ -72,8 +72,8 @@ class TestSonicKdumpConfig(unittest.TestCase):
         self.assertEqual(sys_exit.exception.code, 1)
     
     def test_remote_enabled(self):
-    args = self.parser.parse_args(['--remote'])
-    self.assertTrue(args.remote)
+        args = self.parser.parse_args(['--remote'])
+        self.assertTrue(args.remote)
 
     def test_remote_disabled(self):
         args = self.parser.parse_args([])
