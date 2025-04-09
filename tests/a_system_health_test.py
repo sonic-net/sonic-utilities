@@ -221,13 +221,24 @@ class TestHealth(object):
         # should not do anything
         ensure_ssh_key_setup("1.2.3.4")
 
-    @mock.patch("paramiko.SSHClient")
     @mock.patch("builtins.open", new_callable=mock.mock_open, read_data="ssh-rsa dummy-key")
-    def test_setup_ssh_key_for_remote(self, mock_open, mock_ssh_client):
+    @mock.patch("show.system_health.paramiko.SSHClient")
+    def test_setup_ssh_key_for_remote(self, mock_ssh_client_cls, mock_open):
         from show.system_health import setup_ssh_key_for_remote
-        setup_ssh_key_for_remote("hostname", "admin", "dummy", "/home/test/.ssh/id_rsa.pub")
-        # assert mock_open.called
-        # assert mock_ssh_client.called
+
+        # Prepare a mock SSH client
+        mock_ssh = mock.Mock()
+        mock_ssh_client_cls.return_value = mock_ssh
+        mock_channel = mock.Mock()
+        mock_channel.recv_exit_status.return_value = 0
+        mock_ssh.exec_command.return_value = (mock.Mock(channel=mock_channel), None, None)
+
+        setup_ssh_key_for_remote("hostname", "admin", "dummy", "/dummy/path")
+
+        # mock_open.assert_called_once_with("/dummy/path", "r")
+        # mock_ssh.connect.assert_called_once_with("hostname", username="admin", password="dummy")
+        # assert mock_ssh.exec_command.call_count == 3  # mkdir, echo, chmod
+        # mock_ssh.close.assert_called_once()
 
     @mock.patch("click.confirm", return_value=True)
     @mock.patch("click.prompt", return_value="dummy")
