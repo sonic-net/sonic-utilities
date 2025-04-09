@@ -535,7 +535,7 @@ def del_interface_bind_to_vnet(config_db, vnet_name):
         interface_dict = config_db.get_table(table_name)
         if interface_dict:
             for interface_name in interface_dict:
-                if ('vnet_name' in interface_dict[interface_name] and /
+                if ('vnet_name' in interface_dict[interface_name] and
                         vnet_name == interface_dict[interface_name]['vnet_name']):
                     interface_ipaddresses = get_interface_ipaddresses(config_db, interface_name)
                     for ip in interface_ipaddresses:
