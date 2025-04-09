@@ -5,7 +5,6 @@ import unittest
 from unittest.mock import patch, mock_open, Mock
 from utilities_common.general import load_module_from_source
 from sonic_installer.common import IMAGE_PREFIX
-import argparse
 
 TESTS_DIR_PATH = os.path.dirname(os.path.abspath(__file__))
 UTILITY_DIR_PATH = os.path.dirname(TESTS_DIR_PATH)
