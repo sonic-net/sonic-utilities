@@ -8,6 +8,16 @@
     "CHASSIS_MODULE_HOSTNAME_TABLE|LINE-CARD2": {
         "module_hostname": "sonic-lc3"
     },
+    "CHASSIS_MODULE_TABLE|LINE-CARD2": {
+        "slot": "3",
+        "hostname": "sonic-lc1",
+        "num_asics": "2"
+    },
+    "CHASSIS_MODULE_TABLE|LINE-CARD4": {
+        "slot": "5",
+        "hostname": "sonic-lc2",
+        "num_asics": "1"
+    },
     "LINECARD_PORT_STAT_MARK_TABLE|sonic-lc1": {
         "timestamp": "2020-07-01 00:00:00"
     },

@@ -40,11 +40,11 @@ FABRIC-CARD1      fabric-card               18        Offline              up  F
 """
 
 show_chassis_midplane_output="""\
-      Name     IP-Address    Reachability
-----------  -------------  --------------
-LINE-CARD0  192.168.1.100            True
-LINE-CARD1    192.168.1.2           False
-LINE-CARD2    192.168.1.1            True
+      Name    IP-Address    Reachability
+----------  ------------  --------------
+LINE-CARD0   192.168.3.1            True
+LINE-CARD1   192.168.4.1           False
+LINE-CARD2   192.168.5.1            True
 """
 
 show_chassis_system_ports_output_asic0="""\

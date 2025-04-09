@@ -27,6 +27,11 @@ try:
         sys.path.insert(0, modules_path)
         sys.path.insert(0, tests_path)
         import mock_tables.dbconnector # lgtm [py/unused-import]
+
+        if os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] == "1":
+            import mock
+            device_info.is_supervisor = mock.MagicMock(return_value=True)
+
     if os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] == "multi_asic":
         import mock_tables.mock_multi_asic
         mock_tables.dbconnector.load_namespace_config()
@@ -231,9 +236,10 @@ class Queuestat(object):
         self.voq_stats = {}
 
         for ip in redis_ips:
-            asic_counters_db = Redis(host=ip, db=swsscommon.COUNTERS_DB, decode_responses=True)
+            asic_counters_db = SonicV2Connector()
+            asic_counters_db.connect_host(db_name=asic_counters_db.COUNTERS_DB, host=ip)
             try:
-                counters_voq_name_map = asic_counters_db.hgetall(COUNTERS_VOQ_NAME_MAP)
+                counters_voq_name_map = asic_counters_db.get_all(asic_counters_db.COUNTERS_DB, COUNTERS_VOQ_NAME_MAP)
                 if counters_voq_name_map is None:
                     continue
                 for voq in counters_voq_name_map:
@@ -242,7 +248,7 @@ class Queuestat(object):
                     for counter_name in counter_bucket_dict:
                         self.voq_stats.setdefault(sysPort, {}).setdefault(idx, {}).setdefault(counter_name, 0)
                         oid = counters_voq_name_map[voq]
-                        counter_data = asic_counters_db.hget("COUNTERS:"+oid, counter_name)
+                        counter_data = asic_counters_db.get(asic_counters_db.COUNTERS_DB, "COUNTERS:"+oid, counter_name)
                         if counter_data is not None:
                             self.voq_stats[sysPort][idx][counter_name] += int(counter_data)
 
@@ -474,7 +480,7 @@ class Queuestat(object):
             cache_ns = '-' + self.namespace + '-'
         cnstat_fqn_file_name = cnstat_fqn_file + cache_ns + port
 
-        
+
         json_output = {}
         json_output[port] = {}
         if os.path.isfile(cnstat_fqn_file_name):

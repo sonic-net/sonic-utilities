@@ -1333,15 +1333,15 @@
         "max_priority_groups": "8"
     },
     "CHASSIS_MIDPLANE_TABLE|LINE-CARD0": {
-        "ip_address": "192.168.1.100",
+        "ip_address": "192.168.3.1",
         "access": "True"
     },
     "CHASSIS_MIDPLANE_TABLE|LINE-CARD2": {
-        "ip_address": "192.168.1.1",
+        "ip_address": "192.168.5.1",
         "access": "True"
     },
     "CHASSIS_MIDPLANE_TABLE|LINE-CARD1": {
-        "ip_address": "192.168.1.2",
+        "ip_address": "192.168.4.1",
         "access": "False"
     },
     "PORT_TABLE|Ethernet0": {
