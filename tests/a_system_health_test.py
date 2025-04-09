@@ -167,6 +167,7 @@ class TestHealth(object):
             show.cli.commands["system-health"].commands["detail"],
             ["--module-name", "DPU0"]
         )
+        print(result)
         # assert result.exit_code == 0
         # assert mock_health.called
         # assert mock_list.called
@@ -184,6 +185,7 @@ class TestHealth(object):
         result = runner.invoke(
             show.cli.commands["system-health"].commands["monitor-list"], ["all"]
         )
+        print(result)
         # assert result.exit_code == 0
         # assert mock_list.called
         # assert mock_health.called
