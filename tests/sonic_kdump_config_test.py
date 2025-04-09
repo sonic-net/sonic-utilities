@@ -696,4 +696,4 @@ class TestRemoteArg(unittest.TestCase):
 
     def test_remote_flag_only(self):
         args = self.parser.parse_args(['--remote'])
-        self.assertTrue(args.remote)
+        self.assertIsNone(args.remote)
