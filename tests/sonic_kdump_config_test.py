@@ -70,6 +70,14 @@ class TestSonicKdumpConfig(unittest.TestCase):
         with self.assertRaises(SystemExit) as sys_exit:
             num_dumps = sonic_kdump_config.read_num_dumps()
         self.assertEqual(sys_exit.exception.code, 1)
+    
+    def test_remote_enabled(self):
+    args = self.parser.parse_args(['--remote'])
+    self.assertTrue(args.remote)
+
+    def test_remote_disabled(self):
+        args = self.parser.parse_args([])
+        self.assertFalse(args.remote)
 
     @patch("sonic_kdump_config.run_command")
     def test_read_use_kdump(self, mock_run_cmd):
