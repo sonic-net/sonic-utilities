@@ -189,3 +189,23 @@ class TestHealth(object):
         # assert result.exit_code == 0
         # assert mock_list.called
         # assert mock_health.called
+
+
+class TestSystemHealthSSH(object):
+
+    @mock.patch("show.system_health.subprocess.run")
+    @mock.patch("os.path.exists", return_value=False)
+    def test_disable_auto_ssh_key(self, mock_exists, mock_run):
+        from show.system_health import disable_auto_ssh_key
+        try:
+            disable_auto_ssh_key()
+        except SystemExit as e:
+            assert e.code == 0
+        assert mock_run.called
+
+    @mock.patch("show.system_health.subprocess.run")
+    @mock.patch("os.path.exists", side_effect=lambda path: path != "/etc/ssh/sshd_config.d/99-disable-auto-key.conf")
+    def test_ensure_ssh_key_exists(self, mock_exists, mock_run):
+        from show.system_health import ensure_ssh_key_exists
+        ensure_ssh_key_exists()
+        assert mock_run.called
