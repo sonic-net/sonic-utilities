@@ -4,7 +4,7 @@ import sys
 import unittest
 from unittest.mock import patch, mock_open, Mock
 from utilities_common.general import load_module_from_source
-from sonic_kdump_config import main
+from sonic-kdump-config import main
 from sonic_installer.common import IMAGE_PREFIX
 
 TESTS_DIR_PATH = os.path.dirname(os.path.abspath(__file__))
