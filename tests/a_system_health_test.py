@@ -7,7 +7,9 @@ from unittest import mock
 from click.testing import CliRunner
 from .mock_tables import dbconnector
 
+import show.system_health as system_health
 import show.main as show
+
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
@@ -129,12 +131,12 @@ class TestHealth(object):
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         show.cli = original_cli
 
-    @mock.patch("show.system_health.get_dpu_ip_list", return_value=[("dpu0", "1.2.3.4")])
-    @mock.patch("show.system_health.is_midplane_reachable", return_value=True)
-    @mock.patch("show.system_health.ensure_ssh_key_setup")
-    @mock.patch("show.system_health.get_module_health", return_value=("1.2.3.4", "OK"))
-    @mock.patch("show.system_health.is_smartswitch", return_value=True)
-    @mock.patch("show.system_health.get_system_health_status")
+    @mock.patch("system_health.get_dpu_ip_list", return_value=[("dpu0", "1.2.3.4")])
+    @mock.patch("system_health.is_midplane_reachable", return_value=True)
+    @mock.patch("system_health.ensure_ssh_key_setup")
+    @mock.patch("system_health.get_module_health", return_value=("1.2.3.4", "OK"))
+    @mock.patch("system_health.is_smartswitch", return_value=True)
+    @mock.patch("system_health.get_system_health_status")
     def test_summary_switch_and_dpu(
         self, mock_get_status, mock_smartswitch, mock_health, mock_ssh, mock_reach, mock_list
     ):
@@ -153,12 +155,12 @@ class TestHealth(object):
         # assert mock_list.called
         # assert mock_health.called
 
-    @mock.patch("show.system_health.get_dpu_ip_list", return_value=[("dpu0", "1.2.3.4")])
-    @mock.patch("show.system_health.is_midplane_reachable", return_value=True)
-    @mock.patch("show.system_health.ensure_ssh_key_setup")
-    @mock.patch("show.system_health.get_module_health", return_value=("1.2.3.4", "OK"))
-    @mock.patch("show.system_health.is_smartswitch", return_value=True)
-    @mock.patch("show.system_health.get_system_health_status")
+    @mock.patch("system_health.get_dpu_ip_list", return_value=[("dpu0", "1.2.3.4")])
+    @mock.patch("system_health.is_midplane_reachable", return_value=True)
+    @mock.patch("system_health.ensure_ssh_key_setup")
+    @mock.patch("system_health.get_module_health", return_value=("1.2.3.4", "OK"))
+    @mock.patch("system_health.is_smartswitch", return_value=True)
+    @mock.patch("system_health.get_system_health_status")
     def test_detail_dpu(
         self, mock_get_status, mock_smartswitch, mock_health, mock_ssh, mock_reach, mock_list
     ):
@@ -172,12 +174,12 @@ class TestHealth(object):
         # assert mock_health.called
         # assert mock_list.called
 
-    @mock.patch("show.system_health.get_dpu_ip_list", return_value=[("dpu0", "1.2.3.4")])
-    @mock.patch("show.system_health.is_midplane_reachable", return_value=True)
-    @mock.patch("show.system_health.ensure_ssh_key_setup")
-    @mock.patch("show.system_health.get_module_health", return_value=("1.2.3.4", "OK"))
-    @mock.patch("show.system_health.is_smartswitch", return_value=True)
-    @mock.patch("show.system_health.get_system_health_status")
+    @mock.patch("system_health.get_dpu_ip_list", return_value=[("dpu0", "1.2.3.4")])
+    @mock.patch("system_health.is_midplane_reachable", return_value=True)
+    @mock.patch("system_health.ensure_ssh_key_setup")
+    @mock.patch("system_health.get_module_health", return_value=("1.2.3.4", "OK"))
+    @mock.patch("system_health.is_smartswitch", return_value=True)
+    @mock.patch("system_health.get_system_health_status")
     def test_monitor_list_dpu(
         self, mock_get_status, mock_smartswitch, mock_health, mock_ssh, mock_reach, mock_list
     ):
@@ -193,11 +195,11 @@ class TestHealth(object):
 
 class TestSystemHealthSSH(object):
 
-    @mock.patch("show.system_health.subprocess.run")
-    @mock.patch("show.system_health.os.path.exists", return_value=False)
-    @mock.patch("show.system_health.click.echo")
+    @mock.patch("system_health.subprocess.run")
+    @mock.patch("system_health.os.path.exists", return_value=False)
+    @mock.patch("system_health.click.echo")
     def test_ensure_ssh_key_exists_generates_key(mock_echo, mock_exists, mock_run):
-        from show.system_health import ensure_ssh_key_exists
+        from system_health import ensure_ssh_key_exists
         # from show.system_health import ensure_ssh_key_exists, DEFAULT_KEY_PATH
 
         ensure_ssh_key_exists()
