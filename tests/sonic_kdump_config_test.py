@@ -25,9 +25,22 @@ sonic_kdump_config = load_module_from_source("sonic_kdump_config", sonic_kdump_c
 
 def create_parser():
     parser = argparse.ArgumentParser()
-    parser.add_argument('--remote', nargs='?', type=bool, action='store', default=False,
-                        help='remote ssh enable disable')
+    parser.add_argument('--remote', action='store_true', help='enable remote ssh')
     return parser
+
+class TestRemoteArg(unittest.TestCase):
+    def setUp(self):
+        self.parser = create_parser()
+
+    def test_remote_default(self):
+        """Test the default value of --remote"""
+        args = self.parser.parse_args([])
+        self.assertFalse(args.remote)
+
+    def test_remote_enabled(self):
+        """Test --remote with the flag provided"""
+        args = self.parser.parse_args(['--remote'])
+        self.assertTrue(args.remote)
 
 class TestSonicKdumpConfig(unittest.TestCase):
     @classmethod
@@ -230,19 +243,6 @@ class TestSonicKdumpConfig(unittest.TestCase):
         with self.assertRaises(SystemExit) as sys_exit:
             sonic_kdump_config.write_use_kdump(0)
         self.assertEqual(sys_exit.exception.code, 1)
-
-    def setUp(self):
-        self.parser = create_parser()
-
-    def test_remote_default(self):
-        """Test the default value of --remote"""
-        args = self.parser.parse_args([])
-        self.assertFalse(args.remote)
-
-    def test_remote_enabled(self):
-        """Test --remote with the flag provided"""
-        args = self.parser.parse_args(['--remote'])
-        self.assertTrue(args.remote)
 
     @patch('sonic_kdump_config.run_command')
     @patch('sonic_kdump_config.read_ssh_string')
