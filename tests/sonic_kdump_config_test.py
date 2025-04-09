@@ -70,7 +70,7 @@ class TestSonicKdumpConfig(unittest.TestCase):
         with self.assertRaises(SystemExit) as sys_exit:
             num_dumps = sonic_kdump_config.read_num_dumps()
         self.assertEqual(sys_exit.exception.code, 1)
-    
+
     def test_remote_enabled(self):
         args = self.parser.parse_args(['--remote'])
         self.assertTrue(args.remote)
