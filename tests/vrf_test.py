@@ -277,6 +277,7 @@ Error: 'vrf_name' length should not exceed 15 characters
         assert ('VrfNameTooLong!!!') not in db.cfgdb.get_table('VRF')
         assert expected_output in result.output
 
+
 class TestVnet(object):
     @classmethod
     def setup_class(cls):
