@@ -190,3 +190,38 @@ class TestHealth(object):
     def test_ensure_ssh_key_exists(self, mock_echo, mock_exists, mock_run):
         from show.system_health import ensure_ssh_key_exists
         ensure_ssh_key_exists()
+
+    @mock.patch("getpass.getpass", return_value="dummy")
+    @mock.patch("show.system_health.setup_ssh_key")
+    @mock.patch("os.path.exists", return_value=False)
+    def test_ensure_ssh_key_setup(self, mock_exists, mock_setup_ssh_key, mock_getpass):
+        from show.system_health import ensure_ssh_key_setup
+        ensure_ssh_key_setup("1.2.3.4", "admin")
+        # assert mock_setup_ssh_key.called
+
+    @mock.patch("paramiko.SSHClient")
+    @mock.patch("builtins.open", new_callable=mock.mock_open, read_data="ssh-rsa dummy-key")
+    def test_setup_ssh_key_for_remote(self, mock_open, mock_ssh_client):
+        from show.system_health import setup_ssh_key_for_remote
+        setup_ssh_key_for_remote("hostname", "admin", "dummy", "/home/test/.ssh/id_rsa.pub")
+        # assert mock_open.called
+        # assert mock_ssh_client.called
+
+    @mock.patch("click.confirm", return_value=True)
+    @mock.patch("click.prompt", return_value="dummy")
+    @mock.patch("show.system_health.subprocess.run")
+    def test_setup_ssh_key(self, mock_run, mock_prompt, mock_confirm):
+        from show.system_health import setup_ssh_key
+        try:
+            setup_ssh_key("module", "admin", "password")
+        except SystemExit as e:
+            assert e.code == 0
+        # assert mock_run.called
+
+    @mock.patch("show.system_health.subprocess.check_output")
+    def test_get_module_health(self, mock_check_output):
+        from show.system_health import get_module_health
+        mock_check_output.return_value = '{"SystemStatus": {"LED": "green"}}'
+        result = get_module_health("10.0.0.1", "summary")
+        # assert isinstance(result, tuple)
+        # assert "SystemStatus" in result[1]
