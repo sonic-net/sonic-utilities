@@ -141,7 +141,6 @@ class TestHealth(object):
     ):
         runner = CliRunner()
 
-        # mock chassis.get_status_led()
         mock_chassis = mock.Mock()
         mock_chassis.get_status_led.return_value = "green"
         mock_get_status.return_value = (None, mock_chassis, {})
@@ -169,9 +168,6 @@ class TestHealth(object):
             ["--module-name", "DPU0"]
         )
         print(result)
-        # assert result.exit_code == 0
-        # assert mock_health.called
-        # assert mock_list.called
 
     @mock.patch("show.system_health.get_dpu_ip_list", return_value=[("dpu0", "1.2.3.4")])
     @mock.patch("show.system_health.is_midplane_reachable", return_value=True)
@@ -187,21 +183,10 @@ class TestHealth(object):
             show_main.cli.commands["system-health"].commands["monitor-list"], ["all"]
         )
         print(result)
-        # assert result.exit_code == 0
-        # assert mock_list.called
-        # assert mock_health.called
 
     @mock.patch("show.system_health.subprocess.run")
     @mock.patch("show.system_health.os.path.exists", return_value=True)
     @mock.patch("show.system_health.click.echo")
-    def test_ensure_ssh_key_exists(mock_echo, mock_exists, mock_run):
+    def test_ensure_ssh_key_exists(self, mock_echo, mock_exists, mock_run):
         from show.system_health import ensure_ssh_key_exists
-        # from show.system_health import ensure_ssh_key_exists, DEFAULT_KEY_PATH
-
         ensure_ssh_key_exists()
-
-        # mock_echo.assert_called_with("SSH key not found. Generating...")
-        # mock_run.assert_called_once_with(
-        #     ["ssh-keygen", "-t", "rsa", "-b", "4096", "-N", "", "-f", DEFAULT_KEY_PATH],
-        #     check=True, stdout=mock.ANY, stderr=mock.ANY
-        # )
