@@ -8,8 +8,7 @@ import show.main as show
 from utilities_common.db import Db
 
 ERROR_STR = '''
-Error: argument is not in pattern prefix
-'''
+Error: argument is not in pattern prefix'''
 ERROR_STR_INVALID_NEXTHOP_PATTERN = '''
 Error: nexthop is not in pattern!
 '''
