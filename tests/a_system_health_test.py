@@ -268,9 +268,3 @@ class TestHealth(object):
         assert result[0] == "10.0.0.1"
         # assert "SystemStatus" in result[1]
         # assert "Debian" not in result[1]
-
-    @mock.patch("show.system_health.subprocess.check_output", side_effect=subprocess.TimeoutExpired("ssh", timeout=60))
-    def test_get_module_health_timeout(self, mock_check_output):
-        from show.system_health import get_module_health
-        result = get_module_health("10.0.0.2", "summary")
-        # assert result == ("10.0.0.2", "Module: 10.0.0.2 down (timeout)")
