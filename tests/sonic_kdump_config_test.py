@@ -282,7 +282,7 @@ class TestSonicKdumpConfig(unittest.TestCase):
     def test_cmd_kdump_ssh_string_update(self, mock_print, mock_write, mock_read, mock_run):
         # Mock read_ssh_string to return the current SSH string
         mock_read.return_value = 'old_ssh_string'
-        # Call the function with a new SSH string
+        # Call the function with a new SSH string to configure
         sonic_kdump_config.cmd_kdump_ssh_string(verbose=True, ssh_string='new_ssh_string')
 
         # Check that write_ssh_string was called with the new SSH string
