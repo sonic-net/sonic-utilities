@@ -23,50 +23,6 @@ sonic_kdump_config_path = os.path.join(SCRIPTS_DIR_PATH, "sonic-kdump-config")
 sonic_kdump_config = load_module_from_source("sonic_kdump_config", sonic_kdump_config_path)
 
 
-def create_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--num_dumps', nargs='?', type=int, action='store', default=3,
-                        help='Maximum number of kernel dump files stored')
-    parser.add_argument('--remote', action='store_true', help='enable remote ssh')
-    parser.add_argument('--ssh_string', nargs='?', type=str, action='store', default=None,
-                        help='ssh_string for remote kdump')
-    return parser
-
-
-class TestSonicKdumpConfig(unittest.TestCase):
-    def setUp(self):
-        self.parser = create_parser()
-
-    def test_num_dumps_default(self):
-        """Test the default value of --num_dumps"""
-        args = self.parser.parse_args([])
-        self.assertEqual(args.num_dumps, 3)
-
-    def test_num_dumps_provided(self):
-        """Test --num_dumps with a provided value"""
-        args = self.parser.parse_args(['--num_dumps', '5'])
-        self.assertEqual(args.num_dumps, 5)
-
-    def test_remote_default(self):
-        """Test the default value of --remote"""
-        args = self.parser.parse_args([])
-        self.assertFalse(args.remote)
-
-    def test_remote_enabled(self):
-        """Test --remote with the flag provided"""
-        args = self.parser.parse_args(['--remote'])
-        self.assertTrue(args.remote)
-
-    def test_ssh_string_default(self):
-        """Test the default value of --ssh_string"""
-        args = self.parser.parse_args([])
-        self.assertIsNone(args.ssh_string)
-
-    def test_ssh_string_provided(self):
-        """Test --ssh_string with a provided value"""
-        args = self.parser.parse_args(['--ssh_string', 'user@host'])
-        self.assertEqual(args.ssh_string, 'user@host')
-
 class TestSonicKdumpConfig(unittest.TestCase):
     @classmethod
     def setup_class(cls):
@@ -268,6 +224,14 @@ class TestSonicKdumpConfig(unittest.TestCase):
         with self.assertRaises(SystemExit) as sys_exit:
             sonic_kdump_config.write_use_kdump(0)
         self.assertEqual(sys_exit.exception.code, 1)
+
+    def test_remote_enabled(self):
+        args = self.parser.parse_args(['--remote'])
+        self.assertTrue(args.remote)
+
+    def test_remote_disabled(self):
+        args = self.parser.parse_args([])
+        self.assertFalse(args.remote)
 
     @patch('sonic_kdump_config.run_command')
     @patch('sonic_kdump_config.read_ssh_string')
