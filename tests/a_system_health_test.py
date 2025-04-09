@@ -199,7 +199,7 @@ class TestSystemHealthSSH(object):
     def test_ensure_ssh_key_exists_generates_key(mock_echo, mock_exists, mock_run):
         from show.system_health import ensure_ssh_key_exists
         # from show.system_health import ensure_ssh_key_exists, DEFAULT_KEY_PATH
-        
+
         ensure_ssh_key_exists()
 
         # mock_echo.assert_called_with("SSH key not found. Generating...")
