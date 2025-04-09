@@ -21,8 +21,6 @@ logger = logging.getLogger(__name__)
 sonic_kdump_config_path = os.path.join(SCRIPTS_DIR_PATH, "sonic-kdump-config")
 sonic_kdump_config = load_module_from_source("sonic_kdump_config", sonic_kdump_config_path)
 
-from sonic_kdump_config import main
-
 class TestSonicKdumpConfig(unittest.TestCase):
     @classmethod
     def setup_class(cls):
