@@ -535,12 +535,13 @@ def del_interface_bind_to_vnet(config_db, vnet_name):
         interface_dict = config_db.get_table(table_name)
         if interface_dict:
             for interface_name in interface_dict:
-                if 'vnet_name' in interface_dict[interface_name] and vnet_name == interface_dict[interface_name]['vnet_name']:
+                if ('vnet_name' in interface_dict[interface_name] and 
+                    vnet_name == interface_dict[interface_name]['vnet_name']):
                     interface_ipaddresses = get_interface_ipaddresses(config_db, interface_name)
-                    for ipaddress in interface_ipaddresses:
-                        remove_router_interface_ip_address(config_db, interface_name, ipaddress)
+                    for ip in interface_ipaddresses:
+                        remove_router_interface_ip_address(config_db, interface_name, ip)
                     config_db.set_entry(table_name, interface_name, None)
-            
+        
 def set_interface_naming_mode(mode):
     """Modify SONIC_CLI_IFACE_MODE env variable in user .bashrc
     """
@@ -5990,7 +5991,7 @@ def enable_use_link_local_only(ctx, interface_name):
         interface_type = "PORTCHANNEL_INTERFACE"
     elif interface_name.startswith("Vlan"):
         interface_type = "VLAN_INTERFACE"
-    else:
+    else :
         ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
 
     if (interface_type == "INTERFACE" ) or (interface_type == "PORTCHANNEL_INTERFACE"):
