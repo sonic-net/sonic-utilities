@@ -28,6 +28,7 @@ def create_parser():
     parser.add_argument('--remote', action='store_true', help='enable remote ssh')
     return parser
 
+
 class TestRemoteArg(unittest.TestCase):
     def setUp(self):
         self.parser = create_parser()
