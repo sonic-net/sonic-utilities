@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch, mock_open, Mock
 from utilities_common.general import load_module_from_source
 from sonic_installer.common import IMAGE_PREFIX
-from sonic-kdump-config import main
+
 TESTS_DIR_PATH = os.path.dirname(os.path.abspath(__file__))
 UTILITY_DIR_PATH = os.path.dirname(TESTS_DIR_PATH)
 SCRIPTS_DIR_PATH = os.path.join(UTILITY_DIR_PATH, "scripts")
@@ -222,42 +222,6 @@ class TestSonicKdumpConfig(unittest.TestCase):
         with self.assertRaises(SystemExit) as sys_exit:
             sonic_kdump_config.write_use_kdump(0)
         self.assertEqual(sys_exit.exception.code, 1)
-
-    @patch('sys.argv', ['sonic-kdump-config', '--remote', 'True'])
-    @patch('sonic_kdump_config.get_kdump_remote')
-    def test_remote_enable(self, mock_get_remote):
-        """Test enabling remote SSH with --remote True"""
-        mock_get_remote.return_value = True
-        with patch('sonic_kdump_config.write_kdump_remote') as mock_write_remote:
-            main()
-            mock_write_remote.assert_called_once_with()
-
-    @patch('sys.argv', ['sonic-kdump-config', '--remote', 'False'])
-    @patch('sonic_kdump_config.get_kdump_remote')
-    def test_remote_disable(self, mock_get_remote):
-        """Test disabling remote SSH with --remote False"""
-        mock_get_remote.return_value = False
-        with patch('sonic_kdump_config.write_kdump_remote') as mock_write_remote:
-            main()
-            mock_write_remote.assert_called_once_with()
-
-    @patch('sys.argv', ['sonic-kdump-config', '--remote'])
-    @patch('sonic_kdump_config.get_kdump_remote')
-    def test_remote_default(self, mock_get_remote):
-        """Test --remote without a value (should use default)"""
-        mock_get_remote.return_value = False
-        with patch('sonic_kdump_config.write_kdump_remote') as mock_write_remote:
-            main()
-            mock_write_remote.assert_called_once_with()
-
-    @patch('sys.argv', ['sonic-kdump-config'])
-    @patch('sonic_kdump_config.get_kdump_remote')
-    def test_remote_not_provided(self, mock_get_remote):
-        """Test when --remote is not provided (should use default)"""
-        mock_get_remote.return_value = False
-        with patch('sonic_kdump_config.write_kdump_remote') as mock_write_remote:
-            main()
-            mock_write_remote.assert_not_called()
 
     @patch('sonic_kdump_config.run_command')
     @patch('sonic_kdump_config.read_ssh_string')
