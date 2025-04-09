@@ -191,9 +191,6 @@ class TestHealth(object):
         # assert mock_list.called
         # assert mock_health.called
 
-
-class TestSystemHealthSSH(object):
-
     @mock.patch("show.system_health.subprocess.run")
     @mock.patch("show.system_health.os.path.exists", return_value=False)
     @mock.patch("show.system_health.click.echo")
