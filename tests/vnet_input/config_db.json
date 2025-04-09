@@ -10,8 +10,5 @@
     },
     "VLAN_INTERFACE|Vlan100": {
         "vnet_name": "Vnet_2000"
-    },
-    "INTERFACE|Ethernet4": {
-        "vnet_name": "Vnet_2000"
     }
 }
