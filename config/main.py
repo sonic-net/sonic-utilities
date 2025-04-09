@@ -535,13 +535,13 @@ def del_interface_bind_to_vnet(config_db, vnet_name):
         interface_dict = config_db.get_table(table_name)
         if interface_dict:
             for interface_name in interface_dict:
-                if ('vnet_name' in interface_dict[interface_name] and 
-                    vnet_name == interface_dict[interface_name]['vnet_name']):
+                if ('vnet_name' in interface_dict[interface_name] and /
+                        vnet_name == interface_dict[interface_name]['vnet_name']):
                     interface_ipaddresses = get_interface_ipaddresses(config_db, interface_name)
                     for ip in interface_ipaddresses:
                         remove_router_interface_ip_address(config_db, interface_name, ip)
                     config_db.set_entry(table_name, interface_name, None)
-        
+
 def set_interface_naming_mode(mode):
     """Modify SONIC_CLI_IFACE_MODE env variable in user .bashrc
     """
@@ -6144,7 +6144,7 @@ def add_vrrp_ip(ctx, interface_name, vrrp_id, ip_addr):
     if check_vrrp_ip_exist(config_db, ip_addr):
         ctx.abort()
 
-    if "/" not in ip_addr:
+    if "/" not in ip_addr :
         ctx.fail("IP address {} is missing a mask. Such as xx.xx.xx.xx/yy or xx:xx::xx/yy".format(str(ip_addr)))
 
     # check vip exist

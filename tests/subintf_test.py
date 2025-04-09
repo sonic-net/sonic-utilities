@@ -269,12 +269,12 @@ class TestSubinterface(object):
         assert result.exit_code == 0
         assert ('Eth0.1002') in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
 
-        expected_output = "Interface Eth0.1002 IP disabled and address(es) removed due to binding VRF Vnet_1000.\n"
+        output = "Interface Eth0.1002 IP disabled and address(es) removed due to binding VRF Vnet_1000.\n"
         cmds = config.config.commands["interface"].commands["vrf"].commands["bind"]
         result = runner.invoke(cmds, ["Eth0.1002", "Vnet_1000"], obj=obj)
         assert result.exit_code == 0
         assert ('Vnet_1000') in db.cfgdb.get_table('VLAN_SUB_INTERFACE')['Eth0.1002']['vnet_name']
-        assert result.output == expected_output
+        assert result.output == output
 
         output = "Interface Eth0.1002 IP disabled and address(es) removed due to unbinding VRF.\n"
         cmds = config.config.commands["interface"].commands["vrf"].commands["unbind"]
