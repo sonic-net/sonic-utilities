@@ -421,15 +421,15 @@ class TestSonicKdumpConfig(unittest.TestCase):
     @patch("sonic_kdump_config.get_kdump_memory")
     @patch("sonic_kdump_config.get_kdump_administrative_mode")
     def test_cmd_kdump_enable_aboot_platform(self,
-        mock_admin_mode,
-        mock_memory,
-        mock_num_dumps,
-        mock_remote,
-        mock_ssh_string,
-        mock_ssh_path,
-        mock_exists,
-        mock_open_file,
-        mock_kdump_enable):
+            mock_admin_mode,
+            mock_memory,
+            mock_num_dumps,
+            mock_remote,
+            mock_ssh_string,
+            mock_ssh_path,
+            mock_exists,
+            mock_open_file,
+            mock_kdump_enable):
 
         # Setup mocks
         mock_admin_mode.return_value = True
@@ -469,15 +469,15 @@ class TestSonicKdumpConfig(unittest.TestCase):
     @patch("sonic_kdump_config.get_kdump_memory")
     @patch("sonic_kdump_config.get_kdump_administrative_mode")
     def test_cmd_kdump_enable_unsupported_platform(self,
-        mock_admin_mode,
-        mock_memory,
-        mock_num_dumps,
-        mock_remote,
-        mock_ssh_string,
-        mock_ssh_path,
-        mock_exists,
-        mock_open_file,
-        mock_kdump_enable):
+            mock_admin_mode,
+            mock_memory,
+            mock_num_dumps,
+            mock_remote,
+            mock_ssh_string,
+            mock_ssh_path,
+            mock_exists,
+            mock_open_file,
+            mock_kdump_enable):
 
         # Setup: Not grub_cfg, no aboot_platform -> should print unsupported
         mock_exists.return_value = False
@@ -497,15 +497,15 @@ class TestSonicKdumpConfig(unittest.TestCase):
     @patch("sonic_kdump_config.get_kdump_memory")
     @patch("sonic_kdump_config.get_kdump_administrative_mode")
     def test_cmd_kdump_enable_grub_cfg_exists(self,
-        mock_admin_mode,
-        mock_memory,
-        mock_num_dumps,
-        mock_remote,
-        mock_ssh_string,
-        mock_ssh_path,
-        mock_exists,
-        mock_open_file,
-        mock_kdump_enable):
+            mock_admin_mode,
+            mock_memory,
+            mock_num_dumps,
+            mock_remote,
+            mock_ssh_string,
+            mock_ssh_path,
+            mock_exists,
+            mock_open_file,
+            mock_kdump_enable):
 
         # Setup grub.cfg path exists
         mock_exists.return_value = True
