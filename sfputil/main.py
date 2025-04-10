@@ -693,7 +693,8 @@ def eeprom(port, dump_dom, namespace):
                     try:
                         xcvr_dom_info = platform_chassis.get_sfp(physical_port).get_transceiver_dom_real_value()
                     except NotImplementedError:
-                        click.echo("Sfp.get_transceiver_dom_real_value() is currently not implemented for this platform")
+                        click.echo("Sfp.get_transceiver_dom_real_value() is currently not implemented "
+                                   "for this platform")
                         sys.exit(ERROR_NOT_IMPLEMENTED)
 
                     try:

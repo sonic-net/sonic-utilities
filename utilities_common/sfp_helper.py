@@ -359,23 +359,23 @@ CCMIS_STATUS_MAP = {
 }
 
 CCMIS_VDM_TO_LEGACY_STATUS_MAP = {
-    'biasxi1' : 'biasxi',
-    'biasxq1' : 'biasxq',
-    'biasxp1' : 'biasxp',
-    'biasyi1' : 'biasyi',
-    'biasyq1' : 'biasyq',
-    'biasyp1' : 'biasyp',
-    'cdshort1' : 'cdshort',
-    'cdlong1' : 'cdlong',
-    'dgd1' : 'dgd',
-    'sopmd1' : 'sopmd',
-    'pdl1' : 'pdl',
-    'osnr1' : 'osnr',
-    'esnr1' : 'esnr',
-    'cfo1' : 'cfo',
-    'txcurrpower1' : 'txcurrpower',
-    'rxtotpower1' : 'rxtotpower',
-    'rxsigpower1' : 'rxsigpower'
+    'biasxi1': 'biasxi',
+    'biasxq1': 'biasxq',
+    'biasxp1': 'biasxp',
+    'biasyi1': 'biasyi',
+    'biasyq1': 'biasyq',
+    'biasyp1': 'biasyp',
+    'cdshort1': 'cdshort',
+    'cdlong1': 'cdlong',
+    'dgd1': 'dgd',
+    'sopmd1': 'sopmd',
+    'pdl1': 'pdl',
+    'osnr1': 'osnr',
+    'esnr1': 'esnr',
+    'cfo1': 'cfo',
+    'txcurrpower1': 'txcurrpower',
+    'rxtotpower1': 'rxtotpower',
+    'rxsigpower1': 'rxsigpower'
 }
 
 CCMIS_VDM_THRESHOLD_TO_LEGACY_DOM_THRESHOLD_MAP = {
