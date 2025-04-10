@@ -686,21 +686,18 @@ class TestShowPlatform(object):
 
     @mock.patch('sonic_py_common.device_info.get_platform_json_data')
     @patch('utilities_common.cli.run_command')
-    @patch('os.popen')
-    def test_ssdhealth(self, mock_popen, mock_run_command, mock_plat_json):
+    def test_ssdhealth(self, mock_run_command, mock_plat_json):
         mock_plat_json.return_value = {
             "chassis": {
                  "name": "mock_platform"
             }
         }
-        mock_popen.return_value.readline.return_value = '/dev/sda\n'
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['platform'].commands['ssdhealth'], ['--verbose', '--vendor'])
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_popen.assert_called_once_with('lsblk -o NAME,TYPE -p | grep disk')
-        mock_run_command.assert_called_once_with(['sudo', 'ssdutil', '-d', '/dev/sda', '-v', '-e'], display_cmd=True)
+        mock_run_command.assert_called_once_with(['sudo', 'ssdutil', '-v', '-e'], display_cmd=True)
 
     @patch('utilities_common.cli.run_command')
     def test_pcieinfo(self, mock_run_command):

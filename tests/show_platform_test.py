@@ -98,21 +98,17 @@ class TestShowPlatformSsdhealth(object):
         assert mock_run_command.call_count == 1
         mock_run_command.assert_called_with(['sudo', 'ssdutil', '-d', '/dev/nvme0n1', '-v'], display_cmd=True)
 
-    @mock.patch('os.popen')
     @mock.patch('utilities_common.cli.run_command')
     @mock.patch('sonic_py_common.device_info.get_platform_json_data')
-    def test_ssdhealth_default_device(self, mock_plat_json, mock_run_command, mock_open):
+    def test_ssdhealth_default_device(self, mock_plat_json, mock_run_command):
         mock_plat_json.return_value = {
             "chassis": {
                  "name": "mock_platform"
             }
         }
-        mock_fd = mock.MagicMock()
-        mock_fd.readline.return_value = "/dev/nvme0n1     disk\n"
-        mock_open.return_value = mock_fd
+
         CliRunner().invoke(show.cli.commands['platform'].commands['ssdhealth'], ['--verbose'])
-        mock_open.assert_called_with("lsblk -o NAME,TYPE -p | grep disk")
-        mock_run_command.assert_called_with(['sudo', 'ssdutil', '-d', '/dev/nvme0n1', '-v'], display_cmd=True)
+        mock_run_command.assert_called_with(['sudo', 'ssdutil', '-v'], display_cmd=True)
 
         mock_plat_json.return_value = {
             "chassis": {
