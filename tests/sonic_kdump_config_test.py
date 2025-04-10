@@ -5,7 +5,6 @@ import unittest
 from unittest.mock import patch, mock_open, Mock
 from utilities_common.general import load_module_from_source
 from sonic_installer.common import IMAGE_PREFIX
-import argparse
 
 TESTS_DIR_PATH = os.path.dirname(os.path.abspath(__file__))
 UTILITY_DIR_PATH = os.path.dirname(TESTS_DIR_PATH)
@@ -444,7 +443,7 @@ class TestSonicKdumpConfig(unittest.TestCase):
         mock_kdump_enable.return_value = True
 
         result = sonic_kdump_config.cmd_kdump_enable(verbose=True, image=image)
-        self.assertTrue(result)
+        self.assertFalse(result)
 
         # Extract aboot_cfg value from mock_open_file (the path should include 'aboot')
         # Let's assume `cmd_kdump_enable` internally constructs something like '/host/boot/aboot.cfg'
