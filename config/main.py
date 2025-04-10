@@ -1475,8 +1475,6 @@ config.add_command(stp.spanning_tree)
 
 # add mclag commands
 config.add_command(mclag.mclag)
-config.add_command(mclag.mclag_member)
-config.add_command(mclag.mclag_unique_ip)
 
 # syslog module
 config.add_command(syslog.syslog)
