@@ -7176,7 +7176,8 @@ def add_route(ctx, command_str):
         # Set vrf to empty string if not defined
         if 'nexthop-vrf' in route:
             if i >= len(route['nexthop-vrf'].split(',')):
-                route['nexthop-vrf'] += ','
+                vrf = route['nexthop-vrf'].split(',')[0]
+                route['nexthop-vrf'] += ',' + vrf
         else:
             route['nexthop-vrf'] = ''
 
