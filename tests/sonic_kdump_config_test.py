@@ -301,52 +301,62 @@ class TestSonicKdumpConfig(unittest.TestCase):
             return_result = sonic_kdump_config.cmd_kdump_disable(True)
             assert return_result == False
 
-    @patch('sonic_kdump_config.ConfigDBConnector')
-    def test_get_kdump_memory(self, mock_config_db_connector):
-        # Mock the ConfigDBConnector and its methods
-        mock_config_db = mock_config_db_connector.return_value
-        mock_config_db.connect.return_value = None
+    @patch("sonic_kdump_config.read_num_dumps")
+    @patch("sonic_kdump_config.run_command")
+    def test_write_num_dumps(self, mock_run_cmd, mock_read_num_dumps):
+        # Success case: correct write and verification
+        mock_run_cmd.side_effect = [(0, [], None)]
+        mock_read_num_dumps.return_value = 5
+        sonic_kdump_config.write_num_dumps(5)
 
-        # Test case: Successful retrieval of memory configuration
-        mock_config_db.get_table.return_value = {
-            'config': {
-                'memory': '128M'
-            }
-        }
-        with patch('sonic_kdump_config.get_kdump_memory') as mock_get_kdump_memory:
-            mock_get_kdump_memory.return_value = '128M'
-            memory = mock_get_kdump_memory()
-            self.assertEqual(memory, '128M')
+        # Case where run_command returns wrong type
+        mock_run_cmd.side_effect = [(0, (), None)]
+        mock_read_num_dumps.return_value = 5
+        with self.assertRaises(SystemExit) as sys_exit:
+            sonic_kdump_config.write_num_dumps(5)
+        self.assertEqual(sys_exit.exception.code, 1)
 
-        # Test case: Memory configuration not found in the database
-        mock_config_db.get_table.return_value = {
-            'config': {}
-        }
-        with patch('sonic_kdump_config.get_kdump_memory') as mock_get_kdump_memory:
-            mock_get_kdump_memory.return_value = "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M"
-            memory = mock_get_kdump_memory()
-            self.assertEqual(memory, "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M")
+        # Case where line is non-empty
+        mock_run_cmd.side_effect = [(0, ["Some output"], None)]
+        mock_read_num_dumps.return_value = 5
+        with self.assertRaises(SystemExit) as sys_exit:
+            sonic_kdump_config.write_num_dumps(5)
+        self.assertEqual(sys_exit.exception.code, 1)
 
-        # Test case: No 'config' key in the table data
-        mock_config_db.get_table.return_value = {}
-        with patch('sonic_kdump_config.get_kdump_memory') as mock_get_kdump_memory:
-            mock_get_kdump_memory.return_value = "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M"
-            memory = mock_get_kdump_memory()
-            self.assertEqual(memory, "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M")
+        # Case where read_num_dumps does not match input
+        mock_run_cmd.side_effect = [(0, [], None)]
+        mock_read_num_dumps.return_value = 4
+        with self.assertRaises(SystemExit) as sys_exit:
+            sonic_kdump_config.write_num_dumps(5)
+        self.assertEqual(sys_exit.exception.code, 1)
 
-        # Test case: get_table returns None
-        mock_config_db.get_table.return_value = None
-        with patch('sonic_kdump_config.get_kdump_memory') as mock_get_kdump_memory:
-            mock_get_kdump_memory.return_value = "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M"
-            memory = mock_get_kdump_memory()
-            self.assertEqual(memory, "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M")
+        # Case where run_command fails
+        mock_run_cmd.side_effect = [(1, [], "Error")]
+        mock_read_num_dumps.return_value = 5
+        with self.assertRaises(SystemExit) as sys_exit:
+            sonic_kdump_config.write_num_dumps(5)
+        self.assertEqual(sys_exit.exception.code, 1)
 
-        # Test case: ConfigDBConnector is None
-        mock_config_db_connector.return_value = None
-        with patch('sonic_kdump_config.get_kdump_memory') as mock_get_kdump_memory:
-            mock_get_kdump_memory.return_value = "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M"
-            memory = mock_get_kdump_memory()
-            self.assertEqual(memory, "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M")
+        # Case where lines contain non-integer
+        mock_run_cmd.side_effect = [(0, ["NotInteger"], None)]
+        mock_read_num_dumps.return_value = 5
+        with self.assertRaises(SystemExit) as sys_exit:
+            sonic_kdump_config.write_num_dumps(5)
+        self.assertEqual(sys_exit.exception.code, 1)
+
+        # Edge case: empty string in output but matches value
+        mock_run_cmd.side_effect = [(0, [""], None)]
+        mock_read_num_dumps.return_value = 5
+        with self.assertRaises(SystemExit) as sys_exit:
+            sonic_kdump_config.write_num_dumps(5)
+        self.assertEqual(sys_exit.exception.code, 1)
+
+        # Edge case: read_num_dumps returns matching value but run_command fails
+        mock_run_cmd.side_effect = [(2, [], None)]
+        mock_read_num_dumps.return_value = 5
+        with self.assertRaises(SystemExit) as sys_exit:
+            sonic_kdump_config.write_num_dumps(5)
+        self.assertEqual(sys_exit.exception.code, 1)
 
     @patch("sonic_kdump_config.get_bootloader")
     def test_get_image(self, mock_get_bootloader):
