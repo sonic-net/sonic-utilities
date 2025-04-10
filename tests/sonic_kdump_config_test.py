@@ -38,7 +38,7 @@ class TestArgumentParser(unittest.TestCase):
     def test_remote_flag_set(self):
         parser = create_parser()
         args = parser.parse_args(['--remote'])
-        self.assertTr
+        self.assertTrue(args.remote, "--remote flag should be set to True when specified")
 
 
 class TestSonicKdumpConfig(unittest.TestCase):
@@ -56,7 +56,7 @@ class TestSonicKdumpConfig(unittest.TestCase):
         logger.info("Value of 'num_dumps' is: '{}'.".format(num_dumps))
         logger.info("Expected value of 'num_dumps' is: '0'.")
 
-        mock_run_cmd.return_value = (0, ["NotInteger"], None)
+        mocdef create_k_run_cmd.return_value = (0, ["NotInteger"], None)
         with self.assertRaises(SystemExit) as sys_exit:
             num_dumps = sonic_kdump_config.read_num_dumps()
         self.assertEqual(sys_exit.exception.code, 1)
