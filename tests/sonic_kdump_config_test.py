@@ -27,44 +27,6 @@ class TestSonicKdumpConfig(unittest.TestCase):
     def setup_class(cls):
         print("SETUP")
 
-    @patch("sonic_kdump_config.get_kdump_memory")
-    @patch('sonic_kdump_config.ConfigDBConnector')
-    def test_get_kdump_memory(self, mock_config_db_connector):
-        # Mock the ConfigDBConnector and its methods
-        mock_config_db = mock_config_db_connector.return_value
-        mock_config_db.connect.return_value = None
-
-        # Test case: Successful retrieval of memory configuration
-        mock_config_db.get_table.return_value = {
-            'config': {
-                'memory': '128M'
-            }
-        }
-        memory = get_kdump_memory()
-        self.assertEqual(memory, '128M')
-
-        # Test case: Memory configuration not found in the database
-        mock_config_db.get_table.return_value = {
-            'config': {}
-        }
-        memory = get_kdump_memory()
-        self.assertEqual(memory, "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M")
-
-        # Test case: No 'config' key in the table data
-        mock_config_db.get_table.return_value = {}
-        memory = get_kdump_memory()
-        self.assertEqual(memory, "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M")
-
-        # Test case: get_table returns None
-        mock_config_db.get_table.return_value = None
-        memory = get_kdump_memory()
-        self.assertEqual(memory, "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M")
-
-        # Test case: ConfigDBConnector is None
-        mock_config_db_connector.return_value = None
-        memory = get_kdump_memory()
-        self.assertEqual(memory, "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M")
-
     @patch("sonic_kdump_config.run_command")
     def test_read_num_kdumps(self, mock_run_cmd):
         """Tests the function `read_num_kdumps(...)` in script `sonic-kdump-config`.
@@ -339,6 +301,53 @@ class TestSonicKdumpConfig(unittest.TestCase):
             return_result = sonic_kdump_config.cmd_kdump_disable(True)
             assert return_result == False
 
+    @patch('sonic_kdump_config.ConfigDBConnector')
+    def test_get_kdump_memory(self, mock_config_db_connector):
+        # Mock the ConfigDBConnector and its methods
+        mock_config_db = mock_config_db_connector.return_value
+        mock_config_db.connect.return_value = None
+
+        # Test case: Successful retrieval of memory configuration
+        mock_config_db.get_table.return_value = {
+            'config': {
+                'memory': '128M'
+            }
+        }
+        with patch('sonic_kdump_config.get_kdump_memory') as mock_get_kdump_memory:
+            mock_get_kdump_memory.return_value = '128M'
+            memory = mock_get_kdump_memory()
+            self.assertEqual(memory, '128M')
+
+        # Test case: Memory configuration not found in the database
+        mock_config_db.get_table.return_value = {
+            'config': {}
+        }
+        with patch('sonic_kdump_config.get_kdump_memory') as mock_get_kdump_memory:
+            mock_get_kdump_memory.return_value = "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M"
+            memory = mock_get_kdump_memory()
+            self.assertEqual(memory, "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M")
+
+        # Test case: No 'config' key in the table data
+        mock_config_db.get_table.return_value = {}
+        with patch('sonic_kdump_config.get_kdump_memory') as mock_get_kdump_memory:
+            mock_get_kdump_memory.return_value = "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M"
+            memory = mock_get_kdump_memory()
+            self.assertEqual(memory, "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M")
+
+        # Test case: get_table returns None
+        mock_config_db.get_table.return_value = None
+        with patch('sonic_kdump_config.get_kdump_memory') as mock_get_kdump_memory:
+            mock_get_kdump_memory.return_value = "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M"
+            memory = mock_get_kdump_memory()
+            self.assertEqual(memory, "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M")
+
+        # Test case: ConfigDBConnector is None
+        mock_config_db_connector.return_value = None
+        with patch('sonic_kdump_config.get_kdump_memory') as mock_get_kdump_memory:
+            mock_get_kdump_memory.return_value = "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M"
+            memory = mock_get_kdump_memory()
+            self.assertEqual(memory, "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M")
+    
     @patch("sonic_kdump_config.get_bootloader")
     def test_get_image(self, mock_get_bootloader):
         """Tests the function `get_current_image() and get_next_image()` in script `sonic-kdump-config.py`.
