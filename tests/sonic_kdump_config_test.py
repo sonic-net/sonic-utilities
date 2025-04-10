@@ -412,7 +412,6 @@ class TestSonicKdumpConfig(unittest.TestCase):
         self.assertEqual(mock_run_command.call_count, 2)
 
     @patch("sonic_kdump_config.kdump_enable")
-    @patch("sonic_kdump_config.open", new_callable=mock_open, read_data='some config data with aboot_platform')
     @patch("sonic_kdump_config.os.path.exists")
     @patch("sonic_kdump_config.get_kdump_ssh_path")
     @patch("sonic_kdump_config.get_kdump_ssh_string")
@@ -420,6 +419,7 @@ class TestSonicKdumpConfig(unittest.TestCase):
     @patch("sonic_kdump_config.get_kdump_num_dumps")
     @patch("sonic_kdump_config.get_kdump_memory")
     @patch("sonic_kdump_config.get_kdump_administrative_mode")
+    @patch("sonic_kdump_config.open", new_callable=mock_open, read_data='... aboot ...')
     def test_cmd_kdump_enable_aboot_platform(self,
             mock_admin_mode,
             mock_memory,
