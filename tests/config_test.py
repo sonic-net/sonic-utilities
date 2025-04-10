@@ -1315,6 +1315,7 @@ class TestLoadMinigraph(object):
 
 class TestReloadConfig(object):
     dummy_cfg_file = os.path.join(os.sep, "tmp", "config.json")
+    dummy_golden_cfg_file = os.path.join(os.sep, "tmp", "golden_config.json")
 
     @classmethod
     def setup_class(cls):
@@ -1517,7 +1518,7 @@ class TestReloadConfig(object):
                 == RELOAD_YANG_CFG_OUTPUT.format(config.SYSTEM_RELOAD_LOCK)
 
     def test_reload_config_fails_yang_validation(self, get_cmd_module, setup_single_broadcom_asic):
-        with open(self.dummy_cfg_file, 'w') as f:
+        with open(self.dummy_golden_cfg_file, 'w') as f:
             device_metadata = {
                 "DEVICE_METADATA": {
                     "localhost": {
@@ -1536,7 +1537,7 @@ class TestReloadConfig(object):
 
             result = runner.invoke(
                 config.config.commands["reload"],
-                [self.dummy_cfg_file, '-y', '-f'])
+                [self.dummy_golden_cfg_file, '-y', '-f'])
 
             print(result.exit_code)
             print(result.output)
@@ -1548,6 +1549,7 @@ class TestReloadConfig(object):
     def teardown_class(cls):
         os.environ['UTILITIES_UNIT_TESTING'] = "0"
         os.remove(cls.dummy_cfg_file)
+        os.remove(cls.dummy_golden_cfg_file)
         print("TEARDOWN")
 
 
