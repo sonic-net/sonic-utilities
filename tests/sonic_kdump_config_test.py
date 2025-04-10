@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import patch, mock_open, Mock
 from utilities_common.general import load_module_from_source
 from sonic_installer.common import IMAGE_PREFIX
+import argparse
 
 TESTS_DIR_PATH = os.path.dirname(os.path.abspath(__file__))
 UTILITY_DIR_PATH = os.path.dirname(TESTS_DIR_PATH)
@@ -20,6 +21,15 @@ logger = logging.getLogger(__name__)
 # Load `sonic-kdump-config` module from source since `sonic-kdump-config` does not have .py extension.
 sonic_kdump_config_path = os.path.join(SCRIPTS_DIR_PATH, "sonic-kdump-config")
 sonic_kdump_config = load_module_from_source("sonic_kdump_config", sonic_kdump_config_path)
+
+def create_parser():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--remote', action='store_true', help='enable remote ssh')
+    parser.add_argument('--num_dumps', nargs='?', type=int, action='store', default=3,
+                        help='Maximum number of kernel dump files stored')
+    parser.add_argument('--ssh_string', nargs='?', type=str, action='store', default=None,
+                        help='ssh_string for remote kdump')
+    return parser
 
 
 class TestSonicKdumpConfig(unittest.TestCase):
@@ -224,13 +234,38 @@ class TestSonicKdumpConfig(unittest.TestCase):
             sonic_kdump_config.write_use_kdump(0)
         self.assertEqual(sys_exit.exception.code, 1)
 
+    def setUp(self):
+        self.parser = create_parser()
+
     def test_remote_enabled(self):
+        """Test --remote with the flag provided"""
         args = self.parser.parse_args(['--remote'])
         self.assertTrue(args.remote)
 
     def test_remote_disabled(self):
+        """Test the default value of --remote"""
         args = self.parser.parse_args([])
         self.assertFalse(args.remote)
+
+    def test_num_dumps_default(self):
+        """Test the default value of --num_dumps"""
+        args = self.parser.parse_args([])
+        self.assertEqual(args.num_dumps, 3)
+
+    def test_num_dumps_provided(self):
+        """Test --num_dumps with a provided value"""
+        args = self.parser.parse_args(['--num_dumps', '5'])
+        self.assertEqual(args.num_dumps, 5)
+
+    def test_ssh_string_default(self):
+        """Test the default value of --ssh_string"""
+        args = self.parser.parse_args([])
+        self.assertIsNone(args.ssh_string)
+
+    def test_ssh_string_provided(self):
+        """Test --ssh_string with a provided value"""
+        args = self.parser.parse_args(['--ssh_string', 'user@host'])
+        self.assertEqual(args.ssh_string, 'user@host')
 
     @patch('sonic_kdump_config.run_command')
     @patch('sonic_kdump_config.read_ssh_string')
