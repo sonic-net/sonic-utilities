@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import patch, mock_open, Mock
 from utilities_common.general import load_module_from_source
 from sonic_installer.common import IMAGE_PREFIX
+import argparse
 
 TESTS_DIR_PATH = os.path.dirname(os.path.abspath(__file__))
 UTILITY_DIR_PATH = os.path.dirname(TESTS_DIR_PATH)
@@ -20,6 +21,24 @@ logger = logging.getLogger(__name__)
 # Load `sonic-kdump-config` module from source since `sonic-kdump-config` does not have .py extension.
 sonic_kdump_config_path = os.path.join(SCRIPTS_DIR_PATH, "sonic-kdump-config")
 sonic_kdump_config = load_module_from_source("sonic_kdump_config", sonic_kdump_config_path)
+
+
+def create_parser():
+    parser = argparse.ArgumentParser(description='Test parser for kdump arguments')
+    parser.add_argument('--remote', action='store_true', default=False,
+                        help='ssh_string for remote kdump')
+    return parser
+
+class TestArgumentParser(unittest.TestCase):
+    def test_default_remote_flag(self):
+        parser = create_parser()
+        args = parser.parse_args([])
+        self.assertFalse(args.remote, "Default value for --remote should be False")
+
+    def test_remote_flag_set(self):
+        parser = create_parser()
+        args = parser.parse_args(['--remote'])
+        self.assertTr
 
 
 class TestSonicKdumpConfig(unittest.TestCase):
