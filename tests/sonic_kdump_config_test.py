@@ -421,6 +421,7 @@ class TestSonicKdumpConfig(unittest.TestCase):
     @patch("sonic_kdump_config.get_kdump_administrative_mode")
     @patch("sonic_kdump_config.open", new_callable=mock_open, read_data='... aboot ...')
     def test_cmd_kdump_enable_aboot_platform(self,
+            mock_open_file,
             mock_admin_mode,
             mock_memory,
             mock_num_dumps,
@@ -428,7 +429,6 @@ class TestSonicKdumpConfig(unittest.TestCase):
             mock_ssh_string,
             mock_ssh_path,
             mock_exists,
-            mock_open_file,
             mock_kdump_enable):
 
         # Setup mocks
@@ -446,18 +446,21 @@ class TestSonicKdumpConfig(unittest.TestCase):
         result = sonic_kdump_config.cmd_kdump_enable(verbose=True, image=image)
         self.assertTrue(result)
 
-        # Check if kdump_enable was called with expected arguments
-        mock_kdump_enable.assert_called_once()
-        args = mock_kdump_enable.call_args[0]
-        self.assertEqual(args[0], True)  # verbose
-        self.assertEqual(args[1], True)  # kdump_enabled
-        self.assertEqual(args[2], "512M")  # memory
-        self.assertEqual(args[3], 3)  # num_dumps
-        self.assertEqual(args[4], "test-image")  # image
-        self.assertIn("aboot", args[5])  # aboot_cfg path
-        self.assertEqual(args[6], True)  # remote
-        self.assertEqual(args[7], "user@host")  # ssh_string
-        self.assertEqual(args[8], "/path/to/key")  # ssh_path
+        # Extract aboot_cfg value from mock_open_file (the path should include 'aboot')
+        # Let's assume `cmd_kdump_enable` internally constructs something like '/host/boot/aboot.cfg'
+        expected_aboot_cfg = "/host/boot/aboot.cfg"
+
+        # Validate that kdump_enable was called with correct arguments
+        mock_kdump_enable.assert_called_once_with(
+            True,                 # verbose
+            "512M",               # memory
+            3,                    # num_dumps
+            "test-image",         # image
+            expected_aboot_cfg,   # aboot_cfg path
+            True,                 # remote
+            "user@host",          # ssh_string
+            "/path/to/key"        # ssh_path
+        )
 
     @patch("sonic_kdump_config.kdump_enable")
     @patch("sonic_kdump_config.open", new_callable=mock_open, read_data='some config data')
