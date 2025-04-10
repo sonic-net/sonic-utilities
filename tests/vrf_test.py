@@ -11,6 +11,7 @@ import threading
 DEFAULT_NAMESPACE = ''
 test_path = os.path.dirname(os.path.abspath(__file__))
 mock_db_path = os.path.join(test_path, "vrf_input")
+mock_db_path_vnet = os.path.join(test_path, "vnet_input")
 
 class TestShowVrf(object):
     @classmethod
@@ -275,3 +276,60 @@ Error: 'vrf_name' length should not exceed 15 characters
         assert result.exit_code != 0
         assert ('VrfNameTooLong!!!') not in db.cfgdb.get_table('VRF')
         assert expected_output in result.output
+
+
+class TestVnet(object):
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "1"
+        print("SETUP")
+
+    def test_show_vnet_brief(self):
+        from .mock_tables import dbconnector
+        jsonfile_config = os.path.join(mock_db_path_vnet, "config_db")
+        dbconnector.dedicated_dbs['CONFIG_DB'] = jsonfile_config
+        runner = CliRunner()
+
+        result = runner.invoke(show.cli.commands["vnet"].commands["brief"], [])
+        print(result.output)
+        dbconnector.dedicated_dbs = {}
+        assert result.exit_code == 0
+        assert "Vnet_2000" in result.output
+        assert "1234-56-7890-1234" in result.output
+        assert "tunnel1" in result.output
+
+    def test_show_vnet_name(self):
+        from .mock_tables import dbconnector
+        jsonfile_config = os.path.join(mock_db_path_vnet, "config_db")
+        dbconnector.dedicated_dbs['CONFIG_DB'] = jsonfile_config
+        runner = CliRunner()
+
+        result = runner.invoke(show.cli.commands["vnet"].commands["name"], ["Vnet_2000"])
+        print(result.output)
+        dbconnector.dedicated_dbs = {}
+        assert result.exit_code == 0
+        assert "Vnet_2000" in result.output
+        assert "1234-56-7890-1234" in result.output
+        assert "Ethernet4" in result.output
+        assert "Vlan100" in result.output
+
+    def test_show_vnet_guid(self):
+        from .mock_tables import dbconnector
+        jsonfile_config = os.path.join(mock_db_path_vnet, "config_db")
+        dbconnector.dedicated_dbs['CONFIG_DB'] = jsonfile_config
+        runner = CliRunner()
+
+        result = runner.invoke(show.cli.commands["vnet"].commands["guid"], ["1234-56-7890-1234"])
+        print(result.output)
+        dbconnector.dedicated_dbs = {}
+        assert result.exit_code == 0
+        assert "Vnet_2000" in result.output
+        assert "1234-56-7890-1234" in result.output
+        assert "tunnel1" in result.output
+        assert "Ethernet4" in result.output
+        assert "Vlan100" in result.output
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+        print("TEARDOWN")
