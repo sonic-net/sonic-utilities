@@ -23,31 +23,6 @@ sonic_kdump_config_path = os.path.join(SCRIPTS_DIR_PATH, "sonic-kdump-config")
 sonic_kdump_config = load_module_from_source("sonic_kdump_config", sonic_kdump_config_path)
 
 
-def get_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--remote', nargs='?', type=str, action='store', default=False,
-                        help='ssh_string for remote kdump')
-    return parser
-
-
-class TestRemoteArgument(unittest.TestCase):
-
-    def test_no_remote_arg(self):
-        parser = get_parser()
-        args = parser.parse_args([])
-        self.assertFalse(args.remote)
-
-    def test_remote_with_value(self):
-        parser = get_parser()
-        args = parser.parse_args(['--remote', 'user@host'])
-        self.assertEqual(args.remote, 'user@host')
-
-    def test_remote_with_no_value(self):
-        parser = get_parser()
-        args = parser.parse_args(['--remote'])
-        self.assertIsNone(args.remote)
-
-
 class TestSonicKdumpConfig(unittest.TestCase):
     @classmethod
     def setup_class(cls):
@@ -435,6 +410,109 @@ class TestSonicKdumpConfig(unittest.TestCase):
         mock_run_command.assert_any_call("/bin/sed -i 's/SSH/#SSH/' /etc/default/kdump-tools", use_shell=False)
         mock_run_command.assert_any_call("/bin/sed -i 's/SSH_KEY/#SSH_KEY/' /etc/default/kdump-tools", use_shell=False)
         self.assertEqual(mock_run_command.call_count, 2)
+
+    @patch("sonic_kdump_config.kdump_enable")
+    @patch("sonic_kdump_config.open", new_callable=mock_open, read_data='some config data with aboot_platform')
+    @patch("sonic_kdump_config.os.path.exists")
+    @patch("sonic_kdump_config.get_kdump_ssh_path")
+    @patch("sonic_kdump_config.get_kdump_ssh_string")
+    @patch("sonic_kdump_config.get_kdump_remote")
+    @patch("sonic_kdump_config.get_kdump_num_dumps")
+    @patch("sonic_kdump_config.get_kdump_memory")
+    @patch("sonic_kdump_config.get_kdump_administrative_mode")
+    def test_cmd_kdump_enable_aboot_platform(self,
+        mock_admin_mode,
+        mock_memory,
+        mock_num_dumps,
+        mock_remote,
+        mock_ssh_string,
+        mock_ssh_path,
+        mock_exists,
+        mock_open_file,
+        mock_kdump_enable):
+
+        # Setup mocks
+        mock_admin_mode.return_value = True
+        mock_memory.return_value = "512M"
+        mock_num_dumps.return_value = 3
+        mock_remote.return_value = True
+        mock_ssh_string.return_value = "user@host"
+        mock_ssh_path.return_value = "/path/to/key"
+        mock_exists.return_value = False  # grub_cfg does not exist
+
+        image = "test-image"
+        mock_kdump_enable.return_value = True
+
+        result = sonic_kdump_config.cmd_kdump_enable(verbose=True, image=image)
+        self.assertTrue(result)
+
+        # Check if kdump_enable was called with expected arguments
+        mock_kdump_enable.assert_called_once()
+        args = mock_kdump_enable.call_args[0]
+        self.assertEqual(args[0], True)  # verbose
+        self.assertEqual(args[1], True)  # kdump_enabled
+        self.assertEqual(args[2], "512M")  # memory
+        self.assertEqual(args[3], 3)  # num_dumps
+        self.assertEqual(args[4], "test-image")  # image
+        self.assertIn("aboot", args[5])  # aboot_cfg path
+        self.assertEqual(args[6], True)  # remote
+        self.assertEqual(args[7], "user@host")  # ssh_string
+        self.assertEqual(args[8], "/path/to/key")  # ssh_path
+
+    @patch("sonic_kdump_config.kdump_enable")
+    @patch("sonic_kdump_config.open", new_callable=mock_open, read_data='some config data')
+    @patch("sonic_kdump_config.os.path.exists")
+    @patch("sonic_kdump_config.get_kdump_ssh_path")
+    @patch("sonic_kdump_config.get_kdump_ssh_string")
+    @patch("sonic_kdump_config.get_kdump_remote")
+    @patch("sonic_kdump_config.get_kdump_num_dumps")
+    @patch("sonic_kdump_config.get_kdump_memory")
+    @patch("sonic_kdump_config.get_kdump_administrative_mode")
+    def test_cmd_kdump_enable_unsupported_platform(self,
+        mock_admin_mode,
+        mock_memory,
+        mock_num_dumps,
+        mock_remote,
+        mock_ssh_string,
+        mock_ssh_path,
+        mock_exists,
+        mock_open_file,
+        mock_kdump_enable):
+
+        # Setup: Not grub_cfg, no aboot_platform -> should print unsupported
+        mock_exists.return_value = False
+        mock_open_file.return_value.read.return_value = 'no aboot string'
+
+        result = sonic_kdump_config.cmd_kdump_enable(verbose=True, image="img")
+        self.assertFalse(result)
+        mock_kdump_enable.assert_not_called()
+
+    @patch("sonic_kdump_config.kdump_enable")
+    @patch("sonic_kdump_config.open", new_callable=mock_open)
+    @patch("sonic_kdump_config.os.path.exists")
+    @patch("sonic_kdump_config.get_kdump_ssh_path")
+    @patch("sonic_kdump_config.get_kdump_ssh_string")
+    @patch("sonic_kdump_config.get_kdump_remote")
+    @patch("sonic_kdump_config.get_kdump_num_dumps")
+    @patch("sonic_kdump_config.get_kdump_memory")
+    @patch("sonic_kdump_config.get_kdump_administrative_mode")
+    def test_cmd_kdump_enable_grub_cfg_exists(self,
+        mock_admin_mode,
+        mock_memory,
+        mock_num_dumps,
+        mock_remote,
+        mock_ssh_string,
+        mock_ssh_path,
+        mock_exists,
+        mock_open_file,
+        mock_kdump_enable):
+
+        # Setup grub.cfg path exists
+        mock_exists.return_value = True
+        mock_kdump_enable.return_value = True
+        result = sonic_kdump_config.cmd_kdump_enable(verbose=False, image="img")
+        self.assertTrue(result)
+        mock_kdump_enable.assert_called_once()
 
     @patch("sonic_kdump_config.get_kdump_remote")
     @patch("sonic_kdump_config.run_command")
