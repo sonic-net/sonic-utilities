@@ -22,11 +22,13 @@ logger = logging.getLogger(__name__)
 sonic_kdump_config_path = os.path.join(SCRIPTS_DIR_PATH, "sonic-kdump-config")
 sonic_kdump_config = load_module_from_source("sonic_kdump_config", sonic_kdump_config_path)
 
+
 def get_parser():
     parser = argparse.ArgumentParser()
     parser.add_argument('--remote', nargs='?', type=str, action='store', default=False,
                         help='ssh_string for remote kdump')
     return parser
+
 
 class TestRemoteArgument(unittest.TestCase):
 
