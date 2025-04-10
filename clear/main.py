@@ -218,6 +218,13 @@ def tunnelcounters():
     command = ["tunnelstat", "-c"]
     run_command(command)
 
+
+@cli.command()
+def srv6counters():
+    """Clear SRv6 counters"""
+    command = ["srv6stat", "-c"]
+    run_command(command)
+
 #
 # 'clear watermarks
 #
