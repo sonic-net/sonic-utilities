@@ -347,7 +347,7 @@ class TestSonicKdumpConfig(unittest.TestCase):
             mock_get_kdump_memory.return_value = "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M"
             memory = mock_get_kdump_memory()
             self.assertEqual(memory, "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M")
-    
+
     @patch("sonic_kdump_config.get_bootloader")
     def test_get_image(self, mock_get_bootloader):
         """Tests the function `get_current_image() and get_next_image()` in script `sonic-kdump-config.py`.
