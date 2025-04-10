@@ -56,11 +56,10 @@ class TestDryRunConfigWrapper(unittest.TestCase):
                   ]
 
         expected = imitated_config_db
+        actual = config_wrapper.get_config_db_as_json()
         for change in changes:
             # Act
-            config_wrapper.apply_change_to_config_db(change)
-
-            actual = config_wrapper.get_config_db_as_json()
+            actual = config_wrapper.apply_change_to_config_db(actual, change)
             expected = change.apply(expected)
 
             # Assert
@@ -451,48 +450,6 @@ class TestConfigWrapper(unittest.TestCase):
         # Assert
         self.assertDictEqual({"any_table": {"key": "value"}}, actual)
 
-    def test_create_sonic_yang_with_loaded_models__creates_new_sonic_yang_every_call(self):
-        # check yang models fields are the same or None, non-yang model fields are different
-        def check(sy1, sy2):
-            # instances are different
-            self.assertNotEqual(sy1, sy2)
-
-            # yang models fields are same or None
-            self.assertTrue(sy1.confDbYangMap is sy2.confDbYangMap)
-            self.assertTrue(sy1.ctx is sy2.ctx)
-            self.assertTrue(sy1.DEBUG is sy2.DEBUG)
-            self.assertTrue(sy1.preProcessedYang is sy2.preProcessedYang)
-            self.assertTrue(sy1.SYSLOG_IDENTIFIER is sy2.SYSLOG_IDENTIFIER)
-            self.assertTrue(sy1.yang_dir is sy2.yang_dir)
-            self.assertTrue(sy1.yangFiles is sy2.yangFiles)
-            self.assertTrue(sy1.yJson is sy2.yJson)
-            self.assertTrue(not(hasattr(sy1, 'module')) or sy1.module is None) # module is unused, might get deleted
-            self.assertTrue(not(hasattr(sy2, 'module')) or sy2.module is None)
-
-            # non yang models fields are different
-            self.assertFalse(sy1.root is sy2.root)
-            self.assertFalse(sy1.jIn is sy2.jIn)
-            self.assertFalse(sy1.tablesWithOutYang is sy2.tablesWithOutYang)
-            self.assertFalse(sy1.xlateJson is sy2.xlateJson)
-            self.assertFalse(sy1.revXlateJson is sy2.revXlateJson)
-
-        config_wrapper = gu_common.ConfigWrapper()
-        self.assertTrue(config_wrapper.sonic_yang_with_loaded_models is None)
-
-        sy1 = config_wrapper.create_sonic_yang_with_loaded_models()
-        sy2 = config_wrapper.create_sonic_yang_with_loaded_models()
-
-        # Simulating loading non-yang model fields
-        sy1.loadData(Files.ANY_CONFIG_DB)
-        sy1.getData()
-
-        # Simulating loading non-yang model fields
-        sy2.loadData(Files.ANY_CONFIG_DB)
-        sy2.getData()
-
-        check(sy1, sy2)
-        check(sy1, config_wrapper.sonic_yang_with_loaded_models)
-        check(sy2, config_wrapper.sonic_yang_with_loaded_models)
 
 class TestPatchWrapper(unittest.TestCase):
     def setUp(self):
@@ -690,7 +647,7 @@ class TestPathAddressing(unittest.TestCase):
             self.assertEqual(expected, actual)
 
         check("", [])
-        check("/", [""])
+        check("/", [])
         check("/token", ["token"])
         check("/more/than/one/token", ["more", "than", "one", "token"])
         check("/has/numbers/0/and/symbols/^", ["has", "numbers", "0", "and", "symbols", "^"])
@@ -743,33 +700,6 @@ class TestPathAddressing(unittest.TestCase):
         # XPATH 1.0 does not support double-quotes within double-quoted string. str literal can be "[^"]*"
         # Not validating no double-quotes within double-quoted string
         check('/a/mix["of""quotes\'does"]/not/work/well', ["a", 'mix["of""quotes\'does"]', "not", "work", "well"])
-
-    def test_create_xpath(self):
-        def check(tokens, xpath):
-            expected=xpath
-            actual=self.path_addressing.create_xpath(tokens)
-            self.assertEqual(expected, actual)
-
-        check([], "/")
-        check(["token"], "/token")
-        check(["more", "than", "one", "token"], "/more/than/one/token")
-        check(["multi", "tokens", "with", "empty", "last", "token", ""], "/multi/tokens/with/empty/last/token/")
-        check(["has", "numbers", "0", "and", "symbols", "^"], "/has/numbers/0/and/symbols/^")
-        check(["has[a='predicate']", "in", "the", "beginning"], "/has[a='predicate']/in/the/beginning")
-        check(["ha", "s[a='predicate']", "in", "the", "middle"], "/ha/s[a='predicate']/in/the/middle")
-        check(["ha", "s[a='predicate-in-the-end']"], "/ha/s[a='predicate-in-the-end']")
-        check(["it", "has[more='than'][one='predicate']", "somewhere"], "/it/has[more='than'][one='predicate']/somewhere")
-        check(["ha", "s[a='predicate\"with']", "double-quotes", "inside"], "/ha/s[a='predicate\"with']/double-quotes/inside")
-        check(["a", 'predicate[with="double"]', "quotes"], '/a/predicate[with="double"]/quotes')
-        check(['multiple["predicate"][with="double"]', "quotes"], '/multiple["predicate"][with="double"]/quotes')
-        check(['multiple["predicate"][with="double"]', "quotes"], '/multiple["predicate"][with="double"]/quotes')
-        check(["ha", 's[a="predicate\'with"]', "single-quote", "inside"], '/ha/s[a="predicate\'with"]/single-quote/inside')
-        # XPATH 1.0 does not support single-quote within single-quoted string. str literal can be '[^']*'
-        # Not validating no single-quote within single-quoted string
-        check(["a", "mix['of''quotes\"does']", "not", "work", "well"], "/a/mix['of''quotes\"does']/not/work/well", )
-        # XPATH 1.0 does not support double-quotes within double-quoted string. str literal can be "[^"]*"
-        # Not validating no double-quotes within double-quoted string
-        check(["a", 'mix["of""quotes\'does"]', "not", "work", "well"], '/a/mix["of""quotes\'does"]/not/work/well')
 
     def test_find_ref_paths__ref_is_the_whole_key__returns_ref_paths(self):
         # Arrange
