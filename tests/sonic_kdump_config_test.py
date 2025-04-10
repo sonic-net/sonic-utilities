@@ -5,7 +5,6 @@ import unittest
 from unittest.mock import patch, mock_open, Mock
 from utilities_common.general import load_module_from_source
 from sonic_installer.common import IMAGE_PREFIX
-from sonic_kdump_config import get_kdump_memory
 
 TESTS_DIR_PATH = os.path.dirname(os.path.abspath(__file__))
 UTILITY_DIR_PATH = os.path.dirname(TESTS_DIR_PATH)
@@ -28,6 +27,7 @@ class TestSonicKdumpConfig(unittest.TestCase):
     def setup_class(cls):
         print("SETUP")
 
+    @patch("sonic_kdump_config.get_kdump_memory")
     @patch('sonic_kdump_config.ConfigDBConnector')
     def test_get_kdump_memory(self, mock_config_db_connector):
         # Mock the ConfigDBConnector and its methods
