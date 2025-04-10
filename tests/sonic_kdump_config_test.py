@@ -6,6 +6,7 @@ from unittest.mock import patch, mock_open, Mock
 from utilities_common.general import load_module_from_source
 from sonic_installer.common import IMAGE_PREFIX
 import argparse
+from unittest.mock import MagicMock
 
 TESTS_DIR_PATH = os.path.dirname(os.path.abspath(__file__))
 UTILITY_DIR_PATH = os.path.dirname(TESTS_DIR_PATH)
@@ -56,7 +57,7 @@ class TestSonicKdumpConfig(unittest.TestCase):
         logger.info("Value of 'num_dumps' is: '{}'.".format(num_dumps))
         logger.info("Expected value of 'num_dumps' is: '0'.")
 
-        mocdef create_k_run_cmd.return_value = (0, ["NotInteger"], None)
+        mock_create_k_run_cmd = MagicMock(return_value=(0, ["NotInteger"], None))
         with self.assertRaises(SystemExit) as sys_exit:
             num_dumps = sonic_kdump_config.read_num_dumps()
         self.assertEqual(sys_exit.exception.code, 1)
