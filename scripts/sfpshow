@@ -481,6 +481,20 @@ class SFPShow(object):
         return output
 
     def convert_vdm_fields_to_legacy_fields(self, state_db, interface_name, dict_to_be_updated, vdm_to_legacy_field_map, vdm_field_type):
+        """
+        Converts VDM fields from the database into legacy field names
+        and updates the provided dictionary with the converted values.
+
+        This function ensures backward compatibility by mapping VDM fields to their corresponding
+        legacy field names based on the specified field type ('FLAG' or 'THRESHOLD').
+
+        Args:
+            state_db: The database connection object used to retrieve VDM data.
+            interface_name (str): The name of the interface for which VDM data is being retrieved.
+            dict_to_be_updated (dict): The dictionary to be updated with the converted legacy field names and values.
+            vdm_to_legacy_field_map (dict): A mapping of VDM field names to their corresponding legacy field name prefixes.
+            vdm_field_type (str): Specifies the type of VDM fields to process. It can be either 'FLAG' or 'THRESHOLD'.
+        """
         if dict_to_be_updated is None:
             return
         if vdm_field_type not in ['FLAG', 'THRESHOLD']:
