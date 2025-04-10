@@ -823,7 +823,7 @@ def main():
         help='Show kdump config in json format')
 
     # Maximum number of kernel core dumps
-    parser.add_argument('--num_dumps', action='store_true', default=False,
+    parser.add_argument('--num_dumps', nargs='?', type=int, action='store', default=False,
         help='Maximum number of kernel dump files stored')
 
     parser.add_argument('--remote', action='store_true', default=False,
@@ -896,5 +896,5 @@ def main():
 
     sys.exit(0)
 
-if __name__== "__main_":
+if __name__== "__main__":
     main()
