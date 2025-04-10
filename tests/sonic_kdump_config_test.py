@@ -64,7 +64,7 @@ class TestSonicKdumpConfig(unittest.TestCase):
         mock_config_db_connector.return_value = None
         memory = get_kdump_memory()
         self.assertEqual(memory, "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M")
-    
+
     @patch("sonic_kdump_config.run_command")
     def test_read_num_kdumps(self, mock_run_cmd):
         """Tests the function `read_num_kdumps(...)` in script `sonic-kdump-config`.
