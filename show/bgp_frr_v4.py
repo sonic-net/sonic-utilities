@@ -17,8 +17,13 @@ import utilities_common.multi_asic as multi_asic_util
 
 
 @ip.group(cls=clicommon.AliasedGroup)
-def bgp():
+@click.option('--vrf', required=False)
+@click.pass_context
+def bgp(ctx, vrf):
     """Show IPv4 BGP (Border Gateway Protocol) information"""
+
+    ctx.ensure_object(dict)
+    ctx.obj = {'vrf': vrf}
     if device_info.is_supervisor():
         subcommand = sys.argv[3]
         if subcommand not in "network":
@@ -32,9 +37,16 @@ def bgp():
 # 'summary' subcommand ("show ip bgp summary")
 @bgp.command()
 @multi_asic_util.multi_asic_click_options
-def summary(namespace, display):
-    bgp_summary = bgp_util.get_bgp_summary_from_all_bgp_instances(
-        constants.IPV4, namespace, display)
+@click.pass_context
+def summary(ctx, namespace, display):
+    vrf = ctx.obj.get('vrf', None)
+
+    if vrf:
+        bgp_summary = bgp_util.get_bgp_summary_from_per_vrf_instance(
+            constants.IPV4, namespace, display, vrf)
+    else:
+        bgp_summary = bgp_util.get_bgp_summary_from_all_bgp_instances(
+            constants.IPV4, namespace, display)
     bgp_util.display_bgp_summary(bgp_summary=bgp_summary, af=constants.IPV4)
 
 
@@ -53,10 +65,17 @@ def summary(namespace, display):
                 show_default=True,
                 help='Namespace name or all',
                 callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def neighbors(ipaddress, info_type, namespace):
+@click.pass_context
+def neighbors(ctx, ipaddress, info_type, namespace):
     """Show IP (IPv4) BGP neighbors"""
 
-    command = 'show ip bgp neighbor'
+    vrf = ctx.obj.get('vrf', None)
+
+    command = 'show ip bgp'
+    if vrf:
+        command += ' vrf {}'.format(vrf)
+    command += ' neighbor'
+
     if ipaddress is not None:
         if not bgp_util.is_ipv4_address(ipaddress):
             ctx = click.get_current_context()
@@ -108,8 +127,11 @@ def neighbors(ipaddress, info_type, namespace):
                 help='Namespace name or all',
                 default="all",
                 callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def network(ipaddress, info_type, namespace):
+@click.pass_context
+def network(ctx, ipaddress, info_type, namespace):
     """Show IP (IPv4) BGP network"""
+
+    vrf = ctx.obj.get('vrf', None)
 
     if device_info.is_supervisor():
         # the command will be executed by rexec
@@ -126,6 +148,9 @@ def network(ipaddress, info_type, namespace):
                      .format(namespace, multi_asic.get_namespace_list()))
 
     command = 'show ip bgp'
+    if vrf:
+        command += ' vrf {}'.format(vrf)
+
     if ipaddress is not None:
         if '/' in ipaddress:
             # For network prefixes then this all info_type(s) are available
