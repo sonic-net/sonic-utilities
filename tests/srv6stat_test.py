@@ -106,6 +106,6 @@ def test_clear_and_populate_counters_db():
     db.set(db.COUNTERS_DB, 'COUNTERS:oid:0x17000000001000', srv6stat.SRv6Stat.COUNTER_BYTES, '104400')
     db.set(db.COUNTERS_DB, 'COUNTERS:oid:0x17000000002000', srv6stat.SRv6Stat.COUNTER_PACKETS, '500')
     db.set(db.COUNTERS_DB, 'COUNTERS:oid:0x17000000002000', srv6stat.SRv6Stat.COUNTER_BYTES, '207800')
-    with mock.patch('srv6stat.SonicV2Connector', return_value=db):
+    with mock.patch('utilities_common.srv6stat.SonicV2Connector', return_value=db):
         result = SRv6StatRunner(delete_cache_on_start=False).get_result()
         assert result == update_after_clear_output
