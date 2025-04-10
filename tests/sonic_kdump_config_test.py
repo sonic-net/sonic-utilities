@@ -5,7 +5,7 @@ import unittest
 from unittest.mock import patch, mock_open, Mock
 from utilities_common.general import load_module_from_source
 from sonic_installer.common import IMAGE_PREFIX
-import argparse
+from sonic_kdump_config import get_kdump_memory
 
 TESTS_DIR_PATH = os.path.dirname(os.path.abspath(__file__))
 UTILITY_DIR_PATH = os.path.dirname(TESTS_DIR_PATH)
@@ -23,21 +23,48 @@ sonic_kdump_config_path = os.path.join(SCRIPTS_DIR_PATH, "sonic-kdump-config")
 sonic_kdump_config = load_module_from_source("sonic_kdump_config", sonic_kdump_config_path)
 
 
-def create_parser():
-    parser = argparse.ArgumentParser()
-    parser.add_argument('--remote', action='store_true', help='enable remote ssh')
-    parser.add_argument('--num_dumps', nargs='?', type=int, action='store', default=3,
-                        help='Maximum number of kernel dump files stored')
-    parser.add_argument('--ssh_string', nargs='?', type=str, action='store', default=None,
-                        help='ssh_string for remote kdump')
-    return parser
-
-
 class TestSonicKdumpConfig(unittest.TestCase):
     @classmethod
     def setup_class(cls):
         print("SETUP")
 
+    @patch('sonic_kdump_config.ConfigDBConnector')
+    def test_get_kdump_memory(self, mock_config_db_connector):
+        # Mock the ConfigDBConnector and its methods
+        mock_config_db = mock_config_db_connector.return_value
+        mock_config_db.connect.return_value = None
+
+        # Test case: Successful retrieval of memory configuration
+        mock_config_db.get_table.return_value = {
+            'config': {
+                'memory': '128M'
+            }
+        }
+        memory = get_kdump_memory()
+        self.assertEqual(memory, '128M')
+
+        # Test case: Memory configuration not found in the database
+        mock_config_db.get_table.return_value = {
+            'config': {}
+        }
+        memory = get_kdump_memory()
+        self.assertEqual(memory, "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M")
+
+        # Test case: No 'config' key in the table data
+        mock_config_db.get_table.return_value = {}
+        memory = get_kdump_memory()
+        self.assertEqual(memory, "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M")
+
+        # Test case: get_table returns None
+        mock_config_db.get_table.return_value = None
+        memory = get_kdump_memory()
+        self.assertEqual(memory, "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M")
+
+        # Test case: ConfigDBConnector is None
+        mock_config_db_connector.return_value = None
+        memory = get_kdump_memory()
+        self.assertEqual(memory, "0M-2G:256M,2G-4G:320M,4G-8G:384M,8G-:448M")
+    
     @patch("sonic_kdump_config.run_command")
     def test_read_num_kdumps(self, mock_run_cmd):
         """Tests the function `read_num_kdumps(...)` in script `sonic-kdump-config`.
@@ -234,39 +261,6 @@ class TestSonicKdumpConfig(unittest.TestCase):
         with self.assertRaises(SystemExit) as sys_exit:
             sonic_kdump_config.write_use_kdump(0)
         self.assertEqual(sys_exit.exception.code, 1)
-
-    def setUp(self):
-        self.parser = create_parser()
-
-    def test_remote_enabled(self):
-        """Test --remote with the flag provided"""
-        args = self.parser.parse_args(['--remote'])
-        self.assertTrue(args.remote)
-
-    def test_remote_disabled(self):
-        """Test the default value of --remote"""
-        args = self.parser.parse_args([])
-        self.assertFalse(args.remote)
-
-    def test_num_dumps_default(self):
-        """Test the default value of --num_dumps"""
-        args = self.parser.parse_args([])
-        self.assertEqual(args.num_dumps, 3)
-
-    def test_num_dumps_provided(self):
-        """Test --num_dumps with a provided value"""
-        args = self.parser.parse_args(['--num_dumps', '5'])
-        self.assertEqual(args.num_dumps, 5)
-
-    def test_ssh_string_default(self):
-        """Test the default value of --ssh_string"""
-        args = self.parser.parse_args([])
-        self.assertIsNone(args.ssh_string)
-
-    def test_ssh_string_provided(self):
-        """Test --ssh_string with a provided value"""
-        args = self.parser.parse_args(['--ssh_string', 'user@host'])
-        self.assertEqual(args.ssh_string, 'user@host')
 
     @patch('sonic_kdump_config.run_command')
     @patch('sonic_kdump_config.read_ssh_string')
