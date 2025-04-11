@@ -4,8 +4,8 @@ import sys
 import unittest
 from unittest.mock import patch, mock_open, Mock
 from utilities_common.general import load_module_from_source
-
 from sonic_installer.common import IMAGE_PREFIX
+import argparse
 
 TESTS_DIR_PATH = os.path.dirname(os.path.abspath(__file__))
 UTILITY_DIR_PATH = os.path.dirname(TESTS_DIR_PATH)
@@ -21,6 +21,32 @@ logger = logging.getLogger(__name__)
 # Load `sonic-kdump-config` module from source since `sonic-kdump-config` does not have .py extension.
 sonic_kdump_config_path = os.path.join(SCRIPTS_DIR_PATH, "sonic-kdump-config")
 sonic_kdump_config = load_module_from_source("sonic_kdump_config", sonic_kdump_config_path)
+
+
+class TestRemoteFlag(unittest.TestCase):
+    def setUp(self):
+        # Create a new ArgumentParser for each test
+        self.parser = argparse.ArgumentParser(description="kdump configuration and status tool")
+        self.parser.add_argument('--remote', action='store_true', default=False,
+                                 help='Enable the Kdump remote SSH mechanism')
+
+    def test_remote_flag_provided(self):
+        """Test that the --remote flag sets the remote attribute to True."""
+        with patch.object(sys, 'argv', ['script.py', '--remote']):
+            args = self.parser.parse_args()
+            self.assertTrue(args.remote)
+
+    def test_remote_flag_not_provided(self):
+        """Test that the --remote flag defaults to False when not provided."""
+        with patch.object(sys, 'argv', ['script.py']):
+            args = self.parser.parse_args()
+            self.assertFalse(args.remote)
+
+    def test_remote_flag_with_value(self):
+        """Test that providing a value to the --remote flag raises an error."""
+        with patch.object(sys, 'argv', ['script.py', '--remote', 'some_value']):
+            with self.assertRaises(SystemExit):
+                self.parser.parse_args()
 
 
 class TestSonicKdumpConfig(unittest.TestCase):
@@ -246,7 +272,7 @@ class TestSonicKdumpConfig(unittest.TestCase):
     def test_cmd_kdump_ssh_string_update(self, mock_print, mock_write, mock_read, mock_run):
         # Mock read_ssh_string to return the current SSH string
         mock_read.return_value = 'old_ssh_string'
-        # Call the function with a new SSH string
+        # Call the function with a new SSH string to configure
         sonic_kdump_config.cmd_kdump_ssh_string(verbose=True, ssh_string='new_ssh_string')
 
         # Check that write_ssh_string was called with the new SSH string
@@ -301,6 +327,63 @@ class TestSonicKdumpConfig(unittest.TestCase):
         with patch("sonic_kdump_config.open", mock_open(read_data=ABOOT_MACHINE_CFG_ARCH)):
             return_result = sonic_kdump_config.cmd_kdump_disable(True)
             assert return_result == False
+
+    @patch("sonic_kdump_config.read_num_dumps")
+    @patch("sonic_kdump_config.run_command")
+    def test_write_num_dumps(self, mock_run_cmd, mock_read_num_dumps):
+        # Success case: correct write and verification
+        mock_run_cmd.side_effect = [(0, [], None)]
+        mock_read_num_dumps.return_value = 5
+        sonic_kdump_config.write_num_dumps(5)
+
+        # Case where run_command returns wrong type
+        mock_run_cmd.side_effect = [(0, (), None)]
+        mock_read_num_dumps.return_value = 5
+        with self.assertRaises(SystemExit) as sys_exit:
+            sonic_kdump_config.write_num_dumps(5)
+        self.assertEqual(sys_exit.exception.code, 1)
+
+        # Case where line is non-empty
+        mock_run_cmd.side_effect = [(0, ["Some output"], None)]
+        mock_read_num_dumps.return_value = 5
+        with self.assertRaises(SystemExit) as sys_exit:
+            sonic_kdump_config.write_num_dumps(5)
+        self.assertEqual(sys_exit.exception.code, 1)
+
+        # Case where read_num_dumps does not match input
+        mock_run_cmd.side_effect = [(0, [], None)]
+        mock_read_num_dumps.return_value = 4
+        with self.assertRaises(SystemExit) as sys_exit:
+            sonic_kdump_config.write_num_dumps(5)
+        self.assertEqual(sys_exit.exception.code, 1)
+
+        # Case where run_command fails
+        mock_run_cmd.side_effect = [(1, [], "Error")]
+        mock_read_num_dumps.return_value = 5
+        with self.assertRaises(SystemExit) as sys_exit:
+            sonic_kdump_config.write_num_dumps(5)
+        self.assertEqual(sys_exit.exception.code, 1)
+
+        # Case where lines contain non-integer
+        mock_run_cmd.side_effect = [(0, ["NotInteger"], None)]
+        mock_read_num_dumps.return_value = 5
+        with self.assertRaises(SystemExit) as sys_exit:
+            sonic_kdump_config.write_num_dumps(5)
+        self.assertEqual(sys_exit.exception.code, 1)
+
+        # Edge case: empty string in output but matches value
+        mock_run_cmd.side_effect = [(0, [""], None)]
+        mock_read_num_dumps.return_value = 5
+        with self.assertRaises(SystemExit) as sys_exit:
+            sonic_kdump_config.write_num_dumps(5)
+        self.assertEqual(sys_exit.exception.code, 1)
+
+        # Edge case: read_num_dumps returns matching value but run_command fails
+        mock_run_cmd.side_effect = [(2, [], None)]
+        mock_read_num_dumps.return_value = 5
+        with self.assertRaises(SystemExit) as sys_exit:
+            sonic_kdump_config.write_num_dumps(5)
+        self.assertEqual(sys_exit.exception.code, 1)
 
     @patch("sonic_kdump_config.get_bootloader")
     def test_get_image(self, mock_get_bootloader):
