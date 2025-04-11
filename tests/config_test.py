@@ -838,11 +838,7 @@ class TestConfigReloadMasic(object):
         with mock.patch("utilities_common.cli.run_command",
                         mock.MagicMock(side_effect=mock_run_command_side_effect)),\
             mock.patch('config.main.read_json_file',
-                       mock.MagicMock(side_effect=read_json_file_side_effect)),\
-            mock.patch('config.main.sonic_yang.SonicYang.loadData',
-                       return_value=True),\
-            mock.patch('config.main.sonic_yang.SonicYang.validate_data_tree',
-                       return_value=True):
+                       mock.MagicMock(side_effect=read_json_file_side_effect)):
 
             runner = CliRunner()
 
@@ -917,11 +913,7 @@ class TestConfigReloadMasic(object):
         with mock.patch("utilities_common.cli.run_command",
                         mock.MagicMock(side_effect=mock_run_command_side_effect)),\
             mock.patch('config.main.read_json_file',
-                       mock.MagicMock(side_effect=read_json_file_side_effect)),\
-            mock.patch('config.main.sonic_yang.SonicYang.loadData',
-                       return_value=True),\
-            mock.patch('config.main.sonic_yang.SonicYang.validate_data_tree',
-                       return_value=True):
+                       mock.MagicMock(side_effect=read_json_file_side_effect)):
 
             runner = CliRunner()
 
@@ -1347,26 +1339,6 @@ class TestReloadConfig(object):
                 }
             }
             f.write(json.dumps(device_metadata))
-        with open(self.dummy_cfg_file_asic0, 'w') as f:
-            device_metadata = {
-                "DEVICE_METADATA": {
-                    "localhost": {
-                        "platform": "some_platform",
-                        "mac": "02:42:f0:7f:01:05"
-                    }
-                }
-            }
-            f.write(json.dumps(device_metadata))
-        with open(self.dummy_cfg_file_asic1, 'w') as f:
-            device_metadata = {
-                "DEVICE_METADATA": {
-                    "localhost": {
-                        "platform": "some_platform",
-                        "mac": "02:42:f0:7f:01:05"
-                    }
-                }
-            }
-            f.write(json.dumps(device_metadata))
 
     def test_reload_config_invalid_input(self, get_cmd_module, setup_single_broadcom_asic):
         open(self.dummy_cfg_file, 'w').close()
@@ -1513,10 +1485,7 @@ class TestReloadConfig(object):
         with mock.patch("utilities_common.cli.run_command",
                         mock.MagicMock(side_effect=mock_run_command_side_effect)),\
             mock.patch('config.main.read_json_file',
-                       mock.MagicMock(side_effect=read_json_file_side_effect)),\
-            mock.patch('config.main.sonic_yang.SonicYang.loadData', return_value=True),\
-            mock.patch('config.main.sonic_yang.SonicYang.validate_data_tree',
-                       return_value=True):
+                       mock.MagicMock(side_effect=read_json_file_side_effect)):
             (config, show) = get_cmd_module
             runner = CliRunner()
             # 3 config files: 1 for host and 2 for asic
