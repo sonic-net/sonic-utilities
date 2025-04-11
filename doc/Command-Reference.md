@@ -9700,8 +9700,38 @@ This command displays the details of Rx & Tx priority-flow-control (pfc) for all
    ...
    ```
 
+The history flag can be used to view historical statistics:
 
-- NOTE: PFC counters can be cleared by the user with the following command:
+* Usage: see [PFC Watchdog Commands](#pfc-watchdog-commands) on enabling history estimation
+  ```
+  show pfc counters --history
+  ```
+
+* Example:
+  ```
+       Port    Priority    RX Pause Transitions    Total RX Pause Time US    Recent RX Pause Time US    Recent RX Pause Timestamp
+  ---------  ----------  ----------------------  ------------------------  -------------------------  ---------------------------
+  Ethernet0        PFC0                      12                    12,000                      1,200         01/10/2008, 21:20:00
+  Ethernet0        PFC1                      21                    20,001                      2,001         05/18/2033, 03:33:20
+  Ethernet0        PFC2                      22                    20,002                      2,002         05/18/2033, 03:33:20
+  Ethernet0        PFC3                      23                    20,003                      2,003         05/18/2033, 03:33:20
+  Ethernet0        PFC4                      24                    20,004                      2,004         05/18/2033, 03:33:20
+  Ethernet0        PFC5                      25                    20,005                      2,005         05/18/2033, 03:33:20
+  Ethernet0        PFC6                      26                    20,006                      2,006         05/18/2033, 03:33:20
+  Ethernet0        PFC7                      27                    20,007                      2,007         05/18/2033, 03:33:20
+
+  Ethernet4        PFC0                      14                    14,000                      1,400         05/13/2014, 16:53:20
+  Ethernet4        PFC1                      41                    40,001                      4,001         10/02/2096, 07:06:40
+  Ethernet4        PFC2                      42                    40,002                      4,002         10/02/2096, 07:06:40
+  Ethernet4        PFC3                      43                    40,003                      4,003         10/02/2096, 07:06:40
+  Ethernet4        PFC4                      44                    40,004                      4,004         10/02/2096, 07:06:40
+  Ethernet4        PFC5                      45                    40,005                      4,005         10/02/2096, 07:06:40
+  Ethernet4        PFC6                      46                    40,006                      4,006         10/02/2096, 07:06:40
+  Ethernet4        PFC7                      47                    40,007                      4,007         10/02/2096, 07:06:40
+  ```
+
+
+- NOTE: PFC counters (including historical stats) can be cleared by the user with the following command:
   ```
   admin@sonic:~$ sonic-clear pfccounters
   ```
