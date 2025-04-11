@@ -191,7 +191,7 @@ class ConfigWrapper:
                 raise GenericConfigUpdaterError("Attempting to call invalid method {} in module {}. Module must be generic_config_updater.field_operation_validators, and method must be a defined validator".format(method_name, module_name))
             module = importlib.import_module(module_name, package=None)
             method_to_call = getattr(module, method_name)
-            return method_to_call(jsonpatch_element)
+            return method_to_call(self.scope, jsonpatch_element)
 
         if os.path.exists(GCU_FIELD_OP_CONF_FILE):
             with open(GCU_FIELD_OP_CONF_FILE, "r") as s:
