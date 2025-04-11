@@ -5,8 +5,6 @@ import unittest
 from unittest.mock import patch, mock_open, Mock
 from utilities_common.general import load_module_from_source
 from sonic_installer.common import IMAGE_PREFIX
-import argparse
-from unittest.mock import MagicMock
 
 TESTS_DIR_PATH = os.path.dirname(os.path.abspath(__file__))
 UTILITY_DIR_PATH = os.path.dirname(TESTS_DIR_PATH)
@@ -24,24 +22,6 @@ sonic_kdump_config_path = os.path.join(SCRIPTS_DIR_PATH, "sonic-kdump-config")
 sonic_kdump_config = load_module_from_source("sonic_kdump_config", sonic_kdump_config_path)
 
 
-def create_parser():
-    parser = argparse.ArgumentParser(description='Test parser for kdump arguments')
-    parser.add_argument('--remote', action='store_true', default=False,
-                        help='ssh_string for remote kdump')
-    return parser
-
-class TestArgumentParser(unittest.TestCase):
-    def test_default_remote_flag(self):
-        parser = create_parser()
-        args = parser.parse_args([])
-        self.assertFalse(args.remote, "Default value for --remote should be False")
-
-    def test_remote_flag_set(self):
-        parser = create_parser()
-        args = parser.parse_args(['--remote'])
-        self.assertTrue(args.remote, "--remote flag should be set to True when specified")
-
-
 class TestSonicKdumpConfig(unittest.TestCase):
     @classmethod
     def setup_class(cls):
@@ -57,7 +37,7 @@ class TestSonicKdumpConfig(unittest.TestCase):
         logger.info("Value of 'num_dumps' is: '{}'.".format(num_dumps))
         logger.info("Expected value of 'num_dumps' is: '0'.")
 
-        mock_create_k_run_cmd = MagicMock(return_value=(0, ["NotInteger"], None))
+        mock_run_cmd.return_value = (0, ["NotInteger"], None)
         with self.assertRaises(SystemExit) as sys_exit:
             num_dumps = sonic_kdump_config.read_num_dumps()
         self.assertEqual(sys_exit.exception.code, 1)
