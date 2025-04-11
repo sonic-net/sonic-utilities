@@ -168,6 +168,22 @@ def cmd_dump_db():
             else:
                 print("empty")
 
+def get_kdump_remote():
+    """Get the value of the remote feature from the KDUMP configuration."""
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
+    if config_db is not None:
+        config_db.connect()
+        table_data = config_db.get_table('KDUMP')
+        if table_data is not None:
+            config_data = table_data.get('config')
+            if config_data is not None:
+                remote_value = config_data.get('remote')
+                if remote_value is not None:
+                    # Return True if the remote value is 'true', otherwise False
+                    return remote_value.lower() == 'true'  # Explicitly return boolean
+
+    return False  # Default return value if no remote setting is found
+
 def cmd_dump_config_json():
     kdump_enabled = get_kdump_administrative_mode()
     kdump_memory = get_kdump_memory()
@@ -319,22 +335,6 @@ def get_kdump_num_dumps():
                 if num:
                     num_dumps = num
     return num_dumps
-
-def get_kdump_remote():
-    """Get the value of the remote feature from the KDUMP configuration."""
-    config_db = ConfigDBConnector(use_unix_socket_path=True)
-    if config_db is not None:
-        config_db.connect()
-        table_data = config_db.get_table('KDUMP')
-        if table_data is not None:
-            config_data = table_data.get('config')
-            if config_data is not None:
-                remote_value = config_data.get('remote')
-                if remote_value is not None:
-                    # Return True if the remote value is 'true', otherwise False
-                    return remote_value.lower() == 'true'  # Explicitly return boolean
-
-    return False  # Default return value if no remote setting is found
 
 def get_kdump_ssh_string():
     """Get the SSH string from the KDUMP configuration."""

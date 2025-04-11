@@ -5,6 +5,7 @@ import unittest
 from unittest.mock import patch, mock_open, Mock
 from utilities_common.general import load_module_from_source
 from sonic_installer.common import IMAGE_PREFIX
+import argparse
 
 TESTS_DIR_PATH = os.path.dirname(os.path.abspath(__file__))
 UTILITY_DIR_PATH = os.path.dirname(TESTS_DIR_PATH)
@@ -20,6 +21,32 @@ logger = logging.getLogger(__name__)
 # Load `sonic-kdump-config` module from source since `sonic-kdump-config` does not have .py extension.
 sonic_kdump_config_path = os.path.join(SCRIPTS_DIR_PATH, "sonic-kdump-config")
 sonic_kdump_config = load_module_from_source("sonic_kdump_config", sonic_kdump_config_path)
+
+
+class TestRemoteFlag(unittest.TestCase):
+    def setUp(self):
+        # Create a new ArgumentParser for each test
+        self.parser = argparse.ArgumentParser(description="kdump configuration and status tool")
+        self.parser.add_argument('--remote', action='store_true', default=False,
+                                 help='Enable the Kdump remote SSH mechanism')
+
+    def test_remote_flag_provided(self):
+        """Test that the --remote flag sets the remote attribute to True."""
+        with patch.object(sys, 'argv', ['script.py', '--remote']):
+            args = self.parser.parse_args()
+            self.assertTrue(args.remote)
+
+    def test_remote_flag_not_provided(self):
+        """Test that the --remote flag defaults to False when not provided."""
+        with patch.object(sys, 'argv', ['script.py']):
+            args = self.parser.parse_args()
+            self.assertFalse(args.remote)
+
+    def test_remote_flag_with_value(self):
+        """Test that providing a value to the --remote flag raises an error."""
+        with patch.object(sys, 'argv', ['script.py', '--remote', 'some_value']):
+            with self.assertRaises(SystemExit):
+                self.parser.parse_args()
 
 
 class TestSonicKdumpConfig(unittest.TestCase):
