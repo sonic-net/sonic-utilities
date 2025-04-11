@@ -196,12 +196,9 @@ Released lock on {0}
 RELOAD_MASIC_CONFIG_DB_OUTPUT = """\
 Acquired lock on {0}
 Stopping SONiC target ...
-Running command: /usr/local/bin/sonic-cfggen -H -k  --write-to-db
 Running command: /usr/local/bin/sonic-cfggen -j /tmp/config.json --write-to-db
-Running command: /usr/local/bin/sonic-cfggen -H -k  -n asic0 --write-to-db
-Running command: /usr/local/bin/sonic-cfggen -j /tmp/config0.json -n asic0 --write-to-db
-Running command: /usr/local/bin/sonic-cfggen -H -k  -n asic1 --write-to-db
-Running command: /usr/local/bin/sonic-cfggen -j /tmp/config1.json -n asic1 --write-to-db
+Running command: /usr/local/bin/sonic-cfggen -j /tmp/config.json -n asic0 --write-to-db
+Running command: /usr/local/bin/sonic-cfggen -j /tmp/config.json -n asic1 --write-to-db
 Restarting SONiC target ...
 Reloading Monit configuration ...
 Released lock on {0}
@@ -800,7 +797,7 @@ class TestConfigReloadMasic(object):
                             "cloudtype": "None",
                             "default_bgp_status": "down",
                             "default_pfcwd_status": "enable",
-                            "deployment_id": "None",
+                            "deployment_id": "1",
                             "docker_routing_config_mode": "separated",
                             "hostname": "sonic",
                             "hwsku": "multi_asic",
@@ -821,7 +818,7 @@ class TestConfigReloadMasic(object):
                             "cloudtype": "None",
                             "default_bgp_status": "down",
                             "default_pfcwd_status": "enable",
-                            "deployment_id": "None",
+                            "deployment_id": "1",
                             "docker_routing_config_mode": "separated",
                             "hostname": "sonic",
                             "hwsku": "multi_asic",
@@ -879,7 +876,7 @@ class TestConfigReloadMasic(object):
                             "cloudtype": "None",
                             "default_bgp_status": "down",
                             "default_pfcwd_status": "enable",
-                            "deployment_id": "None",
+                            "deployment_id": "1",
                             "docker_routing_config_mode": "separated",
                             "hostname": "sonic",
                             "hwsku": "multi_asic",
@@ -898,7 +895,7 @@ class TestConfigReloadMasic(object):
                             "cloudtype": "None",
                             "default_bgp_status": "down",
                             "default_pfcwd_status": "enable",
-                            "deployment_id": "None",
+                            "deployment_id": "1",
                             "docker_routing_config_mode": "separated",
                             "hostname": "sonic",
                             "hwsku": "multi_asic",
@@ -1491,8 +1488,8 @@ class TestReloadConfig(object):
             # 3 config files: 1 for host and 2 for asic
             cfg_files = "{},{},{}".format(
                             self.dummy_cfg_file,
-                            self.dummy_cfg_file_asic0,
-                            self.dummy_cfg_file_asic1)
+                            self.dummy_cfg_file,
+                            self.dummy_cfg_file)
 
             result = runner.invoke(
                 config.config.commands["reload"],
