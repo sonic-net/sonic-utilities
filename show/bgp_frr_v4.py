@@ -37,7 +37,6 @@ def summary(namespace, display):
         constants.IPV4, namespace, display)
     bgp_util.display_bgp_summary(bgp_summary=bgp_summary, af=constants.IPV4)
 
-
 # 'neighbors' subcommand ("show ip bgp neighbors")
 @bgp.command()
 @click.argument('ipaddress', required=False)
@@ -155,3 +154,66 @@ def network(ipaddress, info_type, namespace):
     else:
         output = bgp_util.run_bgp_show_command(command, namespace)
         click.echo(output.rstrip('\n'))
+
+@bgp.group(cls=clicommon.AliasedGroup)
+@click.argument('vrf', required=True)
+@click.pass_context
+def vrf(ctx, vrf):
+    """Show IPv4 BGP information for a given VRF"""
+    pass
+
+# 'neighbors' subcommand ("show ip bgp neighbors")
+@vrf.command('neighbors')
+@click.argument('ipaddress', required=False)
+@click.argument('info_type',
+                type=click.Choice(
+                    ['routes', 'advertised-routes', 'received-routes']),
+                required=False)
+@click.option('--namespace',
+                '-n',
+                'namespace',
+                default=None,
+                type=str,
+                show_default=True,
+                help='Namespace name or all',
+                callback=multi_asic_util.multi_asic_namespace_validation_callback)
+@click.pass_context
+def vrf_neighbors(ctx, ipaddress, info_type, namespace):
+    """Show IP (IPv4) BGP neighbors"""
+
+    vrf = ctx.parent.params['vrf']
+    command = 'show ip bgp'
+    if vrf is not None:
+        command += ' vrf {}'.format(vrf) 
+    command += ' neighbor'
+
+    if ipaddress is not None:
+        if not bgp_util.is_ipv4_address(ipaddress):
+            ctx = click.get_current_context()
+            ctx.fail("{} is not valid ipv4 address\n".format(ipaddress))
+        try:
+            actual_namespace = bgp_util.get_namespace_for_bgp_neighbor(
+                ipaddress)
+            if namespace is not None and namespace != actual_namespace:
+                click.echo(
+                    "[WARNING]: bgp neighbor {} is present in namespace {} not in {}"
+                    .format(ipaddress, actual_namespace, namespace))
+
+            # save the namespace in which the bgp neighbor is configured
+            namespace = actual_namespace
+
+            command += ' {}'.format(ipaddress)
+
+            # info_type is only valid if ipaddress is specified
+            if info_type is not None:
+                command += ' {}'.format(info_type)
+        except ValueError as err:
+            ctx = click.get_current_context()
+            ctx.fail("{}\n".format(err))
+
+    ns_list = multi_asic.get_namespace_list(namespace)
+    output = ""
+    for ns in ns_list:
+        output += bgp_util.run_bgp_show_command(command, ns)
+
+    click.echo(output.rstrip('\n'))
