@@ -8663,6 +8663,7 @@ This command starts PFC Watchdog
   ```
   config pfcwd start --action drop all 400 --restoration-time 400
   config pfcwd start --action forward Ethernet0 Ethernet8 400
+  config pfcwd start --action drop all 400 --restoration-time 400 --pfc-stat-history
   ```
 
 **config pfcwd stop**
@@ -8701,6 +8702,18 @@ This command enables or disables PFCWD's "BIG RED SWITCH"(BRS). After enabling B
   config pfcwd big_red_switch enable
   ```
 
+**config pfcwd pfc_stat_history \<enable/disable\> \<ports>**
+
+This command enables or disables PFCWD's PFC Historical Statistics estimation. After enabling, PFC Watchdog will be configured to estimate pause transitions, total pause time, and the pause time and timstamp of the most recent pause activity on those ports.
+
+NOTE: The estimation will only be performed on ports the PFCWD has been started on, alternatively use the --pfc-stat-history flag with the `start` command to simultaneously enable history on those ports.
+
+- Usage:
+  ```
+  config pfcwd pfc_stat_history enable all
+  config pfcwd pfc_stat_history disable Ethernet0 Ethernet8
+  ```
+
 **config pfcwd start_default**
 
 This command starts PFC Watchdog with the default settings.
@@ -8716,6 +8729,7 @@ Default values are the following:
    - restoration time - 200ms
    - polling interval - 200ms
    - action - 'drop'
+   - pfc stat history - disable
 
 Additionally if number of ports in the system exceeds 32, all times will be multiplied by roughly <num_ports\>/32.
 
