@@ -199,9 +199,9 @@ Stopping SONiC target ...
 Running command: /usr/local/bin/sonic-cfggen -H -k  --write-to-db
 Running command: /usr/local/bin/sonic-cfggen -j /tmp/config.json --write-to-db
 Running command: /usr/local/bin/sonic-cfggen -H -k  -n asic0 --write-to-db
-Running command: /usr/local/bin/sonic-cfggen -j /tmp/config0.json -n asic0 --write-to-db
+Running command: /usr/local/bin/sonic-cfggen -j /tmp/config.json -n asic0 --write-to-db
 Running command: /usr/local/bin/sonic-cfggen -H -k  -n asic1 --write-to-db
-Running command: /usr/local/bin/sonic-cfggen -j /tmp/config1.json -n asic1 --write-to-db
+Running command: /usr/local/bin/sonic-cfggen -j /tmp/config.json -n asic1 --write-to-db
 Restarting SONiC target ...
 Reloading Monit configuration ...
 Released lock on {0}
