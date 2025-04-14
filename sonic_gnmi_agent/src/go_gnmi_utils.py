@@ -4,9 +4,10 @@ import proto_utils
 import time
 import subprocess
 import os
-import tempfile
+
 
 TIME_BETWEEN_CHUNKS = 1
+
 
 class GNMIEnvironment:
     gnmi_ip = "127.0.0.1"
@@ -16,6 +17,8 @@ class GNMIEnvironment:
     password = "password"
     dpu_index = 0
     num_dpus = 1
+
+
 def exec_cmd(cmd):
     logging.debug(cmd)
     result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
@@ -31,6 +34,7 @@ def exec_cmd(cmd):
         logging.error(result.stderr)
     return result
 
+
 def cleanup_proto_files(cmd_list):
     if not cmd_list:
         return
@@ -39,6 +43,7 @@ def cleanup_proto_files(cmd_list):
         if del_file != '':
             logging.debug("Deleting file:" + del_file)
             os.unlink(del_file)
+
 
 def gnmi_set(env, delete_list, update_list, replace_list):
     """
@@ -53,9 +58,9 @@ def gnmi_set(env, delete_list, update_list, replace_list):
     Returns:
     """
     cmd = '/usr/sbin/gnmi_set '
-    cmd += '-insecure -target_addr %s:%u ' %(env.gnmi_ip, env.gnmi_port)
-    cmd += '-username %s -password %s -alsologtostderr ' %(env.username, env.password)
-    
+    cmd += '-insecure -target_addr %s:%u ' % (env.gnmi_ip, env.gnmi_port)
+    cmd += '-username %s -password %s -alsologtostderr ' % (env.username, env.password)
+
     for delete in delete_list:
         cmd += '--delete ' + delete
         cmd += ' '
@@ -68,7 +73,7 @@ def gnmi_set(env, delete_list, update_list, replace_list):
         cmd += '--replace ' + replace
         cmd += ' '
         logging.info("Replacing " + replace)
-    
+
     result = exec_cmd(cmd)
     if result.returncode == 0:
         logging.info("Command executed successfully")
@@ -78,6 +83,7 @@ def gnmi_set(env, delete_list, update_list, replace_list):
     cleanup_proto_files(replace_list)
 
     return
+
 
 def gnmi_get(env, path_list):
     """
@@ -92,8 +98,8 @@ def gnmi_get(env, path_list):
     """
     base_cmd = '/usr/sbin/gnmi_get '
     base_cmd += '-insecure -target_addr %s:%u ' % (env.gnmi_ip, env.gnmi_port)
-    base_cmd += '-username %s -password %s -alsologtostderr -encoding PROTO ' %(env.username, env.password)
-    
+    base_cmd += '-username %s -password %s -alsologtostderr -encoding PROTO ' % (env.username, env.password)
+
     for index, path in enumerate(path_list):
         cmd = base_cmd
         cmd += "-xpath "
@@ -101,18 +107,18 @@ def gnmi_get(env, path_list):
         cmd += " "
         cmd += "-proto_file "
         cmd += "get_result"
-        
+
         result = exec_cmd(cmd)
-    
+
         elem = path.split('/')
         if elem[3].startswith('_'):
             tblname = elem[3][1:]
         else:
             tblname = elem[3]
-        
+
         print("-"*25)
-        print(path)        
-        
+        print(path)
+
         if result.returncode:
             error = "rpc error:"
             if error in result.stderr:
@@ -121,7 +127,7 @@ def gnmi_get(env, path_list):
             else:
                 print("command failed: " + result.stderr)
             continue
-        
+
         with open("get_result", 'rb') as file:
             # Read the entire content of the binary file
             binary_data = file.read()
@@ -129,6 +135,7 @@ def gnmi_get(env, path_list):
 
         print(pb_obj)
         os.unlink("get_result")
+
 
 def process_template_chunk(res, env, dest_path, batch_val, sleep_secs):
 
@@ -138,7 +145,7 @@ def process_template_chunk(res, env, dest_path, batch_val, sleep_secs):
     replace_list = []
     update_cnt = 0
     base_path = "/sonic-db:APPL_DB"
-    base_path = "%s/dpu%d" %(base_path, env.dpu_index)
+    base_path = "%s/dpu%d" % (base_path, env.dpu_index)
     batch_cnt = 0
 
     for operation in res:
@@ -185,7 +192,7 @@ def process_template_chunk(res, env, dest_path, batch_val, sleep_secs):
                 keys = k.split(":", 1)
                 k = keys[0] + "[key=" + keys[1] + "]"
                 path = "%s/%s" % (base_path, k)
-                get_list.append(path)             
+                get_list.append(path)
         else:
             logging.error("Invalid operation %s" % operation["OP"])
             batch_cnt -= 1
@@ -202,12 +209,13 @@ def process_template_chunk(res, env, dest_path, batch_val, sleep_secs):
             update_list = []
             replace_list = []
             get_list = []
-    
+
     if get_list:
         gnmi_get(env, get_list)
     if delete_list or update_list or replace_list:
         gnmi_set(env, delete_list, update_list, replace_list)
-   
+
+
 def apply_gnmi_file(env, dest_path, batch_val=10, sleep_secs=0):
     """
     Apply dash configuration with gnmi client

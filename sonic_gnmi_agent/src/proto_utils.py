@@ -1,6 +1,5 @@
 import re
 import socket
-import ipaddress
 import uuid
 import base64
 
@@ -9,7 +8,7 @@ import importlib
 
 from dash_api.eni_pb2 import State  # noqa F401
 from dash_api.route_type_pb2 import RoutingType, ActionType, RouteType, RouteTypeItem, EncapType  # noqa F401
-from dash_api.types_pb2 import IpVersion, Range, ValueOrRange, IpPrefix, IpAddress
+from dash_api.types_pb2 import IpVersion, Range, ValueOrRange, IpPrefix, IpAddress  # noqa F401
 
 from google.protobuf.descriptor import FieldDescriptor
 from google.protobuf.json_format import ParseDict
@@ -29,6 +28,7 @@ PB_INT_TYPES = set([
     FieldDescriptor.TYPE_SINT64
 ])
 
+
 def get_enum_type_from_str(enum_type_str, enum_name_str):
 
     # 4_to_6 uses small cap so cannot use dynamic naming
@@ -44,20 +44,7 @@ def get_enum_type_from_str(enum_type_str, enum_name_str):
     else:
         raise Exception(f"Cannot find enum type {enum_type_str}")
 
-'''
-message RouteTypeItem {
-    string action_name = 1;
-    route_type.ActionType action_type = 2;
-    // Optional
-    // encap type depends on the action_type - {vxlan, nvgre}
-    optional route_type.EncapType encap_type = 3;
-    // Optional
-    // vni value to be used as the key for encapsulation. Applicable if encap_type is specified.
-    optional uint32 vni = 4;
-}
-message RouteType {
-    repeated RouteTypeItem items = 1;
-}'''
+
 def routing_type_from_json(json_obj):
     pb = RouteType()
     if isinstance(json_obj, list):
@@ -81,6 +68,7 @@ def routing_type_from_json(json_obj):
         pb.items.append(pbi)
     return pb
 
+
 def get_message_from_table_name(table_name):
     table_name_lis = table_name.lower().split("_")
     table_name_lis2 = [item.capitalize() for item in table_name_lis]
@@ -95,6 +83,7 @@ def get_message_from_table_name(table_name):
 
     return message_class()
 
+
 def parse_ip_address(ip_str):
     ip_addr = IP(ip_str)
     if ip_addr.version == 4:
@@ -104,6 +93,7 @@ def parse_ip_address(ip_str):
 
     return {f"ipv{ip_addr.version}": encoded_val}
 
+
 def prefix_to_ipv4(prefix_length):
     mask = 2**32 - 2**(32-int(prefix_length))
     s = str(hex(mask))
@@ -111,6 +101,7 @@ def prefix_to_ipv4(prefix_length):
     hex_groups = [s[i:i+2] for i in range(0, len(s), 2)]
     ipv4_address_str = '.'.join(hex_groups)
     return ipv4_address_str
+
 
 def prefix_to_ipv6(prefix_length):
     mask = 2**128 - 2**(128-int(prefix_length))
@@ -179,7 +170,7 @@ def json_to_proto(key: str, proto_dict: dict):
         if key not in new_dict:
             new_dict[key] = value
 
-    pb =  ParseDict(new_dict, message)
+    pb = ParseDict(new_dict, message)
     return pb.SerializeToString()
 
 
@@ -190,6 +181,7 @@ def tbl_name_to_type(tbl_name):
     # Capitalize the first character of each word
     words = [word.capitalize() for word in words]
     return ''.join(words)
+
 
 def from_pb(tbl_name, byte_array):
     type_name = tbl_name_to_type(tbl_name)
