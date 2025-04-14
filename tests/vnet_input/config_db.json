@@ -8,7 +8,7 @@
     "VXLAN_TUNNEL|tunnel1": {
         "src_ip": "10.10.10.10"
     },
-    "VLAN_INTERFACE|Vlan100": {
+    "VLAN_SUB_INTERFACE|Ethernet0.100": {
         "vnet_name": "Vnet_2000"
     },
     "INTERFACE|Ethernet4": {
