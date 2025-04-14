@@ -311,7 +311,7 @@ class TestVnet(object):
         assert "Vnet_2000" in result.output
         assert "1234-56-7890-1234" in result.output
         assert "Ethernet4" in result.output
-        assert "Vlan100" in result.output
+        assert "Ethernet0.100" in result.output
 
     def test_show_vnet_guid(self):
         from .mock_tables import dbconnector
@@ -327,7 +327,7 @@ class TestVnet(object):
         assert "1234-56-7890-1234" in result.output
         assert "tunnel1" in result.output
         assert "Ethernet4" in result.output
-        assert "Vlan100" in result.output
+        assert "Ethernet0.100" in result.output
 
     @classmethod
     def teardown_class(cls):
