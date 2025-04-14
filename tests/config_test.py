@@ -196,8 +196,11 @@ Released lock on {0}
 RELOAD_MASIC_CONFIG_DB_OUTPUT = """\
 Acquired lock on {0}
 Stopping SONiC target ...
+Running command: /usr/local/bin/sonic-cfggen -H -k  --write-to-db
 Running command: /usr/local/bin/sonic-cfggen -j /tmp/config.json --write-to-db
+Running command: /usr/local/bin/sonic-cfggen -H -k  -n asic0 --write-to-db
 Running command: /usr/local/bin/sonic-cfggen -j /tmp/config.json -n asic0 --write-to-db
+Running command: /usr/local/bin/sonic-cfggen -H -k  -n asic1 --write-to-db
 Running command: /usr/local/bin/sonic-cfggen -j /tmp/config.json -n asic1 --write-to-db
 Restarting SONiC target ...
 Reloading Monit configuration ...
@@ -797,7 +800,7 @@ class TestConfigReloadMasic(object):
                             "cloudtype": "None",
                             "default_bgp_status": "down",
                             "default_pfcwd_status": "enable",
-                            "deployment_id": "None",
+                            "deployment_id": "1",
                             "docker_routing_config_mode": "separated",
                             "hostname": "sonic",
                             "hwsku": "multi_asic",
@@ -818,7 +821,7 @@ class TestConfigReloadMasic(object):
                             "cloudtype": "None",
                             "default_bgp_status": "down",
                             "default_pfcwd_status": "enable",
-                            "deployment_id": "None",
+                            "deployment_id": "1",
                             "docker_routing_config_mode": "separated",
                             "hostname": "sonic",
                             "hwsku": "multi_asic",
@@ -876,7 +879,7 @@ class TestConfigReloadMasic(object):
                             "cloudtype": "None",
                             "default_bgp_status": "down",
                             "default_pfcwd_status": "enable",
-                            "deployment_id": "None",
+                            "deployment_id": "1",
                             "docker_routing_config_mode": "separated",
                             "hostname": "sonic",
                             "hwsku": "multi_asic",
@@ -895,7 +898,7 @@ class TestConfigReloadMasic(object):
                             "cloudtype": "None",
                             "default_bgp_status": "down",
                             "default_pfcwd_status": "enable",
-                            "deployment_id": "None",
+                            "deployment_id": "1",
                             "docker_routing_config_mode": "separated",
                             "hostname": "sonic",
                             "hwsku": "multi_asic",
@@ -1315,6 +1318,8 @@ class TestLoadMinigraph(object):
 
 class TestReloadConfig(object):
     dummy_cfg_file = os.path.join(os.sep, "tmp", "config.json")
+    dummy_cfg_file_asic0 = os.path.join(os.sep, "tmp", "config0.json")
+    dummy_cfg_file_asic1 = os.path.join(os.sep, "tmp", "config1.json")
 
     @classmethod
     def setup_class(cls):
@@ -1474,11 +1479,13 @@ class TestReloadConfig(object):
                 reload_config_with_disabled_service_output.format(config.SYSTEM_RELOAD_LOCK)
 
     def test_reload_config_masic(self, get_cmd_module, setup_multi_broadcom_masic):
-        self.add_sysinfo_to_cfg_file()
-        with mock.patch(
-                "utilities_common.cli.run_command",
-                mock.MagicMock(side_effect=mock_run_command_side_effect)
-        ) as mock_run_command:
+        def read_json_file_side_effect(filename):
+            return {}
+
+        with mock.patch("utilities_common.cli.run_command",
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)),\
+            mock.patch('config.main.read_json_file',
+                       mock.MagicMock(side_effect=read_json_file_side_effect)):
             (config, show) = get_cmd_module
             runner = CliRunner()
             # 3 config files: 1 for host and 2 for asic
@@ -1486,6 +1493,7 @@ class TestReloadConfig(object):
                             self.dummy_cfg_file,
                             self.dummy_cfg_file,
                             self.dummy_cfg_file)
+
             result = runner.invoke(
                 config.config.commands["reload"],
                 [cfg_files, '-y', '-f'])
