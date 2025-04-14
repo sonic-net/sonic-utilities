@@ -1,0 +1,249 @@
+#!/usr/bin/env python3
+
+#####################################################################
+#
+# policerstat is a tool for summarizing policer counter statistics.
+#
+#####################################################################
+
+import json
+import argparse
+import datetime
+import sys
+import os
+import time
+from collections import namedtuple, OrderedDict
+from natsort import natsorted
+from tabulate import tabulate
+
+try:
+    if os.environ["UTILITIES_UNIT_TESTING"] == "2":
+            modules_path = os.path.join(os.path.dirname(__file__), "..")
+            tests_path = os.path.join(modules_path, "tests")
+            sys.path.insert(0, modules_path)
+            sys.path.insert(0, tests_path)
+            import mock_tables.dbconnector
+    if os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] == "multi_asic":
+            import mock_tables.mock_multi_asic
+            mock_tables.dbconnector.load_namespace_config()   
+except KeyError:
+    pass  
+
+from utilities_common.netstat import ns_diff, STATUS_NA, format_number_with_comma, table_as_json
+from utilities_common import multi_asic as multi_asic_util
+from utilities_common import constants
+from utilities_common.cli import json_serial, UserCache
+from swsscommon.swsscommon import ConfigDBConnector, SonicV2Connector
+
+pstat_fields = (
+    "totalpacket",
+    "totalbytes",
+    "gtotalpacket",
+    "gtotalbytes",
+    "ytotalpacket",
+    "ytotalbytes",
+    "rtotalpacket",
+    "rtotalbytes"
+)
+
+PStats = namedtuple("PStats", pstat_fields)
+
+header = [
+    'Policer',
+    'Total Packets',
+    'Total Bytes',
+    'Green Packets',
+    'Green Bytes',
+    'Yellow Packets',
+    'Yellow Bytes',
+    'Red Packets',
+    'Red Bytes'
+]
+
+def build_json(cnstat):
+    def policers_stats(policer_name, counters):
+        return {
+            policer_name: {
+                "totalpacket": counters.get("totalpacket", "N/A"),
+                "totalbytes": counters.get("totalbytes", "N/A"),
+                "gtotalpacket": counters.get("gtotalpacket", "N/A"),
+                "gtotalbytes": counters.get("gtotalbytes", "N/A"),
+                "ytotalpacket": counters.get("ytotalpacket", "N/A"),
+                "ytotalbytes": counters.get("ytotalbytes", "N/A"),
+                "rtotalpacket": counters.get("rtotalpacket", "N/A"),
+                "rtotalbytes": counters.get("rtotalbytes", "N/A")
+            }
+        }
+
+    out = {}
+    for policer_name, counters in cnstat.items():
+        if policer_name == 'time':
+            continue
+        out.update(policers_stats(policer_name, counters))
+    return out
+
+counter_names = (
+    'SAI_POLICER_STAT_PACKETS',
+    'SAI_POLICER_STAT_ATTR_BYTES',
+    'SAI_POLICER_STAT_GREEN_PACKETS',
+    'SAI_POLICER_STAT_GREEN_BYTES',
+    'SAI_POLICER_STAT_YELLOW_PACKETS',
+    'SAI_POLICER_STAT_YELLOW_BYTES',
+    'SAI_POLICER_STAT_RED_PACKETS',
+    'SAI_POLICER_STAT_RED_BYTES'
+)
+
+COUNTER_TABLE_PREFIX = "COUNTERS:"
+COUNTERS_POLICER_NAME_MAP = "COUNTERS_POLICER_NAME_MAP"
+
+class Policerstat:
+    def __init__(self):
+        self.db = SonicV2Connector(host='127.0.0.1')
+        self.db.connect(self.db.COUNTERS_DB)
+
+    def get_cnstat(self, policer=None):
+        """
+        Get the counters info from database.
+        """
+        def get_counters(policer, table_id):
+            """
+            Get the counters from specific table.
+            """
+            fields = [STATUS_NA] * len(pstat_fields)
+            for pos, counter_name in enumerate(counter_names):
+                full_table_id = f"{COUNTER_TABLE_PREFIX}{table_id}"
+                counter_data = self.db.get(self.db.COUNTERS_DB, full_table_id, counter_name)
+                if counter_data:
+                    fields[pos] = str(counter_data)
+            cntr = PStats._make(fields)._asdict()
+            cntr['policername'] = policer
+            return cntr
+
+
+        cnstat_dict = OrderedDict(time=datetime.datetime.now())
+
+        counter_policer_name_map = self.db.get_all(self.db.COUNTERS_DB, COUNTERS_POLICER_NAME_MAP)
+        if counter_policer_name_map is None:
+            print(f"No {COUNTERS_POLICER_NAME_MAP} in the DB!")
+            sys.exit(1)
+
+        if policer and policer not in counter_policer_name_map:
+            print(f"Policer {policer} missing from {COUNTERS_POLICER_NAME_MAP}! Make sure it exists.")
+            sys.exit(2)
+
+        if policer:
+            cnstat_dict[policer] = get_counters(policer, counter_policer_name_map[policer])
+            return cnstat_dict
+
+        for policer in natsorted(counter_policer_name_map):
+            cnstat_dict[policer] = get_counters(policer, counter_policer_name_map[policer])
+        return cnstat_dict
+
+    def cnstat_print(self, policer, cnstat_dict, use_json):
+        """
+        Print the cnstat.
+        """
+        table = []
+        for key, data in cnstat_dict.items():
+            if key == 'time':
+                continue
+            table.append((
+                data.get('policername', 'N/A'),
+                data.get('totalpacket', 'N/A'),
+                data.get('totalbytes', 'N/A'),
+                data.get('gtotalpacket', 'N/A'),
+                data.get('gtotalbytes', 'N/A'),
+                data.get('ytotalpacket', 'N/A'),
+                data.get('ytotalbytes', 'N/A'),
+                data.get('rtotalpacket', 'N/A'),
+                data.get('rtotalbytes', 'N/A')
+            ))
+        if table:
+            if use_json:
+                print(json.dumps(build_json(cnstat_dict), indent=4))
+            else:
+                print(tabulate(table, header, tablefmt='simple', stralign='right'))
+                print()
+        else:
+            print("No data available for the given policer.")
+
+    def cnstat_diff_print(self, policer, cnstat_new_dict, cnstat_old_dict, use_json):
+        """
+        Print the difference between two cnstat results.
+        """
+        table = []
+
+        for key, cntr in cnstat_new_dict.items():
+            if key == 'time':
+                continue
+            old_cntr = cnstat_old_dict.get(key)
+            if old_cntr:
+                table.append((key,
+                              ns_diff(cntr['totalpacket'], old_cntr['totalpacket']),
+                              ns_diff(cntr['totalbytes'], old_cntr['totalbytes']),
+                              ns_diff(cntr['gtotalpacket'], old_cntr['gtotalpacket']),
+                              ns_diff(cntr['gtotalbytes'], old_cntr['gtotalbytes']),
+                              ns_diff(cntr['ytotalpacket'], old_cntr['ytotalpacket']),
+                              ns_diff(cntr['ytotalbytes'], old_cntr['ytotalbytes']),
+                              ns_diff(cntr['rtotalpacket'], old_cntr['rtotalpacket']),
+                              ns_diff(cntr['rtotalbytes'], old_cntr['rtotalbytes'])))
+            else:
+                table.append((key,
+                              format_number_with_comma(cntr['totalpacket']),
+                              format_number_with_comma(cntr['totalbytes']),
+                              format_number_with_comma(cntr['gtotalpacket']),
+                              format_number_with_comma(cntr['gtotalbytes']),
+                              format_number_with_comma(cntr['ytotalpacket']),
+                              format_number_with_comma(cntr['ytotalbytes']),
+                              format_number_with_comma(cntr['rtotalpacket']),
+                              format_number_with_comma(cntr['rtotalbytes'])))
+        if table:
+            if use_json:
+                print(table_as_json(table, header))
+            else:
+                print(tabulate(table, header, tablefmt='simple', stralign='right'))
+            print()
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description='Display the policer counters',
+        formatter_class=argparse.RawTextHelpFormatter,
+        epilog="""
+            Examples:
+            policerstat -c
+            policerstat -j
+            policerstat -p span_policer
+        """
+    )
+
+    parser.add_argument('-c', '--clear', action='store_true', help='Copy & clear stats')
+    parser.add_argument('-j', '--json', action='store_true', help='Display in JSON format')
+    parser.add_argument('-p', '--policer', type=str, help='Show stats for a single policer')
+    args = parser.parse_args()
+
+    cache = UserCache()
+
+    cnstat_dir = cache.get_directory()
+    cnstat_fqn_file = os.path.join(cnstat_dir, 'policerstat')
+
+    policerstat = Policerstat()
+    cnstat_dict = policerstat.get_cnstat(policer=args.policer)
+
+    if args.clear:
+        json.dump(cnstat_dict, open(cnstat_fqn_file, 'w'), default=json_serial)
+        print("Cleared counters")
+        sys.exit(0)
+    else:
+        if os.path.isfile(cnstat_fqn_file):
+                try:
+                    cnstat_cached_dict = json.load(open(cnstat_fqn_file, 'r'))
+                    policerstat.cnstat_diff_print(args.policer, cnstat_dict, cnstat_cached_dict, args.json)
+                except IOError as e:
+                    print(e.errno, e)
+        else:
+            policerstat.cnstat_print(args.policer, cnstat_dict, args.json)
+    sys.exit(0)
+
+if __name__ == "__main__":
+    main()

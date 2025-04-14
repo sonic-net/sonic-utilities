@@ -142,6 +142,7 @@ setup(
         'scripts/generate_shutdown_order.py',
         'scripts/intfutil',
         'scripts/intfstat',
+        'scripts/policerstat',
         'scripts/ipintutil',
         'scripts/lag_keepalive.py',
         'scripts/lldpshow',

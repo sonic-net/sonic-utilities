@@ -33,6 +33,7 @@ FLOW_CNT_TRAP_STAT    10000               enable
 FLOW_CNT_ROUTE_STAT   10000               enable
 WRED_ECN_QUEUE_STAT   10000               enable
 WRED_ECN_PORT_STAT    1000                enable
+POLICER               10000               enable
 """
 
 expected_counterpoll_show_dpu = """Type                  Interval (in ms)    Status
@@ -49,6 +50,7 @@ FLOW_CNT_TRAP_STAT    10000               enable
 FLOW_CNT_ROUTE_STAT   10000               enable
 WRED_ECN_QUEUE_STAT   10000               enable
 WRED_ECN_PORT_STAT    1000                enable
+POLICER               10000               enable
 ENI_STAT              1000                enable
 """
 
@@ -334,6 +336,45 @@ class TestCounterpoll(object):
         table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
         print(table)
         assert test_interval == table["WRED_ECN_QUEUE"]["POLL_INTERVAL"]
+
+    @pytest.mark.parametrize("status", ["disable", "enable"])
+    def test_update_policer_counter_status(self, status):
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(counterpoll.cli.commands["policer"].commands[status], [], obj=db.cfgdb)
+        assert result.exit_code == 0
+
+        table = db.cfgdb.get_table('FLEX_COUNTER_TABLE')
+        assert status == table["POLICER"]["FLEX_COUNTER_STATUS"]
+
+    def test_update_policer_counter_interval(self):
+        runner = CliRunner()
+        db = Db()
+        test_interval = "20000"
+
+        result = runner.invoke(counterpoll.cli.commands["policer"].commands["interval"], [test_interval],
+                               obj=db.cfgdb)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        table = db.cfgdb.get_table('FLEX_COUNTER_TABLE')
+        assert test_interval == table["POLICER"]["POLL_INTERVAL"]
+
+        test_interval = "500"
+        result = runner.invoke(counterpoll.cli.commands["policer"].commands["interval"], [test_interval],
+                               obj=db.cfgdb)
+        expected = "Invalid value for \"POLL_INTERVAL\": 500 is not in the valid range of 1000 to 60000."
+        assert result.exit_code == 2
+        assert expected in result.output
+
+        test_interval = "70000"
+        result = runner.invoke(counterpoll.cli.commands["policer"].commands["interval"], [test_interval],
+                               obj=db.cfgdb)
+
+        expected = "Invalid value for \"POLL_INTERVAL\": 70000 is not in the valid range of 1000 to 60000."
+        assert result.exit_code == 2
+        assert expected in result.output
 
     @classmethod
     def teardown_class(cls):
