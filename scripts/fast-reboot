@@ -902,6 +902,7 @@ sleep 1
 sync
 
 # sync the current system time to CMOS
+systemctl stop hwclock.service hwclock.timer
 if [ -x /sbin/hwclock ]; then
     /sbin/hwclock -w || /bin/true
 fi
