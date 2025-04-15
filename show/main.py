@@ -69,6 +69,7 @@ from . import dns
 from . import bgp_cli
 from . import stp
 from . import srv6
+from . import copp
 
 # Global Variables
 PLATFORM_JSON = 'platform.json'
@@ -322,6 +323,7 @@ cli.add_command(warm_restart.warm_restart)
 cli.add_command(dns.dns)
 cli.add_command(stp.spanning_tree)
 cli.add_command(srv6.srv6)
+cli.add_command(copp.copp)
 
 # syslog module
 cli.add_command(syslog.syslog)
@@ -2054,6 +2056,17 @@ def spanning_tree(verbose):
     """Show spanning_tree running configuration"""
     stp_list = ["STP", "STP_PORT", "STP_VLAN", "STP_VLAN_PORT"]
     for key in stp_list:
+        cmd = ['sudo', 'sonic-cfggen', '-d', '--var-json', key]
+        run_command(cmd, display_cmd=verbose)
+
+
+# 'copp' subcommand ("show runningconfiguration copp")
+@runningconfiguration.command()
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def copp(verbose):
+    """Show copp running configuration"""
+    copp_list = ["COPP_GROUP", "COPP_TRAP"]
+    for key in copp_list:
         cmd = ['sudo', 'sonic-cfggen', '-d', '--var-json', key]
         run_command(cmd, display_cmd=verbose)
 

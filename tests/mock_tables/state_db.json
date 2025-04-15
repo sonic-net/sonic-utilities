@@ -1777,5 +1777,12 @@
         "mac_remote_fault_time": "",
         "mac_local_fault_count": "0",
         "mac_local_fault_time": ""
+    },
+    "COPP_TRAP_TABLE|bgp": {
+        "state": "ok",
+        "hw_status": "installed"
+    },
+    "COPP_TRAP_TABLE|neighbor_miss": {
+        "state": "ok"
     }
 }
