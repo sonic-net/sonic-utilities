@@ -33,6 +33,7 @@ def mock_platform_sfputil_read_porttab_mappings():
         portMap = jsonobj['portMap']
         RJ45Ports = jsonobj['RJ45Ports']
 
+
 def mock_get_first_subport(logical_port_name):
     """
     Mock function to get the first subport of a logical port.

@@ -264,7 +264,7 @@ def get_first_subport(logical_port):
             logical_port_list = platform_sfputil.get_physical_to_logical(physical_port[0])
             if logical_port_list is not None:
                 return logical_port_list[0]
-    except KeyError as e:
+    except KeyError:
         click.echo(f"Error: Found KeyError while getting first subport for {logical_port}")
         return None
 
