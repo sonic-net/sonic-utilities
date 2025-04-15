@@ -13,5 +13,14 @@
     },
     "INTERFACE|Ethernet4": {
         "vnet_name": "Vnet_2000"
+    },
+    "VLAN_INTERFACE|Vlan40": {
+        "vnet_name": "Vnet_2000"
+    },
+    "PORTCHANNEL_INTERFACE|PortChannel0002": {
+        "vnet_name": "Vnet_2000"
+    },
+    "LOOPBACK_INTERFACE|Loopback0": {
+        "vnet_name": "Vnet_2000"
     }
 }

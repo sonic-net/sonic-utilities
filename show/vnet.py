@@ -67,13 +67,22 @@ def advertised_routes(args):
 def get_vnet_info(config_db, vnet_name):
     """
     Returns a tuple of (vnet_data, interfaces) for a given VNET name.
+    Includes INTERFACE, VLAN_INTERFACE, VLAN_SUB_INTERFACE, PORTCHANNEL_INTERFACE, and LOOPBACK_INTERFACE.
     """
     vnet_data = config_db.get_entry('VNET', vnet_name)
     if not vnet_data:
         return None, []
 
     interfaces = []
-    for table in ['INTERFACE', 'VLAN_INTERFACE']:
+    interface_tables = [
+        'INTERFACE',
+        'VLAN_INTERFACE',
+        'VLAN_SUB_INTERFACE',
+        'PORTCHANNEL_INTERFACE',
+        'LOOPBACK_INTERFACE'
+    ]
+
+    for table in interface_tables:
         intfs_data = config_db.get_table(table)
         for intf, data in intfs_data.items():
             if data.get('vnet_name') == vnet_name:
@@ -83,14 +92,14 @@ def get_vnet_info(config_db, vnet_name):
 
 
 def format_vnet_output(vnet_name, vnet_data, interfaces):
-    headers = ['VNET Name', 'VXLAN Tunnel', 'VNI', 'Peer List', 'GUID', 'Interfaces']
+    headers = ['vnet name', 'vxlan tunnel', 'vni', 'peer list', 'guid', 'interfaces']
     row = [
         vnet_name,
         vnet_data.get('vxlan_tunnel', 'N/A'),
         vnet_data.get('vni', 'N/A'),
         vnet_data.get('peer_list', 'N/A'),
         vnet_data.get('guid', 'N/A'),
-        ", ".join(interfaces) if interfaces else "No Interfaces"
+        ", ".join(interfaces) if interfaces else "no interfaces"
     ]
     return headers, [row]
 
