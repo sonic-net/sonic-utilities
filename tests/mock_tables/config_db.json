@@ -2878,5 +2878,16 @@
         "hello_time": "2",
         "max_age": "20",
         "priority": "32768"
+     },
+     "COPP_GROUP|queue4_group1": {
+        "cir":"2000",
+        "cbs":"2000"
+     },
+     "COPP_GROUP|queue1_group3": {
+       "NULL":"NULL"
+     },
+     "COPP_TRAP|neighbor_miss": {
+        "NULL":"NULL"
      }
+
 }
