@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 from utilities_common.platform_sfputil_helper import (
     load_platform_sfputil, logical_port_to_physical_port_index,
     logical_port_name_to_physical_port_list, is_sfp_present,
-    get_subport, get_sfp_object, get_value_from_db_by_field
+    get_first_subport, get_subport, get_sfp_object, get_value_from_db_by_field
 )
 
 test_path = os.path.dirname(os.path.abspath(__file__))
@@ -1290,6 +1290,25 @@ class TestMultiAsicSFP(object):
             assert False, "Expected SystemExit but it did not occur"
         except SystemExit as e:
             assert e.code == EXIT_FAIL
+
+    @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
+           MagicMock(get_physical_to_logical=MagicMock(return_value=["Ethernet0", "Ethernet4"])))
+    @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
+           MagicMock(get_logical_to_physical=MagicMock(return_value=[1])))
+    def test_get_first_subport(self):
+        assert get_first_subport("Ethernet0") == "Ethernet0"
+
+    @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
+           MagicMock(get_logical_to_physical=MagicMock(return_value=None)))
+    def test_get_first_subport_invalid_physical_port(self):
+        assert get_first_subport("Ethernet0") == None
+
+    @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
+           MagicMock(get_physical_to_logical=MagicMock(side_effect=KeyError)))
+    @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
+           MagicMock(get_logical_to_physical=MagicMock(return_value=[1])))
+    def test_get_first_subport_keyerror(self):
+        assert get_first_subport("Ethernet0") == None
 
     @patch('utilities_common.platform_sfputil_helper.get_value_from_db_by_field')
     def test_get_subport(self, mock_get_value_from_db_by_field):

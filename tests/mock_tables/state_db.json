@@ -356,7 +356,6 @@
         "rx_sig_power_max": "40"
     },
     "TRANSCEIVER_STATUS|Ethernet44":{
-        "cmis_state": "READY",
         "DP1State": "DataPathActivated",
         "DP2State": "DataPathActivated",
         "DP3State": "DataPathActivated",
@@ -463,7 +462,9 @@
         "tx7los_hostlane": "False",
         "tx8los_hostlane": "False"
     },
-
+    "TRANSCEIVER_STATUS_SW|Ethernet44":{
+        "cmis_state": "READY"
+    },
     "TRANSCEIVER_VDM_HALARM_FLAG|Ethernet44":{
         "biasxi1": "False",
         "biasxp1": "False",

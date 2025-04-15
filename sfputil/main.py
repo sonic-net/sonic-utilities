@@ -1074,9 +1074,9 @@ def fetch_error_status_from_state_db(port, state_db):
     """
     status = {}
     if port:
-        status[port] = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_STATUS|{}'.format(port))
+        status[port] = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_STATUS_SW|{}'.format(port))
     else:
-        ports = state_db.keys(state_db.STATE_DB, 'TRANSCEIVER_STATUS|*')
+        ports = state_db.keys(state_db.STATE_DB, 'TRANSCEIVER_STATUS_SW|*')
         for key in ports:
             status[key.split('|')[1]] = state_db.get_all(state_db.STATE_DB, key)
 
