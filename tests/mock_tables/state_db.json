@@ -1817,5 +1817,12 @@
         "src_ip": "10.1.0.36",
         "state": "Up",
         "tx_interval": "100"
+    },
+    "COPP_TRAP_TABLE|bgp": {
+        "state": "ok",
+        "hw_status": "installed"
+    },
+    "COPP_TRAP_TABLE|neighbor_miss": {
+        "state": "ok"
     }
 }
