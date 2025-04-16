@@ -808,6 +808,23 @@
         "status": "67",
         "error": "Blocking Error|High temperature"
     },
+    "TRANSCEIVER_INFO|Ethernet4": {
+        "type": "SFP28 25G Pluggable Transceiver",
+        "hardware_rev": "X.X",
+        "serial": "0123456789",
+        "manufacturer": "XXXX",
+        "model": "XXX",
+        "connector": "LC",
+        "encoding": "N/A",
+        "ext_identifier": "Power Class 1 (0.5W Max)",
+        "ext_rateselect_compliance": "N/A",
+        "cable_type": "Length Cable Assembly(m)",
+        "cable_length": "0.0",
+        "nominal_bit_rate": "0",
+        "specification_compliance": "sm_media_interface",
+        "vendor_date": "2021-11-19",
+        "vendor_oui": "XX-XX-XX"
+    },
     "TRANSCEIVER_STATUS|Ethernet4": {
         "tx1disable": "False",
         "tx2disable": "False",
