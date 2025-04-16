@@ -822,6 +822,23 @@ class DBMigrator():
             self.configDB.set_entry('FLEX_COUNTER_TABLE', obj, flex_counter)
 
 
+    def migrate_frr_separate_config_mode (self):
+        """
+        Modify docker_routing_config_mode field.
+        """
+        log.log_notice('Migrate FRR Config mode configuration')
+        metadata = self.configDB.get_entry('DEVICE_METADATA', 'localhost')
+        #device_metadata_data = self.config_src_data["DEVICE_METADATA"]["localhost"]
+        #metadata['docker_router_config_mode'] = "unified"
+        if 'docker_routing_config_mode' not in metadata:
+            metadata['docker_routing_config_mode'] = "unified"
+            self.configDB.set_entry('DEVICE_METADATA', 'localhost', metadata)
+        else:
+            if metadata['docker_routing_config_mode'] == "separated" :
+                metadata['docker_routing_config_mode'] = "unified"
+                self.configDB.set_entry('DEVICE_METADATA', 'localhost', metadata)
+
+
     def migrate_sflow_table(self):
         """
         Migrate "SFLOW_TABLE" and "SFLOW_SESSION_TABLE" to update default sample_direction
@@ -1356,6 +1373,8 @@ class DBMigrator():
 
         self.migrate_tacplus()
         self.migrate_aaa()
+
+        self.migrate_frr_separate_config_mode()
 
     def migrate(self):
         version = self.get_version()
