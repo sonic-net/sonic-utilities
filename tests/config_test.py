@@ -3680,7 +3680,8 @@ class TestConfigInterface(object):
         runner = CliRunner()
         obj = {'config_db': db.cfgdb}
 
-        result = runner.invoke(config.config.commands['interface'].commands['ip'].commands['add'], ['Loopback0', '10.0.1.0/32'], obj=obj)
+        result = runner.invoke(config.config.commands['interface'].commands['ip'].commands['add'],
+                               ['Loopback0', '10.0.1.0/32'], obj=obj)
         assert result.exit_code == 0
         assert 'Loopback0' in db.cfgdb.get_table('LOOPBACK_INTERFACE')
 
