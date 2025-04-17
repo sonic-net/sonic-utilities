@@ -50,6 +50,7 @@ EXIT_SONIC_INSTALLER_VERIFY_REBOOT=21
 EXIT_PLATFORM_FW_AU_FAILURE=22
 EXIT_TEAMD_RETRY_COUNT_FAILURE=23
 EXIT_NO_MIRROR_SESSION_ACLS=24
+EXIT_LEFTOVER_CPA_TUNNEL=30
 
 function error()
 {
@@ -348,8 +349,43 @@ function check_mirror_session_acls()
     debug "Mirror session ACLs (arp, nd) programmed to ASIC successfully"
 }
 
+function abort_reboot_if_cpa_tunnel_is_leftover()
+{
+    # Devices containing any temporary CPA configuration at this point are indicative of cleanup issues
+    # from the previous warm-reboot. Warm-rebooting now is at risk of causing dataplane downtime.
+    # If any temporary CPA configuration is found, abort the warm-reboot.
+    # This preserves the current state of the system including the logs_before_reboot so that the leftover config
+    # can be debugged, cleaned up and the warm-reboot attempted again.
+
+    local has_leftover_tunnel=false
+    local has_leftover_tunnel_term_table_entry=false
+
+    local tunnel_list=$(redis-cli -n 1 KEYS "ASIC_STATE:SAI_OBJECT_TYPE_TUNNEL:*")
+    for key in $tunnel_list; do
+        if [[ $(redis-cli -n 1 HGET "$key" "SAI_TUNNEL_ATTR_TYPE") == "SAI_TUNNEL_TYPE_VXLAN" ]]; then
+            debug "Found leftover SAI_OBJECT_TYPE_TUNNEL with SAI_TUNNEL_ATTR_TYPE: SAI_TUNNEL_TYPE_VXLAN. (key = $key)"
+            has_leftover_tunnel=true
+        fi
+    done
+
+    local tunnel_term_table_entry_list=$(redis-cli -n 1 KEYS "ASIC_STATE:SAI_OBJECT_TYPE_TUNNEL_TERM_TABLE_ENTRY:*")
+    for key in $tunnel_term_table_entry_list; do
+        if [[ $(redis-cli -n 1 HGET "$key" "SAI_TUNNEL_TERM_TABLE_ENTRY_ATTR_TUNNEL_TYPE") == "SAI_TUNNEL_TYPE_VXLAN" ]]; then
+            debug "Found leftover SAI_OBJECT_TYPE_TUNNEL_TERM_TABLE_ENTRY with SAI_TUNNEL_TERM_TABLE_ENTRY_ATTR_TUNNEL_TYPE: SAI_TUNNEL_TYPE_VXLAN. (key = $key)"
+            has_leftover_tunnel_term_table_entry=true
+        fi
+    done
+
+    if [[ $has_leftover_tunnel == true || $has_leftover_tunnel_term_table_entry == true ]]; then
+        error "Device has leftover CPA tunnel configuration. Aborting warm-reboot."
+        exit "${EXIT_LEFTOVER_CPA_TUNNEL}"
+    fi
+}
+
 function setup_control_plane_assistant()
 {
+    abort_reboot_if_cpa_tunnel_is_leftover
+
     if [[ -n "${ASSISTANT_IP_LIST}" && -x ${ASSISTANT_SCRIPT} ]]; then
         # TH3 HW is not capable of VxLAN programming thus skipping TH3 platforms
         if [[ "${HWSKU}" != "DellEMC-Z9332f-M-O16C64" && "${HWSKU}" != "DellEMC-Z9332f-M-O16C64-lab" ]]; then
