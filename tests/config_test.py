@@ -3683,6 +3683,24 @@ class TestConfigInterface(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_with(['portconfig', '-p', str(interface_name), '-f', str(interface_fec), '-n', 'ns', '-vv'], display_cmd=True)
 
+    def test_startup_shutdown_loopback(self):
+        db = Db()
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands['interface'].commands['ip'].commands['add'],
+                               ['Loopback0', '10.0.1.0/32'], obj=obj)
+        assert result.exit_code == 0
+        assert 'Loopback0' in db.cfgdb.get_table('LOOPBACK_INTERFACE')
+
+        result = runner.invoke(config.config.commands['interface'].commands['shutdown'], ['Loopback0'], obj=obj)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_table('LOOPBACK_INTERFACE')['Loopback0']['admin_status'] == 'down'
+
+        result = runner.invoke(config.config.commands['interface'].commands['startup'], ['Loopback0'], obj=obj)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_table('LOOPBACK_INTERFACE')['Loopback0']['admin_status'] == 'up'
+
     def teardown(self):
         print("TEARDOWN")
 
