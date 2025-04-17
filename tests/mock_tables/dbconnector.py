@@ -57,6 +57,20 @@ def connect_SonicV2Connector(self, db_name, retry_on=True):
     self.dbintf.redis_kwargs['decode_responses'] = True
     _old_connect_SonicV2Connector(self, db_name, retry_on)
 
+_old_connect_SonicV2Connector_host = SonicV2Connector.connect_host
+
+def connect_SonicV2Connector_host(self, db_name, host, retry_on=True):
+    self.dbintf.redis_kwargs['topo'] = topo
+    ip_to_asic = {
+        "192.168.3.10": "asic0",
+        "192.168.3.11": "asic1",
+        "192.168.5.1": "asic2",
+    }
+    self.dbintf.redis_kwargs['namespace'] = ip_to_asic[host]
+    self.dbintf.redis_kwargs['db_name'] = db_name
+    self.dbintf.redis_kwargs['decode_responses'] = True
+    _old_connect_SonicV2Connector_host(self, db_name, host, retry_on)
+
 def _subscribe_keyspace_notification(self, db_name, client):
     pass
 
@@ -233,6 +247,7 @@ swsssdk.interface.DBInterface.close = mock_close
 mockredis.MockRedis.config_set = config_set
 redis.StrictRedis = SwssSyncClient
 SonicV2Connector.connect = connect_SonicV2Connector
+SonicV2Connector.connect_host = connect_SonicV2Connector_host
 swsscommon.SonicV2Connector = SonicV2Connector
 swsscommon.ConfigDBConnector = ConfigDBConnector
 swsscommon.ConfigDBPipeConnector = ConfigDBPipeConnector
