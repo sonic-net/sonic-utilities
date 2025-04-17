@@ -1,0 +1,7 @@
+{
+    "SWITCH_TRIMMING|GLOBAL": {
+        "size": "200",
+        "dscp_value": "20",
+        "queue_index": "2"
+    }
+}
