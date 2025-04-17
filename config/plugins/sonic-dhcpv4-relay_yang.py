@@ -205,41 +205,6 @@ def clear_list_entry_validated(db, table, key, attr):
     update_entry_validated(db, table, key, {attr: None})
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 @click.group(name="dhcpv4-relay",
              cls=clicommon.AliasedGroup)
 def DHCPV4_RELAY():
@@ -248,24 +213,12 @@ def DHCPV4_RELAY():
     pass
 
 
-
-
-
-
-
-
-
-
-
-
 @DHCPV4_RELAY.command(name="add")
-
 @click.argument(
     "name",
     nargs=1,
     required=True,
 )
-
 @click.option(
     "--server-vrf",
     help="Server VRF",
@@ -299,7 +252,8 @@ def DHCPV4_RELAY():
     help="Server IPv4 address list",
 )
 @clicommon.pass_db
-def DHCPV4_RELAY_add(db, name, server_vrf, source_interface, link_selection, vrf_selection, server_id_override, agent_relay_mode, max_hop_count, dhcpv4_servers):
+def DHCPV4_RELAY_add(db, name, server_vrf, source_interface, link_selection, vrf_selection,
+                     server_id_override, agent_relay_mode, max_hop_count, dhcpv4_servers):
     """ Add object in DHCPV4_RELAY. """
 
     table = "DHCPV4_RELAY"
@@ -329,13 +283,11 @@ def DHCPV4_RELAY_add(db, name, server_vrf, source_interface, link_selection, vrf
 
 
 @DHCPV4_RELAY.command(name="update")
-
 @click.argument(
     "name",
     nargs=1,
     required=True,
 )
-
 @click.option(
     "--server-vrf",
     help="Server VRF",
@@ -369,7 +321,8 @@ def DHCPV4_RELAY_add(db, name, server_vrf, source_interface, link_selection, vrf
     help="Server IPv4 address list",
 )
 @clicommon.pass_db
-def DHCPV4_RELAY_update(db, name, server_vrf, source_interface, link_selection, vrf_selection, server_id_override, agent_relay_mode, max_hop_count, dhcpv4_servers):
+def DHCPV4_RELAY_update(db, name, server_vrf, source_interface, link_selection, vrf_selection,
+                        server_id_override, agent_relay_mode, max_hop_count, dhcpv4_servers):
     """ Add object in DHCPV4_RELAY. """
 
     table = "DHCPV4_RELAY"
@@ -399,7 +352,6 @@ def DHCPV4_RELAY_update(db, name, server_vrf, source_interface, link_selection, 
 
 
 @DHCPV4_RELAY.command(name="delete")
-
 @click.argument(
     "name",
     nargs=1,
@@ -417,27 +369,8 @@ def DHCPV4_RELAY_delete(db, name):
         exit_with_error(f"Error: {err}", fg="red")
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 @DHCPV4_RELAY.group(name="dhcpv4-servers",
-                   cls=clicommon.AliasedGroup)
+                    cls=clicommon.AliasedGroup)
 def DHCPV4_RELAY_dhcpv4_servers():
     """ Add/Delete dhcpv4_servers in DHCPV4_RELAY """
 
@@ -445,7 +378,6 @@ def DHCPV4_RELAY_dhcpv4_servers():
 
 
 @DHCPV4_RELAY_dhcpv4_servers.command(name="add")
-
 @click.argument(
     "name",
     nargs=1,
@@ -474,9 +406,7 @@ def DHCPV4_RELAY_dhcpv4_servers_add(
         exit_with_error(f"Error: {err}", fg="red")
 
 
-
 @DHCPV4_RELAY_dhcpv4_servers.command(name="delete")
-
 @click.argument(
     "name",
     nargs=1,
@@ -505,9 +435,7 @@ def DHCPV4_RELAY_dhcpv4_servers_delete(
         exit_with_error(f"Error: {err}", fg="red")
 
 
-
 @DHCPV4_RELAY_dhcpv4_servers.command(name="clear")
-
 @click.argument(
     "name",
     nargs=1,
@@ -528,15 +456,6 @@ def DHCPV4_RELAY_dhcpv4_servers_clear(
         clear_list_entry_validated(db.cfgdb, table, key, attr)
     except Exception as err:
         exit_with_error(f"Error: {err}", fg="red")
-
-
-
-
-
-
-
-
-
 
 
 def register(cli):

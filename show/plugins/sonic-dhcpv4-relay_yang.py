@@ -1,16 +1,11 @@
 """
 Auto-generated show CLI plugin.
-
-
 """
 
 import click
 import tabulate
 import natsort
 import utilities_common.cli as clicommon
-
-
-
 
 
 def format_attr_value(entry, attr):
@@ -47,24 +42,6 @@ def format_group_value(entry, attrs):
     return tabulate.tabulate(data, tablefmt="plain")
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 @click.group(name="dhcpv4-relay",
              cls=clicommon.AliasedGroup,
              invoke_without_command=True)
@@ -73,18 +50,16 @@ def DHCPV4_RELAY(db):
     """  [Callable command group] """
 
     header = [
-"NAME",
-
-"SERVER VRF",
-"SOURCE INTERFACE",
-"LINK SELECTION",
-"VRF SELECTION",
-"SERVER ID OVERRIDE",
-"AGENT RELAY MODE",
-"MAX HOP COUNT",
-"DHCPV4 SERVERS",
-
-]
+        "NAME",
+        "SERVER VRF",
+        "SOURCE INTERFACE",
+        "LINK SELECTION",
+        "VRF SELECTION",
+        "SERVER ID OVERRIDE",
+        "AGENT RELAY MODE",
+        "MAX HOP COUNT",
+        "DHCPV4 SERVERS",
+        ]
 
     body = []
 
@@ -95,45 +70,51 @@ def DHCPV4_RELAY(db):
             key = (key,)
 
         row = [*key] + [
-    format_attr_value(
-        entry,
-        {'name': 'server_vrf', 'description': 'Server VRF', 'is-leaf-list': False, 'is-mandatory': False, 'group': ''}
-    ),
-    format_attr_value(
-        entry,
-        {'name': 'source_interface', 'description': 'Used to determine the source IP address of the relayed packet', 'is-leaf-list': False, 'is-mandatory': False, 'group': ''}
-    ),
-    format_attr_value(
-        entry,
-        {'name': 'link_selection', 'description': 'Enable link selection', 'is-leaf-list': False, 'is-mandatory': False, 'group': ''}
-    ),
-    format_attr_value(
-        entry,
-        {'name': 'vrf_selection', 'description': 'Enable VRF selection', 'is-leaf-list': False, 'is-mandatory': False, 'group': ''}
-    ),
-    format_attr_value(
-        entry,
-        {'name': 'server_id_override', 'description': 'Enable server id override', 'is-leaf-list': False, 'is-mandatory': False, 'group': ''}
-    ),
-    format_attr_value(
-        entry,
-        {'name': 'agent_relay_mode', 'description': 'How to forward packets that already have a relay option', 'is-leaf-list': False, 'is-mandatory': False, 'group': ''}
-    ),
-    format_attr_value(
-        entry,
-        {'name': 'max_hop_count', 'description': 'Maximum hop count for relayed packets', 'is-leaf-list': False, 'is-mandatory': False, 'group': ''}
-    ),
-    format_attr_value(
-        entry,
-        {'name': 'dhcpv4_servers', 'description': 'Server IPv4 address list', 'is-leaf-list': True, 'is-mandatory': False, 'group': ''}
-    ),
-]
+            format_attr_value(
+                entry,
+                {'name': 'server_vrf', 'description': 'Server VRF', 'is-leaf-list': False,
+                 'is-mandatory': False, 'group': ''}
+            ),
+            format_attr_value(
+                entry,
+                {'name': 'source_interface', 'description': 'Used to determine the source IP address of the \
+                  relayed packet', 'is-leaf-list': False, 'is-mandatory': False, 'group': ''}
+            ),
+            format_attr_value(
+                entry,
+                {'name': 'link_selection', 'description': 'Enable link selection', 'is-leaf-list': False,
+                 'is-mandatory': False, 'group': ''}
+            ),
+            format_attr_value(
+                entry,
+                {'name': 'vrf_selection', 'description': 'Enable VRF selection', 'is-leaf-list': False,
+                 'is-mandatory': False, 'group': ''}
+            ),
+            format_attr_value(
+                entry,
+                {'name': 'server_id_override', 'description': 'Enable server id override', 'is-leaf-list': False,
+                 'is-mandatory': False, 'group': ''}
+            ),
+            format_attr_value(
+                entry,
+                {'name': 'agent_relay_mode', 'description': 'How to forward packets that already have a relay option',
+                 'is-leaf-list': False, 'is-mandatory': False, 'group': ''}
+            ),
+            format_attr_value(
+                entry,
+                {'name': 'max_hop_count', 'description': 'Maximum hop count for relayed packets', 'is-leaf-list': False,
+                 'is-mandatory': False, 'group': ''}
+            ),
+            format_attr_value(
+                entry,
+                {'name': 'dhcpv4_servers', 'description': 'Server IPv4 address list', 'is-leaf-list': True,
+                 'is-mandatory': False, 'group': ''}
+            ),
+        ]
 
         body.append(row)
 
     click.echo(tabulate.tabulate(body, header))
-
-
 
 
 def register(cli):
