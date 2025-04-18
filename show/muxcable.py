@@ -2186,7 +2186,7 @@ def get_grpc_cached_version_mux_direction_per_port(db, port):
     mux_info_dict["grpc_connection_status"] = res_dir.get("grpc_connection_status", None)
 
     trans_dir = {}
-    trans_dir = trans_info_full_dict[asic_index]
+    trans_dir = trans_info_full_dict.get(asic_index, None)
 
     presence = "True" if trans_dir else "False"
 
