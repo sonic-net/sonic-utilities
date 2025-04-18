@@ -721,7 +721,6 @@ class SFPShow(object):
 @click.group()
 def cli():
     """sfpshow - Command line utility for display SFP transceivers information"""
-    global platform_sfputil
     # Load platform-specific sfputil class
     platform_sfputil_helper.load_platform_sfputil()
 
