@@ -6,9 +6,10 @@ import re
 import subprocess
 import utilities_common.cli as clicommon
 from utilities_common.chassis import is_smartswitch, get_all_dpus
+from datetime import datetime, timedelta
 
 TIMEOUT_SECS = 10
-
+TRANSITION_TIMEOUT = timedelta(seconds=240)  # 4 minutes
 
 #
 # 'chassis_modules' group ('config chassis_modules ...')
@@ -35,6 +36,38 @@ def get_config_module_state(db, chassis_module_name):
     else:
         return fvs['admin_status']
 
+
+def get_state_transition_in_progress(db, chassis_module_name):
+    fvs = db.cfgdb.get_entry('CHASSIS_MODULE', chassis_module_name)
+    value = fvs.get('state_transition_in_progress', 'False') if fvs else 'False'
+    print(f"[STATE CHECK] state_transition_in_progress = {value}")
+    return value
+
+
+def set_state_transition_in_progress(db, chassis_module_name, value):
+    config_db = db.cfgdb
+    entry = config_db.get_entry('CHASSIS_MODULE', chassis_module_name) or {}
+    entry['state_transition_in_progress'] = value
+    if value == 'True':
+        entry['transition_start_time'] = datetime.utcnow().isoformat()
+    else:
+        entry.pop('transition_start_time', None)
+    config_db.set_entry('CHASSIS_MODULE', chassis_module_name, entry)
+
+
+def is_transition_timed_out(db, chassis_module_name):
+    config_db = db.cfgdb
+    fvs = config_db.get_entry('CHASSIS_MODULE', chassis_module_name)
+    if not fvs:
+        return False
+    start_time_str = fvs.get('transition_start_time')
+    if not start_time_str:
+        return False
+    try:
+        start_time = datetime.fromisoformat(start_time_str)
+    except ValueError:
+        return False
+    return datetime.utcnow() - start_time > TRANSITION_TIMEOUT
 
 #
 # Name: check_config_module_state_with_timeout
@@ -116,20 +149,37 @@ def shutdown_chassis_module(db, chassis_module_name):
     config_db = db.cfgdb
     ctx = click.get_current_context()
 
-    if not chassis_module_name.startswith("SUPERVISOR") and \
-       not chassis_module_name.startswith("LINE-CARD") and \
-       not chassis_module_name.startswith("FABRIC-CARD") and \
-       not chassis_module_name.startswith("DPU"):
-        ctx.fail("'module_name' has to begin with 'SUPERVISOR', 'LINE-CARD', 'FABRIC-CARD', 'DPU'")
+    if not chassis_module_name.startswith(("SUPERVISOR", "LINE-CARD", "FABRIC-CARD", "DPU")):
+        ctx.fail("'module_name' has to begin with 'SUPERVISOR', 'LINE-CARD', 'FABRIC-CARD', or 'DPU'")
 
-    # To avoid duplicate operation
     if get_config_module_state(db, chassis_module_name) == 'down':
-        click.echo("Module {} is already in down state".format(chassis_module_name))
+        click.echo(f"Module {chassis_module_name} is already in down state")
         return
 
-    click.echo("Shutting down chassis module {}".format(chassis_module_name))
-    fvs = {'admin_status': 'down'}
-    config_db.set_entry('CHASSIS_MODULE', chassis_module_name, fvs)
+    if is_smartswitch():
+        if get_state_transition_in_progress(db, chassis_module_name) == 'True':
+            click.echo("DEBUG: Transition in progress is TRUE")
+            if is_transition_timed_out(db, chassis_module_name):
+                click.echo("DEBUG: Transition timed out — continuing shutdown")
+                set_state_transition_in_progress(db, chassis_module_name, 'False')
+                click.echo(f"Previous transition for module {chassis_module_name} timed out. Proceeding with shutdown.")
+            else:
+                click.echo("DEBUG: Transition not timed out — exiting")
+                click.echo(f"Module {chassis_module_name} state transition is already in progress")
+                return
+
+        click.echo(f"Smartswitch: Shutting down chassis module {chassis_module_name}")
+        click.echo(f"DEBUG: Using cfgdb ID: {id(config_db)}")
+        fvs = {
+            'admin_status': 'down',
+            'state_transition_in_progress': 'True',
+            'transition_start_time': datetime.utcnow().isoformat()
+        }
+        config_db.set_entry('CHASSIS_MODULE', chassis_module_name, fvs)
+    else:
+        click.echo(f"Non-Smartswitch: Shutting down chassis module {chassis_module_name}")
+        config_db.set_entry('CHASSIS_MODULE', chassis_module_name, {'admin_status': 'down'})
+
     if chassis_module_name.startswith("FABRIC-CARD"):
         if not check_config_module_state_with_timeout(ctx, db, chassis_module_name, 'down'):
             fabric_module_set_admin_status(db, chassis_module_name, 'down')
@@ -149,16 +199,28 @@ def startup_chassis_module(db, chassis_module_name):
     config_db = db.cfgdb
     ctx = click.get_current_context()
 
-    # To avoid duplicate operation
     if get_config_module_state(db, chassis_module_name) == 'up':
-        click.echo("Module {} is already set to up state".format(chassis_module_name))
+        click.echo(f"Module {chassis_module_name} is already set to up state")
         return
 
-    click.echo("Starting up chassis module {}".format(chassis_module_name))
     if is_smartswitch():
-        fvs = {'admin_status': 'up'}
+        if get_state_transition_in_progress(db, chassis_module_name) == 'True':
+            if is_transition_timed_out(db, chassis_module_name):
+                set_state_transition_in_progress(db, chassis_module_name, 'False')
+                click.echo(f"Previous transition for module {chassis_module_name} timed out. Proceeding with startup.")
+            else:
+                click.echo(f"Module {chassis_module_name} state transition is already in progress")
+                return
+
+        click.echo(f"Starting up chassis module {chassis_module_name}")
+        fvs = {
+            'admin_status': 'up',
+            'state_transition_in_progress': 'True',
+            'transition_start_time': datetime.utcnow().isoformat()
+        }
         config_db.set_entry('CHASSIS_MODULE', chassis_module_name, fvs)
     else:
+        click.echo(f"Starting up chassis module {chassis_module_name}")
         config_db.set_entry('CHASSIS_MODULE', chassis_module_name, None)
 
     if chassis_module_name.startswith("FABRIC-CARD"):
