@@ -1,18 +1,33 @@
 import os
 import sys
-
+import re
 import click
 from tabulate import tabulate
 import utilities_common.cli as clicommon
 from swsscommon.swsscommon import SonicV2Connector
 from natsort import natsorted
-from utilities_common.chassis import is_smartswitch, get_all_dpu_options
+from utilities_common.chassis import (
+    is_smartswitch,
+    get_all_dpu_options,
+    is_midplane_reachable,
+    get_dpu_ip_list
+)
+import subprocess
+import paramiko
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 DPU_STATE = 'DPU_STATE'
 CHASSIS_SERVER = 'redis_chassis.server'
 CHASSIS_SERVER_PORT = 6380
 CHASSIS_STATE_DB = 13
 
+# Global toggle to allow or disable auto SSH key setup
+AUTO_SSH_KEY_SETUP_ENABLED = True
+# Default SSH public key path
+DEFAULT_KEY_PATH = os.path.expanduser("~/.ssh/id_rsa")
+DEFAULT_PUBLIC_KEY_PATH = f"{DEFAULT_KEY_PATH}.pub"
+# Internal cache to avoid repeat setup attempts
+_ssh_key_cache = set()
 
 def get_system_health_status():
     if os.environ.get("UTILITIES_UNIT_TESTING") == "1":
@@ -107,6 +122,132 @@ def display_ignore_list(manager):
             table.append(entry)
     click.echo(tabulate(table, header))
 
+
+def ensure_ssh_key_exists():
+    if not os.path.exists(DEFAULT_PUBLIC_KEY_PATH):
+        click.echo("SSH key not found. Generating...")
+        subprocess.run(["ssh-keygen", "-t", "rsa", "-b", "4096", "-N", "", "-f", DEFAULT_KEY_PATH],
+                       check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+
+
+# define the function to set up SSH key for remote module
+def setup_ssh_key_for_remote(module_host, username, password, public_key_path):
+    """Automatically copies the public SSH key to the remote module"""
+    # Read the public key
+    with open(public_key_path, 'r') as f:
+        public_key = f.read().strip()
+
+    # Create the SSH client
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())  # Automatically accept unknown keys
+
+    # Connect to the DPU using the password
+    ssh.connect(module_host, username=username, password=password)
+
+    # Create the .ssh directory if it doesn't exist
+    stdin, stdout, stderr = ssh.exec_command('mkdir -p ~/.ssh')
+    stdin.channel.recv_exit_status()  # Wait for the command to finish
+
+    # Add the public key to authorized_keys
+    stdin, stdout, stderr = ssh.exec_command(f'echo "{public_key}" >> ~/.ssh/authorized_keys')
+    stdin.channel.recv_exit_status()
+
+    # Set proper permissions for the authorized_keys file
+    stdin, stdout, stderr = ssh.exec_command('chmod 600 ~/.ssh/authorized_keys')
+    stdin.channel.recv_exit_status()
+
+    # Close the SSH connection
+    ssh.close()
+
+
+def ensure_ssh_key_setup(ip, username="admin"):
+    if not AUTO_SSH_KEY_SETUP_ENABLED or ip in _ssh_key_cache:
+        return
+
+    if not is_midplane_reachable(ip):
+        return
+
+    ensure_ssh_key_exists()
+
+    try:
+        ssh_test = subprocess.run([
+            "ssh", "-i", DEFAULT_KEY_PATH,
+            "-o", "BatchMode=yes",
+            "-o", "ConnectTimeout=5",
+            f"{username}@{ip}", "echo OK"
+        ], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+
+        if ssh_test.returncode != 0:
+            click.echo(f"SSH key not set for {ip}. Attempting setup...")
+            click.echo(f"Reason: {ssh_test.stderr.decode().strip()}")
+            password = click.prompt(f"Password for {username}@{ip}", hide_input=True)
+            setup_ssh_key_for_remote(ip, username, password, DEFAULT_PUBLIC_KEY_PATH)
+    except Exception as e:
+        click.echo(f"Auto SSH key setup failed for {ip}: {e}")
+
+    _ssh_key_cache.add(ip)
+
+
+def get_module_health(ip, command_type, timeout=60):
+    module_host = f"admin@{ip}"
+    remote_cmd = f"sudo -n bash -c 'show system-health {command_type}'"
+    ssh_command = [
+        "ssh",
+        "-i", DEFAULT_KEY_PATH,
+        "-T",
+        "-o", "ConnectTimeout=10",
+        "-o", "StrictHostKeyChecking=no",
+        module_host,
+        remote_cmd
+    ]
+    try:
+        output = subprocess.check_output(
+            ssh_command, stderr=subprocess.STDOUT, text=True, timeout=timeout
+        )
+        lines = output.strip().splitlines()
+        lines = [line for line in lines if not re.match(r'(Debian|GNU/Linux|Welcome)', line)]
+        return ip, "\n".join(lines)
+    except subprocess.TimeoutExpired:
+        return ip, f"Module: {ip} down (timeout)"
+    except subprocess.CalledProcessError as e:
+        err = e.output.strip()
+        if "No route to host" in err:
+            return ip, f"Module: {ip} down"
+        if "Permission denied" in err or "Too many authentication failures" in err:
+            return ip, f"Module: {ip} authentication failed"
+        return ip, f"Module: {ip} error: {err}"
+
+
+def display_module_health_summary(module_name, command_type, reachable_only=False):
+    dpulist = []
+    if module_name == "all":
+        dpulist = "all"
+    else:
+        dpulist = [module_name.lower()]
+    modules = get_dpu_ip_list(dpulist)
+    if reachable_only:
+        modules = [(name, ip) for name, ip in modules if is_midplane_reachable(ip)]
+    if not modules:
+        click.echo("No reachable DPU modules found.")
+        return
+
+    for _, ip in modules:
+        ensure_ssh_key_setup(ip)
+
+    with ThreadPoolExecutor(max_workers=len(modules)) as executor:
+        future_to_module = {
+            executor.submit(get_module_health, ip, command_type): name for name, ip in modules
+        }
+        for future in as_completed(future_to_module):
+            module = future_to_module[future]
+            try:
+                _, health_status = future.result()
+                click.echo(f"\nModule: {module}")
+                click.echo(health_status)
+            except Exception as e:
+                click.echo(f"\nModule: {module}")
+                click.echo(f"Module: {module} error: {e}")
+
 #
 # 'system-health' command ("show system-health")
 #
@@ -115,28 +256,92 @@ def system_health():
     """Show system-health information"""
     return
 
-@system_health.command()
-def summary():
-    """Show system-health summary information"""
-    _, chassis, stat = get_system_health_status()
-    display_system_health_summary(stat, chassis.get_status_led())
-
 
 @system_health.command()
-def detail():
-    """Show system-health detail information"""
-    manager, chassis, stat = get_system_health_status()
-    display_system_health_summary(stat, chassis.get_status_led())
-    display_monitor_list(stat)
-    display_ignore_list(manager)
+@click.argument('module_name', required=False)
+@click.option('--reachable-only', is_flag=True, help="Only include modules reachable via midplane.")
+def summary(module_name, reachable_only):
+    if not module_name or module_name == "all":
+        if module_name == "all":
+            print("SWITCH")
+        _, chassis, stat = get_system_health_status()
+        display_system_health_summary(stat, chassis.get_status_led())
+    if module_name and module_name.startswith("DPU") or module_name == "all":
+        display_module_health_summary(module_name, "summary", reachable_only)
 
 
 @system_health.command()
-def monitor_list():
-    """Show system-health monitored services and devices name list"""
-    _, _, stat = get_system_health_status()
-    display_monitor_list(stat)
+@click.argument('module_name', required=False)
+@click.option('--reachable-only', is_flag=True, help="Only include modules reachable via midplane.")
+def detail(module_name, reachable_only):
+    if not module_name or module_name == "all":
+        if module_name == "all":
+            print("SWITCH")
+        _, chassis, stat = get_system_health_status()
+        display_system_health_summary(stat, chassis.get_status_led())
+        display_monitor_list(stat)
+        display_ignore_list(_)
+    if module_name and module_name.startswith("DPU") or module_name == "all":
+        display_module_health_summary(module_name, "detail", reachable_only)
 
+
+@system_health.command()
+@click.argument('module_name', required=False)
+@click.option('--reachable-only', is_flag=True, help="Only include modules reachable via midplane.")
+def monitor_list(module_name, reachable_only):
+    if not module_name or module_name == "all":
+        if module_name == "all":
+            print("SWITCH")
+        _, _, stat = get_system_health_status()
+        display_monitor_list(stat)
+    if module_name and module_name.startswith("DPU") or module_name == "all":
+        display_module_health_summary(module_name, "monitor-list", reachable_only)
+
+
+@system_health.command()
+@click.argument('module', metavar='MODULE', required=True)
+@click.option('--username', prompt=True, help='SSH login username (e.g., admin)')
+@click.option('--password', prompt=True, hide_input=True, help='SSH login password')
+def setup_ssh_key(module, username, password):
+    """Set up SSH key authentication for a specific DPU or all DPUs in parallel."""
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+
+    public_key_path = os.path.expanduser(DEFAULT_PUBLIC_KEY_PATH)
+
+    if not os.path.exists(public_key_path):
+        click.echo(f"Public key not found at {public_key_path}. Please generate it first.")
+        return
+
+    dpulist = "all" if module.lower() == "all" else [module.lower()]
+    targets = get_dpu_ip_list(dpulist)
+
+    if not targets:
+        click.echo(f"No IPs found for module(s): {module}")
+        return
+
+    def setup(ip_info):
+        mod_name, ip = ip_info
+        if not is_midplane_reachable(ip):
+            return f"Skipping unreachable {mod_name} ({ip})"
+        try:
+            setup_ssh_key_for_remote(ip, username, password, public_key_path)
+            return f"SSH key setup completed for {mod_name} ({ip})"
+        except Exception as e:
+            return f"Failed for {mod_name} ({ip}): {e}"
+
+    click.echo(f"Starting SSH key setup for {len(targets)} module(s)...")
+    with ThreadPoolExecutor(max_workers=len(targets)) as executor:
+        futures = {executor.submit(setup, item): item for item in targets}
+        for future in as_completed(futures):
+            click.echo(future.result())
+
+
+@system_health.command()
+def disable_auto_ssh_key():
+    """Disable automatic SSH key setup for modules"""
+    global AUTO_SSH_KEY_SETUP_ENABLED
+    AUTO_SSH_KEY_SETUP_ENABLED = False
+    click.echo("Auto SSH key setup has been disabled.")
 
 @system_health.group('sysready-status',invoke_without_command=True)
 @click.pass_context
