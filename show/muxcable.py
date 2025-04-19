@@ -2177,7 +2177,7 @@ def get_grpc_cached_version_mux_direction_per_port(db, port):
     mux_info_full_dict[asic_index] = state_db[asic_index].get_all(
         state_db[asic_index].STATE_DB, 'MUX_CABLE_INFO|{}'.format(port))
     trans_info_full_dict[asic_index] = state_db[asic_index].get_all(
-        state_db[asic_index].STATE_DB, 'TRANSCEIVER_STATUS|{}'.format(port))
+        state_db[asic_index].STATE_DB, 'TRANSCEIVER_INFO|{}'.format(port)) or {}
 
     res_dir = {}
     res_dir = mux_info_full_dict[asic_index]
@@ -2188,8 +2188,7 @@ def get_grpc_cached_version_mux_direction_per_port(db, port):
     trans_dir = {}
     trans_dir = trans_info_full_dict[asic_index]
     
-    status = trans_dir.get("status", "0")
-    presence = "True" if status == "1" else "False"
+    presence = "True" if trans_dir else "False"
 
     mux_info_dict["presence"] = presence
 
