@@ -443,12 +443,11 @@ Error: 'vrf_name' length should not exceed 15 characters
 Error: 'vnet_name' must begin with 'Vnet_' .
 """
         # Test vnet add using length of vnet name
-        vnet_name = "Vnet_ypfbjjhyzivaythuaxlbcibgdgjkqgapedmiosjgsvddqaalformdmbwigddddddddghkbpccbzjrhefrcdeqkvgmu \
-                 bxxnkgbvjpgpnypfbjjhyzivaythuaxlbcibgdgjkqgapedmiosjgsvddqlformdmbwigghkbpccbzjrhefrcdeqkvgmubxxnkgbvj"
+        vnet_name = "Vnet_ypfbjjhyzivaythuaxlbcibgdgjkqgapedmiosjgsv"
         args = [vnet_name, "222", "tunnel1"]
         result = runner.invoke(config.config.commands["vnet"].commands["add"], args, obj=vnet_obj)
         assert result.exit_code != 0
-        assert "'vnet_name' length should not exceed 200 characters" in result.output
+        assert "'vnet_name' length should not exceed 15 characters" in result.output
         assert vnet_name not in db.cfgdb.get_table('VNET')
 
         # Test vnet add using mandatory arguments
@@ -487,9 +486,8 @@ Error: 'vnet_name' must begin with 'Vnet_' .
         assert expected_output_del in result.output
 
         # Test vnet del with long vnet name
-        expected_output_del = "'vnet_name' length should not exceed 200 characters"
-        vnet_name = ["Vnet_ypfbjjhyzivaythuaxlbcibgdgjkqgapedmiosjgsvddqaalformdmbwigddddddddghkbpccbzjrhefrcdeqkv \
-                     gmubxxnkgbvjpgpnypfbjjhyzivaythuaxlbcibgdgjkqgapedmiosjgsvddqlformdmbwigghkbpccbzjrhefrcdeqkvgmu"]
+        expected_output_del = "'vnet_name' length should not exceed 15 characters"
+        vnet_name = ["Vnet_ypfbjjhyzivaythuaxlbcibgdgjkq"]
         result = runner.invoke(config.config.commands["vnet"].commands["del"], vnet_name, obj=vnet_obj)
         assert result.exit_code != 0
         assert (vnet_name[0]) not in db.cfgdb.get_table('VNET')
