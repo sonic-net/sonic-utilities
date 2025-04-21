@@ -15,10 +15,12 @@ from typing import Dict
 import click
 from natsort import natsorted
 from sonic_py_common import multi_asic
+from utilities_common.general import load_db_config
 from utilities_common.sfp_helper import covert_application_advertisement_to_output_string
 from utilities_common.sfp_helper import (
         QSFP_DATA_MAP,
         CMIS_DATA_MAP,
+        C_CMIS_DATA_MAP,
         QSFP_STATUS_MAP,
         CMIS_STATUS_MAP,
         CCMIS_STATUS_MAP,
@@ -308,8 +310,15 @@ class SFPShow(object):
         indent = ' ' * 8
         output = ''
         is_sfp_cmis = 'cmis_rev' in sfp_info_dict
+        is_sfp_c_cmis = 'supported_max_tx_power' in sfp_info_dict
 
-        data_map = CMIS_DATA_MAP if is_sfp_cmis else QSFP_DATA_MAP
+        if is_sfp_c_cmis:
+            data_map = C_CMIS_DATA_MAP
+        elif is_sfp_cmis:
+            data_map = CMIS_DATA_MAP
+        else:
+            data_map = QSFP_DATA_MAP
+
         sorted_data_map_keys = sorted(data_map, key=data_map.get)
         for key in sorted_data_map_keys:
             if key == 'cable_type':
@@ -730,4 +739,5 @@ def status(port, namespace):
 
 
 if __name__ == "__main__":
+    load_db_config()
     cli()
