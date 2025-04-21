@@ -5968,13 +5968,13 @@ def bind(ctx, interface_name, vrf_name):
             ctx.fail("'interface_name' is None!")
 
     if not is_vrf_exists(config_db, vrf_name):
-        ctx.fail("VRF %s does not exist!"%(vrf_name))
+        ctx.fail("VRF %s does not exist!" % (vrf_name))
 
     table_name = get_interface_table_name(interface_name)
     if table_name == "":
         ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan/Loopback]")
     if is_interface_bind_to_vrf(config_db, interface_name) is True and \
-        config_db.get_entry(table_name, interface_name).get('vrf_name') == vrf_name:
+            config_db.get_entry(table_name, interface_name).get('vrf_name') == vrf_name:
         return
     # Clean ip addresses if interface configured
     interface_addresses = get_interface_ipaddresses(config_db, interface_name)
@@ -9294,6 +9294,19 @@ def motd(message):
     config_db.connect()
     config_db.mod_entry(swsscommon.CFG_BANNER_MESSAGE_TABLE_NAME, 'global',
                         {'motd': message})
+
+#
+# 'vnet' group ('config vnet ...')
+#
+
+@config.group(cls=clicommon.AbbreviationGroup, name='vnet')
+@click.pass_context
+def vnet(ctx):
+    """VNET-related configuration tasks"""
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    ctx.obj = {}
+    ctx.obj['config_db'] = config_db
 
 
 if __name__ == '__main__':
