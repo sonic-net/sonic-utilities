@@ -95,10 +95,10 @@ def format_vnet_output(vnet_name, vnet_data, interfaces):
     headers = ['vnet name', 'vxlan tunnel', 'vni', 'peer list', 'guid', 'interfaces']
     row = [
         vnet_name,
-        vnet_data.get('vxlan_tunnel', 'N/A'),
-        vnet_data.get('vni', 'N/A'),
-        vnet_data.get('peer_list', 'N/A'),
-        vnet_data.get('guid', 'N/A'),
+        vnet_data.get('vxlan_tunnel'),
+        vnet_data.get('vni'),
+        vnet_data.get('peer_list'),
+        vnet_data.get('guid'),
         ", ".join(interfaces) if interfaces else "no interfaces"
     ]
     return headers, [row]
