@@ -216,7 +216,8 @@ class TestSubinterface(object):
         assert ('Po0004.1004') in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
 
         expected_output_bind = "Interface Po0004.1004 IP disabled and address(es) removed due to binding VRF Vrf1.\n"
-        result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["bind"], ["Po0004.1004", "Vrf1"], obj=vrf_obj)
+        cmds = config.config.commands["interface"].commands["vrf"].commands["bind"], ["Po0004.1004", "Vrf1"]
+        result = runner.invoke(cmds, obj=vrf_obj)
         assert result.exit_code == 0
         assert ('Vrf1') in db.cfgdb.get_table('VLAN_SUB_INTERFACE')['Po0004.1004']['vrf_name']
         assert result.output == expected_output_bind
