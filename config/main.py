@@ -125,7 +125,6 @@ TTL_RANGE = click.IntRange(min=0, max=255)
 QUEUE_RANGE = click.IntRange(min=0, max=255)
 GRE_TYPE_RANGE = click.IntRange(min=0, max=65535)
 ADHOC_VALIDATION = True
-VNET_NAME_MAX_LEN = 15
 
 if os.environ.get("UTILITIES_UNIT_TESTING", "0") in ("1", "2"):
     temp_system_reload_lockfile = tempfile.NamedTemporaryFile()
@@ -419,16 +418,6 @@ def is_vrf_exists(config_db, vrf_name):
 
     return False
 
-
-def is_vnet_exists(config_db, vnet_name):
-    """Check if VNET exists
-    """
-    keys = config_db.get_keys("VNET")
-    if vnet_name in keys:
-        return True
-
-    return False
-
 def is_interface_bind_to_vrf(config_db, interface_name):
     """Get interface if bind to vrf or not
     """
@@ -436,7 +425,7 @@ def is_interface_bind_to_vrf(config_db, interface_name):
     if table_name == "":
         return False
     entry = config_db.get_entry(table_name, interface_name)
-    if entry and (entry.get("vrf_name") or entry.get("vnet_name")):
+    if entry and entry.get("vrf_name"):
         return True
     return False
 
@@ -6022,12 +6011,8 @@ def bind(ctx, interface_name, vrf_name):
         remove_router_interface_ip_address(config_db, interface_name, ip_address)
     if table_name == "VLAN_SUB_INTERFACE":
         subintf_entry = config_db.get_entry(table_name, interface_name)
-        if (not isVnet):
-            if 'vrf_name' in subintf_entry:
-                subintf_entry.pop('vrf_name')
-        else:
-            if 'vnet_name' in subintf_entry:
-                subintf_entry.pop('vnet_name')
+        if 'vrf_name' in subintf_entry:
+            subintf_entry.pop('vrf_name')
 
     config_db.set_entry(table_name, interface_name, None)
     # When config_db del entry and then add entry with same key, the DEL will lost.
@@ -6041,18 +6026,10 @@ def bind(ctx, interface_name, vrf_name):
         time.sleep(0.01)
     state_db.close(state_db.STATE_DB)
     if table_name == "VLAN_SUB_INTERFACE":
-        if (not isVnet):
-            subintf_entry['vrf_name'] = vrf_name
-            config_db.set_entry(table_name, interface_name, subintf_entry)
-        else:
-            subintf_entry['vnet_name'] = vrf_name
-            config_db.set_entry(table_name, interface_name, subintf_entry)
+        subintf_entry['vrf_name'] = vrf_name
+        config_db.set_entry(table_name, interface_name, subintf_entry)
     else:
-        if (not isVnet):
-            config_db.set_entry(table_name, interface_name, {"vrf_name": vrf_name})
-        else:
-            config_db.set_entry(table_name, interface_name, {"vnet_name": vrf_name})
-
+        config_db.set_entry(table_name, interface_name, {"vrf_name": vrf_name})
 
     click.echo("Interface {} IP disabled and address(es) removed due to binding VRF {}.".format(interface_name, vrf_name))
 #
@@ -6082,8 +6059,6 @@ def unbind(ctx, interface_name):
         subintf_entry = config_db.get_entry(table_name, interface_name)
         if 'vrf_name' in subintf_entry:
             subintf_entry.pop('vrf_name')
-        elif 'vnet_name' in subintf_entry:
-            subintf_entry.pop('vnet_name')
 
     interface_ipaddresses = get_interface_ipaddresses(config_db, interface_name)
     for ipaddress in interface_ipaddresses:
