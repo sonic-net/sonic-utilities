@@ -150,6 +150,7 @@ def remote_enable(db):
 # 'remote' command ('sudo config kdump remote disable ...')
 #
 
+
 @kdump_remote.command(name="disable", help="Disable remote KDUMP configuration")
 @pass_db
 def remote_disable(db):
@@ -210,6 +211,7 @@ def add_ssh_path(db, ssh_path):
     click.echo(f"SSH path set to '{ssh_path}' successfully.")
 
 # ------------------ Remove group ------------------
+
 
 @kdump.group(name="remove", help="Remove kdump configuration parameters")
 def kdump_remove():
