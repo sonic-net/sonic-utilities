@@ -4,6 +4,24 @@ import os
 from utilities_common.cli import AbbreviationGroup, pass_db
 from ipaddress import ip_address, AddressValueError
 import re
+
+
+def is_valid_ssh_string(ssh_string):
+    if '@' not in ssh_string:
+        return False
+    name, ip = ssh_string.split('@', 1)
+    try:
+        ip_address.ip_address(ip)
+    except ValueError:
+        return False
+    return True
+
+
+def is_valid_path(path):
+    # You can make this stricter as needed (checking existence or just syntax)
+    return bool(path.strip()) and path.startswith("/")
+
+
 #
 # 'kdump' group ('sudo config kdump ...')
 #
@@ -98,158 +116,139 @@ def kdump_num_dumps(db, kdump_num_dumps):
     db.cfgdb.mod_entry("KDUMP", "config", {"num_dumps": kdump_num_dumps})
     echo_reboot_warning()
 
-
-@kdump.command(name="remote", help="Configure the remote enable/disable for KDUMP mechanism")
-@click.argument('action', metavar='<enable/disable>', required=True, type=click.STRING)  # Corrected this line
-@pass_db
-def remote(db, action):
-    """Enable or disable remote kdump feature"""
-    kdump_table = db.cfgdb.get_table("KDUMP")
-    check_kdump_table_existence(kdump_table)
-
-    # Get the current status of the remote feature as string
-    current_status = kdump_table["config"].get("remote", "false").lower()
-
-    if action.lower() == 'enable':
-        if current_status == "true":
-            click.echo("Remote kdump feature is already enabled.")
-        else:
-            db.cfgdb.mod_entry("KDUMP", "config", {"remote": "true"})
-            click.echo("Remote kdump feature enabled.")
-            echo_reboot_warning()
-    elif action.lower() == 'disable':
-        if current_status == "false":
-            click.echo("Remote kdump feature is already disabled.")
-        else:
-            db.cfgdb.mod_entry("KDUMP", "config", {"remote": "false"})
-            click.echo("Remote kdump feature disabled.")
-            echo_reboot_warning()
-    else:
-        click.echo("Invalid action. Use 'enable' or 'disable'.")
+#
+# 'remote' command ('sudo config kdump remote enable/disable')
+#
 
 
-@kdump.group(name="add", help="Add configuration items to KDUMP")
-def add():
-    """Group of commands to add configuration items to KDUMP"""
+@kdump.group(name="remote", help="Enable or disable remote KDUMP configuration")
+def kdump_remote():
     pass
 
+#
+# 'remote' command ('sudo config kdump remote enable ...')
+#
 
-@add.command(name="ssh_string", help="Add an SSH string to the KDUMP configuration")
-@click.argument('ssh_string', metavar='<ssh_key>', required=True)
+
+@kdump_remote.command(name="enable", help="Enable remote KDUMP configuration")
 @pass_db
-def add_ssh_key(db, ssh_string):
-    """Add an SSH string to KDUMP configuration"""
+def remote_enable(db):
+    """Enable remote KDUMP"""
+    kdump_table = db.cfgdb.get_table("KDUMP")
+    check_kdump_table_existence(kdump_table)
 
-    def is_valid_ssh_key(ssh_string):
-        """Validate the SSH key format"""
-        # Check if it contains username and hostname/IP (format: username@host)
-        if "@" not in ssh_string:
-            return "Invalid format. SSH key must be in 'username@host' format."
+    current_val = kdump_table.get("config", {}).get("remote", "false").lower()
 
-        username, host = ssh_string.split("@", 1)
+    if current_val == "true":
+        click.echo("Remote KDUMP is already enabled.")
+    else:
+        db.cfgdb.mod_entry("KDUMP", "config", {"remote": "true"})
+        click.echo("Remote KDUMP has been enabled.")
+        echo_reboot_warning()
 
-        # Validate username
-        if not username or not username.isalnum():
-            return "Invalid username. Ensure it contains only alphanumeric characters."
+#
+# 'remote' command ('sudo config kdump remote disable ...')
+#
 
-        # Validate host (IP or hostname)
-        try:
-            # Check if it's a valid IP address
-            ip_address(host)
-        except AddressValueError:
-            # If not an IP, validate hostname
-            hostname_regex = r'^[a-zA-Z0-9.-]+$'
-            if not re.match(hostname_regex, host) or host.startswith('-') or host.endswith('-'):
-                return "Invalid host. Must be a valid IP or hostname."
+@kdump_remote.command(name="disable", help="Disable remote KDUMP configuration")
+@pass_db
+def remote_disable(db):
+    """Disable remote KDUMP"""
+    kdump_table = db.cfgdb.get_table("KDUMP")
+    check_kdump_table_existence(kdump_table)
 
-        return None  # Validation successful
+    current_val = kdump_table.get("config", {}).get("remote", "false").lower()
+
+    if current_val == "false":
+        click.echo("Remote KDUMP is already disabled.")
+    else:
+        db.cfgdb.mod_entry("KDUMP", "config", {"remote": "false"})
+        click.echo("Remote KDUMP has been disabled.")
+        echo_reboot_warning()
+
+
+# ------------------ Add group ------------------
+
+@kdump.group(name="add", help="Add kdump configuration parameters")
+def kdump_add():
+    pass
+
+#
+# 'ssh_string' command ('sudo config kdump add ssh_string ...')
+#
+
+
+@kdump_add.command(name="ssh_string", help="Add SSH string in the format user@ip")
+@click.argument('ssh_string', metavar='<user@ip>', required=True)
+@pass_db
+def add_ssh_string(db, ssh_string):
+    if not is_valid_ssh_string(ssh_string):
+        click.echo(f"Error: Invalid SSH string '{ssh_string}'. Must be in format user@<valid_ip>")
+        return
 
     kdump_table = db.cfgdb.get_table("KDUMP")
     check_kdump_table_existence(kdump_table)
-    current_status = kdump_table["config"].get("remote", "false").lower()
-
-    if current_status == 'false':
-        click.echo("Remote feature is not enabled. Please enable the remote feature first.")
-        return
-
-    # Validate SSH key
-    validation_error = is_valid_ssh_key(ssh_string)
-    if validation_error:
-        click.echo(f"Error: {validation_error}")
-        return
-
-    # Add or update the 'ssh_key' entry in the KDUMP table
     db.cfgdb.mod_entry("KDUMP", "config", {"ssh_string": ssh_string})
-    click.echo(f"SSH string added to KDUMP configuration: {ssh_string}")
+    click.echo(f"SSH string set to '{ssh_string}' successfully.")
+
+#
+# 'ssh_path' command ('sudo config kdump add ssh_path ...')
+#
 
 
-@add.command(name="ssh_path", help="Add an SSH path to the KDUMP configuration")
+@kdump_add.command(name="ssh_path", help="Add SSH path (must be an absolute path)")
 @click.argument('ssh_path', metavar='<ssh_path>', required=True)
 @pass_db
 def add_ssh_path(db, ssh_path):
-    """Add an SSH path to KDUMP configuration"""
-
-    def is_valid_ssh_path(ssh_path):
-        """Validate the SSH path"""
-        # Check if the path is absolute
-        if not os.path.isabs(ssh_path):
-            return "Invalid path. SSH path must be an absolute path."
-
-        # (Optional) Check if the path exists on the system
-        if not os.path.exists(ssh_path):
-            return f"Invalid path. The path '{ssh_path}' does not exist."
-
-        return None  # Validation successful
+    if not is_valid_path(ssh_path):
+        click.echo(f"Error: Invalid path '{ssh_path}'. Must be an absolute path (starts with '/')")
+        return
 
     kdump_table = db.cfgdb.get_table("KDUMP")
     check_kdump_table_existence(kdump_table)
-    current_status = kdump_table["config"].get("remote", "false").lower()
-    if current_status == 'false':
-        click.echo("Remote feature is not enabled. Please enable the remote feature first.")
-        return
-
-    # Validate SSH path
-    validation_error = is_valid_ssh_path(ssh_path)
-    if validation_error:
-        click.echo(f"Error: {validation_error}")
-        return
-
-    # Add or update the 'ssh_path' entry in the KDUMP table
     db.cfgdb.mod_entry("KDUMP", "config", {"ssh_path": ssh_path})
-    click.echo(f"SSH path added to KDUMP configuration: {ssh_path}")
+    click.echo(f"SSH path set to '{ssh_path}' successfully.")
 
+# ------------------ Remove group ------------------
 
-@kdump.group(name="remove", help="remove configuration items to KDUMP")
-def remove():
-    """Group of commands to remove configuration items to KDUMP"""
+@kdump.group(name="remove", help="Remove kdump configuration parameters")
+def kdump_remove():
     pass
 
+#
+# 'ssh_string' remove command ('sudo config kdump remove ssh_string ...')
+#
 
-@remove.command(name="ssh_string", help="Remove the SSH string from the KDUMP configuration")
+
+@kdump_remove.command(name="ssh_string", help="Remove SSH string")
 @pass_db
 def remove_ssh_string(db):
-    """Remove the SSH string from KDUMP configuration"""
     kdump_table = db.cfgdb.get_table("KDUMP")
     check_kdump_table_existence(kdump_table)
 
-    # Check if ssh_string exists
-    if "ssh_string" in kdump_table["config"]:
-        db.cfgdb.mod_entry("KDUMP", "config", {"ssh_string": None})
-        click.echo("SSH string removed from KDUMP configuration.")
-    else:
-        click.echo("SSH string not found in KDUMP configuration.")
+    current_val = kdump_table.get("config", {}).get("ssh_string", "")
+    if not current_val:
+        click.echo("No SSH string is currently set. Nothing to remove.")
+        return
+
+    db.cfgdb.mod_entry("KDUMP", "config", {"ssh_string": ""})
+    click.echo("SSH string removed successfully.")
+
+#
+# 'ssh_path' remove command ('sudo config kdump remove ssh_path ...')
+#
 
 
-@remove.command(name="ssh_path", help="Remove the SSH path from the KDUMP configuration")
+@kdump_remove.command(name="ssh-path", help="Remove SSH path")
 @pass_db
 def remove_ssh_path(db):
-    """Remove the SSH path from KDUMP configuration"""
     kdump_table = db.cfgdb.get_table("KDUMP")
     check_kdump_table_existence(kdump_table)
 
-    # Check if ssh_string exists
-    if "ssh_path" in kdump_table["config"]:
-        db.cfgdb.mod_entry("KDUMP", "config", {"ssh_path": None})
-        click.echo("SSH path removed from KDUMP configuration.")
-    else:
-        click.echo("SSH path not found in KDUMP configuration.")
+    current_val = kdump_table.get("config", {}).get("ssh_path", "")
+    if not current_val:
+        click.echo("No SSH path is currently set. Nothing to remove.")
+        return
+
+    db.cfgdb.mod_entry("KDUMP", "config", {"ssh_path": ""})
+    click.echo("SSH path removed successfully.")
