@@ -270,8 +270,7 @@ class TestSubinterface(object):
         assert ('Ethernet0.102') not in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
 
         # shut name subintf vrf bind unbind check
-        cmds = config.config.commands["subinterface"].commands["add"],
-        result = runner.invoke(cmds, ["Eth0.1002", "2002"], obj=intf_obj)
+        result = runner.invoke(config.config.commands["subinterface"].commands["add"], ["Eth0.1002", "2002"], obj=intf_obj)
         print(result.exit_code, result.output)
         assert result.exit_code == 0
         assert ('Eth0.1002') in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
