@@ -6055,11 +6055,11 @@ def bind(ctx, interface_name, vrf_name):
             config_db.set_entry(table_name, interface_name, {"vrf_name": vrf_name})
 
     click.echo("Interface {} IP disabled and address(es) removed due to binding VRF {}.".format(interface_name, vrf_name))
+
+
 #
 # 'unbind' subcommand
 #
-
-
 @vrf.command()
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @click.pass_context
@@ -6079,7 +6079,6 @@ def unbind(ctx, interface_name):
 
     if is_interface_bind_to_vrf(config_db, interface_name) is False:
         return
-
     if table_name == "VLAN_SUB_INTERFACE":
         subintf_entry = config_db.get_entry(table_name, interface_name)
         if 'vrf_name' in subintf_entry:
@@ -7296,6 +7295,7 @@ def del_route(ctx, command_str):
     config_db = ctx.obj['config_db']
     key, route = cli_sroute_to_config(ctx, command_str, strict_nh=False)
     keys = config_db.get_keys('STATIC_ROUTE')
+
     if not tuple(key.split("|")) in keys:
         ctx.fail('Route {} doesnt exist'.format(key))
     else:
@@ -8275,7 +8275,6 @@ def enable(enable):
     """Administratively Enable ZTP."""
     command = ['ztp', 'enable']
     clicommon.run_command(command, display_cmd=True)
-
 
 #
 # 'ntp' group ('config ntp ...')
