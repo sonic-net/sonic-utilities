@@ -108,7 +108,11 @@ class TestKdump:
 
         # Simulate command execution for 'add ssh_string' with valid input
         valid_ssh_string = "user@192.168.1.1"
-        result = runner.invoke(config.config.commands["kdump"].commands["add"].commands["ssh_string"], [valid_ssh_string], obj=db)
+        result = runner.invoke(
+                    config.config.commands["kdump"].commands["add"].commands["ssh_string"],
+                    [valid_ssh_string],
+                    obj=db
+                )
         assert result.exit_code == 0
         assert db.cfgdb.get_table("KDUMP")["config"]["ssh_string"] == valid_ssh_string
 
@@ -119,7 +123,11 @@ class TestKdump:
 
         # Simulate command execution for 'add ssh_string' with invalid input
         invalid_ssh_string = "user@invalid_ip"
-        result = runner.invoke(config.config.commands["kdump"].commands["add"].commands["ssh_string"], [invalid_ssh_string], obj=db)
+        result = runner.invoke(
+                    config.config.commands["kdump"].commands["add"].commands["ssh_string"],
+                    [invalid_ssh_string],
+                    obj=db
+                )
         assert result.exit_code == 1  # Expect no change to the database
         assert "Invalid SSH string" in result.output
 
@@ -130,7 +138,11 @@ class TestKdump:
 
         # Simulate command execution for 'add ssh_path' with valid input
         valid_ssh_path = "/absolute/path/to/ssh"
-        result = runner.invoke(config.config.commands["kdump"].commands["add"].commands["ssh_path"], [valid_ssh_path], obj=db)
+        result = runner.invoke(
+                    config.config.commands["kdump"].commands["add"].commands["ssh_path"],
+                    [valid_ssh_path],
+                    obj=db
+                )
         assert result.exit_code == 0
         assert db.cfgdb.get_table("KDUMP")["config"]["ssh_path"] == valid_ssh_path
 
@@ -141,7 +153,11 @@ class TestKdump:
 
         # Simulate command execution for 'add ssh_path' with valid input
         valid_ssh_path = "/absolute/path/to/ssh"
-        result = runner.invoke(config.config.commands["kdump"].commands["add"].commands["ssh_path"], [valid_ssh_path], obj=db)
+        result = runner.invoke(
+                    config.config.commands["kdump"].commands["add"].commands["ssh_path"],
+                    [valid_ssh_path],
+                    obj=db
+                )
         assert result.exit_code == 0
         assert db.cfgdb.get_table("KDUMP")["config"]["ssh_path"] == valid_ssh_path
 
@@ -152,7 +168,13 @@ class TestKdump:
 
         # Simulate command execution for 'add ssh_path' with invalid input
         invalid_ssh_path = "relative/path/to/ssh"
-        result = runner.invoke(config.config.commands["kdump"].commands["add"].commands["ssh_path"], [invalid_ssh_path], obj=db)
+        result = runner.invoke(
+            config.config.commands["kdump"]
+            .commands["add"]
+            .commands["ssh_path"],
+            [invalid_ssh_path],
+            obj=db
+        )
         assert result.exit_code == 1  # Expect no change to the database
         assert "Invalid path" in result.output
 

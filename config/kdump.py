@@ -7,14 +7,15 @@ import re
 
 
 def is_valid_ssh_string(ssh_string):
-    if '@' not in ssh_string:
-        return False
-    name, ip = ssh_string.split('@', 1)
+    import ipaddress
     try:
-        ip_address.ip_address(ip)
-    except ValueError:
+        user, ip = ssh_string.split("@")
+        print(f"Checking IP: {ip}")
+        ipaddress.ip_address(ip)
+        return True
+    except Exception as e:
+        print(f"Validation failed: {e}")
         return False
-    return True
 
 
 def is_valid_path(path):
