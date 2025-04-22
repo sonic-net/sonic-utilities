@@ -745,7 +745,7 @@ def cmd_kdump_num_dumps(verbose, num_dumps):
 def cmd_kdump_remote(verbose):
     remote = get_kdump_remote()  # Retrieve the remote value from the config database
 
-    if remote is not None:
+    if remote:
         # Uncomment SSH and SSH_KEY in the /etc/default/kdump-tools file
         run_command("/bin/sed -i 's/#SSH/SSH/' /etc/default/kdump-tools", use_shell=False)
         run_command("/bin/sed -i 's/#SSH_KEY/SSH_KEY/' /etc/default/kdump-tools", use_shell=False)
