@@ -150,6 +150,7 @@ Vrf103  Ethernet4
         expected_output_bind = "Interface Ethernet0 IP disabled and address(es) removed due to binding VRF Vrf1.\n"
         result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["bind"], ["Ethernet0", "Vrf1"], obj=vrf_obj)
         assert result.exit_code == 0
+        print(db.cfgdb.get_table('INTERFACE'))
         assert result.output == expected_output_bind
         assert ('Vrf1') in db.cfgdb.get_table('INTERFACE')['Ethernet0']['vrf_name']
 

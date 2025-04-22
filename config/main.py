@@ -5999,22 +5999,22 @@ def bind(ctx, interface_name, vrf_name):
     if (vrf_name.startswith('Vnet_')):
         isVnet = True
 
-    if (not isVnet):
+    if (isVnet):
+        if not is_vnet_exists(config_db, vrf_name):
+            ctx.fail("VNET %s does not exist!" % (vrf_name)) 
+    else:
         if not is_vrf_exists(config_db, vrf_name):
             ctx.fail("VRF %s does not exist!" % (vrf_name))
-    else:
-        if not is_vnet_exists(config_db, vrf_name):
-            ctx.fail("VNET %s does not exist!" % (vrf_name))
-
+        
     table_name = get_interface_table_name(interface_name)
     if table_name == "":
         ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan/Loopback]")
     if is_interface_bind_to_vrf(config_db, interface_name) is True:
-        if (not isVnet):
-            if (config_db.get_entry(table_name, interface_name).get('vrf_name') == vrf_name):
-                return
-        else:
+        if (isVnet):
             if (config_db.get_entry(table_name, interface_name).get('vnet_name') == vrf_name):
+                return
+        else:        
+            if (config_db.get_entry(table_name, interface_name).get('vrf_name') == vrf_name):
                 return
 
     # Clean ip addresses if interface configured
@@ -6043,7 +6043,14 @@ def bind(ctx, interface_name, vrf_name):
     state_db.close(state_db.STATE_DB)
     if table_name == "VLAN_SUB_INTERFACE":
         if (isVnet):
-            config_db.set_entry(table_name, interface_name, {"vnet_name": vrf_name})
+            subintf_entry['vnet_name'] = vrf_name
+            config_db.set_entry(table_name, interface_name, subintf_entry)
+        else:
+            subintf_entry['vrf_name'] = vrf_name
+            config_db.set_entry(table_name, interface_name, subintf_entry)
+    else:    
+        if (isVnet):
+            config_db.set_entry(table_name, interface_name, {"vnet_name": vrf_name}) 
         else:
             config_db.set_entry(table_name, interface_name, {"vrf_name": vrf_name})
 
@@ -6071,6 +6078,7 @@ def unbind(ctx, interface_name):
 
     if is_interface_bind_to_vrf(config_db, interface_name) is False:
         return
+
     if table_name == "VLAN_SUB_INTERFACE":
         subintf_entry = config_db.get_entry(table_name, interface_name)
         if 'vrf_name' in subintf_entry:
