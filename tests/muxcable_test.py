@@ -390,7 +390,7 @@ Ethernet4  standby      True        active           READY
 show_muxcable_grpc_muxdirection_active_expected_all_output = """\
 Port       Direction    Presence    PeerDirection    ConnectivityState
 ---------  -----------  ----------  ---------------  -------------------
-Ethernet0  active       False       active           READY
+Ethernet0  active       True        active           READY
 """
 
 show_muxcable_grpc_muxdirection_active_expected_all_output_json = """\
@@ -398,7 +398,7 @@ show_muxcable_grpc_muxdirection_active_expected_all_output_json = """\
     "HWMODE": {
         "Ethernet0": {
             "Direction": "active",
-            "Presence": "False",
+            "Presence": "True",
             "PeerDirection": "active",
             "ConnectivityState": "READY"
         }
