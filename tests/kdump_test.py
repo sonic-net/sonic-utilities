@@ -120,7 +120,7 @@ class TestKdump:
         # Simulate command execution for 'add ssh_string' with invalid input
         invalid_ssh_string = "user@invalid_ip"
         result = runner.invoke(config.config.commands["kdump"].commands["add"].commands["ssh_string"], [invalid_ssh_string], obj=db)
-        assert result.exit_code == 0  # Expect no change to the database
+        assert result.exit_code == 1  # Expect no change to the database
         assert "Invalid SSH string" in result.output
 
     def test_config_kdump_add_ssh_path_valid(self, get_cmd_module):
@@ -153,7 +153,7 @@ class TestKdump:
         # Simulate command execution for 'add ssh_path' with invalid input
         invalid_ssh_path = "relative/path/to/ssh"
         result = runner.invoke(config.config.commands["kdump"].commands["add"].commands["ssh_path"], [invalid_ssh_path], obj=db)
-        assert result.exit_code == 0  # Expect no change to the database
+        assert result.exit_code == 1  # Expect no change to the database
         assert "Invalid path" in result.output
 
     def test_config_kdump_remove_ssh_string(self, get_cmd_module):
@@ -189,7 +189,7 @@ class TestKdump:
 
         # Simulate command execution for 'remove ssh_path' when nothing is set
         result = runner.invoke(config.config.commands["kdump"].commands["remove"].commands["ssh_path"], obj=db)
-        assert result.exit_code == 0
+        assert result.exit_code == 1
         assert "No SSH path is currently set" in result.output
 
     @classmethod
