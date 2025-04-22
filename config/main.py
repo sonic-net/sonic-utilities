@@ -6001,11 +6001,11 @@ def bind(ctx, interface_name, vrf_name):
 
     if (isVnet):
         if not is_vnet_exists(config_db, vrf_name):
-            ctx.fail("VNET %s does not exist!" % (vrf_name)) 
+            ctx.fail("VNET %s does not exist!" % (vrf_name))
     else:
         if not is_vrf_exists(config_db, vrf_name):
             ctx.fail("VRF %s does not exist!" % (vrf_name))
-        
+
     table_name = get_interface_table_name(interface_name)
     if table_name == "":
         ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan/Loopback]")
@@ -6013,7 +6013,7 @@ def bind(ctx, interface_name, vrf_name):
         if (isVnet):
             if (config_db.get_entry(table_name, interface_name).get('vnet_name') == vrf_name):
                 return
-        else:        
+        else:
             if (config_db.get_entry(table_name, interface_name).get('vrf_name') == vrf_name):
                 return
 
@@ -6048,9 +6048,9 @@ def bind(ctx, interface_name, vrf_name):
         else:
             subintf_entry['vrf_name'] = vrf_name
             config_db.set_entry(table_name, interface_name, subintf_entry)
-    else:    
+    else:
         if (isVnet):
-            config_db.set_entry(table_name, interface_name, {"vnet_name": vrf_name}) 
+            config_db.set_entry(table_name, interface_name, {"vnet_name": vrf_name})
         else:
             config_db.set_entry(table_name, interface_name, {"vrf_name": vrf_name})
 
@@ -6058,6 +6058,7 @@ def bind(ctx, interface_name, vrf_name):
 #
 # 'unbind' subcommand
 #
+
 
 @vrf.command()
 @click.argument('interface_name', metavar='<interface_name>', required=True)
