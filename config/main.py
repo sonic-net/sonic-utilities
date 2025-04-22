@@ -9412,7 +9412,7 @@ def add_vnet(ctx, vnet_name, vni, vxlan_tunnel, peer_list, guid, scope, advertis
 @click.argument('vnet_name', metavar='<vnet_name>', required=True)
 @click.pass_context
 def del_vnet(ctx, vnet_name):
-    """Del vrf"""
+    """Del Vnet"""
     config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
     if not vnet_name.startswith("Vnet_"):
         ctx.fail("'vnet_name' must begin with 'Vnet_' .")

@@ -196,6 +196,7 @@
     * [VxLAN show commands](#vxlan-show-commands)
   * [Vnet](#vnet)
     * [Vnet show commands](#vnet-show-commands)
+    * [Vnet config commands](#vnet-config-commands)
 * [Warm Reboot](#warm-reboot)
 * [Warm Restart](#warm-restart)
   * [Warm Restart show commands](#warm-restart-show-commands)
@@ -6329,8 +6330,8 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#interf
 
 **config interface vrf bind**
 
-This command is used to bind a interface to a vrf.
-By default, all L3 interfaces will be in default vrf. Above vrf bind command will let users bind interface to a vrf.
+This command is used to bind a interface to a vrf as well as vnet.
+By default, all L3 interfaces will be in default vrf. Above vrf bind command will let users bind interface to a vrf/vnet.
 
 - Usage:
   ```
@@ -6339,8 +6340,8 @@ By default, all L3 interfaces will be in default vrf. Above vrf bind command wil
 
 **config interface vrf unbind**
 
-This command is used to ubind a interface from a vrf.
-This will move the interface to default vrf.
+This command is used to ubind a interface from a vrf/vnet.
+This will move the interface to default vrf/vnet.
 
 - Usage:
   ```
@@ -12104,6 +12105,7 @@ This command displays vnet interfaces information about all the vnets configured
   Vnet_3000    Vlan2000
   Vnet_1000    PortChannel0002
   Vnet_5000    Po0002.101
+  Vnet_4000    Loopback0
   ```
 
 **show vnet neighbors**
@@ -12124,10 +12126,13 @@ This command displays vnet neighbor information about all the vnets configured i
   -----------  -----------  -------------  ------------
                11.11.11.11                 Ethernet1
                11.11.11.12                 Ethernet1
+               11.11.11.13                 PortChannel0002
+               11.11.11.14                 Po0002.101
 
   Vnet_3000    neighbor     mac_address        interfaces
   -----------  -----------  -----------------  ------------
                20.20.20.20  aa:bb:cc:dd:ee:ff  Vlan2000
+               30.30.30.30  11:22:33:44:55:66  Ethernet0.1002
   ```
 
 **show vnet routes all**
@@ -12176,6 +12181,29 @@ This command displays tunnel routes information about all the vnets configured i
   Vnet_3000    100.100.2.1/32  10.10.10.2  00:00:00:00:03:04
   ```
 
+#### Vnet config commands
+
+**config vnet add**
+
+This command creates vnet in SONiC system with provided vnet-name.
+
+- Usage:
+  ```
+  config vnet add <vnet-name> <vni> <vxlan-tunnel> [<peer_list>] [<guid>] [<scope>] [<advertise_prefix>] [<overlay_dmac>] [<src_mac>]
+  ```
+
+Note: vnet-name should always start with keyword "Vnet_"
+Mandatory Parameters: vnet_name, vni, vxlan_tunnel
+Optional Parameters: peer_list, guid, scope, advertised_prefix, overlay_dmac, src_mac
+
+**config vnet del**
+
+This command deletes vnet with name vnet-name.
+
+- Usage:
+  ```
+  config vnet del <vnet-name>
+  ```
 Go Back To [Beginning of the document](#) or [Beginning of this section](#vxlan--vnet)
 
 ## Warm Reboot
