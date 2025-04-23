@@ -64,29 +64,82 @@ def advertised_routes(args):
     click.echo(tabulate(table, header))
 
 
+def get_vnet_info(config_db, vnet_name):
+    """
+    Returns a tuple of (vnet_data, interfaces) for a given VNET name.
+    Includes INTERFACE, VLAN_INTERFACE, VLAN_SUB_INTERFACE, PORTCHANNEL_INTERFACE, and LOOPBACK_INTERFACE.
+    """
+    vnet_data = config_db.get_entry('VNET', vnet_name)
+    if not vnet_data:
+        return None, []
+
+    interfaces = []
+    interface_tables = [
+        'INTERFACE',
+        'VLAN_INTERFACE',
+        'VLAN_SUB_INTERFACE',
+        'PORTCHANNEL_INTERFACE',
+        'LOOPBACK_INTERFACE'
+    ]
+
+    for table in interface_tables:
+        intfs_data = config_db.get_table(table)
+        for intf, data in intfs_data.items():
+            if data.get('vnet_name') == vnet_name:
+                interfaces.append(intf)
+
+    return vnet_data, interfaces
+
+
+def format_vnet_output(vnet_name, vnet_data, interfaces):
+    headers = ['vnet name', 'vxlan tunnel', 'vni', 'peer list', 'guid', 'interfaces']
+    row = [
+        vnet_name,
+        vnet_data.get('vxlan_tunnel'),
+        vnet_data.get('vni'),
+        vnet_data.get('peer_list'),
+        vnet_data.get('guid'),
+        ", ".join(interfaces) if interfaces else "no interfaces"
+    ]
+    return headers, [row]
+
+
+@vnet.command()
+@click.argument('guid', required=True)
+def guid(guid):
+    """Show VNET details using GUID"""
+    config_db = ConfigDBConnector()
+    config_db.connect()
+
+    vnet_table = config_db.get_table('VNET')
+
+    # Find VNET name with matching GUID
+    vnet_name = next((name for name, data in vnet_table.items() if data.get('guid') == guid), None)
+
+    if not vnet_name:
+        click.echo(f"No VNET found with GUID '{guid}'")
+        return
+
+    vnet_data, interfaces = get_vnet_info(config_db, vnet_name)
+    headers, table = format_vnet_output(vnet_name, vnet_data, interfaces)
+    click.echo(tabulate(table, headers=headers))
+
+
 @vnet.command()
 @click.argument('vnet_name', required=True)
 def name(vnet_name):
-    """Show vnet name <vnet name> information"""
+    """Show VNET details for a given VNET name"""
     config_db = ConfigDBConnector()
     config_db.connect()
-    header = ['vnet name', 'vxlan tunnel', 'vni', 'peer list']
 
-    # Fetching data from config_db for VNET
-    vnet_data = config_db.get_entry('VNET', vnet_name)
+    vnet_data, interfaces = get_vnet_info(config_db, vnet_name)
 
-    def tablelize(vnet_key, vnet_data):
-        table = []
-        if vnet_data:
-            r = []
-            r.append(vnet_key)
-            r.append(vnet_data.get('vxlan_tunnel'))
-            r.append(vnet_data.get('vni'))
-            r.append(vnet_data.get('peer_list'))
-            table.append(r)
-        return table
+    if not vnet_data:
+        click.echo(f"VNET '{vnet_name}' not found!")
+        return
 
-    click.echo(tabulate(tablelize(vnet_name, vnet_data), header))
+    headers, table = format_vnet_output(vnet_name, vnet_data, interfaces)
+    click.echo(tabulate(table, headers=headers))
 
 
 @vnet.command()
@@ -94,7 +147,7 @@ def brief():
     """Show vnet brief information"""
     config_db = ConfigDBConnector()
     config_db.connect()
-    header = ['vnet name', 'vxlan tunnel', 'vni', 'peer list']
+    header = ['vnet name', 'vxlan tunnel', 'vni', 'peer list', 'guid']
 
     # Fetching data from config_db for VNET
     vnet_data = config_db.get_table('VNET')
@@ -108,6 +161,7 @@ def brief():
             r.append(vnet_data[k].get('vxlan_tunnel'))
             r.append(vnet_data[k].get('vni'))
             r.append(vnet_data[k].get('peer_list'))
+            r.append(vnet_data[k].get('guid'))
             table.append(r)
         return table
 
@@ -157,7 +211,7 @@ def interfaces():
 
     # Fetching data from config_db for interfaces
     intfs_data = config_db.get_table("INTERFACE")
-    vlan_intfs_data = config_db.get_table("VLAN_INTERFACE")
+    vlan_sub_intfs_data = config_db.get_table("VLAN_SUB_INTERFACE")
 
     vnet_intfs = {}
     for k, v in intfs_data.items():
@@ -168,7 +222,7 @@ def interfaces():
             else:
                 vnet_intfs[vnet_name] = [k]
 
-    for k, v in vlan_intfs_data.items():
+    for k, v in vlan_sub_intfs_data.items():
         if 'vnet_name' in v:
             vnet_name = v['vnet_name']
             if vnet_name in vnet_intfs:
