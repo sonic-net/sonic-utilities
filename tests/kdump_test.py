@@ -194,8 +194,11 @@ class TestKdump:
         (config, show) = get_cmd_module
         db = Db()
         runner = CliRunner()
+
+        # Clear the default ssh_path if any
+        db.cfgdb.mod_entry("KDUMP", "config", {"ssh_path": ""})
         print(db.cfgdb.get_table("KDUMP")["config"].get("ssh_path"))
-        # Simulate command execution for 'remove ssh_path' when nothing is set
+
         result = runner.invoke(config.config.commands["kdump"].commands["remove"].commands["ssh_path"], obj=db)
         assert result.exit_code == 0
         assert "No SSH path is currently set" in result.output
