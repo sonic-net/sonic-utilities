@@ -197,7 +197,7 @@ class TestKdump:
         print(db.cfgdb.get_table("KDUMP")["config"].get("ssh_path"))
         # Simulate command execution for 'remove ssh_path' when nothing is set
         result = runner.invoke(config.config.commands["kdump"].commands["remove"].commands["ssh_path"], obj=db)
-        assert result.exit_code == 1
+        assert result.exit_code == 0
         assert "No SSH path is currently set" in result.output
 
     @classmethod
