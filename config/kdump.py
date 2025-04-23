@@ -242,7 +242,7 @@ def remove_ssh_string(db):
 #
 
 
-@kdump_remove.command(name="ssh-path", help="Remove SSH path")
+@kdump_remove.command(name="ssh_path", help="Remove SSH path")
 @pass_db
 def remove_ssh_path(db):
     kdump_table = db.cfgdb.get_table("KDUMP")

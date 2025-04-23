@@ -146,21 +146,6 @@ class TestKdump:
         assert result.exit_code == 0
         assert db.cfgdb.get_table("KDUMP")["config"]["ssh_path"] == valid_ssh_path
 
-    def test_config_kdump_add_ssh_path_valid(self, get_cmd_module):
-        (config, show) = get_cmd_module
-        db = Db()
-        runner = CliRunner()
-
-        # Simulate command execution for 'add ssh_path' with valid input
-        valid_ssh_path = "/absolute/path/to/ssh"
-        result = runner.invoke(
-                    config.config.commands["kdump"].commands["add"].commands["ssh_path"],
-                    [valid_ssh_path],
-                    obj=db
-                )
-        assert result.exit_code == 0
-        assert db.cfgdb.get_table("KDUMP")["config"]["ssh_path"] == valid_ssh_path
-
     def test_config_kdump_add_ssh_path_invalid(self, get_cmd_module):
         (config, show) = get_cmd_module
         db = Db()
