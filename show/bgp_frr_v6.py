@@ -250,5 +250,5 @@ def vrf_network(ctx, ipaddress, info_type, namespace):
 def summary(ctx, namespace, display):
     """Show summarized information of IPv6 BGP state"""
     vrf = ctx.parent.params['vrf']
-    bgp_summary = bgp_util.get_bgp_summary_from_all_bgp_instances(constants.IPV6, namespace,display)
+    bgp_summary = bgp_util.get_bgp_summary_from_all_bgp_instances(constants.IPV6, namespace,display,vrf)
     bgp_util.display_bgp_summary(bgp_summary=bgp_summary, af=constants.IPV6)

@@ -297,5 +297,5 @@ def vrf_network(ctx, ipaddress, info_type, namespace):
 def vrf_summary(namespace, display):
     vrf = ctx.parent.params['vrf']
     bgp_summary = bgp_util.get_bgp_summary_from_all_bgp_instances(
-        constants.IPV4, namespace, display)
+        constants.IPV4, namespace, display, vrf)
     bgp_util.display_bgp_summary(bgp_summary=bgp_summary, af=constants.IPV4)
