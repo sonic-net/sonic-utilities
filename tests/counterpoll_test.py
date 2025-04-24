@@ -33,6 +33,7 @@ FLOW_CNT_TRAP_STAT    10000               enable
 FLOW_CNT_ROUTE_STAT   10000               enable
 WRED_ECN_QUEUE_STAT   10000               enable
 WRED_ECN_PORT_STAT    1000                enable
+SRV6_STAT             10000               enable
 """
 
 expected_counterpoll_show_dpu = """Type                  Interval (in ms)    Status
@@ -49,6 +50,7 @@ FLOW_CNT_TRAP_STAT    10000               enable
 FLOW_CNT_ROUTE_STAT   10000               enable
 WRED_ECN_QUEUE_STAT   10000               enable
 WRED_ECN_PORT_STAT    1000                enable
+SRV6_STAT             10000               enable
 ENI_STAT              1000                enable
 """
 
@@ -334,6 +336,31 @@ class TestCounterpoll(object):
         table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
         print(table)
         assert test_interval == table["WRED_ECN_QUEUE"]["POLL_INTERVAL"]
+
+    @pytest.mark.parametrize("status", ["disable", "enable"])
+    def test_update_srv6_status(self, status):
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(counterpoll.cli.commands["srv6"].commands[status], [], obj=db.cfgdb)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
+        assert status == table["SRV6"]["FLEX_COUNTER_STATUS"]
+
+    def test_update_srv6_interval(self):
+        runner = CliRunner()
+        db = Db()
+        test_interval = "20000"
+
+        result = runner.invoke(counterpoll.cli.commands["srv6"].commands["interval"], [test_interval], obj=db.cfgdb)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
+        assert test_interval == table["SRV6"]["POLL_INTERVAL"]
+
 
     @classmethod
     def teardown_class(cls):
