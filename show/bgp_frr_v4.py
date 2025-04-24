@@ -162,7 +162,7 @@ def vrf(ctx, vrf):
     """Show IPv4 BGP information for a given VRF"""
     pass
 
-# 'neighbors' subcommand ("show ip bgp neighbors")
+# 'neighbors' subcommand ("show ip bgp vrf neighbors")
 @vrf.command('neighbors')
 @click.argument('ipaddress', required=False)
 @click.argument('info_type',
@@ -217,3 +217,85 @@ def vrf_neighbors(ctx, ipaddress, info_type, namespace):
         output += bgp_util.run_bgp_show_command(command, ns)
 
     click.echo(output.rstrip('\n'))
+
+# 'network' subcommand ("show ip bgp vrf network")
+@vrf.command('network')
+@click.argument('ipaddress',
+                metavar='[<ipv4-address>|<ipv4-prefix>]',
+                required=True if device_info.is_supervisor() else False)
+@click.argument('info_type',
+                metavar='[bestpath|json|longer-prefixes|multipath]',
+                type=click.Choice(
+                    ['bestpath', 'json', 'longer-prefixes', 'multipath']),
+                required=False)
+@click.option('--namespace',
+                '-n',
+                'namespace',
+                type=str,
+                show_default=True,
+                required=False,
+                help='Namespace name or all',
+                default="all",
+                callback=multi_asic_util.multi_asic_namespace_validation_callback)
+@click.pass_context
+def vrf_network(ctx, ipaddress, info_type, namespace):
+    """Show IP (IPv4) BGP network"""
+
+    vrf = ctx.parent.params['vrf']
+    command = 'show ip bgp'
+    if vrf is not None:
+        command += ' vrf {}'.format(vrf) 
+
+    if device_info.is_supervisor():
+        # the command will be executed by rexec
+        click.echo("Since the current device is a chassis supervisor, " +
+                   "this command will be executed remotely on all linecards")
+        proc = subprocess.run(["rexec", "all"] + ["-c", " ".join(sys.argv)])
+        sys.exit(proc.returncode)
+
+    namespace = namespace.strip()
+    if multi_asic.is_multi_asic():
+        if namespace != "all" and namespace not in multi_asic.get_namespace_list():
+            ctx = click.get_current_context()
+            ctx.fail('invalid namespace {}. provide namespace from list {}'
+                     .format(namespace, multi_asic.get_namespace_list()))
+
+    if ipaddress is not None:
+        if '/' in ipaddress:
+            # For network prefixes then this all info_type(s) are available
+            pass
+        else:
+            # For an ipaddress then check info_type, exit if specified option doesn't work.
+            if info_type in ['longer-prefixes']:
+                click.echo('The parameter option: "{}" only available if passing a network prefix'.format(info_type))
+                click.echo("EX: 'show ip bgp network 10.0.0.0/24 longer-prefixes'")
+                raise click.Abort()
+
+        command += ' {}'.format(ipaddress)
+
+        # info_type is only valid if prefix/ipaddress is specified
+        if info_type is not None:
+            command += ' {}'.format(info_type)
+
+    if namespace == "all":
+        if multi_asic.is_multi_asic():
+            for ns in multi_asic.get_namespace_list():
+                click.echo("\n======== namespace {} ========".format(ns))
+                output = bgp_util.run_bgp_show_command(command, ns)
+                click.echo(output.rstrip('\n'))
+        else:
+            output = bgp_util.run_bgp_show_command(command, "")
+            click.echo(output.rstrip('\n'))
+    else:
+        output = bgp_util.run_bgp_show_command(command, namespace)
+        click.echo(output.rstrip('\n'))
+
+# 'summary' subcommand ("show ip bgp vrf summary")
+@vrf.command('summary')
+@multi_asic_util.multi_asic_click_options
+@click.pass_context
+def vrf_summary(namespace, display):
+    vrf = ctx.parent.params['vrf']
+    bgp_summary = bgp_util.get_bgp_summary_from_all_bgp_instances(
+        constants.IPV4, namespace, display)
+    bgp_util.display_bgp_summary(bgp_summary=bgp_summary, af=constants.IPV4)
