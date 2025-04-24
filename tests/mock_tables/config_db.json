@@ -2039,6 +2039,12 @@
         "pool": "egress_lossy_pool",
         "size": "0"
     },
+    "BUFFER_PROFILE|q_lossy_profile": {
+        "packet_discard_action": "drop",
+        "dynamic_th": "0",
+        "pool": "egress_lossy_pool",
+        "size": "0"
+    },
     "BUFFER_PG|Ethernet0|3-4": {
         "profile": "NULL"
     },
