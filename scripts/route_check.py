@@ -240,7 +240,7 @@ def checkout_rt_entry(k):
     :return (True, ip) or (False, None)
     """
     if k.startswith(ASIC_KEY_PREFIX):
-        e = k.lower()[len(ASIC_KEY_PREFIX) + 9:].split("\"", 1)[0]
+        e = k.lower()[len(ASIC_KEY_PREFIX) + len('{"dest":"'):].split("\"", 1)[0]
         if not is_local(e):
             return True, e
     return False, None
