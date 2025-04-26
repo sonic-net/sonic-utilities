@@ -32,9 +32,9 @@ def bgp():
 # 'summary' subcommand ("show ip bgp summary")
 @bgp.command()
 @multi_asic_util.multi_asic_click_options
-def summary(namespace, display):
+def summary(namespace, display, vrf=None):
     bgp_summary = bgp_util.get_bgp_summary_from_all_bgp_instances(
-        constants.IPV4, namespace, display)
+        constants.IPV4, namespace, display, vrf)
     bgp_util.display_bgp_summary(bgp_summary=bgp_summary, af=constants.IPV4)
 
 # 'neighbors' subcommand ("show ip bgp neighbors")
@@ -52,7 +52,7 @@ def summary(namespace, display):
                 show_default=True,
                 help='Namespace name or all',
                 callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def neighbors(ipaddress, info_type, namespace):
+def neighbors(ipaddress, info_type, namespace, vrf=None):
     """Show IP (IPv4) BGP neighbors"""
 
     command = 'show ip bgp neighbor'
@@ -161,6 +161,14 @@ def network(ipaddress, info_type, namespace):
 def vrf(ctx, vrf):
     """Show IPv4 BGP information for a given VRF"""
     pass
+
+# 'summary' subcommand ("show ip bgp vrf <vrf/vnet name> summary")
+@vrf.command('summary')
+@multi_asic_util.multi_asic_click_options
+@click.pass_context
+def vrf_summary(ctx, namespace, display):
+    vrf = ctx.parent.params['vrf']
+    summary(namespace, display, vrf)
 
 # 'neighbors' subcommand ("show ip bgp vrf neighbors")
 @vrf.command('neighbors')
@@ -289,13 +297,3 @@ def vrf_network(ctx, ipaddress, info_type, namespace):
     else:
         output = bgp_util.run_bgp_show_command(command, namespace)
         click.echo(output.rstrip('\n'))
-
-# 'summary' subcommand ("show ip bgp vrf summary")
-@vrf.command('summary')
-@multi_asic_util.multi_asic_click_options
-@click.pass_context
-def vrf_summary(namespace, display):
-    vrf = ctx.parent.params['vrf']
-    bgp_summary = bgp_util.get_bgp_summary_from_all_bgp_instances(
-        constants.IPV4, namespace, display, vrf)
-    bgp_util.display_bgp_summary(bgp_summary=bgp_summary, af=constants.IPV4)
