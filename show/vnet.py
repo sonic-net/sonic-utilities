@@ -212,7 +212,7 @@ def interfaces():
     # Fetching data from config_db for interfaces
     intfs_data = config_db.get_table("INTERFACE")
     vlan_intfs_data = config_db.get_table("VLAN_INTERFACE")
-    sub_intfs_data = config_db.get_table("VLAN_SUB_INTERFACE")
+    vlan_sub_intfs_data = config_db.get_table("VLAN_SUB_INTERFACE")
     portchannel_intfs_data = config_db.get_table("PORTCHANNEL_INTERFACE")
     loopback_intfs_data = config_db.get_table("LOOPBACK_INTERFACE")
 
@@ -233,14 +233,6 @@ def interfaces():
             else:
                 vnet_intfs[vnet_name] = [k]
 
-    for k, v in sub_intfs_data.items():
-        if 'vnet_name' in v:
-            vnet_name = v['vnet_name']
-            if vnet_name in vnet_intfs:
-                vnet_intfs[vnet_name].append(k)
-            else:
-                vnet_intfs[vnet_name] = [k]
-
     for k, v in portchannel_intfs_data.items():
         if 'vnet_name' in v:
             vnet_name = v['vnet_name']
@@ -250,6 +242,14 @@ def interfaces():
                 vnet_intfs[vnet_name] = [k]
 
     for k, v in loopback_intfs_data.items():
+        if 'vnet_name' in v:
+            vnet_name = v['vnet_name']
+            if vnet_name in vnet_intfs:
+                vnet_intfs[vnet_name].append(k)
+            else:
+                vnet_intfs[vnet_name] = [k]
+    
+    for k, v in vlan_intfs_data.items():
         if 'vnet_name' in v:
             vnet_name = v['vnet_name']
             if vnet_name in vnet_intfs:
