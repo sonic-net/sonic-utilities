@@ -2,7 +2,8 @@
     "VNET|Vnet_2000": {
         "peer_list": "",
         "vni": "2000",
-        "vxlan_tunnel": "tunnel1"
+        "vxlan_tunnel": "tunnel1",
+        "guid": "1234-56-7890-1234"
     },
     "VXLAN_TUNNEL|tunnel1": {
         "src_ip": "10.10.10.10"
@@ -46,5 +47,20 @@
     },
     "VNET|Vnet_103": {
          "NULL": "NULL"
+    },
+    "VLAN_SUB_INTERFACE|Ethernet0.100": {
+        "vnet_name": "Vnet_2000"
+    },
+    "INTERFACE|Ethernet4": {
+        "vnet_name": "Vnet_2000"
+    },
+    "VLAN_INTERFACE|Vlan40": {
+        "vnet_name": "Vnet_2000"
+    },
+    "PORTCHANNEL_INTERFACE|PortChannel0002": {
+        "vnet_name": "Vnet_2000"
+    },
+    "LOOPBACK_INTERFACE|Loopback0": {
+        "vnet_name": "Vnet_2000"
     }
 }
