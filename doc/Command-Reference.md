@@ -12198,7 +12198,29 @@ Optional Parameters: peer_list, guid, scope, advertised_prefix, overlay_dmac, sr
 
 **config vnet del**
 
-This command deletes vnet with name vnet-name.
+This command deletes vnet with name vnet-name and its associated binded interfaces and routes.
+
+- Usage:
+  ```
+  config vnet del <vnet-name>
+  ```
+
+**config vnet add route**
+
+This command creates vnet route in SONiC system with provided vnet-name and prefix.
+
+- Usage:
+  ```
+  config vnet add-route <vnet-name> <prefix> <endpoint> [<vni>] [<endpoint_monitor>] [<mac_address>] [<profile>] [<primary>] [<monitoring>] [<adv_prefix>]
+  ```
+
+Note: vnet-name should always start with keyword "Vnet_"
+Mandatory Parameters: vnet_name, prefix, endpoint
+Optional Parameters: vni, endpoint_monitor, mac_address, profile, primary, monitoring, adv_prefix
+
+**config vnet del-route <vnet-name> <prefix>**
+
+This command deletes vnet route with name vnet-name and prefix.
 
 - Usage:
   ```

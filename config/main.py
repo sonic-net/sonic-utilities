@@ -430,6 +430,7 @@ def is_vnet_exists(config_db, vnet_name):
 
     return False
 
+
 def is_vnet_route_exists(config_db, vnet_name, prefix):
     """Check if VNET exists
     """
@@ -9454,18 +9455,19 @@ def del_vnet(ctx, vnet_name):
 @click.argument('vnet_name', metavar='<vnet_name>', type=str, required=True)
 @click.argument('prefix', metavar='<prefix>', required=True)
 @click.argument('end_point', metavar='<end_point>', required=True)
-@click.argument('mac_address', metavar='<mac_address>', required=False)
 @click.argument('vni', metavar='<vni>', required=False)
+@click.argument('mac_address', metavar='<mac_address>', required=False)
 @click.argument('endpoint_monitor', metavar='<endpoint_monitor>', required=False)
 @click.argument('profile', metavar='<profile>', required=False)
 @click.argument('primary', metavar='<primary>', required=False)
 @click.argument('monitoring', metavar='<monitoring>', required=False)
 @click.argument('adv_prefix', metavar='<adv_prefix>', type=bool, required=False)
 @click.pass_context
-def add_vnet_route(ctx, vnet_name, prefix, end_point, mac_address, vni, endpoint_monitor, profile, primary, monitoring, adv_prefix):
+def add_vnet_route(ctx, vnet_name, prefix, end_point, vni, mac_address, endpoint_monitor,
+                   profile, primary, monitoring, adv_prefix):
     """Add VNET Route"""
     config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
-    
+
     if not vnet_name.startswith("Vnet_"):
         ctx.fail("'vnet_name' must begin with 'Vnet_' .")
     if len(vnet_name) > VNET_NAME_MAX_LEN:
@@ -9477,12 +9479,12 @@ def add_vnet_route(ctx, vnet_name, prefix, end_point, mac_address, vni, endpoint
     else:
         subvnet_dict = {}
         subvnet_dict["end_point"] = end_point
-        if mac_address:
-            subvnet_dict["mac_address"] = mac_address
         if vni:
             subvnet_dict["vni"] = vni
         if endpoint_monitor:
             subvnet_dict['endpoint_monitor'] = endpoint_monitor
+        if mac_address:
+            subvnet_dict["mac_address"] = mac_address
         if profile:
             subvnet_dict['profile'] = profile
         if primary:
@@ -9492,7 +9494,7 @@ def add_vnet_route(ctx, vnet_name, prefix, end_point, mac_address, vni, endpoint
         if adv_prefix:
             subvnet_dict['adv_prefix'] = adv_prefix
         try:
-            config_db.set_entry('VNET_ROUTE_TUNNEL', (vnet_name,prefix), subvnet_dict)
+            config_db.set_entry('VNET_ROUTE_TUNNEL', (vnet_name, prefix), subvnet_dict)
         except ValueError as e:
             ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
