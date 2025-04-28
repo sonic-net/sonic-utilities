@@ -248,7 +248,7 @@ def interfaces():
                 vnet_intfs[vnet_name].append(k)
             else:
                 vnet_intfs[vnet_name] = [k]
-    
+
     for k, v in vlan_intfs_data.items():
         if 'vnet_name' in v:
             vnet_name = v['vnet_name']

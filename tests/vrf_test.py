@@ -278,6 +278,7 @@ Error: 'vrf_name' length should not exceed 15 characters
         assert ('VrfNameTooLong!!!') not in db.cfgdb.get_table('VRF')
         assert expected_output in result.output
 
+
 class TestVnet(object):
     @classmethod
     def setup_class(cls):
@@ -334,7 +335,7 @@ class TestVnet(object):
         assert "Vlan40" in result.output
         assert "PortChannel0002" in result.output
         assert "Loopback0" in result.output
-    
+
     def test_vnet_add_del(self):
         runner = CliRunner()
         db = Db()
