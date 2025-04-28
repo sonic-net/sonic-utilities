@@ -430,6 +430,17 @@ def is_vnet_exists(config_db, vnet_name):
 
     return False
 
+def is_vnet_route_exists(config_db, vnet_name, prefix):
+    """Check if VNET exists
+    """
+    keys = config_db.get_keys("VNET_ROUTE_TUNNEL")
+    for k in keys:
+        if k[0] == vnet_name and k[1] == prefix:
+            return True
+
+    return False
+
+
 def is_interface_bind_to_vrf(config_db, interface_name):
     """Get interface if bind to vrf or not
     """
@@ -542,6 +553,15 @@ def del_interface_bind_to_vnet(config_db, vnet_name):
                     for ip in interface_ipaddresses:
                         remove_router_interface_ip_address(config_db, interface_name, ip)
                     config_db.set_entry(table_name, interface_name, None)
+
+
+def del_route_bind_to_vnet(config_db, vnet_name):
+    """del interface bind to vnet
+    """
+    tables = ['VNET_ROUTE_TUNNEL']
+    for key in tables:
+        if key[0] == vnet_name:
+            config_db.delete_entry('VNET_ROUTE_TUNNEL', key)
 
 def set_interface_naming_mode(mode):
     """Modify SONIC_CLI_IFACE_MODE env variable in user .bashrc
@@ -9390,17 +9410,17 @@ def add_vnet(ctx, vnet_name, vni, vxlan_tunnel, peer_list, guid, scope, advertis
         subvnet_dict = {}
         subvnet_dict["vni"] = vni
         subvnet_dict["vxlan_tunnel"] = vxlan_tunnel
-        if peer_list is not None:
+        if peer_list:
             subvnet_dict["peer_list"] = peer_list
-        if guid is not None:
+        if guid:
             subvnet_dict["guid"] = guid
-        if scope is not None:
+        if scope:
             subvnet_dict["scope"] = scope
-        if advertise_prefix is not None:
+        if advertise_prefix:
             subvnet_dict["advertise_prefix"] = advertise_prefix
-        if overlay_dmac is not None:
+        if overlay_dmac:
             subvnet_dict["overlay_dmac"] = overlay_dmac
-        if src_mac is not None:
+        if src_mac:
             subvnet_dict["src_mac"] = src_mac
         try:
             config_db.set_entry('VNET', vnet_name, subvnet_dict)
@@ -9422,11 +9442,84 @@ def del_vnet(ctx, vnet_name):
         ctx.fail("VNET {} does not exist!".format(vnet_name))
     else:
         del_interface_bind_to_vnet(config_db, vnet_name)
+        del_route_bind_to_vnet(config_db, vnet_name)
         try:
             config_db.set_entry('VNET', vnet_name, None)
         except JsonPatchConflict as e:
             ctx.fail("Invalid ConfigDB. Error: {}".format(e))
-        click.echo("VNET {} deleted and all associated IP addresses removed.".format(vnet_name))
+        click.echo("VNET {} deleted and all associated IP addresses and routes removed.".format(vnet_name))
+
+
+@vnet.command('add-route')
+@click.argument('vnet_name', metavar='<vnet_name>', type=str, required=True)
+@click.argument('prefix', metavar='<prefix>', required=True)
+@click.argument('end_point', metavar='<end_point>', required=True)
+@click.argument('mac_address', metavar='<mac_address>', required=False)
+@click.argument('vni', metavar='<vni>', required=False)
+@click.argument('endpoint_monitor', metavar='<endpoint_monitor>', required=False)
+@click.argument('profile', metavar='<profile>', required=False)
+@click.argument('primary', metavar='<primary>', required=False)
+@click.argument('monitoring', metavar='<monitoring>', required=False)
+@click.argument('adv_prefix', metavar='<adv_prefix>', type=bool, required=False)
+@click.pass_context
+def add_vnet_route(ctx, vnet_name, prefix, end_point, mac_address, vni, endpoint_monitor, profile, primary, monitoring, adv_prefix):
+    """Add VNET Route"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+    
+    if not vnet_name.startswith("Vnet_"):
+        ctx.fail("'vnet_name' must begin with 'Vnet_' .")
+    if len(vnet_name) > VNET_NAME_MAX_LEN:
+        ctx.fail("'vnet_name' length should not exceed {} characters.".format(VNET_NAME_MAX_LEN))
+    if not is_vnet_exists(config_db, vnet_name):
+        ctx.fail("VNET {} doesnot exist, cannot add a route!".format(vnet_name))
+    if is_vnet_route_exists(config_db, vnet_name, prefix):
+        ctx.fail("Route already exists for the VNET {}!".format(vnet_name))
+    else:
+        subvnet_dict = {}
+        subvnet_dict["end_point"] = end_point
+        if mac_address:
+            subvnet_dict["mac_address"] = mac_address
+        if vni:
+            subvnet_dict["vni"] = vni
+        if endpoint_monitor:
+            subvnet_dict['endpoint_monitor'] = endpoint_monitor
+        if profile:
+            subvnet_dict['profile'] = profile
+        if primary:
+            subvnet_dict['primary'] = primary
+        if monitoring:
+            subvnet_dict['monitoring'] = monitoring
+        if adv_prefix:
+            subvnet_dict['adv_prefix'] = adv_prefix
+        try:
+            config_db.set_entry('VNET_ROUTE_TUNNEL', (vnet_name,prefix), subvnet_dict)
+        except ValueError as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+
+@vnet.command('del-route')
+@click.argument('vnet_name', metavar='<vnet_name>', type=str, required=True)
+@click.argument('prefix', metavar='<prefix>', required=True)
+@click.pass_context
+def del_vnet_route(ctx, vnet_name, prefix):
+    """Del VNET route"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+    if not vnet_name.startswith("Vnet_"):
+        ctx.fail("'vnet_name' must begin with 'Vnet_' .")
+    if len(vnet_name) > VNET_NAME_MAX_LEN:
+        ctx.fail("'vnet_name' length should not exceed {} characters".format(VNET_NAME_MAX_LEN))
+    if not is_vnet_exists(config_db, vnet_name):
+        ctx.fail("VNET {} doesnot exist, cannot delete the route!".format(vnet_name))
+    if not is_vnet_route_exists(config_db, vnet_name, prefix):
+        ctx.fail("Route does not exist for the VNET {}, cant delete it!".format(vnet_name))
+    else:
+        for key in config_db.get_table('VNET_ROUTE_TUNNEL'):
+            if key[0] == vnet_name and key[1] == prefix:
+                try:
+                    config_db.set_entry('VNET_ROUTE_TUNNEL', (vnet_name, prefix), None)
+                except JsonPatchConflict as e:
+                    ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
 
 if __name__ == '__main__':
     config()

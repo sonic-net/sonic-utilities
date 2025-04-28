@@ -495,7 +495,7 @@ Error: 'vnet_name' must begin with 'Vnet_' .
         assert expected_output_del in result.output
 
         # Test vnet del
-        expected_output_del = "VNET Vnet_3 deleted and all associated IP addresses removed.\n"
+        expected_output_del = "VNET Vnet_3 deleted and all associated IP addresses and routes removed.\n"
         result = runner.invoke(config.config.commands["vnet"].commands["del"], ["Vnet_3"], obj=vnet_obj)
         assert result.exit_code == 0
         assert ('Vnet_3') not in db.cfgdb.get_table('VNET')
@@ -506,3 +506,92 @@ Error: 'vnet_name' must begin with 'Vnet_' .
         assert result.exit_code != 0
         assert ('Vnet_3') not in db.cfgdb.get_table('VNET')
         assert "VNET Vnet_3 does not exist!" in result.output
+
+    def test_vnet_add_del_route(self):
+        runner = CliRunner()
+        db = Db()
+        vnet_obj = {'config_db': db.cfgdb, 'namespace': db.db.namespace}
+        expected_output = """\
+Error: 'vnet_name' must begin with 'Vnet_' .
+"""
+        # Add the vnet to a vnet table and verify if it exists while route addition
+        args = ["Vnet_3", "2", "tunnel1"]
+        result = runner.invoke(config.config.commands["vnet"].commands["add"], args, obj=vnet_obj)
+        assert ('Vnet_3') in db.cfgdb.get_table('VNET')
+
+        # Test vnet add route using mandatory arguments    
+        args = ["Vnet_3", "10.10.10.10/32", "10.10.10.1"]
+        result = runner.invoke(config.config.commands["vnet"].commands["add-route"], args, obj=vnet_obj)
+        assert any(key[0] == 'Vnet_3' for key in db.cfgdb.get_table('VNET_ROUTE_TUNNEL'))
+        assert result.exit_code == 0
+
+        # Test vnet add route using invalid vnet name
+        args = ["Vnet-3", "10.10.10.10/32", "10.10.10.1"]
+        result = runner.invoke(config.config.commands["vnet"].commands["add-route"], args, obj=vnet_obj)
+        assert result.exit_code != 0
+        assert expected_output in result.output
+
+        # Test vnet add route when vnet doesnt exist
+        args = ["Vnet_6", "10.10.10.10/32", "10.10.10.1"]
+        result = runner.invoke(config.config.commands["vnet"].commands["add-route"], args, obj=vnet_obj)
+        assert "VNET Vnet_6 doesnot exist, cannot add a route!" in result.output
+        assert result.exit_code != 0
+
+        # Test vnet add route when vnet route exists
+        args = ["Vnet_3", "10.10.10.10/32", "10.10.10.1"]
+        result = runner.invoke(config.config.commands["vnet"].commands["add-route"], args, obj=vnet_obj)
+        assert "Route already exists for the VNET Vnet_3" in result.output
+        assert result.exit_code != 0
+
+        # Test vnet add route with optional args
+        args = ["Vnet_4", "22", "tunnel1"]
+        result = runner.invoke(config.config.commands["vnet"].commands["add"], args, obj=vnet_obj)
+        assert ('Vnet_4') in db.cfgdb.get_table('VNET')
+
+        args = ["Vnet_4", "10.10.10.10/32", "10.10.10.1", "11:22:33:44:55:66", "123", "8.8.8.8"]
+        result = runner.invoke(config.config.commands["vnet"].commands["add-route"], args, obj=vnet_obj)
+        assert any(key[0] == 'Vnet_4' for key in db.cfgdb.get_table('VNET_ROUTE_TUNNEL'))
+        assert result.exit_code == 0
+
+        # Test vnet add route using length of vnet name
+        vnet_name = "Vnet_ypfbjjhyzivaythuaxlbcibgdgjkqgapedmiosjgsv"
+        args = [vnet_name, "10.10.10.10/32", "10.10.10.1"]
+        result = runner.invoke(config.config.commands["vnet"].commands["add-route"], args, obj=vnet_obj)
+        assert result.exit_code != 0
+        assert "'vnet_name' length should not exceed 15 characters" in result.output
+        assert vnet_name not in db.cfgdb.get_table('VNET_ROUTE_TUNNEL')
+
+        # Test vnet del with route deletion
+        result = runner.invoke(config.config.commands["vnet"].commands["del"], ["Vnet_4"], obj=vnet_obj)
+        assert any(key[0] != 'Vnet_4' for key in db.cfgdb.get_table('VNET_ROUTE_TUNNEL'))
+
+        # Test vnet del route with wrong vnet name
+        expected_output_del = "'vnet_name' must begin with 'Vnet_' "
+        result = runner.invoke(config.config.commands["vnet"].commands["del-route"], ["vnet_3", "10.10.10.10/32"], obj=vnet_obj)
+        assert result.exit_code != 0
+        assert expected_output_del in result.output
+
+        # Test vnet del route with long vnet name
+        expected_output_del = "'vnet_name' length should not exceed 15 characters"
+        vnet_name = "Vnet_ypfbjjhyzivaythuaxlbcibgdgjkq"
+        result = runner.invoke(config.config.commands["vnet"].commands["del-route"], [vnet_name, "10.10.10.10/32"], obj=vnet_obj)
+        assert result.exit_code != 0
+        assert any(key[0] != vnet_name for key in db.cfgdb.get_table('VNET_ROUTE_TUNNEL'))
+        assert expected_output_del in result.output
+
+        # Test vnet del route
+        result = runner.invoke(config.config.commands["vnet"].commands["del-route"], ["Vnet_3", "10.10.10.10/32"], obj=vnet_obj)
+        assert result.exit_code == 0
+        assert any(key[0] != 'Vnet_3' for key in db.cfgdb.get_table('VNET_ROUTE_TUNNEL'))
+
+        # Test vnet del route for vnet that is non existent
+        result = runner.invoke(config.config.commands["vnet"].commands["del-route"], ["Vnet_100", "10.10.10.10/32"], obj=vnet_obj)
+        assert result.exit_code != 0
+        assert ('Vnet_100') not in db.cfgdb.get_table('VNET')
+        assert "VNET Vnet_100 doesnot exist, cannot delete the route!" in result.output
+
+        # Test vnet del route with non existent route
+        result = runner.invoke(config.config.commands["vnet"].commands["del-route"], ["Vnet_3", "10.10.10.10/32"], obj=vnet_obj)
+        assert result.exit_code != 0
+        assert any(key[0] != 'Vnet_3' for key in db.cfgdb.get_table('VNET_ROUTE_TUNNEL'))
+        assert "Route does not exist for the VNET Vnet_3, cant delete it!" in result.output
