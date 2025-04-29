@@ -9421,7 +9421,7 @@ def add_vnet(ctx, vnet_name, vni, vxlan_tunnel, peer_list, guid, scope, advertis
     config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
 
     vnet_name_is_valid(ctx, vnet_name)
-    
+
     if is_vnet_exists(config_db, vnet_name):
         ctx.fail("VNET {} already exists!".format(vnet_name))
     else:
@@ -9452,7 +9452,7 @@ def add_vnet(ctx, vnet_name, vni, vxlan_tunnel, peer_list, guid, scope, advertis
 def del_vnet(ctx, vnet_name):
     """Del Vnet"""
     config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
-    
+
     vnet_name_is_valid(ctx, vnet_name)
 
     if not is_vnet_exists(config_db, vnet_name):
@@ -9522,7 +9522,7 @@ def del_vnet_route(ctx, vnet_name, prefix):
     config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
 
     vnet_name_is_valid(ctx, vnet_name)
-    
+
     if not is_vnet_exists(config_db, vnet_name):
         ctx.fail("VNET {} doesnot exist, cannot delete the route!".format(vnet_name))
     if not is_vnet_route_exists(config_db, vnet_name, prefix):
