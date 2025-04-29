@@ -442,6 +442,15 @@ def is_vnet_route_exists(config_db, vnet_name, prefix):
     return False
 
 
+def vnet_name_is_valid(ctx, vnet_name):
+    """Check if the vnet name is valid
+    """
+    if not vnet_name.startswith("Vnet_"):
+        ctx.fail("'vnet_name' must begin with 'Vnet_' .")
+    if len(vnet_name) > VNET_NAME_MAX_LEN:
+        ctx.fail("'vnet_name' length should not exceed {} characters".format(VNET_NAME_MAX_LEN))
+
+
 def is_interface_bind_to_vrf(config_db, interface_name):
     """Get interface if bind to vrf or not
     """
@@ -9411,10 +9420,8 @@ def add_vnet(ctx, vnet_name, vni, vxlan_tunnel, peer_list, guid, scope, advertis
     """Add Vnet"""
     config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
 
-    if not vnet_name.startswith("Vnet_"):
-        ctx.fail("'vnet_name' must begin with 'Vnet_' .")
-    if len(vnet_name) > VNET_NAME_MAX_LEN:
-        ctx.fail("'vnet_name' length should not exceed {} characters.".format(VNET_NAME_MAX_LEN))
+    vnet_name_is_valid(ctx, vnet_name)
+    
     if is_vnet_exists(config_db, vnet_name):
         ctx.fail("VNET {} already exists!".format(vnet_name))
     else:
@@ -9445,10 +9452,9 @@ def add_vnet(ctx, vnet_name, vni, vxlan_tunnel, peer_list, guid, scope, advertis
 def del_vnet(ctx, vnet_name):
     """Del Vnet"""
     config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
-    if not vnet_name.startswith("Vnet_"):
-        ctx.fail("'vnet_name' must begin with 'Vnet_' .")
-    if len(vnet_name) > VNET_NAME_MAX_LEN:
-        ctx.fail("'vnet_name' length should not exceed {} characters".format(VNET_NAME_MAX_LEN))
+    
+    vnet_name_is_valid(ctx, vnet_name)
+
     if not is_vnet_exists(config_db, vnet_name):
         ctx.fail("VNET {} does not exist!".format(vnet_name))
     else:
@@ -9478,10 +9484,8 @@ def add_vnet_route(ctx, vnet_name, prefix, end_point, vni, mac_address, endpoint
     """Add VNET Route"""
     config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
 
-    if not vnet_name.startswith("Vnet_"):
-        ctx.fail("'vnet_name' must begin with 'Vnet_' .")
-    if len(vnet_name) > VNET_NAME_MAX_LEN:
-        ctx.fail("'vnet_name' length should not exceed {} characters.".format(VNET_NAME_MAX_LEN))
+    vnet_name_is_valid(ctx, vnet_name)
+
     if not is_vnet_exists(config_db, vnet_name):
         ctx.fail("VNET {} doesnot exist, cannot add a route!".format(vnet_name))
     if is_vnet_route_exists(config_db, vnet_name, prefix):
@@ -9516,10 +9520,9 @@ def add_vnet_route(ctx, vnet_name, prefix, end_point, vni, mac_address, endpoint
 def del_vnet_route(ctx, vnet_name, prefix):
     """Del VNET route"""
     config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
-    if not vnet_name.startswith("Vnet_"):
-        ctx.fail("'vnet_name' must begin with 'Vnet_' .")
-    if len(vnet_name) > VNET_NAME_MAX_LEN:
-        ctx.fail("'vnet_name' length should not exceed {} characters".format(VNET_NAME_MAX_LEN))
+
+    vnet_name_is_valid(ctx, vnet_name)
+    
     if not is_vnet_exists(config_db, vnet_name):
         ctx.fail("VNET {} doesnot exist, cannot delete the route!".format(vnet_name))
     if not is_vnet_route_exists(config_db, vnet_name, prefix):
