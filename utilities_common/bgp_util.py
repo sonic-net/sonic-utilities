@@ -262,7 +262,7 @@ def run_bgp_show_command(vtysh_cmd, bgp_namespace=multi_asic.DEFAULT_NAMESPACE, 
     return output
 
 
-def get_bgp_summary_from_all_bgp_instances(af, namespace, display, vrf):
+def get_bgp_summary_from_bgp_instances(af, namespace, display, vrf):
 
     device = multi_asic_util.MultiAsic(display, namespace)
     ctx = click.get_current_context()

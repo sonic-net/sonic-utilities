@@ -33,7 +33,7 @@ def bgp():
 @bgp.command()
 @multi_asic_util.multi_asic_click_options
 def summary(namespace, display, vrf=None):
-    bgp_summary = bgp_util.get_bgp_summary_from_all_bgp_instances(
+    bgp_summary = bgp_util.get_bgp_summary_from_bgp_instances(
         constants.IPV4, namespace, display, vrf)
     bgp_util.display_bgp_summary(bgp_summary=bgp_summary, af=constants.IPV4)
 
