@@ -48,15 +48,6 @@ class TestFineGrainedEcmp:
         runner = CliRunner()
 
         # add
-#        result = runner.invoke(
-#            config.config.commands["fg-nhg"].commands["add"],
-#            ["fg_grp_1", "--bucket-size", "60", "--match-mode", "prefix-based", "--max-next-hops", "6"], obj=db
-#        )
-#
-#        logger.debug("\n" + result.output)
-#        logger.debug(result.exit_code)
-#        assert result.exit_code == SUCCESS
-#
         result = runner.invoke(
             config.config.commands["fg-nhg"].commands["add"],
             ["fg_grp_2", "--bucket-size", "30", "--match-mode", "nexthop-based"], obj=db
@@ -112,14 +103,6 @@ class TestFineGrainedEcmp:
         self.verify_output(db, runner, "fg-nhg", assert_show_output.show_fg_nhg_after_update)
 
         # delete
-#        result = runner.invoke(
-#            config.config.commands["fg-nhg"].commands["delete"],
-#            ["fg_grp_1"], obj=db
-#        )
-#
-#        logger.debug("\n" + result.output)
-#        logger.debug(result.exit_code)
-#        assert result.exit_code == SUCCESS
 
         result = runner.invoke(
             config.config.commands["fg-nhg"].commands["delete"],
