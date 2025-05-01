@@ -646,7 +646,7 @@ Error: 'vnet_name' must begin with 'Vnet_' .
         assert result.exit_code == 0
         vnet_route_tunnel = db.cfgdb.get_table('VNET_ROUTE_TUNNEL')
         if vnet_route_tunnel:
-                assert any(key[0] != 'Vnet_3' for key in db.cfgdb.get_table('VNET_ROUTE_TUNNEL'))
+            assert any(key[0] != 'Vnet_3' for key in vnet_route_tunnel)
 
         # Test vnet del route for vnet that is non existent
         args = ["Vnet_100", "10.10.10.10/32"]

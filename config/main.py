@@ -575,7 +575,7 @@ def del_route_bind_to_vnet(config_db, vnet_name):
             for key in table_dict:
                 if key[0] == vnet_name:
                     config_db.set_entry(table_name, key, None)
-  
+
 
 def set_interface_naming_mode(mode):
     """Modify SONIC_CLI_IFACE_MODE env variable in user .bashrc
