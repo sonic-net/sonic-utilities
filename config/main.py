@@ -568,10 +568,14 @@ def del_interface_bind_to_vnet(config_db, vnet_name):
 def del_route_bind_to_vnet(config_db, vnet_name):
     """del interface bind to vnet
     """
-    tables = ['VNET_ROUTE_TUNNEL']
-    for key in tables:
-        if key[0] == vnet_name:
-            config_db.delete_entry('VNET_ROUTE_TUNNEL', key)
+    tables = ['VNET_ROUTE_TUNNEL', 'VNET_ROUTE']
+    for table_name in tables:
+        table_dict = config_db.get_table(table_name)
+        if table_dict:
+            for key in table_dict:
+                if key[0] == vnet_name:
+                    config_db.set_entry(table_name, key, None)
+  
 
 def set_interface_naming_mode(mode):
     """Modify SONIC_CLI_IFACE_MODE env variable in user .bashrc
