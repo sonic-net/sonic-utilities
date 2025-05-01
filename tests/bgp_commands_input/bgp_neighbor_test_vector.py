@@ -647,106 +647,127 @@ def mock_show_bgp_neighbor_single_asic(request):
 
 testData = {
     'bgp_v4_neighbors': {
+        'vrf': 'default',
         'args': [],
         'rc': 0,
         'rc_output': bgp_v4_neighbors_output
     },
     'bgp_v4_neighbor_ip_address': {
+        'vrf': 'default',
         'args': ['10.0.0.57'],
         'rc': 0,
         'rc_output': bgp_v4_neighbors_output
     },
     'bgp_v4_neighbor_invalid': {
+        'vrf': 'default',
         'args': ['20.1.1.1'],
         'rc': 2,
         'rc_err_msg': bgp_v4_neighbor_invalid
     },
     'bgp_v4_neighbor_invalid_address': {
+        'vrf': 'default',
         'args': ['invalid_address'],
         'rc': 2,
         'rc_err_msg': bgp_v4_neighbor_invalid_address
     },
     'bgp_v4_neighbor_adv_routes': {
+        'vrf': 'default',
         'args': ["10.0.0.57", "advertised-routes"],
         'rc': 0,
         'rc_output': bgp_v4_neighbor_output_adv_routes
     },
     'bgp_v4_neighbor_recv_routes': {
+        'vrf': 'default',
         'args': ["10.0.0.57", "received-routes"],
         'rc': 0,
         'rc_output': bgp_v4_neighbor_output_recv_routes
     },
     'bgp_v6_neighbors': {
+        'vrf': 'default',
         'args': [],
         'rc': 0,
         'rc_output': bgp_v6_neighbors_output
     },
     'bgp_v6_neighbor_ip_address': {
+        'vrf': 'default',
         'args': ['fc00::72'],
         'rc': 0,
         'rc_output': bgp_v6_neighbors_output
     },
     'bgp_v6_neighbor_invalid': {
+        'vrf': 'default',
         'args': ['aa00::72'],
         'rc': 2,
         'rc_err_msg': bgp_v6_neighbor_invalid
     },
     'bgp_v6_neighbor_invalid_address': {
+        'vrf': 'default',
         'args': ['20.1.1.1'],
         'rc': 2,
         'rc_err_msg': bgp_v6_neighbor_invalid_address
     },
     'bgp_v6_neighbor_adv_routes': {
+        'vrf': 'default',
         'args': ["fc00::72", "advertised-routes"],
         'rc': 0,
         'rc_output': bgp_v6_neighbor_output_adv_routes
     },
     'bgp_v6_neighbor_recv_routes': {
+        'vrf': 'default',
         'args': ["fc00::72", "received-routes"],
         'rc': 0,
         'rc_output': bgp_v6_neighbor_output_recv_routes
     },
     'bgp_v4_neighbors_multi_asic' : {
+        'vrf': 'default',
         'args': [],
         'rc': 0,
         'rc_output': bgp_v4_neighbors_output_all_asics
     },
     'bgp_v4_neighbors_asic' : {
+        'vrf': 'default',
         'args': ['-nasic1'],
         'rc': 0,
         'rc_output': bgp_v4_neighbors_output_asic1
     },
     'bgp_v4_neighbors_external' : {
+        'vrf': 'default',
         'args': ['10.0.0.1'],
         'rc': 0,
         'rc_output': bgp_v4_neighbors_output_asic0
     },
     'bgp_v4_neighbors_internal' : {
+        'vrf': 'default',
         'args': ['10.1.0.1'],
         'rc': 0,
         'rc_output': bgp_v4_neighbors_output_asic1
     },
     'bgp_v6_neighbors_multi_asic' : {
+        'vrf': 'default',
         'args': [],
         'rc': 0,
         'rc_output': bgp_v6_neighbors_output_all_asics
     },
     'bgp_v6_neighbors_asic' : {
+        'vrf': 'default',
         'args': ['-nasic0'],
         'rc': 0,
         'rc_output': bgp_v6_neighbors_output_asic0
     },
     'bgp_v6_neighbors_external' : {
+        'vrf': 'default',
         'args': ['fc00::2'],
         'rc': 0,
         'rc_output': bgp_v6_neighbors_output_asic0
     },
     'bgp_v6_neighbors_internal' : {
+        'vrf': 'default',
         'args': ['2603:10e2:400:1::2'],
         'rc': 0,
         'rc_output': bgp_v6_neighbors_output_asic1
     },
     'bgp_v6_neighbor_warning' : {
+        'vrf': 'default',
         'args': ['2603:10e2:400:1::2', '-nasic0'],
         'rc': 0,
         'rc_warning_msg': bgp_v6_neighbor_output_warning

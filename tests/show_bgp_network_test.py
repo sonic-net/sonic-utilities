@@ -35,6 +35,35 @@ def executor(test_vector, show):
     if 'rc_warning_msg' in input:
         output = result.output.strip().split("\n")[0]
         assert input['rc_warning_msg'] in output
+        
+def executor_vrf(test_vector, show):
+    runner = CliRunner()
+    input = bgp_network_test_vector.testData[test_vector]
+    if test_vector.startswith('bgp_v6'):
+        exec_cmd = show.cli.commands["ipv6"].commands["bgp"].commands["vrf"].commands["network"]
+    else:
+        exec_cmd = show.cli.commands["ip"].commands["bgp"].commands["vrf"].commands["network"]
+
+    result = runner.invoke(exec_cmd, [input['vrf']] + input['args'])
+
+    print(result.exit_code)
+    print(result.output)
+
+    if input['rc'] == 0:
+        assert result.exit_code == 0
+    else:
+        assert result.exit_code == input['rc']
+
+    if 'rc_err_msg' in input:
+        output = result.output.strip().split("\n")[-1]
+        assert input['rc_err_msg'] in output
+
+    if 'rc_output' in input:
+        assert result.output == input['rc_output']
+
+    if 'rc_warning_msg' in input:
+        output = result.output.strip().split("\n")[0]
+        assert input['rc_warning_msg'] in output
 
 
 class TestBgpNetwork(object):
@@ -64,6 +93,7 @@ class TestBgpNetwork(object):
                          setup_single_bgp_instance):
         show = setup_bgp_commands
         executor(test_vector, show)
+        executor_vrf(test_vector, show)
 
 
 class TestMultiAsicBgpNetwork(object):
@@ -93,6 +123,7 @@ class TestMultiAsicBgpNetwork(object):
                          setup_multi_asic_bgp_instance):
         show = setup_bgp_commands
         executor(test_vector, show)
+        executor_vrf(test_vector, show)
 
     @classmethod
     def teardown_class(cls):
