@@ -12220,7 +12220,7 @@ Optional Parameters: vni, endpoint_monitor, mac_address, profile, primary, monit
 
 **config vnet del-route <vnet-name>**
 
-This command deletes a vnet route with vnet-name and prefix. It deletes all routes for the provided vnet if prefix isnt specified
+This command deletes a vnet route with vnet-name and prefix. It deletes all routes for the provided vnet if prefix isnt specified.
 
 - Usage:
   ```
