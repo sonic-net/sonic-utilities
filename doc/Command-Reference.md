@@ -12198,7 +12198,7 @@ Optional Parameters: peer_list, guid, scope, advertised_prefix, overlay_dmac, sr
 
 **config vnet del**
 
-This command deletes vnet with name vnet-name and its associated binded interfaces and routes.
+This command deletes vnet with vnet-name and its associated binded interfaces and routes.
 
 - Usage:
   ```
@@ -12218,13 +12218,13 @@ Note: vnet-name should always start with keyword "Vnet_"
 Mandatory Parameters: vnet_name, prefix, endpoint
 Optional Parameters: vni, endpoint_monitor, mac_address, profile, primary, monitoring, adv_prefix
 
-**config vnet del-route <vnet-name> <prefix>**
+**config vnet del-route <vnet-name>**
 
-This command deletes vnet route with name vnet-name and prefix.
+This command deletes a vnet route with vnet-name and prefix. It deletes all routes for the provided vnet if prefix isnt specified
 
 - Usage:
   ```
-  config vnet del <vnet-name>
+  config vnet del-route <vnet-name> [<prefix>]
   ```
 Go Back To [Beginning of the document](#) or [Beginning of this section](#vxlan--vnet)
 
