@@ -9555,12 +9555,7 @@ def del_vnet_route(ctx, vnet_name, prefix):
                     except ValueError as e:
                         ctx.fail("Invalid ConfigDB. Error: {}".format(e))
     else:
-        for key in config_db.get_table('VNET_ROUTE_TUNNEL'):
-            if key[0] == vnet_name:
-                try:
-                    config_db.set_entry('VNET_ROUTE_TUNNEL', key, None)
-                except ValueError as e:
-                    ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+        del_route_bind_to_vnet(config_db, vnet_name)
 
 
 if __name__ == '__main__':
