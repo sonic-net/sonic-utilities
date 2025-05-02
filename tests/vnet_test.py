@@ -1,5 +1,4 @@
 import os
-import sys
 from click.testing import CliRunner
 from swsscommon.swsscommon import SonicV2Connector
 from utilities_common.db import Db
@@ -12,6 +11,7 @@ DEFAULT_NAMESPACE = ''
 test_path = os.path.dirname(os.path.abspath(__file__))
 mock_db_path_vnet = os.path.join(test_path, "vnet_input")
 
+
 class TestVnet(object):
     @classmethod
     def setup_class(cls):
@@ -22,7 +22,7 @@ class TestVnet(object):
         import time
         time.sleep(0.5)
         db.delete(db_name, key)
-    
+
     def test_vnet_bind_unbind(self):
         from .mock_tables import dbconnector
         jsonfile_config = os.path.join(mock_db_path_vnet, "config_db")
@@ -267,9 +267,9 @@ Error: 'vnet_name' must begin with 'Vnet'.
         assert ('Vnet3') in db.cfgdb.get_table('VNET')
 
         # Test vnet add route using mandatory arguments
-        args = ["Vnet3", "10.10.10.10/32", "10.10.10.1"]
+        args = ["Vnet3", "9.9.9.9.2/32", "10.10.10.1"]
         result = runner.invoke(config.config.commands["vnet"].commands["add-route"], args, obj=vnet_obj)
-        assert any((key[0] == 'Vnet3' and key[1] == "10.10.10.10/32") for key in db.cfgdb.get_table('VNET_ROUTE_TUNNEL'))
+        assert any((key[0] == 'Vnet3' and key[1] == "9.9.9.9.2/32") for key in db.cfgdb.get_table('VNET_ROUTE_TUNNEL'))
         assert result.exit_code == 0
 
         # Test vnet add route using invalid vnet name
@@ -285,7 +285,7 @@ Error: 'vnet_name' must begin with 'Vnet'.
         assert result.exit_code != 0
 
         # Test vnet add route when vnet route exists
-        args = ["Vnet3", "10.10.10.10/32", "10.10.10.1"]
+        args = ["Vnet3", "9.9.9.9.2/32", "9.9.9.1"]
         result = runner.invoke(config.config.commands["vnet"].commands["add-route"], args, obj=vnet_obj)
         assert "Route already exists for the VNET Vnet3" in result.output
         assert result.exit_code != 0
@@ -295,9 +295,9 @@ Error: 'vnet_name' must begin with 'Vnet'.
         result = runner.invoke(config.config.commands["vnet"].commands["add"], args, obj=vnet_obj)
         assert ('Vnet4') in db.cfgdb.get_table('VNET')
 
-        args = ["Vnet4", "10.10.10.10/32", "10.10.10.1", "123", "8.8.8.8", "11:22:33:44:55:66"]
+        args = ["Vnet4", "8.8.8.8/32", "10.10.10.1", "123", "8.8.8.8", "11:22:33:44:55:66"]
         result = runner.invoke(config.config.commands["vnet"].commands["add-route"], args, obj=vnet_obj)
-        assert any((key[0] == 'Vnet4' and key[1] == '10.10.10.10/32') for key in db.cfgdb.get_table('VNET_ROUTE_TUNNEL'))
+        assert any((key[0] == 'Vnet4' and key[1] == '8.8.8.8/32') for key in db.cfgdb.get_table('VNET_ROUTE_TUNNEL'))
         assert result.exit_code == 0
 
         # Test vnet add route using length of vnet name
@@ -323,12 +323,12 @@ Error: 'vnet_name' must begin with 'Vnet'.
         assert expected_output_del in result.output
 
         # Test vnet del route
-        args = ["Vnet3", "10.10.10.10/32"]
+        args = ["Vnet3", "9.9.9.9.2/32"]
         result = runner.invoke(config.config.commands["vnet"].commands["del-route"], args, obj=vnet_obj)
         assert result.exit_code == 0
         vnet_route_tunnel = db.cfgdb.get_table('VNET_ROUTE_TUNNEL')
         if vnet_route_tunnel:
-            assert not any((key[0] == 'Vnet3' and key[1] == '10.10.10.10/32') for key in vnet_route_tunnel)
+            assert not any((key[0] == 'Vnet3' and key[1] == '9.9.9.9.2/32') for key in vnet_route_tunnel)
 
         # Test vnet del route of specific prefix should be deleted and other prefix should not be deleted
         args1 = ["Vnet4", "11.11.11.11/32", "11.11.11.12"]
@@ -338,7 +338,7 @@ Error: 'vnet_name' must begin with 'Vnet'.
         assert result2.exit_code == 0
         vnet_route_tunnel = db.cfgdb.get_table('VNET_ROUTE_TUNNEL')
         if vnet_route_tunnel:
-            assert any((key[0] == 'Vnet4' and key[1] == "10.10.10.10/32") for key in vnet_route_tunnel)
+            assert any((key[0] == 'Vnet4' and key[1] == "8.8.8.8/32") for key in vnet_route_tunnel)
             assert not any((key[0] == 'Vnet4' and key[1] == "11.11.11.11/32") for key in vnet_route_tunnel)
 
         # Test vnet del route for vnet that is non existent
