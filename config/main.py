@@ -445,8 +445,8 @@ def is_vnet_route_exists(config_db, vnet_name, prefix):
 def vnet_name_is_valid(ctx, vnet_name):
     """Check if the vnet name is valid
     """
-    if not vnet_name.startswith("Vnet_"):
-        ctx.fail("'vnet_name' must begin with 'Vnet_' .")
+    if not vnet_name.startswith("Vnet"):
+        ctx.fail("'vnet_name' must begin with 'Vnet'.")
     if len(vnet_name) > VNET_NAME_MAX_LEN:
         ctx.fail("'vnet_name' length should not exceed {} characters".format(VNET_NAME_MAX_LEN))
 
@@ -566,7 +566,7 @@ def del_interface_bind_to_vnet(config_db, vnet_name):
 
 
 def del_route_bind_to_vnet(config_db, vnet_name):
-    """del interface bind to vnet
+    """del all routes bind to vnet
     """
     tables = ['VNET_ROUTE_TUNNEL', 'VNET_ROUTE']
     for table_name in tables:
