@@ -1163,6 +1163,45 @@ class RemoveCreateOnlyDependencyMoveGenerator:
                                member_name, create_only_field):
         return config[table_to_check][member_name].get(create_only_field, None)
 
+class VNETAssociationChangeValidator:
+    """
+    A class to validate that VNET associations cannot be modified after they're set.
+    Whether through replace or delete-then-recreate approach.
+    """
+    def __init__(self, path_addressing):
+        self.path_addressing = path_addressing
+        self.tables = ["VLAN_SUB_INTERFACE", "VLAN_INTERFACE", "INTERFACE"]
+        self.failed_interface = None
+
+    def validate(self, move, diff):
+        current_config = diff.current_config
+        target_config = diff.target_config
+        
+        for table in self.tables:
+            if table not in current_config:
+                continue
+                
+            for interface, config in current_config[table].items():
+                if "|" in interface: # Skip IP prefix entries
+                    continue
+                    
+                if "vnet_name" not in config:
+                    continue
+                    
+                if table in target_config and interface in target_config[table]:
+                    if ("vnet_name" in target_config[table][interface] and 
+                        target_config[table][interface]["vnet_name"] != config["vnet_name"]):
+                        simulated_config = move.apply(current_config)
+                        
+                        # If the move changes the vnet or deletes the table/interface that has a vnet
+                        if (table not in simulated_config or 
+                            interface not in simulated_config[table] or
+                            "vnet_name" not in simulated_config[table][interface] or
+                            simulated_config[table][interface]["vnet_name"] != config["vnet_name"]):
+                            self.failed_interface = interface
+                            return False
+        
+        return True
 
 class SingleRunLowLevelMoveGenerator:
     """
@@ -1648,6 +1687,7 @@ class SortAlgorithmFactory:
                           DeleteInsteadOfReplaceMoveExtender(),
                           DeleteRefsMoveExtender(self.path_addressing)]
         move_validators = [DeleteWholeConfigMoveValidator(),
+                           VNETAssociationChangeValidator(self.path_addressing),
                            FullConfigMoveValidator(self.config_wrapper),
                            NoDependencyMoveValidator(self.path_addressing, self.config_wrapper),
                            CreateOnlyMoveValidator(self.path_addressing),
@@ -1936,6 +1976,9 @@ class PatchSorter:
         moves = sort_algorithm.sort(diff)
 
         if moves is None:
+            for validator in sort_algorithm.move_wrapper.move_validators:
+                if isinstance(validator, VNETAssociationChangeValidator) and validator.failed_interface:
+                    raise GenericConfigUpdaterError(f"Vnet is already associated with interface {validator.failed_interface} and cannot be modified")
             raise GenericConfigUpdaterError("There is no possible sorting")
 
         changes = [JsonChange(move.patch) for move in moves]

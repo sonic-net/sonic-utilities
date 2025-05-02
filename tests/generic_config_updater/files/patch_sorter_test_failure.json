@@ -105,5 +105,153 @@
         "expected_error_substrings": [
             "There is no possible sorting"
         ]
+    },
+    "VLAN_SUB_INTERFACE_CHANGE_VNET_ASSOCIATION__FAILURE": {
+        "desc": [
+            "Changing a VLAN subinterface VNET association fails.", 
+            "If a subinterface is already associated with a VNET, it cannot be associated with a new VNET.",
+            "e.g. Changing /VLAN_SUB_INTERFACE/Ethernet8.10/vnet_name from Vnet1 to Vnet2 fails."
+        ],
+        "current_config": {
+            "VXLAN_TUNNEL": {
+                "vtep1": {
+                    "src_ip": "1.2.3.4"
+                }
+            },
+            "VNET": {
+                "Vnet1": {
+                    "vxlan_tunnel": "vtep1",
+                    "vni": "10011"
+                },
+                "Vnet2": {
+                    "vxlan_tunnel": "vtep1",
+                    "vni": "10012"
+                }
+            },
+            "PORT": {
+                "Ethernet8": {
+                    "admin_status": "up",
+                    "alias": "Ethernet8/1",
+                    "description": "Ethernet8",
+                    "lanes": "45,46,47,48",
+                    "mtu": "9000",
+                    "speed": "100000"
+                }
+            },
+            "VLAN_SUB_INTERFACE": {
+                "Ethernet8.10": {
+                    "vnet_name": "Vnet1",
+                    "vlan": 10
+                },
+                "Ethernet8.10|10.0.0.1/30": {
+                    "ip-prefix": "10.0.0.1/30"
+                }
+            }
+        },
+        "patch": [
+            {
+                "op": "replace",
+                "path": "/VLAN_SUB_INTERFACE/Ethernet8.10/vnet_name",
+                "value": "Vnet2"
+            }
+        ],
+        "expected_error_substrings": [
+            "Vnet is already associated with interface Ethernet8.10 and cannot be modified"
+        ]
+    },
+    "VLAN_INTERFACE_CHANGE_VNET_ASSOCIATION__FAILURE": {
+        "desc": [
+            "Changing a VLAN interface VNET association fails.",
+            "If an interface is already associated with a VNET, it cannot be associated with a new VNET.",
+            "e.g. Changing /VLAN_INTERFACE/Vlan1000/vnet_name from Vnet1 to Vnet2 fails."
+        ],
+        "current_config": {
+            "VXLAN_TUNNEL": {
+                "vtep1": {
+                    "src_ip": "1.2.3.4"
+                }
+            },
+            "VNET": {
+                "Vnet1": {
+                    "vxlan_tunnel": "vtep1",
+                    "vni": "10011"
+                },
+                "Vnet2": {
+                    "vxlan_tunnel": "vtep1",
+                    "vni": "10012"
+                }
+            },
+            "VLAN": {
+                "Vlan1000": {
+                    "vlanid": "1000"
+                }
+            },
+            "VLAN_INTERFACE": {
+                "Vlan1000": {
+                    "vnet_name": "Vnet1"
+                },
+                "Vlan1000|192.168.0.1/21": {}
+            }
+        },
+        "patch": [
+            {
+                "op": "replace",
+                "path": "/VLAN_INTERFACE/Vlan1000/vnet_name",
+                "value": "Vnet2"
+            }
+        ],
+        "expected_error_substrings": [
+            "Vnet is already associated with interface Vlan1000 and cannot be modified"
+        ]
+    },
+    "INTERFACE_CHANGE_VNET_ASSOCIATION__FAILURE": {
+        "desc": [
+            "Changing a regular interface VNET association fails.",
+            "If an interface is already associated with a VNET, it cannot be associated with a new VNET.",
+            "e.g. Changing /INTERFACE/Ethernet8/vnet_name from Vnet1 to Vnet2 fails."
+        ],
+        "current_config": {
+            "VXLAN_TUNNEL": {
+                "vtep1": {
+                    "src_ip": "1.2.3.4"
+                }
+            },
+            "VNET": {
+                "Vnet1": {
+                    "vxlan_tunnel": "vtep1",
+                    "vni": "10011"
+                },
+                "Vnet2": {
+                    "vxlan_tunnel": "vtep1",
+                    "vni": "10012"
+                }
+            },
+            "PORT": {
+                "Ethernet8": {
+                    "admin_status": "up",
+                    "alias": "Ethernet8/1",
+                    "description": "Ethernet8",
+                    "lanes": "45,46,47,48",
+                    "mtu": "9000",
+                    "speed": "100000"
+                }
+            },
+            "INTERFACE": {
+                "Ethernet8": {
+                    "vnet_name": "Vnet1"
+                },
+                "Ethernet8|10.0.0.1/30": {}
+            }
+        },
+        "patch": [
+            {
+                "op": "replace",
+                "path": "/INTERFACE/Ethernet8/vnet_name",
+                "value": "Vnet2"
+            }
+        ],
+        "expected_error_substrings": [
+            "Vnet is already associated with interface Ethernet8 and cannot be modified"
+        ]
     }
 }
