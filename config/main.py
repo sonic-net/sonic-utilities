@@ -9543,7 +9543,7 @@ def del_vnet_route(ctx, vnet_name, prefix):
     if not is_vnet_exists(config_db, vnet_name):
         ctx.fail("VNET {} doesnot exist, cannot delete the route!".format(vnet_name))
     if not is_any_vnet_route_exists(config_db, vnet_name):
-            ctx.fail("Routes dont exist for the VNET {}, cant delete it!".format(vnet_name))
+        ctx.fail("Routes dont exist for the VNET {}, cant delete it!".format(vnet_name))
     if prefix:
         if not is_vnet_route_exists(config_db, vnet_name, prefix):
             ctx.fail("Route does not exist for the VNET {}, cant delete it!".format(vnet_name))
@@ -9560,7 +9560,7 @@ def del_vnet_route(ctx, vnet_name, prefix):
                 try:
                     config_db.set_entry('VNET_ROUTE_TUNNEL', key, None)
                 except ValueError as e:
-                    ctx.fail("Invalid ConfigDB. Error: {}".format(e))   
+                    ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
 
 if __name__ == '__main__':
