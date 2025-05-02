@@ -40,7 +40,7 @@ intf_counters_all = """\
 Ethernet0        D        8  2000.00 MB/s  247000.00/s     64.00%        10       100       N/A       10  1500.00 MB/s  183000.00/s     48.00%       N/A       N/A       N/A       0
 Ethernet4      N/A        4   204.80 KB/s     200.00/s        N/A         0     1,000       N/A       40   204.85 KB/s     201.00/s        N/A       N/A       N/A       N/A     100
 Ethernet8      N/A        6  1350.00 KB/s    9000.00/s        N/A       100        10       N/A       60    13.37 MB/s    9000.00/s        N/A       N/A       N/A       N/A     N/A
-"""
+"""  # noqa: E501
 
 intf_fec_counters = """\
     IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER
@@ -142,7 +142,7 @@ Ethernet4        U        4  0.00 B/s    0.00/s      0.00%         0     1,000  
 
 Reminder: Please execute 'show interface counters -d all' to include internal links
 
-"""
+"""  # noqa: E501
 
 multi_asic_intf_counters_printall = """\
          IFACE    STATE    RX_OK    RX_BPS    RX_PPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK    TX_BPS    TX_PPS    TX_UTIL    TX_ERR    TX_DRP    TX_OVR    TRIM
@@ -156,7 +156,7 @@ Ethernet-BP260        U        4  0.00 B/s    0.00/s      0.00%         0     1,
 
 Reminder: Please execute 'show interface counters -d all' to include internal links
 
-"""
+"""  # noqa: E501
 
 multi_asic_intf_counters_asic0_printall = """\
        IFACE    STATE    RX_OK    RX_BPS    RX_PPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK    TX_BPS    TX_PPS    TX_UTIL    TX_ERR    TX_DRP    TX_OVR    TRIM
@@ -168,7 +168,7 @@ Ethernet-BP4        U        8  0.00 B/s    0.00/s      0.00%         0     1,00
 
 Reminder: Please execute 'show interface counters -d all' to include internal links
 
-"""
+"""  # noqa: E501
 multi_asic_intf_counters_period = """\
 The rates are calculated within 3 seconds period
     IFACE    STATE    RX_OK    RX_BPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK    TX_BPS    TX_UTIL    TX_ERR    TX_DRP    TX_OVR

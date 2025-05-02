@@ -742,6 +742,7 @@ def queue():
     """Show details of the queues """
     pass
 
+
 # 'counters' subcommand ("show queue counters")
 @queue.command()
 @click.argument('interfacename', metavar='[INTERFACE_NAME]', required=False)
@@ -752,7 +753,7 @@ def queue():
 @click.option('-nz', '--nonzero', is_flag=True, help="Non Zero Counters")
 @click.option('-j', '--json', is_flag=True, help="JSON output")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def counters(interfacename, namespace, display, all, trim, voq, nonzero, json, verbose):
+def counters(interfacename, namespace, display, all, trim, voq, nonzero, json, verbose):  # noqa: F811
     """Show queue counters"""
 
     cmd = ["queuestat"]

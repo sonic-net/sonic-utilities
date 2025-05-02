@@ -791,7 +791,7 @@ def counters(ctx, namespace, display, interface, printall, period, json_fmt, ver
 @click.option('-p', '--period', type=click.INT, help="Display statistics over a specified period (in seconds)")
 @click.option('-j', '--json', 'json_fmt', is_flag=True, help="Print in JSON format")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def errors(namespace, display, period, json_fmt, verbose):
+def errors(namespace, display, period, json_fmt, verbose):  # noqa: F811
     """Show interface counters errors"""
 
     cmd = ['portstat', '-e']
@@ -931,6 +931,7 @@ def rif(ctx, interface, period, json_fmt, verbose):
         cmd += ['-j']
 
     clicommon.run_command(cmd, display_cmd=verbose)
+
 
 # 'counters' subcommand ("show interfaces counters trim")
 @counters.command()

@@ -453,7 +453,7 @@ class Portstat(object):
                               format_prate(rates.tx_pps),
                               format_util(rates.tx_bps, port_speed)
                               if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util)))
-            elif trim_stats_only: # Packet Trimming related statistics
+            elif trim_stats_only:  # Packet Trimming related statistics
                 header = header_trim_only
                 table.append((key, self.get_port_state(key),
                               format_number_with_comma(data['trim'])))
@@ -744,7 +744,7 @@ class Portstat(object):
                                   format_prate(rates.tx_pps),
                                   format_util(rates.tx_bps, port_speed)
                                   if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util)))
-            elif trim_stats_only: # Packet Trimming related statistics
+            elif trim_stats_only:  # Packet Trimming related statistics
                 header = header_trim_only
                 if old_cntr is not None:
                     table.append((key, self.get_port_state(key),

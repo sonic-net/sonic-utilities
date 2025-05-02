@@ -283,14 +283,16 @@ testData = {
                                                   '\nError: Invalid value for "-a": 12 is not in the '
                                                   'valid range of -8 to 8.\n')
                                        },
-             'mmu_cfg_trim' : {'cmd' : ['config'],
-                               'args' : ['-p', 'q_lossy_profile', '-t', 'on'],
-                               'rc' : 0,
-                               'db_table' : 'BUFFER_PROFILE',
-                               'cmp_args': [',q_lossy_profile,packet_discard_action,trim'],
-                               'rc_msg' : ''
-                              },
-             'mmu_cfg_trim_invalid': {'cmd': ['config'],
+             'mmu_cfg_trim': {
+                              'cmd': ['config'],
+                              'args': ['-p', 'q_lossy_profile', '-t', 'on'],
+                              'rc': 0,
+                              'db_table': 'BUFFER_PROFILE',
+                              'cmp_args': [',q_lossy_profile,packet_discard_action,trim'],
+                              'rc_msg': ''
+                             },
+             'mmu_cfg_trim_invalid': {
+                                      'cmd': ['config'],
                                       'args': ['-p', 'q_lossy_profile', '-t', 'INVALID_VALUE'],
                                       'rc': 2,
                                       'rc_msg': ('Usage: mmu [OPTIONS]\nTry "mmu --help" for help.\n'

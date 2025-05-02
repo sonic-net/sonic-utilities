@@ -2,7 +2,7 @@
 Module holding the correct values for show CLI command outputs for the queuestat_test.py
 """
 
-counters_all="""\
+counters_all = """\
 For namespace :
      Port    TxQ    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes    Trim/pkts
 ---------  -----  --------------  ---------------  -----------  ------------  -----------
@@ -106,7 +106,7 @@ Ethernet8  ALL28             N/A              N/A          N/A           N/A    
 Ethernet8  ALL29             N/A              N/A          N/A           N/A          N/A
 
 """
-counters_all_json="""\
+counters_all_json = """\
 {
   "Ethernet0": {
     "ALL20": {
@@ -747,7 +747,7 @@ counters_all_json="""\
 }
 """
 
-trim_counters_all="""\
+trim_counters_all = """\
 For namespace :
      Port    TxQ    Trim/pkts
 ---------  -----  -----------
@@ -851,7 +851,7 @@ Ethernet8  ALL28          N/A
 Ethernet8  ALL29          N/A
 
 """
-trim_counters_all_json="""\
+trim_counters_all_json = """\
 {
   "Ethernet0": {
     "ALL20": {
@@ -1132,7 +1132,7 @@ trim_counters_all_json="""\
 }
 """
 
-trim_eth0_counters="""\
+trim_eth0_counters = """\
 For namespace :
      Port    TxQ    Trim/pkts
 ---------  -----  -----------
@@ -1168,7 +1168,7 @@ Ethernet0  ALL28          N/A
 Ethernet0  ALL29          N/A
 
 """
-trim_eth0_counters_json="""\
+trim_eth0_counters_json = """\
 {
   "Ethernet0": {
     "ALL20": {
@@ -1265,7 +1265,7 @@ trim_eth0_counters_json="""\
 }
 """
 
-trim_eth4_counters="""\
+trim_eth4_counters = """\
 For namespace :
      Port    TxQ    Trim/pkts
 ---------  -----  -----------
@@ -1301,7 +1301,7 @@ Ethernet4  ALL28          N/A
 Ethernet4  ALL29          N/A
 
 """
-trim_eth4_counters_json="""\
+trim_eth4_counters_json = """\
 {
   "Ethernet4": {
     "ALL20": {
@@ -1398,7 +1398,7 @@ trim_eth4_counters_json="""\
 }
 """
 
-trim_eth8_counters="""\
+trim_eth8_counters = """\
 For namespace :
      Port    TxQ    Trim/pkts
 ---------  -----  -----------
@@ -1434,7 +1434,7 @@ Ethernet8  ALL28          N/A
 Ethernet8  ALL29          N/A
 
 """
-trim_eth8_counters_json="""\
+trim_eth8_counters_json = """\
 {
   "Ethernet8": {
     "ALL20": {
@@ -1531,12 +1531,12 @@ trim_eth8_counters_json="""\
 }
 """
 
-trim_counters_clear_msg="""\
+trim_counters_clear_msg = """\
 Clear and update saved counters for Ethernet0
 Clear and update saved counters for Ethernet4
 Clear and update saved counters for Ethernet8
 """
-trim_counters_clear_stat="""\
+trim_counters_clear_stat = """\
      Port    TxQ    Trim/pkts
 ---------  -----  -----------
 Ethernet0    UC0            0

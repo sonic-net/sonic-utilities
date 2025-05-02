@@ -2,11 +2,11 @@
 Module holding the correct values for show CLI command outputs for the trimming_test.py
 """
 
-show_trim_empty="""\
+show_trim_empty = """\
 No configuration is present in CONFIG DB
 """
 
-show_trim_partial="""\
+show_trim_partial = """\
 +-----------------------------+---------+
 | Configuration               | Value   |
 +=============================+=========+
@@ -17,7 +17,7 @@ show_trim_partial="""\
 | Packet trimming queue index | N/A     |
 +-----------------------------+---------+
 """
-show_trim_partial_json="""\
+show_trim_partial_json = """\
 {
     "size": "200",
     "dscp_value": "20",
@@ -25,7 +25,7 @@ show_trim_partial_json="""\
 }
 """
 
-show_trim_queue_static="""\
+show_trim_queue_static = """\
 +-----------------------------+---------+
 | Configuration               |   Value |
 +=============================+=========+
@@ -36,7 +36,7 @@ show_trim_queue_static="""\
 | Packet trimming queue index |       2 |
 +-----------------------------+---------+
 """
-show_trim_queue_static_json="""\
+show_trim_queue_static_json = """\
 {
     "size": "200",
     "dscp_value": "20",
@@ -44,7 +44,7 @@ show_trim_queue_static_json="""\
 }
 """
 
-show_trim_queue_dynamic="""\
+show_trim_queue_dynamic = """\
 +-----------------------------+---------+
 | Configuration               | Value   |
 +=============================+=========+
@@ -55,7 +55,7 @@ show_trim_queue_dynamic="""\
 | Packet trimming queue index | dynamic |
 +-----------------------------+---------+
 """
-show_trim_queue_dynamic_json="""\
+show_trim_queue_dynamic_json = """\
 {
     "size": "200",
     "dscp_value": "20",

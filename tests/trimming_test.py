@@ -35,9 +35,7 @@ class TestTrimming:
         os.environ['UTILITIES_UNIT_TESTING'] = "0"
         dbconnector.dedicated_dbs.clear()
 
-
-    ########## CONFIG SWITCH-TRIMMING GLOBAL ##########
-
+    # ---------- CONFIG CONFIG SWITCH-TRIMMING GLOBAL ---------- #
 
     @pytest.mark.parametrize(
         "size,dscp,queue", [
@@ -45,7 +43,7 @@ class TestTrimming:
                 "200", "20", "2",
                 id="queue-static"
             ),
-           pytest.param(
+            pytest.param(
                 "300", "30", "dynamic",
                 id="queue-dynamic"
             )
@@ -128,9 +126,7 @@ class TestTrimming:
         assert pattern in result.output
         assert result.exit_code == ERROR2
 
-
-    ########## SHOW SWITCH-TRIMMING GLOBAL ##########
-
+    # ---------- SHOW SWITCH-TRIMMING GLOBAL ---------- #
 
     @pytest.mark.parametrize(
         "cfgdb,output", [

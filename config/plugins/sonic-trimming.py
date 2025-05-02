@@ -27,9 +27,11 @@ from utilities_common.switch_trimming import (
 log = logger.Logger(SYSLOG_IDENTIFIER)
 log.set_min_log_priority_info()
 
+
 #
 # Validators ----------------------------------------------------------------------------------------------------------
 #
+
 
 class SizeTypeValidator(click.ParamType):
     """ Size option validator """
@@ -104,9 +106,11 @@ class QueueTypeValidator(click.ParamType):
 
         return value
 
+
 #
 # DB interface --------------------------------------------------------------------------------------------------------
 #
+
 
 def update_entry_validated(db, table, key, data, create_if_not_exists=False):
     """ Update entry in table and validate configuration.
@@ -150,9 +154,11 @@ def update_entry_validated(db, table, key, data, create_if_not_exists=False):
 
     db.set_entry(table, key, cfg[table][key])
 
+
 #
 # CLI -----------------------------------------------------------------------------------------------------------------
 #
+
 
 @click.group(
     name="switch-trimming",

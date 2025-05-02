@@ -38,7 +38,7 @@ def remove_timestamp(result):
 
 def verify_after_clear(output, expected_out):
     # ignore lines containing 'Last cached time was' as it has time stamp and is diffcult to compare
-    lines = [ x for x in output.splitlines() if 'Last cached time was' not in x ]
+    lines = [x for x in output.splitlines() if 'Last cached time was' not in x]
     new_output = '\n'.join(lines)
     assert new_output == expected_out
 

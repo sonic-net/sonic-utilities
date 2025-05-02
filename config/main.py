@@ -7676,7 +7676,8 @@ def mmu(p, a, s, t, namespace, verbose):
     command = ['mmuconfig', '-p', str(p)]
     if a is not None: command += ['-a', str(a)]
     if s is not None: command += ['-s', str(s)]
-    if t is not None: command += ['-t', str(t)]
+    if t is not None:
+        command += ['-t', str(t)]
     if namespace is not None:
         command += ['-n', str(namespace)]
     if verbose:

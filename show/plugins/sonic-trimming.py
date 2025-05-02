@@ -12,9 +12,11 @@ from utilities_common.switch_trimming import (
     CFG_TRIM_KEY
 )
 
+
 #
 # Helpers -------------------------------------------------------------------------------------------------------------
 #
+
 
 def format_attr_value(entry, attr):
     """ Helper that formats attribute to be presented in the table output.
@@ -32,9 +34,11 @@ def format_attr_value(entry, attr):
         return "\n".join(value) if value else "N/A"
     return entry.get(attr["name"], "N/A")
 
+
 #
 # CLI -----------------------------------------------------------------------------------------------------------------
 #
+
 
 @click.group(
     name="switch-trimming",

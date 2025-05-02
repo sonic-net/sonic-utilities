@@ -1,11 +1,13 @@
 from utilities_common import db
 
-from swsscommon.swsscommon import CFG_SWITCH_TRIMMING_TABLE_NAME as CFG_SWITCH_TRIMMING
-from swsscommon.swsscommon import STATE_SWITCH_CAPABILITY_TABLE_NAME as STATE_SWITCH_CAPABILITY
+from swsscommon.swsscommon import CFG_SWITCH_TRIMMING_TABLE_NAME as CFG_SWITCH_TRIMMING  # noqa: F401
+from swsscommon.swsscommon import STATE_SWITCH_CAPABILITY_TABLE_NAME as STATE_SWITCH_CAPABILITY  # noqa: F401
+
 
 #
 # Constants -----------------------------------------------------------------------------------------------------------
 #
+
 
 STATE_CAP_TRIMMING_CAPABLE_KEY = "SWITCH_TRIMMING_CAPABLE"
 STATE_CAP_QUEUE_MODE_KEY = "SWITCH|PACKET_TRIMMING_QUEUE_RESOLUTION_MODE"
@@ -23,9 +25,11 @@ UINT8_MAX = 255
 
 SYSLOG_IDENTIFIER = "switch_trimming"
 
+
 #
 # Helpers -------------------------------------------------------------------------------------------------------------
 #
+
 
 def get_db(ctx):
     """ Get DB object """
