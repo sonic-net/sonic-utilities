@@ -432,12 +432,25 @@ def is_vnet_exists(config_db, vnet_name):
 
 
 def is_vnet_route_exists(config_db, vnet_name, prefix):
-    """Check if VNET exists
+    """Check if VNET ROUTE WITH PREFIX exists
     """
     keys = config_db.get_keys("VNET_ROUTE_TUNNEL")
-    for k in keys:
-        if k[0] == vnet_name and k[1] == prefix:
-            return True
+    if keys:
+        for k in keys:
+            if k[0] == vnet_name and k[1] == prefix:
+                return True
+
+    return False
+
+
+def is_any_vnet_route_exists(config_db, vnet_name):
+    """Check if VNET ROUTE exists
+    """
+    keys = config_db.get_keys("VNET_ROUTE_TUNNEL")
+    if keys:
+        for k in keys:
+            if k[0] == vnet_name:
+                return True
 
     return False
 
@@ -9519,7 +9532,7 @@ def add_vnet_route(ctx, vnet_name, prefix, end_point, vni, mac_address, endpoint
 
 @vnet.command('del-route')
 @click.argument('vnet_name', metavar='<vnet_name>', type=str, required=True)
-@click.argument('prefix', metavar='<prefix>', required=True)
+@click.argument('prefix', metavar='<prefix>', required=False)
 @click.pass_context
 def del_vnet_route(ctx, vnet_name, prefix):
     """Del VNET route"""
@@ -9529,15 +9542,25 @@ def del_vnet_route(ctx, vnet_name, prefix):
 
     if not is_vnet_exists(config_db, vnet_name):
         ctx.fail("VNET {} doesnot exist, cannot delete the route!".format(vnet_name))
-    if not is_vnet_route_exists(config_db, vnet_name, prefix):
-        ctx.fail("Route does not exist for the VNET {}, cant delete it!".format(vnet_name))
+    if not is_any_vnet_route_exists(config_db, vnet_name):
+            ctx.fail("Routes dont exist for the VNET {}, cant delete it!".format(vnet_name))
+    if prefix:
+        if not is_vnet_route_exists(config_db, vnet_name, prefix):
+            ctx.fail("Route does not exist for the VNET {}, cant delete it!".format(vnet_name))
+        else:
+            for key in config_db.get_table('VNET_ROUTE_TUNNEL'):
+                if key[0] == vnet_name and key[1] == prefix:
+                    try:
+                        config_db.set_entry('VNET_ROUTE_TUNNEL', (vnet_name, prefix), None)
+                    except ValueError as e:
+                        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
     else:
         for key in config_db.get_table('VNET_ROUTE_TUNNEL'):
-            if key[0] == vnet_name and key[1] == prefix:
+            if key[0] == vnet_name:
                 try:
-                    config_db.set_entry('VNET_ROUTE_TUNNEL', (vnet_name, prefix), None)
-                except JsonPatchConflict as e:
-                    ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+                    config_db.set_entry('VNET_ROUTE_TUNNEL', key, None)
+                except ValueError as e:
+                    ctx.fail("Invalid ConfigDB. Error: {}".format(e))   
 
 
 if __name__ == '__main__':

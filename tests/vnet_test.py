@@ -341,6 +341,12 @@ Error: 'vnet_name' must begin with 'Vnet'.
             assert any((key[0] == 'Vnet4' and key[1] == "8.8.8.8/32") for key in vnet_route_tunnel)
             assert not any((key[0] == 'Vnet4' and key[1] == "11.11.11.11/32") for key in vnet_route_tunnel)
 
+        # Test vnet del route for all routes
+        result = runner.invoke(config.config.commands["vnet"].commands["del-route"], "Vnet4", obj=vnet_obj)
+        vnet_route_tunnel = db.cfgdb.get_table('VNET_ROUTE_TUNNEL')
+        if vnet_route_tunnel:
+            assert all((key[0] != 'Vnet4') for key in vnet_route_tunnel)
+
         # Test vnet del route for vnet that is non existent
         args = ["Vnet_100", "10.10.10.10/32"]
         result = runner.invoke(config.config.commands["vnet"].commands["del-route"], args, obj=vnet_obj)
@@ -352,4 +358,4 @@ Error: 'vnet_name' must begin with 'Vnet'.
         args = ["Vnet3", "10.10.10.10/32"]
         result = runner.invoke(config.config.commands["vnet"].commands["del-route"], args, obj=vnet_obj)
         assert result.exit_code != 0
-        assert "Route does not exist for the VNET Vnet3, cant delete it!" in result.output
+        assert "Routes dont exist for the VNET Vnet3, cant delete it!" in result.output
