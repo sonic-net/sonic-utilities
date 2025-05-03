@@ -26,6 +26,8 @@ test_sfp_eeprom_with_dom_output = """\
 Ethernet0: SFP EEPROM detected
         Application Advertisement: N/A
         Connector: No separable connector
+        DOM Capability:
+                sff8472_dom_support: yes
         Encoding: 64B66B
         Extended Identifier: Power Class 3(2.5W max), CDR present in Rx Tx
         Extended RateSelect Compliance: QSFP+ Rate Select Version 1
@@ -78,6 +80,11 @@ Ethernet8: SFP EEPROM detected
 				   IB EDR (Arch.Spec.Vol.2) - Active Cable assembly with BER < 5x10^-5
 				   IB QDR (Arch.Spec.Vol.2) - Active Cable assembly with BER < 10^-12
         Connector: No separable connector
+        DOM Capability:
+                Rx_power_support: yes
+                Temp_support: yes
+                Tx_power_support: yes
+                Voltage_support: yes
         Encoding: Not supported for CMIS cables
         Extended Identifier: Power Class 1(10.0W Max)
         Extended RateSelect Compliance: Not supported for CMIS cables
@@ -158,6 +165,7 @@ Ethernet72: SFP EEPROM detected
                                    IB SDR (Arch.Spec.Vol.2) - Host Assign (0x11) - Copper cable - Media Assign (Unknown)
         CMIS Rev: 5.0
         Connector: No separable connector
+        DOM Capability: N/A
         Encoding: N/A
         Extended Identifier: Power Class 1 (0.25W Max)
         Extended RateSelect Compliance: N/A
@@ -216,6 +224,8 @@ test_sfp_eeprom_output = """\
 Ethernet0: SFP EEPROM detected
         Application Advertisement: N/A
         Connector: No separable connector
+        DOM Capability:
+                sff8472_dom_support: yes
         Encoding: 64B66B
         Extended Identifier: Power Class 3(2.5W max), CDR present in Rx Tx
         Extended RateSelect Compliance: QSFP+ Rate Select Version 1
@@ -238,6 +248,11 @@ Ethernet8: SFP EEPROM detected
 				   IB EDR (Arch.Spec.Vol.2) - Active Cable assembly with BER < 5x10^-5
 				   IB QDR (Arch.Spec.Vol.2) - Active Cable assembly with BER < 10^-12
         Connector: No separable connector
+        DOM Capability:
+                Rx_power_support: yes
+                Temp_support: yes
+                Tx_power_support: yes
+                Voltage_support: yes
         Encoding: Not supported for CMIS cables
         Extended Identifier: Power Class 1(10.0W Max)
         Extended RateSelect Compliance: Not supported for CMIS cables
@@ -258,6 +273,11 @@ Ethernet40: SFP EEPROM detected
         Application Advertisement: 400G CR8 - Host Assign (0x1) - Copper cable - Media Assign (0x2)
                                    200GBASE-CR4 (Clause 136) - Host Assign (Unknown) - Unknown - Media Assign (Unknown)
         Connector: No separable connector
+        DOM Capability:
+                Rx_power_support: yes
+                Temp_support: yes
+                Tx_power_support: yes
+                Voltage_support: yes
         Encoding: Not supported for CMIS cables
         Extended Identifier: Power Class 1(10.0W Max)
         Extended RateSelect Compliance: Not supported for CMIS cables
@@ -616,6 +636,11 @@ Ethernet64: SFP EEPROM detected
         E2 Active Firmware: X.X
         E2 Inactive Firmware: Y.Y
         E2 Server Firmware: A.B.C.D
+        DOM Capability:
+                Rx_power_support: yes
+                Temp_support: yes
+                Tx_power_support: yes
+                Voltage_support: yes
         Encoding: N/A
         Extended Identifier: Power Class 8 (20.0W Max)
         Extended RateSelect Compliance: N/A
@@ -644,6 +669,8 @@ test_sfp_eeprom_dom_all_output = """\
 Ethernet0: SFP EEPROM detected
         Application Advertisement: N/A
         Connector: No separable connector
+        DOM Capability:
+                sff8472_dom_support: yes
         Encoding: 64B66B
         Extended Identifier: Power Class 3(2.5W max), CDR present in Rx Tx
         Extended RateSelect Compliance: QSFP+ Rate Select Version 1
@@ -712,6 +739,11 @@ Ethernet64: SFP EEPROM detected
         E2 Active Firmware: X.X
         E2 Inactive Firmware: Y.Y
         E2 Server Firmware: A.B.C.D
+        DOM Capability:
+                Rx_power_support: yes
+                Temp_support: yes
+                Tx_power_support: yes
+                Voltage_support: yes
         Encoding: N/A
         Extended Identifier: Power Class 8 (20.0W Max)
         Extended RateSelect Compliance: N/A
@@ -770,6 +802,8 @@ test_sfp_eeprom_all_output = """\
 Ethernet0: SFP EEPROM detected
         Application Advertisement: N/A
         Connector: No separable connector
+        DOM Capability:
+                sff8472_dom_support: yes
         Encoding: 64B66B
         Extended Identifier: Power Class 3(2.5W max), CDR present in Rx Tx
         Extended RateSelect Compliance: QSFP+ Rate Select Version 1
@@ -808,6 +842,11 @@ Ethernet64: SFP EEPROM detected
         E2 Active Firmware: X.X
         E2 Inactive Firmware: Y.Y
         E2 Server Firmware: A.B.C.D
+        DOM Capability:
+                Rx_power_support: yes
+                Temp_support: yes
+                Tx_power_support: yes
+                Voltage_support: yes
         Encoding: N/A
         Extended Identifier: Power Class 8 (20.0W Max)
         Extended RateSelect Compliance: N/A
