@@ -104,7 +104,6 @@ def summary(ctx, namespace, display):
 @click.pass_context
 def vrf_neighbors(ctx, ipaddress, info_type, namespace):
     """Show IPv6 BGP neighbors"""
-
     vrf = ctx.parent.params['vrf']
     neighbors_helper(ipaddress, info_type, namespace, vrf)
 
