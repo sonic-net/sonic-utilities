@@ -828,8 +828,6 @@ class DBMigrator():
         """
         log.log_notice('Migrate FRR Config mode configuration')
         metadata = self.configDB.get_entry('DEVICE_METADATA', 'localhost')
-        #device_metadata_data = self.config_src_data["DEVICE_METADATA"]["localhost"]
-        #metadata['docker_router_config_mode'] = "unified"
         if 'docker_routing_config_mode' not in metadata:
             metadata['docker_routing_config_mode'] = "unified"
             self.configDB.set_entry('DEVICE_METADATA', 'localhost', metadata)
