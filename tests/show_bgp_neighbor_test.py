@@ -16,7 +16,22 @@ def executor(test_vector, show):
         exec_cmd = show.cli.commands["ip"].commands["bgp"].commands["neighbors"]
 
     result = runner.invoke(exec_cmd, input['args'])
+    check_result(result, input)
+    
+    
+def executor_vrf(test_vector, show):
+    runner = CliRunner()
+    input = testData[test_vector]
+    if test_vector.startswith('bgp_v6'):
+        exec_cmd = show.cli.commands["ipv6"].commands["bgp"].commands["vrf"]
+    else:
+        exec_cmd = show.cli.commands["ip"].commands["bgp"].commands["vrf"]
 
+    result = runner.invoke(exec_cmd, [input['vrf'], 'neighbors'] + input['args'])
+    check_result(result, input)
+
+        
+def check_result(result, input):
     print(result.exit_code)
     print(result.output)
 
@@ -36,34 +51,6 @@ def executor(test_vector, show):
         output = result.output.strip().split("\n")[0]
         assert input['rc_warning_msg'] in output
         
-def executor_vrf(test_vector, show):
-    runner = CliRunner()
-    input = testData[test_vector]
-    if test_vector.startswith('bgp_v6'):
-        exec_cmd = show.cli.commands["ipv6"].commands["bgp"].commands["vrf"].commands["neighbors"]
-    else:
-        exec_cmd = show.cli.commands["ip"].commands["bgp"].commands["vrf"].commands["neighbors"]
-
-    result = runner.invoke(exec_cmd, [input['vrf']] + input['args'])
-
-    print(result.exit_code)
-    print(result.output)
-
-    if input['rc'] == 0:
-        assert result.exit_code == 0
-    else:
-        assert result.exit_code == input['rc']
-
-    if 'rc_err_msg' in input:
-        output = result.output.strip().split("\n")[-1]
-        assert input['rc_err_msg'] == output
-
-    if 'rc_output' in input:
-        assert result.output == input['rc_output']
-
-    if 'rc_warning_msg' in input:
-        output = result.output.strip().split("\n")[0]
-        assert input['rc_warning_msg'] in output
 
 class TestBgpNeighbors(object):
 
