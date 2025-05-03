@@ -32,10 +32,8 @@ def bgp():
 # 'summary' subcommand ("show ip bgp summary")
 @bgp.command()
 @multi_asic_util.multi_asic_click_options
-def summary(namespace, display, vrf=None):
-    bgp_summary = bgp_util.get_bgp_summary_from_bgp_instances(
-        constants.IPV4, namespace, display, vrf)
-    bgp_util.display_bgp_summary(bgp_summary=bgp_summary, af=constants.IPV4)
+def summary(namespace, display):
+    summary_helper(namespace, display)
 
 # 'neighbors' subcommand ("show ip bgp neighbors")
 @bgp.command()
@@ -52,8 +50,101 @@ def summary(namespace, display, vrf=None):
                 show_default=True,
                 help='Namespace name or all',
                 callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def neighbors(ipaddress, info_type, namespace, vrf=None):
+def neighbors(ipaddress, info_type, namespace):
     """Show IP (IPv4) BGP neighbors"""
+    neighbors_helper(ipaddress, info_type, namespace)
+
+# 'network' subcommand ("show ip bgp network")
+@bgp.command()
+@click.argument('ipaddress',
+                metavar='[<ipv4-address>|<ipv4-prefix>]',
+                required=True if device_info.is_supervisor() else False)
+@click.argument('info_type',
+                metavar='[bestpath|json|longer-prefixes|multipath]',
+                type=click.Choice(
+                    ['bestpath', 'json', 'longer-prefixes', 'multipath']),
+                required=False)
+@click.option('--namespace',
+                '-n',
+                'namespace',
+                type=str,
+                show_default=True,
+                required=False,
+                help='Namespace name or all',
+                default="all",
+                callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def network(ipaddress, info_type, namespace):
+    """Show IP (IPv4) BGP network"""
+    network_helper(ipaddress, info_type, namespace)
+    
+@bgp.group(cls=clicommon.AliasedGroup)
+@click.argument('vrf', required=True)
+@click.pass_context
+def vrf(ctx, vrf):
+    """Show IPv4 BGP information for a given VRF"""
+    pass
+
+# 'summary' subcommand ("show ip bgp vrf <vrf/vnet name> summary")
+@vrf.command('summary')
+@multi_asic_util.multi_asic_click_options
+@click.pass_context
+def vrf_summary(ctx, namespace, display):
+    vrf = ctx.parent.params['vrf']
+    summary_helper(namespace, display, vrf)
+
+# 'neighbors' subcommand ("show ip bgp vrf neighbors")
+@vrf.command('neighbors')
+@click.argument('ipaddress', required=False)
+@click.argument('info_type',
+                type=click.Choice(
+                    ['routes', 'advertised-routes', 'received-routes']),
+                required=False)
+@click.option('--namespace',
+                '-n',
+                'namespace',
+                default=None,
+                type=str,
+                show_default=True,
+                help='Namespace name or all',
+                callback=multi_asic_util.multi_asic_namespace_validation_callback)
+@click.pass_context
+def vrf_neighbors(ctx, ipaddress, info_type, namespace):
+    """Show IP (IPv4) BGP neighbors"""
+    vrf = ctx.parent.params['vrf']
+    neighbors_helper(ipaddress, info_type, namespace, vrf)
+
+# 'network' subcommand ("show ip bgp vrf network")
+@vrf.command('network')
+@click.argument('ipaddress',
+                metavar='[<ipv4-address>|<ipv4-prefix>]',
+                required=True if device_info.is_supervisor() else False)
+@click.argument('info_type',
+                metavar='[bestpath|json|longer-prefixes|multipath]',
+                type=click.Choice(
+                    ['bestpath', 'json', 'longer-prefixes', 'multipath']),
+                required=False)
+@click.option('--namespace',
+                '-n',
+                'namespace',
+                type=str,
+                show_default=True,
+                required=False,
+                help='Namespace name or all',
+                default="all",
+                callback=multi_asic_util.multi_asic_namespace_validation_callback)
+@click.pass_context
+def vrf_network(ctx, ipaddress, info_type, namespace):
+    """Show IP (IPv4) BGP network"""
+    vrf = ctx.parent.params['vrf']
+    network_helper(ipaddress, info_type, namespace, vrf)
+    
+def summary_helper(namespace, display, vrf=None):
+    bgp_summary = bgp_util.get_bgp_summary_from_bgp_instances(
+        constants.IPV4, namespace, display, vrf)
+    bgp_util.display_bgp_summary(bgp_summary=bgp_summary, af=constants.IPV4)
+    
+    
+def neighbors_helper(ipaddress, info_type, namespace, vrf=None):
     command = 'show ip bgp'
     if vrf is not None:
         command += ' vrf {}'.format(vrf) 
@@ -89,30 +180,8 @@ def neighbors(ipaddress, info_type, namespace, vrf=None):
         output += bgp_util.run_bgp_show_command(command, ns)
 
     click.echo(output.rstrip('\n'))
-
-# 'network' subcommand ("show ip bgp network")
-@bgp.command()
-@click.argument('ipaddress',
-                metavar='[<ipv4-address>|<ipv4-prefix>]',
-                required=True if device_info.is_supervisor() else False)
-@click.argument('info_type',
-                metavar='[bestpath|json|longer-prefixes|multipath]',
-                type=click.Choice(
-                    ['bestpath', 'json', 'longer-prefixes', 'multipath']),
-                required=False)
-@click.option('--namespace',
-                '-n',
-                'namespace',
-                type=str,
-                show_default=True,
-                required=False,
-                help='Namespace name or all',
-                default="all",
-                callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def network(ipaddress, info_type, namespace, vrf=None):
-    """Show IP (IPv4) BGP network"""
-
-    vrf = ctx.parent.params['vrf']
+    
+def network_helper(ipaddress, info_type, namespace, vrf=None):
     command = 'show ip bgp'
     if vrf is not None:
         command += ' vrf {}'.format(vrf) 
@@ -160,64 +229,3 @@ def network(ipaddress, info_type, namespace, vrf=None):
     else:
         output = bgp_util.run_bgp_show_command(command, namespace)
         click.echo(output.rstrip('\n'))
-    
-@bgp.group(cls=clicommon.AliasedGroup)
-@click.argument('vrf', required=True)
-@click.pass_context
-def vrf(ctx, vrf):
-    """Show IPv4 BGP information for a given VRF"""
-    pass
-
-# 'summary' subcommand ("show ip bgp vrf <vrf/vnet name> summary")
-@vrf.command('summary')
-@multi_asic_util.multi_asic_click_options
-@click.pass_context
-def vrf_summary(ctx, namespace, display):
-    vrf = ctx.parent.params['vrf']
-    summary(namespace, display, vrf)
-
-# 'neighbors' subcommand ("show ip bgp vrf neighbors")
-@vrf.command('neighbors')
-@click.argument('ipaddress', required=False)
-@click.argument('info_type',
-                type=click.Choice(
-                    ['routes', 'advertised-routes', 'received-routes']),
-                required=False)
-@click.option('--namespace',
-                '-n',
-                'namespace',
-                default=None,
-                type=str,
-                show_default=True,
-                help='Namespace name or all',
-                callback=multi_asic_util.multi_asic_namespace_validation_callback)
-@click.pass_context
-def vrf_neighbors(ctx, ipaddress, info_type, namespace):
-    """Show IP (IPv4) BGP neighbors"""
-    vrf = ctx.parent.params['vrf']
-    neighbors(ipaddress, info_type, namespace, vrf)
-
-# 'network' subcommand ("show ip bgp vrf network")
-@vrf.command('network')
-@click.argument('ipaddress',
-                metavar='[<ipv4-address>|<ipv4-prefix>]',
-                required=True if device_info.is_supervisor() else False)
-@click.argument('info_type',
-                metavar='[bestpath|json|longer-prefixes|multipath]',
-                type=click.Choice(
-                    ['bestpath', 'json', 'longer-prefixes', 'multipath']),
-                required=False)
-@click.option('--namespace',
-                '-n',
-                'namespace',
-                type=str,
-                show_default=True,
-                required=False,
-                help='Namespace name or all',
-                default="all",
-                callback=multi_asic_util.multi_asic_namespace_validation_callback)
-@click.pass_context
-def vrf_network(ctx, ipaddress, info_type, namespace):
-    """Show IP (IPv4) BGP network"""
-    vrf = ctx.parent.params['vrf']
-    network(ipaddress, info_type, namespace, vrf)
