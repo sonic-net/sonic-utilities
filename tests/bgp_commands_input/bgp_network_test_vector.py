@@ -546,101 +546,121 @@ def mock_show_bgp_network_multi_asic(param):
 
 testData = {
     'bgp_v4_network': {
+        'vrf': 'default',
         'args': [],
         'rc': 0,
         'rc_output': bgp_v4_network
     },
     'bgp_v4_network_ip_address': {
+        'vrf': 'default',
         'args': [' 193.11.248.128/25'],
         'rc': 0,
         'rc_output': bgp_v4_network_ip_address
     },
     'bgp_v4_network_bestpath': {
+        'vrf': 'default',
         'args': [' 193.11.248.128/25', 'bestpath'],
         'rc': 0,
         'rc_output': bgp_v4_network_bestpath
     },
     'bgp_v4_network_longer_prefixes_error': {
+        'vrf': 'default',
         'args': [' 193.11.248.128', 'longer-prefixes'],
         'rc': 1,
         'rc_output': bgp_v4_network_longer_prefixes_error
     },
     'bgp_v4_network_all_asic_on_single_asic': {
+        'vrf': 'default',
         'args': ['-nall'],
         'rc': 0,
         'rc_output': bgp_v4_network
     },
     'bgp_v6_network': {
+        'vrf': 'default',
         'args': [],
         'rc': 0,
         'rc_output': bgp_v6_network
     },
     'bgp_v6_network_ip_address': {
+        'vrf': 'default',
         'args': [' 20c0:a820:0:80::/64'],
         'rc': 0,
         'rc_output': bgp_v6_network_ip_address
     },
     'bgp_v6_network_bestpath': {
+        'vrf': 'default',
         'args': [' 20c0:a820:0:80::/64', 'bestpath'],
         'rc': 0,
         'rc_output': bgp_v6_network_bestpath
     },
     'bgp_v6_network_longer_prefixes_error': {
+        'vrf': 'default',
         'args': [' 20c0:a820:0:80::', 'longer-prefixes'],
         'rc': 1,
         'rc_output': bgp_v6_network_longer_prefixes_error
     },
     'bgp_v6_network_longer_prefixes': {
+        'vrf': 'default',
         'args': [' 20c0:a820:0:80::/64', 'longer-prefixes'],
         'rc': 0,
         'rc_output': bgp_v6_network_longer_prefixes
     },
     'bgp_v4_network_default_multi_asic': {
+        'vrf': 'default',
         'args': [],
         'rc': 0,
         'rc_output': bgp_v4_network_all_asic
     },
     'bgp_v4_network_asic0': {
+        'vrf': 'default',
         'args': ['-nasic0'],
         'rc': 0,
         'rc_output': bgp_v4_network_asic0
     },
     'bgp_v4_network_ip_address_asic0': {
+        'vrf': 'default',
         'args': ['-nasic0', '10.0.0.44'],
         'rc': 0,
         'rc_output': bgp_v4_network_ip_address_asic0
     },
     'bgp_v4_network_bestpath_asic0': {
+        'vrf': 'default',
         'args': ['-nasic0', '10.0.0.44', 'bestpath'],
         'rc': 0,
         'rc_output': bgp_v4_network_bestpath_asic0
     },
     'bgp_v4_network_all_asic': {
+        'vrf': 'default',
         'args': ['-nall'],
         'rc': 0,
         'rc_output': bgp_v4_network_all_asic
     },
     'bgp_v4_network_asic_unknown': {
+        'vrf': 'default',
         'args': ['-nasic_unknown'],
         'rc': 2,
         'rc_err_msg': multi_asic_bgp_network_asic_unknown_err
     },
     'bgp_v6_network_multi_asic': {
+        'vrf': 'default',
         'args': [],
         'rc': 2,
         'rc_err_msg': multi_asic_bgp_network_err
     },
     'bgp_v6_network_asic0': {
+        'vrf': 'default',
         'args': ['-nasic0'],
         'rc': 0,
         'rc_output': bgp_v4_network_asic0
     },
     'bgp_v6_network_ip_address_asic0': {
+        'vrf': 'default',
         'args': ['-nasic0', '20c0:a808:0:80::/64'],
         'rc': 0,
         'rc_output': bgp_v6_network_ip_address_asic0
     },
     'bgp_v6_network_bestpath_asic0': {
+        'vrf': 'default',
         'args': ['-nasic0', '20c0:a808:0:80::/64', 'bestpath'],
         'rc': 0,
         'rc_output': bgp_v6_network_ip_address_asic0_bestpath
