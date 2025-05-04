@@ -9487,7 +9487,7 @@ def add_vnet(ctx, vnet_name, vni, vxlan_tunnel, peer_list, guid, scope, advertis
         subvnet_dict["vxlan_tunnel"] = vxlan_tunnel
 
         if peer_list:
-            peers= peer_list.split(',')
+            peers = peer_list.split(',')
             for peer in peers:
                 if not is_vnet_exists(config_db, peer):
                     ctx.fail("VNET {} does not exist!".format(peer))
@@ -9582,7 +9582,7 @@ def add_vnet_route(ctx, vnet_name, prefix, endpoint, vni, mac_address, endpoint_
             if not vni.isdigit() or clicommon.vni_id_is_valid(int(vni)) is False:
                 ctx.fail("Invalid VNI {}. Valid range [1 to 16777215].".format(vni))
             subvnet_dict["vni"] = vni
-        
+
         if mac_address:
             if not is_mac_address_valid(mac_address):
                 ctx.fail("Invalid MAC {}".format(mac_address))
@@ -9593,7 +9593,6 @@ def add_vnet_route(ctx, vnet_name, prefix, endpoint, vni, mac_address, endpoint_
             for endpoint_monitor_ip in endpoint_monitor_ips:
                 if not clicommon.is_ipaddress(endpoint_monitor_ip):
                     ctx.fail("Endpoint monitor has invalid IP address {}".format(endpoint_monitor_ip))
-                    
             subvnet_dict["endpoint_monitor"] = endpoint_monitor
 
         if profile:
@@ -9625,7 +9624,7 @@ def add_vnet_route(ctx, vnet_name, prefix, endpoint, vni, mac_address, endpoint_
 @click.argument('prefix', metavar='<prefix>', required=False)
 @click.pass_context
 def del_vnet_route(ctx, vnet_name, prefix):
-    """Del VNET route"""
+    """Del a specific VNET route or all VNET routes"""
     config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
 
     vnet_name_is_valid(ctx, vnet_name)

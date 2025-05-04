@@ -209,6 +209,7 @@ def is_ipaddress(val):
         return False
     return True
 
+
 def is_ipaddress_prefix(val):
     """ Validate if an entry is a valid IP address prefix """
     import netaddr
@@ -219,6 +220,7 @@ def is_ipaddress_prefix(val):
     except netaddr.core.AddrFormatError:
         return False
     return True
+
 
 def ipaddress_type(val):
     """ Return the IP address type """

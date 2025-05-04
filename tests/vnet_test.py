@@ -190,8 +190,8 @@ Vnet_103     Po0002.101
         expected_output = """\
 Error: 'vnet_name' must begin with 'Vnet'.
 """
-        db.cfgdb.set_entry("VXLAN_TUNNEL", "tunnel1", {"src_ip": "10.1.0.1","dst_port": "4789"})
-        db.cfgdb.set_entry("VXLAN_TUNNEL_MAP", ("tunnel1","map_100_Vlan100"), {"vni" : "2","vlan": "Vlan100"})
+        db.cfgdb.set_entry("VXLAN_TUNNEL", "tunnel1", {"src_ip": "10.1.0.1", "dst_port": "4789"})
+        db.cfgdb.set_entry("VXLAN_TUNNEL_MAP", ("tunnel1", "map_100_Vlan100"), {"vni": "2", "vlan": "Vlan100"})
 
         # Test vnet add using length of vnet name
         vnet_name = "Vnet_ypfbjjhyzivaythuaxlbcibgdgjkqgapedmiosjgsv"
@@ -251,8 +251,8 @@ Error: 'vnet_name' must begin with 'Vnet'.
         expected_output = """\
 Error: 'vnet_name' must begin with 'Vnet'.
 """
-        db.cfgdb.set_entry("VXLAN_TUNNEL", "tunnel1", {"src_ip": "10.1.0.1","dst_port": "4789"})
-        db.cfgdb.set_entry("VXLAN_TUNNEL_MAP", ("tunnel1","map_100_Vlan100"), {"vni" : "2","vlan": "Vlan100"})
+        db.cfgdb.set_entry("VXLAN_TUNNEL", "tunnel1", {"src_ip": "10.1.0.1", "dst_port": "4789"})
+        db.cfgdb.set_entry("VXLAN_TUNNEL_MAP", ("tunnel1", "map_100_Vlan100"), {"vni": "2", "vlan": "Vlan100"})
 
         # Add the vnet to a vnet table and verify if it exists while route addition
         args = ["Vnet3", "2", "tunnel1"]
@@ -282,7 +282,7 @@ Error: 'vnet_name' must begin with 'Vnet'.
         result = runner.invoke(config.config.commands["vnet"].commands["add-route"], args, obj=vnet_obj)
         assert "Route already exists for the VNET Vnet3" in result.output
         assert result.exit_code != 0
-        
+
         # Test vnet add route using length of vnet name
         vnet_name = "Vnetypfbjjhyzivaythuaxlbcibgdgjkqgapedmiosjgsv"
         args = [vnet_name, "10.10.10.10/32", "10.10.10.1"]
@@ -352,9 +352,9 @@ Error: 'vnet_name' must begin with 'Vnet'.
         db = Db()
         vnet_obj = {'config_db': db.cfgdb, 'namespace': db.db.namespace}
 
-        db.cfgdb.set_entry("VXLAN_TUNNEL", "tunnel1", {"src_ip": "10.1.0.1","dst_port": "4789"})
-        db.cfgdb.set_entry("VXLAN_TUNNEL_MAP", ("tunnel1","map_100_Vlan100"), {"vni" : "12","vlan": "Vlan100"})
-        
+        db.cfgdb.set_entry("VXLAN_TUNNEL", "tunnel1", {"src_ip": "10.1.0.1", "dst_port": "4789"})
+        db.cfgdb.set_entry("VXLAN_TUNNEL_MAP", ("tunnel1", "map_100_Vlan100"), {"vni": "12", "vlan": "Vlan100"})
+
         # Test vnet add with optional arg-invalid vni
         args = ["Vnet11", "12a", "tunnel1"]
         result = runner.invoke(config.config.commands["vnet"].commands["add"], args, obj=vnet_obj)
@@ -391,18 +391,18 @@ Error: 'vnet_name' must begin with 'Vnet'.
         args = ["Vnet12", "12", "tunnel1", "Vnet4", "aaa233_2323", "default", "10"]
         result = runner.invoke(config.config.commands["vnet"].commands["add"], args, obj=vnet_obj)
         assert result.exit_code != 0
-        
+
         # Test vnet add with optional arg-invalid overlay_dmac
         args = ["Vnet11", "12", "tunnel1", "Vnet4", "aaa233_2323", "default", "true", "11:22:33:44:556"]
         result = runner.invoke(config.config.commands["vnet"].commands["add"], args, obj=vnet_obj)
         assert "Invalid MAC for overlay dmac 11:22:33:44:556 ." in result.output
 
         # Test vnet add with optional arg-invalid src_mac
-        args = ["Vnet11", "12", "tunnel1", "Vnet4", "aaa233_2323", "default", "TRUE", "11:22:33:44:55:66", "66:55:44:33:11"]
+        args = ["Vnet11", "1", "tunnel1", "Vnet4", "aaa_2323", "default", "TRUE", "11:22:33:44:55:66", "66:55:44:33:11"]
         result = runner.invoke(config.config.commands["vnet"].commands["add"], args, obj=vnet_obj)
         assert "Invalid MAC for src mac 66:55:44:33:11 ." in result.output
 
-        # Test vnet add successfully with all optional arguments 
+        # Test vnet add successfully with all optional arguments
         args2 = ["Vnet4", "559c6ce8-26ab-419-b46-b2", "default", "TRUE", "11:22:33:44:55:66", "66:55:44:33:22:11"]
         args = ["Vnet_11", "12", "tunnel1"] + args2
         result = runner.invoke(config.config.commands["vnet"].commands["add"], args, obj=vnet_obj)
@@ -414,8 +414,8 @@ Error: 'vnet_name' must begin with 'Vnet'.
         db = Db()
         vnet_obj = {'config_db': db.cfgdb, 'namespace': db.db.namespace}
 
-        db.cfgdb.set_entry("VXLAN_TUNNEL", "tunnel1", {"src_ip": "10.1.0.1","dst_port": "4789"})
-        db.cfgdb.set_entry("VXLAN_TUNNEL_MAP", ("tunnel1","map_100_Vlan100"), {"vni" : "12","vlan": "Vlan100"})
+        db.cfgdb.set_entry("VXLAN_TUNNEL", "tunnel1", {"src_ip": "10.1.0.1", "dst_port": "4789"})
+        db.cfgdb.set_entry("VXLAN_TUNNEL_MAP", ("tunnel1", "map_100_Vlan100"), {"vni": "12", "vlan": "Vlan100"})
 
         # Add the vnet
         args = ["Vnet4", "12", "tunnel1"]
@@ -448,17 +448,19 @@ Error: 'vnet_name' must begin with 'Vnet'.
         assert "Endpoint monitor has invalid IP address 10.10.10.1000" in result.output
 
         # Test vnet add route with optional arg-invalid primary
-        args = ["Vnet4", "8.8.8.8/32", "10.10.10.1", "123", "11:22:33:AA:55:66", "8.8.8.8", "test", "192.168.1.999", "custom"]
+        args = ["Vnet4", "8.8.8.8/32", "1.1.1.1", "12", "11:22:33:AA:55:66", "8.8.8.8", "test", "92.8.1.999", "custom"]
         result = runner.invoke(config.config.commands["vnet"].commands["add-route"], args, obj=vnet_obj)
-        assert "Primary has invalid IP address 192.168.1.999" in result.output
+        assert "Primary has invalid IP address 92.8.1.999" in result.output
 
         # Test vnet add route with optional arg-invalid adv_prefix
-        args = ["Vnet4", "8.8.8.8/32", "10.10.10.1", "123", "11:22:33:AA:55:66", "8.8.8.8", "test", "192.168.1.9", "custom", "8.8.8.8/33"]
+        args = ["Vnet4", "8.8.8.8/32", "1.1.1.1", "1", "11:22:33:AA:55:66",
+                "8.8.8.8", "test", "9.8.1.9", "custom", "8.8.8.8/33"]
         result = runner.invoke(config.config.commands["vnet"].commands["add-route"], args, obj=vnet_obj)
         assert "Invalid adv_prefix" in result.output
 
         # Test vnet add route with successful optional args
-        args = ["Vnet4", "8.8.8.8/32", "10.10.10.1", "123", "11:22:33:AA:55:66", "8.8.8.8", "test", "192.168.1.9", "custom", "8.8.8.8/24"]
+        args = ["Vnet4", "8.8.8.8/32", "1.1.1.1", "1", "11:22:33:AA:55:66",
+                "8.8.8.8", "test", "9.8.1.9", "custom", "8.8.8.8/24"]
         result = runner.invoke(config.config.commands["vnet"].commands["add-route"], args, obj=vnet_obj)
         assert any((key[0] == 'Vnet4' and key[1] == '8.8.8.8/32') for key in db.cfgdb.get_table('VNET_ROUTE_TUNNEL'))
         assert result.exit_code == 0
