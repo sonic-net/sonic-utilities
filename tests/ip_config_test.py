@@ -351,6 +351,9 @@ class TestConfigIP(object):
         db = Db()
         obj = {'config_db': db.cfgdb, 'namespace': db.db.namespace}
 
+        db.cfgdb.set_entry("VXLAN_TUNNEL", "tunnel1", {"src_ip": "10.1.0.1", "dst_port": "4789"})
+        db.cfgdb.set_entry("VXLAN_TUNNEL_MAP", ("tunnel1", "map_100_Vlan100"), {"vni": "222", "vlan": "Vlan100"})
+
         # Create vnet
         result = runner.invoke(config.config.commands["vnet"].commands["add"], ["Vnet_1000", "222", "tunnel1"], obj=obj)
         print(db.cfgdb.get_table('VNET'))
