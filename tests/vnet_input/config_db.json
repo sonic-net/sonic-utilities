@@ -35,7 +35,7 @@
         "vnet_name": "Vnet_103"
     },
     "VNET|Vnet_1": {
-        "peer_list": "10.11.11.11/32",
+        "peer_list": "Vnet_101",
         "vni": "3000",
         "vxlan_tunnel": "tunnel1"
     },

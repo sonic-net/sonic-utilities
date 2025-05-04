@@ -353,7 +353,7 @@ Error: 'vnet_name' must begin with 'Vnet'.
         vnet_obj = {'config_db': db.cfgdb, 'namespace': db.db.namespace}
 
         db.cfgdb.set_entry("VXLAN_TUNNEL", "tunnel1", {"src_ip": "10.1.0.1", "dst_port": "4789"})
-        db.cfgdb.set_entry("VXLAN_TUNNEL_MAP", ("tunnel1", "map_100_Vlan100"), {"vni": "12", "vlan": "Vlan100"})
+        db.cfgdb.set_entry("VXLAN_TUNNEL_MAP", ("tunnel1", "map_100_Vlan100"), {"vni": "1", "vlan": "Vlan100"})
 
         # Test vnet add with optional arg-invalid vni
         args = ["Vnet11", "12a", "tunnel1"]
@@ -370,30 +370,30 @@ Error: 'vnet_name' must begin with 'Vnet'.
         assert "VNI 13 is not mapped to Vxlan tunnel tunnel1" in result.output
 
         # Test vnet add with optional arg-invalid peer list
-        args = ["Vnet11", "12", "tunnel1", "Vnet1"]
+        args = ["Vnet11", "1", "tunnel1", "Vnet1"]
         result = runner.invoke(config.config.commands["vnet"].commands["add"], args, obj=vnet_obj)
         assert "VNET Vnet1 does not exist!" in result.output
 
         # Test vnet add with optional arg-invalid guid
-        args = ["Vnet4", "12", "tunnel1"]
+        args = ["Vnet4", "1", "tunnel1"]
         result = runner.invoke(config.config.commands["vnet"].commands["add"], args, obj=vnet_obj)
         invalid_guid = "123456789012345"*25
-        args = ["Vnet11", "12", "tunnel1", "Vnet4", invalid_guid]
+        args = ["Vnet11", "1", "tunnel1", "Vnet4", invalid_guid]
         result = runner.invoke(config.config.commands["vnet"].commands["add"], args, obj=vnet_obj)
         assert "'guid' length should not exceed 255 characters" in result.output
 
         # Test vnet add with optional arg-invalid scope
-        args = ["Vnet11", "12", "tunnel1", "Vnet4", "aaa233_2323", "non_default"]
+        args = ["Vnet11", "1", "tunnel1", "Vnet4", "aaa233_2323", "non_default"]
         result = runner.invoke(config.config.commands["vnet"].commands["add"], args, obj=vnet_obj)
         assert "Only 'default' value is allowed for scope!" in result.output
 
         # Test vnet add with optional arg-invalid adv_prefix
-        args = ["Vnet12", "12", "tunnel1", "Vnet4", "aaa233_2323", "default", "10"]
+        args = ["Vnet12", "1", "tunnel1", "Vnet4", "aaa233_2323", "default", "10"]
         result = runner.invoke(config.config.commands["vnet"].commands["add"], args, obj=vnet_obj)
         assert result.exit_code != 0
 
         # Test vnet add with optional arg-invalid overlay_dmac
-        args = ["Vnet11", "12", "tunnel1", "Vnet4", "aaa233_2323", "default", "true", "11:22:33:44:556"]
+        args = ["Vnet11", "1", "tunnel1", "Vnet4", "aaa233_2323", "default", "true", "11:22:33:44:556"]
         result = runner.invoke(config.config.commands["vnet"].commands["add"], args, obj=vnet_obj)
         assert "Invalid MAC for overlay dmac 11:22:33:44:556 ." in result.output
 
@@ -404,7 +404,7 @@ Error: 'vnet_name' must begin with 'Vnet'.
 
         # Test vnet add successfully with all optional arguments
         args2 = ["Vnet4", "559c6ce8-26ab-419-b46-b2", "default", "TRUE", "11:22:33:44:55:66", "66:55:44:33:22:11"]
-        args = ["Vnet_11", "12", "tunnel1"] + args2
+        args = ["Vnet_11", "1", "tunnel1"] + args2
         result = runner.invoke(config.config.commands["vnet"].commands["add"], args, obj=vnet_obj)
         assert ('Vnet_11') in db.cfgdb.get_table('VNET')
         assert result.exit_code == 0
