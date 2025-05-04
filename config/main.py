@@ -119,6 +119,7 @@ PORT_MODE = "switchport_mode"
 DOM_CONFIG_SUPPORTED_SUBPORTS = ['0', '1']
 
 VNET_NAME_MAX_LEN = 15
+GUID_MAX_LEN = 255
 
 asic_type = None
 
@@ -421,12 +422,44 @@ def is_vrf_exists(config_db, vrf_name):
     return False
 
 
+def is_vxlan_tunnel_exists(config_db, vxlan_tunnel_name):
+    """Check if VXLAN tunnel exists
+    """
+    keys = config_db.get_keys("VXLAN_TUNNEL")
+    if keys:
+        if vxlan_tunnel_name in keys:
+            return True
+    return False
+
+
+def is_vni_vxlan_mapping_exists(config_db, vxlan_tunnel_name, vni):
+    """Check if VNI to VXLAN mapping exists
+    """
+    keys = config_db.get_keys("VXLAN_TUNNEL_MAP")
+    if keys:
+        for k in keys:
+            if k[0] == vxlan_tunnel_name:
+                val = config_db.get_entry("VXLAN_TUNNEL_MAP", k)
+                if val['vni'] == vni:
+                    return True
+    return False
+
+
+def is_mac_address_valid(mac):
+    """Check if MAC address is valid
+    """
+    if not mac:
+        return False
+    return bool(re.match("^([0-9A-Fa-f]{2}[:]){5}([0-9A-Fa-f]{2})$", mac))
+
+
 def is_vnet_exists(config_db, vnet_name):
     """Check if VNET exists
     """
     keys = config_db.get_keys("VNET")
-    if vnet_name in keys:
-        return True
+    if keys:
+        if vnet_name in keys:
+            return True
 
     return False
 
@@ -9442,21 +9475,47 @@ def add_vnet(ctx, vnet_name, vni, vxlan_tunnel, peer_list, guid, scope, advertis
     if is_vnet_exists(config_db, vnet_name):
         ctx.fail("VNET {} already exists!".format(vnet_name))
     else:
+        if not vni.isdigit() or clicommon.vni_id_is_valid(int(vni)) is False:
+            ctx.fail("Invalid VNI {}. Valid range [1 to 16777215].".format(vni))
+        if not is_vxlan_tunnel_exists(config_db, vxlan_tunnel):
+            ctx.fail("Vxlan tunnel {} does not exist!".format(vxlan_tunnel))
+        if not is_vni_vxlan_mapping_exists(config_db, vxlan_tunnel, vni):
+            ctx.fail("VNI {} is not mapped to Vxlan tunnel {}.".format(vni, vxlan_tunnel))
+
         subvnet_dict = {}
         subvnet_dict["vni"] = vni
         subvnet_dict["vxlan_tunnel"] = vxlan_tunnel
+
         if peer_list:
+            peers= peer_list.split(',')
+            for peer in peers:
+                if not is_vnet_exists(config_db, peer):
+                    ctx.fail("VNET {} does not exist!".format(peer))
             subvnet_dict["peer_list"] = peer_list
+
         if guid:
+            if len(guid) > GUID_MAX_LEN:
+                ctx.fail("'guid' length should not exceed {} characters".format(GUID_MAX_LEN))
             subvnet_dict["guid"] = guid
+
         if scope:
+            if scope != 'default':
+                ctx.fail("Only 'default' value is allowed for scope!")
             subvnet_dict["scope"] = scope
+
         if advertise_prefix:
             subvnet_dict["advertise_prefix"] = advertise_prefix
+
         if overlay_dmac:
+            if not is_mac_address_valid(overlay_dmac):
+                ctx.fail("Invalid MAC for overlay dmac {} .".format(overlay_dmac))
             subvnet_dict["overlay_dmac"] = overlay_dmac
+
         if src_mac:
+            if not is_mac_address_valid(src_mac):
+                ctx.fail("Invalid MAC for src mac {} .".format(src_mac))
             subvnet_dict["src_mac"] = src_mac
+
         try:
             config_db.set_entry('VNET', vnet_name, subvnet_dict)
         except ValueError as e:
@@ -9477,6 +9536,7 @@ def del_vnet(ctx, vnet_name):
     else:
         del_interface_bind_to_vnet(config_db, vnet_name)
         del_route_bind_to_vnet(config_db, vnet_name)
+
         try:
             config_db.set_entry('VNET', vnet_name, None)
         except JsonPatchConflict as e:
@@ -9487,16 +9547,16 @@ def del_vnet(ctx, vnet_name):
 @vnet.command('add-route')
 @click.argument('vnet_name', metavar='<vnet_name>', type=str, required=True)
 @click.argument('prefix', metavar='<prefix>', required=True)
-@click.argument('end_point', metavar='<end_point>', required=True)
+@click.argument('endpoint', metavar='<endpoint>', required=True)
 @click.argument('vni', metavar='<vni>', required=False)
 @click.argument('mac_address', metavar='<mac_address>', required=False)
 @click.argument('endpoint_monitor', metavar='<endpoint_monitor>', required=False)
-@click.argument('profile', metavar='<profile>', required=False)
+@click.argument('profile', metavar='<profile>', type=str, required=False)
 @click.argument('primary', metavar='<primary>', required=False)
-@click.argument('monitoring', metavar='<monitoring>', required=False)
-@click.argument('adv_prefix', metavar='<adv_prefix>', type=bool, required=False)
+@click.argument('monitoring', metavar='<monitoring>', type=str, required=False)
+@click.argument('adv_prefix', metavar='<adv_prefix>', required=False)
 @click.pass_context
-def add_vnet_route(ctx, vnet_name, prefix, end_point, vni, mac_address, endpoint_monitor,
+def add_vnet_route(ctx, vnet_name, prefix, endpoint, vni, mac_address, endpoint_monitor,
                    profile, primary, monitoring, adv_prefix):
     """Add VNET Route"""
     config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
@@ -9505,25 +9565,55 @@ def add_vnet_route(ctx, vnet_name, prefix, end_point, vni, mac_address, endpoint
 
     if not is_vnet_exists(config_db, vnet_name):
         ctx.fail("VNET {} doesnot exist, cannot add a route!".format(vnet_name))
+    if not clicommon.is_ipaddress_prefix(prefix):
+        ctx.fail("Invalid prefix {}".format(prefix))
     if is_vnet_route_exists(config_db, vnet_name, prefix):
         ctx.fail("Route already exists for the VNET {}!".format(vnet_name))
     else:
+        endpoint_ips = endpoint.split(',')
+        for endpoint_ip in endpoint_ips:
+            if not clicommon.is_ipaddress(endpoint_ip):
+                ctx.fail("Endpoint has invalid IP address {}".format(endpoint_ip))
+
         subvnet_dict = {}
-        subvnet_dict["end_point"] = end_point
+        subvnet_dict["endpoint"] = endpoint
+
         if vni:
+            if not vni.isdigit() or clicommon.vni_id_is_valid(int(vni)) is False:
+                ctx.fail("Invalid VNI {}. Valid range [1 to 16777215].".format(vni))
             subvnet_dict["vni"] = vni
-        if endpoint_monitor:
-            subvnet_dict['endpoint_monitor'] = endpoint_monitor
+        
         if mac_address:
+            if not is_mac_address_valid(mac_address):
+                ctx.fail("Invalid MAC {}".format(mac_address))
             subvnet_dict["mac_address"] = mac_address
+
+        if endpoint_monitor:
+            endpoint_monitor_ips = endpoint_monitor.split(',')
+            for endpoint_monitor_ip in endpoint_monitor_ips:
+                if not clicommon.is_ipaddress(endpoint_monitor_ip):
+                    ctx.fail("Endpoint monitor has invalid IP address {}".format(endpoint_monitor_ip))
+                    
+            subvnet_dict["endpoint_monitor"] = endpoint_monitor
+
         if profile:
             subvnet_dict['profile'] = profile
+
         if primary:
+            primary_ips = primary.split(',')
+            for primary_ip in primary_ips:
+                if not clicommon.is_ipaddress(primary_ip):
+                    ctx.fail("Primary has invalid IP address {}".format(primary_ip))
             subvnet_dict['primary'] = primary
+
         if monitoring:
             subvnet_dict['monitoring'] = monitoring
+
         if adv_prefix:
+            if not clicommon.is_ipaddress_prefix(adv_prefix):
+                ctx.fail("Invalid adv_prefix {}".format(adv_prefix))
             subvnet_dict['adv_prefix'] = adv_prefix
+
         try:
             config_db.set_entry('VNET_ROUTE_TUNNEL', (vnet_name, prefix), subvnet_dict)
         except ValueError as e:
@@ -9545,6 +9635,8 @@ def del_vnet_route(ctx, vnet_name, prefix):
     if not is_any_vnet_route_exists(config_db, vnet_name):
         ctx.fail("Routes dont exist for the VNET {}, cant delete it!".format(vnet_name))
     if prefix:
+        if not clicommon.is_ipaddress_prefix(prefix):
+            ctx.fail("Invalid prefix {}".format(prefix))
         if not is_vnet_route_exists(config_db, vnet_name, prefix):
             ctx.fail("Route does not exist for the VNET {}, cant delete it!".format(vnet_name))
         else:
