@@ -307,7 +307,10 @@ def get_bgp_summary_from_bgp_instances(af, namespace, display, vrf):
                     has_bgp_neighbors = False
 
         if not has_bgp_neighbors:
-            vtysh_bgp_json_cmd = "show ip bgp json"
+            vtysh_bgp_json_cmd = "show ip bgp"
+            if vrf is not None:
+                vtysh_bgp_json_cmd += " vrf {}".format(vrf)
+            vtysh_bgp_json_cmd += " json"
             no_neigh_cmd_output = run_bgp_show_command(vtysh_bgp_json_cmd, ns)
             try:
                 no_neigh_cmd_output_json = json.loads(no_neigh_cmd_output)

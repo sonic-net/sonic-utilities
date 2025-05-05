@@ -103,6 +103,13 @@ Try "summary --help" for help.
 Error: bgp summary from bgp container not in json format
 """
 
+show_vrf_error_invalid_json = """\
+Usage: vrf summary [OPTIONS]
+Try "vrf summary --help" for help.
+
+Error: bgp summary from bgp container not in json format
+"""
+
 show_error_no_v6_neighbor_single_asic = """\
 
 IPv6 Unicast Summary:
