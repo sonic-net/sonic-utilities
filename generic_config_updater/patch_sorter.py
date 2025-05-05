@@ -1186,11 +1186,11 @@ class VNETAssociationChangeValidator:
                 if "vnet_name" not in config:
                     continue
                 if table in target_config and interface in target_config[table]:
-                    if ("vnet_name" in target_config[table][interface] and 
+                    if ("vnet_name" in target_config[table][interface] and
                             target_config[table][interface]["vnet_name"] != config["vnet_name"]):
                         simulated_config = move.apply(current_config)
                         # If the move changes the vnet or deletes the table/interface that has a vnet
-                        if (table not in simulated_config or 
+                        if (table not in simulated_config or
                                 interface not in simulated_config[table] or
                                 "vnet_name" not in simulated_config[table][interface] or
                                 simulated_config[table][interface]["vnet_name"] != config["vnet_name"]):
