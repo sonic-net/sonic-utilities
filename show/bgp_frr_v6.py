@@ -126,6 +126,7 @@ def vrf_neighbors(ctx, ipaddress, info_type, namespace):
                 help='Namespace name or all',
                 default=multi_asic.DEFAULT_NAMESPACE,
                 callback=multi_asic_util.multi_asic_namespace_validation_callback)
+@click.pass_context
 def vrf_network(ctx, ipaddress, info_type, namespace):
     """Show BGP ipv6 network"""
     vrf = ctx.parent.params['vrf']

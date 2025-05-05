@@ -362,6 +362,20 @@ class TestBgpCommandsSingleAsic(object):
         print("{}".format(result.output))
         assert result.exit_code == 0
         assert result.output == show_bgp_summary_v4
+        
+    @pytest.mark.parametrize('setup_single_bgp_instance',
+                             ['v4'], indirect=['setup_single_bgp_instance'])
+    def test_bgp_vrf_summary_v4(
+            self,
+            setup_bgp_commands,
+            setup_single_bgp_instance):
+        show = setup_bgp_commands
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["ip"].commands["bgp"].commands["vrf"], ['default', 'summary'])
+        print("{}".format(result.output))
+        assert result.exit_code == 0
+        assert result.output == show_bgp_summary_v4
 
     @pytest.mark.parametrize('setup_single_bgp_instance',
                              ['v6'], indirect=['setup_single_bgp_instance'])
@@ -373,6 +387,20 @@ class TestBgpCommandsSingleAsic(object):
         runner = CliRunner()
         result = runner.invoke(
             show.cli.commands["ipv6"].commands["bgp"].commands["summary"], [])
+        print("{}".format(result.output))
+        assert result.exit_code == 0
+        assert result.output == show_bgp_summary_v6
+        
+    @pytest.mark.parametrize('setup_single_bgp_instance',
+                             ['v6'], indirect=['setup_single_bgp_instance'])
+    def test_bgp_vrf_summary_v6(
+            self,
+            setup_bgp_commands,
+            setup_single_bgp_instance):
+        show = setup_bgp_commands
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["ipv6"].commands["bgp"].commands["vrf"], ['default', 'summary'])
         print("{}".format(result.output))
         assert result.exit_code == 0
         assert result.output == show_bgp_summary_v6
@@ -391,6 +419,20 @@ class TestBgpCommandsSingleAsic(object):
         assert result.exit_code == 2
         assert result.output == show_error_invalid_json
 
+    @pytest.mark.parametrize('setup_single_bgp_instance',
+                             [' '], indirect=['setup_single_bgp_instance'])
+    def test_bgp_vrf_summary_error(
+            self,
+            setup_bgp_commands,
+            setup_single_bgp_instance):
+        show = setup_bgp_commands
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["ipv6"].commands["bgp"].commands["vrf"], ['default', 'summary'])
+        print("{}".format(result.output))
+        assert result.exit_code == 2
+        assert result.output == show_error_invalid_json
+        
     def display_external(self):
         return constants.DISPLAY_EXTERNAL
 
@@ -415,6 +457,25 @@ class TestBgpCommandsSingleAsic(object):
         print("{}".format(result.output))
         assert result.exit_code == 0
         assert result.output == show_bgp_summary_v4_chassis
+      
+    @pytest.mark.parametrize(
+        'setup_single_bgp_instance_chassis', ['v4'],
+        indirect=['setup_single_bgp_instance_chassis']
+    )  
+    @patch.object(multi_asic.MultiAsic, 'get_display_option', display_external)
+    @patch('sonic_py_common.device_info.get_platform_info')
+    def test_bgp_vrf_summary_v4_chassis(
+        self, mock_is_chassis, setup_bgp_commands,
+        setup_single_bgp_instance_chassis
+    ):
+        mock_is_chassis.return_value = {'switch_type': 'voq'}
+        show = setup_bgp_commands
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["ip"].commands["bgp"].commands["vrf"], ['default', 'summary'])
+        print("{}".format(result.output))
+        assert result.exit_code == 0
+        assert result.output == show_bgp_summary_v4_chassis
 
     @pytest.mark.parametrize(
         'setup_single_bgp_instance_chassis', ['v6'],
@@ -431,6 +492,25 @@ class TestBgpCommandsSingleAsic(object):
         runner = CliRunner()
         result = runner.invoke(
             show.cli.commands["ipv6"].commands["bgp"].commands["summary"], [])
+        print("{}".format(result.output))
+        assert result.exit_code == 0
+        assert result.output == show_bgp_summary_v6_chassis
+
+    @pytest.mark.parametrize(
+        'setup_single_bgp_instance_chassis', ['v6'],
+        indirect=['setup_single_bgp_instance_chassis']
+    )
+    @patch.object(multi_asic.MultiAsic, 'get_display_option', display_external)
+    @patch('sonic_py_common.device_info.get_platform_info')
+    def test_bgp_vrf_summary_v6_chassis(
+        self, mock_is_chassis, setup_bgp_commands,
+        setup_single_bgp_instance_chassis
+    ):
+        mock_is_chassis.return_value = {'switch_type': 'voq'}
+        show = setup_bgp_commands
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["ipv6"].commands["bgp"].commands["vrf"], ['default', 'summary'])
         print("{}".format(result.output))
         assert result.exit_code == 0
         assert result.output == show_bgp_summary_v6_chassis
@@ -453,7 +533,26 @@ class TestBgpCommandsSingleAsic(object):
         print("{}".format(result.output))
         assert result.exit_code == 0
         assert result.output == show_bgp_summary_v4_all_chassis
-
+    
+    @pytest.mark.parametrize(
+        'setup_single_bgp_instance_chassis', ['v4'],
+        indirect=['setup_single_bgp_instance_chassis']
+    )
+    @patch.object(multi_asic.MultiAsic, 'get_display_option', display_all)
+    @patch('sonic_py_common.device_info.get_platform_info')
+    def test_bgp_vrf_summary_v4_all_chassis(
+        self, mock_is_chassis, setup_bgp_commands,
+        setup_single_bgp_instance_chassis
+    ):
+        mock_is_chassis.return_value = {'switch_type': 'voq'}
+        show = setup_bgp_commands
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["ip"].commands["bgp"].commands["vrf"], ['default', 'summary'])
+        print("{}".format(result.output))
+        assert result.exit_code == 0
+        assert result.output == show_bgp_summary_v4_all_chassis
+        
     @pytest.mark.parametrize('setup_single_bgp_instance',
                              ['show_bgp_summary_no_neigh'], indirect=['setup_single_bgp_instance'])
     def test_bgp_summary_no_v4_neigh(
@@ -464,6 +563,20 @@ class TestBgpCommandsSingleAsic(object):
         runner = CliRunner()
         result = runner.invoke(
             show.cli.commands["ip"].commands["bgp"].commands["summary"], [])
+        print("{}".format(result.output))
+        assert result.exit_code == 0
+        assert result.output == show_error_no_v4_neighbor_single_asic
+        
+    @pytest.mark.parametrize('setup_single_bgp_instance',
+                             ['show_bgp_summary_no_neigh'], indirect=['setup_single_bgp_instance'])
+    def test_bgp_vrf_summary_no_v4_neigh(
+            self,
+            setup_bgp_commands,
+            setup_single_bgp_instance):
+        show = setup_bgp_commands
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["ip"].commands["bgp"].commands["vrf"], ['default', 'summary'])
         print("{}".format(result.output))
         assert result.exit_code == 0
         assert result.output == show_error_no_v4_neighbor_single_asic
@@ -478,6 +591,20 @@ class TestBgpCommandsSingleAsic(object):
         runner = CliRunner()
         result = runner.invoke(
             show.cli.commands["ipv6"].commands["bgp"].commands["summary"], [])
+        print("{}".format(result.output))
+        assert result.exit_code == 0
+        assert result.output == show_error_no_v6_neighbor_single_asic
+        
+    @pytest.mark.parametrize('setup_single_bgp_instance',
+                             ['show_bgp_summary_no_neigh'], indirect=['setup_single_bgp_instance'])
+    def test_bgp_vrf_summary_no_v6_neigh(
+            self,
+            setup_bgp_commands,
+            setup_single_bgp_instance):
+        show = setup_bgp_commands
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["ipv6"].commands["bgp"].commands["vrf"], ['default', 'summary'])
         print("{}".format(result.output))
         assert result.exit_code == 0
         assert result.output == show_error_no_v6_neighbor_single_asic
@@ -535,6 +662,58 @@ class TestBgpCommandsSingleAsic(object):
             assert "Peer groups 0, using 0 bytes of memory" in result.output
 
     @pytest.mark.parametrize('setup_single_bgp_instance',
+                             ['v4'], indirect=['setup_single_bgp_instance'])
+    def test_bgp_vrf_summary_raw_missing_peergroup_count(
+            self,
+            setup_bgp_commands,
+            setup_single_bgp_instance):
+        show = setup_bgp_commands
+        runner = CliRunner()
+        # mock vtysh cli output that does not have peergroup count
+        mock_json = {
+            "ipv4Unicast": {
+                "routerId": "10.1.0.32",
+                "as": 65100,
+                "localAS": 65100,
+                "vrfId": 0,
+                "tableVersion": 1,
+                "totalPeers": 0,
+                "dynamicPeers": 0,
+                "bestPaths": 0,
+                "peerCount": 2,
+                "peerMemory": 2048,
+                "ribCount": 10,
+                "ribMemory": 1024,
+                "peers": {
+                    "10.0.0.33": {
+                        "remoteAs": 64001,
+                        "version": 4,
+                        "msgRcvd": 0,
+                        "msgSent": 0,
+                        "tableVersion": 0,
+                        "outq": 0,
+                        "inq": 0,
+                        "peerUptime": "never",
+                        "peerUptimeMsec": 0,
+                        "prefixReceivedCount": 0,
+                        "pfxRcd": 0,
+                        "state": "Active",
+                        "connectionsEstablished": 0,
+                        "connectionsDropped": 0,
+                        "idType": "ipv4"
+                    }
+                }
+            }
+        }
+
+        with patch('utilities_common.bgp_util.run_bgp_command', return_value=json.dumps(mock_json)):
+            result = runner.invoke(
+                show.cli.commands["ip"].commands["bgp"].commands["vrf"], ['default', 'summary'])
+            # verify that the CLI handles missing peergroup count gracefully
+            assert result.exit_code == 0
+            assert "Peer groups 0, using 0 bytes of memory" in result.output
+
+    @pytest.mark.parametrize('setup_single_bgp_instance',
                              ['v6'], indirect=['setup_single_bgp_instance'])
     def test_bgp_summary_raw_missing_peergroup_count_v6(
             self,
@@ -586,6 +765,58 @@ class TestBgpCommandsSingleAsic(object):
             assert result.exit_code == 0
             assert "Peer groups 0, using 0 bytes of memory" in result.output
 
+    @pytest.mark.parametrize('setup_single_bgp_instance',
+                             ['v6'], indirect=['setup_single_bgp_instance'])
+    def test_bgp_vrf_summary_raw_missing_peergroup_count_v6(
+            self,
+            setup_bgp_commands,
+            setup_single_bgp_instance):
+        show = setup_bgp_commands
+        runner = CliRunner()
+        # mock vtysh cli output that does not have peergroup count
+        mock_json = {
+            "ipv6Unicast": {
+                "routerId": "10.1.0.32",
+                "as": 65100,
+                "localAS": 65100,
+                "vrfId": 0,
+                "tableVersion": 1,
+                "totalPeers": 0,
+                "dynamicPeers": 0,
+                "bestPaths": 0,
+                "peerCount": 2,
+                "peerMemory": 2048,
+                "ribCount": 10,
+                "ribMemory": 1024,
+                "peers": {
+                    "fc00::42": {
+                        "remoteAs": 64001,
+                        "version": 4,
+                        "msgRcvd": 0,
+                        "msgSent": 0,
+                        "tableVersion": 0,
+                        "outq": 0,
+                        "inq": 0,
+                        "peerUptime": "never",
+                        "peerUptimeMsec": 0,
+                        "prefixReceivedCount": 0,
+                        "pfxRcd": 0,
+                        "state": "Active",
+                        "connectionsEstablished": 0,
+                        "connectionsDropped": 0,
+                        "idType": "ipv6"
+                    }
+                }
+            }
+        }
+
+        with patch('utilities_common.bgp_util.run_bgp_command', return_value=json.dumps(mock_json)):
+            result = runner.invoke(
+                show.cli.commands["ipv6"].commands["bgp"].commands["vrf"], ['default', 'summary'])
+            # verify that the CLI handles missing peergroup count gracefully
+            assert result.exit_code == 0
+            assert "Peer groups 0, using 0 bytes of memory" in result.output
+
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
@@ -625,6 +856,21 @@ class TestBgpCommandsMultiAsic(object):
 
     @pytest.mark.parametrize('setup_multi_asic_bgp_instance',
                              ['show_bgp_summary_no_neigh'], indirect=['setup_multi_asic_bgp_instance'])
+    def test_bgp_vrf_summary_multi_asic_no_v4_neigh(
+            self,
+            setup_bgp_commands,
+            setup_multi_asic_bgp_instance):
+        show = setup_bgp_commands
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["ip"].commands["bgp"].commands["vrf"], ['default', 'summary'])
+        print("{}".format(result.output))
+        assert result.exit_code == 0
+        assert result.output == show_error_no_v4_neighbor_multi_asic
+
+
+    @pytest.mark.parametrize('setup_multi_asic_bgp_instance',
+                             ['show_bgp_summary_no_neigh'], indirect=['setup_multi_asic_bgp_instance'])
     def test_bgp_summary_multi_asic_no_v6_neigh(
             self,
             setup_bgp_commands,
@@ -636,6 +882,22 @@ class TestBgpCommandsMultiAsic(object):
         print("{}".format(result.output))
         assert result.exit_code == 0
         assert result.output == show_error_no_v6_neighbor_multi_asic
+        
+
+    @pytest.mark.parametrize('setup_multi_asic_bgp_instance',
+                             ['show_bgp_summary_no_neigh'], indirect=['setup_multi_asic_bgp_instance'])
+    def test_bgp_vrf_summary_multi_asic_no_v6_neigh(
+            self,
+            setup_bgp_commands,
+            setup_multi_asic_bgp_instance):
+        show = setup_bgp_commands
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["ipv6"].commands["bgp"].commands["vrf"], ['default', 'summary'])
+        print("{}".format(result.output))
+        assert result.exit_code == 0
+        assert result.output == show_error_no_v6_neighbor_multi_asic
+        
 
     @patch.object(bgp_util, 'get_external_bgp_neighbors_dict', mock.MagicMock(return_value={}))
     @patch.object(multi_asic.MultiAsic, 'get_ns_list_based_on_options', mock.Mock(return_value=['asic0', 'asic1']))
@@ -652,6 +914,26 @@ class TestBgpCommandsMultiAsic(object):
         runner = CliRunner()
         result = runner.invoke(
             show.cli.commands["ip"].commands["bgp"].commands["summary"], [])
+        print("{}".format(result.output))
+        assert result.exit_code == 0
+        assert result.output == SHOW_BGP_SUMMARY_V4_NO_EXT_NEIGHBORS_ON_ALL_ASIC     
+
+
+    @patch.object(bgp_util, 'get_external_bgp_neighbors_dict', mock.MagicMock(return_value={}))
+    @patch.object(multi_asic.MultiAsic, 'get_ns_list_based_on_options', mock.Mock(return_value=['asic0', 'asic1']))
+    @patch.object(multi_asic.MultiAsic, 'get_display_option', mock.MagicMock(return_value=constants.DISPLAY_EXTERNAL))
+    @pytest.mark.parametrize('setup_multi_asic_bgp_instance',
+                             ['show_bgp_summary_no_ext_neigh_on_all_asic'],
+                             indirect=['setup_multi_asic_bgp_instance'])
+    @patch.object(device_info, 'is_chassis', mock.MagicMock(return_value=True))
+    def test_bgp_vrf_summary_multi_asic_no_external_neighbors_on_all_asic(
+            self,
+            setup_bgp_commands,
+            setup_multi_asic_bgp_instance):
+        show = setup_bgp_commands
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["ip"].commands["bgp"].commands["vrf"], ['default', 'summary'])
         print("{}".format(result.output))
         assert result.exit_code == 0
         assert result.output == SHOW_BGP_SUMMARY_V4_NO_EXT_NEIGHBORS_ON_ALL_ASIC     
@@ -676,6 +958,25 @@ class TestBgpCommandsMultiAsic(object):
         assert result.output == SHOW_BGP_SUMMARY_V4_NO_EXT_NEIGHBORS_ON_ASIC1
 
     
+    @patch.object(multi_asic.MultiAsic, 'get_ns_list_based_on_options', mock.Mock(return_value=['asic0', 'asic1']))
+    @patch.object(multi_asic.MultiAsic, 'get_display_option', mock.MagicMock(return_value=constants.DISPLAY_EXTERNAL))
+    @pytest.mark.parametrize('setup_multi_asic_bgp_instance',
+                             ['show_bgp_summary_no_ext_neigh_on_asic1'],
+                             indirect=['setup_multi_asic_bgp_instance'])
+    @patch.object(device_info, 'is_chassis', mock.MagicMock(return_value=True))
+    def test_bgp_vrf_summary_multi_asic_no_external_neighbor_on_asic1(
+            self,
+            setup_bgp_commands,
+            setup_multi_asic_bgp_instance):
+        show = setup_bgp_commands
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["ip"].commands["bgp"].commands["vrf"], ['default', 'summary'])
+        print("{}".format(result.output))
+        assert result.exit_code == 0
+        assert result.output == SHOW_BGP_SUMMARY_V4_NO_EXT_NEIGHBORS_ON_ASIC1
+        
+        
     @pytest.mark.parametrize('setup_multi_asic_bgp_instance',
                              ['show_bgp_summary_no_ext_neigh_on_all_asic'], indirect=['setup_multi_asic_bgp_instance'])
     def test_bgp_summary_multi_asic_display_with_no_external_neighbor(
@@ -689,6 +990,22 @@ class TestBgpCommandsMultiAsic(object):
         print("{}".format(result.output))
         assert result.exit_code == 0
         assert result.output == SHOW_BGP_SUMMARY_ALL_V4_NO_EXT_NEIGHBORS
+        
+        
+    @pytest.mark.parametrize('setup_multi_asic_bgp_instance',
+                             ['show_bgp_summary_no_ext_neigh_on_all_asic'], indirect=['setup_multi_asic_bgp_instance'])
+    def test_bgp_vrf_summary_multi_asic_display_with_no_external_neighbor(
+            self,
+            setup_bgp_commands,
+            setup_multi_asic_bgp_instance):
+        show = setup_bgp_commands
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["ip"].commands["bgp"].commands["vrf"], ["default","summary","-dall"])
+        print("{}".format(result.output))
+        assert result.exit_code == 0
+        assert result.output == SHOW_BGP_SUMMARY_ALL_V4_NO_EXT_NEIGHBORS
+        
         
     def teardown_class(cls):
         print("TEARDOWN")
