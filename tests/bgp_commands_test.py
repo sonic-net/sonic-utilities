@@ -438,7 +438,7 @@ class TestBgpCommandsSingleAsic(object):
             show.cli.commands["ipv6"].commands["bgp"].commands["vrf"], ['default', 'summary'])
         print("{}".format(result.output))
         assert result.exit_code == 2
-        assert result.output == show_error_invalid_json
+        assert result.output == show_vrf_error_invalid_json
         
     def display_external(self):
         return constants.DISPLAY_EXTERNAL
