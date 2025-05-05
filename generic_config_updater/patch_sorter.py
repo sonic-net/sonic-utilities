@@ -1172,7 +1172,7 @@ class VNETAssociationChangeValidator:
     def __init__(self, path_addressing):
         self.path_addressing = path_addressing
         self.tables = ["VLAN_SUB_INTERFACE", "VLAN_INTERFACE", "INTERFACE"]
-        self.failed_interface = None
+        self.failed_interfaces = []
 
     def validate(self, move, diff):
         current_config = diff.current_config
@@ -1194,9 +1194,9 @@ class VNETAssociationChangeValidator:
                                 interface not in simulated_config[table] or
                                 "vnet_name" not in simulated_config[table][interface] or
                                 simulated_config[table][interface]["vnet_name"] != config["vnet_name"]):
-                            self.failed_interface = interface
-                            return False
-        return True
+                            failed_interface = f"{table}/{interface}"
+                            self.failed_interfaces.append(failed_interface)
+        return len(self.failed_interfaces) == 0
 
 class SingleRunLowLevelMoveGenerator:
     """
@@ -1972,10 +1972,10 @@ class PatchSorter:
 
         if moves is None:
             for validator in sort_algorithm.move_wrapper.move_validators:
-                if isinstance(validator, VNETAssociationChangeValidator) and validator.failed_interface:
+                if isinstance(validator, VNETAssociationChangeValidator) and validator.failed_interfaces:
+                    failed_interfaces_str = ", ".join(validator.failed_interfaces)
                     raise GenericConfigUpdaterError(
-                        f"Vnet is already associated with interface {validator.failed_interface} "
-                        "and cannot be modified"
+                        f"Vnet associations cannot be modified for interfaces: {failed_interfaces_str}"
                     )
             raise GenericConfigUpdaterError("There is no possible sorting")
 
