@@ -2567,12 +2567,17 @@ def bfd():
 # 'summary' subcommand ("show bfd summary")
 @bfd.command()
 @clicommon.pass_db
-def summary(db):
+@click.option('--namespace', '-n', 'namespace', default=None, type=str, show_default=True,
+              help='Namespace name or all', callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def summary(db, namespace):
     """Show bfd session information"""
     bfd_headers = ["Peer Addr", "Interface", "Vrf", "State", "Type", "Local Addr",
                 "TX Interval", "RX Interval", "Multiplier", "Multihop", "Local Discriminator"]
 
-    bfd_keys = db.db.keys(db.db.STATE_DB, "BFD_SESSION_TABLE|*")
+    if namespace is None:
+        namespace = constants.DEFAULT_NAMESPACE
+
+    bfd_keys = db.db_clients[namespace].keys(db.db.STATE_DB, "BFD_SESSION_TABLE|*")
 
     click.echo("Total number of BFD sessions: {}".format(0 if bfd_keys is None else len(bfd_keys)))
 
@@ -2580,7 +2585,7 @@ def summary(db):
     if bfd_keys is not None:
         for key in bfd_keys:
             key_values = key.split('|')
-            values = db.db.get_all(db.db.STATE_DB, key)
+            values = db.db_clients[namespace].get_all(db.db.STATE_DB, key)
             if "local_discriminator" not in values.keys():
                 values["local_discriminator"] = "NA"
             bfd_body.append([key_values[3], key_values[2], key_values[1], values["state"], values["type"], values["local_addr"],
@@ -2593,13 +2598,18 @@ def summary(db):
 @bfd.command()
 @clicommon.pass_db
 @click.argument('peer_ip', required=True)
-def peer(db, peer_ip):
+@click.option('--namespace', '-n', 'namespace', default=None, type=str, show_default=True,
+              help='Namespace name or all', callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def peer(db, peer_ip, namespace):
     """Show bfd session information for BFD peer"""
     bfd_headers = ["Peer Addr", "Interface", "Vrf", "State", "Type", "Local Addr",
                 "TX Interval", "RX Interval", "Multiplier", "Multihop", "Local Discriminator"]
 
-    bfd_keys = db.db.keys(db.db.STATE_DB, "BFD_SESSION_TABLE|*|{}".format(peer_ip))
-    delimiter = db.db.get_db_separator(db.db.STATE_DB)
+    if namespace is None:
+        namespace = constants.DEFAULT_NAMESPACE
+
+    bfd_keys = db.db_clients[namespace].keys(db.db.STATE_DB, "BFD_SESSION_TABLE|*|{}".format(peer_ip))
+    delimiter = db.db_clients[namespace].get_db_separator(db.db.STATE_DB)
 
     if bfd_keys is None or len(bfd_keys) == 0:
         click.echo("No BFD sessions found for peer IP {}".format(peer_ip))
@@ -2611,7 +2621,7 @@ def peer(db, peer_ip):
     if bfd_keys is not None:
         for key in bfd_keys:
             key_values = key.split(delimiter)
-            values = db.db.get_all(db.db.STATE_DB, key)
+            values = db.db_clients[namespace].get_all(db.db.STATE_DB, key)
             if "local_discriminator" not in values.keys():
                 values["local_discriminator"] = "NA"
             bfd_body.append([key_values[3], key_values[2], key_values[1], values.get("state"), values.get("type"), values.get("local_addr"),
