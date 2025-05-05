@@ -217,3 +217,30 @@ CRC-32               0xFE        4  0xAC518FB3
     def test_support_platforms_no_eeprom(self, mockDbBased, mockNotDbBased):
         ret = decode_syseeprom.main()
         assert ret == errno.ENODEV
+
+    @mock.patch('decode_syseeprom.instantiate_eeprom_object')
+    def test_print_vendor_eeprom_success(self, mock_instantiate, capsys):
+        mock_eeprom = mock.MagicMock()
+        mock_eeprom.vendorstr.return_value = 'MOCK_VENDOR'
+        mock_instantiate.return_value = mock_eeprom
+        decode_syseeprom.print_vendor(use_db=False)
+        captured = capsys.readouterr()
+        assert captured.out == 'MOCK_VENDOR\n'
+
+    @mock.patch('decode_syseeprom.instantiate_eeprom_object')
+    def test_print_vendor_eeprom_none(self, mock_instantiate, capsys):
+        mock_instantiate.return_value = None
+        decode_syseeprom.print_vendor(use_db=False)
+        captured = capsys.readouterr()
+        assert 'Failed to read system EEPROM info' in captured.out
+
+    @mock.patch('decode_syseeprom.instantiate_eeprom_object')
+    def test_print_vendor_typeerror_fallback(self, mock_instantiate, capsys):
+        mock_eeprom = mock.MagicMock()
+        # Simulate vendorstr() raising TypeError when called with no args
+        mock_eeprom.vendorstr.side_effect = [TypeError(), 'FALLBACK_VENDOR']
+        mock_eeprom.read_eeprom.return_value = 'dummy'
+        mock_instantiate.return_value = mock_eeprom
+        decode_syseeprom.print_vendor(use_db=False)
+        captured = capsys.readouterr()
+        assert captured.out == 'FALLBACK_VENDOR\n'
