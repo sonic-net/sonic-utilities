@@ -22,6 +22,10 @@ from sonic_platform_base.sfp_base import SfpBase
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from natsort import natsorted
 from sonic_py_common import device_info, logger, multi_asic
+from utilities_common import platform_sfputil_helper
+from utilities_common.platform_sfputil_helper import (
+    get_first_subport
+)
 from utilities_common.sfp_helper import covert_application_advertisement_to_output_string
 from utilities_common.sfp_helper import QSFP_DATA_MAP
 from tabulate import tabulate
@@ -605,6 +609,11 @@ def cli():
     if not load_port_config():
         sys.exit(ERROR_PORT_CONFIG_LOAD)
 
+    # Generic way to load platform-specific sfputil
+    # and chassis classes
+    platform_sfputil_helper.load_platform_sfputil()
+    platform_sfputil_helper.load_chassis()
+    platform_sfputil_helper.platform_sfputil_read_porttab_mappings()
 
 cli.add_command(debug)
 
@@ -691,9 +700,10 @@ def eeprom(port, dump_dom, namespace):
                             output += "DOM values not supported for flat memory module\n"
                             continue
                     try:
-                        xcvr_dom_info = platform_chassis.get_sfp(physical_port).get_transceiver_bulk_status()
+                        xcvr_dom_info = platform_chassis.get_sfp(physical_port).get_transceiver_dom_real_value()
                     except NotImplementedError:
-                        click.echo("Sfp.get_transceiver_bulk_status() is currently not implemented for this platform")
+                        click.echo("Sfp.get_transceiver_dom_real_value() is currently not implemented "
+                                   "for this platform")
                         sys.exit(ERROR_NOT_IMPLEMENTED)
 
                     try:
@@ -1073,9 +1083,9 @@ def fetch_error_status_from_state_db(port, state_db):
     """
     status = {}
     if port:
-        status[port] = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_STATUS|{}'.format(port))
+        status[port] = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_STATUS_SW|{}'.format(port))
     else:
-        ports = state_db.keys(state_db.STATE_DB, 'TRANSCEIVER_STATUS|*')
+        ports = state_db.keys(state_db.STATE_DB, 'TRANSCEIVER_STATUS_SW|*')
         for key in ports:
             status[key.split('|')[1]] = state_db.get_all(state_db.STATE_DB, key)
 
@@ -1380,7 +1390,11 @@ def enable(port_name):
 
 
 def update_firmware_info_to_state_db(port_name):
-    physical_port = logical_port_to_physical_port_index(port_name)
+    first_subport = get_first_subport(port_name)
+    if first_subport is None:
+        click.echo("Error: Unable to get first subport for {} while updating FW info to DB".format(port_name))
+        return
+    physical_port = logical_port_to_physical_port_index(first_subport)
 
     namespaces = multi_asic.get_front_end_namespaces()
     for namespace in namespaces:
@@ -1390,7 +1404,7 @@ def update_firmware_info_to_state_db(port_name):
             transceiver_firmware_info_dict = platform_chassis.get_sfp(physical_port).get_transceiver_info_firmware_versions()
             if transceiver_firmware_info_dict is not None:
                 for key, value in transceiver_firmware_info_dict.items():
-                    state_db.set(state_db.STATE_DB, 'TRANSCEIVER_FIRMWARE_INFO|{}'.format(port_name), key, value)
+                    state_db.set(state_db.STATE_DB, 'TRANSCEIVER_FIRMWARE_INFO|{}'.format(first_subport), key, value)
 
 # 'firmware' subgroup
 @cli.group()

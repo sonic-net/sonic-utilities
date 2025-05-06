@@ -14,6 +14,7 @@ from typing import Dict
 
 import click
 from natsort import natsorted
+from utilities_common import platform_sfputil_helper
 from sonic_py_common import multi_asic
 from utilities_common.general import load_db_config
 from utilities_common.sfp_helper import covert_application_advertisement_to_output_string
@@ -23,7 +24,10 @@ from utilities_common.sfp_helper import (
         C_CMIS_DATA_MAP,
         QSFP_STATUS_MAP,
         CMIS_STATUS_MAP,
+        CMIS_VDM_TO_LEGACY_STATUS_MAP,
         CCMIS_STATUS_MAP,
+        CCMIS_VDM_TO_LEGACY_STATUS_MAP,
+        CCMIS_VDM_THRESHOLD_TO_LEGACY_DOM_THRESHOLD_MAP
 )
 from tabulate import tabulate
 
@@ -453,8 +457,14 @@ class SFPShow(object):
     def convert_interface_sfp_info_to_cli_output_string(self, state_db, interface_name, dump_dom):
         output = ''
 
+        first_subport = platform_sfputil_helper.get_first_subport(interface_name)
+        if first_subport is None:
+            click.echo("Error: Unable to get first subport for {} while converting SFP info".format(interface_name))
+            output = "SFP EEPROM Not detected\n"
+            return output
+
         sfp_info_dict = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_INFO|{}'.format(interface_name))
-        sfp_firmware_info_dict = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_FIRMWARE_INFO|{}'.format(interface_name))
+        sfp_firmware_info_dict = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_FIRMWARE_INFO|{}'.format(first_subport))
         if sfp_info_dict:
             if sfp_info_dict['type'] == RJ45_PORT_TYPE:
                 output = 'SFP EEPROM is not applicable for RJ45 port\n'
@@ -465,8 +475,8 @@ class SFPShow(object):
 
                 if dump_dom:
                     sfp_type = sfp_info_dict['type']
-                    dom_info_dict = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_DOM_SENSOR|{}'.format(interface_name))
-                    dom_info_dict.update(state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_DOM_THRESHOLD|{}'.format(interface_name)))
+                    dom_info_dict = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_DOM_SENSOR|{}'.format(first_subport)) or {}
+                    dom_info_dict.update(state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_DOM_THRESHOLD|{}'.format(first_subport)) or {})
                     dom_output = self.convert_dom_to_output_string(sfp_type, dom_info_dict)
                     output += dom_output
         else:
@@ -477,17 +487,75 @@ class SFPShow(object):
 
         return output
 
+    def convert_vdm_fields_to_legacy_fields(self, state_db, interface_name, dict_to_be_updated, vdm_to_legacy_field_map, vdm_field_type):
+        """
+        Converts VDM fields from the database into legacy field names
+        and updates the provided dictionary with the converted values.
+
+        This function ensures backward compatibility by mapping VDM fields to their corresponding
+        legacy field names based on the specified field type ('FLAG' or 'THRESHOLD').
+
+        Args:
+            state_db: The database connection object used to retrieve VDM data.
+            interface_name (str): The name of the interface for which VDM data is being retrieved.
+            dict_to_be_updated (dict): The dictionary to be updated with the converted legacy field names and values.
+            vdm_to_legacy_field_map (dict): A mapping of VDM field names to their corresponding legacy field name prefixes.
+            vdm_field_type (str): Specifies the type of VDM fields to process. It can be either 'FLAG' or 'THRESHOLD'.
+        """
+        if dict_to_be_updated is None:
+            return
+        if vdm_field_type not in ['FLAG', 'THRESHOLD']:
+            return
+
+        # Retrieve VDM data from the database
+        vdm_halarm_db_dict = state_db.get_all(state_db.STATE_DB, f'TRANSCEIVER_VDM_HALARM_{vdm_field_type}|{interface_name}') or {}
+        vdm_lalarm_db_dict = state_db.get_all(state_db.STATE_DB, f'TRANSCEIVER_VDM_LALARM_{vdm_field_type}|{interface_name}') or {}
+        vdm_hwarning_db_dict = state_db.get_all(state_db.STATE_DB, f'TRANSCEIVER_VDM_HWARN_{vdm_field_type}|{interface_name}') or {}
+        vdm_lwarning_db_dict = state_db.get_all(state_db.STATE_DB, f'TRANSCEIVER_VDM_LWARN_{vdm_field_type}|{interface_name}') or {}
+
+        # Define threshold types and their corresponding dictionaries
+        VDM_THRESHOLD_TYPES = {
+            'highalarm': vdm_halarm_db_dict,
+            'lowalarm': vdm_lalarm_db_dict,
+            'highwarning': vdm_hwarning_db_dict,
+            'lowwarning': vdm_lwarning_db_dict
+        }
+
+        # Process each VDM field and update the dictionary
+        for vdm_field, legacy_field_prefix in vdm_to_legacy_field_map.items():
+            for threshold_type, vdm_db_dict in VDM_THRESHOLD_TYPES.items():
+                if vdm_field in vdm_db_dict:
+                    if vdm_field_type == 'FLAG':
+                        legacy_field_name = f"{legacy_field_prefix}{threshold_type}_flag"
+                    else:
+                        legacy_field_name = f"{legacy_field_prefix}{threshold_type}"
+                    dict_to_be_updated[legacy_field_name] = vdm_db_dict[vdm_field]
+
     # Convert sfp status info in DB to cli output string
     def convert_interface_sfp_status_to_cli_output_string(self, state_db, interface_name):
-        sfp_status_dict = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_STATUS|{}'.format(interface_name))
+        first_subport = platform_sfputil_helper.get_first_subport(interface_name)
+        if first_subport is None:
+            click.echo("Error: Unable to get first subport for {} while converting SFP status".format(interface_name))
+            output = QSFP_STATUS_NOT_APPLICABLE_STR + '\n'
+            return output
+
+        sfp_status_dict = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_STATUS|{}'.format(first_subport))
+        if sfp_status_dict:
+            # Additional handling to ensure that the CLI output remains the same
+            # after restructuring the diagnostic data in the state DB
+            sfp_status_dict.update(state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_STATUS_SW|{}'.format(interface_name)) or {})
+            sfp_status_dict.update(state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_STATUS_FLAG|{}'.format(first_subport)) or {})
+            sfp_status_dict.update(state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_DOM_FLAG|{}'.format(first_subport)) or {})
         if sfp_status_dict and len(sfp_status_dict) > 2:
             # common section
             output = '\n' + self.convert_sfp_status_to_output_string(sfp_status_dict, QSFP_STATUS_MAP)
             # CMIS specific section
             if 'module_state' in sfp_status_dict:
+                self.convert_vdm_fields_to_legacy_fields(state_db, first_subport, sfp_status_dict, CMIS_VDM_TO_LEGACY_STATUS_MAP, 'FLAG')
                 output += self.convert_sfp_status_to_output_string(sfp_status_dict, CMIS_STATUS_MAP)
             # C-CMIS specific section
             if 'tuning_in_progress' in sfp_status_dict:
+                self.convert_vdm_fields_to_legacy_fields(state_db, first_subport, sfp_status_dict, CCMIS_VDM_TO_LEGACY_STATUS_MAP, 'FLAG')
                 output += self.convert_sfp_status_to_output_string(sfp_status_dict, CCMIS_STATUS_MAP)
         else:
             output = QSFP_STATUS_NOT_APPLICABLE_STR + '\n'
@@ -510,10 +578,18 @@ class SFPShow(object):
             return str(field)
 
     def convert_interface_sfp_pm_to_cli_output_string(self, state_db, interface_name):
+        first_subport = platform_sfputil_helper.get_first_subport(interface_name)
+        if first_subport is None:
+            click.echo("Error: Unable to get first subport for {} while converting SFP PM".format(interface_name))
+            output = ZR_PM_NOT_APPLICABLE_STR + '\n'
+            return output
+
         sfp_pm_dict = state_db.get_all(
-            self.db.STATE_DB, 'TRANSCEIVER_PM|{}'.format(interface_name))
+            self.db.STATE_DB, 'TRANSCEIVER_PM|{}'.format(first_subport))
         sfp_threshold_dict = state_db.get_all(
-            state_db.STATE_DB, 'TRANSCEIVER_DOM_THRESHOLD|{}'.format(interface_name))
+            state_db.STATE_DB, 'TRANSCEIVER_DOM_THRESHOLD|{}'.format(first_subport))
+        # Convert VDM THRESHOLD fields to legacy DOM THRESHOLD fields
+        self.convert_vdm_fields_to_legacy_fields(state_db, first_subport, sfp_threshold_dict, CCMIS_VDM_THRESHOLD_TO_LEGACY_DOM_THRESHOLD_MAP, 'THRESHOLD')
         table = []
         indent_num = 4
         indent = ' ' * indent_num
@@ -645,7 +721,12 @@ class SFPShow(object):
 @click.group()
 def cli():
     """sfpshow - Command line utility for display SFP transceivers information"""
-    pass
+    # Load platform-specific sfputil class
+    platform_sfputil_helper.load_platform_sfputil()
+
+    # Load port info
+    platform_sfputil_helper.platform_sfputil_read_porttab_mappings()
+
 
 # 'eeprom' subcommand
 

@@ -704,6 +704,29 @@ Ethernet0  N/A
             assert result.exit_code == 0
         assert result.output == FLAT_MEMORY_MODULE_EEPROM + expected_output
 
+    @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
+    @patch('sfputil.main.logical_port_name_to_physical_port_list', MagicMock(return_value=[1]))
+    @patch('sfputil.main.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
+    @patch('sfputil.main.is_port_type_rj45', MagicMock(return_value=False))
+    @patch('sfputil.main.platform_chassis')
+    def test_show_eeprom_dom_real_value_exception(self, mock_chassis):
+        mock_sfp = MagicMock()
+        mock_sfp.get_presence.return_value = True
+        mock_sfp.get_transceiver_info.return_value = MagicMock()
+        mock_sfp.get_transceiver_dom_real_value = MagicMock(side_effect=NotImplementedError)
+        mock_chassis.get_sfp.return_value = mock_sfp
+
+        mock_api = MagicMock()
+        mock_api.is_flat_memory = MagicMock(return_value=False)
+        mock_api.get_dom = MagicMock(side_effect=NotImplementedError)
+        mock_chassis.get_sfp().get_xcvr_api.return_value = mock_api
+
+        runner = CliRunner()
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom'], ["-p", "Ethernet16", "-d"])
+
+        assert result.output == "Sfp.get_transceiver_dom_real_value() is currently not implemented for this platform\n"
+        assert result.exit_code == ERROR_NOT_IMPLEMENTED
+
     @patch('sfputil.main.platform_chassis')
     @patch('sfputil.main.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=0)))
     def test_show_eeprom_hexdump_invalid_port(self, mock_chassis):
@@ -1311,16 +1334,100 @@ EEPROM hexdump for port Ethernet4
         result = runner.invoke(sfputil.cli.commands['firmware'].commands['commit'], ["Ethernet0"])
         assert result.exit_code == 0
 
-    @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))
-    @patch('sonic_py_common.multi_asic.get_front_end_namespaces', MagicMock(return_value=['']))
-    @patch('sfputil.main.SonicV2Connector', MagicMock())
+    @pytest.mark.parametrize(
+        "port_name, first_subport, physical_port, namespaces, transceiver_info, expected_calls, expected_logs",
+        [
+            # Case 1: Valid port with firmware info
+            (
+                "Ethernet0",
+                "Ethernet0",
+                1,
+                [""],
+                {"active_firmware": "1.0.0", "inactive_firmware": "0.9.0"},
+                [
+                    ("TRANSCEIVER_FIRMWARE_INFO|Ethernet0", "active_firmware", "1.0.0"),
+                    ("TRANSCEIVER_FIRMWARE_INFO|Ethernet0", "inactive_firmware", "0.9.0"),
+                ],
+                [],
+            ),
+            # Case 2: Missing subport
+            (
+                "Ethernet1",
+                None,
+                None,
+                [],
+                None,
+                [],
+                ["Error: Unable to get first subport for Ethernet1 while updating FW info to DB"],
+            ),
+            # Case 3: Exception during firmware info retrieval
+            (
+                "Ethernet2",
+                "Ethernet2",
+                2,
+                [""],
+                None,
+                [],
+                [],
+            ),
+        ],
+    )
+    @patch("sfputil.main.get_first_subport")
+    @patch("sfputil.main.logical_port_to_physical_port_index")
+    @patch("sfputil.main.multi_asic.get_front_end_namespaces")
     @patch('sfputil.main.platform_chassis')
-    def test_update_firmware_info_to_state_db(self, mock_chassis):
+    @patch("sfputil.main.SonicV2Connector")
+    def test_update_firmware_info_to_state_db(
+        self,
+        mock_sonic_v2_connector,
+        mock_chassis,
+        mock_get_front_end_namespaces,
+        mock_logical_port_to_physical_port_index,
+        mock_get_first_subport,
+        port_name,
+        first_subport,
+        physical_port,
+        namespaces,
+        transceiver_info,
+        expected_calls,
+        expected_logs,
+        capsys,
+    ):
+        # Mock get_first_subport
+        mock_get_first_subport.return_value = first_subport
+
+        # Mock logical_port_to_physical_port_index
+        mock_logical_port_to_physical_port_index.return_value = physical_port
+
+        # Mock multi_asic.get_front_end_namespaces
+        mock_get_front_end_namespaces.return_value = namespaces
+
+        # Mock platform_chassis.get_sfp
         mock_sfp = MagicMock()
         mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
-        mock_sfp.get_transceiver_info_firmware_versions.return_value = {'active_firmware' : 'a.b.c', 'inactive_firmware' : 'd.e.f'}
+        mock_sfp.get_transceiver_info_firmware_versions = MagicMock(return_value=transceiver_info)
 
-        sfputil.update_firmware_info_to_state_db("Ethernet0")
+        # Mock SonicV2Connector
+        mock_state_db = MagicMock()
+        mock_state_db.STATE_DB = "STATE_DB"
+        mock_state_db.connect = MagicMock()
+        mock_sonic_v2_connector.return_value = mock_state_db
+
+        # Call the function
+        sfputil.update_firmware_info_to_state_db(port_name)
+
+        # Verify logs
+        captured = capsys.readouterr()
+        for log in expected_logs:
+            assert log in captured.out
+
+        # Verify database updates
+        if first_subport or transceiver_info:
+            mock_state_db.connect.assert_called_once_with(mock_state_db.STATE_DB)
+            for call in expected_calls:
+                mock_state_db.set.assert_any_call(mock_state_db.STATE_DB, *call)
+        else:
+            mock_state_db.connect.assert_not_called()
 
     @patch('sfputil.main.is_port_type_rj45', MagicMock(return_value=False))
     @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))

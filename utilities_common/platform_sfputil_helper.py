@@ -247,6 +247,30 @@ def get_value_from_db_by_field(db_name, table_name, field, key):
             db.close()
 
 
+def get_first_subport(logical_port):
+    """
+    Retrieve the first subport associated with a given logical port.
+
+    Args:
+        logical_port (str): The name of the logical port.
+
+    Returns:
+        str: The name of the first subport if found, otherwise None.
+    """
+    try:
+        physical_port = platform_sfputil.get_logical_to_physical(logical_port)
+        if physical_port is not None:
+            # Get the first subport for the given logical port
+            logical_port_list = platform_sfputil.get_physical_to_logical(physical_port[0])
+            if logical_port_list is not None:
+                return logical_port_list[0]
+    except KeyError:
+        click.echo(f"Error: Found KeyError while getting first subport for {logical_port}")
+        return None
+
+    return None
+
+
 def get_subport(port_name):
     subport = get_value_from_db_by_field("CONFIG_DB", "PORT", "subport", port_name)
 
