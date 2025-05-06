@@ -364,7 +364,7 @@ def setup_multi_asic_bgp_instance(request):
 
     def mock_run_show_summ_bgp_command_no_ext_neigh_on_all_asic(
             vtysh_cmd, bgp_namespace, vtysh_shell_cmd=constants.VTYSH_COMMAND, exit_on_fail=True):
-        if vtysh_cmd == "show ip bgp summary json":
+        if vtysh_cmd == "show ip bgp summary json" or vtysh_cmd == "show ip bgp vrf default summary json":
             m_asic_json_file = 'no_ext_bgp_neigh.json'
         else:
             m_asic_json_file = 'device_bgp_info.json'

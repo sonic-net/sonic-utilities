@@ -20,7 +20,10 @@ import utilities_common.multi_asic as multi_asic_util
 def bgp():
     """Show IPv4 BGP (Border Gateway Protocol) information"""
     if device_info.is_supervisor():
-        subcommand = sys.argv[3]
+        if sys.argv[3] in "vrf":
+            subcommand = sys.argv[5]
+        else:
+            subcommand = sys.argv[3]
         if subcommand not in "network":
             # the command will be executed directly by rexec if it is not "show ip bgp network"
             click.echo("Since the current device is a chassis supervisor, " +
