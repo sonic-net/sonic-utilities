@@ -1167,7 +1167,18 @@ class RemoveCreateOnlyDependencyMoveGenerator:
 class VNETAssociationChangeValidator:
     """
     A class to validate that VNET associations cannot be modified after they're set.
-    Whether through replace or delete-then-recreate approach.
+    This validation ensures that any attempt to modify a VNET association, whether
+    through a replace operation or a delete-then-recreate approach, is flagged as invalid.
+    
+    How differences in `vnet_name` are detected:
+    - The `validate` method iterates through predefined tables (e.g., "VLAN_SUB_INTERFACE").
+    - For each table, it checks if the `vnet_name` field in the current configuration
+      differs from the target configuration.
+    - If a difference is detected, the interface is added to the `failed_interfaces` list.
+    
+    What the error message communicates:
+    - The error message indicates which interfaces have invalid VNET association changes.
+    - This helps users identify and correct configuration issues.
     """
     def __init__(self, path_addressing):
         self.path_addressing = path_addressing
