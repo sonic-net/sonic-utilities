@@ -12,6 +12,19 @@ platform_porttab_mapping_read = False
 
 RJ45_PORT_TYPE = 'RJ45'
 
+def load_chassis():
+    """Load the platform chassis if not already loaded"""
+    global platform_chassis
+
+    if platform_chassis is None:
+        try:
+            import sonic_platform
+            platform_chassis = sonic_platform.platform.Platform().get_chassis()
+        except Exception as e:
+            click.echo(f"Failed to load platform chassis: {str(e)}")
+            sys.exit(1)
+    return platform_chassis
+
 def load_platform_sfputil():
 
     global platform_sfputil
@@ -145,3 +158,26 @@ def is_rj45_port(port_name):
         return port_type == platform_sfp_base.SFP_PORT_TYPE_BIT_RJ45
 
     return False
+
+def get_first_subport(logical_port):
+    """
+    Retrieve the first subport associated with a given logical port.
+
+    Args:
+        logical_port (str): The name of the logical port.
+
+    Returns:
+        str: The name of the first subport if found, otherwise None.
+    """
+    try:
+        physical_port = platform_sfputil.get_logical_to_physical(logical_port)
+        if physical_port is not None:
+            # Get the first subport for the given logical port
+            logical_port_list = platform_sfputil.get_physical_to_logical(physical_port[0])
+            if logical_port_list is not None:
+                return logical_port_list[0]
+    except KeyError:
+        click.echo(f"Error: Found KeyError while getting first subport for {logical_port}")
+        return None
+
+    return None

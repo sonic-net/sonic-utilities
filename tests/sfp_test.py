@@ -4,6 +4,8 @@ from click.testing import CliRunner
 from .mock_tables import dbconnector
 from unittest.mock import patch, MagicMock
 
+from utilities_common.platform_sfputil_helper import get_first_subport
+
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
 scripts_path = os.path.join(modules_path, "scripts")
@@ -1191,6 +1193,25 @@ Ethernet200  Not present
         result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["status"])
         assert result.exit_code == 0
         assert "\n".join([ l.rstrip() for l in result.output.split('\n')]) == test_qsfp_dd_status_all_output
+
+    @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
+           MagicMock(get_physical_to_logical=MagicMock(return_value=["Ethernet0", "Ethernet4"])))
+    @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
+           MagicMock(get_logical_to_physical=MagicMock(return_value=[1])))
+    def test_get_first_subport(self):
+        assert get_first_subport("Ethernet0") == "Ethernet0"
+
+    @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
+           MagicMock(get_logical_to_physical=MagicMock(return_value=None)))
+    def test_get_first_subport_invalid_physical_port(self):
+        assert get_first_subport("Ethernet0") is None
+
+    @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
+           MagicMock(get_physical_to_logical=MagicMock(side_effect=KeyError)))
+    @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
+           MagicMock(get_logical_to_physical=MagicMock(return_value=[1])))
+    def test_get_first_subport_keyerror(self):
+        assert get_first_subport("Ethernet0") is None
 
     @classmethod
     def teardown_class(cls):
