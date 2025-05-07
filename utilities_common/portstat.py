@@ -28,14 +28,16 @@ NStats = namedtuple("NStats", "rx_ok, rx_err, rx_drop, rx_ovr, tx_ok,\
                     tx_uca, tx_mca, tx_bca, tx_all,\
                     rx_jbr, rx_frag, rx_usize, rx_ovrrun,\
                     fec_corr, fec_uncorr, fec_symbol_err,\
-                    wred_grn_drp_pkt, wred_ylw_drp_pkt, wred_red_drp_pkt, wred_tot_drp_pkt")
+                    wred_grn_drp_pkt, wred_ylw_drp_pkt, wred_red_drp_pkt, wred_tot_drp_pkt,\
+                    trim")
 header_all = ['IFACE', 'STATE', 'RX_OK', 'RX_BPS', 'RX_PPS', 'RX_UTIL', 'RX_ERR', 'RX_DRP', 'RX_OVR',
-              'TX_OK', 'TX_BPS', 'TX_PPS', 'TX_UTIL', 'TX_ERR', 'TX_DRP', 'TX_OVR']
+              'TX_OK', 'TX_BPS', 'TX_PPS', 'TX_UTIL', 'TX_ERR', 'TX_DRP', 'TX_OVR', 'TRIM']
 header_std = ['IFACE', 'STATE', 'RX_OK', 'RX_BPS', 'RX_UTIL', 'RX_ERR', 'RX_DRP', 'RX_OVR',
               'TX_OK', 'TX_BPS', 'TX_UTIL', 'TX_ERR', 'TX_DRP', 'TX_OVR']
 header_errors_only = ['IFACE', 'STATE', 'RX_ERR', 'RX_DRP', 'RX_OVR', 'TX_ERR', 'TX_DRP', 'TX_OVR']
 header_fec_only = ['IFACE', 'STATE', 'FEC_CORR', 'FEC_UNCORR', 'FEC_SYMBOL_ERR', 'FEC_PRE_BER', 'FEC_POST_BER']
 header_rates_only = ['IFACE', 'STATE', 'RX_OK', 'RX_BPS', 'RX_PPS', 'RX_UTIL', 'TX_OK', 'TX_BPS', 'TX_PPS', 'TX_UTIL']
+header_trim_only = ['IFACE', 'STATE', 'TRIM_PKTS']
 
 rates_key_list = ['RX_BPS', 'RX_PPS', 'RX_UTIL', 'TX_BPS', 'TX_PPS', 'TX_UTIL', 'FEC_PRE_BER', 'FEC_POST_BER']
 ratestat_fields = ("rx_bps",  "rx_pps", "rx_util", "tx_bps", "tx_pps", "tx_util", "fec_pre_ber", "fec_post_ber")
@@ -45,7 +47,7 @@ RateStats = namedtuple("RateStats", ratestat_fields)
 The order and count of statistics mentioned below needs to be in sync with the values in portstat script
 So, any fields added/deleted in here should be reflected in portstat script also
 """
-BUCKET_NUM = 49
+BUCKET_NUM = 50
 
 wred_green_pkt_stat_capable = "false"
 wred_yellow_pkt_stat_capable = "false"
@@ -105,7 +107,8 @@ counter_bucket_dict = {
         45: ['SAI_PORT_STAT_GREEN_WRED_DROPPED_PACKETS'],
         46: ['SAI_PORT_STAT_YELLOW_WRED_DROPPED_PACKETS'],
         47: ['SAI_PORT_STAT_RED_WRED_DROPPED_PACKETS'],
-        48: ['SAI_PORT_STAT_WRED_DROPPED_PACKETS']
+        48: ['SAI_PORT_STAT_WRED_DROPPED_PACKETS'],
+        49: ['SAI_PORT_STAT_TRIM_PACKETS'],
 }
 
 STATUS_NA = 'N/A'
@@ -380,7 +383,7 @@ class Portstat(object):
         return STATUS_NA
 
     def cnstat_print(self, cnstat_dict, ratestat_dict, intf_list, use_json, print_all,
-                     errors_only, fec_stats_only, rates_only, detail=False):
+                     errors_only, fec_stats_only, rates_only, trim_stats_only, detail=False):
         """
             Print the cnstat.
         """
@@ -418,7 +421,8 @@ class Portstat(object):
                               if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util),
                               format_number_with_comma(data["tx_err"]),
                               format_number_with_comma(data["tx_drop"]),
-                              format_number_with_comma(data["tx_ovr"])))
+                              format_number_with_comma(data["tx_ovr"]),
+                              format_number_with_comma(data["trim"])))
             elif errors_only:
                 header = header_errors_only
                 table.append((key, self.get_port_state(key),
@@ -449,6 +453,10 @@ class Portstat(object):
                               format_prate(rates.tx_pps),
                               format_util(rates.tx_bps, port_speed)
                               if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util)))
+            elif trim_stats_only:  # Packet Trimming related statistics
+                header = header_trim_only
+                table.append((key, self.get_port_state(key),
+                              format_number_with_comma(data['trim'])))
             else:
                 header = header_std
                 table.append((key, self.get_port_state(key),
@@ -603,12 +611,15 @@ class Portstat(object):
                     )
                 print("")
 
+            print("Packets Trimmed................................ {}".format(ns_diff(cntr['trim'],
+                                                                                      old_cntr['trim'])))
+
             print("Time Since Counters Last Cleared............... " + str(cnstat_old_dict.get('time')))
 
     def cnstat_diff_print(self, cnstat_new_dict, cnstat_old_dict,
                           ratestat_dict, intf_list, use_json,
                           print_all, errors_only, fec_stats_only,
-                          rates_only, detail=False):
+                          rates_only, trim_stats_only, detail=False):
         """
             Print the difference between two cnstat results.
         """
@@ -653,7 +664,8 @@ class Portstat(object):
                                   if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util),
                                   ns_diff(cntr["tx_err"], old_cntr["tx_err"]),
                                   ns_diff(cntr["tx_drop"], old_cntr["tx_drop"]),
-                                  ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"])))
+                                  ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"]),
+                                  ns_diff(cntr["trim"], old_cntr["trim"])))
                 else:
                     table.append((key, self.get_port_state(key),
                                   format_number_with_comma(cntr["rx_ok"]),
@@ -671,7 +683,8 @@ class Portstat(object):
                                   if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util),
                                   format_number_with_comma(cntr["tx_err"]),
                                   format_number_with_comma(cntr["tx_drop"]),
-                                  format_number_with_comma(cntr["tx_ovr"])))
+                                  format_number_with_comma(cntr["tx_ovr"]),
+                                  format_number_with_comma(cntr["trim"])))
             elif errors_only:
                 header = header_errors_only
                 if old_cntr is not None:
@@ -731,6 +744,14 @@ class Portstat(object):
                                   format_prate(rates.tx_pps),
                                   format_util(rates.tx_bps, port_speed)
                                   if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util)))
+            elif trim_stats_only:  # Packet Trimming related statistics
+                header = header_trim_only
+                if old_cntr is not None:
+                    table.append((key, self.get_port_state(key),
+                                  ns_diff(cntr['trim'], old_cntr['trim'])))
+                else:
+                    table.append((key, self.get_port_state(key),
+                                  format_number_with_comma(cntr['trim'])))
             else:
                 header = header_std
                 if old_cntr is not None:

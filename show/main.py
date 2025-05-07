@@ -742,15 +742,18 @@ def queue():
     """Show details of the queues """
     pass
 
+
 # 'counters' subcommand ("show queue counters")
 @queue.command()
-@click.argument('interfacename', required=False)
+@click.argument('interfacename', metavar='[INTERFACE_NAME]', required=False)
 @multi_asic_util.multi_asic_click_options
+@click.option('-a', '--all', is_flag=True, help="All counters")
+@click.option('-T', '--trim', is_flag=True, help="Trimming counters")
+@click.option('-V', '--voq', is_flag=True, help="VOQ counters")
+@click.option('-nz', '--nonzero', is_flag=True, help="Non Zero Counters")
+@click.option('-j', '--json', is_flag=True, help="JSON output")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-@click.option('--json', is_flag=True, help="JSON output")
-@click.option('--voq', is_flag=True, help="VOQ counters")
-@click.option('--nonzero', is_flag=True, help="Non Zero Counters")
-def counters(interfacename, namespace, display, verbose, json, voq, nonzero):
+def counters(interfacename, namespace, display, all, trim, voq, nonzero, json, verbose):  # noqa: F811
     """Show queue counters"""
 
     cmd = ["queuestat"]
@@ -765,14 +768,20 @@ def counters(interfacename, namespace, display, verbose, json, voq, nonzero):
     if namespace is not None:
         cmd += ['-n', str(namespace)]
 
-    if json:
-        cmd += ["-j"]
+    if all:
+        cmd += ["-a"]
+
+    if trim:
+        cmd += ["-T"]
 
     if voq:
         cmd += ["-V"]
 
     if nonzero:
         cmd += ["-nz"]
+
+    if json:
+        cmd += ["-j"]
 
     run_command(cmd, display_cmd=verbose)
 

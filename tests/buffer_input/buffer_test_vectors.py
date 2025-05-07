@@ -81,6 +81,14 @@ pool        egress_lossy_pool
 size        0
 ----------  -----------------
 
+Profile: q_lossy_profile
+---------------------  -----------------
+packet_discard_action  drop
+dynamic_th             0
+pool                   egress_lossy_pool
+size                   0
+---------------------  -----------------
+
 """
 
 show_buffer_information_output="""\

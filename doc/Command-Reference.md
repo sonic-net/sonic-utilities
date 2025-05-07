@@ -129,6 +129,9 @@
 * [Muxcable](#muxcable)
   * [Muxcable Show commands](#muxcable-show-commands)
   * [Muxcable Config commands](#muxcable-config-commands)
+* [MMU](#mmu)
+  * [MMU Show commands](#mmu-show-commands)
+  * [NAT Config commands](#mmu-config-commands)
 * [NAT](#nat)
   * [NAT Show commands](#nat-show-commands)
   * [NAT Config commands](#nat-config-commands)
@@ -154,6 +157,9 @@
 * [PortChannels](#portchannels)
   * [PortChannel Show commands](#portchannel-show-commands)
   * [PortChannel Config commands](#portchannel-config-commands)
+* [Packet Trimming](#packet-trimming)
+  * [Packet Trimming Show commands](#packet-trimming-show-commands)
+  * [Packet Trimming Config commands](#packet-trimming-config-commands)
 * [QoS](#qos)
   * [QoS Show commands](#qos-show-commands)
     * [PFC](#pfc)
@@ -5051,6 +5057,7 @@ Optional argument "-p" specify a period (in seconds) with which to gather counte
   show interfaces counters fec-histogram [-i <interface_name>]
   show interfaces counters fec-stats
   show interfaces counters detailed <interface_name>
+  show interfaces counters trim [interface_name] [-p|--period <sec>] [-j|--json]
   ```
 
 - Example:
@@ -5258,6 +5265,17 @@ The "fec-stats" subcommand is used to disply the interface fec related statistic
   Ethernet16        U           0             0                 0    1.77e-20       0.00e+00
   ```
 
+The "trim" subcommand is used to display the interface packet trimming related statistic.
+
+- Example:
+  ```
+  admin@sonic:~$ show interfaces counters trim
+       IFACE    STATE    TRIM_PKTS
+  ----------  -------  -----------
+   Ethernet0        U            0
+   Ethernet8        U          100
+  Ethernet16        U          200
+  ```
 
 **show interfaces description**
 
@@ -8088,6 +8106,140 @@ While adding a new SPAN session, users need to configure the following fields th
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#mirroring)
 
+## MMU
+
+### MMU Show commands
+
+This subsection explains how to display switch Memory Management Unit (MMU) configuration.
+
+**show mmu**
+
+This command displays MMU configuration.
+
+- Usage:
+  ```bash
+  show mmu [OPTIONS]
+  ```
+
+- Options:
+  - _-n,--namespace_: namespace name or all
+  - _-vv,--verbose_: enable verbose output
+
+- Example:
+  ```bash
+  admin@sonic:~$ show mmu
+  Pool: ingress_lossless_pool
+  ----  --------
+  xoff  4194112
+  type  ingress
+  mode  dynamic
+  size  10875072
+  ----  --------
+
+  Pool: egress_lossless_pool
+  ----  --------
+  type  egress
+  mode  static
+  size  15982720
+  ----  --------
+
+  Pool: egress_lossy_pool
+  ----  -------
+  type  egress
+  mode  dynamic
+  size  9243812
+  ----  -------
+
+  Profile: egress_lossy_profile
+  ----------  -------------------------------
+  dynamic_th  3
+  pool        [BUFFER_POOL|egress_lossy_pool]
+  size        1518
+  ----------  -------------------------------
+
+  Profile: pg_lossless_100000_300m_profile
+  ----------  -----------------------------------
+  xon_offset  2288
+  dynamic_th  -3
+  xon         2288
+  xoff        268736
+  pool        [BUFFER_POOL|ingress_lossless_pool]
+  size        1248
+  ----------  -----------------------------------
+
+  Profile: egress_lossless_profile
+  ---------  ----------------------------------
+  static_th  3995680
+  pool       [BUFFER_POOL|egress_lossless_pool]
+  size       1518
+  ---------  ----------------------------------
+
+  Profile: pg_lossless_100000_40m_profile
+  ----------  -----------------------------------
+  xon_offset  2288
+  dynamic_th  -3
+  xon         2288
+  xoff        177632
+  pool        [BUFFER_POOL|ingress_lossless_pool]
+  size        1248
+  ----------  -----------------------------------
+
+  Profile: ingress_lossy_profile
+  ----------  -----------------------------------
+  dynamic_th  3
+  pool        [BUFFER_POOL|ingress_lossless_pool]
+  size        0
+  ----------  -----------------------------------
+
+  Profile: pg_lossless_40000_40m_profile
+  ----------  -----------------------------------
+  xon_offset  2288
+  dynamic_th  -3
+  xon         2288
+  xoff        71552
+  pool        [BUFFER_POOL|ingress_lossless_pool]
+  size        1248
+  ----------  -----------------------------------
+
+  Profile: q_lossy_profile
+  ---------------------  -----------------
+  packet_discard_action  drop
+  dynamic_th             0
+  pool                   egress_lossy_pool
+  size                   0
+  ---------------------  -----------------
+  ```
+
+### MMU Config commands
+
+This subsection explains how to configure switch Memory Management Unit (MMU).
+
+**config mmu**
+
+This command is used to manage switch MMU configuration.
+
+- Usage:
+  ```bash
+  config mmu [OPTIONS]
+  ```
+
+- Options:
+  - _-p_: profile name
+  - _-a_: set alpha for profile type dynamic
+  - _-s_: set staticth for profile type static
+  - _-t_: set packet trimming eligibility
+  - _-n,--namespace_: namespace name or all
+  - _-vv,--verbose_: enable verbose output
+
+- Examples:
+  ```bash
+  config mmu -p alpha_profile -a 2
+  config mmu -p ingress_lossless_profile -s 12121215
+  config mmu -p q_lossy_profile -t on
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#mmu)
+
 ## NAT
 
 ### NAT Show commands
@@ -8987,6 +9139,82 @@ This command adds or deletes a member port to/from the already created portchann
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#portchannels)
 
+# Packet Trimming
+
+This section explains the various show commands and configuration commands available for users.
+
+### Packet Trimming Show commands
+
+This subsection explains how to display switch trimming configuration.
+
+**show switch-trimming global**
+
+This command displays switch trimming global configuration.
+
+- Usage:
+  ```bash
+  show switch-trimming global [OPTIONS]
+  ```
+
+- Options:
+  - _-j,--json_: display in JSON format
+
+- Example:
+  ```bash
+  admin@sonic:~$ show switch-trimming global
+  +-----------------------------+---------+
+  | Configuration               |   Value |
+  +=============================+=========+
+  | Packet trimming size        |     200 |
+  +-----------------------------+---------+
+  | Packet trimming DSCP value  |      20 |
+  +-----------------------------+---------+
+  | Packet trimming queue index |       2 |
+  +-----------------------------+---------+
+
+  admin@sonic:~$ show switch-trimming global --json
+  {
+      "size": "200",
+      "dscp_value": "20",
+      "queue_index": "2"
+  }
+  ```
+
+### Packet Trimming Config commands
+
+This subsection explains how to configure switch trimming.
+
+**config switch-trimming global**
+
+This command is used to manage switch trimming global configuration.
+
+- Usage:
+  ```bash
+  config switch-trimming global [OPTIONS]
+  ```
+
+- Options:
+  - _-s,--size_: size (in bytes) to trim eligible packet
+  - _-d,--dscp_: dscp value assigned to a packet after trimming
+  - _-q,--queue_: queue index to use for transmission of a packet after trimming
+
+- Examples:
+  ```bash
+  admin@sonic:~$ config switch-trimming global \
+  --size '128' \
+  --dscp '48' \
+  --queue '6'
+  ```
+
+- Note:
+  - At least one option must be provided
+  - When `--queue` value is set to `dynamic`, the `--dscp` value is used for mapping to the queue
+  ```bash
+  admin@sonic:~$ config switch-trimming global --queue dynamic
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#packet-trimming)
+
 ## NVGRE
 
 This section explains the various show commands and configuration commands available for users.
@@ -9551,8 +9779,18 @@ This command can be used to clear the counters for all queues of all ports. Note
 
 - Usage:
   ```
-  show queue counters [<interface_name>]
+  show queue counters [OPTIONS] [interface_name]
   ```
+
+- Parameters:
+  - _interface_name_: display counters for interface name only
+
+- Options:
+  - _-a,--all_: display all counters
+  - _-T,--trim_: display trimming counters only
+  - _-V,--voq_: display VOQ counters only
+  - _-nz,--nonzero_: display non zero counters
+  - _-j,--json_: display counters in JSON format
 
 - Example:
   ```
@@ -9604,6 +9842,30 @@ This command can be used to clear the counters for all queues of all ports. Note
   Ethernet4    MC9               0                0            0             0
 
   ...
+
+  admin@sonic:~$ show queue counters --trim
+       Port    TxQ    Trim/pkts
+  ---------  -----  -----------
+  Ethernet0    UC0            0
+  Ethernet0    UC1            0
+  Ethernet0    UC2            0
+  Ethernet0    UC3            0
+  Ethernet0    UC4            0
+  Ethernet0    UC5            0
+  Ethernet0    UC6            0
+  Ethernet0    UC7            0
+  Ethernet0    UC8            0
+  Ethernet0    UC9            0
+  Ethernet0    MC0          N/A
+  Ethernet0    MC1          N/A
+  Ethernet0    MC2          N/A
+  Ethernet0    MC3          N/A
+  Ethernet0    MC4          N/A
+  Ethernet0    MC5          N/A
+  Ethernet0    MC6          N/A
+  Ethernet0    MC7          N/A
+  Ethernet0    MC8          N/A
+  Ethernet0    MC9          N/A
   ```
 
 Optionally, you can specify an interface name in order to display only that particular interface
@@ -11360,92 +11622,6 @@ This command displays the system-wide memory utilization information – just a 
   Mem:          3.9G       2.0G       1.8G        33M       324M       791M
   -/+ buffers/cache:       951M       2.9G
   Swap:           0B         0B         0B
-  ```
-
-**show mmu**
-
-This command displays virtual address to the physical address translation status of the Memory Management Unit (MMU).
-
-- Usage:
-  ```
-  show mmu
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show mmu
-  Pool: ingress_lossless_pool
-  ----  --------
-  xoff  4194112
-  type  ingress
-  mode  dynamic
-  size  10875072
-  ----  --------
-
-  Pool: egress_lossless_pool
-  ----  --------
-  type  egress
-  mode  static
-  size  15982720
-  ----  --------
-
-  Pool: egress_lossy_pool
-  ----  -------
-  type  egress
-  mode  dynamic
-  size  9243812
-  ----  -------
-
-  Profile: egress_lossy_profile
-  ----------  -------------------------------
-  dynamic_th  3
-  pool        [BUFFER_POOL|egress_lossy_pool]
-  size        1518
-  ----------  -------------------------------
-
-  Profile: pg_lossless_100000_300m_profile
-  ----------  -----------------------------------
-  xon_offset  2288
-  dynamic_th  -3
-  xon         2288
-  xoff        268736
-  pool        [BUFFER_POOL|ingress_lossless_pool]
-  size        1248
-  ----------  -----------------------------------
-
-  Profile: egress_lossless_profile
-  ---------  ----------------------------------
-  static_th  3995680
-  pool       [BUFFER_POOL|egress_lossless_pool]
-  size       1518
-  ---------  ----------------------------------
-
-  Profile: pg_lossless_100000_40m_profile
-  ----------  -----------------------------------
-  xon_offset  2288
-  dynamic_th  -3
-  xon         2288
-  xoff        177632
-  pool        [BUFFER_POOL|ingress_lossless_pool]
-  size        1248
-  ----------  -----------------------------------
-
-  Profile: ingress_lossy_profile
-  ----------  -----------------------------------
-  dynamic_th  3
-  pool        [BUFFER_POOL|ingress_lossless_pool]
-  size        0
-  ----------  -----------------------------------
-
-  Profile: pg_lossless_40000_40m_profile
-  ----------  -----------------------------------
-  xon_offset  2288
-  dynamic_th  -3
-  xon         2288
-  xoff        71552
-  pool        [BUFFER_POOL|ingress_lossless_pool]
-  size        1248
-  ----------  -----------------------------------
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#System-State)
