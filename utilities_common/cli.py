@@ -210,7 +210,7 @@ def is_ipaddress(val):
     return True
 
 
-def is_ipaddress_prefix(val):
+def is_ipprefix(val):
     """ Validate if an entry is a valid IP address prefix """
     import netaddr
     if not val:
