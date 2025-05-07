@@ -1171,7 +1171,7 @@ def cli_sroute_to_config(ctx, command_str, strict_nh = True):
     else:
         key = ip_prefix
 
-    return key, config_entry
+    return key, config_entry, vrf_name
 
 def update_sonic_environment():
     """Prepare sonic environment variable using SONiC environment template file.
@@ -7169,7 +7169,7 @@ def route(ctx):
 def add_route(ctx, command_str):
     """Add route command"""
     config_db = ctx.obj['config_db']
-    key, route = cli_sroute_to_config(ctx, command_str)
+    key, route, vrf = cli_sroute_to_config(ctx, command_str)
 
     entry_counter = 1
     if 'nexthop' in route:
@@ -7185,7 +7185,7 @@ def add_route(ctx, command_str):
                 vrf = route['nexthop-vrf'].split(',')[0]
                 route['nexthop-vrf'] += ',' + vrf
         else:
-            route['nexthop-vrf'] = ''
+            route['nexthop-vrf'] = vrf
 
         # Set nexthop to empty string if not defined
         if 'nexthop' in route:
@@ -7248,7 +7248,7 @@ def add_route(ctx, command_str):
 def del_route(ctx, command_str):
     """Del route command"""
     config_db = ctx.obj['config_db']
-    key, route = cli_sroute_to_config(ctx, command_str, strict_nh=False)
+    key, route, vrf = cli_sroute_to_config(ctx, command_str, strict_nh=False)
     keys = config_db.get_keys('STATIC_ROUTE')
 
     if not tuple(key.split("|")) in keys:
@@ -7291,6 +7291,8 @@ def del_route(ctx, command_str):
                 if ',' in route[item]:
                     ctx.fail('Only one nexthop can be deleted at a time')
                 cli_tuple += (route[item],)
+            elif item == 'nexthop-vrf':
+                cli_tuple += (vrf,)
             else:
                 cli_tuple += ('',)
 
