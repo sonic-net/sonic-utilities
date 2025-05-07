@@ -1,6 +1,7 @@
 #!/bin/bash -e
 
-REBOOT_USER=$(logname)
+# reboot DBus service, which uses this script, doesn't use a login shell
+REBOOT_USER=$(logname || whoami)
 REBOOT_TIME=$(date)
 REBOOT_CAUSE_FILE="/host/reboot-cause/reboot-cause.txt"
 WARM_DIR=/host/warmboot
