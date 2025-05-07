@@ -1166,19 +1166,26 @@ class RemoveCreateOnlyDependencyMoveGenerator:
 
 class VNETAssociationChangeValidator:
     """
-    A class to validate that VNET associations cannot be modified after they're set.
-    This validation ensures that any attempt to modify a VNET association, whether
-    through a replace operation or a delete-then-recreate approach, is flagged as invalid.
-    
-    How differences in `vnet_name` are detected:
-    - The `validate` method iterates through predefined tables (e.g., "VLAN_SUB_INTERFACE").
-    - For each table, it checks if the `vnet_name` field in the current configuration
-      differs from the target configuration.
-    - If a difference is detected, the interface is added to the `failed_interfaces` list.
-    
-    What the error message communicates:
-    - The error message indicates which interfaces have invalid VNET association changes.
-    - This helps users identify and correct configuration issues.
+    A class to validate that VNET associations of interfaces cannot be modified after they're set.
+    What is allowed:
+        - Creating new interfaces with VNET associations
+        - Adding non-VNET properties to interfaces with existing VNET associations
+        - Modifying non-VNET properties of interfaces with existing VNET associations
+        - Completely deleting interfaces with VNET associations
+        - Completely removing a VNET association from an interface without adding a new one
+        - Adding a VNET association to an interface that didn't have one before
+        - Adding a previously deleted interface with the same VNET name it had before
+
+    What is NOT allowed:
+    - Changing an existing VNET association to a different VNET association
+    - Attempting to modify a VNET association in a single operation
+    - Any operation that results in the same interface having a different VNET name
+      in the target configuration compared to the current configuration
+
+    Two-step process for changing VNETs:
+    Users can effectively "change" a VNET association by performing two separate operations:
+        1. First operation: Delete the entire interface with its old VNET association
+        2. Later operation: Create a new interface with a different VNET association
     """
     def __init__(self, path_addressing):
         self.path_addressing = path_addressing
