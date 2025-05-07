@@ -209,7 +209,7 @@ Error: 'vnet_name' must begin with 'Vnet'.
 
         # Test vnet update and check vnet exists before and after the command
         args = ["Vnet_3", "3", "tunnel1", "Vnet_4"]
-        assert  ('Vnet_3') in db.cfgdb.get_table('VNET')
+        assert ('Vnet_3') in db.cfgdb.get_table('VNET')
         result = runner.invoke(config.config.commands["vnet"].commands["add"], args, obj=vnet_obj)
         assert ('Vnet_3') in db.cfgdb.get_table('VNET')
         assert result.exit_code == 0
@@ -328,8 +328,8 @@ Error: 'vnet_name' must begin with 'Vnet'.
         assert result2.exit_code == 0
         vnet_route_tunnel = db.cfgdb.get_table('VNET_ROUTE_TUNNEL')
         if vnet_route_tunnel:
-            assert ("Vnet4","8.8.8.8/32") in vnet_route_tunnel
-            assert ("Vnet4","11.11.11.11/32") not in vnet_route_tunnel
+            assert ("Vnet4", "8.8.8.8/32") in vnet_route_tunnel
+            assert ("Vnet4", "11.11.11.11/32") not in vnet_route_tunnel
         assert "Specific route deleted for the VNET Vnet4" in result2.output
 
         # Test vnet del route for all routes
@@ -461,7 +461,7 @@ Error: 'vnet_name' must begin with 'Vnet'.
         args = ["Vnet4", "8.8.8.8/32", "1.1.1.1", "1", "11:22:33:AA:55:66",
                 "8.8.8.8", "test", "9.8.1.9", "custom", "8.8.8.8/24"]
         result = runner.invoke(config.config.commands["vnet"].commands["add-route"], args, obj=vnet_obj)
-        assert (('Vnet4','8.8.8.8/32') in db.cfgdb.get_table('VNET_ROUTE_TUNNEL'))
+        assert (('Vnet4', '8.8.8.8/32') in db.cfgdb.get_table('VNET_ROUTE_TUNNEL'))
         assert result.exit_code == 0
 
         # Test vnet del route with optional arg-invalid prefix
