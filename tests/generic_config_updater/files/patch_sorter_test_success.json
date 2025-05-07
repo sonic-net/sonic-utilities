@@ -410,9 +410,7 @@
                         "stage": "ingress",
                         "type": "L3"
                     }
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/ACL_TABLE/EVERFLOW",
@@ -424,9 +422,7 @@
                         "stage": "ingress",
                         "type": "MIRROR"
                     }
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/ACL_TABLE/EVERFLOWV6",
@@ -606,9 +602,7 @@
                     "op": "add",
                     "path": "/LOOPBACK_INTERFACE/Loopback0|10.1.0.32~132",
                     "value": {}
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/LOOPBACK_INTERFACE/Loopback0|1100:1::32~1128",
@@ -806,9 +800,7 @@
                         "description": "",
                         "speed": "10000"
                     }
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/PORT/Ethernet2",
@@ -818,9 +810,7 @@
                         "description": "",
                         "speed": "10000"
                     }
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/PORT/Ethernet1",
@@ -850,18 +840,14 @@
                     "value": {
                         "tagging_mode": "untagged"
                     }
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/VLAN_MEMBER/Vlan100|Ethernet3",
                     "value": {
                         "tagging_mode": "untagged"
                     }
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/VLAN_MEMBER/Vlan100|Ethernet2",
@@ -1032,15 +1018,11 @@
                 {
                     "op": "remove",
                     "path": "/VLAN_MEMBER/Vlan100|Ethernet1"
-                }
-            ],
-            [
+                },
                 {
                     "op": "remove",
                     "path": "/VLAN_MEMBER/Vlan100|Ethernet2"
-                }
-            ],
-            [
+                },
                 {
                     "op": "remove",
                     "path": "/VLAN_MEMBER/Vlan100|Ethernet3"
@@ -1411,9 +1393,7 @@
                     "op": "add",
                     "path": "/VLAN_INTERFACE/Vlan1000|fc02:1000::1~164",
                     "value": {}
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/VLAN_INTERFACE/Vlan1000|192.168.0.1~121",
@@ -1451,9 +1431,7 @@
                     "op": "replace",
                     "path": "/CRM/Config/acl_counter_high_threshold",
                     "value": "80"
-                }
-            ],
-            [
+                },
                 {
                     "op": "replace",
                     "path": "/CRM/Config/acl_counter_low_threshold",
@@ -2146,21 +2124,19 @@
                 {
                     "op": "remove",
                     "path": "/ACL_TABLE/NO-NSW-PACL-V4"
-                }
-            ],
-            [
+                },
                 {
                     "op": "remove",
                     "path": "/ACL_TABLE/DATAACL"
-                }
-            ],
-            [
+                },
                 {
                     "op": "remove",
                     "path": "/ACL_TABLE/EVERFLOW"
-                }
-            ],
-            [
+                },
+                {
+                    "op": "remove",
+                    "path": "/ACL_TABLE/EVERFLOWV6"
+                },
                 {
                     "op": "remove",
                     "path": "/ACL_TABLE"
@@ -2223,9 +2199,7 @@
                     "op": "add",
                     "path": "/LOOPBACK_INTERFACE/Loopback1|20.2.0.32~132",
                     "value": {}
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/LOOPBACK_INTERFACE/Loopback1|2200:2::32~1128",
@@ -2512,9 +2486,7 @@
                     "op": "add",
                     "path": "/LOOPBACK_INTERFACE/Loopback0|10.1.0.32~132",
                     "value": {}
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/LOOPBACK_INTERFACE/Loopback0|1100:1::32~1128",
@@ -2583,9 +2555,7 @@
                         "nhopself": "0",
                         "rrclient": "0"
                     }
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/BGP_NEIGHBOR/10.0.0.61",
@@ -3923,9 +3893,7 @@
                         "nhopself": "0",
                         "rrclient": "0"
                     }
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/BGP_NEIGHBOR/fc00::42",
@@ -3948,9 +3916,7 @@
                     "value": {
                         "profile": "pg_lossless_40000_40m_profile"
                     }
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/BUFFER_PG/Ethernet64|0",
@@ -3966,18 +3932,14 @@
                     "value": {
                         "profile": "egress_lossy_profile"
                     }
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/BUFFER_QUEUE/Ethernet64|3-4",
                     "value": {
                         "profile": "egress_lossless_profile"
                     }
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/BUFFER_QUEUE/Ethernet64|5-6",
@@ -3999,6 +3961,19 @@
             [
                 {
                     "op": "add",
+                    "path": "/PORT_QOS_MAP/Ethernet64",
+                    "value": {
+                        "dscp_to_tc_map": "AZURE",
+                        "pfc_enable": "3,4",
+                        "pfc_to_queue_map": "AZURE",
+                        "tc_to_pg_map": "AZURE",
+                        "tc_to_queue_map": "AZURE"
+                    }
+                }
+            ],
+            [
+                {
+                    "op": "add",
                     "path": "/INTERFACE/Ethernet64",
                     "value": {}
                 }
@@ -4008,9 +3983,7 @@
                     "op": "add",
                     "path": "/INTERFACE/Ethernet64|10.0.0.32~131",
                     "value": {}
-                }
-            ],
-            [
+                },
                 {
                     "op": "add",
                     "path": "/INTERFACE/Ethernet64|FC00::41~1126",
@@ -4020,14 +3993,233 @@
             [
                 {
                     "op": "add",
-                    "path": "/PORT_QOS_MAP/Ethernet64",
-                    "value": {
-                        "dscp_to_tc_map": "AZURE",
-                        "pfc_enable": "3,4",
-                        "pfc_to_queue_map": "AZURE",
-                        "tc_to_pg_map": "AZURE",
-                        "tc_to_queue_map": "AZURE"
-                    }
+                    "path": "/BGP_NEIGHBOR/10.0.0.1/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/10.0.0.5/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/10.0.0.9/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/10.0.0.13/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/10.0.0.17/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/10.0.0.21/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/10.0.0.25/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/10.0.0.29/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/10.0.0.35/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/10.0.0.37/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/10.0.0.39/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/10.0.0.41/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/10.0.0.43/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/10.0.0.45/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/10.0.0.47/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/10.0.0.49/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/10.0.0.51/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/10.0.0.53/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/10.0.0.55/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/10.0.0.57/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/10.0.0.59/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/10.0.0.61/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/10.0.0.63/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/fc00::1a/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/fc00::2/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/fc00::2a/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/fc00::3a/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/fc00::4a/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/fc00::4e/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/fc00::5a/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/fc00::5e/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/fc00::6a/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/fc00::6e/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/fc00::7a/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/fc00::7e/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/fc00::12/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/fc00::22/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/fc00::32/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/fc00::46/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/fc00::52/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/fc00::56/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/fc00::62/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/fc00::66/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/fc00::72/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/fc00::76/admin_status",
+                    "value": "up"
+                },
+                {
+                    "op": "add",
+                    "path": "/BGP_NEIGHBOR/fc00::a/admin_status",
+                    "value": "up"
                 }
             ],
             [
@@ -4042,328 +4234,6 @@
                     "op": "add",
                     "path": "/ACL_TABLE/EVERFLOWV6/ports/0",
                     "value": "Ethernet64"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/10.0.0.1/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/10.0.0.5/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/10.0.0.9/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/10.0.0.13/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/10.0.0.17/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/10.0.0.21/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/10.0.0.25/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/10.0.0.29/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/10.0.0.35/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/10.0.0.37/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/10.0.0.39/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/10.0.0.41/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/10.0.0.43/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/10.0.0.45/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/10.0.0.47/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/10.0.0.49/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/10.0.0.51/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/10.0.0.53/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/10.0.0.55/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/10.0.0.57/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/10.0.0.59/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/10.0.0.61/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/10.0.0.63/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/fc00::1a/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/fc00::2/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/fc00::2a/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/fc00::3a/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/fc00::4a/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/fc00::4e/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/fc00::5a/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/fc00::5e/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/fc00::6a/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/fc00::6e/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/fc00::7a/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/fc00::7e/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/fc00::12/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/fc00::22/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/fc00::32/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/fc00::46/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/fc00::52/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/fc00::56/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/fc00::62/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/fc00::66/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/fc00::72/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/fc00::76/admin_status",
-                    "value": "up"
-                }
-            ],
-            [
-                {
-                    "op": "add",
-                    "path": "/BGP_NEIGHBOR/fc00::a/admin_status",
-                    "value": "up"
                 }
             ],
             [
@@ -5545,28 +5415,8 @@
             [
                 {
                     "op": "remove",
-                    "path": "/BGP_NEIGHBOR/10.0.0.33"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/fc00::42"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/DEVICE_NEIGHBOR/Ethernet64"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
                     "path": "/INTERFACE/Ethernet64|10.0.0.32~131"
-                }
-            ],
-            [
+                },
                 {
                     "op": "remove",
                     "path": "/INTERFACE/Ethernet64|FC00::41~1126"
@@ -5581,6 +5431,208 @@
             [
                 {
                     "op": "remove",
+                    "path": "/DEVICE_NEIGHBOR/Ethernet64"
+                }
+            ],
+            [
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/10.0.0.33"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/fc00::42"
+                }
+            ],
+            [
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/10.0.0.1/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/10.0.0.5/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/10.0.0.9/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/10.0.0.13/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/10.0.0.17/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/10.0.0.21/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/10.0.0.25/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/10.0.0.29/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/10.0.0.35/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/10.0.0.37/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/10.0.0.39/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/10.0.0.41/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/10.0.0.43/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/10.0.0.45/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/10.0.0.47/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/10.0.0.49/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/10.0.0.51/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/10.0.0.53/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/10.0.0.55/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/10.0.0.57/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/10.0.0.59/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/10.0.0.61/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/10.0.0.63/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/fc00::1a/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/fc00::2/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/fc00::2a/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/fc00::3a/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/fc00::4a/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/fc00::4e/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/fc00::5a/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/fc00::5e/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/fc00::6a/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/fc00::6e/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/fc00::7a/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/fc00::7e/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/fc00::12/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/fc00::22/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/fc00::32/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/fc00::46/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/fc00::52/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/fc00::56/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/fc00::62/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/fc00::66/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/fc00::72/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/fc00::76/admin_status"
+                },
+                {
+                    "op": "remove",
+                    "path": "/BGP_NEIGHBOR/fc00::a/admin_status"
+                }
+            ],
+            [
+                {
+                    "op": "remove",
                     "path": "/ACL_TABLE/EVERFLOW/ports/0"
                 }
             ],
@@ -5588,282 +5640,6 @@
                 {
                     "op": "remove",
                     "path": "/ACL_TABLE/EVERFLOWV6/ports/0"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/10.0.0.1/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/10.0.0.5/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/10.0.0.9/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/10.0.0.13/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/10.0.0.17/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/10.0.0.21/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/10.0.0.25/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/10.0.0.29/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/10.0.0.35/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/10.0.0.37/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/10.0.0.39/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/10.0.0.41/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/10.0.0.43/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/10.0.0.45/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/10.0.0.47/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/10.0.0.49/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/10.0.0.51/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/10.0.0.53/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/10.0.0.55/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/10.0.0.57/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/10.0.0.59/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/10.0.0.61/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/10.0.0.63/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/fc00::1a/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/fc00::2/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/fc00::2a/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/fc00::3a/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/fc00::4a/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/fc00::4e/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/fc00::5a/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/fc00::5e/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/fc00::6a/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/fc00::6e/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/fc00::7a/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/fc00::7e/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/fc00::12/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/fc00::22/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/fc00::32/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/fc00::46/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/fc00::52/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/fc00::56/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/fc00::62/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/fc00::66/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/fc00::72/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/fc00::76/admin_status"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/BGP_NEIGHBOR/fc00::a/admin_status"
                 }
             ],
             [
@@ -5889,9 +5665,7 @@
                 {
                     "op": "remove",
                     "path": "/BUFFER_PG/Ethernet64|3-4"
-                }
-            ],
-            [
+                },
                 {
                     "op": "remove",
                     "path": "/BUFFER_PG/Ethernet64|0"
@@ -5901,15 +5675,11 @@
                 {
                     "op": "remove",
                     "path": "/BUFFER_QUEUE/Ethernet64|0-2"
-                }
-            ],
-            [
+                },
                 {
                     "op": "remove",
                     "path": "/BUFFER_QUEUE/Ethernet64|3-4"
-                }
-            ],
-            [
+                },
                 {
                     "op": "remove",
                     "path": "/BUFFER_QUEUE/Ethernet64|5-6"
