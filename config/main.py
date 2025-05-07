@@ -9549,8 +9549,6 @@ def add_vnet_route(ctx, vnet_name, prefix, endpoint, vni, mac_address, endpoint_
         ctx.fail("VNET {} doesnot exist, cannot add a route!".format(vnet_name))
     if not clicommon.is_ipprefix(prefix):
         ctx.fail("Invalid prefix {}".format(prefix))
-    if is_specific_vnet_route_exists(config_db, vnet_name, prefix):
-        ctx.fail("Route already exists for the VNET {}!".format(vnet_name))
     else:
         if not clicommon.is_ipaddress(endpoint):
             ctx.fail("Endpoint has invalid IP address {}".format(endpoint))
@@ -9593,7 +9591,7 @@ def add_vnet_route(ctx, vnet_name, prefix, endpoint, vni, mac_address, endpoint_
             config_db.set_entry('VNET_ROUTE_TUNNEL', (vnet_name, prefix), subvnet_dict)
         except ValueError as e:
             ctx.fail("Invalid ConfigDB. Error: {}".format(e))
-        click.echo("Successfully added VNET route for the VNET{}.".format(vnet_name))
+        click.echo("VNET route added/updated for the VNET {}.".format(vnet_name))
 
 
 @vnet.command('del-route')

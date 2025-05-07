@@ -266,6 +266,16 @@ Error: 'vnet_name' must begin with 'Vnet'.
         assert any((key[0] == 'Vnet3' and key[1] == "9.9.9.9/32") for key in db.cfgdb.get_table('VNET_ROUTE_TUNNEL'))
         assert result.exit_code == 0
 
+        # Test vnet add/update route
+        args = ["Vnet3", "9.9.9.9/32", "9.9.9.1"]
+        existing_route = ("Vnet3", "9.9.9.9/32")
+        assert existing_route  in db.cfgdb.get_table('VNET_ROUTE_TUNNEL')
+        assert db.cfgdb.get_table('VNET_ROUTE_TUNNEL')[existing_route]['endpoint'] == "10.10.10.1"
+        result = runner.invoke(config.config.commands["vnet"].commands["add-route"], args, obj=vnet_obj)
+        assert db.cfgdb.get_table('VNET_ROUTE_TUNNEL')[existing_route]['endpoint'] == "9.9.9.1"
+        assert "VNET route added/updated for the VNET Vnet3" in result.output
+        assert result.exit_code == 0
+
         # Test vnet add route using invalid vnet name
         args = ["vnet-3", "10.10.10.10/32", "10.10.10.1"]
         result = runner.invoke(config.config.commands["vnet"].commands["add-route"], args, obj=vnet_obj)
@@ -276,12 +286,6 @@ Error: 'vnet_name' must begin with 'Vnet'.
         args = ["Vnet_6", "10.10.10.10/32", "10.10.10.1"]
         result = runner.invoke(config.config.commands["vnet"].commands["add-route"], args, obj=vnet_obj)
         assert "VNET Vnet_6 doesnot exist, cannot add a route!" in result.output
-        assert result.exit_code != 0
-
-        # Test vnet add route when vnet route exists
-        args = ["Vnet3", "9.9.9.9/32", "9.9.9.1"]
-        result = runner.invoke(config.config.commands["vnet"].commands["add-route"], args, obj=vnet_obj)
-        assert "Route already exists for the VNET Vnet3" in result.output
         assert result.exit_code != 0
 
         # Test vnet add route using length of vnet name
