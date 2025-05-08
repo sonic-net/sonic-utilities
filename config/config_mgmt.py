@@ -228,7 +228,10 @@ class ConfigMgmt():
             configdb = self.configdb
         sonic_cfggen.deep_update(data, sonic_cfggen.FormatConverter.to_deserialized(jDiff))
         self.sysLog(msg="Write in DB: {}".format(data))
-        configdb.mod_config(sonic_cfggen.FormatConverter.output_to_db(data))
+        db = sonic_cfggen.FormatConverter.output_to_db(data)
+        for port, config in db['PORT'].items():
+            single_port_config = {'PORT': {port: config}}
+            configdb.mod_config(single_port_config)
 
         return
 
