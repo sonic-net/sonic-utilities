@@ -27,6 +27,7 @@ def summary(namespace, display):
     """Show summarized information of IPv6 BGP state"""
     summary_helper(namespace, display)
 
+
 # 'neighbors' subcommand ("show ipv6 bgp neighbors")
 @bgp.command()
 @click.argument('ipaddress', required=False)
@@ -35,13 +36,13 @@ def summary(namespace, display):
                     ['routes', 'advertised-routes', 'received-routes']),
                 required=False)
 @click.option('--namespace',
-                '-n',
-                'namespace',
-                default=None,
-                type=str,
-                show_default=True,
-                help='Namespace name or all',
-             callback=multi_asic_util.multi_asic_namespace_validation_callback)
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
 def neighbors(ipaddress, info_type, namespace):
     """Show IPv6 BGP neighbors"""
     neighbors_helper(ipaddress, info_type, namespace)
@@ -58,17 +59,18 @@ def neighbors(ipaddress, info_type, namespace):
                     ['bestpath', 'json', 'longer-prefixes', 'multipath']),
                 required=False)
 @click.option('--namespace',
-                '-n',
-                'namespace',
-                type=str,
-                show_default=True,
-                required=True if multi_asic.is_multi_asic is True else False,
-                help='Namespace name or all',
-                default=multi_asic.DEFAULT_NAMESPACE,
-                callback=multi_asic_util.multi_asic_namespace_validation_callback)
+              '-n',
+              'namespace',
+              type=str,
+              show_default=True,
+              required=True if multi_asic.is_multi_asic is True else False,
+              help='Namespace name or all',
+              default=multi_asic.DEFAULT_NAMESPACE,
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
 def network(ipaddress, info_type, namespace):
     """Show BGP ipv6 network"""
     network_helper(ipaddress, info_type, namespace)
+
 
 @bgp.group(cls=clicommon.AliasedGroup)
 @click.argument('vrf', required=True)
@@ -77,14 +79,16 @@ def vrf(ctx, vrf):
     """Show IPv4 BGP information for a given VRF"""
     pass
 
+
 # 'summary' subcommand ("show ipv6 bgp summary")
 @vrf.command('summary')
 @multi_asic_util.multi_asic_click_options
 @click.pass_context
-def summary(ctx, namespace, display):
+def vrf_summary(ctx, namespace, display):
     """Show summarized information of IPv6 BGP state"""
     vrf = ctx.parent.params['vrf']
     summary_helper(namespace, display, vrf)
+
 
 # 'neighbors' subcommand ("show ipv6 bgp vrf neighbors")
 @vrf.command('neighbors')
@@ -94,18 +98,19 @@ def summary(ctx, namespace, display):
                     ['routes', 'advertised-routes', 'received-routes']),
                 required=False)
 @click.option('--namespace',
-                '-n',
-                'namespace',
-                default=None,
-                type=str,
-                show_default=True,
-                help='Namespace name or all',
-             callback=multi_asic_util.multi_asic_namespace_validation_callback)
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
 @click.pass_context
 def vrf_neighbors(ctx, ipaddress, info_type, namespace):
     """Show IPv6 BGP neighbors"""
     vrf = ctx.parent.params['vrf']
     neighbors_helper(ipaddress, info_type, namespace, vrf)
+
 
 # 'network' subcommand ("show ipv6 bgp network")
 @vrf.command('network')
@@ -118,24 +123,26 @@ def vrf_neighbors(ctx, ipaddress, info_type, namespace):
                     ['bestpath', 'json', 'longer-prefixes', 'multipath']),
                 required=False)
 @click.option('--namespace',
-                '-n',
-                'namespace',
-                type=str,
-                show_default=True,
-                required=True if multi_asic.is_multi_asic is True else False,
-                help='Namespace name or all',
-                default=multi_asic.DEFAULT_NAMESPACE,
-                callback=multi_asic_util.multi_asic_namespace_validation_callback)
+              '-n',
+              'namespace',
+              type=str,
+              show_default=True,
+              required=True if multi_asic.is_multi_asic is True else False,
+              help='Namespace name or all',
+              default=multi_asic.DEFAULT_NAMESPACE,
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
 @click.pass_context
 def vrf_network(ctx, ipaddress, info_type, namespace):
     """Show BGP ipv6 network"""
     vrf = ctx.parent.params['vrf']
     network_helper(ipaddress, info_type, namespace, vrf)
-    
+
+
 def summary_helper(namespace, display, vrf=None):
-    bgp_summary = bgp_util.get_bgp_summary_from_all_bgp_instances(constants.IPV6, namespace,display, vrf)
+    bgp_summary = bgp_util.get_bgp_summary_from_all_bgp_instances(constants.IPV6, namespace, display, vrf)
     bgp_util.display_bgp_summary(bgp_summary=bgp_summary, af=constants.IPV6)
-    
+
+
 def neighbors_helper(ipaddress, info_type, namespace, vrf=None):
     command = 'show bgp'
     if vrf is not None:
@@ -171,7 +178,8 @@ def neighbors_helper(ipaddress, info_type, namespace, vrf=None):
         output += bgp_util.run_bgp_show_command(command, ns)
     
     click.echo(output.rstrip('\n'))
-    
+
+
 def network_helper(ipaddress, info_type, namespace, vrf=None):
     command = 'show bgp'
     if vrf is not None:

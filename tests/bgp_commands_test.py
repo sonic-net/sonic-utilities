@@ -369,7 +369,7 @@ class TestBgpCommandsSingleAsic(object):
         print("{}".format(result.output))
         assert result.exit_code == 0
         assert result.output == show_bgp_summary_v4
-        
+
     @pytest.mark.parametrize('setup_single_bgp_instance',
                              ['v4'], indirect=['setup_single_bgp_instance'])
     def test_bgp_vrf_summary_v4(
@@ -397,7 +397,7 @@ class TestBgpCommandsSingleAsic(object):
         print("{}".format(result.output))
         assert result.exit_code == 0
         assert result.output == show_bgp_summary_v6
-        
+
     @pytest.mark.parametrize('setup_single_bgp_instance',
                              ['v6'], indirect=['setup_single_bgp_instance'])
     def test_bgp_vrf_summary_v6(
@@ -439,7 +439,7 @@ class TestBgpCommandsSingleAsic(object):
         print("{}".format(result.output))
         assert result.exit_code == 2
         assert result.output == show_vrf_error_invalid_json
-        
+
     def display_external(self):
         return constants.DISPLAY_EXTERNAL
 
@@ -464,11 +464,11 @@ class TestBgpCommandsSingleAsic(object):
         print("{}".format(result.output))
         assert result.exit_code == 0
         assert result.output == show_bgp_summary_v4_chassis
-      
+
     @pytest.mark.parametrize(
         'setup_single_bgp_instance_chassis', ['v4'],
         indirect=['setup_single_bgp_instance_chassis']
-    )  
+    )
     @patch.object(multi_asic.MultiAsic, 'get_display_option', display_external)
     @patch('sonic_py_common.device_info.get_platform_info')
     def test_bgp_vrf_summary_v4_chassis(
@@ -540,7 +540,7 @@ class TestBgpCommandsSingleAsic(object):
         print("{}".format(result.output))
         assert result.exit_code == 0
         assert result.output == show_bgp_summary_v4_all_chassis
-    
+
     @pytest.mark.parametrize(
         'setup_single_bgp_instance_chassis', ['v4'],
         indirect=['setup_single_bgp_instance_chassis']
@@ -559,7 +559,7 @@ class TestBgpCommandsSingleAsic(object):
         print("{}".format(result.output))
         assert result.exit_code == 0
         assert result.output == show_bgp_summary_v4_all_chassis
-        
+
     @pytest.mark.parametrize('setup_single_bgp_instance',
                              ['show_bgp_summary_no_neigh'], indirect=['setup_single_bgp_instance'])
     def test_bgp_summary_no_v4_neigh(
@@ -573,7 +573,7 @@ class TestBgpCommandsSingleAsic(object):
         print("{}".format(result.output))
         assert result.exit_code == 0
         assert result.output == show_error_no_v4_neighbor_single_asic
-        
+
     @pytest.mark.parametrize('setup_single_bgp_instance',
                              ['show_bgp_summary_no_neigh'], indirect=['setup_single_bgp_instance'])
     def test_bgp_vrf_summary_no_v4_neigh(
@@ -601,7 +601,7 @@ class TestBgpCommandsSingleAsic(object):
         print("{}".format(result.output))
         assert result.exit_code == 0
         assert result.output == show_error_no_v6_neighbor_single_asic
-        
+
     @pytest.mark.parametrize('setup_single_bgp_instance',
                              ['show_bgp_summary_no_neigh'], indirect=['setup_single_bgp_instance'])
     def test_bgp_vrf_summary_no_v6_neigh(
@@ -860,7 +860,6 @@ class TestBgpCommandsMultiAsic(object):
         assert result.exit_code == 0
         assert result.output == show_error_no_v4_neighbor_multi_asic
 
-
     @pytest.mark.parametrize('setup_multi_asic_bgp_instance',
                              ['show_bgp_summary_no_neigh'], indirect=['setup_multi_asic_bgp_instance'])
     def test_bgp_vrf_summary_multi_asic_no_v4_neigh(
@@ -889,7 +888,6 @@ class TestBgpCommandsMultiAsic(object):
         print("{}".format(result.output))
         assert result.exit_code == 0
         assert result.output == show_error_no_v6_neighbor_multi_asic
-        
 
     @pytest.mark.parametrize('setup_multi_asic_bgp_instance',
                              ['show_bgp_summary_no_neigh'], indirect=['setup_multi_asic_bgp_instance'])
@@ -904,7 +902,7 @@ class TestBgpCommandsMultiAsic(object):
         print("{}".format(result.output))
         assert result.exit_code == 0
         assert result.output == show_error_no_v6_neighbor_multi_asic
-        
+
 
     @patch.object(bgp_util, 'get_external_bgp_neighbors_dict', mock.MagicMock(return_value={}))
     @patch.object(multi_asic.MultiAsic, 'get_ns_list_based_on_options', mock.Mock(return_value=['asic0', 'asic1']))
@@ -923,8 +921,7 @@ class TestBgpCommandsMultiAsic(object):
             show.cli.commands["ip"].commands["bgp"].commands["summary"], [])
         print("{}".format(result.output))
         assert result.exit_code == 0
-        assert result.output == SHOW_BGP_SUMMARY_V4_NO_EXT_NEIGHBORS_ON_ALL_ASIC     
-
+        assert result.output == SHOW_BGP_SUMMARY_V4_NO_EXT_NEIGHBORS_ON_ALL_ASIC
 
     @patch.object(bgp_util, 'get_external_bgp_neighbors_dict', mock.MagicMock(return_value={}))
     @patch.object(multi_asic.MultiAsic, 'get_ns_list_based_on_options', mock.Mock(return_value=['asic0', 'asic1']))
@@ -943,7 +940,7 @@ class TestBgpCommandsMultiAsic(object):
             show.cli.commands["ip"].commands["bgp"].commands["vrf"], ['default', 'summary'])
         print("{}".format(result.output))
         assert result.exit_code == 0
-        assert result.output == SHOW_BGP_SUMMARY_V4_NO_EXT_NEIGHBORS_ON_ALL_ASIC     
+        assert result.output == SHOW_BGP_SUMMARY_V4_NO_EXT_NEIGHBORS_ON_ALL_ASIC
 
 
     @patch.object(multi_asic.MultiAsic, 'get_ns_list_based_on_options', mock.Mock(return_value=['asic0', 'asic1']))
@@ -963,7 +960,6 @@ class TestBgpCommandsMultiAsic(object):
         print("{}".format(result.output))
         assert result.exit_code == 0
         assert result.output == SHOW_BGP_SUMMARY_V4_NO_EXT_NEIGHBORS_ON_ASIC1
-
     
     @patch.object(multi_asic.MultiAsic, 'get_ns_list_based_on_options', mock.Mock(return_value=['asic0', 'asic1']))
     @patch.object(multi_asic.MultiAsic, 'get_display_option', mock.MagicMock(return_value=constants.DISPLAY_EXTERNAL))
@@ -982,8 +978,8 @@ class TestBgpCommandsMultiAsic(object):
         print("{}".format(result.output))
         assert result.exit_code == 0
         assert result.output == SHOW_BGP_SUMMARY_V4_NO_EXT_NEIGHBORS_ON_ASIC1
-        
-        
+
+
     @pytest.mark.parametrize('setup_multi_asic_bgp_instance',
                              ['show_bgp_summary_no_ext_neigh_on_all_asic'], indirect=['setup_multi_asic_bgp_instance'])
     def test_bgp_summary_multi_asic_display_with_no_external_neighbor(
@@ -997,8 +993,7 @@ class TestBgpCommandsMultiAsic(object):
         print("{}".format(result.output))
         assert result.exit_code == 0
         assert result.output == SHOW_BGP_SUMMARY_ALL_V4_NO_EXT_NEIGHBORS
-        
-        
+
     @pytest.mark.parametrize('setup_multi_asic_bgp_instance',
                              ['show_bgp_summary_no_ext_neigh_on_all_asic'], indirect=['setup_multi_asic_bgp_instance'])
     def test_bgp_vrf_summary_multi_asic_display_with_no_external_neighbor(
@@ -1008,12 +1003,12 @@ class TestBgpCommandsMultiAsic(object):
         show = setup_bgp_commands
         runner = CliRunner()
         result = runner.invoke(
-            show.cli.commands["ip"].commands["bgp"].commands["vrf"], ["default","summary","-dall"])
+            show.cli.commands["ip"].commands["bgp"].commands["vrf"], ["default", "summary", "-dall"])
         print("{}".format(result.output))
         assert result.exit_code == 0
         assert result.output == SHOW_BGP_SUMMARY_ALL_V4_NO_EXT_NEIGHBORS
-        
-        
+
+
     def teardown_class(cls):
         print("TEARDOWN")
         from .mock_tables import mock_single_asic

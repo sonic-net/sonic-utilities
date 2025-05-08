@@ -17,7 +17,8 @@ def executor(test_vector, show):
 
     result = runner.invoke(exec_cmd, input['args'])
     check_result(result, input)
-        
+
+
 def executor_vrf(test_vector, show):
     runner = CliRunner()
     input = bgp_network_test_vector.testData[test_vector]
@@ -28,6 +29,7 @@ def executor_vrf(test_vector, show):
 
     result = runner.invoke(exec_cmd, [input['vrf'], 'network'] + input['args'])
     check_result(result, input)
+
 
 def check_result(result, input):
     print(result.exit_code)

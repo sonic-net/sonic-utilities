@@ -17,8 +17,8 @@ def executor(test_vector, show):
 
     result = runner.invoke(exec_cmd, input['args'])
     check_result(result, input)
-    
-    
+
+
 def executor_vrf(test_vector, show):
     runner = CliRunner()
     input = testData[test_vector]
@@ -30,7 +30,7 @@ def executor_vrf(test_vector, show):
     result = runner.invoke(exec_cmd, [input['vrf'], 'neighbors'] + input['args'])
     check_result(result, input)
 
-        
+
 def check_result(result, input):
     print(result.exit_code)
     print(result.output)
@@ -50,7 +50,7 @@ def check_result(result, input):
     if 'rc_warning_msg' in input:
         output = result.output.strip().split("\n")[0]
         assert input['rc_warning_msg'] in output
-        
+
 
 class TestBgpNeighbors(object):
 
