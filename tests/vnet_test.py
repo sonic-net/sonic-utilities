@@ -269,7 +269,7 @@ Error: 'vnet_name' must begin with 'Vnet'.
         # Test vnet add/update route
         args = ["Vnet3", "9.9.9.9/32", "9.9.9.1"]
         existing_route = ("Vnet3", "9.9.9.9/32")
-        assert existing_route  in db.cfgdb.get_table('VNET_ROUTE_TUNNEL')
+        assert existing_route in db.cfgdb.get_table('VNET_ROUTE_TUNNEL')
         assert db.cfgdb.get_table('VNET_ROUTE_TUNNEL')[existing_route]['endpoint'] == "10.10.10.1"
         result = runner.invoke(config.config.commands["vnet"].commands["add-route"], args, obj=vnet_obj)
         assert db.cfgdb.get_table('VNET_ROUTE_TUNNEL')[existing_route]['endpoint'] == "9.9.9.1"

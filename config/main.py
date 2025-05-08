@@ -9540,7 +9540,7 @@ def del_vnet(ctx, vnet_name):
 @click.pass_context
 def add_vnet_route(ctx, vnet_name, prefix, endpoint, vni, mac_address, endpoint_monitor,
                    profile, primary, monitoring, adv_prefix):
-    """Add VNET Route"""
+    """Add/Update VNET Route"""
     config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
 
     vnet_name_is_valid(ctx, vnet_name)
