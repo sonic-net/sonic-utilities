@@ -29,6 +29,13 @@ Try "bind --help" for help.
 Error: VRF mgmt does not exist!
 """
 
+INVALID_VNET_MSG = """\
+Usage: bind [OPTIONS] <interface_name> <vrf_name>
+Try "bind --help" for help.
+
+Error: VNET Vnet_2000 does not exist!
+"""
+
 class TestConfigIP(object):
     _old_run_bgp_command = None
     @classmethod
@@ -339,6 +346,31 @@ class TestConfigIP(object):
         print(result.exit_code, result.output)
         assert result.exit_code == 0
 
+    def test_intf_vnet_bind_unbind(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db': db.cfgdb, 'namespace': db.db.namespace}
+
+        db.cfgdb.set_entry("VXLAN_TUNNEL", "tunnel1", {"src_ip": "10.1.0.1", "dst_port": "4789"})
+
+        # Create vnet
+        result = runner.invoke(config.config.commands["vnet"].commands["add"], ["Vnet_1000", "222", "tunnel1"], obj=obj)
+        print(db.cfgdb.get_table('VNET'))
+        assert ('Vnet_1000') in db.cfgdb.get_table('VNET')
+        assert result.exit_code == 0
+
+        bind_command = config.config.commands["interface"].commands["vrf"].commands["bind"]
+        interfaces = ["Ethernet64", "Vnet_1000"]
+        result = runner.invoke(bind_command, interfaces, obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        unbind_command = config.config.commands["interface"].commands["vrf"].commands["unbind"]
+        interfaces = ["Ethernet64"]
+        result = runner.invoke(unbind_command, interfaces, obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
     def test_intf_unknown_vrf_bind(self):
         runner = CliRunner()
         db = Db()
@@ -348,6 +380,13 @@ class TestConfigIP(object):
         print(result.exit_code, result.output)
         assert result.exit_code != 0
         assert result.output == INVALID_VRF_MSG
+
+        bind_command = config.config.commands["interface"].commands["vrf"].commands["bind"]
+        interfaces = ["Ethernet64", "Vnet_2000"]
+        result = runner.invoke(bind_command, interfaces, obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code != 0
+        assert result.output == INVALID_VNET_MSG
 
         result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["bind"], ["Ethernet64", "mgmt"], obj=obj)
         print(result.exit_code, result.output)
