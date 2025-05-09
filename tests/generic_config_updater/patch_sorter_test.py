@@ -3291,7 +3291,8 @@ class TestSortAlgorithmFactory(unittest.TestCase):
                               ps.CreateOnlyMoveValidator,
                               ps.RequiredValueMoveValidator,
                               ps.RemoveCreateOnlyDependencyMoveValidator,
-                              ps.NoEmptyTableMoveValidator]
+                              ps.NoEmptyTableMoveValidator,
+                              ps.VNETAssociationChangeValidator]
 
         # Act
         sorter = factory.create(algo)

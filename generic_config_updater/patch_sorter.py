@@ -1164,6 +1164,58 @@ class RemoveCreateOnlyDependencyMoveGenerator:
         return config[table_to_check][member_name].get(create_only_field, None)
 
 
+class VNETAssociationChangeValidator:
+    """
+    A class to validate that VNET associations of interfaces cannot be modified after they're set.
+    What is allowed:
+        - Creating new interfaces with VNET associations
+        - Adding non-VNET properties to interfaces with existing VNET associations
+        - Modifying non-VNET properties of interfaces with existing VNET associations
+        - Completely deleting interfaces with VNET associations
+        - Completely removing a VNET association from an interface without adding a new one
+        - Adding a VNET association to an interface that didn't have one before
+        - Adding a previously deleted interface with the same VNET name it had before
+
+    What is NOT allowed:
+    - Changing an existing VNET association to a different VNET association
+    - Attempting to modify a VNET association in a single operation
+    - Any operation that results in the same interface having a different VNET name
+      in the target configuration compared to the current configuration
+
+    Two-step process for changing VNETs:
+    Users can effectively "change" a VNET association by performing two separate operations:
+        1. First operation: Delete the entire interface with its old VNET association
+        2. Later operation: Create a new interface with a different VNET association
+    """
+    def __init__(self, path_addressing):
+        self.path_addressing = path_addressing
+        self.tables = ["VLAN_SUB_INTERFACE", "VLAN_INTERFACE", "INTERFACE"]
+        self.failed_interfaces = set()
+
+    def validate(self, move, diff):
+        current_config = diff.current_config
+        target_config = diff.target_config
+        for table in self.tables:
+            if table not in current_config:
+                continue
+            for interface, config in current_config[table].items():
+                if "|" in interface:  # Skip IP prefix entries
+                    continue
+                if "vnet_name" not in config:
+                    continue
+                if table in target_config and interface in target_config[table]:
+                    if ("vnet_name" in target_config[table][interface] and
+                            target_config[table][interface]["vnet_name"] != config["vnet_name"]):
+                        simulated_config = move.apply(current_config)
+                        # If the move changes the vnet or deletes the table/interface that has a vnet
+                        if (table not in simulated_config or
+                                interface not in simulated_config[table] or
+                                "vnet_name" not in simulated_config[table][interface] or
+                                simulated_config[table][interface]["vnet_name"] != config["vnet_name"]):
+                            failed_interface = f"{table}/{interface}"
+                            self.failed_interfaces.add(failed_interface)
+        return len(self.failed_interfaces) == 0
+
 class SingleRunLowLevelMoveGenerator:
     """
     A class that can only run once to assist LowLevelMoveGenerator with generating the moves.
@@ -1648,6 +1700,7 @@ class SortAlgorithmFactory:
                           DeleteInsteadOfReplaceMoveExtender(),
                           DeleteRefsMoveExtender(self.path_addressing)]
         move_validators = [DeleteWholeConfigMoveValidator(),
+                           VNETAssociationChangeValidator(self.path_addressing),
                            FullConfigMoveValidator(self.config_wrapper),
                            NoDependencyMoveValidator(self.path_addressing, self.config_wrapper),
                            CreateOnlyMoveValidator(self.path_addressing),
@@ -1936,6 +1989,12 @@ class PatchSorter:
         moves = sort_algorithm.sort(diff)
 
         if moves is None:
+            for validator in sort_algorithm.move_wrapper.move_validators:
+                if isinstance(validator, VNETAssociationChangeValidator) and validator.failed_interfaces:
+                    failed_interfaces_str = ", ".join(sorted(validator.failed_interfaces))
+                    raise GenericConfigUpdaterError(
+                        f"Vnet associations cannot be modified for interfaces: {failed_interfaces_str}"
+                    )
             raise GenericConfigUpdaterError("There is no possible sorting")
 
         changes = [JsonChange(move.patch) for move in moves]
