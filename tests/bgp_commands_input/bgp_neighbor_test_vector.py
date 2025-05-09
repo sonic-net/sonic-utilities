@@ -647,7 +647,7 @@ def mock_show_bgp_neighbor_single_asic(request):
 
 testData = {
     'bgp_v4_neighbors': {
-        'vrf': 'default',
+        'vrf': 'Vnet_70',
         'args': [],
         'rc': 0,
         'rc_output': bgp_v4_neighbors_output
