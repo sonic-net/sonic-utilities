@@ -332,7 +332,7 @@
         ],
         "expected_error_substrings": [
             "Vnet associations cannot be modified for interfaces: ",
-            "INTERFACE/Ethernet8, VLAN_SUB_INTERFACE/Ethernet8.10, VLAN_INTERFACE/Vlan1000"
+            "INTERFACE/Ethernet8, VLAN_INTERFACE/Vlan1000, VLAN_SUB_INTERFACE/Ethernet8.10"
         ]
     }
 }
