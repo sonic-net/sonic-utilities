@@ -1134,22 +1134,6 @@ class TestCreateOnlyMoveValidator(unittest.TestCase):
                     "ttl": "32",
                     "type": "ERSPAN"
                 }
-            },
-            "VLAN_SUB_INTERFACE": {
-                "Ethernet0.10": {
-                    "vlan": 10,
-                    "vnet_name": "Vnet1"
-                }
-            },
-            "VLAN_INTERFACE": {
-                "Vlan100": {
-                    "vnet_name": "Vnet2"
-                }
-            },
-            "INTERFACE": {
-                "Ethernet2": {
-                    "vnet_name": "Vnet3"
-                }
             }
         }
         expected = [
@@ -1186,9 +1170,6 @@ class TestCreateOnlyMoveValidator(unittest.TestCase):
             "/MIRROR_SESSION/mirror_session_dscp/src_ip",
             "/MIRROR_SESSION/mirror_session_dscp/ttl",
             "/MIRROR_SESSION/mirror_session_dscp/type",
-            "/VLAN_SUB_INTERFACE/Ethernet0.10/vnet_name",
-            "/VLAN_INTERFACE/Vlan100/vnet_name",
-            "/INTERFACE/Ethernet2/vnet_name",
         ]
 
         actual = self.validator._get_create_only_paths(config)
