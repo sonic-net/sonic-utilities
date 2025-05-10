@@ -16,7 +16,22 @@ def executor(test_vector, show):
         exec_cmd = show.cli.commands["ip"].commands["bgp"].commands["neighbors"]
 
     result = runner.invoke(exec_cmd, input['args'])
+    check_result(result, input)
 
+
+def executor_vrf(test_vector, show):
+    runner = CliRunner()
+    input = testData[test_vector]
+    if test_vector.startswith('bgp_v6'):
+        exec_cmd = show.cli.commands["ipv6"].commands["bgp"].commands["vrf"]
+    else:
+        exec_cmd = show.cli.commands["ip"].commands["bgp"].commands["vrf"]
+
+    result = runner.invoke(exec_cmd, [input['vrf'], 'neighbors'] + input['args'])
+    check_result(result, input)
+
+
+def check_result(result, input):
     print(result.exit_code)
     print(result.output)
 
@@ -79,6 +94,7 @@ class TestBgpNeighbors(object):
                            test_vector):
         show = setup_bgp_commands
         executor(test_vector, show)
+        executor_vrf(test_vector, show)
 
 
 class TestBgpNeighborsMultiAsic(object):
@@ -118,6 +134,7 @@ class TestBgpNeighborsMultiAsic(object):
                            test_vector):
         show = setup_bgp_commands
         executor(test_vector, show)
+        executor_vrf(test_vector, show)
 
     @classmethod
     def teardown_class(cls):
