@@ -65,6 +65,7 @@ class TestBgpNeighbors(object):
     @pytest.mark.parametrize('setup_single_bgp_instance, test_vector',
                              [
                                  ('bgp_v4_neighbors_output', 'bgp_v4_neighbors'),
+                                 ('bgp_v4_neighbors_output', 'bgp_v4_neighbors_vrf'),
                                  ('bgp_v4_neighbors_output',
                                      'bgp_v4_neighbor_ip_address'),
                                  ('bgp_v4_neighbor_invalid_neigh',
@@ -76,6 +77,7 @@ class TestBgpNeighbors(object):
                                  ('bgp_v4_neighbor_output_recv_routes',
                                      'bgp_v4_neighbor_recv_routes'),
                                  ('bgp_v6_neighbors_output', 'bgp_v6_neighbors'),
+                                 ('bgp_v6_neighbors_output', 'bgp_v6_neighbors_vrf'),
                                  ('bgp_v6_neighbors_output',
                                      'bgp_v6_neighbor_ip_address'),
                                  ('bgp_v6_neighbor_invalid',

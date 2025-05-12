@@ -82,7 +82,7 @@ def network(ipaddress, info_type, namespace):
     """Show IP (IPv4) BGP network"""
     network_helper(ipaddress, info_type, namespace)
 
-    
+
 @bgp.group(cls=clicommon.AliasedGroup)
 @click.argument('vrf', required=True)
 @click.pass_context
