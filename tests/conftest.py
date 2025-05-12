@@ -174,9 +174,15 @@ def setup_single_bgp_instance(request):
     if request.param == 'v4':
         bgp_mocked_json = os.path.join(
             test_path, 'mock_tables', 'ipv4_bgp_summary.json')
+    elif request.param == 'v4_vrf':
+        bgp_mocked_json = os.path.join(
+            test_path, 'mock_tables', 'ipv4_bgp_summary_vrf.json')
     elif request.param == 'v6':
         bgp_mocked_json = os.path.join(
             test_path, 'mock_tables', 'ipv6_bgp_summary.json')
+    elif request.param == 'v6_vrf':
+        bgp_mocked_json = os.path.join(
+            test_path, 'mock_tables', 'ipv6_bgp_summary_vrf.json')
     elif request.param == 'show_bgp_summary_no_neigh':
         bgp_neigh_mocked_json = os.path.join(
             test_path, 'mock_tables', 'no_bgp_neigh.json')

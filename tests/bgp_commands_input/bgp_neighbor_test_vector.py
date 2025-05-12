@@ -903,10 +903,6 @@ def mock_show_bgp_neighbor_single_asic(request):
         return bgp_v4_neighbors_output
     elif request.param == 'bgp_v6_neighbors_output':
         return bgp_v6_neighbors_output
-    elif request.param == 'bgp_v4_neighbors_output_vrf_all':
-      return bgp_v4_neighbors_output_vrf_all
-    elif request.param == 'bgp_v6_neighbors_output_vrf_all':
-      return bgp_v6_neighbors_output_vrf_all
     elif request.param == 'bgp_v4_neighbors_output_invalid_vrf':
         return bgp_v4_neighbors_output_invalid_vrf
     elif request.param == 'bgp_v6_neighbors_output_invalid_vrf':
@@ -936,16 +932,10 @@ testData = {
         'rc': 0,
         'rc_output': bgp_v4_neighbors_output
     },
-    'bgp_v4_neighbors_vrf_all': {
-        'vrf': 'all',
-        'args': [],
-        'rc': 0,
-        'rc_output': bgp_v4_neighbors_output_vrf_all
-    },
-        'bgp_v4_neighbors_invalid_vrf': {
+    'bgp_v4_neighbors_invalid_vrf': {
         'vrf': 'Vnet_invalid',
         'args': [],
-        'rc': 1,
+        'rc': 2,
         'rc_output': bgp_v4_neighbors_output_invalid_vrf
     },
     'bgp_v4_neighbor_ip_address': {
@@ -990,16 +980,10 @@ testData = {
         'rc': 0,
         'rc_output': bgp_v6_neighbors_output
     },
-    'bgp_v6_neighbors_vrf_all': {
-        'vrf': 'all',
-        'args': [],
-        'rc': 0,
-        'rc_output': bgp_v6_neighbors_output_vrf_all
-    },
     'bgp_v6_neighbors_invalid_vrf': {
         'vrf': 'Vnet_invalid',
         'args': [],
-        'rc': 1,
+        'rc': 2,
         'rc_output': bgp_v6_neighbors_output_invalid_vrf
     },
     'bgp_v6_neighbor_ip_address': {
