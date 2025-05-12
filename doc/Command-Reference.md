@@ -2376,8 +2376,6 @@ Detailed show commands examples for Quagga are provided at the end of this docum
 
 This command displays the summary of all IPv4 & IPv6 bgp neighbors that are configured and the corresponding states.
 
-Optionally, you can specify a vrf-name in order to display summary only for that particular vrf. 
-
 - Usage:
 
   *Versions >= 201904 using default FRR routing stack*
