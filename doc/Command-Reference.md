@@ -2382,11 +2382,11 @@ Optionally, you can specify a vrf-name in order to display summary only for that
 
   *Versions >= 201904 using default FRR routing stack*
   ```
-  show bgp [vrf <vrf-name>] summary
+  show bgp summary
   ```
   *Versions <= 201811 using Quagga routing stack*
   ```
-  show ip bgp [vrf <vrf-name>] summary
+  show ip bgp summary
   ```
 
 - Example:
@@ -2464,11 +2464,11 @@ In order to get details for an IPv6 neigbor, use "show bgp ipv6 neighbor <ipv6_a
 
   *Versions >= 201904 using default FRR routing stack*
   ```
-  show bgp [vrf <vrf-name>] neighbors [<ipv4-address> [advertised-routes | received-routes | routes]]
+  show bgp neighbors [<ipv4-address> [advertised-routes | received-routes | routes]]
   ```
   *Versions <= 201811 using Quagga routing stack*
   ```
-  show ip bgp [vrf <vrf-name>] neighbors [<ipv4-address> [advertised-routes | received-routes | routes]]
+  show ip bgp neighbors [<ipv4-address> [advertised-routes | received-routes | routes]]
   ```
 
 - Example:
@@ -2542,14 +2542,7 @@ Optionally, you can specify an IP address in order to display only that particul
 
   Click [here](#Quagga-BGP-Show-Commands) to see the example for "show ip bgp neighbors" for Quagga.
 
-Optionally, you can specify a vrf-name in order to display only neighbors for that particular vrf. 
-
-- Example:
-```
- admin@sonic:~$ show bgp vrf Vnet_90 neighbors
-```
-
-**show ip bgp [vrf <vrf-name>] network [[<ipv4-address>|<ipv4-prefix>] [(bestpath | multipath | longer-prefixes | json)]]**
+**show ip bgp network [[<ipv4-address>|<ipv4-prefix>] [(bestpath | multipath | longer-prefixes | json)]]**
 
 This command displays all the details of IPv4 Border Gateway Protocol (BGP) prefixes.
 
@@ -2557,7 +2550,7 @@ This command displays all the details of IPv4 Border Gateway Protocol (BGP) pref
 
 
   ```
-  show ip bgp [vrf <vrf-name>] network [[<ipv4-address>|<ipv4-prefix>] [(bestpath | multipath | longer-prefixes | json)]]
+  show ip bgp network [[<ipv4-address>|<ipv4-prefix>] [(bestpath | multipath | longer-prefixes | json)]]
   ```
 
 - Example:
@@ -2580,13 +2573,11 @@ This command displays all the details of IPv4 Border Gateway Protocol (BGP) pref
   admin@sonic:~$ show ip bgp network 10.1.0.32/32 json
 
   admin@sonic:~$ show ip bgp network 10.1.0.32/32 longer-prefixes
-
-  admin@sonic:~$ show ip bgp vrf Vnet_90 network
   ```
 
-**show bgp [vrf <vrf-name>] ipv6 summary (Versions >= 201904 using default FRR routing stack)**
+**show bgp ipv6 summary (Versions >= 201904 using default FRR routing stack)**
 
-**show ipv6 bgp [vrf <vrf-name>] summary (Versions <= 201811 using Quagga routing stack)**
+**show ipv6 bgp summary (Versions <= 201811 using Quagga routing stack)**
 
 This command displays the summary of all IPv6 bgp neighbors that are configured and the corresponding states.
 
@@ -2594,11 +2585,11 @@ This command displays the summary of all IPv6 bgp neighbors that are configured 
 
   *Versions >= 201904 using default FRR routing stack*
   ```
-  show bgp [vrf <vrf-name>] ipv6 summary
+  show bgp ipv6 summary
   ```
   *Versions <= 201811 using Quagga routing stack*
   ```
-  show ipv6 bgp [vrf <vrf-name>] summary
+  show ipv6 bgp summary
   ```
 
 - Example:
@@ -2633,11 +2624,11 @@ This command displays all the details of one particular IPv6 Border Gateway Prot
 
   *Versions >= 201904 using default FRR routing stack*
   ```
-  show bgp [vrf <vrf-name>] ipv6 neighbors [<ipv6-address> [(advertised-routes | received-routes | routes)]]
+  show bgp ipv6 neighbors [<ipv6-address> [(advertised-routes | received-routes | routes)]]
   ```
   *Versions <= 201811 using Quagga routing stack*
   ```
-  show ipv6 bgp [vrf <vrf-name>] neighbors [<ipv6-address> [(advertised-routes | received-routes | routes)]]
+  show ipv6 bgp neighbors [<ipv6-address> [(advertised-routes | received-routes | routes)]]
   ```
 
 - Example:
@@ -2647,13 +2638,11 @@ This command displays all the details of one particular IPv6 Border Gateway Prot
   admin@sonic:~$ show bgp ipv6 neighbors fc00::72 received-routes
 
   admin@sonic:~$ show bgp ipv6 neighbors fc00::72 routes
-
-  admin@sonic:~$ show bgp vrf Vnet_90 ipv6 neighbors
   ```
   Click [here](#Quagga-BGP-Show-Commands) to see the example for "show ip bgp summary" for Quagga.
 
 
-**show ipv6 bgp [vrf <vrf-name>] network [[<ipv6-address>|<ipv6-prefix>] [(bestpath | multipath | longer-prefixes | json)]]
+**show ipv6 bgp network [[<ipv6-address>|<ipv6-prefix>] [(bestpath | multipath | longer-prefixes | json)]]
 
 This command displays all the details of IPv6 Border Gateway Protocol (BGP) prefixes.
 
@@ -2661,7 +2650,7 @@ This command displays all the details of IPv6 Border Gateway Protocol (BGP) pref
 
 
   ```
-  show ipv6 bgp [vrf <vrf-name>] network [[<ipv6-address>|<ipv6-prefix>] [(bestpath | multipath | longer-prefixes | json)]]
+  show ipv6 bgp network [[<ipv6-address>|<ipv6-prefix>] [(bestpath | multipath | longer-prefixes | json)]]
   ```
 
 - Example:
@@ -2684,8 +2673,7 @@ This command displays all the details of IPv6 Border Gateway Protocol (BGP) pref
   admin@sonic:~$ show ipv6 bgp network fc00::72/64 json
 
   admin@sonic:~$ show ipv6 bgp network fc00::72/64 longer-prefixes
-
-  admin@sonic:~$ show ipv6 bgp vrf Vnet_90 network
+  ```
 
 
 
