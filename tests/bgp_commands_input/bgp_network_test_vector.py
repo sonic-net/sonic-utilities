@@ -185,7 +185,7 @@ Origin codes:  i - IGP, e - EGP, ? - incomplete
    Network          Next Hop            Metric LocPrf Weight Path
 *> 2064:100::1d/128 fc00::72                               0 64600 i
 *= 20c0:a810::/64   fc00::7e                               0 64600 65502 i
-*= 20c0:a820::/64   fc00::7e                               0 64600 65504 i 
+*= 20c0:a820::/64   fc00::7e                               0 64600 65504 i
 """
 
 bgp_v6_network_invalid_vrf = \
@@ -593,12 +593,6 @@ def mock_show_bgp_network_multi_asic(param):
 
 
 testData = {
-    'bgp_v4_network': {
-        'vrf': 'default',
-        'args': [],
-        'rc': 0,
-        'rc_output': bgp_v4_network
-    },
     'bgp_v4_network': {
         'vrf': 'default',
         'args': [],

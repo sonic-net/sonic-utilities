@@ -136,7 +136,7 @@ fc00::a        4  65200       6665       6671         0      0       0  2d09h38m
 Total number of neighbors 24
 """
 
-show_bgp_summary_v6 = """\
+show_bgp_summary_v6_vrf = """\
 
 IPv6 Unicast Summary:
 BGP router identifier 10.1.0.32, local AS number 65100 vrf-id 81
