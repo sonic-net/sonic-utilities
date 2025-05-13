@@ -166,7 +166,7 @@ class DropConfig(object):
         """
         if not counter_name:
             start_drop_monitor()
-            print("Drop monitor feature is turned on for all counters")
+            print("Drop counter monitor is globally enabled.")
             return
         if not self.counter_name_in_use(counter_name):
             raise InvalidArgumentError('Counter \'{}\' not found'.format(counter_name))
@@ -204,6 +204,7 @@ class DropConfig(object):
         self.config_db.set_entry(DEBUG_COUNTER_CONFIG_TABLE,
                                  counter_name,
                                  drop_monitor_config)
+        print("Drop counter monitor is enabled for counter {}".format(counter_name))
 
     def disable_drop_monitor(self, counter_name):
         """
@@ -212,7 +213,7 @@ class DropConfig(object):
         """
         if not counter_name:
             stop_drop_monitor()
-            print("Drop monitor feature is turned off for all counters")
+            print("Drop counter monitor is globally disabled.")
             return
         if not self.counter_name_in_use(counter_name):
             raise InvalidArgumentError('Counter \'{}\' not found'.format(counter_name))
@@ -233,6 +234,7 @@ class DropConfig(object):
         self.config_db.set_entry(DEBUG_COUNTER_CONFIG_TABLE,
                                  counter_name,
                                  drop_counter_entry)
+        print("Drop counter monitor is disabled for counter {}".format(counter_name))
 
     def create_counter(self, counter_name, alias, group, counter_type,
                        description, reasons, window, ict, dct):
@@ -587,7 +589,7 @@ Examples:
     parser.add_argument('-r', '--reasons', type=str, help='The list of drop reasons for the target drop counter',  default=None)
     parser.add_argument('-w', '--window', type=int, help='The window for drop counter monitor in seconds',  default=None)
     parser.add_argument('-dct', '--drop-count-threshold', type=int, help='The minimum drops needed to classify a drop as an incident by the drop count monitor',  default=None)
-    parser.add_argument('-ict', '--incident-count-threshold', type=int, help='The minimum number of incidents needed to register a syslog by drop count monitor',  default=None)
+    parser.add_argument('-ict', '--incident-count-threshold', type=int, help='The minimum number of incidents needed to trigger a persistent drop alert',  default=None)
     parser.add_argument('-ns', '--namespace', type=str, help='Perform operation on a specific namespace or skip for all',  default=None)
 
     args = parser.parse_args()

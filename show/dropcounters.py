@@ -17,9 +17,20 @@ def dropcounters():
 @dropcounters.command()
 @click.argument("counter_name", type=str, required=True)
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def persistent_drops(counter_name, verbose):
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def persistent_drops(counter_name, verbose, namespace):
     """Show device drop counter persistent drops"""
     cmd = ['dropconfig', '-c', 'show_drop_monitor_persistent_drops', '-n', str(counter_name)]
+
+    if namespace:
+        cmd += ['-ns', str(namespace)]
 
     clicommon.run_command(cmd, display_cmd=verbose)
 

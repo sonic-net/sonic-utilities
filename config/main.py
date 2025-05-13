@@ -7530,7 +7530,7 @@ def dropcounters():
 @click.option("-dct", "--drop-count-threshold",  type=int,
               help="Minimum threshold for drop counts to be classified as an incident")
 @click.option('-ict', '--incident-count-threshold', type=int,
-              help="Minimum number of incidents to trigger a syslog entry")
+              help="Minimum number of incidents to trigger a persistent drop alert")
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
 @click.option('--namespace',
               '-n',
@@ -7571,7 +7571,7 @@ def install(counter_name, alias, group, counter_type, desc, reasons, window,
 @click.option("-dct", "--drop-count-threshold",  type=int,
               help="Minimum threshold for drop counts to be classified as an incident")
 @click.option('-ict', '--incident-count-threshold', type=int,
-              help="Minimum number of incidents to trigger a syslog entry")
+              help="Minimum number of incidents to trigger a persistent drop alert")
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
 @click.option('--namespace',
               '-n',
@@ -7613,7 +7613,7 @@ def enable_monitor(counter_name, window, incident_count_threshold, drop_count_th
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
 def disable_monitor(counter_name, verbose, namespace):
-    """Disable drop monitor feature. If no counter is provided, gloabl feature status is set to disabled."""
+    """Disable drop monitor feature. If no counter is provided, global feature status is set to disabled."""
     command = ['dropconfig', '-c', 'disable_drop_monitor']
     if counter_name:
         command += ['-n', str(counter_name)]
