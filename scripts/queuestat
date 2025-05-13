@@ -89,7 +89,6 @@ cnstat_dir = 'N/A'
 cnstat_fqn_file = 'N/A'
 
 
-soni
 def get_redis_ips(db):
     db.connect(db.STATE_DB)
     redis_ips = []
@@ -160,7 +159,6 @@ def build_json(port, cnstat, all=False, trim=False, voq=False):
     for k in cnstat:
         out.update(ports_stats(k))
     return out
-
 
 def run_queuestat(save_fresh_stats, port_to_show_stats, json_opt, non_zero, ns, db, voq, trim, all_):
     queuestat = Queuestat(ns, db, all_, trim voq)
@@ -333,7 +331,6 @@ class Queuestat(object):
 
             # Layout is per QueueStats/VoqStats type definition
             fields.extend(["0"]*len(counter_dict))
-
 
             for counter_name, pos in counter_dict.items():
                 full_table_id = COUNTER_TABLE_PREFIX + table_id
@@ -535,7 +532,6 @@ class Queuestat(object):
             if self.voq and self.namespace is not None:
                 cache_ns = '-' + self.namespace + '-'
             cnstat_fqn_file_name = cnstat_fqn_file + cache_ns + port
-
             if os.path.isfile(cnstat_fqn_file_name):
                 try:
                     cnstat_cached_dict = json.load(open(cnstat_fqn_file_name, 'r'))
@@ -574,8 +570,6 @@ class Queuestat(object):
         if self.voq and self.namespace is not None:
             cache_ns = '-' + self.namespace + '-'
         cnstat_fqn_file_name = cnstat_fqn_file + cache_ns + port
-
-
         json_output = {}
         json_output[port] = {}
         if os.path.isfile(cnstat_fqn_file_name):
