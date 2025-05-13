@@ -44,9 +44,11 @@ from utilities_common.cli import json_serial, UserCache
 from utilities_common import constants
 import utilities_common.multi_asic as multi_asic_util
 
-QueueStats = namedtuple("QueueStats", "queueindex, queuetype, totalpacket, totalbytes, droppacket, dropbytes")
+QueueStats = namedtuple("QueueStats", "queueindex, queuetype, totalpacket, totalbytes, droppacket, dropbytes, trimpacket")
 VoqStats = namedtuple("VoqStats", "queueindex, queuetype, totalpacket, totalbytes, droppacket, dropbytes, creditWDpkts")
-header = ['Port', 'TxQ', 'Counter/pkts', 'Counter/bytes', 'Drop/pkts', 'Drop/bytes']
+std_header = ['Port', 'TxQ', 'Counter/pkts', 'Counter/bytes', 'Drop/pkts', 'Drop/bytes']
+all_header = ['Port', 'TxQ', 'Counter/pkts', 'Counter/bytes', 'Drop/pkts', 'Drop/bytes', 'Trim/pkts']
+trim_header = ['Port', 'TxQ', 'Trim/pkts']
 voq_header = ['Port', 'Voq', 'Counter/pkts', 'Counter/bytes', 'Drop/pkts', 'Drop/bytes', 'Credit-WD-Del/pkts']
 
 counter_bucket_dict = {
@@ -54,6 +56,9 @@ counter_bucket_dict = {
     'SAI_QUEUE_STAT_BYTES': 3,
     'SAI_QUEUE_STAT_DROPPED_PACKETS': 4,
     'SAI_QUEUE_STAT_DROPPED_BYTES': 5,
+}
+trim_counter_bucket_dict = {
+    'SAI_QUEUE_STAT_TRIM_PACKETS': 6,
 }
 voq_counter_bucket_dict = {
     'SAI_QUEUE_STAT_CREDIT_WD_DELETED_PACKETS': 6
@@ -84,6 +89,7 @@ cnstat_dir = 'N/A'
 cnstat_fqn_file = 'N/A'
 
 
+soni
 def get_redis_ips(db):
     db.connect(db.STATE_DB)
     redis_ips = []
@@ -105,7 +111,7 @@ def get_redis_ips(db):
         if num_asics == None:
             continue
 
-        # No namespace in single ASIC LC
+        # No namespace in single ASIsosssssC LC
         if num_asics == "1":
             redis_ips.append(lc['ip_address'])
         else:
@@ -117,7 +123,7 @@ def get_redis_ips(db):
     return redis_ips
 
 
-def build_json(port, cnstat, voq=False):
+def build_json(port, cnstat, all=False, trim=False, voq=False):
     def ports_stats(k):
         p = {}
         if voq:
@@ -129,12 +135,25 @@ def build_json(port, cnstat, voq=False):
               "creditWDPkts": k[6]
            }
         else:
-           p[k[1]] = {
-              "totalpacket": k[2],
-              "totalbytes": k[3],
-              "droppacket": k[4],
-              "dropbytes": k[5]
-           }
+            if all: # All statistics
+                p[k[1]] = {
+                    "totalpacket": k[2],
+                    "totalbytes": k[3],
+                    "droppacket": k[4],
+                    "dropbytes": k[5],
+                    "trimpacket": k[6],
+                }
+            elif trim: # Packet Trimming related statistics
+                p[k[1]] = {
+                    "trimpacket": k[2],
+                }
+            else: # Generic statistics
+                p[k[1]] = {
+                    "totalpacket": k[2],
+                    "totalbytes": k[3],
+                    "droppacket": k[4],
+                    "dropbytes": k[5],
+                }
         return p
 
     out = {}
@@ -143,8 +162,8 @@ def build_json(port, cnstat, voq=False):
     return out
 
 
-def run_queuestat(save_fresh_stats, port_to_show_stats, json_opt, non_zero, ns, db, voq):
-    queuestat = Queuestat(ns, db, voq)
+def run_queuestat(save_fresh_stats, port_to_show_stats, json_opt, non_zero, ns, db, voq, trim, all_):
+    queuestat = Queuestat(ns, db, all_, trim voq)
     if save_fresh_stats:
         queuestat.save_fresh_stats()
         return
@@ -157,8 +176,10 @@ def run_queuestat(save_fresh_stats, port_to_show_stats, json_opt, non_zero, ns, 
 
 class QueuestatWrapper(object):
     """A wrapper to execute queuestat cmd over the correct namespaces"""
-    def __init__(self, namespace, voq):
+    def __init__(self, namespace, all, trim, voq):
         self.namespace = namespace
+        self.all = all
+        self.trim = trim
         self.voq = voq
 
         # Initialize the multi-asic namespace
@@ -168,11 +189,13 @@ class QueuestatWrapper(object):
     @multi_asic_util.run_on_multi_asic
     def run(self, save_fresh_stats, port_to_show_stats, json_opt, non_zero):
         run_queuestat(save_fresh_stats, port_to_show_stats, json_opt, non_zero, \
-                      self.multi_asic.current_namespace, self.db, self.voq)
+                      self.multi_asic.current_namespace, self.db, self.voq, self.trim, self.all)
 
 class Queuestat(object):
-    def __init__(self, namespace, db, voq=False):
+    def __init__(self, namespace, db, all=False, trim=False, voq=False):
         self.db = db
+        self.all = all
+        self.trim = trim
         self.voq = voq
         self.voq_stats = {}
         self.namespace = namespace
@@ -210,6 +233,8 @@ class Queuestat(object):
 
         if self.voq:
             counter_bucket_dict.update(voq_counter_bucket_dict)
+        else:
+            counter_bucket_dict.update(trim_counter_bucket_dict) 
 
         if device_info.is_supervisor():
             self.aggregate_voq_stats()
@@ -303,15 +328,12 @@ class Queuestat(object):
                     print(f"Queue Type is invalid{self.namespace_str}:", table_id, queue_type)
                     sys.exit(1)
 
-            if self.voq:
-               fields = ["0","0","0","0","0","0","0"]
-            else:
-               fields = ["0","0","0","0","0","0"]
-            fields[0] = get_queue_index(table_id)
-            fields[1] = get_queue_type(table_id)
+            counter_dict = { **counter_bucket_dict }
+            fields = [ get_queue_index(table_id), get_queue_type(table_id) ]
 
-            counter_dict = {}
-            counter_dict.update(counter_bucket_dict)
+            # Layout is per QueueStats/VoqStats type definition
+            fields.extend(["0"]*len(counter_dict))
+
 
             for counter_name, pos in counter_dict.items():
                 full_table_id = COUNTER_TABLE_PREFIX + table_id
@@ -327,7 +349,7 @@ class Queuestat(object):
                cntr = QueueStats._make(fields)._asdict()
             return cntr
 
-       # Build a dictionary of the stats
+        # Build a dictionary of the stats
         cnstat_dict = OrderedDict()
         cnstat_dict['time'] = datetime.datetime.now()
         if queue_map is None:
@@ -356,17 +378,49 @@ class Queuestat(object):
                               data['totalpacket'], data['totalbytes'],
                               data['droppacket'], data['dropbytes'], data['creditWDpkts']))
             else:
-               if not non_zero or data['totalpacket'] != '0' or  data['totalbytes'] != '0' or \
-                  data['droppacket'] != '0' or data['dropbytes'] != '0':
-                  table.append((port, data['queuetype'] + str(data['queueindex']),
-                              data['totalpacket'], data['totalbytes'],
-                              data['droppacket'], data['dropbytes']))
+                queuetag = data['queuetype'] + str(data['queueindex'])
+
+                if self.all: # All statistics
+                    if not non_zero or \
+                            data['totalpacket'] != '0' or data['totalbytes'] != '0' or \
+                            data['droppacket'] != '0' or data['dropbytes'] != '0' or \
+                            data['trimpacket'] != '0':
+                        table.append((
+                            port, queuetag,
+                            data['totalpacket'], data['totalbytes'],
+                            data['droppacket'], data['dropbytes'],
+                            data['trimpacket']
+                        ))
+                elif self.trim: # Packet Trimming related statistics
+                    if not non_zero or \
+                            data['trimpacket'] != '0':
+                        table.append((
+                            port, queuetag,
+                            data['trimpacket']
+                        ))
+                else: # Generic statistics
+                    if not non_zero or \
+                            data['totalpacket'] != '0' or data['totalbytes'] != '0' or \
+                            data['droppacket'] != '0' or data['dropbytes'] != '0':
+                        table.append((
+                            port, queuetag,
+                            data['totalpacket'], data['totalbytes'],
+                            data['droppacket'], data['dropbytes']
+                        ))
 
         if json_opt:
-            json_output[port].update(build_json(port, table, self.voq))
+            json_output[port].update(build_json(port, table, self.all, self.trim, self.voq))
             return json_output
         else:
-            hdr = voq_header if self.voq else header
+            if self.voq:
+                hdr = voq_header
+            elif self.all:
+                hdr = all_header
+            elif self.trim:
+                hdr = trim_header
+            else:
+                hdr = std_header
+
             if table:
                 if not device_info.is_supervisor():
                     print(f"For namespace {self.namespace}:")
@@ -403,20 +457,61 @@ class Queuestat(object):
                                    ns_diff(cntr['dropbytes'], old_cntr['dropbytes']),
                                    ns_diff(cntr['creditWDpkts'], old_cntr['creditWDpkts'])))
                 else:
-                    if not non_zero or ns_diff(cntr['totalpacket'], old_cntr['totalpacket']) != '0' or \
-                                   ns_diff(cntr['totalbytes'], old_cntr['totalbytes']) != '0' or \
-                                   ns_diff(cntr['droppacket'], old_cntr['droppacket']) != '0' or \
-                                   ns_diff(cntr['dropbytes'], old_cntr['dropbytes']) != '0':
-                       table.append((port, cntr['queuetype'] + str(cntr['queueindex']),
-                                   ns_diff(cntr['totalpacket'], old_cntr['totalpacket']),
-                                   ns_diff(cntr['totalbytes'], old_cntr['totalbytes']),
-                                   ns_diff(cntr['droppacket'], old_cntr['droppacket']),
-                                   ns_diff(cntr['dropbytes'], old_cntr['dropbytes'])))
+                    queuetag = cntr['queuetype'] + str(cntr['queueindex'])
+
+                    if self.all: # All statistics
+                        totalpacket = ns_diff(cntr['totalpacket'], old_cntr['totalpacket'])
+                        totalbytes = ns_diff(cntr['totalbytes'], old_cntr['totalbytes'])
+                        droppacket = ns_diff(cntr['droppacket'], old_cntr['droppacket'])
+                        dropbytes = ns_diff(cntr['dropbytes'], old_cntr['dropbytes'])
+                        trimpacket = ns_diff(cntr['trimpacket'], old_cntr['trimpacket'])
+
+                        if not non_zero or \
+                                totalpacket != '0' or totalbytes != '0' or \
+                                droppacket != '0' or dropbytes != '0' or \
+                                trimpacket != '0':
+                            table.append((
+                                port, queuetag,
+                                totalpacket, totalbytes,
+                                droppacket, dropbytes,
+                                trimpacket
+                            ))
+                    elif self.trim: # Packet Trimming related statistics
+                        trimpacket = ns_diff(cntr['trimpacket'], old_cntr['trimpacket'])
+
+                        if not non_zero or \
+                                trimpacket != '0':
+                            table.append((
+                                port, queuetag,
+                                trimpacket
+                            ))
+                    else: # Generic statistics
+                        totalpacket = ns_diff(cntr['totalpacket'], old_cntr['totalpacket'])
+                        totalbytes = ns_diff(cntr['totalbytes'], old_cntr['totalbytes'])
+                        droppacket = ns_diff(cntr['droppacket'], old_cntr['droppacket'])
+                        dropbytes = ns_diff(cntr['dropbytes'], old_cntr['dropbytes'])
+
+                        if not non_zero or \
+                                totalpacket != '0' or totalbytes != '0' or \
+                                droppacket != '0' or dropbytes != '0':
+                            table.append((
+                                port, queuetag,
+                                totalpacket, totalbytes,
+                                droppacket, dropbytes
+                            ))
         if json_opt:
-            json_output[port].update(build_json(port, table, self.voq))
+            json_output[port].update(build_json(port, table, self.all, self.trim, self.voq))
             return json_output
         else:
-            hdr = voq_header if self.voq else header
+            if self.voq:
+                hdr = voq_header
+            elif self.all:
+                hdr = all_header
+            elif self.trim:
+                hdr = trim_header
+            else:
+                hdr = std_header
+
             if table:
                 print(port + f" Last cached time{self.namespace_str} was " + str(cnstat_old_dict.get('time')))
                 print(tabulate(table, hdr, tablefmt='simple', stralign='right'))
@@ -524,11 +619,13 @@ class Queuestat(object):
 @click.option('-c', '--clear', is_flag=True, default=False, help='Clear previous stats and save new ones')
 @click.option('-d', '--delete', is_flag=True, default=False, help='Delete saved stats')
 @click.option('-j', '--json_opt',  is_flag=True, default=False, help='Print in JSON format')
+@click.option('-a', '--all', is_flag=True, default=False, help='Display all the stats counters')
+@click.option('-T', '--trim', is_flag=True, default=False, help='Display trimming related statistics')
 @click.option('-V', '--voq', is_flag=True, default=False, help='display voq stats')
 @click.option('-nz','--non_zero', is_flag=True, default=False, help='Display non-zero queue counters')
 @click.option('-n', '--namespace', type=click.Choice(multi_asic.get_namespace_list()), help='Display queuecounters for a specific namespace name or skip for all', default=None)
 @click.version_option(version='1.0')
-def main(port, clear, delete, json_opt, voq, non_zero, namespace):
+def main(port, clear, delete, json_opt, all, trim, voq, non_zero, namespace):
     """
     Examples:
       queuestat
@@ -554,11 +651,13 @@ def main(port, clear, delete, json_opt, voq, non_zero, namespace):
     if delete_stats:
         cache.remove()
 
+
     if device_info.is_supervisor() and namespace is None:
         run_queuestat(save_fresh_stats, port_to_show_stats, json_opt, non_zero, namespace, None, voq)
     else:
-        queuestat_wrapper = QueuestatWrapper(namespace, voq)
+        queuestat_wrapper = QueuestatWrapper(namespace, all, trim, voq)
         queuestat_wrapper.run(save_fresh_stats, port_to_show_stats, json_opt, non_zero)
+
 
     sys.exit(0)
 

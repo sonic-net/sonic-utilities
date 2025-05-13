@@ -15,20 +15,25 @@ from collections import OrderedDict
 
 # mock the redis for unit test purposes #
 try:
-    if os.environ["UTILITIES_UNIT_TESTING"] == "2":
+    if os.environ.get("UTILITIES_UNIT_TESTING", "") == "2":
         modules_path = os.path.join(os.path.dirname(__file__), "..")
         tests_path = os.path.join(modules_path, "tests")
         sys.path.insert(0, modules_path)
         sys.path.insert(0, tests_path)
         import mock_tables.dbconnector
 
-        if os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] == "1":
+        if os.environ.get("UTILITIES_UNIT_TESTING_IS_SUP", "") == "1":
             import mock
             import sonic_py_common
             from swsscommon.swsscommon import SonicV2Connector
             sonic_py_common.device_info.is_supervisor = mock.MagicMock(return_value=True)
+            if os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] == "1":
+                sonic_py_common.device_info.is_voq_chassis = mock.MagicMock(return_value=False)
+                sonic_py_common.device_info.is_packet_chassis = mock.MagicMock(return_value=True)
+            else:
+                sonic_py_common.device_info.is_voq_chassis = mock.MagicMock(return_value=True)
             SonicV2Connector.delete_all_by_pattern = mock.MagicMock()
-    if os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] == "multi_asic":
+    if os.environ.get("UTILITIES_UNIT_TESTING_TOPOLOGY", "") == "multi_asic":
         import mock_tables.mock_multi_asic
         mock_tables.dbconnector.load_namespace_config()
 
@@ -68,6 +73,7 @@ Examples:
     parser.add_argument('-j', '--json', action='store_true', help='Display in JSON format')
     parser.add_argument('-r', '--raw', action='store_true', help='Raw stats (unmodified output of netstat)')
     parser.add_argument('-R', '--rate', action='store_true', help='Display interface rates')
+    parser.add_argument('-T', '--trim', action='store_true', help='Display trimming related statistics')
     parser.add_argument('-t', '--tag', type=str, help='Save stats with name TAG', default=None)
     parser.add_argument('-p', '--period', type=int, help='Display stats over a specified period (in seconds).', default=0)
     parser.add_argument('-i', '--interface', type=str, help='Display stats for interface lists.', default=None)
@@ -85,6 +91,7 @@ Examples:
     rates_only = args.rate
     use_json = args.json
     raw_stats = args.raw
+    trim_stats_only = args.trim
     tag_name = args.tag
     wait_time_in_seconds = args.period
     print_all = args.all
@@ -118,7 +125,7 @@ Examples:
 
     # Now decide what information to display
     if raw_stats:
-        portstat.cnstat_print(cnstat_dict, ratestat_dict, intf_list, use_json, print_all, errors_only, fec_stats_only, rates_only)
+        portstat.cnstat_print(cnstat_dict, ratestat_dict, intf_list, use_json, print_all, errors_only, fec_stats_only, rates_only, trim_stats_only)
         sys.exit(0)
 
     if save_fresh_stats:
@@ -137,7 +144,7 @@ Examples:
                 cnstat_cached_dict = json.load(open(cnstat_fqn_file, 'r'))
                 if not detail:
                     print("Last cached time was " + str(cnstat_cached_dict.get('time')))
-                portstat.cnstat_diff_print(cnstat_dict, cnstat_cached_dict, ratestat_dict, intf_list, use_json, print_all, errors_only, fec_stats_only, rates_only, detail)
+                portstat.cnstat_diff_print(cnstat_dict, cnstat_cached_dict, ratestat_dict, intf_list, use_json, print_all, errors_only, fec_stats_only, rates_only, trim_stats_only, detail)
             except IOError as e:
                 print(e.errno, e)
         else:
@@ -145,13 +152,13 @@ Examples:
                 print("\nFile '%s' does not exist" % cnstat_fqn_file)
                 print("Did you run 'portstat -c -t %s' to record the counters via tag %s?\n" % (tag_name, tag_name))
             else:
-                portstat.cnstat_print(cnstat_dict, ratestat_dict, intf_list, use_json, print_all, errors_only, fec_stats_only, rates_only, detail)
+                portstat.cnstat_print(cnstat_dict, ratestat_dict, intf_list, use_json, print_all, errors_only, fec_stats_only, rates_only, trim_stats_only, detail)
     else:
         #wait for the specified time and then gather the new stats and output the difference.
         time.sleep(wait_time_in_seconds)
         print("The rates are calculated within %s seconds period" % wait_time_in_seconds)
         cnstat_new_dict, ratestat_new_dict = portstat.get_cnstat_dict()
-        portstat.cnstat_diff_print(cnstat_new_dict, cnstat_dict, ratestat_new_dict, intf_list, use_json, print_all, errors_only, fec_stats_only, rates_only, detail)
+        portstat.cnstat_diff_print(cnstat_new_dict, cnstat_dict, ratestat_new_dict, intf_list, use_json, print_all, errors_only, fec_stats_only, rates_only, trim_stats_only, detail)
 
 if __name__ == "__main__":
     main()

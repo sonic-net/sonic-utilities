@@ -51,7 +51,7 @@ import concurrent.futures
 from ipaddress import ip_network
 from swsscommon import swsscommon
 from utilities_common import chassis
-from sonic_py_common import multi_asic
+from sonic_py_common import multi_asic, device_info
 from utilities_common.general import load_db_config
 
 APPL_DB_NAME = 'APPL_DB'
@@ -61,8 +61,8 @@ ASIC_KEY_PREFIX = 'SAI_OBJECT_TYPE_ROUTE_ENTRY:'
 
 SUBSCRIBE_WAIT_SECS = 1
 
-# Max of 2 minutes
-TIMEOUT_SECONDS = 120
+# Max of 2 minutes on normal devices and 5 minutes on virtual chassis
+TIMEOUT_SECONDS = 120 if not device_info.is_virtual_chassis() else 360
 
 UNIT_TESTING = 0
 
@@ -240,7 +240,7 @@ def checkout_rt_entry(k):
     :return (True, ip) or (False, None)
     """
     if k.startswith(ASIC_KEY_PREFIX):
-        e = k.lower().split("\"", -1)[3]
+        e = k.lower()[len(ASIC_KEY_PREFIX) + len('{"dest":"'):].split("\"", 1)[0]
         if not is_local(e):
             return True, e
     return False, None

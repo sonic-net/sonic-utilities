@@ -1,0 +1,18 @@
+{
+    "ACL_TABLE_TYPE_TABLE:MY_TYPE": {
+        "matches": "ETHER_TYPE,L4_DST_PORT_RANGE,L4_SRC_PORT_RANGE ",
+        "bind_point_types": "port"
+    },
+    "ACL_TABLE_TABLE:DATAACL2": {
+        "policy_desc": "Some ACL table",
+        "ports": "Ethernet0,Ethernet4",
+        "stage": "ingress",
+        "type": "MY_TYPE"
+    },
+    "ACL_RULE_TABLE:DATAACL2:R0": {
+        "L4_SRC_PORT_RANGE ": "90-95",
+        "L4_DST_PORT_RANGE ": "90-95",
+        "PACKET_ACTION": "FORWARD",
+        "PRIORITY": "999"
+    }
+}

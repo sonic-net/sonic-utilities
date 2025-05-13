@@ -806,6 +806,7 @@ save_frr_info() {
     save_vtysh "show mpls table" "frr.mpls.table"
     save_vtysh "show mpls fec" "frr.mpls.fec"
     save_vtysh "show nexthop-group rib" "frr.nhg.rib"
+    save_vtysh "show route-map" "frr.route_map"
     save_vtysh "show thread cpu" "frr.thread_cpu"
     save_vtysh "show thread poll" "frr.thread_poll"
     save_vtysh "show debugging hashtable" "frr.debugging_hashtable"
@@ -872,6 +873,87 @@ save_proc() {
     done
 
     chmod ugo+rw -R $DUMPDIR/$BASE/proc
+}
+
+###############################################################################
+# Given list of sys files, saves sys files to tar.
+# Globals:
+#  V
+#  TARDIR
+#  MKDIR
+#  CP
+#  DUMPDIR
+#  TAR
+#  RM
+#  BASE
+#  TARFILE
+#  NOOP
+# Arguments:
+#  *sysfiles: variable-length list of sys file paths to save
+# Returns:
+#  None
+###############################################################################
+save_sys() {
+    trap 'handle_error $? $LINENO' ERR
+    local sysfiles="$@"
+    local cp_cmd="sudo cp"
+    
+    $MKDIR $V -p $TARDIR/sys
+    for f in $sysfiles
+    do
+        if $NOOP; then
+            if [ -e $f ]; then
+                echo "$cp_cmd $V -r -p $f $TARDIR/sys"
+            fi
+        else
+            ( [ -e $f ] && $cp_cmd $V -r -p $f $TARDIR/sys ) || echo "$f not found" > $TARDIR/$f
+        fi
+    done
+
+    chmod ugo+rw -R $DUMPDIR/$BASE/sys
+}
+
+###############################################################################
+# Given list of pstore directories or files, saves subdirectories and files to tar.
+# Globals:
+#  V
+#  TARDIR
+#  MKDIR
+#  CP
+#  DUMPDIR
+#  TAR
+#  RM
+#  BASE
+#  TARFILE
+#  NOOP
+# Arguments:
+#  *pstorefiles: variable-length list of pstore file paths to save
+# Returns:
+#  None
+###############################################################################
+save_pstore() {
+    trap 'handle_error $? $LINENO' ERR
+    local pstorefiles="$@"
+    PSTORE_DIR_LIST_INFO_FILE="techsupport_pstore_dir_listing_info"
+    $MKDIR $V -p $TARDIR/pstore
+    
+    echo "==================================" > $TARDIR/pstore/$PSTORE_DIR_LIST_INFO_FILE
+    echo "/var/lib/systemd/pstore files info" >> $TARDIR/pstore/$PSTORE_DIR_LIST_INFO_FILE
+    echo "==================================" >> $TARDIR/pstore/$PSTORE_DIR_LIST_INFO_FILE
+    for f in $pstorefiles
+    do
+        if $NOOP; then
+            if [ -e $f ]; then
+                echo "$CP $V -r -p $f/* $TARDIR/pstore"
+            fi
+        else
+            ls --time-style='+%d-%m-%Y %H:%M:%S' -last $f >> $TARDIR/pstore/$PSTORE_DIR_LIST_INFO_FILE
+            ls --time-style='+%d-%m-%Y %H:%M:%S' -last $f/* >> $TARDIR/pstore/$PSTORE_DIR_LIST_INFO_FILE
+            ( [ -e $f ] && $CP $V -r -p $f/* $TARDIR/pstore ) || echo "$f not found" > $TARDIR/$f
+        fi
+    done
+
+    chmod ugo+rw -R $DUMPDIR/$BASE/pstore
 }
 
 ###############################################################################
@@ -1469,6 +1551,7 @@ collect_marvell_prestera() {
 ###############################################################################
 collect_broadcom() {
     trap 'handle_error $? $LINENO' ERR
+    local timeout_cmd="timeout --foreground ${TIMEOUT_MIN}m"
     local platform=$(show platform summary --json | python -c 'import sys, json; \
         print(json.load(sys.stdin)["platform"])')
     local hwsku=$(show platform summary --json | python -c 'import sys, json; \
@@ -1597,6 +1680,25 @@ collect_broadcom() {
 
     copy_from_masic_docker "syncd" "/var/log/diagrun.log" "/var/log/diagrun.log"
     copy_from_masic_docker "syncd" "/var/log/bcm_diag_post" "/var/log/bcm_diag_post"
+
+    # run 'hw-management-generate-dump.sh' script and save the result file
+    HW_DUMP_FILE=/usr/bin/hw-management-generate-dump.sh
+    if [ -f "$HW_DUMP_FILE" ]; then
+      ${CMD_PREFIX}${timeout_cmd} /usr/bin/hw-management-generate-dump.sh $ALLOW_PROCESS_STOP
+      ret=$?
+      if [ $ret -ne 0 ]; then
+        if [ $ret -eq $TIMEOUT_EXIT_CODE ]; then
+          echo "hw-management dump timedout after ${TIMEOUT_MIN} minutes."
+        else
+          echo "hw-management dump failed ..."
+        fi
+      else
+        save_file "/tmp/hw-mgmt-dump*" "hw-mgmt" false
+        rm -f /tmp/hw-mgmt-dump*
+      fi
+    else
+      echo "HW Mgmt dump script $HW_DUMP_FILE does not exist"
+    fi  
 }
 
 ###############################################################################
@@ -1735,6 +1837,8 @@ collect_nvidia_bluefield() {
     else
       echo "Platform dump script $DUMP_FILE does not exist"
     fi
+
+    save_cmd "get_component_versions.py" "component_versions"
 }
 
 ###############################################################################
@@ -1805,6 +1909,12 @@ save_log_files() {
         file_list="${file_list} ${file_list_2}"
     fi
 
+    # save log files creation info
+    files_ts_info=/tmp/files.timestamp.info
+    ls --time-style='+%d-%m-%Y %H:%M:%S' -last /var/log/* > $files_ts_info
+    save_file $files_ts_info "log" true
+    rm -f $files_ts_info
+    
     # gzip up all log files individually before placing them in the incremental tarball
     for file in $file_list; do
         dest_dir="log"
@@ -1966,7 +2076,7 @@ save_counter_snapshot() {
     save_cmd "echo $counter_t" "date.counter_$idx"
     save_cmd "show interface counters" "interface.counters_$idx"
     if ! $IS_SUPERVISOR; then
-       save_cmd_all_ns "show queue counters" "queue.counters_$idx"
+       save_cmd "show queue counters" "queue.counters_$idx"
     fi
     save_redis "COUNTERS_DB" "COUNTERS_DB_$idx"
 
@@ -2071,6 +2181,19 @@ main() {
     echo "[ Capture Proc State ] : $(($end_t-$start_t)) msec" >> $TECHSUPPORT_TIME_INFO
     wait
 
+    # capture /sys info - include acpi info and pre-process pstore info
+    save_sys /sys/firmware/acpi/tables /sys/fs/pstore &
+    end_t2=$(date +%s%3N)
+    echo "[ Capture Sys info ] : $(($end_t2-$end_t)) msec" >> $TECHSUPPORT_TIME_INFO
+    wait
+
+    # capture /var/lib/systemd/pstore info
+    start_t=$(date +%s%3N)
+    save_pstore /var/lib/systemd/pstore &
+    end_t=$(date +%s%3N)
+    echo "[ Capture pstore info ] : $(($end_t-$start_t)) msec" >> $TECHSUPPORT_TIME_INFO
+    wait
+    
     # Save all the processes within each docker
     save_cmd "show services" services.summary &
 
@@ -2141,10 +2264,10 @@ main() {
     wait
 
  	save_cmd "stpctl all" "stp.log"
-    save_cmd "show spanning_tree" "stp.show"
-    save_cmd "show spanning_tree statistics" "stp.stats"
-    save_cmd "show spanning_tree bpdu_guard" "stp.bg"
-    save_cmd "show spanning_tree root_guard" "stp.rg"
+    save_cmd "show spanning-tree" "stp.show"
+    save_cmd "show spanning-tree statistics" "stp.stats"
+    save_cmd "show spanning-tree bpdu_guard" "stp.bg"
+    save_cmd "show spanning-tree root_guard" "stp.rg"
 
     save_cmd "ps aux" "ps.aux" &
     save_cmd "top -b -n 1" "top" &

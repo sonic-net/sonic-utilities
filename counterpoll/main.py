@@ -395,17 +395,13 @@ def disable(ctx):
     fc_info['FLEX_COUNTER_STATUS'] = 'disable'
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "FLOW_CNT_ROUTE", fc_info)
 
-
 # ENI counter commands
-@cli.group()
+@click.group()
 @click.pass_context
 def eni(ctx):
     """ ENI counter commands """
     ctx.obj = ConfigDBConnector()
     ctx.obj.connect()
-    if not is_dpu(ctx.obj):
-        click.echo("ENI counters are not supported on non DPU platforms")
-        exit(1)
 
 
 @eni.command(name='interval')
@@ -436,6 +432,114 @@ def eni_disable(ctx):
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", ENI, eni_info)
 
 
+# WRED queue counter commands
+@cli.group()
+@click.pass_context
+def wredqueue(ctx):
+    """ WRED queue counter commands """
+    ctx.obj = ConfigDBConnector()
+    ctx.obj.connect()
+
+
+@wredqueue.command(name='interval')
+@click.argument('poll_interval', type=click.IntRange(100, 30000))
+@click.pass_context
+def wredqueue_interval(ctx, poll_interval):
+    """ Set wred queue counter query interval """
+    wred_queue_info = {}
+    wred_queue_info['POLL_INTERVAL'] = poll_interval
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "WRED_ECN_QUEUE", wred_queue_info)
+
+
+@wredqueue.command(name='enable')
+@click.pass_context
+def wredqueue_enable(ctx):
+    """ Enable wred queue counter query """
+    wred_queue_info = {}
+    wred_queue_info['FLEX_COUNTER_STATUS'] = 'enable'
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "WRED_ECN_QUEUE", wred_queue_info)
+
+
+@wredqueue.command(name='disable')
+@click.pass_context
+def wredqueue_disable(ctx):
+    """ Disable wred queue counter query """
+    wred_queue_info = {}
+    wred_queue_info['FLEX_COUNTER_STATUS'] = 'disable'
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "WRED_ECN_QUEUE", wred_queue_info)
+
+
+# WRED port counter commands
+@cli.group()
+@click.pass_context
+def wredport(ctx):
+    """ WRED port counter commands """
+    ctx.obj = ConfigDBConnector()
+    ctx.obj.connect()
+
+
+@wredport.command(name='interval')
+@click.argument('poll_interval', type=click.IntRange(100, 30000))
+@click.pass_context
+def wredport_interval(ctx, poll_interval):
+    """ Set wred port counter query interval """
+    wred_port_info = {}
+    wred_port_info['POLL_INTERVAL'] = poll_interval
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "WRED_ECN_PORT", wred_port_info)
+
+
+@wredport.command(name='enable')
+@click.pass_context
+def wredport_enable(ctx):
+    """ Enable wred port counter query """
+    wred_port_info = {}
+    wred_port_info['FLEX_COUNTER_STATUS'] = 'enable'
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "WRED_ECN_PORT", wred_port_info)
+
+
+@wredport.command(name='disable')
+@click.pass_context
+def wredport_disable(ctx):
+    """ Disable wred port counter query """
+    wred_port_info = {}
+    wred_port_info['FLEX_COUNTER_STATUS'] = 'disable'
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "WRED_ECN_PORT", wred_port_info)
+
+
+# SRv6 counter commands
+@cli.group()
+@click.pass_context
+def srv6(ctx):
+    """ SRv6 counter commands """
+    ctx.obj = ConfigDBConnector()
+    ctx.obj.connect()
+
+
+@srv6.command()
+@click.pass_context
+@click.argument('poll_interval', type=click.IntRange(1000, 30000))
+def interval(ctx, poll_interval):  # noqa: F811
+    """ Set SRv6 counter query interval """
+    srv6_info = {'POLL_INTERVAL': poll_interval}
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "SRV6", srv6_info)
+
+
+@srv6.command()
+@click.pass_context
+def enable(ctx):  # noqa: F811
+    """ Enable SRv6 counter query """
+    srv6_info = {'FLEX_COUNTER_STATUS': ENABLE}
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "SRV6", srv6_info)
+
+
+@srv6.command()
+@click.pass_context
+def disable(ctx):  # noqa: F811
+    """ Disable SRv6 counter query """
+    srv6_info = {'FLEX_COUNTER_STATUS': DISABLE}
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "SRV6", srv6_info)
+
+
 @cli.command()
 def show():
     """ Show the counter configuration """
@@ -454,6 +558,9 @@ def show():
     trap_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'FLOW_CNT_TRAP')
     route_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'FLOW_CNT_ROUTE')
     eni_info = configdb.get_entry('FLEX_COUNTER_TABLE', ENI)
+    wred_queue_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'WRED_ECN_QUEUE')
+    wred_port_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'WRED_ECN_PORT')
+    srv6_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'SRV6')
 
     header = ("Type", "Interval (in ms)", "Status")
     data = []
@@ -482,6 +589,15 @@ def show():
     if route_info:
         data.append(["FLOW_CNT_ROUTE_STAT", route_info.get("POLL_INTERVAL", DEFLT_10_SEC),
                      route_info.get("FLEX_COUNTER_STATUS", DISABLE)])
+    if wred_queue_info:
+        data.append(["WRED_ECN_QUEUE_STAT", wred_queue_info.get("POLL_INTERVAL", DEFLT_10_SEC),
+                    wred_queue_info.get("FLEX_COUNTER_STATUS", DISABLE)])
+    if wred_port_info:
+        data.append(["WRED_ECN_PORT_STAT", wred_port_info.get("POLL_INTERVAL", DEFLT_1_SEC),
+                    wred_port_info.get("FLEX_COUNTER_STATUS", DISABLE)])
+    if srv6_info:
+        data.append(["SRV6_STAT", srv6_info.get("POLL_INTERVAL", DEFLT_10_SEC),
+                    srv6_info.get("FLEX_COUNTER_STATUS", DISABLE)])
 
     if is_dpu(configdb) and eni_info:
         data.append(["ENI_STAT", eni_info.get("POLL_INTERVAL", DEFLT_10_SEC),
@@ -489,48 +605,25 @@ def show():
 
     click.echo(tabulate(data, headers=header, tablefmt="simple", missingval=""))
 
-def _update_config_db_flex_counter_table(status, filename):
-    """ Update counter configuration in config_db file """
-    with open(filename) as config_db_file:
-        config_db = json.load(config_db_file)
+"""
+The list of dynamic commands that are added on a specific condition.
+Format:
+    (click group/command, callback function)
+"""
+dynamic_commands = [
+    (eni, is_dpu)
+]
 
-    write_config_db = False
-    if "FLEX_COUNTER_TABLE" in config_db:
-        if status != "delay":
-            for counter, counter_config in config_db["FLEX_COUNTER_TABLE"].items():
-                if "FLEX_COUNTER_STATUS" in counter_config and \
-                    counter_config["FLEX_COUNTER_STATUS"] is not status:
-                    counter_config["FLEX_COUNTER_STATUS"] = status
-                    write_config_db = True
 
-        elif status == "delay":
-            write_config_db = True
-            for key in config_db["FLEX_COUNTER_TABLE"].keys():
-                config_db["FLEX_COUNTER_TABLE"][key].update({"FLEX_COUNTER_DELAY_STATUS":"true"})
+def register_dynamic_commands(cmds):
+    """
+    Dynamically register commands based on condition callback.
+    """
+    db = ConfigDBConnector()
+    db.connect()
+    for cmd, cb in cmds:
+        if cb(db):
+            cli.add_command(cmd)
 
-    if write_config_db:
-        with open(filename, 'w') as config_db_file:
-            json.dump(config_db, config_db_file, indent=4)
 
-# Working on Config DB
-@cli.group()
-def config_db():
-    """ Config DB counter commands """
-
-@config_db.command()
-@click.argument("filename", default="/etc/sonic/config_db.json", type=click.Path(exists=True))
-def enable(filename):
-    """ Enable counter configuration in config_db file """
-    _update_config_db_flex_counter_table("enable", filename)
-
-@config_db.command()
-@click.argument("filename", default="/etc/sonic/config_db.json", type=click.Path(exists=True))
-def disable(filename):
-    """ Disable counter configuration in config_db file """
-    _update_config_db_flex_counter_table("disable", filename)
-
-@config_db.command()
-@click.argument("filename", default="/etc/sonic/config_db.json", type=click.Path(exists=True))
-def delay(filename):
-    """ Delay counters in config_db file """
-    _update_config_db_flex_counter_table("delay", filename)
+register_dynamic_commands(dynamic_commands)

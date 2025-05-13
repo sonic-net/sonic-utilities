@@ -136,6 +136,11 @@
                 "type": "LeafRouter"
             }
         },
+        "INTERFACE": {
+            "Ethernet2": {
+                "vnet_name": "Vnet3"
+            }
+        },
         "PORT": {
             "Ethernet0": {
                 "alias": "fortyGigE0/0",
@@ -232,7 +237,10 @@
         "VLAN_INTERFACE": {
             "Vlan1000": {},
             "Vlan1000|192.168.0.1/21": {},
-            "Vlan1000|2603:10b0:b13:c70::1/64": {}
+            "Vlan1000|2603:10b0:b13:c70::1/64": {},
+            "Vlan100": {
+                "vnet_name": "Vnet2"
+            }
         },
         "VLAN_MEMBER": {
             "Vlan1000|Ethernet12": {
@@ -242,6 +250,12 @@
                 "tagging_mode": "untagged"
             },
             "Vlan1000|Ethernet28": {
+            }
+        },
+        "VLAN_SUB_INTERFACE": {
+            "Ethernet0.10": {
+                "vlan": 10,
+                "vnet_name": "Vnet1"
             }
         },
         "WRED_PROFILE": {

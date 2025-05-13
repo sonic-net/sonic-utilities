@@ -86,3 +86,9 @@ class TestMmuConfig(TestMmuConfigBase):
 
     def test_mmu_staticth_config(self):
         self.executor(testData['mmu_cfg_static_th'])
+
+    def test_mmu_trim_config(self):
+        self.executor(testData['mmu_cfg_trim'])
+
+    def test_mmu_trim_invalid_config(self):
+        self.executor(testData['mmu_cfg_trim_invalid'])

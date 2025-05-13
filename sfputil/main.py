@@ -17,10 +17,15 @@ import subprocess
 import click
 import sonic_platform
 import sonic_platform_base.sonic_sfp.sfputilhelper
+from sfputil.debug import debug
 from sonic_platform_base.sfp_base import SfpBase
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from natsort import natsorted
 from sonic_py_common import device_info, logger, multi_asic
+from utilities_common import platform_sfputil_helper
+from utilities_common.platform_sfputil_helper import (
+    get_first_subport
+)
 from utilities_common.sfp_helper import covert_application_advertisement_to_output_string
 from utilities_common.sfp_helper import QSFP_DATA_MAP
 from tabulate import tabulate
@@ -604,6 +609,13 @@ def cli():
     if not load_port_config():
         sys.exit(ERROR_PORT_CONFIG_LOAD)
 
+    # Generic way to load platform-specific sfputil
+    # and chassis classes
+    platform_sfputil_helper.load_platform_sfputil()
+    platform_sfputil_helper.load_chassis()
+    platform_sfputil_helper.platform_sfputil_read_porttab_mappings()
+
+cli.add_command(debug)
 
 # 'show' subgroup
 @cli.group()
@@ -688,9 +700,10 @@ def eeprom(port, dump_dom, namespace):
                             output += "DOM values not supported for flat memory module\n"
                             continue
                     try:
-                        xcvr_dom_info = platform_chassis.get_sfp(physical_port).get_transceiver_bulk_status()
+                        xcvr_dom_info = platform_chassis.get_sfp(physical_port).get_transceiver_dom_real_value()
                     except NotImplementedError:
-                        click.echo("Sfp.get_transceiver_bulk_status() is currently not implemented for this platform")
+                        click.echo("Sfp.get_transceiver_dom_real_value() is currently not implemented "
+                                   "for this platform")
                         sys.exit(ERROR_NOT_IMPLEMENTED)
 
                     try:
@@ -1070,9 +1083,9 @@ def fetch_error_status_from_state_db(port, state_db):
     """
     status = {}
     if port:
-        status[port] = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_STATUS|{}'.format(port))
+        status[port] = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_STATUS_SW|{}'.format(port))
     else:
-        ports = state_db.keys(state_db.STATE_DB, 'TRANSCEIVER_STATUS|*')
+        ports = state_db.keys(state_db.STATE_DB, 'TRANSCEIVER_STATUS_SW|*')
         for key in ports:
             status[key.split('|')[1]] = state_db.get_all(state_db.STATE_DB, key)
 
@@ -1377,7 +1390,11 @@ def enable(port_name):
 
 
 def update_firmware_info_to_state_db(port_name):
-    physical_port = logical_port_to_physical_port_index(port_name)
+    first_subport = get_first_subport(port_name)
+    if first_subport is None:
+        click.echo("Error: Unable to get first subport for {} while updating FW info to DB".format(port_name))
+        return
+    physical_port = logical_port_to_physical_port_index(first_subport)
 
     namespaces = multi_asic.get_front_end_namespaces()
     for namespace in namespaces:
@@ -1387,7 +1404,7 @@ def update_firmware_info_to_state_db(port_name):
             transceiver_firmware_info_dict = platform_chassis.get_sfp(physical_port).get_transceiver_info_firmware_versions()
             if transceiver_firmware_info_dict is not None:
                 for key, value in transceiver_firmware_info_dict.items():
-                    state_db.set(state_db.STATE_DB, 'TRANSCEIVER_FIRMWARE_INFO|{}'.format(port_name), key, value)
+                    state_db.set(state_db.STATE_DB, 'TRANSCEIVER_FIRMWARE_INFO|{}'.format(first_subport), key, value)
 
 # 'firmware' subgroup
 @cli.group()
@@ -1963,117 +1980,6 @@ def get_overall_offset_sff8472(api, page, offset, size, wire_addr):
         if size + offset - 1 > MAX_OFFSET_FOR_A2H:
             raise ValueError(f'Invalid size {size} for wire address {wire_addr}, valid range: [1, {255 - offset + 1}]')
         return page * PAGE_SIZE + offset + PAGE_SIZE_FOR_A0H
-
-
-# 'debug' subgroup
-@cli.group()
-def debug():
-    """Module debug and diagnostic control"""
-    pass
-
-
-# 'loopback' subcommand
-@debug.command()
-@click.argument('port_name', required=True)
-@click.argument('loopback_mode', required=True,
-                type=click.Choice(["host-side-input", "host-side-output",
-                                   "media-side-input", "media-side-output"]))
-@click.argument('enable', required=True, type=click.Choice(["enable", "disable"]))
-def loopback(port_name, loopback_mode, enable):
-    """Set module diagnostic loopback mode
-    """
-    physical_port = logical_port_to_physical_port_index(port_name)
-    sfp = platform_chassis.get_sfp(physical_port)
-
-    if is_port_type_rj45(port_name):
-        click.echo("{}: This functionality is not applicable for RJ45 port".format(port_name))
-        sys.exit(EXIT_FAIL)
-
-    if not is_sfp_present(port_name):
-        click.echo("{}: SFP EEPROM not detected".format(port_name))
-        sys.exit(EXIT_FAIL)
-
-    try:
-        api = sfp.get_xcvr_api()
-    except NotImplementedError:
-        click.echo("{}: This functionality is not implemented".format(port_name))
-        sys.exit(ERROR_NOT_IMPLEMENTED)
-
-    namespace = multi_asic.get_namespace_for_port(port_name)
-    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
-    if config_db is not None:
-        config_db.connect()
-        try:
-            subport = int(config_db.get(config_db.CONFIG_DB, f'PORT|{port_name}', 'subport'))
-        except TypeError:
-            click.echo(f"{port_name}: subport is not present in CONFIG_DB")
-            sys.exit(EXIT_FAIL)
-
-        # If subport is set to 0, assign a default value of 1 to ensure valid subport configuration
-        if subport == 0:
-            subport = 1
-    else:
-        click.echo(f"{port_name}: Failed to connect to CONFIG_DB")
-        sys.exit(EXIT_FAIL)
-
-    state_db = SonicV2Connector(use_unix_socket_path=False, namespace=namespace)
-    if state_db is not None:
-        state_db.connect(state_db.STATE_DB)
-        try:
-            host_lane_count = int(state_db.get(state_db.STATE_DB,
-                                               f'TRANSCEIVER_INFO|{port_name}',
-                                               'host_lane_count'))
-        except TypeError:
-            click.echo(f"{port_name}: host_lane_count is not present in STATE_DB")
-            sys.exit(EXIT_FAIL)
-
-        try:
-            media_lane_count = int(state_db.get(state_db.STATE_DB,
-                                                f'TRANSCEIVER_INFO|{port_name}',
-                                                'media_lane_count'))
-        except TypeError:
-            click.echo(f"{port_name}: media_lane_count is not present in STATE_DB")
-            sys.exit(EXIT_FAIL)
-    else:
-        click.echo(f"{port_name}: Failed to connect to STATE_DB")
-        sys.exit(EXIT_FAIL)
-
-    if 'host-side' in loopback_mode:
-        lane_mask = get_subport_lane_mask(subport, host_lane_count)
-    elif 'media-side' in loopback_mode:
-        lane_mask = get_subport_lane_mask(subport, media_lane_count)
-    else:
-        lane_mask = 0
-
-    try:
-        status = api.set_loopback_mode(loopback_mode,
-                                       lane_mask=lane_mask,
-                                       enable=enable == 'enable')
-    except AttributeError:
-        click.echo("{}: Set loopback mode is not applicable for this module".format(port_name))
-        sys.exit(ERROR_NOT_IMPLEMENTED)
-    except TypeError:
-        click.echo("{}: Set loopback mode failed. Parameter is not supported".format(port_name))
-        sys.exit(EXIT_FAIL)
-
-    if status:
-        click.echo("{}: {} {} loopback".format(port_name, enable, loopback_mode))
-    else:
-        click.echo("{}: {} {} loopback failed".format(port_name, enable, loopback_mode))
-        sys.exit(EXIT_FAIL)
-
-
-def get_subport_lane_mask(subport, lane_count):
-    """Get the lane mask for the given subport and lane count
-
-    Args:
-        subport (int): Subport number
-        lane_count (int): Lane count for the subport
-
-    Returns:
-        int: Lane mask for the given subport and lane count
-    """
-    return ((1 << lane_count) - 1) << ((subport - 1) * lane_count)
 
 
 if __name__ == '__main__':
