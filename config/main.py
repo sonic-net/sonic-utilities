@@ -2135,15 +2135,15 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
     # get the device type
     device_type = _get_device_type()
     if device_type != 'MgmtToRRouter' and device_type != 'MgmtTsToR' and device_type != 'BmcMgmtToRRouter' and device_type != 'EPMS':
-        start_pfcwd = True
+        # default behavior to call pfcwd start_default for all platforms
+        default_pfcwd_status = 'enable'
         if override_config and config_to_check:
             # If pfcwd is disabled in the golden config, skip starting pfcwd
             # This is needed for platform which doesn't support lossless traffic.
-            device_metadata = config_to_check.get('DEVICE_METADATA', {})
-            default_pfcwd_status = device_metadata.get('localhost', {}).get('default_pfcwd_status')
-            if default_pfcwd_status == 'disable':
-                start_pfcwd = False
-        if start_pfcwd:
+            override_metadata = config_to_check.get('DEVICE_METADATA', {}).get('localhost', {})
+            if 'default_pfcwd_status' in override_metadata:
+                default_pfcwd_status = override_metadata['default_pfcwd_status'].lower()
+        if default_pfcwd_status == 'enable':
             clicommon.run_command(['pfcwd', 'start_default'], display_cmd=True)
 
     # Write latest db version string into db
