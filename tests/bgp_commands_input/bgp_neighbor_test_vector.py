@@ -75,9 +75,9 @@ Read thread: on  Write thread: on  FD used: 28
 """
 
 bgp_v4_neighbors_output_invalid_vrf = \
-"""
-% No BGP neighbors found
-"""
+  """
+  % No BGP neighbors found
+  """
 
 bgp_v4_neighbor_invalid = \
 """Error:  Bgp neighbor 20.1.1.1 not configured"""
@@ -235,9 +235,9 @@ Read thread: on  Write thread: on  FD used: 30
 """
 
 bgp_v6_neighbors_output_invalid_vrf = \
-"""
-% No BGP neighbors found
-"""
+  """
+  % No BGP neighbors found
+  """
 
 bgp_v6_neighbor_output_adv_routes = \
 """

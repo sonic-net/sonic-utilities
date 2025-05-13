@@ -51,24 +51,24 @@ Origin codes:  i - IGP, e - EGP, ? - incomplete
 """
 
 bgp_v4_network_vrf = \
-"""
-BGP table version is 6327, local router ID is 10.1.0.32, vrf id 81
-Default local pref 100, local AS 65100
-Status codes:  s suppressed, d damped, h history, * valid, > best, = multipath,
-               i internal, r RIB-failure, S Stale, R Removed
-Nexthop codes: @NNN nexthop's vrf id, < announce-nh-self
-Origin codes:  i - IGP, e - EGP, ? - incomplete
+  """
+  BGP table version is 6327, local router ID is 10.1.0.32, vrf id 81
+  Default local pref 100, local AS 65100
+  Status codes:  s suppressed, d damped, h history, * valid, > best, = multipath,
+                i internal, r RIB-failure, S Stale, R Removed
+  Nexthop codes: @NNN nexthop's vrf id, < announce-nh-self
+  Origin codes:  i - IGP, e - EGP, ? - incomplete
 
-   Network          Next Hop            Metric LocPrf Weight Path
-*= 10.1.0.32/32     10.0.0.62                0             0 65100 i
-*= 100.1.0.32/32    0.0.0.0                  0         32768 i
-*= 192.168.0.0/21   10.0.0.62                0             0 65100 i
-"""
+    Network          Next Hop            Metric LocPrf Weight Path
+  *= 10.1.0.32/32     10.0.0.62                0             0 65100 i
+  *= 100.1.0.32/32    0.0.0.0                  0         32768 i
+  *= 192.168.0.0/21   10.0.0.62                0             0 65100 i
+  """
 
 bgp_v4_network_invalid_vrf = \
-"""
-View/Vrf Vnet_invalid is unknown
-"""
+  """
+  View/Vrf Vnet_invalid is unknown
+  """
 
 bgp_v4_network_ip_address = \
 """
@@ -174,24 +174,24 @@ Origin codes:  i - IGP, e - EGP, ? - incomplete
 """
 
 bgp_v6_network_vrf = \
-"""
-BGP table version is 6407, local router ID is 10.1.0.32, vrf id 81
-Default local pref 100, local AS 65100
-Status codes:  s suppressed, d damped, h history, * valid, > best, = multipath,
-               i internal, r RIB-failure, S Stale, R Removed
-Nexthop codes: @NNN nexthop's vrf id, < announce-nh-self
-Origin codes:  i - IGP, e - EGP, ? - incomplete
+  """
+  BGP table version is 6407, local router ID is 10.1.0.32, vrf id 81
+  Default local pref 100, local AS 65100
+  Status codes:  s suppressed, d damped, h history, * valid, > best, = multipath,
+                i internal, r RIB-failure, S Stale, R Removed
+  Nexthop codes: @NNN nexthop's vrf id, < announce-nh-self
+  Origin codes:  i - IGP, e - EGP, ? - incomplete
 
-   Network          Next Hop            Metric LocPrf Weight Path
-*> 2064:100::1d/128 fc00::72                               0 64600 i
-*= 20c0:a810::/64   fc00::7e                               0 64600 65502 i
-*= 20c0:a820::/64   fc00::7e                               0 64600 65504 i
-"""
+    Network          Next Hop            Metric LocPrf Weight Path
+  *> 2064:100::1d/128 fc00::72                               0 64600 i
+  *= 20c0:a810::/64   fc00::7e                               0 64600 65502 i
+  *= 20c0:a820::/64   fc00::7e                               0 64600 65504 i
+  """
 
 bgp_v6_network_invalid_vrf = \
-"""
-View/Vrf Vnet_invalid is unknown
-"""
+  """
+  View/Vrf Vnet_invalid is unknown
+  """
 
 bgp_v6_network_ip_address = \
 """

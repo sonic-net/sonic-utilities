@@ -4,12 +4,12 @@ import os
 import pytest
 
 from click.testing import CliRunner
-from .bgp_commands_input.bgp_neighbor_test_vector import *
+from .bgp_commands_input import bgp_neighbors_test_vector
 
 
 def executor(test_vector, show):
     runner = CliRunner()
-    input = testData[test_vector]
+    input = bgp_neighbors_test_vector.testData[test_vector]
     if test_vector.startswith('bgp_v6'):
         exec_cmd = show.cli.commands["ipv6"].commands["bgp"].commands["neighbors"]
     else:
@@ -21,7 +21,7 @@ def executor(test_vector, show):
 
 def executor_vrf(test_vector, show):
     runner = CliRunner()
-    input = testData[test_vector]
+    input = bgp_neighbors_test_vector.testData[test_vector]
     if test_vector.startswith('bgp_v6'):
         exec_cmd = show.cli.commands["ipv6"].commands["bgp"].commands["vrf"]
     else:
