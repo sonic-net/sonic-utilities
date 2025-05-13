@@ -161,7 +161,7 @@ def build_json(port, cnstat, all=False, trim=False, voq=False):
     return out
 
 def run_queuestat(save_fresh_stats, port_to_show_stats, json_opt, non_zero, ns, db, voq, trim, all_):
-    queuestat = Queuestat(ns, db, all_, trim voq)
+    queuestat = Queuestat(ns, db, all_, trim, voq)
     if save_fresh_stats:
         queuestat.save_fresh_stats()
         return
@@ -232,7 +232,7 @@ class Queuestat(object):
         if self.voq:
             counter_bucket_dict.update(voq_counter_bucket_dict)
         else:
-            counter_bucket_dict.update(trim_counter_bucket_dict) 
+            counter_bucket_dict.update(trim_counter_bucket_dict)
 
         if device_info.is_supervisor():
             self.aggregate_voq_stats()
@@ -271,7 +271,7 @@ class Queuestat(object):
                     for counter_name in counter_bucket_dict:
                         self.voq_stats.setdefault(sysPort, {}).setdefault(idx, {}).setdefault(counter_name, 0)
                         oid = counters_voq_name_map[voq]
-                        counter_data = asic_counters_db.get(asic_counters_db.COUNTERS_DB, "COUNTERS:"+oid, counter_name)
+                        counter_data = asic_counters_db.hget("COUNTERS:"+oid, counter_name)
                         if counter_data is not None:
                             self.voq_stats[sysPort][idx][counter_name] += int(counter_data)
 
@@ -647,7 +647,7 @@ def main(port, clear, delete, json_opt, all, trim, voq, non_zero, namespace):
 
 
     if device_info.is_supervisor() and namespace is None:
-        run_queuestat(save_fresh_stats, port_to_show_stats, json_opt, non_zero, namespace, None, voq)
+        run_queuestat(save_fresh_stats, port_to_show_stats, json_opt, non_zero, namespace, None, voq, trim, all)
     else:
         queuestat_wrapper = QueuestatWrapper(namespace, all, trim, voq)
         queuestat_wrapper.run(save_fresh_stats, port_to_show_stats, json_opt, non_zero)
