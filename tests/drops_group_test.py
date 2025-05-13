@@ -18,7 +18,7 @@ import clear.main as clear
 expected_counter_capabilities = """\
 Counter Type           Total
 -------------------  -------
-PORT_INGRESS_DROPS         4
+PORT_INGRESS_DROPS         5
 SWITCH_EGRESS_DROPS        2
 
 PORT_INGRESS_DROPS
@@ -123,6 +123,12 @@ The persistent drops recorded on DEBUG_0 are:
 2025-05-06 01:42:47: Persistent packet drops detected on Ethernet1
 """
 
+expected_drop_monitor_persistent_drop_missing_counter = """\
+Usage: persistent-drops [OPTIONS] COUNTER_NAME
+Try "persistent-drops --help" for help.
+
+Error: Missing argument "COUNTER_NAME".
+"""
 
 def remove_tmp_dropstat_file():
     # remove the tmp portstat
@@ -194,6 +200,19 @@ class TestDropCounters(object):
         print(result.output)
         assert result.output == expected_drop_monitor_persistent_drops
 
+    def test_show_drop_monitor_persistent_drops_no_counter_name(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["dropcounters"].commands["persistent-drops"], [])
+        print(result.output)
+        assert result.exit_code == 2
+        assert result.output == expected_drop_monitor_persistent_drop_missing_counter
+
+    def test_show_drop_monitor_persistent_drops_invalid_counter_name(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["dropcounters"].commands["persistent-drops"], ['NONEXISTENT_COUNTER'])
+        print(result.output)
+        assert result.exit_code == 1
+
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
@@ -235,6 +254,14 @@ class TestDropCountersMasic(object):
                                ["-g", "PACKET_DROPS", '-n', 'asic0'])
         print(result.output)
         assert result.output == "For namespace: asic0\n" + expected_counter_configuration_with_group
+
+    def test_show_drop_monitor_persistent_drops(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["dropcounters"].commands["persistent-drops"],
+                               ['DEBUG_0', '-n', 'asic0'])
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == "No persistent drop alerts have been recorded\n"
 
     @classmethod
     def teardown_class(cls):

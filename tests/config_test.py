@@ -3352,14 +3352,18 @@ class TestConfigDropcounters(object):
         counter_type = 'PORT_INGRESS_DROPS'
         reasons = '[EXCEEDS_L2_MTU,DECAP_ERROR]'
         alias = 'BAD_DROPS'
-        dct = '10'  # Drop count threshold
         group = 'BAD'
         desc = 'more port ingress drops'
+
+        # Parameters for configurable drop monitor
+        dct = '10'  # Drop count threshold
+        ict = '2'  # Incident count threshold
+        window = '300'
 
         runner = CliRunner()
         result = runner.invoke(config.config.commands['dropcounters'].commands['install'],
                                [counter_name, counter_type, reasons, '-d', desc, '-g', group,
-                               '-a', alias, '-dct', dct])
+                               '-a', alias, '-w', window, '-dct', dct, '-ict', ict])
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
@@ -3368,7 +3372,8 @@ class TestConfigDropcounters(object):
                                                   '-t', str(counter_type),
                                                   '-r', str(reasons), '-a', str(alias),
                                                   '-g', str(group), '-d', str(desc),
-                                                  '-dct', str(dct)],
+                                                  '-w', str(window), '-dct', str(dct),
+                                                  '-ict', str(ict)],
                                                  display_cmd=False)
 
     @patch('utilities_common.cli.run_command')
@@ -3393,34 +3398,6 @@ class TestConfigDropcounters(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['dropconfig', '-c', 'add', '-n', str(counter_name),
                                                   '-r', str(reasons)], display_cmd=True)
-
-    @patch('utilities_common.cli.run_command')
-    def test_enable_drop_monitor(self, mock_run_command):
-        counter_name = 'DEBUG_2'
-        dct = '10'  # Drop count threshold
-        ict = '2'  # Incident count threshold
-        window = '300'
-        runner = CliRunner()
-        result = runner.invoke(config.config.commands['dropcounters'].commands['enable-monitor'],
-                               ['-c', counter_name, '-w', window, '-dct', dct, '-ict', ict, '-v'])
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['dropconfig', '-c', 'enable_drop_monitor', '-n',
-                                                  str(counter_name), '-w', str(window), '-dct', str(dct),
-                                                  '-ict', str(ict)], display_cmd=True)
-
-    @patch('utilities_common.cli.run_command')
-    def test_disable_drop_monitor(self, mock_run_command):
-        counter_name = 'DEBUG_2'
-        runner = CliRunner()
-        result = runner.invoke(config.config.commands['dropcounters'].commands['disable-monitor'],
-                               ['-c', counter_name, '-v'])
-        print(result.exit_code)
-        print(result.output)
-        assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['dropconfig', '-c', 'disable_drop_monitor',
-                                                  '-n', str(counter_name)], display_cmd=True)
 
     @patch('utilities_common.cli.run_command')
     def test_remove_reasons(self, mock_run_command):
@@ -3470,6 +3447,39 @@ class TestConfigDropcountersMasic(object):
         mock_run_command.assert_called_once_with(['dropconfig', '-c', 'install', '-n', str(counter_name),
                                                   '-t', str(counter_type), '-r', str(reasons), '-a', str(alias),
                                                   '-g', str(group), '-d', str(desc),
+                                                  '-ns', str(namespace)], display_cmd=False)
+
+    @patch('utilities_common.cli.run_command')
+    def test_enable_monitor_multi_asic(self, mock_run_command):
+        counter_name = 'DEBUG_2'
+        window = '300'
+        dct = '10'  # Drop count threshold
+        ict = '5'  # Incident count threshold
+        namespace = 'asic0'
+
+        runner = CliRunner()
+        result = runner.invoke(config.config.commands['dropcounters'].commands['enable-monitor'],
+                               ['-c', counter_name, '-w', window, '-dct', dct, '-ict', ict,
+                               '-n', namespace])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(['dropconfig', '-c', 'enable_drop_monitor', '-n', str(counter_name),
+                                                  '-w', str(window), '-dct', str(dct), '-ict', str(ict),
+                                                  '-ns', str(namespace)], display_cmd=False)
+
+    @patch('utilities_common.cli.run_command')
+    def test_disable_monitor_multi_asic(self, mock_run_command):
+        counter_name = 'DEBUG_2'
+        namespace = 'asic0'
+
+        runner = CliRunner()
+        result = runner.invoke(config.config.commands['dropcounters'].commands['disable-monitor'],
+                               ['-c', counter_name, '-n', namespace])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(['dropconfig', '-c', 'disable_drop_monitor', '-n', str(counter_name),
                                                   '-ns', str(namespace)], display_cmd=False)
 
     @patch('utilities_common.cli.run_command')
