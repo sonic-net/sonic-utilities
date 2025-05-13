@@ -56,8 +56,7 @@ from utilities_common.general import load_db_config
 
 APPL_DB_NAME = 'APPL_DB'
 ASIC_DB_NAME = 'ASIC_DB'
-ASIC_TABLE_NAME = 'ASIC_STATE'
-ASIC_KEY_PREFIX = 'SAI_OBJECT_TYPE_ROUTE_ENTRY:'
+ASIC_TABLE_NAME = 'ASIC_STATE:SAI_OBJECT_TYPE_ROUTE_ENTRY'
 
 SUBSCRIBE_WAIT_SECS = 1
 
@@ -233,16 +232,15 @@ def diff_sorted_lists(t1, t2):
     return t1_miss, t2_miss
 
 
-def checkout_rt_entry(k):
+def extract_non_local_ip(key):
     """
-    helper to filter out correct keys and strip out IP alone.
-    :param ip: key to check as string
-    :return (True, ip) or (False, None)
+    Extracts IP address from the key if it is not local.
+    :param key: key to check as string
+    :return (True, ip_str) or (False, None)
     """
-    if k.startswith(ASIC_KEY_PREFIX):
-        e = k.lower()[len(ASIC_KEY_PREFIX) + len('{"dest":"'):].split("\"", 1)[0]
-        if not is_local(e):
-            return True, e
+    ip_str = key.lower()[len(':{"dest":"'):].split("\"", 1)[0]
+    if not is_local(ip_str):
+        return True, ip_str
     return False, None
 
 
@@ -265,7 +263,7 @@ def get_subscribe_updates(selector, subs):
             key, op, val = subs.pop()
             if not key:
                 break
-            res, e = checkout_rt_entry(key)
+            res, e = extract_non_local_ip(key)
             if res:
                 if op == "SET":
                     adds.append(e)
@@ -315,10 +313,10 @@ def get_asicdb_routes(namespace):
 
     rt = []
     while True:
-        k, _, _ = subs.pop()
-        if not k:
+        key, _, _ = subs.pop()
+        if not key:
             break
-        res, e = checkout_rt_entry(k)
+        res, e = extract_non_local_ip(key)
         if res:
             rt.append(e)
 
