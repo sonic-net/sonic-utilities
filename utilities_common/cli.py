@@ -235,6 +235,14 @@ def ipaddress_type(val):
     return ip_version.version
 
 
+def is_mac_address_valid(mac):
+    """Check if MAC address is valid
+    """
+    if not mac:
+        return False
+    return bool(re.match("^([0-9A-Fa-f]{2}[:]){5}([0-9A-Fa-f]{2})$", mac))
+
+
 def is_ip_prefix_in_key(key):
     '''
     Function to check if IP address is present in the key. If it
@@ -420,6 +428,16 @@ def interface_is_in_portchannel(portchannel_member_table, interface_name):
         if intf == interface_name:
             return True
 
+    return False
+
+
+def is_vxlan_tunnel_exists(config_db, vxlan_tunnel_name):
+    """Check if VXLAN tunnel exists
+    """
+    keys = config_db.get_keys("VXLAN_TUNNEL")
+    if keys:
+        if vxlan_tunnel_name in keys:
+            return True
     return False
 
 

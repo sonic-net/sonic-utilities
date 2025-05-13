@@ -422,24 +422,6 @@ def is_vrf_exists(config_db, vrf_name):
     return False
 
 
-def is_vxlan_tunnel_exists(config_db, vxlan_tunnel_name):
-    """Check if VXLAN tunnel exists
-    """
-    keys = config_db.get_keys("VXLAN_TUNNEL")
-    if keys:
-        if vxlan_tunnel_name in keys:
-            return True
-    return False
-
-
-def is_mac_address_valid(mac):
-    """Check if MAC address is valid
-    """
-    if not mac:
-        return False
-    return bool(re.match("^([0-9A-Fa-f]{2}[:]){5}([0-9A-Fa-f]{2})$", mac))
-
-
 def is_vnet_exists(config_db, vnet_name):
     """Check if VNET exists
     """
@@ -9461,7 +9443,7 @@ def add_vnet(ctx, vnet_name, vni, vxlan_tunnel, peer_list, guid, scope, advertis
 
     if not vni.isdigit() or clicommon.vni_id_is_valid(int(vni)) is False:
         ctx.fail("Invalid VNI {}. Valid range [1 to 16777215].".format(vni))
-    if not is_vxlan_tunnel_exists(config_db, vxlan_tunnel):
+    if not clicommon.is_vxlan_tunnel_exists(config_db, vxlan_tunnel):
         ctx.fail("Vxlan tunnel {} does not exist!".format(vxlan_tunnel))
 
     subvnet_dict = {}
@@ -9488,12 +9470,12 @@ def add_vnet(ctx, vnet_name, vni, vxlan_tunnel, peer_list, guid, scope, advertis
         subvnet_dict["advertise_prefix"] = advertise_prefix
 
     if overlay_dmac:
-        if not is_mac_address_valid(overlay_dmac):
+        if not clicommon.is_mac_address_valid(overlay_dmac):
             ctx.fail("Invalid MAC for overlay dmac {} .".format(overlay_dmac))
         subvnet_dict["overlay_dmac"] = overlay_dmac
 
     if src_mac:
-        if not is_mac_address_valid(src_mac):
+        if not clicommon.is_mac_address_valid(src_mac):
             ctx.fail("Invalid MAC for src mac {} .".format(src_mac))
         subvnet_dict["src_mac"] = src_mac
 
@@ -9562,7 +9544,7 @@ def add_vnet_route(ctx, vnet_name, prefix, endpoint, vni, mac_address, endpoint_
             subvnet_dict["vni"] = vni
 
         if mac_address:
-            if not is_mac_address_valid(mac_address):
+            if not clicommon.is_mac_address_valid(mac_address):
                 ctx.fail("Invalid MAC {}".format(mac_address))
             subvnet_dict["mac_address"] = mac_address
 
