@@ -479,9 +479,9 @@ def statistics(option):
         del_table_key('RADIUS', 'global', 'statistics')
     else:
         if option == 'enable':
-            add_table_kv('RADIUS', 'global', 'statistics', True)
+            add_table_kv('RADIUS', 'global', 'statistics', 'true')
         elif option == 'disable':
-            add_table_kv('RADIUS', 'global', 'statistics', False)
+            add_table_kv('RADIUS', 'global', 'statistics', 'false')
 radius.add_command(statistics)
 
 
