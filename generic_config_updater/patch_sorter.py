@@ -571,9 +571,6 @@ class CreateOnlyFilter:
             ["BGP_MONITORS", "*", "nhopself"],
             ["BGP_MONITORS", "*", "rrclient"],
             ["MIRROR_SESSION", "*", "*"],
-            ["VLAN_SUB_INTERFACE", "*", "vnet_name"],
-            ["VLAN_INTERFACE", "*", "vnet_name"],
-            ["INTERFACE", "*", "vnet_name"],
         ]
 
     def get_filter(self):
