@@ -1295,4 +1295,63 @@ TEST_DATA = {
         },
         RET: -1,
     },
+    "28": {
+        DESCR: "failure case with local p2p IPs in APP_DB",
+        MULTI_ASIC: False,
+        NAMESPACE: [''],
+        ARGS: "route_check -i 15",
+        RET: -1,
+        PRE: {
+            DEFAULTNS: {
+                APPL_DB: {
+                    ROUTE_TABLE: {
+                        "0.0.0.0/0": {"ifname": "portchannel0"},
+                        "10.10.196.12/31": {"ifname": "portchannel0"},
+                        "10.10.196.20/31": {"ifname": "portchannel0"},
+                        "10.10.196.40/31": {"ifname": "portchannel0"},
+                        "90.10.196.32/32": {"ifname": "portchannel0"},
+                        "fc02::78/126": {"ifname": "portchannel0"},
+                        "fc03::2c/126": {"ifname": "portchannel0"},
+                        "10.10.196.30/31": {"ifname": "lo"}
+                    },
+                    INTF_TABLE: {
+                        "PortChannel1013:90.10.196.24/31": {},
+                        "PortChannel1015:10.10.196.12/31": {},
+                        "PortChannel1017:fc03::2c/126": {},
+                        "PortChannel1021:9603:10b0:503:df4::5e/126": {},
+                        "PortChannel1023:9603:10b0:503:df4::5d/126": {},
+                        "PortChannel1024": {}
+                    }
+                },
+                ASIC_DB: {
+                    RT_ENTRY_TABLE: {
+                        ASIC_RT_ENTRY_KEY_PREFIX + "20.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.40/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "3603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
+                    }
+                }
+            }
+        },
+        RESULT: {
+            DEFAULTNS: {
+                "missed_ROUTE_TABLE_routes": [
+                    "10.10.196.20/31",
+                    "90.10.196.32/32",
+                    "fc02::78/126"
+                ],
+                "missed_INTF_TABLE_entries": [
+                    "10.10.196.12/32",
+                    "90.10.196.24/32",
+                    "9603:10b0:503:df4::5d/128",
+                    "9603:10b0:503:df4::5e/128",
+                    "fc03::2c/128"
+                ],
+                "Unaccounted_ROUTE_ENTRY_TABLE_entries": [
+                    "20.10.196.24/32",
+                    "3603:10b0:503:df4::5d/128"
+                ]
+            }
+        }
+    },
 }
