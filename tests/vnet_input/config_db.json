@@ -8,6 +8,46 @@
     "VXLAN_TUNNEL|tunnel1": {
         "src_ip": "10.10.10.10"
     },
+    "VLAN_SUB_INTERFACE|Ethernet0.10": {
+        "vnet_name": "Vnet_101",
+        "admin_status": "up"
+    },
+    "VLAN_SUB_INTERFACE|Eth36.10": {
+        "vnet_name": "Vnet_102",
+        "admin_status": "up",
+        "vlan": "100"
+    },
+    "VLAN_SUB_INTERFACE|Po0002.101": {
+        "vnet_name": "Vnet_103",
+        "admin_status": "up",
+        "vlan": "1001"
+    },
+    "VLAN_INTERFACE|Vlan40": {
+        "vnet_name": "Vnet_102"
+    },
+    "PORTCHANNEL_INTERFACE|PortChannel0002": {
+        "vnet_name": "Vnet_102"
+    },
+    "INTERFACE|Ethernet4": {
+        "vnet_name": "Vnet_103"
+    },
+    "LOOPBACK_INTERFACE|Loopback0": {
+        "vnet_name": "Vnet_103"
+    },
+    "VNET|Vnet_1": {
+        "peer_list": "Vnet_101",
+        "vni": "3000",
+        "vxlan_tunnel": "tunnel1"
+    },
+    "VNET|Vnet_101": {
+         "NULL": "NULL"
+    },
+    "VNET|Vnet_102": {
+         "NULL": "NULL"
+    },
+    "VNET|Vnet_103": {
+         "NULL": "NULL"
+    },
     "VLAN_SUB_INTERFACE|Ethernet0.100": {
         "vnet_name": "Vnet_2000"
     },
