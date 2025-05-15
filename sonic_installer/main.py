@@ -537,9 +537,11 @@ def sonic_installer():
               help='If system available memory is lower than threhold, setup SWAP memory',
               cls=clicommon.MutuallyExclusiveOption, mutually_exclusive=['skip_setup_swap'],
               callback=validate_positive_int)
+@click.option('--enable-fips', is_flag=True, default=False,
+              help="Enable the FIPS, the default value is not to enable FIPS")
 @click.argument('url')
 def install(url, force, skip_platform_check=False, skip_migration=False, skip_package_migration=False,
-            skip_setup_swap=False, swap_mem_size=None, total_mem_threshold=None, available_mem_threshold=None):
+            skip_setup_swap=False, swap_mem_size=None, total_mem_threshold=None, available_mem_threshold=None, enable_fips=False):
     """ Install image from local binary or URL"""
     bootloader = get_bootloader()
 
@@ -589,6 +591,9 @@ def install(url, force, skip_platform_check=False, skip_migration=False, skip_pa
                 raise click.Abort()
             else:
                 echo_and_log('Verification successful')
+
+        if enable_fips:
+            os.environ['ENABLE_FIPS'] = '1'
 
         echo_and_log("Installing image {} and setting it as default...".format(binary_image_version))
         with SWAPAllocator(not skip_setup_swap, swap_mem_size, total_mem_threshold, available_mem_threshold):
