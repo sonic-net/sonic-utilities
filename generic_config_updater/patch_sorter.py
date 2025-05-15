@@ -77,7 +77,6 @@ class JsonMove:
         self.current_config_tokens = current_config_tokens
         self.target_config_tokens = target_config_tokens
 
-
     def _to_jsonpatch_operation(self, diff, op_type, current_config_tokens, target_config_tokens):
         operation_wrapper = OperationWrapper()
         path_addressing = PathAddressing()
@@ -282,22 +281,26 @@ class JsonMove:
 
         return JsonMove(diff, op_type, current_config_tokens, target_config_tokens)
 
-    def apply(self, config, in_place: bool=False):
+    def apply(self, config, in_place: bool = False):
         if self.op_type == OperationType.REMOVE or self.op_type == OperationType.REPLACE:
             self.orig_value = JsonMove._get_value(config, sonic_yang.SonicYang.configdb_path_split(self.path))
 
-        return self.patch.apply(config, in_place = in_place)
+        return self.patch.apply(config, in_place=in_place)
 
-    def undo(self, config, in_place: bool=False):
+    def undo(self, config, in_place: bool = False):
         # Create new patch to undo previous application
         if self.patch.patch[0]['op'] == 'add':
-            patch = jsonpatch.JsonPatch([ { 'op': 'remove', 'path': self.patch.patch[0]['path'] } ])
+            patch = jsonpatch.JsonPatch([{'op': 'remove', 'path': self.patch.patch[0]['path']}])
         elif self.patch.patch[0]['op'] == 'replace':
-            patch = jsonpatch.JsonPatch([ { 'op': 'replace', 'path': self.patch.patch[0]['path'], 'value': self.orig_value } ])
+            patch = jsonpatch.JsonPatch([{
+                                        'op': 'replace',
+                                        'path': self.patch.patch[0]['path'],
+                                        'value': self.orig_value
+                                        }])
         elif self.patch.patch[0]['op'] == 'remove':
-            patch = jsonpatch.JsonPatch([ { 'op': 'add', 'path': self.patch.patch[0]['path'], 'value': self.orig_value } ])
+            patch = jsonpatch.JsonPatch([{'op': 'add', 'path': self.patch.patch[0]['path'], 'value': self.orig_value}])
 
-        return patch.apply(config, in_place = in_place)
+        return patch.apply(config, in_place=in_place)
 
     def __str__(self):
         return str(self.patch)
@@ -319,7 +322,7 @@ class JsonMoveGroup:
     """
     Group of JsonMove objects to be applied together
     """
-    def __init__(self, move: JsonMove=None):
+    def __init__(self, move: JsonMove = None):
         self.patches = []
         if move is not None:
             self.append(move)
@@ -327,7 +330,7 @@ class JsonMoveGroup:
     def append(self, move: JsonMove):
         self.patches.append(move)
 
-    def apply(self, config, in_place: bool=False):
+    def apply(self, config, in_place: bool = False):
         update = config
         for i, patch in enumerate(self.patches):
             if i != 0:
@@ -337,7 +340,7 @@ class JsonMoveGroup:
                 return None
         return update
 
-    def undo(self, config, in_place: bool=False):
+    def undo(self, config, in_place: bool = False):
         update = config
         for i, patch in enumerate(reversed(self.patches)):
             if i != 0:
@@ -352,7 +355,6 @@ class JsonMoveGroup:
         for move in self.patches:
             raw_patches.extend(move.patch.patch)
         return jsonpatch.JsonPatch(raw_patches)
-
 
     def parentTableName(self):
         """
@@ -390,7 +392,7 @@ class JsonMoveGroup:
         self.patches.extend(group.patches)
 
     def __str__(self):
-        return ",".join([ str(patch) for patch in self.patches ])
+        return ",".join([str(patch) for patch in self.patches])
 
     def __repr__(self):
         return str(self)
@@ -472,10 +474,10 @@ class MoveWrapper:
                 return False
         return True
 
-    def simulate(self, move, diff, in_place: bool=False):
+    def simulate(self, move, diff, in_place: bool = False):
         return diff.apply_move(move, in_place)
 
-    def undo_simulate(self, move, diff, in_place: bool=False):
+    def undo_simulate(self, move, diff, in_place: bool = False):
         return diff.undo_move(move, in_place)
 
     def _generate_moves(self, diff):
@@ -641,7 +643,7 @@ class RequiredValueIdentifier:
             is_match = True
 
             for idx, token in enumerate(setting["required_pattern"]):
-                if token not in [ "*", "@", configdb_path_tokens[idx] ]:
+                if token not in ["*", "@", configdb_path_tokens[idx]]:
                     is_match = False
                     break
 
@@ -778,7 +780,7 @@ class RemoveCreateOnlyDependencyMoveValidator:
 
                 if not self._validate_member(tokens, member_name,
                                              current_config, target_config, simulated_config,
-                                             reload_config = reload_config):
+                                             reload_config=reload_config):
                     return False
 
                 # After first call, no need to reload again
@@ -786,7 +788,8 @@ class RemoveCreateOnlyDependencyMoveValidator:
 
         return True
 
-    def _validate_member(self, tokens, member_name, current_config, target_config, simulated_config, reload_config: bool = True):
+    def _validate_member(self, tokens, member_name, current_config, target_config, simulated_config,
+                         reload_config: bool = True):
         table_to_check, create_only_field = tokens[0], tokens[-1]
 
         current_field = self._get_create_only_field(
@@ -814,7 +817,7 @@ class RemoveCreateOnlyDependencyMoveValidator:
                 return False
 
         member_path = f"/{table_to_check}/{member_name}"
-        for ref_path in self.path_addressing.find_ref_paths(member_path, simulated_config, reload_config = reload_config):
+        for ref_path in self.path_addressing.find_ref_paths(member_path, simulated_config, reload_config=reload_config):
             if not self.path_addressing.has_path(current_config, ref_path):
                 return False
 
@@ -960,7 +963,7 @@ class NoDependencyMoveValidator:
         reload_config = True
         # Note: all moves in a group are guaranteed to be the same operation type
         for move in group:
-            if not self.__validate_move(move, diff, simulated_config, reload_config = reload_config):
+            if not self.__validate_move(move, diff, simulated_config, reload_config=reload_config):
                 return False
             reload_config = False
         return True
@@ -1021,11 +1024,11 @@ class NoDependencyMoveValidator:
         #       load twice :(
 
         # For deleted paths, we check the current config has no dependencies between nodes under the removed path
-        if not self._validate_paths_config(deleted_paths, diff.current_config, reload_config = True):
+        if not self._validate_paths_config(deleted_paths, diff.current_config, reload_config=True):
             return False
 
         # For added paths, we check the simulated config has no dependencies between nodes under the added path
-        if not self._validate_paths_config(added_paths, simulated_config, reload_config = True):
+        if not self._validate_paths_config(added_paths, simulated_config, reload_config=True):
             return False
 
         return True
@@ -1096,7 +1099,7 @@ class NoDependencyMoveValidator:
         """
         validates all config under paths do not have config and its references
         """
-        refs = self.path_addressing.find_ref_paths(paths, config, reload_config = reload_config)
+        refs = self.path_addressing.find_ref_paths(paths, config, reload_config=reload_config)
         for ref in refs:
             for path in paths:
                 if ref.startswith(path):
@@ -1263,12 +1266,14 @@ class KeyLevelMoveGenerator:
                 if not(table in config2) or not (key in config2[table]):
                     yield [table, key]
 
+
 class BulkKeyLevelMoveGenerator:
     """
     Same concept as KeyLevelMoveGenerator, but groups additions and removals of sibling keys.
     """
     def __init__(self, path_addressing):
         self.path_addressing = path_addressing
+
     def generate(self, diff):
         prev_num_separators = -1
         group = None
@@ -1338,6 +1343,7 @@ class BulkKeyLevelMoveGenerator:
                 if not(table in config2) or not (key in config2[table]):
                     yield [table, key]
 
+
 class BulkKeyGroupLowLevelMoveGenerator:
     """
     This is a Wrapper around BulkLowLevelMoveGenerator that groups the leaf
@@ -1384,7 +1390,7 @@ class BulkKeyGroupLowLevelMoveGenerator:
         for move in self.generate_groups(diff, self.generator.generate_add, restricted_only=True):
             yield move
 
-    def generate_groups(self, diff, cb, restricted_only: bool=False):
+    def generate_groups(self, diff, cb, restricted_only: bool = False):
         group = None
         for move in cb(diff, min_moves=1, restricted_only=restricted_only):
             if group is None:
@@ -1457,7 +1463,7 @@ class BulkLowLevelMoveGenerator:
                                     min_moves, restricted_only):
             yield move
 
-    def __restricted_key(self, tokens, key, invert: bool=False):
+    def __restricted_key(self, tokens, key, invert: bool = False):
         tokens.append(key)
         rv = self.requiredval.target_in_required_pattern(tokens)
         tokens.pop()
@@ -1484,7 +1490,7 @@ class BulkLowLevelMoveGenerator:
                 reverse = False
 
             for key in self.path_addressing.configdb_sorted_keys_by_backlinks(
-                self.path_addressing.create_path(tokens), current_ptr, reverse=reverse, configdb_relative=True):
+                    self.path_addressing.create_path(tokens), current_ptr, reverse=reverse, configdb_relative=True):
 
                 # Does not exist in target, skip
                 if target_ptr.get(key) is None:
@@ -1546,7 +1552,7 @@ class BulkLowLevelMoveGenerator:
         for key in current_ptr:
             target_val = target_ptr.get(key)
             if (target_val is not None and target_val != current_ptr.get(key) and
-                not self.__restricted_key(tokens, key, invert=restricted_only)):
+                    not self.__restricted_key(tokens, key, invert=restricted_only)):
                 tokens.append(key)
                 group.append(JsonMove(self.diff, OperationType.REPLACE, tokens, tokens))
                 tokens.pop()
@@ -1607,7 +1613,8 @@ class RemoveCreateOnlyDependencyMoveGenerator:
 
                 member_path = f"/{table_to_check}/{member_name}"
 
-                for ref_path in self.path_addressing.find_ref_paths(member_path, current_config, reload_config = reload_config):
+                for ref_path in self.path_addressing.find_ref_paths(member_path, current_config,
+                                                                    reload_config=reload_config):
                     yield JsonMoveGroup(JsonMove(diff, OperationType.REMOVE,
                                         self.path_addressing.get_path_tokens(ref_path)))
 
@@ -1624,7 +1631,7 @@ class LowLevelMoveGenerator:
     A class to generate the low level moves i.e. moves corresponding to differences between current/target config
     where the path of the move does not have children.
     """
-    def __init__(self,path_addressing):
+    def __init__(self, path_addressing):
         self.diff = None
         self.path_addressing = path_addressing
 
@@ -1979,6 +1986,7 @@ class DeleteInsteadOfReplaceMoveExtender:
 
         yield new_move
 
+
 class DeleteRefsMoveExtender:
     """
     A class to extend the given DELETE move by adding DELETE moves to configs referring to the path in the move.
@@ -1992,8 +2000,9 @@ class DeleteRefsMoveExtender:
         if operation_type != OperationType.REMOVE:
             return
 
-        for ref_path in self.path_addressing.find_ref_paths(move.path, diff.current_config, reload_config = True):
+        for ref_path in self.path_addressing.find_ref_paths(move.path, diff.current_config, reload_config=True):
             yield JsonMove(diff, OperationType.REMOVE, self.path_addressing.get_path_tokens(ref_path))
+
 
 class DfsSorter:
     def __init__(self, move_wrapper):
@@ -2021,6 +2030,7 @@ class DfsSorter:
                     return [move] + new_moves
 
         return None
+
 
 class BfsSorter:
     def __init__(self, move_wrapper):
@@ -2057,6 +2067,7 @@ class BfsSorter:
 
         return None
 
+
 class MemoizationSorter:
     def __init__(self, move_wrapper):
         self.visited = {}
@@ -2087,10 +2098,12 @@ class MemoizationSorter:
         self.mem[diff_hash] = bst_moves
         return bst_moves
 
+
 class Algorithm(Enum):
     DFS = 1
     BFS = 2
     MEMOIZATION = 3
+
 
 class SortAlgorithmFactory:
     def __init__(self, operation_wrapper, config_wrapper, path_addressing):
@@ -2130,6 +2143,7 @@ class SortAlgorithmFactory:
             raise ValueError(f"Algorithm {algorithm} is not supported")
 
         return sorter
+
 
 class StrictPatchSorter:
     def __init__(self, config_wrapper, patch_wrapper, inner_patch_sorter=None):
@@ -2193,7 +2207,8 @@ class IgnorePathsFromYangConfigSplitter:
 
             # Add to config_without_yang from config_with_yang
             tokens = self.path_addressing.get_path_tokens(path)
-            add_move = JsonMoveGroup(JsonMove(Diff(config_without_yang, config_with_yang), OperationType.ADD, tokens, tokens))
+            add_move = JsonMoveGroup(JsonMove(Diff(config_without_yang, config_with_yang), OperationType.ADD, tokens,
+                                              tokens))
             config_without_yang = add_move.apply(config_without_yang)
 
             # Remove from config_with_yang

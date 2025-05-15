@@ -74,7 +74,9 @@ class TestPatchApplier(unittest.TestCase):
             create_side_effect_dict({(str(Files.MULTI_OPERATION_CONFIG_DB_PATCH),): changes})
 
         changeapplier = Mock()
-        changeapplier.apply.side_effect = create_side_effect_skipfirstarg_dict({(str(changes[0]),): Files.CONFIG_DB_AFTER_MULTI_PATCH, (str(changes[1]),): Files.CONFIG_DB_AFTER_MULTI_PATCH})
+        changeapplier.apply.side_effect = create_side_effect_skipfirstarg_dict({
+                (str(changes[0]),): Files.CONFIG_DB_AFTER_MULTI_PATCH,
+                (str(changes[1]),): Files.CONFIG_DB_AFTER_MULTI_PATCH})
 
         return gu.PatchApplier(patchsorter, changeapplier, config_wrapper, patch_wrapper)
 
