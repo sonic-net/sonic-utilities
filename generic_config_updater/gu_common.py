@@ -39,7 +39,7 @@ class JsonChange:
     def __init__(self, patch):
         self.patch = patch
 
-    def apply(self, config, in_place: bool=False):
+    def apply(self, config, in_place: bool = False):
         return self.patch.apply(config, in_place)
 
     def __repr__(self):
@@ -529,7 +529,7 @@ class PathAddressing:
 
         # Force to be a list
         if not isinstance(paths, list):
-            paths = [ paths ]
+            paths = [paths]
 
         ref_paths = []
         ref_paths_set = set()
@@ -569,7 +569,7 @@ class PathAddressing:
         schema = node.schema()
         return ly.LYS_LEAF == schema.nodetype()
 
-    def convert_path_to_xpath(self, path, config = None, sy = None):
+    def convert_path_to_xpath(self, path, config=None, sy=None):
         """
         Converts the given JsonPatch path (i.e. JsonPointer) to XPATH.
         Example:
@@ -580,7 +580,7 @@ class PathAddressing:
             sy = self._create_sonic_yang_with_loaded_models()
         return sy.configdb_path_to_xpath(path, configdb=config)
 
-    def convert_xpath_to_path(self, xpath, config = None, sy = None):
+    def convert_xpath_to_path(self, xpath, config=None, sy=None):
         """
         Converts the given XPATH to JsonPatch path (i.e. JsonPointer).
         Example:
@@ -608,7 +608,8 @@ class PathAddressing:
         cmp = a["nsep"] - b["nsep"]
         return cmp
 
-    def configdb_sorted_keys_by_backlinks(self, configdb_path: str, configdb: dict, reverse: bool = False, configdb_relative: bool = False, sy = None):
+    def configdb_sorted_keys_by_backlinks(self, configdb_path: str, configdb: dict, reverse: bool = False,
+                                          configdb_relative: bool = False, sy=None):
         """
         Given a path and a config, iterates across all keys at the path location
         to look up the number of backlinks per key, then returns the keys sorted
@@ -636,7 +637,7 @@ class PathAddressing:
 
         # Test cases expect non-sorted and config_wrapper isn't set.
         if self.config_wrapper is None:
-            return [ key for key in ptr ]
+            return [key for key in ptr]
 
         keys = []
         # Enumerate all keys and retrieve backlinks, store in a list of dictionaries for sorting
@@ -649,16 +650,18 @@ class PathAddressing:
                 # Test cases use invalid tables, so we have to handle that even
                 # though it shouldn't be possible in live code as tables without
                 # yang are trimmed
-                keys.append({ "key": key,
-                              "backlinks": 0,
-                              "musts": 0,
-                              "nsep": 0
+                keys.append({
+                            "key": key,
+                            "backlinks": 0,
+                            "musts": 0,
+                            "nsep": 0
                             })
             else:
-                keys.append({ "key": key,
-                              "backlinks": len(sy.find_schema_dependencies(xpath, match_ancestors=True)),
-                              "musts": sy.find_schema_must_count(xpath, match_ancestors=True),
-                              "nsep": str(key).count("|")
+                keys.append({
+                            "key": key,
+                            "backlinks": len(sy.find_schema_dependencies(xpath, match_ancestors=True)),
+                            "musts": sy.find_schema_must_count(xpath, match_ancestors=True),
+                            "nsep": str(key).count("|")
                             })
             tokens.pop()
 

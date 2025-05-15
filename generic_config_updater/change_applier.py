@@ -10,7 +10,7 @@ from collections import defaultdict
 from swsscommon.swsscommon import ConfigDBConnector
 from sonic_py_common import multi_asic
 from .gu_common import GenericConfigUpdaterError, genericUpdaterLogging
-from .gu_common import get_config_db_as_json, JsonChange
+from .gu_common import JsonChange
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 UPDATER_CONF_FILE = f"{SCRIPT_DIR}/gcu_services_validator.conf.json"

@@ -275,6 +275,6 @@ class TestMultiAsicChangeApplier(unittest.TestCase):
 
         # Apply the patch
         try:
-            assert(applier.apply(current_config, change) != None)
+            assert(applier.apply(current_config, change) is not None)
         except Exception:
             pass

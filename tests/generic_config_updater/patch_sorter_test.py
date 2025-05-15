@@ -2,7 +2,6 @@ from collections import OrderedDict
 import jsonpatch
 import unittest
 from unittest.mock import MagicMock, Mock
-import json
 import generic_config_updater.patch_sorter as ps
 from .gutest_helpers import Files, create_side_effect_dict, create_side_effect_jsonmovegroup_dict, \
                             create_side_effect_skiplastarg_dict
@@ -529,7 +528,8 @@ class TestMoveWrapper(unittest.TestCase):
         # Arrange
         move_generators = [self.multiple_move_generator]
         move_wrapper = ps.MoveWrapper(move_generators, [], [], [])
-        expected = [JsonMoveGroup(self.any_move), JsonMoveGroup(self.any_other_move1), JsonMoveGroup(self.any_other_move2)]
+        expected = [JsonMoveGroup(self.any_move), JsonMoveGroup(self.any_other_move1),
+                    JsonMoveGroup(self.any_other_move2)]
 
         # Act
         actual = list(move_wrapper.generate(self.any_diff))
@@ -616,7 +616,8 @@ class TestMoveWrapper(unittest.TestCase):
         move_generators = [self.single_move_generator]
         move_extenders = [self.multiple_move_extender]
         move_wrapper = ps.MoveWrapper(move_generators, [], move_extenders, [])
-        expected = [JsonMoveGroup(self.any_move), JsonMoveGroup(self.any_extended_move), JsonMoveGroup(self.any_other_extended_move1), JsonMoveGroup(self.any_other_extended_move2)]
+        expected = [JsonMoveGroup(self.any_move), JsonMoveGroup(self.any_extended_move),
+                    JsonMoveGroup(self.any_other_extended_move1), JsonMoveGroup(self.any_other_extended_move2)]
 
         # Act
         actual = list(move_wrapper.generate(self.any_diff))
@@ -629,7 +630,8 @@ class TestMoveWrapper(unittest.TestCase):
         move_generators = [self.single_move_generator]
         move_extenders = [self.single_move_extender, self.another_single_move_extender]
         move_wrapper = ps.MoveWrapper(move_generators, [], move_extenders, [])
-        expected = [JsonMoveGroup(self.any_move), JsonMoveGroup(self.any_extended_move), JsonMoveGroup(self.any_other_extended_move1)]
+        expected = [JsonMoveGroup(self.any_move), JsonMoveGroup(self.any_extended_move),
+                    JsonMoveGroup(self.any_other_extended_move1)]
 
         # Act
         actual = list(move_wrapper.generate(self.any_diff))
@@ -1357,7 +1359,8 @@ class TestNoDependencyMoveValidator(unittest.TestCase):
         diff = ps.Diff(current_config, target_config)
         # the target tokens point to location 0 which exist in target_config
         # but the replace operation is operating on location 1 in current_config
-        move = JsonMoveGroup(ps.JsonMove(diff, OperationType.REPLACE, ["VLAN", "Vlan100", "dhcp_servers", 1], ["VLAN", "Vlan100", "dhcp_servers", 0]))
+        move = JsonMoveGroup(ps.JsonMove(diff, OperationType.REPLACE, ["VLAN", "Vlan100", "dhcp_servers", 1],
+                                         ["VLAN", "Vlan100", "dhcp_servers", 0]))
 
         # Act and assert
         self.assertTrue(self.validator.validate(move, diff, move.apply(diff.current_config)))
