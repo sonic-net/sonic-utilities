@@ -2,6 +2,7 @@ import sys
 import os
 import json
 from unittest import mock
+import show.main as show_main
 
 import click
 from click.testing import CliRunner
@@ -61,7 +62,6 @@ class MockerChassis(object):
             MockerChassis.counter += 1
             return "red"
 
-import show.main as show
 
 class TestHealth(object):
     original_cli = None
@@ -72,17 +72,17 @@ class TestHealth(object):
         os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "1"
         global original_cli
-        original_cli = show.cli
+        original_cli = show_main.cli
 
     def test_health_summary(self):
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands["system-health"].commands["summary"])
+        result = runner.invoke(show_main.cli.commands["system-health"].commands["summary"])
         click.echo(result.output)
         expected = """\
 System health configuration file not found, exit...
 """
         assert result.output == expected
-        result = runner.invoke(show.cli.commands["system-health"].commands["summary"])
+        result = runner.invoke(show_main.cli.commands["system-health"].commands["summary"])
         expected = """\
 System status summary
 
@@ -95,7 +95,7 @@ System status summary
 """
         click.echo(result.output)
         assert result.output == expected
-        result = runner.invoke(show.cli.commands["system-health"].commands["summary"])
+        result = runner.invoke(show_main.cli.commands["system-health"].commands["summary"])
         click.echo(result.output)
         expected = """\
 System status summary
@@ -110,7 +110,7 @@ System status summary
 
     def test_health_monitor(self):
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands["system-health"].commands["monitor-list"])
+        result = runner.invoke(show_main.cli.commands["system-health"].commands["monitor-list"])
         click.echo(result.output)
         expected = """
 System services and devices monitor list
@@ -168,7 +168,7 @@ fan8            OK        Fan
 
     def test_health_detail(self):
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands["system-health"].commands["detail"])
+        result = runner.invoke(show_main.cli.commands["system-health"].commands["detail"])
         click.echo(result.output)
         expected = """\
 System status summary
@@ -240,7 +240,7 @@ Name    Status    Type
 """
         assert result.output == expected
         MockerConfig.ignore_devices.insert(0, "psu.voltage")
-        result = runner.invoke(show.cli.commands["system-health"].commands["detail"])
+        result = runner.invoke(show_main.cli.commands["system-health"].commands["detail"])
         click.echo(result.output)
         expected = """\
 System status summary
@@ -313,7 +313,7 @@ psu.voltage  Ignored   Device
 
     def test_health_systemready(self):
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands["system-health"].commands["sysready-status"])
+        result = runner.invoke(show_main.cli.commands["system-health"].commands["sysready-status"])
         click.echo(result.output)
         print("myresult:{}".format(result.output))
         expected = """\
@@ -327,14 +327,14 @@ pmon            OK                OK                  -
 swss            OK                OK                  -
 """
         assert result.output == expected
-        result = runner.invoke(show.cli.commands["system-health"].commands["sysready-status"],["brief"])
+        result = runner.invoke(show_main.cli.commands["system-health"].commands["sysready-status"], ["brief"])
         click.echo(result.output)
         print("myresult:{}".format(result.output))
         expected = """\
 System is not ready - one or more services are not up
 """
         assert result.output == expected
-        result = runner.invoke(show.cli.commands["system-health"].commands["sysready-status"],["detail"])
+        result = runner.invoke(show_main.cli.commands["system-health"].commands["sysready-status"], ["detail"])
         click.echo(result.output)
         print("myresult:{}".format(result.output))
         expected = """\
@@ -353,7 +353,7 @@ swss            OK                OK                  -              -
         with mock.patch("sonic_py_common.device_info.is_smartswitch", return_value=True):
 
             # Check if 'dpu' command is available under system-health
-            available_commands = show.cli.commands["system-health"].commands
+            available_commands = show_main.cli.commands["system-health"].commands
             assert "dpu" in available_commands, f"'dpu' command not found: {available_commands}"
 
             conn = dbconnector.SonicV2Connector()
@@ -371,14 +371,14 @@ swss            OK                OK                  -              -
 
             with mock.patch("show.system_health.SonicV2Connector", return_value=conn):
                 runner = CliRunner()
-                result = runner.invoke(show.cli.commands["system-health"].commands["dpu"], ["DPU0"])
+                result = runner.invoke(show_main.cli.commands["system-health"].commands["dpu"], ["DPU0"])
 
                 # Assert the output and exit code
                 assert result.exit_code == 0, f"Expected exit code 0, got {result.exit_code}. Output: {result.output}"
                 assert "DPU0" in result.output, f"Expected 'DPU0' in output, got: {result.output}"
 
                 # check -h option
-                result = runner.invoke(show.cli.commands["system-health"].commands["dpu"], ["-h"])
+                result = runner.invoke(show_main.cli.commands["system-health"].commands["dpu"], ["-h"])
                 print(result.output)
 
     def test_health_dpu_non_smartswitch(self):
@@ -386,7 +386,7 @@ swss            OK                OK                  -              -
         with mock.patch("sonic_py_common.device_info.is_smartswitch", return_value=False):
 
             # Check if 'dpu' command is available under system-health
-            available_commands = show.cli.commands["system-health"].commands
+            available_commands = show_main.cli.commands["system-health"].commands
             assert "dpu" in available_commands, f"'dpu' command not found: {available_commands}"
 
             conn = dbconnector.SonicV2Connector()
@@ -404,7 +404,7 @@ swss            OK                OK                  -              -
 
             with mock.patch("show.system_health.SonicV2Connector", return_value=conn):
                 runner = CliRunner()
-                result = runner.invoke(show.cli.commands["system-health"].commands["dpu"], ["DPU0"])
+                result = runner.invoke(show_main.cli.commands["system-health"].commands["dpu"], ["DPU0"])
 
                 # Assert the output and exit code
                 assert result.exit_code == 0, f"Expected exit code 0, got {result.exit_code}. Output: {result.output}"
@@ -436,4 +436,126 @@ swss            OK                OK                  -              -
         print("TEARDOWN")
         os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
-        show.cli = original_cli
+        show_main.cli = original_cli
+
+    @mock.patch("show.system_health.get_dpu_ip_list", return_value=[("dpu0", "1.2.3.4")])
+    @mock.patch("show.system_health.is_midplane_reachable", return_value=True)
+    @mock.patch("show.system_health.ensure_ssh_key_setup")
+    @mock.patch("show.system_health.get_module_health", return_value=("1.2.3.4", "OK"))
+    @mock.patch("show.system_health.is_smartswitch", return_value=True)
+    @mock.patch("show.system_health.get_system_health_status")
+    def test_summary_switch_and_dpu(
+        self, mock_get_status, mock_smartswitch, mock_health, mock_ssh, mock_reach, mock_list
+    ):
+        runner = CliRunner()
+
+        mock_chassis = mock.Mock()
+        mock_chassis.get_status_led.return_value = "green"
+        mock_get_status.return_value = (None, mock_chassis, {})
+
+        result = runner.invoke(
+            show_main.cli.commands["system-health"].commands["summary"], ["all"]
+        )
+        print(result)
+
+    @mock.patch("show.system_health.get_dpu_ip_list", return_value=[("dpu0", "1.2.3.4")])
+    @mock.patch("show.system_health.is_midplane_reachable", return_value=True)
+    @mock.patch("show.system_health.ensure_ssh_key_setup")
+    @mock.patch("show.system_health.get_module_health", return_value=("1.2.3.4", "OK"))
+    @mock.patch("show.system_health.is_smartswitch", return_value=True)
+    @mock.patch("show.system_health.get_system_health_status")
+    def test_detail_dpu(
+        self, mock_get_status, mock_smartswitch, mock_health, mock_ssh, mock_reach, mock_list
+    ):
+        runner = CliRunner()
+        result = runner.invoke(
+            show_main.cli.commands["system-health"].commands["detail"],
+            ["--module-name", "DPU0"]
+        )
+        print(result)
+
+    @mock.patch("show.system_health.get_dpu_ip_list", return_value=[("dpu0", "1.2.3.4")])
+    @mock.patch("show.system_health.is_midplane_reachable", return_value=True)
+    @mock.patch("show.system_health.ensure_ssh_key_setup")
+    @mock.patch("show.system_health.get_module_health", return_value=("1.2.3.4", "OK"))
+    @mock.patch("show.system_health.is_smartswitch", return_value=True)
+    @mock.patch("show.system_health.get_system_health_status")
+    def test_monitor_list_dpu(
+        self, mock_get_status, mock_smartswitch, mock_health, mock_ssh, mock_reach, mock_list
+    ):
+        runner = CliRunner()
+        result = runner.invoke(
+            show_main.cli.commands["system-health"].commands["monitor-list"], ["all"]
+        )
+        print(result)
+
+    @mock.patch("show.system_health.subprocess.run")
+    @mock.patch("show.system_health.os.path.exists", return_value=False)
+    @mock.patch("show.system_health.click.echo")
+    def test_ensure_ssh_key_exists(self, mock_echo, mock_exists, mock_run):
+        from show.system_health import ensure_ssh_key_exists
+        ensure_ssh_key_exists()
+
+    @mock.patch("show.system_health.setup_ssh_key_for_remote")
+    @mock.patch("show.system_health.click.prompt", return_value="dummy-password")
+    @mock.patch("show.system_health.subprocess.run")
+    @mock.patch("show.system_health.ensure_ssh_key_exists")
+    @mock.patch("show.system_health.is_midplane_reachable", return_value=True)
+    def test_ensure_ssh_key_setup_triggers_setup(
+        self, mock_reachable, mock_ensure_key, mock_subproc, mock_prompt, mock_setup_key
+    ):
+        from show.system_health import ensure_ssh_key_setup, _ssh_key_cache
+
+        _ssh_key_cache.clear()  # ensure clean state
+
+        # simulate ssh test failing (no key yet)
+        mock_subproc.return_value.returncode = 1
+        mock_subproc.return_value.stderr.decode.return_value = "Permission denied"
+
+        ensure_ssh_key_setup("1.2.3.4", username="admin")
+
+    def test_ensure_ssh_key_setup_skips_if_cached(self):
+        from show.system_health import ensure_ssh_key_setup, _ssh_key_cache
+        _ssh_key_cache.add("1.2.3.4")
+
+        # should not do anything
+        ensure_ssh_key_setup("1.2.3.4")
+
+    @mock.patch("builtins.open", new_callable=mock.mock_open, read_data="ssh-rsa dummy-key")
+    @mock.patch("show.system_health.paramiko.SSHClient")
+    def test_setup_ssh_key_for_remote(self, mock_ssh_client_cls, mock_open):
+        from show.system_health import setup_ssh_key_for_remote
+
+        # Prepare a mock SSH client
+        mock_ssh = mock.Mock()
+        mock_ssh_client_cls.return_value = mock_ssh
+        mock_channel = mock.Mock()
+        mock_channel.recv_exit_status.return_value = 0
+        mock_ssh.exec_command.return_value = (mock.Mock(channel=mock_channel), None, None)
+
+        setup_ssh_key_for_remote("hostname", "admin", "dummy", "/dummy/path")
+
+    @mock.patch("show.system_health.setup_ssh_key_for_remote")
+    @mock.patch("show.system_health.is_midplane_reachable", return_value=True)
+    @mock.patch("show.system_health.get_dpu_ip_list", return_value=[("dpu0", "1.2.3.4")])
+    @mock.patch("show.system_health.os.path.exists", return_value=True)
+    def test_setup_ssh_key_cli(
+        self, mock_exists, mock_get_dpus, mock_reachable, mock_setup_key
+    ):
+        from show.system_health import setup_ssh_key
+        runner = CliRunner()
+        result = runner.invoke(
+            setup_ssh_key,
+            ["dpu0", "--username", "admin", "--password", "dummy"]
+        )
+
+        assert result.exit_code == 0
+
+    @mock.patch("show.system_health.subprocess.check_output")
+    def test_get_module_health_success(self, mock_check_output):
+        from show.system_health import get_module_health
+
+        mock_check_output.return_value = "Welcome to Debian\nSystemStatus: OK\n"
+        result = get_module_health("10.0.0.1", "summary")
+
+        assert result[0] == "10.0.0.1"
