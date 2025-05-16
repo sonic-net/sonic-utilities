@@ -684,17 +684,20 @@ class TestShowPlatform(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['sudo', 'decode-syseeprom', '-d'], display_cmd=True)
 
+    @mock.patch('sonic_py_common.device_info.get_platform_json_data')
     @patch('utilities_common.cli.run_command')
-    @patch('os.popen')
-    def test_ssdhealth(self, mock_popen, mock_run_command):
-        mock_popen.return_value.readline.return_value = '/dev/sda\n'
+    def test_ssdhealth(self, mock_run_command, mock_plat_json):
+        mock_plat_json.return_value = {
+            "chassis": {
+                 "name": "mock_platform"
+            }
+        }
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['platform'].commands['ssdhealth'], ['--verbose', '--vendor'])
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_popen.assert_called_once_with('lsblk -o NAME,TYPE -p | grep disk')
-        mock_run_command.assert_called_once_with(['sudo', 'ssdutil', '-d', '/dev/sda', '-v', '-e'], display_cmd=True)
+        mock_run_command.assert_called_once_with(['sudo', 'ssdutil', '-v', '-e'], display_cmd=True)
 
     @patch('utilities_common.cli.run_command')
     def test_pcieinfo(self, mock_run_command):
@@ -1046,6 +1049,25 @@ class TestShow(object):
         result = runner.invoke(show.cli.commands['banner'])
         assert result.exit_code == 0
 
+    @patch('show.main.run_command')
+    def test_show_ntp(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands['ntp'])
+        assert result.exit_code == 0
+        expected_calls = [call(['chronyc', '-n', 'tracking'], display_cmd=False),
+                          call(['chronyc', '-n', 'sources'], display_cmd=False)]
+        mock_run_command.assert_has_calls(expected_calls)
+
+    @patch('show.main.is_mgmt_vrf_enabled', MagicMock(return_value=True))
+    @patch('show.main.run_command')
+    def test_show_ntp_mgmt_vrf(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands['ntp'])
+        assert result.exit_code == 0
+        expected_calls = [call(['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'chronyc', '-n', 'tracking'], display_cmd=False),
+                          call(['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'chronyc', '-n', 'sources'], display_cmd=False)]
+        mock_run_command.assert_has_calls(expected_calls)
+
     def teardown(self):
         print('TEAR DOWN')
 
@@ -1071,7 +1093,7 @@ class TestShowRunningconfiguration(object):
         assert '[1.1.1.1]' in result.output
 
     @patch('builtins.open', mock_open(
-        read_data=open('tests/ntp.conf').read()))
+        read_data=open('tests/chrony.conf').read()))
     def test_ntp(self):
         runner = CliRunner()
 
@@ -1087,3 +1109,29 @@ class TestShowRunningconfiguration(object):
     @classmethod
     def teardown_class(cls):
         print('TEARDOWN')
+
+
+class TestShowSRv6Counters(object):
+    def setup(self):
+        print('SETUP')
+
+    @patch('utilities_common.cli.run_command')
+    def test_srv6_stats(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands['srv6'].commands['stats'], ['--verbose'])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(['srv6stat'], display_cmd=True)
+
+    @patch('utilities_common.cli.run_command')
+    def test_srv6_stats_with_sid(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands['srv6'].commands['stats'], ['1000:2:30::/48', '--verbose'])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(['srv6stat', '-s', '1000:2:30::/48'], display_cmd=True)
+
+    def teardown(self):
+        print('TEAR DOWN')

@@ -218,6 +218,13 @@ def tunnelcounters():
     command = ["tunnelstat", "-c"]
     run_command(command)
 
+
+@cli.command()
+def srv6counters():
+    """Clear SRv6 counters"""
+    command = ["srv6stat", "-c"]
+    run_command(command)
+
 #
 # 'clear watermarks
 #
@@ -324,8 +331,16 @@ def clear_pwm_pg_shared(namespace):
 
 @cli.group()
 def queue():
-    """Clear queue WM"""
+    """Clear queue"""
     pass
+
+
+@queue.command()
+def wredcounters():
+    """Clear queue wredcounters"""
+    command = ['wredstat', '-c']
+    run_command(command)
+
 
 @queue.group()
 def watermark():

@@ -81,6 +81,14 @@ pool        egress_lossy_pool
 size        0
 ----------  -----------------
 
+Profile: q_lossy_profile
+---------------------  -----------------
+packet_discard_action  drop
+dynamic_th             0
+pool                   egress_lossy_pool
+size                   0
+---------------------  -----------------
+
 """
 
 show_mmu_config_asic0 = """\
@@ -275,6 +283,22 @@ testData = {
                                                   '\nError: Invalid value for "-a": 12 is not in the '
                                                   'valid range of -8 to 8.\n')
                                        },
+             'mmu_cfg_trim': {
+                              'cmd': ['config'],
+                              'args': ['-p', 'q_lossy_profile', '-t', 'on'],
+                              'rc': 0,
+                              'db_table': 'BUFFER_PROFILE',
+                              'cmp_args': [',q_lossy_profile,packet_discard_action,trim'],
+                              'rc_msg': ''
+                             },
+             'mmu_cfg_trim_invalid': {
+                                      'cmd': ['config'],
+                                      'args': ['-p', 'q_lossy_profile', '-t', 'INVALID_VALUE'],
+                                      'rc': 2,
+                                      'rc_msg': ('Usage: mmu [OPTIONS]\nTry "mmu --help" for help.\n'
+                                                 '\nError: Invalid value for "-t": invalid choice: INVALID_VALUE. '
+                                                 '(choose from on, off)\n')
+                                     },
              'mmu_cfg_list_one_masic': {'cmd': ['show'],
                                         'args': ['-n', 'asic0'],
                                         'rc': 0,
