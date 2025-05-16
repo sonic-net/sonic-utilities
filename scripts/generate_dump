@@ -1436,6 +1436,7 @@ collect_mellanox_dfw_dumps() {
     local hwsku=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_hwsku())")
     local def_dump_path="/var/log/mellanox/sdk-dumps"
     local sdk_dump_path=`cat /usr/share/sonic/device/${platform}/${hwsku}/sai.profile|grep "SAI_DUMP_STORE_PATH"|cut -d = -f2`
+    local sku_folder="/usr/share/sonic/device/${platform}/${hwsku}"
 
     if [ -z $sdk_dump_path ]; then
         # If the SAI_DUMP_STORE_PATH is not found in device specific sai profile, check in common sai profile
@@ -1475,6 +1476,14 @@ collect_mellanox_dfw_dumps() {
             else
                 ${CMD_PREFIX}save_file ${file} sai_sdk_dump false true
             fi
+        fi
+    done
+
+    for file in $(find "$sku_folder" -name "sai_*.xml"); do
+        if [[ $file != *.gz ]]; then
+            save_file "$file" sai_sdk_dump true
+        else
+            save_file "$file" sai_sdk_dump false
         fi
     done
 }
