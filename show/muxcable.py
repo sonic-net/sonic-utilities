@@ -577,7 +577,8 @@ def create_table_dump_per_port_config(db ,print_data, per_npu_configdb, asic_id,
         port_list.append(soc_ipv6_value)
     else:
         port_list.append("")
-    prober_type_value = get_optional_value_for_key_in_config_tbl(per_npu_configdb[asic_id], port, "prober_type", "MUX_CABLE")
+    prober_type_value = get_optional_value_for_key_in_config_tbl(per_npu_configdb[asic_id],
+									port, "prober_type", "MUX_CABLE")
     if prober_type_value is not None:
         port_list.append(prober_type_value)
     else:
@@ -605,7 +606,8 @@ def create_json_dump_per_port_config(db, port_status_dict, per_npu_configdb, asi
     soc_ipv6_value = get_optional_value_for_key_in_config_tbl(per_npu_configdb[asic_id], port, "soc_ipv6", "MUX_CABLE")
     if soc_ipv6_value is not None:
         port_status_dict["MUX_CABLE"]["PORTS"][port_name]["SERVER"]["soc_ipv6"] = soc_ipv6_value
-    prober_type_value = get_optional_value_for_key_in_config_tbl(per_npu_configdb[asic_id], port, "prober_type", "MUX_CABLE")
+    prober_type_value = get_optional_value_for_key_in_config_tbl(per_npu_configdb[asic_id],
+									port, "prober_type", "MUX_CABLE")
     if prober_type_value is not None:
         port_status_dict["MUX_CABLE"]["PORTS"][port_name]["SERVER"]["prober_type"] = prober_type_value
 

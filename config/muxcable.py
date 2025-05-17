@@ -289,6 +289,7 @@ def update_configdb_pck_loss_data(config_db, port, val):
         ctx = click.get_current_context()
         ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
+
 def update_configdb_prober_type(config_db, port, val):
     fvs = {}
     configdb_state = get_value_for_key_in_config_tbl(config_db, port, "state", "MUX_CABLE")
@@ -405,6 +406,7 @@ def mode(db, state, port, json_output):
 
         sys.exit(CONFIG_SUCCESSFUL)
 
+
 # 'muxcable' command ("config muxcable probertype hardware/software <port|all>")
 @muxcable.command()
 @click.argument('probertype', metavar='<operation_status>', required=True, type=click.Choice(["hardware", "software"]))
@@ -426,7 +428,7 @@ def probertype(db, probertype, port):
     for namespace in namespaces:
         asic_id = multi_asic.get_asic_index_from_namespace(namespace)
         # replace these with correct macros
-        per_npu_configdb[asic_id] =  ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
+        per_npu_configdb[asic_id] = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
         per_npu_configdb[asic_id].connect()
         per_npu_statedb[asic_id] = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
         per_npu_statedb[asic_id].connect(per_npu_statedb[asic_id].STATE_DB)
@@ -455,10 +457,10 @@ def probertype(db, probertype, port):
                 update_configdb_prober_type(per_npu_configdb[asic_index], port, probertype)
                 sys.exit(CONFIG_SUCCESSFUL)
             else:
-                click.echo("this is not a valid port present on mux_cable".format(port))
+                click.echo("this is not a valid port {} present on mux_cable".format(port))
                 sys.exit(CONFIG_FAIL)
         else:
-            click.echo("there is not a valid asic table for this asic_index".format(asic_index))
+            click.echo("there is not a valid asic asic-{} table for this asic_index".format(asic_index))
             sys.exit(CONFIG_FAIL)
 
     elif port == "all" and port is not None:
@@ -487,7 +489,7 @@ def kill_radv(db, knob):
         mux_lmgrd_cfg_tbl = config_db.get_table("MUX_LINKMGR")
         config_db.mod_entry("MUX_LINKMGR", "SERVICE_MGMT", {"kill_radv": "True" if knob == "enable" else "False"})
 
-#'muxcable' command ("config muxcable packetloss reset <port|all>")
+# 'muxcable' command ("config muxcable packetloss reset <port|all>")
 @muxcable.command()
 @click.argument('action', metavar='<action_name>', required=True, type=click.Choice(["reset"]))
 @click.argument('port', metavar='<port_name>', required=True, default=None)
