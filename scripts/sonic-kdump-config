@@ -32,6 +32,7 @@ from sonic_py_common.general import getstatusoutput_noshell_pipe
 
 aboot_cfg_template ="/host/image-%s/kernel-cmdline"
 grub_cfg = "/host/grub/grub.cfg"
+uboot_cfg = "uboot-env.txt"
 kdump_cfg = "/etc/default/kdump-tools"
 kdump_mem_file = "/sys/kernel/kexec_crash_size"
 machine_cfg = "/host/machine.conf"
@@ -104,6 +105,93 @@ def get_next_image():
         return nextimage[len(IMAGE_PREFIX):]
     print_err("Unable to locate next SONiC image")
     sys.exit(1)
+
+## Detect if U-Boot is the bootloader by checking for the presence of `fw_printenv`.
+def is_uboot_present():
+    try:
+        # Check if the `fw_printenv` command exists
+        result = subprocess.run(['which', 'fw_printenv'], capture_output=True, text=True, check=False)
+        if result.returncode == 0:
+            print("U-Boot detected: `fw_printenv` command is available.")
+            return True
+        else:
+            print("U-Boot not detected: `fw_printenv` command is not available.")
+            return False
+    except Exception as e:
+        print(f"An error occurred while checking for U-Boot: {e}")
+        return False
+
+## Retrieve the current U-Boot environment variables.
+def get_uboot_env():
+    try:
+        result = subprocess.run(['fw_printenv'], capture_output=True, text=True, check=False)
+        env_vars = {}
+        for line in result.stdout.splitlines():
+            if '=' in line:
+                key, value = line.split('=', 1)
+                env_vars[key] = value
+        return env_vars
+    except (subprocess.CalledProcessError, Exception) as e:
+        print(f"Error retrieving U-Boot environment: {e}")
+        return None
+
+## Dump the U-Boot environment variables into a file.
+def dump_uboot_env(output_file):
+    try:
+        # Run the `fw_printenv` command to get the U-Boot environment
+        result = subprocess.run(['fw_printenv'], capture_output=True, text=True, check=False)
+
+        # Write the output to the specified file
+        with open(output_file, 'w', encoding='utf-8') as file:
+            file.write(result.stdout)
+
+        print(f"U-Boot environment variables have been dumped to {output_file}")
+    except FileNotFoundError:
+        print("Error: `fw_printenv` command not found. Ensure U-Boot tools are installed.")
+    except subprocess.CalledProcessError as e:
+        print(f"Error while running `fw_printenv`: {e}")
+    except Exception as e:
+        print(f"An unexpected error occurred: {e}")
+
+## Set a U-Boot environment variable.
+def set_uboot_env(key, value):
+    try:
+        subprocess.run(['fw_setenv', key, value], check=True)
+        print(f"Successfully set {key}={value}")
+    except (subprocess.CalledProcessError, Exception) as e:
+        print(f"Error setting U-Boot environment variable {key}: {e}")
+
+## Modify the U-Boot parameters to add or update the crashkernel parameter.
+def modify_crashkernel_param_uboot_env(crashkernel_value):
+    if not is_uboot_present():
+        print("U-Boot environment variables utility not present.")
+        return
+
+    env_vars = get_uboot_env()
+    if env_vars is None:
+        print("Failed to retrieve U-Boot environment variables.")
+        return
+
+    # Get the current bootargs
+    bootargs = env_vars.get('linuxargs', '')
+
+    # Check if crashkernel is already present
+    if 'crashkernel=' in bootargs:
+        # Update the existing crashkernel parameter
+        new_bootargs = []
+        for param in bootargs.split():
+            if (param.startswith('crashkernel=')):
+                if (crashkernel_value != "0"):
+                    new_bootargs.append(f'crashkernel={crashkernel_value}')
+            else:
+                new_bootargs.append(param)
+        bootargs = ' '.join(new_bootargs)
+    else:
+        # Add the crashkernel parameter
+        bootargs += f' crashkernel={crashkernel_value}'
+
+    # Set the updated bootargs
+    set_uboot_env('linuxargs', bootargs)
 
 ## Search for Current/Next SONiC image in grub configuration
 #
@@ -533,6 +621,9 @@ def kdump_enable(verbose, kdump_enabled, memory, num_dumps, image, cmdline_file,
     if verbose:
         print("Enabling kdump for image=[%s]" % image)
 
+    if (cmdline_file == uboot_cfg):
+        dump_uboot_env(uboot_cfg)
+
     # Existing functionality: Reading the kernel command line file
     try:
         lines = [line.rstrip('\n') for line in open(cmdline_file)]
@@ -572,6 +663,10 @@ def kdump_enable(verbose, kdump_enabled, memory, num_dumps, image, cmdline_file,
 
     if changed:
         rewrite_cfg(lines, cmdline_file)
+        if (cmdline_file == uboot_cfg):
+            modify_crashkernel_param_uboot_env(memory)
+            if os.path.exists(uboot_cfg):
+                os.remove(uboot_cfg)
 
     # Enable kdump
     write_use_kdump(1)
@@ -643,6 +738,8 @@ def cmd_kdump_enable(verbose, image):
     elif open(machine_cfg, 'r').read().find('aboot_platform') >= 0:
         aboot_cfg = aboot_cfg_template % image
         return kdump_enable(verbose, kdump_enabled, memory, num_dumps, image, aboot_cfg, remote, ssh_string, ssh_path)
+    elif is_uboot_present():
+        return kdump_enable(verbose, kdump_enabled, memory, num_dumps, image, uboot_cfg, remote, ssh_string, ssh_path)
     else:
         print("Feature not supported on this platform")
         return False
@@ -674,6 +771,9 @@ def kdump_disable(verbose, image, booter_config_file_path):
     if verbose:
         print("Disabling kdump for image=[%s]\n" % image)
 
+    if (booter_config_file_path == uboot_cfg):
+        dump_uboot_env(uboot_cfg)
+
     try:
         with open(booter_config_file_path) as config_file_handler:
             lines = [line.rstrip('\n') for line in config_file_handler]
@@ -697,6 +797,10 @@ def kdump_disable(verbose, image, booter_config_file_path):
 
     if changed:
         rewrite_cfg(lines, booter_config_file_path)
+        if (booter_config_file_path == uboot_cfg):
+            modify_crashkernel_param_uboot_env("0")
+            if os.path.exists(uboot_cfg):
+                os.remove(uboot_cfg)
 
     if not os.path.exists('/etc/sonic/config_db.json'):
         print_err("Startup configuration not found, Kdump configuration is not saved")
@@ -725,6 +829,8 @@ def cmd_kdump_disable(verbose):
     elif open(machine_cfg, 'r').read().find('aboot_platform') >= 0:
         aboot_cfg = aboot_cfg_template % image
         return kdump_disable(verbose, image, aboot_cfg)
+    elif is_uboot_present():
+        return kdump_disable(verbose, image, uboot_cfg)
     else:
         print("Feature not supported on this platform")
         return False
