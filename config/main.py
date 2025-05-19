@@ -8418,6 +8418,31 @@ def del_ntp_server(ctx, ntp_ip_address):
     except SystemExit as e:
         ctx.fail("Restart service chrony failed with error {}".format(e))
 
+@ntp.command('vrf')
+@click.argument('vrf_value', metavar='<default|mgmt>', required=True)
+@click.pass_context
+def modify_ntp_vrf_value(ctx, vrf_value):
+    """ Modify NTP deamon VRF """
+    db = ValidatedConfigDBConnector(ctx.obj['db'])
+    ntp_global = db.get_entry('NTP', 'global')
+    ntp_vrf_current_value = ntp_global.get("vrf")
+    if ntp_vrf_current_value != vrf_value and vrf_value in ["default", "mgmt"]:
+        try:
+            ntp_global['vrf'] = vrf_value
+            db.set_entry("NTP", "global", ntp_global)
+        except JsonPatchConflict as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+        click.echo("NTP VRF configured to {}".format(vrf_value))
+    elif ntp_vrf_current_value == vrf_value:
+        ctx.fail("NTP vrf is already configured as {}.".format(vrf_value))
+    else:
+        ctx.fail("NTP vrf cannot be configured as {}.".format(vrf_value))
+    try:
+        click.echo("Restarting chrony service...")
+        clicommon.run_command(['systemctl', 'restart', 'chrony'], display_cmd=False)
+    except SystemExit as e:
+        ctx.fail("Restart service chrony failed with error {}".format(e))
+
 #
 # 'sflow' group ('config sflow ...')
 #
