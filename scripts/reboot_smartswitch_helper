@@ -49,12 +49,16 @@ function get_reboot_status()
 {
     local dpu_ip=$1
     local port=$2
-    $(docker exec gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -notls -module System -rpc RebootStatus | tee reboot_status.txt &>/dev/null)
+    local reboot_output_file="reboot_status.txt"
+
+    $(docker exec gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -notls -module System -rpc RebootStatus | tee "$reboot_output_file" &>/dev/null)
     if [ $? -ne 0 ]; then
+        rm -f "$reboot_output_file"
         return ${EXIT_ERROR}
     fi
     local is_reboot_active
-    is_reboot_active=$(cat "reboot_status.txt" | awk '/^{.*}$/' | jq -r '.active')
+    is_reboot_active=$(cat "$reboot_output_file" | awk '/^{.*}$/' | jq -r '.active')
+    rm -f "$reboot_output_file"
     if [ "$is_reboot_active" != "true" ]; then
         return ${EXIT_SUCCESS}
     fi
