@@ -207,6 +207,58 @@ class TestRadius(object):
         assert result.exit_code == 0
         assert result.output == show_radius_default_output
 
+    def test_config_radius_statistics(self, get_cmd_module):
+        (config, show) = get_cmd_module
+        runner = CliRunner()
+        db = Db()
+        db.cfgdb.delete_table("RADIUS")
+
+        result = runner.invoke(config.config.commands["radius"],
+                               ["statistics", "enable"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == config_radius_empty_output
+
+        db.cfgdb.mod_entry("RADIUS", "global", {'statistics': 'true'})
+
+        result = runner.invoke(show.cli.commands["radius"], [], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert "RADIUS global statistics true" in result.output
+
+        result = runner.invoke(config.config.commands["radius"],
+                               ["statistics", "disable"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == config_radius_empty_output
+
+        db.cfgdb.mod_entry("RADIUS", "global", {'statistics': 'false'})
+
+        result = runner.invoke(show.cli.commands["radius"], [], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert "RADIUS global statistics false" in result.output
+
+        result = runner.invoke(config.config.commands["radius"],
+                               ["statistics", "default"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == config_radius_empty_output
+
+        db.cfgdb.mod_entry("RADIUS", "global", {'statistics': 'default'})
+
+        result = runner.invoke(show.cli.commands["radius"], [], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert "RADIUS global statistics true" not in result.output
+        assert "RADIUS global statistics false" not in result.output
+
     @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry", mock.Mock(side_effect=ValueError))
     def test_config_radius_server_invalidkey_yang_validation(self):
