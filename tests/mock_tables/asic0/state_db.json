@@ -339,5 +339,42 @@
     },
     "PORT_CAPACITY_TABLE|PORT_CAPACITY_DATA" : {
         "capacity": "80000"
+    },
+    "BFD_SESSION_TABLE|default|default|10.0.1.1": {
+        "state": "DOWN",
+        "type": "async_active",
+        "local_addr" : "10.0.0.1",
+        "tx_interval" :"300",
+        "rx_interval" : "500",
+        "multiplier" : "3",
+        "multihop": "true"
+    },
+    "BFD_SESSION_TABLE|default|Ethernet12|10.0.2.1": {
+        "state": "UP",
+        "type": "async_active",
+        "local_addr" : "10.0.0.1",
+        "tx_interval" :"200",
+        "rx_interval" : "600",
+        "multiplier" : "3",
+        "multihop": "false",
+        "local_discriminator": "88"
+    },
+    "BFD_SESSION_TABLE|default|default|2000::10:1": {
+        "state": "UP",
+        "type": "async_active",
+        "local_addr" : "2000::1",
+        "tx_interval" :"100",
+        "rx_interval" : "700",
+        "multiplier" : "3",
+        "multihop": "false"
+    },
+    "BFD_SESSION_TABLE|VrfRed|default|10.0.1.1": {
+        "state": "UP",
+        "type": "async_active",
+        "local_addr" : "10.0.0.1",
+        "tx_interval" :"400",
+        "rx_interval" : "500",
+        "multiplier" : "5",
+        "multihop": "false"
     }
 }
