@@ -1130,7 +1130,15 @@ def pwm_headroom_pool(namespace):
 @click.option('-t', '--type')
 @click.option('-c', '--count', is_flag=True)
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def mac(ctx, vlan, port, address, type, count, verbose):
+@click.option('-n',
+              '--namespace',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def mac(ctx, vlan, port, address, type, count, verbose, namespace):
     """Show MAC (FDB) entries"""
 
     if ctx.invoked_subcommand is not None:
@@ -1152,6 +1160,9 @@ def mac(ctx, vlan, port, address, type, count, verbose):
 
     if count:
         cmd += ["-c"]
+
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
 
     run_command(cmd, display_cmd=verbose)
 
