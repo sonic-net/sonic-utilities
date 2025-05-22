@@ -277,14 +277,26 @@ def lookup_statedb_and_update_configdb(db, per_npu_statedb, config_db, port, sta
             port_status_dict[port_name] = 'OK'
 
 def update_configdb_pck_loss_data(config_db, port, val):
+    fvs = {}
     configdb_state = get_value_for_key_in_config_tbl(config_db, port, "state", "MUX_CABLE")
+    fvs["state"] = configdb_state
     ipv4_value = get_value_for_key_in_config_tbl(config_db, port, "server_ipv4", "MUX_CABLE")
+    fvs["server_ipv4"] = ipv4_value
     ipv6_value = get_value_for_key_in_config_tbl(config_db, port, "server_ipv6", "MUX_CABLE")
+    fvs["server_ipv6"] = ipv6_value
+    soc_ipv4_value = get_optional_value_for_key_in_config_tbl(config_db, port, "soc_ipv4", "MUX_CABLE")
+    if soc_ipv4_value is not None:
+        fvs["soc_ipv4"] = soc_ipv4_value
+    cable_type = get_optional_value_for_key_in_config_tbl(config_db, port, "cable_type", "MUX_CABLE")
+    if cable_type is not None:
+        fvs["cable_type"] = cable_type
+    prober_type_val = get_optional_value_for_key_in_config_tbl(config_db, port, "prober_type", "MUX_CABLE")
+    if prober_type_val is not None:
+        fvs["prober_type"] = prober_type_val
 
+    fvs["pck_loss_data_reset"] = val
     try:
-        config_db.set_entry("MUX_CABLE", port, {"state": configdb_state,
-                                                "server_ipv4": ipv4_value, "server_ipv6": ipv6_value, 
-                                                "pck_loss_data_reset": val})
+        config_db.set_entry("MUX_CABLE", port, fvs)
     except ValueError as e:
         ctx = click.get_current_context()
         ctx.fail("Invalid ConfigDB. Error: {}".format(e))
