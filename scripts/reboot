@@ -77,7 +77,7 @@ function stop_pmon_service()
      fi
      systemctl stop pmon || debug "Ignore stopping pmon error $?"
      docker kill pmon &> /dev/null || CONTAINER_STOP_RC=$?
-     if [[ CONTAINER_STOP_RC -ne 0 ]]; then
+     if [[ $CONTAINER_STOP_RC -ne 0 ]]; then
         debug "Failed killing container pmon RC $CONTAINER_STOP_RC ."
      fi
 }
@@ -315,7 +315,7 @@ if [ -x ${WATCHDOG_UTIL} ]; then
 fi
 
 if [[ "${PRE_SHUTDOWN}" == "yes" ]]; then
-    echo "${DPU_MODULE_NAME} pre-shutdown steps are completed"
+    debug "${DPU_MODULE_NAME} pre-shutdown steps are completed"
     exit ${EXIT_SUCCESS}
 fi
 
