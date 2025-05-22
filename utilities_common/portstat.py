@@ -1,8 +1,7 @@
 import datetime
 import time
+import re
 from collections import OrderedDict, namedtuple
-
-from natsort import natsorted
 from tabulate import tabulate
 from sonic_py_common import multi_asic
 from sonic_py_common import device_info
@@ -133,6 +132,16 @@ PORT_STATE_DISABLED = 'X'
 LINECARD_PORT_STAT_TABLE = 'LINECARD_PORT_STAT_TABLE'
 LINECARD_PORT_STAT_MARK_TABLE = 'LINECARD_PORT_STAT_MARK_TABLE'
 CHASSIS_MIDPLANE_INFO_TABLE = 'CHASSIS_MIDPLANE_TABLE'
+
+
+def intfsorted(intf_list):
+    """
+        Sort the interfaces list purely based on digital indexes
+    """
+    def sort_key(intf):
+        return [int(i) for i in re.findall(r'\d+', intf)]
+
+    return sorted(intf_list, key=sort_key)
 
 
 class Portstat(object):
@@ -328,7 +337,7 @@ class Portstat(object):
         counter_table = CounterTable(self.db.get_redis_client(self.db.COUNTERS_DB))
         if counter_port_name_map is None:
             return cnstat_dict, ratestat_dict
-        for port in natsorted(counter_port_name_map):
+        for port in intfsorted(counter_port_name_map):
             port_name = port.split(":")[0]
             if self.multi_asic.skip_display(constants.PORT_OBJ, port_name):
                 continue
@@ -383,7 +392,7 @@ class Portstat(object):
         return STATUS_NA
 
     def cnstat_print(self, cnstat_dict, ratestat_dict, intf_list, use_json, print_all,
-                     errors_only, fec_stats_only, rates_only, trim_stats_only, detail=False):
+                     errors_only, fec_stats_only, rates_only, trim_stats_only, detail=False, nonzero=False):
         """
             Print the cnstat.
         """
@@ -395,7 +404,7 @@ class Portstat(object):
         table = []
         header = None
 
-        for key in natsorted(cnstat_dict.keys()):
+        for key in intfsorted(cnstat_dict.keys()):
             if key == 'time':
                 continue
             if intf_list and key not in intf_list:
@@ -405,75 +414,90 @@ class Portstat(object):
             rates = ratestat_dict.get(key, RateStats._make([STATUS_NA] * len(rates_key_list)))
             if print_all:
                 header = header_all
-                table.append((key, self.get_port_state(key),
-                              format_number_with_comma(data["rx_ok"]),
-                              format_brate(rates.rx_bps),
-                              format_prate(rates.rx_pps),
-                              format_util(rates.rx_bps, port_speed)
-                              if rates.rx_util == STATUS_NA else format_util_directly(rates.rx_util),
-                              format_number_with_comma(data["rx_err"]),
-                              format_number_with_comma(data["rx_drop"]),
-                              format_number_with_comma(data["rx_ovr"]),
-                              format_number_with_comma(data["tx_ok"]),
-                              format_brate(rates.tx_bps),
-                              format_prate(rates.tx_pps),
-                              format_util(rates.tx_bps, port_speed)
-                              if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util),
-                              format_number_with_comma(data["tx_err"]),
-                              format_number_with_comma(data["tx_drop"]),
-                              format_number_with_comma(data["tx_ovr"]),
-                              format_number_with_comma(data["trim"])))
+                if not nonzero or data["rx_ok"] != 0 or data["tx_ok"] != 0 or \
+                        data["rx_err"] != 0 or data["tx_err"] != 0 or \
+                        data["rx_drop"] != 0 or data["tx_drop"] != 0 or \
+                        data["rx_ovr"] != 0 or data["tx_ovr"] != 0:
+                    table.append((key, self.get_port_state(key),
+                                format_number_with_comma(data["rx_ok"]),
+                                format_brate(rates.rx_bps),
+                                format_prate(rates.rx_pps),
+                                format_util(rates.rx_bps, port_speed)
+                                if rates.rx_util == STATUS_NA else format_util_directly(rates.rx_util),
+                                format_number_with_comma(data["rx_err"]),
+                                format_number_with_comma(data["rx_drop"]),
+                                format_number_with_comma(data["rx_ovr"]),
+                                format_number_with_comma(data["tx_ok"]),
+                                format_brate(rates.tx_bps),
+                                format_prate(rates.tx_pps),
+                                format_util(rates.tx_bps, port_speed)
+                                if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util),
+                                format_number_with_comma(data["tx_err"]),
+                                format_number_with_comma(data["tx_drop"]),
+                                format_number_with_comma(data["tx_ovr"]),
+                                format_number_with_comma(data["trim"])))
             elif errors_only:
                 header = header_errors_only
-                table.append((key, self.get_port_state(key),
-                              format_number_with_comma(data["rx_err"]),
-                              format_number_with_comma(data["rx_drop"]),
-                              format_number_with_comma(data["rx_ovr"]),
-                              format_number_with_comma(data["tx_err"]),
-                              format_number_with_comma(data["tx_drop"]),
-                              format_number_with_comma(data["tx_ovr"])))
+                if not nonzero or data["rx_err"] != 0 or data["tx_err"] != 0 or \
+                        data["rx_drop"] != 0 or data["tx_drop"] != 0 or \
+                        data["rx_ovr"] != 0 or data["tx_ovr"] != 0:
+                    table.append((key, self.get_port_state(key),
+                                format_number_with_comma(data["rx_err"]),
+                                format_number_with_comma(data["rx_drop"]),
+                                format_number_with_comma(data["rx_ovr"]),
+                                format_number_with_comma(data["tx_err"]),
+                                format_number_with_comma(data["tx_drop"]),
+                                format_number_with_comma(data["tx_ovr"])))
             elif fec_stats_only:
                 header = header_fec_only
-                table.append((key, self.get_port_state(key),
-                              format_number_with_comma(data['fec_corr']),
-                              format_number_with_comma(data['fec_uncorr']),
-                              format_number_with_comma(data['fec_symbol_err']),
-                              format_fec_ber(rates.fec_pre_ber),
-                              format_fec_ber(rates.fec_post_ber)))
+                if not nonzero or data['fec_corr'] != 0 or data['fec_uncorr'] != 0 or \
+                        data['fec_symbol_err'] != 0:
+                    table.append((key, self.get_port_state(key),
+                                format_number_with_comma(data['fec_corr']),
+                                format_number_with_comma(data['fec_uncorr']),
+                                format_number_with_comma(data['fec_symbol_err']),
+                                format_fec_ber(rates.fec_pre_ber),
+                                format_fec_ber(rates.fec_post_ber)))
             elif rates_only:
                 header = header_rates_only
-                table.append((key, self.get_port_state(key),
-                              format_number_with_comma(data["rx_ok"]),
-                              format_brate(rates.rx_bps),
-                              format_prate(rates.rx_pps),
-                              format_util(rates.rx_bps, port_speed)
-                              if rates.rx_util == STATUS_NA else format_util_directly(rates.rx_util),
-                              format_number_with_comma(data["tx_ok"]),
-                              format_brate(rates.tx_bps),
-                              format_prate(rates.tx_pps),
-                              format_util(rates.tx_bps, port_speed)
-                              if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util)))
+                if not nonzero or data["rx_ok"] != 0 or data["tx_ok"] != 0:
+                    table.append((key, self.get_port_state(key),
+                                format_number_with_comma(data["rx_ok"]),
+                                format_brate(rates.rx_bps),
+                                format_prate(rates.rx_pps),
+                                format_util(rates.rx_bps, port_speed)
+                                if rates.rx_util == STATUS_NA else format_util_directly(rates.rx_util),
+                                format_number_with_comma(data["tx_ok"]),
+                                format_brate(rates.tx_bps),
+                                format_prate(rates.tx_pps),
+                                format_util(rates.tx_bps, port_speed)
+                                if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util)))
             elif trim_stats_only:  # Packet Trimming related statistics
                 header = header_trim_only
-                table.append((key, self.get_port_state(key),
-                              format_number_with_comma(data['trim'])))
+                if not nonzero or data['trim'] != 0:
+                    table.append((key, self.get_port_state(key),
+                                format_number_with_comma(data['trim'])))
             else:
                 header = header_std
-                table.append((key, self.get_port_state(key),
-                              format_number_with_comma(data["rx_ok"]),
-                              format_brate(rates.rx_bps),
-                              format_util(rates.rx_bps, port_speed)
-                              if rates.rx_util == STATUS_NA else format_util_directly(rates.rx_util),
-                              format_number_with_comma(data["rx_err"]),
-                              format_number_with_comma(data["rx_drop"]),
-                              format_number_with_comma(data["rx_ovr"]),
-                              format_number_with_comma(data["tx_ok"]),
-                              format_brate(rates.tx_bps),
-                              format_util(rates.tx_bps, port_speed)
-                              if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util),
-                              format_number_with_comma(data["tx_err"]),
-                              format_number_with_comma(data["tx_drop"]),
-                              format_number_with_comma(data["tx_ovr"])))
+                if not nonzero or data["rx_ok"] != 0 or data["tx_ok"] != 0 or \
+                        data["rx_err"] != 0 or data["tx_err"] != 0 or \
+                        data["rx_drop"] != 0 or data["tx_drop"] != 0 or \
+                        data["rx_ovr"] != 0 or data["tx_ovr"] != 0:
+                    table.append((key, self.get_port_state(key),
+                                format_number_with_comma(data["rx_ok"]),
+                                format_brate(rates.rx_bps),
+                                format_util(rates.rx_bps, port_speed)
+                                if rates.rx_util == STATUS_NA else format_util_directly(rates.rx_util),
+                                format_number_with_comma(data["rx_err"]),
+                                format_number_with_comma(data["rx_drop"]),
+                                format_number_with_comma(data["rx_ovr"]),
+                                format_number_with_comma(data["tx_ok"]),
+                                format_brate(rates.tx_bps),
+                                format_util(rates.tx_bps, port_speed)
+                                if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util),
+                                format_number_with_comma(data["tx_err"]),
+                                format_number_with_comma(data["tx_drop"]),
+                                format_number_with_comma(data["tx_ovr"])))
         if table:
             if use_json:
                 print(table_as_json(table, header))
@@ -489,7 +513,7 @@ class Portstat(object):
             Print the difference between two cnstat results for interface.
         """
 
-        for key in natsorted(cnstat_new_dict.keys()):
+        for key in intfsorted(cnstat_new_dict.keys()):
             cntr = cnstat_new_dict.get(key)
             if key == 'time':
                 continue
@@ -619,7 +643,7 @@ class Portstat(object):
     def cnstat_diff_print(self, cnstat_new_dict, cnstat_old_dict,
                           ratestat_dict, intf_list, use_json,
                           print_all, errors_only, fec_stats_only,
-                          rates_only, trim_stats_only, detail=False):
+                          rates_only, trim_stats_only, detail=False, nonzero=False):
         """
             Print the difference between two cnstat results.
         """
@@ -631,7 +655,7 @@ class Portstat(object):
         table = []
         header = None
 
-        for key in natsorted(cnstat_new_dict.keys()):
+        for key in intfsorted(cnstat_new_dict.keys()):
             cntr = cnstat_new_dict.get(key)
             if key == 'time':
                 continue
@@ -648,146 +672,193 @@ class Portstat(object):
             if print_all:
                 header = header_all
                 if old_cntr is not None:
-                    table.append((key, self.get_port_state(key),
-                                  ns_diff(cntr["rx_ok"], old_cntr["rx_ok"]),
-                                  format_brate(rates.rx_bps),
-                                  format_prate(rates.rx_pps),
-                                  format_util(rates.rx_bps, port_speed)
-                                  if rates.rx_util == STATUS_NA else format_util_directly(rates.rx_util),
-                                  ns_diff(cntr["rx_err"], old_cntr["rx_err"]),
-                                  ns_diff(cntr["rx_drop"], old_cntr["rx_drop"]),
-                                  ns_diff(cntr["rx_ovr"], old_cntr["rx_ovr"]),
-                                  ns_diff(cntr["tx_ok"], old_cntr["tx_ok"]),
-                                  format_brate(rates.tx_bps),
-                                  format_prate(rates.tx_pps),
-                                  format_util(rates.tx_bps, port_speed)
-                                  if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util),
-                                  ns_diff(cntr["tx_err"], old_cntr["tx_err"]),
-                                  ns_diff(cntr["tx_drop"], old_cntr["tx_drop"]),
-                                  ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"]),
-                                  ns_diff(cntr["trim"], old_cntr["trim"])))
+                    if not nonzero or ns_diff(cntr["rx_ok"], old_cntr["rx_ok"]) != 0 or \
+                            ns_diff(cntr["tx_ok"], old_cntr["tx_ok"]) != 0 or \
+                            ns_diff(cntr["rx_err"], old_cntr["rx_err"]) != 0 or \
+                            ns_diff(cntr["tx_err"], old_cntr["tx_err"]) != 0 or \
+                            ns_diff(cntr["rx_drop"], old_cntr["rx_drop"]) != 0 or \
+                            ns_diff(cntr["tx_drop"], old_cntr["tx_drop"]) != 0 or \
+                            ns_diff(cntr["rx_ovr"], old_cntr["rx_ovr"]) != 0 or \
+                            ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"]) != 0:
+                        table.append((key, self.get_port_state(key),
+                                    ns_diff(cntr["rx_ok"], old_cntr["rx_ok"]),
+                                    format_brate(rates.rx_bps),
+                                    format_prate(rates.rx_pps),
+                                    format_util(rates.rx_bps, port_speed)
+                                    if rates.rx_util == STATUS_NA else format_util_directly(rates.rx_util),
+                                    ns_diff(cntr["rx_err"], old_cntr["rx_err"]),
+                                    ns_diff(cntr["rx_drop"], old_cntr["rx_drop"]),
+                                    ns_diff(cntr["rx_ovr"], old_cntr["rx_ovr"]),
+                                    ns_diff(cntr["tx_ok"], old_cntr["tx_ok"]),
+                                    format_brate(rates.tx_bps),
+                                    format_prate(rates.tx_pps),
+                                    format_util(rates.tx_bps, port_speed)
+                                    if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util),
+                                    ns_diff(cntr["tx_err"], old_cntr["tx_err"]),
+                                    ns_diff(cntr["tx_drop"], old_cntr["tx_drop"]),
+                                    ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"]),
+                                    ns_diff(cntr["trim"], old_cntr["trim"])))
                 else:
-                    table.append((key, self.get_port_state(key),
-                                  format_number_with_comma(cntr["rx_ok"]),
-                                  format_brate(rates.rx_bps),
-                                  format_prate(rates.rx_pps),
-                                  format_util(rates.rx_bps, port_speed)
-                                  if rates.rx_util == STATUS_NA else format_util_directly(rates.rx_util),
-                                  format_number_with_comma(cntr["rx_err"]),
-                                  format_number_with_comma(cntr["rx_drop"]),
-                                  format_number_with_comma(cntr["rx_ovr"]),
-                                  format_number_with_comma(cntr["tx_ok"]),
-                                  format_brate(rates.tx_bps),
-                                  format_prate(rates.tx_pps),
-                                  format_util(rates.tx_bps, port_speed)
-                                  if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util),
-                                  format_number_with_comma(cntr["tx_err"]),
-                                  format_number_with_comma(cntr["tx_drop"]),
-                                  format_number_with_comma(cntr["tx_ovr"]),
-                                  format_number_with_comma(cntr["trim"])))
+                    if not nonzero or ns_diff(cntr["rx_ok"], 0) != 0 or \
+                            ns_diff(cntr["tx_ok"], 0) != 0 or \
+                            ns_diff(cntr["rx_err"], 0) != 0 or \
+                            ns_diff(cntr["tx_err"], 0) != 0 or \
+                            ns_diff(cntr["rx_drop"], 0) != 0 or \
+                            ns_diff(cntr["tx_drop"], 0) != 0 or \
+                            ns_diff(cntr["rx_ovr"], 0) != 0 or \
+                            ns_diff(cntr["tx_ovr"], 0) != 0:
+                        table.append((key, self.get_port_state(key),
+                                    format_number_with_comma(cntr["rx_ok"]),
+                                    format_brate(rates.rx_bps),
+                                    format_prate(rates.rx_pps),
+                                    format_util(rates.rx_bps, port_speed)
+                                    if rates.rx_util == STATUS_NA else format_util_directly(rates.rx_util),
+                                    format_number_with_comma(cntr["rx_err"]),
+                                    format_number_with_comma(cntr["rx_drop"]),
+                                    format_number_with_comma(cntr["rx_ovr"]),
+                                    format_number_with_comma(cntr["tx_ok"]),
+                                    format_brate(rates.tx_bps),
+                                    format_prate(rates.tx_pps),
+                                    format_util(rates.tx_bps, port_speed)
+                                    if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util),
+                                    format_number_with_comma(cntr["tx_err"]),
+                                    format_number_with_comma(cntr["tx_drop"]),
+                                    format_number_with_comma(cntr["tx_ovr"]),
+                                    format_number_with_comma(cntr["trim"])))
             elif errors_only:
                 header = header_errors_only
                 if old_cntr is not None:
-                    table.append((key, self.get_port_state(key),
-                                  ns_diff(cntr["rx_err"], old_cntr["rx_err"]),
-                                  ns_diff(cntr["rx_drop"], old_cntr["rx_drop"]),
-                                  ns_diff(cntr["rx_ovr"], old_cntr["rx_ovr"]),
-                                  ns_diff(cntr["tx_err"], old_cntr["tx_err"]),
-                                  ns_diff(cntr["tx_drop"], old_cntr["tx_drop"]),
-                                  ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"])))
+                    if not nonzero or ns_diff(cntr["rx_err"], old_cntr["rx_err"]) != 0 or \
+                            ns_diff(cntr["tx_err"], old_cntr["tx_err"]) != 0 or \
+                            ns_diff(cntr["rx_drop"], old_cntr["rx_drop"]) != 0 or \
+                            ns_diff(cntr["tx_drop"], old_cntr["tx_drop"]) != 0 or \
+                            ns_diff(cntr["rx_ovr"], old_cntr["rx_ovr"]) != 0 or \
+                            ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"]) != 0:
+                        table.append((key, self.get_port_state(key),
+                                    ns_diff(cntr["rx_err"], old_cntr["rx_err"]),
+                                    ns_diff(cntr["rx_drop"], old_cntr["rx_drop"]),
+                                    ns_diff(cntr["rx_ovr"], old_cntr["rx_ovr"]),
+                                    ns_diff(cntr["tx_err"], old_cntr["tx_err"]),
+                                    ns_diff(cntr["tx_drop"], old_cntr["tx_drop"]),
+                                    ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"])))
                 else:
-                    table.append((key, self.get_port_state(key),
-                                  format_number_with_comma(cntr["rx_err"]),
-                                  format_number_with_comma(cntr["rx_drop"]),
-                                  format_number_with_comma(cntr["rx_ovr"]),
-                                  format_number_with_comma(cntr["tx_err"]),
-                                  format_number_with_comma(cntr["tx_drop"]),
-                                  format_number_with_comma(cntr["tx_ovr"])))
+                    if not nonzero or cntr["rx_err"] != 0 or cntr["tx_err"] != 0 or \
+                            cntr["rx_drop"] != 0 or cntr["tx_drop"] != 0 or \
+                            cntr["rx_ovr"] != 0 or cntr["tx_ovr"] != 0:
+                        table.append((key, self.get_port_state(key),
+                                    format_number_with_comma(cntr["rx_err"]),
+                                    format_number_with_comma(cntr["rx_drop"]),
+                                    format_number_with_comma(cntr["rx_ovr"]),
+                                    format_number_with_comma(cntr["tx_err"]),
+                                    format_number_with_comma(cntr["tx_drop"]),
+                                    format_number_with_comma(cntr["tx_ovr"])))
             elif fec_stats_only:
                 header = header_fec_only
                 if old_cntr is not None:
-                    table.append((key, self.get_port_state(key),
-                                  ns_diff(cntr['fec_corr'], old_cntr['fec_corr']),
-                                  ns_diff(cntr['fec_uncorr'], old_cntr['fec_uncorr']),
-                                  ns_diff(cntr['fec_symbol_err'], old_cntr['fec_symbol_err'])))
+                    if not nonzero or ns_diff(cntr['fec_corr'], old_cntr['fec_corr']) != 0 or \
+                            ns_diff(cntr['fec_uncorr'], old_cntr['fec_uncorr']) != 0 or \
+                            ns_diff(cntr['fec_symbol_err'], old_cntr['fec_symbol_err']) != 0:
+                        table.append((key, self.get_port_state(key),
+                                    ns_diff(cntr['fec_corr'], old_cntr['fec_corr']),
+                                    ns_diff(cntr['fec_uncorr'], old_cntr['fec_uncorr']),
+                                    ns_diff(cntr['fec_symbol_err'], old_cntr['fec_symbol_err'])))
                 else:
-                    table.append((key, self.get_port_state(key),
-                                  format_number_with_comma(cntr['fec_corr']),
-                                  format_number_with_comma(cntr['fec_uncorr']),
-                                  format_number_with_comma(cntr['fec_symbol_err'])))
+                    if not nonzero or cntr['fec_corr'] != 0 or cntr['fec_uncorr'] != 0 or \
+                            cntr['fec_symbol_err'] != 0:
+                        table.append((key, self.get_port_state(key),
+                                    format_number_with_comma(cntr['fec_corr']),
+                                    format_number_with_comma(cntr['fec_uncorr']),
+                                    format_number_with_comma(cntr['fec_symbol_err'])))
 
             elif rates_only:
                 header = header_rates_only
                 if old_cntr is not None:
-                    table.append((key,
-                                  self.get_port_state(key),
-                                  ns_diff(cntr["rx_ok"], old_cntr["rx_ok"]),
-                                  format_brate(rates.rx_bps),
-                                  format_prate(rates.rx_pps),
-                                  format_util(rates.rx_bps, port_speed)
-                                  if rates.rx_util == STATUS_NA else format_util_directly(rates.rx_util),
-                                  ns_diff(cntr["tx_ok"], old_cntr["tx_ok"]),
-                                  format_brate(rates.tx_bps),
-                                  format_prate(rates.tx_pps),
-                                  format_util(rates.tx_bps, port_speed)
-                                  if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util)))
+                    if not nonzero or ns_diff(cntr["rx_ok"], old_cntr["rx_ok"]) != 0 or \
+                            ns_diff(cntr["tx_ok"], old_cntr["tx_ok"]) != 0:
+                        table.append((key,
+                                    self.get_port_state(key),
+                                    ns_diff(cntr["rx_ok"], old_cntr["rx_ok"]),
+                                    format_brate(rates.rx_bps),
+                                    format_prate(rates.rx_pps),
+                                    format_util(rates.rx_bps, port_speed)
+                                    if rates.rx_util == STATUS_NA else format_util_directly(rates.rx_util),
+                                    ns_diff(cntr["tx_ok"], old_cntr["tx_ok"]),
+                                    format_brate(rates.tx_bps),
+                                    format_prate(rates.tx_pps),
+                                    format_util(rates.tx_bps, port_speed)
+                                    if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util)))
                 else:
-                    table.append((key,
-                                  self.get_port_state(key),
-                                  format_number_with_comma(cntr["rx_ok"]),
-                                  format_brate(rates.rx_bps),
-                                  format_prate(rates.rx_pps),
-                                  format_util(rates.rx_bps, port_speed)
-                                  if rates.rx_util == STATUS_NA else format_util_directly(rates.rx_util),
-                                  format_number_with_comma(cntr["tx_ok"]),
-                                  format_brate(rates.tx_bps),
-                                  format_prate(rates.tx_pps),
-                                  format_util(rates.tx_bps, port_speed)
-                                  if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util)))
+                    if not nonzero or cntr["rx_ok"] != 0 or cntr["tx_ok"] != 0:
+                        table.append((key,
+                                    self.get_port_state(key),
+                                    format_number_with_comma(cntr["rx_ok"]),
+                                    format_brate(rates.rx_bps),
+                                    format_prate(rates.rx_pps),
+                                    format_util(rates.rx_bps, port_speed)
+                                    if rates.rx_util == STATUS_NA else format_util_directly(rates.rx_util),
+                                    format_number_with_comma(cntr["tx_ok"]),
+                                    format_brate(rates.tx_bps),
+                                    format_prate(rates.tx_pps),
+                                    format_util(rates.tx_bps, port_speed)
+                                    if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util)))
             elif trim_stats_only:  # Packet Trimming related statistics
                 header = header_trim_only
                 if old_cntr is not None:
-                    table.append((key, self.get_port_state(key),
-                                  ns_diff(cntr['trim'], old_cntr['trim'])))
+                    if not nonzero or ns_diff(cntr['trim'], old_cntr['trim']) != 0:
+                        table.append((key, self.get_port_state(key),
+                                    ns_diff(cntr['trim'], old_cntr['trim'])))
                 else:
-                    table.append((key, self.get_port_state(key),
-                                  format_number_with_comma(cntr['trim'])))
+                    if not nonzero or cntr['trim'] != 0:
+                        table.append((key, self.get_port_state(key),
+                                    format_number_with_comma(cntr['trim'])))
             else:
                 header = header_std
                 if old_cntr is not None:
-                    table.append((key,
-                                  self.get_port_state(key),
-                                  ns_diff(cntr["rx_ok"], old_cntr["rx_ok"]),
-                                  format_brate(rates.rx_bps),
-                                  format_util(rates.rx_bps, port_speed)
-                                  if rates.rx_util == STATUS_NA else format_util_directly(rates.rx_util),
-                                  ns_diff(cntr["rx_err"], old_cntr["rx_err"]),
-                                  ns_diff(cntr["rx_drop"], old_cntr["rx_drop"]),
-                                  ns_diff(cntr["rx_ovr"], old_cntr["rx_ovr"]),
-                                  ns_diff(cntr["tx_ok"], old_cntr["tx_ok"]),
-                                  format_brate(rates.tx_bps),
-                                  format_util(rates.tx_bps, port_speed)
-                                  if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util),
-                                  ns_diff(cntr["tx_err"], old_cntr["tx_err"]),
-                                  ns_diff(cntr["tx_drop"], old_cntr["tx_drop"]),
-                                  ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"])))
+                    if not nonzero or ns_diff(cntr["rx_ok"], old_cntr["rx_ok"]) != 0 or \
+                            ns_diff(cntr["tx_ok"], old_cntr["tx_ok"]) != 0 or \
+                            ns_diff(cntr["rx_err"], old_cntr["rx_err"]) != 0 or \
+                            ns_diff(cntr["tx_err"], old_cntr["tx_err"]) != 0 or \
+                            ns_diff(cntr["rx_drop"], old_cntr["rx_drop"]) != 0 or \
+                            ns_diff(cntr["tx_drop"], old_cntr["tx_drop"]) != 0 or \
+                            ns_diff(cntr["rx_ovr"], old_cntr["rx_ovr"]) != 0 or \
+                            ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"]) != 0:
+                        table.append((key,
+                                    self.get_port_state(key),
+                                    ns_diff(cntr["rx_ok"], old_cntr["rx_ok"]),
+                                    format_brate(rates.rx_bps),
+                                    format_util(rates.rx_bps, port_speed)
+                                    if rates.rx_util == STATUS_NA else format_util_directly(rates.rx_util),
+                                    ns_diff(cntr["rx_err"], old_cntr["rx_err"]),
+                                    ns_diff(cntr["rx_drop"], old_cntr["rx_drop"]),
+                                    ns_diff(cntr["rx_ovr"], old_cntr["rx_ovr"]),
+                                    ns_diff(cntr["tx_ok"], old_cntr["tx_ok"]),
+                                    format_brate(rates.tx_bps),
+                                    format_util(rates.tx_bps, port_speed)
+                                    if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util),
+                                    ns_diff(cntr["tx_err"], old_cntr["tx_err"]),
+                                    ns_diff(cntr["tx_drop"], old_cntr["tx_drop"]),
+                                    ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"])))
                 else:
-                    table.append((key,
-                                  self.get_port_state(key),
-                                  format_number_with_comma(cntr["rx_ok"]),
-                                  format_brate(rates.rx_bps),
-                                  format_util(rates.rx_bps, port_speed)
-                                  if rates.rx_util == STATUS_NA else format_util_directly(rates.rx_util),
-                                  format_number_with_comma(cntr["rx_err"]),
-                                  format_number_with_comma(cntr["rx_drop"]),
-                                  format_number_with_comma(cntr["rx_ovr"]),
-                                  format_number_with_comma(cntr["tx_ok"]),
-                                  format_brate(rates.tx_bps),
-                                  format_util(rates.tx_bps, port_speed)
-                                  if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util),
-                                  format_number_with_comma(cntr["tx_err"]),
-                                  format_number_with_comma(cntr["tx_drop"]),
-                                  format_number_with_comma(cntr["tx_ovr"])))
+                    if not nonzero or cntr["rx_ok"] != 0 or cntr["tx_ok"] != 0 or \
+                            cntr["rx_err"] != 0 or cntr["tx_err"] != 0 or \
+                            cntr["rx_drop"] != 0 or cntr["tx_drop"] != 0 or \
+                            cntr["rx_ovr"] != 0 or cntr["tx_ovr"] != 0:
+                        table.append((key,
+                                    self.get_port_state(key),
+                                    format_number_with_comma(cntr["rx_ok"]),
+                                    format_brate(rates.rx_bps),
+                                    format_util(rates.rx_bps, port_speed)
+                                    if rates.rx_util == STATUS_NA else format_util_directly(rates.rx_util),
+                                    format_number_with_comma(cntr["rx_err"]),
+                                    format_number_with_comma(cntr["rx_drop"]),
+                                    format_number_with_comma(cntr["rx_ovr"]),
+                                    format_number_with_comma(cntr["tx_ok"]),
+                                    format_brate(rates.tx_bps),
+                                    format_util(rates.tx_bps, port_speed)
+                                    if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util),
+                                    format_number_with_comma(cntr["tx_err"]),
+                                    format_number_with_comma(cntr["tx_drop"]),
+                                    format_number_with_comma(cntr["tx_ovr"])))
         if table:
             if use_json:
                 print(table_as_json(table, header))

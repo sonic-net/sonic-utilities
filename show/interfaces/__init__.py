@@ -761,8 +761,9 @@ def error_status(db, interfacename, fetch_from_hardware, namespace, verbose):
 @click.option('-p', '--period', type=click.INT, help="Display statistics over a specified period (in seconds)")
 @click.option('-j', '--json', 'json_fmt', is_flag=True, help="Print in JSON format")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
+@click.option('--nonzero', is_flag=True, help="Only display non zero counters")
 @click.pass_context
-def counters(ctx, namespace, display, interface, printall, period, json_fmt, verbose):
+def counters(ctx, namespace, display, interface, printall, period, json_fmt, verbose, nonzero):
     """Show interface counters"""
 
     if ctx.invoked_subcommand is None:
@@ -781,6 +782,8 @@ def counters(ctx, namespace, display, interface, printall, period, json_fmt, ver
             cmd += ['-n', str(namespace)]
         if json_fmt:
             cmd += ['-j']
+        if nonzero:
+            cmd += ['-nz']
 
         clicommon.run_command(cmd, display_cmd=verbose)
 
