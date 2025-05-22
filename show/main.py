@@ -835,11 +835,14 @@ def watermark():
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def wm_q_uni(namespace):
+@click.option('--json', '-j', 'json_output', is_flag=True, default=False, show_default=True, help="Display JSON output")
+def wm_q_uni(namespace, json_output):
     """Show user WM for unicast queues"""
     command = ['watermarkstat', '-t', 'q_shared_uni']
     if namespace is not None:
         command += ['-n', str(namespace)]
+    if json_output:
+        command += ["-j"]
     run_command(command)
 
 # 'multicast' subcommand ("show queue watermarks multicast")
@@ -852,11 +855,14 @@ def wm_q_uni(namespace):
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def wm_q_multi(namespace):
+@click.option('--json', '-j', 'json_output', is_flag=True, default=False, show_default=True, help="Display JSON output")
+def wm_q_multi(namespace, json_output):
     """Show user WM for multicast queues"""
     command = ['watermarkstat', '-t', 'q_shared_multi']
     if namespace is not None:
         command += ['-n', str(namespace)]
+    if json_output:
+        command += ["-j"]
     run_command(command)
 
 # 'all' subcommand ("show queue watermarks all")
@@ -869,11 +875,14 @@ def wm_q_multi(namespace):
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def wm_q_all(namespace):
+@click.option('--json', '-j', 'json_output', is_flag=True, default=False, show_default=True, help="Display JSON output")
+def wm_q_all(namespace, json_output):
     """Show user WM for all queues"""
     command = ['watermarkstat', '-t', 'q_shared_all']
     if namespace is not None:
         command += ['-n', str(namespace)]
+    if json_output:
+        command += ["-j"]
     run_command(command)
 
 #
@@ -895,11 +904,14 @@ def persistent_watermark():
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def pwm_q_uni(namespace):
+@click.option('--json', '-j', 'json_output', is_flag=True, default=False, show_default=True, help="Display JSON output")
+def pwm_q_uni(namespace, json_output):
     """Show persistent WM for unicast queues"""
     command = ['watermarkstat', '-p', '-t', 'q_shared_uni']
     if namespace is not None:
         command += ['-n', str(namespace)]
+    if json_output:
+        command += ["-j"]
     run_command(command)
 
 # 'multicast' subcommand ("show queue persistent-watermarks multicast")
@@ -912,11 +924,14 @@ def pwm_q_uni(namespace):
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def pwm_q_multi(namespace):
+@click.option('--json', '-j', 'json_output', is_flag=True, default=False, show_default=True, help="Display JSON output")
+def pwm_q_multi(namespace, json_output):
     """Show persistent WM for multicast queues"""
     command = ['watermarkstat', '-p', '-t', 'q_shared_multi']
     if namespace is not None:
         command += ['-n', str(namespace)]
+    if json_output:
+        command += ["-j"]
     run_command(command)
 
 # 'all' subcommand ("show queue persistent-watermarks all")
@@ -929,11 +944,14 @@ def pwm_q_multi(namespace):
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def pwm_q_all(namespace):
+@click.option('--json', '-j', 'json_output', is_flag=True, default=False, show_default=True, help="Display JSON output")
+def pwm_q_all(namespace, json_output):
     """Show persistent WM for all queues"""
     command = ['watermarkstat', '-p', '-t', 'q_shared_all']
     if namespace is not None:
         command += ['-n', str(namespace)]
+    if json_output:
+        command += ["-j"]
     run_command(command)
 
 #
@@ -958,11 +976,14 @@ def watermark():
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def wm_pg_headroom(namespace):
+@click.option('--json', '-j', 'json_output', is_flag=True, default=False, show_default=True, help="Display JSON output")
+def wm_pg_headroom(namespace, json_output):
     """Show user headroom WM for pg"""
     command = ['watermarkstat', '-t', 'pg_headroom']
     if namespace is not None:
         command += ['-n', str(namespace)]
+    if json_output:
+        command += ["-j"]
     run_command(command)
 
 @watermark.command('shared')
@@ -974,11 +995,14 @@ def wm_pg_headroom(namespace):
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def wm_pg_shared(namespace):
+@click.option('--json', '-j', 'json_output', is_flag=True, default=False, show_default=True, help="Display JSON output")
+def wm_pg_shared(namespace, json_output):
     """Show user shared WM for pg"""
     command = ['watermarkstat', '-t', 'pg_shared']
     if namespace is not None:
         command += ['-n', str(namespace)]
+    if json_output:
+        command += ["-j"]
     run_command(command)
 
 @priority_group.group()
@@ -1009,11 +1033,14 @@ def persistent_watermark():
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def pwm_pg_headroom(namespace):
+@click.option('--json', '-j', 'json_output', is_flag=True, default=False, show_default=True, help="Display JSON output")
+def pwm_pg_headroom(namespace, json_output):
     """Show persistent headroom WM for pg"""
     command = ['watermarkstat', '-p', '-t', 'pg_headroom']
     if namespace is not None:
         command += ['-n', str(namespace)]
+    if json_output:
+        command += ["-j"]
     run_command(command)
 
 
@@ -1026,11 +1053,14 @@ def pwm_pg_headroom(namespace):
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def pwm_pg_shared(namespace):
+@click.option('--json', '-j', 'json_output', is_flag=True, default=False, show_default=True, help="Display JSON output")
+def pwm_pg_shared(namespace, json_output):
     """Show persistent shared WM for pg"""
     command = ['watermarkstat', '-p', '-t', 'pg_shared']
     if namespace is not None:
         command += ['-n', str(namespace)]
+    if json_output:
+        command += ["-j"]
     run_command(command)
 
 
