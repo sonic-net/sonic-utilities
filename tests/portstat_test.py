@@ -321,6 +321,19 @@ Ethernet-BP8      N/A        6  1350.00 KB/s        N/A       100        10     
 Reminder: Please execute 'show interface counters -d all' to include internal links
 """
 
+intf_counters_from_lc_on_sup_packet_chassis = """\
+                  IFACE    STATE    RX_OK     RX_BPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK     TX_BPS    TX_UTIL\
+    TX_ERR    TX_DRP    TX_OVR
+-----------------------  -------  -------  ---------  ---------  --------  --------  --------  -------  ---------  ---------\
+  --------  --------  --------
+     HundredGigE0/1/0/1        U      100  10.00 B/s      0.00%         0         0         0      100  10.00 B/s      0.00%\
+         0         0         0
+       FortyGigE0/2/0/2        U      100  10.00 B/s      0.00%         0         0         0      100  10.00 B/s      0.00%\
+         0         0         0
+FourHundredGigE0/3/0/10        U      100  10.00 B/s      0.00%         0         0         0      100  10.00 B/s      0.00%\
+         0         0         0
+"""
+
 intf_counters_nonzero = """\
     IFACE    STATE    RX_OK        RX_BPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK        TX_BPS    TX_UTIL    TX_ERR    TX_DRP    TX_OVR
 ---------  -------  -------  ------------  ---------  --------  --------  --------  -------  ------------  ---------  --------  --------  --------
@@ -628,6 +641,31 @@ class TestPortStat(object):
                   .format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
         os.system("cp /tmp/counters_db.json {}"
                   .format(os.path.join(test_path, "mock_tables/counters_db.json")))
+
+    def test_show_intf_counters_from_lc_on_sup_packet_chassis(self):
+        os.system("cp {} /tmp/".format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+        os.system("cp {} {}".format(os.path.join(test_path, "portstat_db/on_sup_packet_chassis/chassis_state_db.json"),
+                                    os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+        os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "1"
+        os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] = "1"
+
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["counters"], ["-dall"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == intf_counters_from_lc_on_sup_packet_chassis
+
+        return_code, result = get_result_and_return_code(['portstat', '-s', 'all'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result.rstrip() == intf_counters_from_lc_on_sup_packet_chassis.rstrip()
+        os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
+        os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] = "0"
+        os.system("cp /tmp/chassis_state_db.json {}"
+                  .format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
 
     def test_show_intf_counters_nonzero(self):
         runner = CliRunner()
