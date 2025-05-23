@@ -56,6 +56,42 @@ Neighbhor      V     AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ  Up/Down 
 Total number of neighbors 24
 """
 
+show_bgp_summary_alias_v4 = """\
+
+IPv4 Unicast Summary:
+BGP router identifier 10.1.0.32, local AS number 65100 vrf-id 0
+BGP table version 12811
+RIB entries 12817, using 2358328 bytes of memory
+Peers 2, using 502080 KiB of memory
+Peer groups 1, using 256 bytes of memory
+
+
+Neighbhor      V     AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ  Up/Down      State/PfxRcd  NeighborName
+-----------  ---  -----  ---------  ---------  --------  -----  ------  ---------  --------------  --------------
+etp1           4  65200       5919       2717         0      0       0  1d21h11m             6402  NotAvailable
+etp2           4  65200       5916       2714         0      0       0  1d21h10m             6402  NotAvailable
+
+Total number of neighbors 2
+"""
+
+show_bgp_summary_alias_v6 = """\
+
+IPv6 Unicast Summary:
+BGP router identifier 10.1.0.32, local AS number 65100 vrf-id 0
+BGP table version 12811
+RIB entries 12817, using 2358328 bytes of memory
+Peers 2, using 502080 KiB of memory
+Peer groups 1, using 256 bytes of memory
+
+
+Neighbhor      V     AS    MsgRcvd    MsgSent    TblVer    InQ    OutQ  Up/Down      State/PfxRcd  NeighborName
+-----------  ---  -----  ---------  ---------  --------  -----  ------  ---------  --------------  --------------
+etp1           4  65200       5919       2717         0      0       0  1d21h11m             6402  NotAvailable
+etp2           4  65200       5916       2714         0      0       0  1d21h10m             6402  NotAvailable
+
+Total number of neighbors 2
+"""
+
 show_bgp_summary_v6 = """\
 
 IPv6 Unicast Summary:
@@ -362,6 +398,60 @@ class TestBgpCommandsSingleAsic(object):
         print("{}".format(result.output))
         assert result.exit_code == 0
         assert result.output == show_bgp_summary_v4
+
+    @pytest.mark.parametrize('setup_single_bgp_instance',
+                             ['alias_v4'], indirect=['setup_single_bgp_instance'])
+    def test_bgp_summary_alias_v4(
+            self,
+            setup_bgp_commands,
+            setup_single_bgp_instance):
+        show = setup_bgp_commands
+        runner = CliRunner()
+        os.environ['SONIC_CLI_IFACE_MODE'] = "alias"
+        result = runner.invoke(
+            show.cli.commands["ip"].commands["bgp"].commands["summary"], [])
+        os.environ['SONIC_CLI_IFACE_MODE'] = "default"
+        print("{}".format(result.output))
+        assert result.exit_code == 0
+        assert result.output == show_bgp_summary_alias_v4
+
+    @pytest.mark.parametrize('setup_single_bgp_instance',
+                             ['alias_v6'], indirect=['setup_single_bgp_instance'])
+    def test_bgp_summary_alias_v6(
+            self,
+            setup_bgp_commands,
+            setup_single_bgp_instance):
+        show = setup_bgp_commands
+        runner = CliRunner()
+        os.environ['SONIC_CLI_IFACE_MODE'] = "alias"
+        result = runner.invoke(
+            show.cli.commands["ipv6"].commands["bgp"].commands["summary"], [])
+        os.environ['SONIC_CLI_IFACE_MODE'] = "default"
+        print("{}".format(result.output))
+        assert result.exit_code == 0
+        assert result.output == show_bgp_summary_alias_v6
+
+    @pytest.mark.parametrize('setup_single_bgp_instance',
+                             ['alias_empty'], indirect=['setup_single_bgp_instance'])
+    def test_bgp_summary_alias_empty(
+            self,
+            setup_bgp_commands,
+            setup_single_bgp_instance):
+        show = setup_bgp_commands
+        runner = CliRunner()
+        os.environ['SONIC_CLI_IFACE_MODE'] = "alias"
+        result = runner.invoke(
+            show.cli.commands["ip"].commands["bgp"].commands["summary"], [])
+        os.environ['SONIC_CLI_IFACE_MODE'] = "default"
+        print("{}".format(result.output))
+        assert result.exit_code == 2
+
+        os.environ['SONIC_CLI_IFACE_MODE'] = "alias"
+        result = runner.invoke(
+            show.cli.commands["ipv6"].commands["bgp"].commands["summary"], [])
+        os.environ['SONIC_CLI_IFACE_MODE'] = "default"
+        print("{}".format(result.output))
+        assert result.exit_code == 2
 
     @pytest.mark.parametrize('setup_single_bgp_instance',
                              ['v6'], indirect=['setup_single_bgp_instance'])

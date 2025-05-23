@@ -173,6 +173,15 @@ def setup_single_bgp_instance(request):
     if request.param == 'v4':
         bgp_mocked_json = os.path.join(
             test_path, 'mock_tables', 'ipv4_bgp_summary.json')
+    elif request.param == 'alias_v4':
+        bgp_mocked_json = os.path.join(
+            test_path, 'mock_tables', 'ipv4_bgp_summary_alias.json')
+    elif request.param == 'alias_v6':
+        bgp_mocked_json = os.path.join(
+            test_path, 'mock_tables', 'ipv6_bgp_summary_alias.json')
+    elif request.param == 'alias_empty':
+        bgp_mocked_json = os.path.join(
+            test_path, 'mock_tables', 'ip_bgp_summary_alias_empty.json')
     elif request.param == 'v6':
         bgp_mocked_json = os.path.join(
             test_path, 'mock_tables', 'ipv6_bgp_summary.json')

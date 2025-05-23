@@ -10,6 +10,7 @@ import click
 import json
 import lazy_object_proxy
 import netaddr
+import utilities_common.bgp_util as bgp_util
 
 from natsort import natsorted
 from sonic_py_common import multi_asic
@@ -759,8 +760,8 @@ def run_command(command, display_cmd=False, ignore_error=False, return_cmd=False
     # both SONiC interface name and alias name for all interfaces.
     # IP route table cannot be handled in function run_command_in_alias_mode since it is in JSON format
     # with a list for next hops
-    if (get_interface_naming_mode() == "alias" and not command_str.startswith("intfutil") and not re.search(
-            "show ip|ipv6 route", command_str)):
+    if (get_interface_naming_mode() == "alias" and not command_str.startswith("intfutil")
+            and not bgp_util.is_vtysh_cmd(command_str)):
         return run_command_in_alias_mode(command, shell=shell)
 
     proc = subprocess.Popen(command, shell=shell, text=True, stdout=subprocess.PIPE)
