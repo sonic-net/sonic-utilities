@@ -26,7 +26,8 @@ intf_counters_before_clear = """\
 Ethernet0        D        8  2000.00 MB/s     64.00%        10       100       N/A       10  1500.00 MB/s     48.00%       N/A       N/A       N/A
 Ethernet4      N/A        4   204.80 KB/s        N/A         0     1,000       N/A       40   204.85 KB/s        N/A       N/A       N/A       N/A
 Ethernet8      N/A        6  1350.00 KB/s        N/A       100        10       N/A       60    13.37 MB/s        N/A       N/A       N/A       N/A
-Ethernet9      N/A        0        0 KB/s        N/A         0         0       N/A        0        0 MB/s        N/A       N/A       N/A       N/A
+Ethernet9      N/A        0        0 KB/s        N/A         0         0       N/A        0        0 MB/s        N/A\
+       N/A       N/A       N/A
 """
 
 intf_counters_ethernet4 = """\
@@ -91,7 +92,8 @@ The rates are calculated within 3 seconds period
 Ethernet0        D        0  2000.00 MB/s     64.00%         0         0       N/A        0  1500.00 MB/s     48.00%       N/A       N/A       N/A
 Ethernet4      N/A        0   204.80 KB/s        N/A         0         0       N/A        0   204.85 KB/s        N/A       N/A       N/A       N/A
 Ethernet8      N/A        0  1350.00 KB/s        N/A         0         0       N/A        0    13.37 MB/s        N/A       N/A       N/A       N/A
-Ethernet9      N/A        0        0 KB/s        N/A         0         0       N/A        0        0 MB/s        N/A       N/A       N/A       N/A
+Ethernet9      N/A        0        0 KB/s        N/A         0         0       N/A        0        0 MB/s        N/A\
+       N/A       N/A       N/A
 """
 
 intf_counter_after_clear = """\
@@ -99,8 +101,10 @@ intf_counter_after_clear = """\
 ---------  -------  -------  ------------  ---------  --------  --------  --------  -------  ------------  ---------  --------  --------  --------
 Ethernet0        D        0  2000.00 MB/s     64.00%         0         0       N/A        0  1500.00 MB/s     48.00%       N/A       N/A       N/A
 Ethernet4      N/A        0   204.80 KB/s        N/A         0         0       N/A        0   204.85 KB/s        N/A       N/A       N/A       N/A
-Ethernet8      N/A        0  1350.00 KB/s        N/A         0         0       N/A        0    13.37 MB/s        N/A       N/A       N/A       N/A
-Ethernet9      N/A        0        0 KB/s        N/A         0         0       N/A        0        0 MB/s        N/A       N/A       N/A       N/A"""
+Ethernet8      N/A        0  1350.00 KB/s        N/A         0         0       N/A        0    13.37 MB/s        N/A\
+       N/A       N/A       N/A
+Ethernet9      N/A        0        0 KB/s        N/A         0         0       N/A        0        0 MB/s        N/A\
+       N/A       N/A       N/A"""
 
 clear_counter = """\
 Cleared counters"""
@@ -322,24 +326,29 @@ Reminder: Please execute 'show interface counters -d all' to include internal li
 """
 
 intf_counters_from_lc_on_sup_packet_chassis = """\
-                  IFACE    STATE    RX_OK     RX_BPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK     TX_BPS    TX_UTIL\
-    TX_ERR    TX_DRP    TX_OVR
------------------------  -------  -------  ---------  ---------  --------  --------  --------  -------  ---------  ---------\
-  --------  --------  --------
-     HundredGigE0/1/0/1        U      100  10.00 B/s      0.00%         0         0         0      100  10.00 B/s      0.00%\
-         0         0         0
-       FortyGigE0/2/0/2        U      100  10.00 B/s      0.00%         0         0         0      100  10.00 B/s      0.00%\
-         0         0         0
-FourHundredGigE0/3/0/10        U      100  10.00 B/s      0.00%         0         0         0      100  10.00 B/s      0.00%\
-         0         0         0
+                  IFACE    STATE    RX_OK     RX_BPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK     TX_BPS\
+    TX_UTIL    TX_ERR    TX_DRP    TX_OVR
+-----------------------  -------  -------  ---------  ---------  --------  --------  --------  -------  ---------\
+  ---------  --------  --------  --------
+     HundredGigE0/1/0/1        U      100  10.00 B/s      0.00%         0         0         0      100  10.00 B/s\
+      0.00%         0         0         0
+       FortyGigE0/2/0/2        U      100  10.00 B/s      0.00%         0         0         0      100  10.00 B/s\
+      0.00%         0         0         0
+FourHundredGigE0/3/0/10        U      100  10.00 B/s      0.00%         0         0         0      100  10.00 B/s\
+      0.00%         0         0         0
 """
 
 intf_counters_nonzero = """\
-    IFACE    STATE    RX_OK        RX_BPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK        TX_BPS    TX_UTIL    TX_ERR    TX_DRP    TX_OVR
----------  -------  -------  ------------  ---------  --------  --------  --------  -------  ------------  ---------  --------  --------  --------
-Ethernet0        D        8  2000.00 MB/s     64.00%        10       100       N/A       10  1500.00 MB/s     48.00%       N/A       N/A       N/A
-Ethernet4      N/A        4   204.80 KB/s        N/A         0     1,000       N/A       40   204.85 KB/s        N/A       N/A       N/A       N/A
-Ethernet8      N/A        6  1350.00 KB/s        N/A       100        10       N/A       60    13.37 MB/s        N/A       N/A       N/A       N/A
+    IFACE    STATE    RX_OK        RX_BPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK        TX_BPS    TX_UTIL\
+    TX_ERR    TX_DRP    TX_OVR
+---------  -------  -------  ------------  ---------  --------  --------  --------  -------  ------------  ---------\
+  --------  --------  --------
+Ethernet0        D        8  2000.00 MB/s     64.00%        10       100       N/A       10  1500.00 MB/s     48.00%\
+       N/A       N/A       N/A
+Ethernet4      N/A        4   204.80 KB/s        N/A         0     1,000       N/A       40   204.85 KB/s        N/A\
+       N/A       N/A       N/A
+Ethernet8      N/A        6  1350.00 KB/s        N/A       100        10       N/A       60    13.37 MB/s        N/A\
+       N/A       N/A       N/A
 """
 
 intf_counter_after_clear_nonzero = """\
