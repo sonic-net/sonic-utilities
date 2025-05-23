@@ -5222,39 +5222,60 @@ def add_interface_ip(ctx, interface_name, ip_addr, gw, secondary):
         interface_name = interface_alias_to_name(config_db, interface_name)
         if interface_name is None:
             ctx.fail("'interface_name' is None!")
-        # Add a validation to check this interface is not a member in vlan before
-        # changing it to a router port mode
-    vlan_member_table = config_db.get_table('VLAN_MEMBER')
 
-    if (interface_is_in_vlan(vlan_member_table, interface_name)):
-        click.echo("Interface {} is a member of vlan\nAborting!".format(interface_name))
-        return
-
-
-    portchannel_member_table = config_db.get_table('PORTCHANNEL_MEMBER')
-
-    if interface_is_in_portchannel(portchannel_member_table, interface_name):
-        ctx.fail("{} is configured as a member of portchannel."
-                .format(interface_name))
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "":
+        ctx.fail(f"{interface_name} is not valid. Valid names [Ethernet/PortChannel/Vlan/Loopback]")
 
     # Add a validation to check this interface is in routed mode before
-    # assigning an IP address to it
+    # assigning an IP address to it. For sub-interfaces, check that the base
+    # interface is in the right mode
 
-    sub_intf = False
+    base_interface_name = interface_name
 
-    if clicommon.is_valid_port(config_db, interface_name):
-        is_port = True
-    elif clicommon.is_valid_portchannel(config_db, interface_name):
-        is_port = False
-    else:
-        sub_intf = True
+    # Handle short name
+    match = re.search(r'\d', interface_name)
+    if match:
+        index = match.start()
+        intf_type = interface_name[:index]
+        intf_val = interface_name[index:]
+        if intf_type == "Eth":
+            intf_type = "Ethernet"
+        elif intf_type == "Po":
+            intf_type = "PortChannel"
+        base_interface_name = intf_type + intf_val
 
-    if not sub_intf:
+    base_table_name = table_name
+    if table_name == "VLAN_SUB_INTERFACE":
+        interface_name_parts = base_interface_name.split(".")
+        base_interface_name = interface_name_parts[0] if len(interface_name_parts) >= 2 else interface_name
+        base_table_name = get_interface_table_name(base_interface_name)
+        if base_table_name == "":
+            ctx.fail(f"{interface_name} is not valid. Valid names [Ethernet/PortChannel/Vlan/Loopback]")
+
+    portchannel_member_table = config_db.get_table('PORTCHANNEL_MEMBER')
+    if interface_is_in_portchannel(portchannel_member_table, base_interface_name):
+        ctx.fail(f"{base_interface_name} is configured as a member of portchannel.")
+
+    # Add a validation to check this interface is not a member in vlan before
+    vlan_member_table = config_db.get_table('VLAN_MEMBER')
+    if (interface_is_in_vlan(vlan_member_table, base_interface_name)):
+        click.echo("Interface {} is a member of vlan\nAborting!".format(base_interface_name))
+        return
+
+    if base_table_name == "INTERFACE" or base_table_name == "PORTCHANNEL_INTERFACE":
+        if clicommon.is_valid_port(config_db, base_interface_name):
+            is_port = True
+        elif clicommon.is_valid_portchannel(config_db, base_interface_name):
+            is_port = False
+        else:
+            ctx.fail("Interface {} does not exist".format(interface_name))
+
         interface_mode = None
         if is_port:
-            interface_data = config_db.get_entry('PORT', interface_name)
+            interface_data = config_db.get_entry('PORT', base_interface_name)
         else:
-            interface_data = config_db.get_entry('PORTCHANNEL', interface_name)
+            interface_data = config_db.get_entry('PORTCHANNEL', base_interface_name)
 
         if "mode" in interface_data:
             interface_mode = interface_data["mode"]
@@ -5263,6 +5284,7 @@ def add_interface_ip(ctx, interface_name, ip_addr, gw, secondary):
             click.echo("Interface {} is in {} mode and needs to be in routed mode!".format(
                 interface_name, interface_mode))
             return
+
     try:
         ip_address = ipaddress.ip_interface(ip_addr)
     except ValueError as err:
@@ -5290,10 +5312,6 @@ def add_interface_ip(ctx, interface_name, ip_addr, gw, secondary):
             config_db.set_entry("MGMT_INTERFACE", (interface_name, str(ip_address)), {"gwaddr": gw})
 
         return
-
-    table_name = get_interface_table_name(interface_name)
-    if table_name == "":
-        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan/Loopback]")
 
     if table_name == "VLAN_INTERFACE":
         if not validate_vlan_exists(config_db, interface_name):
