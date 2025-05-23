@@ -142,7 +142,6 @@ def intfsorted(intf_list):
     def sort_key(intf):
         return [int(i) for i in re.findall(r'\d+', intf)]
 
-    if
     return sorted(intf_list, key=sort_key)
 
 
