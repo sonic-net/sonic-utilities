@@ -2,6 +2,7 @@
 
 import click
 import utilities_common.cli as clicommon
+import socket
 
 from swsscommon.swsscommon import SonicV2Connector
 from sonic_py_common import multi_asic
@@ -20,13 +21,15 @@ class IcmpShow:
             asic_id = multi_asic.get_asic_index_from_namespace(namespace)
             self.asic_ids.append(asic_id)
             self.per_npu_statedb[asic_id] = SonicV2Connector(use_unix_socket_path=False, namespace=namespace)
-            self.per_npu_statedb[asic_id].connect(self.per_npu_statedb[asic_id].STATE_DB)
             try:
+                self.per_npu_statedb[asic_id].connect(self.per_npu_statedb[asic_id].STATE_DB)
                 self.icmp_echo_table_keys[asic_id] = sorted(
                         self.per_npu_statedb[asic_id].keys(self.per_npu_statedb[asic_id].STATE_DB,
                                                            'ICMP_ECHO_SESSION_TABLE|*'))
-            except:
-                self.ctx.fail("No keys in ICMP_ECHO_SESSION_TABLE")
+            except (socket.error, IOError) as e:
+                self.ctx.fail("Socket error in connecting with ICMP_ECHO_SESSION_TABLE: {}".format(str(e)))
+            except (KeyError, ValueError) as e:
+                self.ctx.fail("Error getting keys from ICMP_ECHO_SESSION_TABLE: {}".format(str(e)))
 
     def get_icmp_echo_entry(self, asic_id, key):
         """Show icmp echo session entry from state db."""
@@ -55,11 +58,8 @@ class IcmpShow:
         table_data = []
         for asic_id in self.asic_ids:
             keys = []
-            if key == None:
-                try:
-                    keys = self.icmp_echo_table_keys[asic_id]
-                except:
-                    self.ctx.fail("ICMP_ECHO_SESSION_TABLE does not exist!")
+            if key is None:
+                keys = self.icmp_echo_table_keys[asic_id]
             else:
                 keys.append("ICMP_ECHO_SESSION_TABLE|" + key.replace(":", "|"))
 
@@ -79,11 +79,7 @@ class IcmpShow:
         total_up = 0
         total_rx = 0
         for asic_id in self.asic_ids:
-            keys = []
-            try:
-                keys = self.icmp_echo_table_keys[asic_id]
-            except:
-                self.ctx.fail("ICMP_ECHO_SESSION_TABLE does not exist!")
+            keys = self.icmp_echo_table_keys[asic_id]
 
             for k in keys:
                 if 'RX' in k:
