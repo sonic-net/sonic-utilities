@@ -26,7 +26,7 @@ intf_counters_before_clear = """\
 Ethernet0        D        8  2000.00 MB/s     64.00%        10       100       N/A       10  1500.00 MB/s     48.00%       N/A       N/A       N/A
 Ethernet4      N/A        4   204.80 KB/s        N/A         0     1,000       N/A       40   204.85 KB/s        N/A       N/A       N/A       N/A
 Ethernet8      N/A        6  1350.00 KB/s        N/A       100        10       N/A       60    13.37 MB/s        N/A       N/A       N/A       N/A
-Ethernet9      N/A        0         0 B/s        N/A         0         0       N/A        0         0 B/s        N/A\
+Ethernet9      N/A        0      0.00 B/s        N/A         0         0       N/A        0      0.00 B/s        N/A\
        N/A       N/A       N/A
 """
 
@@ -42,7 +42,7 @@ intf_counters_all = """\
 Ethernet0        D        8  2000.00 MB/s  247000.00/s     64.00%        10       100       N/A       10  1500.00 MB/s  183000.00/s     48.00%       N/A       N/A       N/A       0
 Ethernet4      N/A        4   204.80 KB/s     200.00/s        N/A         0     1,000       N/A       40   204.85 KB/s     201.00/s        N/A       N/A       N/A       N/A     100
 Ethernet8      N/A        6  1350.00 KB/s    9000.00/s        N/A       100        10       N/A       60    13.37 MB/s    9000.00/s        N/A       N/A       N/A       N/A     N/A
-Ethernet9      N/A        0         0 B/s          0/s        N/A         0         0       N/A        0         0 B/s          0/s        N/A       N/A       N/A       N/A
+Ethernet9      N/A        0      0.00 B/s          0/s        N/A         0         0       N/A        0      0.00 B/s          0/s        N/A       N/A       N/A       N/A
 """  # noqa: E501
 
 intf_fec_counters = """\
@@ -663,13 +663,13 @@ class TestPortStat(object):
 
         runner = CliRunner()
         result = runner.invoke(
-            show.cli.commands["interfaces"].commands["counters"], ["-dall"])
+            show.cli.commands["interfaces"].commands["counters"])
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
         assert result.output == intf_counters_from_lc_on_sup_packet_chassis
 
-        return_code, result = get_result_and_return_code(['portstat', '-s', 'all'])
+        return_code, result = get_result_and_return_code(['portstat'])
         print("return_code: {}".format(return_code))
         print("result = {}".format(result))
         assert return_code == 0

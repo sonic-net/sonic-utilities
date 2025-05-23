@@ -2,6 +2,7 @@ import datetime
 import time
 import re
 from collections import OrderedDict, namedtuple
+from natsorted import natsorted
 from tabulate import tabulate
 from sonic_py_common import multi_asic
 from sonic_py_common import device_info
@@ -141,6 +142,7 @@ def intfsorted(intf_list):
     def sort_key(intf):
         return [int(i) for i in re.findall(r'\d+', intf)]
 
+    if
     return sorted(intf_list, key=sort_key)
 
 
@@ -154,6 +156,8 @@ class Portstat(object):
             self.db = SonicV2Connector(use_unix_socket_path=False)
             self.db.connect(self.db.CHASSIS_STATE_DB, False)
 
+        self.sorted = natsorted
+
     def get_cnstat_dict(self):
         self.cnstat_dict = OrderedDict()
         self.cnstat_dict['time'] = datetime.datetime.now()
@@ -161,8 +165,10 @@ class Portstat(object):
         if device_info.is_supervisor():
             if device_info.is_voq_chassis() or (self.namespace is None and self.display_option != 'all'):
                 self.collect_stat_from_lc()
+                self.sorted = intfsorted
             else:
                 self.collect_stat()
+                self.sorted = natsorted
         else:
             self.collect_stat()
         return self.cnstat_dict, self.ratestat_dict
@@ -404,7 +410,7 @@ class Portstat(object):
         table = []
         header = None
 
-        for key in intfsorted(cnstat_dict.keys()):
+        for key in self.sorted(cnstat_dict.keys()):
             if key == 'time':
                 continue
             if intf_list and key not in intf_list:
@@ -516,7 +522,7 @@ class Portstat(object):
             Print the difference between two cnstat results for interface.
         """
 
-        for key in intfsorted(cnstat_new_dict.keys()):
+        for key in self.sorted(cnstat_new_dict.keys()):
             cntr = cnstat_new_dict.get(key)
             if key == 'time':
                 continue
@@ -658,7 +664,7 @@ class Portstat(object):
         table = []
         header = None
 
-        for key in intfsorted(cnstat_new_dict.keys()):
+        for key in self.sorted(cnstat_new_dict.keys()):
             cntr = cnstat_new_dict.get(key)
             if key == 'time':
                 continue
@@ -825,7 +831,7 @@ class Portstat(object):
                             ns_diff(cntr["tx_drop"], old_cntr["tx_drop"]) != 0 or \
                             ns_diff(cntr["rx_ovr"], old_cntr["rx_ovr"]) != 0 or \
                             ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"]) != 0:
-                        table.append(key,
+                        table.append((key,
                                      self.get_port_state(key),
                                      ns_diff(cntr["rx_ok"], old_cntr["rx_ok"]),
                                      format_brate(rates.rx_bps),
@@ -840,7 +846,7 @@ class Portstat(object):
                                      if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util),
                                      ns_diff(cntr["tx_err"], old_cntr["tx_err"]),
                                      ns_diff(cntr["tx_drop"], old_cntr["tx_drop"]),
-                                     ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"]))
+                                     ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"])))
                 else:
                     if not nonzero or cntr["rx_ok"] != 0 or cntr["tx_ok"] != 0 or \
                             cntr["rx_err"] != 0 or cntr["tx_err"] != 0 or \
