@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-import argparse
-import time
 import click
 import utilities_common.cli as clicommon
 
@@ -12,21 +10,23 @@ from tabulate import tabulate
 
 class IcmpShow:
     def __init__(self, click):
-        self.click   = click
+        self.click = click
         namespaces = multi_asic.get_front_end_namespaces()
         self.asic_ids = []
         self.per_npu_statedb = {}
         self.icmp_echo_table_keys = {}
+        self.ctx = self.click.get_current_context()
         for namespace in namespaces:
-            self.ctx = self.click.get_current_context()
             asic_id = multi_asic.get_asic_index_from_namespace(namespace)
             self.asic_ids.append(asic_id)
             self.per_npu_statedb[asic_id] = SonicV2Connector(use_unix_socket_path=False, namespace=namespace)
             self.per_npu_statedb[asic_id].connect(self.per_npu_statedb[asic_id].STATE_DB)
             try:
-                self.icmp_echo_table_keys[asic_id] = sorted(self.per_npu_statedb[asic_id].keys(self.per_npu_statedb[asic_id].STATE_DB, 'ICMP_ECHO_SESSION_TABLE|*'))
-            except Exception as e:
-                self.ctx.fail("ICMP_ECHO_SESSION_TABLE does not have keys!")
+                self.icmp_echo_table_keys[asic_id] = sorted(
+                        self.per_npu_statedb[asic_id].keys(self.per_npu_statedb[asic_id].STATE_DB,
+                                                           'ICMP_ECHO_SESSION_TABLE|*'))
+            except:
+                self.ctx.fail("No keys in ICMP_ECHO_SESSION_TABLE")
 
     def get_icmp_echo_entry(self, asic_id, key):
         """Show icmp echo session entry from state db."""
@@ -34,11 +34,20 @@ class IcmpShow:
         tbl_dict = state_db.get_all(state_db.STATE_DB, key)
         if tbl_dict:
             # Prepare data for tabulate
-            fields = {"key": key.removeprefix("ICMP_ECHO_SESSION_TABLE|"), "state": None, "dst_ip": None, "tx_interval": None, "rx_interval": None, "hw_lookup": None, "session_cookie": None}
+            fields = {
+                "key": key.removeprefix("ICMP_ECHO_SESSION_TABLE|"),
+                "state": None,
+                "dst_ip": None,
+                "tx_interval": None,
+                "rx_interval": None,
+                "hw_lookup": None,
+                "session_cookie": None
+            }
             for f in tbl_dict:
                 if f in fields:
                     fields[f] = tbl_dict[f]
-            return [fields["key"], fields["dst_ip"], fields["tx_interval"], fields["rx_interval"], fields["hw_lookup"], fields["session_cookie"], fields["state"]]
+            return [fields["key"], fields["dst_ip"], fields["tx_interval"], fields["rx_interval"], fields["hw_lookup"],
+                    fields["session_cookie"], fields["state"]]
         else:
             return None
 
@@ -49,8 +58,8 @@ class IcmpShow:
             if key == None:
                 try:
                     keys = self.icmp_echo_table_keys[asic_id]
-                except Exception as e:
-                    ctx.fail("ICMP_ECHO_SESSION_TABLE does not exist!")
+                except:
+                    self.ctx.fail("ICMP_ECHO_SESSION_TABLE does not exist!")
             else:
                 keys.append("ICMP_ECHO_SESSION_TABLE|" + key.replace(":", "|"))
 
@@ -73,8 +82,8 @@ class IcmpShow:
             keys = []
             try:
                 keys = self.icmp_echo_table_keys[asic_id]
-            except Exception as e:
-                ctx.fail("ICMP_ECHO_SESSION_TABLE does not exist!")
+            except:
+                self.ctx.fail("ICMP_ECHO_SESSION_TABLE does not exist!")
 
             for k in keys:
                 if 'RX' in k:
@@ -88,16 +97,19 @@ class IcmpShow:
             self.click.echo("Up sessions: {}".format(total_up))
             self.click.echo("RX sessions: {}".format(total_rx))
 
+
 @click.group(cls=clicommon.AliasedGroup)
 def icmp():
     """Show icmp-offload information"""
     pass
+
 
 @icmp.command()
 @click.argument('key', required=False)
 def sessions(key):
     s_icmp = IcmpShow(click)
     s_icmp.show_icmp_sessions(key)
+
 
 @icmp.command()
 def summary():

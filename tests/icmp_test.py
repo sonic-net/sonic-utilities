@@ -1,7 +1,4 @@
 import os
-import traceback
-
-import traceback
 
 from click.testing import CliRunner
 from utilities_common.db import Db
@@ -29,6 +26,7 @@ Key                              Dst IP         Tx Interval    Rx Interval  HW l
 -------------------------------  -----------  -------------  -------------  -----------  ----------  -------
 default|Ethernet0|0x4eb39592|RX  192.168.0.3              0            300  false        0x58767e7a  Up
 """
+
 
 class TestIcmpSession(object):
     @classmethod
@@ -58,7 +56,8 @@ class TestIcmpSession(object):
     def test_icmpecho_key_sessions(self):
         runner = CliRunner()
         db = Db()
-        result = runner.invoke(show.cli.commands["icmp"].commands["sessions"], "default|Ethernet0|0x4eb39592|RX", obj=db)
+        result = runner.invoke(show.cli.commands["icmp"].commands["sessions"],
+                               "default|Ethernet0|0x4eb39592|RX", obj=db)
         print(result.exit_code)
         print(result.output)
 
