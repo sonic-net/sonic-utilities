@@ -379,6 +379,9 @@ class TestPortStat(object):
         os.environ["UTILITIES_UNIT_TESTING"] = "2"
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] = "0"
+        os.system("cp {} /tmp/counters_db.json.orig".format(os.path.join(test_path, "mock_tables/counters_db.json")))
+        os.system("cp {} {}".format(os.path.join(test_path, "portstat_db/counters_db.json"),
+                                    os.path.join(test_path, "mock_tables/counters_db.json")))
         remove_tmp_cnstat_file()
 
     def test_show_intf_counters(self):
@@ -728,9 +731,7 @@ class TestPortStat(object):
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] = "0"
         remove_tmp_cnstat_file()
-        os.system("cp /tmp/chassis_state_db.json {}"
-                  .format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
-        os.system("cp /tmp/counters_db.json {}"
+        os.system("cp /tmp/counters_db.json.orig {}"
                   .format(os.path.join(test_path, "mock_tables/counters_db.json")))
 
 
