@@ -2,7 +2,7 @@ import datetime
 import time
 import re
 from collections import OrderedDict, namedtuple
-from natsorted import natsorted
+from natsort import natsorted
 from tabulate import tabulate
 from sonic_py_common import multi_asic
 from sonic_py_common import device_info
