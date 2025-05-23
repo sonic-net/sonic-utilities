@@ -2337,7 +2337,7 @@ This command displays the state and key parameters of all BFD sessions.
 
 - Usage:
   ```
-  show bfd summary
+  show bfd summary [-n <namespace>]
   ```
 - Example:
   ```
@@ -2356,7 +2356,7 @@ This command displays the state and key parameters of all BFD sessions that matc
 
 - Usage:
   ```
-  show bfd peer <peer-ip>
+  show bfd peer <peer-ip> [-n <namespace>]
   ```
 - Example:
   ```
@@ -12004,12 +12004,13 @@ This command displays the MAC (FDB) entries either in full or partial as given b
 4) show mac -a <mac-address> - display the MACs that match a specific mac-address
 5) show mac -t <type> - display the MACs that match a specific type (static/dynamic)
 6) show mac -c - display the count of MAC addresses
+7) show mac -n <namespace> - display the MACs that belong to a specific namespace
 
 To show the default MAC address aging time on the switch.
 
 - Usage:
   ```
-  show mac [-v <vlan_id>] [-p <port_name>] [-a <mac_address>] [-t <type>] [-c]
+  show mac [-v <vlan_id>] [-p <port_name>] [-a <mac_address>] [-t <type>] [-c] [-n <namespace>]
   ```
 
 - Example:
@@ -12107,6 +12108,14 @@ Optionally, you can specify a VLAN ID or interface name or type or mac-address i
   ```
   admin@sonic:~$ show mac -c
   Total number of entries 18
+  ```
+  ```
+  admin@sonic:~$ show mac -n asic0
+  No.    Vlan  MacAddress         Port           Type
+  -----  ------  -----------------  -----------  -------
+    2    1000  50:96:23:AD:F1:65  Ethernet192    Static
+    2    1000  C6:C9:5E:AE:24:42  Ethernet192    Static
+  Total number of entries 2
   ```
 
 **show mac aging-time**
