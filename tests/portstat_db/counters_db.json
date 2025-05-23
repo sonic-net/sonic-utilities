@@ -985,6 +985,12 @@
             "TX_BPS": "13.37e6",
             "TX_PPS": "9000"
     },
+    "RATES:oid:0x1000000000015": {
+            "RX_BPS": "0",
+            "RX_PPS": "0",
+            "TX_BPS": "0",
+            "TX_PPS": "0"
+    },
     "RATES:oid:0x600000000065f": {
             "RX_BPS": "3",
             "RX_PPS": "4",
@@ -1363,7 +1369,7 @@
         "SAI_PORT_STAT_IF_IN_UCAST_PKTS": "0",
         "SAI_PORT_STAT_IF_IN_NON_UCAST_PKTS": "0",
         "SAI_PORT_STAT_IF_IN_OCTETS" : "0",
-        "SAI_PORT_STAT_IF_OUT_UCAST_PKTS": "6",
+        "SAI_PORT_STAT_IF_OUT_UCAST_PKTS": "0",
         "SAI_PORT_STAT_IF_OUT_NON_UCAST_PKTS" : "0",
         "SAI_PORT_STAT_IF_OUT_OCTETS" : "0",
         "SAI_PORT_STAT_IF_IN_ERRORS": "0",
