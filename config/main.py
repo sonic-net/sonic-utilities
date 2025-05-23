@@ -1881,7 +1881,13 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
             return
 
     if filename is not None and filename != "/dev/stdin":
-        config_file_yang_validation(filename)
+        if multi_asic.is_multi_asic():
+            cfg_files = filename.split(',')
+            for cfg_file in cfg_files:
+                if cfg_file is not None:
+                    config_file_yang_validation(cfg_file)
+        else:
+            config_file_yang_validation(filename)
 
     #Stop services before config push
     if not no_service_restart:
