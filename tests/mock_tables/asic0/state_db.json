@@ -114,7 +114,7 @@
     },
     "DEBUG_COUNTER_CAPABILITIES|PORT_INGRESS_DROPS": {
         "reasons": "[IP_HEADER_ERROR,NO_L3_HEADER]",
-        "count": "4"
+        "count": "5"
     },
     "DEBUG_COUNTER_CAPABILITIES|SWITCH_EGRESS_DROPS": {
         "reasons": "[ACL_ANY,L2_ANY,L3_ANY]",
