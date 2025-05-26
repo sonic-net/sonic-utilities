@@ -89,9 +89,9 @@ class IcmpShow:
                 if entry and entry[6] == "Up":
                     total_up = total_up + 1
 
-            self.click.echo("Total Sessions: {}".format(total_sessions))
-            self.click.echo("Up sessions: {}".format(total_up))
-            self.click.echo("RX sessions: {}".format(total_rx))
+        self.click.echo("Total Sessions: {}".format(total_sessions))
+        self.click.echo("Up sessions: {}".format(total_up))
+        self.click.echo("RX sessions: {}".format(total_rx))
 
 
 @click.group(cls=clicommon.AliasedGroup)
