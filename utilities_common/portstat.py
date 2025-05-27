@@ -161,12 +161,12 @@ class Portstat(object):
         self.cnstat_dict = OrderedDict()
         self.cnstat_dict['time'] = datetime.datetime.now()
         self.ratestat_dict = OrderedDict()
-        import sys
-        print("device_info.is_supervisor():", device_info.is_supervisor(), file=sys.stderr)
-        print("device_info.is_voq_chassis():", device_info.is_voq_chassis(), file=sys.stderr)
-        print("self.namespace:", self.namespace, file=sys.stderr)
-        print("self.display_option:", self.display_option, file=sys.stderr)
         if device_info.is_supervisor():
+            import sys
+            print("device_info.is_supervisor():", device_info.is_supervisor(), file=sys.stderr)
+            print("device_info.is_voq_chassis():", device_info.is_voq_chassis(), file=sys.stderr)
+            print("self.namespace:", self.namespace, file=sys.stderr)
+            print("self.display_option:", self.display_option, file=sys.stderr)
             if device_info.is_voq_chassis() or (self.namespace is None and self.display_option != 'all'):
                 self.collect_stat_from_lc()
                 self.sorted = intfsorted
