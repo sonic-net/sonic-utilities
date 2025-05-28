@@ -663,7 +663,7 @@ class TestPortStat(object):
 
         runner = CliRunner()
         result = runner.invoke(
-            show.cli.commands["interfaces"].commands["counters"])
+            show.cli.commands["interfaces"].commands["counters"], ["-d frontend"])
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0

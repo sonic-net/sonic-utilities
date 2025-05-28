@@ -769,12 +769,6 @@ def counters(ctx, namespace, display, interface, printall, period, json_fmt, ver
     if ctx.invoked_subcommand is None:
         cmd = ["portstat"]
 
-        if not multi_asic.is_multi_asic() and not device_info.is_chassis():
-            # Force display all counters in single asic mode
-            assert display == multi_asic_util.constants.DISPLAY_ALL
-        else:
-            assert display == multi_asic_util.constants.DISPLAY_EXTERNAL
-
         if printall:
             cmd += ["-a"]
         if period is not None:
