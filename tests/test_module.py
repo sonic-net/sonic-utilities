@@ -82,9 +82,9 @@ class TestModuleHelper:
         mock_try_get_args.return_value = True
         mock_try_get.return_value = True
         mock_load_platform_chassis.return_value.get_module_index.return_value = 1
-        mock_load_platform_chassis.return_value.get_module.return_value.pci_detach.return_value = True
+        mock_load_platform_chassis.return_value.get_module.return_value.module_pre_shutdown.return_value = True
 
-        result = module_helper.pci_detach_module("DPU1")
+        result = module_helper.module_pre_shutdown("DPU1")
         assert result is True
 
     def test_pci_detach_module_invalid_index(self, mock_load_platform_chassis, mock_try_get_args):
@@ -98,14 +98,14 @@ class TestModuleHelper:
         mock_try_get_args.return_value = True
         mock_try_get.return_value = True
         mock_load_platform_chassis.return_value.get_module_index.return_value = 1
-        mock_load_platform_chassis.return_value.get_module.return_value.pci_reattach.return_value = True
+        mock_load_platform_chassis.return_value.get_module.return_value.module_post_startup.return_value = True
 
-        result = module_helper.pci_reattach_module("DPU1")
+        result = module_helper.module_post_startup("DPU1")
         assert result is True
 
     def test_pci_reattach_module_invalid_index(self, mock_load_platform_chassis, mock_try_get_args):
         mock_try_get_args.return_value = INVALID_MODULE_INDEX
         mock_load_platform_chassis.return_value.get_module_index.return_value = INVALID_MODULE_INDEX
 
-        result = module_helper.pci_reattach_module("DPU1")
+        result = module_helper.module_post_startup("DPU1")
         assert result is False
