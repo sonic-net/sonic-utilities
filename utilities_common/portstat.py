@@ -883,6 +883,9 @@ class Portstat(object):
                 print(table_as_json(table, header))
             else:
                 print(tabulate(table, header, tablefmt='simple', stralign='right'))
+        elif nonzero:
+            print("No non-zero statistics found for the specified interfaces.")
+
         if device_info.is_voq_chassis():
             return
         elif (multi_asic.is_multi_asic() or device_info.is_packet_chassis()) and not use_json:
