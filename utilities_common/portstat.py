@@ -717,8 +717,7 @@ class Portstat(object):
                                       ns_diff(cntr["tx_err"], old_cntr["tx_err"]),
                                       ns_diff(cntr["tx_drop"], old_cntr["tx_drop"]),
                                       ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"]),
-                                      ns_diff(cntr["trim"], old_cntr["trim"]))
-                        )
+                                      ns_diff(cntr["trim"], old_cntr["trim"])))
                 else:
                     if not nonzero or is_non_zero(ns_diff(cntr["rx_ok"], 0)) or \
                        is_non_zero(ns_diff(cntr["tx_ok"], 0)) or \
@@ -745,8 +744,7 @@ class Portstat(object):
                                       format_number_with_comma(cntr["tx_err"]),
                                       format_number_with_comma(cntr["tx_drop"]),
                                       format_number_with_comma(cntr["tx_ovr"]),
-                                      format_number_with_comma(cntr["trim"]))
-                        )
+                                      format_number_with_comma(cntr["trim"])))
             elif errors_only:
                 header = header_errors_only
                 if old_cntr is not None:
@@ -762,8 +760,7 @@ class Portstat(object):
                                       ns_diff(cntr["rx_ovr"], old_cntr["rx_ovr"]),
                                       ns_diff(cntr["tx_err"], old_cntr["tx_err"]),
                                       ns_diff(cntr["tx_drop"], old_cntr["tx_drop"]),
-                                      ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"]))
-                        )
+                                      ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"])))
                 else:
                     if not nonzero or is_non_zero(cntr["rx_err"]) or is_non_zero(cntr["tx_err"]) or \
                        is_non_zero(cntr["rx_drop"]) or is_non_zero(cntr["tx_drop"]) or \
@@ -774,8 +771,7 @@ class Portstat(object):
                                       format_number_with_comma(cntr["rx_ovr"]),
                                       format_number_with_comma(cntr["tx_err"]),
                                       format_number_with_comma(cntr["tx_drop"]),
-                                      format_number_with_comma(cntr["tx_ovr"]))
-                        )
+                                      format_number_with_comma(cntr["tx_ovr"])))
             elif fec_stats_only:
                 header = header_fec_only
                 if old_cntr is not None:
@@ -860,8 +856,7 @@ class Portstat(object):
                                      if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util),
                                      ns_diff(cntr["tx_err"], old_cntr["tx_err"]),
                                      ns_diff(cntr["tx_drop"], old_cntr["tx_drop"]),
-                                     ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"]))
-                        )
+                                     ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"])))
                 else:
                     if not nonzero or is_non_zero(cntr["rx_ok"]) or is_non_zero(cntr["tx_ok"]) or \
                        is_non_zero(cntr["rx_err"]) or is_non_zero(cntr["tx_err"]) or \
@@ -882,8 +877,7 @@ class Portstat(object):
                                       if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util),
                                       format_number_with_comma(cntr["tx_err"]),
                                       format_number_with_comma(cntr["tx_drop"]),
-                                      format_number_with_comma(cntr["tx_ovr"]))
-                        )
+                                      format_number_with_comma(cntr["tx_ovr"])))
         if table:
             if use_json:
                 print(table_as_json(table, header))
