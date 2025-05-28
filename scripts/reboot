@@ -300,6 +300,10 @@ if [ -x ${DEVPATH}/${PLATFORM}/${PLATFORM_UPDATE_REBOOT_CAUSE} ]; then
     ${DEVPATH}/${PLATFORM}/${PLATFORM_UPDATE_REBOOT_CAUSE}
 fi
 
+if [ "$smartswitch" == "True" ]; then
+    /usr/local/bin/process-reboot-cause
+fi
+
 if [ -x ${DEVPATH}/${PLATFORM}/${PRE_REBOOT_HOOK} ]; then
     debug "Executing the pre-reboot script"
     ${DEVPATH}/${PLATFORM}/${PRE_REBOOT_HOOK}
