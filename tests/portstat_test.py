@@ -54,6 +54,14 @@ Ethernet8      N/A     100,317             0                 0            N/A   
 Ethernet9      N/A           0             0                 0            N/A             N/A
 """
 
+intf_fec_counters_nonzero = """\
+    IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER
+---------  -------  ----------  ------------  ----------------  -------------  --------------
+Ethernet0        D     130,402             3                 4            N/A             N/A
+Ethernet4      N/A     110,412             1                 0            N/A             N/A
+Ethernet8      N/A     100,317             0                 0            N/A             N/A
+"""
+
 intf_fec_counters_fec_hist = """\
 Symbol Errors Per Codeword      Codewords
 ----------------------------  -----------
@@ -356,6 +364,23 @@ Ethernet8      N/A        6  1350.00 KB/s        N/A       100        10       N
 intf_counter_after_clear_nonzero = """\
 No non-zero statistics found for the specified interfaces."""
 
+intf_rates = """\
+    IFACE    STATE    RX_OK        RX_BPS       RX_PPS    RX_UTIL    TX_OK        TX_BPS       TX_PPS    TX_UTIL
+---------  -------  -------  ------------  -----------  ---------  -------  ------------  -----------  ---------
+Ethernet0        D        8  2000.00 MB/s  247000.00/s     64.00%       10  1500.00 MB/s  183000.00/s     48.00%
+Ethernet4      N/A        4   204.80 KB/s     200.00/s        N/A       40   204.85 KB/s     201.00/s        N/A
+Ethernet8      N/A        6  1350.00 KB/s    9000.00/s        N/A       60    13.37 MB/s    9000.00/s        N/A
+Ethernet9      N/A        0      0.00 B/s       0.00/s        N/A        0      0.00 B/s       0.00/s        N/A
+"""  # noqa: E501
+
+intf_rates_nonzero = """\
+    IFACE    STATE    RX_OK        RX_BPS       RX_PPS    RX_UTIL    TX_OK        TX_BPS       TX_PPS    TX_UTIL
+---------  -------  -------  ------------  -----------  ---------  -------  ------------  -----------  ---------
+Ethernet0        D        8  2000.00 MB/s  247000.00/s     64.00%       10  1500.00 MB/s  183000.00/s     48.00%
+Ethernet4      N/A        4   204.80 KB/s     200.00/s        N/A       40   204.85 KB/s     201.00/s        N/A
+Ethernet8      N/A        6  1350.00 KB/s    9000.00/s        N/A       60    13.37 MB/s    9000.00/s        N/A
+"""  # noqa: E501
+
 TEST_PERIOD = 3
 
 
@@ -472,8 +497,6 @@ class TestPortStat(object):
         assert return_code == 0
         assert result == intf_fec_counters_period
 
-
-
     def test_show_intf_counters_period(self):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["interfaces"].commands["counters"], [
@@ -504,6 +527,13 @@ class TestPortStat(object):
         print("result = {}".format(result))
         assert return_code == 0
         assert result == intf_counters_detailed
+
+    def test_show_intf_rates(self):
+        return_code, result = get_result_and_return_code(['portstat', '-R'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result == intf_rates
 
     def test_clear_intf_counters(self):
         runner = CliRunner()
@@ -723,6 +753,28 @@ class TestPortStat(object):
         print("result = {}".format(result))
         assert return_code == 0
         verify_after_clear(result, intf_counter_after_clear_nonzero)
+
+    def test_show_intf_fec_counters_nonzero(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["counters"].commands["fec-stats"], ["--nonzero"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == intf_fec_counters_nonzero
+
+        return_code, result = get_result_and_return_code(['portstat', '-f', '-nz'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result == intf_fec_counters_nonzero
+
+    def test_show_intf_rates_nonzero(self):
+        return_code, result = get_result_and_return_code(['portstat', '-R', '-nz'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result == intf_rates_nonzero
 
     @classmethod
     def teardown_class(cls):

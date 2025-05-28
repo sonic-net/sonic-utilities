@@ -127,7 +127,8 @@ Examples:
 
     # Now decide what information to display
     if raw_stats:
-        portstat.cnstat_print(cnstat_dict, ratestat_dict, intf_list, use_json, print_all, errors_only, fec_stats_only, rates_only, trim_stats_only)
+        portstat.cnstat_diff_print(cnstat_dict, {}, ratestat_dict, intf_list, use_json, print_all, errors_only,
+                                   fec_stats_only, rates_only, trim_stats_only)
         sys.exit(0)
 
     if save_fresh_stats:
@@ -154,7 +155,8 @@ Examples:
                 print("\nFile '%s' does not exist" % cnstat_fqn_file)
                 print("Did you run 'portstat -c -t %s' to record the counters via tag %s?\n" % (tag_name, tag_name))
             else:
-                portstat.cnstat_print(cnstat_dict, ratestat_dict, intf_list, use_json, print_all, errors_only, fec_stats_only, rates_only, trim_stats_only, detail, nonzero)
+                portstat.cnstat_diff_print(cnstat_dict, {}, ratestat_dict, intf_list, use_json, print_all, errors_only,
+                                           fec_stats_only, rates_only, trim_stats_only, detail, nonzero)
     else:
         #wait for the specified time and then gather the new stats and output the difference.
         time.sleep(wait_time_in_seconds)
