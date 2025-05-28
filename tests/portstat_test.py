@@ -336,6 +336,8 @@ intf_counters_from_lc_on_sup_packet_chassis = """\
       0.00%         0         0         0
 FourHundredGigE0/3/0/10        U      100  10.00 B/s      0.00%         0         0         0      100  10.00 B/s\
       0.00%         0         0         0
+
+Reminder: Please execute 'show interface counters -d all' to include internal links
 """
 
 intf_counters_nonzero = """\
