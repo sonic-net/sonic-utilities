@@ -83,10 +83,7 @@ def multi_asic_ns_choices():
 
 
 def multi_asic_display_choices():
-    if not multi_asic.is_multi_asic() and not device_info.is_chassis():
-        return [constants.DISPLAY_ALL]
-    else:
-        return [constants.DISPLAY_ALL, constants.DISPLAY_EXTERNAL]
+    return [constants.DISPLAY_ALL, constants.DISPLAY_EXTERNAL]
 
 
 def multi_asic_display_default_option():
