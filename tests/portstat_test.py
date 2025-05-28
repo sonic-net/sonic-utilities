@@ -718,7 +718,7 @@ class TestPortStat(object):
         assert result.exit_code == 0
         verify_after_clear(result.output, intf_counter_after_clear_nonzero)
 
-        return_code, result = get_result_and_return_code(['portstat', '-z'])
+        return_code, result = get_result_and_return_code(['portstat', '-nz'])
         print("return_code: {}".format(return_code))
         print("result = {}".format(result))
         assert return_code == 0
