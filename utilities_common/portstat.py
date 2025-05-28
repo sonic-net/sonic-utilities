@@ -575,13 +575,13 @@ class Portstat(object):
                 header = header_all
 
                 if not nonzero or is_non_zero(ns_diff(cntr["rx_ok"], old_cntr["rx_ok"])) or \
-                    is_non_zero(ns_diff(cntr["tx_ok"], old_cntr["tx_ok"])) or \
-                    is_non_zero(ns_diff(cntr["rx_err"], old_cntr["rx_err"])) or \
-                    is_non_zero(ns_diff(cntr["tx_err"], old_cntr["tx_err"])) or \
-                    is_non_zero(ns_diff(cntr["rx_drop"], old_cntr["rx_drop"])) or \
-                    is_non_zero(ns_diff(cntr["tx_drop"], old_cntr["tx_drop"])) or \
-                    is_non_zero(ns_diff(cntr["rx_ovr"], old_cntr["rx_ovr"])) or \
-                    is_non_zero(ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"])):
+                   is_non_zero(ns_diff(cntr["tx_ok"], old_cntr["tx_ok"])) or \
+                   is_non_zero(ns_diff(cntr["rx_err"], old_cntr["rx_err"])) or \
+                   is_non_zero(ns_diff(cntr["tx_err"], old_cntr["tx_err"])) or \
+                   is_non_zero(ns_diff(cntr["rx_drop"], old_cntr["rx_drop"])) or \
+                   is_non_zero(ns_diff(cntr["tx_drop"], old_cntr["tx_drop"])) or \
+                   is_non_zero(ns_diff(cntr["rx_ovr"], old_cntr["rx_ovr"])) or \
+                   is_non_zero(ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"])):
                     table.append((key, self.get_port_state(key),
                                   ns_diff(cntr["rx_ok"], old_cntr["rx_ok"]),
                                   format_brate(rates.rx_bps),
@@ -604,11 +604,11 @@ class Portstat(object):
                 header = header_errors_only
 
                 if not nonzero or is_non_zero(ns_diff(cntr["rx_err"], old_cntr["rx_err"])) or \
-                    is_non_zero(ns_diff(cntr["tx_err"], old_cntr["tx_err"])) or \
-                    is_non_zero(ns_diff(cntr["rx_drop"], old_cntr["rx_drop"])) or \
-                    is_non_zero(ns_diff(cntr["tx_drop"], old_cntr["tx_drop"])) or \
-                    is_non_zero(ns_diff(cntr["rx_ovr"], old_cntr["rx_ovr"])) or \
-                    is_non_zero(ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"])):
+                   is_non_zero(ns_diff(cntr["tx_err"], old_cntr["tx_err"])) or \
+                   is_non_zero(ns_diff(cntr["rx_drop"], old_cntr["rx_drop"])) or \
+                   is_non_zero(ns_diff(cntr["tx_drop"], old_cntr["tx_drop"])) or \
+                   is_non_zero(ns_diff(cntr["rx_ovr"], old_cntr["rx_ovr"])) or \
+                   is_non_zero(ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"])):
                     table.append((key, self.get_port_state(key),
                                   ns_diff(cntr["rx_err"], old_cntr["rx_err"]),
                                   ns_diff(cntr["rx_drop"], old_cntr["rx_drop"]),
@@ -620,8 +620,8 @@ class Portstat(object):
                 header = header_fec_only
 
                 if not nonzero or is_non_zero(ns_diff(cntr['fec_corr'], old_cntr['fec_corr'])) or \
-                    is_non_zero(ns_diff(cntr['fec_uncorr'], old_cntr['fec_uncorr'])) or \
-                    is_non_zero(ns_diff(cntr['fec_symbol_err'], old_cntr['fec_symbol_err'])):
+                   is_non_zero(ns_diff(cntr['fec_uncorr'], old_cntr['fec_uncorr'])) or \
+                   is_non_zero(ns_diff(cntr['fec_symbol_err'], old_cntr['fec_symbol_err'])):
                     table.append((key, self.get_port_state(key),
                                   ns_diff(cntr['fec_corr'], old_cntr['fec_corr']),
                                   ns_diff(cntr['fec_uncorr'], old_cntr['fec_uncorr']),
@@ -630,7 +630,7 @@ class Portstat(object):
                 header = header_rates_only
 
                 if not nonzero or is_non_zero(ns_diff(cntr["rx_ok"], old_cntr["rx_ok"])) or \
-                    is_non_zero(ns_diff(cntr["tx_ok"], old_cntr["tx_ok"])):
+                   is_non_zero(ns_diff(cntr["tx_ok"], old_cntr["tx_ok"])):
                     table.append((key,
                                   self.get_port_state(key),
                                   ns_diff(cntr["rx_ok"], old_cntr["rx_ok"]),
@@ -653,13 +653,13 @@ class Portstat(object):
                 header = header_std
 
                 if not nonzero or is_non_zero(ns_diff(cntr["rx_ok"], old_cntr["rx_ok"])) or \
-                    is_non_zero(ns_diff(cntr["tx_ok"], old_cntr["tx_ok"])) or \
-                    is_non_zero(ns_diff(cntr["rx_err"], old_cntr["rx_err"])) or \
-                    is_non_zero(ns_diff(cntr["tx_err"], old_cntr["tx_err"])) or \
-                    is_non_zero(ns_diff(cntr["rx_drop"], old_cntr["rx_drop"])) or \
-                    is_non_zero(ns_diff(cntr["tx_drop"], old_cntr["tx_drop"])) or \
-                    is_non_zero(ns_diff(cntr["rx_ovr"], old_cntr["rx_ovr"])) or \
-                    is_non_zero(ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"])):
+                   is_non_zero(ns_diff(cntr["tx_ok"], old_cntr["tx_ok"])) or \
+                   is_non_zero(ns_diff(cntr["rx_err"], old_cntr["rx_err"])) or \
+                   is_non_zero(ns_diff(cntr["tx_err"], old_cntr["tx_err"])) or \
+                   is_non_zero(ns_diff(cntr["rx_drop"], old_cntr["rx_drop"])) or \
+                   is_non_zero(ns_diff(cntr["tx_drop"], old_cntr["tx_drop"])) or \
+                   is_non_zero(ns_diff(cntr["rx_ovr"], old_cntr["rx_ovr"])) or \
+                   is_non_zero(ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"])):
                     table.append((key,
                                   self.get_port_state(key),
                                   ns_diff(cntr["rx_ok"], old_cntr["rx_ok"]),
