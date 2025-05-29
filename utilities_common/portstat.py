@@ -625,7 +625,9 @@ class Portstat(object):
                     table.append((key, self.get_port_state(key),
                                   ns_diff(cntr['fec_corr'], old_cntr['fec_corr']),
                                   ns_diff(cntr['fec_uncorr'], old_cntr['fec_uncorr']),
-                                  ns_diff(cntr['fec_symbol_err'], old_cntr['fec_symbol_err'])))
+                                  ns_diff(cntr['fec_symbol_err'], old_cntr['fec_symbol_err']),
+                                  format_fec_ber(rates.fec_pre_ber),
+                                  format_fec_ber(rates.fec_post_ber)))
             elif rates_only:
                 header = header_rates_only
 

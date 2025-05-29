@@ -85,12 +85,12 @@ BIN15                                   0
 
 intf_fec_counters_period = """\
 The rates are calculated within 3 seconds period
-    IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR
----------  -------  ----------  ------------  ----------------
-Ethernet0        D           0             0                 0
-Ethernet4      N/A           0             0                 0
-Ethernet8      N/A           0             0                 0
-Ethernet9      N/A           0             0                 0
+    IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER
+---------  -------  ----------  ------------  ----------------  -------------  --------------
+Ethernet0        D           0             0                 0           N/A             N/A
+Ethernet4      N/A           0             0                 0           N/A             N/A
+Ethernet8      N/A           0             0                 0           N/A             N/A
+Ethernet9      N/A           0             0                 0           N/A             N/A
 """
 
 intf_counters_period = """\
