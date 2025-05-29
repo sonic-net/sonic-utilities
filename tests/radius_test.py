@@ -36,11 +36,11 @@ RADIUS global passkey <EMPTY_STRING> (default)
 
 RADIUS_SERVER address 10.10.10.10
                auth_port 1812
-               passkey testing123
                priority 1
                retransmit 1
-               src_intf eth0
                timeout 3
+               passkey testing123
+               src_intf eth0
 
 """
 
@@ -63,6 +63,22 @@ RADIUS global src_ip 2000::1
 """
 
 config_radius_empty_output="""\
+"""
+
+show_radius_global_timeout_output = """\
+RADIUS global auth_type pap (default)
+RADIUS global retransmit 3 (default)
+RADIUS global timeout 60
+RADIUS global passkey <EMPTY_STRING> (default)
+
+"""
+
+show_radius_global_retransmit_output = """\
+RADIUS global auth_type pap (default)
+RADIUS global retransmit 10
+RADIUS global timeout 5 (default)
+RADIUS global passkey <EMPTY_STRING> (default)
+
 """
 
 config_radius_server_invalidkey_output="""\
@@ -90,7 +106,8 @@ class TestRadius(object):
 
     def test_show_radius_default(self):
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands["radius"], [])
+        db = Db()
+        result = runner.invoke(show.cli.commands["radius"], [], obj=db)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
@@ -100,25 +117,14 @@ class TestRadius(object):
         (config, show) = get_cmd_module
         runner = CliRunner()
         db = Db()
-        db.cfgdb.delete_table("RADIUS_SERVER")
 
         result = runner.invoke(config.config.commands["radius"],\
                                ["add", "10.10.10.10", "-r", "1", "-t", "3",\
-                                "-k", "testing123", "-s", "eth0"])
+                                "-k", "testing123", "-s", "eth0"], obj=db)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
         assert result.output == config_radius_empty_output
-
-        db.cfgdb.mod_entry("RADIUS_SERVER", "10.10.10.10", \
-            {'auth_port' : '1812', \
-            'passkey'   : 'testing123', \
-            'priority'  : '1', \
-            'retransmit': '1', \
-            'src_intf'  : 'eth0', \
-            'timeout'   : '3', \
-            } \
-        )
 
         result = runner.invoke(show.cli.commands["radius"], [], obj=db)
         print(result.exit_code)
@@ -127,13 +133,11 @@ class TestRadius(object):
         assert result.output == show_radius_server_output
 
         result = runner.invoke(config.config.commands["radius"],\
-                               ["delete", "10.10.10.10"])
+                               ["delete", "10.10.10.10"], obj=db)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
         assert result.output == config_radius_empty_output
-
-        db.cfgdb.delete_table("RADIUS_SERVER")
 
         result = runner.invoke(show.cli.commands["radius"], [], obj=db)
         print(result.exit_code)
@@ -143,9 +147,10 @@ class TestRadius(object):
 
     def test_config_radius_server_invalidkey(self):
         runner = CliRunner()
+        db = Db()
         result = runner.invoke(config.config.commands["radius"],\
                                ["add", "10.10.10.10", "-r", "1", "-t", "3",\
-                                "-k", "comma,invalid", "-s", "eth0"])
+                                "-k", "comma,invalid", "-s", "eth0"], obj=db)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
@@ -153,8 +158,9 @@ class TestRadius(object):
 
     def test_config_radius_nasip_invalid(self):
         runner = CliRunner()
+        db = Db()
         result = runner.invoke(config.config.commands["radius"],\
-                               ["nasip", "invalid"])
+                               ["nasip", "invalid"], obj=db)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
@@ -162,8 +168,9 @@ class TestRadius(object):
 
     def test_config_radius_sourceip_invalid(self):
         runner = CliRunner()
+        db = Db()
         result = runner.invoke(config.config.commands["radius"],\
-                               ["sourceip", "invalid"])
+                               ["sourceip", "invalid"], obj=db)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
@@ -173,18 +180,13 @@ class TestRadius(object):
         (config, show) = get_cmd_module
         runner = CliRunner()
         db = Db()
-        db.cfgdb.delete_table("RADIUS")
 
         result = runner.invoke(config.config.commands["radius"],\
-                               ["authtype", "chap"])
+                               ["authtype", "chap"], obj=db)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
         assert result.output == config_radius_empty_output
-
-        db.cfgdb.mod_entry("RADIUS", "global", \
-            {'auth_type'   : 'chap'} \
-        )
 
         result = runner.invoke(show.cli.commands["radius"], [], obj=db)
         print(result.exit_code)
@@ -193,13 +195,73 @@ class TestRadius(object):
         assert result.output == show_radius_global_output
 
         result = runner.invoke(config.config.commands["radius"],\
-                               ["default", "authtype"])
+                               ["default", "authtype"], obj=db)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
         assert result.output == config_radius_empty_output
 
-        db.cfgdb.delete_table("RADIUS")
+        result = runner.invoke(show.cli.commands["radius"], [], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == show_radius_default_output
+
+    def test_config_radius_timeout(self, get_cmd_module):
+        (config, show) = get_cmd_module
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(config.config.commands["radius"],
+                               ["timeout", "60"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == config_radius_empty_output
+
+        result = runner.invoke(show.cli.commands["radius"], [], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == show_radius_global_timeout_output
+
+        result = runner.invoke(config.config.commands["radius"],
+                               ["default", "timeout"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == config_radius_empty_output
+
+        result = runner.invoke(show.cli.commands["radius"], [], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == show_radius_default_output
+
+    def test_config_radius_retransmit(self, get_cmd_module):
+        (config, show) = get_cmd_module
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(config.config.commands["radius"],
+                               ["retransmit", "10"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == config_radius_empty_output
+
+        result = runner.invoke(show.cli.commands["radius"], [], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == show_radius_global_retransmit_output
+
+        result = runner.invoke(config.config.commands["radius"],
+                               ["default", "retransmit"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == config_radius_empty_output
 
         result = runner.invoke(show.cli.commands["radius"], [], obj=db)
         print(result.exit_code)
@@ -212,9 +274,10 @@ class TestRadius(object):
     def test_config_radius_server_invalidkey_yang_validation(self):
         aaa.ADHOC_VALIDATION = False
         runner = CliRunner()
+        db = Db()
         result = runner.invoke(config.config.commands["radius"],\
                                ["add", "10.10.10.10", "-r", "1", "-t", "3",\
-                                "-k", "comma,invalid", "-s", "eth0"])
+                                "-k", "comma,invalid", "-s", "eth0"], obj=db)
         print(result.output)
         assert "Invalid ConfigDB. Error" in result.output
 
@@ -223,8 +286,9 @@ class TestRadius(object):
     def test_config_radius_server_invalid_delete_yang_validation(self):
         aaa.ADHOC_VALIDATION = False
         runner = CliRunner()
+        db = Db()
         result = runner.invoke(config.config.commands["radius"],\
-                               ["delete", "10.10.10.x"])
+                               ["delete", "10.10.10.x"], obj=db)
         print(result.output)
         assert "Invalid ConfigDB. Error" in result.output
 
@@ -232,38 +296,40 @@ class TestRadius(object):
         (config, show) = get_cmd_module
         runner = CliRunner()
         db = Db()
-        db.cfgdb.delete_table("RADIUS")
-        db.cfgdb.delete_table("RADIUS_SERVER")
         
         result = runner.invoke(config.config.commands["radius"],\
-                               ["nasip", "1.1.1.1"])
+                               ["nasip", "1.1.1.1"], obj=db)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
 
         result = runner.invoke(config.config.commands["radius"],\
-                               ["sourceip", "2000::1"])
+                               ["sourceip", "2000::1"], obj=db)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-
-        result = runner.invoke(show.cli.commands["radius"], [])
-        print(result.exit_code)
-        print(result.output)
-        assert result.output == show_radius_default_output
-
-        db.cfgdb.mod_entry("RADIUS", "global", \
-            {'auth_type' : 'pap (default)', \
-             'retransmit': '3 (default)', \
-             'timeout'   : '5 (default)', \
-             'passkey'   : '<EMPTY_STRING> (default)', \
-             'nas_ip'    : '1.1.1.1', \
-             'src_ip'    : '2000::1', \
-            } \
-        )
 
         result = runner.invoke(show.cli.commands["radius"], [], obj=db)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
         assert result.output == show_radius_global_nasip_source_ip_output
+
+        # Test delete nasip/sourceip
+        result = runner.invoke(config.config.commands["radius"],
+                               ["default", "nasip"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+
+        result = runner.invoke(config.config.commands["radius"],
+                               ["default", "sourceip"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+
+        result = runner.invoke(show.cli.commands["radius"], [], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == show_radius_default_output
