@@ -151,10 +151,10 @@ def is_non_zero(value):
     """
     if value == STATUS_NA:
         return False
-    try:
-        return int(value) != 0
-    except ValueError:
-        return False
+    if type(value) is str and ',' in value:
+        value.replace(',', '')
+
+    return int(value) != 0
 
 
 class Portstat(object):
