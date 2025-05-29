@@ -87,10 +87,10 @@ intf_fec_counters_period = """\
 The rates are calculated within 3 seconds period
     IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER
 ---------  -------  ----------  ------------  ----------------  -------------  --------------
-Ethernet0        D           0             0                 0           N/A             N/A
-Ethernet4      N/A           0             0                 0           N/A             N/A
-Ethernet8      N/A           0             0                 0           N/A             N/A
-Ethernet9      N/A           0             0                 0           N/A             N/A
+Ethernet0        D           0             0                 0            N/A             N/A
+Ethernet4      N/A           0             0                 0            N/A             N/A
+Ethernet8      N/A           0             0                 0            N/A             N/A
+Ethernet9      N/A           0             0                 0            N/A             N/A
 """
 
 intf_counters_period = """\
@@ -755,6 +755,7 @@ class TestPortStat(object):
         verify_after_clear(result, intf_counter_after_clear_nonzero)
 
     def test_show_intf_fec_counters_nonzero(self):
+        remove_tmp_cnstat_file()
         runner = CliRunner()
         result = runner.invoke(
             show.cli.commands["interfaces"].commands["counters"].commands["fec-stats"], ["--nonzero"])
@@ -770,6 +771,7 @@ class TestPortStat(object):
         assert result == intf_fec_counters_nonzero
 
     def test_show_intf_rates_nonzero(self):
+        remove_tmp_cnstat_file()
         return_code, result = get_result_and_return_code(['portstat', '-R', '-nz'])
         print("return_code: {}".format(return_code))
         print("result = {}".format(result))
