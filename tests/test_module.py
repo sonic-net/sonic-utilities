@@ -78,7 +78,7 @@ class TestModuleHelper:
         result = module_helper.reboot_module("DPU1", "cold")
         assert result is False
 
-    def test_pci_detach_module_success(self, mock_load_platform_chassis, mock_try_get_args, mock_try_get):
+    def test_module_pre_shutdown_success(self, mock_load_platform_chassis, mock_try_get_args, mock_try_get):
         mock_try_get_args.return_value = True
         mock_try_get.return_value = True
         mock_load_platform_chassis.return_value.get_module_index.return_value = 1
@@ -87,11 +87,11 @@ class TestModuleHelper:
         result = module_helper.module_pre_shutdown("DPU1")
         assert result is True
 
-    def test_pci_detach_module_invalid_index(self, mock_load_platform_chassis, mock_try_get_args):
+    def test_module_pre_shutdown_invalid_index(self, mock_load_platform_chassis, mock_try_get_args):
         mock_try_get_args.return_value = INVALID_MODULE_INDEX
         mock_load_platform_chassis.return_value.get_module_index.return_value = INVALID_MODULE_INDEX
 
-        result = module_helper.pci_detach_module("DPU1")
+        result = module_helper.module_pre_shutdown("DPU1")
         assert result is False
 
     def test_pci_reattach_module_success(self, mock_load_platform_chassis, mock_try_get_args, mock_try_get):
