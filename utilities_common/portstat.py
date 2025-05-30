@@ -354,7 +354,7 @@ class Portstat(object):
         counter_table = CounterTable(self.db.get_redis_client(self.db.COUNTERS_DB))
         if counter_port_name_map is None:
             return cnstat_dict, ratestat_dict
-        for port in intfsorted(counter_port_name_map):
+        for port in self.sorted(counter_port_name_map):
             port_name = port.split(":")[0]
             if self.multi_asic.skip_display(constants.PORT_OBJ, port_name):
                 continue
