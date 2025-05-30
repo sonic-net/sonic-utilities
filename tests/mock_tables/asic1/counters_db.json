@@ -1675,5 +1675,23 @@
     },
     "USER_WATERMARKS:oid:0x100000000b115": {
         "SAI_QUEUE_STAT_SHARED_WATERMARK_BYTES": "2"
+    },
+    "COUNTERS_VOQ_NAME_MAP": {
+        "sonic-lc1|asic0|Ethernet0:0": "oid:0x1500000000059d",
+        "sonic-lc2|asic0|Ethernet4:1": "oid:0x15000000000571"
+    },
+    "COUNTERS:oid:0x1500000000059d": {
+        "SAI_QUEUE_STAT_DROPPED_BYTES": "1098",
+        "SAI_QUEUE_STAT_DROPPED_PACKETS": "9",
+        "SAI_QUEUE_STAT_CREDIT_WD_DELETED_PACKETS": "0",
+        "SAI_QUEUE_STAT_BYTES": "854",
+        "SAI_QUEUE_STAT_PACKETS": "7"
+    },
+    "COUNTERS:oid:0x15000000000571": {
+        "SAI_QUEUE_STAT_DROPPED_BYTES": "732",
+        "SAI_QUEUE_STAT_DROPPED_PACKETS": "6",
+        "SAI_QUEUE_STAT_CREDIT_WD_DELETED_PACKETS": "0",
+        "SAI_QUEUE_STAT_BYTES": "610",
+        "SAI_QUEUE_STAT_PACKETS": "5"
     }
 }
