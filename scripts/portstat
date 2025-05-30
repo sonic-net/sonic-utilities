@@ -81,6 +81,7 @@ Examples:
     parser.add_argument('-n','--namespace', default=None, help='Display interfaces for specific namespace')
     parser.add_argument('-v', '--version', action='version', version='%(prog)s 1.0')
     parser.add_argument('-l', '--detail', action='store_true', help='Display detailed statistics.')
+    parser.add_argument('-nz','--non_zero', action='store_true', help='Display only non-zero counters')
     args = parser.parse_args()
 
     save_fresh_stats = args.clear
@@ -99,6 +100,7 @@ Examples:
     namespace = args.namespace
     display_option = args.show
     detail = args.detail
+    nonzero = args.non_zero
 
     cache = UserCache(tag=tag_name)
 
@@ -125,7 +127,8 @@ Examples:
 
     # Now decide what information to display
     if raw_stats:
-        portstat.cnstat_print(cnstat_dict, ratestat_dict, intf_list, use_json, print_all, errors_only, fec_stats_only, rates_only, trim_stats_only)
+        portstat.cnstat_diff_print(cnstat_dict, {}, ratestat_dict, intf_list, use_json, print_all, errors_only,
+                                   fec_stats_only, rates_only, trim_stats_only)
         sys.exit(0)
 
     if save_fresh_stats:
@@ -144,7 +147,7 @@ Examples:
                 cnstat_cached_dict = json.load(open(cnstat_fqn_file, 'r'))
                 if not detail:
                     print("Last cached time was " + str(cnstat_cached_dict.get('time')))
-                portstat.cnstat_diff_print(cnstat_dict, cnstat_cached_dict, ratestat_dict, intf_list, use_json, print_all, errors_only, fec_stats_only, rates_only, trim_stats_only, detail)
+                portstat.cnstat_diff_print(cnstat_dict, cnstat_cached_dict, ratestat_dict, intf_list, use_json, print_all, errors_only, fec_stats_only, rates_only, trim_stats_only, detail, nonzero)
             except IOError as e:
                 print(e.errno, e)
         else:
@@ -152,13 +155,14 @@ Examples:
                 print("\nFile '%s' does not exist" % cnstat_fqn_file)
                 print("Did you run 'portstat -c -t %s' to record the counters via tag %s?\n" % (tag_name, tag_name))
             else:
-                portstat.cnstat_print(cnstat_dict, ratestat_dict, intf_list, use_json, print_all, errors_only, fec_stats_only, rates_only, trim_stats_only, detail)
+                portstat.cnstat_diff_print(cnstat_dict, {}, ratestat_dict, intf_list, use_json, print_all, errors_only,
+                                           fec_stats_only, rates_only, trim_stats_only, detail, nonzero)
     else:
         #wait for the specified time and then gather the new stats and output the difference.
         time.sleep(wait_time_in_seconds)
         print("The rates are calculated within %s seconds period" % wait_time_in_seconds)
         cnstat_new_dict, ratestat_new_dict = portstat.get_cnstat_dict()
-        portstat.cnstat_diff_print(cnstat_new_dict, cnstat_dict, ratestat_new_dict, intf_list, use_json, print_all, errors_only, fec_stats_only, rates_only, trim_stats_only, detail)
+        portstat.cnstat_diff_print(cnstat_new_dict, cnstat_dict, ratestat_new_dict, intf_list, use_json, print_all, errors_only, fec_stats_only, rates_only, trim_stats_only, detail, nonzero)
 
 if __name__ == "__main__":
     main()
