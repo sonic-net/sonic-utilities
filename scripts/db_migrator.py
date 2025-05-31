@@ -1293,6 +1293,14 @@ class DBMigrator():
         Version 202411_01.
         """
         log.log_info('Handling version_202411_01')
+        self.set_version('version_202411_02')
+        return 'version_202411_02'
+
+    def version_202411_02(self):
+        """
+        Version 202411_02.
+        """
+        log.log_info('Handling version_202411_02')
         self.set_version('version_202505_01')
         return 'version_202505_01'
 
