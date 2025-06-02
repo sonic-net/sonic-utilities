@@ -76,7 +76,7 @@ def network(ipaddress, info_type, namespace):
 @click.argument('vrf', required=True)
 @click.pass_context
 def vrf(ctx, vrf):
-    """Show IPv4 BGP information for a given VRF"""
+    """Show IPv6 BGP information for a given VRF"""
     pass
 
 

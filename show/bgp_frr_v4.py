@@ -20,7 +20,7 @@ import utilities_common.multi_asic as multi_asic_util
 def bgp():
     """Show IPv4 BGP (Border Gateway Protocol) information"""
     if device_info.is_supervisor():
-        if sys.argv[3] in "vrf":
+        if sys.argv[3] == "vrf":
             subcommand = sys.argv[5]
         else:
             subcommand = sys.argv[3]
