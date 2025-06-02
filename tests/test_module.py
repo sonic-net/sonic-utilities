@@ -112,8 +112,8 @@ class TestModuleHelper:
 
     def test_module_pre_shutdown_method_not_found(self, mock_load_platform_chassis, mock_try_get_args, mock_log_error):
         mock_try_get_args.return_value = 1
-        mock_module = mock.MagicMock()
-        mock_module.__class__ = type('MockModule', (), {})
+        # Create a plain object without any methods
+        mock_module = object()
         mock_load_platform_chassis.return_value.get_module.return_value = mock_module
 
         result = module_helper.module_pre_shutdown("DPU1")
@@ -139,8 +139,8 @@ class TestModuleHelper:
                                                   mock_try_get_args,
                                                   mock_log_error):
         mock_try_get_args.return_value = 1
-        mock_module = mock.MagicMock()
-        mock_module.__class__ = type('MockModule', (), {})
+        # Create a plain object without any methods
+        mock_module = object()
         mock_load_platform_chassis.return_value.get_module.return_value = mock_module
 
         result = module_helper.module_post_startup("DPU1")
