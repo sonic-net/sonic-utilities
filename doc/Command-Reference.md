@@ -2549,8 +2549,7 @@ Optionally, you can specify an IP address in order to display only that particul
 
   Click [here](#Quagga-BGP-Show-Commands) to see the example for "show ip bgp neighbors" for Quagga.
 
-
-**show ip bgp network [[<ipv4-address>|<ipv4-prefix>] [(bestpath | multipath | longer-prefixes | json)]]
+**show ip bgp network [[<ipv4-address>|<ipv4-prefix>] [(bestpath | multipath | longer-prefixes | json)]]**
 
 This command displays all the details of IPv4 Border Gateway Protocol (BGP) prefixes.
 
