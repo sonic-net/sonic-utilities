@@ -26,6 +26,8 @@ intf_counters_before_clear = """\
 Ethernet0        D        8  2000.00 MB/s     64.00%        10       100       N/A       10  1500.00 MB/s     48.00%       N/A       N/A       N/A
 Ethernet4      N/A        4   204.80 KB/s        N/A         0     1,000       N/A       40   204.85 KB/s        N/A       N/A       N/A       N/A
 Ethernet8      N/A        6  1350.00 KB/s        N/A       100        10       N/A       60    13.37 MB/s        N/A       N/A       N/A       N/A
+Ethernet9      N/A        0      0.00 B/s        N/A         0         0       N/A        0      0.00 B/s        N/A\
+       N/A       N/A       N/A
 """
 
 intf_counters_ethernet4 = """\
@@ -40,9 +42,19 @@ intf_counters_all = """\
 Ethernet0        D        8  2000.00 MB/s  247000.00/s     64.00%        10       100       N/A       10  1500.00 MB/s  183000.00/s     48.00%       N/A       N/A       N/A       0
 Ethernet4      N/A        4   204.80 KB/s     200.00/s        N/A         0     1,000       N/A       40   204.85 KB/s     201.00/s        N/A       N/A       N/A       N/A     100
 Ethernet8      N/A        6  1350.00 KB/s    9000.00/s        N/A       100        10       N/A       60    13.37 MB/s    9000.00/s        N/A       N/A       N/A       N/A     N/A
+Ethernet9      N/A        0      0.00 B/s       0.00/s        N/A         0         0       N/A        0      0.00 B/s       0.00/s        N/A       N/A       N/A       N/A     N/A
 """  # noqa: E501
 
 intf_fec_counters = """\
+    IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER
+---------  -------  ----------  ------------  ----------------  -------------  --------------
+Ethernet0        D     130,402             3                 4            N/A             N/A
+Ethernet4      N/A     110,412             1                 0            N/A             N/A
+Ethernet8      N/A     100,317             0                 0            N/A             N/A
+Ethernet9      N/A           0             0                 0            N/A             N/A
+"""
+
+intf_fec_counters_nonzero = """\
     IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER
 ---------  -------  ----------  ------------  ----------------  -------------  --------------
 Ethernet0        D     130,402             3                 4            N/A             N/A
@@ -73,11 +85,12 @@ BIN15                                   0
 
 intf_fec_counters_period = """\
 The rates are calculated within 3 seconds period
-    IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR
----------  -------  ----------  ------------  ----------------
-Ethernet0        D           0             0                 0
-Ethernet4      N/A           0             0                 0
-Ethernet8      N/A           0             0                 0
+    IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER
+---------  -------  ----------  ------------  ----------------  -------------  --------------
+Ethernet0        D           0             0                 0            N/A             N/A
+Ethernet4      N/A           0             0                 0            N/A             N/A
+Ethernet8      N/A           0             0                 0            N/A             N/A
+Ethernet9      N/A           0             0                 0            N/A             N/A
 """
 
 intf_counters_period = """\
@@ -87,6 +100,8 @@ The rates are calculated within 3 seconds period
 Ethernet0        D        0  2000.00 MB/s     64.00%         0         0       N/A        0  1500.00 MB/s     48.00%       N/A       N/A       N/A
 Ethernet4      N/A        0   204.80 KB/s        N/A         0         0       N/A        0   204.85 KB/s        N/A       N/A       N/A       N/A
 Ethernet8      N/A        0  1350.00 KB/s        N/A         0         0       N/A        0    13.37 MB/s        N/A       N/A       N/A       N/A
+Ethernet9      N/A        0      0.00 B/s        N/A         0         0       N/A        0      0.00 B/s        N/A\
+       N/A       N/A       N/A
 """
 
 intf_counter_after_clear = """\
@@ -94,7 +109,10 @@ intf_counter_after_clear = """\
 ---------  -------  -------  ------------  ---------  --------  --------  --------  -------  ------------  ---------  --------  --------  --------
 Ethernet0        D        0  2000.00 MB/s     64.00%         0         0       N/A        0  1500.00 MB/s     48.00%       N/A       N/A       N/A
 Ethernet4      N/A        0   204.80 KB/s        N/A         0         0       N/A        0   204.85 KB/s        N/A       N/A       N/A       N/A
-Ethernet8      N/A        0  1350.00 KB/s        N/A         0         0       N/A        0    13.37 MB/s        N/A       N/A       N/A       N/A"""
+Ethernet8      N/A        0  1350.00 KB/s        N/A         0         0       N/A        0    13.37 MB/s        N/A\
+       N/A       N/A       N/A
+Ethernet9      N/A        0      0.00 B/s        N/A         0         0       N/A        0      0.00 B/s        N/A\
+       N/A       N/A       N/A"""
 
 clear_counter = """\
 Cleared counters"""
@@ -315,6 +333,54 @@ Ethernet-BP8      N/A        6  1350.00 KB/s        N/A       100        10     
 Reminder: Please execute 'show interface counters -d all' to include internal links
 """
 
+intf_counters_from_lc_on_sup_packet_chassis = """\
+                  IFACE    STATE    RX_OK     RX_BPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK     TX_BPS\
+    TX_UTIL    TX_ERR    TX_DRP    TX_OVR
+-----------------------  -------  -------  ---------  ---------  --------  --------  --------  -------  ---------\
+  ---------  --------  --------  --------
+     HundredGigE0/1/0/1        U      100  10.00 B/s      0.00%         0         0         0      100  10.00 B/s\
+      0.00%         0         0         0
+       FortyGigE0/2/0/2        U      100  10.00 B/s      0.00%         0         0         0      100  10.00 B/s\
+      0.00%         0         0         0
+FourHundredGigE0/3/0/10        U      100  10.00 B/s      0.00%         0         0         0      100  10.00 B/s\
+      0.00%         0         0         0
+
+Reminder: Please execute 'show interface counters -d all' to include internal links
+"""
+
+intf_counters_nonzero = """\
+    IFACE    STATE    RX_OK        RX_BPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK        TX_BPS    TX_UTIL\
+    TX_ERR    TX_DRP    TX_OVR
+---------  -------  -------  ------------  ---------  --------  --------  --------  -------  ------------  ---------\
+  --------  --------  --------
+Ethernet0        D        8  2000.00 MB/s     64.00%        10       100       N/A       10  1500.00 MB/s     48.00%\
+       N/A       N/A       N/A
+Ethernet4      N/A        4   204.80 KB/s        N/A         0     1,000       N/A       40   204.85 KB/s        N/A\
+       N/A       N/A       N/A
+Ethernet8      N/A        6  1350.00 KB/s        N/A       100        10       N/A       60    13.37 MB/s        N/A\
+       N/A       N/A       N/A
+"""
+
+intf_counter_after_clear_nonzero = """\
+No non-zero statistics found for the specified interfaces."""
+
+intf_rates = """\
+    IFACE    STATE    RX_OK        RX_BPS       RX_PPS    RX_UTIL    TX_OK        TX_BPS       TX_PPS    TX_UTIL
+---------  -------  -------  ------------  -----------  ---------  -------  ------------  -----------  ---------
+Ethernet0        D        8  2000.00 MB/s  247000.00/s     64.00%       10  1500.00 MB/s  183000.00/s     48.00%
+Ethernet4      N/A        4   204.80 KB/s     200.00/s        N/A       40   204.85 KB/s     201.00/s        N/A
+Ethernet8      N/A        6  1350.00 KB/s    9000.00/s        N/A       60    13.37 MB/s    9000.00/s        N/A
+Ethernet9      N/A        0      0.00 B/s       0.00/s        N/A        0      0.00 B/s       0.00/s        N/A
+"""  # noqa: E501
+
+intf_rates_nonzero = """\
+    IFACE    STATE    RX_OK        RX_BPS       RX_PPS    RX_UTIL    TX_OK        TX_BPS       TX_PPS    TX_UTIL
+---------  -------  -------  ------------  -----------  ---------  -------  ------------  -----------  ---------
+Ethernet0        D        8  2000.00 MB/s  247000.00/s     64.00%       10  1500.00 MB/s  183000.00/s     48.00%
+Ethernet4      N/A        4   204.80 KB/s     200.00/s        N/A       40   204.85 KB/s     201.00/s        N/A
+Ethernet8      N/A        6  1350.00 KB/s    9000.00/s        N/A       60    13.37 MB/s    9000.00/s        N/A
+"""  # noqa: E501
+
 TEST_PERIOD = 3
 
 
@@ -340,6 +406,9 @@ class TestPortStat(object):
         os.environ["UTILITIES_UNIT_TESTING"] = "2"
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] = "0"
+        os.system("cp {} /tmp/counters_db.json.orig".format(os.path.join(test_path, "mock_tables/counters_db.json")))
+        os.system("cp {} {}".format(os.path.join(test_path, "portstat_db/counters_db.json"),
+                                    os.path.join(test_path, "mock_tables/counters_db.json")))
         remove_tmp_cnstat_file()
 
     def test_show_intf_counters(self):
@@ -428,8 +497,6 @@ class TestPortStat(object):
         assert return_code == 0
         assert result == intf_fec_counters_period
 
-
-
     def test_show_intf_counters_period(self):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["interfaces"].commands["counters"], [
@@ -460,6 +527,13 @@ class TestPortStat(object):
         print("result = {}".format(result))
         assert return_code == 0
         assert result == intf_counters_detailed
+
+    def test_show_intf_rates(self):
+        return_code, result = get_result_and_return_code(['portstat', '-R'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result == intf_rates
 
     def test_clear_intf_counters(self):
         runner = CliRunner()
@@ -612,6 +686,98 @@ class TestPortStat(object):
         os.system("cp /tmp/counters_db.json {}"
                   .format(os.path.join(test_path, "mock_tables/counters_db.json")))
 
+    def test_show_intf_counters_from_lc_on_sup_packet_chassis(self):
+        os.system("cp {} /tmp/".format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+        os.system("cp {} {}".format(os.path.join(test_path, "portstat_db/on_sup_packet_chassis/chassis_state_db.json"),
+                                    os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+        os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "1"
+        os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] = "1"
+
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["counters"], ["-dfrontend"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == intf_counters_from_lc_on_sup_packet_chassis
+
+        return_code, result = get_result_and_return_code(['portstat'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result.rstrip() == intf_counters_from_lc_on_sup_packet_chassis.rstrip()
+        os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
+        os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] = "0"
+        os.system("cp /tmp/chassis_state_db.json {}"
+                  .format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+
+    def test_show_intf_counters_nonzero(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["counters"], ["--nonzero"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == intf_counters_nonzero
+
+        return_code, result = get_result_and_return_code(['portstat', '-nz'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result == intf_counters_nonzero
+
+    def test_clear_intf_counters_nonzero(self):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands["counters"], [])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output.rstrip() == clear_counter
+
+        return_code, result = get_result_and_return_code(['portstat', '-c'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result.rstrip() == clear_counter
+
+        # check counters after clear
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["counters"], ["--nonzero"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        verify_after_clear(result.output, intf_counter_after_clear_nonzero)
+
+        return_code, result = get_result_and_return_code(['portstat', '-nz'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        verify_after_clear(result, intf_counter_after_clear_nonzero)
+
+    def test_show_intf_fec_counters_nonzero(self):
+        remove_tmp_cnstat_file()
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["counters"].commands["fec-stats"], ["--nonzero"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == intf_fec_counters_nonzero
+
+        return_code, result = get_result_and_return_code(['portstat', '-f', '-nz'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result == intf_fec_counters_nonzero
+
+    def test_show_intf_rates_nonzero(self):
+        remove_tmp_cnstat_file()
+        return_code, result = get_result_and_return_code(['portstat', '-R', '-nz'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result == intf_rates_nonzero
+
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
@@ -621,9 +787,7 @@ class TestPortStat(object):
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] = "0"
         remove_tmp_cnstat_file()
-        os.system("cp /tmp/chassis_state_db.json {}"
-                  .format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
-        os.system("cp /tmp/counters_db.json {}"
+        os.system("cp /tmp/counters_db.json.orig {}"
                   .format(os.path.join(test_path, "mock_tables/counters_db.json")))
 
 
