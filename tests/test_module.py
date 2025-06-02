@@ -113,14 +113,17 @@ class TestModuleHelper:
     def test_module_pre_shutdown_method_not_found(self, mock_load_platform_chassis, mock_try_get_args, mock_log_error):
         mock_try_get_args.return_value = 1
         mock_module = mock.MagicMock()
-        delattr(mock_module, 'module_pre_shutdown')
+        mock_module.__class__ = type('MockModule', (), {})
         mock_load_platform_chassis.return_value.get_module.return_value = mock_module
 
         result = module_helper.module_pre_shutdown("DPU1")
         assert result is False
         mock_log_error.assert_called_once_with("Module pre-shutdown method not found in platform chassis")
 
-    def test_module_pre_shutdown_operation_failed(self, mock_load_platform_chassis, mock_try_get_args, mock_try_get, mock_log_error):
+    def test_module_pre_shutdown_operation_failed(self,
+                                                  mock_load_platform_chassis,
+                                                  mock_try_get_args,
+                                                  mock_try_get, mock_log_error):
         mock_try_get_args.return_value = 1
         mock_try_get.return_value = False
         mock_module = mock.MagicMock()
@@ -131,17 +134,24 @@ class TestModuleHelper:
         assert result is False
         mock_log_error.assert_called_once_with("Module pre-shutdown status for module DPU1: False")
 
-    def test_module_post_startup_method_not_found(self, mock_load_platform_chassis, mock_try_get_args, mock_log_error):
+    def test_module_post_startup_method_not_found(self,
+                                                  mock_load_platform_chassis,
+                                                  mock_try_get_args,
+                                                  mock_log_error):
         mock_try_get_args.return_value = 1
         mock_module = mock.MagicMock()
-        delattr(mock_module, 'module_post_startup')
+        mock_module.__class__ = type('MockModule', (), {})
         mock_load_platform_chassis.return_value.get_module.return_value = mock_module
 
         result = module_helper.module_post_startup("DPU1")
         assert result is False
         mock_log_error.assert_called_once_with("Module post-startup method not found in platform chassis")
 
-    def test_module_post_startup_operation_failed(self, mock_load_platform_chassis, mock_try_get_args, mock_try_get, mock_log_error):
+    def test_module_post_startup_operation_failed(self,
+                                                  mock_load_platform_chassis,
+                                                  mock_try_get_args,
+                                                  mock_try_get,
+                                                  mock_log_error):
         mock_try_get_args.return_value = 1
         mock_try_get.return_value = False
         mock_module = mock.MagicMock()
