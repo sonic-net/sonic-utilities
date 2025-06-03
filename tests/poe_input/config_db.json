@@ -1,0 +1,41 @@
+{
+    "PORT|Ethernet0": {
+        "admin_status": "up",
+        "alias": "etp1",
+        "index": "0",
+        "lanes": "0,1,2,3",
+        "mtu": "9100",
+        "speed": "100000"
+    },
+    "PORT|Ethernet4": {
+        "admin_status": "up",
+        "alias": "etp2",
+        "index": "1",
+        "lanes": "4,5,6,7",
+        "mtu": "9100",
+        "speed": "100000"
+    },
+    "PORT|Ethernet8": {
+        "admin_status": "up",
+        "alias": "etp3",
+        "index": "2",
+        "lanes": "8,9,10,11",
+        "mtu": "9100",
+        "speed": "100000"
+    },
+    "POE_PORT|Ethernet0": {
+        "enabled": "enable",
+        "pwr_limit": "100",
+        "priority": "high"
+    },
+    "POE_PORT|Ethernet4": {
+        "enabled": "disable",
+        "pwr_limit": "100",
+        "priority": "low"
+    },
+    "POE_PORT|Ethernet8": {
+        "enabled": "enable",
+        "pwr_limit": "200",
+        "priority": "crit"
+    }
+}

@@ -250,6 +250,10 @@
     * [Historical Memory Statistics for Last 3 Hours](#historical-memory-statistics-for-last-3-hours)
     * [Historical Memory Statistics for Specific Metric (Used Memory)](#historical-memory-statistics-for-specific-metric-used-memory)
     * [View Memory Statistics Configuration](#view-memory-statistics-configuration)
+* [Power over Ethernet](#power-over-ethernet)
+  * [PoE show commands](#poe-show-commands)
+  * [PoE config commands](#poe-config-commands)
+
 ## Document History
 
 | Version | Modification Date | Details |
@@ -14810,3 +14814,114 @@ Enabled:            false
 Sampling Interval:  5
 Retention Period:   15
 ```
+
+## Power over Ethernet
+
+This section explains all the PoE commands that are supported in SONiC.
+
+### PoE show commands
+This sub-section contains the show commands.
+
+- Show status of all PoE devices:
+  ```
+  show poe status
+  ```
+  ```
+  admin@sonic:~$ show poe status
+    Id    PoE ports  Total power    Power consump    Power available    Power limit mode    HW info    Version
+  ----  -----------  -------------  ---------------  -----------------  ------------------  ---------  ---------
+     0           16  100.000 W      10.000 W         90.000 W           port                mcu1       0.1.2.3
+     1           16  100.000 W      10.000 W         90.000 W           class               mcu2       0.1.2.3
+  ```
+
+- Show status of all PoE PSEs:
+  ```
+  show poe pse status
+  ```
+  ```
+  admin@sonic:~$ show poe pse status
+    Id  Status    Temperature    SW ver            HW ver
+  ----  --------  -------------  ----------------  ----------------
+     0  active    25.000 C       0.1.2.3           4.5.6.7
+     1  active    25.000 C       0.1.2.3           4.5.6.7
+     2  active    25.000 C       0.1.2.3           4.5.6.7
+     3  active    25.000 C       0.1.2.3           4.5.6.7
+  ```
+
+- Show status of all PoE interfaces:
+  ```
+  show poe interface status
+  ```
+  ```
+  admin@sonic:~$ show poe interface status
+  Port         Status      En/Dis    Priority    Protocol          Class A    Class B  PWR Consump    PWR limit    Voltage    Current
+  -----------  ----------  --------  ----------  --------------  ---------  ---------  -------------  -----------  ---------  ---------
+  Ethernet0    delivering  enable    crit        802.3bt Type 3          2          4  10.000 W       50.000 W     50.000 V   0.200 A
+  Ethernet1    delivering  enable    crit        802.3bt Type 3          2          4  10.000 W       50.000 W     50.000 V   0.200 A
+  Ethernet2    delivering  enable    low         802.3bt Type 3          2          4  10.000 W       50.000 W     50.000 V   0.200 A
+  Ethernet3    delivering  enable    low         802.3bt Type 3          2          4  10.000 W       50.000 W     50.000 V   0.200 A
+  ```
+
+- Show current configuration of all PoE interfaces:
+  ```
+  show poe interface configuration
+  ```
+  ```
+  admin@sonic:~$ show poe interface configuration
+  Port         En/Dis      Power limit  Priority
+  -----------  --------  -------------  ----------
+  Ethernet0    enable               50  crit
+  Ethernet1    enable               50  crit
+  Ethernet2    enable               50  low
+  Ethernet3    enable               50  low
+  ```
+
+### PoE config commands
+This sub-section contains the config commands.
+
+
+- Enable PoE:
+  ```
+  admin@sonic:~$ sudo config poe interface status --help
+  Usage: config poe interface status [OPTIONS] IFNAME [enable|disable]
+
+    Enable or disable PoE on interface
+
+  Options:
+    -h, -?, --help  Show this message and exit.
+  ```
+  ```
+  admin@sonic:~$ sudo config poe interface status Ethernet0 enable
+  ```
+
+
+- Configure power limit:
+  ```
+  admin@sonic:~$ sudo config poe interface power-limit --help
+  Usage: config poe interface power-limit [OPTIONS] IFNAME POWER_LIMIT
+
+    Configure PoE interface power limit
+
+  Options:
+    -h, -?, --help  Show this message and exit.
+  ```
+  ```
+  admin@sonic:~$ sudo config poe interface power-limit Ethernet0 25
+  ```
+
+
+- Configure priority:
+  ```
+  admin@sonic:~$ sudo config poe interface priority --help
+  Usage: config poe interface priority [OPTIONS] IFNAME [low|high|crit]
+
+    Configure PoE interface priority
+
+  Options:
+    -?, -h, --help  Show this message and exit.
+  ```
+  ```
+  admin@sonic:~$ sudo config poe interface priority Ethernet0 crit
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#power-over-ethernet)
