@@ -11,7 +11,7 @@ module_helper = ModuleHelper()
 
 
 class TestModuleHelper:
-    @pytest.fixture
+    @pytest.fixture(scope="function")
     def mock_load_platform_chassis(self):
         with mock.patch('utilities_common.module.util.load_platform_chassis') as mock_load_platform_chassis:
             yield mock_load_platform_chassis
@@ -114,7 +114,7 @@ class TestModuleHelper:
         mock_try_get_args.return_value = 1
         # Create a plain object without any methods
         mock_module = object()
-        mock_load_platform_chassis.return_value.get_module.return_value = mock_module
+        module_helper.platform_chassis.get_module.return_value = mock_module
 
         result = module_helper.module_pre_shutdown("DPU1")
         assert result is False
@@ -128,7 +128,7 @@ class TestModuleHelper:
         mock_try_get.return_value = False
         mock_module = mock.MagicMock()
         mock_module.module_pre_shutdown.return_value = False
-        mock_load_platform_chassis.return_value.get_module.return_value = mock_module
+        module_helper.platform_chassis.get_module.return_value = mock_module
 
         result = module_helper.module_pre_shutdown("DPU1")
         assert result is False
@@ -141,7 +141,7 @@ class TestModuleHelper:
         mock_try_get_args.return_value = 1
         # Create a plain object without any methods
         mock_module = object()
-        mock_load_platform_chassis.return_value.get_module.return_value = mock_module
+        module_helper.platform_chassis.get_module.return_value = mock_module
 
         result = module_helper.module_post_startup("DPU1")
         assert result is False
@@ -156,7 +156,7 @@ class TestModuleHelper:
         mock_try_get.return_value = False
         mock_module = mock.MagicMock()
         mock_module.module_post_startup.return_value = False
-        mock_load_platform_chassis.return_value.get_module.return_value = mock_module
+        module_helper.platform_chassis.get_module.return_value = mock_module
 
         result = module_helper.module_post_startup("DPU1")
         assert result is False
