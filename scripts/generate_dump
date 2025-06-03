@@ -1480,7 +1480,7 @@ collect_nvidia_sdk_dumps() {
     done
 
     for file in $(find "$sku_folder" -name "sai_*.xml"); do
-        save_file "$file" sai_sdk_dump true
+        save_file "$file" sai_sdk_dump true true
     done
 }
 
