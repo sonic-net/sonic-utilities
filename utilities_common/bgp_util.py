@@ -262,15 +262,21 @@ def run_bgp_show_command(vtysh_cmd, bgp_namespace=multi_asic.DEFAULT_NAMESPACE, 
     return output
 
 
-def get_bgp_summary_from_all_bgp_instances(af, namespace, display):
+def get_bgp_summary_from_all_bgp_instances(af, namespace, display, vrf):
 
     device = multi_asic_util.MultiAsic(display, namespace)
     ctx = click.get_current_context()
     if af is constants.IPV4:
-        vtysh_cmd = "show ip bgp summary json"
+        vtysh_cmd = "show ip bgp"
+        if vrf is not None:
+            vtysh_cmd += ' vrf {}'.format(vrf)
+        vtysh_cmd += " summary json"
         key = 'ipv4Unicast'
     else:
-        vtysh_cmd = "show bgp ipv6 summary json"
+        vtysh_cmd = "show bgp"
+        if vrf is not None:
+            vtysh_cmd += ' vrf {}'.format(vrf)
+        vtysh_cmd += " ipv6 summary json"
         key = 'ipv6Unicast'
 
     bgp_summary = {}
@@ -301,7 +307,10 @@ def get_bgp_summary_from_all_bgp_instances(af, namespace, display):
                     has_bgp_neighbors = False
 
         if not has_bgp_neighbors:
-            vtysh_bgp_json_cmd = "show ip bgp json"
+            vtysh_bgp_json_cmd = "show ip bgp"
+            if vrf is not None:
+                vtysh_bgp_json_cmd += " vrf {}".format(vrf)
+            vtysh_bgp_json_cmd += " json"
             no_neigh_cmd_output = run_bgp_show_command(vtysh_bgp_json_cmd, ns)
             try:
                 no_neigh_cmd_output_json = json.loads(no_neigh_cmd_output)
