@@ -45,6 +45,7 @@ from utilities_common.general import load_db_config, load_module_from_source
 from .validated_config_db_connector import ValidatedConfigDBConnector
 import utilities_common.multi_asic as multi_asic_util
 from utilities_common.flock import try_lock
+from utilities_common.constants import DEFAULT_SUPPORTED_FECS_LIST
 
 from .utils import log
 
@@ -4965,12 +4966,13 @@ def advertised_types(ctx, interface_name, interface_type_list, verbose):
 @interface.command()
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @click.argument('mode', required=True, type=click.STRING, autocompletion=_get_breakout_options)
+@click.argument('interface_fec', metavar='<interface_fec>', required=False)
 @click.option('-f', '--force-remove-dependencies', is_flag=True,  help='Clear all dependencies internally first.')
 @click.option('-l', '--load-predefined-config', is_flag=True,  help='load predefied user configuration (alias, lanes, speed etc) first.')
 @click.option('-y', '--yes', is_flag=True, callback=_abort_if_false, expose_value=False, prompt='Do you want to Breakout the port, continue?')
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
 @click.pass_context
-def breakout(ctx, interface_name, mode, verbose, force_remove_dependencies, load_predefined_config):
+def breakout(ctx, interface_name, interface_fec, mode, verbose, force_remove_dependencies, load_predefined_config):
     """ Set interface breakout mode """
     breakout_cfg_file = device_info.get_path_to_port_config_file()
 
@@ -5014,6 +5016,17 @@ def breakout(ctx, interface_name, mode, verbose, force_remove_dependencies, load
     # Get list of interfaces to be added
     add_ports = get_child_ports(interface_name, target_brkout_mode, breakout_cfg_file)
     add_intf_dict = {intf: add_ports[intf]["speed"] for intf in add_ports}
+
+    # Check fec config none, rs, fc
+    if interface_fec:
+        valid_fec_values = DEFAULT_SUPPORTED_FECS_LIST
+        if interface_fec not in valid_fec_values:
+            ctx.fail("\nInvalid fec \'{}\'! Supported {}\n".format(interface_fec, valid_fec_values))
+        else:
+            # Add Fec to each port
+            for intf in add_ports:
+                attrib_str = add_ports[intf]
+                attrib_str['fec'] = str(interface_fec)
 
     if add_intf_dict:
         click.echo("Ports to be added : \n {}".format(json.dumps(add_intf_dict, indent=4)))
