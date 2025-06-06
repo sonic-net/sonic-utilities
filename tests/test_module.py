@@ -11,7 +11,7 @@ module_helper = ModuleHelper()
 
 
 class TestModuleHelper:
-    @pytest.fixture
+    @pytest.fixture(scope="function")
     def mock_load_platform_chassis(self):
         with mock.patch('utilities_common.module.util.load_platform_chassis') as mock_load_platform_chassis:
             yield mock_load_platform_chassis
@@ -78,34 +78,86 @@ class TestModuleHelper:
         result = module_helper.reboot_module("DPU1", "cold")
         assert result is False
 
-    def test_pci_detach_module_success(self, mock_load_platform_chassis, mock_try_get_args, mock_try_get):
+    def test_module_pre_shutdown_success(self, mock_load_platform_chassis, mock_try_get_args, mock_try_get):
         mock_try_get_args.return_value = True
         mock_try_get.return_value = True
         mock_load_platform_chassis.return_value.get_module_index.return_value = 1
-        mock_load_platform_chassis.return_value.get_module.return_value.pci_detach.return_value = True
+        mock_load_platform_chassis.return_value.get_module.return_value.module_pre_shutdown.return_value = True
 
-        result = module_helper.pci_detach_module("DPU1")
+        result = module_helper.module_pre_shutdown("DPU1")
         assert result is True
 
-    def test_pci_detach_module_invalid_index(self, mock_load_platform_chassis, mock_try_get_args):
+    def test_module_pre_shutdown_invalid_index(self, mock_load_platform_chassis, mock_try_get_args):
         mock_try_get_args.return_value = INVALID_MODULE_INDEX
         mock_load_platform_chassis.return_value.get_module_index.return_value = INVALID_MODULE_INDEX
 
-        result = module_helper.pci_detach_module("DPU1")
+        result = module_helper.module_pre_shutdown("DPU1")
         assert result is False
 
-    def test_pci_reattach_module_success(self, mock_load_platform_chassis, mock_try_get_args, mock_try_get):
+    def test_module_post_startup_success(self, mock_load_platform_chassis, mock_try_get_args, mock_try_get):
         mock_try_get_args.return_value = True
         mock_try_get.return_value = True
         mock_load_platform_chassis.return_value.get_module_index.return_value = 1
-        mock_load_platform_chassis.return_value.get_module.return_value.pci_reattach.return_value = True
+        mock_load_platform_chassis.return_value.get_module.return_value.module_post_startup.return_value = True
 
-        result = module_helper.pci_reattach_module("DPU1")
+        result = module_helper.module_post_startup("DPU1")
         assert result is True
 
     def test_pci_reattach_module_invalid_index(self, mock_load_platform_chassis, mock_try_get_args):
         mock_try_get_args.return_value = INVALID_MODULE_INDEX
         mock_load_platform_chassis.return_value.get_module_index.return_value = INVALID_MODULE_INDEX
 
-        result = module_helper.pci_reattach_module("DPU1")
+        result = module_helper.module_post_startup("DPU1")
         assert result is False
+
+    def test_module_pre_shutdown_method_not_found(self, mock_load_platform_chassis, mock_try_get_args, mock_log_error):
+        mock_try_get_args.return_value = 1
+        # Create a plain object without any methods
+        mock_module = object()
+        module_helper.platform_chassis.get_module.return_value = mock_module
+
+        result = module_helper.module_pre_shutdown("DPU1")
+        assert result is False
+        mock_log_error.assert_called_once_with("Module pre-shutdown method not found in platform chassis")
+
+    def test_module_pre_shutdown_operation_failed(self,
+                                                  mock_load_platform_chassis,
+                                                  mock_try_get_args,
+                                                  mock_try_get, mock_log_error):
+        mock_try_get_args.return_value = 1
+        mock_try_get.return_value = False
+        mock_module = mock.MagicMock()
+        mock_module.module_pre_shutdown.return_value = False
+        module_helper.platform_chassis.get_module.return_value = mock_module
+
+        result = module_helper.module_pre_shutdown("DPU1")
+        assert result is False
+        mock_log_error.assert_called_once_with("Module pre-shutdown status for module DPU1: False")
+
+    def test_module_post_startup_method_not_found(self,
+                                                  mock_load_platform_chassis,
+                                                  mock_try_get_args,
+                                                  mock_log_error):
+        mock_try_get_args.return_value = 1
+        # Create a plain object without any methods
+        mock_module = object()
+        module_helper.platform_chassis.get_module.return_value = mock_module
+
+        result = module_helper.module_post_startup("DPU1")
+        assert result is False
+        mock_log_error.assert_called_once_with("Module post-startup method not found in platform chassis")
+
+    def test_module_post_startup_operation_failed(self,
+                                                  mock_load_platform_chassis,
+                                                  mock_try_get_args,
+                                                  mock_try_get,
+                                                  mock_log_error):
+        mock_try_get_args.return_value = 1
+        mock_try_get.return_value = False
+        mock_module = mock.MagicMock()
+        mock_module.module_post_startup.return_value = False
+        module_helper.platform_chassis.get_module.return_value = mock_module
+
+        result = module_helper.module_post_startup("DPU1")
+        assert result is False
+        mock_log_error.assert_called_once_with("Module post-startup status for module DPU1: False")

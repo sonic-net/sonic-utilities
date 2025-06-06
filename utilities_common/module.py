@@ -73,11 +73,11 @@ class ModuleHelper:
 
         return True
 
-    def pci_detach_module(self, module_name):
+    def module_pre_shutdown(self, module_name):
         """
         Detach the specified module by invoking the platform API.
         Note: Caller to make sure this method is not invoked concurrently with
-        pci_reattach_module for the same module.
+        module_post_startup for the same module.
 
         Args:
             module_name (str): The name of the module to detach.
@@ -92,23 +92,23 @@ class ModuleHelper:
             log.log_error("Unable to get module-index for {}". format(module_name))
             return False
 
-        if not hasattr(self.platform_chassis.get_module(module_index), 'pci_detach'):
-            log.log_error("PCI detach method not found in platform chassis")
+        if not hasattr(self.platform_chassis.get_module(module_index), 'module_pre_shutdown'):
+            log.log_error("Module pre-shutdown method not found in platform chassis")
             return False
 
         log.log_info("Detaching module {}...".format(module_name))
-        status = util.try_get(self.platform_chassis.get_module(module_index).pci_detach, default=False)
+        status = util.try_get(self.platform_chassis.get_module(module_index).module_pre_shutdown, default=False)
         if not status:
-            log.log_error("PCI detach status for module {}: {}".format(module_name, status))
+            log.log_error("Module pre-shutdown status for module {}: {}".format(module_name, status))
             return False
 
         return True
 
-    def pci_reattach_module(self, module_name):
+    def module_post_startup(self, module_name):
         """
         Rescan the specified module by invoking the platform API.
         Note: Caller to make sure this method is not invoked concurrently with
-        pci_detach_module for the same module.
+        module_pre_shutdown for the same module.
 
         Args:
             module_name (str): The name of the module to rescan.
@@ -123,14 +123,14 @@ class ModuleHelper:
             log.log_error("Unable to get module-index for {}". format(module_name))
             return False
 
-        if not hasattr(self.platform_chassis.get_module(module_index), 'pci_reattach'):
-            log.log_error("PCI reattach method not found in platform chassis")
+        if not hasattr(self.platform_chassis.get_module(module_index), 'module_post_startup'):
+            log.log_error("Module post-startup method not found in platform chassis")
             return False
 
         log.log_info("Rescanning module {}...".format(module_name))
-        status = util.try_get(self.platform_chassis.get_module(module_index).pci_reattach, default=False)
+        status = util.try_get(self.platform_chassis.get_module(module_index).module_post_startup, default=False)
         if not status:
-            log.log_error("PCI rescan status for module {}: {}".format(module_name, status))
+            log.log_error("Module post-startup status for module {}: {}".format(module_name, status))
             return False
 
         return True
