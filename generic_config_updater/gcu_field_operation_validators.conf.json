@@ -165,19 +165,19 @@
             }
         },
         "WRED_PROFILE": {
-            "field_operation_validators": [ "generic_config_updater.field_operation_validators.rdma_config_update_validator" ],
+            "field_operation_validators": [ "generic_config_updater.field_operation_validators.wred_profile_config_update_validator" ],
             "validator_data": {
                 "rdma_config_update_validator": {
                     "ECN tuning": {
                         "fields": [
-                            "azure_lossless/green_min_threshold",
-                            "azure_lossless/green_max_threshold",
-                            "azure_lossless/green_drop_probability"
+                            "green_min_threshold",
+                            "green_max_threshold",
+                            "green_drop_probability"
                         ],
                         "operations": ["replace"],
                         "platforms": {
                             "spc1": "20181100",
-			    "spc2": "20191100",
+                            "spc2": "20191100",
                             "spc3": "20220500",
                             "spc4": "20221100",
                             "spc5": "20241200",
