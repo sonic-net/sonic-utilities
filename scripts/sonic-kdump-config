@@ -133,7 +133,7 @@ def rewrite_cfg(lines, fname):
 #  @param where String should be in the form "crashkernel=X", X being a string
 #  @return      The value X as a string
 def search_for_crash_kernel(where):
-    expected_str = ' crashkernel='
+    expected_str = 'crashkernel='
     p = where.find(expected_str)
     if p == -1:
         return None
@@ -333,7 +333,7 @@ def get_kdump_num_dumps():
             if config_data is not None:
                 num = config_data.get('num_dumps')
                 if num:
-                    num_dumps = num
+                    num_dumps = int(num)
     return num_dumps
 
 def get_kdump_ssh_string():
@@ -371,7 +371,7 @@ def get_kdump_ssh_path():
 #
 #  @return The integer value X from USE_KDUMP=X in /etc/default/kdump-tools
 def read_use_kdump():
-    (rc, lines, err_str) = run_command("grep 'USE_KDUMP=.*' %s | cut -d = -f 2" % kdump_cfg, use_shell=False);
+    (rc, lines, err_str) = run_command("grep 'USE_KDUMP=.*' %s | cut -d = -f 2" % kdump_cfg, use_shell=True);
     if rc == 0 and type(lines) == list and len(lines) >= 1:
         try:
             return int(lines[0])
@@ -640,6 +640,33 @@ def cmd_kdump_config_next(verbose):
     return cmd_kdump_enable(verbose, image)
 
 
+def disable_kdump_from_kernel_cmdline_append(kernel_cmdline_append_file, verbose):
+    try:
+        with open(kernel_cmdline_append_file) as config_file_handler:
+            lines = [line.rstrip('\n') for line in config_file_handler]
+    except OSError as sys_err:
+        syslog.syslog(syslog.LOG_ERR, "Failed to open kernel cmdline append file: '{}', Error is: '{}'!"
+                      .format(kernel_cmdline_append_file, sys_err))
+        return False
+
+    changed = False
+    for idx in range(len(lines)):
+        crash_kernel_mem = search_for_crash_kernel(lines[idx])
+        if crash_kernel_mem is not None:
+            lines[idx] = lines[idx].replace("crashkernel="+crash_kernel_mem, "")
+            changed = True
+            if verbose:
+                print("Removed [%s] in %s" % ("crashkernel="+crash_kernel_mem, kernel_cmdline_append_file))
+
+    # Remove empty lines (including those with just whitespace)
+    cleaned_lines = [line for line in lines if line.strip()]
+
+    if changed:
+        rewrite_cfg(cleaned_lines, kernel_cmdline_append_file)
+
+    return True
+
+
 def kdump_disable(verbose, image, booter_config_file_path):
     """Unloads Kdump kernel and remove parameter `crashkernel=*` from configuration file of
     kernel boot loader.
@@ -680,6 +707,14 @@ def kdump_disable(verbose, image, booter_config_file_path):
 
     if changed:
         rewrite_cfg(lines, booter_config_file_path)
+
+    # boot0 file creates the final kernel-cmdline by parsing both kernel-cmdline and kernel-cmdline-append file
+    # hence remove crashkernel parameter from kernel-cmdline-append file also.
+    kernel_cmdline_append_file = booter_config_file_path + "-append"
+    if not disable_kdump_from_kernel_cmdline_append(kernel_cmdline_append_file, verbose):
+        syslog.syslog(syslog.LOG_ERR, "Failed to disable kdump config from kernel-cmdline-append file: '{}'"
+                .format(kernel_cmdline_append_file))
+        return False
 
     if not os.path.exists('/etc/sonic/config_db.json'):
         print_err("Startup configuration not found, Kdump configuration is not saved")
