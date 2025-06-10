@@ -26,13 +26,14 @@ def mock_docker_api():
     @dataclass
     class Image:
         id: str
-
+        tags: list[str]
+        
         @property
         def attrs(self):
             return {'RepoTags': [self.id]}
 
     def pull(repo, ref):
-        return Image(f'{repo}:{ref}')
+        return Image(f'{repo}:{ref}', [ref])
 
     def load(filename):
         return Image(filename)
