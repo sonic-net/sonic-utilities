@@ -36,7 +36,7 @@ def mock_docker_api():
         return Image(f'{repo}:{ref}', [ref])
 
     def load(filename):
-        return Image(filename)
+        return Image(filename, ["latest"])
 
     docker.pull = MagicMock(side_effect=pull)
     docker.load = MagicMock(side_effect=load)
