@@ -282,7 +282,7 @@ def get_subport(port_name):
     if subport is None:
         click.echo(f"{port_name}: subport is not present in CONFIG_DB")
         sys.exit(EXIT_FAIL)
-    else:
+    elif subport == '':
         subport = 1
 
     return max(int(subport), 1)

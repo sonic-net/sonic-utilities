@@ -1825,7 +1825,10 @@ EEPROM hexdump for port Ethernet4
         "direction, lane_count, enable, disable_func_result, output_dict, expected_echo, expected_exit",
         [
             # TX disable success
-            ("tx", 2, "disable", True, {"TxOutputStatus1": False, "TxOutputStatus2": False}, "TX output disabled", None),
+            (
+                "tx", 2, "disable", True, {"TxOutputStatus1": False, "TxOutputStatus2": False},
+                "TX output disabled", None
+            ),
             # RX enable success
             ("rx", 1, "enable", True, {"RxOutputStatus1": True}, "RX output enabled", None),
             # TX disable fails to disable
@@ -1843,10 +1846,20 @@ EEPROM hexdump for port Ethernet4
     @patch("sfputil.debug.get_media_lane_count")
     @patch("sfputil.debug.get_host_lane_count")
     @patch("sfputil.debug.time.sleep", return_value=None)
-    def test_set_output_cli(self,
-        mock_sleep, mock_get_host_lane_count,
-        mock_get_media_lane_count, mock_get_subport, mock_get_sfp_object,
-        direction, lane_count, enable, disable_func_result, output_dict, expected_echo, expected_exit
+    def test_set_output_cli(
+        self,
+        mock_sleep,
+        mock_get_host_lane_count,
+        mock_get_media_lane_count,
+        mock_get_subport,
+        mock_get_sfp_object,
+        direction,
+        lane_count,
+        enable,
+        disable_func_result,
+        output_dict,
+        expected_echo,
+        expected_exit
     ):
         from click.testing import CliRunner
         import sfputil.main as sfputil
