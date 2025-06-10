@@ -130,14 +130,17 @@ def set_output(port_name, enable, direction):
                     if lane_status:
                         click.echo(
                             f"{port_name}: {direction.upper()} output on lane {lane} is still "
-                            "enabled on subport {subport}. Restoring state."
+                            f"enabled on subport {subport}. Restoring state."
                         )
                         # Restore the state if disable failed
                         disable_func(lane_mask, True)
                         sys.exit(EXIT_FAIL)
                 else:
                     if not lane_status:
-                        click.echo(f"{port_name}: {direction.upper()} output on lane {lane} is still disabled on subport {subport}. Restoring state.")
+                        click.echo(
+                            f"{port_name}: {direction.upper()} output on lane {lane} is still disabled "
+                            f"on subport {subport}. Restoring state."
+                        )
                         # Restore the state if enable failed
                         disable_func(lane_mask, False)
                         sys.exit(EXIT_FAIL)

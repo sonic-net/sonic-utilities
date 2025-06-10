@@ -1889,7 +1889,8 @@ EEPROM hexdump for port Ethernet4
         cli_cmd = direction_to_cli.get(direction, direction)
 
         # Run CLI and check output/exit
-        result = runner.invoke(sfputil.cli.commands['debug'].commands.get(cli_cmd, lambda *a, **k: None), [port_name, enable])
+        result = runner.invoke(sfputil.cli.commands['debug'].commands.get(cli_cmd, lambda *a, **k: None),
+                               [port_name, enable])
 
         if expected_exit:
             assert result.exit_code != 0
