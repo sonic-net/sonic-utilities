@@ -133,7 +133,7 @@ def set_output(port_name, enable, direction):
                             f"enabled on subport {subport}. Restoring state."
                         )
                         # Restore the state if disable failed
-                        disable_func(lane_mask, True)
+                        disable_func(lane_mask, False)
                         sys.exit(EXIT_FAIL)
                 else:
                     if not lane_status:
@@ -142,7 +142,7 @@ def set_output(port_name, enable, direction):
                             f"on subport {subport}. Restoring state."
                         )
                         # Restore the state if enable failed
-                        disable_func(lane_mask, False)
+                        disable_func(lane_mask, True)
                         sys.exit(EXIT_FAIL)
 
         click.echo(
