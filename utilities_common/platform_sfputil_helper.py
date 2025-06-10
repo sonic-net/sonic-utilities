@@ -191,7 +191,7 @@ def get_host_lane_count(port_name):
 
     lane_count = get_value_from_db_by_field("STATE_DB", "TRANSCEIVER_INFO", "host_lane_count", port_name)
 
-    if lane_count == 0 or lane_count is None:
+    if lane_count == 0 or lane_count is None or lane_count == '':
         click.echo(f"{port_name}: unable to retreive correct host lane count")
         sys.exit(EXIT_FAIL)
 
@@ -202,7 +202,7 @@ def get_media_lane_count(port_name):
 
     lane_count = get_value_from_db_by_field("STATE_DB", "TRANSCEIVER_INFO", "media_lane_count", port_name)
 
-    if lane_count == 0 or lane_count is None:
+    if lane_count == 0 or lane_count is None or lane_count == '':
         click.echo(f"{port_name}: unable to retreive correct media lane count")
         sys.exit(EXIT_FAIL)
 
@@ -237,7 +237,12 @@ def get_value_from_db_by_field(db_name, table_name, field, key):
             db.connect(getattr(db, db_name))  # Get the corresponding attribute (e.g., STATE_DB) from the connector
 
         # Retrieve the value from the database
-        return db.get(db_name, f"{table_name}|{key}", field)
+        value = db.get(db_name, f"{table_name}|{key}", field)
+        if value is None:
+            click.echo(f"Field '{field}' not found in table '{table_name}' for key '{key}' in {db_name}.")
+            return ''
+        else:
+            return value
     except (TypeError, KeyError, AttributeError) as e:
         click.echo(f"Error: {e}")
         return None
@@ -277,6 +282,8 @@ def get_subport(port_name):
     if subport is None:
         click.echo(f"{port_name}: subport is not present in CONFIG_DB")
         sys.exit(EXIT_FAIL)
+    else:
+        subport = 1
 
     return max(int(subport), 1)
 

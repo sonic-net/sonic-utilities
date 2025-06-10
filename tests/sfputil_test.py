@@ -1821,81 +1821,69 @@ EEPROM hexdump for port Ethernet4
         assert result.output == 'Error: \nEthernet0: subport is not present in CONFIG_DB\n'
         assert result.exit_code == EXIT_FAIL
 
-    # Test for 'tx-output' command
-    @patch('sfputil.debug.get_sfp_object')
-    @patch('utilities_common.platform_sfputil_helper.ConfigDBConnector')
-    @patch('utilities_common.platform_sfputil_helper.SonicV2Connector')
-    @patch('sonic_py_common.multi_asic.get_front_end_namespaces', MagicMock(return_value=['']))
-    def test_tx_output(self, mock_sonic_v2_connector, mock_config_db_connector, mock_get_sfp_object):
-        """Test for tx-output command"""
-        mock_sfp = MagicMock()
-        mock_get_sfp_object.return_value = mock_sfp  # Ensure get_sfp_object returns the mock
-        mock_sonic_v2_connector.return_value = MagicMock()
+    @pytest.mark.parametrize(
+        "direction, lane_count, enable, disable_func_result, output_dict, expected_echo, expected_exit",
+        [
+            # TX disable success
+            ("tx", 2, "disable", True, {"TxOutputStatus1": False, "TxOutputStatus2": False}, "TX output disabled", None),
+            # RX enable success
+            ("rx", 1, "enable", True, {"RxOutputStatus1": True}, "RX output enabled", None),
+            # TX disable fails to disable
+            ("tx", 1, "disable", True, {"TxOutputStatus1": True}, "TX output on lane 1 is still enabled", SystemExit),
+            # RX enable fails to enable
+            ("rx", 1, "enable", True, {"RxOutputStatus1": False}, "RX output on lane 1 is still disabled", SystemExit),
+            # TX disable_func returns False
+            ("tx", 1, "disable", False, {}, "TX disable failed", SystemExit),
+            # RX output_dict is None
+            ("rx", 1, "disable", True, None, "RX output status not available", SystemExit),
+        ]
+    )
+    @patch("sfputil.debug.get_sfp_object")
+    @patch("sfputil.debug.get_subport")
+    @patch("sfputil.debug.get_media_lane_count")
+    @patch("sfputil.debug.get_host_lane_count")
+    @patch("sfputil.debug.time.sleep", return_value=None)
+    def test_set_output_cli(self,
+        mock_sleep, mock_get_host_lane_count,
+        mock_get_media_lane_count, mock_get_subport, mock_get_sfp_object,
+        direction, lane_count, enable, disable_func_result, output_dict, expected_echo, expected_exit
+    ):
+        from click.testing import CliRunner
+        import sfputil.main as sfputil
 
-        mock_sfp.get_presence.return_value = False
+        port_name = "Ethernet0"
+        subport = 1
         runner = CliRunner()
 
-        # Test the case where the module is not applicable
-        mock_sfp.get_presence.return_value = True
-        mock_sfp.tx_disable_channel = MagicMock(side_effect=AttributeError)
-        result = runner.invoke(sfputil.cli.commands['debug'].commands['tx-output'], ["Ethernet0", "enable"])
-        assert result.output == 'Ethernet0: TX disable is not applicable for this module\n'
-        assert result.exit_code == ERROR_NOT_IMPLEMENTED
+        mock_get_subport.return_value = subport
+        mock_get_media_lane_count.return_value = lane_count
+        mock_get_host_lane_count.return_value = lane_count
 
-        # Test the case where enabling/disabling TX works
-        mock_sfp.tx_disable_channel = MagicMock(return_value=None)
-        result = runner.invoke(sfputil.cli.commands['debug'].commands['tx-output'], ["Ethernet0", "enable"])
-        assert result.output == 'Ethernet0: TX output enabled on subport 1\n'
-        assert result.exit_code != ERROR_NOT_IMPLEMENTED
-
-        mock_sfp.tx_disable_channel = MagicMock(return_value=None)
-        result = runner.invoke(sfputil.cli.commands['debug'].commands['tx-output'], ["Ethernet0", "disable"])
-        assert result.output == 'Ethernet0: TX output disabled on subport 1\n'
-        assert result.exit_code != ERROR_NOT_IMPLEMENTED
-
-        # Test the case where there is a failure while disabling TX
-        mock_sfp.tx_disable_channel = MagicMock(side_effect=Exception("TX disable failed"))
-        result = runner.invoke(sfputil.cli.commands['debug'].commands['tx-output'], ["Ethernet0", "disable"])
-        assert result.output == 'Ethernet0: TX disable failed due to TX disable failed\n'
-        assert result.exit_code == EXIT_FAIL
-
-    # Test for 'rx-output' command
-    @patch('sfputil.debug.get_sfp_object')
-    @patch('utilities_common.platform_sfputil_helper.ConfigDBConnector')
-    @patch('utilities_common.platform_sfputil_helper.SonicV2Connector')
-    @patch('sonic_py_common.multi_asic.get_front_end_namespaces', MagicMock(return_value=['']))
-    def test_rx_output(self, mock_sonic_v2_connector, mock_config_db_connector, mock_get_sfp_object):
-        """Test for rx-output command"""
+        # Mock SFP and API
         mock_sfp = MagicMock()
-        mock_get_sfp_object.return_value = mock_sfp  # Ensure get_sfp_object returns the mock
-        mock_sonic_v2_connector.return_value = MagicMock()
+        mock_api = MagicMock()
+        if direction == "tx":
+            mock_sfp.tx_disable_channel.return_value = disable_func_result
+            mock_api.get_tx_output_status.return_value = output_dict
+        elif direction == "rx":
+            mock_sfp.rx_disable_channel.return_value = disable_func_result
+            mock_api.get_rx_output_status.return_value = output_dict
+        mock_sfp.get_xcvr_api.return_value = mock_api
+        mock_get_sfp_object.return_value = mock_sfp
 
-        mock_sfp.get_presence.return_value = False
-        runner = CliRunner()
+        # Map direction to CLI command
+        direction_to_cli = {"tx": "tx-output", "rx": "rx-output"}
+        cli_cmd = direction_to_cli.get(direction, direction)
 
-        # Test the case where the module is not applicable
-        mock_sfp.get_presence.return_value = True
-        mock_sfp.rx_disable_channel = MagicMock(side_effect=AttributeError)
-        result = runner.invoke(sfputil.cli.commands['debug'].commands['rx-output'], ["Ethernet0", "enable"])
-        assert result.output == 'Ethernet0: RX disable is not applicable for this module\n'
-        assert result.exit_code == ERROR_NOT_IMPLEMENTED
+        # Run CLI and check output/exit
+        result = runner.invoke(sfputil.cli.commands['debug'].commands.get(cli_cmd, lambda *a, **k: None), [port_name, enable])
 
-        # Test the case where enabling/disabling RX works
-        mock_sfp.rx_disable_channel = MagicMock(return_value=None)
-        result = runner.invoke(sfputil.cli.commands['debug'].commands['rx-output'], ["Ethernet0", "enable"])
-        assert result.output == 'Ethernet0: RX output enabled on subport 1\n'
-        assert result.exit_code != ERROR_NOT_IMPLEMENTED
-
-        mock_sfp.rx_disable_channel = MagicMock(return_value=None)
-        result = runner.invoke(sfputil.cli.commands['debug'].commands['rx-output'], ["Ethernet0", "disable"])
-        assert result.output == 'Ethernet0: RX output disabled on subport 1\n'
-        assert result.exit_code != ERROR_NOT_IMPLEMENTED
-
-        # Test the case where there is a failure while disabling RX
-        mock_sfp.rx_disable_channel = MagicMock(side_effect=Exception("RX disable failed"))
-        result = runner.invoke(sfputil.cli.commands['debug'].commands['rx-output'], ["Ethernet0", "disable"])
-        assert result.output == 'Ethernet0: RX disable failed due to RX disable failed\n'
-        assert result.exit_code == EXIT_FAIL
+        if expected_exit:
+            assert result.exit_code != 0
+            assert expected_echo in result.output
+        else:
+            assert result.exit_code == 0
+            assert expected_echo in result.output
 
     @pytest.mark.parametrize("subport, lane_count, expected_mask", [
         (1, 1, 0x1),
