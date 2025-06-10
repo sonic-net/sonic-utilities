@@ -29,7 +29,7 @@ def print_single_copp_entry(entry, trap_id=None, group=None):
     """Print single copp entry"""
 
     if not trap_id:
-        click.echo("Trap Id(s).................. {}".format(",".join(entry.get("trap_ids", {}))))
+        click.echo("Trap Id(s).................. {}".format(",".join(entry.get("trap_ids", []))))
     else:
         click.echo("Trap Group.................. {}".format(group))
 
@@ -150,6 +150,8 @@ def merge_copp_config(config_db, input_trap=None, input_group=None):
             json_data = json.load(file)
     except FileNotFoundError:
         click.echo(f"WARNING: CoPP CFG file: '{COPP_INIT_CFG_JSON_FILE}' not found.")
+    except json.JSONDecodeError:
+        click.echo(f"ERROR: CoPP CFG file: '{COPP_INIT_CFG_JSON_FILE}' contains malformed JSON.")
 
     # Merge CoPP groups and traps
     merged_group = merge_copp_entries(config_db,

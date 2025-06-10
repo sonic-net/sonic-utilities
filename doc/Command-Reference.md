@@ -14907,7 +14907,7 @@ CIR......................... 200
 Green Action................ forward
 Yellow Action............... forward
 Red Action.................. drop
-Oper Status................. installed
+HW Status................... installed
 ```
 
 Command to display the detailed CoPP configuration of a specific CoPP group.
@@ -14920,7 +14920,7 @@ admin@sonic:~$ show copp configuration detailed --group queue1_group3
 
 ```bash
 Trap Id(s).................. neighbor_miss
-queue....................... 1
+Queue....................... 1
 Trap Priority............... 1
 Trap Action................. trap
 Meter Type.................. packets
