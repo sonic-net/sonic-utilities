@@ -283,7 +283,7 @@ class ServiceCreator:
             'docker_container_name': name,
             'docker_image_id': image_id,
             'docker_image_name': package.entry.repository,
-            'docker_image_tag': package.tag,
+            'docker_image_tag': package.entry.tag,
             'docker_image_run_opt': run_opt,
             'sonic_asic_platform': sonic_asic_platform
         }
