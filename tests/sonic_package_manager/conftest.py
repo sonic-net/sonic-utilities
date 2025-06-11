@@ -27,7 +27,7 @@ def mock_docker_api():
     class Image:
         id: str
         tags: list[str]
-        
+
         @property
         def attrs(self):
             return {'RepoTags': [self.id]}
