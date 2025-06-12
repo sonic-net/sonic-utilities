@@ -285,7 +285,7 @@ def get_subport(port_name):
     elif subport == '':
         subport = 0
 
-    return subport
+    return int(subport)
 
 
 def is_sfp_present(port_name):
