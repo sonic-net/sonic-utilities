@@ -563,8 +563,7 @@ TEST_DATA = {
         RESULT: {
             DEFAULTNS: {
                 "missed_FRR_routes": [
-                    {"prefix": "10.10.196.12/31", "vrfName": "default", "protocol": "bgp", "selected": True},
-                    {"prefix": "1.1.1.0/24", "vrfName": "default", "protocol": "static", "selected": True},
+                    {"prefix": "10.10.196.12/31", "vrfName": "default", "protocol": "bgp", "selected": True}
                 ],
             },
         },
@@ -1113,65 +1112,6 @@ TEST_DATA = {
         },
     },
     "24": {
-        DESCR: "Good one with static routes",
-        MULTI_ASIC: False,
-        NAMESPACE: [''],
-        ARGS: "route_check -m INFO -i 1000",
-        PRE: {
-            CONFIG_DB: {
-                DEVICE_METADATA: {
-                    LOCALHOST: {
-                    }
-                }
-            },
-            APPL_DB: {
-                ROUTE_TABLE: {
-                    "0.0.0.0/0": {"ifname": "portchannel0"},
-                    "10.10.196.12/31": {"ifname": "portchannel0"},
-                },
-                INTF_TABLE: {
-                    "PortChannel1013:10.10.196.24/31": {},
-                    "PortChannel1023:2603:10b0:503:df4::5d/126": {},
-                    "PortChannel1024": {}
-                },
-                MY_SID_TABLE: {
-                    "32:16:0:0:fcbb:bbbb:1::": {}
-                }
-            },
-            ASIC_DB: {
-                RT_ENTRY_TABLE: {
-                    ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
-                    ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
-                    ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
-                    ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
-                    ASIC_SID_ENTRY_KEY_PREFIX + "fcbb:bbbb:1::" + ASIC_SID_ENTRY_KEY_SUFFIX: {}
-                }
-            },
-        },
-        FRR_ROUTES: {
-            "0.0.0.0/0": [
-                {
-                    "prefix": "0.0.0.0/0",
-                    "vrfName": "default",
-                    "protocol": "bgp",
-                    "offloaded": "true",
-                },
-            ],
-            "10.10.196.12/31": [
-                {
-                    "prefix": "10.10.196.12/31",
-                    "vrfName": "default",
-                    "protocol": "static"
-                },
-            ],
-            "10.10.196.24/31": [
-                {
-                    "protocol": "connected",
-                },
-            ],
-        },
-    },
-    "25": {
         DESCR: "Good one with SIDs",
         MULTI_ASIC: False,
         NAMESPACE: [''],
@@ -1231,19 +1171,13 @@ TEST_DATA = {
             ],
         },
     },
-    "26": {
+    "25": {
         DESCR: "Bad one with SID missing in ASIC_DB",
         MULTI_ASIC: False,
         NAMESPACE: [''],
         ARGS: "route_check -m INFO -i 1000",
         PRE: {
             DEFAULTNS: {
-                CONFIG_DB: {
-                    DEVICE_METADATA: {
-                        LOCALHOST: {
-                        }
-                    }
-                },
                 APPL_DB: {
                     ROUTE_TABLE: {
                         "0.0.0.0/0": {"ifname": "portchannel0"},
@@ -1297,7 +1231,8 @@ TEST_DATA = {
                     "32:16:0:0:fcbb:bbbb:1::"
                 ],
             }
-        }
+        },
+        RET: -1,
     },
     "27": {
         DESCR: "Bad one with SID missing in APPL_DB",
@@ -1306,12 +1241,6 @@ TEST_DATA = {
         ARGS: "route_check -m INFO -i 1000",
         PRE: {
             DEFAULTNS: {
-                CONFIG_DB: {
-                    DEVICE_METADATA: {
-                        LOCALHOST: {
-                        }
-                    }
-                },
                 APPL_DB: {
                     ROUTE_TABLE: {
                         "0.0.0.0/0": {"ifname": "portchannel0"},
@@ -1359,10 +1288,11 @@ TEST_DATA = {
         },
         RESULT: {
             DEFAULTNS: {
-                "missed_APPL_MY_SID_TABLE_entries": [
+                "missed_ASIC_MY_SID_TABLE_entries": [
                     "32:16:0:0:fcbb:bbbb:1::"
                 ],
             }
-        }
+        },
+        RET: -1,
     },
 }
