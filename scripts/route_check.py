@@ -329,6 +329,59 @@ def get_asicdb_routes(namespace):
     return (selector, subs, sorted(rt))
 
 
+def get_appdb_sids(namespace):
+    """
+    helper to read SIDs table from APPL-DB.
+    :return list of sorted SIDs with prefix ensured
+    """
+    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    print_message(syslog.LOG_DEBUG, "APPL DB connected for sids")
+    tbl = swsscommon.Table(db, 'SRV6_MY_SID_TABLE')
+    keys = tbl.getKeys()
+
+    sids = []
+    for k in keys:
+        content = k.split(":", 1)
+
+        sid_entry = content[1]
+        sids.append(sid_entry)
+
+    sids = sorted(sids)
+    print_message(syslog.LOG_DEBUG, json.dumps({"APPL_MY_SID_TABLE": sids}, indent=4))
+    return sids
+
+
+def get_asicdb_sids(namespace):
+    """
+    helper to read SIDs table from APPL-DB.
+    :return list of sorted SIDs with prefix ensured
+    """
+    db = swsscommon.DBConnector(ASIC_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    print_message(syslog.LOG_DEBUG, "ASIC DB connected for sids")
+    tbl = swsscommon.Table(db, ASIC_TABLE_NAME)
+    keys = tbl.getKeys()
+
+    sids = []
+    for k in keys:
+        content = k.split(":", 1)
+        if content[0] != 'SAI_OBJECT_TYPE_MY_SID_ENTRY':
+            continue
+        sid_info = json.loads(content[1])
+        sid_entry = ":".join([
+            sid_info.get("locator_block_len", "0"),
+            sid_info.get("locator_node_len", "0"),
+            sid_info.get("function_len", "0"),
+            sid_info.get("args_len", "0"),
+            sid_info.get("sid")
+        ])
+
+        sids.append(sid_entry)
+
+    sids = sorted(sids)
+    print_message(syslog.LOG_DEBUG, json.dumps({"ASIC_MY_SID_TABLE": sids}, indent=4))
+    return sids
+
+
 def is_suppress_fib_pending_enabled(namespace):
     """
     Returns True if FIB suppression is enabled, False otherwise
@@ -839,6 +892,72 @@ def check_routes(namespace):
         print_message(syslog.LOG_INFO, "All good!")
         return 0, None
 
+
+def check_sids_for_namespace(namespace):
+    """
+    Process a Single Namespace for SIDs consistency check:
+    Read APPL-DB & ASIC-DB, the relevant tables for SID checking.
+    Checkout SIDs in ASIC-DB to match APPL-DB. Compared to check_routes,
+    this function does not wait for subscriber updates, as SIDs are not
+    expected to change frequently.
+
+    :return (0, None) on sucess, else (-1, results) where results holds
+    the unjustifiable entries.
+    """
+
+    results = {}
+    sid_appl_miss = []
+    sid_asic_miss = []
+
+    sids_asic = get_asicdb_sids(namespace)
+
+    sids_appl = get_appdb_sids(namespace)
+
+    # Diff APPL-DB SIDs & ASIC-DB SIDs
+    sid_appl_miss, sid_asic_miss = diff_sorted_lists(sids_appl, sids_asic)
+
+    if sid_appl_miss:
+        results["missed_APPL_MY_SID_TABLE_entries"] = sid_appl_miss
+
+    if sid_asic_miss:
+        results["missed_ASIC_MY_SID_TABLE_entries"] = sid_asic_miss
+
+
+def check_sids(namespace):
+    """
+    Main function to parallelize SID checks across all namespaces.
+    """
+    namespace_list = []
+    if namespace is not multi_asic.DEFAULT_NAMESPACE and namespace in multi_asic.get_namespace_list():
+        namespace_list.append(namespace)
+    else:
+        namespace_list = multi_asic.get_namespace_list()
+        print_message(syslog.LOG_INFO, "Checking SIDs for namespaces: ", namespace_list)
+
+    results = {}
+
+    # Use ThreadPoolExecutor to parallelize the check for each namespace
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = {executor.submit(check_sids_for_namespace, ns): ns for ns in namespace_list}
+
+        for future in concurrent.futures.as_completed(futures):
+            ns = futures[future]
+            try:
+                result = future.result()
+                if result:
+                    results[ns] = result
+            except Exception as e:
+                print_message(syslog.LOG_ERR, "Error processing namespace {}: {}".format(ns, e))
+                return -1, results
+
+    if results:
+        print_message(syslog.LOG_WARNING, "SIDs Check Failure results: {",  json.dumps(results, indent=4), "}")
+        return -1, results
+    else:
+        print_message(syslog.LOG_INFO, "All good!")
+        return 0, None
+
+
 def main():
     """
     main entry point, which mainly parses the args and call check_routes
@@ -885,7 +1004,9 @@ def main():
     while True:
         signal.alarm(TIMEOUT_SECONDS)
         ret, res= check_routes(namespace)
-        print_message(syslog.LOG_DEBUG, "ret={}, res={}".format(ret, res))
+        print_message(syslog.LOG_DEBUG, "check_routes: ret={}, res={}".format(ret, res))
+        ret, res = check_sids(namespace)
+        print_message(syslog.LOG_DEBUG, "check_sids: ret={}, res={}".format(ret, res))
         signal.alarm(0)
 
         if interval:
