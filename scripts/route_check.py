@@ -1010,11 +1010,15 @@ def main():
         signal.alarm(0)
         if ret1 < 0 or ret2 < 0:
             ret = -1
+        else:
+            ret = 0
+
+        if res1 is not None or res2 is not None:
             res = dict()
-            if res1 is not None:
-                res.update(res1)
-            if res2 is not None:
-                res.update(res2)
+            res.update(res1 if res1 else {})
+            res.update(res2 if res2 else {})
+        else:
+            res = None
 
         if interval:
             time.sleep(interval)
