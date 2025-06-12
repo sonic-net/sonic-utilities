@@ -20,6 +20,7 @@ OP_DEL = "DEL"
 
 NEIGH_TABLE = 'NEIGH_TABLE'
 ROUTE_TABLE = 'ROUTE_TABLE'
+MY_SID_TABLE = 'SRV6_MY_SID_TABLE'
 VNET_ROUTE_TABLE = 'VNET_ROUTE_TABLE'
 INTF_TABLE = 'INTF_TABLE'
 RT_ENTRY_TABLE = 'ASIC_STATE'
@@ -30,8 +31,10 @@ MUX_CABLE = "MUX_CABLE"
 
 LOCALHOST = "localhost"
 
-RT_ENTRY_KEY_PREFIX = 'SAI_OBJECT_TYPE_ROUTE_ENTRY:{\"dest":\"'
-RT_ENTRY_KEY_SUFFIX = '\",\"switch_id\":\"oid:0x21000000000000\",\"vr\":\"oid:0x3000000000023\"}'
+ASIC_RT_ENTRY_KEY_PREFIX = 'SAI_OBJECT_TYPE_ROUTE_ENTRY:{\"dest":\"'
+ASIC_RT_ENTRY_KEY_SUFFIX = '\",\"switch_id\":\"oid:0x21000000000000\",\"vr\":\"oid:0x3000000000023\"}'
+ASIC_SID_ENTRY_KEY_PREFIX = 'SAI_OBJECT_TYPE_MY_SID_ENTRY:{"args_len":"0","function_len":"0","locator_block_len":"32","locator_node_len":"16","sid":"'
+ASIC_SID_ENTRY_KEY_SUFFIX = '","switch_id":"oid:0x21000000000000","vr_id":"oid:0x3000000000023"}'
 
 DEFAULT_CONFIG_DB = {
     DEVICE_METADATA: {
@@ -68,11 +71,11 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
             }
@@ -99,11 +102,11 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.10.10/32" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.10.10/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
             }
@@ -113,10 +116,10 @@ TEST_DATA = {
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
                         OP_SET: {
-                            RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
+                            ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         },
                         OP_DEL: {
-                            RT_ENTRY_KEY_PREFIX + "10.10.10.10/32" + RT_ENTRY_KEY_SUFFIX: {}
+                            ASIC_RT_ENTRY_KEY_PREFIX + "10.10.10.10/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                         }
                     }
                 }
@@ -146,11 +149,11 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "20.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "20.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "20.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "3603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "20.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "20.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "20.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "3603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
             }
@@ -196,11 +199,11 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
             }
@@ -235,14 +238,14 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.197.1/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df5::1/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "101.0.0.0/24" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.197.1/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df5::1/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "101.0.0.0/24" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
             }
@@ -271,11 +274,11 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
             }
@@ -317,15 +320,15 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "30.1.10.1/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "30.1.10.0/24" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "50.1.1.0/24" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "50.2.2.0/24" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "30.1.10.1/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "30.1.10.0/24" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "50.1.1.0/24" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "50.2.2.0/24" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
             }
@@ -355,7 +358,7 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "fc02:1000::99/128" + RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "fc02:1000::99/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                     }
                 }
             }
@@ -382,11 +385,11 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
             }
@@ -427,10 +430,10 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "192.168.0.2/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "fc02:1000::2/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "192.168.0.3/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "fc02:1000::3/128" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "192.168.0.2/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "fc02:1000::2/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "192.168.0.3/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "fc02:1000::3/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
             }
@@ -456,10 +459,10 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 },
             },
@@ -513,10 +516,10 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 },
             },
@@ -586,10 +589,10 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 },
             },
@@ -637,7 +640,7 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "2000:31::1/128" + RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2000:31::1/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                     }
                 }
             }
@@ -681,11 +684,11 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "20.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "20.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "20.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "192.168.0.101/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "192.168.0.102/32" + RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "20.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "20.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "20.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "192.168.0.101/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "192.168.0.102/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                     }
                 }
             }
@@ -730,11 +733,11 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
             }
@@ -762,11 +765,11 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
             },
@@ -786,11 +789,11 @@ TEST_DATA = {
                },
                ASIC_DB: {
                    RT_ENTRY_TABLE: {
-                       RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                       RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                       RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                       RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                       RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                       ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                       ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                       ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                       ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                       ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                    }
                }
            },
@@ -818,10 +821,10 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
             }
@@ -857,10 +860,10 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
             },
@@ -879,11 +882,11 @@ TEST_DATA = {
                },
                ASIC_DB: {
                    RT_ENTRY_TABLE: {
-                       RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                       RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                       RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                       RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                       RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                       ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                       ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                       ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                       ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                       ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                    }
                }
            },
@@ -936,10 +939,10 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 },
             },
@@ -1011,10 +1014,10 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 },
             },
@@ -1075,10 +1078,10 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 },
             },
@@ -1107,5 +1110,258 @@ TEST_DATA = {
                 ],
             },
         },
+    },
+    "24": {
+        DESCR: "Good one with static routes",
+        MULTI_ASIC: False,
+        NAMESPACE: [''],
+        ARGS: "route_check -m INFO -i 1000",
+        PRE: {
+            CONFIG_DB: {
+                DEVICE_METADATA: {
+                    LOCALHOST: {
+                    }
+                }
+            },
+            APPL_DB: {
+                ROUTE_TABLE: {
+                    "0.0.0.0/0" : { "ifname": "portchannel0" },
+                    "10.10.196.12/31" : { "ifname": "portchannel0" },
+                },
+                INTF_TABLE: {
+                    "PortChannel1013:10.10.196.24/31": {},
+                    "PortChannel1023:2603:10b0:503:df4::5d/126": {},
+                    "PortChannel1024": {}
+                },
+                MY_SID_TABLE: {
+                    "32:16:0:0:fcbb:bbbb:1::": {}
+                }
+            },
+            ASIC_DB: {
+                RT_ENTRY_TABLE: {
+                    ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                    ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                    ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                    ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                    ASIC_SID_ENTRY_KEY_PREFIX + "fcbb:bbbb:1::" + ASIC_SID_ENTRY_KEY_SUFFIX: {}
+                }
+            },
+        },
+        FRR_ROUTES: {
+            "0.0.0.0/0": [
+                {
+                    "prefix": "0.0.0.0/0",
+                    "vrfName": "default",
+                    "protocol": "bgp",
+                    "offloaded": "true",
+                },
+            ],
+            "10.10.196.12/31": [
+                {
+                    "prefix": "10.10.196.12/31",
+                    "vrfName": "default",
+                    "protocol": "static"
+                },
+            ],
+            "10.10.196.24/31": [
+                {
+                    "protocol": "connected",
+                },
+            ],
+        },
+    },
+    "25": {
+        DESCR: "Good one with SIDs",
+        MULTI_ASIC: False,
+        NAMESPACE: [''],
+        ARGS: "route_check -m INFO -i 1000",
+        PRE: {
+            CONFIG_DB: {
+                DEVICE_METADATA: {
+                    LOCALHOST: {
+                    }
+                }
+            },
+            APPL_DB: {
+                ROUTE_TABLE: {
+                    "0.0.0.0/0" : { "ifname": "portchannel0" },
+                    "10.10.196.12/31" : { "ifname": "portchannel0" },
+                },
+                INTF_TABLE: {
+                    "PortChannel1013:10.10.196.24/31": {},
+                    "PortChannel1023:2603:10b0:503:df4::5d/126": {},
+                    "PortChannel1024": {}
+                },
+                MY_SID_TABLE: {
+                    "32:16:0:0:fcbb:bbbb:1::": {}
+                }
+            },
+            ASIC_DB: {
+                RT_ENTRY_TABLE: {
+                    ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                    ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                    ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                    ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                    ASIC_SID_ENTRY_KEY_PREFIX + "fcbb:bbbb:1::" + ASIC_SID_ENTRY_KEY_SUFFIX: {}
+                }
+            },
+        },
+        FRR_ROUTES: {
+            "0.0.0.0/0": [
+                {
+                    "prefix": "0.0.0.0/0",
+                    "vrfName": "default",
+                    "protocol": "bgp",
+                    "offloaded": "true",
+                },
+            ],
+            "10.10.196.12/31": [
+                {
+                    "prefix": "10.10.196.12/31",
+                    "vrfName": "default",
+                    "protocol": "bgp",
+                    "offloaded": "true",
+                },
+            ],
+            "10.10.196.24/31": [
+                {
+                    "protocol": "connected",
+                },
+            ],
+        },
+    },
+    "26": {
+        DESCR: "Bad one with SID missing in ASIC_DB",
+        MULTI_ASIC: False,
+        NAMESPACE: [''],
+        ARGS: "route_check -m INFO -i 1000",
+        PRE: {
+            DEFAULTNS: {
+                CONFIG_DB: {
+                    DEVICE_METADATA: {
+                        LOCALHOST: {
+                        }
+                    }
+                },
+                APPL_DB: {
+                    ROUTE_TABLE: {
+                        "0.0.0.0/0" : { "ifname": "portchannel0" },
+                        "10.10.196.12/31" : { "ifname": "portchannel0" },
+                    },
+                    INTF_TABLE: {
+                        "PortChannel1013:10.10.196.24/31": {},
+                        "PortChannel1023:2603:10b0:503:df4::5d/126": {},
+                        "PortChannel1024": {}
+                    },
+                    MY_SID_TABLE: {
+                        "32:16:0:0:fcbb:bbbb:1::": {}
+                    }
+                },
+                ASIC_DB: {
+                    RT_ENTRY_TABLE: {
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
+                    }
+                },
+            },
+        },
+        FRR_ROUTES: {
+            "0.0.0.0/0": [
+                {
+                    "prefix": "0.0.0.0/0",
+                    "vrfName": "default",
+                    "protocol": "bgp",
+                    "offloaded": "true",
+                },
+            ],
+            "10.10.196.12/31": [
+                {
+                    "prefix": "10.10.196.12/31",
+                    "vrfName": "default",
+                    "protocol": "bgp",
+                    "offloaded": "true",
+                },
+            ],
+            "10.10.196.24/31": [
+                {
+                    "protocol": "connected",
+                },
+            ],
+        },
+        RESULT: {
+            DEFAULTNS: {
+                "missed_APPL_MY_SID_TABLE_entries": [
+                    "32:16:0:0:fcbb:bbbb:1::"
+                ],
+            }
+        }
+    },
+    "27": {
+        DESCR: "Bad one with SID missing in APPL_DB",
+        MULTI_ASIC: False,
+        NAMESPACE: [''],
+        ARGS: "route_check -m INFO -i 1000",
+        PRE: {
+            DEFAULTNS: {
+                CONFIG_DB: {
+                    DEVICE_METADATA: {
+                        LOCALHOST: {
+                        }
+                    }
+                },
+                APPL_DB: {
+                    ROUTE_TABLE: {
+                        "0.0.0.0/0" : { "ifname": "portchannel0" },
+                        "10.10.196.12/31" : { "ifname": "portchannel0" },
+                    },
+                    INTF_TABLE: {
+                        "PortChannel1013:10.10.196.24/31": {},
+                        "PortChannel1023:2603:10b0:503:df4::5d/126": {},
+                        "PortChannel1024": {}
+                    }
+                },
+                ASIC_DB: {
+                    RT_ENTRY_TABLE: {
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_SID_ENTRY_KEY_PREFIX + "fcbb:bbbb:1::" + ASIC_SID_ENTRY_KEY_SUFFIX: {}
+                    }
+                },
+            },
+        },
+        FRR_ROUTES: {
+            "0.0.0.0/0": [
+                {
+                    "prefix": "0.0.0.0/0",
+                    "vrfName": "default",
+                    "protocol": "bgp",
+                    "offloaded": "true",
+                },
+            ],
+            "10.10.196.12/31": [
+                {
+                    "prefix": "10.10.196.12/31",
+                    "vrfName": "default",
+                    "protocol": "bgp",
+                    "offloaded": "true",
+                },
+            ],
+            "10.10.196.24/31": [
+                {
+                    "protocol": "connected",
+                },
+            ],
+        },
+        RESULT: {
+            DEFAULTNS: {
+                "missed_APPL_MY_SID_TABLE_entries": [
+                    "32:16:0:0:fcbb:bbbb:1::"
+                ],
+            }
+        }
     },
 }
