@@ -51,6 +51,11 @@ class PackageSource(object):
 
         image = self.install_image(package)
         package.entry.image_id = image.id
+        if image.tags:
+            package.entry.tag = image.tags[0]
+        else:
+            package.entry.tag = image.id
+
         # if no repository is defined for this package
         # get repository from image
         if not package.repository:
