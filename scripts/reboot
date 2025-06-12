@@ -19,6 +19,10 @@ VMCORE_FILE=/proc/vmcore
 if [ -e $VMCORE_FILE -a -s $VMCORE_FILE ]; then
         echo "We have a /proc/vmcore, then we just kdump'ed"
         echo "Kernel Panic [Time: ${REBOOT_TIME}]" > ${REBOOT_CAUSE_FILE}
+        makedumpfile --dump-dmesg /proc/vmcore /tmp/dmesg
+        if  grep -q "Kernel panic - not syncing: Out of memory" /tmp/dmesg; then
+            echo "Kernel Panic - Out of memory [Time: ${REBOOT_TIME}]" > ${REBOOT_CAUSE_FILE}
+        fi
         sync
         PLATFORM=$(grep -oP 'sonic_platform=\K\S+' /proc/cmdline)
         if [ ! -z "${PLATFORM}" -a -x ${DEVPATH}/${PLATFORM}/${PLAT_REBOOT} ]; then
