@@ -1900,6 +1900,8 @@ EEPROM hexdump for port Ethernet4
             assert expected_echo in result.output
 
     @pytest.mark.parametrize("subport, lane_count, expected_mask", [
+        (0, 2, 0x3),
+        (0, 4, 0xf),
         (1, 1, 0x1),
         (1, 4, 0xf),
         (2, 1, 0x2),

@@ -150,7 +150,7 @@ def get_subport_lane_mask(subport, lane_count):
         int: The lane mask calculated for the given subport and lane count.
     """
     # Calculating the lane mask using bitwise operations.
-    return ((1 << lane_count) - 1) << ((subport - 1) * lane_count)
+    return ((1 << lane_count) - 1) << ((0 if subport == 0 else subport - 1) * lane_count)
 
 
 def get_sfp_object(port_name):
@@ -283,9 +283,9 @@ def get_subport(port_name):
         click.echo(f"{port_name}: subport is not present in CONFIG_DB")
         sys.exit(EXIT_FAIL)
     elif subport == '':
-        subport = 1
+        subport = 0
 
-    return max(int(subport), 1)
+    return subport
 
 
 def is_sfp_present(port_name):
