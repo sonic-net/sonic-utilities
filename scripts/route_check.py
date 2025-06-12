@@ -1003,11 +1003,18 @@ def main():
 
     while True:
         signal.alarm(TIMEOUT_SECONDS)
-        ret, res= check_routes(namespace)
-        print_message(syslog.LOG_DEBUG, "check_routes: ret={}, res={}".format(ret, res))
-        ret, res = check_sids(namespace)
-        print_message(syslog.LOG_DEBUG, "check_sids: ret={}, res={}".format(ret, res))
+        ret1, res1= check_routes(namespace)
+        print_message(syslog.LOG_DEBUG, "check_routes: ret={}, res={}".format(ret1, res1))
+        ret2, res2 = check_sids(namespace)
+        print_message(syslog.LOG_DEBUG, "check_sids: ret={}, res={}".format(ret2, res2))
         signal.alarm(0)
+        if ret1 < 0 or ret2 < 0:
+            ret = -1
+            res = dict()
+            if res1 is not None:
+                res.update(res1)
+            if res2 is not None:
+                res.update(res2)
 
         if interval:
             time.sleep(interval)
