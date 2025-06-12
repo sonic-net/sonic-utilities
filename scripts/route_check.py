@@ -1003,7 +1003,7 @@ def main():
 
     while True:
         signal.alarm(TIMEOUT_SECONDS)
-        ret1, res1= check_routes(namespace)
+        ret1, res1 = check_routes(namespace)
         print_message(syslog.LOG_DEBUG, "check_routes: ret={}, res={}".format(ret1, res1))
         ret2, res2 = check_sids(namespace)
         print_message(syslog.LOG_DEBUG, "check_sids: ret={}, res={}".format(ret2, res2))
