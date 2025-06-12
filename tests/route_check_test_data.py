@@ -62,7 +62,7 @@ TEST_DATA = {
                         "0.0.0.0/0": {"ifname": "portchannel0"},
                         "10.10.196.12/31": {"ifname": "portchannel0"},
                         "10.10.196.20/31": {"ifname": "portchannel0"},
-                        "10.10.196.30/31": { "ifname": "lo" }
+                        "10.10.196.30/31": {"ifname": "lo"}
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -94,7 +94,7 @@ TEST_DATA = {
                         "0.0.0.0/0": {"ifname": "portchannel0"},
                         "10.10.196.12/31": {"ifname": "portchannel0"},
                         "10.10.196.20/31": {"ifname": "portchannel0"},
-                        "10.10.196.30/31": { "ifname": "lo" }
+                        "10.10.196.30/31": {"ifname": "lo"}
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -140,7 +140,7 @@ TEST_DATA = {
                         "0.0.0.0/0": {"ifname": "portchannel0"},
                         "10.10.196.12/31": {"ifname": "portchannel0"},
                         "10.10.196.20/31": {"ifname": "portchannel0"},
-                        "10.10.196.30/31": { "ifname": "lo" }
+                        "10.10.196.30/31": {"ifname": "lo"}
                     },
                     INTF_TABLE: {
                         "PortChannel1013:90.10.196.24/31": {},
@@ -190,7 +190,7 @@ TEST_DATA = {
                         "0.0.0.0/0": {"ifname": "portchannel0"},
                         "10.10.196.12/31": {"ifname": "portchannel0"},
                         "10.10.196.20/31": {"ifname": "portchannel0"},
-                        "10.10.196.30/31": { "ifname": "lo" }
+                        "10.10.196.30/31": {"ifname": "lo"}
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -222,12 +222,12 @@ TEST_DATA = {
                         "0.0.0.0/0": {"ifname": "portchannel0"},
                         "10.10.196.12/31": {"ifname": "portchannel0"},
                         "10.10.196.20/31": {"ifname": "portchannel0"},
-                        "10.10.196.30/31": { "ifname": "lo" },
-                        "10.10.197.1" : { "ifname": "Ethernet-IB0", "nexthop": "0.0.0.0"},
-                        "2603:10b0:503:df5::1" : { "ifname": "Ethernet-IB0", "nexthop": "::"},
-                        "100.0.0.2/32" : { "ifname": "Ethernet-IB0", "nexthop": "0.0.0.0" },
-                        "2064:100::2/128" : { "ifname": "Ethernet-IB0", "nexthop": "::" },
-                        "101.0.0.0/24" : { "ifname": "Ethernet-IB0", "nexthop": "100.0.0.2"}
+                        "10.10.196.30/31": {"ifname": "lo"},
+                        "10.10.197.1" : {"ifname": "Ethernet-IB0", "nexthop": "0.0.0.0"},
+                        "2603:10b0:503:df5::1" : {"ifname": "Ethernet-IB0", "nexthop": "::"},
+                        "100.0.0.2/32" : {"ifname": "Ethernet-IB0", "nexthop": "0.0.0.0" },
+                        "2064:100::2/128" : {"ifname": "Ethernet-IB0", "nexthop": "::" },
+                        "101.0.0.0/24" : {"ifname": "Ethernet-IB0", "nexthop": "100.0.0.2"}
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -265,7 +265,7 @@ TEST_DATA = {
                         "0.0.0.0/0": {"ifname": "portchannel0"},
                         "10.10.196.12/31": {"ifname": "portchannel0"},
                         "10.10.196.20/31": {"ifname": "portchannel0"},
-                        "10.10.196.30/31": { "ifname": "lo", "nexthop": "100.0.0.2" }
+                        "10.10.196.30/31": {"ifname": "lo", "nexthop": "100.0.0.2"}
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -304,12 +304,12 @@ TEST_DATA = {
                         "0.0.0.0/0": {"ifname": "portchannel0"},
                         "10.10.196.12/31": {"ifname": "portchannel0"},
                         "10.10.196.20/31": {"ifname": "portchannel0"},
-                        "10.10.196.30/31": { "ifname": "lo" }
+                        "10.10.196.30/31": {"ifname": "lo"}
                     },
                     VNET_ROUTE_TABLE: {
-                        "Vnet1:30.1.10.0/24": { "ifname": "Vlan3001" },
-                        "Vnet1:50.1.1.0/24": { "ifname": "Vlan3001" },
-                        "Vnet1:50.2.2.0/24": { "ifname": "Vlan3001" }
+                        "Vnet1:30.1.10.0/24": {"ifname": "Vlan3001" },
+                        "Vnet1:50.1.1.0/24": {"ifname": "Vlan3001" },
+                        "Vnet1:50.2.2.0/24": {"ifname": "Vlan3001" }
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -669,8 +669,8 @@ TEST_DATA = {
                     ROUTE_TABLE: {
                         "10.10.196.12/31": {"ifname": "portchannel0"},
                         "10.10.196.20/31": {"ifname": "portchannel0"},
-                        "192.168.0.101/32": { "ifname": "tun0" },
-                        "192.168.0.103/32": { "ifname": "tun0" },
+                        "192.168.0.101/32": {"ifname": "tun0" },
+                        "192.168.0.103/32": {"ifname": "tun0" },
                     },
                     INTF_TABLE: {
                         "PortChannel1013:90.10.196.24/31": {},
@@ -724,7 +724,7 @@ TEST_DATA = {
                         "0.0.0.0/0": {"ifname": "portchannel0"},
                         "10.10.196.12/31": {"ifname": "portchannel0"},
                         "10.10.196.20/31": {"ifname": "portchannel0"},
-                        "10.10.196.30/31": { "ifname": "lo" }
+                        "10.10.196.30/31": {"ifname": "lo"}
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -756,7 +756,7 @@ TEST_DATA = {
                         "0.0.0.0/0": {"ifname": "portchannel0"},
                         "10.10.196.12/31": {"ifname": "portchannel0"},
                         "10.10.196.20/31": {"ifname": "portchannel0"},
-                        "10.10.196.30/31": { "ifname": "lo" }
+                        "10.10.196.30/31": {"ifname": "lo"}
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -780,7 +780,7 @@ TEST_DATA = {
                        "0.0.0.0/0": {"ifname": "portchannel0"},
                        "10.10.196.12/31": {"ifname": "portchannel0"},
                        "10.10.196.20/31": {"ifname": "portchannel0"},
-                       "10.10.196.30/31": { "ifname": "lo" }
+                       "10.10.196.30/31": {"ifname": "lo"}
                    },
                    INTF_TABLE: {
                        "PortChannel1013:10.10.196.24/31": {},
@@ -812,7 +812,7 @@ TEST_DATA = {
                         "0.0.0.0/0": {"ifname": "portchannel0"},
                         "10.10.196.12/31": {"ifname": "portchannel0"},
                         "10.10.196.20/31": {"ifname": "portchannel0"},
-                        "10.10.196.30/31": { "ifname": "lo" }
+                        "10.10.196.30/31": {"ifname": "lo"}
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -851,7 +851,7 @@ TEST_DATA = {
                         "0.0.0.0/0": {"ifname": "portchannel0"},
                         "10.10.196.12/31": {"ifname": "portchannel0"},
                         "10.10.196.20/31": {"ifname": "portchannel0"},
-                        "10.10.196.30/31": { "ifname": "lo" }
+                        "10.10.196.30/31": {"ifname": "lo"}
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -873,7 +873,7 @@ TEST_DATA = {
                    ROUTE_TABLE: {
                        "0.0.0.0/0": {"ifname": "portchannel0"},
                        "10.10.196.20/31": {"ifname": "portchannel0"},
-                       "10.10.196.30/31": { "ifname": "lo" }
+                       "10.10.196.30/31": {"ifname": "lo"}
                    },
                    INTF_TABLE: {
                        "PortChannel1013:10.10.196.24/31": {},
