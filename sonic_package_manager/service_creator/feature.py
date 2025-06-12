@@ -233,5 +233,6 @@ class FeatureRegistry:
             'has_global_scope': str(manifest['service']['host-service']),
             'delayed': str(manifest['service']['delayed']),
             'check_up_status': str(manifest['service']['check_up_status']),
+            'irrel_for_sysready': str(manifest['service']['irrel_for_sysready']),
             'support_syslog_rate_limit': str(manifest['service']['syslog']['support-rate-limit']),
         }
