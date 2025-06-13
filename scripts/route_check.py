@@ -922,6 +922,8 @@ def check_sids_for_namespace(namespace):
     if sid_asic_miss:
         results["missed_ASIC_MY_SID_TABLE_entries"] = sid_asic_miss
 
+    return results
+
 
 def check_sids(namespace):
     """
