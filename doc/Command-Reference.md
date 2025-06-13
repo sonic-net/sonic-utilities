@@ -250,6 +250,9 @@
     * [Historical Memory Statistics for Last 3 Hours](#historical-memory-statistics-for-last-3-hours)
     * [Historical Memory Statistics for Specific Metric (Used Memory)](#historical-memory-statistics-for-specific-metric-used-memory)
     * [View Memory Statistics Configuration](#view-memory-statistics-configuration)
+* [CoPP Commands](#copp-commands)
+  * [Overview](#overview)
+  * [CoPP show commands](#copp-show-commands)
 ## Document History
 
 | Version | Modification Date | Details |
@@ -10862,6 +10865,7 @@ This sub-section explains the show commands for displaying the running configura
 6) acl
 7) ports
 8) syslog
+9) copp
 
 **show runningconfiguration all**
 
@@ -10986,6 +10990,20 @@ This command displays the running configuration of the snmp module.
 
   ```
   admin@sonic:~$ show runningconfiguration ports Ethernet0
+  ```
+
+ **show runningconfiguration copp**
+
+ This command displays the running configuration of copp
+
+- Usage:
+  ```
+  show runningconfiguration copp
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show runningconfiguration copp
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#Startup--Running-Configuration)
@@ -14809,4 +14827,107 @@ Memory Statistics Configuration:
 Enabled:            false
 Sampling Interval:  5
 Retention Period:   15
+```
+---
+# CoPP Commands
+
+## Overview
+This sub-section explains the list of commands available for CoPP (Control Plane Policing) feature.
+
+---
+
+## CoPP Show Commands
+
+These commands are used to display the current CoPP configuration and their status.
+
+### Usage
+```bash
+show copp configuration <detailed> [--trapid <trap_id>] [--group <trap_group>]
+```
+
+**Example**:
+
+```bash
+show copp configuration
+show copp configuration detailed --group queue1_group3
+show copp configuration detailed --trapid neighbor_miss
+```
+
+### Show CoPP Configuration
+
+Command to display the current CoPP configurations and hardware status of the traps.
+
+```bash
+admin@sonic:~$ show copp configuration
+```
+
+**Sample Output**:
+
+```bash
+admin@sonic:~$ show copp configuration
+TrapId           Trap Group     Action      CBS    CIR  Meter Type    Mode    HW Status
+---------------  -------------  --------  -----  -----  ------------  ------  -------------
+arp_req          queue4_group2  copy        600    600  packets       sr_tcm  installed
+arp_resp         queue4_group2  copy        600    600  packets       sr_tcm  installed
+bgp              queue4_group1  trap       6000   6000  packets       sr_tcm  not-installed
+bgpv6            queue4_group1  trap       6000   6000  packets       sr_tcm  not-installed
+dest_nat_miss    queue1_group2  trap        600    600  packets       sr_tcm  installed
+dhcp             queue4_group3  trap        100    100  packets       sr_tcm  installed
+dhcpv6           queue4_group3  trap        100    100  packets       sr_tcm  installed
+eapol            queue4_group1  trap       6000   6000  packets       sr_tcm  installed
+ip2me            queue1_group1  trap       6000   6000  packets       sr_tcm  installed
+lacp             queue4_group1  trap       6000   6000  packets       sr_tcm  installed
+lldp             queue4_group3  trap        100    100  packets       sr_tcm  installed
+neigh_discovery  queue4_group2  copy        600    600  packets       sr_tcm  installed
+neighbor_miss    queue1_group3  trap        200    200  packets       sr_tcm  installed
+sample_packet    queue2_group1  trap       1000   1000  packets       sr_tcm  not-installed
+src_nat_miss     queue1_group2  trap        600    600  packets       sr_tcm  installed
+udld             queue4_group3  trap        100    100  packets       sr_tcm  installed
+```
+
+### Show CoPP Configuration Detailed
+
+Command to display the detailed CoPP configuration of a specific trap ID.
+
+```bash
+admin@sonic:~$ show copp configuration detailed --trapid neighbor_miss
+```
+
+**Sample Output**:
+
+```bash
+Trap Group.................. queue1_group3
+queue....................... 1
+Trap Priority............... 1
+Trap Action................. trap
+Meter Type.................. packets
+Mode........................ sr_tcm
+CBS......................... 200
+CIR......................... 200
+Green Action................ forward
+Yellow Action............... forward
+Red Action.................. drop
+HW Status................... installed
+```
+
+Command to display the detailed CoPP configuration of a specific CoPP group.
+
+```bash
+admin@sonic:~$ show copp configuration detailed --group queue1_group3
+```
+
+**Sample Output**:
+
+```bash
+Trap Id(s).................. neighbor_miss
+Queue....................... 1
+Trap Priority............... 1
+Trap Action................. trap
+Meter Type.................. packets
+Mode........................ sr_tcm
+CBS......................... 200
+CIR......................... 200
+Yellow Action............... forward
+Green Action................ forward
+Red Action.................. drop
 ```
