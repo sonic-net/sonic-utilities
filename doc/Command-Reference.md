@@ -9163,19 +9163,22 @@ This command displays switch trimming global configuration.
   ```bash
   admin@sonic:~$ show switch-trimming global
   +-----------------------------+---------+
-  | Configuration               |   Value |
+  | Configuration               | Value   |
   +=============================+=========+
-  | Packet trimming size        |     200 |
+  | Packet trimming size        | 200     |
   +-----------------------------+---------+
-  | Packet trimming DSCP value  |      20 |
+  | Packet trimming DSCP value  | 20      |
   +-----------------------------+---------+
-  | Packet trimming queue index |       2 |
+  | Packet trimming TC value    | N/A     |
+  +-----------------------------+---------+
+  | Packet trimming queue index | 2       |
   +-----------------------------+---------+
 
   admin@sonic:~$ show switch-trimming global --json
   {
       "size": "200",
       "dscp_value": "20",
+      "tc_value": "N/A",
       "queue_index": "2"
   }
   ```
@@ -9196,22 +9199,21 @@ This command is used to manage switch trimming global configuration.
 - Options:
   - _-s,--size_: size (in bytes) to trim eligible packet
   - _-d,--dscp_: dscp value assigned to a packet after trimming
+  - _-t,--tc_: tc value assigned to a packet after trimming
   - _-q,--queue_: queue index to use for transmission of a packet after trimming
 
 - Examples:
   ```bash
-  admin@sonic:~$ config switch-trimming global \
-  --size '128' \
-  --dscp '48' \
-  --queue '6'
+  admin@sonic:~$ config switch-trimming global --size '128' --dscp '48' --queue '6'
+  admin@sonic:~$ config switch-trimming global --size '128' --dscp '48' --queue 'dynamic'
+  admin@sonic:~$ config switch-trimming global --size '128' --dscp 'from-tc' --tc '6' --queue '6'
+  admin@sonic:~$ config switch-trimming global --size '128' --dscp 'from-tc' --tc '6' --queue 'dynamic'
   ```
 
 - Note:
   - At least one option must be provided
+  - When `--dscp` value is set to `from-tc`, the `--tc` value is used for mapping to DSCP
   - When `--queue` value is set to `dynamic`, the `--dscp` value is used for mapping to the queue
-  ```bash
-  admin@sonic:~$ config switch-trimming global --queue dynamic
-  ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#packet-trimming)
 
