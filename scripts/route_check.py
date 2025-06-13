@@ -339,14 +339,7 @@ def get_appdb_sids(namespace):
     tbl = swsscommon.Table(db, 'SRV6_MY_SID_TABLE')
     keys = tbl.getKeys()
 
-    sids = []
-    for k in keys:
-        content = k.split(":", 1)
-
-        sid_entry = content[1]
-        sids.append(sid_entry)
-
-    sids = sorted(sids)
+    sids = sorted(keys)
     print_message(syslog.LOG_DEBUG, json.dumps({"APPL_MY_SID_TABLE": sids}, indent=4))
     return sids
 
