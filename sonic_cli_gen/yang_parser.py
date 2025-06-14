@@ -36,8 +36,7 @@ class YangParser:
                             'name': 'value',
                             'description': 'value',
                             'is-leaf-list': False,
-                            'is-mandatory': False,
-                            'group': 'value'
+                            'is-mandatory': False
                         }
                         ...
                     ],
@@ -228,59 +227,18 @@ def on_object_entity(y_module: OrderedDict,
         obj_elem['keys'] = get_list_keys(y_entity)
 
     attrs_list = list()
-    # grouping_name is empty because 'grouping' is not used so far
-    attrs_list.extend(get_leafs(y_entity, grouping_name=''))
-    attrs_list.extend(get_leaf_lists(y_entity, grouping_name=''))
-    attrs_list.extend(get_choices(y_module, y_entity, conf_mgmt, grouping_name=''))
-    attrs_list.extend(get_uses(y_module, y_entity, conf_mgmt))
+    attrs_list.extend(get_leafs(y_entity))
+    attrs_list.extend(get_leaf_lists(y_entity))
+    attrs_list.extend(get_choices(y_module, y_entity, conf_mgmt))
 
     obj_elem['attrs'] = attrs_list
 
     return obj_elem
 
 
-def on_uses(y_module: OrderedDict,
-            y_uses,
-            conf_mgmt: ConfigMgmt) -> list:
-    """ Parse a YANG 'uses' entities
-        'uses' referring to 'grouping' YANG entity
-
-        Args:
-            y_module: reference to 'module'
-            y_uses: reference to 'uses'
-            conf_mgmt: reference to ConfigMgmt class instance,
-                       it have yJson object which contain all parsed YANG model
-        Returns:
-            element for obj_elem['attrs'], 'attrs' contain a parsed 'leafs'
-    """
-
-    ret_attrs = list()
-    y_grouping = get_all_grouping(y_module, y_uses, conf_mgmt)
-    # trim prefixes in order to the next checks
-    trim_uses_prefixes(y_uses)
-
-    for group in y_grouping:
-        if isinstance(y_uses, list):
-            for use in y_uses:
-                if group.get('@name') == use.get('@name'):
-                    resolve_refine(group, use)
-                    ret_attrs.extend(get_leafs(group, group.get('@name')))
-                    ret_attrs.extend(get_leaf_lists(group, group.get('@name')))
-                    ret_attrs.extend(get_choices(y_module, group, conf_mgmt, group.get('@name')))
-        else:
-            if group.get('@name') == y_uses.get('@name'):
-                resolve_refine(group, y_uses)
-                ret_attrs.extend(get_leafs(group, group.get('@name')))
-                ret_attrs.extend(get_leaf_lists(group, group.get('@name')))
-                ret_attrs.extend(get_choices(y_module, group, conf_mgmt, group.get('@name')))
-
-    return ret_attrs
-
-
 def on_choices(y_module: OrderedDict,
                y_choices,
-               conf_mgmt: ConfigMgmt,
-               grouping_name: str) -> list:
+               conf_mgmt: ConfigMgmt) -> list:
     """ Parse a YANG 'choice' entities
 
         Args:
@@ -288,7 +246,6 @@ def on_choices(y_module: OrderedDict,
             y_choices: reference to 'choice' element
             conf_mgmt: reference to ConfigMgmt class instance,
                        it have yJson object which contain all parsed YANG model
-            grouping_name: if YANG entity contain 'uses', this arg represent 'grouping' name
         Returns:
             element for obj_elem['attrs'], 'attrs' contain a parsed 'leafs'
     """
@@ -300,21 +257,20 @@ def on_choices(y_module: OrderedDict,
     if isinstance(y_choices, list):
         for choice in y_choices:
             attrs = on_choice_cases(y_module, choice.get('case'),
-                                    conf_mgmt, grouping_name)
+                                    conf_mgmt)
             ret_attrs.extend(attrs)
     else:
         ret_attrs = on_choice_cases(y_module, y_choices.get('case'),
-                                    conf_mgmt, grouping_name)
+                                    conf_mgmt)
 
     return ret_attrs
 
 
 def on_choice_cases(y_module: OrderedDict,
                     y_cases,
-                    conf_mgmt: ConfigMgmt,
-                    grouping_name: str) -> list:
+                    conf_mgmt: ConfigMgmt) -> list:
     """ Parse a single YANG 'case' entity from the 'choice' entity.
-        The 'case' element can has inside - 'leaf', 'leaf-list', 'uses'
+        The 'case' element can has inside - 'leaf', 'leaf-list'
 
         Args:
             y_module: reference to 'module'
@@ -322,8 +278,6 @@ def on_choice_cases(y_module: OrderedDict,
             conf_mgmt: reference to ConfigMgmt class instance,
                 it have yJson object which contain all
                 parsed YANG model
-            grouping_name: if YANG entity contain 'uses',
-                this argument represent 'grouping' name
         Returns:
             element for the obj_elem['attrs'], the 'attrs'
                 contain a parsed 'leafs'
@@ -333,26 +287,21 @@ def on_choice_cases(y_module: OrderedDict,
 
     if isinstance(y_cases, list):
         for case in y_cases:
-            ret_attrs.extend(get_leafs(case, grouping_name))
-            ret_attrs.extend(get_leaf_lists(case, grouping_name))
-            ret_attrs.extend(get_uses(y_module, case, conf_mgmt))
+            ret_attrs.extend(get_leafs(case))
+            ret_attrs.extend(get_leaf_lists(case))
     else:
-        ret_attrs.extend(get_leafs(y_cases, grouping_name))
-        ret_attrs.extend(get_leaf_lists(y_cases, grouping_name))
-        ret_attrs.extend(get_uses(y_module, y_cases, conf_mgmt))
+        ret_attrs.extend(get_leafs(y_cases))
+        ret_attrs.extend(get_leaf_lists(y_cases))
 
     return ret_attrs
 
 
 def on_leafs(y_leafs,
-             grouping_name: str,
              is_leaf_list: bool) -> list:
     """ Parse all the 'leaf' or 'leaf-list' elements
 
         Args:
             y_leafs: reference to all 'leaf' elements
-            grouping_name: if YANG entity contain 'uses',
-                this argument represent the 'grouping' name
             is_leaf_list: boolean to determine if a 'leaf-list'
                 was passed as 'y_leafs' argument
         Returns:
@@ -362,20 +311,17 @@ def on_leafs(y_leafs,
     ret_attrs = list()
     # The YANG 'container' entity may have only 1 'leaf'
     # element OR a list of 'leaf' elements
-    ret_attrs += list_handler(y_leafs, lambda e: on_leaf(e, grouping_name, is_leaf_list))
+    ret_attrs += list_handler(y_leafs, lambda e: on_leaf(e, is_leaf_list))
 
     return ret_attrs
 
 
 def on_leaf(leaf: OrderedDict,
-            grouping_name: str,
             is_leaf_list: bool) -> dict:
     """ Parse a single 'leaf' element
 
         Args:
             leaf: reference to a 'leaf' entity
-            grouping_name: if YANG entity contain 'uses',
-                this argument represent 'grouping' name
             is_leaf_list: boolean to determine if 'leaf-list'
                 was passed in 'y_leafs' argument
         Returns:
@@ -385,8 +331,7 @@ def on_leaf(leaf: OrderedDict,
     attr = {'name': leaf.get('@name'),
             'description': get_description(leaf),
             'is-leaf-list': is_leaf_list,
-            'is-mandatory': get_mandatory(leaf),
-            'group': grouping_name}
+            'is-mandatory': get_mandatory(leaf)}
 
     return attr
 
@@ -423,267 +368,57 @@ def get_description(y_entity: OrderedDict) -> str:
         return ''
 
 
-def get_leafs(y_entity: OrderedDict,
-              grouping_name: str) -> list:
+def get_leafs(y_entity: OrderedDict) -> list:
     """ Check if the YANG entity have 'leafs', if so call handler
 
         Args:
             y_entity: reference YANG 'container' or 'list'
-                or 'choice' or 'uses'
-            grouping_name: if YANG entity contain 'uses',
-                this argument represent 'grouping' name
+                or 'choice'
         Returns:
             list of parsed 'leaf' elements
     """
 
     if y_entity.get('leaf') is not None:
-        return on_leafs(y_entity.get('leaf'), grouping_name, is_leaf_list=False)
+        return on_leafs(y_entity.get('leaf'), is_leaf_list=False)
 
     return []
 
 
-def get_leaf_lists(y_entity: OrderedDict,
-                   grouping_name: str) -> list:
+def get_leaf_lists(y_entity: OrderedDict) -> list:
     """ Check if the YANG entity have 'leaf-list', if so call handler
 
         Args:
             y_entity: reference YANG 'container' or 'list'
-                or 'choice' or 'uses'
-            grouping_name: if YANG entity contain 'uses',
-                this argument represent 'grouping' name
+                or 'choice'
         Returns:
             list of parsed 'leaf-list' elements
     """
 
     if y_entity.get('leaf-list') is not None:
-        return on_leafs(y_entity.get('leaf-list'), grouping_name, is_leaf_list=True)
+        return on_leafs(y_entity.get('leaf-list'), is_leaf_list=True)
 
     return []
 
 
 def get_choices(y_module: OrderedDict,
                 y_entity: OrderedDict,
-                conf_mgmt: ConfigMgmt,
-                grouping_name: str) -> list:
+                conf_mgmt: ConfigMgmt) -> list:
     """ Check if the YANG entity have 'choice', if so call handler
 
         Args:
             y_module: reference to 'module'
             y_entity: reference YANG 'container' or 'list'
-                or 'choice' or 'uses'
+                or 'choice'
             conf_mgmt: reference to ConfigMgmt class instance,
                 it have yJson object which contain all parsed YANG model
-            grouping_name: if YANG entity contain 'uses',
-                this argument represent 'grouping' name
         Returns:
             list of parsed elements inside 'choice'
     """
 
     if y_entity.get('choice') is not None:
-        return on_choices(y_module, y_entity.get('choice'), conf_mgmt, grouping_name)
+        return on_choices(y_module, y_entity.get('choice'), conf_mgmt)
 
     return []
-
-
-def get_uses(y_module: OrderedDict,
-             y_entity: OrderedDict,
-             conf_mgmt: ConfigMgmt) -> list:
-    """ Check if the YANG entity have 'uses', if so call handler
-
-        Args:
-            y_module: reference to 'module'
-            y_entity: reference YANG 'container' or 'list'
-                or 'choice' or 'uses'
-            conf_mgmt: reference to ConfigMgmt class instance,
-                it have yJson object which contain all parsed YANG model
-        Returns:
-            list of parsed elements inside 'grouping'
-                that referenced by 'uses'
-    """
-
-    if y_entity.get('uses') is not None:
-        return on_uses(y_module, y_entity.get('uses'), conf_mgmt)
-
-    return []
-
-
-def refine_cb(refine: OrderedDict, entity: OrderedDict):
-    if refine.get('@target-node') != entity.get('@name'):
-        return
-
-    if refine.get('description') is not None:
-        entity['description'] = OrderedDict([('text', refine.get('description').get('text'))])
-
-    if refine.get('mandatory') is not None:
-        entity['mandatory'] = OrderedDict([('@value', refine.get('mandatory').get('@value'))])
-
-
-def resolve_refine_list(y_uses_refine: OrderedDict, y_entity: OrderedDict):
-    if isinstance(y_uses_refine, list):
-        if isinstance(y_entity, list):
-            for refine in y_uses_refine:
-                for e in y_entity:
-                    refine_cb(refine, e)
-        else:
-            for refine in y_uses_refine:
-                refine_cb(refine, y_entity)
-    else:
-        if isinstance(y_entity, list):
-            for e in y_entity:
-                refine_cb(y_uses_refine, e)
-        else:
-            refine_cb(y_uses_refine, y_entity)
-
-
-def resolve_refine(y_group: OrderedDict, y_uses: OrderedDict):
-    """ Check if the YANG 'uses' entity have the 'refine' entity, if so
-        this function will override values in 'y_group' using 'refine' values
-
-        Args:
-            y_group: reference to 'grouping'
-            y_uses: reference to 'uses'
-    """
-
-    y_uses_refine = y_uses.get('refine')
-
-    if y_uses_refine is None:
-        return
-
-    y_group_leaf = y_group.get('leaf')
-    y_group_leaf_list = y_group.get('leaf-list')
-
-    if y_group_leaf is not None:
-        resolve_refine_list(y_uses_refine, y_group_leaf)
-
-    if y_group_leaf_list is not None:
-        resolve_refine_list(y_uses_refine, y_group_leaf_list)
-
-
-def get_all_grouping(y_module: OrderedDict,
-                     y_uses: OrderedDict,
-                     conf_mgmt: ConfigMgmt) -> list:
-    """ Get all the 'grouping' entities that was referenced
-        by 'uses' in current YANG model
-
-        Args:
-            y_module: reference to 'module'
-            y_entity: reference to 'uses'
-            conf_mgmt: reference to ConfigMgmt class instance,
-                it have yJson object which contain all parsed YANG model
-        Returns:
-            list of 'grouping' elements
-    """
-
-    ret_grouping = list()
-    # prefix_list needed to find what YANG model was imported
-    prefix_list = get_import_prefixes(y_uses)
-
-    # in case if 'grouping' located in the same YANG model
-    local_grouping = y_module.get('grouping')
-    if local_grouping is not None:
-        if isinstance(local_grouping, list):
-            ret_grouping.extend(local_grouping)
-        else:
-            ret_grouping.append(local_grouping)
-
-    # if prefix_list is NOT empty it means that 'grouping'
-    # was imported from another YANG model
-    if prefix_list != []:
-        for prefix in prefix_list:
-            y_import = y_module.get('import')
-            if isinstance(y_import, list):
-                for _import in y_import:
-                    if _import.get('prefix').get('@value') == prefix:
-                        ret_grouping.extend(get_grouping_from_another_yang_model(_import.get('@module'), conf_mgmt))
-            else:
-                if y_import.get('prefix').get('@value') == prefix:
-                    ret_grouping.extend(get_grouping_from_another_yang_model(y_import.get('@module'), conf_mgmt))
-
-    return ret_grouping
-
-
-def get_grouping_from_another_yang_model(yang_model_name: str,
-                                         conf_mgmt) -> list:
-    """ Get the YANG 'grouping' entity
-
-        Args:
-            yang_model_name - YANG model to search
-            conf_mgmt - reference to ConfigMgmt class instance,
-                it have yJson object which contain all parsed YANG models
-
-        Returns:
-            list of 'grouping' entities
-    """
-
-    ret_grouping = list()
-
-    for yang_model in conf_mgmt.sy.yJson:
-        if (yang_model.get('module').get('@name') == yang_model_name):
-            grouping = yang_model.get('module').get('grouping')
-            if isinstance(grouping, list):
-                ret_grouping.extend(grouping)
-            else:
-                ret_grouping.append(grouping)
-
-    return ret_grouping
-
-
-def get_import_prefixes(y_uses: OrderedDict) -> list:
-    """ Parse 'import prefix' of YANG 'uses' entity
-        Example:
-        {
-            uses stypes:endpoint;
-        }
-        'stypes' - prefix of imported YANG module.
-        'endpoint' - YANG 'grouping' entity name
-
-        Args:
-            y_uses: refrence to YANG 'uses'
-        Returns:
-            list of parsed prefixes
-    """
-
-    ret_prefixes = list()
-
-    if isinstance(y_uses, list):
-        for use in y_uses:
-            prefix = use.get('@name').split(':')[0]
-            if prefix != use.get('@name'):
-                ret_prefixes.append(prefix)
-    else:
-        prefix = y_uses.get('@name').split(':')[0]
-        if prefix != y_uses.get('@name'):
-            ret_prefixes.append(prefix)
-
-    return ret_prefixes
-
-
-def trim_uses_prefixes(y_uses) -> list:
-    """ Trim prefixes from the 'uses' YANG entities.
-        If the YANG 'grouping' was imported from another
-        YANG file, it use the 'prefix' before the 'grouping' name:
-        {
-            uses sgrop:endpoint;
-        }
-        Where 'sgrop' = 'prefix'; 'endpoint' = 'grouping' name.
-
-        Args:
-            y_uses: reference to 'uses'
-
-        Returns:
-            list of 'uses' without 'prefixes'
-    """
-
-    prefixes = get_import_prefixes(y_uses)
-
-    for prefix in prefixes:
-        if isinstance(y_uses, list):
-            for use in y_uses:
-                if prefix in use.get('@name'):
-                    use['@name'] = use.get('@name').split(':')[1]
-        else:
-            if prefix in y_uses.get('@name'):
-                y_uses['@name'] = y_uses.get('@name').split(':')[1]
 
 
 def get_list_keys(y_list: OrderedDict) -> list:
