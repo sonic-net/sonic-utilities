@@ -14,6 +14,8 @@ show_trim_partial = """\
 +-----------------------------+---------+
 | Packet trimming DSCP value  | 20      |
 +-----------------------------+---------+
+| Packet trimming TC value    | N/A     |
++-----------------------------+---------+
 | Packet trimming queue index | N/A     |
 +-----------------------------+---------+
 """
@@ -21,25 +23,29 @@ show_trim_partial_json = """\
 {
     "size": "200",
     "dscp_value": "20",
+    "tc_value": "N/A",
     "queue_index": "N/A"
 }
 """
 
-show_trim_queue_static = """\
+show_trim_dscp_asymmetric = """\
 +-----------------------------+---------+
-| Configuration               |   Value |
+| Configuration               | Value   |
 +=============================+=========+
-| Packet trimming size        |     200 |
+| Packet trimming size        | 200     |
 +-----------------------------+---------+
-| Packet trimming DSCP value  |      20 |
+| Packet trimming DSCP value  | from-tc |
 +-----------------------------+---------+
-| Packet trimming queue index |       2 |
+| Packet trimming TC value    | 2       |
++-----------------------------+---------+
+| Packet trimming queue index | 2       |
 +-----------------------------+---------+
 """
-show_trim_queue_static_json = """\
+show_trim_dscp_asymmetric_json = """\
 {
     "size": "200",
-    "dscp_value": "20",
+    "dscp_value": "from-tc",
+    "tc_value": "2",
     "queue_index": "2"
 }
 """
@@ -52,6 +58,8 @@ show_trim_queue_dynamic = """\
 +-----------------------------+---------+
 | Packet trimming DSCP value  | 20      |
 +-----------------------------+---------+
+| Packet trimming TC value    | N/A     |
++-----------------------------+---------+
 | Packet trimming queue index | dynamic |
 +-----------------------------+---------+
 """
@@ -59,6 +67,7 @@ show_trim_queue_dynamic_json = """\
 {
     "size": "200",
     "dscp_value": "20",
+    "tc_value": "N/A",
     "queue_index": "dynamic"
 }
 """

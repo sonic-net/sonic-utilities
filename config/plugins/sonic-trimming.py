@@ -10,12 +10,20 @@ from utilities_common.switch_trimming import (
     CFG_SWITCH_TRIMMING,
     STATE_SWITCH_CAPABILITY,
     STATE_CAP_TRIMMING_CAPABLE_KEY,
+    STATE_CAP_DSCP_MODE_KEY,
+    STATE_CAP_DSCP_MODE_DSCP_VALUE,
+    STATE_CAP_DSCP_MODE_FROM_TC,
     STATE_CAP_QUEUE_MODE_KEY,
     STATE_CAP_QUEUE_MODE_DYNAMIC,
     STATE_CAP_QUEUE_MODE_STATIC,
+    STATE_CAP_TC_NUM_KEY,
+    STATE_CAP_QUEUE_NUM_KEY,
+    CFG_TRIM_DSCP_VALUE_FROM_TC,
     CFG_TRIM_QUEUE_INDEX_DYNAMIC,
     CFG_TRIM_KEY,
     STATE_CAP_KEY,
+    DSCP_MIN,
+    DSCP_MAX,
     UINT32_MAX,
     UINT8_MAX,
     SYSLOG_IDENTIFIER,
@@ -32,6 +40,14 @@ log.set_min_log_priority_info()
 # Validators ----------------------------------------------------------------------------------------------------------
 #
 
+def generic_validator(ctx, db):
+    """ Generic configuration validator """
+    entry = db.get_all(db.STATE_DB, "{}|{}".format(STATE_SWITCH_CAPABILITY, STATE_CAP_KEY))
+    value = entry.get(STATE_CAP_TRIMMING_CAPABLE_KEY, "false")
+
+    if value != "true":
+        ctx.fail("Failed to configure switch trimming: operation is not supported")
+
 
 class SizeTypeValidator(click.ParamType):
     """ Size option validator """
@@ -44,10 +60,68 @@ class SizeTypeValidator(click.ParamType):
 
 class DscpTypeValidator(click.ParamType):
     """ Dscp option validator """
+    name = "text"
+
+    def get_metavar(self, param):
+        db = get_db(click.get_current_context())
+
+        entry = db.get_all(db.STATE_DB, "{}|{}".format(STATE_SWITCH_CAPABILITY, STATE_CAP_KEY))
+        entry.setdefault(STATE_CAP_DSCP_MODE_KEY, "N/A")
+
+        cap_list = entry[STATE_CAP_DSCP_MODE_KEY].split(',')
+
+        if cap_list.count(STATE_CAP_DSCP_MODE_FROM_TC) == len(cap_list):
+            return "from-tc"
+        elif cap_list.count(STATE_CAP_DSCP_MODE_DSCP_VALUE) == len(cap_list):
+            return "INTEGER"
+
+        return "[INTEGER|from-tc]"
+
+    def convert(self, value, param, ctx):
+        db = get_db(ctx)
+
+        entry = db.get_all(db.STATE_DB, "{}|{}".format(STATE_SWITCH_CAPABILITY, STATE_CAP_KEY))
+        entry.setdefault(STATE_CAP_DSCP_MODE_KEY, "N/A")
+
+        if not entry[STATE_CAP_DSCP_MODE_KEY]:
+            raise click.UsageError("Failed to configure {}: no dscp resolution mode capabilities".format(
+                param.get_error_hint(ctx)), ctx
+            )
+
+        verify_cap = True
+
+        if entry[STATE_CAP_DSCP_MODE_KEY] == "N/A":
+            verify_cap = False
+
+        cap_list = entry[STATE_CAP_DSCP_MODE_KEY].split(',')
+
+        if value == CFG_TRIM_DSCP_VALUE_FROM_TC:
+            if verify_cap and (STATE_CAP_DSCP_MODE_FROM_TC not in cap_list):
+                self.fail("asymmetric dscp resolution mode is not supported", param, ctx)
+        else:
+            if verify_cap and (STATE_CAP_DSCP_MODE_DSCP_VALUE not in cap_list):
+                self.fail("symmetric dscp resolution mode is not supported", param, ctx)
+
+            click.IntRange(DSCP_MIN, DSCP_MAX).convert(value, param, ctx)
+
+        return value
+
+
+class TcTypeValidator(click.ParamType):
+    """ Tc option validator """
     name = "integer"
 
     def convert(self, value, param, ctx):
-        click.IntRange(0, UINT8_MAX).convert(value, param, ctx)
+        db = get_db(ctx)
+
+        entry = db.get_all(db.STATE_DB, "{}|{}".format(STATE_SWITCH_CAPABILITY, STATE_CAP_KEY))
+        entry.setdefault(STATE_CAP_TC_NUM_KEY, "N/A")
+
+        if entry[STATE_CAP_TC_NUM_KEY] == "N/A":
+            click.IntRange(0, UINT8_MAX).convert(value, param, ctx)
+        else:
+            click.IntRange(0, int(entry[STATE_CAP_TC_NUM_KEY])-1).convert(value, param, ctx)
+
         return value
 
 
@@ -74,14 +148,8 @@ class QueueTypeValidator(click.ParamType):
         db = get_db(ctx)
 
         entry = db.get_all(db.STATE_DB, "{}|{}".format(STATE_SWITCH_CAPABILITY, STATE_CAP_KEY))
-
-        entry.setdefault(STATE_CAP_TRIMMING_CAPABLE_KEY, "false")
         entry.setdefault(STATE_CAP_QUEUE_MODE_KEY, "N/A")
-
-        if entry[STATE_CAP_TRIMMING_CAPABLE_KEY] == "false":
-            raise click.UsageError("Failed to configure {}: operation is not supported".format(
-                param.get_error_hint(ctx)), ctx
-            )
+        entry.setdefault(STATE_CAP_QUEUE_NUM_KEY, "N/A")
 
         if not entry[STATE_CAP_QUEUE_MODE_KEY]:
             raise click.UsageError("Failed to configure {}: no queue resolution mode capabilities".format(
@@ -102,7 +170,10 @@ class QueueTypeValidator(click.ParamType):
             if verify_cap and (STATE_CAP_QUEUE_MODE_STATIC not in cap_list):
                 self.fail("static queue resolution mode is not supported", param, ctx)
 
-            click.IntRange(0, UINT8_MAX).convert(value, param, ctx)
+            if entry[STATE_CAP_QUEUE_NUM_KEY] == "N/A":
+                click.IntRange(0, UINT8_MAX).convert(value, param, ctx)
+            else:
+                click.IntRange(0, int(entry[STATE_CAP_QUEUE_NUM_KEY])-1).convert(value, param, ctx)
 
         return value
 
@@ -176,25 +247,32 @@ def SWITCH_TRIMMING():
 @click.option(
     "-s", "--size", "size",
     help="Configures size (in bytes) to trim eligible packet",
-    type=SizeTypeValidator(),
+    type=SizeTypeValidator()
 )
 @click.option(
     "-d", "--dscp", "dscp",
     help="Configures DSCP value assigned to a packet after trimming",
-    type=DscpTypeValidator(),
+    type=DscpTypeValidator()
+)
+@click.option(
+    "-t", "--tc", "tc",
+    help="Configures TC value assigned to a packet after trimming",
+    type=TcTypeValidator()
 )
 @click.option(
     "-q", "--queue", "queue",
     help="Configures queue index to use for transmission of a packet after trimming",
-    type=QueueTypeValidator(),
+    type=QueueTypeValidator()
 )
 @clicommon.pass_db
 @click.pass_context
-def SWITCH_TRIMMING_GLOBAL(ctx, db, size, dscp, queue):
+def SWITCH_TRIMMING_GLOBAL(ctx, db, size, dscp, tc, queue):
     """ Configure switch trimming global """
 
-    if not (size or dscp or queue):
+    if not (size or dscp or tc or queue):
         raise click.UsageError("Failed to configure switch trimming global: no options are provided", ctx)
+
+    generic_validator(ctx, db.db)
 
     table = CFG_SWITCH_TRIMMING
     key = CFG_TRIM_KEY
@@ -202,7 +280,8 @@ def SWITCH_TRIMMING_GLOBAL(ctx, db, size, dscp, queue):
     data = {
         "size": size,
         "dscp_value": dscp,
-        "queue_index": queue,
+        "tc_value": tc,
+        "queue_index": queue
     }
 
     try:
