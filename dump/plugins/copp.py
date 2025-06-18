@@ -43,7 +43,8 @@ TRAP_ID_MAP = {
     "bfd": "SAI_HOSTIF_TRAP_TYPE_BFD",
     "bfdv6": "SAI_HOSTIF_TRAP_TYPE_BFDV6",
     "src_nat_miss": "SAI_HOSTIF_TRAP_TYPE_SNAT_MISS",
-    "dest_nat_miss": "SAI_HOSTIF_TRAP_TYPE_DNAT_MISS"
+    "dest_nat_miss": "SAI_HOSTIF_TRAP_TYPE_DNAT_MISS",
+    "neighbor_miss": "SAI_HOSTIF_TRAP_TYPE_NEIGHBOR_MISS"
 }
 
 CFG_COPP_TRAP_TABLE_NAME = "COPP_TRAP"

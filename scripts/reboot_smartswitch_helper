@@ -49,39 +49,41 @@ function get_reboot_status()
 {
     local dpu_ip=$1
     local port=$2
-    $(docker exec gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -notls -module System -rpc RebootStatus &>/dev/null)
+    local reboot_output_file="reboot_status.txt"
+
+    $(docker exec gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -notls -module System -rpc RebootStatus | tee "$reboot_output_file" &>/dev/null)
     if [ $? -ne 0 ]; then
+        rm -f "$reboot_output_file"
         return ${EXIT_ERROR}
     fi
     local is_reboot_active
-    is_reboot_active=$(echo "$reboot_status" | grep "active" | awk '{print $2}')
-    if [ "$is_reboot_active" == "false" ]; then
+    is_reboot_active=$(cat "$reboot_output_file" | awk '/^{.*}$/' | jq -r '.active')
+    rm -f "$reboot_output_file"
+    if [ "$is_reboot_active" != "true" ]; then
         return ${EXIT_SUCCESS}
     fi
     return ${EXIT_ERROR}
 }
 
 # Function to detach PCI module
-function pci_detach_module()
+function module_pre_shutdown()
 {
     local DPU_NAME=$1
     local DPU_BUS_INFO=$2
-    python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.pci_detach_module('${DPU_NAME}')"
+    python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.module_pre_shutdown('${DPU_NAME}')"
     if [ $? -ne 0 ]; then
-        log_message "ERROR: PCI detach vendor API is not available"
-        echo 1 > /sys/bus/pci/devices/${DPU_BUS_INFO}/remove
+        log_message "ERROR: Module pre-shutdown vendor API failed"
     fi
 }
 
 # Function to rescan PCI module
-function pci_reattach_module()
+function module_post_startup()
 {
     local DPU_NAME=$1
     local DPU_BUS_INFO=$2
-    python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.pci_reattach_module('${DPU_NAME}')"
+    python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.module_post_startup('${DPU_NAME}')"
     if [ $? -ne 0 ]; then
-        log_message "ERROR: PCI reattach vendor API is not available"
-        echo 1 > /sys/bus/pci/devices/${DPU_BUS_INFO}/rescan
+        log_message "ERROR: Module post-startup vendor API failed"
     fi
 }
 
@@ -193,7 +195,7 @@ function reboot_dpu()
         return ${EXIT_ERROR}
     fi
 
-    pci_detach_module ${DPU_NAME} ${DPU_BUS_INFO}
+    module_pre_shutdown ${DPU_NAME} ${DPU_BUS_INFO}
     if [ $? -ne 0 ]; then
         log_message "ERROR: Failed to detach PCI module for ${DPU_NAME}"
         return ${EXIT_ERROR}
@@ -206,7 +208,7 @@ function reboot_dpu()
     fi
 
     if [[ "$REBOOT_TYPE" != $MODULE_REBOOT_SMARTSWITCH ]]; then
-        pci_reattach_module ${DPU_NAME} ${DPU_BUS_INFO}
+        module_post_startup ${DPU_NAME} ${DPU_BUS_INFO}
     fi
 }
 

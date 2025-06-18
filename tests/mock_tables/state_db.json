@@ -1777,5 +1777,52 @@
         "mac_remote_fault_time": "",
         "mac_local_fault_count": "0",
         "mac_local_fault_time": ""
+    },
+    "ICMP_ECHO_SESSION_TABLE|default|Ethernet8|0x69f578f5|NORMAL" : {
+        "dst_ip": "192.168.0.5",
+        "hw_lookup": "false",
+        "rx_interval": "300",
+        "session_cookie": "0x58767e7a",
+        "session_guid": "0x69f578f5",
+        "src_ip": "10.1.0.36",
+        "state": "Up",
+        "tx_interval": "100"
+    },
+    "ICMP_ECHO_SESSION_TABLE|default|Ethernet0|0x4eb39592|RX" : {
+        "dst_ip": "192.168.0.3",
+        "hw_lookup": "false",
+        "rx_interval": "300",
+        "session_cookie": "0x58767e7a",
+        "session_guid": "0x4eb39592",
+        "src_ip": "10.1.0.36",
+        "state": "Up",
+        "tx_interval": "0"
+    },
+    "ICMP_ECHO_SESSION_TABLE|default|Ethernet128|0x23ffb930|NORMAL" : {
+        "dst_ip": "192.168.0.31",
+        "hw_lookup": "false",
+        "rx_interval": "300",
+        "session_cookie": "0x58767e7a",
+        "session_guid": "0x23ffb930",
+        "src_ip": "10.1.0.36",
+        "state": "Down",
+        "tx_interval": "100"
+    },
+    "ICMP_ECHO_SESSION_TABLE|default|Ethernet152|0x39e05375|NORMAL" : {
+        "dst_ip": "192.168.0.37",
+        "hw_lookup": "false",
+        "rx_interval": "300",
+        "session_cookie": "0x58767e7a",
+        "session_guid": "0x39e05375",
+        "src_ip": "10.1.0.36",
+        "state": "Up",
+        "tx_interval": "100"
+    },
+    "COPP_TRAP_TABLE|bgp": {
+        "state": "ok",
+        "hw_status": "installed"
+    },
+    "COPP_TRAP_TABLE|neighbor_miss": {
+        "state": "ok"
     }
 }
