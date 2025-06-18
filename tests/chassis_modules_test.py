@@ -45,6 +45,7 @@ show_chassis_midplane_output="""\
 LINE-CARD0   192.168.3.1            True
 LINE-CARD1   192.168.4.1           False
 LINE-CARD2   192.168.5.1            True
+LINE-CARD3   192.168.6.1            True
 """
 
 show_chassis_system_ports_output_asic0="""\
@@ -340,7 +341,7 @@ class TestChassisModules(object):
         result = runner.invoke(show.cli.commands["chassis"].commands["modules"].commands["midplane-status"], [])
         print(result.output)
         result_lines = result.output.strip('\n').split('\n')
-        modules = ["LINE-CARD0", "LINE-CARD1", "LINE-CARD2"]
+        modules = ["LINE-CARD0", "LINE-CARD1", "LINE-CARD2", "LINE-CARD3"]
         for i, module in enumerate(modules):
             assert module in result_lines[i + warning_lines + header_lines]
         assert len(result_lines) == warning_lines + header_lines + len(modules)

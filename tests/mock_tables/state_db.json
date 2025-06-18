@@ -1404,6 +1404,10 @@
         "ip_address": "192.168.4.1",
         "access": "False"
     },
+    "CHASSIS_MIDPLANE_TABLE|LINE-CARD3": {
+        "ip_address": "192.168.6.1",
+        "access": "True"
+    },
     "PORT_TABLE|Ethernet0": {
         "rmt_adv_speeds" : "10,100,1000",
         "speed" : "100000",

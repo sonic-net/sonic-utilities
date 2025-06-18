@@ -65,6 +65,7 @@ def connect_SonicV2Connector_host(self, db_name, host, retry_on=True):
         "192.168.3.10": "asic0",
         "192.168.3.11": "asic1",
         "192.168.5.1": "asic2",
+        "192.168.6.1": "asic3"
     }
     self.dbintf.redis_kwargs['namespace'] = ip_to_asic[host]
     self.dbintf.redis_kwargs['db_name'] = db_name
