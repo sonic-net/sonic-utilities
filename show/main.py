@@ -88,7 +88,7 @@ COMMAND_TIMEOUT = 300
 # bash oneliner. To be revisited once routing-stack info is tracked somewhere.
 def get_routing_stack():
     result = None
-    command = "sudo docker ps | grep bgp | awk '{print$2}' | cut -d'-' -f3 | cut -d':' -f1 | head -n 1"
+    command = "sudo docker ps | grep bgp | grep -E 'quagga|frr' | awk '{print$2}' | cut -d'-' -f3 | cut -d':' -f1 | head -n 1"
 
     try:
         stdout = subprocess.check_output(command, shell=True, text=True, timeout=COMMAND_TIMEOUT)
