@@ -187,6 +187,16 @@ Ethernet-BP4        U        8  0.00 B/s    0.00/s      0.00%         0     1,00
 Reminder: Please execute 'show interface counters -d all' to include internal links
 
 """  # noqa: E501
+
+multi_asic_intf_counters_bp0 = """\
+       IFACE    STATE    RX_OK    RX_BPS    RX_PPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK    TX_BPS    TX_PPS    TX_UTIL    TX_ERR    TX_DRP    TX_OVR    TRIM
+------------  -------  -------  --------  --------  ---------  --------  --------  --------  -------  --------  --------  ---------  --------  --------  --------  ------
+Ethernet-BP0        U        6  0.00 B/s    0.00/s      0.00%         0     1,000       N/A       60  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A     N/A
+
+Reminder: Please execute 'show interface counters -d all' to include internal links
+
+"""  # noqa: E501
+
 multi_asic_intf_counters_period = """\
 The rates are calculated within 3 seconds period
     IFACE    STATE    RX_OK    RX_BPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK    TX_BPS    TX_UTIL    TX_ERR    TX_DRP    TX_OVR
@@ -1039,6 +1049,14 @@ class TestMultiAsicPortStat(object):
         print("result = {}".format(result))
         assert return_code == 0
         assert result == multi_asic_intf_counters_asic0_printall
+
+    def test_multi_show_intf_counters_bp0(self):
+        return_code, result = get_result_and_return_code(
+            ['portstat', '-a', '-i', 'Ethernet-BP0', '-s', 'all'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result == multi_asic_intf_counters_bp0
 
     def test_multi_show_intf_counters_period(self):
         return_code, result = get_result_and_return_code(
