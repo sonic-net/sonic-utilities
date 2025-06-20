@@ -196,12 +196,9 @@ Released lock on {0}
 RELOAD_MASIC_CONFIG_DB_OUTPUT = """\
 Acquired lock on {0}
 Stopping SONiC target ...
-Running command: /usr/local/bin/sonic-cfggen -H -k  --write-to-db
 Running command: /usr/local/bin/sonic-cfggen -j /tmp/config.json --write-to-db
-Running command: /usr/local/bin/sonic-cfggen -H -k  -n asic0 --write-to-db
-Running command: /usr/local/bin/sonic-cfggen -j /tmp/config.json -n asic0 --write-to-db
-Running command: /usr/local/bin/sonic-cfggen -H -k  -n asic1 --write-to-db
-Running command: /usr/local/bin/sonic-cfggen -j /tmp/config.json -n asic1 --write-to-db
+Running command: /usr/local/bin/sonic-cfggen -j /tmp/config0.json -n asic0 --write-to-db
+Running command: /usr/local/bin/sonic-cfggen -j /tmp/config1.json -n asic1 --write-to-db
 Restarting SONiC target ...
 Reloading Monit configuration ...
 Released lock on {0}
@@ -771,6 +768,11 @@ class TestConfigReloadMasic(object):
         importlib.reload(mock_multi_asic)
         dbconnector.load_namespace_config()
 
+    def _create_dummy_config(self, path, content):
+        """Helper method to create a dummy config file with JSON content."""
+        with open(path, 'w') as f:
+            f.write(json.dumps(content))
+
     def test_config_reload_onefile_masic(self):
         def read_json_file_side_effect(filename):
             return {
@@ -950,6 +952,66 @@ class TestConfigReloadMasic(object):
 
             assert result.exit_code != 0
             assert "Input file all_config_db.json must contain all asics config" in result.output
+
+    def test_config_reload_multiple_files(self):
+        dummy_cfg_file = os.path.join(os.sep, "tmp", "config.json")
+        dummy_cfg_file_asic0 = os.path.join(os.sep, "tmp", "config0.json")
+        dummy_cfg_file_asic1 = os.path.join(os.sep, "tmp", "config1.json")
+        device_metadata = {
+            "DEVICE_METADATA": {
+                "localhost": {
+                    "platform": "some_platform",
+                    "mac": "02:42:f0:7f:01:05"
+                }
+            }
+        }
+        self._create_dummy_config(dummy_cfg_file, device_metadata)
+        self._create_dummy_config(dummy_cfg_file_asic0, device_metadata)
+        self._create_dummy_config(dummy_cfg_file_asic1, device_metadata)
+
+        with mock.patch("utilities_common.cli.run_command",
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)):
+            runner = CliRunner()
+            # 3 config files: 1 for host and 2 for asic
+            cfg_files = f"{dummy_cfg_file},{dummy_cfg_file_asic0},{dummy_cfg_file_asic1}"
+
+            result = runner.invoke(
+                config.config.commands["reload"],
+                [cfg_files, '-y', '-f'])
+
+            assert result.exit_code == 0
+            assert "\n".join([li.rstrip() for li in result.output.split('\n')]) == \
+                RELOAD_MASIC_CONFIG_DB_OUTPUT.format(config.SYSTEM_RELOAD_LOCK)
+
+    def test_config_reload_multiple_files_with_spaces(self):
+        dummy_cfg_file = os.path.join(os.sep, "tmp", "config.json")
+        dummy_cfg_file_asic0 = os.path.join(os.sep, "tmp", "config0.json")
+        dummy_cfg_file_asic1 = os.path.join(os.sep, "tmp", "config1.json")
+        device_metadata = {
+            "DEVICE_METADATA": {
+                "localhost": {
+                    "platform": "some_platform",
+                    "mac": "02:42:f0:7f:01:05"
+                }
+            }
+        }
+        self._create_dummy_config(dummy_cfg_file, device_metadata)
+        self._create_dummy_config(dummy_cfg_file_asic0, device_metadata)
+        self._create_dummy_config(dummy_cfg_file_asic1, device_metadata)
+
+        with mock.patch("utilities_common.cli.run_command",
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)):
+            runner = CliRunner()
+            # add unnecessary spaces and comma at the end
+            cfg_files = f"   {dummy_cfg_file} ,{dummy_cfg_file_asic0},  {dummy_cfg_file_asic1},"
+
+            result = runner.invoke(
+                config.config.commands["reload"],
+                [cfg_files, '-y', '-f'])
+
+            assert result.exit_code == 0
+            assert "\n".join([li.rstrip() for li in result.output.split('\n')]) == \
+                RELOAD_MASIC_CONFIG_DB_OUTPUT.format(config.SYSTEM_RELOAD_LOCK)
 
     @classmethod
     def teardown_class(cls):
@@ -1318,8 +1380,6 @@ class TestLoadMinigraph(object):
 
 class TestReloadConfig(object):
     dummy_cfg_file = os.path.join(os.sep, "tmp", "config.json")
-    dummy_cfg_file_asic0 = os.path.join(os.sep, "tmp", "config0.json")
-    dummy_cfg_file_asic1 = os.path.join(os.sep, "tmp", "config1.json")
 
     @classmethod
     def setup_class(cls):
@@ -1477,33 +1537,6 @@ class TestReloadConfig(object):
 
             assert "\n".join([line.rstrip() for line in result.output.split('\n')]) == \
                 reload_config_with_disabled_service_output.format(config.SYSTEM_RELOAD_LOCK)
-
-    def test_reload_config_masic(self, get_cmd_module, setup_multi_broadcom_masic):
-        def read_json_file_side_effect(filename):
-            return {}
-
-        with mock.patch("utilities_common.cli.run_command",
-                        mock.MagicMock(side_effect=mock_run_command_side_effect)),\
-            mock.patch('config.main.read_json_file',
-                       mock.MagicMock(side_effect=read_json_file_side_effect)):
-            (config, show) = get_cmd_module
-            runner = CliRunner()
-            # 3 config files: 1 for host and 2 for asic
-            cfg_files = "{},{},{}".format(
-                            self.dummy_cfg_file,
-                            self.dummy_cfg_file,
-                            self.dummy_cfg_file)
-
-            result = runner.invoke(
-                config.config.commands["reload"],
-                [cfg_files, '-y', '-f'])
-
-            print(result.exit_code)
-            print(result.output)
-            traceback.print_tb(result.exc_info[2])
-            assert result.exit_code == 0
-            assert "\n".join([l.rstrip() for l in result.output.split('\n')]) \
-                == RELOAD_MASIC_CONFIG_DB_OUTPUT.format(config.SYSTEM_RELOAD_LOCK)
 
     def test_reload_yang_config(self, get_cmd_module,
                                         setup_single_broadcom_asic):

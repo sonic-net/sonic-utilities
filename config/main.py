@@ -1948,7 +1948,8 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
     multiasic_single_file_mode = False
     # If the user give the filename[s], extract the file names.
     if filename is not None:
-        cfg_files = filename.split(',')
+        # strip whitespaces and filter out empty strings
+        cfg_files = [s.strip() for s in filename.split(',') if s.strip()]
 
         if len(cfg_files) == 1 and multi_asic.is_multi_asic():
             multiasic_validate_single_file(cfg_files[0])
@@ -1958,7 +1959,12 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
             return
 
     if filename is not None and filename != "/dev/stdin":
-        config_file_yang_validation(filename)
+        if multi_asic.is_multi_asic():
+            for cfg_file in cfg_files:
+                if cfg_file is not None:
+                    config_file_yang_validation(cfg_file)
+        else:
+            config_file_yang_validation(filename)
 
     #Stop services before config push
     if not no_service_restart:
