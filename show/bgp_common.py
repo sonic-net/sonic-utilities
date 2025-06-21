@@ -79,7 +79,10 @@ def get_nexthop_info_str(nxhp_info, filterByIp):
             str_2_return = " (blackhole)"
 
     if "vrf" in nxhp_info:
-        str_2_return += "(vrf {}, {},".format(nxhp_info['vrf'], nxhp_info['interfaceName'])
+        str_2_return += " (vrf {}".format(nxhp_info['vrf'])
+        if 'interfaceName' in nxhp_info:
+            str_2_return += ", {}".format(nxhp_info['interfaceName'])
+        str_2_return += ")"
     if "active" not in nxhp_info:
         str_2_return += " inactive"
     if "recursive" in nxhp_info:
