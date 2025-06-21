@@ -928,6 +928,13 @@ then
   systemctl stop "$service_name"
 fi
 
+# Stop platform monitor sevice to prevent i2c access during warm/fast reboot
+services=$(systemctl list-units --plain --no-pager --no-legend --type=service | grep platform-monitor | cut -f 1 -d' ')
+for service_name in $services
+do
+  systemctl stop "$service_name"
+done
+
 # Update the reboot cause file to reflect that user issued this script
 # Upon next boot, the contents of this file will be used to determine the
 # cause of the previous reboot
