@@ -169,6 +169,8 @@
 * [Radius](#radius)
   * [Radius show commands](#show-radius-commands)
   * [Radius config commands](#Radius-config-commands)
+* [Rate](#rate)
+  * [Rate config commands](#rate-config-commands)
 * [sFlow](#sflow)
   * [sFlow Show commands](#sflow-show-commands)
   * [sFlow Config commands](#sflow-config-commands)
@@ -10282,6 +10284,28 @@ This command is to config the radius server for various parameter listed.
   timeout     Specify RADIUS server global timeout <1 - 60>
 
   ```
+
+## Rate
+
+### Rate config commands
+
+**config rate smoothing-interval**
+
+This command is used to change the window size of exponential moving average to make
+the rates and utilization values more smooth in the output of "show interface counters"
+
+- Usage:
+  ```
+  config rate smoothing-interval <interval>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config rate smoothing-interval 20
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#rate)
+
 ## sFlow
 
 ### sFlow Show commands
