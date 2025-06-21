@@ -97,8 +97,8 @@ class FibBase(object):
         for fib in self.fib_entry_list:
             prefix = fib[0]
 
-            if 'VRF' in fib[0]:
-                vrf = re.match(r"VRF-(.*)",fib[0].split(":")[0]).group(1)
+            if 'Vrf' in fib[0]:
+                vrf = re.match(r"Vrf(.*)",fib[0].split(":")[0]).group(1)
                 prefix = fib[0].split(":")[1]
             else:
                 vrf = ""
