@@ -87,6 +87,17 @@ def get_current_image():
     print_err("Unable to locate current SONiC image")
     sys.exit(1)
 
+
+def str2bool(v):
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
 ## Read allocated memory size
 def get_crash_kernel_size():
     try:
@@ -429,23 +440,6 @@ def write_num_dumps(num_dumps):
     else:
         print_err("Error while writing KDUMP_NUM_DUMPS into %s" % kdump_cfg)
         sys.exit(1)
-
-def write_kdump_remote():
-    # Assuming there's a function that retrieves the remote value from the config database
-    remote = get_kdump_remote()  # This function needs to be implemented
-
-    kdump_cfg = '/etc/default/kdump-tools'
-
-    if remote:
-        # Uncomment SSH and SSH_KEY in the /etc/default/kdump-tools file
-        run_command("/bin/sed -i 's/#SSH/SSH/' %s" % kdump_cfg, use_shell=False)
-        run_command("/bin/sed -i 's/#SSH_KEY/SSH_KEY/' %s" % kdump_cfg, use_shell=False)
-        print("SSH and SSH_KEY uncommented for remote configuration.")
-    else:
-        # Comment out SSH and SSH_KEY in the /etc/default/kdump-tools file
-        run_command("/bin/sed -i 's/SSH/#SSH/' %s" % kdump_cfg, use_shell=False)
-        run_command("/bin/sed -i 's/SSH_KEY/#SSH_KEY/' %s" % kdump_cfg, use_shell=False)
-        print("SSH and SSH_KEY commented out for local configuration.")
 
 def read_ssh_string():
     (rc, lines, err_str) = run_command("grep '#*SSH=.*' %s | cut -d '=' -f 2 | tr -d '\"'" % kdump_cfg, use_shell=False)
@@ -826,15 +820,15 @@ def main():
     parser.add_argument('--num_dumps', nargs='?', type=int, action='store', default=False,
         help='Maximum number of kernel dump files stored')
 
-    parser.add_argument('--remote', action='store_true', default=False,
-                help='Enable remote kdump via SSH')
-    
+    parser.add_argument('--remote', type=str2bool, nargs='?', const=True, default=False,
+    help='Enable or disable remote kdump via SSH (true/false)')
+
     parser.add_argument('--ssh_string', nargs='?', type=str, action='store', default=False,
             help='ssh_string for remote kdump')
 
     parser.add_argument('--ssh_path', nargs='?', type=str, action='store',default=False,
             help='ssh_path for remote kdump')
-    
+
     # Memory allocated for capture kernel on Current Image
     parser.add_argument('--memory', nargs='?', type=str, action='store', default=False,
         help='Amount of memory reserved for the capture kernel')
