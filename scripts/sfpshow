@@ -325,7 +325,7 @@ class SFPShow(object):
 
         sorted_data_map_keys = sorted(data_map, key=data_map.get)
         for key in sorted_data_map_keys:
-            if key == 'cable_type':
+            if key == 'cable_type' and sfp_info_dict['cable_type'] != 'N/A':
                 output += '{}{}: {}\n'.format(indent, sfp_info_dict['cable_type'], sfp_info_dict['cable_length'])
             elif key == 'cable_length':
                 pass
@@ -350,6 +350,18 @@ class SFPShow(object):
             elif key.startswith(('e1_', 'e2_')):
                 if key in sfp_firmware_info_dict:
                     output += '{}{}: {}\n'.format(indent, data_map[key], sfp_firmware_info_dict[key])
+            elif key == 'dom_capability':
+                if sfp_info_dict['dom_capability'] == 'N/A':
+                    output += '{}{}: {}\n'.format(indent, QSFP_DATA_MAP['dom_capability'], 'N/A')
+                else:
+                    try:
+                        dom_capability_dict = ast.literal_eval(sfp_info_dict['dom_capability'])
+                        sorted_dom_capability_key_table = natsorted(dom_capability_dict)
+                        output += '{}{}:\n'.format(indent, QSFP_DATA_MAP['dom_capability'])
+                        for dom_capability_key in sorted_dom_capability_key_table:
+                            output += '{}{}: {}\n'.format((indent * 2), dom_capability_key, dom_capability_dict[dom_capability_key])
+                    except ValueError as e:
+                        output += '{}N/A\n'.format((indent * 2))
             else:
                 output += '{}{}: {}\n'.format(indent, data_map[key], sfp_info_dict[key])
 

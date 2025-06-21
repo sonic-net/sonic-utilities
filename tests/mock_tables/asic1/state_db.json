@@ -16,6 +16,7 @@
         "vendor_date" : "2021-11-19",
         "vendor_oui" : "XX-XX-XX",
         "application_advertisement" : "{1: {'host_electrical_interface_id': '400GAUI-8 C2M (Annex 120E)', 'module_media_interface_id': '400ZR, DWDM, amplified', 'media_lane_count': 1, 'host_lane_count': 8, 'host_lane_assignment_options': 1, 'media_lane_assignment_options': 1}, 2: {'host_electrical_interface_id': '400GAUI-8 C2M (Annex 120E)', 'module_media_interface_id': '400ZR, Single Wavelength, Unamplified', 'media_lane_count': 1, 'host_lane_count': 8, 'host_lane_assignment_options': 1, 'media_lane_assignment_options': 1}, 3: {'host_electrical_interface_id': '100GAUI-2 C2M (Annex 135G)', 'module_media_interface_id': '400ZR, DWDM, amplified', 'media_lane_count': 1, 'host_lane_count': 2, 'host_lane_assignment_options': 85, 'media_lane_assignment_options': 1}}",
+        "dom_capability": "{'Rx_power_support': 'yes', 'Temp_support': 'yes', 'Voltage_support': 'yes', 'Tx_power_support': 'yes'}",
         "host_lane_count" : "8",
         "media_lane_count" : "1",
         "active_apsel_hostlane1" : "1",
