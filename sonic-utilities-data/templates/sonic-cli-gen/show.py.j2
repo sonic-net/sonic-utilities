@@ -54,6 +54,34 @@ def format_group_value(entry, attrs):
     return tabulate.tabulate(data, tablefmt="plain")
 
 
+def get_db_table(db, db_name, table_name):
+    """ Retrieve data table from redis DB, support CONFIG_DB|STATE_DB|...
+
+    Args:
+        db: Db object in utilities_common.
+        db_name: Redis db name
+        table_name: Redis table name
+
+    Returns:
+        dict: data table.
+    """
+
+    table = {}
+
+    if db_name == '' or db_name == 'CONFIG_DB':
+        table = db.cfgdb.get_table(table_name)
+    else:
+        db.db.connect(db_name)
+        seps = db.db.get_db_separator(db_name)
+        keys = db.db.keys(db_name, table_name + seps + '*')
+
+        for key in keys:
+            t = db.db.get_all(db_name, key)
+            table[key[(key.find(seps) + 1):]] = t
+
+    return table
+
+
 {# Generates a python list that represents a row in the table view.
 E.g:
 Jinja2:
@@ -185,7 +213,7 @@ def {{ table.name }}_{{ object.name }}(db):
     header = {{ gen_header(object.attrs) }}
     body = []
 
-    table = db.cfgdb.get_table("{{ table.name }}")
+    table = get_db_table(db, '{{ table['db-name'] }}', '{{ table.name }}')
     entry = table.get("{{ object.name }}", {})
     row = {{ gen_row("entry", object.attrs) }}
     body.append(row)
@@ -222,7 +250,7 @@ def {{ name }}(db):
     header = {{ gen_header(object["keys"] + object.attrs) }}
     body = []
 
-    table = db.cfgdb.get_table("{{ table.name }}")
+    table = get_db_table(db, '{{ table['db-name'] }}', '{{ name }}')
     for key in natsort.natsorted(table):
         entry = table[key]
         if not isinstance(key, tuple):
