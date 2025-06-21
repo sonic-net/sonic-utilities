@@ -38,24 +38,36 @@ class TestTrimming:
     # ---------- CONFIG CONFIG SWITCH-TRIMMING GLOBAL ---------- #
 
     @pytest.mark.parametrize(
-        "size,dscp,queue", [
+        "size,dscp,tc,queue", [
             pytest.param(
-                "200", "20", "2",
+                "200", "20", None, "2",
+                id="dscp-symmetric"
+            ),
+            pytest.param(
+                "200", "from-tc", "2", "2",
+                id="dscp-asymmetric"
+            ),
+            pytest.param(
+                "200", "20", None, "2",
                 id="queue-static"
             ),
             pytest.param(
-                "300", "30", "dynamic",
+                "200", "20", None, "dynamic",
                 id="queue-dynamic"
             )
         ]
     )
-    def test_config_trimming(self, size, dscp, queue):
+    def test_config_trimming(self, size, dscp, tc, queue):
         db = Db()
         runner = CliRunner()
 
+        args = ["--size", size, "--dscp", dscp, "--queue", queue]
+        if tc is not None:
+            args.extend(["--tc", tc])
+
         result = runner.invoke(
             config.config.commands["switch-trimming"].commands["global"],
-            ["--size", size, "--dscp", dscp, "--queue", queue], obj=db
+            args, obj=db
         )
 
         logger.debug("\n" + result.output)
@@ -79,9 +91,27 @@ class TestTrimming:
             ),
             pytest.param(
                 os.path.join(mock_state_path, "all"),
+                ["--tc", "-1"],
+                "is not in the valid range of",
+                id="tc-out-of-bound"
+            ),
+            pytest.param(
+                os.path.join(mock_state_path, "all"),
                 ["--queue", "-1"],
                 "is not in the valid range of",
                 id="queue-out-of-bound"
+            ),
+            pytest.param(
+                os.path.join(mock_state_path, "dscp_symmetric"),
+                ["--dscp", "from-tc"],
+                "asymmetric dscp resolution mode is not supported",
+                id="dscp-symmetric-only"
+            ),
+            pytest.param(
+                os.path.join(mock_state_path, "dscp_asymmetric"),
+                ["--dscp", "20"],
+                "symmetric dscp resolution mode is not supported",
+                id="dscp-asymmetric-only"
             ),
             pytest.param(
                 os.path.join(mock_state_path, "queue_static"),
@@ -97,15 +127,27 @@ class TestTrimming:
             ),
             pytest.param(
                 os.path.join(mock_state_path, "no_capabilities"),
+                ["--dscp", "from-tc"],
+                "no dscp resolution mode capabilities",
+                id="no-dscp-capabilities"
+            ),
+            pytest.param(
+                os.path.join(mock_state_path, "no_capabilities"),
                 ["--queue", "dynamic"],
                 "no queue resolution mode capabilities",
-                id="no-capabilities"
+                id="no-queue-capabilities"
             ),
             pytest.param(
                 os.path.join(mock_state_path, "not_supported"),
-                ["--queue", "2"],
+                ["--size", "200"],
                 "operation is not supported",
                 id="not-supported"
+            ),
+            pytest.param(
+                os.path.join(mock_state_path, "not_supported"),
+                [],
+                "no options are provided",
+                id="no-options"
             )
         ]
     )
@@ -129,6 +171,57 @@ class TestTrimming:
     # ---------- SHOW SWITCH-TRIMMING GLOBAL ---------- #
 
     @pytest.mark.parametrize(
+        "statedb,pattern", [
+            pytest.param(
+                os.path.join(mock_state_path, "dscp_asymmetric"),
+                "-d, --dscp from-tc",
+                id="dscp-asymmetric-only"
+            ),
+            pytest.param(
+                os.path.join(mock_state_path, "dscp_symmetric"),
+                "-d, --dscp INTEGER",
+                id="dscp-symmetric-only"
+            ),
+            pytest.param(
+                os.path.join(mock_state_path, "all"),
+                "-d, --dscp [INTEGER|from-tc]",
+                id="dscp-asymmetric-and-symmetric"
+            ),
+            pytest.param(
+                os.path.join(mock_state_path, "queue_dynamic"),
+                "-q, --queue dynamic",
+                id="queue-dynamic-only"
+            ),
+            pytest.param(
+                os.path.join(mock_state_path, "queue_static"),
+                "-q, --queue INTEGER",
+                id="queue-static-only"
+            ),
+            pytest.param(
+                os.path.join(mock_state_path, "all"),
+                "-q, --queue [INTEGER|dynamic]",
+                id="queue-dynamic-and-static"
+            )
+        ]
+    )
+    def test_show_trimming_meta(self, statedb, pattern):
+        dbconnector.dedicated_dbs["STATE_DB"] = statedb
+
+        db = Db()
+        runner = CliRunner()
+
+        result = runner.invoke(
+            config.config.commands["switch-trimming"].commands["global"],
+            ["--help"], obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+
+        assert pattern in result.output
+        assert result.exit_code == SUCCESS
+
+    @pytest.mark.parametrize(
         "cfgdb,output", [
             pytest.param(
                 os.path.join(mock_config_path, "empty"),
@@ -147,12 +240,12 @@ class TestTrimming:
                 id="partial"
             ),
             pytest.param(
-                os.path.join(mock_config_path, "queue_static"),
+                os.path.join(mock_config_path, "dscp_asymmetric"),
                 {
-                    "plain": assert_show_output.show_trim_queue_static,
-                    "json": assert_show_output.show_trim_queue_static_json
+                    "plain": assert_show_output.show_trim_dscp_asymmetric,
+                    "json": assert_show_output.show_trim_dscp_asymmetric_json
                 },
-                id="queue-static"
+                id="dscp-asymmetric"
             ),
             pytest.param(
                 os.path.join(mock_config_path, "queue_dynamic"),
