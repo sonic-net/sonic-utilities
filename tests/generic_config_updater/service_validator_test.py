@@ -277,7 +277,6 @@ class TestServiceValidator(unittest.TestCase):
             if entry["cmd"]:
                 for c in entry["cmd"].split(","):
                     os_system_calls.append({"cmd": c, "rc": 0})
-            #msg = "case failed: {}".format(str(entry))
 
             ntp_validator(entry["old"], entry["upd"], None)
 
