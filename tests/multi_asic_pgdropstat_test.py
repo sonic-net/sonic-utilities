@@ -27,10 +27,10 @@ Ingress PG dropped packets:
     PG14    PG15
 --------------  -----  -----  -----  -----  -----  -----  -----  -----  -----  -----  ------  ------  ------  ------\
   ------  ------
-     Ethernet0      0      0      0      0      0      0      0      0      0      0       0       0       0       0\
-       0       0
-     Ethernet4      0      0      0      0      0      0      0      0      0      0       0       0       0       0\
-       0       0
+     Ethernet0    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A     N/A     N/A     N/A     N/A\
+     N/A     N/A
+     Ethernet4    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A     N/A     N/A     N/A     N/A\
+     N/A     N/A
   Ethernet-BP0      0      0      0      0      0      0      0      0      0      0       0       0       0       0\
        0       0
   Ethernet-BP4      0      0      0      0      0      0      0      0      0      0       0       0       0       0\

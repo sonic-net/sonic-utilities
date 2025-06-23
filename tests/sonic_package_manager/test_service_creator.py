@@ -137,20 +137,6 @@ def test_service_creator(sonic_fs, manifest, service_creator, package_manager):
     assert not sonic_fs.exists(os.path.join(ETC_SYSTEMD_LOCATION, 'test@2.service.d'))
 
 
-def test_service_creator_with_timer_unit(sonic_fs, manifest, service_creator):
-    entry = PackageEntry('test', 'azure/sonic-test')
-    package = Package(entry, Metadata(manifest))
-    service_creator.create(package)
-
-    assert not sonic_fs.exists(os.path.join(SYSTEMD_LOCATION, 'test.timer'))
-
-    manifest['service']['delayed'] = True
-    package = Package(entry, Metadata(manifest))
-    service_creator.create(package)
-
-    assert sonic_fs.exists(os.path.join(SYSTEMD_LOCATION, 'test.timer'))
-
-
 def test_service_creator_with_debug_dump(sonic_fs, manifest, service_creator):
     entry = PackageEntry('test', 'azure/sonic-test')
     package = Package(entry, Metadata(manifest))
@@ -394,27 +380,6 @@ def test_feature_update(mock_sonic_db, manifest):
             'support_syslog_rate_limit': 'False',
         }),
     ], any_order=True)
-
-
-def test_feature_registration_with_timer(mock_sonic_db, manifest):
-    manifest['service']['delayed'] = True
-    mock_connector = Mock()
-    mock_connector.get_entry = Mock(return_value={})
-    mock_sonic_db.get_connectors = Mock(return_value=[mock_connector])
-    mock_sonic_db.get_initial_db_connector = Mock(return_value=mock_connector)
-    feature_registry = FeatureRegistry(mock_sonic_db)
-    feature_registry.register(manifest)
-    mock_connector.set_entry.assert_called_with('FEATURE', 'test', {
-        'state': 'disabled',
-        'auto_restart': 'enabled',
-        'high_mem_alert': 'disabled',
-        'set_owner': 'local',
-        'has_per_asic_scope': 'False',
-        'has_global_scope': 'True',
-        'delayed': 'True',
-        'check_up_status': 'False',
-        'support_syslog_rate_limit': 'False',
-    })
 
 
 def test_feature_registration_with_non_default_owner(mock_sonic_db, manifest):

@@ -11,6 +11,7 @@ import threading
 DEFAULT_NAMESPACE = ''
 test_path = os.path.dirname(os.path.abspath(__file__))
 mock_db_path = os.path.join(test_path, "vrf_input")
+mock_db_path_vnet = os.path.join(test_path, "vnet_input")
 
 class TestShowVrf(object):
     @classmethod
@@ -41,7 +42,7 @@ Vrf103  Ethernet4
         Loopback0
         Po0002.101
 """
-       
+
         result = runner.invoke(show.cli.commands['vrf'], [], obj=db)
         dbconnector.dedicated_dbs = {}
         assert result.exit_code == 0
@@ -65,7 +66,7 @@ Vrf103  Ethernet4
         Loopback0
         Po0002.101
 """
-       
+
         result = runner.invoke(show.cli.commands['vrf'], [], obj=db)
         dbconnector.dedicated_dbs = {}
         assert result.exit_code == 0
@@ -81,7 +82,7 @@ Vrf103  Ethernet4
         assert result.exit_code == 0
         assert 'Ethernet4' not in db.cfgdb.get_table('INTERFACE')
         assert result.output == expected_output_unbind
-        
+
         expected_output_unbind = "Interface Loopback0 IP disabled and address(es) removed due to unbinding VRF.\n"
 
         result = runner.invoke(config.config.commands["interface"].commands["vrf"].commands["unbind"], ["Loopback0"], obj=vrf_obj)
@@ -108,7 +109,7 @@ Vrf103  Ethernet4
         assert result.exit_code == 0
         assert 'PortChannel002' not in db.cfgdb.get_table('PORTCHANNEL_INTERFACE')
         assert result.output == expected_output_unbind
-        
+
         vrf_obj = {'config_db':db.cfgdb, 'namespace':DEFAULT_NAMESPACE}
         state_db = SonicV2Connector(use_unix_socket_path=True, namespace='')
         state_db.connect(state_db.STATE_DB, False)
@@ -203,7 +204,7 @@ Vrf103  Ethernet4
         Loopback0
         Po0002.101
 """
-       
+
         result = runner.invoke(show.cli.commands['vrf'], [], obj=db)
         dbconnector.dedicated_dbs = {}
         assert result.exit_code == 0
@@ -213,16 +214,16 @@ Vrf103  Ethernet4
         runner = CliRunner()
         db = Db()
         vrf_obj = {'config_db':db.cfgdb, 'namespace':db.db.namespace}
-        
+
         result = runner.invoke(config.config.commands["vrf"].commands["add"], ["Vrf100"], obj=vrf_obj)
         assert ('Vrf100') in db.cfgdb.get_table('VRF')
         assert result.exit_code == 0
-        
+
         result = runner.invoke(config.config.commands["vrf"].commands["add"], ["Vrf1"], obj=vrf_obj)
         assert "VRF Vrf1 already exists!" in result.output
         assert ('Vrf1') in db.cfgdb.get_table('VRF')
         assert result.exit_code != 0
-        
+
         expected_output_del = "VRF Vrf1 deleted and all associated IP addresses removed.\n"
         result = runner.invoke(config.config.commands["vrf"].commands["del"], ["Vrf1"], obj=vrf_obj)
         assert result.exit_code == 0
@@ -230,7 +231,7 @@ Vrf103  Ethernet4
         assert ('Vrf1') not in db.cfgdb.get_table('VRF')
 
         result = runner.invoke(config.config.commands["vrf"].commands["del"], ["Vrf200"], obj=vrf_obj)
-        assert result.exit_code != 0       
+        assert result.exit_code != 0
         assert ('Vrf200') not in db.cfgdb.get_table('VRF')
         assert "VRF Vrf200 does not exist!" in result.output
 
@@ -245,25 +246,96 @@ Error: 'vrf_name' must begin with 'Vrf' or named 'mgmt'/'management' in case of 
         assert result.exit_code != 0
         assert ('vrf-blue') not in db.cfgdb.get_table('VRF')
         assert expected_output in result.output
-        
+
         result = runner.invoke(config.config.commands["vrf"].commands["add"], ["VRF2"], obj=obj)
         assert result.exit_code != 0
         assert ('VRF2') not in db.cfgdb.get_table('VRF')
         assert expected_output in result.output
-        
+
         result = runner.invoke(config.config.commands["vrf"].commands["add"], ["VrF10"], obj=obj)
         assert result.exit_code != 0
         assert ('VrF10') not in db.cfgdb.get_table('VRF')
         assert expected_output in result.output
-        
+
         result = runner.invoke(config.config.commands["vrf"].commands["del"], ["vrf-blue"], obj=obj)
         assert result.exit_code != 0
         assert expected_output in result.output
-        
+
         result = runner.invoke(config.config.commands["vrf"].commands["del"], ["VRF2"], obj=obj)
         assert result.exit_code != 0
         assert expected_output in result.output
-        
+
         result = runner.invoke(config.config.commands["vrf"].commands["del"], ["VrF10"], obj=obj)
         assert result.exit_code != 0
         assert expected_output in result.output
+
+        expected_output = """\
+Error: 'vrf_name' length should not exceed 15 characters
+"""
+        result = runner.invoke(config.config.commands["vrf"].commands["add"], ["VrfNameTooLong!!!"], obj=obj)
+        assert result.exit_code != 0
+        assert ('VrfNameTooLong!!!') not in db.cfgdb.get_table('VRF')
+        assert expected_output in result.output
+
+
+class TestVnet(object):
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "1"
+        print("SETUP")
+
+    def test_show_vnet_brief(self):
+        from .mock_tables import dbconnector
+        jsonfile_config = os.path.join(mock_db_path_vnet, "config_db")
+        dbconnector.dedicated_dbs['CONFIG_DB'] = jsonfile_config
+        runner = CliRunner()
+
+        result = runner.invoke(show.cli.commands["vnet"].commands["brief"], [])
+        print(result.output)
+        dbconnector.dedicated_dbs = {}
+        assert result.exit_code == 0
+        assert "Vnet_2000" in result.output
+        assert "1234-56-7890-1234" in result.output
+        assert "tunnel1" in result.output
+
+    def test_show_vnet_name(self):
+        from .mock_tables import dbconnector
+        jsonfile_config = os.path.join(mock_db_path_vnet, "config_db")
+        dbconnector.dedicated_dbs['CONFIG_DB'] = jsonfile_config
+        runner = CliRunner()
+
+        result = runner.invoke(show.cli.commands["vnet"].commands["name"], ["Vnet_2000"])
+        print(result.output)
+        dbconnector.dedicated_dbs = {}
+        assert result.exit_code == 0
+        assert "Vnet_2000" in result.output
+        assert "1234-56-7890-1234" in result.output
+        assert "Ethernet4" in result.output
+        assert "Ethernet0.100" in result.output
+        assert "Vlan40" in result.output
+        assert "PortChannel0002" in result.output
+        assert "Loopback0" in result.output
+
+    def test_show_vnet_guid(self):
+        from .mock_tables import dbconnector
+        jsonfile_config = os.path.join(mock_db_path_vnet, "config_db")
+        dbconnector.dedicated_dbs['CONFIG_DB'] = jsonfile_config
+        runner = CliRunner()
+
+        result = runner.invoke(show.cli.commands["vnet"].commands["guid"], ["1234-56-7890-1234"])
+        print(result.output)
+        dbconnector.dedicated_dbs = {}
+        assert result.exit_code == 0
+        assert "Vnet_2000" in result.output
+        assert "1234-56-7890-1234" in result.output
+        assert "tunnel1" in result.output
+        assert "Ethernet4" in result.output
+        assert "Ethernet0.100" in result.output
+        assert "Vlan40" in result.output
+        assert "PortChannel0002" in result.output
+        assert "Loopback0" in result.output
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+        print("TEARDOWN")

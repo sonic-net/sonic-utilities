@@ -46,11 +46,12 @@ import time
 import signal
 import traceback
 import subprocess
+import concurrent.futures
 
 from ipaddress import ip_network
 from swsscommon import swsscommon
 from utilities_common import chassis
-from sonic_py_common import multi_asic
+from sonic_py_common import multi_asic, device_info
 from utilities_common.general import load_db_config
 
 APPL_DB_NAME = 'APPL_DB'
@@ -60,8 +61,8 @@ ASIC_KEY_PREFIX = 'SAI_OBJECT_TYPE_ROUTE_ENTRY:'
 
 SUBSCRIBE_WAIT_SECS = 1
 
-# Max of 2 minutes
-TIMEOUT_SECONDS = 120
+# Max of 2 minutes on normal devices and 5 minutes on virtual chassis
+TIMEOUT_SECONDS = 120 if not device_info.is_virtual_chassis() else 360
 
 UNIT_TESTING = 0
 
@@ -239,7 +240,7 @@ def checkout_rt_entry(k):
     :return (True, ip) or (False, None)
     """
     if k.startswith(ASIC_KEY_PREFIX):
-        e = k.lower().split("\"", -1)[3]
+        e = k.lower()[len(ASIC_KEY_PREFIX) + len('{"dest":"'):].split("\"", 1)[0]
         if not is_local(e):
             return True, e
     return False, None
@@ -328,14 +329,50 @@ def get_asicdb_routes(namespace):
     return (selector, subs, sorted(rt))
 
 
-def is_bgp_suppress_fib_pending_enabled(namespace):
+def get_appdb_sids(namespace):
     """
-    Retruns True if FIB suppression is enabled in BGP config, False otherwise
+    helper to read SIDs table from APPL-DB.
+    :return list of sorted SIDs with prefix ensured
     """
-    show_run_cmd = ['show', 'runningconfiguration', 'bgp', '-n', namespace]
+    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    print_message(syslog.LOG_DEBUG, "APPL DB connected for sids")
+    tbl = swsscommon.Table(db, 'SRV6_MY_SID_TABLE')
+    keys = tbl.getKeys()
 
-    output = subprocess.check_output(show_run_cmd, text=True)
-    return 'bgp suppress-fib-pending' in output
+    sids = sorted(keys)
+    print_message(syslog.LOG_DEBUG, json.dumps({"APPL_MY_SID_TABLE": sids}, indent=4))
+    return sids
+
+
+def get_asicdb_sids(namespace):
+    """
+    helper to read SIDs table from APPL-DB.
+    :return list of sorted SIDs with prefix ensured
+    """
+    db = swsscommon.DBConnector(ASIC_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    print_message(syslog.LOG_DEBUG, "ASIC DB connected for sids")
+    tbl = swsscommon.Table(db, ASIC_TABLE_NAME)
+    keys = tbl.getKeys()
+
+    sids = []
+    for k in keys:
+        content = k.split(":", 1)
+        if content[0] != 'SAI_OBJECT_TYPE_MY_SID_ENTRY':
+            continue
+        sid_info = json.loads(content[1])
+        sid_entry = ":".join([
+            sid_info.get("locator_block_len", "0"),
+            sid_info.get("locator_node_len", "0"),
+            sid_info.get("function_len", "0"),
+            sid_info.get("args_len", "0"),
+            sid_info.get("sid")
+        ])
+
+        sids.append(sid_entry)
+
+    sids = sorted(sids)
+    print_message(syslog.LOG_DEBUG, json.dumps({"ASIC_MY_SID_TABLE": sids}, indent=4))
+    return sids
 
 
 def is_suppress_fib_pending_enabled(namespace):
@@ -348,10 +385,18 @@ def is_suppress_fib_pending_enabled(namespace):
     return state == 'enabled'
 
 
-def get_frr_routes(namespace):
+def fetch_routes(cmd):
     """
-    Read routes from zebra through CLI command
-    :return frr routes dictionary
+    Fetch routes using the given command.
+    """
+    output = subprocess.check_output(cmd, text=True)
+    return json.loads(output)
+
+
+def get_frr_routes_parallel(namespace):
+    """
+    Read routes from zebra through CLI command for IPv4 and IPv6 in parallel
+    :return combined IPv4 and IPv6 routes dictionary.
     """
     if namespace == multi_asic.DEFAULT_NAMESPACE:
         v4_route_cmd = ['show', 'ip', 'route', 'json']
@@ -360,12 +405,18 @@ def get_frr_routes(namespace):
         v4_route_cmd = ['show', 'ip', 'route', '-n', namespace, 'json']
         v6_route_cmd = ['show', 'ipv6', 'route', '-n', namespace, 'json']
 
-    output = subprocess.check_output(v4_route_cmd, text=True)
-    routes = json.loads(output)
-    output = subprocess.check_output(v6_route_cmd, text=True)
-    routes.update(json.loads(output))
-    print_message(syslog.LOG_DEBUG, "FRR Routes: namespace={}, routes={}".format(namespace, routes))
-    return routes
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        future_v4 = executor.submit(fetch_routes, v4_route_cmd)
+        future_v6 = executor.submit(fetch_routes, v6_route_cmd)
+
+        # Wait for both results to complete
+        v4_routes = future_v4.result()
+        v6_routes = future_v6.result()
+
+    # Combine both IPv4 and IPv6 routes
+    v4_routes.update(v6_routes)
+    print_message(syslog.LOG_DEBUG, "FRR Routes: namespace={}, routes={}".format(namespace, v4_routes))
+    return v4_routes
 
 
 def get_interfaces(namespace):
@@ -566,11 +617,11 @@ def check_frr_pending_routes(namespace):
     retries = FRR_CHECK_RETRIES
     for i in range(retries):
         missed_rt = []
-        frr_routes = get_frr_routes(namespace)
+        frr_routes = get_frr_routes_parallel(namespace)
 
         for _, entries in frr_routes.items():
             for entry in entries:
-                if entry['protocol'] in ('connected', 'kernel'):
+                if entry['protocol'] in ('connected', 'kernel', 'static'):
                     continue
 
                 # TODO: Also handle VRF routes. Currently this script does not check for VRF routes so it would be incorrect for us
@@ -699,8 +750,9 @@ def filter_out_vlan_neigh_route_miss(namespace, rt_appl_miss, rt_asic_miss):
     return rt_appl_miss, rt_asic_miss
 
 
-def check_routes(namespace):
+def check_routes_for_namespace(namespace):
     """
+    Process a Single Namespace:
     The heart of this script which runs the checks.
     Read APPL-DB & ASIC-DB, the relevant tables for route checking.
     Checkout routes in ASIC-DB to match APPL-DB, discounting local &
@@ -718,6 +770,82 @@ def check_routes(namespace):
     :return (0, None) on sucess, else (-1, results) where results holds
     the unjustifiable entries.
     """
+
+    results = {}
+    adds = []
+    deletes = []
+    intf_appl_miss = []
+    rt_appl_miss = []
+    rt_asic_miss = []
+    rt_frr_miss = []
+
+    selector, subs, rt_asic = get_asicdb_routes(namespace)
+
+    rt_appl = get_appdb_routes(namespace)
+    intf_appl = get_interfaces(namespace)
+
+    # Diff APPL-DB routes & ASIC-DB routes
+    rt_appl_miss, rt_asic_miss = diff_sorted_lists(rt_appl, rt_asic)
+
+    # Check missed ASIC routes against APPL-DB INTF_TABLE
+    _, rt_asic_miss = diff_sorted_lists(intf_appl, rt_asic_miss)
+    rt_asic_miss = filter_out_default_routes(rt_asic_miss)
+    rt_asic_miss = filter_out_vnet_routes(namespace, rt_asic_miss)
+    rt_asic_miss = filter_out_standalone_tunnel_routes(namespace, rt_asic_miss)
+    rt_asic_miss = filter_out_soc_ip_routes(namespace, rt_asic_miss)
+
+    # Check APPL-DB INTF_TABLE with ASIC table route entries
+    intf_appl_miss, _ = diff_sorted_lists(intf_appl, rt_asic)
+
+    if rt_appl_miss:
+        rt_appl_miss = filter_out_local_interfaces(namespace, rt_appl_miss)
+
+    if rt_appl_miss:
+        rt_appl_miss = filter_out_voq_neigh_routes(namespace, rt_appl_miss)
+
+    # NOTE: On dualtor environment, ignore any route miss for the
+    # neighbors learned from the vlan subnet.
+    if rt_appl_miss or rt_asic_miss:
+        rt_appl_miss, rt_asic_miss = filter_out_vlan_neigh_route_miss(namespace, rt_appl_miss, rt_asic_miss)
+
+    if rt_appl_miss or rt_asic_miss:
+        # Look for subscribe updates for a second
+        adds, deletes = get_subscribe_updates(selector, subs)
+
+    # Drop all those for which SET received
+    rt_appl_miss, _ = diff_sorted_lists(rt_appl_miss, adds)
+
+    # Drop all those for which DEL received
+    rt_asic_miss, _ = diff_sorted_lists(rt_asic_miss, deletes)
+
+    if rt_appl_miss:
+        results["missed_ROUTE_TABLE_routes"] = rt_appl_miss
+
+    if intf_appl_miss:
+        results["missed_INTF_TABLE_entries"] = intf_appl_miss
+
+    if rt_asic_miss:
+        results["Unaccounted_ROUTE_ENTRY_TABLE_entries"] = rt_asic_miss
+
+    rt_frr_miss = check_frr_pending_routes(namespace)
+
+    if rt_frr_miss:
+        results["missed_FRR_routes"] = rt_frr_miss
+
+    if results:
+        if rt_frr_miss and not rt_appl_miss and not rt_asic_miss:
+            print_message(syslog.LOG_ERR, "Some routes are not set offloaded in FRR{} \
+                          but all routes in APPL_DB and ASIC_DB are in sync".format(namespace))
+            if is_suppress_fib_pending_enabled(namespace):
+                mitigate_installed_not_offloaded_frr_routes(namespace, rt_frr_miss, rt_appl)
+
+    return results, adds, deletes
+
+
+def check_routes(namespace):
+    """
+    Main function to parallelize route checks across all namespaces.
+    """
     namespace_list = []
     if namespace is not multi_asic.DEFAULT_NAMESPACE and namespace in multi_asic.get_namespace_list():
         namespace_list.append(namespace)
@@ -726,95 +854,104 @@ def check_routes(namespace):
         print_message(syslog.LOG_INFO, "Checking routes for namespaces: ", namespace_list)
 
     results = {}
-    adds = {}
-    deletes = {}
-    for namespace in namespace_list:
-        intf_appl_miss = []
-        rt_appl_miss = []
-        rt_asic_miss = []
-        rt_frr_miss = []
-        adds[namespace] = []
-        deletes[namespace] = []
+    all_adds = {}
+    all_deletes = {}
 
-        selector, subs, rt_asic = get_asicdb_routes(namespace)
+    # Use ThreadPoolExecutor to parallelize the check for each namespace
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = {executor.submit(check_routes_for_namespace, ns): ns for ns in namespace_list}
 
-        rt_appl = get_appdb_routes(namespace)
-        intf_appl = get_interfaces(namespace)
-
-        # Diff APPL-DB routes & ASIC-DB routes
-        rt_appl_miss, rt_asic_miss = diff_sorted_lists(rt_appl, rt_asic)
-
-        # Check missed ASIC routes against APPL-DB INTF_TABLE
-        _, rt_asic_miss = diff_sorted_lists(intf_appl, rt_asic_miss)
-        rt_asic_miss = filter_out_default_routes(rt_asic_miss)
-        rt_asic_miss = filter_out_vnet_routes(namespace, rt_asic_miss)
-        rt_asic_miss = filter_out_standalone_tunnel_routes(namespace, rt_asic_miss)
-        rt_asic_miss = filter_out_soc_ip_routes(namespace, rt_asic_miss)
-
-
-        # Check APPL-DB INTF_TABLE with ASIC table route entries
-        intf_appl_miss, _ = diff_sorted_lists(intf_appl, rt_asic)
-
-        if rt_appl_miss:
-            rt_appl_miss = filter_out_local_interfaces(namespace, rt_appl_miss)
-
-        if rt_appl_miss:
-            rt_appl_miss = filter_out_voq_neigh_routes(namespace, rt_appl_miss)
-
-        # NOTE: On dualtor environment, ignore any route miss for the
-        # neighbors learned from the vlan subnet.
-        if rt_appl_miss or rt_asic_miss:
-            rt_appl_miss, rt_asic_miss = filter_out_vlan_neigh_route_miss(namespace, rt_appl_miss, rt_asic_miss)
-
-        if rt_appl_miss or rt_asic_miss:
-            # Look for subscribe updates for a second
-            adds[namespace], deletes[namespace] = get_subscribe_updates(selector, subs)
-
-        # Drop all those for which SET received
-        rt_appl_miss, _ = diff_sorted_lists(rt_appl_miss, adds[namespace])
-
-        # Drop all those for which DEL received
-        rt_asic_miss, _ = diff_sorted_lists(rt_asic_miss, deletes[namespace])
-
-        if rt_appl_miss:
-            if namespace not in results:
-                results[namespace] = {}
-            results[namespace]["missed_ROUTE_TABLE_routes"] = rt_appl_miss
-
-        if intf_appl_miss:
-            if namespace not in results:
-                results[namespace] = {}
-            results[namespace]["missed_INTF_TABLE_entries"] = intf_appl_miss
-
-        if rt_asic_miss:
-            if namespace not in results:
-                results[namespace] = {}
-            results[namespace]["Unaccounted_ROUTE_ENTRY_TABLE_entries"] = rt_asic_miss
-
-        if is_bgp_suppress_fib_pending_enabled(namespace):
-            rt_frr_miss = check_frr_pending_routes(namespace)
-
-            if rt_frr_miss:
-                if namespace not in results:
-                    results[namespace] = {}
-                results[namespace]["missed_FRR_routes"] = rt_frr_miss
-
-            if results:
-                if rt_frr_miss and not rt_appl_miss and not rt_asic_miss:
-                    print_message(syslog.LOG_ERR, "Some routes are not set offloaded in FRR{} but all "
-                                  "routes in APPL_DB and ASIC_DB are in sync".format(namespace))
-                    if is_suppress_fib_pending_enabled(namespace):
-                        mitigate_installed_not_offloaded_frr_routes(namespace, rt_frr_miss, rt_appl)
+        for future in concurrent.futures.as_completed(futures):
+            ns = futures[future]
+            all_adds[ns] = []
+            all_deletes[ns] = []
+            try:
+                result, adds, deletes = future.result()
+                if result:
+                    results[ns] = result
+                    all_adds[ns] = adds
+                    all_deletes[ns] = deletes
+            except Exception as e:
+                print_message(syslog.LOG_ERR, "Error processing namespace {}: {}".format(ns, e))
+                return -1, results
 
     if results:
         print_message(syslog.LOG_WARNING, "Failure results: {",  json.dumps(results, indent=4), "}")
         print_message(syslog.LOG_WARNING, "Failed. Look at reported mismatches above")
-        print_message(syslog.LOG_WARNING, "add: ", json.dumps(adds, indent=4))
-        print_message(syslog.LOG_WARNING, "del: ", json.dumps(deletes, indent=4))
+        print_message(syslog.LOG_WARNING, "add: ", json.dumps(all_adds, indent=4))
+        print_message(syslog.LOG_WARNING, "del: ", json.dumps(all_deletes, indent=4))
         return -1, results
     else:
         print_message(syslog.LOG_INFO, "All good!")
         return 0, None
+
+
+def check_sids_for_namespace(namespace):
+    """
+    Process a Single Namespace for SIDs consistency check:
+    Read APPL-DB & ASIC-DB, the relevant tables for SID checking.
+    Checkout SIDs in ASIC-DB to match APPL-DB. Compared to check_routes,
+    this function does not wait for subscriber updates, as SIDs are not
+    expected to change frequently.
+
+    :return (0, None) on sucess, else (-1, results) where results holds
+    the unjustifiable entries.
+    """
+
+    results = {}
+    sid_appl_miss = []
+    sid_asic_miss = []
+
+    sids_asic = get_asicdb_sids(namespace)
+
+    sids_appl = get_appdb_sids(namespace)
+
+    # Diff APPL-DB SIDs & ASIC-DB SIDs
+    sid_appl_miss, sid_asic_miss = diff_sorted_lists(sids_appl, sids_asic)
+
+    if sid_appl_miss:
+        results["missed_APPL_MY_SID_TABLE_entries"] = sid_appl_miss
+
+    if sid_asic_miss:
+        results["missed_ASIC_MY_SID_TABLE_entries"] = sid_asic_miss
+
+    return results
+
+
+def check_sids(namespace):
+    """
+    Main function to parallelize SID checks across all namespaces.
+    """
+    namespace_list = []
+    if namespace is not multi_asic.DEFAULT_NAMESPACE and namespace in multi_asic.get_namespace_list():
+        namespace_list.append(namespace)
+    else:
+        namespace_list = multi_asic.get_namespace_list()
+        print_message(syslog.LOG_INFO, "Checking SIDs for namespaces: ", namespace_list)
+
+    results = {}
+
+    # Use ThreadPoolExecutor to parallelize the check for each namespace
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = {executor.submit(check_sids_for_namespace, ns): ns for ns in namespace_list}
+
+        for future in concurrent.futures.as_completed(futures):
+            ns = futures[future]
+            try:
+                result = future.result()
+                if result:
+                    results[ns] = result
+            except Exception as e:
+                print_message(syslog.LOG_ERR, "Error processing namespace {}: {}".format(ns, e))
+                return -1, results
+
+    if results:
+        print_message(syslog.LOG_WARNING, "SIDs Check Failure results: {",  json.dumps(results, indent=4), "}")
+        return -1, results
+    else:
+        print_message(syslog.LOG_INFO, "All good!")
+        return 0, None
+
 
 def main():
     """
@@ -861,9 +998,22 @@ def main():
 
     while True:
         signal.alarm(TIMEOUT_SECONDS)
-        ret, res= check_routes(namespace)
-        print_message(syslog.LOG_DEBUG, "ret={}, res={}".format(ret, res))
+        ret1, res1 = check_routes(namespace)
+        print_message(syslog.LOG_DEBUG, "check_routes: ret={}, res={}".format(ret1, res1))
+        ret2, res2 = check_sids(namespace)
+        print_message(syslog.LOG_DEBUG, "check_sids: ret={}, res={}".format(ret2, res2))
         signal.alarm(0)
+        if ret1 < 0 or ret2 < 0:
+            ret = -1
+        else:
+            ret = 0
+
+        if res1 is not None or res2 is not None:
+            res = dict()
+            res.update(res1 if res1 else {})
+            res.update(res2 if res2 else {})
+        else:
+            res = None
 
         if interval:
             time.sleep(interval)
@@ -871,7 +1021,6 @@ def main():
                 return ret, res
         else:
             return ret, res
-
 
 
 if __name__ == "__main__":

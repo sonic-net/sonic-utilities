@@ -58,7 +58,7 @@ class DBMigrator():
                      none-zero values.
               build: sequentially increase within a minor version domain.
         """
-        self.CURRENT_VERSION = 'version_202411_01'
+        self.CURRENT_VERSION = 'version_202505_01'
 
         self.TABLE_NAME      = 'VERSIONS'
         self.TABLE_KEY       = 'DATABASE'
@@ -127,7 +127,7 @@ class DBMigrator():
                             config_namespace = "localhost"
                         else:
                             config_namespace = ns
-                        golden_config_data = golden_data[config_namespace]
+                        golden_config_data = golden_data.get(config_namespace, None)
         except Exception as e:
             log.log_error('Caught exception while trying to load golden config: ' + str(e))
             pass
@@ -509,6 +509,18 @@ class DBMigrator():
                 elif value['autoneg'] == '0':
                     self.configDB.set(self.configDB.CONFIG_DB, '{}|{}'.format(table_name, key), 'autoneg', 'off')
 
+    def migrate_config_db_port_table_for_dhcp_rate_limit(self):
+        port_table_name = 'PORT'
+        port_table = self.configDB.get_table(port_table_name)
+
+        for p_key, p_value in port_table.items():
+            if 'dhcp_rate_limit' in p_value:
+                self.configDB.set(self.configDB.CONFIG_DB, '{}|{}'.format(port_table_name, p_key),
+                                  'dhcp_rate_limit', p_value['dhcp_rate_limit'])
+            else:
+                self.configDB.set(self.configDB.CONFIG_DB, '{}|{}'.format(port_table_name, p_key),
+                                  'dhcp_rate_limit', '300')
+
     def migrate_qos_db_fieldval_reference_remove(self, table_list, db, db_num, db_delimeter):
         for pair in table_list:
             table_name, fields_list = pair
@@ -663,6 +675,26 @@ class DBMigrator():
             metadata['synchronous_mode'] = device_metadata_data.get("synchronous_mode")
             self.configDB.set_entry('DEVICE_METADATA', 'localhost', metadata)
 
+    def migrate_ipinip_tunnel(self):
+        """Migrate TUNNEL_DECAP_TABLE to add decap terms with TUNNEL_DECAP_TERM_TABLE."""
+        tunnel_decap_table = self.appDB.get_table('TUNNEL_DECAP_TABLE')
+        app_db_separator = self.appDB.get_db_separator(self.appDB.APPL_DB)
+        for key, attrs in tunnel_decap_table.items():
+            dst_ip = attrs.pop("dst_ip", None)
+            src_ip = attrs.pop("src_ip", None)
+            if dst_ip:
+                dst_ips = dst_ip.split(",")
+                for dip in dst_ips:
+                    decap_term_table_key = app_db_separator.join(["TUNNEL_DECAP_TERM_TABLE", key, dip])
+                    if src_ip:
+                        self.appDB.set(self.appDB.APPL_DB, decap_term_table_key, "src_ip", src_ip)
+                        self.appDB.set(self.appDB.APPL_DB, decap_term_table_key, "term_type", "P2P")
+                    else:
+                        self.appDB.set(self.appDB.APPL_DB, decap_term_table_key, "term_type", "P2MP")
+
+            if dst_ip or src_ip:
+                self.appDB.set_entry("TUNNEL_DECAP_TABLE", key, attrs)
+
     def migrate_port_qos_map_global(self):
         """
         Generate dscp_to_tc_map for switch.
@@ -777,6 +809,18 @@ class DBMigrator():
             if delay_status is None or delay_status == 'false':
                 flex_counter['FLEX_COUNTER_DELAY_STATUS'] = 'true'
                 self.configDB.mod_entry('FLEX_COUNTER_TABLE', obj, flex_counter)
+
+    def migrate_flex_counter_delay_status_removal(self):
+        """
+        Remove FLEX_COUNTER_DELAY_STATUS field.
+        """
+
+        flex_counter_objects = self.configDB.get_keys('FLEX_COUNTER_TABLE')
+        for obj in flex_counter_objects:
+            flex_counter = self.configDB.get_entry('FLEX_COUNTER_TABLE', obj)
+            flex_counter.pop('FLEX_COUNTER_DELAY_STATUS', None)
+            self.configDB.set_entry('FLEX_COUNTER_TABLE', obj, flex_counter)
+
 
     def migrate_sflow_table(self):
         """
@@ -1043,6 +1087,7 @@ class DBMigrator():
         """
         log.log_info('Handling version_3_0_0')
         self.migrate_config_db_port_table_for_auto_neg()
+        self.migrate_config_db_port_table_for_dhcp_rate_limit()
         self.set_version('version_3_0_1')
         return 'version_3_0_1'
 
@@ -1245,19 +1290,45 @@ class DBMigrator():
         Version 202405_01.
         """
         log.log_info('Handling version_202405_01')
+        self.set_version('version_202405_02')
+        return 'version_202405_02'
 
-        if self.configDB.keys(self.configDB.CONFIG_DB, "SNMP|CONTACT"):
-            self.migrate_config_db_snmp_contact()
-
+    def version_202405_02(self):
+        """
+        Version 202405_02.
+        """
+        log.log_info('Handling version_202405_02')
+        self.migrate_ipinip_tunnel()
         self.set_version('version_202411_01')
         return 'version_202411_01'
 
     def version_202411_01(self):
         """
-        Version 202411_01, this version should be the final version for
-        master branch until 202411 branch is created.
+        Version 202411_01.
         """
         log.log_info('Handling version_202411_01')
+        self.set_version('version_202411_02')
+        return 'version_202411_02'
+
+    def version_202411_02(self):
+        """
+        Version 202411_02.
+        """
+        log.log_info('Handling version_202411_02')
+        self.set_version('version_202505_01')
+        return 'version_202505_01'
+
+    def version_202505_01(self):
+        """
+        Version 202505_01, this version should be the final version for
+        master branch until 202505 branch is created.
+        """
+        log.log_info('Handling version_202505_01')
+        
+        if self.configDB.keys(self.configDB.CONFIG_DB, "SNMP|CONTACT"):
+            self.migrate_config_db_snmp_contact()
+
+        self.migrate_flex_counter_delay_status_removal()
         return None
 
     def get_version(self):

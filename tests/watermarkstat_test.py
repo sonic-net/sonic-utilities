@@ -1,11 +1,9 @@
 import os
 import sys
 import pytest
-
 import show.main as show
 from click.testing import CliRunner
-
-from .wm_input.wm_test_vectors import *
+from wm_input.wm_test_vectors import testData
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
@@ -84,12 +82,14 @@ class TestWatermarkstat(object):
             else:
                 exec_cmd = show.cli.commands[input['cmd'][0]].commands[input['cmd'][1]]
 
-            result = runner.invoke(exec_cmd, [])
+            args = [] if 'args' not in input else input['args']
+            result = runner.invoke(exec_cmd, args)
 
             print(result.exit_code)
             print(result.output)
 
-            assert result.exit_code == 0
+            expected_code = 0 if 'rc' not in input else input['rc']
+            assert result.exit_code == expected_code
             assert result.output == input['rc_output']
 
     @classmethod

@@ -17,6 +17,7 @@ import time
 import itertools
 import copy
 import tempfile
+import sonic_yang
 
 from jsonpatch import JsonPatchConflict
 from jsonpointer import JsonPointerException
@@ -33,7 +34,8 @@ from sonic_py_common.interface import get_interface_table_name, get_port_table_n
 from sonic_yang_cfg_generator import SonicYangCfgDbGenerator
 from utilities_common import util_base
 from swsscommon import swsscommon
-from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector, ConfigDBPipeConnector
+from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector, ConfigDBPipeConnector, \
+                                isInterfaceNameValid, IFACE_NAME_MAX_LEN
 from utilities_common.db import Db
 from utilities_common.intf_filter import parse_interface_in_filter
 from utilities_common import bgp_util
@@ -42,6 +44,7 @@ from utilities_common.helper import get_port_pbh_binding, get_port_acl_binding, 
 from utilities_common.general import load_db_config, load_module_from_source
 from .validated_config_db_connector import ValidatedConfigDBConnector
 import utilities_common.multi_asic as multi_asic_util
+from utilities_common.flock import try_lock
 
 from .utils import log
 
@@ -58,13 +61,13 @@ from . import nat
 from . import vlan
 from . import vxlan
 from . import plugins
-from .config_mgmt import ConfigMgmtDPB, ConfigMgmt
+from .config_mgmt import ConfigMgmtDPB, ConfigMgmt, YANG_DIR
 from . import mclag
 from . import syslog
 from . import switchport
 from . import dns
 from . import bgp_cli
-
+from . import stp
 
 # mock masic APIs for unit test
 try:
@@ -104,7 +107,6 @@ CFG_LOOPBACK_NO="<0-999>"
 
 CFG_PORTCHANNEL_PREFIX = "PortChannel"
 CFG_PORTCHANNEL_PREFIX_LEN = 11
-CFG_PORTCHANNEL_NAME_TOTAL_LEN_MAX = 15
 CFG_PORTCHANNEL_MAX_VAL = 9999
 CFG_PORTCHANNEL_NO="<0-9999>"
 
@@ -116,6 +118,9 @@ PORT_MODE = "switchport_mode"
 
 DOM_CONFIG_SUPPORTED_SUBPORTS = ['0', '1']
 
+VNET_NAME_MAX_LEN = 15
+GUID_MAX_LEN = 255
+
 asic_type = None
 
 DSCP_RANGE = click.IntRange(min=0, max=63)
@@ -123,6 +128,12 @@ TTL_RANGE = click.IntRange(min=0, max=255)
 QUEUE_RANGE = click.IntRange(min=0, max=255)
 GRE_TYPE_RANGE = click.IntRange(min=0, max=65535)
 ADHOC_VALIDATION = True
+
+if os.environ.get("UTILITIES_UNIT_TESTING", "0") in ("1", "2"):
+    temp_system_reload_lockfile = tempfile.NamedTemporaryFile()
+    SYSTEM_RELOAD_LOCK = temp_system_reload_lockfile.name
+else:
+    SYSTEM_RELOAD_LOCK = "/etc/sonic/reload.lock"
 
 # Load sonic-cfggen from source since /usr/local/bin/sonic-cfggen does not have .py extension.
 sonic_cfggen = load_module_from_source('sonic_cfggen', '/usr/local/bin/sonic-cfggen')
@@ -410,6 +421,51 @@ def is_vrf_exists(config_db, vrf_name):
 
     return False
 
+
+def is_vnet_exists(config_db, vnet_name):
+    """Check if VNET exists
+    """
+    keys = config_db.get_keys("VNET")
+    if keys:
+        if vnet_name in keys:
+            return True
+
+    return False
+
+
+def is_specific_vnet_route_exists(config_db, vnet_name, prefix):
+    """Check if VNET ROUTE WITH PREFIX exists
+    """
+    keys = config_db.get_keys("VNET_ROUTE_TUNNEL")
+    if keys:
+        for k in keys:
+            if k[0] == vnet_name and k[1] == prefix:
+                return True
+
+    return False
+
+
+def is_vnet_route_exists(config_db, vnet_name):
+    """Check if VNET ROUTE exists
+    """
+    keys = config_db.get_keys("VNET_ROUTE_TUNNEL")
+    if keys:
+        for k in keys:
+            if k[0] == vnet_name:
+                return True
+
+    return False
+
+
+def vnet_name_is_valid(ctx, vnet_name):
+    """Check if the vnet name is valid
+    """
+    if not vnet_name.startswith("Vnet"):
+        ctx.fail("'vnet_name' must begin with 'Vnet'.")
+    if len(vnet_name) > VNET_NAME_MAX_LEN:
+        ctx.fail("'vnet_name' length should not exceed {} characters".format(VNET_NAME_MAX_LEN))
+
+
 def is_interface_bind_to_vrf(config_db, interface_name):
     """Get interface if bind to vrf or not
     """
@@ -417,7 +473,7 @@ def is_interface_bind_to_vrf(config_db, interface_name):
     if table_name == "":
         return False
     entry = config_db.get_entry(table_name, interface_name)
-    if entry and entry.get("vrf_name"):
+    if entry and (entry.get("vrf_name") or entry.get("vnet_name")):
         return True
     return False
 
@@ -431,7 +487,7 @@ def is_portchannel_name_valid(portchannel_name):
     if (portchannel_name[CFG_PORTCHANNEL_PREFIX_LEN:].isdigit() is False or
           int(portchannel_name[CFG_PORTCHANNEL_PREFIX_LEN:]) > CFG_PORTCHANNEL_MAX_VAL) :
         return False
-    if len(portchannel_name) > CFG_PORTCHANNEL_NAME_TOTAL_LEN_MAX:
+    if not isInterfaceNameValid(portchannel_name):
         return False
     return True
 
@@ -496,7 +552,7 @@ def get_port_namespace(port):
 def del_interface_bind_to_vrf(config_db, vrf_name):
     """del interface bind to vrf
     """
-    tables = ['INTERFACE', 'PORTCHANNEL_INTERFACE', 'VLAN_INTERFACE', 'LOOPBACK_INTERFACE']
+    tables = ['INTERFACE', 'PORTCHANNEL_INTERFACE', 'VLAN_INTERFACE', 'LOOPBACK_INTERFACE', 'VLAN_SUB_INTERFACE']
     for table_name in tables:
         interface_dict = config_db.get_table(table_name)
         if interface_dict:
@@ -506,6 +562,35 @@ def del_interface_bind_to_vrf(config_db, vrf_name):
                     for ipaddress in interface_ipaddresses:
                         remove_router_interface_ip_address(config_db, interface_name, ipaddress)
                     config_db.set_entry(table_name, interface_name, None)
+
+
+def del_interface_bind_to_vnet(config_db, vnet_name):
+    """del interface bind to vnet
+    """
+    tables = ['INTERFACE', 'PORTCHANNEL_INTERFACE', 'VLAN_INTERFACE', 'LOOPBACK_INTERFACE', 'VLAN_SUB_INTERFACE']
+    for table_name in tables:
+        interface_dict = config_db.get_table(table_name)
+        if interface_dict:
+            for interface_name in interface_dict:
+                if ('vnet_name' in interface_dict[interface_name] and
+                        vnet_name == interface_dict[interface_name]['vnet_name']):
+                    interface_ipaddresses = get_interface_ipaddresses(config_db, interface_name)
+                    for ip in interface_ipaddresses:
+                        remove_router_interface_ip_address(config_db, interface_name, ip)
+                    config_db.set_entry(table_name, interface_name, None)
+
+
+def del_route_bind_to_vnet(config_db, vnet_name):
+    """del all routes bind to vnet
+    """
+    tables = ['VNET_ROUTE_TUNNEL', 'VNET_ROUTE']
+    for table_name in tables:
+        table_dict = config_db.get_table(table_name)
+        if table_dict:
+            for key in table_dict:
+                if key[0] == vnet_name:
+                    config_db.set_entry(table_name, key, None)
+
 
 def set_interface_naming_mode(mode):
     """Modify SONIC_CLI_IFACE_MODE env variable in user .bashrc
@@ -770,6 +855,8 @@ def storm_control_delete_entry(port_name, storm_type):
 
 
 def _wait_until_clear(tables, interval=0.5, timeout=30, verbose=False):
+    if timeout == 0:
+        return True
     start = time.time()
     empty = False
     app_db = SonicV2Connector(host='127.0.0.1')
@@ -785,12 +872,14 @@ def _wait_until_clear(tables, interval=0.5, timeout=30, verbose=False):
                     click.echo("Some entries matching {} still exist: {}".format(table, keys[0]))
                 time.sleep(interval)
         empty = (non_empty_table_count == 0)
+
     if not empty:
         click.echo("Operation not completed successfully, please save and reload configuration.")
     return empty
 
 
 def _clear_qos(delay=False, verbose=False):
+    status = True
     QOS_TABLE_NAMES = [
             'PORT_QOS_MAP',
             'QUEUE',
@@ -830,7 +919,8 @@ def _clear_qos(delay=False, verbose=False):
         device_metadata = config_db.get_entry('DEVICE_METADATA', 'localhost')
         # Traditional buffer manager do not remove buffer tables in any case, no need to wait.
         timeout = 120 if device_metadata and device_metadata.get('buffer_model') == 'dynamic' else 0
-        _wait_until_clear(["BUFFER_*_TABLE:*", "BUFFER_*_SET"], interval=0.5, timeout=timeout, verbose=verbose)
+        status = _wait_until_clear(["BUFFER_*_TABLE:*", "BUFFER_*_SET"], interval=0.5, timeout=timeout, verbose=verbose)
+    return status
 
 def _get_sonic_generated_services(num_asic):
     if not os.path.isfile(SONIC_GENERATED_SERVICE_PATH):
@@ -881,8 +971,9 @@ def _get_disabled_services_list(config_db):
 def _stop_services():
     try:
         subprocess.check_call(['sudo', 'monit', 'status'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        click.echo("Disabling container monitoring ...")
+        click.echo("Disabling container and routeCheck monitoring ...")
         clicommon.run_command(['sudo', 'monit', 'unmonitor', 'container_checker'])
+        clicommon.run_command(['sudo', 'monit', 'unmonitor', 'routeCheck'])
     except subprocess.CalledProcessError as err:
         pass
 
@@ -940,14 +1031,14 @@ def _restart_services():
     # If load_minigraph exit before eth0 restart, commands after load_minigraph may failed
     wait_service_restart_finish('interfaces-config', last_interface_config_timestamp)
     wait_service_restart_finish('networking', last_networking_timestamp)
-
     try:
         subprocess.check_call(['sudo', 'monit', 'status'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-        click.echo("Enabling container monitoring ...")
+        click.echo("Enabling container and routeCheck monitoring ...")
+        clicommon.run_command(['sudo', 'monit', 'monitor', 'routeCheck'])
         clicommon.run_command(['sudo', 'monit', 'monitor', 'container_checker'])
+        time.sleep(1)
     except subprocess.CalledProcessError as err:
         pass
-
     # Reload Monit configuration to pick up new hostname in case it changed
     click.echo("Reloading Monit configuration ...")
     clicommon.run_command(['sudo', 'monit', 'reload'])
@@ -1072,8 +1163,9 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
     return True
 
 def cli_sroute_to_config(ctx, command_str, strict_nh = True):
-    if len(command_str) < 2 or len(command_str) > 9:
-        ctx.fail("argument is not in pattern prefix [vrf <vrf_name>] <A.B.C.D/M> nexthop <[vrf <vrf_name>] <A.B.C.D>>|<dev <dev_name>>!")
+    if len(command_str) < 2 or len(command_str) > 10:
+        ctx.fail("argument is not in pattern prefix [vrf <vrf_name>] <A.B.C.D/M> nexthop [vrf <vrf_name>] \
+                 <A.B.C.D>|<dev <dev_name>>|<A.B.C.D dev <dev_name>>!")
     if "prefix" not in command_str:
         ctx.fail("argument is incomplete, prefix not found!")
     if "nexthop" not in command_str and strict_nh:
@@ -1106,35 +1198,50 @@ def cli_sroute_to_config(ctx, command_str, strict_nh = True):
             ctx.fail("prefix is not in pattern!")
 
     if nexthop_str:
-        if 'nexthop' in nexthop_str and 'vrf' in nexthop_str:
-            # nexthop_str: ['nexthop', 'vrf', Vrf-name, ip]
-            config_entry["nexthop"] = nexthop_str[3]
-            if not is_vrf_exists(config_db, nexthop_str[2]):
-                ctx.fail("VRF %s does not exist!"%(nexthop_str[2]))
+        idx = 1
+        if 'vrf' in nexthop_str:
+            # extract nexthop vrf
+            for vrf in nexthop_str[2].split(','):
+                if not is_vrf_exists(config_db, vrf):
+                    ctx.fail("Nexthop VRF %s does not exist!" % (vrf))
             config_entry["nexthop-vrf"] = nexthop_str[2]
-        elif 'nexthop' in nexthop_str and 'dev' in nexthop_str:
-            # nexthop_str: ['nexthop', 'dev', ifname]
-            config_entry["ifname"] = nexthop_str[2]
-        elif 'nexthop' in nexthop_str:
-            # nexthop_str: ['nexthop', ip]
-            config_entry["nexthop"] = nexthop_str[1]
+            idx = 3
+
+        if nexthop_str[idx] == 'dev':
+            # no nexthop IPs but interface name
+            config_entry["ifname"] = nexthop_str[idx + 1]
         else:
-            ctx.fail("nexthop is not in pattern!")
+            # nexthop IPs present, extract them first
+            config_entry["nexthop"] = nexthop_str[idx]
+            if len(nexthop_str) > idx + 1:
+                if nexthop_str[idx + 1] == 'dev' and len(nexthop_str) > idx + 2:
+                    # extract interface name
+                    config_entry["ifname"] = nexthop_str[idx + 2]
+                else:
+                    ctx.fail("nexthop is not in pattern!")
 
     try:
         ipaddress.ip_network(ip_prefix)
         if 'nexthop' in config_entry:
             nh_list = config_entry['nexthop'].split(',')
             for nh in nh_list:
-                # Nexthop to portchannel
-                if nh.startswith('PortChannel'):
-                    config_db = ctx.obj['config_db']
-                    if not nh in config_db.get_keys('PORTCHANNEL'):
-                        ctx.fail("portchannel does not exist.")
-                else:
-                    ipaddress.ip_address(nh)
+                ipaddress.ip_address(nh)
     except ValueError:
         ctx.fail("ip address is not valid.")
+
+    if 'ifname' in config_entry:
+        ifname_list = config_entry['ifname'].split(',')
+        for ifname in ifname_list:
+            if ifname.startswith('PortChannel'):
+                if ifname not in config_db.get_keys('PORTCHANNEL'):
+                    ctx.fail("portchannel does not exist.")
+            elif ifname.startswith("Vlan"):
+                if ifname not in config_db.get_keys('VLAN_INTERFACE'):
+                    ctx.fail("vlan interface does not exist.")
+            elif ifname not in config_db.get_keys('INTERFACE') and \
+                ifname not in config_db.get_keys('VLAN_SUB_INTERFACE') and \
+                    ifname != 'null':
+                ctx.fail("interface {} does not exist.".format(ifname))
 
     if not vrf_name == "":
         key = vrf_name + "|" + ip_prefix
@@ -1313,6 +1420,18 @@ def flush_configdb(namespace=DEFAULT_NAMESPACE):
     return client, config_db
 
 
+def delete_transceiver_tables():
+    tables = ["TRANSCEIVER_INFO", "TRANSCEIVER_STATUS", "TRANSCEIVER_PM",
+              "TRANSCEIVER_FIRMWARE_INFO", "TRANSCEIVER_DOM_SENSOR", "TRANSCEIVER_DOM_THRESHOLD"]
+    state_db_del_pattern = "|*"
+
+    # delete TRANSCEIVER tables from State DB
+    state_db = SonicV2Connector(use_unix_socket_path=True)
+    state_db.connect(state_db.STATE_DB, False)
+    for table in tables:
+        state_db.delete_all_by_pattern(state_db.STATE_DB, table + state_db_del_pattern)
+
+
 def migrate_db_to_lastest(namespace=DEFAULT_NAMESPACE):
     # Migrate DB contents to latest version
     db_migrator = '/usr/local/bin/db_migrator.py'
@@ -1364,6 +1483,37 @@ def multiasic_write_to_db(filename, load_sysinfo):
         migrate_db_to_lastest(ns)
 
 
+def config_file_yang_validation(filename):
+    config = read_json_file(filename)
+
+    # Check if the config is not a dictionary
+    if not isinstance(config, dict):
+        return False
+
+    sy = sonic_yang.SonicYang(YANG_DIR)
+    sy.loadYangModel()
+    asic_list = [HOST_NAMESPACE]
+    if multi_asic.is_multi_asic():
+        asic_list.extend(multi_asic.get_namespace_list())
+    for scope in asic_list:
+        config_to_check = config.get(scope) if multi_asic.is_multi_asic() else config
+        if config_to_check:
+            try:
+                sy.loadData(configdbJson=config_to_check)
+                sy.validate_data_tree()
+            except sonic_yang.SonicYangException as e:
+                click.secho("{} fails YANG validation! Error: {}".format(filename, str(e)),
+                            fg='magenta')
+                raise click.Abort()
+
+        sy.tablesWithOutYang.pop('bgpraw', None)
+        if len(sy.tablesWithOutYang):
+            click.secho("Config tables are missing yang models: {}".format(str(sy.tablesWithOutYang.keys())),
+                        fg='magenta')
+            raise click.Abort()
+    return True
+
+
 # This is our main entrypoint - the main 'config' command
 @click.group(cls=clicommon.AbbreviationGroup, context_settings=CONTEXT_SETTINGS)
 @click.pass_context
@@ -1413,7 +1563,10 @@ config.add_command(nat.nat)
 config.add_command(vlan.vlan)
 config.add_command(vxlan.vxlan)
 
-#add mclag commands
+# add stp commands
+config.add_command(stp.spanning_tree)
+
+# add mclag commands
 config.add_command(mclag.mclag)
 config.add_command(mclag.mclag_member)
 config.add_command(mclag.mclag_unique_ip)
@@ -1735,12 +1888,14 @@ def delete_checkpoint(ctx, checkpoint_name, verbose):
         ctx.fail(ex)
 
 @config.command('list-checkpoints')
+@click.option('-t', '--time', is_flag=True, default=False,
+              help='Add extra last modified time information for each checkpoint')
 @click.option('-v', '--verbose', is_flag=True, default=False, help='print additional details of what the operation is doing')
 @click.pass_context
-def list_checkpoints(ctx, verbose):
+def list_checkpoints(ctx, time, verbose):
     """List the config checkpoints available."""
     try:
-        checkpoints_list = GenericUpdater().list_checkpoints(verbose)
+        checkpoints_list = GenericUpdater().list_checkpoints(time, verbose)
         formatted_output = json.dumps(checkpoints_list, indent=4)
         click.echo(formatted_output)
     except Exception as ex:
@@ -1753,9 +1908,11 @@ def list_checkpoints(ctx, verbose):
 @click.option('-n', '--no_service_restart', default=False, is_flag=True, help='Do not restart docker services')
 @click.option('-f', '--force', default=False, is_flag=True, help='Force config reload without system checks')
 @click.option('-t', '--file_format', default='config_db',type=click.Choice(['config_yang', 'config_db']),show_default=True,help='specify the file format')
+@click.option('-b', '--bypass-lock', default=False, is_flag=True, help='Do reload without acquiring lock')
 @click.argument('filename', required=False)
 @clicommon.pass_db
-def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_format):
+@try_lock(SYSTEM_RELOAD_LOCK, timeout=0)
+def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_format, bypass_lock):
     """Clear current configuration and import a previous saved config DB dump file.
        <filename> : Names of configuration file(s) to load, separated by comma with no spaces in between
     """
@@ -1791,7 +1948,8 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
     multiasic_single_file_mode = False
     # If the user give the filename[s], extract the file names.
     if filename is not None:
-        cfg_files = filename.split(',')
+        # strip whitespaces and filter out empty strings
+        cfg_files = [s.strip() for s in filename.split(',') if s.strip()]
 
         if len(cfg_files) == 1 and multi_asic.is_multi_asic():
             multiasic_validate_single_file(cfg_files[0])
@@ -1799,6 +1957,14 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
         elif len(cfg_files) != num_cfg_file:
             click.echo("Input {} config file(s) separated by comma for multiple files ".format(num_cfg_file))
             return
+
+    if filename is not None and filename != "/dev/stdin":
+        if multi_asic.is_multi_asic():
+            for cfg_file in cfg_files:
+                if cfg_file is not None:
+                    config_file_yang_validation(cfg_file)
+        else:
+            config_file_yang_validation(filename)
 
     #Stop services before config push
     if not no_service_restart:
@@ -1867,6 +2033,7 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
                 cfg_hwsku = output.strip()
 
             client, config_db = flush_configdb(namespace)
+            delete_transceiver_tables()
 
             if load_sysinfo:
                 if namespace is DEFAULT_NAMESPACE:
@@ -1968,8 +2135,10 @@ def load_mgmt_config(filename):
 @click.option('-t', '--traffic_shift_away', default=False, is_flag=True, help='Keep device in maintenance with TSA')
 @click.option('-o', '--override_config', default=False, is_flag=True, help='Enable config override. Proceed with default path.')
 @click.option('-p', '--golden_config_path', help='Provide golden config path to override. Use with --override_config')
+@click.option('-b', '--bypass-lock', default=False, is_flag=True, help='Do load minigraph without acquiring lock')
 @clicommon.pass_db
-def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, golden_config_path):
+@try_lock(SYSTEM_RELOAD_LOCK, timeout=0)
+def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, golden_config_path, bypass_lock):
     """Reconfigure based on minigraph."""
     argv_str = ' '.join(['config', *sys.argv[1:]])
     log.log_notice(f"'load_minigraph' executing with command: {argv_str}")
@@ -1983,17 +2152,25 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
                         fg='magenta')
             raise click.Abort()
 
-        # Dependency check golden config json
-        config_to_check = read_json_file(golden_config_path)
-        if multi_asic.is_multi_asic():
-            host_config = config_to_check.get('localhost', {})
-        else:
-            host_config = config_to_check
-        table_hard_dependency_check(host_config)
+        if not config_file_yang_validation(golden_config_path):
+            click.secho("Invalid golden config file:'{}'!".format(golden_config_path),
+                        fg='magenta')
+            raise click.Abort()
 
-    #Stop services before config push
+        config_to_check = read_json_file(golden_config_path)
+        # Dependency check golden config json
+        asic_list = [HOST_NAMESPACE]
+        if multi_asic.is_multi_asic():
+            asic_list.extend(multi_asic.get_namespace_list())
+        for scope in asic_list:
+            host_config = config_to_check.get(scope) if multi_asic.is_multi_asic() else config_to_check
+            if host_config:
+                table_hard_dependency_check(host_config)
+
+    # Stop services before config push
     if not no_service_restart:
         log.log_notice("'load_minigraph' stopping services...")
+        delete_transceiver_tables()
         _stop_services()
 
     # For Single Asic platform the namespace list has the empty string
@@ -2041,7 +2218,16 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
     # get the device type
     device_type = _get_device_type()
     if device_type != 'MgmtToRRouter' and device_type != 'MgmtTsToR' and device_type != 'BmcMgmtToRRouter' and device_type != 'EPMS':
-        clicommon.run_command(['pfcwd', 'start_default'], display_cmd=True)
+        # default behavior to call pfcwd start_default for all platforms
+        default_pfcwd_status = 'enable'
+        if override_config and config_to_check:
+            # If pfcwd is disabled in the golden config, skip starting pfcwd
+            # This is needed for platform which doesn't support lossless traffic.
+            override_metadata = config_to_check.get('DEVICE_METADATA', {}).get('localhost', {})
+            if 'default_pfcwd_status' in override_metadata:
+                default_pfcwd_status = override_metadata['default_pfcwd_status'].lower()
+        if default_pfcwd_status == 'enable':
+            clicommon.run_command(['pfcwd', 'start_default'], display_cmd=True)
 
     # Write latest db version string into db
     db_migrator = '/usr/local/bin/db_migrator.py'
@@ -2142,12 +2328,16 @@ def generate_sysinfo(cur_config, config_input, ns=None):
 
     mac = None
     platform = None
+    asic_id = None
     cur_device_metadata = cur_config.get('DEVICE_METADATA')
 
-    # Reuse current config's mac and platform. Generate if absent
+    # Reuse the existing configuration's MAC address, platform, and asic_id
+    # if available; generate these values only if they are missing.
     if cur_device_metadata is not None:
         mac = cur_device_metadata.get('localhost', {}).get('mac')
         platform = cur_device_metadata.get('localhost', {}).get('platform')
+        if ns != DEFAULT_NAMESPACE and ns != HOST_NAMESPACE:
+            asic_id = cur_device_metadata.get('localhost', {}).get('asic_id')
 
     if not mac:
         if ns:
@@ -2165,8 +2355,14 @@ def generate_sysinfo(cur_config, config_input, ns=None):
     if not platform:
         platform = device_info.get_platform()
 
-    device_metadata['localhost']['mac'] = mac
-    device_metadata['localhost']['platform'] = platform
+    if not asic_id and ns != DEFAULT_NAMESPACE and ns != HOST_NAMESPACE:
+        asic_name = multi_asic.get_asic_id_from_name(ns)
+        asic_id = multi_asic.get_asic_device_id(asic_name)
+
+    device_metadata['localhost']['mac'] = mac.rstrip('\n')
+    device_metadata['localhost']['platform'] = platform.rstrip('\n')
+    if ns != DEFAULT_NAMESPACE and ns != HOST_NAMESPACE and asic_id:
+        device_metadata['localhost']['asic_id'] = asic_id.rstrip('\n')
 
     return
 
@@ -2311,7 +2507,7 @@ def aaa_table_hard_dependency_check(config_json):
     tacacs_enable = "tacacs+" in aaa_authentication_login.split(",")
     tacplus_passkey = TACPLUS_TABLE.get("global", {}).get("passkey", "")
     if tacacs_enable and len(tacplus_passkey) == 0:
-        click.secho("Authentication with 'tacacs+' is not allowed when passkey not exits.", fg="magenta")
+        click.secho("Authentication with 'tacacs+' is not allowed when passkey not exists.", fg="magenta")
         sys.exit(1)
 
 
@@ -2364,6 +2560,20 @@ def synchronous_mode(sync_mode):
     Option 1. config save -y \n
               config reload -y \n
     Option 2. systemctl restart swss""" % sync_mode)
+
+
+#
+# 'suppress-fib-pending' command ('config suppress-fib-pending ...')
+#
+@config.command('suppress-fib-pending')
+@click.argument('state', metavar='<enabled|disabled>', required=True, type=click.Choice(['enabled', 'disabled']))
+@clicommon.pass_db
+def suppress_pending_fib(db, state):
+    ''' Enable or disable pending FIB suppression. Once enabled,
+        BGP will not advertise routes that are not yet installed in the hardware '''
+
+    config_db = db.cfgdb
+    config_db.mod_entry('DEVICE_METADATA', 'localhost', {"suppress-fib-pending": state})
 
 #
 # 'yang_config_validation' command ('config yang_config_validation ...')
@@ -2429,8 +2639,9 @@ def add_portchannel(ctx, portchannel_name, min_links, fallback, fast_rate):
     db = ValidatedConfigDBConnector(ctx.obj['db'])
     if ADHOC_VALIDATION:
         if is_portchannel_name_valid(portchannel_name) != True:
-            ctx.fail("{} is invalid!, name should have prefix '{}' and suffix '{}'"
-                    .format(portchannel_name, CFG_PORTCHANNEL_PREFIX, CFG_PORTCHANNEL_NO))
+            ctx.fail("{} is invalid!, name should have prefix '{}' and suffix '{}' "
+                     "and its length should not exceed {} characters"
+                     .format(portchannel_name, CFG_PORTCHANNEL_PREFIX, CFG_PORTCHANNEL_NO, IFACE_NAME_MAX_LEN))
         if is_portchannel_present_in_db(db, portchannel_name):
             ctx.fail("{} already exists!".format(portchannel_name)) # TODO: MISSING CONSTRAINT IN YANG MODEL
 
@@ -3104,6 +3315,7 @@ def _update_buffer_calculation_model(config_db, model):
     help="Dry run, writes config to the given file"
 )
 def reload(ctx, no_dynamic_buffer, no_delay, dry_run, json_data, ports, verbose):
+    status = True
     """Reload QoS configuration"""
     if ports:
         log.log_info("'qos reload --ports {}' executing...".format(ports))
@@ -3112,11 +3324,11 @@ def reload(ctx, no_dynamic_buffer, no_delay, dry_run, json_data, ports, verbose)
 
     log.log_info("'qos reload' executing...")
     if not dry_run:
-        _clear_qos(delay = not no_delay, verbose=verbose)
+        status = _clear_qos(delay=not no_delay, verbose=verbose)
 
     _, hwsku_path = device_info.get_paths_to_platform_and_hwsku_dirs()
     sonic_version_file = device_info.get_sonic_version_file()
-    from_db = ['-d', '--write-to-db']
+    from_db = ['-d']
     if dry_run:
         from_db = ['--additional-data'] + [str(json_data)] if json_data else []
 
@@ -3162,11 +3374,27 @@ def reload(ctx, no_dynamic_buffer, no_delay, dry_run, json_data, ports, verbose)
             )
             if os.path.isfile(qos_template_file):
                 cmd_ns = [] if ns is DEFAULT_NAMESPACE else ['-n', str(ns)]
-                fname = "{}{}".format(dry_run, asic_id_suffix) if dry_run else "config-db"
-                command = [SONIC_CFGGEN_PATH] + cmd_ns + from_db + ['-t', '{},{}'.format(buffer_template_file, fname), '-t', '{},{}'.format(qos_template_file, fname), '-y', sonic_version_file]
-                # Apply the configurations only when both buffer and qos
-                # configuration files are present
+                buffer_fname = "/tmp/cfg_buffer{}.json".format(asic_id_suffix)
+                qos_fname = "/tmp/cfg_qos{}.json".format(asic_id_suffix)
+
+                command = [SONIC_CFGGEN_PATH] + cmd_ns + from_db + [
+                    '-t', '{},{}'.format(buffer_template_file, buffer_fname),
+                    '-t', '{},{}'.format(qos_template_file, qos_fname),
+                    '-y', sonic_version_file
+                ]
                 clicommon.run_command(command, display_cmd=True)
+
+                command = [SONIC_CFGGEN_PATH] + cmd_ns + ["-j", buffer_fname, "-j", qos_fname]
+                if dry_run:
+                    out, rc = clicommon.run_command(command + ["--print-data"], display_cmd=True, return_cmd=True)
+                    if rc != 0:
+                        # clicommon.run_command does this by default when rc != 0 and return_cmd=False
+                        sys.exit(rc)
+                    with open("{}{}".format(dry_run, asic_id_suffix), 'w') as f:
+                        json.dump(json.loads(out), f, sort_keys=True, indent=4)
+                else:
+                    clicommon.run_command(command + ["--write-to-db"], display_cmd=True)
+
             else:
                 click.secho("QoS definition template not found at {}".format(
                     qos_template_file
@@ -3178,6 +3406,9 @@ def reload(ctx, no_dynamic_buffer, no_delay, dry_run, json_data, ports, verbose)
 
     if buffer_model_updated:
         print("Buffer calculation model updated, restarting swss is required to take effect")
+
+    if not status:
+        sys.exit(1)
 
 def _qos_update_ports(ctx, ports, dry_run, json_data):
     """Reload QoS configuration"""
@@ -4157,6 +4388,105 @@ def del_user(db, user):
             click.echo("Restart service snmp failed with error {}".format(e))
             raise click.Abort()
 
+
+#
+# 'bmp' group ('config bmp ...')
+#
+@config.group()
+@clicommon.pass_db
+def bmp(db):
+    """BMP-related configuration"""
+    pass
+
+
+#
+# common function to update bmp config table
+#
+@clicommon.pass_db
+def update_bmp_table(db, table_name, value):
+    log.log_info(f"'bmp {value} {table_name}' executing...")
+    bmp_table = db.cfgdb.get_table('BMP')
+    if not bmp_table:
+        bmp_table = {'table': {table_name: value}}
+    else:
+        bmp_table['table'][table_name] = value
+    db.cfgdb.mod_entry('BMP', 'table', bmp_table['table'])
+
+
+#
+# 'enable' subgroup ('config bmp enable ...')
+#
+@bmp.group()
+@clicommon.pass_db
+def enable(db):
+    """Enable BMP table dump """
+    pass
+
+
+#
+# 'bgp-neighbor-table' command ('config bmp enable bgp-neighbor-table')
+#
+@enable.command('bgp-neighbor-table')
+@clicommon.pass_db
+def enable_bgp_neighbor_table(db):
+    update_bmp_table('bgp_neighbor_table', 'true')
+
+
+#
+# 'bgp-rib-out-table' command ('config bmp enable bgp-rib-out-table')
+#
+@enable.command('bgp-rib-out-table')
+@clicommon.pass_db
+def enable_bgp_rib_out_table(db):
+    update_bmp_table('bgp_rib_out_table', 'true')
+
+
+#
+# 'bgp-rib-in-table' command ('config bmp enable bgp-rib-in-table')
+#
+@enable.command('bgp-rib-in-table')
+@clicommon.pass_db
+def enable_bgp_rib_in_table(db):
+    update_bmp_table('bgp_rib_in_table', 'true')
+
+
+#
+# 'disable' subgroup ('config bmp disable ...')
+#
+@bmp.group()
+@clicommon.pass_db
+def disable(db):
+    """Disable BMP table dump """
+    pass
+
+
+#
+# 'bgp-neighbor-table' command ('config bmp disable bgp-neighbor-table')
+#
+@disable.command('bgp-neighbor-table')
+@clicommon.pass_db
+def disable_bgp_neighbor_table(db):
+    update_bmp_table('bgp_neighbor_table', 'false')
+
+
+#
+# 'bgp-rib-out-table' command ('config bmp disable bgp-rib-out-table')
+#
+@disable.command('bgp-rib-out-table')
+@clicommon.pass_db
+def diable_bgp_rib_out_table(db):
+    update_bmp_table('bgp_rib_out_table', 'false')
+
+
+#
+# 'bgp-rib-in-table' command ('config bmp disable bgp-rib-in-table')
+#
+@disable.command('bgp-rib-in-table')
+@clicommon.pass_db
+def disable_bgp_rib_in_table(db):
+    update_bmp_table('bgp_rib_in_table', 'false')
+
+
 #
 # 'bgp' group ('config bgp ...')
 #
@@ -4375,6 +4705,11 @@ def startup(ctx, interface_name):
         if sp_name in intf_fs:
             config_db.mod_entry("VLAN_SUB_INTERFACE", sp_name, {"admin_status": "up"})
 
+    lo_list = config_db.get_table("LOOPBACK_INTERFACE")
+    for lo in lo_list:
+        if lo in intf_fs:
+            config_db.mod_entry("LOOPBACK_INTERFACE", lo, {"admin_status": "up"})
+
 #
 # 'shutdown' subcommand
 #
@@ -4414,6 +4749,11 @@ def shutdown(ctx, interface_name):
     for sp_name in subport_list:
         if sp_name in intf_fs:
             config_db.mod_entry("VLAN_SUB_INTERFACE", sp_name, {"admin_status": "down"})
+
+    lo_list = config_db.get_table("LOOPBACK_INTERFACE")
+    for lo in lo_list:
+        if lo in intf_fs:
+            config_db.mod_entry("LOOPBACK_INTERFACE", lo, {"admin_status": "down"})
 
 #
 # 'speed' subcommand
@@ -5024,6 +5364,105 @@ def loopback_action(ctx, interface_name, action):
     config_db.mod_entry(table_name, interface_name, {"loopback_action": action})
 
 #
+# 'dhcp-mitigation-rate' subgroup ('config interface dhcp-mitigation-rate ...')
+#
+
+
+@interface.group(cls=clicommon.AbbreviationGroup, name='dhcp-mitigation-rate')
+@click.pass_context
+def dhcp_mitigation_rate(ctx):
+    """Set interface DHCP rate limit attribute"""
+    pass
+
+#
+# 'add' subcommand
+#
+
+
+@dhcp_mitigation_rate.command(name='add')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('packet_rate', metavar='<DHCP packet rate>', required=True, type=int)
+@click.pass_context
+@clicommon.pass_db
+def add_dhcp_mitigation_rate(db, ctx, interface_name, packet_rate):
+    """Add a new DHCP mitigation rate on an interface"""
+    # Get the config_db connector
+    config_db = ValidatedConfigDBConnector(db.cfgdb)
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+
+    if clicommon.is_valid_port(config_db, interface_name):
+        pass
+    elif clicommon.is_valid_portchannel(config_db, interface_name):
+        ctx.fail("{} is a PortChannel!".format(interface_name))
+    else:
+        ctx.fail("{} does not exist".format(interface_name))
+
+    if packet_rate <= 0:
+        ctx.fail("DHCP rate limit is not valid. \nIt must be greater than 0.")
+
+    port_data = config_db.get_entry('PORT', interface_name)
+
+    if 'dhcp_rate_limit' in port_data:
+        rate = port_data["dhcp_rate_limit"]
+    else:
+        rate = '0'
+
+    if rate != '0':
+        ctx.fail("{} has DHCP rate limit configured. \nRemove it to add new DHCP rate limit.".format(interface_name))
+
+    try:
+        config_db.mod_entry('PORT', interface_name, {"dhcp_rate_limit": "{}".format(str(packet_rate))})
+    except ValueError as e:
+        ctx.fail("{} invalid or does not exist. Error: {}".format(interface_name, e))
+
+#
+# 'del' subcommand
+#
+
+
+@dhcp_mitigation_rate.command(name='del')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('packet_rate', metavar='<DHCP packet rate>', required=True, type=int)
+@click.pass_context
+@clicommon.pass_db
+def del_dhcp_mitigation_rate(db, ctx, interface_name, packet_rate):
+    """Delete an existing DHCP mitigation rate on an interface"""
+    # Get the config_db connector
+    config_db = ValidatedConfigDBConnector(db.cfgdb)
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+
+    if clicommon.is_valid_port(config_db, interface_name):
+        pass
+    elif clicommon.is_valid_portchannel(config_db, interface_name):
+        ctx.fail("{} is a PortChannel!".format(interface_name))
+    else:
+        ctx.fail("{} does not exist".format(interface_name))
+
+    if packet_rate <= 0:
+        ctx.fail("DHCP rate limit is not valid. \nIt must be greater than 0.")
+
+    port_data = config_db.get_entry('PORT', interface_name)
+
+    if 'dhcp_rate_limit' in port_data:
+        rate = port_data["dhcp_rate_limit"]
+    else:
+        rate = '0'
+
+    if rate != str(packet_rate):
+        ctx.fail("{} DHCP rate limit does not exist on {}.".format(packet_rate, interface_name))
+
+    port_data["dhcp_rate_limit"] = "0"
+
+    try:
+        config_db.mod_entry('PORT', interface_name, {"dhcp_rate_limit": "0"})
+    except ValueError as e:
+        ctx.fail("{} invalid or does not exist. Error: {}".format(interface_name, e))
+
+#
 # buffer commands and utilities
 #
 def buffer_objects_map_check_legality(ctx, db, interface_name, input_map, is_new_id, is_pg):
@@ -5607,23 +6046,40 @@ def bind(ctx, interface_name, vrf_name):
         if interface_name is None:
             ctx.fail("'interface_name' is None!")
 
-    if not is_vrf_exists(config_db, vrf_name):
-        ctx.fail("VRF %s does not exist!"%(vrf_name))
+    isVnet = False
+    if (vrf_name.startswith('Vnet_')):
+        isVnet = True
+
+    if (isVnet):
+        if not is_vnet_exists(config_db, vrf_name):
+            ctx.fail("VNET %s does not exist!" % (vrf_name))
+    else:
+        if not is_vrf_exists(config_db, vrf_name):
+            ctx.fail("VRF %s does not exist!" % (vrf_name))
 
     table_name = get_interface_table_name(interface_name)
     if table_name == "":
         ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan/Loopback]")
-    if is_interface_bind_to_vrf(config_db, interface_name) is True and \
-        config_db.get_entry(table_name, interface_name).get('vrf_name') == vrf_name:
-        return
+    if is_interface_bind_to_vrf(config_db, interface_name) is True:
+        if (isVnet):
+            if (config_db.get_entry(table_name, interface_name).get('vnet_name') == vrf_name):
+                return
+        else:
+            if (config_db.get_entry(table_name, interface_name).get('vrf_name') == vrf_name):
+                return
+
     # Clean ip addresses if interface configured
     interface_addresses = get_interface_ipaddresses(config_db, interface_name)
-    for ipaddress in interface_addresses:
-        remove_router_interface_ip_address(config_db, interface_name, ipaddress)
+    for ip_address in interface_addresses:
+        remove_router_interface_ip_address(config_db, interface_name, ip_address)
     if table_name == "VLAN_SUB_INTERFACE":
         subintf_entry = config_db.get_entry(table_name, interface_name)
-        if 'vrf_name' in subintf_entry:
-            subintf_entry.pop('vrf_name')
+        if (isVnet):
+            if 'vnet_name' in subintf_entry:
+                subintf_entry.pop('vnet_name')
+        else:
+            if 'vrf_name' in subintf_entry:
+                subintf_entry.pop('vrf_name')
 
     config_db.set_entry(table_name, interface_name, None)
     # When config_db del entry and then add entry with same key, the DEL will lost.
@@ -5637,16 +6093,24 @@ def bind(ctx, interface_name, vrf_name):
         time.sleep(0.01)
     state_db.close(state_db.STATE_DB)
     if table_name == "VLAN_SUB_INTERFACE":
-        subintf_entry['vrf_name'] = vrf_name
-        config_db.set_entry(table_name, interface_name, subintf_entry)
+        if (isVnet):
+            subintf_entry['vnet_name'] = vrf_name
+            config_db.set_entry(table_name, interface_name, subintf_entry)
+        else:
+            subintf_entry['vrf_name'] = vrf_name
+            config_db.set_entry(table_name, interface_name, subintf_entry)
     else:
-        config_db.set_entry(table_name, interface_name, {"vrf_name": vrf_name})
+        if (isVnet):
+            config_db.set_entry(table_name, interface_name, {"vnet_name": vrf_name})
+        else:
+            config_db.set_entry(table_name, interface_name, {"vrf_name": vrf_name})
 
     click.echo("Interface {} IP disabled and address(es) removed due to binding VRF {}.".format(interface_name, vrf_name))
+
+
 #
 # 'unbind' subcommand
 #
-
 @vrf.command()
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @click.pass_context
@@ -5670,6 +6134,8 @@ def unbind(ctx, interface_name):
         subintf_entry = config_db.get_entry(table_name, interface_name)
         if 'vrf_name' in subintf_entry:
             subintf_entry.pop('vrf_name')
+        elif 'vnet_name' in subintf_entry:
+            subintf_entry.pop('vnet_name')
 
     interface_ipaddresses = get_interface_ipaddresses(config_db, interface_name)
     for ipaddress in interface_ipaddresses:
@@ -5820,6 +6286,853 @@ def disable_use_link_local_only(ctx, interface_name):
     interface_dict = db.get_table(interface_type)
     set_ipv6_link_local_only_on_interface(db, interface_dict, interface_type, interface_name, "disable")
 
+
+def is_vaild_intf_ip_addr(ip_addr) -> bool:
+    """Check whether the ip address is valid"""
+    try:
+        ip_address = ipaddress.ip_interface(ip_addr)
+    except ValueError as err:
+        click.echo("IP address {} is not valid: {}".format(ip_addr, err))
+        return False
+
+    if ip_address.version == 6:
+        if ip_address.is_unspecified:
+            click.echo("IPv6 address {} is unspecified".format(str(ip_address)))
+            return False
+    elif ip_address.version == 4:
+        if str(ip_address.ip) == "0.0.0.0":
+            click.echo("IPv4 address {} is Zero".format(str(ip_address)))
+            return False
+
+    if ip_address.is_multicast:
+        click.echo("IP address {} is multicast".format(str(ip_address)))
+        return False
+
+    ip = ip_address.ip
+    if ip.is_loopback:
+        click.echo("IP address {} is loopback address".format(str(ip_address)))
+        return False
+
+    return True
+
+
+#
+# 'vrrp' subgroup ('config interface vrrp ...')
+#
+@interface.group(cls=clicommon.AbbreviationGroup)
+@click.pass_context
+def vrrp(ctx):
+    """Vrrp configuration"""
+    pass
+
+
+#
+# ip subgroup ('config interface vrrp ip ...')
+#
+@vrrp.group(cls=clicommon.AbbreviationGroup, name='ip')
+@click.pass_context
+def ip(ctx):
+    """vrrp ip configuration """
+    pass
+
+
+@ip.command('add')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.argument("ip_addr", metavar="<ip_addr>", required=True)
+@click.pass_context
+def add_vrrp_ip(ctx, interface_name, vrrp_id, ip_addr):
+    """Add IPv4 address to the vrrp instance"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    if not is_vaild_intf_ip_addr(ip_addr):
+        ctx.abort()
+    if check_vrrp_ip_exist(config_db, ip_addr):
+        ctx.abort()
+
+    if "/" not in ip_addr:
+        ctx.fail("IP address {} is missing a mask. Such as xx.xx.xx.xx/yy or xx:xx::xx/yy".format(str(ip_addr)))
+
+    # check vip exist
+    vrrp_entry = config_db.get_entry("VRRP", (interface_name, str(vrrp_id)))
+    address_list = []
+    if vrrp_entry:
+        # update vrrp
+        if "vip" in vrrp_entry:
+            address_list = vrrp_entry.get("vip")
+            # add ip address
+            if len(address_list) >= 4:
+                ctx.fail("The vrrp instance {} has already configured 4 IP addresses".format(vrrp_id))
+
+    else:
+        # create new vrrp
+        vrrp_entry = {}
+        vrrp_keys = config_db.get_keys("VRRP")
+        if len(vrrp_keys) >= 254:
+            ctx.fail("Has already configured 254 vrrp instances")
+        intf_cfg = 0
+        for key in vrrp_keys:
+            if key[1] == str(vrrp_id):
+                ctx.fail("The vrrp instance {} has already configured!".format(vrrp_id))
+            if key[0] == interface_name:
+                intf_cfg += 1
+            if intf_cfg >= 16:
+                ctx.fail("{} has already configured 16 vrrp instances!".format(interface_name))
+        vrrp_entry["vid"] = vrrp_id
+
+    address_list.append(ip_addr)
+    vrrp_entry['vip'] = address_list
+
+    config_db.set_entry("VRRP", (interface_name, str(vrrp_id)), vrrp_entry)
+
+
+@ip.command('remove')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.argument("ip_addr", metavar="<ip_addr>", required=True)
+@click.pass_context
+def remove_vrrp_ip(ctx, interface_name, vrrp_id, ip_addr):
+    """Remove IPv4 address to the vrrp instance"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    try:
+        ipaddress.ip_interface(ip_addr)
+    except ValueError as err:
+        ctx.fail("IP address is not valid: {}".format(err))
+
+    vrrp_entry = config_db.get_entry("VRRP", (interface_name, str(vrrp_id)))
+    if not vrrp_entry:
+        ctx.fail("{} is not configured on the vrrp instance {}!".format(ip_addr, vrrp_id))
+
+    address_list = vrrp_entry.get("vip")
+    # address_list = vrrp_entry.get("vip")
+    if not address_list:
+        ctx.fail("{} is not configured on the vrrp instance {}!".format(ip_addr, vrrp_id))
+
+    # del ip address
+    if ip_addr in address_list:
+        address_list.remove(ip_addr)
+    else:
+        ctx.fail("{} is not configured on the vrrp instance {}!".format(ip_addr, vrrp_id))
+    vrrp_entry['vip'] = address_list
+    config_db.set_entry("VRRP", (interface_name, str(vrrp_id)), vrrp_entry)
+
+
+#
+# track interface subgroup ('config interface vrrp track_interface ...')
+#
+@vrrp.group(cls=clicommon.AbbreviationGroup, name='track_interface')
+@click.pass_context
+def track_interface(ctx):
+    """ vrrp track_interface configuration """
+    pass
+
+
+@track_interface.command('add')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.argument("track_interface", metavar="<track_interface>", required=True)
+@click.argument('priority_increment', metavar='<priority_increment>', required=True, type=click.IntRange(10, 50),
+                default=20)
+@click.pass_context
+def add_track_interface(ctx, interface_name, vrrp_id, track_interface, priority_increment):
+    """add track_interface to the vrrp instance"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        track_interface = interface_alias_to_name(config_db, track_interface)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+        if track_interface is None:
+            ctx.fail("'track_interface' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    table_name_t = get_interface_table_name(track_interface)
+    if table_name_t == "" or table_name_t == "LOOPBACK_INTERFACE":
+        ctx.fail("'track_interface' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if track_interface not in config_db.get_table(table_name_t):
+        ctx.fail("Router Interface '{}' not found".format(track_interface))
+
+    vrrp_entry = config_db.get_entry("VRRP", (interface_name, str(vrrp_id)))
+    if not vrrp_entry:
+        ctx.fail("vrrp instance {} not found on interface {}".format(vrrp_id, interface_name))
+
+    track_entry = config_db.get_entry("VRRP_TRACK", (interface_name, str(vrrp_id), track_interface))
+    if track_entry:
+        track_entry['priority_increment'] = priority_increment
+    else:
+        track_entry = {}
+        track_entry["priority_increment"] = priority_increment
+
+    vrrp_track_keys = config_db.get_keys("VRRP_TRACK")
+    if vrrp_track_keys:
+        track_key = (interface_name, str(vrrp_id))
+        count = 0
+        for item in vrrp_track_keys:
+            subtuple1 = item[:2]
+            if subtuple1 == track_key:
+                count += 1
+
+        if count >= 8:
+            ctx.fail("The Vrrpv instance {} has already configured 8 track interfaces".format(vrrp_id))
+
+    config_db.set_entry("VRRP_TRACK", (interface_name, str(vrrp_id), track_interface), track_entry)
+
+
+@track_interface.command('remove')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.argument("track_interface", metavar="<track_interface>", required=True)
+@click.pass_context
+def remove_track_interface(ctx, interface_name, vrrp_id, track_interface):
+    """Remove track_interface to the vrrp instance"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        track_interface = interface_alias_to_name(config_db, track_interface)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+        if track_interface is None:
+            ctx.fail("'track_interface' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    table_name_t = get_interface_table_name(track_interface)
+    if table_name_t == "" or table_name_t == "LOOPBACK_INTERFACE":
+        ctx.fail("'track_interface' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+
+    vrrp_entry = config_db.get_entry("VRRP", (interface_name, str(vrrp_id)))
+    if not vrrp_entry:
+        ctx.fail("vrrp instance {} not found on interface {}".format(vrrp_id, interface_name))
+
+    track_entry = config_db.get_entry("VRRP_TRACK", (interface_name, str(vrrp_id), track_interface))
+    if not track_entry:
+        ctx.fail("{} is not configured on the vrrp instance {}!".format(track_interface, vrrp_id))
+    config_db.set_entry('VRRP_TRACK', (interface_name, str(vrrp_id), track_interface), None)
+
+
+#
+# 'vrrp' subcommand ('config interface vrrp priority ...')
+#
+@vrrp.command("priority")
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.argument('priority', metavar='<priority>', required=True, type=click.IntRange(1, 254), default=100)
+@click.pass_context
+def priority(ctx, interface_name, vrrp_id, priority):
+    """config priority to the vrrp instance"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    vrrp_entry = config_db.get_entry("VRRP", (interface_name, str(vrrp_id)))
+    if not vrrp_entry:
+        ctx.fail("vrrp instance {} not found on interface {}".format(vrrp_id, interface_name))
+
+    vrrp_entry['priority'] = priority
+    config_db.set_entry("VRRP", (interface_name, str(vrrp_id)), vrrp_entry)
+
+
+#
+# 'vrrp' subcommand ('config interface vrrp adv_interval ...')
+#
+@vrrp.command("adv_interval")
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.argument('interval', metavar='<interval>', required=True, type=click.IntRange(1, 255), default=1)
+@click.pass_context
+def adv_interval(ctx, interface_name, vrrp_id, interval):
+    """config adv_interval to the vrrp instance"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    vrrp_entry = config_db.get_entry("VRRP", (interface_name, str(vrrp_id)))
+    if not vrrp_entry:
+        ctx.fail("vrrp instance {} not found on interface {}".format(vrrp_id, interface_name))
+
+    vrrp_entry['adv_interval'] = interval
+    config_db.set_entry("VRRP", (interface_name, str(vrrp_id)), vrrp_entry)
+
+
+#
+# 'vrrp' subcommand ('config interface vrrp pre_empt ...')
+#
+@vrrp.command("pre_empt")
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.argument('mode', metavar='<mode>', required=True, type=click.Choice(["enabled", "disabled"]))
+@click.pass_context
+def pre_empt(ctx, interface_name, vrrp_id, mode):
+    """Config pre_empt mode to the vrrp instance"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    vrrp_entry = config_db.get_entry("VRRP", (interface_name, str(vrrp_id)))
+    if not vrrp_entry:
+        ctx.fail("vrrp instance {} not found on interface {}".format(vrrp_id, interface_name))
+
+    vrrp_entry['preempt'] = mode
+    config_db.set_entry("VRRP", (interface_name, str(vrrp_id)), vrrp_entry)
+
+
+#
+# 'vrrp' subcommand ('config interface vrrp version...')
+#
+@vrrp.command("version")
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.argument('version', metavar='<version>', required=True, type=click.Choice(["2", "3"]), default=3)
+@click.pass_context
+def version(ctx, interface_name, vrrp_id, version):
+    """Config vrrp packet version to the vrrp instance"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    vrrp_entry = config_db.get_entry("VRRP", (interface_name, str(vrrp_id)))
+    if not vrrp_entry:
+        ctx.fail("vrrp instance {} not found on interface {}".format(vrrp_id, interface_name))
+
+    vrrp_entry['version'] = version
+    config_db.set_entry("VRRP", (interface_name, str(vrrp_id)), vrrp_entry)
+
+
+#
+# 'vrrp' subcommand
+#
+@vrrp.command("add")
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.pass_context
+def add_vrrp(ctx, interface_name, vrrp_id):
+    """Add vrrp instance to the interface"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    vrrp_entry = config_db.get_entry("VRRP", (interface_name, str(vrrp_id)))
+    if vrrp_entry:
+        ctx.fail("{} has already configured the vrrp instance {}!".format(interface_name, vrrp_id))
+    else:
+        vrrp_keys = config_db.get_keys("VRRP")
+        if len(vrrp_keys) >= 254:
+            ctx.fail("Has already configured 254 vrrp instances!")
+        intf_cfg = 0
+        for key in vrrp_keys:
+            if key[1] == str(vrrp_id):
+                ctx.fail("The vrrp instance {} has already configured!".format(vrrp_id))
+            if key[0] == interface_name:
+                intf_cfg += 1
+            if intf_cfg >= 16:
+                ctx.fail("{} has already configured 16 vrrp instances!".format(interface_name))
+
+        config_db.set_entry('VRRP', (interface_name, str(vrrp_id)), {"vid": vrrp_id})
+
+
+@vrrp.command("remove")
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.pass_context
+def remove_vrrp(ctx, interface_name, vrrp_id):
+    """Remove vrrp instance to the interface"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    vrrp_entry = config_db.get_entry("VRRP", (interface_name, str(vrrp_id)))
+    if not vrrp_entry:
+        ctx.fail("{} dose not configured the vrrp instance {}!".format(interface_name, vrrp_id))
+    config_db.set_entry('VRRP', (interface_name, str(vrrp_id)), None)
+
+
+#
+# 'vrrp6' subgroup ('config interface vrrp6 ...')
+#
+@interface.group(cls=clicommon.AbbreviationGroup)
+@click.pass_context
+def vrrp6(ctx):
+    """Vrrpv6 configuration"""
+    pass
+
+
+#
+# ip subgroup ('config interface vrrp6 ipv6 ...')
+#
+@vrrp6.group(cls=clicommon.AbbreviationGroup, name='ipv6')
+@click.pass_context
+def ipv6(ctx):
+    """Vrrpv6 ipv6 configuration """
+    pass
+
+
+@ipv6.command('add')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.argument("ipv6_addr", metavar="<ipv6_addr>", required=True)
+@click.pass_context
+def add_vrrp6_ipv6(ctx, interface_name, vrrp_id, ipv6_addr):
+    """Add IPv6 address to the Vrrpv6 instance"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    if not is_vaild_intf_ip_addr(ipv6_addr):
+        ctx.abort()
+    if check_vrrp_ip_exist(config_db, ipv6_addr):
+        ctx.abort()
+
+    if "/" not in ipv6_addr:
+        ctx.fail("IPv6 address {} is missing a mask. Such as xx:xx::xx/yy".format(str(ipv6_addr)))
+
+    # check vip exist
+    vrrp6_entry = config_db.get_entry("VRRP6", (interface_name, str(vrrp_id)))
+    address_list = []
+    if vrrp6_entry:
+        # update vrrp
+        if "vip" in vrrp6_entry:
+            address_list = vrrp6_entry.get("vip")
+            # add ip address
+            if len(address_list) >= 4:
+                ctx.fail("The vrrp instance {} has already configured 4 IPv6 addresses".format(vrrp_id))
+
+    else:
+        # create new vrrp
+        vrrp6_entry = {}
+        vrrp6_keys = config_db.get_keys("VRRP6")
+        if len(vrrp6_keys) >= 254:
+            ctx.fail("Has already configured 254 Vrrpv6 instances.")
+        intf_cfg = 0
+        for key in vrrp6_keys:
+            if key[1] == str(vrrp_id):
+                ctx.fail("The Vrrpv6 instance {} has already configured!".format(vrrp_id))
+            if key[0] == interface_name:
+                intf_cfg += 1
+            if intf_cfg >= 16:
+                ctx.fail("{} has already configured 16 Vrrpv6 instances!".format(interface_name))
+        vrrp6_entry["vid"] = vrrp_id
+
+    address_list.append(ipv6_addr)
+    vrrp6_entry['vip'] = address_list
+
+    config_db.set_entry("VRRP6", (interface_name, str(vrrp_id)), vrrp6_entry)
+
+
+@ipv6.command('remove')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.argument("ipv6_addr", metavar="<ipv6_addr>", required=True)
+@click.pass_context
+def remove_vrrp_ipv6(ctx, interface_name, vrrp_id, ipv6_addr):
+    """Remove IPv6 address to the Vrrpv6 instance"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    try:
+        ipaddress.ip_interface(ipv6_addr)
+    except ValueError as err:
+        ctx.fail("IPv6 address is not valid: {}".format(err))
+
+    vrrp6_entry = config_db.get_entry("VRRP6", (interface_name, str(vrrp_id)))
+    if not vrrp6_entry:
+        ctx.fail("{} is not configured on the Vrrpv6 instance {}!".format(ipv6_addr, vrrp_id))
+
+    address_list = vrrp6_entry.get("vip")
+    # address_list = vrrp6_entry.get("vip")
+    if not address_list:
+        ctx.fail("{} is not configured on the Vrrpv6 instance {}!".format(ipv6_addr, vrrp_id))
+
+    # del ip address
+    if ipv6_addr in address_list:
+        address_list.remove(ipv6_addr)
+    else:
+        ctx.fail("{} is not configured on the Vrrpv6 instance {}!".format(ipv6_addr, vrrp_id))
+    vrrp6_entry['vip'] = address_list
+    config_db.set_entry("VRRP6", (interface_name, str(vrrp_id)), vrrp6_entry)
+
+
+def check_vrrp_ip_exist(config_db, ip_addr) -> bool:
+    addr_type = ipaddress.ip_interface(ip_addr).version
+    vrrp_table = "VRRP" if addr_type == 4 else "VRRP6"
+    vrrp_keys = config_db.get_keys(vrrp_table)
+    for vrrp_key in vrrp_keys:
+        vrrp_entry = config_db.get_entry(vrrp_table, vrrp_key)
+        if "vip" not in vrrp_entry:
+            continue
+        if ip_addr in vrrp_entry["vip"]:
+            click.echo("{} has already configured on the {} vrrp instance {}!".format(ip_addr, vrrp_key[0],
+                                                                                      vrrp_key[1]))
+            return True
+    return False
+
+
+#
+# track interface subgroup ('config interface vrrp6 track_interface ...')
+#
+@vrrp6.group(cls=clicommon.AbbreviationGroup, name='track_interface')
+@click.pass_context
+def vrrp6_track_interface(ctx):
+    """ Vrrpv6 track_interface configuration """
+    pass
+
+
+@vrrp6_track_interface.command('add')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.argument("track_interface", metavar="<track_interface>", required=True)
+@click.argument('priority_increment', metavar='<priority_increment>', required=True, type=click.IntRange(10, 50),
+                default=20)
+@click.pass_context
+def add_track_interface_v6(ctx, interface_name, vrrp_id, track_interface, priority_increment):
+    """add track_interface to the vrrp instance"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        track_interface = interface_alias_to_name(config_db, track_interface)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+        if track_interface is None:
+            ctx.fail("'track_interface' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    table_name_t = get_interface_table_name(track_interface)
+    if table_name_t == "" or table_name_t == "LOOPBACK_INTERFACE":
+        ctx.fail("'track_interface' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if track_interface not in config_db.get_table(table_name_t):
+        ctx.fail("Router Interface '{}' not found".format(track_interface))
+
+    vrrp_entry = config_db.get_entry("VRRP6", (interface_name, str(vrrp_id)))
+    if not vrrp_entry:
+        ctx.fail("vrrp6 instance {} not found on interface {}".format(vrrp_id, interface_name))
+
+    # track_intf_key = track_interface + "|weight|" + str(weight)
+    vrrp6_track_keys = config_db.get_keys("VRRP6_TRACK")
+    if vrrp6_track_keys:
+        track_key = (interface_name, str(vrrp_id))
+        count = 0
+        for item in vrrp6_track_keys:
+            subtuple1 = item[:2]
+            if subtuple1 == track_key:
+                count += 1
+
+        if count >= 8:
+            ctx.fail("The Vrrpv6 instance {} has already configured 8 track interfaces".format(vrrp_id))
+
+    # create a new entry
+    track6_entry = {}
+    track6_entry["priority_increment"] = priority_increment
+    config_db.set_entry("VRRP6_TRACK", (interface_name, str(vrrp_id), track_interface), track6_entry)
+
+
+@vrrp6_track_interface.command('remove')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.argument("track_interface", metavar="<track_interface>", required=True)
+@click.pass_context
+def remove_track_interface_v6(ctx, interface_name, vrrp_id, track_interface):
+    """Remove track_interface to the vrrp instance"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        track_interface = interface_alias_to_name(config_db, track_interface)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+        if track_interface is None:
+            ctx.fail("'track_interface' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    table_name_t = get_interface_table_name(track_interface)
+    if table_name_t == "" or table_name_t == "LOOPBACK_INTERFACE":
+        ctx.fail("'track_interface' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+
+    vrrp_entry = config_db.get_entry("VRRP6", (interface_name, str(vrrp_id)))
+    if not vrrp_entry:
+        ctx.fail("vrrp6 instance {} not found on interface {}".format(vrrp_id, interface_name))
+
+    track6_entry = config_db.get_entry("VRRP6_TRACK", (interface_name, str(vrrp_id), track_interface))
+    if not track6_entry:
+        ctx.fail("{} is not configured on the vrrp6 instance {}!".format(track_interface, vrrp_id))
+    config_db.set_entry('VRRP6_TRACK', (interface_name, str(vrrp_id), track_interface), None)
+
+
+#
+# 'vrrp6' subcommand ('config interface vrrp6 priority ...')
+#
+@vrrp6.command("priority")
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.argument('priority', metavar='<priority>', required=True, type=click.IntRange(1, 254), default=100)
+@click.pass_context
+def priority_v6(ctx, interface_name, vrrp_id, priority):
+    """config priority to the Vrrpv6 instance"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    vrrp6_entry = config_db.get_entry("VRRP6", (interface_name, str(vrrp_id)))
+    if not vrrp6_entry:
+        ctx.fail("Vrrpv6 instance {} not found on interface {}".format(vrrp_id, interface_name))
+
+    vrrp6_entry['priority'] = priority
+    config_db.set_entry("VRRP6", (interface_name, str(vrrp_id)), vrrp6_entry)
+
+
+#
+# 'vrrp' subcommand ('config interface vrrp6 adv_interval ...')
+#
+@vrrp6.command("adv_interval")
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.argument('interval', metavar='<interval>', required=True, type=click.IntRange(1, 255), default=1000)
+@click.pass_context
+def adv_interval_v6(ctx, interface_name, vrrp_id, interval):
+    """config adv_interval to the Vrrpv6 instance"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    vrrp6_entry = config_db.get_entry("VRRP6", (interface_name, str(vrrp_id)))
+    if not vrrp6_entry:
+        ctx.fail("Vrrpv6 instance {} not found on interface {}".format(vrrp_id, interface_name))
+
+    vrrp6_entry['adv_interval'] = interval
+    config_db.set_entry("VRRP6", (interface_name, str(vrrp_id)), vrrp6_entry)
+
+
+#
+# 'vrrp' subcommand ('config interface vrrp6 pre_empt ...')
+#
+@vrrp6.command("pre_empt")
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.argument('mode', metavar='<mode>', required=True, type=click.Choice(["enabled", "disabled"]))
+@click.pass_context
+def pre_empt_v6(ctx, interface_name, vrrp_id, mode):
+    """Config pre_empt mode to the Vrrpv6 instance"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    vrrp6_entry = config_db.get_entry("VRRP6", (interface_name, str(vrrp_id)))
+    if not vrrp6_entry:
+        ctx.fail("Vrrpv6 instance {} not found on interface {}".format(vrrp_id, interface_name))
+
+    vrrp6_entry['preempt'] = mode
+    config_db.set_entry("VRRP6", (interface_name, str(vrrp_id)), vrrp6_entry)
+
+
+#
+# 'vrrp6' subcommand
+#
+@vrrp6.command("add")
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.pass_context
+def add_vrrp_v6(ctx, interface_name, vrrp_id):
+    """Add Vrrpv6 instance to the interface"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    vrrp6_entry = config_db.get_entry("VRRP6", (interface_name, str(vrrp_id)))
+    if vrrp6_entry:
+        ctx.fail("{} has already configured the Vrrpv6 instance {}!".format(interface_name, vrrp_id))
+    else:
+        vrrp6_keys = config_db.get_keys("VRRP6")
+        if len(vrrp6_keys) >= 254:
+            ctx.fail("Has already configured 254 Vrrpv6 instances!")
+        intf_cfg = 0
+        for key in vrrp6_keys:
+            if key[1] == str(vrrp_id):
+                ctx.fail("The Vrrpv6 instance {} has already configured!".format(vrrp_id))
+            if key[0] == interface_name:
+                intf_cfg += 1
+            if intf_cfg >= 16:
+                ctx.fail("{} has already configured 16 Vrrpv6 instances!".format(interface_name))
+
+        config_db.set_entry('VRRP6', (interface_name, str(vrrp_id)), {"vid": vrrp_id})
+
+
+@vrrp6.command("remove")
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('vrrp_id', metavar='<vrrp_id>', required=True, type=click.IntRange(1, 255))
+@click.pass_context
+def remove_vrrp_v6(ctx, interface_name, vrrp_id):
+    """Remove Vrrpv6 instance to the interface"""
+    config_db = ctx.obj["config_db"]
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    table_name = get_interface_table_name(interface_name)
+    if table_name == "" or table_name == "LOOPBACK_INTERFACE":
+        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
+    if interface_name not in config_db.get_table(table_name):
+        ctx.fail("Router Interface '{}' not found".format(interface_name))
+
+    vrrp6_entry = config_db.get_entry("VRRP6", (interface_name, str(vrrp_id)))
+    if not vrrp6_entry:
+        ctx.fail("{} dose not configured the Vrrpv6 instance {}!".format(interface_name, vrrp_id))
+    config_db.set_entry('VRRP6', (interface_name, str(vrrp_id)), None)
+
+
 #
 # 'vrf' group ('config vrf ...')
 #
@@ -5841,8 +7154,8 @@ def add_vrf(ctx, vrf_name):
     config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
     if not vrf_name.startswith("Vrf") and not (vrf_name == 'mgmt') and not (vrf_name == 'management'):
         ctx.fail("'vrf_name' must begin with 'Vrf' or named 'mgmt'/'management' in case of ManagementVRF.")
-    if len(vrf_name) > 15:
-        ctx.fail("'vrf_name' is too long!")
+    if not isInterfaceNameValid(vrf_name):
+        ctx.fail("'vrf_name' length should not exceed {} characters".format(IFACE_NAME_MAX_LEN))
     if is_vrf_exists(config_db, vrf_name):
         ctx.fail("VRF {} already exists!".format(vrf_name))
     elif (vrf_name == 'mgmt' or vrf_name == 'management'):
@@ -5861,8 +7174,8 @@ def del_vrf(ctx, vrf_name):
     config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
     if not vrf_name.startswith("Vrf") and not (vrf_name == 'mgmt') and not (vrf_name == 'management'):
         ctx.fail("'vrf_name' must begin with 'Vrf' or named 'mgmt'/'management' in case of ManagementVRF.")
-    if len(vrf_name) > 15:
-        ctx.fail("'vrf_name' is too long!")
+    if not isInterfaceNameValid(vrf_name):
+        ctx.fail("'vrf_name' length should not exceed {} characters".format((IFACE_NAME_MAX_LEN)))
     syslog_table = config_db.get_table("SYSLOG_SERVER")
     syslog_vrf_dev = "mgmt" if vrf_name == "management" else vrf_name
     for syslog_entry, syslog_data in syslog_table.items():
@@ -5944,53 +7257,60 @@ def route(ctx):
     ctx.obj = {}
     ctx.obj['config_db'] = config_db
 
+
 @route.command('add', context_settings={"ignore_unknown_options": True})
-@click.argument('command_str', metavar='prefix [vrf <vrf_name>] <A.B.C.D/M> nexthop <[vrf <vrf_name>] <A.B.C.D>>|<dev <dev_name>>', nargs=-1, type=click.Path())
+@click.argument('command_str', metavar='prefix [vrf <vrf_name>] <A.B.C.D/M> nexthop [vrf <vrf_name>] \
+                <A.B.C.D>|<dev <dev_name>>|<A.B.C.D dev <dev_name>>', nargs=-1, type=click.Path())
 @click.pass_context
 def add_route(ctx, command_str):
     """Add route command"""
     config_db = ctx.obj['config_db']
     key, route = cli_sroute_to_config(ctx, command_str)
 
-    # If defined intf name, check if it belongs to interface
-    if 'ifname' in route:
-        if (not route['ifname'] in config_db.get_keys('VLAN_INTERFACE') and
-            not route['ifname'] in config_db.get_keys('INTERFACE') and
-            not route['ifname'] in config_db.get_keys('PORTCHANNEL_INTERFACE') and
-            not route['ifname'] in config_db.get_keys('VLAN_SUB_INTERFACE') and
-            not route['ifname'] == 'null'):
-            ctx.fail('interface {} doesn`t exist'.format(route['ifname']))
-
     entry_counter = 1
     if 'nexthop' in route:
         entry_counter = len(route['nexthop'].split(','))
+    if 'ifname' in route and len(route['ifname'].split(',')) > entry_counter:
+        entry_counter = len(route['ifname'].split(','))
 
     # Alignment in case the command contains several nexthop ip
     for i in range(entry_counter):
+        # Set vrf to empty string if not defined
         if 'nexthop-vrf' in route:
-            if i > 0:
+            if i >= len(route['nexthop-vrf'].split(',')):
                 vrf = route['nexthop-vrf'].split(',')[0]
                 route['nexthop-vrf'] += ',' + vrf
         else:
             route['nexthop-vrf'] = ''
 
-        if not 'nexthop' in route:
+        # Set nexthop to empty string if not defined
+        if 'nexthop' in route:
+            if i >= len(route['nexthop'].split(',')):
+                route['nexthop'] += ','
+        else:
             route['nexthop'] = ''
 
+        # Set ifname to empty string if not defined
         if 'ifname' in route:
-            if i > 0:
+            if i >= len(route['ifname'].split(',')):
                 route['ifname'] += ','
         else:
             route['ifname'] = ''
 
         # Set default values for distance and blackhole because the command doesn't have such an option
         if 'distance' in route:
-            route['distance'] += ',0'
+            if i >= len(route['distance'].split(',')):
+                route['distance'] += ',0'
         else:
             route['distance'] = '0'
 
         if 'blackhole' in route:
-            route['blackhole'] += ',false'
+            if i >= len(route['blackhole'].split(',')):
+                # If the user configure with "ifname" as "null", set 'blackhole' attribute as true.
+                if route['ifname'].split(',')[i] == 'null':
+                    route['blackhole'] += ',true'
+                else:
+                    route['blackhole'] += ',false'
         else:
             # If the user configure with "ifname" as "null", set 'blackhole' attribute as true.
             if 'ifname' in route and route['ifname'] == 'null':
@@ -6004,28 +7324,30 @@ def add_route(ctx, command_str):
         # If exist update current entry
         current_entry = config_db.get_entry('STATIC_ROUTE', key)
 
-        for entry in ['nexthop', 'nexthop-vrf', 'ifname', 'distance', 'blackhole']:
-            if not entry in current_entry:
-                current_entry[entry] = ''
-            if entry in route:
-                current_entry[entry] += ',' + route[entry]
+        for item in ['nexthop', 'nexthop-vrf', 'ifname', 'distance', 'blackhole']:
+            if item not in current_entry:
+                current_entry[item] = ''
+            if item in route:
+                current_entry[item] += ',' + route[item]
             else:
-                current_entry[entry] += ','
+                current_entry[item] += ','
 
         config_db.set_entry("STATIC_ROUTE", key, current_entry)
     else:
         config_db.set_entry("STATIC_ROUTE", key, route)
 
+
 @route.command('del', context_settings={"ignore_unknown_options": True})
-@click.argument('command_str', metavar='prefix [vrf <vrf_name>] <A.B.C.D/M> nexthop <[vrf <vrf_name>] <A.B.C.D>>|<dev <dev_name>>', nargs=-1, type=click.Path())
+@click.argument('command_str', metavar='prefix [vrf <vrf_name>] <A.B.C.D/M> nexthop [vrf <vrf_name>] \
+                <A.B.C.D>|<dev <dev_name>>|<A.B.C.D dev <dev_name>>', nargs=-1, type=click.Path())
 @click.pass_context
 def del_route(ctx, command_str):
     """Del route command"""
     config_db = ctx.obj['config_db']
     key, route = cli_sroute_to_config(ctx, command_str, strict_nh=False)
     keys = config_db.get_keys('STATIC_ROUTE')
-    prefix_tuple = tuple(key.split('|'))
-    if not tuple(key.split("|")) in keys and not prefix_tuple in keys:
+
+    if not tuple(key.split("|")) in keys:
         ctx.fail('Route {} doesnt exist'.format(key))
     else:
         # If not defined nexthop or intf name remove entire route
@@ -6060,9 +7382,11 @@ def del_route(ctx, command_str):
         # Create tuple from CLI argument
         # config route add prefix 1.4.3.4/32 nexthop vrf Vrf-RED 20.0.0.2
         # ('20.0.0.2', 'Vrf-RED', '')
-        for entry in ['nexthop', 'nexthop-vrf', 'ifname']:
-            if entry in route:
-                cli_tuple += (route[entry],)
+        for item in ['nexthop', 'nexthop-vrf', 'ifname']:
+            if item in route:
+                if ',' in route[item]:
+                    ctx.fail('Only one nexthop can be deleted at a time')
+                cli_tuple += (route[item],)
             else:
                 cli_tuple += ('',)
 
@@ -6299,7 +7623,15 @@ def dropcounters():
 @click.option("-g", "--group", type=str, help="Group for this counter")
 @click.option("-d", "--desc",  type=str, help="Description for this counter")
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
-def install(counter_name, alias, group, counter_type, desc, reasons, verbose):
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def install(counter_name, alias, group, counter_type, desc, reasons, verbose, namespace):
     """Install a new drop counter"""
     command = ['dropconfig', '-c', 'install', '-n', str(counter_name), '-t', str(counter_type), '-r', str(reasons)]
     if alias:
@@ -6308,6 +7640,8 @@ def install(counter_name, alias, group, counter_type, desc, reasons, verbose):
         command += ['-g', str(group)]
     if desc:
         command += ['-d', str(desc)]
+    if namespace:
+        command += ['-ns', str(namespace)]
 
     clicommon.run_command(command, display_cmd=verbose)
 
@@ -6318,9 +7652,19 @@ def install(counter_name, alias, group, counter_type, desc, reasons, verbose):
 @dropcounters.command()
 @click.argument("counter_name", type=str, required=True)
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
-def delete(counter_name, verbose):
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def delete(counter_name, verbose, namespace):
     """Delete an existing drop counter"""
     command = ['dropconfig', '-c', 'uninstall', '-n', str(counter_name)]
+    if namespace:
+        command += ['-ns', str(namespace)]
     clicommon.run_command(command, display_cmd=verbose)
 
 
@@ -6331,9 +7675,19 @@ def delete(counter_name, verbose):
 @click.argument("counter_name", type=str, required=True)
 @click.argument("reasons",      type=str, required=True)
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
-def add_reasons(counter_name, reasons, verbose):
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def add_reasons(counter_name, reasons, verbose, namespace):
     """Add reasons to an existing drop counter"""
     command = ['dropconfig', '-c', 'add', '-n', str(counter_name), '-r', str(reasons)]
+    if namespace:
+        command += ['-ns', str(namespace)]
     clicommon.run_command(command, display_cmd=verbose)
 
 
@@ -6344,9 +7698,19 @@ def add_reasons(counter_name, reasons, verbose):
 @click.argument("counter_name", type=str, required=True)
 @click.argument("reasons",      type=str, required=True)
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
-def remove_reasons(counter_name, reasons, verbose):
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def remove_reasons(counter_name, reasons, verbose, namespace):
     """Remove reasons from an existing drop counter"""
     command = ['dropconfig', '-c', 'remove', '-n', str(counter_name), '-r', str(reasons)]
+    if namespace:
+        command += ['-ns', str(namespace)]
     clicommon.run_command(command, display_cmd=verbose)
 
 
@@ -6365,7 +7729,8 @@ def remove_reasons(counter_name, reasons, verbose):
 @click.option('-ydrop', metavar='<yellow drop probability>', type=click.IntRange(0, 100), help="Set yellow drop probability")
 @click.option('-gdrop', metavar='<green drop probability>', type=click.IntRange(0, 100), help="Set green drop probability")
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
-def ecn(profile, rmax, rmin, ymax, ymin, gmax, gmin, rdrop, ydrop, gdrop, verbose):
+@multi_asic_util.multi_asic_click_option_namespace
+def ecn(profile, rmax, rmin, ymax, ymin, gmax, gmin, rdrop, ydrop, gdrop, verbose, namespace):
     """ECN-related configuration tasks"""
     log.log_info("'ecn -profile {}' executing...".format(profile))
     command = ['ecnconfig', '-p', str(profile)]
@@ -6379,6 +7744,8 @@ def ecn(profile, rmax, rmin, ymax, ymin, gmax, gmin, rdrop, ydrop, gdrop, verbos
     if ydrop is not None: command += ['-ydrop', str(ydrop)]
     if gdrop is not None: command += ['-gdrop', str(gdrop)]
     if verbose: command += ["-vv"]
+    if namespace is not None:
+        command += ['-n', str(namespace)]
     clicommon.run_command(command, display_cmd=verbose)
 
 
@@ -6388,13 +7755,29 @@ def ecn(profile, rmax, rmin, ymax, ymin, gmax, gmin, rdrop, ydrop, gdrop, verbos
 @config.command()
 @click.option('-p', metavar='<profile_name>', type=str, required=True, help="Profile name")
 @click.option('-a', metavar='<alpha>', type=click.IntRange(-8,8), help="Set alpha for profile type dynamic")
-@click.option('-s', metavar='<staticth>', type=int, help="Set staticth for profile type static")
-def mmu(p, a, s):
+@click.option('-s', metavar='<staticth>', type=click.IntRange(min=0), help="Set staticth for profile type static")
+@click.option('-t', type=click.Choice(["on", "off"]), help="Set packet trimming eligibility")
+@click.option('--verbose', '-vv', is_flag=True, help="Enable verbose output")
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def mmu(p, a, s, t, namespace, verbose):
     """mmuconfig configuration tasks"""
     log.log_info("'mmuconfig -p {}' executing...".format(p))
     command = ['mmuconfig', '-p', str(p)]
     if a is not None: command += ['-a', str(a)]
     if s is not None: command += ['-s', str(s)]
+    if t is not None:
+        command += ['-t', str(t)]
+    if namespace is not None:
+        command += ['-n', str(namespace)]
+    if verbose:
+        command += ['-vv']
     clicommon.run_command(command)
 
 
@@ -6416,8 +7799,9 @@ def pfc(ctx):
 @pfc.command()
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @click.argument('status', type=click.Choice(['on', 'off']))
+@multi_asic_util.multi_asic_click_option_namespace
 @click.pass_context
-def asymmetric(ctx, interface_name, status):
+def asymmetric(ctx, interface_name, status, namespace):
     """Set asymmetric PFC configuration."""
     # Get the config_db connector
     config_db = ctx.obj['config_db']
@@ -6427,7 +7811,11 @@ def asymmetric(ctx, interface_name, status):
         if interface_name is None:
             ctx.fail("'interface_name' is None!")
 
-    clicommon.run_command(['pfc', 'config', 'asymmetric', str(status), str(interface_name)])
+    cmd = ['pfc', 'config', 'asymmetric', str(status), str(interface_name)]
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
+
+    clicommon.run_command(cmd)
 
 #
 # 'pfc priority' command ('config interface pfc priority ...')
@@ -6437,8 +7825,9 @@ def asymmetric(ctx, interface_name, status):
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @click.argument('priority', type=click.Choice([str(x) for x in range(8)]))
 @click.argument('status', type=click.Choice(['on', 'off']))
+@multi_asic_util.multi_asic_click_option_namespace
 @click.pass_context
-def priority(ctx, interface_name, priority, status):
+def priority(ctx, interface_name, priority, status, namespace):
     """Set PFC priority configuration."""
     # Get the config_db connector
     config_db = ctx.obj['config_db']
@@ -6448,7 +7837,11 @@ def priority(ctx, interface_name, priority, status):
         if interface_name is None:
             ctx.fail("'interface_name' is None!")
 
-    clicommon.run_command(['pfc', 'config', 'priority', str(status), str(interface_name), str(priority)])
+    cmd = ['pfc', 'config', 'priority', str(status), str(interface_name), str(priority)]
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
+
+    clicommon.run_command(cmd)
 
 #
 # 'buffer' group ('config buffer ...')
@@ -6866,8 +8259,8 @@ def add_loopback(ctx, loopback_name):
     config_db = ValidatedConfigDBConnector(ctx.obj['db'])
     if ADHOC_VALIDATION:
         if is_loopback_name_valid(loopback_name) is False:
-            ctx.fail("{} is invalid, name should have prefix '{}' and suffix '{}' "
-                    .format(loopback_name, CFG_LOOPBACK_PREFIX, CFG_LOOPBACK_NO))
+            ctx.fail("{} is invalid, name should have prefix '{}' and suffix '{}' and should not exceed {} characters"
+                    .format(loopback_name, CFG_LOOPBACK_PREFIX, CFG_LOOPBACK_NO, IFACE_NAME_MAX_LEN))
 
         lo_intfs = [k for k, v in config_db.get_table('LOOPBACK_INTERFACE').items() if type(k) != tuple]
         if loopback_name in lo_intfs:
@@ -6944,17 +8337,24 @@ def enable(enable):
 @click.pass_context
 def ntp(ctx):
     """NTP server configuration tasks"""
-    config_db = ConfigDBConnector()
-    config_db.connect()
-    ctx.obj = {'db': config_db}
+    # This is checking to see if ctx.obj is a dictionary, to differentiate it
+    # between unit test scenario and runtime scenario.
+    if not isinstance(ctx.obj, dict):
+        config_db = ConfigDBConnector()
+        config_db.connect()
+        ctx.obj = {'db': config_db}
 
 @ntp.command('add')
 @click.argument('ntp_ip_address', metavar='<ntp_ip_address>', required=True)
+@click.option('--association-type', type=click.Choice(["server", "pool"], case_sensitive=False), default="server",
+              help="Define the association type for this NTP server")
+@click.option('--iburst', is_flag=True, help="Enable iburst for this NTP server")
+@click.option('--version', type=int, help="Specify the version for this NTP server")
 @click.pass_context
-def add_ntp_server(ctx, ntp_ip_address):
+def add_ntp_server(ctx, ntp_ip_address, association_type, iburst, version):
     """ Add NTP server IP """
     if ADHOC_VALIDATION:
-        if not clicommon.is_ipaddress(ntp_ip_address):
+        if not clicommon.is_ipaddress(ntp_ip_address) and association_type != "pool":
             ctx.fail('Invalid IP address')
     db = ValidatedConfigDBConnector(ctx.obj['db'])
     ntp_servers = db.get_table("NTP_SERVER")
@@ -6962,27 +8362,29 @@ def add_ntp_server(ctx, ntp_ip_address):
         click.echo("NTP server {} is already configured".format(ntp_ip_address))
         return
     else:
+        ntp_server_options = {}
+        if version:
+            ntp_server_options['version'] = version
+        if association_type != "server":
+            ntp_server_options['association_type'] = association_type
+        if iburst:
+            ntp_server_options['iburst'] = "on"
         try:
-            db.set_entry('NTP_SERVER', ntp_ip_address,
-                         {'resolve_as': ntp_ip_address,
-                          'association_type': 'server'})
+            db.set_entry('NTP_SERVER', ntp_ip_address, ntp_server_options)
         except ValueError as e:
             ctx.fail("Invalid ConfigDB. Error: {}".format(e))
         click.echo("NTP server {} added to configuration".format(ntp_ip_address))
         try:
-            click.echo("Restarting ntp-config service...")
-            clicommon.run_command(['systemctl', 'restart', 'ntp-config'], display_cmd=False)
+            click.echo("Restarting chrony service...")
+            clicommon.run_command(['systemctl', 'restart', 'chrony'], display_cmd=False)
         except SystemExit as e:
-            ctx.fail("Restart service ntp-config failed with error {}".format(e))
+            ctx.fail("Restart service chrony failed with error {}".format(e))
 
 @ntp.command('del')
 @click.argument('ntp_ip_address', metavar='<ntp_ip_address>', required=True)
 @click.pass_context
 def del_ntp_server(ctx, ntp_ip_address):
     """ Delete NTP server IP """
-    if ADHOC_VALIDATION:
-        if not clicommon.is_ipaddress(ntp_ip_address):
-            ctx.fail('Invalid IP address')
     db = ValidatedConfigDBConnector(ctx.obj['db'])
     ntp_servers = db.get_table("NTP_SERVER")
     if ntp_ip_address in ntp_servers:
@@ -6994,10 +8396,10 @@ def del_ntp_server(ctx, ntp_ip_address):
     else:
         ctx.fail("NTP server {} is not configured.".format(ntp_ip_address))
     try:
-        click.echo("Restarting ntp-config service...")
-        clicommon.run_command(['systemctl', 'restart', 'ntp-config'], display_cmd=False)
+        click.echo("Restarting chrony service...")
+        clicommon.run_command(['systemctl', 'restart', 'chrony'], display_cmd=False)
     except SystemExit as e:
-        ctx.fail("Restart service ntp-config failed with error {}".format(e))
+        ctx.fail("Restart service chrony failed with error {}".format(e))
 
 #
 # 'sflow' group ('config sflow ...')
@@ -7614,6 +9016,8 @@ def add_subinterface(ctx, subinterface_name, vid):
 
         if interface_alias is None:
             ctx.fail("{} invalid subinterface".format(interface_alias))
+        if not isInterfaceNameValid(subinterface_name):
+            ctx.fail("Subinterface name length should not exceed {} characters".format(IFACE_NAME_MAX_LEN))
 
         if interface_alias.startswith("Po") is True:
             intf_table_name = CFG_PORTCHANNEL_PREFIX
@@ -7880,6 +9284,323 @@ def warning(db, category_list, max_events, namespace):
 @clicommon.pass_db
 def notice(db, category_list, max_events, namespace):
     handle_asic_sdk_health_suppress(db, 'notice', category_list, max_events, namespace)
+
+
+#
+# 'serial_console' group ('config  serial_console')
+#
+@config.group(cls=clicommon.AbbreviationGroup, name='serial_console')
+def serial_console():
+    """Configuring system serial-console behavior"""
+    pass
+
+
+@serial_console.command('sysrq-capabilities')
+@click.argument('sysrq_capabilities', metavar='<enabled|disabled>', required=True,
+                type=click.Choice(['enabled', 'disabled']))
+def sysrq_capabilities(sysrq_capabilities):
+    """Set serial console sysrq-capabilities state"""
+
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    config_db.mod_entry("SERIAL_CONSOLE", 'POLICIES',
+                        {'sysrq_capabilities': sysrq_capabilities})
+
+
+@serial_console.command('inactivity-timeout')
+@click.argument('inactivity_timeout', metavar='<timeout>', required=True,
+                type=click.IntRange(0, 35000))
+def inactivity_timeout_serial(inactivity_timeout):
+    """Set serial console inactivity timeout"""
+
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    config_db.mod_entry("SERIAL_CONSOLE", 'POLICIES',
+                        {'inactivity_timeout': inactivity_timeout})
+
+
+#
+# 'ssh' group ('config  ssh')
+#
+@config.group(cls=clicommon.AbbreviationGroup, name='ssh')
+def ssh():
+    """Configuring system ssh behavior"""
+    pass
+
+
+@ssh.command('inactivity-timeout')
+@click.argument('inactivity_timeout', metavar='<timeout>', required=True,
+                type=click.IntRange(0, 35000))
+def inactivity_timeout_ssh(inactivity_timeout):
+    """Set ssh inactivity timeout"""
+
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    config_db.mod_entry("SSH_SERVER", 'POLICIES',
+                        {'inactivity_timeout': inactivity_timeout})
+
+
+@ssh.command('max-sessions')
+@click.argument('max-sessions', metavar='<max-sessions>', required=True,
+                type=click.IntRange(0, 100))
+def max_sessions(max_sessions):
+    """Set max number of concurrent logins"""
+
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    config_db.mod_entry("SSH_SERVER", 'POLICIES',
+                        {'max_sessions': max_sessions})
+
+
+#
+# 'banner' group ('config banner ...')
+#
+@config.group()
+def banner():
+    """Configuring system banner messages"""
+    pass
+
+
+@banner.command()
+@click.argument('state', metavar='<enabled|disabled>', required=True, type=click.Choice(['enabled', 'disabled']))
+def state(state):
+    """Set banner feature state"""
+
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    config_db.mod_entry(swsscommon.CFG_BANNER_MESSAGE_TABLE_NAME, 'global',
+                        {'state': state})
+
+
+@banner.command()
+@click.argument('message', metavar='<message>', required=True)
+def login(message):
+    """Set login message"""
+
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    config_db.mod_entry(swsscommon.CFG_BANNER_MESSAGE_TABLE_NAME, 'global',
+                        {'login': message})
+
+
+@banner.command()
+@click.argument('message', metavar='<message>', required=True)
+def logout(message):
+    """Set logout message"""
+
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    config_db.mod_entry(swsscommon.CFG_BANNER_MESSAGE_TABLE_NAME, 'global',
+                        {'logout': message})
+
+
+@banner.command()
+@click.argument('message', metavar='<message>', required=True)
+def motd(message):
+    """Set message of the day"""
+
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    config_db.mod_entry(swsscommon.CFG_BANNER_MESSAGE_TABLE_NAME, 'global',
+                        {'motd': message})
+
+
+#
+# 'vnet' group ('config vnet ...')
+#
+
+@config.group(cls=clicommon.AbbreviationGroup, name='vnet')
+@click.pass_context
+def vnet(ctx):
+    """VNET-related configuration tasks"""
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    ctx.obj = {}
+    ctx.obj['config_db'] = config_db
+
+
+@vnet.command('add')
+@click.argument('vnet_name', metavar='<vnet_name>', type=str, required=True)
+@click.argument('vni', metavar='<vni>', required=True)
+@click.argument('vxlan_tunnel', metavar='<vxlan_tunnel>', required=True)
+@click.argument('peer_list', metavar='<peer_list>', required=False)
+@click.argument('guid', metavar='<guid>', type=str, required=False)
+@click.argument('scope', metavar='<scope>', required=False)
+@click.argument('advertise_prefix', metavar='<advertise_prefix>', type=bool, required=False)
+@click.argument('overlay_dmac', metavar='<overlay_dmac>', required=False)
+@click.argument('src_mac', metavar='<src_mac>', required=False)
+@click.pass_context
+def add_vnet(ctx, vnet_name, vni, vxlan_tunnel, peer_list, guid, scope, advertise_prefix, overlay_dmac, src_mac):
+    """Add Vnet"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+
+    vnet_name_is_valid(ctx, vnet_name)
+
+    if not vni.isdigit() or clicommon.vni_id_is_valid(int(vni)) is False:
+        ctx.fail("Invalid VNI {}. Valid range [1 to 16777215].".format(vni))
+    if not clicommon.is_vxlan_tunnel_exists(config_db, vxlan_tunnel):
+        ctx.fail("Vxlan tunnel {} does not exist!".format(vxlan_tunnel))
+
+    subvnet_dict = {}
+    subvnet_dict["vni"] = vni
+    subvnet_dict["vxlan_tunnel"] = vxlan_tunnel
+
+    if peer_list:
+        peer_list = peer_list.split(',')
+        for peer in peer_list:
+            vnet_name_is_valid(ctx, peer)
+        subvnet_dict["peer_list"] = peer_list
+
+    if guid:
+        if len(guid) > GUID_MAX_LEN:
+            ctx.fail("'guid' length should not exceed {} characters".format(GUID_MAX_LEN))
+        subvnet_dict["guid"] = guid
+
+    if scope:
+        if scope != 'default':
+            ctx.fail("Only 'default' value is allowed for scope!")
+        subvnet_dict["scope"] = scope
+
+    if advertise_prefix:
+        subvnet_dict["advertise_prefix"] = advertise_prefix
+
+    if overlay_dmac:
+        if not clicommon.is_mac_address_valid(overlay_dmac):
+            ctx.fail("Invalid MAC for overlay dmac {} .".format(overlay_dmac))
+        subvnet_dict["overlay_dmac"] = overlay_dmac
+
+    if src_mac:
+        if not clicommon.is_mac_address_valid(src_mac):
+            ctx.fail("Invalid MAC for src mac {} .".format(src_mac))
+        subvnet_dict["src_mac"] = src_mac
+
+    try:
+        config_db.set_entry('VNET', vnet_name, subvnet_dict)
+    except ValueError as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+    click.echo("VNET {} is added/updated.".format(vnet_name))
+
+
+@vnet.command('del')
+@click.argument('vnet_name', metavar='<vnet_name>', required=True)
+@click.pass_context
+def del_vnet(ctx, vnet_name):
+    """Del Vnet"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+
+    vnet_name_is_valid(ctx, vnet_name)
+
+    if not is_vnet_exists(config_db, vnet_name):
+        ctx.fail("VNET {} does not exist!".format(vnet_name))
+    else:
+        del_interface_bind_to_vnet(config_db, vnet_name)
+        del_route_bind_to_vnet(config_db, vnet_name)
+
+        try:
+            config_db.set_entry('VNET', vnet_name, None)
+        except JsonPatchConflict as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+        click.echo("VNET {} deleted and all associated IP addresses and routes removed.".format(vnet_name))
+
+
+@vnet.command('add-route')
+@click.argument('vnet_name', metavar='<vnet_name>', type=str, required=True)
+@click.argument('prefix', metavar='<prefix>', required=True)
+@click.argument('endpoint', metavar='<endpoint>', required=True)
+@click.argument('vni', metavar='<vni>', required=False)
+@click.argument('mac_address', metavar='<mac_address>', required=False)
+@click.argument('endpoint_monitor', metavar='<endpoint_monitor>', required=False)
+@click.argument('profile', metavar='<profile>', type=str, required=False)
+@click.argument('primary', metavar='<primary>', required=False)
+@click.argument('monitoring', metavar='<monitoring>', type=str, required=False)
+@click.argument('adv_prefix', metavar='<adv_prefix>', required=False)
+@click.pass_context
+def add_vnet_route(ctx, vnet_name, prefix, endpoint, vni, mac_address, endpoint_monitor,
+                   profile, primary, monitoring, adv_prefix):
+    """Add/Update VNET Route"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+
+    vnet_name_is_valid(ctx, vnet_name)
+
+    if not is_vnet_exists(config_db, vnet_name):
+        ctx.fail("VNET {} doesnot exist, cannot add a route!".format(vnet_name))
+    if not clicommon.is_ipprefix(prefix):
+        ctx.fail("Invalid prefix {}".format(prefix))
+    else:
+        if not clicommon.is_ipaddress(endpoint):
+            ctx.fail("Endpoint has invalid IP address {}".format(endpoint))
+
+        subvnet_dict = {}
+        subvnet_dict["endpoint"] = endpoint
+
+        if vni:
+            if not vni.isdigit() or clicommon.vni_id_is_valid(int(vni)) is False:
+                ctx.fail("Invalid VNI {}. Valid range [1 to 16777215].".format(vni))
+            subvnet_dict["vni"] = vni
+
+        if mac_address:
+            if not clicommon.is_mac_address_valid(mac_address):
+                ctx.fail("Invalid MAC {}".format(mac_address))
+            subvnet_dict["mac_address"] = mac_address
+
+        if endpoint_monitor:
+            if not clicommon.is_ipaddress(endpoint_monitor):
+                ctx.fail("Endpoint monitor has invalid IP address {}".format(endpoint_monitor))
+            subvnet_dict["endpoint_monitor"] = endpoint_monitor
+
+        if profile:
+            subvnet_dict['profile'] = profile
+
+        if primary:
+            if not clicommon.is_ipaddress(primary):
+                ctx.fail("Primary has invalid IP address {}".format(primary))
+            subvnet_dict['primary'] = primary
+
+        if monitoring:
+            subvnet_dict['monitoring'] = monitoring
+
+        if adv_prefix:
+            if not clicommon.is_ipprefix(adv_prefix):
+                ctx.fail("Invalid adv_prefix {}".format(adv_prefix))
+            subvnet_dict['adv_prefix'] = adv_prefix
+
+        try:
+            config_db.set_entry('VNET_ROUTE_TUNNEL', (vnet_name, prefix), subvnet_dict)
+        except ValueError as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+        click.echo("VNET route added/updated for the VNET {}.".format(vnet_name))
+
+
+@vnet.command('del-route')
+@click.argument('vnet_name', metavar='<vnet_name>', type=str, required=True)
+@click.argument('prefix', metavar='<prefix>', required=False)
+@click.pass_context
+def del_vnet_route(ctx, vnet_name, prefix):
+    """Del a specific VNET route or all VNET routes"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+
+    vnet_name_is_valid(ctx, vnet_name)
+
+    if not is_vnet_exists(config_db, vnet_name):
+        ctx.fail("VNET {} doesnot exist, cannot delete the route!".format(vnet_name))
+    if not is_vnet_route_exists(config_db, vnet_name):
+        ctx.fail("Routes dont exist for the VNET {}, cant delete it!".format(vnet_name))
+    if prefix:
+        if not clicommon.is_ipprefix(prefix):
+            ctx.fail("Invalid prefix {}".format(prefix))
+        if not is_specific_vnet_route_exists(config_db, vnet_name, prefix):
+            ctx.fail("Route does not exist for the VNET {}, cant delete it!".format(vnet_name))
+        else:
+            for key in config_db.get_table('VNET_ROUTE_TUNNEL'):
+                if key[0] == vnet_name and key[1] == prefix:
+                    try:
+                        config_db.set_entry('VNET_ROUTE_TUNNEL', (vnet_name, prefix), None)
+                    except ValueError as e:
+                        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+                    click.echo("Specific route deleted for the VNET {}.".format(vnet_name))
+    else:
+        del_route_bind_to_vnet(config_db, vnet_name)
+        click.echo("All routes deleted for the VNET {}.".format(vnet_name))
 
 
 if __name__ == '__main__':

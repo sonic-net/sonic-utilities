@@ -88,7 +88,6 @@ setup(
         'utilities_common',
         'watchdogutil',
         'sonic_cli_gen',
-        'wol',
     ],
     package_data={
         'generic_config_updater': ['gcu_services_validator.conf.json', 'gcu_field_operation_validators.conf.json'],
@@ -121,11 +120,14 @@ setup(
         'scripts/decode-syseeprom',
         'scripts/dropcheck',
         'scripts/disk_check.py',
+        'scripts/dpu-tty.py',
         'scripts/dropconfig',
         'scripts/dropstat',
         'scripts/dualtor_neighbor_check.py',
         'scripts/dump_nat_entries.py',
+        'scripts/debug_voq_chassis_packet_drops.sh',
         'scripts/ecnconfig',
+        'scripts/express-reboot',
         'scripts/fabricstat',
         'scripts/fanshow',
         'scripts/fast-reboot',
@@ -160,6 +162,7 @@ setup(
         'scripts/psushow',
         'scripts/queuestat',
         'scripts/reboot',
+        'scripts/reboot_smartswitch_helper',
         'scripts/route_check.py',
         'scripts/route_check_test.sh',
         'scripts/vnet_route_check.py',
@@ -167,6 +170,7 @@ setup(
         'scripts/soft-reboot',
         'scripts/storyteller',
         'scripts/syseeprom-to-json',
+        'scripts/srv6stat',
         'scripts/teamd_increase_retry_count.py',
         'scripts/tempershow',
         'scripts/tunnelstat',
@@ -188,7 +192,8 @@ setup(
         'scripts/verify_image_sign.sh',
         'scripts/verify_image_sign_common.sh',
         'scripts/check_db_integrity.py',
-        'scripts/sysreadyshow'
+        'scripts/sysreadyshow',
+        'scripts/wredstat'
     ],
     entry_points={
         'console_scripts': [
@@ -223,7 +228,6 @@ setup(
             'undebug = undebug.main:cli',
             'watchdogutil = watchdogutil.main:watchdogutil',
             'sonic-cli-gen = sonic_cli_gen.main:cli',
-            'wol = wol.main:wol',
         ]
     },
     install_requires=[
@@ -237,6 +241,7 @@ setup(
         'filelock>=3.0.12',
         'enlighten>=1.8.0',
         'ipaddress>=1.0.23',
+        'protobuf',
         'jinja2>=2.11.3',
         'jsondiff>=1.2.0',
         'jsonpatch>=1.32.0',
@@ -249,7 +254,7 @@ setup(
         'pexpect>=4.8.0',
         'semantic-version>=2.8.5',
         'prettyprinter>=0.18.0',
-        'pyroute2>=0.5.14, <0.6.1',
+        'pyroute2==0.7.12',
         'requests>=2.25.0, <=2.31.0',
         'tabulate==0.9.0',
         'toposort==1.6',

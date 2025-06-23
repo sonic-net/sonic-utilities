@@ -17,7 +17,6 @@
     "asic0": {
         "DEVICE_METADATA": {
             "localhost": {
-                "asic_id": "01.00.0",
                 "asic_name": "asic0",
                 "bgp_asn": "65100",
                 "cloudtype": "None",
@@ -36,7 +35,6 @@
     "asic1": {
         "DEVICE_METADATA": {
             "localhost": {
-                "asic_id": "08:00.0",
                 "asic_name": "asic1",
                 "bgp_asn": "65100",
                 "cloudtype": "None",

@@ -8,9 +8,12 @@ from .gu_common import GenericConfigUpdaterError
 from swsscommon import swsscommon
 from utilities_common.constants import DEFAULT_SUPPORTED_FECS_LIST
 
+STATE_DB_NAME = 'STATE_DB'
+REDIS_TIMEOUT_MSECS = 0
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 GCU_TABLE_MOD_CONF_FILE = f"{SCRIPT_DIR}/gcu_field_operation_validators.conf.json"
 GET_HWSKU_CMD = "sonic-cfggen -d -v DEVICE_METADATA.localhost.hwsku"
+
 
 def get_asic_name():
     asic = "unknown"
@@ -26,6 +29,8 @@ def get_asic_name():
 
     if asic_type == 'cisco-8000':
         asic = "cisco-8000"
+    if asic_type == 'marvell-teralynx':
+        asic = "marvell-teralynx"
     elif asic_type == 'mellanox' or asic_type == 'vs' or asic_type == 'broadcom':
         proc = subprocess.Popen(GET_HWSKU_CMD, shell=True, universal_newlines=True, stdout=subprocess.PIPE)
         output, err = proc.communicate()
@@ -35,6 +40,7 @@ def get_asic_name():
             spc2_hwskus = asic_mapping["mellanox_asics"]["spc2"]
             spc3_hwskus = asic_mapping["mellanox_asics"]["spc3"]
             spc4_hwskus = asic_mapping["mellanox_asics"]["spc4"]
+            spc5_hwskus = asic_mapping["mellanox_asics"]["spc5"]
             if hwsku.lower() in [spc1_hwsku.lower() for spc1_hwsku in spc1_hwskus]:
                 asic = "spc1"
                 return asic
@@ -46,6 +52,9 @@ def get_asic_name():
                 return asic
             if hwsku.lower() in [spc4_hwsku.lower() for spc4_hwsku in spc4_hwskus]:
                 asic = "spc4"
+                return asic
+            if hwsku.lower() in [spc5_hwsku.lower() for spc5_hwsku in spc5_hwskus]:
+                asic = "spc5"
                 return asic
         if asic_type == 'broadcom' or asic_type == 'vs':
             broadcom_asics = asic_mapping["broadcom_asics"]
@@ -60,7 +69,7 @@ def get_asic_name():
     return asic
 
 
-def rdma_config_update_validator(patch_element):
+def rdma_config_update_validator(scope, patch_element):
     asic = get_asic_name()
     if asic == "unknown":
         return False
@@ -133,17 +142,17 @@ def rdma_config_update_validator(patch_element):
     return True
 
 
-def read_statedb_entry(table, key, field):
-    state_db = swsscommon.DBConnector("STATE_DB", 0)
+def read_statedb_entry(scope, table, key, field):
+    state_db = swsscommon.DBConnector(STATE_DB_NAME, REDIS_TIMEOUT_MSECS, True, scope)
     tbl = swsscommon.Table(state_db, table)
     return tbl.hget(key, field)[1]
 
 
-def port_config_update_validator(patch_element):
+def port_config_update_validator(scope, patch_element):
 
     def _validate_field(field, port, value):
         if field == "fec":
-            supported_fecs_str = read_statedb_entry("PORT_TABLE", port, "supported_fecs")
+            supported_fecs_str = read_statedb_entry(scope, "PORT_TABLE", port, "supported_fecs")
             if supported_fecs_str:
                 if supported_fecs_str != 'N/A':
                     supported_fecs_list = [element.strip() for element in supported_fecs_str.split(',')]
@@ -155,7 +164,7 @@ def port_config_update_validator(patch_element):
                 return False
             return True
         if field == "speed":
-            supported_speeds_str = read_statedb_entry("PORT_TABLE", port, "supported_speeds") or ''
+            supported_speeds_str = read_statedb_entry(scope, "PORT_TABLE", port, "supported_speeds") or ''
             try:
                 supported_speeds = [int(s) for s in supported_speeds_str.split(',') if s]
                 if supported_speeds and int(value) not in supported_speeds:

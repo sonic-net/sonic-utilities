@@ -4,6 +4,7 @@ import sys
 import json
 import syslog
 import subprocess
+import argparse
 from swsscommon import swsscommon
 
 ''' vnet_route_check.py: tool that verifies VNET routes consistancy between SONiC and vendor SDK DBs.
@@ -74,7 +75,7 @@ def print_message(lvl, *args):
 def check_vnet_cfg():
     ''' Returns True if VNET is configured in APP_DB or False if no VNET configuration.
     '''
-    db = swsscommon.DBConnector('APPL_DB', 0)
+    db = swsscommon.DBConnector('APPL_DB', 0, True)
 
     vnet_db_keys = swsscommon.Table(db, 'VNET_TABLE').getKeys()
 
@@ -85,7 +86,7 @@ def get_vnet_intfs():
     ''' Returns dictionary of VNETs and related VNET interfaces.
     Format: { <vnet_name>: [ <vnet_rif_name> ] }
     '''
-    db = swsscommon.DBConnector('APPL_DB', 0)
+    db = swsscommon.DBConnector('APPL_DB', 0, True)
 
     intfs_table = swsscommon.Table(db, 'INTF_TABLE')
     intfs_keys = swsscommon.Table(db, 'INTF_TABLE').getKeys()
@@ -109,7 +110,7 @@ def get_all_rifs_oids():
     ''' Returns dictionary of all router interfaces and their OIDs.
     Format: { <rif_name>: <rif_oid> }
     '''
-    db = swsscommon.DBConnector('COUNTERS_DB', 0)
+    db = swsscommon.DBConnector('COUNTERS_DB', 0, True)
     rif_table = swsscommon.Table(db, 'COUNTERS_RIF_NAME_MAP')
 
     rif_name_oid_map = dict(rif_table.get('')[1])
@@ -140,7 +141,7 @@ def get_vrf_entries():
     ''' Returns dictionary of VNET interfaces and corresponding VRF OIDs.
     Format: { <vnet_rif_name>: <vrf_oid> }
     '''
-    db = swsscommon.DBConnector('ASIC_DB', 0)
+    db = swsscommon.DBConnector('ASIC_DB', 0, True)
     rif_table = swsscommon.Table(db, 'ASIC_STATE')
 
     vnet_rifs_oids = get_vnet_rifs_oids()
@@ -162,7 +163,7 @@ def filter_out_vnet_ip2me_routes(vnet_routes):
     ''' Filters out IP2ME routes from the provided dictionary with VNET routes
     Format: { <vnet_name>: { 'routes': [ <pfx/pfx_len> ], 'vrf_oid': <oid> } }
     '''
-    db = swsscommon.DBConnector('APPL_DB', 0)
+    db = swsscommon.DBConnector('APPL_DB', 0, True)
 
     all_rifs_db_keys = swsscommon.Table(db, 'INTF_TABLE').getKeys()
     vnet_intfs = get_vnet_intfs()
@@ -198,7 +199,7 @@ def get_vnet_routes_from_app_db():
     ''' Returns dictionary of VNET routes configured per each VNET in APP_DB.
     Format: { <vnet_name>: { 'routes': [ <pfx/pfx_len> ], 'vrf_oid': <oid> } }
     '''
-    db = swsscommon.DBConnector('APPL_DB', 0)
+    db = swsscommon.DBConnector('APPL_DB', 0, True)
 
     vnet_intfs = get_vnet_intfs()
     vnet_vrfs = get_vrf_entries()
@@ -245,7 +246,7 @@ def get_vnet_routes_from_asic_db():
     ''' Returns dictionary of VNET routes configured per each VNET in ASIC_DB.
     Format: { <vnet_name>: { 'routes': [ <pfx/pfx_len> ], 'vrf_oid': <oid> } }
     '''
-    db = swsscommon.DBConnector('ASIC_DB', 0)
+    db = swsscommon.DBConnector('ASIC_DB', 0, True)
 
     tbl = swsscommon.Table(db, 'ASIC_STATE')
 
@@ -356,23 +357,62 @@ def get_sdk_vnet_routes_diff(routes):
     return routes_diff
 
 
+def filter_active_vnet_routes(vnet_routes: dict):
+    """ Filters a dictionary containing VNet routes configured for each VNet in APP_DB.
+    For each VNet in "vnet_routes", only active routes are included in the returned dictionary.
+    Format (for both input and output):
+    { <vnet_name>: { 'routes': [ <pfx/pfx_len> ], 'vrf_oid': <oid> } }
+    """
+    state_db = swsscommon.DBConnector("STATE_DB", 0, True)
+    vnet_route_tunnel_table = swsscommon.Table(state_db, "VNET_ROUTE_TUNNEL_TABLE")
+
+    vnet_active_routes = {}
+    for vnet_name, vnet_info in vnet_routes.items():
+        active_routes = []
+        for prefix in vnet_info["routes"]:
+            key = f"{vnet_name}|{prefix}"
+            exists, fvs = vnet_route_tunnel_table.get(key)
+            if not exists:
+                print_message(syslog.LOG_WARNING, f"VNET_ROUTE_TUNNEL_TABLE|{key} does not exist in STATE DB.")
+                active_routes.append(prefix)  # Treating "prefix" as an active route
+                continue
+            fvs_dict = dict(fvs)
+            if fvs_dict.get("state") == "active":
+                active_routes.append(prefix)
+        if len(active_routes) > 0:
+            vnet_active_routes[vnet_name] = {"routes": active_routes, "vrf_oid": vnet_info["vrf_oid"]}
+
+    return vnet_active_routes
+
+
 def main():
+    parser = argparse.ArgumentParser(
+        description="A script that checks for VNet route mismatches between APP DB, ASIC DB, and SDK.")
+    parser.add_argument("-a", "--all", action="store_true",
+                        help="Find routes missed in ASIC DB by checking both active and inactive routes in APP DB.")
+    args = parser.parse_args()
 
     rc = RC_OK
 
     # Don't run VNET routes consistancy logic if there is no VNET configuration
     if not check_vnet_cfg():
         return rc
-    asic_db = swsscommon.DBConnector('ASIC_DB', 0)
+    asic_db = swsscommon.DBConnector('ASIC_DB', 0, True)
     virtual_router = swsscommon.Table(asic_db, 'ASIC_STATE:SAI_OBJECT_TYPE_VIRTUAL_ROUTER')
-    if virtual_router.getKeys() != []:
-        global default_vrf_oid
-        default_vrf_oid = virtual_router.getKeys()[0]
+    global default_vrf_oid
+    default_vrf_oid = ""
+    vr_keys = virtual_router.getKeys()
+    if vr_keys:
+        default_vrf_oid = vr_keys[0]
 
     app_db_vnet_routes = get_vnet_routes_from_app_db()
+    active_app_db_vnet_routes = filter_active_vnet_routes(app_db_vnet_routes)
     asic_db_vnet_routes = get_vnet_routes_from_asic_db()
 
-    missed_in_asic_db_routes = get_vnet_routes_diff(asic_db_vnet_routes, app_db_vnet_routes,True)
+    if args.all:
+        missed_in_asic_db_routes = get_vnet_routes_diff(asic_db_vnet_routes, app_db_vnet_routes, True)
+    else:
+        missed_in_asic_db_routes = get_vnet_routes_diff(asic_db_vnet_routes, active_app_db_vnet_routes, True)
     missed_in_app_db_routes = get_vnet_routes_diff(app_db_vnet_routes, asic_db_vnet_routes)
     missed_in_sdk_routes = get_sdk_vnet_routes_diff(asic_db_vnet_routes)
 

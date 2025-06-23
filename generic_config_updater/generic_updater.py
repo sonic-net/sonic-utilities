@@ -3,6 +3,7 @@ import jsonpointer
 import os
 import subprocess
 
+from datetime import datetime, timezone
 from enum import Enum
 from .gu_common import HOST_NAMESPACE, GenericConfigUpdaterError, EmptyTableError, ConfigWrapper, \
                     DryRunConfigWrapper, PatchWrapper, genericUpdaterLogging
@@ -17,9 +18,11 @@ CHECKPOINT_EXT = ".cp.json"
 
 def extract_scope(path):
     if not path:
-        raise Exception("Wrong patch with empty path.")
+        raise GenericConfigUpdaterError("Wrong patch with empty path.")
     pointer = jsonpointer.JsonPointer(path)
-    parts = pointer.parts
+
+    # Re-escapes
+    parts = [jsonpointer.escape(part) for part in pointer.parts]
     if not parts:
         raise GenericConfigUpdaterError("Wrong patch with empty path.")
     if parts[0].startswith("asic"):
@@ -231,7 +234,7 @@ class FileSystemConfigRollbacker:
 
         self.logger.log_notice("Config checkpoint completed.")
 
-    def list_checkpoints(self):
+    def list_checkpoints(self, includes_time=False):
         self.logger.log_info("Listing checkpoints starting.")
 
         self.logger.log_info(f"Verifying checkpoints directory '{self.checkpoints_dir}' exists.")
@@ -242,14 +245,35 @@ class FileSystemConfigRollbacker:
         self.logger.log_info("Getting checkpoints in checkpoints directory.")
         checkpoint_names = self.util.get_checkpoint_names()
 
-        checkpoints_len = len(checkpoint_names)
-        self.logger.log_info(f"Found {checkpoints_len} checkpoint{'s' if checkpoints_len != 1 else ''}{':' if checkpoints_len > 0 else '.'}")
-        for checkpoint_name in checkpoint_names:
-            self.logger.log_info(f"  * {checkpoint_name}")
+        checkpoints = []
+        if includes_time:
+            for checkpoint_name in checkpoint_names:
+                checkpoint_path = os.path.join(self.checkpoints_dir, checkpoint_name + CHECKPOINT_EXT)
+                last_modified = datetime.fromtimestamp(os.path.getmtime(checkpoint_path), tz=timezone.utc).isoformat()
+                checkpoints.append({"name": checkpoint_name, "time": last_modified})
+
+            checkpoints.sort(key=lambda x: x["time"], reverse=True)
+        else:
+            checkpoints = checkpoint_names
+
+        checkpoints_len = len(checkpoints)
+        self.logger.log_info(
+            "Found {} checkpoint{}{}".format(
+                checkpoints_len,
+                's' if checkpoints_len != 1 else '',
+                ':' if checkpoints_len > 0 else '.'
+            )
+        )
+
+        for checkpoint in checkpoints:
+            if includes_time:
+                self.logger.log_info(f"  * {checkpoint['name']} (Last Modified: {checkpoint['time']})")
+            else:
+                self.logger.log_info(f"  * {checkpoint}")
 
         self.logger.log_info("Listing checkpoints completed.")
 
-        return checkpoint_names
+        return checkpoints
 
     def delete_checkpoint(self, checkpoint_name):
         self.logger.log_notice("Deleting checkpoint starting.")
@@ -405,8 +429,8 @@ class Decorator(PatchApplier, ConfigReplacer, FileSystemConfigRollbacker):
     def checkpoint(self, checkpoint_name):
         self.decorated_config_rollbacker.checkpoint(checkpoint_name)
 
-    def list_checkpoints(self):
-        return self.decorated_config_rollbacker.list_checkpoints()
+    def list_checkpoints(self, includes_time):
+        return self.decorated_config_rollbacker.list_checkpoints(includes_time)
 
     def delete_checkpoint(self, checkpoint_name):
         self.decorated_config_rollbacker.delete_checkpoint(checkpoint_name)
@@ -615,6 +639,6 @@ class GenericUpdater:
         config_rollbacker = self.generic_update_factory.create_config_rollbacker(verbose)
         config_rollbacker.delete_checkpoint(checkpoint_name)
 
-    def list_checkpoints(self, verbose):
+    def list_checkpoints(self, includes_time, verbose):
         config_rollbacker = self.generic_update_factory.create_config_rollbacker(verbose)
-        return config_rollbacker.list_checkpoints()
+        return config_rollbacker.list_checkpoints(includes_time)

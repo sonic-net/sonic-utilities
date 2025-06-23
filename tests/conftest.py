@@ -27,7 +27,6 @@ modules_path = os.path.dirname(test_path)
 sys.path.insert(0, modules_path)
 
 generated_services_list = [
-    'ntp-config.service',
     'warmboot-finalizer.service',
     'watchdog-control.service',
     'rsyslog-config.service',
@@ -174,9 +173,15 @@ def setup_single_bgp_instance(request):
     if request.param == 'v4':
         bgp_mocked_json = os.path.join(
             test_path, 'mock_tables', 'ipv4_bgp_summary.json')
+    elif request.param == 'v4_vrf':
+        bgp_mocked_json = os.path.join(
+            test_path, 'mock_tables', 'ipv4_bgp_summary_vrf.json')
     elif request.param == 'v6':
         bgp_mocked_json = os.path.join(
             test_path, 'mock_tables', 'ipv6_bgp_summary.json')
+    elif request.param == 'v6_vrf':
+        bgp_mocked_json = os.path.join(
+            test_path, 'mock_tables', 'ipv6_bgp_summary_vrf.json')
     elif request.param == 'show_bgp_summary_no_neigh':
         bgp_neigh_mocked_json = os.path.join(
             test_path, 'mock_tables', 'no_bgp_neigh.json')
@@ -194,7 +199,11 @@ def setup_single_bgp_instance(request):
     elif request.param == 'ipv6_route':
         bgp_mocked_json = 'ipv6_route.json'
     elif request.param == 'ip_special_route':
-        bgp_mocked_json = 'ip_special_route.json'    
+        bgp_mocked_json = 'ip_special_route.json'
+    elif request.param == 'ip_route_lc':
+        bgp_mocked_json = 'ip_route_lc.json'
+    elif request.param == 'ip_route_remote_lc':
+        bgp_mocked_json = 'ip_route_remote_lc.json'
     else:
         bgp_mocked_json = os.path.join(
             test_path, 'mock_tables', 'dummy.json')
@@ -240,7 +249,8 @@ def setup_single_bgp_instance(request):
     _old_run_bgp_command = bgp_util.run_bgp_command
     if any([request.param == 'ip_route',
             request.param == 'ip_specific_route', request.param == 'ip_special_route',
-            request.param == 'ipv6_route', request.param == 'ipv6_specific_route']):
+            request.param == 'ipv6_route', request.param == 'ipv6_specific_route',
+            request.param == 'ip_route_lc', request.param == 'ip_route_remote_lc']):
         bgp_util.run_bgp_command = mock.MagicMock(
             return_value=mock_run_bgp_route_command("", ""))
     elif request.param.startswith('ipv6_route_err'):
@@ -303,6 +313,12 @@ def setup_multi_asic_bgp_instance(request):
         request.param.startswith('bgp_v4_neighbor') or \
         request.param.startswith('bgp_v6_neighbor'):
         m_asic_json_file = request.param
+    elif request.param == 'ip_route_lc':
+        m_asic_json_file = 'ip_route_lc.json'
+    elif request.param == 'ip_route_remote_lc':
+        m_asic_json_file = 'ip_route_remote_lc.json'
+    elif request.param == 'ip_route_lc_2':
+        m_asic_json_file = 'ip_route_lc_2.json'
     else:
         m_asic_json_file = os.path.join(
             test_path, 'mock_tables', 'dummy.json')
@@ -353,7 +369,7 @@ def setup_multi_asic_bgp_instance(request):
 
     def mock_run_show_summ_bgp_command_no_ext_neigh_on_all_asic(
             vtysh_cmd, bgp_namespace, vtysh_shell_cmd=constants.VTYSH_COMMAND, exit_on_fail=True):
-        if vtysh_cmd == "show ip bgp summary json":
+        if vtysh_cmd == "show ip bgp summary json" or vtysh_cmd == "show ip bgp vrf default summary json":
             m_asic_json_file = 'no_ext_bgp_neigh.json'
         else:
             m_asic_json_file = 'device_bgp_info.json'
@@ -369,7 +385,7 @@ def setup_multi_asic_bgp_instance(request):
 
     def mock_run_show_summ_bgp_command_no_ext_neigh_on_asic1(
             vtysh_cmd, bgp_namespace, vtysh_shell_cmd=constants.VTYSH_COMMAND, exit_on_fail=True):
-        if vtysh_cmd == "show ip bgp summary json":
+        if vtysh_cmd == "show ip bgp summary json" or vtysh_cmd == "show ip bgp vrf default summary json":
             if bgp_namespace == "asic1":
                 m_asic_json_file = 'no_ext_bgp_neigh.json'
             else:

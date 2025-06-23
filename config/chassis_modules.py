@@ -5,6 +5,7 @@ import time
 import re
 import subprocess
 import utilities_common.cli as clicommon
+from utilities_common.chassis import is_smartswitch, get_all_dpus
 
 TIMEOUT_SECS = 10
 
@@ -27,7 +28,10 @@ def get_config_module_state(db, chassis_module_name):
     config_db = db.cfgdb
     fvs = config_db.get_entry('CHASSIS_MODULE', chassis_module_name)
     if not fvs:
-        return 'up'
+        if is_smartswitch():
+            return 'down'
+        else:
+            return 'up'
     else:
         return fvs['admin_status']
 
@@ -72,7 +76,7 @@ def fabric_module_set_admin_status(db, chassis_module_name, state):
     if state == "down":
         for asic in asic_list:
             click.echo("Stop swss@{} and peer services".format(asic))
-            clicommon.run_command('sudo systemctl stop swss@{}.service'.format(asic))
+            clicommon.run_command(['sudo', 'systemctl', 'stop', 'swss@{}.service'.format(asic)])
 
         is_active = subprocess.call(["systemctl", "is-active", "--quiet", "swss@{}.service".format(asic)])
 
@@ -89,20 +93,24 @@ def fabric_module_set_admin_status(db, chassis_module_name, state):
         # without bring down the hardware
         for asic in asic_list:
             # To address systemd service restart limit by resetting the count
-            clicommon.run_command('sudo systemctl reset-failed swss@{}.service'.format(asic))
+            clicommon.run_command(['sudo', 'systemctl', 'reset-failed', 'swss@{}.service'.format(asic)])
             click.echo("Start swss@{} and peer services".format(asic))
-            clicommon.run_command('sudo systemctl start swss@{}.service'.format(asic))
+            clicommon.run_command(['sudo', 'systemctl', 'start', 'swss@{}.service'.format(asic)])
     elif state == "up":
         for asic in asic_list:
             click.echo("Start swss@{} and peer services".format(asic))
-            clicommon.run_command('sudo systemctl start swss@{}.service'.format(asic))
+            clicommon.run_command(['sudo', 'systemctl', 'start', 'swss@{}.service'.format(asic)])
 
 #
 # 'shutdown' subcommand ('config chassis_modules shutdown ...')
 #
 @modules.command('shutdown')
 @clicommon.pass_db
-@click.argument('chassis_module_name', metavar='<module_name>', required=True)
+@click.argument('chassis_module_name',
+                metavar='<module_name>',
+                required=True,
+                type=click.Choice(get_all_dpus(), case_sensitive=False) if is_smartswitch() else str
+                )
 def shutdown_chassis_module(db, chassis_module_name):
     """Chassis-module shutdown of module"""
     config_db = db.cfgdb
@@ -110,8 +118,9 @@ def shutdown_chassis_module(db, chassis_module_name):
 
     if not chassis_module_name.startswith("SUPERVISOR") and \
        not chassis_module_name.startswith("LINE-CARD") and \
-       not chassis_module_name.startswith("FABRIC-CARD"):
-        ctx.fail("'module_name' has to begin with 'SUPERVISOR', 'LINE-CARD' or 'FABRIC-CARD'")
+       not chassis_module_name.startswith("FABRIC-CARD") and \
+       not chassis_module_name.startswith("DPU"):
+        ctx.fail("'module_name' has to begin with 'SUPERVISOR', 'LINE-CARD', 'FABRIC-CARD', 'DPU'")
 
     # To avoid duplicate operation
     if get_config_module_state(db, chassis_module_name) == 'down':
@@ -130,7 +139,11 @@ def shutdown_chassis_module(db, chassis_module_name):
 #
 @modules.command('startup')
 @clicommon.pass_db
-@click.argument('chassis_module_name', metavar='<module_name>', required=True)
+@click.argument('chassis_module_name',
+                metavar='<module_name>',
+                required=True,
+                type=click.Choice(get_all_dpus(), case_sensitive=False) if is_smartswitch() else str
+                )
 def startup_chassis_module(db, chassis_module_name):
     """Chassis-module startup of module"""
     config_db = db.cfgdb
@@ -142,7 +155,12 @@ def startup_chassis_module(db, chassis_module_name):
         return
 
     click.echo("Starting up chassis module {}".format(chassis_module_name))
-    config_db.set_entry('CHASSIS_MODULE', chassis_module_name, None)
+    if is_smartswitch():
+        fvs = {'admin_status': 'up'}
+        config_db.set_entry('CHASSIS_MODULE', chassis_module_name, fvs)
+    else:
+        config_db.set_entry('CHASSIS_MODULE', chassis_module_name, None)
+
     if chassis_module_name.startswith("FABRIC-CARD"):
         if not check_config_module_state_with_timeout(ctx, db, chassis_module_name, 'up'):
             fabric_module_set_admin_status(db, chassis_module_name, 'up')

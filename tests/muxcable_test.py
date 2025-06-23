@@ -143,30 +143,30 @@ tabular_data_config_output_expected = """\
 SWITCH_NAME    PEER_TOR
 -------------  ----------
 sonic-switch   10.2.2.2
-port        state    ipv4      ipv6      cable_type      soc_ipv4    soc_ipv6
-----------  -------  --------  --------  --------------  ----------  ----------
-Ethernet0   active   10.2.1.1  e800::46
-Ethernet4   auto     10.3.1.1  e801::46                              e801::47
-Ethernet8   active   10.4.1.1  e802::46
-Ethernet12  active   10.4.1.1  e802::46
-Ethernet16  standby  10.1.1.1  fc00::75  active-standby
-Ethernet28  manual   10.1.1.1  fc00::75
-Ethernet32  auto     10.1.1.1  fc00::75  active-active   10.1.1.2    fc00::76
+port        state    ipv4      ipv6      cable_type      soc_ipv4    soc_ipv6    prober_type
+----------  -------  --------  --------  --------------  ----------  ----------  -------------
+Ethernet0   active   10.2.1.1  e800::46                                          software
+Ethernet4   auto     10.3.1.1  e801::46                              e801::47    software
+Ethernet8   active   10.4.1.1  e802::46                                          hardware
+Ethernet12  active   10.4.1.1  e802::46                                          software
+Ethernet16  standby  10.1.1.1  fc00::75  active-standby                          software
+Ethernet28  manual   10.1.1.1  fc00::75                                          software
+Ethernet32  auto     10.1.1.1  fc00::75  active-active   10.1.1.2    fc00::76    software
 """
 
 tabular_data_config_output_expected_alias = """\
 SWITCH_NAME    PEER_TOR
 -------------  ----------
 sonic-switch   10.2.2.2
-port    state    ipv4      ipv6      cable_type      soc_ipv4    soc_ipv6
-------  -------  --------  --------  --------------  ----------  ----------
-etp1    active   10.2.1.1  e800::46
-etp2    auto     10.3.1.1  e801::46                              e801::47
-etp3    active   10.4.1.1  e802::46
-etp4    active   10.4.1.1  e802::46
-etp5    standby  10.1.1.1  fc00::75  active-standby
-etp8    manual   10.1.1.1  fc00::75
-etp9    auto     10.1.1.1  fc00::75  active-active   10.1.1.2    fc00::76
+port    state    ipv4      ipv6      cable_type      soc_ipv4    soc_ipv6    prober_type
+------  -------  --------  --------  --------------  ----------  ----------  -------------
+etp1    active   10.2.1.1  e800::46                                          software
+etp2    auto     10.3.1.1  e801::46                              e801::47    software
+etp3    active   10.4.1.1  e802::46                                          hardware
+etp4    active   10.4.1.1  e802::46                                          software
+etp5    standby  10.1.1.1  fc00::75  active-standby                          software
+etp8    manual   10.1.1.1  fc00::75                                          software
+etp9    auto     10.1.1.1  fc00::75  active-active   10.1.1.2    fc00::76    software
 """
 
 json_data_status_config_output_expected = """\
@@ -186,14 +186,16 @@ json_data_status_config_output_expected = """\
                 "SERVER": {
                     "IPv4": "10.3.1.1",
                     "IPv6": "e801::46",
-                    "soc_ipv6": "e801::47"
+                    "soc_ipv6": "e801::47",
+                    "prober_type": "software"
                 }
             },
             "Ethernet8": {
                 "STATE": "active",
                 "SERVER": {
                     "IPv4": "10.4.1.1",
-                    "IPv6": "e802::46"
+                    "IPv6": "e802::46",
+                    "prober_type": "hardware"
                 }
             },
             "Ethernet12": {
@@ -250,14 +252,16 @@ json_data_status_config_output_expected_alias = """\
                 "SERVER": {
                     "IPv4": "10.3.1.1",
                     "IPv6": "e801::46",
-                    "soc_ipv6": "e801::47"
+                    "soc_ipv6": "e801::47",
+                    "prober_type": "software"
                 }
             },
             "etp3": {
                 "STATE": "active",
                 "SERVER": {
                     "IPv4": "10.4.1.1",
-                    "IPv6": "e802::46"
+                    "IPv6": "e802::46",
+                    "prober_type": "hardware"
                 }
             },
             "etp4": {
@@ -390,7 +394,7 @@ Ethernet4  standby      True        active           READY
 show_muxcable_grpc_muxdirection_active_expected_all_output = """\
 Port       Direction    Presence    PeerDirection    ConnectivityState
 ---------  -----------  ----------  ---------------  -------------------
-Ethernet0  active       False       active           READY
+Ethernet0  active       True        active           READY
 """
 
 show_muxcable_grpc_muxdirection_active_expected_all_output_json = """\
@@ -398,7 +402,7 @@ show_muxcable_grpc_muxdirection_active_expected_all_output_json = """\
     "HWMODE": {
         "Ethernet0": {
             "Direction": "active",
-            "Presence": "False",
+            "Presence": "True",
             "PeerDirection": "active",
             "ConnectivityState": "READY"
         }
@@ -722,7 +726,6 @@ class TestMuxcable(object):
         db = Db()
 
         result = runner.invoke(show.cli.commands["muxcable"].commands["config"], obj=db)
-
         assert result.exit_code == 0
         assert result.output == tabular_data_config_output_expected
 
@@ -1048,6 +1051,51 @@ class TestMuxcable(object):
                                    "active", "Ethernet33"], obj=db)
 
         assert result.exit_code == 1
+
+    def test_config_muxcable_probertype_hardware_Ethernet0(self):
+        runner = CliRunner()
+        db = Db()
+
+        with mock.patch('sonic_platform_base.sonic_sfp.sfputilhelper') as patched_util:
+            patched_util.SfpUtilHelper.return_value.get_asic_id_for_logical_port.return_value = 0
+            result = runner.invoke(config.config.commands["muxcable"].commands["probertype"], [
+                                   "hardware", "Ethernet0"], obj=db)
+
+        assert result.exit_code == 0
+
+    def test_config_muxcable_probertype_hardware_all(self):
+        runner = CliRunner()
+        db = Db()
+
+        with mock.patch('sonic_platform_base.sonic_sfp.sfputilhelper') as patched_util:
+            patched_util.SfpUtilHelper.return_value.get_asic_id_for_logical_port.return_value = 0
+            result = runner.invoke(config.config.commands["muxcable"].commands["probertype"], [
+                                   "hardware", "all"], obj=db)
+
+        assert result.exit_code == 0
+
+    def test_config_muxcable_probertype_hardware_incorrect_index(self):
+        runner = CliRunner()
+        db = Db()
+
+        with mock.patch('sonic_platform_base.sonic_sfp.sfputilhelper') as patched_util:
+            patched_util.SfpUtilHelper.return_value.get_asic_id_for_logical_port.return_value = 2
+            result = runner.invoke(config.config.commands["muxcable"].commands["probertype"], [
+                                   "hardware", "Ethernet0"], obj=db)
+
+        assert result.exit_code == 1
+
+    def test_config_muxcable_probertype_hardware_incorrect_port(self):
+        runner = CliRunner()
+        db = Db()
+
+        with mock.patch('sonic_platform_base.sonic_sfp.sfputilhelper') as patched_util:
+            patched_util.SfpUtilHelper.return_value.get_asic_id_for_logical_port.return_value = 0
+            result = runner.invoke(config.config.commands["muxcable"].commands["probertype"], [
+                                   "hardware", "Ethernet33"], obj=db)
+
+        assert result.exit_code == 1
+
 
     def test_config_muxcable_packetloss_reset_Ethernet0(self):
         runner = CliRunner()
@@ -2125,6 +2173,61 @@ class TestMuxcable(object):
                                ["Ethernet0", "--json"], obj=db)
         assert result.output == show_muxcable_resetcause_expected_port_output_json
 
+    def test_config_muxcable_reset_heartbeat_suspend_all(self):
+        runner = CliRunner()
+        db = Db()
+
+        os.environ['SONIC_CLI_IFACE_MODE'] = "alias"
+        result = runner.invoke(config.config.commands["muxcable"].commands["reset-heartbeat-suspend"],
+                               ["all"], obj=db)
+        os.environ['SONIC_CLI_IFACE_MODE'] = "default"
+
+        assert result.exit_code == 0
+        assert result.output == ("Success in resetting heartbeat suspend for mux ports: "
+                                 "Ethernet0, Ethernet4, Ethernet8, Ethernet12, Ethernet16, Ethernet28\n")
+
+    @mock.patch('sonic_platform_base.sonic_sfp.sfputilhelper.SfpUtilHelper.get_asic_id_for_logical_port',
+                mock.MagicMock(return_value=0))
+    def test_config_muxcable_reset_heartbeat_suspend_active_standby_port(self):
+        runner = CliRunner()
+        db = Db()
+
+        os.environ['SONIC_CLI_IFACE_MODE'] = "alias"
+        result = runner.invoke(config.config.commands["muxcable"].commands["reset-heartbeat-suspend"],
+                               ["Ethernet28"], obj=db)
+        os.environ['SONIC_CLI_IFACE_MODE'] = "default"
+
+        assert result.exit_code == 0
+        assert result.output == "Success in resetting heartbeat suspend for mux ports: Ethernet28\n"
+
+    @mock.patch('sonic_platform_base.sonic_sfp.sfputilhelper.SfpUtilHelper.get_asic_id_for_logical_port',
+                mock.MagicMock(return_value=0))
+    def test_config_muxcable_reset_heartbeat_suspend_active_active_port(self):
+        runner = CliRunner()
+        db = Db()
+
+        os.environ['SONIC_CLI_IFACE_MODE'] = "alias"
+        result = runner.invoke(config.config.commands["muxcable"].commands["reset-heartbeat-suspend"],
+                               ["Ethernet32"], obj=db)
+        os.environ['SONIC_CLI_IFACE_MODE'] = "default"
+
+        assert result.exit_code == 1
+        assert result.output == \
+            "Got invalid port Ethernet32, can't reset heartbeat suspend on active-active mux port\n"
+
+    @mock.patch('sonic_platform_base.sonic_sfp.sfputilhelper.SfpUtilHelper.get_asic_id_for_logical_port',
+                mock.MagicMock(return_value=0))
+    def test_config_muxcable_reset_heartbeat_suspend_invalid_port(self):
+        runner = CliRunner()
+        db = Db()
+
+        os.environ['SONIC_CLI_IFACE_MODE'] = "alias"
+        result = runner.invoke(config.config.commands["muxcable"].commands["reset-heartbeat-suspend"],
+                               ["Ethernet40"], obj=db)
+        os.environ['SONIC_CLI_IFACE_MODE'] = "default"
+
+        assert result.exit_code == 1
+        assert result.output == "Got invalid port Ethernet40, can't reset heartbeat suspend'\n"
 
     @classmethod
     def teardown_class(cls):

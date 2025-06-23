@@ -4,6 +4,14 @@ import sys
 import click
 from tabulate import tabulate
 import utilities_common.cli as clicommon
+from swsscommon.swsscommon import SonicV2Connector
+from natsort import natsorted
+from utilities_common.chassis import is_smartswitch, get_all_dpu_options
+
+DPU_STATE = 'DPU_STATE'
+CHASSIS_SERVER = 'redis_chassis.server'
+CHASSIS_SERVER_PORT = 6380
+CHASSIS_STATE_DB = 13
 
 
 def get_system_health_status():
@@ -159,3 +167,82 @@ def sysready_status_detail():
         clicommon.run_command(cmd, display_cmd=False)
     except Exception as e:
         click.echo("Exception: {}".format(str(e)))
+
+
+def show_dpu_state(module_name):
+    chassis_state_db = SonicV2Connector(host=CHASSIS_SERVER, port=CHASSIS_SERVER_PORT)
+    chassis_state_db.connect(chassis_state_db.CHASSIS_STATE_DB)
+    key = 'DPU_STATE|'
+    suffix = '*' if not module_name or not module_name.startswith("DPU") else module_name
+    key = key + suffix
+    keys = chassis_state_db.keys(chassis_state_db.CHASSIS_STATE_DB, key)
+    if not keys:
+        click.echo("DPU_STATE table is not present for module:{} in DB".format(module_name))
+        return
+
+    table = []
+    for dbkey in natsorted(keys):
+        key_list = dbkey.split('|')
+        if len(key_list) != 2:  # error data in DB, log it and ignore
+            continue
+        state_info = chassis_state_db.get_all(chassis_state_db.CHASSIS_STATE_DB, dbkey)
+        # Determine operational status
+        midplanedown = False
+        up_cnt = 0
+        for key, value in state_info.items():
+            if key.endswith('_state'):
+                if value.lower() == 'up':
+                    up_cnt = up_cnt + 1
+                if 'midplane' in key and value.lower() == 'down':
+                    midplanedown = True
+
+        if midplanedown:
+            oper_status = "Offline"
+        elif up_cnt == 3:
+            oper_status = "Online"
+        else:
+            oper_status = "Partial Online"
+
+        for dpustates in range(3):
+            if dpustates == 0:
+                row = [key_list[1], oper_status, "", "", "", ""]
+            else:
+                row = ["", "", "", "", "", ""]
+            for key, value in state_info.items():
+                if key == "id":
+                    continue
+                if dpustates == 0 and 'midplane' in key:
+                    populate_row(row, key, value, table)
+                elif dpustates == 1 and 'control' in key:
+                    populate_row(row, key, value, table)
+                elif dpustates == 2 and 'data' in key:
+                    populate_row(row, key, value, table)
+
+    headers = ["Name", "Oper-Status", "State-Detail", "State-Value", "Time", "Reason"]
+    click.echo(tabulate(table, headers=headers))
+
+
+def populate_row(row, key, value, table):
+    if key.endswith('_state'):
+        row[2] = key
+        row[3] = value
+        if "up" in row[3]:
+            row[5] = ""
+        table.append(row)
+    elif key.endswith('_time'):
+        row[4] = value
+    elif key.endswith('_reason'):
+        if "up" not in row[3]:
+            row[5] = value
+
+
+@system_health.command()
+@click.argument('module_name',
+                required=True,
+                type=click.Choice(get_all_dpu_options(), case_sensitive=False) if is_smartswitch() else None
+                )
+def dpu(module_name):
+    """Show system-health dpu information"""
+    if not is_smartswitch():
+        return
+    show_dpu_state(module_name)

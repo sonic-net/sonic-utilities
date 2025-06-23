@@ -43,12 +43,15 @@
   * [Console config commands](#console-config-commands)
   * [Console connect commands](#console-connect-commands)
   * [Console clear commands](#console-clear-commands)
+  * [DPU serial console utility](#dpu-serial-console-utility)
 * [CMIS firmware upgrade](#cmis-firmware-upgrade)
   * [CMIS firmware version show commands](#cmis-firmware-version-show-commands)
   * [CMIS firmware upgrade commands](#cmis-firmware-upgrade-commands)
   * [CMIS firmware target mode commands](#cmis-firmware-target-mode-commands)
 * [CMIS debug](#cmis-debug)
 * [CMIS debug loopback](#cmis-debug-loopback)
+* [CMIS debug rx-output](#cmis-debug-rx-output)
+* [CMIS debug tx-output](#cmis-debug-tx-output)
 * [DHCP Relay](#dhcp-relay)
   * [DHCP Relay show commands](#dhcp-relay-show-commands)
   * [DHCP Relay clear commands](#dhcp-relay-clear-commands)
@@ -126,6 +129,9 @@
 * [Muxcable](#muxcable)
   * [Muxcable Show commands](#muxcable-show-commands)
   * [Muxcable Config commands](#muxcable-config-commands)
+* [MMU](#mmu)
+  * [MMU Show commands](#mmu-show-commands)
+  * [NAT Config commands](#mmu-config-commands)
 * [NAT](#nat)
   * [NAT Show commands](#nat-show-commands)
   * [NAT Config commands](#nat-config-commands)
@@ -151,6 +157,9 @@
 * [PortChannels](#portchannels)
   * [PortChannel Show commands](#portchannel-show-commands)
   * [PortChannel Config commands](#portchannel-config-commands)
+* [Packet Trimming](#packet-trimming)
+  * [Packet Trimming Show commands](#packet-trimming-show-commands)
+  * [Packet Trimming Config commands](#packet-trimming-config-commands)
 * [QoS](#qos)
   * [QoS Show commands](#qos-show-commands)
     * [PFC](#pfc)
@@ -193,6 +202,7 @@
     * [VxLAN show commands](#vxlan-show-commands)
   * [Vnet](#vnet)
     * [Vnet show commands](#vnet-show-commands)
+    * [Vnet config commands](#vnet-config-commands)
 * [Warm Reboot](#warm-reboot)
 * [Warm Restart](#warm-restart)
   * [Warm Restart show commands](#warm-restart-show-commands)
@@ -224,11 +234,30 @@
   * [Static DNS show command](#static-dns-show-command)
 * [Wake-on-LAN Commands](#wake-on-lan-commands)
   * [Send Wake-on-LAN Magic Packet command](#send-wake-on-lan-magic-packet-command)
-
+* [Banner Commands](#banner-commands)
+  * [Banner config commands](#banner-config-commands)
+  * [Banner show command](#banner-show-command)
+* [Memory Statistics Commands](#memory-statistics-commands)
+  * [Overview](#overview)
+  * [Memory Statistics Config Commands](#memory-statistics-config-commands)
+    * [Enable/Disable Memory Statistics Monitoring](#enabledisable-memory-statistics-monitoring)
+    * [Set the Frequency of Memory Data Collection](#set-the-frequency-of-memory-data-collection)
+    * [Adjust the Data Retention Period](#adjust-the-data-retention-period)
+  * [Memory Statistics Show Commands](#memory-statistics-show-commands)
+    * [Default Historical Memory Statistics](#default-historical-memory-statistics)
+    * [Historical Memory Statistics for Last 10 Days](#historical-memory-statistics-for-last-10-days)
+    * [Historical Memory Statistics for Last 100 Minutes](#historical-memory-statistics-for-last-100-minutes)
+    * [Historical Memory Statistics for Last 3 Hours](#historical-memory-statistics-for-last-3-hours)
+    * [Historical Memory Statistics for Specific Metric (Used Memory)](#historical-memory-statistics-for-specific-metric-used-memory)
+    * [View Memory Statistics Configuration](#view-memory-statistics-configuration)
+* [CoPP Commands](#copp-commands)
+  * [Overview](#overview)
+  * [CoPP show commands](#copp-show-commands)
 ## Document History
 
 | Version | Modification Date | Details |
 | --- | --- | --- |
+| v9 | Sep-19-2024 | Add DPU serial console utility |
 | v8 | Oct-09-2023 | Add CMIS firmware upgrade commands |
 | v7 | Jun-22-2023 | Add static DNS show and config commands |
 | v6 | May-06-2021 | Add SNMP show and config commands |
@@ -708,11 +737,52 @@ This command displays the cause of the previous reboot
   ```
 
 - Example:
+  ### Shown below is the output of the CLI when executed on the NPU
   ```
   admin@sonic:~$ show reboot-cause
   User issued reboot command [User: admin, Time: Mon Mar 25 01:02:03 UTC 2019]
   ```
+  ### Shown below is the output of the CLI when executed on the DPU
+  ```
+  admin@sonic:~$ show reboot-cause
+  reboot
+  ```
+```
+Note: The CLI extensions shown in this block are applicable only to smartswitch platforms. When these extensions are used on a regular switch the extension will be ignored and the output will be the same irrespective of the options.
 
+CLI Extensions Applicable to Smartswtich
+  - show reboot-cause all
+  - show reboot-cause history all
+  - show reboot-cause history DPUx
+```
+**show reboot-cause all**
+
+This command displays the cause of the previous reboot for the Switch and the DPUs for which the midplane interfaces are up.
+
+- Usage:
+  ```
+  show reboot-cause all
+  ```
+
+- Example:
+  ### Shown below is the output of the CLI when executed on the NPU
+  ```
+  root@MtFuji:/home/cisco# show reboot-cause all
+  Device    Name                 Cause         Time                             User
+  --------  -------------------  ------------  -------------------------------  ------
+  NPU       2025_01_21_09_01_11  Power Loss    N/A                              N/A
+  DPU1      2025_01_21_09_03_43  Non-Hardware  Tue Jan 21 09:03:43 AM UTC 2025
+  DPU0      2025_01_21_09_03_37  Non-Hardware  Tue Jan 21 09:03:37 AM UTC 2025
+
+  ```
+  ### Shown below is the output of the CLI when executed on the DPU
+  ```
+  root@sonic:/home/admin# show reboot-cause all
+  Usage: show reboot-cause [OPTIONS] COMMAND [ARGS]...
+  Try "show reboot-cause -h" for help.
+
+  Error: No such command "all".
+  ```
 **show reboot-cause history**
 
 This command displays the history of the previous reboots up to 10 entry
@@ -723,15 +793,74 @@ This command displays the history of the previous reboots up to 10 entry
   ```
 
 - Example:
+  ### Shown below is the output of the CLI when executed on the NPU
   ```
-  admin@sonic:~$ show reboot-cause history
-  Name                 Cause        Time                          User    Comment
-  -------------------  -----------  ----------------------------  ------  ---------
-  2020_10_09_02_33_06  reboot       Fri Oct  9 02:29:44 UTC 2020  admin
+  root@MtFuji:/home/cisco# show reboot-cause history
+  Name                 Cause       Time    User    Comment
+  -------------------  ----------  ------  ------  ----------------------------------------------------------------------------------
+  2020_10_09_02_40_11  Power Loss  Fri Oct  9 02:40:11 UTC 2020     N/A     Unknown (First boot of SONiC version azure_cisco_master.308-dirty-20250120.220704)
   2020_10_09_01_56_59  reboot       Fri Oct  9 01:53:49 UTC 2020  admin
-  2020_10_09_02_00_53  fast-reboot  Fri Oct  9 01:58:04 UTC 2020  admin
-  2020_10_09_04_53_58  warm-reboot  Fri Oct  9 04:51:47 UTC 2020  admin
   ```
+  ### Shown below is the output of the CLI when executed on the DPU
+  ```
+  root@sonic:/home/admin# show reboot-cause history
+  Name                 Cause    Time                             User    Comment
+  -------------------  -------  -------------------------------  ------  ---------
+  2025_01_21_16_49_20  Unknown  N/A                              N/A     N/A
+  2025_01_17_11_25_58  reboot   Fri Jan 17 11:23:24 AM UTC 2025  admin   N/A
+  ```
+**show reboot-cause history all**
+
+This command displays the history of the previous reboots up to 10 entry of the Switch and the DPUs for which the midplane interfaces are up.
+
+- Usage:
+  ```
+  show reboot-cause history all
+  ```
+
+- Example:
+  ### Shown below is the output of the CLI when executed on the NPU
+  ```
+  root@MtFuji:~# show reboot-cause history all
+  Device    Name                 Cause                                      Time                             User    Comment
+  --------  -------------------  -----------------------------------------  -------------------------------  ------  -------
+  NPU       2024_07_23_23_06_57  Kernel Panic                               Tue Jul 23 11:02:27 PM UTC 2024  N/A     N/A
+  NPU       2024_07_23_11_21_32  Power Loss                                 N/A                              N/A     Unknown
+  ```
+  ### Shown below is the output of the CLI when executed on the DPU
+  ```
+  root@sonic:/home/admin# show reboot-cause history all
+  Usage: show reboot-cause history [OPTIONS]
+  Try "show reboot-cause history -h" for help.
+
+  Error: Got unexpected extra argument (all)
+  ```
+**show reboot-cause history DPU1**
+
+This command displays the history of the previous reboots up to 10 entry of DPU1. If DPU1 is powered down then there won't be any data in the DB and the "show reboot-cause history DPU1" output will be blank.
+
+- Usage:
+  ```
+  show reboot-cause history DPU1
+  ```
+
+- Example:
+  ### Shown below is the output of the CLI when executed on the NPU
+  ```
+  root@MtFuji:~# show reboot-cause history DPU1
+  Device    Name    Cause                                      Time    User    Comment
+  --------  ------  -----------------------------------------  ------  ------  ---------
+  DPU1      DPU1    Software causes (Hardware watchdog reset)  N/A     N/A     N/A
+  ```
+  ### Shown below is the output of the CLI when executed on the DPU
+  ```
+  root@sonic:/home/admin# show reboot-cause history DPU1
+  Usage: show reboot-cause history [OPTIONS]
+  Try "show reboot-cause history -h" for help.
+
+  Error: Got unexpected extra argument (DPU1)
+  ```
+
 
 **show uptime**
 
@@ -2211,7 +2340,7 @@ This command displays the state and key parameters of all BFD sessions.
 
 - Usage:
   ```
-  show bfd summary
+  show bfd summary [-n <namespace>]
   ```
 - Example:
   ```
@@ -2230,7 +2359,7 @@ This command displays the state and key parameters of all BFD sessions that matc
 
 - Usage:
   ```
-  show bfd peer <peer-ip>
+  show bfd peer <peer-ip> [-n <namespace>]
   ```
 - Example:
   ```
@@ -2423,8 +2552,7 @@ Optionally, you can specify an IP address in order to display only that particul
 
   Click [here](#Quagga-BGP-Show-Commands) to see the example for "show ip bgp neighbors" for Quagga.
 
-
-**show ip bgp network [[<ipv4-address>|<ipv4-prefix>] [(bestpath | multipath | longer-prefixes | json)]]
+**show ip bgp network [[<ipv4-address>|<ipv4-prefix>] [(bestpath | multipath | longer-prefixes | json)]]**
 
 This command displays all the details of IPv4 Border Gateway Protocol (BGP) prefixes.
 
@@ -2612,6 +2740,26 @@ This command displays the routing policy that takes precedence over the other ro
       Exit routemap
   ```
 
+**show suppress-fib-pending**
+
+This command is used to show the status of suppress pending FIB feature.
+When enabled, BGP will not advertise routes which aren't yet offloaded.
+
+- Usage:
+  ```
+  show suppress-fib-pending
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ show suppress-fib-pending
+  Enabled
+  ```
+  ```
+  admin@sonic:~$ show suppress-fib-pending
+  Disabled
+  ```
+
 **show bgp device-global**
 
 This command displays BGP device global configuration.
@@ -2724,6 +2872,24 @@ This command is used to remove particular IPv4 or IPv6 BGP neighbor configuratio
   admin@sonic:~$ sudo config bgp remove neighbor SONIC02SPINE
   ```
 
+**config suppress-fib-pending**
+
+This command is used to enable or disable announcements of routes not yet installed in the HW.
+Once enabled, BGP will not advertise routes which aren't yet offloaded.
+
+- Usage:
+  ```
+  config suppress-fib-pending <enabled|disabled>
+  ```
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config suppress-fib-pending enabled
+  ```
+  ```
+  admin@sonic:~$ sudo config suppress-fib-pending disabled 
+  ```
+
 **config bgp device-global tsa/w-ecmp**
 
 This command is used to manage BGP device global configuration.
@@ -2787,7 +2953,7 @@ Optionally, you can display configured console ports only by specifying the `-b`
        1    9600         Enabled      -             -   switch1
   ```
 
-## Console config commands
+### Console config commands
 
 This sub-section explains the list of configuration options available for console management module.
 
@@ -2963,6 +3129,88 @@ Optionally, you can clear with a remote device name by specifying the `-d` or `-
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#console)
 
+### DPU serial console utility
+
+**dpu-tty.py**
+
+This command allows user to connect to a DPU serial console via TTY device with
+interactive CLI program: picocom. The configuration is from platform.json. The
+utility works only on smart switch that provides DPU UART connections through
+/dev/ttyS* devices.
+
+- Usage:
+  ```
+  dpu-tty.py (-n|--name) <DPU_NAME> [(-b|-baud) <BAUD_RATE>] [(-t|-tty) <TTY>]
+  ```
+
+- Example:
+  ```
+  root@MtFuji:/home/cisco# dpu-tty.py -n dpu0
+  picocom v3.1
+
+  port is        : /dev/ttyS4
+  flowcontrol    : none
+  baudrate is    : 115200
+  parity is      : none
+  databits are   : 8
+  stopbits are   : 1
+  escape is      : C-a
+  local echo is  : no
+  noinit is      : no
+  noreset is     : no
+  hangup is      : no
+  nolock is      : no
+  send_cmd is    : sz -vv
+  receive_cmd is : rz -vv -E
+  imap is        : 
+  omap is        : 
+  emap is        : crcrlf,delbs,
+  logfile is     : none
+  initstring     : none
+  exit_after is  : not set
+  exit is        : no
+
+  Type [C-a] [C-h] to see available commands
+  Terminal ready
+
+  sonic login: admin
+  Password: 
+  Linux sonic 6.1.0-11-2-arm64 #1 SMP Debian 6.1.38-4 (2023-08-08) aarch64
+  You are on
+    ____   ___  _   _ _  ____
+   / ___| / _ \| \ | (_)/ ___|
+   \___ \| | | |  \| | | |
+    ___) | |_| | |\  | | |___
+   |____/ \___/|_| \_|_|\____|
+
+  -- Software for Open Networking in the Cloud --
+
+  Unauthorized access and/or use are prohibited.
+  All access and/or use are subject to monitoring.
+
+  Help:    https://sonic-net.github.io/SONiC/
+
+  Last login: Mon Sep  9 21:39:44 UTC 2024 on ttyS0
+  admin@sonic:~$ 
+  Terminating...
+  Thanks for using picocom
+  root@MtFuji:/home/cisco#
+  ```
+
+Optionally, user may overwrite baud rate for experiment.
+
+- Example:
+  ```
+  root@MtFuji:/home/cisco# dpu-tty.py -n dpu1 -b 9600
+  ```
+
+Optionally, user may overwrite TTY device for experiment.
+
+- Example:
+  ```
+  root@MtFuji:/home/cisco# dpu-tty.py -n dpu2 -t ttyS4
+  ```
+
 ## CMIS firmware upgrade
 
 ### CMIS firmware version show commands
@@ -3106,19 +3354,54 @@ This command is the standard CMIS diagnostic control used for troubleshooting li
 
 - Usage:
   ```
-  sfputil debug loopback PORT_NAME LOOPBACK_MODE
+  sfputil debug loopback PORT_NAME LOOPBACK_MODE <enable/disable>
 
-  Set the loopback mode
+  Valid values for loopback mode
   host-side-input: host side input loopback mode
   host-side-output: host side output loopback mode
   media-side-input: media side input loopback mode
   media-side-output: media side output loopback mode
-  none: disable loopback mode
   ```
 
 - Example:
   ```
-  admin@sonic:~$ sfputil debug loopback Ethernet88 host-side-input
+  admin@sonic:~$ sfputil debug loopback Ethernet88 host-side-input enable
+  admin@sonic:~$ sfputil debug loopback Ethernet88 media-side-output disable
+  ```
+
+### CMIS debug rx-output
+
+The command disables RX input by muting the optical receiver on the module, preventing it from detecting incoming signals.
+
+**sfputil debug rx-ouput**
+
+- Usage:
+  ```
+  sfputil debug rx-output PORT_NAME <enable/disable>
+
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sfputil debug rx-output Ethernet88 enable
+  admin@sonic:~$ sfputil debug rx-output Ethernet88 disable
+  ```
+
+### CMIS debug tx-output
+
+The command disables TX output by turning off the laser on the module, effectively blocking the optical signal.
+
+**sfputil debug tx-ouput**
+
+- Usage:
+  ```
+  sfputil debug tx-output PORT_NAME <enable/disable>
+
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sfputil debug tx-output Ethernet88 enable
   ```
 
 ## DHCP Relay
@@ -4487,6 +4770,7 @@ This command displays switch hash global configuration.
   |        | | INNER_SRC_IP      |             | |
   |        | | INNER_L4_DST_PORT |             | |
   |        | | INNER_L4_SRC_PORT |             | |
+  |        | | IPV6_FLOW_LABEL   |             | |
   |        | +-------------------+-------------+ |
   +--------+-------------------------------------+
   | LAG    | +-------------------+-------------+ |
@@ -4508,6 +4792,7 @@ This command displays switch hash global configuration.
   |        | | INNER_SRC_IP      |             | |
   |        | | INNER_L4_DST_PORT |             | |
   |        | | INNER_L4_SRC_PORT |             | |
+  |        | | IPV6_FLOW_LABEL   |             | |
   |        | +-------------------+-------------+ |
   +--------+-------------------------------------+
   ```
@@ -4551,6 +4836,7 @@ This command displays switch hash capabilities.
   |        | | INNER_SRC_IP      |             | |
   |        | | INNER_L4_DST_PORT |             | |
   |        | | INNER_L4_SRC_PORT |             | |
+  |        | | IPV6_FLOW_LABEL   |             | |
   |        | +-------------------+-------------+ |
   +--------+-------------------------------------+
   | LAG    | +-------------------+-------------+ |
@@ -4574,6 +4860,7 @@ This command displays switch hash capabilities.
   |        | | INNER_SRC_IP      |             | |
   |        | | INNER_L4_DST_PORT |             | |
   |        | | INNER_L4_SRC_PORT |             | |
+  |        | | IPV6_FLOW_LABEL   |             | |
   |        | +-------------------+-------------+ |
   +--------+-------------------------------------+
   ```
@@ -4613,7 +4900,8 @@ This command is used to manage switch hash global configuration.
   'INNER_DST_IP' \
   'INNER_SRC_IP' \
   'INNER_L4_DST_PORT' \
-  'INNER_L4_SRC_PORT'
+  'INNER_L4_SRC_PORT' \
+  'IPV6_FLOW_LABEL'
   admin@sonic:~$ config switch-hash global lag-hash \
   'DST_MAC' \
   'SRC_MAC' \
@@ -4630,7 +4918,8 @@ This command is used to manage switch hash global configuration.
   'INNER_DST_IP' \
   'INNER_SRC_IP' \
   'INNER_L4_DST_PORT' \
-  'INNER_L4_SRC_PORT'
+  'INNER_L4_SRC_PORT' \
+  'IPV6_FLOW_LABEL'
   ```
 
 **config switch-hash global ecmp/lag hash algorithm**
@@ -4759,8 +5048,8 @@ The "current-mode" subcommand is used to display current breakout mode for all i
 
 **show interfaces counters**
 
-This show command displays packet counters for all interfaces since the last time the counters were cleared. To display l3 counters "rif" subcommand can be used. There is no facility to display counters for one specific l2 interface. For l3 interfaces a single interface output mode is present. Optional argument "-a" provides two additional columns - RX-PPS and TX_PPS.
-Optional argument "-p" specify a period (in seconds) with which to gather counters over.
+This show command displays packet counters for all interfaces(except the "show interface detailed" command) since the last time the counters were cleared. To display l3 counters "rif" subcommand can be used. There is no facility to display counters for one specific l2 interface. For l3 interfaces a single interface output mode is present.  Optional argument "-a" provides two additional columns - RX-PPS and TX_PPS. 
+Optional argument "-p" specify a period (in seconds) with which to gather counters over. To display the detailed per-interface counters "detailed <interface-name>" subcommand can be used.
 
 - Usage:
   ```
@@ -4768,6 +5057,10 @@ Optional argument "-p" specify a period (in seconds) with which to gather counte
   show interfaces counters errors
   show interfaces counters rates
   show interfaces counters rif [-p|--period <period>] [-i <interface_name>]
+  show interfaces counters fec-histogram [-i <interface_name>]
+  show interfaces counters fec-stats
+  show interfaces counters detailed <interface_name>
+  show interfaces counters trim [interface_name] [-p|--period <sec>] [-j|--json]
   ```
 
 - Example:
@@ -4873,6 +5166,56 @@ Optionally, you can specify a period (in seconds) with which to gather counters 
     Ethernet24        U      173   16.09 KB/s      0.00%         0         0         0      169   11.39 KB/s      0.00%         0         0         0
   ```
 
+The "detailed" subcommand is used to display more detailed interface counters. Along with tx/rx counters, it also displays the WRED drop counters that are supported on the platform.
+
+- Example:
+  ```
+    admin@sonic:~$ show interfaces counters detailed Ethernet8
+    Packets Received 64 Octets..................... 0
+    Packets Received 65-127 Octets................. 0
+    Packets Received 128-255 Octets................ 0
+    Packets Received 256-511 Octets................ 0
+    Packets Received 512-1023 Octets............... 0
+    Packets Received 1024-1518 Octets.............. 0
+    Packets Received 1519-2047 Octets.............. 0
+    Packets Received 2048-4095 Octets.............. 0
+    Packets Received 4096-9216 Octets.............. 0
+    Packets Received 9217-16383 Octets............. 0
+
+    Total Packets Received Without Errors.......... 0
+    Unicast Packets Received....................... 0
+    Multicast Packets Received..................... 0
+    Broadcast Packets Received..................... 0
+
+    Jabbers Received............................... N/A
+    Fragments Received............................. N/A
+    Undersize Received............................. 0
+    Overruns Received.............................. 0
+
+    Packets Transmitted 64 Octets.................. 0
+    Packets Transmitted 65-127 Octets.............. 0
+    Packets Transmitted 128-255 Octets............. 0
+    Packets Transmitted 256-511 Octets............. 0
+    Packets Transmitted 512-1023 Octets............ 0
+    Packets Transmitted 1024-1518 Octets........... 0
+    Packets Transmitted 1519-2047 Octets........... 0
+    Packets Transmitted 2048-4095 Octets........... 0
+    Packets Transmitted 4096-9216 Octets........... 0
+    Packets Transmitted 9217-16383 Octets.......... 0
+
+    Total Packets Transmitted Successfully......... 0
+    Unicast Packets Transmitted.................... 0
+    Multicast Packets Transmitted.................. 0
+    Broadcast Packets Transmitted.................. 0
+
+    WRED Green Dropped Packets..................... 0
+    WRED Yellow Dropped Packets.................... 0
+    WRED Red Dropped Packets....................... 0
+    WRED Total Dropped Packets..................... 0
+
+    Time Since Counters Last Cleared............... None
+  ```
+
 - NOTE: Interface counters can be cleared by the user with the following command:
 
   ```
@@ -4883,6 +5226,58 @@ Optionally, you can specify a period (in seconds) with which to gather counters 
 
   ```
   admin@sonic:~$ sonic-clear rifcounters
+  ```
+
+The "fec-histogram" subcommand is used to display the fec histogram for the port.
+
+When data is transmitted, it's broken down into units called codewords. FEC algorithms add extra data to each codeword that can be used to detect and correct errors in transmission.
+In a FEC histogram, "bins" represent ranges of errors or specific categories of errors. For instance, Bin0 might represent codewords with no errors, while Bin1 could represent codewords with a single bit error, and so on. The histogram shows how many codewords fell into each bin. A high number in the higher bins might indicate a problem with the transmission link, such as signal degradation.
+
+- Example:
+  ```
+  admin@str-s6000-acs-11:/usr/bin$ show interface counters fec-histogram -i <PORT>
+  Symbol Errors Per Codeword  Codewords
+  --------------------------  ---------
+  BIN0:                       1000000
+  BIN1:                       900000
+  BIN2:                       800000
+  BIN3:                       700000
+  BIN4:                       600000
+  BIN5:                       500000
+  BIN6:                       400000
+  BIN7:                       300000
+  BIN8:                       0
+  BIN9:                       0
+  BIN10:                      0
+  BIN11:                      0
+  BIN12:                      0
+  BIN13:                      0
+  BIN14:                      0
+  BIN15:                      0
+  ```
+
+The "fec-stats" subcommand is used to disply the interface fec related statistic.
+
+- Example:
+  ```
+  admin@ctd615:~$ show interfaces counters fec-stats
+        IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER
+  -----------  -------  ----------  ------------  ----------------  -------------  --------------
+   Ethernet0        U           0             0                 0    1.48e-20       0.00e+00
+   Ethernet8        U           0             0                 0    1.98e-19       0.00e+00
+  Ethernet16        U           0             0                 0    1.77e-20       0.00e+00
+  ```
+
+The "trim" subcommand is used to display the interface packet trimming related statistic.
+
+- Example:
+  ```
+  admin@sonic:~$ show interfaces counters trim
+       IFACE    STATE    TRIM_PKTS
+  ----------  -------  -----------
+   Ethernet0        U            0
+   Ethernet8        U          100
+  Ethernet16        U          200
   ```
 
 **show interfaces description**
@@ -4965,6 +5360,54 @@ This command is to display the link-training status of the selected interfaces. 
   -----------  -----------  ----------  ------  -------
     Ethernet8      trained          on      up       up
   ```
+
+**show interfaces flap**
+
+The show interfaces flap command provides detailed insights into interface events, including the timestamp of the last link down event and the total flap count (number of times the link has gone up and down). This helps in diagnosing stability and connectivity issues.
+
+- Usage:
+  ```
+  show interfaces flap
+  ```
+- Example:
+  ```
+  admin@sonic:~$ show interfaces flap
+  Interface    Flap Count    Admin    Oper    Link Down TimeStamp (UTC)                                 Link Up TimeStamp (UTC)
+  -----------  ------------  -------  ------  --------------------------------------------------------  -----------------------------------------------------------
+  Ethernet0    5             Up       Up      Last flapped : 2024-10-01 10:00:00 (0 days 00:01:23 ago)  Last Link up: 2024-09-30 10:01:03 UTC (1 days 02:30:15 ago)
+  Ethernet4    Never         Up       Up      Never                                                     Last Link up: 2024-09-30 10:01:03 UTC (1 days 02:30:15 ago)
+  Ethernet8    1             Up       Up      Last flapped : 2024-10-01 10:01:00 (0 days 00:00:23 ago)  Last Link up: 2024-10-02 10:01:03 UTC (5 days 02:30:15 ago)
+  ```
+**show interfaces errors**
+
+The show interface errors command provides detailed statistics and error counters for MAC-level operations on an interface. It displays the status of various operational parameters, error counts, and timestamps for when these errors occurred.
+
+- Usage:
+  ```
+  show interfaces errors [<interface_name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show interfaces errors Ethernet4
+  Port Errors                        Count           Last timestamp(UTC)
+  ---------------------------------- -----           -------------------
+  oper_error_status                  5442            2024-11-02 04:00:05
+  mac_local_fault                    2               2024-11-02 04:00:05
+  fec_sync_loss                      2               2024-11-02 04:00:05
+  fec_alignment_loss                 2               2024-11-02 04:00:05
+  high_ser_error                     2               2024-11-02 04:00:05
+  high ber_error                     2               2024-11-02 04:00:05
+  data_unit_crc_error                2               2024-11-02 04:00:05
+  data_unit_misalignment_error       2               2024-11-02 04:00:05
+  signal_local_error                 2               2024-11-02 04:00:05
+  mac_remote_fault                   2               2024-11-02 04:00:50
+  crc_rate                           2               2024-11-02 04:00:50
+  data_unit_size                     2               2024-11-02 04:00:50
+  code_group_error                   0               Never
+  no_rx_reachability                 0               Never
+  ```
+
 
 **show interfaces mpls**
 
@@ -5068,7 +5511,7 @@ This command is used to display the list of expected neighbors for all interface
 
 - Usage:
   ```
-  show interfaces neighbor expected [<interface_name>]
+  show interfaces neighbor expected [<interface_name>] -n [<namespace>]
   ```
 
 - Example:
@@ -5907,8 +6350,8 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#interf
 
 **config interface vrf bind**
 
-This command is used to bind a interface to a vrf.
-By default, all L3 interfaces will be in default vrf. Above vrf bind command will let users bind interface to a vrf.
+This command is used to bind a interface to a vrf as well as vnet.
+By default, all L3 interfaces will be in default vrf. Above vrf bind command will let users bind interface to a vrf/vnet.
 
 - Usage:
   ```
@@ -5917,8 +6360,8 @@ By default, all L3 interfaces will be in default vrf. Above vrf bind command wil
 
 **config interface vrf unbind**
 
-This command is used to ubind a interface from a vrf.
-This will move the interface to default vrf.
+This command is used to ubind a interface from a vrf/vnet.
+This will move the interface to default vrf/vnet.
 
 - Usage:
   ```
@@ -7666,6 +8109,140 @@ While adding a new SPAN session, users need to configure the following fields th
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#mirroring)
 
+## MMU
+
+### MMU Show commands
+
+This subsection explains how to display switch Memory Management Unit (MMU) configuration.
+
+**show mmu**
+
+This command displays MMU configuration.
+
+- Usage:
+  ```bash
+  show mmu [OPTIONS]
+  ```
+
+- Options:
+  - _-n,--namespace_: namespace name or all
+  - _-vv,--verbose_: enable verbose output
+
+- Example:
+  ```bash
+  admin@sonic:~$ show mmu
+  Pool: ingress_lossless_pool
+  ----  --------
+  xoff  4194112
+  type  ingress
+  mode  dynamic
+  size  10875072
+  ----  --------
+
+  Pool: egress_lossless_pool
+  ----  --------
+  type  egress
+  mode  static
+  size  15982720
+  ----  --------
+
+  Pool: egress_lossy_pool
+  ----  -------
+  type  egress
+  mode  dynamic
+  size  9243812
+  ----  -------
+
+  Profile: egress_lossy_profile
+  ----------  -------------------------------
+  dynamic_th  3
+  pool        [BUFFER_POOL|egress_lossy_pool]
+  size        1518
+  ----------  -------------------------------
+
+  Profile: pg_lossless_100000_300m_profile
+  ----------  -----------------------------------
+  xon_offset  2288
+  dynamic_th  -3
+  xon         2288
+  xoff        268736
+  pool        [BUFFER_POOL|ingress_lossless_pool]
+  size        1248
+  ----------  -----------------------------------
+
+  Profile: egress_lossless_profile
+  ---------  ----------------------------------
+  static_th  3995680
+  pool       [BUFFER_POOL|egress_lossless_pool]
+  size       1518
+  ---------  ----------------------------------
+
+  Profile: pg_lossless_100000_40m_profile
+  ----------  -----------------------------------
+  xon_offset  2288
+  dynamic_th  -3
+  xon         2288
+  xoff        177632
+  pool        [BUFFER_POOL|ingress_lossless_pool]
+  size        1248
+  ----------  -----------------------------------
+
+  Profile: ingress_lossy_profile
+  ----------  -----------------------------------
+  dynamic_th  3
+  pool        [BUFFER_POOL|ingress_lossless_pool]
+  size        0
+  ----------  -----------------------------------
+
+  Profile: pg_lossless_40000_40m_profile
+  ----------  -----------------------------------
+  xon_offset  2288
+  dynamic_th  -3
+  xon         2288
+  xoff        71552
+  pool        [BUFFER_POOL|ingress_lossless_pool]
+  size        1248
+  ----------  -----------------------------------
+
+  Profile: q_lossy_profile
+  ---------------------  -----------------
+  packet_discard_action  drop
+  dynamic_th             0
+  pool                   egress_lossy_pool
+  size                   0
+  ---------------------  -----------------
+  ```
+
+### MMU Config commands
+
+This subsection explains how to configure switch Memory Management Unit (MMU).
+
+**config mmu**
+
+This command is used to manage switch MMU configuration.
+
+- Usage:
+  ```bash
+  config mmu [OPTIONS]
+  ```
+
+- Options:
+  - _-p_: profile name
+  - _-a_: set alpha for profile type dynamic
+  - _-s_: set staticth for profile type static
+  - _-t_: set packet trimming eligibility
+  - _-n,--namespace_: namespace name or all
+  - _-vv,--verbose_: enable verbose output
+
+- Examples:
+  ```bash
+  config mmu -p alpha_profile -a 2
+  config mmu -p ingress_lossless_profile -s 12121215
+  config mmu -p q_lossy_profile -t on
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#mmu)
+
 ## NAT
 
 ### NAT Show commands
@@ -8448,74 +9025,11 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#platfo
 
 ### Mellanox Platform Specific Commands
 
-There are few commands that are platform specific. Mellanox has used this feature and implemented Mellanox specific commands as follows.
+config platform mlnx
 
-**show platform mlnx sniffer**
+This command is valid only on mellanox devices. The sub-commands for "config platform" gets populated only on mellanox platforms. There are no other subcommands on non-Mellanox devices and hence this command appears empty and useless in other platforms. 
 
-This command shows the SDK sniffer status
-
-- Usage:
-  ```
-  show platform mlnx sniffer
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show platform mlnx sniffer
-  sdk sniffer is disabled
-  ```
-
-**show platform mlnx sniffer**
-
-Another show command available on ‘show platform mlnx’ which is the issu status.
-This means if ISSU is enabled on this SKU or not. A warm boot command can be executed only when ISSU is enabled on the SKU.
-
-- Usage:
-  ```
-  show platform mlnx issu
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show platform mlnx issu
-  ISSU is enabled
-  ```
-
-In the case ISSU is disabled and warm-boot is called, the user will get a notification message explaining that the command cannot be invoked.
-
-- Example:
-  ```
-  admin@sonic:~$ sudo warm-reboot
-  ISSU is not enabled on this HWSKU
-  Warm reboot is not supported
-  ```
-
-**config platform mlnx**
-
-This command is valid only on mellanox devices. The sub-commands for "config platform" gets populated only on mellanox platforms.
-There are no other subcommands on non-Mellanox devices and hence this command appears empty and useless in other platforms.
-The platform mellanox command currently includes a single sub command which is the SDK sniffer.
-The SDK sniffer is a troubleshooting tool which records the RPC calls from the Mellanox SDK user API library to the sx_sdk task into a .pcap file.
-This .pcap file can be replayed afterward to get the exact same configuration state on SDK and FW to reproduce and investigate issues.
-
-A new folder will be created to store the sniffer files: "/var/log/mellanox/sniffer/". The result file will be stored in a .pcap file, which includes a time stamp of the starting time in the file name, for example, "sx_sdk_sniffer_20180224081306.pcap"
-In order to have a complete .pcap file with all the RPC calls, the user should disable the SDK sniffer. Swss service will be restarted and no capturing is taken place from that moment.
-It is recommended to review the .pcap file while sniffing is disabled.
-Once SDK sniffer is enabled/disabled, the user is requested to approve that swss service will be restarted.
-For example: To change SDK sniffer status, swss service will be restarted, continue? [y/N]:
-In order to avoid that confirmation the -y / --yes option should be used.
-
-- Usage:
-  ```
-  config platform mlnx sniffer sdk [-y|--yes]
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ config platform mlnx sniffer sdk
-  To change SDK sniffer status, swss service will be restarted, continue? [y/N]: y
-  NOTE: In order to avoid that confirmation the -y / --yes option should be used.
-  ```
+The platform mellanox command currently includes no sub command.
 
 ### Barefoot Platform Specific Commands
 
@@ -8627,6 +9141,82 @@ This command adds or deletes a member port to/from the already created portchann
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#portchannels)
+
+# Packet Trimming
+
+This section explains the various show commands and configuration commands available for users.
+
+### Packet Trimming Show commands
+
+This subsection explains how to display switch trimming configuration.
+
+**show switch-trimming global**
+
+This command displays switch trimming global configuration.
+
+- Usage:
+  ```bash
+  show switch-trimming global [OPTIONS]
+  ```
+
+- Options:
+  - _-j,--json_: display in JSON format
+
+- Example:
+  ```bash
+  admin@sonic:~$ show switch-trimming global
+  +-----------------------------+---------+
+  | Configuration               |   Value |
+  +=============================+=========+
+  | Packet trimming size        |     200 |
+  +-----------------------------+---------+
+  | Packet trimming DSCP value  |      20 |
+  +-----------------------------+---------+
+  | Packet trimming queue index |       2 |
+  +-----------------------------+---------+
+
+  admin@sonic:~$ show switch-trimming global --json
+  {
+      "size": "200",
+      "dscp_value": "20",
+      "queue_index": "2"
+  }
+  ```
+
+### Packet Trimming Config commands
+
+This subsection explains how to configure switch trimming.
+
+**config switch-trimming global**
+
+This command is used to manage switch trimming global configuration.
+
+- Usage:
+  ```bash
+  config switch-trimming global [OPTIONS]
+  ```
+
+- Options:
+  - _-s,--size_: size (in bytes) to trim eligible packet
+  - _-d,--dscp_: dscp value assigned to a packet after trimming
+  - _-q,--queue_: queue index to use for transmission of a packet after trimming
+
+- Examples:
+  ```bash
+  admin@sonic:~$ config switch-trimming global \
+  --size '128' \
+  --dscp '48' \
+  --queue '6'
+  ```
+
+- Note:
+  - At least one option must be provided
+  - When `--queue` value is set to `dynamic`, the `--dscp` value is used for mapping to the queue
+  ```bash
+  admin@sonic:~$ config switch-trimming global --queue dynamic
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#packet-trimming)
 
 ## NVGRE
 
@@ -9182,6 +9772,7 @@ This sub-section explains the following queue parameters that can be displayed u
 2) queue watermark
 3) priority-group  watermark
 4) queue persistent-watermark
+5) queue wredcounters
 
 
 **show queue counters**
@@ -9191,8 +9782,18 @@ This command can be used to clear the counters for all queues of all ports. Note
 
 - Usage:
   ```
-  show queue counters [<interface_name>]
+  show queue counters [OPTIONS] [interface_name]
   ```
+
+- Parameters:
+  - _interface_name_: display counters for interface name only
+
+- Options:
+  - _-a,--all_: display all counters
+  - _-T,--trim_: display trimming counters only
+  - _-V,--voq_: display VOQ counters only
+  - _-nz,--nonzero_: display non zero counters
+  - _-j,--json_: display counters in JSON format
 
 - Example:
   ```
@@ -9244,6 +9845,30 @@ This command can be used to clear the counters for all queues of all ports. Note
   Ethernet4    MC9               0                0            0             0
 
   ...
+
+  admin@sonic:~$ show queue counters --trim
+       Port    TxQ    Trim/pkts
+  ---------  -----  -----------
+  Ethernet0    UC0            0
+  Ethernet0    UC1            0
+  Ethernet0    UC2            0
+  Ethernet0    UC3            0
+  Ethernet0    UC4            0
+  Ethernet0    UC5            0
+  Ethernet0    UC6            0
+  Ethernet0    UC7            0
+  Ethernet0    UC8            0
+  Ethernet0    UC9            0
+  Ethernet0    MC0          N/A
+  Ethernet0    MC1          N/A
+  Ethernet0    MC2          N/A
+  Ethernet0    MC3          N/A
+  Ethernet0    MC4          N/A
+  Ethernet0    MC5          N/A
+  Ethernet0    MC6          N/A
+  Ethernet0    MC7          N/A
+  Ethernet0    MC8          N/A
+  Ethernet0    MC9          N/A
   ```
 
 Optionally, you can specify an interface name in order to display only that particular interface
@@ -9375,6 +10000,83 @@ This command displays the user persistet-watermark for the queues (Egress shared
   admin@sonic:~$ sonic-clear priority-group drop counters
   ```
 
+**show queue wredcounters**
+
+This command displays wred-drop packet/byte and ecn-marked packet/byte counters for all queues of all ports or one specific-port given as arguement.
+This command can be used to clear the counters for all queues of all ports. Note that port specific clear is not supported.
+
+- Usage:
+  ```
+  show queue wredcounters [<interface_name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show queue wredcounters
+     Port      TxQ    WredDrp/pkts    WredDrp/bytes  EcnMarked/pkts  EcnMarked/bytes
+  ---------  -----  --------------  --------------- --------------- ----------------
+
+  Ethernet0    UC0               0                0               0                0
+  Ethernet0    UC1               0                0               0                0
+  Ethernet0    UC2               0                0               0                0
+  Ethernet0    UC3               0                0               0                0
+  Ethernet0    UC4               0                0               0                0
+  Ethernet0    UC5               0                0               0                0
+  Ethernet0    UC6               0                0               0                0
+  Ethernet0    UC7               0                0               0                0
+  Ethernet0    UC8               0                0               0                0
+  Ethernet0    UC9               0                0               0                0
+  Ethernet0    MC0               0                0               0                0
+  Ethernet0    MC1               0                0               0                0
+  Ethernet0    MC2               0                0               0                0
+  Ethernet0    MC3               0                0               0                0
+  Ethernet0    MC4               0                0               0                0
+  Ethernet0    MC5               0                0               0                0
+  Ethernet0    MC6               0                0               0                0
+  Ethernet0    MC7               0                0               0                0
+  Ethernet0    MC8               0                0               0                0
+  Ethernet0    MC9               0                0               0                0
+
+     Port      TxQ    WredDrp/pkts    WredDrp/bytes  EcnMarked/pkts  EcnMarked/bytes
+  ---------  -----  --------------  --------------- --------------- ----------------
+
+  Ethernet4    UC0               0                0               0                0
+  Ethernet4    UC1               0                0               0                0
+  Ethernet4    UC2               0                0               0                0
+  Ethernet4    UC3               0                0               0                0
+  Ethernet4    UC4               0                0               0                0
+  Ethernet4    UC5               0                0               0                0
+  Ethernet4    UC6               0                0               0                0
+  Ethernet4    UC7               0                0               0                0
+  Ethernet4    UC8               0                0               0                0
+  Ethernet4    UC9               0                0               0                0
+  Ethernet4    MC0               0                0               0                0
+  Ethernet4    MC1               0                0               0                0
+  Ethernet4    MC2               0                0               0                0
+  Ethernet4    MC3               0                0               0                0
+  Ethernet4    MC4               0                0               0                0
+  Ethernet4    MC5               0                0               0                0
+  Ethernet4    MC6               0                0               0                0
+  Ethernet4    MC7               0                0               0                0
+  Ethernet4    MC8               0                0               0                0
+  Ethernet4    MC9               0                0               0                0
+
+  ...
+  ```
+
+Optionally, you can specify an interface name in order to display only that particular interface
+
+- Example:
+  ```
+  admin@sonic:~$ show queue wredcounters Ethernet72
+  ```
+
+- NOTE: Queue counters can be cleared by the user with the following command:
+  ```
+  admin@sonic:~$ sonic-clear queue wredcounters
+  ```
+
+
 #### Buffer Pool
 
 This sub-section explains the following buffer pool parameters that can be displayed using "show buffer_pool" command.
@@ -9500,6 +10202,7 @@ Some of the example QOS configurations that users can modify are given below.
 
   In this example, it uses the buffers.json.j2 file and qos.json.j2 file from platform specific folders.
   When there are no changes in the platform specific configutation files, they internally use the file "/usr/share/sonic/templates/buffers_config.j2" and "/usr/share/sonic/templates/qos_config.j2" to generate the configuration.
+  When an error occurs, such as "Operation not completed successfully, please save and reload configuration," the system will record the status, after executing all the latter commands, exit with code 1.
   ```
 
 **config qos reload --ports port_list**
@@ -10162,6 +10865,7 @@ This sub-section explains the show commands for displaying the running configura
 6) acl
 7) ports
 8) syslog
+9) copp
 
 **show runningconfiguration all**
 
@@ -10286,6 +10990,20 @@ This command displays the running configuration of the snmp module.
 
   ```
   admin@sonic:~$ show runningconfiguration ports Ethernet0
+  ```
+
+ **show runningconfiguration copp**
+
+ This command displays the running configuration of copp
+
+- Usage:
+  ```
+  show runningconfiguration copp
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show runningconfiguration copp
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#Startup--Running-Configuration)
@@ -10702,6 +11420,35 @@ This command is used to disable syslog rate limit feature.
   config syslog rate-limit-feature disable database -n asci0
   ```
 
+**config syslog level**
+
+This command is used to configure log level for a given log identifier.
+
+- Usage:
+  ```
+  config syslog level -i <log_identifier> -l <log_level> --container [<container_name>] --program [<program_name>]
+
+  config syslog level -i <log_identifier> -l <log_level> --container [<container_name>] --pid [<process_id>]
+
+  config syslog level -i <log_identifier> -l <log_level> ---pid [<process_id>]
+  ```
+
+- Example:
+
+  ```
+  # Update the log level without refresh the configuration
+  config syslog level -i xcvrd -l DEBUG
+
+  # Update the log level and send SIGHUP to xcvrd running in PMON
+  config syslog level -i xcvrd -l DEBUG --container pmon --program xcvrd
+
+  # Update the log level and send SIGHUP to PID 20 running in PMON
+  config syslog level -i xcvrd -l DEBUG --container pmon --pid 20
+
+  # Update the log level and send SIGHUP to PID 20 running in host
+  config syslog level -i xcvrd -l DEBUG --pid 20
+  ```
+
 Go Back To [Beginning of the document](#) or [Beginning of this section](#syslog)
 
 ## System State
@@ -10895,92 +11642,6 @@ This command displays the system-wide memory utilization information – just a 
   Swap:           0B         0B         0B
   ```
 
-**show mmu**
-
-This command displays virtual address to the physical address translation status of the Memory Management Unit (MMU).
-
-- Usage:
-  ```
-  show mmu
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show mmu
-  Pool: ingress_lossless_pool
-  ----  --------
-  xoff  4194112
-  type  ingress
-  mode  dynamic
-  size  10875072
-  ----  --------
-
-  Pool: egress_lossless_pool
-  ----  --------
-  type  egress
-  mode  static
-  size  15982720
-  ----  --------
-
-  Pool: egress_lossy_pool
-  ----  -------
-  type  egress
-  mode  dynamic
-  size  9243812
-  ----  -------
-
-  Profile: egress_lossy_profile
-  ----------  -------------------------------
-  dynamic_th  3
-  pool        [BUFFER_POOL|egress_lossy_pool]
-  size        1518
-  ----------  -------------------------------
-
-  Profile: pg_lossless_100000_300m_profile
-  ----------  -----------------------------------
-  xon_offset  2288
-  dynamic_th  -3
-  xon         2288
-  xoff        268736
-  pool        [BUFFER_POOL|ingress_lossless_pool]
-  size        1248
-  ----------  -----------------------------------
-
-  Profile: egress_lossless_profile
-  ---------  ----------------------------------
-  static_th  3995680
-  pool       [BUFFER_POOL|egress_lossless_pool]
-  size       1518
-  ---------  ----------------------------------
-
-  Profile: pg_lossless_100000_40m_profile
-  ----------  -----------------------------------
-  xon_offset  2288
-  dynamic_th  -3
-  xon         2288
-  xoff        177632
-  pool        [BUFFER_POOL|ingress_lossless_pool]
-  size        1248
-  ----------  -----------------------------------
-
-  Profile: ingress_lossy_profile
-  ----------  -----------------------------------
-  dynamic_th  3
-  pool        [BUFFER_POOL|ingress_lossless_pool]
-  size        0
-  ----------  -----------------------------------
-
-  Profile: pg_lossless_40000_40m_profile
-  ----------  -----------------------------------
-  xon_offset  2288
-  dynamic_th  -3
-  xon         2288
-  xoff        71552
-  pool        [BUFFER_POOL|ingress_lossless_pool]
-  size        1248
-  ----------  -----------------------------------
-  ```
-
 Go Back To [Beginning of the document](#) or [Beginning of this section](#System-State)
 
 ### System-Health
@@ -11165,6 +11826,36 @@ In addition, displays a list of all current 'Services' and 'Hardware' being moni
   psu.voltage  Ignored   Device
   ```
 
+**show system-health dpu <option>**
+
+This is a smartswitch specific cli.  This cli shows the midplane, control plane and data plane health of the DPU modules in the smartswitch.
+
+This can take two forms of "<option>" 1. DPU module name (ex: DPU0) 2. all, which will list all the DPUs in the smartswitch
+
+- Usage:
+  ```
+  show system-health dpu DPU0
+  ```
+
+- Example:
+  ```
+root@MtFuji-dut:/home/cisco# show system-health dpu DPU0
+Name    Oper-Status    State-Detail             State-Value    Time                             Reason
+------  -------------  -----------------------  -------------  -------------------------------  ------------------------------------------------------------------------------------
+DPU0    Online         dpu_midplane_link_state  up             Mon Dec 23 05:12:17 PM UTC 2024
+                       dpu_control_plane_state  up             Mon Dec 23 05:12:17 PM UTC 2024 All containers are up and running, host-ethlink-status: Uplink1/1 is UP
+                       dpu_data_plane_state     up             Mon Dec 23 05:12:17 PM UTC 2024 DPU container named polaris is running, pdsagent running : OK, pciemgrd running : OK
+
+root@MtFuji-dut:/home/cisco# show system-health dpu all
+Name    Oper-Status    State-Detail             State-Value    Time                             Reason
+------  -------------  -----------------------  -------------  -------------------------------  ------------------------------------------------------------------------------------
+DPU0    Online         dpu_midplane_link_state  up             Mon Dec 23 05:12:17 PM UTC 2024
+                       dpu_control_plane_state  up             Mon Dec 23 05:12:17 PM UTC 2024 All containers are up and running, host-ethlink-status: Uplink1/1 is UP
+                       dpu_data_plane_state     up             Mon Dec 23 05:12:17 PM UTC 2024 DPU container named polaris is running, pdsagent running : OK, pciemgrd running : OK
+DPU1    Online         dpu_midplane_link_state  up             Mon Dec 23 05:12:17 PM UTC 2024
+                       dpu_control_plane_state  up             Mon Dec 23 05:12:17 PM UTC 2024 All containers are up and running, host-ethlink-status: Uplink1/1 is UP
+                       dpu_data_plane_state     up             Mon Dec 23 05:12:17 PM UTC 2024 DPU container named polaris is running, pdsagent running : OK, pciemgrd running : OK
+
 Go Back To [Beginning of the document](#) or [Beginning of this section](#System-Health)
 
 ## VLAN & FDB
@@ -11330,12 +12021,13 @@ This command displays the MAC (FDB) entries either in full or partial as given b
 4) show mac -a <mac-address> - display the MACs that match a specific mac-address
 5) show mac -t <type> - display the MACs that match a specific type (static/dynamic)
 6) show mac -c - display the count of MAC addresses
+7) show mac -n <namespace> - display the MACs that belong to a specific namespace
 
 To show the default MAC address aging time on the switch.
 
 - Usage:
   ```
-  show mac [-v <vlan_id>] [-p <port_name>] [-a <mac_address>] [-t <type>] [-c]
+  show mac [-v <vlan_id>] [-p <port_name>] [-a <mac_address>] [-t <type>] [-c] [-n <namespace>]
   ```
 
 - Example:
@@ -11433,6 +12125,14 @@ Optionally, you can specify a VLAN ID or interface name or type or mac-address i
   ```
   admin@sonic:~$ show mac -c
   Total number of entries 18
+  ```
+  ```
+  admin@sonic:~$ show mac -n asic0
+  No.    Vlan  MacAddress         Port           Type
+  -----  ------  -----------------  -----------  -------
+    2    1000  50:96:23:AD:F1:65  Ethernet192    Static
+    2    1000  C6:C9:5E:AE:24:42  Ethernet192    Static
+  Total number of entries 2
   ```
 
 **show mac aging-time**
@@ -11605,6 +12305,9 @@ This command displays vnet interfaces information about all the vnets configured
   -----------  ------------
   Vnet_2000    Ethernet1
   Vnet_3000    Vlan2000
+  Vnet_1000    PortChannel0002
+  Vnet_5000    Po0002.101
+  Vnet_4000    Loopback0
   ```
 
 **show vnet neighbors**
@@ -11625,10 +12328,13 @@ This command displays vnet neighbor information about all the vnets configured i
   -----------  -----------  -------------  ------------
                11.11.11.11                 Ethernet1
                11.11.11.12                 Ethernet1
+               11.11.11.13                 PortChannel0002
+               11.11.11.14                 Po0002.101
 
   Vnet_3000    neighbor     mac_address        interfaces
   -----------  -----------  -----------------  ------------
                20.20.20.20  aa:bb:cc:dd:ee:ff  Vlan2000
+               30.30.30.30  11:22:33:44:55:66  Ethernet0.1002
   ```
 
 **show vnet routes all**
@@ -11677,6 +12383,51 @@ This command displays tunnel routes information about all the vnets configured i
   Vnet_3000    100.100.2.1/32  10.10.10.2  00:00:00:00:03:04
   ```
 
+#### Vnet config commands
+
+**config vnet add**
+
+This command creates vnet in SONiC system with provided vnet-name.
+
+- Usage:
+  ```
+  config vnet add <vnet-name> <vni> <vxlan-tunnel> [<peer_list>] [<guid>] [<scope>] [<advertise_prefix>] [<overlay_dmac>] [<src_mac>]
+  ```
+
+Note: vnet-name should always start with keyword "Vnet_"
+Mandatory Parameters: vnet_name, vni, vxlan_tunnel
+Optional Parameters: peer_list, guid, scope, advertised_prefix, overlay_dmac, src_mac
+
+**config vnet del**
+
+This command deletes vnet with vnet-name and its associated binded interfaces and routes.
+
+- Usage:
+  ```
+  config vnet del <vnet-name>
+  ```
+
+**config vnet add route**
+
+This command creates vnet route in SONiC system with provided vnet-name and prefix.
+
+- Usage:
+  ```
+  config vnet add-route <vnet-name> <prefix> <endpoint> [<vni>] [<endpoint_monitor>] [<mac_address>] [<profile>] [<primary>] [<monitoring>] [<adv_prefix>]
+  ```
+
+Note: vnet-name should always start with keyword "Vnet_"
+Mandatory Parameters: vnet_name, prefix, endpoint
+Optional Parameters: vni, endpoint_monitor, mac_address, profile, primary, monitoring, adv_prefix
+
+**config vnet del-route <vnet-name>**
+
+This command deletes a vnet route with vnet-name and prefix. It deletes all routes for the provided vnet if prefix isnt specified.
+
+- Usage:
+  ```
+  config vnet del-route <vnet-name> [<prefix>]
+  ```
 Go Back To [Beginning of the document](#) or [Beginning of this section](#vxlan--vnet)
 
 ## Warm Reboot
@@ -13701,3 +14452,482 @@ Sending 3 magic packet to 11:33:55:77:99:bb via interface Vlan1000
 ```
 
 For the 4th example, it specifise 2 target MAC addresses and `count` is 3. So it'll send 6 magic packets in total.
+
+# Banner Commands
+
+This sub-section explains the list of the configuration options available for Banner feature.
+
+## Banner config commands
+
+- Set banner feature state
+
+```
+admin@sonic:~$ config banner state <enabled|disabled>
+Usage: config config banner state <enabled|disabled>
+
+  Set banner feature state
+
+Options:
+  -?, -h, --help  Show this message and exit.
+```
+
+- Set login message
+
+```
+admin@sonic:~$ config banner login <message>
+Usage: config banner login <message>
+
+  Set login message
+
+Options:
+  -?, -h, --help  Show this message and exit.
+```
+
+- Set logout message
+
+```
+admin@sonic:~$ config banner logout <message>
+Usage: config banner logout <message>
+
+  Set logout message
+
+Options:
+  -?, -h, --help  Show this message and exit.
+```
+
+- Set message of the day
+
+```
+admin@sonic:~$ config banner motd <message>
+Usage: config banner motd <message>
+
+  Set message of the day
+
+Options:
+  -?, -h, --help  Show this message and exit.
+```
+
+## Banner show command
+
+- how banner messages
+
+```
+admin@sonic:~$ show banner
+Usage: show banner
+
+  Show banner messages
+
+Options:
+  -h, -?, --help  Show this message and exit.
+```
+```
+admin@sonic:~$ show banner
+state    login    motd                                              logout
+-------  -------  ------------------------------------------------  --------
+enabled  Login    You are on
+         Message    ____   ___  _   _ _  ____
+                   / ___| / _ \| \ | (_)/ ___|
+                   \___ \| | | |  \| | | |
+                    ___) | |_| | |\  | | |___
+                   |____/ \___/|_| \_|_|\____|
+
+                  -- Software for Open Networking in the Cloud --
+
+                  Unauthorized access and/or use are prohibited.
+                  All access and/or use are subject to monitoring.
+
+                  Help:    https://sonic-net.github.io/SONiC/
+ ```                             
+---
+
+# Memory Statistics Commands
+
+## Overview
+These commands allow users to enable/disable memory statistics monitoring, configure data collection intervals, adjust data retention periods, view memory statistics, and check the current configuration. Memory statistics can help administrators monitor and analyze system memory usage over time.
+
+**Common Use Cases** 
+ - Monitor system memory trends over time. 
+ - Track memory usage patterns during peak time.  
+ - Plan system capacity based on historical memory data.
+
+---
+
+## Memory Statistics Config Commands
+
+### Enable/Disable Memory Statistics Monitoring
+
+To enable or disable the memory statistics monitoring feature:
+
+```bash
+admin@sonic:~$ config memory-stats enable/disable
+```
+
+This will **enable/disable** memory statistics monitoring.
+
+By default, this feature is **disabled**.
+
+**Examples**:
+
+- To enable memory statistics monitoring:
+
+  ```bash
+  admin@sonic:~$ config memory-stats enable
+  Memory statistics monitoring enabled.
+  ```
+
+- To disable memory statistics monitoring:
+
+  ```bash
+  admin@sonic:~$ config memory-stats disable
+  Memory statistics monitoring disabled.
+  ```
+
+---
+
+### Set the Frequency of Memory Data Collection
+
+To configure the interval for memory data collection (specified in minutes):
+
+```bash
+admin@sonic:~$ config memory-stats sampling-interval <interval>
+```
+
+- `<interval>` is the sampling interval in minutes.
+- The default sampling interval is **5 minutes**.
+
+**Example**:
+
+- To set the sampling interval to 10 minutes:
+
+  ```bash
+  admin@sonic:~$ config memory-stats sampling-interval 10
+  Sampling interval set to 10 minutes.
+  ```
+
+---
+
+### Adjust the Data Retention Period
+
+To set how long the memory data should be retained (specified in days):
+
+```bash
+admin@sonic:~$ config memory-stats retention-period <period>
+```
+
+- `<period>` is the retention period in days.
+- The default retention period is **15 days**.
+
+**Example**:
+
+- To set the retention period to 30 days:
+
+  ```bash
+  admin@sonic:~$ config memory-stats retention-period 30
+  Retention period set to 30 days.
+  ```
+
+---
+
+## Memory Statistics Show Commands
+
+### View Memory Usage Statistics
+To display memory usage statistics, use the following command with optional parameters for time range and specific metrics:
+
+```bash
+admin@sonic:~$ show memory-stats [--from <date-time>] [--to <date-time>] [--select <metric>]
+```
+
+**Command Options:**
+- `show memory-stats`: Display basic memory usage statistics.
+- `--from <date-time>`: Display memory statistics from the specified start date-time.
+- `--to <date-time>`: Display memory statistics up to the specified end date-time.
+- `--select <metric>`: Display specific memory statistics, such as total memory.
+
+**Time Format for Statistics Retrieval:**
+The time format for `--from` and `--to` options includes:
+- **Relative time formats:**
+  - 'X days ago', 'X hours ago', 'X minutes ago'
+  - 'yesterday', 'today'
+- **Specific times and dates:**
+  - 'now'
+  - 'July 23', 'July 23, 2024', '2 November 2024'
+  - '7/24', '1/2'
+- **Time expressions:**
+  - '2 am', '3:15 pm'
+  - 'Aug 01 06:43:40', 'July 1 3:00:00'
+- **Named months:**
+  - 'jan', 'feb', 'march', 'september', etc.
+  - Full month names: 'January', 'February', 'March', etc.
+- **ISO 8601 format:**
+  - '2024-07-01T15:00:00'
+
+---
+
+### Default Historical Memory Statistics
+
+To view the historical memory statistics:
+
+```bash
+admin@sonic:~$ show memory-stats
+```
+
+**Sample Output**:
+
+```bash
+Memory Statistics:
+Codes: M - minutes, H - hours, D - days
+--------------------------------------------------------------------------------
+Report Generated:    2024-12-04 15:49:52
+Analysis Period:     From 2024-11-19 15:49:52 to 2024-12-04 15:49:52
+Interval:            2 Days
+--------------------------------------------------------------------------------------------------------------------------------------------------
+Metric             Current    High       Low        D19-D21     D21-D23     D23-D25     D25-D27     D27-D29     D29-D01     D01-D03     D03-D05    
+                   Value      Value      Value      19Nov24     21Nov24     23Nov24     25Nov24     27Nov24     29Nov24     01Dec24     03Dec24    
+--------------------------------------------------------------------------------------------------------------------------------------------------
+total_memory       15.29GB    15.29GB    15.29GB    15.29GB     15.29GB     15.29GB     15.29GB     15.29GB    15.29GB      15.29GB     15.29GB    
+used_memory        8.87GB     9.35GB     8.15GB     8.15GB      9.10GB      8.15GB      8.20GB      9.05GB     8.30GB       9.35GB      9.12GB     
+free_memory        943.92MB   906.28MB   500.00MB   800.00MB    750.00MB    906.2MB     650.00MB    600.00MB   550.00MB     500.00MB    725.92MB   
+available_memory   4.78GB     4.74GB     4.35GB     4.65GB      4.60GB      4.55GB      4.74GB      4.45GB     4.40GB       4.35GB      4.57GB     
+cached_memory      5.17GB     5.08GB     4.96GB     5.08GB      5.06GB      5.04GB      5.02GB     5.00GB      4.98GB       4.96GB      5.05GB     
+buffers_memory     337.83MB   333.59MB   295.00MB   325.00MB    320.00MB    315.00MB    333.59MB   305.00MB    300.00MB     295.00MB    317.84MB   
+shared_memory      1.31GB     1.22GB     1.08GB     1.22GB      1.20GB      1.18GB      1.15GB     1.12GB      1.10GB       1.08GB      1.19GB
+```
+
+---
+
+### Historical Memory Statistics for Last 10 Days
+
+To view memory statistics for the last 10 days:
+
+```bash
+admin@sonic:~$ show memory-stats --from '10 days ago' --to 'now'
+```
+
+**Sample Output**:
+
+```
+Memory Statistics:
+Codes: M - minutes, H - hours, D - days
+--------------------------------------------------------------------------------
+Report Generated:    2024-12-24 17:29:19
+Analysis Period:     From 2024-12-14 17:29:19 to 2024-12-24 17:29:19
+Interval:            1 Days
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Metric             Current    High       Low        D14-D15     D15-D16     D16-D17     D17-D18     D18-D19     D19-D20     D20-D21     D21-D22     D22-D23     D23-D24     D24-D25    
+                   Value      Value      Value      14Dec24     15Dec24     16Dec24     17Dec24     18Dec24     19Dec24     20Dec24     21Dec24     22Dec24     23Dec24     24Dec24    
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+total_memory       15.29GB    15.29GB    15.29GB    -           -           -           -           -           -           -           -           -           -           15.29GB    
+used_memory        11.74GB    9.14GB     9.14GB     -           -           -           -           -           -           -           -           -           -           9.14GB     
+free_memory        704.33MB   2.61GB     2.61GB     -           -           -           -           -           -           -           -           -           -           2.61GB     
+available_memory   2.21GB     4.73GB     4.73GB     -           -           -           -           -           -           -           -           -           -           4.73GB     
+cached_memory      2.76GB     3.40GB     3.40GB     -           -           -           -           -           -           -           -           -           -           3.40GB     
+buffers_memory     105.39MB   144.28MB   144.28MB   -           -           -           -           -           -           -           -           -           -           144.28MB   
+shared_memory      1.00GB     1.08GB     1.08GB     -           -           -           -           -           -           -           -           -           -           1.08GB
+```
+
+---
+
+### Historical Memory Statistics for Last 100 Minutes
+
+```bash
+admin@sonic:~$ show memory-stats --from '100 minutes ago' --to 'now'
+```
+
+**Sample Output**:
+
+```
+Memory Statistics:
+Codes: M - minutes, H - hours, D - days
+--------------------------------------------------------------------------------
+Report Generated:    2024-12-24 17:24:08
+Analysis Period:     From 2024-12-24 15:44:08 to 2024-12-24 17:24:08
+Interval:            10 Minutes
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Metric             Current    High       Low        M44-M54     M54-M04     M04-M14     M14-M24     M24-M34     M34-M44     M44-M54     M54-M04     M04-M14     M14-M24     M24-M34    
+                   Value      Value      Value      15:44       15:54       16:04       16:14       16:24       16:34       16:44       16:54       17:04       17:14       17:24      
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+total_memory       15.29GB    15.29GB    15.29GB    15.29GB     15.29GB     15.29GB     15.29GB     15.29GB     15.29GB     15.29GB     15.29GB     15.29GB     15.29GB     -          
+used_memory        11.62GB    11.81GB    10.69GB    11.81GB     11.74GB     10.69GB     10.93GB     11.31GB     11.31GB     11.38GB     11.40GB     11.44GB     11.50GB     -          
+free_memory        888.46MB   1.65GB     514.18MB   514.18MB    525.77MB    1.65GB      1.15GB      802.98MB    818.78MB    680.81MB    716.42MB    533.82MB    1.07GB      -          
+available_memory   2.35GB     3.37GB     2.25GB     2.25GB      2.25GB      3.37GB      2.96GB      2.62GB      2.64GB      2.52GB      2.57GB      2.49GB      2.52GB      -          
+cached_memory      2.70GB     3.15GB     2.63GB     2.85GB      2.91GB      2.82GB      3.07GB      3.05GB      3.03GB      3.09GB      3.03GB      3.15GB      2.63GB      -          
+buffers_memory     101.39MB   186.47MB   99.00MB    134.77MB    136.97MB    140.94MB    148.42MB    153.82MB    157.19MB    160.90MB    165.18MB    186.47MB    99.00MB     -          
+shared_memory      1005.79MB  1.07GB     917.46MB   926.08MB    993.94MB    917.46MB    1.07GB      1.01GB      1020.12MB   1.04GB      1001.18MB   1.01GB      961.13MB    -
+```
+
+---
+
+### Historical Memory Statistics for Last 3 Hours
+
+```bash
+admin@sonic:~$ show memory-stats --from '3 hours ago' --to 'now'
+```
+
+**Sample Output**:
+
+```
+Memory Statistics:
+Codes: M - minutes, H - hours, D - days
+--------------------------------------------------------------------------------
+Report Generated:    2024-12-24 17:24:51
+Analysis Period:     From 2024-12-24 14:24:51 to 2024-12-24 17:24:51
+Interval:            1 Hours
+--------------------------------------------------------------------------------------------------
+Metric             Current    High       Low        H14-H15     H15-H16     H16-H17     H17-H18    
+                   Value      Value      Value      14:24       15:24       16:24       17:24      
+--------------------------------------------------------------------------------------------------
+total_memory       15.29GB    15.29GB    15.29GB    15.29GB     15.29GB     15.29GB     -          
+used_memory        11.59GB    11.52GB    11.39GB    11.42GB     11.52GB     11.39GB     -          
+free_memory        928.18MB   826.58MB   774.48MB   780.43MB    826.58MB    774.48MB    -          
+available_memory   2.39GB     2.56GB     2.50GB     2.53GB      2.50GB      2.56GB      -          
+cached_memory      2.70GB     3.00GB     2.83GB     2.89GB      2.83GB      3.00GB      -          
+buffers_memory     101.62MB   153.76MB   132.42MB   149.62MB    132.42MB    153.76MB    -          
+shared_memory      997.97MB   1020.80MB  961.19MB   971.47MB    961.19MB    1020.80MB   -
+```
+
+---
+
+### Historical Memory Statistics for Specific Metric (Used Memory)
+
+```bash
+admin@sonic:~$ show memory-stats --from '100 minutes ago' --to 'now' --select 'used_memory'
+```
+
+**Sample Output**:
+
+```
+Memory Statistics:
+Codes: M - minutes, H - hours, D - days
+--------------------------------------------------------------------------------
+Report Generated:    2024-12-24 17:27:58
+Analysis Period:     From 2024-12-24 15:47:58 to 2024-12-24 17:27:58
+Interval:            10 Minutes
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+Metric             Current    High       Low        M47-M57     M57-M07     M07-M17     M17-M27     M27-M37     M37-M47     M47-M57     M57-M07     M07-M17     M17-M27     M27-M37    
+                   Value      Value      Value      15:47       15:57       16:07       16:17       16:27       16:37       16:47       16:57       17:07       17:17       17:27      
+--------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------
+used_memory        11.69GB    11.79GB    10.55GB    11.79GB     11.35GB     10.55GB     11.24GB     11.30GB     11.33GB     11.40GB     11.39GB     11.46GB     11.62GB     -
+     
+
+```
+
+---
+
+### View Memory Statistics Configuration
+To display the current configuration parameters such as data collection frequency, retention period, and enable/disable status, use the following command:
+
+```bash
+admin@sonic:~$ show memory-stats-config
+```
+**Example:**
+```bash
+admin@sonic:~$ show memory-stats-config
+Memory Statistics Configuration:
+--------------------------------
+Enabled:            false
+Sampling Interval:  5
+Retention Period:   15
+```
+---
+# CoPP Commands
+
+## Overview
+This sub-section explains the list of commands available for CoPP (Control Plane Policing) feature.
+
+---
+
+## CoPP Show Commands
+
+These commands are used to display the current CoPP configuration and their status.
+
+### Usage
+```bash
+show copp configuration <detailed> [--trapid <trap_id>] [--group <trap_group>]
+```
+
+**Example**:
+
+```bash
+show copp configuration
+show copp configuration detailed --group queue1_group3
+show copp configuration detailed --trapid neighbor_miss
+```
+
+### Show CoPP Configuration
+
+Command to display the current CoPP configurations and hardware status of the traps.
+
+```bash
+admin@sonic:~$ show copp configuration
+```
+
+**Sample Output**:
+
+```bash
+admin@sonic:~$ show copp configuration
+TrapId           Trap Group     Action      CBS    CIR  Meter Type    Mode    HW Status
+---------------  -------------  --------  -----  -----  ------------  ------  -------------
+arp_req          queue4_group2  copy        600    600  packets       sr_tcm  installed
+arp_resp         queue4_group2  copy        600    600  packets       sr_tcm  installed
+bgp              queue4_group1  trap       6000   6000  packets       sr_tcm  not-installed
+bgpv6            queue4_group1  trap       6000   6000  packets       sr_tcm  not-installed
+dest_nat_miss    queue1_group2  trap        600    600  packets       sr_tcm  installed
+dhcp             queue4_group3  trap        100    100  packets       sr_tcm  installed
+dhcpv6           queue4_group3  trap        100    100  packets       sr_tcm  installed
+eapol            queue4_group1  trap       6000   6000  packets       sr_tcm  installed
+ip2me            queue1_group1  trap       6000   6000  packets       sr_tcm  installed
+lacp             queue4_group1  trap       6000   6000  packets       sr_tcm  installed
+lldp             queue4_group3  trap        100    100  packets       sr_tcm  installed
+neigh_discovery  queue4_group2  copy        600    600  packets       sr_tcm  installed
+neighbor_miss    queue1_group3  trap        200    200  packets       sr_tcm  installed
+sample_packet    queue2_group1  trap       1000   1000  packets       sr_tcm  not-installed
+src_nat_miss     queue1_group2  trap        600    600  packets       sr_tcm  installed
+udld             queue4_group3  trap        100    100  packets       sr_tcm  installed
+```
+
+### Show CoPP Configuration Detailed
+
+Command to display the detailed CoPP configuration of a specific trap ID.
+
+```bash
+admin@sonic:~$ show copp configuration detailed --trapid neighbor_miss
+```
+
+**Sample Output**:
+
+```bash
+Trap Group.................. queue1_group3
+queue....................... 1
+Trap Priority............... 1
+Trap Action................. trap
+Meter Type.................. packets
+Mode........................ sr_tcm
+CBS......................... 200
+CIR......................... 200
+Green Action................ forward
+Yellow Action............... forward
+Red Action.................. drop
+HW Status................... installed
+```
+
+Command to display the detailed CoPP configuration of a specific CoPP group.
+
+```bash
+admin@sonic:~$ show copp configuration detailed --group queue1_group3
+```
+
+**Sample Output**:
+
+```bash
+Trap Id(s).................. neighbor_miss
+Queue....................... 1
+Trap Priority............... 1
+Trap Action................. trap
+Meter Type.................. packets
+Mode........................ sr_tcm
+CBS......................... 200
+CIR......................... 200
+Yellow Action............... forward
+Green Action................ forward
+Red Action.................. drop
+```

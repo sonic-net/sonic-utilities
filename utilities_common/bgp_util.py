@@ -25,16 +25,30 @@ def get_namespace_for_bgp_neighbor(neighbor_ip):
 
 def is_bgp_neigh_present(neighbor_ip, namespace=multi_asic.DEFAULT_NAMESPACE):
     config_db = multi_asic.connect_config_db_for_ns(namespace)
-    #check the internal
-    bgp_session = config_db.get_entry(multi_asic.BGP_NEIGH_CFG_DB_TABLE,
-                                      neighbor_ip)
-    if bgp_session:
-        return True
 
-    bgp_session = config_db.get_entry(
-        multi_asic.BGP_INTERNAL_NEIGH_CFG_DB_TABLE, neighbor_ip)
-    if bgp_session:
-        return True
+    tables = [
+        multi_asic.BGP_NEIGH_CFG_DB_TABLE,
+        multi_asic.BGP_INTERNAL_NEIGH_CFG_DB_TABLE,
+    ]
+    pattern = re.compile(rf".*\|{re.escape(neighbor_ip)}")
+
+    for table in tables:
+        # Check for the neighbor_ip format
+        if config_db.get_entry(table, neighbor_ip):
+            return True
+
+        # Check for any string|neighbor_ip format using regex. This is needed
+        # when unified routing config mode is enabled, as in that case
+        # vrfname|neighbor_ip is the key instead of just neighbor_ip
+        keys = config_db.get_keys(table)
+        for key in keys:
+            # Convert the key from tuple like ('default', 'x.x.x.x') to a string
+            # like 'default|x.x.x.x'
+            if isinstance(key, tuple):
+                key_str = "|".join(key)
+                if pattern.match(key_str) and config_db.get_entry(table, key):
+                    return True
+
     return False
 
 
@@ -135,8 +149,18 @@ def get_bgp_neighbor_ip_to_name(ip, static_neighbors, dynamic_neighbors):
     :param dynamic_neighbors: subnet of dynamically defined neighbors dict
     :return: name of neighbor
     """
+    # Direct IP match
     if ip in static_neighbors:
         return static_neighbors[ip]
+    # Try to find the key where IP is the second element of any tuple key.
+    # This is to handle the case where the key is a tuple like (vrfname, IP)
+    # when unified routing config mode is enabled
+    elif matching_key := next(
+        (key for key in static_neighbors.keys()
+         if isinstance(key, tuple) and len(key) == 2 and key[1] == ip),
+        None
+    ):
+        return static_neighbors[matching_key]
     elif is_ipv4_address(ip):
         for subnet in dynamic_neighbors[constants.IPV4]:
             if ipaddress.IPv4Address(ip) in ipaddress.IPv4Network(subnet):
@@ -238,15 +262,21 @@ def run_bgp_show_command(vtysh_cmd, bgp_namespace=multi_asic.DEFAULT_NAMESPACE, 
     return output
 
 
-def get_bgp_summary_from_all_bgp_instances(af, namespace, display):
+def get_bgp_summary_from_all_bgp_instances(af, namespace, display, vrf):
 
     device = multi_asic_util.MultiAsic(display, namespace)
     ctx = click.get_current_context()
     if af is constants.IPV4:
-        vtysh_cmd = "show ip bgp summary json"
+        vtysh_cmd = "show ip bgp"
+        if vrf is not None:
+            vtysh_cmd += ' vrf {}'.format(vrf)
+        vtysh_cmd += " summary json"
         key = 'ipv4Unicast'
     else:
-        vtysh_cmd = "show bgp ipv6 summary json"
+        vtysh_cmd = "show bgp"
+        if vrf is not None:
+            vtysh_cmd += ' vrf {}'.format(vrf)
+        vtysh_cmd += " ipv6 summary json"
         key = 'ipv6Unicast'
 
     bgp_summary = {}
@@ -277,7 +307,10 @@ def get_bgp_summary_from_all_bgp_instances(af, namespace, display):
                     has_bgp_neighbors = False
 
         if not has_bgp_neighbors:
-            vtysh_bgp_json_cmd = "show ip bgp json"
+            vtysh_bgp_json_cmd = "show ip bgp"
+            if vrf is not None:
+                vtysh_bgp_json_cmd += " vrf {}".format(vrf)
+            vtysh_bgp_json_cmd += " json"
             no_neigh_cmd_output = run_bgp_show_command(vtysh_bgp_json_cmd, ns)
             try:
                 no_neigh_cmd_output_json = json.loads(no_neigh_cmd_output)
@@ -357,10 +390,13 @@ def process_bgp_summary_json(bgp_summary, cmd_output, device, has_bgp_neighbors=
                 'ribCount', 0) + cmd_output['ribCount']
             bgp_summary['ribMemory'] = bgp_summary.get(
                 'ribMemory', 0) + cmd_output['ribMemory']
+            # Handle the case when we have peers but no peer-groups are configured.
+            # We still want to display peer information without just showing
+            # Error: peerGroupCount missing in the bgp_summary
             bgp_summary['peerGroupCount'] = bgp_summary.get(
-                'peerGroupCount', 0) + cmd_output['peerGroupCount']
+                'peerGroupCount', 0) + cmd_output.get('peerGroupCount', 0)
             bgp_summary['peerGroupMemory'] = bgp_summary.get(
-                'peerGroupMemory', 0) + cmd_output['peerGroupMemory']
+                'peerGroupMemory', 0) + cmd_output.get('peerGroupMemory', 0)
         else:
             # when there are no bgp neighbors, all values are zero
             bgp_summary['peerCount'] = bgp_summary.get(

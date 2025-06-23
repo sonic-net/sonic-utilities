@@ -20,6 +20,7 @@ OP_DEL = "DEL"
 
 NEIGH_TABLE = 'NEIGH_TABLE'
 ROUTE_TABLE = 'ROUTE_TABLE'
+MY_SID_TABLE = 'SRV6_MY_SID_TABLE'
 VNET_ROUTE_TABLE = 'VNET_ROUTE_TABLE'
 INTF_TABLE = 'INTF_TABLE'
 RT_ENTRY_TABLE = 'ASIC_STATE'
@@ -30,8 +31,11 @@ MUX_CABLE = "MUX_CABLE"
 
 LOCALHOST = "localhost"
 
-RT_ENTRY_KEY_PREFIX = 'SAI_OBJECT_TYPE_ROUTE_ENTRY:{\"dest":\"'
-RT_ENTRY_KEY_SUFFIX = '\",\"switch_id\":\"oid:0x21000000000000\",\"vr\":\"oid:0x3000000000023\"}'
+ASIC_RT_ENTRY_KEY_PREFIX = 'SAI_OBJECT_TYPE_ROUTE_ENTRY:{\"dest":\"'
+ASIC_RT_ENTRY_KEY_SUFFIX = '\",\"switch_id\":\"oid:0x21000000000000\",\"vr\":\"oid:0x3000000000023\"}'
+ASIC_SID_ENTRY_KEY_PREFIX = 'SAI_OBJECT_TYPE_MY_SID_ENTRY:{"args_len":"0","function_len":"0","locator_block_len":"32",\
+"locator_node_len":"16","sid":"'
+ASIC_SID_ENTRY_KEY_SUFFIX = '","switch_id":"oid:0x21000000000000","vr_id":"oid:0x3000000000023"}'
 
 DEFAULT_CONFIG_DB = {
     DEVICE_METADATA: {
@@ -55,10 +59,10 @@ TEST_DATA = {
             DEFAULTNS: {
                 APPL_DB: {
                     ROUTE_TABLE: {
-                        "0.0.0.0/0" : { "ifname": "portchannel0" },
-                        "10.10.196.12/31" : { "ifname": "portchannel0" },
-                        "10.10.196.20/31" : { "ifname": "portchannel0" },
-                        "10.10.196.30/31" : { "ifname": "lo" }
+                        "0.0.0.0/0": {"ifname": "portchannel0"},
+                        "10.10.196.12/31": {"ifname": "portchannel0"},
+                        "10.10.196.20/31": {"ifname": "portchannel0"},
+                        "10.10.196.30/31": {"ifname": "lo"}
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -68,11 +72,11 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
             }
@@ -87,10 +91,10 @@ TEST_DATA = {
             DEFAULTNS: {
                 APPL_DB: {
                     ROUTE_TABLE: {
-                        "0.0.0.0/0" : { "ifname": "portchannel0" },
-                        "10.10.196.12/31" : { "ifname": "portchannel0" },
-                        "10.10.196.20/31" : { "ifname": "portchannel0" },
-                        "10.10.196.30/31" : { "ifname": "lo" }
+                        "0.0.0.0/0": {"ifname": "portchannel0"},
+                        "10.10.196.12/31": {"ifname": "portchannel0"},
+                        "10.10.196.20/31": {"ifname": "portchannel0"},
+                        "10.10.196.30/31": {"ifname": "lo"}
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -99,11 +103,11 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.10.10/32" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.10.10/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
             }
@@ -113,10 +117,10 @@ TEST_DATA = {
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
                         OP_SET: {
-                            RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
+                            ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         },
                         OP_DEL: {
-                            RT_ENTRY_KEY_PREFIX + "10.10.10.10/32" + RT_ENTRY_KEY_SUFFIX: {}
+                            ASIC_RT_ENTRY_KEY_PREFIX + "10.10.10.10/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                         }
                     }
                 }
@@ -133,10 +137,10 @@ TEST_DATA = {
             DEFAULTNS: {
                 APPL_DB: {
                     ROUTE_TABLE: {
-                        "0.0.0.0/0" : { "ifname": "portchannel0" },
-                        "10.10.196.12/31" : { "ifname": "portchannel0" },
-                        "10.10.196.20/31" : { "ifname": "portchannel0" },
-                        "10.10.196.30/31" : { "ifname": "lo" }
+                        "0.0.0.0/0": {"ifname": "portchannel0"},
+                        "10.10.196.12/31": {"ifname": "portchannel0"},
+                        "10.10.196.20/31": {"ifname": "portchannel0"},
+                        "10.10.196.30/31": {"ifname": "lo"}
                     },
                     INTF_TABLE: {
                         "PortChannel1013:90.10.196.24/31": {},
@@ -146,11 +150,11 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "20.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "20.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "20.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "3603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "20.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "20.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "20.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "3603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
             }
@@ -183,10 +187,10 @@ TEST_DATA = {
             DEFAULTNS: {
                 APPL_DB: {
                     ROUTE_TABLE: {
-                        "0.0.0.0/0" : { "ifname": "portchannel0" },
-                        "10.10.196.12/31" : { "ifname": "portchannel0" },
-                        "10.10.196.20/31" : { "ifname": "portchannel0" },
-                        "10.10.196.30/31" : { "ifname": "lo" }
+                        "0.0.0.0/0": {"ifname": "portchannel0"},
+                        "10.10.196.12/31": {"ifname": "portchannel0"},
+                        "10.10.196.20/31": {"ifname": "portchannel0"},
+                        "10.10.196.30/31": {"ifname": "lo"}
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -196,11 +200,11 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
             }
@@ -215,15 +219,15 @@ TEST_DATA = {
             DEFAULTNS: {
                 APPL_DB: {
                     ROUTE_TABLE: {
-                        "0.0.0.0/0" : { "ifname": "portchannel0" },
-                        "10.10.196.12/31" : { "ifname": "portchannel0" },
-                        "10.10.196.20/31" : { "ifname": "portchannel0" },
-                        "10.10.196.30/31" : { "ifname": "lo" },
-                        "10.10.197.1" : { "ifname": "Ethernet-IB0", "nexthop": "0.0.0.0"},
-                        "2603:10b0:503:df5::1" : { "ifname": "Ethernet-IB0", "nexthop": "::"},
-                        "100.0.0.2/32" : { "ifname": "Ethernet-IB0", "nexthop": "0.0.0.0" },
-                        "2064:100::2/128" : { "ifname": "Ethernet-IB0", "nexthop": "::" },
-                        "101.0.0.0/24" : { "ifname": "Ethernet-IB0", "nexthop": "100.0.0.2"}
+                        "0.0.0.0/0": {"ifname": "portchannel0"},
+                        "10.10.196.12/31": {"ifname": "portchannel0"},
+                        "10.10.196.20/31": {"ifname": "portchannel0"},
+                        "10.10.196.30/31": {"ifname": "lo"},
+                        "10.10.197.1": {"ifname": "Ethernet-IB0", "nexthop": "0.0.0.0"},
+                        "2603:10b0:503:df5::1": {"ifname": "Ethernet-IB0", "nexthop": "::"},
+                        "100.0.0.2/32": {"ifname": "Ethernet-IB0", "nexthop": "0.0.0.0"},
+                        "2064:100::2/128": {"ifname": "Ethernet-IB0", "nexthop": "::"},
+                        "101.0.0.0/24": {"ifname": "Ethernet-IB0", "nexthop": "100.0.0.2"}
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -235,14 +239,14 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.197.1/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df5::1/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "101.0.0.0/24" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.197.1/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df5::1/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "101.0.0.0/24" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
             }
@@ -258,10 +262,10 @@ TEST_DATA = {
             DEFAULTNS: {
                 APPL_DB: {
                     ROUTE_TABLE: {
-                        "0.0.0.0/0" : { "ifname": "portchannel0" },
-                        "10.10.196.12/31" : { "ifname": "portchannel0" },
-                        "10.10.196.20/31" : { "ifname": "portchannel0" },
-                        "10.10.196.30/31" : { "ifname": "lo", "nexthop": "100.0.0.2" }
+                        "0.0.0.0/0": {"ifname": "portchannel0"},
+                        "10.10.196.12/31": {"ifname": "portchannel0"},
+                        "10.10.196.20/31": {"ifname": "portchannel0"},
+                        "10.10.196.30/31": {"ifname": "lo", "nexthop": "100.0.0.2"}
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -271,11 +275,11 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
             }
@@ -297,15 +301,15 @@ TEST_DATA = {
             DEFAULTNS: {
                 APPL_DB: {
                     ROUTE_TABLE: {
-                        "0.0.0.0/0" : { "ifname": "portchannel0" },
-                        "10.10.196.12/31" : { "ifname": "portchannel0" },
-                        "10.10.196.20/31" : { "ifname": "portchannel0" },
-                        "10.10.196.30/31" : { "ifname": "lo" }
+                        "0.0.0.0/0": {"ifname": "portchannel0"},
+                        "10.10.196.12/31": {"ifname": "portchannel0"},
+                        "10.10.196.20/31": {"ifname": "portchannel0"},
+                        "10.10.196.30/31": {"ifname": "lo"}
                     },
                     VNET_ROUTE_TABLE: {
-                        "Vnet1:30.1.10.0/24": { "ifname": "Vlan3001" },
-                        "Vnet1:50.1.1.0/24": { "ifname": "Vlan3001" },
-                        "Vnet1:50.2.2.0/24": { "ifname": "Vlan3001" }
+                        "Vnet1:30.1.10.0/24": {"ifname": "Vlan3001"},
+                        "Vnet1:50.1.1.0/24": {"ifname": "Vlan3001"},
+                        "Vnet1:50.2.2.0/24": {"ifname": "Vlan3001"}
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -317,15 +321,15 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "30.1.10.1/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "30.1.10.0/24" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "50.1.1.0/24" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "50.2.2.0/24" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "30.1.10.1/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "30.1.10.0/24" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "50.1.1.0/24" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "50.2.2.0/24" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
             }
@@ -355,7 +359,7 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "fc02:1000::99/128" + RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "fc02:1000::99/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                     }
                 }
             }
@@ -370,9 +374,9 @@ TEST_DATA = {
             DEFAULTNS: {
                 APPL_DB: {
                     ROUTE_TABLE: {
-                        "Vrf1:0.0.0.0/0" : { "ifname": "portchannel0" },
-                        "Vrf1:10.10.196.12/31" : { "ifname": "portchannel0" },
-                        "Vrf1:10.10.196.20/31" : { "ifname": "portchannel0" }
+                        "Vrf1:0.0.0.0/0": {"ifname": "portchannel0"},
+                        "Vrf1:10.10.196.12/31": {"ifname": "portchannel0"},
+                        "Vrf1:10.10.196.20/31": {"ifname": "portchannel0"}
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -382,11 +386,11 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
             }
@@ -427,10 +431,10 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "192.168.0.2/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "fc02:1000::2/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "192.168.0.3/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "fc02:1000::3/128" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "192.168.0.2/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "fc02:1000::2/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "192.168.0.3/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "fc02:1000::3/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
             }
@@ -445,8 +449,8 @@ TEST_DATA = {
             DEFAULTNS: {
                 APPL_DB: {
                     ROUTE_TABLE: {
-                        "0.0.0.0/0" : { "ifname": "portchannel0" },
-                        "10.10.196.12/31" : { "ifname": "portchannel0" },
+                        "0.0.0.0/0": {"ifname": "portchannel0"},
+                        "10.10.196.12/31": {"ifname": "portchannel0"},
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -456,10 +460,10 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 },
             },
@@ -502,8 +506,8 @@ TEST_DATA = {
             DEFAULTNS: {
                 APPL_DB: {
                     ROUTE_TABLE: {
-                        "0.0.0.0/0" : { "ifname": "portchannel0" },
-                        "10.10.196.12/31" : { "ifname": "portchannel0" },
+                        "0.0.0.0/0": {"ifname": "portchannel0"},
+                        "10.10.196.12/31": {"ifname": "portchannel0"},
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -513,10 +517,10 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 },
             },
@@ -559,8 +563,7 @@ TEST_DATA = {
         RESULT: {
             DEFAULTNS: {
                 "missed_FRR_routes": [
-                    {"prefix": "10.10.196.12/31", "vrfName": "default", "protocol": "bgp", "selected": True},
-                    {"prefix": "1.1.1.0/24", "vrfName": "default", "protocol": "static", "selected": True},
+                    {"prefix": "10.10.196.12/31", "vrfName": "default", "protocol": "bgp", "selected": True}
                 ],
             },
         },
@@ -575,8 +578,8 @@ TEST_DATA = {
             DEFAULTNS: {
                 APPL_DB: {
                     ROUTE_TABLE: {
-                        "0.0.0.0/0" : { "ifname": "portchannel0" },
-                        "10.10.196.12/31" : { "ifname": "portchannel0" },
+                        "0.0.0.0/0": {"ifname": "portchannel0"},
+                        "10.10.196.12/31": {"ifname": "portchannel0"},
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -586,10 +589,10 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 },
             },
@@ -637,7 +640,7 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "2000:31::1/128" + RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2000:31::1/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                     }
                 }
             }
@@ -663,10 +666,10 @@ TEST_DATA = {
                 },
                 APPL_DB: {
                     ROUTE_TABLE: {
-                        "10.10.196.12/31" : { "ifname": "portchannel0" },
-                        "10.10.196.20/31" : { "ifname": "portchannel0" },
-                        "192.168.0.101/32": { "ifname": "tun0" },
-                        "192.168.0.103/32": { "ifname": "tun0" },
+                        "10.10.196.12/31": {"ifname": "portchannel0"},
+                        "10.10.196.20/31": {"ifname": "portchannel0"},
+                        "192.168.0.101/32": {"ifname": "tun0"},
+                        "192.168.0.103/32": {"ifname": "tun0"},
                     },
                     INTF_TABLE: {
                         "PortChannel1013:90.10.196.24/31": {},
@@ -681,11 +684,11 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "20.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "20.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "20.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "192.168.0.101/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "192.168.0.102/32" + RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "20.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "20.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "20.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "192.168.0.101/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "192.168.0.102/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                     }
                 }
             }
@@ -717,10 +720,10 @@ TEST_DATA = {
             ASIC0: {
                 APPL_DB: {
                     ROUTE_TABLE: {
-                        "0.0.0.0/0" : { "ifname": "portchannel0" },
-                        "10.10.196.12/31" : { "ifname": "portchannel0" },
-                        "10.10.196.20/31" : { "ifname": "portchannel0" },
-                        "10.10.196.30/31" : { "ifname": "lo" }
+                        "0.0.0.0/0": {"ifname": "portchannel0"},
+                        "10.10.196.12/31": {"ifname": "portchannel0"},
+                        "10.10.196.20/31": {"ifname": "portchannel0"},
+                        "10.10.196.30/31": {"ifname": "lo"}
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -730,11 +733,11 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
             }
@@ -749,10 +752,10 @@ TEST_DATA = {
             ASIC0: {
                 APPL_DB: {
                     ROUTE_TABLE: {
-                        "0.0.0.0/0" : { "ifname": "portchannel0" },
-                        "10.10.196.12/31" : { "ifname": "portchannel0" },
-                        "10.10.196.20/31" : { "ifname": "portchannel0" },
-                        "10.10.196.30/31" : { "ifname": "lo" }
+                        "0.0.0.0/0": {"ifname": "portchannel0"},
+                        "10.10.196.12/31": {"ifname": "portchannel0"},
+                        "10.10.196.20/31": {"ifname": "portchannel0"},
+                        "10.10.196.30/31": {"ifname": "lo"}
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -762,21 +765,21 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
             },
             ASIC1: {
                APPL_DB: {
                    ROUTE_TABLE: {
-                       "0.0.0.0/0" : { "ifname": "portchannel0" },
-                       "10.10.196.12/31" : { "ifname": "portchannel0" },
-                       "10.10.196.20/31" : { "ifname": "portchannel0" },
-                       "10.10.196.30/31" : { "ifname": "lo" }
+                       "0.0.0.0/0": {"ifname": "portchannel0"},
+                       "10.10.196.12/31": {"ifname": "portchannel0"},
+                       "10.10.196.20/31": {"ifname": "portchannel0"},
+                       "10.10.196.30/31": {"ifname": "lo"}
                    },
                    INTF_TABLE: {
                        "PortChannel1013:10.10.196.24/31": {},
@@ -786,11 +789,11 @@ TEST_DATA = {
                },
                ASIC_DB: {
                    RT_ENTRY_TABLE: {
-                       RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                       RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                       RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                       RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                       RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                       ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                       ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                       ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                       ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                       ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                    }
                }
            },
@@ -805,10 +808,10 @@ TEST_DATA = {
             ASIC0: {
                 APPL_DB: {
                     ROUTE_TABLE: {
-                        "0.0.0.0/0" : { "ifname": "portchannel0" },
-                        "10.10.196.12/31" : { "ifname": "portchannel0" },
-                        "10.10.196.20/31" : { "ifname": "portchannel0" },
-                        "10.10.196.30/31" : { "ifname": "lo" }
+                        "0.0.0.0/0": {"ifname": "portchannel0"},
+                        "10.10.196.12/31": {"ifname": "portchannel0"},
+                        "10.10.196.20/31": {"ifname": "portchannel0"},
+                        "10.10.196.30/31": {"ifname": "lo"}
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -818,10 +821,10 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
             }
@@ -844,10 +847,10 @@ TEST_DATA = {
             ASIC0: {
                 APPL_DB: {
                     ROUTE_TABLE: {
-                        "0.0.0.0/0" : { "ifname": "portchannel0" },
-                        "10.10.196.12/31" : { "ifname": "portchannel0" },
-                        "10.10.196.20/31" : { "ifname": "portchannel0" },
-                        "10.10.196.30/31" : { "ifname": "lo" }
+                        "0.0.0.0/0": {"ifname": "portchannel0"},
+                        "10.10.196.12/31": {"ifname": "portchannel0"},
+                        "10.10.196.20/31": {"ifname": "portchannel0"},
+                        "10.10.196.30/31": {"ifname": "lo"}
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -857,19 +860,19 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
             },
             ASIC1: {
                APPL_DB: {
                    ROUTE_TABLE: {
-                       "0.0.0.0/0" : { "ifname": "portchannel0" },
-                       "10.10.196.20/31" : { "ifname": "portchannel0" },
-                       "10.10.196.30/31" : { "ifname": "lo" }
+                       "0.0.0.0/0": {"ifname": "portchannel0"},
+                       "10.10.196.20/31": {"ifname": "portchannel0"},
+                       "10.10.196.30/31": {"ifname": "lo"}
                    },
                    INTF_TABLE: {
                        "PortChannel1013:10.10.196.24/31": {},
@@ -879,11 +882,11 @@ TEST_DATA = {
                },
                ASIC_DB: {
                    RT_ENTRY_TABLE: {
-                       RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                       RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + RT_ENTRY_KEY_SUFFIX: {},
-                       RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                       RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                       RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                       ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                       ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                       ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                       ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                       ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                    }
                }
            },
@@ -925,8 +928,8 @@ TEST_DATA = {
             ASIC1: {
                 APPL_DB: {
                     ROUTE_TABLE: {
-                        "0.0.0.0/0" : { "ifname": "portchannel0" },
-                        "10.10.196.12/31" : { "ifname": "portchannel0" },
+                        "0.0.0.0/0": {"ifname": "portchannel0"},
+                        "10.10.196.12/31": {"ifname": "portchannel0"},
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -936,10 +939,10 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 },
             },
@@ -1000,8 +1003,8 @@ TEST_DATA = {
                 },
                 APPL_DB: {
                     ROUTE_TABLE: {
-                        "0.0.0.0/0" : { "ifname": "portchannel0" },
-                        "10.10.196.12/31" : { "ifname": "portchannel0" },
+                        "0.0.0.0/0": {"ifname": "portchannel0"},
+                        "10.10.196.12/31": {"ifname": "portchannel0"},
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -1011,10 +1014,10 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 },
             },
@@ -1064,8 +1067,8 @@ TEST_DATA = {
                 },
                 APPL_DB: {
                     ROUTE_TABLE: {
-                        "0.0.0.0/0" : { "ifname": "portchannel0" },
-                        "10.10.196.12/31" : { "ifname": "portchannel0" },
+                        "0.0.0.0/0": {"ifname": "portchannel0"},
+                        "10.10.196.12/31": {"ifname": "portchannel0"},
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -1075,10 +1078,10 @@ TEST_DATA = {
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + RT_ENTRY_KEY_SUFFIX: {},
-                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {}
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 },
             },
@@ -1107,5 +1110,189 @@ TEST_DATA = {
                 ],
             },
         },
+    },
+    "24": {
+        DESCR: "Good one with SIDs",
+        MULTI_ASIC: False,
+        NAMESPACE: [''],
+        ARGS: "route_check -m INFO -i 1000",
+        PRE: {
+            CONFIG_DB: {
+                DEVICE_METADATA: {
+                    LOCALHOST: {
+                    }
+                }
+            },
+            APPL_DB: {
+                ROUTE_TABLE: {
+                    "0.0.0.0/0": {"ifname": "portchannel0"},
+                    "10.10.196.12/31": {"ifname": "portchannel0"},
+                },
+                INTF_TABLE: {
+                    "PortChannel1013:10.10.196.24/31": {},
+                    "PortChannel1023:2603:10b0:503:df4::5d/126": {},
+                    "PortChannel1024": {}
+                },
+                MY_SID_TABLE: {
+                    "32:16:0:0:fcbb:bbbb:1::": {}
+                }
+            },
+            ASIC_DB: {
+                RT_ENTRY_TABLE: {
+                    ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                    ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                    ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                    ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                    ASIC_SID_ENTRY_KEY_PREFIX + "fcbb:bbbb:1::" + ASIC_SID_ENTRY_KEY_SUFFIX: {}
+                }
+            },
+        },
+        FRR_ROUTES: {
+            "0.0.0.0/0": [
+                {
+                    "prefix": "0.0.0.0/0",
+                    "vrfName": "default",
+                    "protocol": "bgp",
+                    "offloaded": "true",
+                },
+            ],
+            "10.10.196.12/31": [
+                {
+                    "prefix": "10.10.196.12/31",
+                    "vrfName": "default",
+                    "protocol": "bgp",
+                    "offloaded": "true",
+                },
+            ],
+            "10.10.196.24/31": [
+                {
+                    "protocol": "connected",
+                },
+            ],
+        },
+    },
+    "25": {
+        DESCR: "Bad one with SID missing in ASIC_DB",
+        MULTI_ASIC: False,
+        NAMESPACE: [''],
+        ARGS: "route_check -m INFO -i 1000",
+        PRE: {
+            DEFAULTNS: {
+                APPL_DB: {
+                    ROUTE_TABLE: {
+                        "0.0.0.0/0": {"ifname": "portchannel0"},
+                        "10.10.196.12/31": {"ifname": "portchannel0"},
+                    },
+                    INTF_TABLE: {
+                        "PortChannel1013:10.10.196.24/31": {},
+                        "PortChannel1023:2603:10b0:503:df4::5d/126": {},
+                        "PortChannel1024": {}
+                    },
+                    MY_SID_TABLE: {
+                        "32:16:0:0:fcbb:bbbb:1::": {}
+                    }
+                },
+                ASIC_DB: {
+                    RT_ENTRY_TABLE: {
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
+                    }
+                },
+            },
+        },
+        FRR_ROUTES: {
+            "0.0.0.0/0": [
+                {
+                    "prefix": "0.0.0.0/0",
+                    "vrfName": "default",
+                    "protocol": "bgp",
+                    "offloaded": "true",
+                },
+            ],
+            "10.10.196.12/31": [
+                {
+                    "prefix": "10.10.196.12/31",
+                    "vrfName": "default",
+                    "protocol": "bgp",
+                    "offloaded": "true",
+                },
+            ],
+            "10.10.196.24/31": [
+                {
+                    "protocol": "connected",
+                },
+            ],
+        },
+        RESULT: {
+            DEFAULTNS: {
+                "missed_APPL_MY_SID_TABLE_entries": [
+                    "32:16:0:0:fcbb:bbbb:1::"
+                ],
+            }
+        },
+        RET: -1,
+    },
+    "27": {
+        DESCR: "Bad one with SID missing in APPL_DB",
+        MULTI_ASIC: False,
+        NAMESPACE: [''],
+        ARGS: "route_check -m INFO -i 1000",
+        PRE: {
+            DEFAULTNS: {
+                APPL_DB: {
+                    ROUTE_TABLE: {
+                        "0.0.0.0/0": {"ifname": "portchannel0"},
+                        "10.10.196.12/31": {"ifname": "portchannel0"},
+                    },
+                    INTF_TABLE: {
+                        "PortChannel1013:10.10.196.24/31": {},
+                        "PortChannel1023:2603:10b0:503:df4::5d/126": {},
+                        "PortChannel1024": {}
+                    }
+                },
+                ASIC_DB: {
+                    RT_ENTRY_TABLE: {
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_SID_ENTRY_KEY_PREFIX + "fcbb:bbbb:1::" + ASIC_SID_ENTRY_KEY_SUFFIX: {}
+                    }
+                },
+            },
+        },
+        FRR_ROUTES: {
+            "0.0.0.0/0": [
+                {
+                    "prefix": "0.0.0.0/0",
+                    "vrfName": "default",
+                    "protocol": "bgp",
+                    "offloaded": "true",
+                },
+            ],
+            "10.10.196.12/31": [
+                {
+                    "prefix": "10.10.196.12/31",
+                    "vrfName": "default",
+                    "protocol": "bgp",
+                    "offloaded": "true",
+                },
+            ],
+            "10.10.196.24/31": [
+                {
+                    "protocol": "connected",
+                },
+            ],
+        },
+        RESULT: {
+            DEFAULTNS: {
+                "missed_ASIC_MY_SID_TABLE_entries": [
+                    "32:16:0:0:fcbb:bbbb:1::"
+                ],
+            }
+        },
+        RET: -1,
     },
 }
