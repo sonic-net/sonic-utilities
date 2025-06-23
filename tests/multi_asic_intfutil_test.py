@@ -49,6 +49,13 @@ intf_status_asic0_all = """\
 PortChannel1002           N/A      80G   9100    N/A           N/A            trunk      up       up              N/A         N/A
 PortChannel4001           N/A      80G   9100    N/A           N/A           routed      up       up              N/A         N/A
 """
+
+intf_status_asic0_bp0 = """\
+   Interface        Lanes    Speed    MTU    FEC         Alias             Vlan    Oper    Admin    Type    Asym PFC
+------------  -----------  -------  -----  -----  ------------  ---------------  ------  -------  ------  ----------
+Ethernet-BP0  93,94,95,96      40G   9100    N/A  Ethernet-BP0  PortChannel4001      up       up     N/A         off
+"""
+
 intf_description = """\
   Interface    Oper    Admin        Alias               Description
 -----------  ------  -------  -----------  ------------------------
@@ -66,6 +73,12 @@ intf_description_all = """\
   Ethernet-BP4      up       up    Ethernet-BP4          ASIC1:Eth1-ASIC1
 Ethernet-BP256      up       up  Ethernet-BP256         ASIC0:Eth16-ASIC0
 Ethernet-BP260      up       up  Ethernet-BP260         ASIC0:Eth17-ASIC0
+"""
+
+intf_description_bp0 = """\
+   Interface    Oper    Admin         Alias       Description
+------------  ------  -------  ------------  ----------------
+Ethernet-BP0      up       up  Ethernet-BP0  ASIC1:Eth0-ASIC1
 """
 
 intf_description_asic0 = """\
@@ -118,6 +131,16 @@ class TestInterfacesMultiAsic(object):
         assert return_code == 0
         assert result == intf_status_asic0_all
 
+    def test_multi_asic_interface_status_bp0(self):
+        return_code, result = get_result_and_return_code(
+            ['intfutil', '-c', 'status', '-i', 'Ethernet-BP0', '-d', 'all']
+        )
+
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result == intf_status_asic0_bp0
+
     def test_multi_asic_interface_status_asic0(self):
         return_code, result = get_result_and_return_code(['intfutil', '-c', 'status', '-n', 'asic0'])
         print("return_code: {}".format(return_code))
@@ -139,6 +162,16 @@ class TestInterfacesMultiAsic(object):
         assert return_code == 0
         assert result == intf_description_all
 
+    def test_multi_asic_interface_desc_bp0(self):
+        return_code, result = get_result_and_return_code(
+            ['intfutil', '-c', 'description', '-i', 'Ethernet-BP0', '-d', 'all']
+        )
+
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result == intf_description_bp0
+
     def test_multi_asic_interface_asic0(self):
         return_code, result = get_result_and_return_code(['intfutil', '-c', 'description', '-n', 'asic0'])
         print("return_code: {}".format(return_code))
@@ -153,7 +186,7 @@ class TestInterfacesMultiAsic(object):
         assert return_code == 0
         assert result == intf_description_asic0_all
 
-    def test_invalid_asic_name(self):
+    def test_invalid_asic_name_all(self):
         return_code, result = get_result_and_return_code(['intfutil', '-c', 'description', '-n', 'asic99', '-d', 'all'])
         print("return_code: {}".format(return_code))
         print("result = {}".format(result))

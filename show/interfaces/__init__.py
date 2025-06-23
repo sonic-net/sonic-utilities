@@ -119,6 +119,8 @@ def description(interfacename, namespace, display, verbose):
         interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
 
         cmd += ['-i', str(interfacename)]
+        if multi_asic.is_multi_asic():
+            cmd += ['-d', str(display)]
     else:
         cmd += ['-d', str(display)]
 
@@ -153,6 +155,8 @@ def status(interfacename, namespace, display, verbose):
         interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
 
         cmd += ['-i', str(interfacename)]
+        if multi_asic.is_multi_asic():
+            cmd += ['-d', str(display)]
 
     else:
         cmd += ['-d', str(display)]
@@ -178,6 +182,8 @@ def tpid(interfacename, namespace, display, verbose):
         interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
 
         cmd += ['-i', str(interfacename)]
+        if multi_asic.is_multi_asic():
+            cmd += ['-d', str(display)]
     else:
         cmd += ['-d', str(display)]
 
@@ -775,6 +781,8 @@ def counters(ctx, namespace, display, interface, printall, period, json_fmt, ver
         if interface is not None:
             interface = try_convert_interfacename_from_alias(ctx, interface)
             cmd += ['-i', str(interface)]
+            if multi_asic.is_multi_asic():
+                cmd += ['-s', str(display)]
         else:
             cmd += ['-s', str(display)]
         if namespace is not None:
@@ -1002,6 +1010,8 @@ def autoneg_status(interfacename, namespace, display, verbose):
         interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
 
         cmd += ['-i', str(interfacename)]
+        if multi_asic.is_multi_asic():
+            cmd += ['-d', str(display)]
     else:
         cmd += ['-d', str(display)]
 
@@ -1039,6 +1049,8 @@ def link_training_status(interfacename, namespace, display, verbose):
         interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
 
         cmd += ['-i', str(interfacename)]
+        if multi_asic.is_multi_asic():
+            cmd += ['-d', str(display)]
     else:
         cmd += ['-d', str(display)]
 
@@ -1075,6 +1087,8 @@ def fec_status(interfacename, namespace, display, verbose):
         interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
 
         cmd += ['-i', str(interfacename)]
+        if multi_asic.is_multi_asic():
+            cmd += ['-d', str(display)]
     else:
         cmd += ['-d', str(display)]
 
