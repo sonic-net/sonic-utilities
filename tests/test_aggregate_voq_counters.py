@@ -1,4 +1,3 @@
-import mock
 from click.testing import CliRunner
 import show.main as show
 import os
@@ -48,6 +47,7 @@ show_queue_counters_voq_json = {
     "time": "2025-04-07T15:57:11.881496"
   }
 }
+
 
 class TestAggVoq(object):
     @classmethod

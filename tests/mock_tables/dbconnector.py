@@ -57,6 +57,7 @@ def connect_SonicV2Connector(self, db_name, retry_on=True):
     self.dbintf.redis_kwargs['decode_responses'] = True
     _old_connect_SonicV2Connector(self, db_name, retry_on)
 
+
 def connect_SonicV2Connector_host(self, db_name, host, retry_on=True):
     self.dbintf.redis_kwargs['topo'] = topo
     ip_to_asic = {
