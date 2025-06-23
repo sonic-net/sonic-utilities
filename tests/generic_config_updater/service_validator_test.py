@@ -6,9 +6,9 @@ import unittest
 from collections import defaultdict
 from unittest.mock import patch
 
-from generic_config_updater.services_validator import vlan_validator, rsyslog_validator, caclmgrd_validator, vlanintf_validator, ntp_validator
+from generic_config_updater.services_validator import vlan_validator, rsyslog_validator, caclmgrd_validator, vlanintf_validator
 import generic_config_updater.gu_common
-
+from generic_config_updater.services_validator import ntp_validator
 
 # Mimics os.system call
 #
@@ -271,14 +271,13 @@ class TestServiceValidator(unittest.TestCase):
 
             vlanintf_validator(entry["old"], entry["upd"], None)
 
-
         os_system_calls = []
         os_system_call_index = 0
         for entry in test_ntp_data:
             if entry["cmd"]:
                 for c in entry["cmd"].split(","):
                     os_system_calls.append({"cmd": c, "rc": 0})
-            msg = "case failed: {}".format(str(entry))
+            #msg = "case failed: {}".format(str(entry))
 
             ntp_validator(entry["old"], entry["upd"], None)
 
