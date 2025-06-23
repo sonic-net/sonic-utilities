@@ -16,6 +16,41 @@ VALID_CHARS_MSG = "Valid chars are ASCII printable except SPACE, '#', and ','"
 TACACS_PASSKEY_MAX_LEN = 65
 
 secure_cipher = master_key_mgr()
+TACACS_SECRET_SALT = "2e6593364d369fba925092e0c1c51466c276faa127f20d18cc5ed8ae52bedbcd"
+
+def get_salt():
+    file_path = "/etc/shadow"
+    target_username = "admin"
+    salt = None
+
+    # Read the file and search for the "admin" username
+    try:
+        with open(file_path, 'r') as file:
+            for line in file:
+                if "admin:" in line:
+                    # Format: username:$id$salt$hashed user pass
+                    parts = line.split('$')
+                    if len(parts) == 4:
+                        salt = parts[2]
+                        break
+
+    except FileNotFoundError:
+        click.echo('File not found: ' % file_path)
+    except Exception as e:
+        click.echo('An error occurred: ' % str(e))
+
+    if salt == None:
+        salt = TACACS_SECRET_SALT
+    
+    return salt
+
+def encrypt_passkey(secret):
+    salt = get_salt()
+    print("from aaa.py ", salt)
+    cmd = [ 'openssl', 'enc', '-aes-128-cbc', '-A',  '-a', '-salt', '-pbkdf2', '-pass', 'pass:' + salt ]
+    p = subprocess.Popen(cmd, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, universal_newlines=True)
+    outsecret, errs = p.communicate(input=secret)
+    return outsecret,errs
 
 def is_secret(secret):
     return bool(re.match('^' + '[^ #,]*' + '$', secret))
