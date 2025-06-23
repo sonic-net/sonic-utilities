@@ -148,7 +148,7 @@ def rdma_config_update_validator_common(scope, patch_element, exact_field_match=
         if scenario is None:
             return False
 
-        if scenario["platforms"][asic] == "":
+        if not scenario["platforms"].get(asic):  # None or empty string
             return False
 
         if patch_element['op'] not in scenario["operations"]:
