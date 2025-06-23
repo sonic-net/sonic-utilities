@@ -1324,7 +1324,7 @@ class DBMigrator():
         master branch until 202505 branch is created.
         """
         log.log_info('Handling version_202505_01')
-        
+
         if self.configDB.keys(self.configDB.CONFIG_DB, "SNMP|CONTACT"):
             self.migrate_config_db_snmp_contact()
 
