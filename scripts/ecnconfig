@@ -276,7 +276,7 @@ class EcnQ(object):
         )
 
         switch_type  = device_info.get_localhost_info('switch_type', self.config_db)
-        if switch_type == 'voq':
+        if switch_type == 'voq' or os.environ.get("UTILITIES_UNIT_TESTING_VOQ", "0") == "1":
             ports_key_temp = []
             host_name = device_info.get_localhost_info('hostname', self.config_db)
             asic_name = device_info.get_localhost_info('asic_name', self.config_db)

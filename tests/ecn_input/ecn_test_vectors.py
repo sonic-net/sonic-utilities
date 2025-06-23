@@ -369,5 +369,9 @@ testData = {
                                                                  'asic1,wred_profile,AZURE_LOSSLESS'],
                                                     'cmp_q_args': ['0'],
                                                     'other_q': ['1']
-                                                    }
+                                                    },
+             'ecn_cfg_q_voq': {'cmd': ['q_cmd'],
+                               'args': ['-q', '3', 'off'],
+                               'rc': 0,
+                               }
            }
