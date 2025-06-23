@@ -6,7 +6,7 @@ import unittest
 from collections import defaultdict
 from unittest.mock import patch
 
-from generic_config_updater.services_validator import vlan_validator, rsyslog_validator, caclmgrd_validator, vlanintf_validator
+from generic_config_updater.services_validator import vlan_validator, rsyslog_validator, caclmgrd_validator, vlanintf_validator, ntp_validator
 import generic_config_updater.gu_common
 
 
@@ -217,6 +217,24 @@ test_vlanintf_data = [
    ]
 
 
+test_ntp_data = [
+        {
+            "old": {
+                "NTP_SERVER": {
+                    "0.pool.ntp.org": {}
+                    }
+                },
+            "upd": {
+                "NTP_SERVER": {
+                    "0.pool.ntp.org": {},
+                    "1.pool.ntp.org": {}
+                    }
+                },
+            "cmd": "systemctl restart chrony"
+        }
+   ]
+
+
 class TestServiceValidator(unittest.TestCase):
 
     @patch("generic_config_updater.change_applier.os.system")
@@ -252,6 +270,17 @@ class TestServiceValidator(unittest.TestCase):
             msg = "case failed: {}".format(str(entry))
 
             vlanintf_validator(entry["old"], entry["upd"], None)
+
+
+        os_system_calls = []
+        os_system_call_index = 0
+        for entry in test_ntp_data:
+            if entry["cmd"]:
+                for c in entry["cmd"].split(","):
+                    os_system_calls.append({"cmd": c, "rc": 0})
+            msg = "case failed: {}".format(str(entry))
+
+            ntp_validator(entry["old"], entry["upd"], None)
 
     @patch("generic_config_updater.services_validator.time.sleep")
     def test_change_apply_time_sleep(self, mock_time_sleep):
