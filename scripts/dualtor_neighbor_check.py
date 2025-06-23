@@ -379,6 +379,13 @@ def get_mux_server_to_port_map(mux_cables):
             mux_server_to_port_map[server_ipv6] = port
     return mux_server_to_port_map
 
+def get_mux_soc_neighbors(mux_cables):
+    mux_soc_neighbor_ips = []
+    for port, mux_details in mux_cables.items():
+        if "server_ipv4" in mux_details:
+            soc_ipv4 = str(ipaddress.ip_interface(mux_details["soc_ipv4"]).ip)
+            mux_soc_neighbor_ips.append(soc_ipv4)
+    return mux_soc_neighbor_ips
 
 def get_mac_to_port_name_map(asic_fdb, if_oid_to_port_name_map):
     """Return mac to port name map."""
@@ -390,7 +397,8 @@ def get_mac_to_port_name_map(asic_fdb, if_oid_to_port_name_map):
 
 
 def check_neighbor_consistency(neighbors, mux_states, hw_mux_states, mac_to_port_name_map,
-                               asic_route_table, asic_neigh_table, mux_server_to_port_map):
+                               asic_route_table, asic_neigh_table, mux_server_to_port_map,
+                               mux_soc_neigh_ips):
     """Checks if neighbors are consistent with mux states."""
 
     asic_route_destinations = set(json.loads(_)["dest"].split("/")[0] for _ in asic_route_table)
@@ -426,10 +434,8 @@ def check_neighbor_consistency(neighbors, mux_states, hw_mux_states, mac_to_port
             check_result["MUX_STATE"] = mux_state
             check_result["IN_MUX_TOGGLE"] = mux_state != hw_mux_state
 
-            if mux_state == "active":
-                check_result["HWSTATUS"] = (check_result["NEIGHBOR_IN_ASIC"] and (not check_result["TUNNEL_IN_ASIC"]))
-            elif mux_state == "standby":
-                check_result["HWSTATUS"] = ((not check_result["NEIGHBOR_IN_ASIC"]) and check_result["TUNNEL_IN_ASIC"])
+            if mux_state == "active" or mux_state == "standby":
+                    check_result["HWSTATUS"] = (check_result["NEIGHBOR_IN_ASIC"] and check_result["TUNNEL_IN_ASIC"])
             else:
                 # skip as unknown mux state
                 continue
@@ -501,6 +507,7 @@ if __name__ == "__main__":
     if_oid_to_port_name_map = get_if_br_oid_to_port_name_map()
     neighbors, mux_states, hw_mux_states, asic_fdb, asic_route_table, asic_neigh_table = read_tables_from_db(appl_db)
     mac_to_port_name_map = get_mac_to_port_name_map(asic_fdb, if_oid_to_port_name_map)
+    mux_soc_neigh_ips = get_mux_soc_neighbors(mux_cables)
 
     check_results = check_neighbor_consistency(
         neighbors,
@@ -509,7 +516,8 @@ if __name__ == "__main__":
         mac_to_port_name_map,
         asic_route_table,
         asic_neigh_table,
-        mux_server_to_port_map
+        mux_server_to_port_map,
+        mux_soc_neigh_ips
     )
     res = parse_check_results(check_results)
     sys.exit(0 if res else 1)
