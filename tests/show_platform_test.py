@@ -51,6 +51,32 @@ class TestShowPlatform(object):
                 assert result.output == textwrap.dedent(expected_output)
 
 
+class TestShowPlatformTemperature(object):
+    """
+        Note: `show platform temperature` simply calls the `tempershow` utility and
+        passes a variety of options. Here we test that the utility is called
+        with the appropriate option(s). The functionality of the underlying
+        `tempershow` utility is expected to be tested by a separate suite of unit tests
+    """
+    def test_temperature(self):
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], [])
+        assert mock_run_command.call_count == 1
+        mock_run_command.assert_called_with(['tempershow'])
+
+    def test_temperature_json(self):
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['--json'])
+        assert mock_run_command.call_count == 1
+        mock_run_command.assert_called_with(['tempershow', '-j'])
+
+    def test_temperature_short_json(self):
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['-j'])
+        assert mock_run_command.call_count == 1
+        mock_run_command.assert_called_with(['tempershow', '-j'])
+
+
 class TestShowPlatformPsu(object):
     """
         Note: `show platform psustatus` simply calls the `psushow` utility and
