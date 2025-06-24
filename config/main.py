@@ -4127,7 +4127,7 @@ def modify_contact(db, contact):
     snmp = config_db.get_table("SNMP")
     try:
         snmp_contact = snmp['CONTACT']['Contact']
-        if contact in snmp_contact:
+        if contact == snmp_contact:
             click.echo("SNMP contact {} already exists".format(contact))
             sys.exit(1)
         else:
@@ -4145,7 +4145,7 @@ def modify_contact(db, contact):
                 click.echo("Restart service snmp failed with error {}".format(e))
                 raise click.Abort()
     except KeyError:
-        click.echo("Cannot modify SNMP Contact.  You must use 'config snmp contact add' command.'")
+        click.echo("Cannot modify SNMP Contact.  You must use 'config snmp contact add' command.")
         sys.exit(2)
 
 
