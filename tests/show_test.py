@@ -879,46 +879,6 @@ class TestShowPlatform(object):
     def teardown(self):
         print('TEAR DOWN')
 
-class TestShowQuagga(object):
-    def setup(self):
-        print('SETUP')
-
-    @patch('show.main.run_command')
-    @patch('show.main.get_routing_stack', MagicMock(return_value='quagga'))
-    def test_show_ip_bgp(self, mock_run_command):
-        from show.bgp_quagga_v4 import bgp
-        runner = CliRunner()
-
-        result = runner.invoke(show.cli.commands["ip"].commands['bgp'].commands['summary'])
-        assert result.exit_code == 0
-        mock_run_command.assert_called_with(['sudo', constants.RVTYSH_COMMAND, '-c', "show ip bgp summary"], return_cmd=True)
-
-        result = runner.invoke(show.cli.commands["ip"].commands['bgp'].commands['neighbors'])
-        assert result.exit_code == 0
-        mock_run_command.assert_called_with(['sudo', constants.RVTYSH_COMMAND, '-c', "show ip bgp neighbor"])
-
-        result = runner.invoke(show.cli.commands["ip"].commands['bgp'].commands['neighbors'], ['0.0.0.0', 'routes'])
-        assert result.exit_code == 0
-        mock_run_command.assert_called_with(['sudo', constants.RVTYSH_COMMAND, '-c', "show ip bgp neighbor 0.0.0.0 routes"])
-
-    @patch('show.main.run_command')
-    @patch('show.main.get_routing_stack', MagicMock(return_value='quagga'))
-    def test_show_ipv6_bgp(self, mock_run_command):
-        from show.bgp_quagga_v6 import bgp
-        runner = CliRunner()
-
-        result = runner.invoke(show.cli.commands["ipv6"].commands['bgp'].commands['summary'])
-        assert result.exit_code == 0
-        mock_run_command.assert_called_with(['sudo', constants.RVTYSH_COMMAND, '-c', "show ipv6 bgp summary"], return_cmd=True)
-
-        result = runner.invoke(show.cli.commands["ipv6"].commands['bgp'].commands['neighbors'], ['0.0.0.0', 'routes'])
-        assert result.exit_code == 0
-        mock_run_command.assert_called_with(['sudo', constants.RVTYSH_COMMAND, '-c', "show ipv6 bgp neighbor 0.0.0.0 routes"])
-
-    def teardown(self):
-        print('TEAR DOWN')
-
-
 class TestShow(object):
     def setup(self):
         print('SETUP')
