@@ -1,0 +1,11 @@
+{
+    "TWAMP_SESSION_TABLE|SESSION_SEND_VM1": {
+            "status": "active"
+    },
+    "TWAMP_SESSION_TABLE|SESSION_SEND_VM2": {
+            "status": "active"
+    },
+    "TWAMP_SESSION_TABLE|SESSION_RECV_VM3": {
+            "status": "active"
+    }
+}
