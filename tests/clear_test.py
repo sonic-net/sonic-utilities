@@ -111,11 +111,135 @@ class TestClear(object):
     def teardown(self):
         print('TEAR DOWN')
 
+
+class TestClearQuaggav4(object):
+    def setup(self):
+        print('SETUP')
+
+    @patch('clear.main.run_command')
+    @patch('clear.main.get_routing_stack', MagicMock(return_value='quagga'))
+    def test_clear_ipv4_quagga(self, run_command):
+        from clear.bgp_quagga_v4 import bgp
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['ip'].commands['bgp'].commands['neighbor'].commands['all'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear ip bgp *"])
+
+        result = runner.invoke(clear.cli.commands['ip'].commands['bgp'].commands['neighbor'].commands['all'], ['10.0.0.1'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear ip bgp 10.0.0.1"])
+
+        result = runner.invoke(clear.cli.commands['ip'].commands['bgp'].commands['neighbor'].commands['in'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear ip bgp * in"])
+
+        result = runner.invoke(clear.cli.commands['ip'].commands['bgp'].commands['neighbor'].commands['in'], ['10.0.0.1'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear ip bgp 10.0.0.1 in"])
+
+        result = runner.invoke(clear.cli.commands['ip'].commands['bgp'].commands['neighbor'].commands['out'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear ip bgp * out"])
+
+        result = runner.invoke(clear.cli.commands['ip'].commands['bgp'].commands['neighbor'].commands['out'], ['10.0.0.1'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear ip bgp 10.0.0.1 out"])
+
+        result = runner.invoke(clear.cli.commands['ip'].commands['bgp'].commands['neighbor'].commands['soft'].commands['all'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear ip bgp * soft"])
+
+        result = runner.invoke(clear.cli.commands['ip'].commands['bgp'].commands['neighbor'].commands['soft'].commands['all'], ['10.0.0.1'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear ip bgp 10.0.0.1 soft"])
+
+        result = runner.invoke(clear.cli.commands['ip'].commands['bgp'].commands['neighbor'].commands['soft'].commands['in'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear ip bgp * soft in"])
+
+        result = runner.invoke(clear.cli.commands['ip'].commands['bgp'].commands['neighbor'].commands['soft'].commands['in'], ['10.0.0.1'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear ip bgp 10.0.0.1 soft in"])
+
+        result = runner.invoke(clear.cli.commands['ip'].commands['bgp'].commands['neighbor'].commands['soft'].commands['out'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear ip bgp * soft out"])
+
+        result = runner.invoke(clear.cli.commands['ip'].commands['bgp'].commands['neighbor'].commands['soft'].commands['out'], ['10.0.0.1'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear ip bgp 10.0.0.1 soft out"])
+
+    def teardown(self):
+        print('TEAR DOWN')
+
+
+class TestClearQuaggav6(object):
+    def setup(self):
+        print('SETUP')
+
+    @patch('clear.main.run_command')
+    @patch('clear.main.get_routing_stack', MagicMock(return_value='quagga'))
+    def test_clear_ipv6_quagga(self, run_command):
+        from clear.bgp_quagga_v6 import bgp
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['ipv6'].commands['bgp'].commands['neighbor'].commands['all'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear ipv6 bgp *"])
+
+        result = runner.invoke(clear.cli.commands['ipv6'].commands['bgp'].commands['neighbor'].commands['all'], ['10.0.0.1'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear ipv6 bgp 10.0.0.1"])
+
+        result = runner.invoke(clear.cli.commands['ipv6'].commands['bgp'].commands['neighbor'].commands['in'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear ipv6 bgp * in"])
+
+        result = runner.invoke(clear.cli.commands['ipv6'].commands['bgp'].commands['neighbor'].commands['in'], ['10.0.0.1'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear ipv6 bgp 10.0.0.1 in"])
+
+        result = runner.invoke(clear.cli.commands['ipv6'].commands['bgp'].commands['neighbor'].commands['out'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear ipv6 bgp * out"])
+
+        result = runner.invoke(clear.cli.commands['ipv6'].commands['bgp'].commands['neighbor'].commands['out'], ['10.0.0.1'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear ipv6 bgp 10.0.0.1 out"])
+
+        result = runner.invoke(clear.cli.commands['ipv6'].commands['bgp'].commands['neighbor'].commands['soft'].commands['all'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear ipv6 bgp * soft"])
+
+        result = runner.invoke(clear.cli.commands['ipv6'].commands['bgp'].commands['neighbor'].commands['soft'].commands['all'], ['10.0.0.1'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear ipv6 bgp 10.0.0.1 soft"])
+
+        result = runner.invoke(clear.cli.commands['ipv6'].commands['bgp'].commands['neighbor'].commands['soft'].commands['in'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear ipv6 bgp * soft in"])
+
+        result = runner.invoke(clear.cli.commands['ipv6'].commands['bgp'].commands['neighbor'].commands['soft'].commands['in'], ['10.0.0.1'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear ipv6 bgp 10.0.0.1 soft in"])
+
+        result = runner.invoke(clear.cli.commands['ipv6'].commands['bgp'].commands['neighbor'].commands['soft'].commands['out'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear ipv6 bgp * soft out"])
+
+        result = runner.invoke(clear.cli.commands['ipv6'].commands['bgp'].commands['neighbor'].commands['soft'].commands['out'], ['10.0.0.1'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear ipv6 bgp 10.0.0.1 soft out"])
+
+    def teardown(self):
+        print('TEAR DOWN')
+
+
 class TestClearFrr(object):
     def setup(self):
         print('SETUP')
 
     @patch('clear.main.run_command')
+    @patch('clear.main.get_routing_stack', MagicMock(return_value='frr'))
     def test_clear_ipv6_frr(self, run_command):
         from clear.bgp_frr_v6 import bgp
         runner = CliRunner()
