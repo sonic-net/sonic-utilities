@@ -28,8 +28,8 @@ def rotate_tacplus_key(table_info, secret):
 
 # Security cipher Callback dir
 # Note: Required for Security Cipher - password rotation feature
-security_cipher_clbk_lookup = {        
-        "rotate_tacplus_key": rotate_tacplus_key       #TACPLUS
+security_cipher_clbk_lookup = {
+        "rotate_tacplus_key": rotate_tacplus_key # TACPLUS
 }
 secure_cipher = master_key_mgr(security_cipher_clbk_lookup)
 
@@ -317,7 +317,7 @@ def passkey(db, ctx, secret, encrypt, rotate):
             # Deregister feature with Security Cipher module
             secure_cipher.deregister("TACPLUS", rotate_tacplus_key)
             add_table_kv('TACPLUS', 'global', 'key_encrypt', False)
-            click.echo('Unexpected error: %s' %e)
+            click.echo('Unexpected error: %s' % e)
             return
     else:
         # Update key_encrypt flag to false
@@ -378,7 +378,12 @@ def add(address, timeout, key, encrypted_key, rotate, auth_type, port, pri, use_
                     if rotate:
                         passwd = getpass.getpass()
                         # Rotate password for TACPLUS feature and re-encrypt the secret
-                        secure_cipher.rotate_feature_passwd("TACPLUS", ("TACPLUS_SERVER|" + address), encrypted_key, passwd)
+                        secure_cipher.rotate_feature_passwd(
+                            "TACPLUS",
+                            f"TACPLUS_SERVER|{address}",
+                            encrypted_key,
+                            passwd
+                        )
                         return
                 b64_encoded = secure_cipher.encrypt_passkey("TACPLUS", encrypted_key)
                 if b64_encoded is not None:
@@ -400,7 +405,7 @@ def add(address, timeout, key, encrypted_key, rotate, auth_type, port, pri, use_
                 # Deregister feature with Security Cipher module
                 secure_cipher.deregister("TACPLUS", rotate_tacplus_key)
                 add_table_kv('TACPLUS_SERVER', address, 'key_encrypt', False)
-                click.echo('Unexpected error: %s' %e)
+                click.echo('Unexpected error: %s' % e)
                 return
         else:
             if key is not None:
