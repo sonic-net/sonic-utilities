@@ -29,7 +29,8 @@ def rotate_tacplus_key(table_info, secret):
 # Security cipher Callback dir
 # Note: Required for Security Cipher - password rotation feature
 security_cipher_clbk_lookup = {
-        "rotate_tacplus_key": rotate_tacplus_key # TACPLUS
+        # TACPLUS
+        "rotate_tacplus_key": rotate_tacplus_key
 }
 secure_cipher = master_key_mgr(security_cipher_clbk_lookup)
 
