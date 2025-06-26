@@ -25,7 +25,7 @@ StartLimitIntervalSec=1200
 StartLimitBurst=3
 
 [Service]
-{%- if manifest.service.type is defined %}
+{%- if manifest.service.type is defined and manifest.service.type %}
 Type={{ manifest.service.type }}
 {%- endif %}
 ExecStartPre={{path}}/{{manifest.service.name}}.sh start{% if multi_instance %} %i{% endif %}
