@@ -75,6 +75,7 @@ def set_state_transition_in_progress(db, chassis_module_name, value):
         entry['transition_start_time'] = datetime.utcnow().isoformat()
     else:
         entry.pop('transition_start_time', None)
+        state_db.delete_field('CHASSIS_MODULE_TABLE', chassis_module_name, 'transition_start_time')
     state_db.set_entry('CHASSIS_MODULE_TABLE', chassis_module_name, entry)
 
 
