@@ -362,7 +362,7 @@ def add(address, timeout, key, encrypted_key, rotate, auth_type, port, pri, use_
             data['timeout'] = str(timeout)
 
         if key and encrypted_key:
-            aise click.UsageError("You must provide either --key or --encrypted_key")
+            raise click.UsageError("You must provide either --key or --encrypted_key")
 
         if encrypted_key is not None:
             try:
