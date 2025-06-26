@@ -176,7 +176,6 @@ def shutdown_chassis_module(db, chassis_module_name):
 
     if not chassis_module_name.startswith(("SUPERVISOR", "LINE-CARD", "FABRIC-CARD", "DPU")):
         ctx.fail("'module_name' has to begin with 'SUPERVISOR', 'LINE-CARD', 'FABRIC-CARD', or 'DPU'")
-        return
 
     if get_config_module_state(db, chassis_module_name) == 'down':
         click.echo(f"Module {chassis_module_name} is already in down state")
