@@ -15,7 +15,7 @@ RADIUS_PASSKEY_MAX_LEN = 65
 VALID_CHARS_MSG = "Valid chars are ASCII printable except SPACE, '#', and ','"
 TACACS_PASSKEY_MAX_LEN = 65
 
-def rotate_tacplus_key(table_info):
+def rotate_tacplus_key(table_info, secret):
     #Extract table and nested_key names
     table = table_info.split('|')[0]
     nested_key = table_info.split('|')[1]
