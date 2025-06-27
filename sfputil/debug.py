@@ -97,11 +97,13 @@ def set_output(port_name, enable, direction):
         if direction == "tx":
             lane_count = get_media_lane_count(port_name)
             disable_func = sfp.tx_disable_channel
+            get_disable_status_func = api.get_tx_disable
             get_status_func = api.get_tx_output_status
             status_key = "TxOutputStatus"
         elif direction == "rx":
             lane_count = get_host_lane_count(port_name)
             disable_func = sfp.rx_disable_channel
+            get_disable_status_func = api.get_rx_disable
             get_status_func = api.get_rx_output_status
             status_key = "RxOutputStatus"
 
@@ -111,6 +113,39 @@ def set_output(port_name, enable, direction):
             sys.exit(EXIT_FAIL)
 
         time.sleep(TX_RX_OUTPUT_UPDATE_WAIT_TIME)
+
+        disable_status_list = get_disable_status_func()
+        if not disable_status_list:
+            click.echo(f"{port_name}: {direction.upper()} disable status not available for subport {subport}")
+            sys.exit(EXIT_FAIL)
+
+        for lane in range(1, CMIS_MAX_CHANNELS + 1):
+            if lane_mask & (1 << (lane - 1)):
+                disable_status = disable_status_list[lane - 1]
+                if enable == "disable":
+                    if not disable_status or disable_status == "N/A":
+                        click.echo(f"{port_name}: {direction.upper()} output on lane {lane} is still "
+                                   f"enabled on subport {subport}. Restoring state.")
+                        sys.exit(EXIT_FAIL)
+                else:
+                    if disable_status or disable_status == "N/A":
+                        click.echo(f"{port_name}: {direction.upper()} output on lane {lane} is still "
+                                   f"disabled on subport {subport}. Restoring state.")
+                        sys.exit(EXIT_FAIL)
+
+        if hasattr(api, 'get_cmis_rev'):
+            cmis_rev = api.get_cmis_rev()
+            if cmis_rev is None:
+                click.echo(f"{port_name}: CMIS revision not available for subport {subport}")
+                sys.exit(EXIT_FAIL)
+
+            # OutputStatusRx and OutputStatusTx are supported from CMIS 5.0
+            if float(cmis_rev) < 5.0:
+                click.echo(
+                    f"{port_name}: {direction.upper()} output "
+                    f"{'disabled' if enable == 'disable' else 'enabled'} on subport {subport}"
+                )
+                return
 
         output_dict = get_status_func()
         if output_dict is None:
