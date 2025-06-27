@@ -15,23 +15,6 @@ RADIUS_PASSKEY_MAX_LEN = 65
 VALID_CHARS_MSG = "Valid chars are ASCII printable except SPACE, '#', and ','"
 TACACS_PASSKEY_MAX_LEN = 65
 
-
-def rotate_tacplus_key(table_info, secret):
-    # Extract table and nested_key names
-    table = table_info.split('|')[0]
-    nested_key = table_info.split('|')[1]
-
-    # Re-encrypt with updated password
-    value = secure_cipher.encrypt_passkey("TACPLUS", secret)
-    add_table_kv(table, nested_key, 'passkey', value)
-
-
-# Security cipher Callback dir
-# Note: Required for Security Cipher - password rotation feature
-security_cipher_clbk_lookup = {
-        # TACPLUS
-        "rotate_tacplus_key": rotate_tacplus_key
-}
 secure_cipher = master_key_mgr(security_cipher_clbk_lookup)
 
 
