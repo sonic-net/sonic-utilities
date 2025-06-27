@@ -29,6 +29,12 @@ class UtilHelper(object):
             log.log_debug('importing plugin: {}'.format(module_name))
             try:
                 module = importlib.import_module(module_name)
+
+            except ModuleNotFoundError as err:
+                log.log_warning('failed to import plugin {}: {}'.format(module_name, err),
+                                also_print_to_console=True)
+                continue
+
             except Exception as err:
                 log.log_error('failed to import plugin {}: {}'.format(module_name, err),
                               also_print_to_console=True)
