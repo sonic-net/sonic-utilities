@@ -287,7 +287,7 @@ def passkey(db, ctx, secret, encrypt, rotate):
             # Set new passwd if not set already
             if secure_cipher.is_key_encrypt_enabled("TACPLUS", "global") is False:
                 # Register feature with Security Cipher module for the 1st time
-                secure_cipher.register("TACPLUS", rotate_tacplus_key)
+                secure_cipher.register("TACPLUS", "TACPLUS|global")
                 passwd = getpass.getpass()
                 # Set new password for encryption
                 secure_cipher.set_feature_password("TACPLUS", passwd)
@@ -296,7 +296,7 @@ def passkey(db, ctx, secret, encrypt, rotate):
                 if rotate:
                     passwd = getpass.getpass()
                     # Rotate password for TACPLUS feature and re-encrypt the secret
-                    secure_cipher.rotate_feature_passwd("TACPLUS", "TACPLUS|global", secret, passwd)
+                    secure_cipher.rotate_feature_passwd("TACPLUS", passwd)
                     return
             b64_encoded = secure_cipher.encrypt_passkey("TACPLUS", secret)
             if b64_encoded is not None:
@@ -310,17 +310,19 @@ def passkey(db, ctx, secret, encrypt, rotate):
                 return
         except (EOFError, KeyboardInterrupt):
             # Deregister feature with Security Cipher module
-            secure_cipher.deregister("TACPLUS", rotate_tacplus_key)
+            secure_cipher.deregister("TACPLUS", "TACPLUS|global")
             add_table_kv('TACPLUS', 'global', 'key_encrypt', False)
             click.echo('Input cancelled')
             return
         except Exception as e:
             # Deregister feature with Security Cipher module
-            secure_cipher.deregister("TACPLUS", rotate_tacplus_key)
+            secure_cipher.deregister("TACPLUS", "TACPLUS|global")
             add_table_kv('TACPLUS', 'global', 'key_encrypt', False)
             click.echo('Unexpected error: %s' % e)
             return
     else:
+        if secure_cipher.is_key_encrypt_enabled("TACPLUS", "global"):
+            secure_cipher.deregister("TACPLUS", "TACPLUS|global")
         # Update key_encrypt flag to false
         add_table_kv('TACPLUS', 'global', 'key_encrypt', False)
         add_table_kv('TACPLUS', 'global', 'passkey', secret)
@@ -370,7 +372,7 @@ def add(address, timeout, key, encrypted_key, rotate, auth_type, port, pri, use_
                 # Set new passwd if not set already
                 if secure_cipher.is_key_encrypt_enabled("TACPLUS_SERVER", address) is False:
                     # Register feature with Security Cipher module for the 1st time
-                    secure_cipher.register("TACPLUS", rotate_tacplus_key)
+                    secure_cipher.register("TACPLUS", f"TACPLUS_SERVER|{address}")
                     passwd = getpass.getpass()
                     # Set new password for encryption
                     secure_cipher.set_feature_password("TACPLUS", passwd)
@@ -379,12 +381,7 @@ def add(address, timeout, key, encrypted_key, rotate, auth_type, port, pri, use_
                     if rotate:
                         passwd = getpass.getpass()
                         # Rotate password for TACPLUS feature and re-encrypt the secret
-                        secure_cipher.rotate_feature_passwd(
-                            "TACPLUS",
-                            f"TACPLUS_SERVER|{address}",
-                            encrypted_key,
-                            passwd
-                        )
+                        secure_cipher.rotate_feature_passwd("TACPLUS", passwd)
                         return
                 b64_encoded = secure_cipher.encrypt_passkey("TACPLUS", encrypted_key)
                 if b64_encoded is not None:
@@ -393,22 +390,24 @@ def add(address, timeout, key, encrypted_key, rotate, auth_type, port, pri, use_
                     add_table_kv('TACPLUS_SERVER', address, 'passkey', b64_encoded)
                 else:
                     # Deregister feature with Security Cipher module
-                    secure_cipher.deregister("TACPLUS", rotate_tacplus_key)
+                    secure_cipher.deregister("TACPLUS", f"TACPLUS_SERVER|{address}")
                     click.echo('Passkey encryption failed')
                     return
             except (EOFError, KeyboardInterrupt):
                 # Deregister feature with Security Cipher module
-                secure_cipher.deregister("TACPLUS", rotate_tacplus_key)
+                secure_cipher.deregister("TACPLUS", f"TACPLUS_SERVER|{address}")
                 add_table_kv('TACPLUS_SERVER', address, 'key_encrypt', False)
                 click.echo('Input cancelled')
                 return
             except Exception as e:
                 # Deregister feature with Security Cipher module
-                secure_cipher.deregister("TACPLUS", rotate_tacplus_key)
+                secure_cipher.deregister("TACPLUS", f"TACPLUS_SERVER|{address}")
                 add_table_kv('TACPLUS_SERVER', address, 'key_encrypt', False)
                 click.echo('Unexpected error: %s' % e)
                 return
         else:
+            if secure_cipher.is_key_encrypt_enabled("TACPLUS_SERVER", address):
+                secure_cipher.deregister("TACPLUS", f"TACPLUS_SERVER|{address}")
             if key is not None:
                 # Update key_encrypt flag to false
                 add_table_kv('TACPLUS_SERVER', address, 'key_encrypt', False)
