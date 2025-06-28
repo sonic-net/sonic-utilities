@@ -1,6 +1,12 @@
 import sys
 import os
 from click.testing import CliRunner
+from datetime import datetime, timedelta
+from config.chassis_modules import (
+    set_state_transition_in_progress,
+    is_transition_timed_out,
+    TRANSITION_TIMEOUT
+)
 
 import show.main as show
 import config.main as config
@@ -440,6 +446,160 @@ class TestChassisModules(object):
         print("result = {}".format(result))
         assert return_code == 0
         assert result == show_chassis_system_lags_output_lc4
+
+    def test_shutdown_triggers_transition_tracking(self):
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value='up'):
+
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["shutdown"],
+                ["DPU0"],
+                obj=db
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+
+            # Check CONFIG_DB for admin_status
+            cfg_fvs = db.cfgdb.get_entry("CHASSIS_MODULE", "DPU0")
+            admin_status = cfg_fvs.get("admin_status")
+            print(f"admin_status: {admin_status}")
+            assert admin_status == "down"
+
+            # Check STATE_DB for transition flags
+            state_fvs = db.db.get_all("STATE_DB", "CHASSIS_MODULE_TABLE|DPU0")
+            transition_flag = state_fvs.get("state_transition_in_progress")
+            transition_time = state_fvs.get("transition_start_time")
+
+            print(f"state_transition_in_progress: {transition_flag}")
+            print(f"transition_start_time: {transition_time}")
+
+            assert transition_flag == "True"
+            assert transition_time is not None
+
+    def test_shutdown_triggers_transition_in_progress(self):
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value='up'):
+
+            runner = CliRunner()
+            db = Db()
+
+            fvs = {
+                'admin_status': 'up',
+                'state_transition_in_progress': 'True',
+                'transition_start_time': datetime.utcnow().isoformat()
+            }
+            db.cfgdb.set_entry('CHASSIS_MODULE', "DPU0", fvs)
+
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["shutdown"],
+                ["DPU0"],
+                obj=db
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+
+            fvs = db.db.get_all("STATE_DB", "CHASSIS_MODULE_TABLE|DPU0")
+            print(f"state_transition_in_progress:{fvs['state_transition_in_progress']}")
+            print(f"transition_start_time:{fvs['transition_start_time']}")
+
+    def test_shutdown_triggers_transition_timeout(self):
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value='up'):
+
+            runner = CliRunner()
+            db = Db()
+
+            fvs = {
+                'admin_status': 'up',
+                'state_transition_in_progress': 'True',
+                'transition_start_time': (datetime.utcnow() - timedelta(minutes=30)).isoformat()
+            }
+            db.cfgdb.set_entry('CHASSIS_MODULE', "DPU0", fvs)
+
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["shutdown"],
+                ["DPU0"],
+                obj=db
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+
+            fvs = db.db.get_all("STATE_DB", "CHASSIS_MODULE_TABLE|DPU0")
+            print(f"state_transition_in_progress:{fvs['state_transition_in_progress']}")
+            print(f"transition_start_time:{fvs['transition_start_time']}")
+
+    def test_startup_triggers_transition_tracking(self):
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value='down'):
+
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["startup"],
+                ["DPU0"],
+                obj=db
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+
+            fvs = db.db.get_all("STATE_DB", "CHASSIS_MODULE_TABLE|DPU0")
+            print(f"state_transition_in_progress:{fvs['state_transition_in_progress']}")
+            print(f"transition_start_time:{fvs['transition_start_time']}")
+
+    def test_set_state_transition_in_progress_sets_and_removes_timestamp(self):
+        db = mock.MagicMock()
+        db.statedb = mock.MagicMock()
+
+        # Case 1: Set to 'True' adds timestamp
+        db.statedb.get_entry.return_value = {}
+        set_state_transition_in_progress(db, "DPU0", "True")
+        args = db.statedb.set_entry.call_args[0]
+        updated_entry = args[2]
+        assert updated_entry["state_transition_in_progress"] == "True"
+        assert "transition_start_time" in updated_entry
+
+        # Case 2: Set to 'False' removes timestamp
+        db.statedb.get_entry.return_value = {
+            "state_transition_in_progress": "True",
+            "transition_start_time": "2025-05-01T01:00:00"
+        }
+        set_state_transition_in_progress(db, "DPU0", "False")
+        args = db.statedb.set_entry.call_args[0]
+        updated_entry = args[2]
+        assert updated_entry["state_transition_in_progress"] == "False"
+        assert "transition_start_time" not in updated_entry
+
+    def test_is_transition_timed_out_all_paths(self):
+        db = mock.MagicMock()
+        db.statedb = mock.MagicMock()
+
+        # Case 1: No entry
+        db.statedb.get_entry.return_value = None
+        assert is_transition_timed_out(db, "DPU0") is False
+
+        # Case 2: No transition_start_time
+        db.statedb.get_entry.return_value = {"state_transition_in_progress": "True"}
+        assert is_transition_timed_out(db, "DPU0") is False
+
+        # Case 3: Invalid format
+        db.statedb.get_entry.return_value = {"transition_start_time": "not-a-date"}
+        assert is_transition_timed_out(db, "DPU0") is False
+
+        # Case 4: Timed out
+        old_time = (datetime.utcnow() - TRANSITION_TIMEOUT - timedelta(seconds=1)).isoformat()
+        db.statedb.get_entry.return_value = {"transition_start_time": old_time}
+        assert is_transition_timed_out(db, "DPU0") is True
+
+        # Case 5: Not timed out yet
+        now = datetime.utcnow().isoformat()
+        db.statedb.get_entry.return_value = {"transition_start_time": now}
+        assert is_transition_timed_out(db, "DPU0") is False
 
     @classmethod
     def teardown_class(cls):
