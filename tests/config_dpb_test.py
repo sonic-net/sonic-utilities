@@ -700,6 +700,49 @@ class TestConfigDPB(object):
 
         return
 
+    @pytest.mark.usefixtures('mock_func')
+    def test_config_breakout_fec_cases(self, sonic_db):
+        '''
+        Test fec case of breakout port. Such as:
+        Wrong fec config, valid fec config
+        @Param: sonic_db [PyFixture], db.cfgdb -> Config DB.
+        '''
+
+        db = sonic_db
+        runner = CliRunner()
+        obj = {'config_db':db.cfgdb}
+
+        # Input Data
+        interface = 'Ethernet0'
+        curMode = '4x25G[10G]'
+        newMode = '2x50G'
+        fecMode = 'rs'
+
+
+        # Valid FEC
+        result = runner.invoke(config.config.commands["interface"].\
+            commands["breakout"], ['{}'.format(interface), '{}'.format(newMode), '{}'.format(fecMode), '-v', '-y'], obj=obj)
+
+        print(result.exit_code, result.output)
+        assert result.exit_code == 1
+        assert "fec valid config" in result.output
+
+        # Input Data
+        interface = 'Ethernet0'
+        curMode = '4x25G[10G]'
+        newMode = '1x50G'
+        fecMode = 'fec'
+
+        # Wrong mode
+        result = runner.invoke(config.config.commands["interface"].\
+            commands["breakout"], ['{}'.format(interface), '{}'.format(newMode), '{}'.format(fecMode), '-v', '-y'], obj=obj)
+
+        print(result.exit_code, result.output)
+        assert result.exit_code == 1
+        assert "Invalid fec mode" in result.output
+
+        return
+
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
