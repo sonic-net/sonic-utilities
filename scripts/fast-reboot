@@ -928,6 +928,11 @@ then
   systemctl stop "$service_name"
 fi
 
+if [[ "$sonic_asic_type" = 'clounix' ]];
+then
+  systemctl stop clx-modules.service || debug "Ignore stopping clounix service error $?"
+fi
+
 # Update the reboot cause file to reflect that user issued this script
 # Upon next boot, the contents of this file will be used to determine the
 # cause of the previous reboot
