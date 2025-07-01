@@ -196,6 +196,9 @@ class PlatformDataProvider(object):
 
     def get_chassis(self):
         return self.__chassis
+    
+    def is_smart_switch(self):
+        return self.__chassis.is_smartswitch()
 
     def is_modular_chassis(self):
         return len(self.module_component_map) > 0
@@ -535,8 +538,8 @@ class ComponentUpdateProvider(PlatformDataProvider):
             os.mkdir(FIRMWARE_AU_STATUS_DIR)
 
         self.__root_path = root_path
-
-        self.__pcp = PlatformComponentsParser(self.is_modular_chassis())
+        is_modular_chassis = self.is_modular_chassis() and not self.is_smart_switch()
+        self.__pcp = PlatformComponentsParser(is_modular_chassis)
         self.__pcp.parse_platform_components(root_path)
 
         self.__validate_platform_schema(self.__pcp)
@@ -546,6 +549,9 @@ class ComponentUpdateProvider(PlatformDataProvider):
 
     def __validate_component_map(self, section, pdp_map, pcp_map):
         diff_keys = self.__diff_keys(list(pdp_map.keys()), list(pcp_map.keys()))
+
+        if diff_keys and section == self.SECTION_MODULE and self.is_smart_switch():
+            return
 
         if diff_keys:
             raise RuntimeError(
