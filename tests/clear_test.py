@@ -117,7 +117,6 @@ class TestClearFrr(object):
         print('SETUP')
 
     @patch('clear.main.run_command')
-    @patch('clear.main.get_routing_stack', MagicMock(return_value='frr'))
     def test_clear_ipv6_frr(self, run_command):
         from clear.bgp_frr_v6 import bgp
         runner = CliRunner()
