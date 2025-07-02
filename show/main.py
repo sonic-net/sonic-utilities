@@ -84,6 +84,25 @@ GEARBOX_TABLE_PHY_PATTERN = r"_GEARBOX_TABLE:phy:*"
 
 COMMAND_TIMEOUT = 300
 
+# To be enhanced. Routing-stack information should be collected from a global
+# location (configdb?), so that we prevent the continous execution of this
+# bash oneliner. To be revisited once routing-stack info is tracked somewhere.
+def get_routing_stack():
+    result = None
+    command = "sudo docker ps | grep bgp | grep -E 'quagga|frr' | awk '{print$2}' | cut -d'-' -f3 | cut -d':' -f1 | head -n 1"
+
+    try:
+        stdout = subprocess.check_output(command, shell=True, text=True, timeout=COMMAND_TIMEOUT)
+        result = stdout.rstrip('\n')
+    except Exception as err:
+        click.echo('Failed to get routing stack: {}'.format(err), err=True)
+
+    return result
+
+
+# Global Routing-Stack variable
+routing_stack = get_routing_stack()
+
 # Read given JSON file
 def readJsonFile(fileName):
     try:
@@ -1474,10 +1493,21 @@ def protocol(verbose):
 # Inserting BGP functionality into cli's show parse-chain.
 # BGP commands are determined by the routing-stack being elected.
 #
-from .bgp_frr_v4 import bgp
-ip.add_command(bgp)
-from .bgp_frr_v6 import bgp
-ipv6.add_command(bgp)
+if routing_stack == "quagga":
+    from .bgp_quagga_v4 import bgp
+    ip.add_command(bgp)
+    from .bgp_quagga_v6 import bgp
+    ipv6.add_command(bgp)
+elif routing_stack == "frr":
+    from .bgp_frr_v4 import bgp
+    ip.add_command(bgp)
+    from .bgp_frr_v6 import bgp
+    ipv6.add_command(bgp)
+elif device_info.is_supervisor():
+    from .bgp_frr_v4 import bgp
+    ip.add_command(bgp)
+    from .bgp_frr_v6 import bgp
+    ipv6.add_command(bgp)
 #
 # 'link-local-mode' subcommand ("show ipv6 link-local-mode")
 #
