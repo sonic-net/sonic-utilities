@@ -77,7 +77,7 @@ class AliasedGroup(click.Group):
 
 # new version only supports frr
 def get_routing_stack():
-    return ("frr")
+    return "frr"
 
 
 # Global Routing-Stack variable

@@ -120,7 +120,7 @@ class TestClearFrr(object):
     def test_clear_ipv6_frr(self, run_command):
         from clear.bgp_frr_v6 import bgp
         runner = CliRunner()
-        result = runner.invoke(clear.cli.commands['ipv6'].commands['bgp'].commands['neighbor'].commands['all'])
+        result = runner.invoke(clear.cli.commands['ipv6'].commands['bgp'].commands['all'])
         assert result.exit_code == 0
         run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear bgp ipv6 *"])
 
