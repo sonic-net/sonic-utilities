@@ -3,6 +3,7 @@ import json
 import os
 import sys
 import re
+import ipaddress
 from unittest import mock
 
 import mockredis
@@ -243,12 +244,12 @@ class DBConnector:
         redis_kwargs = {}
 
         # Check if IP is being used to connect to redis
-        if len(args)==4:
+        if len(args) == 4:
             try:
                 ip = args[1]
                 ipaddress.ip_address(args[1])
                 redis_kwargs['namespace'] = ip_to_asic[ip] if ip is not None else ip
-            except:
+            except ValueError:
                 redis_kwargs['namespace'] = None
 
         redis_kwargs['db_name'] = 'counters_db'
