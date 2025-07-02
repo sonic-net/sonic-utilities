@@ -75,9 +75,27 @@ class AliasedGroup(click.Group):
         ctx.fail('Too many matches: %s' % ', '.join(sorted(matches)))
 
 
+# To be enhanced. Routing-stack information should be collected from a global
+# location (configdb?), so that we prevent the continous execution of this
+# bash oneliner. To be revisited once routing-stack info is tracked somewhere.
+def get_routing_stack():
+    cmd0 = ["sudo", "docker", "ps"]
+    cmd1 = ["grep", "bgp"]
+    cmd2 = ["awk", '{print$2}']
+    cmd3 = ["cut", "-d-", "-f3"]
+    cmd4 = ["cut", "-d:", "-f1"]
+
+    try:
+        _, result = getstatusoutput_noshell_pipe(cmd0, cmd1, cmd2, cmd3, cmd4)
+
+    except OSError as e:
+        raise OSError("Cannot detect routing-stack")
+
+    return (result)
+
+
 # Global Routing-Stack variable
-# new version only supports frr
-routing_stack = "frr"
+routing_stack = get_routing_stack()
 
 
 def run_command(command, pager=False, return_output=False, return_exitstatus=False):

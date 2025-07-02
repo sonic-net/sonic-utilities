@@ -84,8 +84,24 @@ GEARBOX_TABLE_PHY_PATTERN = r"_GEARBOX_TABLE:phy:*"
 
 COMMAND_TIMEOUT = 300
 
+# To be enhanced. Routing-stack information should be collected from a global
+# location (configdb?), so that we prevent the continous execution of this
+# bash oneliner. To be revisited once routing-stack info is tracked somewhere.
+def get_routing_stack():
+    result = None
+    command = "sudo docker ps | grep bgp | grep -E 'quagga|frr' | awk '{print$2}' | cut -d'-' -f3 | cut -d':' -f1 | head -n 1"
+
+    try:
+        stdout = subprocess.check_output(command, shell=True, text=True, timeout=COMMAND_TIMEOUT)
+        result = stdout.rstrip('\n')
+    except Exception as err:
+        click.echo('Failed to get routing stack: {}'.format(err), err=True)
+
+    return result
+
+
 # Global Routing-Stack variable
-routing_stack = "frr"
+routing_stack = get_routing_stack()
 
 # Read given JSON file
 def readJsonFile(fileName):
