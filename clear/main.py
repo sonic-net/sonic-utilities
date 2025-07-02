@@ -79,20 +79,25 @@ class AliasedGroup(click.Group):
 # location (configdb?), so that we prevent the continous execution of this
 # bash oneliner. To be revisited once routing-stack info is tracked somewhere.
 def get_routing_stack():
-    cmd0 = ["sudo", "docker", "ps"]
-    cmd1 = ["grep", "bgp"]
-    cmd2 = ["awk", '{print$2}']
-    cmd3 = ["cut", "-d-", "-f3"]
-    cmd4 = ["cut", "-d:", "-f1"]
+    result = None
+
+    cmd0 = ["sudo", "docker", "ps", "--format", "{{.Image}}\t{{.Names}}"]
+    cmd1 = ["awk", '$2 == "bgp"']
+    cmd2 = ["cut", "-d-", "-f3"]
+    cmd3 = ["cut", "-d:", "-f1"]
+    cmd4 = ["head", "-n", "1"]
 
     try:
         _, result = getstatusoutput_noshell_pipe(cmd0, cmd1, cmd2, cmd3, cmd4)
-
+        result = result.strip()
+        # If no result was found, use "frr" as default
+        if not result:
+            result = "frr"
     except OSError as e:
-        raise OSError("Cannot detect routing-stack")
+        # If detection fails, return "frr" as default
+        result = "frr"
 
-    return (result)
-
+    return result
 
 # Global Routing-Stack variable
 routing_stack = get_routing_stack()

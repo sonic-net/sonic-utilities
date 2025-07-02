@@ -89,13 +89,17 @@ COMMAND_TIMEOUT = 300
 # bash oneliner. To be revisited once routing-stack info is tracked somewhere.
 def get_routing_stack():
     result = None
-    command = "sudo docker ps | grep bgp | grep -E 'quagga|frr' | awk '{print$2}' | cut -d'-' -f3 | cut -d':' -f1 | head -n 1"
+    command = "sudo docker ps --format '{{.Image}}\t{{.Names}}' | awk '$2 == \"bgp\"' | cut -d'-' -f3 | cut -d':' -f1 | head -n 1"  # noqa: E501
 
     try:
         stdout = subprocess.check_output(command, shell=True, text=True, timeout=COMMAND_TIMEOUT)
         result = stdout.rstrip('\n')
+        # If no result was found, use "frr" as default
+        if not result:
+            result = "frr"
     except Exception as err:
-        click.echo('Failed to get routing stack: {}'.format(err), err=True)
+        # If detection fails, return "frr" as default
+        result = "frr"
 
     return result
 
