@@ -1,6 +1,7 @@
 import click
 import pytest
 import clear.main as clear
+import importlib
 from click.testing import CliRunner
 from unittest.mock import patch, MagicMock
 
@@ -118,9 +119,10 @@ class TestClearFrr(object):
 
     @patch('clear.main.run_command')
     def test_clear_ipv6_frr(self, run_command):
+        importlib.reload(clear)
         from clear.bgp_frr_v6 import bgp
         runner = CliRunner()
-        result = runner.invoke(clear.cli.commands['ipv6'].commands['bgp'].commands['all'])
+        result = runner.invoke(clear.cli.commands['ipv6'].commands['bgp'].commands['neighbor'].commands['all'])
         assert result.exit_code == 0
         run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear bgp ipv6 *"])
 
