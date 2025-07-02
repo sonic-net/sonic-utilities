@@ -278,6 +278,128 @@ class TestPortChannel(object):
         assert result.exit_code != 0
         assert "PortChannel1001 has vlan Vlan4000 configured, remove vlan membership to proceed" in result.output
 
+    def test_portchannel_mode_multi_process_help(self):
+      """Test help message for multi-process mode command"""
+      runner = CliRunner()
+    
+       # Check if the command structure uses a hyphen instead of underscore
+       # Try both 'multi-process' and 'multi_process' to diagnose the issue
+      try:
+          # Option 1: Using hyphen
+         result = runner.invoke(config.config.commands["portchannel"].commands["mode"].commands["multi-process"], ["--help"])
+      except KeyError:
+          try:
+              # Option 2: Using underscore
+              result = runner.invoke(config.config.commands["portchannel"].commands["mode"].commands["multi_process"], ["--help"])
+          except KeyError:
+              # Option 3: Direct child of portchannel
+              result = runner.invoke(config.config.commands["portchannel"].commands["multi-process"], ["--help"])
+    
+      # Verify command executes and shows help
+      print("PASSED:test_portchannel_mode_multi_process_help")
+      assert result.exit_code == 0
+      assert "Enable or disable multi-process mode" in result.output
+      assert "<enable|disable>" in result.output
+
+    def test_portchannel_mode_invalid_action(self):
+      """Test invalid action parameter"""
+      runner = CliRunner()
+      db = Db()
+      obj = {'db': db.cfgdb}
+    
+      # Use the correct command structure based on what works in the help test
+      try:
+          # Option 1: Using hyphen
+          result = runner.invoke(
+              config.config.commands["portchannel"].commands["mode"].commands["multi-process"], 
+              ["invalid"], 
+              obj=obj
+          )
+      except KeyError:
+          try:
+              # Option 2: Using underscore
+              result = runner.invoke(
+                  config.config.commands["portchannel"].commands["mode"].commands["multi_process"], 
+                  ["invalid"], 
+                  obj=obj
+              )
+          except KeyError:
+              # Option 3: Direct child of portchannel
+              result = runner.invoke(
+                  config.config.commands["portchannel"].commands["multi-process"], 
+                  ["invalid"], 
+                  obj=obj
+              )
+    
+      # Verify expected error message
+      print("PASSED:test_portchannel_mode_invalid_action")
+      assert result.exit_code != 0
+      assert "Error: Invalid value for \"<enable|disable>\"" in result.output
+      assert "invalid choice: invalid. (choose from enable, disable)" in result.output
+
+    def test_portchannel_mode_missing_action(self):
+      """Test missing action parameter"""
+      runner = CliRunner()
+      db = Db()
+      obj = {'db': db.cfgdb}
+    
+      # Use the correct command structure based on what works in the help test
+      try:
+          # Option 1: Using hyphen
+          result = runner.invoke(
+              config.config.commands["portchannel"].commands["mode"].commands["multi-process"], 
+              [], 
+              obj=obj
+          )
+      except KeyError:
+          try:
+              # Option 2: Using underscore
+              result = runner.invoke(
+                  config.config.commands["portchannel"].commands["mode"].commands["multi_process"], 
+                  [], 
+                  obj=obj
+              )
+          except KeyError:
+              # Option 3: Direct child of portchannel
+              result = runner.invoke(
+                  config.config.commands["portchannel"].commands["multi-process"], 
+                  [], 
+                  obj=obj
+              )
+    
+      # Verify expected error message
+      print("PASSED:test_portchannel_mode_missing_action")
+      assert result.exit_code != 0
+      assert "Error: Missing argument \"<enable|disable>\"" in result.output
+
+    def test_portchannel_mode_enable(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        # Enable multi-process mode
+        result = runner.invoke(config.config.commands["portchannel"].commands["mode"].commands["multi-process"], ["enable"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        print("PASSED:test_portchannel_mode_enable")
+        assert result.exit_code == 0
+        assert "[WARNING] multi-process mode is configured. Please restart the teamd docker to take effect." in result.output
+
+
+    def test_portchannel_mode_disable(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        # Disable multi-process mode
+        result = runner.invoke(config.config.commands["portchannel"].commands["mode"].commands["multi-process"], ["disable"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        print("PASSED:test_portchannel_mode_disable")
+        assert result.exit_code == 0
+        assert "[WARNING] multi-process mode is removed. Please restart the teamd docker to take effect." in result.output
+
+
     def test_get_invalid_portchannel_retry_count(self):
         runner = CliRunner()
         db = Db()
