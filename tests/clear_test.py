@@ -2,6 +2,7 @@ import click
 import pytest
 import clear.main as clear
 import importlib
+import sys
 from click.testing import CliRunner
 from unittest.mock import patch, MagicMock
 
@@ -119,7 +120,15 @@ class TestClearFrr(object):
 
     @patch('clear.main.run_command')
     def test_clear_ipv6_frr(self, run_command):
+        # We need to reload the module with its full path to ensure all internal references are updated
+        if 'clear.main' in sys.modules:
+            importlib.reload(sys.modules['clear.main'])
+        # Also reload our local import alias
         importlib.reload(clear)
+
+        # Make sure routing_stack is correctly set to "frr"
+        print(f"Current routing_stack value: {clear.routing_stack}")
+
         from clear.bgp_frr_v6 import bgp
         runner = CliRunner()
         result = runner.invoke(clear.cli.commands['ipv6'].commands['bgp'].commands['neighbor'].commands['all'])
