@@ -2,6 +2,7 @@ import os
 import sys
 import click
 import pytest
+import logging
 import importlib
 import subprocess
 import show.main as show
@@ -27,6 +28,10 @@ Pool Entries
 NAT Bindings
 NAT Zones
 """
+
+logger = logging.getLogger(__name__)
+
+SUCCESS = 0
 
 
 class TestShowRunAllCommands(object):
@@ -1278,3 +1283,123 @@ class TestShowSRv6Counters(object):
 
     def teardown(self):
         print('TEAR DOWN')
+
+
+class TestShowSwitchCounters(object):
+    @classmethod
+    def setup_class(cls):
+        logger.info("Setup class: {}".format(cls.__name__))
+
+    @classmethod
+    def teardown_class(cls):
+        logger.info("Teardown class: {}".format(cls.__name__))
+
+    def verify_stats(self, mock_run_command, command, options, expected):
+        runner = CliRunner()
+        result = runner.invoke(command, options)
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+
+        assert result.exit_code == SUCCESS
+        mock_run_command.assert_called_once_with(expected, display_cmd=True)
+
+    @pytest.mark.parametrize(
+        "command, options, expected", [
+            pytest.param(
+                show.cli.commands["switch"].commands["counters"].commands["all"],
+                ["--verbose"],
+                ["switchstat", "--all", "-p", "0", "-d", "all"],
+                id="plain-all"
+            ),
+            pytest.param(
+                show.cli.commands["switch"].commands["counters"].commands["trim"],
+                ["--verbose"],
+                ["switchstat", "--trim", "-p", "0", "-d", "all"],
+                id="plain-trim"
+            ),
+            pytest.param(
+                show.cli.commands["switch"].commands["counters"],
+                ["--verbose"],
+                ["switchstat", "-p", "0", "-d", "all"],
+                id="plain-std"
+            ),
+            pytest.param(
+                show.cli.commands["switch"].commands["counters"].commands["detailed"],
+                ["--verbose"],
+                ["switchstat", "--detail", "-p", "0", "-d", "all"],
+                id="plain-detail"
+            ),
+            pytest.param(
+                show.cli.commands["switch"].commands["counters"].commands["all"],
+                ["--json", "--verbose"],
+                ["switchstat", "--all", "-p", "0", "-d", "all", "-j"],
+                id="json-all"
+            ),
+            pytest.param(
+                show.cli.commands["switch"].commands["counters"].commands["trim"],
+                ["--json", "--verbose"],
+                ["switchstat", "--trim", "-p", "0", "-d", "all", "-j"],
+                id="json-trim"
+            ),
+            pytest.param(
+                show.cli.commands["switch"].commands["counters"],
+                ["--json", "--verbose"],
+                ["switchstat", "-p", "0", "-d", "all", "-j"],
+                id="json-std"
+            )
+        ]
+    )
+    @patch("utilities_common.cli.run_command")
+    def test_switch_stats(self, mock_run_command, command, options, expected):
+        self.verify_stats(mock_run_command, command, options, expected)
+
+    @pytest.mark.parametrize(
+        "command, options, expected", [
+            pytest.param(
+                show.cli.commands["switch"].commands["counters"].commands["all"],
+                ["--period", "1", "--verbose"],
+                ["switchstat", "--all", "-p", "1", "-d", "all"],
+                id="plain-all"
+            ),
+            pytest.param(
+                show.cli.commands["switch"].commands["counters"].commands["trim"],
+                ["--period", "2", "--verbose"],
+                ["switchstat", "--trim", "-p", "2", "-d", "all"],
+                id="plain-trim"
+            ),
+            pytest.param(
+                show.cli.commands["switch"].commands["counters"],
+                ["--period", "3", "--verbose"],
+                ["switchstat", "-p", "3", "-d", "all"],
+                id="plain-std"
+            ),
+            pytest.param(
+                show.cli.commands["switch"].commands["counters"].commands["detailed"],
+                ["--period", "4", "--verbose"],
+                ["switchstat", "--detail", "-p", "4", "-d", "all"],
+                id="plain-detail"
+            ),
+            pytest.param(
+                show.cli.commands["switch"].commands["counters"].commands["all"],
+                ["--period", "1", "--json", "--verbose"],
+                ["switchstat", "--all", "-p", "1", "-d", "all", "-j"],
+                id="json-all"
+            ),
+            pytest.param(
+                show.cli.commands["switch"].commands["counters"].commands["trim"],
+                ["--period", "2", "--json", "--verbose"],
+                ["switchstat", "--trim", "-p", "2", "-d", "all", "-j"],
+                id="json-trim"
+            ),
+            pytest.param(
+                show.cli.commands["switch"].commands["counters"],
+                ["--period", "3", "--json", "--verbose"],
+                ["switchstat", "-p", "3", "-d", "all", "-j"],
+                id="json-std"
+            )
+        ]
+    )
+    @patch("utilities_common.cli.run_command")
+    def test_switch_stats_period(self, mock_run_command, command, options, expected):
+        self.verify_stats(mock_run_command, command, options, expected)

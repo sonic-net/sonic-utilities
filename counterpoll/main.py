@@ -1,9 +1,12 @@
 import click
-import json
-from flow_counter_util.route import exit_if_route_flow_counter_not_support
-from swsscommon.swsscommon import ConfigDBConnector
+import utilities_common.cli as clicommon
+
 from tabulate import tabulate
 from sonic_py_common import device_info
+from flow_counter_util.route import exit_if_route_flow_counter_not_support
+from swsscommon.swsscommon import ConfigDBConnector
+from swsscommon.swsscommon import CFG_FLEX_COUNTER_TABLE_NAME as CFG_FLEX_COUNTER_TABLE
+
 
 BUFFER_POOL_WATERMARK = "BUFFER_POOL_WATERMARK"
 PORT_BUFFER_DROP = "PORT_BUFFER_DROP"
@@ -540,6 +543,56 @@ def disable(ctx):  # noqa: F811
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "SRV6", srv6_info)
 
 
+# Switch counter commands
+@cli.group()
+def switch():
+    """ Switch counter commands """
+    pass
+
+
+@switch.command()
+@clicommon.pass_db
+@click.argument("poll_interval", type=click.IntRange(1000, 60000))
+def interval(db, poll_interval):  # noqa: F811
+    """ Set switch counter query interval """
+    table = CFG_FLEX_COUNTER_TABLE
+    key = "SWITCH"
+
+    data = {
+        "POLL_INTERVAL": poll_interval
+    }
+
+    db.cfgdb.mod_entry(table, key, data)
+
+
+@switch.command()
+@clicommon.pass_db
+def enable(db):  # noqa: F811
+    """ Enable switch counter query """
+    table = CFG_FLEX_COUNTER_TABLE
+    key = "SWITCH"
+
+    data = {
+        "FLEX_COUNTER_STATUS": ENABLE
+    }
+
+    db.cfgdb.mod_entry(table, key, data)
+
+
+@switch.command()
+@clicommon.pass_db
+def disable(db):  # noqa: F811
+    """ Disable switch counter query """
+    table = CFG_FLEX_COUNTER_TABLE
+    key = "SWITCH"
+
+    data = {
+        "FLEX_COUNTER_STATUS": DISABLE
+    }
+
+    db.cfgdb.mod_entry(table, key, data)
+
+
 @cli.command()
 def show():
     """ Show the counter configuration """
@@ -561,6 +614,7 @@ def show():
     wred_queue_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'WRED_ECN_QUEUE')
     wred_port_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'WRED_ECN_PORT')
     srv6_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'SRV6')
+    switch_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'SWITCH')
 
     header = ("Type", "Interval (in ms)", "Status")
     data = []
@@ -598,6 +652,12 @@ def show():
     if srv6_info:
         data.append(["SRV6_STAT", srv6_info.get("POLL_INTERVAL", DEFLT_10_SEC),
                     srv6_info.get("FLEX_COUNTER_STATUS", DISABLE)])
+    if switch_info:
+        data.append([
+            "SWITCH_STAT",
+            switch_info.get("POLL_INTERVAL", DEFLT_60_SEC),
+            switch_info.get("FLEX_COUNTER_STATUS", DISABLE)
+        ])
 
     if is_dpu(configdb) and eni_info:
         data.append(["ENI_STAT", eni_info.get("POLL_INTERVAL", DEFLT_10_SEC),
