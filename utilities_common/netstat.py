@@ -6,7 +6,8 @@ import json
 STATUS_NA = 'N/A'
 PORT_RATE = 40
 
-def ns_diff(newstr, oldstr):
+
+def ns_diff(newstr, oldstr, raw=False):
     """
         Calculate the diff.
     """
@@ -18,7 +19,7 @@ def ns_diff(newstr, oldstr):
         oldstr = '0'
 
     new, old = int(newstr), int(oldstr)
-    return '{:,}'.format(max(0, new - old))
+    return '{:,}'.format((new - old) if raw else max(0, new - old))
 
 def ns_brate(newstr, oldstr, delta):
     """
@@ -72,10 +73,18 @@ def table_as_json(table, header):
     return json.dumps(output, indent=4, sort_keys=True)
 
 
-def format_number_with_comma(number_in_str):
+def format_number_with_comma(number_in_str, raw=False):
     """
         Format the number with comma.
     """
+    if raw:
+        if number_in_str.startswith('-', 0, 1) and number_in_str[1:].isdecimal():
+            return '{:,}'.format(int(number_in_str))
+        elif number_in_str.isdecimal():
+            return '{:,}'.format(int(number_in_str))
+        else:
+            return number_in_str
+
     if number_in_str.isdecimal():
         return '{:,}'.format(int(number_in_str))
     else:
