@@ -1,0 +1,133 @@
+#!/usr/bin/python3
+
+import click
+import time
+
+from utilities_common import multi_asic, constants
+from utilities_common.switchstat import SwitchStat
+
+
+@click.command()
+@click.pass_context
+@click.option(
+    "-a", "--all",
+    help="Display all the stats counters",
+    is_flag=True,
+    default=False
+)
+@click.option(
+    "-t", "--trim",
+    help="Display trimming related statistics",
+    is_flag=True,
+    default=False
+)
+@click.option(
+    "-l", "--detail",
+    help="Display detailed statistics",
+    is_flag=True,
+    default=False
+)
+@click.option(
+    "-r", "--raw",
+    help="Display raw stats (unmodified output)",
+    is_flag=True,
+    default=False
+)
+@click.option(
+    "-p", "--period",
+    help="Display stats over a specified period (in seconds)",
+    type=click.INT,
+    default=0,
+    show_default=True
+)
+@click.option(
+    "-c", "--clear", "clear_stats",
+    help="Copy & clear stats",
+    is_flag=True,
+    default=False
+)
+@click.option(
+    "-ds", "--delete", "del_stats",
+    help="Delete saved stats, either the uid or the specified tag",
+    is_flag=True,
+    default=False
+)
+@click.option(
+    "-da", "--delete-all", "del_all_stats",
+    help="Delete all saved stats",
+    is_flag=True,
+    default=False
+)
+@click.option(
+    "-T", "--tag",
+    help="Save stats with name TAG",
+    default=None
+)
+@multi_asic.multi_asic_click_options
+@click.option(
+    "-j", "--json", "json_fmt",
+    help="Display in JSON format",
+    is_flag=True,
+    default=False
+)
+@click.version_option("1.0", "-v", "--version")
+@click.help_option("-h", "--help")
+def main(ctx, all, trim, detail, raw, period, clear_stats, del_stats, del_all_stats, tag, display, namespace, json_fmt):
+    """ Display switch counters """
+
+    if clear_stats: # save counters for all namespaces
+        namespace = None
+        display = constants.DISPLAY_ALL
+
+    switchstat = SwitchStat(namespace, display, tag)
+
+    if del_all_stats: # remove all stats
+        click.echo("Removed all saved switch stats")
+        switchstat.remove_stats(all=True)
+        ctx.exit(0)
+
+    if del_stats: # remove single stat with/without tag
+        click.echo("Removed saved switch stats{}".format("" if tag is None else " using tag {}".format(tag)))
+        switchstat.remove_stats()
+        ctx.exit(0)
+
+    if clear_stats: # reset counters
+        cnstat_dict = switchstat.get_cnstat_dict(timestamp=True)
+
+        try:
+            switchstat.save_stats(cnstat_dict)
+        except OSError as e:
+            ctx.fail("Failed to clear switch counters: {}".format(str(e)))
+
+        click.echo("Cleared switch counters{}".format("" if tag is None else " using tag {}".format(tag)))
+        ctx.exit(0)
+
+    if raw: # display raw stats
+        cnstat_dict = switchstat.get_cnstat_dict()
+        switchstat.cnstat_print(cnstat_dict, all, trim, detail, json_fmt)
+        ctx.exit(0)
+
+    if period == 0: # do not wait - display stats diff
+        cnstat_cached_dict = {}
+
+        if switchstat.is_cache_exists(): # cache exists - display stats diff
+            try:
+                cnstat_cached_dict = switchstat.load_stats()
+            except OSError as e:
+                ctx.fail("Failed to load saved switch counters: {}".format(str(e)))
+
+            cnstat_dict = switchstat.get_cnstat_dict()
+            switchstat.cnstat_diff_print(cnstat_dict, cnstat_cached_dict, all, trim, detail, json_fmt)
+        else: # no cache - display raw stats
+            cnstat_dict = switchstat.get_cnstat_dict()
+            switchstat.cnstat_print(cnstat_dict, all, trim, detail, json_fmt)
+    else: # wait for n seconds - display stats diff
+        click.echo("The switch stats are calculated within {} seconds period".format(period))
+        cnstat_cached_dict = switchstat.get_cnstat_dict(timestamp=True)
+        time.sleep(period)
+        cnstat_dict = switchstat.get_cnstat_dict()
+        switchstat.cnstat_diff_print(cnstat_dict, cnstat_cached_dict, all, trim, detail, json_fmt)
+
+
+if __name__ == "__main__":
+    main()

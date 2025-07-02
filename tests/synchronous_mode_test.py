@@ -2,6 +2,7 @@ from click.testing import CliRunner
 from utilities_common.db import Db
 from unittest import mock
 from mock import patch
+from .mock_tables import dbconnector
 import config.main as config
 import config.validated_config_db_connector as validated_config_db_connector 
 
@@ -9,6 +10,7 @@ class TestSynchronousMode(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
+        dbconnector.load_namespace_config()
 
     def __check_result(self, result_msg, mode):
         if mode == "enable" or mode == "disable":
