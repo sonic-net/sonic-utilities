@@ -89,10 +89,12 @@ def get_routing_stack():
 
     try:
         _, result = getstatusoutput_noshell_pipe(cmd0, cmd1, cmd2, cmd3, cmd4)
-    except OSError as e:
-        raise OSError("Cannot detect routing-stack")
 
-    return (result)
+    except OSError as e:
+        # If detection fails, return "frr" as default
+        pass
+
+    return result
 
 # Global Routing-Stack variable
 routing_stack = get_routing_stack()
