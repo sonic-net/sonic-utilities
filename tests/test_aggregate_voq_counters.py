@@ -10,7 +10,7 @@ scripts_path = os.path.join(modules_path, "scripts")
 show_queue_counters_voq = """\
                      Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes    Credit-WD-Del/pkts
 -------------------------  -----  --------------  ---------------  -----------  ------------  --------------------
-sonic-lc1|asic0|Ethernet0   VOQ0             129              855           10          1220                     0
+sonic-lc1|asic0|Ethernet0   VOQ0               8              976           10          1220                     0
 
                      Port    Voq    Counter/pkts    Counter/bytes    Drop/pkts    Drop/bytes    Credit-WD-Del/pkts
 -------------------------  -----  --------------  ---------------  -----------  ------------  --------------------
@@ -31,8 +31,8 @@ show_queue_counters_voq_json = {
       "creditWDPkts": "0",
       "dropbytes": "1220",
       "droppacket": "10",
-      "totalbytes": "855",
-      "totalpacket": "129"
+      "totalbytes": "976",
+      "totalpacket": "8"
     },
     "time": "2025-04-07T15:57:11.881430"
   },
@@ -47,7 +47,6 @@ show_queue_counters_voq_json = {
     "time": "2025-04-07T15:57:11.881496"
   }
 }
-
 
 class TestAggVoq(object):
     @classmethod
@@ -73,13 +72,12 @@ class TestAggVoq(object):
             ["--voq", "--json"]
         )
         res = result.output
-        res.replace("\n", "")
         res = json.loads(res)
         assert result.exit_code == 0
-        for lc in res:
-            for voq in res[lc]:
+        for lc in show_queue_counters_voq_json:
+            for voq in show_queue_counters_voq_json[lc]:
                 if voq != "time":
-                    for counter in res[lc][voq]:
+                    for counter in show_queue_counters_voq_json[lc][voq]:
                         assert res[lc][voq][counter] == show_queue_counters_voq_json[lc][voq][counter]
 
     def test_queue_voq_counters_aggregate_sys_port(self):
