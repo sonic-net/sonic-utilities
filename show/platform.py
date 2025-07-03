@@ -117,11 +117,13 @@ def ssdhealth(device, verbose, vendor):
         if platform_data:
             device = platform_data.get("chassis", {}).get("disk", {}).get("device", None)
 
-        if not device:
-            # Fallback to discovery
-            device = os.popen("lsblk -o NAME,TYPE -p | grep disk").readline().strip().split()[0]
+    # if device argument is not provided ssdutil will display the health of the disk containing
+    # the /host partition. In sonic this is the primary storage device.
+    if device:
+        cmd = ['sudo', 'ssdutil', '-d', str(device)]
+    else:
+        cmd = ['sudo', 'ssdutil']
 
-    cmd = ['sudo', 'ssdutil', '-d', str(device)]
     options = ["-v"] if verbose else []
     options += ["-e"] if vendor else []
     clicommon.run_command(cmd + options, display_cmd=verbose)

@@ -564,17 +564,26 @@ def create_table_dump_per_port_config(db ,print_data, per_npu_configdb, asic_id,
     cable_type = get_optional_value_for_key_in_config_tbl(per_npu_configdb[asic_id], port, "cable_type", "MUX_CABLE")
     if cable_type is not None:
         port_list.append(cable_type)
+    else:
+        port_list.append("")
     soc_ipv4_value = get_optional_value_for_key_in_config_tbl(per_npu_configdb[asic_id], port, "soc_ipv4", "MUX_CABLE")
     if soc_ipv4_value is not None:
         port_list.append(soc_ipv4_value)
         is_dualtor_active_active[0] = True
+    else:
+        port_list.append("")
     soc_ipv6_value = get_optional_value_for_key_in_config_tbl(per_npu_configdb[asic_id], port, "soc_ipv6", "MUX_CABLE")
     if soc_ipv6_value is not None:
-        if cable_type is None:
-            port_list.append("")
-        if soc_ipv4_value is None:
-            port_list.append("")
         port_list.append(soc_ipv6_value)
+    else:
+        port_list.append("")
+    prober_type_value = get_optional_value_for_key_in_config_tbl(per_npu_configdb[asic_id],
+                                                                 port, "prober_type", "MUX_CABLE")
+    if prober_type_value is not None:
+        port_list.append(prober_type_value)
+    else:
+        port_list.append("software")
+
     print_data.append(port_list)
 
 
@@ -597,6 +606,11 @@ def create_json_dump_per_port_config(db, port_status_dict, per_npu_configdb, asi
     soc_ipv6_value = get_optional_value_for_key_in_config_tbl(per_npu_configdb[asic_id], port, "soc_ipv6", "MUX_CABLE")
     if soc_ipv6_value is not None:
         port_status_dict["MUX_CABLE"]["PORTS"][port_name]["SERVER"]["soc_ipv6"] = soc_ipv6_value
+    prober_type_value = get_optional_value_for_key_in_config_tbl(per_npu_configdb[asic_id],
+                                                                 port, "prober_type", "MUX_CABLE")
+    if prober_type_value is not None:
+        port_status_dict["MUX_CABLE"]["PORTS"][port_name]["SERVER"]["prober_type"] = prober_type_value
+
 
 def get_tunnel_route_per_port(db, port_tunnel_route, per_npu_configdb, per_npu_appl_db, per_npu_asic_db, asic_id, port):
 
@@ -873,7 +887,7 @@ def config(db, port, json_output):
                     print_peer_tor.append(peer_tor_data)
                     click.echo(tabulate(print_peer_tor, headers=headers))
                     if is_dualtor_active_active[0]:
-                        headers = ['port', 'state', 'ipv4', 'ipv6', 'cable_type', 'soc_ipv4', 'soc_ipv6']
+                        headers = ['port', 'state', 'ipv4', 'ipv6', 'cable_type', 'soc_ipv4', 'soc_ipv6', 'prober_type']
                     else:
                         headers = ['port', 'state', 'ipv4', 'ipv6']
                     click.echo(tabulate(print_data, headers=headers))
@@ -925,7 +939,7 @@ def config(db, port, json_output):
             print_peer_tor.append(peer_tor_data)
             click.echo(tabulate(print_peer_tor, headers=headers))
             if is_dualtor_active_active[0]:
-                headers = ['port', 'state', 'ipv4', 'ipv6', 'cable_type', 'soc_ipv4', 'soc_ipv6']
+                headers = ['port', 'state', 'ipv4', 'ipv6', 'cable_type', 'soc_ipv4', 'soc_ipv6', 'prober_type']
             else:
                 headers = ['port', 'state', 'ipv4', 'ipv6']
             click.echo(tabulate(print_data, headers=headers))
@@ -2177,7 +2191,7 @@ def get_grpc_cached_version_mux_direction_per_port(db, port):
     mux_info_full_dict[asic_index] = state_db[asic_index].get_all(
         state_db[asic_index].STATE_DB, 'MUX_CABLE_INFO|{}'.format(port))
     trans_info_full_dict[asic_index] = state_db[asic_index].get_all(
-        state_db[asic_index].STATE_DB, 'TRANSCEIVER_STATUS|{}'.format(port))
+        state_db[asic_index].STATE_DB, 'TRANSCEIVER_INFO|{}'.format(port)) or {}
 
     res_dir = {}
     res_dir = mux_info_full_dict[asic_index]
@@ -2186,10 +2200,9 @@ def get_grpc_cached_version_mux_direction_per_port(db, port):
     mux_info_dict["grpc_connection_status"] = res_dir.get("grpc_connection_status", None)
 
     trans_dir = {}
-    trans_dir = trans_info_full_dict[asic_index]
-    
-    status = trans_dir.get("status", "0")
-    presence = "True" if status == "1" else "False"
+    trans_dir = trans_info_full_dict.get(asic_index, None)
+
+    presence = "True" if trans_dir else "False"
 
     mux_info_dict["presence"] = presence
 

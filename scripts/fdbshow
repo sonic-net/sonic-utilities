@@ -32,14 +32,18 @@ import sys
 import os
 import re
 
+from utilities_common.general import load_db_config
+
 # mock the redis for unit test purposes #
 try: # pragma: no cover
-    if os.environ["UTILITIES_UNIT_TESTING"] == "1": 
+    if os.environ["UTILITIES_UNIT_TESTING"] == "1":
         modules_path = os.path.join(os.path.dirname(__file__), "..")
         test_path = os.path.join(modules_path, "tests")
         sys.path.insert(0, modules_path)
         sys.path.insert(0, test_path)
-        import mock_tables.dbconnector
+        from tests.mock_tables import dbconnector
+
+    if os.environ["FDBSHOW_UNIT_TESTING"] == "1":
         mock_variants = { "1": 'asic_db',
                           "2": 'asic_db_def_vlan',
                           "3": 'asic_db_no_fdb',
@@ -50,23 +54,38 @@ try: # pragma: no cover
         mock_db_path = os.path.join(test_path, "fdbshow_input")
         file_name = mock_variants[os.environ["FDBSHOW_MOCK"]]
         jsonfile_asic = os.path.join(mock_db_path, file_name)
-        mock_tables.dbconnector.dedicated_dbs['ASIC_DB'] = jsonfile_asic
+        dbconnector.dedicated_dbs['ASIC_DB'] = jsonfile_asic
         jsonfile_counters = os.path.join(mock_db_path, 'counters_db')
-        mock_tables.dbconnector.dedicated_dbs['COUNTERS_DB'] = jsonfile_counters
+        dbconnector.dedicated_dbs['COUNTERS_DB'] = jsonfile_counters
+
+    if os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] == "multi_asic":
+        import tests.mock_tables.mock_multi_asic
+        dbconnector.load_namespace_config()
 except KeyError: # pragma: no cover
     pass
 
-from sonic_py_common import port_util
-from swsscommon.swsscommon import SonicV2Connector
+from sonic_py_common import port_util, multi_asic
+from swsscommon.swsscommon import SonicV2Connector, SonicDBConfig
 from tabulate import tabulate
 
 class FdbShow(object):
 
     HEADER = ['No.', 'Vlan', 'MacAddress', 'Port', 'Type']
 
-    def __init__(self):
+    def __init__(self, namespace=None):
         super(FdbShow,self).__init__()
-        self.db = SonicV2Connector(host="127.0.0.1")
+        if namespace is not None:
+            if not multi_asic.is_multi_asic():
+                print("Error: Namespace is not supported in single asic")
+                sys.exit(1)
+
+            if not SonicDBConfig.isGlobalInit():
+                SonicDBConfig.load_sonic_global_db_config()
+
+            self.db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
+        else:
+            self.db = SonicV2Connector(host="127.0.0.1")
+
         self.if_name_map, \
         self.if_oid_map = port_util.get_interface_oid_map(self.db)
         self.if_br_oid_map = port_util.get_bridge_port_map(self.db)
@@ -205,10 +224,11 @@ def main():
     parser.add_argument('-a', '--address', type=str, help='FDB display based on specific mac address', default=None)
     parser.add_argument('-t', '--type', type=str, help='FDB display of specific type of mac address', default=None)
     parser.add_argument('-c', '--count', action='store_true', help='FDB display count of mac address')
+    parser.add_argument('-n', '--namespace', type=str, help='Namespace name or all', default=None)
     args = parser.parse_args()
 
     try:
-        fdb = FdbShow()
+        fdb = FdbShow(namespace=args.namespace)
         if not fdb.validate_params(args.vlan, args.port, args.address, args.type):
            sys.exit(1)
 

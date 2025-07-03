@@ -127,6 +127,10 @@ No.    Vlan    MacAddress    Port    Type
 Total number of entries 0
 """
 
+show_mac_invalid_namespace = """\
+Error: Namespace is not supported in single asic
+"""
+
 show_mac_invalid_port_output= """\
 Error: Invalid port eth123
 """
@@ -148,10 +152,12 @@ class TestFdbshow():
         print("SETUP")
         os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "1"
+        os.environ["FDBSHOW_UNIT_TESTING"] = "1"
         yield
         print("TEARDOWN")
         os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
+        os.environ["FDBSHOW_UNIT_TESTING"] = "0"
 
     @pytest.fixture(scope="function", autouse=True)
     def setUp(self):
@@ -512,6 +518,21 @@ class TestFdbshow():
         print("result = {}".format(output))
         assert return_code == 1
         assert "Failed to get Vlan id for bvid oid:0x260000000007c7" in output
+
+    def test_show_mac_invalid_namespace(self):
+        self.set_mock_variant("1")
+
+        result = self.runner.invoke(show.cli.commands["mac"], "-n asic0")
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 1
+        assert result.output == show_mac_invalid_namespace
+
+        return_code, result = get_result_and_return_code(['fdbshow', '-n', 'asic0'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 1
+        assert result == show_mac_invalid_namespace.strip("\n")
 
     def test_show_mac_invalid_port(self):
         self.set_mock_variant("1")

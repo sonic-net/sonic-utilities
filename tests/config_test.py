@@ -197,8 +197,8 @@ RELOAD_MASIC_CONFIG_DB_OUTPUT = """\
 Acquired lock on {0}
 Stopping SONiC target ...
 Running command: /usr/local/bin/sonic-cfggen -j /tmp/config.json --write-to-db
-Running command: /usr/local/bin/sonic-cfggen -j /tmp/config.json -n asic0 --write-to-db
-Running command: /usr/local/bin/sonic-cfggen -j /tmp/config.json -n asic1 --write-to-db
+Running command: /usr/local/bin/sonic-cfggen -j /tmp/config0.json -n asic0 --write-to-db
+Running command: /usr/local/bin/sonic-cfggen -j /tmp/config1.json -n asic1 --write-to-db
 Restarting SONiC target ...
 Reloading Monit configuration ...
 Released lock on {0}
@@ -768,6 +768,11 @@ class TestConfigReloadMasic(object):
         importlib.reload(mock_multi_asic)
         dbconnector.load_namespace_config()
 
+    def _create_dummy_config(self, path, content):
+        """Helper method to create a dummy config file with JSON content."""
+        with open(path, 'w') as f:
+            f.write(json.dumps(content))
+
     def test_config_reload_onefile_masic(self):
         def read_json_file_side_effect(filename):
             return {
@@ -797,7 +802,7 @@ class TestConfigReloadMasic(object):
                             "cloudtype": "None",
                             "default_bgp_status": "down",
                             "default_pfcwd_status": "enable",
-                            "deployment_id": "None",
+                            "deployment_id": "1",
                             "docker_routing_config_mode": "separated",
                             "hostname": "sonic",
                             "hwsku": "multi_asic",
@@ -818,7 +823,7 @@ class TestConfigReloadMasic(object):
                             "cloudtype": "None",
                             "default_bgp_status": "down",
                             "default_pfcwd_status": "enable",
-                            "deployment_id": "None",
+                            "deployment_id": "1",
                             "docker_routing_config_mode": "separated",
                             "hostname": "sonic",
                             "hwsku": "multi_asic",
@@ -876,7 +881,7 @@ class TestConfigReloadMasic(object):
                             "cloudtype": "None",
                             "default_bgp_status": "down",
                             "default_pfcwd_status": "enable",
-                            "deployment_id": "None",
+                            "deployment_id": "1",
                             "docker_routing_config_mode": "separated",
                             "hostname": "sonic",
                             "hwsku": "multi_asic",
@@ -895,7 +900,7 @@ class TestConfigReloadMasic(object):
                             "cloudtype": "None",
                             "default_bgp_status": "down",
                             "default_pfcwd_status": "enable",
-                            "deployment_id": "None",
+                            "deployment_id": "1",
                             "docker_routing_config_mode": "separated",
                             "hostname": "sonic",
                             "hwsku": "multi_asic",
@@ -947,6 +952,66 @@ class TestConfigReloadMasic(object):
 
             assert result.exit_code != 0
             assert "Input file all_config_db.json must contain all asics config" in result.output
+
+    def test_config_reload_multiple_files(self):
+        dummy_cfg_file = os.path.join(os.sep, "tmp", "config.json")
+        dummy_cfg_file_asic0 = os.path.join(os.sep, "tmp", "config0.json")
+        dummy_cfg_file_asic1 = os.path.join(os.sep, "tmp", "config1.json")
+        device_metadata = {
+            "DEVICE_METADATA": {
+                "localhost": {
+                    "platform": "some_platform",
+                    "mac": "02:42:f0:7f:01:05"
+                }
+            }
+        }
+        self._create_dummy_config(dummy_cfg_file, device_metadata)
+        self._create_dummy_config(dummy_cfg_file_asic0, device_metadata)
+        self._create_dummy_config(dummy_cfg_file_asic1, device_metadata)
+
+        with mock.patch("utilities_common.cli.run_command",
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)):
+            runner = CliRunner()
+            # 3 config files: 1 for host and 2 for asic
+            cfg_files = f"{dummy_cfg_file},{dummy_cfg_file_asic0},{dummy_cfg_file_asic1}"
+
+            result = runner.invoke(
+                config.config.commands["reload"],
+                [cfg_files, '-y', '-f'])
+
+            assert result.exit_code == 0
+            assert "\n".join([li.rstrip() for li in result.output.split('\n')]) == \
+                RELOAD_MASIC_CONFIG_DB_OUTPUT.format(config.SYSTEM_RELOAD_LOCK)
+
+    def test_config_reload_multiple_files_with_spaces(self):
+        dummy_cfg_file = os.path.join(os.sep, "tmp", "config.json")
+        dummy_cfg_file_asic0 = os.path.join(os.sep, "tmp", "config0.json")
+        dummy_cfg_file_asic1 = os.path.join(os.sep, "tmp", "config1.json")
+        device_metadata = {
+            "DEVICE_METADATA": {
+                "localhost": {
+                    "platform": "some_platform",
+                    "mac": "02:42:f0:7f:01:05"
+                }
+            }
+        }
+        self._create_dummy_config(dummy_cfg_file, device_metadata)
+        self._create_dummy_config(dummy_cfg_file_asic0, device_metadata)
+        self._create_dummy_config(dummy_cfg_file_asic1, device_metadata)
+
+        with mock.patch("utilities_common.cli.run_command",
+                        mock.MagicMock(side_effect=mock_run_command_side_effect)):
+            runner = CliRunner()
+            # add unnecessary spaces and comma at the end
+            cfg_files = f"   {dummy_cfg_file} ,{dummy_cfg_file_asic0},  {dummy_cfg_file_asic1},"
+
+            result = runner.invoke(
+                config.config.commands["reload"],
+                [cfg_files, '-y', '-f'])
+
+            assert result.exit_code == 0
+            assert "\n".join([li.rstrip() for li in result.output.split('\n')]) == \
+                RELOAD_MASIC_CONFIG_DB_OUTPUT.format(config.SYSTEM_RELOAD_LOCK)
 
     @classmethod
     def teardown_class(cls):
@@ -1315,7 +1380,6 @@ class TestLoadMinigraph(object):
 
 class TestReloadConfig(object):
     dummy_cfg_file = os.path.join(os.sep, "tmp", "config.json")
-    dummy_golden_cfg_file = os.path.join(os.sep, "tmp", "golden_config.json")
 
     @classmethod
     def setup_class(cls):
@@ -1474,30 +1538,6 @@ class TestReloadConfig(object):
             assert "\n".join([line.rstrip() for line in result.output.split('\n')]) == \
                 reload_config_with_disabled_service_output.format(config.SYSTEM_RELOAD_LOCK)
 
-    def test_reload_config_masic(self, get_cmd_module, setup_multi_broadcom_masic):
-        self.add_sysinfo_to_cfg_file()
-        with mock.patch(
-                "utilities_common.cli.run_command",
-                mock.MagicMock(side_effect=mock_run_command_side_effect)
-        ) as mock_run_command:
-            (config, show) = get_cmd_module
-            runner = CliRunner()
-            # 3 config files: 1 for host and 2 for asic
-            cfg_files = "{},{},{}".format(
-                            self.dummy_cfg_file,
-                            self.dummy_cfg_file,
-                            self.dummy_cfg_file)
-            result = runner.invoke(
-                config.config.commands["reload"],
-                [cfg_files, '-y', '-f'])
-
-            print(result.exit_code)
-            print(result.output)
-            traceback.print_tb(result.exc_info[2])
-            assert result.exit_code == 0
-            assert "\n".join([l.rstrip() for l in result.output.split('\n')]) \
-                == RELOAD_MASIC_CONFIG_DB_OUTPUT.format(config.SYSTEM_RELOAD_LOCK)
-
     def test_reload_yang_config(self, get_cmd_module,
                                         setup_single_broadcom_asic):
         with mock.patch(
@@ -1518,7 +1558,7 @@ class TestReloadConfig(object):
                 == RELOAD_YANG_CFG_OUTPUT.format(config.SYSTEM_RELOAD_LOCK)
 
     def test_reload_config_fails_yang_validation(self, get_cmd_module, setup_single_broadcom_asic):
-        with open(self.dummy_golden_cfg_file, 'w') as f:
+        with open(self.dummy_cfg_file, 'w') as f:
             device_metadata = {
                 "DEVICE_METADATA": {
                     "localhost": {
@@ -1537,7 +1577,7 @@ class TestReloadConfig(object):
 
             result = runner.invoke(
                 config.config.commands["reload"],
-                [self.dummy_golden_cfg_file, '-y', '-f'])
+                [self.dummy_cfg_file, '-y', '-f'])
 
             print(result.exit_code)
             print(result.output)
@@ -1549,7 +1589,6 @@ class TestReloadConfig(object):
     def teardown_class(cls):
         os.environ['UTILITIES_UNIT_TESTING'] = "0"
         os.remove(cls.dummy_cfg_file)
-        os.remove(cls.dummy_golden_cfg_file)
         print("TEARDOWN")
 
 
@@ -3075,13 +3114,81 @@ class TestConfigNtp(object):
         import config.main
         importlib.reload(config.main)
 
-    @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry", mock.Mock(side_effect=ValueError))
+    @patch('utilities_common.cli.run_command')
+    def test_add_ntp_server(self, mock_run_command):
+        config.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands["ntp"], ["add", "10.10.10.4"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
+
+    @patch('utilities_common.cli.run_command')
+    def test_add_ntp_server_version_3(self, mock_run_command):
+        config.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands["ntp"], ["add", "--version", "3", "10.10.10.4"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
+
+    @patch('utilities_common.cli.run_command')
+    def test_add_ntp_server_with_iburst(self, mock_run_command):
+        config.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands["ntp"], ["add", "--iburst", "10.10.10.4"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
+
+    @patch('utilities_common.cli.run_command')
+    def test_add_ntp_server_with_server_association(self, mock_run_command):
+        config.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands["ntp"], ["add", "--association-type", "server", "10.10.10.4"],
+                               obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
+
+    @patch('utilities_common.cli.run_command')
+    def test_add_ntp_server_with_pool_association(self, mock_run_command):
+        config.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands["ntp"], ["add", "--association-type", "pool", "pool.ntp.org"],
+                               obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
+
+    @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry",
+           mock.Mock(side_effect=ValueError))
     @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
     def test_add_ntp_server_failed_yang_validation(self):
         config.ADHOC_VALIDATION = False
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'db': db.cfgdb}
 
         result = runner.invoke(config.config.commands["ntp"], ["add", "10.10.10.x"], obj=obj)
         print(result.exit_code)
@@ -3092,23 +3199,72 @@ class TestConfigNtp(object):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'db': db.cfgdb}
 
         result = runner.invoke(config.config.commands["ntp"], ["add", "10.10.10.x"], obj=obj)
         print(result.exit_code)
         print(result.output)
         assert "Invalid IP address" in result.output
 
-    def test_del_ntp_server_invalid_ip(self):
+    @patch('utilities_common.cli.run_command')
+    def test_add_ntp_server_twice(self, mock_run_command):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'db': db.cfgdb}
 
-        result = runner.invoke(config.config.commands["ntp"], ["del", "10.10.10.x"], obj=obj)
+        db.cfgdb.set_entry("NTP_SERVER", "10.10.10.4", {})
+
+        result = runner.invoke(config.config.commands["ntp"], ["add", "10.10.10.4"], obj=obj)
         print(result.exit_code)
         print(result.output)
-        assert "Invalid IP address" in result.output
+        assert result.exit_code == 0
+        assert "is already configured" in result.output
+        mock_run_command.assert_not_called()
+
+    @patch('utilities_common.cli.run_command')
+    def test_del_ntp_server(self, mock_run_command):
+        config.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        db.cfgdb.set_entry("NTP_SERVER", "10.10.10.4", {})
+
+        result = runner.invoke(config.config.commands["ntp"], ["del", "10.10.10.4"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
+
+    @patch('utilities_common.cli.run_command')
+    def test_del_pool_ntp_server(self, mock_run_command):
+        config.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        db.cfgdb.set_entry("NTP_SERVER", "pool.ntp.org", {})
+
+        result = runner.invoke(config.config.commands["ntp"], ["del", "pool.ntp.org"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(['systemctl', 'restart', 'chrony'], display_cmd=False)
+
+    @patch('utilities_common.cli.run_command')
+    def test_del_ntp_server_not_configured(self, mock_run_command):
+        config.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands["ntp"], ["del", "10.10.10.4"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "not configured" in result.output
+        mock_run_command.assert_not_called()
 
     @patch("config.main.ConfigDBConnector.get_table", mock.Mock(return_value="10.10.10.10"))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry", mock.Mock(side_effect=JsonPatchConflict))
@@ -3117,7 +3273,7 @@ class TestConfigNtp(object):
         config.ADHOC_VALIDATION = False
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'db': db.cfgdb}
 
         result = runner.invoke(config.config.commands["ntp"], ["del", "10.10.10.10"], obj=obj)
         print(result.exit_code)
@@ -3559,6 +3715,24 @@ class TestConfigInterface(object):
         result = runner.invoke(config.config.commands['interface'].commands['fec'], [interface_name, interface_fec, '--verbose'], obj=obj)
         assert result.exit_code == 0
         mock_run_command.assert_called_with(['portconfig', '-p', str(interface_name), '-f', str(interface_fec), '-n', 'ns', '-vv'], display_cmd=True)
+
+    def test_startup_shutdown_loopback(self):
+        db = Db()
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands['interface'].commands['ip'].commands['add'],
+                               ['Loopback0', '10.0.1.0/32'], obj=obj)
+        assert result.exit_code == 0
+        assert 'Loopback0' in db.cfgdb.get_table('LOOPBACK_INTERFACE')
+
+        result = runner.invoke(config.config.commands['interface'].commands['shutdown'], ['Loopback0'], obj=obj)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_table('LOOPBACK_INTERFACE')['Loopback0']['admin_status'] == 'down'
+
+        result = runner.invoke(config.config.commands['interface'].commands['startup'], ['Loopback0'], obj=obj)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_table('LOOPBACK_INTERFACE')['Loopback0']['admin_status'] == 'up'
 
     def teardown(self):
         print("TEARDOWN")
