@@ -2736,20 +2736,6 @@ def add_portchannel_member(ctx, portchannel_name, port_name):
             if v == port_name:
                 ctx.fail("{} Interface is already member of {} ".format(v,k))    # TODO: MISSING CONSTRAINT IN YANG MODEL
 
-        # Dont allow a port to be member of port channel if its speed does not match with existing members
-        for k,v in db.get_table('PORTCHANNEL_MEMBER'):
-            if k == portchannel_name:
-                member_port_entry = db.get_entry('PORT', v)
-                port_entry = db.get_entry('PORT', port_name)
-
-                if member_port_entry is not None and port_entry is not None:
-                    member_port_speed = member_port_entry.get(PORT_SPEED)
-
-                    port_speed = port_entry.get(PORT_SPEED) # TODO: MISSING CONSTRAINT IN YANG MODEL
-                    if member_port_speed != port_speed:
-                        ctx.fail("Port speed of {} is different than the other members of the portchannel {}"
-                                 .format(port_name, portchannel_name))
-
         # Dont allow a port to be member of port channel if its MTU does not match with portchannel
         portchannel_entry =  db.get_entry('PORTCHANNEL', portchannel_name)
         if portchannel_entry and portchannel_entry.get(PORT_MTU) is not None :
