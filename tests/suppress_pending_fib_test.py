@@ -16,7 +16,7 @@ class TestSuppressFibPending:
         result = runner.invoke(config.config.commands['suppress-fib-pending'], ['enabled'], obj=db)
         print(result.output)
         assert result.exit_code == 0
-        assert db.cfgdb.get_entry('DEVICE_METADATA', 'localhost')['suppress_fib_pending'] == 'enabled'
+        assert db.cfgdb.get_entry('DEVICE_METADATA', 'localhost')['suppress-fib-pending'] == 'enabled'
 
         result = runner.invoke(show.cli.commands['suppress-fib-pending'], obj=db)
         assert result.exit_code == 0
@@ -25,7 +25,7 @@ class TestSuppressFibPending:
         result = runner.invoke(config.config.commands['suppress-fib-pending'], ['disabled'], obj=db)
         print(result.output)
         assert result.exit_code == 0
-        assert db.cfgdb.get_entry('DEVICE_METADATA', 'localhost')['suppress_fib_pending'] == 'disabled'
+        assert db.cfgdb.get_entry('DEVICE_METADATA', 'localhost')['suppress-fib-pending'] == 'disabled'
 
         result = runner.invoke(show.cli.commands['suppress-fib-pending'], obj=db)
         assert result.exit_code == 0
@@ -59,7 +59,7 @@ class TestSuppressFibPendingMultiAsic(object):
         result = runner.invoke(config.config.commands['suppress-fib-pending'], ['-n', 'asic0', 'enabled'], obj=db)
         print(result.output)
         assert result.exit_code == 0
-        assert cfgdb0.get_entry('DEVICE_METADATA', 'localhost')['suppress_fib_pending'] == 'enabled'
+        assert cfgdb0.get_entry('DEVICE_METADATA', 'localhost')['suppress-fib-pending'] == 'enabled'
 
         result = runner.invoke(show.cli.commands['suppress-fib-pending'], ['-n', 'asic0'], obj=db)
         assert result.exit_code == 0
@@ -75,13 +75,13 @@ class TestSuppressFibPendingMultiAsic(object):
         result = runner.invoke(config.config.commands['suppress-fib-pending'], ['-n', 'asic0', 'disabled'], obj=db)
         print(result.output)
         assert result.exit_code == 0
-        assert cfgdb0.get_entry('DEVICE_METADATA', 'localhost')['suppress_fib_pending'] == 'disabled'
+        assert cfgdb0.get_entry('DEVICE_METADATA', 'localhost')['suppress-fib-pending'] == 'disabled'
 
         # Test config and db check for asic1
         result = runner.invoke(config.config.commands['suppress-fib-pending'], ['-n', 'asic1', 'enabled'], obj=db)
         print(result.output)
         assert result.exit_code == 0
-        assert cfgdb1.get_entry('DEVICE_METADATA', 'localhost')['suppress_fib_pending'] == 'enabled'
+        assert cfgdb1.get_entry('DEVICE_METADATA', 'localhost')['suppress-fib-pending'] == 'enabled'
 
         # Show for all asics
         result = runner.invoke(show.cli.commands['suppress-fib-pending'], obj=db)

@@ -2676,7 +2676,7 @@ def suppress_pending_fib(db, namespace):
 
         config_db = db.cfgdb_clients[ns]
         field_values = config_db.get_entry('DEVICE_METADATA', 'localhost')
-        state = field_values.get('suppress_fib_pending', 'enabled').title()
+        state = field_values.get('suppress-fib-pending', 'enabled').title()
 
         if masic:
             click.echo("{}: {}".format(ns, state))

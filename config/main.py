@@ -2579,7 +2579,7 @@ def suppress_pending_fib(db, namespace, state):
         namespace = DEFAULT_NAMESPACE
 
     config_db = db.cfgdb_clients[namespace]
-    config_db.mod_entry('DEVICE_METADATA', 'localhost', {"suppress_fib_pending": state})
+    config_db.mod_entry('DEVICE_METADATA', 'localhost', {"suppress-fib-pending": state})
 
 #
 # 'yang_config_validation' command ('config yang_config_validation ...')
