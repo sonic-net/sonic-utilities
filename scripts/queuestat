@@ -269,7 +269,7 @@ class Queuestat(object):
                     sysPort, idx = voq.split(":")
                     for counter_name in counter_bucket_dict:
                         self.voq_stats.setdefault(sysPort, {}).setdefault(idx, {}).setdefault(counter_name, 0)
-                        counter_data = asic_counters_db.hget("COUNTERS:"+oid, counter_name)
+                        oid = counters_voq_name_map[voq]
                         counter_data = asic_counters_db.hget("COUNTERS:"+oid, counter_name)
                         if counter_data is not None:
                             self.voq_stats[sysPort][idx][counter_name] += int(counter_data)
