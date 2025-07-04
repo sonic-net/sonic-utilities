@@ -13,6 +13,9 @@ PLATFORM_UPDATE_REBOOT_CAUSE="platform_update_reboot_cause"
 REBOOT_CAUSE_FILE="/host/reboot-cause/reboot-cause.txt"
 PLATFORM_REBOOT_PRE_CHECK="platform_reboot_pre_check"
 REBOOT_TIME=$(date)
+PAM_AUTH_CONF="/etc/pam.d/common-auth-sonic"
+PAM_AUTH_CONF_TEMPLATE="/usr/share/sonic/templates/common-auth-sonic.j2"
+TMP_AUTH_JSON="/tmp/auth.json"
 
 # Reboot immediately if we run the kdump capture kernel
 VMCORE_FILE=/proc/vmcore
@@ -118,6 +121,13 @@ function stop_services_asan()
 {
     debug "Stopping swss for ASAN"
     systemctl stop swss
+}
+
+function restore_local_auth()
+{
+    echo '{"auth":{"login":"local"}}' > ${TMP_AUTH_JSON}
+    j2 -f json ${PAM_AUTH_CONF_TEMPLATE} ${TMP_AUTH_JSON} > ${PAM_AUTH_CONF}
+    rm -rf ${TMP_AUTH_JSON}
 }
 
 function clear_warm_boot()
@@ -279,6 +289,9 @@ stop_sonic_services
 if [[ x"$ASAN" == x"yes" ]]; then
     stop_services_asan
 fi
+
+# Restore local authentication to enable login before system gets ready in the upcoming bootup
+restore_local_auth
 
 clear_warm_boot
 
