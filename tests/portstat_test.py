@@ -309,6 +309,8 @@ intf_counters_on_sup = """\
          0         0         0
 Ethernet11/1        U      100  10.00 B/s      0.00%         0         0         0      100  10.00 B/s      0.00%\
          0         0         0
+Ethernet12/1        U      100  10.00 B/s      0.00%         0         0         0      100  10.00 B/s      0.00%\
+         0         0         0
 """
 
 intf_counters_on_sup_no_counters = "Linecard Counter Table is not available.\n"
@@ -325,6 +327,8 @@ intf_counters_on_sup_na = """\
  Ethernet2/1        U      100  10.00 B/s      0.00%         0         0         0      100  10.00 B/s      0.00%\
          0         0         0
 Ethernet11/1      N/A      N/A        N/A        N/A       N/A       N/A       N/A      N/A        N/A        N/A\
+       N/A       N/A       N/A
+Ethernet12/1      N/A      N/A        N/A        N/A       N/A       N/A       N/A      N/A        N/A        N/A\
        N/A       N/A       N/A
 """
 

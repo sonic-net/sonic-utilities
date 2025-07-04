@@ -17,6 +17,8 @@ MULTI_LC_REXEC_OUTPUT = '''======== LINE-CARD0|sonic-lc1 output: ========
 hello world
 ======== LINE-CARD2|sonic-lc3 output: ========
 hello world
+======== LINE-CARD3|sonic-lc4 output: ========
+hello world
 '''
 REXEC_HELP = '''Usage: cli [OPTIONS] LINECARD_NAMES...
 
