@@ -63,8 +63,7 @@ FLAT_MEMORY_MODULE_EEPROM = """Ethernet16: SFP EEPROM detected
 EMPTY_DOM_VALUES = """        ChannelMonitorValues:
         ChannelThresholdValues:
         ModuleMonitorValues:
-        ModuleThresholdValues:
-"""
+        ModuleThresholdValues:"""
 
 class TestSfputil(object):
     def test_format_dict_value_to_string(self):
