@@ -60,7 +60,7 @@ FLAT_MEMORY_MODULE_EEPROM = """Ethernet16: SFP EEPROM detected
         Vendor Rev: A2
         Vendor SN: MT1636VS10561
 """
-EMPTY_DOM_VALUES = """       ChannelMonitorValues:
+EMPTY_DOM_VALUES = """        ChannelMonitorValues:
         ChannelThresholdValues:
         ModuleMonitorValues:
         ModuleThresholdValues:
