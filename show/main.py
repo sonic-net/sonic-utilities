@@ -95,8 +95,7 @@ def get_routing_stack():
         stdout = subprocess.check_output(command, shell=True, text=True, timeout=COMMAND_TIMEOUT)
         result = stdout.rstrip('\n')
     except Exception as err:
-        # If detection fails, return "frr" as default
-        pass
+        click.echo('Failed to get routing stack: {}'.format(err), err=True)
 
     return result
 
