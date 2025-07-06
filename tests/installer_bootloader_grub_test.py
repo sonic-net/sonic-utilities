@@ -36,7 +36,12 @@ def test_install_image():
         call(["bash", image_path]),
         call(['grub-set-default', '--boot-directory=' + grub.HOST_PATH, '0'])
     ]
-    with patch('sonic_installer.bootloader.grub.run_command') as mock_cmd:
+
+    with patch('sonic_installer.bootloader.grub.run_command') as mock_cmd, \
+         patch('os.makedirs') as mock_makedirs, \
+         patch('builtins.open', new_callable=Mock), \
+         patch('shutil.copy') as mock_copy:
+
         bootloader = grub.GrubBootloader()
         bootloader.install_image(image_path)
         mock_cmd.assert_has_calls(expected_calls)
