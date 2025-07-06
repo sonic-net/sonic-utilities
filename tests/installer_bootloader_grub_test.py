@@ -45,6 +45,8 @@ def test_install_image():
         bootloader = grub.GrubBootloader()
         bootloader.install_image(image_path)
         mock_cmd.assert_has_calls(expected_calls)
+        mock_makedirs.assert_called_with('/host/old_config', exist_ok=True)
+        mock_copy.assert_any_call('/etc/sonic/config_db.json', '/host/old_config/config_db.json')
 
 @patch("sonic_installer.bootloader.grub.subprocess.call", Mock())
 @patch("sonic_installer.bootloader.grub.open")
