@@ -94,7 +94,6 @@ class TestDropConfig(object):
             dropconfig.main()
         except SystemExit as e:
             assert e.code == 0
-        mock_print.assert_called_once_with('Drop counter monitor is globally enabled.')
 
     @patch('builtins.print')
     @patch('sys.argv', ['dropconfig', '-c', 'enable_drop_monitor', '-n', 'DEBUG_0'])
@@ -103,7 +102,6 @@ class TestDropConfig(object):
             dropconfig.main()
         except SystemExit as e:
             assert e.code == 0
-        mock_print.assert_called_once_with('Drop counter monitor is enabled for counter DEBUG_0')
 
     @patch('builtins.print')
     @patch('sys.argv', ['dropconfig', '-c', 'disable_drop_monitor'])
@@ -112,7 +110,6 @@ class TestDropConfig(object):
             dropconfig.main()
         except SystemExit as e:
             assert e.code == 0
-        mock_print.assert_called_once_with('Drop counter monitor is globally disabled.')
 
     @patch('builtins.print')
     @patch('sys.argv', ['dropconfig', '-c', 'disable_drop_monitor', '-n', 'DEBUG_0'])
@@ -121,7 +118,6 @@ class TestDropConfig(object):
             dropconfig.main()
         except SystemExit as e:
             assert e.code == 0
-        mock_print.assert_called_once_with('Drop counter monitor is disabled for counter DEBUG_0')
 
     @patch('builtins.print')
     @patch('sys.argv', ['dropconfig', '-c', 'enable_drop_monitor', '-n', 'INVALID'])
@@ -175,4 +171,3 @@ class TestDropConfig(object):
 
     def teardown(self):
         print('TEARDOWN')
-

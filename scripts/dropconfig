@@ -149,12 +149,12 @@ class DropConfig(object):
                 timestamp = datetime.utcfromtimestamp(int(timestamp)).strftime('%Y-%m-%d %H:%M:%S')
                 print(f"{timestamp}: {message}")
 
-    def start_drop_monitor(self):
+    def start_global_drop_monitor(self):
         self.config_db.set_entry(DEBUG_DROP_MONITOR_TABLE,
                                  'CONFIG',
                                  {'status': 'enabled'})
 
-    def stop_drop_monitor(self):
+    def stop_global_drop_monitor(self):
         self.config_db.set_entry(DEBUG_DROP_MONITOR_TABLE,
                                  'CONFIG',
                                  {'status': 'disabled'})
@@ -165,11 +165,17 @@ class DropConfig(object):
             If no counter name is provided, we toggle the global feature status.
         """
         if not counter_name:
-            self.start_drop_monitor()
+            self.start_global_drop_monitor()
             print("Drop counter monitor is globally enabled.")
             return
         if not self.counter_name_in_use(counter_name):
             raise InvalidArgumentError('Counter \'{}\' not found'.format(counter_name))
+
+        # Check if drop monitor is globally enabled
+        global_drop_monitor_status = self.config_db.get_entry(DEBUG_DROP_MONITOR_TABLE, 'CONFIG')['status']
+        if global_drop_monitor_status == 'disabled':
+            print(f"Warning: Cannot enable monitoring for {counter_name}. The Global Persistent Drop Counter Monitor is currently disabled. Please enable global monitoring first.")
+            return
 
         drop_monitor_config = self.config_db.get_entry(DEBUG_COUNTER_CONFIG_TABLE,
                                                       counter_name)
@@ -194,23 +200,31 @@ class DropConfig(object):
                 raise InvalidArgumentError('Invalid drop count threshold. Drop count threshold should be non-negative, received: {}'.format(dct))
             drop_monitor_config['drop_count_threshold'] = str(dct)
 
-        # Start the drop monitor feature
-        self.start_drop_monitor()
-
         drop_monitor_config['drop_monitor_status'] = 'enabled'
         self.config_db.set_entry(DEBUG_COUNTER_CONFIG_TABLE,
                                  counter_name,
                                  drop_monitor_config)
-        print("Drop counter monitor is enabled for counter {}".format(counter_name))
+        print("Drop counter monitor is enabled for counter {}. The monitor is configured with:".format(counter_name))
+        print("window: {}".format(window))
+        print("drop_count_threshold: {}".format(dct))
+        print("incident_count_threshold: {}".format(ict))
 
     def disable_drop_monitor(self, counter_name):
         """
             The function to disable Debug Drop Monitor feature.
-            If no counter name is provided, we toggle the global feature status.
+            If no counter name is provided, we disable the global monitor control status.
+            If the Global Monitor Control is set to disabled, the monitoring status of each individual drop counter will also be set to disabled.
         """
         if not counter_name:
-            self.stop_drop_monitor()
+            # Disable global drop monitor feature
+            self.stop_global_drop_monitor()
             print("Drop counter monitor is globally disabled.")
+
+            # Disable drop monitor on all configured drop counters
+            drop_counter_list = self.config_db.get_keys(DEBUG_COUNTER_CONFIG_TABLE)
+            for counter_name in drop_counter_list:
+                self.disable_drop_monitor(counter_name)
+
             return
         if not self.counter_name_in_use(counter_name):
             raise InvalidArgumentError('Counter \'{}\' not found'.format(counter_name))
@@ -218,7 +232,7 @@ class DropConfig(object):
         drop_counter_entry = self.config_db.get_entry(DEBUG_COUNTER_CONFIG_TABLE,
                                                       counter_name)
 
-        if drop_counter_entry['drop_monitor_status'] == 'disabled':
+        if drop_counter_entry.get('drop_monitor_status', '') == 'disabled':
             print(f'Drop monitor is already disabled for {counter_name}')
             return
 
@@ -281,7 +295,6 @@ class DropConfig(object):
         if description or description == '':
             drop_counter_entry['desc'] = description
         if install_drop_monitor:
-            drop_counter_entry['drop_monitor_status'] = 'enabled'
             drop_counter_entry['window'] = str(window)
             drop_counter_entry['incident_count_threshold'] = str(ict)
             drop_counter_entry['drop_count_threshold'] = str(dct)

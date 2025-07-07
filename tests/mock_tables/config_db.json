@@ -826,6 +826,9 @@
     "INTERFACE|Ethernet40": {
         "ipv6_use_link_local_only": "enable"
     },
+    "DEBUG_DROP_MONITOR|CONFIG": {
+        "status": "enabled"
+    },
     "DEBUG_COUNTER|DEBUG_0": {
         "type": "PORT_INGRESS_DROPS",
         "drop_monitor_status": "enabled",

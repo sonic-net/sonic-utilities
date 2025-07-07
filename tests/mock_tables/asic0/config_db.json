@@ -346,6 +346,9 @@
         "pool": "ingress_lossless_pool_hbm",
         "size": "0"
     },
+    "DEBUG_DROP_MONITOR|CONFIG": {
+        "status": "enabled"
+    },
     "DEBUG_COUNTER|DEBUG_0": {
         "type": "PORT_INGRESS_DROPS",
         "drop_monitor_status": "enabled",
