@@ -149,7 +149,7 @@ class TestConfigIP(object):
         assert result.exit_code == 0
         assert ('PortChannel0001.10', '32.11.10.1/24') in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
 
-        # config int ip add Po0001.10 32.11.10.1/24
+        # config int ip add Po0001.11 32.11.10.1/24
         result = runner.invoke(
                 config.config.commands["interface"].commands["ip"].commands["add"],
                 ["Po0001.11", "32.11.10.1/24"],
