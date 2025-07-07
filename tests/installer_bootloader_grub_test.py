@@ -30,6 +30,7 @@ def test_set_next_image():
         bootloader.set_next_image(image)
         mock_cmd.assert_has_calls(expected_call)
 
+
 @patch('os.makedirs')
 @patch('shutil.copy')
 @patch('os.path.exists', return_value=True)
