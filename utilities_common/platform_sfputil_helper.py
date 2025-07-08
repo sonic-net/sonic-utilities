@@ -12,6 +12,7 @@ platform_porttab_mapping_read = False
 
 RJ45_PORT_TYPE = 'RJ45'
 
+
 def load_chassis():
     """Load the platform chassis if not already loaded"""
     global platform_chassis
@@ -158,6 +159,7 @@ def is_rj45_port(port_name):
         return port_type == platform_sfp_base.SFP_PORT_TYPE_BIT_RJ45
 
     return False
+
 
 def get_first_subport(logical_port):
     """
