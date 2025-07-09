@@ -82,8 +82,8 @@ COMMAND_TIMEOUT = 300
 # location (configdb?), so that we prevent the continous execution of this
 # bash oneliner. To be revisited once routing-stack info is tracked somewhere.
 def get_routing_stack():
-    result = None
-    command = "sudo docker ps | grep bgp | awk '{print$2}' | cut -d'-' -f3 | cut -d':' -f1 | head -n 1"
+    result = 'frr'
+    command = "sudo docker ps --format '{{.Image}}\t{{.Names}}' | awk '$2 == \"bgp\"' | cut -d'-' -f3 | cut -d':' -f1 | head -n 1"  # noqa: E501
 
     try:
         stdout = subprocess.check_output(command, shell=True, text=True, timeout=COMMAND_TIMEOUT)
