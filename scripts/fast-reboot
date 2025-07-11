@@ -51,6 +51,7 @@ EXIT_SONIC_INSTALLER_VERIFY_REBOOT=21
 EXIT_PLATFORM_FW_AU_FAILURE=22
 EXIT_TEAMD_RETRY_COUNT_FAILURE=23
 EXIT_NO_MIRROR_SESSION_ACLS=24
+EXIT_PFC_STORM_DETECTED=25
 EXIT_LEFTOVER_CPA_TUNNEL=30
 
 function error()
@@ -514,6 +515,19 @@ function check_docker_exec()
     done
 }
 
+function check_pfc_storm_active()
+{
+    # check if PFC storm is active (abort warmboot) or restored (proceed with warmboot)
+    PFC_STORMED="stormed"
+    pfcwd show stats | grep -i stormed || PFC_STORMED="not_stormed"
+    if [[ "${PFC_STORMED}" = "stormed" ]]; then
+        error "PFC storm detected. Aborting warm-reboot to prevent failure in recovery path..."
+        exit ${EXIT_PFC_STORM_DETECTED}
+    else
+        debug "PFC active storm not detected. Safe to proceed w/ warm-reboot..."
+    fi
+}
+
 function check_db_integrity()
 {
     if [[ "$REBOOT_TYPE" = "warm-reboot" || "$REBOOT_TYPE" = "fastfast-reboot" || "$REBOOT_TYPE" = "express-reboot" || "$REBOOT_TYPE" = "fast-reboot" ]]; then
@@ -533,6 +547,7 @@ function check_db_integrity()
 
 function reboot_pre_check()
 {
+    check_pfc_storm_active
     check_docker_exec
     # Make sure that the file system is normal: read-write able
     filename="/host/test-$(date +%Y%m%d-%H%M%S)"
