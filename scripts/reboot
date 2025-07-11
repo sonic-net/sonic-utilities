@@ -373,15 +373,15 @@ fi
 VERBOSE=yes debug "Issuing OS-level reboot ..." >&2
 
 if [[ "${BLOCKING_MODE}" != "yes" ]]; then
-    #
+    # In non blocking mode, we will remain the original logic.
     exec /sbin/reboot ${REBOOT_FLAGS}
 else
     /sbin/reboot ${REBOOT_FLAGS}
     if [[ "${BLOCKING_MODE}" == "yes" ]]; then
         # In blocking mode, we just deadloop here to avoid more output generated.
         BLOCKING_TIMER=1
+        sleep 1
         while true; do
-            sleep 10;
             if [ "${SHOW_TIMER}" == "yes" ]; then
                 if [ "${BLOCKING_TIMER}" -ge 50 ]; then
                     BLOCKING_TIMER=1
@@ -391,6 +391,7 @@ else
                     echo -n "."
                 fi
             fi
+            sleep 10
         done
     fi
 fi
