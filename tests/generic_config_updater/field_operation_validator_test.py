@@ -318,6 +318,30 @@ class TestGetAsicName(unittest.TestCase):
 
     @patch('sonic_py_common.device_info.get_sonic_version_info')
     @patch('subprocess.Popen')
+    def test_get_asic_spc3_mellanox_sn4280_c48(self, mock_popen, mock_get_sonic_version_info):
+        mock_get_sonic_version_info.return_value = {'asic_type': 'mellanox'}
+        mock_popen.return_value = mock.Mock()
+        mock_popen.return_value.communicate.return_value = ["Mellanox-SN4280-C48", 0]
+        self.assertEqual(fov.get_asic_name(), "spc3")
+
+    @patch('sonic_py_common.device_info.get_sonic_version_info')
+    @patch('subprocess.Popen')
+    def test_get_asic_spc3_mellanox_sn4280_o8c40(self, mock_popen, mock_get_sonic_version_info):
+        mock_get_sonic_version_info.return_value = {'asic_type': 'mellanox'}
+        mock_popen.return_value = mock.Mock()
+        mock_popen.return_value.communicate.return_value = ["Mellanox-SN4280-O8C40", 0]
+        self.assertEqual(fov.get_asic_name(), "spc3")
+
+    @patch('sonic_py_common.device_info.get_sonic_version_info')
+    @patch('subprocess.Popen')
+    def test_get_asic_spc3_mellanox_sn4280_o8v40(self, mock_popen, mock_get_sonic_version_info):
+        mock_get_sonic_version_info.return_value = {'asic_type': 'mellanox'}
+        mock_popen.return_value = mock.Mock()
+        mock_popen.return_value.communicate.return_value = ["Mellanox-SN4280-O8V40", 0]
+        self.assertEqual(fov.get_asic_name(), "spc3")
+
+    @patch('sonic_py_common.device_info.get_sonic_version_info')
+    @patch('subprocess.Popen')
     def test_get_asic_th(self, mock_popen, mock_get_sonic_version_info):
         mock_get_sonic_version_info.return_value = {'asic_type': 'broadcom'}
         mock_popen.return_value = mock.Mock()
