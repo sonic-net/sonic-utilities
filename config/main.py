@@ -921,6 +921,69 @@ def _clear_qos(delay=False, verbose=False):
         timeout = 120 if device_metadata and device_metadata.get('buffer_model') == 'dynamic' else 0
         status = _wait_until_clear(["BUFFER_*_TABLE:*", "BUFFER_*_SET"], interval=0.5, timeout=timeout, verbose=verbose)
     return status
+#
+# 'tx_error_threshold' subgroup
+#
+
+@interface.group()
+@click.pass_context
+def tx_error_threshold(ctx):
+    """Set or del threshold of tx error statistics"""
+    pass
+
+#
+# 'set' subcommand
+#
+@tx_error_threshold.command()
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('interface_tx_err_threshold', metavar='<interface_tx_err_threshold>', required=True, type=int)
+def set(ctx, interface_name, interface_tx_err_threshold):
+    """Set threshold of tx error statistics"""
+    if interface_name is None:
+        ctx.fail("'interface_name' is None!")
+
+    config_db = ctx.obj['config_db']
+    if get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    if interface_name_is_valid(interface_name) is False:
+        ctx.fail("Interface name is invalid. Please enter a valid interface name!!")
+
+    if interface_name.startswith("Ethernet"):
+        config_db.set_entry("TX_ERR_CFG", (interface_name), {"tx_error_threshold": interface_tx_err_threshold})
+    else:
+        ctx.fail("Only Ethernet interfaces are supported")
+
+#
+# 'clear' subcommand
+#
+@tx_error_threshold.command()
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+def clear(ctx, interface_name):
+    """Clear threshold of tx error statistics"""
+    if interface_name is None:
+        ctx.fail("'interface_name' is None!")
+
+    config_db = ctx.obj["config_db"]
+    if get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    if interface_name_is_valid(interface_name) is False:
+        ctx.fail("Interface name is invalid. Please enter a valid interface name!!")
+
+    if config_db.get_entry('TX_ERR_CFG', interface_name):
+        if interface_name.startswith("Ethernet"):
+            config_db.set_entry("TX_ERR_CFG", (interface_name), None)
+        else:
+            ctx.fail("Only Ethernet interfaces are supported")
+    else:
+        ctx.fail("Tx Error threshold hasn't been configured on the interface")
 
 def _get_sonic_generated_services(num_asic):
     if not os.path.isfile(SONIC_GENERATED_SERVICE_PATH):
@@ -967,6 +1030,16 @@ def _get_disabled_services_list(config_db):
 
     return disabled_services_list
 
+#
+# 'tx_error_stat_poll_period' subcommand ('config tx_error_stat_poll_period')
+#
+@config.command()
+@click.argument('period', metavar='<period>', required=True, type=int)
+def tx_error_stat_poll_period(period):
+    """Set polling period of tx error statistics, 0 for disable, xxx for default"""
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    config_db.set_entry("TX_ERR_CFG", ("GLOBAL_PERIOD"), {"tx_error_check_period": period})
 
 def _stop_services():
     try:
