@@ -2567,12 +2567,18 @@ def synchronous_mode(sync_mode):
 #
 @config.command('suppress-fib-pending')
 @click.argument('state', metavar='<enabled|disabled>', required=True, type=click.Choice(['enabled', 'disabled']))
+@click.option('-n', '--namespace', help='Namespace name', required=True if multi_asic.is_multi_asic() else False,
+              type=click.Choice(multi_asic.get_namespace_list()))
 @clicommon.pass_db
-def suppress_pending_fib(db, state):
+def suppress_pending_fib(db, namespace, state):
     ''' Enable or disable pending FIB suppression. Once enabled,
         BGP will not advertise routes that are not yet installed in the hardware '''
 
-    config_db = db.cfgdb
+    # Set namespace to default_namespace if it is None.
+    if namespace is None:
+        namespace = DEFAULT_NAMESPACE
+
+    config_db = db.cfgdb_clients[namespace]
     config_db.mod_entry('DEVICE_METADATA', 'localhost', {"suppress-fib-pending": state})
 
 #
