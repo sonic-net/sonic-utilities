@@ -576,7 +576,11 @@ def snmpagentaddress (ctx):
         body.append([agent[0], agent[1], agent[2]])
     click.echo(tabulate(body, header))
 
-@interfaces.command()
+#
+# 'tx-error' command ("show tx-error")
+#
+
+@cli.command('tx-error')
 @click.argument('interfacename', required=False)
 def tx_error(interfacename):
     """Show Interface tx_error information"""
