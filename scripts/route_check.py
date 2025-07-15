@@ -462,7 +462,7 @@ def is_point_to_point_prefix(prefix):
 
 def get_local_p2p_ips(namespace):
     """
-    helper to read p2p2 local IPs from interface table in APPL-DB.
+    helper to read p2p local IPs from interface table in APPL-DB.
     :return sorted list of local p2p IP addresses
     """
     db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
