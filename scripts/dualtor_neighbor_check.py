@@ -35,7 +35,7 @@ DB_READ_SCRIPT = """
 --   - HW_MUX_CABLE_TABLE
 --   - NEIGH_TABLE
 -- ASIC_DB:
---   - ASIC_STATE
+--   - ASIC_STATE (route entries, neighbor entries, nexthop entries)
 --
 -- KEYS - None
 -- ARGV[1] - APPL_DB db index
@@ -76,6 +76,7 @@ local hw_mux_states         = {}
 local asic_fdb              = {}
 local asic_route_table      = {}
 local asic_neighbor_table   = {}
+local asic_nexthop_table    = {}
 
 -- read from APPL_DB
 redis.call('SELECT', APPL_DB)
@@ -126,12 +127,16 @@ for i, fdb_entry in ipairs(fdb_entries) do
     asic_fdb[mac] = bridge_port_id
 end
 
--- read ASIC route table
+-- read ASIC route table with nexthop information
 local route_prefix = asic_state_table_name .. ASIC_DB_SEPARATOR .. asic_route_key_prefix
 local route_entries = redis.call('KEYS', route_prefix .. '*')
 for i, route_entry in ipairs(route_entries) do
     local route_details = string.sub(route_entry, string.len(route_prefix) + 2)
-    table.insert(asic_route_table, route_details)
+    local nexthop_id = redis.call('HGET', route_entry, 'SAI_ROUTE_ENTRY_ATTR_NEXT_HOP_ID')
+    local route_info = {}
+    route_info['route_details'] = route_details
+    route_info['nexthop_id'] = nexthop_id
+    table.insert(asic_route_table, route_info)
 end
 
 -- read ASIC neigh table
@@ -142,6 +147,24 @@ for i, neighbor_entry in ipairs(neighbor_entries) do
     table.insert(asic_neighbor_table, neighbor_details)
 end
 
+-- read ASIC nexthop table
+local nexthop_prefix = asic_state_table_name .. ASIC_DB_SEPARATOR .. 'SAI_OBJECT_TYPE_NEXT_HOP:'
+local nexthop_entries = redis.call('KEYS', nexthop_prefix .. '*')
+for i, nexthop_entry in ipairs(nexthop_entries) do
+    local nexthop_id = string.sub(nexthop_entry, string.len(nexthop_prefix) + 1)
+    local nexthop_type = redis.call('HGET', nexthop_entry, 'SAI_NEXT_HOP_ATTR_TYPE')
+    local nexthop_info = {}
+    nexthop_info['nexthop_id'] = nexthop_id
+    nexthop_info['nexthop_type'] = nexthop_type
+    
+    -- Get tunnel ID if it's a tunnel nexthop
+    if nexthop_type == 'SAI_NEXT_HOP_TYPE_TUNNEL_ENCAP' then
+        nexthop_info['tunnel_id'] = redis.call('HGET', nexthop_entry, 'SAI_NEXT_HOP_ATTR_TUNNEL_ID')
+    end
+    
+    asic_nexthop_table[nexthop_id] = nexthop_info
+end
+
 local result = {}
 result['neighbors']         = neighbors
 result['mux_states']        = mux_states
@@ -149,13 +172,14 @@ result['hw_mux_states']     = hw_mux_states
 result['asic_fdb']          = asic_fdb
 result['asic_route_table']  = asic_route_table
 result['asic_neigh_table']  = asic_neighbor_table
+result['asic_nexthop_table'] = asic_nexthop_table
 
 return redis.status_reply(cjson.encode(result))
 """
 
 DB_READ_SCRIPT_CONFIG_DB_KEY = "_DUALTOR_NEIGHBOR_CHECK_SCRIPT_SHA1"
 ZERO_MAC = "00:00:00:00:00:00"
-NEIGHBOR_ATTRIBUTES = ["NEIGHBOR", "MAC", "PORT", "MUX_STATE", "IN_MUX_TOGGLE", "NEIGHBOR_IN_ASIC", "TUNNEL_IN_ASIC", "HWSTATUS"]
+NEIGHBOR_ATTRIBUTES = ["NEIGHBOR", "MAC", "PORT", "MUX_STATE", "IN_MUX_TOGGLE", "NEIGHBOR_IN_ASIC", "TUNNEL_IN_ASIC", "NEXTHOP_TYPE", "HWSTATUS"]
 NOT_AVAILABLE = "N/A"
 
 
@@ -330,13 +354,15 @@ def read_tables_from_db(appl_db):
     asic_fdb = {k: v.lstrip("oid:0x") for k, v in tables["asic_fdb"].items()}
     asic_route_table = tables["asic_route_table"]
     asic_neigh_table = tables["asic_neigh_table"]
+    asic_nexthop_table = tables["asic_nexthop_table"]
     WRITE_LOG_DEBUG("neighbors: %s", json.dumps(neighbors, indent=4))
     WRITE_LOG_DEBUG("mux states: %s", json.dumps(mux_states, indent=4))
     WRITE_LOG_DEBUG("hw mux states: %s", json.dumps(hw_mux_states, indent=4))
     WRITE_LOG_DEBUG("ASIC FDB: %s", json.dumps(asic_fdb, indent=4))
     WRITE_LOG_DEBUG("ASIC route table: %s", json.dumps(asic_route_table, indent=4))
     WRITE_LOG_DEBUG("ASIC neigh table: %s", json.dumps(asic_neigh_table, indent=4))
-    return neighbors, mux_states, hw_mux_states, asic_fdb, asic_route_table, asic_neigh_table
+    WRITE_LOG_DEBUG("ASIC nexthop table: %s", json.dumps(asic_nexthop_table, indent=4))
+    return neighbors, mux_states, hw_mux_states, asic_fdb, asic_route_table, asic_neigh_table, asic_nexthop_table
 
 
 def get_if_br_oid_to_port_name_map():
@@ -397,11 +423,35 @@ def get_mac_to_port_name_map(asic_fdb, if_oid_to_port_name_map):
 
 
 def check_neighbor_consistency(neighbors, mux_states, hw_mux_states, mac_to_port_name_map,
-                               asic_route_table, asic_neigh_table, mux_server_to_port_map,
-                               mux_soc_neigh_ips):
+                               asic_route_table, asic_neigh_table, asic_nexthop_table, 
+                               mux_server_to_port_map, mux_soc_neigh_ips):
     """Checks if neighbors are consistent with mux states."""
 
-    asic_route_destinations = set(json.loads(_)["dest"].split("/")[0] for _ in asic_route_table)
+    # Parse route table to get route destinations and their nexthop types
+    route_to_nexthop_map = {}
+    asic_route_destinations = set()
+    
+    for route_info in asic_route_table:
+        route_details = json.loads(route_info["route_details"])
+        route_dest = route_details["dest"].split("/")[0]
+        asic_route_destinations.add(route_dest)
+        
+        nexthop_id = route_info["nexthop_id"]
+        if nexthop_id and nexthop_id.startswith("oid:0x"):
+            nexthop_id = nexthop_id.lstrip("oid:0x")
+        
+        nexthop_type = NOT_AVAILABLE
+        if nexthop_id in asic_nexthop_table:
+            nexthop_info = asic_nexthop_table[nexthop_id]
+            if nexthop_info["nexthop_type"] == "SAI_NEXT_HOP_TYPE_TUNNEL_ENCAP":
+                nexthop_type = "TUNNEL"
+            elif nexthop_info["nexthop_type"] == "SAI_NEXT_HOP_TYPE_IP":
+                nexthop_type = "NEIGHBOR"
+            else:
+                nexthop_type = nexthop_info["nexthop_type"]
+        
+        route_to_nexthop_map[route_dest] = nexthop_type
+
     asic_neighs = set(json.loads(_)["ip"] for _ in asic_neigh_table)
 
     check_results = []
@@ -418,6 +468,8 @@ def check_neighbor_consistency(neighbors, mux_states, hw_mux_states, mac_to_port
 
         check_result["NEIGHBOR_IN_ASIC"] = neighbor_ip in asic_neighs
         check_result["TUNNEL_IN_ASIC"] = neighbor_ip in asic_route_destinations
+        check_result["NEXTHOP_TYPE"] = route_to_nexthop_map.get(neighbor_ip, NOT_AVAILABLE)
+        
         if is_zero_mac:
             # NOTE: for zero-mac neighbors, two situations:
             # 1. new neighbor just learnt, no neighbor entry in ASIC, tunnel route present in ASIC.
@@ -434,8 +486,17 @@ def check_neighbor_consistency(neighbors, mux_states, hw_mux_states, mac_to_port
             check_result["MUX_STATE"] = mux_state
             check_result["IN_MUX_TOGGLE"] = mux_state != hw_mux_state
 
-            if mux_state == "active" or mux_state == "standby":
-                    check_result["HWSTATUS"] = (check_result["NEIGHBOR_IN_ASIC"] and check_result["TUNNEL_IN_ASIC"])
+            if mux_state == "active":
+                # For active mux state, neighbor should be in ASIC and route should point to neighbor nexthop
+                expected_nexthop = "NEIGHBOR"
+                check_result["HWSTATUS"] = (check_result["NEIGHBOR_IN_ASIC"] and 
+                                          check_result["TUNNEL_IN_ASIC"] and
+                                          check_result["NEXTHOP_TYPE"] == expected_nexthop)
+            elif mux_state == "standby":
+                # For standby mux state, route should point to tunnel nexthop
+                expected_nexthop = "TUNNEL"
+                check_result["HWSTATUS"] = (check_result["TUNNEL_IN_ASIC"] and
+                                          check_result["NEXTHOP_TYPE"] == expected_nexthop)
             else:
                 # skip as unknown mux state
                 continue
@@ -505,7 +566,7 @@ if __name__ == "__main__":
 
     mux_server_to_port_map = get_mux_server_to_port_map(mux_cables)
     if_oid_to_port_name_map = get_if_br_oid_to_port_name_map()
-    neighbors, mux_states, hw_mux_states, asic_fdb, asic_route_table, asic_neigh_table = read_tables_from_db(appl_db)
+    neighbors, mux_states, hw_mux_states, asic_fdb, asic_route_table, asic_neigh_table, asic_nexthop_table = read_tables_from_db(appl_db)
     mac_to_port_name_map = get_mac_to_port_name_map(asic_fdb, if_oid_to_port_name_map)
     mux_soc_neigh_ips = get_mux_soc_neighbors(mux_cables)
 
@@ -516,6 +577,7 @@ if __name__ == "__main__":
         mac_to_port_name_map,
         asic_route_table,
         asic_neigh_table,
+        asic_nexthop_table,
         mux_server_to_port_map,
         mux_soc_neigh_ips
     )
