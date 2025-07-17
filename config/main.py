@@ -1041,6 +1041,157 @@ def wait_service_restart_finish(service, last_timestamp, timeout=30):
     log.log_warning("Service: {} does not restart in {} seconds, stop waiting".format(service, timeout))
 
 
+def _iface_vrf(iface: str) -> str | None:
+    try:
+        out = subprocess.check_output(["ip", "-o", "link", "show", "dev", iface], text=True)
+        m = re.search(r"master\s+(\S+)", out)
+        return m.group(1) if m else None
+    except subprocess.CalledProcessError:
+        return None
+
+
+def _capture_default_routes(iface: str):
+    vrf = _iface_vrf(iface)
+    scope = ["vrf", vrf] if vrf else []
+    routes = []
+    for fam in (["-4"], ["-6"]):
+        try:
+            out = subprocess.check_output(["ip", *fam, "route", "show", *scope, "default", "dev", iface], text=True)
+        except subprocess.CalledProcessError:
+            continue
+        for line in out.splitlines():
+            # Example: "default via 192.0.2.1 dev eth0 metric 102"
+            m = re.search(r"^default(?:\s+via\s+(\S+))?.*?dev\s+\S+(?:.*?\smetric\s+(\d+))?", line)
+            if m:
+                routes.append({"fam": fam[0], "vrf": vrf, "gw": m.group(1), "metric": m.group(2)})
+    return routes
+
+
+def _restore_default_routes(iface: str, routes):
+    for r in routes:
+        fam = r["fam"]
+        vrf = r["vrf"]
+        cmd = ["ip", fam, "route", "replace"]
+        if vrf:
+            cmd += ["vrf", vrf]
+        cmd += ["default"]
+        if r["gw"]:
+            cmd += ["via", r["gw"]]
+        cmd += ["dev", iface]
+        if r["metric"]:
+            cmd += ["metric", r["metric"]]
+        subprocess.run([str(x) for x in cmd if x], check=False)
+
+
+def get_mgmt_interface():
+    """
+    Parse /etc/sonic/config_db.json to find the management interface name (e.g., eth0).
+    """
+    try:
+        with open('/etc/sonic/config_db.json') as f:
+            config = json.load(f)
+        mgmt_entries = config.get("MGMT_INTERFACE", {})
+        if not mgmt_entries:
+            return None
+        # Example key: "eth0|10.3.141.10/24"
+        return list(mgmt_entries.keys())[0].split('|')[0]
+    except Exception:
+        # Valid - no mgmt interface in config_db.json
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        return None
+
+
+def reset_mgmt_interface_if_usb_not_running():
+    """
+    If the management interface is a USB device and not RUNNING,
+    bring it down and up with delay to trigger renegotiation.
+    """
+    iface = get_mgmt_interface()
+    if not iface:
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        time.sleep(0.001)
+        return
+    if 'usb' not in os.path.realpath(f"/sys/class/net/{iface}/device"):
+        return
+    try:
+        with open(f"/sys/class/net/{iface}/operstate") as f:
+            operstate = f.read().strip()
+        if operstate == "up":
+            return  # Already RUNNING
+    except Exception:
+        pass  # Continue to attempt reset
+
+    click.echo("Reset USB-based mgmt interface for re-negotiation")
+    # Flap admin state but preserve default routes
+    saved = _capture_default_routes(iface)
+
+    subprocess.run(["ip", "link", "set", iface, "down"], check=True)
+    time.sleep(1.0)
+    subprocess.run(["ip", "link", "set", iface, "up"], check=True)
+    # Continue anyway
+    # Give carrier a moment, then restore default routes if needed
+    time.sleep(1)
+    _restore_default_routes(iface, saved)
+
+
 def _restart_services():
     last_interface_config_timestamp = get_service_finish_timestamp('interfaces-config')
     last_networking_timestamp = get_service_finish_timestamp('networking')
@@ -1064,6 +1215,8 @@ def _restart_services():
     # Reload Monit configuration to pick up new hostname in case it changed
     click.echo("Reloading Monit configuration ...")
     clicommon.run_command(['sudo', 'monit', 'reload'])
+
+    reset_mgmt_interface_if_usb_not_running()
 
 def _per_namespace_swss_ready(service_name):
     out, _ = clicommon.run_command(['systemctl', 'show', str(service_name), '--property', 'ActiveState', '--value'], return_cmd=True)
