@@ -86,7 +86,7 @@ COMMAND_TIMEOUT = 300
 # bash oneliner. To be revisited once routing-stack info is tracked somewhere.
 def get_routing_stack():
     result = 'frr'
-    command = "sudo docker ps --format '{{.Image}}\t{{.Names}}' | awk '$2 ~ /^bgp([0-9]+)?$/' | cut -d'-' -f3 | cut -d':' -f1 | head -n 1" # noqa: E501
+    command = "sudo docker ps --format '{{.Image}}\t{{.Names}}' | awk '$2 ~ /^bgp([0-9]+)?$/' | cut -d'-' -f3 | cut -d':' -f1 | head -n 1"  # noqa: E501
 
     try:
         stdout = subprocess.check_output(command, shell=True, text=True, timeout=COMMAND_TIMEOUT)
