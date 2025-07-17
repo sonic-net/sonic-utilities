@@ -5163,21 +5163,14 @@ def fec(ctx, interface_name, interface_fec, verbose):
 #
 # 'tx_error_threshold' subgroup
 #
-
-@interface.group()
-@click.pass_context
-def tx_error_threshold(ctx):
-    """Set or del threshold of tx error statistics"""
-    pass
-
+ 
 #
 # 'set' subcommand
 #
-@tx_error_threshold.command()
 @click.pass_context
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @click.argument('interface_tx_err_threshold', metavar='<interface_tx_err_threshold>', required=True, type=int)
-def set(ctx, interface_name, interface_tx_err_threshold):
+def tx_error_threshold_set(ctx, interface_name, interface_tx_err_threshold):
     """Set threshold of tx error statistics"""
     if interface_name is None:
         ctx.fail("'interface_name' is None!")
@@ -5199,10 +5192,9 @@ def set(ctx, interface_name, interface_tx_err_threshold):
 #
 # 'clear' subcommand
 #
-@tx_error_threshold.command()
 @click.pass_context
 @click.argument('interface_name', metavar='<interface_name>', required=True)
-def clear(ctx, interface_name):
+def tx_error_threshold_clear(ctx, interface_name):
     """Clear threshold of tx error statistics"""
     if interface_name is None:
         ctx.fail("'interface_name' is None!")
