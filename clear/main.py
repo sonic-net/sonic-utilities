@@ -79,20 +79,7 @@ class AliasedGroup(click.Group):
 # location (configdb?), so that we prevent the continous execution of this
 # bash oneliner. To be revisited once routing-stack info is tracked somewhere.
 def get_routing_stack():
-    result = 'frr'
-
-    cmd0 = ["sudo", "docker", "ps", "--format", "{{.Image}}\t{{.Names}}"]
-    cmd1 = ["awk", '$2 == "bgp"']
-    cmd2 = ["cut", "-d-", "-f3"]
-    cmd3 = ["cut", "-d:", "-f1"]
-    cmd4 = ["head", "-n", "1"]
-
-    try:
-        _, result = getstatusoutput_noshell_pipe(cmd0, cmd1, cmd2, cmd3, cmd4)
-    except OSError as e:
-        raise OSError("Cannot detect routing-stack")
-
-    return (result)
+    return "frr"
 
 # Global Routing-Stack variable
 routing_stack = get_routing_stack()
@@ -163,6 +150,7 @@ elif routing_stack == "frr":
     ip.add_command(bgp)
     from .bgp_frr_v6 import bgp
     ipv6.add_command(bgp)
+
 
 @cli.command()
 def counters():
