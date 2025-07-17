@@ -82,7 +82,7 @@ def get_routing_stack():
     result = 'frr'
 
     cmd0 = ["sudo", "docker", "ps", "--format", "{{.Image}}\t{{.Names}}"]
-    cmd1 = ["awk", '$2 == "bgp"']
+    cmd1 = ["awk", '$2 ~ /^bgp([0-9]+)?$/']
     cmd2 = ["cut", "-d-", "-f3"]
     cmd3 = ["cut", "-d:", "-f1"]
     cmd4 = ["head", "-n", "1"]
