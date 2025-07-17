@@ -58,18 +58,21 @@ def status(db, chassis_module_name):
             continue
 
         data_dict = state_db.get_all(state_db.STATE_DB, key)
-        desc = data_dict[CHASSIS_MODULE_INFO_DESC_FIELD]
-        slot = data_dict[CHASSIS_MODULE_INFO_SLOT_FIELD]
-        oper_status = data_dict[CHASSIS_MODULE_INFO_OPERSTATUS_FIELD]
-        serial = data_dict[CHASSIS_MODULE_INFO_SERIAL_FIELD]
 
+        # Use default values if any field is missing
+        desc = data_dict.get(CHASSIS_MODULE_INFO_DESC_FIELD, 'N/A')
+        slot = data_dict.get(CHASSIS_MODULE_INFO_SLOT_FIELD, 'N/A')
+        oper_status = data_dict.get(CHASSIS_MODULE_INFO_OPERSTATUS_FIELD, 'Unknown')
+        serial = data_dict.get(CHASSIS_MODULE_INFO_SERIAL_FIELD, 'N/A')
+
+        # Determine admin_status
         if is_smartswitch():
             admin_status = 'down'
         else:
             admin_status = 'up'
         config_data = chassis_cfg_table.get(key_list[1])
         if config_data is not None:
-            admin_status = config_data.get(CHASSIS_MODULE_INFO_ADMINSTATUS_FIELD)
+            admin_status = config_data.get(CHASSIS_MODULE_INFO_ADMINSTATUS_FIELD, admin_status)
 
         table.append((key_list[1], desc, slot, oper_status, admin_status, serial))
 
@@ -100,13 +103,15 @@ def midplane_status(chassis_module_name):
     table = []
     for key in natsorted(keys):
         key_list = key.split('|')
-        if len(key_list) != 2:  # error data in DB, log it and ignore
+        if len(key_list) != 2:
             print('Warn: Invalid Key {} in {} table'.format(key, CHASSIS_MIDPLANE_INFO_TABLE))
             continue
 
         data_dict = state_db.get_all(state_db.STATE_DB, key)
-        ip = data_dict[CHASSIS_MIDPLANE_INFO_IP_FIELD]
-        access = data_dict[CHASSIS_MIDPLANE_INFO_ACCESS_FIELD]
+
+        # Defensive access with fallback defaults
+        ip = data_dict.get(CHASSIS_MIDPLANE_INFO_IP_FIELD, 'N/A')
+        access = data_dict.get(CHASSIS_MIDPLANE_INFO_ACCESS_FIELD, 'Unknown')
 
         table.append((key_list[1], ip, access))
 
