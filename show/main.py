@@ -589,9 +589,11 @@ def tx_error(interfacename):
     state_db.connect(state_db.STATE_DB, False)   # Make one attempt only
     TABLE_NAME_SEPARATOR = '|'
     prefix_statedb = "TX_ERR_STATE|"
+
     _hash = '{}{}'.format(prefix_statedb, '*')
     # DBInterface keys() method
     txerr_keys = state_db.keys(state_db.STATE_DB, _hash)
+
     appl_db = SonicV2Connector(host='127.0.0.1')
     appl_db.connect(appl_db.APPL_DB, False)
     prefix_appldb = "TX_ERR_APPL:"
