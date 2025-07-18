@@ -231,7 +231,7 @@ setup(
         ]
     },
     install_requires=[
-        'bcrypt==3.2.2',
+        'bcrypt>=3.2.2',
         'click==7.0',
         'cryptography>=3.3.2',
         'urllib3>=2',
@@ -254,7 +254,7 @@ setup(
         'pexpect>=4.8.0',
         'semantic-version>=2.8.5',
         'prettyprinter>=0.18.0',
-        'pyroute2==0.7.12',
+        'pyroute2>=0.7.7',
         'requests>=2.25.0, <=2.31.0',
         'tabulate==0.9.0',
         'toposort==1.6',
@@ -273,7 +273,7 @@ setup(
         'responses',
         'pytest',
         'mockredispy>=2.9.3',
-        'deepdiff==6.2.2'
+        'deepdiff>=6.2.2'
     ],
     extras_require = {
         'testing': [
@@ -281,7 +281,7 @@ setup(
             'responses',
             'pytest',
             'mockredispy>=2.9.3',
-            'deepdiff==6.2.2'
+            'deepdiff>= 6.2.2'
         ],
     },
     classifiers=[

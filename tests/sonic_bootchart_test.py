@@ -1,12 +1,24 @@
 import os
+import sys
 import subprocess
 import pytest
 from click.testing import CliRunner
 from unittest.mock import patch, Mock
 import utilities_common
-import imp
+import importlib.util
+import importlib.machinery
 
-sonic_bootchart = imp.load_source('sonic-bootchart', 'scripts/sonic-bootchart')
+def load_source(modname, filename):
+    loader = importlib.machinery.SourceFileLoader(modname, filename)
+    spec = importlib.util.spec_from_file_location(modname, filename, loader=loader)
+    module = importlib.util.module_from_spec(spec)
+    # The module is always executed and not cached in sys.modules.
+    # Uncomment the following line to cache the module.
+    sys.modules[module.__name__] = module
+    loader.exec_module(module)
+    return module
+
+sonic_bootchart = load_source('sonic-bootchart', 'scripts/sonic-bootchart')
 
 BOOTCHART_OUTPUT_FILES = [
     os.path.join(sonic_bootchart.BOOTCHART_DEFAULT_OUTPUT_DIR, "bootchart-20220504-1040.svg"),
