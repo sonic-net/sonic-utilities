@@ -730,6 +730,78 @@ class TestStpVlanMaxAge:
         assert result.exit_code != 0, "Command should have failed for invalid max_age"
         assert "max_age must be between 6 and 40" in actual_output
 
+    def test_stp_vlan_max_age_mst_mode(self):
+        """Test that max age configuration fails if STP mode is MST."""
+
+        # Mock STP mode as MST
+        self.db.cfgdb.get_entry.return_value = {"mode": "mst"}
+
+        # Mock CLI runner to return a failure result
+        self.runner.invoke.return_value = MagicMock(exit_code=1, output="Configuration not supported for MST")
+
+        # Run the command to update max age
+        result = self.runner.invoke(
+            config.config.commands["spanning-tree"]
+            .commands["vlan"]
+            .commands["max_age"],
+            ["200", "20"],  # Setting max_age to 20 seconds
+            obj=self.db,
+        )
+
+        actual_output = result.output.strip().lower()
+        print(f"\nMocked Command Output:\n{actual_output}")
+
+        assert result.exit_code != 0, "Command should have failed with MST mode"
+        assert "configuration not supported for mst" in actual_output
+
+    def test_stp_vlan_max_age_valid_value(self):
+        """Test that max age values within valid range (6-40) are accepted."""
+
+        # Mock STP mode as PVST
+        self.db.cfgdb.get_entry.return_value = {"mode": "pvst"}
+
+        # Mock CLI runner to return a successful result
+        self.runner.invoke.return_value = MagicMock(exit_code=0, output="Success")
+
+        # Run the command to update max age
+        result = self.runner.invoke(
+            config.config.commands["spanning-tree"]
+            .commands["vlan"]
+            .commands["max_age"],
+            ["200", "10"],  # Setting max_age to 10 seconds
+            obj=self.db,
+        )
+
+        actual_output = result.output.strip().lower()
+        print(f"\nMocked Command Output:\n{actual_output}")
+
+        assert result.exit_code == 0, "Command should have succeeded with valid max_age"
+        assert "success" in actual_output
+
+    def test_stp_vlan_max_age_invalid_value(self):
+        """Test that max age values outside valid range (6-40) are rejected."""
+
+        # Mock STP mode as PVST
+        self.db.cfgdb.get_entry.return_value = {"mode": "pvst"}
+
+        # Mock CLI runner to return a failure result
+        self.runner.invoke.return_value = MagicMock(exit_code=1, output="max_age must be between 6 and 40")
+
+        # Run the command to update max age
+        result = self.runner.invoke(
+            config.config.commands["spanning-tree"]
+            .commands["vlan"]
+            .commands["max_age"],
+            ["200", "5"],  # Setting max_age to 5 seconds (invalid)
+            obj=self.db,
+        )
+
+        actual_output = result.output.strip().lower()
+        print(f"\nMocked Command Output:\n{actual_output}")
+
+        assert result.exit_code != 0, "Command should have failed with invalid max_age"
+        assert "max_age must be between 6 and 40" in actual_output
+
 
 class TestStpVlanPriority:
     def setup_method(self):
