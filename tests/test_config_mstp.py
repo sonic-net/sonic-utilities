@@ -518,6 +518,57 @@ def test_stp_global_max_hops_invalid_mode(mock_db):
     assert "Max hops not supported for PVST" in result.output
     assert result.exit_code != 0  # Error exit code
 
+def test_stp_global_max_hops_mst_valid(mock_db):
+    """Test the scenario where the mode is MST and max_hops is within the valid range."""
+    # Simulate MST mode
+    mock_db.cfgdb.get_entry.return_value = {"mode": "mst"}
+
+    runner = CliRunner()
+    result = runner.invoke(stp_global_max_hops, ['20'], obj=mock_db)  # Test max_hops for MST
+
+    # Check if the function succeeds with the correct output
+    assert "Success" in result.output
+    assert result.exit_code == 0  # Success exit code
+
+    # Verify that the entry was modified correctly
+    mock_db.cfgdb.mod_entry.assert_called_with('STP_MST', "GLOBAL", {'max_hops': 20})
+
+def test_stp_global_max_hops_mst_invalid(mock_db):
+    """Test the scenario where the mode is MST and max_hops is outside the valid range."""
+    # Simulate MST mode
+    mock_db.cfgdb.get_entry.return_value = {"mode": "mst"}
+
+    runner = CliRunner()
+    result = runner.invoke(stp_global_max_hops, ['41'], obj=mock_db)  # Test max_hops for MST
+
+    # Check if the function fails with the correct error message
+    assert "STP max hops must be in range 1-40" in result.output
+    assert result.exit_code != 0  # Error exit code
+
+def test_stp_global_max_hops_invalid_mode_configured(mock_db):
+    """Test the scenario where an invalid STP mode is configured."""
+    # Simulate an invalid mode
+    mock_db.cfgdb.get_entry.return_value = {"mode": "invalid"}
+
+    runner = CliRunner()
+    result = runner.invoke(stp_global_max_hops, ['20'], obj=mock_db)  # Test max_hops for invalid mode
+
+    # Check if the function fails with the correct error message
+    assert "Invalid STP mode configured" in result.output
+    assert result.exit_code != 0  # Error exit code
+
+def test_stp_global_max_hops_stp_disabled(mock_db):
+    """Test the scenario where STP is not enabled."""
+    # Simulate STP not being enabled
+    mock_db.cfgdb.get_entry.return_value = None
+
+    runner = CliRunner()
+    result = runner.invoke(stp_global_max_hops, ['20'], obj=mock_db)  # Test max_hops when STP is disabled
+
+    # Check if the function fails with the correct error message
+    assert "STP is not enabled" in result.output
+    assert result.exit_code != 0  # Error exit code
+
 
 # Constants for STP default values
 STP_DEFAULT_ROOT_GUARD_TIMEOUT = "30"
