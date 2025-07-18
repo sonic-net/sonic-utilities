@@ -1343,6 +1343,7 @@ collect_mellanox() {
     local platform=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_platform())")
     local platform_folder="/usr/share/sonic/device/${platform}"
     local hwsku=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_hwsku())")
+    local is_smartswitch=$(python3 -c "from sonic_py_common import device_info; print(device_info.is_smartswitch())")
     local sku_folder="/usr/share/sonic/device/${platform}/${hwsku}"
     local cmis_host_mgmt_files=(
         "/tmp/nv-syncd-shared/sai.profile"
@@ -1404,6 +1405,9 @@ collect_mellanox() {
     fi
 
     save_cmd "get_component_versions.py" "component_versions"
+    if [[ $is_smartswitch == "True" ]]; then
+        save_cmd "dpuctl dpu-status" "dpu_status"
+    fi
 
     # Save CMIS-host-management related files
     local cmis_host_mgmt_path="cmis-host-mgmt"
