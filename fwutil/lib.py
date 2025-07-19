@@ -196,7 +196,7 @@ class PlatformDataProvider(object):
 
     def get_chassis(self):
         return self.__chassis
-    
+
     def is_smart_switch(self):
         return self.__chassis.is_smartswitch()
 
