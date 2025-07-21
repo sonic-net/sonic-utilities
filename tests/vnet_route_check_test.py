@@ -639,8 +639,8 @@ test_data = {
                     "tunnel_v4": {"src_ip": "10.1.0.32"}
                 },
                 VNET_TABLE: {
-                    "Vnet_v4": [("vxlan_tunnel", "tunnel_v4"), ("scope", "default"), ("vni", "10002"),
-                                ("peer_list", "")]
+                    "Vnet_v4_in_v4-0": [("vxlan_tunnel", "tunnel_v4"), ("scope", "default"), ("vni", "10002"),
+                                        ("peer_list", "")]
                 },
                 VNET_ROUTE_TABLE: {
                     "Vnet_v4_in_v4-0:150.62.191.1/32": {"endpoint": "100.251.7.1,100.251.7.2"}
