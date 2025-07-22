@@ -110,7 +110,7 @@ def config_db_vlan_port_keys_get(intf_to_sw_mode_dict, intf_to_po_dict, intf_nam
     """
     mode = "routed"
     if intf_name in intf_to_po_dict.keys():
-       mode = intf_to_po_dict[intf_name]
+        mode = intf_to_po_dict[intf_name]
     elif intf_name in intf_to_sw_mode_dict.keys():
        mode = intf_to_sw_mode_dict[intf_name]
     return mode
