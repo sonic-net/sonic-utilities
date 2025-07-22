@@ -48,6 +48,7 @@ class Teamshow(object):
         self.get_teamdctl()
         self.get_teamshow_result()
 
+    @multi_asic_util.run_on_multi_asic
     def get_portchannel_names(self):
         """
             Get the portchannel names from database.
@@ -155,12 +156,97 @@ class Teamshow(object):
             output.append([team_id, 'PortChannel'+team_id, self.summary[team_id]['protocol'], self.summary[team_id]['ports']])
         print(tabulate(output, header))
 
+
 # 'portchannel' subcommand ("show interfaces portchannel")
-@click.command()
+@click.group(invoke_without_command=True)
 @multi_asic_util.multi_asic_click_options
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def portchannel(namespace, display, verbose):
+@click.pass_context
+def portchannel(ctx, namespace, display, verbose):
     """Show PortChannel information"""
-    team = Teamshow(namespace, display)
-    team.get_teams_info()
-    team.display_summary()
+    if ctx.invoked_subcommand is None:
+        team = Teamshow(namespace, display)
+        team.get_teams_info()
+        team.display_summary()
+
+
+def lacp_state(state):
+    flags = {
+        0x01: "Act",   # LACP Activity
+        0x02: "Tmo",   # Timeout
+        0x04: "Agg",   # Aggregation
+        0x08: "Sync",  # Synchronization
+        0x10: "Coll",  # Collecting
+        0x20: "Dist",  # Distributing
+        0x40: "Def",   # Defaulted
+        0x80: "Exp"    # Expired
+    }
+
+    result = [label for bit, label in flags.items() if int(state) & bit]
+    return ", ".join(result) if result else "None"
+
+
+def member_port_info(team, ts):
+    member_keys = ts.db.keys(ts.db.STATE_DB, PORT_CHANNEL_MEMBER_STATE_TABLE_PREFIX+team+'|*')
+    if member_keys:
+        ports = [key[len(PORT_CHANNEL_MEMBER_STATE_TABLE_PREFIX+team+'|'):] for key in member_keys]
+        for port in ports:
+            pinfo = ts.db.get_all(ts.db.STATE_DB, PORT_CHANNEL_MEMBER_STATE_TABLE_PREFIX+team+'|'+port)
+            click.echo("LAG MEMBER: {}({})". format(
+                          port, "selected" if pinfo['runner.aggregator.selected'] == "true" else "deselected"))
+            click.echo("    LACP Actor: port {}, address {}, key {}". format(
+                              pinfo['runner.actor_lacpdu_info.port'],
+                              pinfo['runner.actor_lacpdu_info.system'],
+                              pinfo['runner.actor_lacpdu_info.key']))
+            click.echo("    LACP Actor State: ({})". format(lacp_state(pinfo['runner.actor_lacpdu_info.state'])))
+            click.echo("    LACP Partner: port {}, address {}, key {}". format(
+                              pinfo['runner.partner_lacpdu_info.port'],
+                              pinfo['runner.partner_lacpdu_info.system'],
+                              pinfo['runner.partner_lacpdu_info.key']))
+            click.echo("    LACP Partner State: ({})". format(lacp_state(pinfo['runner.partner_lacpdu_info.state'])))
+            click.echo("    Statistics:")
+            click.echo("        lacpdu_illegal_pkts: {}". format(pinfo['runner.statistics.lacpdu_illegal_pkts']))
+            click.echo("        lacpdu_rx_stats: {}". format(pinfo['runner.statistics.lacpdu_rx_stats']))
+            click.echo("        lacpdu_tx_stats: {}". format(pinfo['runner.statistics.lacpdu_tx_stats']))
+            click.echo("        last rx lacpdu at: {}". format(pinfo['runner.statistics.last_lacpdu_rx_time']))
+            click.echo("        last tx lacpdu at: {}". format(pinfo['runner.statistics.last_lacpdu_tx_time']))
+    else:
+        click.echo("LAG MEMBER: None")
+
+
+def show_lacp_info(team, ts):
+    team_id = ts.get_team_id(team)
+    if team_id not in ts.teamsraw:
+        click.echo("No such PortChannel interface: {}". format(team))
+    else:
+        info = ts.teamsraw[team_id]
+        click.echo("--------------------------------------------------------------------------")
+        click.echo("LAG: {} is {}, mode LACP". format(team, ts.get_portchannel_status(team)))
+        click.echo("Minimum number of links to bring PortChannel up is {}". format(info['runner.min_ports']))
+        click.echo("address is {}". format(info['team_device.ifinfo.dev_addr']))
+        click.echo("Fallback: {}". format("Disabled" if info['runner.fallback'] == "false" else "Enabled"))
+        click.echo("Fast_rate: {}". format("Disabled" if info['runner.fast_rate'] == "false" else "Enabled"))
+        click.echo("Retry_count_feature: {}". format(
+                      "Disabled" if info['runner.enable_retry_count_feature'] == "false" else "Enabled"))
+        click.echo("Retry_count: {}". format(info['runner.retry_count']))
+        click.echo("MTU: {}". format(info['mtu']))
+        click.echo("LACP: mode {}, priority {}, address {}". format(
+                      "ACTIVE" if info['runner.active'] == "true" else "INACTIVE",
+                      info['runner.sys_prio'], info['team_device.ifinfo.dev_addr']))
+        member_port_info(team, ts)
+        click.echo("--------------------------------------------------------------------------")
+
+
+@portchannel.command('info')
+@multi_asic_util.multi_asic_click_options
+@click.argument('pname', metavar='<PortChannel name>', required=False)
+def info(namespace, display, pname):
+    """ Information of portchannel lacp """
+    ts = Teamshow(namespace, display)
+    ts.get_portchannel_names()
+    ts.get_teamdctl()
+    if pname:
+        show_lacp_info(pname, ts)
+    else:
+        for team in ts.teams:
+            show_lacp_info(team, ts)
