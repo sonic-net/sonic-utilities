@@ -1828,6 +1828,10 @@
         "POLL_INTERVAL": "1000",
         "FLEX_COUNTER_STATUS": "enable"
     },
+    "FLEX_COUNTER_TABLE|SRV6": {
+        "POLL_INTERVAL": "10000",
+        "FLEX_COUNTER_STATUS": "enable"
+    },
     "PFC_WD|Ethernet0": {
         "action": "drop",
         "detection_time": "600",
@@ -2031,6 +2035,12 @@
         "size": "0"
     },
     "BUFFER_PROFILE|egress_lossy_profile": {
+        "dynamic_th": "0",
+        "pool": "egress_lossy_pool",
+        "size": "0"
+    },
+    "BUFFER_PROFILE|q_lossy_profile": {
+        "packet_discard_action": "drop",
         "dynamic_th": "0",
         "pool": "egress_lossy_pool",
         "size": "0"
@@ -2868,5 +2878,16 @@
         "hello_time": "2",
         "max_age": "20",
         "priority": "32768"
+     },
+     "COPP_GROUP|queue4_group1": {
+        "cir":"2000",
+        "cbs":"2000"
+     },
+     "COPP_GROUP|queue1_group3": {
+       "NULL":"NULL"
+     },
+     "COPP_TRAP|neighbor_miss": {
+        "NULL":"NULL"
      }
+
 }

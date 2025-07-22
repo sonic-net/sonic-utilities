@@ -129,6 +129,9 @@
 * [Muxcable](#muxcable)
   * [Muxcable Show commands](#muxcable-show-commands)
   * [Muxcable Config commands](#muxcable-config-commands)
+* [MMU](#mmu)
+  * [MMU Show commands](#mmu-show-commands)
+  * [NAT Config commands](#mmu-config-commands)
 * [NAT](#nat)
   * [NAT Show commands](#nat-show-commands)
   * [NAT Config commands](#nat-config-commands)
@@ -154,6 +157,9 @@
 * [PortChannels](#portchannels)
   * [PortChannel Show commands](#portchannel-show-commands)
   * [PortChannel Config commands](#portchannel-config-commands)
+* [Packet Trimming](#packet-trimming)
+  * [Packet Trimming Show commands](#packet-trimming-show-commands)
+  * [Packet Trimming Config commands](#packet-trimming-config-commands)
 * [QoS](#qos)
   * [QoS Show commands](#qos-show-commands)
     * [PFC](#pfc)
@@ -196,6 +202,7 @@
     * [VxLAN show commands](#vxlan-show-commands)
   * [Vnet](#vnet)
     * [Vnet show commands](#vnet-show-commands)
+    * [Vnet config commands](#vnet-config-commands)
 * [Warm Reboot](#warm-reboot)
 * [Warm Restart](#warm-restart)
   * [Warm Restart show commands](#warm-restart-show-commands)
@@ -243,6 +250,9 @@
     * [Historical Memory Statistics for Last 3 Hours](#historical-memory-statistics-for-last-3-hours)
     * [Historical Memory Statistics for Specific Metric (Used Memory)](#historical-memory-statistics-for-specific-metric-used-memory)
     * [View Memory Statistics Configuration](#view-memory-statistics-configuration)
+* [CoPP Commands](#copp-commands)
+  * [Overview](#overview)
+  * [CoPP show commands](#copp-show-commands)
 ## Document History
 
 | Version | Modification Date | Details |
@@ -2330,7 +2340,7 @@ This command displays the state and key parameters of all BFD sessions.
 
 - Usage:
   ```
-  show bfd summary
+  show bfd summary [-n <namespace>]
   ```
 - Example:
   ```
@@ -2349,7 +2359,7 @@ This command displays the state and key parameters of all BFD sessions that matc
 
 - Usage:
   ```
-  show bfd peer <peer-ip>
+  show bfd peer <peer-ip> [-n <namespace>]
   ```
 - Example:
   ```
@@ -2542,8 +2552,7 @@ Optionally, you can specify an IP address in order to display only that particul
 
   Click [here](#Quagga-BGP-Show-Commands) to see the example for "show ip bgp neighbors" for Quagga.
 
-
-**show ip bgp network [[<ipv4-address>|<ipv4-prefix>] [(bestpath | multipath | longer-prefixes | json)]]
+**show ip bgp network [[<ipv4-address>|<ipv4-prefix>] [(bestpath | multipath | longer-prefixes | json)]]**
 
 This command displays all the details of IPv4 Border Gateway Protocol (BGP) prefixes.
 
@@ -5051,6 +5060,7 @@ Optional argument "-p" specify a period (in seconds) with which to gather counte
   show interfaces counters fec-histogram [-i <interface_name>]
   show interfaces counters fec-stats
   show interfaces counters detailed <interface_name>
+  show interfaces counters trim [interface_name] [-p|--period <sec>] [-j|--json]
   ```
 
 - Example:
@@ -5258,6 +5268,17 @@ The "fec-stats" subcommand is used to disply the interface fec related statistic
   Ethernet16        U           0             0                 0    1.77e-20       0.00e+00
   ```
 
+The "trim" subcommand is used to display the interface packet trimming related statistic.
+
+- Example:
+  ```
+  admin@sonic:~$ show interfaces counters trim
+       IFACE    STATE    TRIM_PKTS
+  ----------  -------  -----------
+   Ethernet0        U            0
+   Ethernet8        U          100
+  Ethernet16        U          200
+  ```
 
 **show interfaces description**
 
@@ -6329,8 +6350,8 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#interf
 
 **config interface vrf bind**
 
-This command is used to bind a interface to a vrf.
-By default, all L3 interfaces will be in default vrf. Above vrf bind command will let users bind interface to a vrf.
+This command is used to bind a interface to a vrf as well as vnet.
+By default, all L3 interfaces will be in default vrf. Above vrf bind command will let users bind interface to a vrf/vnet.
 
 - Usage:
   ```
@@ -6339,8 +6360,8 @@ By default, all L3 interfaces will be in default vrf. Above vrf bind command wil
 
 **config interface vrf unbind**
 
-This command is used to ubind a interface from a vrf.
-This will move the interface to default vrf.
+This command is used to ubind a interface from a vrf/vnet.
+This will move the interface to default vrf/vnet.
 
 - Usage:
   ```
@@ -8088,6 +8109,140 @@ While adding a new SPAN session, users need to configure the following fields th
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#mirroring)
 
+## MMU
+
+### MMU Show commands
+
+This subsection explains how to display switch Memory Management Unit (MMU) configuration.
+
+**show mmu**
+
+This command displays MMU configuration.
+
+- Usage:
+  ```bash
+  show mmu [OPTIONS]
+  ```
+
+- Options:
+  - _-n,--namespace_: namespace name or all
+  - _-vv,--verbose_: enable verbose output
+
+- Example:
+  ```bash
+  admin@sonic:~$ show mmu
+  Pool: ingress_lossless_pool
+  ----  --------
+  xoff  4194112
+  type  ingress
+  mode  dynamic
+  size  10875072
+  ----  --------
+
+  Pool: egress_lossless_pool
+  ----  --------
+  type  egress
+  mode  static
+  size  15982720
+  ----  --------
+
+  Pool: egress_lossy_pool
+  ----  -------
+  type  egress
+  mode  dynamic
+  size  9243812
+  ----  -------
+
+  Profile: egress_lossy_profile
+  ----------  -------------------------------
+  dynamic_th  3
+  pool        [BUFFER_POOL|egress_lossy_pool]
+  size        1518
+  ----------  -------------------------------
+
+  Profile: pg_lossless_100000_300m_profile
+  ----------  -----------------------------------
+  xon_offset  2288
+  dynamic_th  -3
+  xon         2288
+  xoff        268736
+  pool        [BUFFER_POOL|ingress_lossless_pool]
+  size        1248
+  ----------  -----------------------------------
+
+  Profile: egress_lossless_profile
+  ---------  ----------------------------------
+  static_th  3995680
+  pool       [BUFFER_POOL|egress_lossless_pool]
+  size       1518
+  ---------  ----------------------------------
+
+  Profile: pg_lossless_100000_40m_profile
+  ----------  -----------------------------------
+  xon_offset  2288
+  dynamic_th  -3
+  xon         2288
+  xoff        177632
+  pool        [BUFFER_POOL|ingress_lossless_pool]
+  size        1248
+  ----------  -----------------------------------
+
+  Profile: ingress_lossy_profile
+  ----------  -----------------------------------
+  dynamic_th  3
+  pool        [BUFFER_POOL|ingress_lossless_pool]
+  size        0
+  ----------  -----------------------------------
+
+  Profile: pg_lossless_40000_40m_profile
+  ----------  -----------------------------------
+  xon_offset  2288
+  dynamic_th  -3
+  xon         2288
+  xoff        71552
+  pool        [BUFFER_POOL|ingress_lossless_pool]
+  size        1248
+  ----------  -----------------------------------
+
+  Profile: q_lossy_profile
+  ---------------------  -----------------
+  packet_discard_action  drop
+  dynamic_th             0
+  pool                   egress_lossy_pool
+  size                   0
+  ---------------------  -----------------
+  ```
+
+### MMU Config commands
+
+This subsection explains how to configure switch Memory Management Unit (MMU).
+
+**config mmu**
+
+This command is used to manage switch MMU configuration.
+
+- Usage:
+  ```bash
+  config mmu [OPTIONS]
+  ```
+
+- Options:
+  - _-p_: profile name
+  - _-a_: set alpha for profile type dynamic
+  - _-s_: set staticth for profile type static
+  - _-t_: set packet trimming eligibility
+  - _-n,--namespace_: namespace name or all
+  - _-vv,--verbose_: enable verbose output
+
+- Examples:
+  ```bash
+  config mmu -p alpha_profile -a 2
+  config mmu -p ingress_lossless_profile -s 12121215
+  config mmu -p q_lossy_profile -t on
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#mmu)
+
 ## NAT
 
 ### NAT Show commands
@@ -8987,6 +9142,84 @@ This command adds or deletes a member port to/from the already created portchann
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#portchannels)
 
+# Packet Trimming
+
+This section explains the various show commands and configuration commands available for users.
+
+### Packet Trimming Show commands
+
+This subsection explains how to display switch trimming configuration.
+
+**show switch-trimming global**
+
+This command displays switch trimming global configuration.
+
+- Usage:
+  ```bash
+  show switch-trimming global [OPTIONS]
+  ```
+
+- Options:
+  - _-j,--json_: display in JSON format
+
+- Example:
+  ```bash
+  admin@sonic:~$ show switch-trimming global
+  +-----------------------------+---------+
+  | Configuration               | Value   |
+  +=============================+=========+
+  | Packet trimming size        | 200     |
+  +-----------------------------+---------+
+  | Packet trimming DSCP value  | 20      |
+  +-----------------------------+---------+
+  | Packet trimming TC value    | N/A     |
+  +-----------------------------+---------+
+  | Packet trimming queue index | 2       |
+  +-----------------------------+---------+
+
+  admin@sonic:~$ show switch-trimming global --json
+  {
+      "size": "200",
+      "dscp_value": "20",
+      "tc_value": "N/A",
+      "queue_index": "2"
+  }
+  ```
+
+### Packet Trimming Config commands
+
+This subsection explains how to configure switch trimming.
+
+**config switch-trimming global**
+
+This command is used to manage switch trimming global configuration.
+
+- Usage:
+  ```bash
+  config switch-trimming global [OPTIONS]
+  ```
+
+- Options:
+  - _-s,--size_: size (in bytes) to trim eligible packet
+  - _-d,--dscp_: dscp value assigned to a packet after trimming
+  - _-t,--tc_: tc value assigned to a packet after trimming
+  - _-q,--queue_: queue index to use for transmission of a packet after trimming
+
+- Examples:
+  ```bash
+  admin@sonic:~$ config switch-trimming global --size '128' --dscp '48' --queue '6'
+  admin@sonic:~$ config switch-trimming global --size '128' --dscp '48' --queue 'dynamic'
+  admin@sonic:~$ config switch-trimming global --size '128' --dscp 'from-tc' --tc '6' --queue '6'
+  admin@sonic:~$ config switch-trimming global --size '128' --dscp 'from-tc' --tc '6' --queue 'dynamic'
+  ```
+
+- Note:
+  - At least one option must be provided
+  - When `--dscp` value is set to `from-tc`, the `--tc` value is used for mapping to DSCP
+  - When `--queue` value is set to `dynamic`, the `--dscp` value is used for mapping to the queue
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#packet-trimming)
+
 ## NVGRE
 
 This section explains the various show commands and configuration commands available for users.
@@ -9551,8 +9784,18 @@ This command can be used to clear the counters for all queues of all ports. Note
 
 - Usage:
   ```
-  show queue counters [<interface_name>]
+  show queue counters [OPTIONS] [interface_name]
   ```
+
+- Parameters:
+  - _interface_name_: display counters for interface name only
+
+- Options:
+  - _-a,--all_: display all counters
+  - _-T,--trim_: display trimming counters only
+  - _-V,--voq_: display VOQ counters only
+  - _-nz,--nonzero_: display non zero counters
+  - _-j,--json_: display counters in JSON format
 
 - Example:
   ```
@@ -9604,6 +9847,30 @@ This command can be used to clear the counters for all queues of all ports. Note
   Ethernet4    MC9               0                0            0             0
 
   ...
+
+  admin@sonic:~$ show queue counters --trim
+       Port    TxQ    Trim/pkts
+  ---------  -----  -----------
+  Ethernet0    UC0            0
+  Ethernet0    UC1            0
+  Ethernet0    UC2            0
+  Ethernet0    UC3            0
+  Ethernet0    UC4            0
+  Ethernet0    UC5            0
+  Ethernet0    UC6            0
+  Ethernet0    UC7            0
+  Ethernet0    UC8            0
+  Ethernet0    UC9            0
+  Ethernet0    MC0          N/A
+  Ethernet0    MC1          N/A
+  Ethernet0    MC2          N/A
+  Ethernet0    MC3          N/A
+  Ethernet0    MC4          N/A
+  Ethernet0    MC5          N/A
+  Ethernet0    MC6          N/A
+  Ethernet0    MC7          N/A
+  Ethernet0    MC8          N/A
+  Ethernet0    MC9          N/A
   ```
 
 Optionally, you can specify an interface name in order to display only that particular interface
@@ -10600,6 +10867,7 @@ This sub-section explains the show commands for displaying the running configura
 6) acl
 7) ports
 8) syslog
+9) copp
 
 **show runningconfiguration all**
 
@@ -10724,6 +10992,20 @@ This command displays the running configuration of the snmp module.
 
   ```
   admin@sonic:~$ show runningconfiguration ports Ethernet0
+  ```
+
+ **show runningconfiguration copp**
+
+ This command displays the running configuration of copp
+
+- Usage:
+  ```
+  show runningconfiguration copp
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show runningconfiguration copp
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#Startup--Running-Configuration)
@@ -11362,92 +11644,6 @@ This command displays the system-wide memory utilization information – just a 
   Swap:           0B         0B         0B
   ```
 
-**show mmu**
-
-This command displays virtual address to the physical address translation status of the Memory Management Unit (MMU).
-
-- Usage:
-  ```
-  show mmu
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show mmu
-  Pool: ingress_lossless_pool
-  ----  --------
-  xoff  4194112
-  type  ingress
-  mode  dynamic
-  size  10875072
-  ----  --------
-
-  Pool: egress_lossless_pool
-  ----  --------
-  type  egress
-  mode  static
-  size  15982720
-  ----  --------
-
-  Pool: egress_lossy_pool
-  ----  -------
-  type  egress
-  mode  dynamic
-  size  9243812
-  ----  -------
-
-  Profile: egress_lossy_profile
-  ----------  -------------------------------
-  dynamic_th  3
-  pool        [BUFFER_POOL|egress_lossy_pool]
-  size        1518
-  ----------  -------------------------------
-
-  Profile: pg_lossless_100000_300m_profile
-  ----------  -----------------------------------
-  xon_offset  2288
-  dynamic_th  -3
-  xon         2288
-  xoff        268736
-  pool        [BUFFER_POOL|ingress_lossless_pool]
-  size        1248
-  ----------  -----------------------------------
-
-  Profile: egress_lossless_profile
-  ---------  ----------------------------------
-  static_th  3995680
-  pool       [BUFFER_POOL|egress_lossless_pool]
-  size       1518
-  ---------  ----------------------------------
-
-  Profile: pg_lossless_100000_40m_profile
-  ----------  -----------------------------------
-  xon_offset  2288
-  dynamic_th  -3
-  xon         2288
-  xoff        177632
-  pool        [BUFFER_POOL|ingress_lossless_pool]
-  size        1248
-  ----------  -----------------------------------
-
-  Profile: ingress_lossy_profile
-  ----------  -----------------------------------
-  dynamic_th  3
-  pool        [BUFFER_POOL|ingress_lossless_pool]
-  size        0
-  ----------  -----------------------------------
-
-  Profile: pg_lossless_40000_40m_profile
-  ----------  -----------------------------------
-  xon_offset  2288
-  dynamic_th  -3
-  xon         2288
-  xoff        71552
-  pool        [BUFFER_POOL|ingress_lossless_pool]
-  size        1248
-  ----------  -----------------------------------
-  ```
-
 Go Back To [Beginning of the document](#) or [Beginning of this section](#System-State)
 
 ### System-Health
@@ -11827,12 +12023,13 @@ This command displays the MAC (FDB) entries either in full or partial as given b
 4) show mac -a <mac-address> - display the MACs that match a specific mac-address
 5) show mac -t <type> - display the MACs that match a specific type (static/dynamic)
 6) show mac -c - display the count of MAC addresses
+7) show mac -n <namespace> - display the MACs that belong to a specific namespace
 
 To show the default MAC address aging time on the switch.
 
 - Usage:
   ```
-  show mac [-v <vlan_id>] [-p <port_name>] [-a <mac_address>] [-t <type>] [-c]
+  show mac [-v <vlan_id>] [-p <port_name>] [-a <mac_address>] [-t <type>] [-c] [-n <namespace>]
   ```
 
 - Example:
@@ -11930,6 +12127,14 @@ Optionally, you can specify a VLAN ID or interface name or type or mac-address i
   ```
   admin@sonic:~$ show mac -c
   Total number of entries 18
+  ```
+  ```
+  admin@sonic:~$ show mac -n asic0
+  No.    Vlan  MacAddress         Port           Type
+  -----  ------  -----------------  -----------  -------
+    2    1000  50:96:23:AD:F1:65  Ethernet192    Static
+    2    1000  C6:C9:5E:AE:24:42  Ethernet192    Static
+  Total number of entries 2
   ```
 
 **show mac aging-time**
@@ -12102,6 +12307,9 @@ This command displays vnet interfaces information about all the vnets configured
   -----------  ------------
   Vnet_2000    Ethernet1
   Vnet_3000    Vlan2000
+  Vnet_1000    PortChannel0002
+  Vnet_5000    Po0002.101
+  Vnet_4000    Loopback0
   ```
 
 **show vnet neighbors**
@@ -12122,10 +12330,13 @@ This command displays vnet neighbor information about all the vnets configured i
   -----------  -----------  -------------  ------------
                11.11.11.11                 Ethernet1
                11.11.11.12                 Ethernet1
+               11.11.11.13                 PortChannel0002
+               11.11.11.14                 Po0002.101
 
   Vnet_3000    neighbor     mac_address        interfaces
   -----------  -----------  -----------------  ------------
                20.20.20.20  aa:bb:cc:dd:ee:ff  Vlan2000
+               30.30.30.30  11:22:33:44:55:66  Ethernet0.1002
   ```
 
 **show vnet routes all**
@@ -12174,6 +12385,51 @@ This command displays tunnel routes information about all the vnets configured i
   Vnet_3000    100.100.2.1/32  10.10.10.2  00:00:00:00:03:04
   ```
 
+#### Vnet config commands
+
+**config vnet add**
+
+This command creates vnet in SONiC system with provided vnet-name.
+
+- Usage:
+  ```
+  config vnet add <vnet-name> <vni> <vxlan-tunnel> [<peer_list>] [<guid>] [<scope>] [<advertise_prefix>] [<overlay_dmac>] [<src_mac>]
+  ```
+
+Note: vnet-name should always start with keyword "Vnet_"
+Mandatory Parameters: vnet_name, vni, vxlan_tunnel
+Optional Parameters: peer_list, guid, scope, advertised_prefix, overlay_dmac, src_mac
+
+**config vnet del**
+
+This command deletes vnet with vnet-name and its associated binded interfaces and routes.
+
+- Usage:
+  ```
+  config vnet del <vnet-name>
+  ```
+
+**config vnet add route**
+
+This command creates vnet route in SONiC system with provided vnet-name and prefix.
+
+- Usage:
+  ```
+  config vnet add-route <vnet-name> <prefix> <endpoint> [<vni>] [<endpoint_monitor>] [<mac_address>] [<profile>] [<primary>] [<monitoring>] [<adv_prefix>]
+  ```
+
+Note: vnet-name should always start with keyword "Vnet_"
+Mandatory Parameters: vnet_name, prefix, endpoint
+Optional Parameters: vni, endpoint_monitor, mac_address, profile, primary, monitoring, adv_prefix
+
+**config vnet del-route <vnet-name>**
+
+This command deletes a vnet route with vnet-name and prefix. It deletes all routes for the provided vnet if prefix isnt specified.
+
+- Usage:
+  ```
+  config vnet del-route <vnet-name> [<prefix>]
+  ```
 Go Back To [Beginning of the document](#) or [Beginning of this section](#vxlan--vnet)
 
 ## Warm Reboot
@@ -14573,4 +14829,107 @@ Memory Statistics Configuration:
 Enabled:            false
 Sampling Interval:  5
 Retention Period:   15
+```
+---
+# CoPP Commands
+
+## Overview
+This sub-section explains the list of commands available for CoPP (Control Plane Policing) feature.
+
+---
+
+## CoPP Show Commands
+
+These commands are used to display the current CoPP configuration and their status.
+
+### Usage
+```bash
+show copp configuration <detailed> [--trapid <trap_id>] [--group <trap_group>]
+```
+
+**Example**:
+
+```bash
+show copp configuration
+show copp configuration detailed --group queue1_group3
+show copp configuration detailed --trapid neighbor_miss
+```
+
+### Show CoPP Configuration
+
+Command to display the current CoPP configurations and hardware status of the traps.
+
+```bash
+admin@sonic:~$ show copp configuration
+```
+
+**Sample Output**:
+
+```bash
+admin@sonic:~$ show copp configuration
+TrapId           Trap Group     Action      CBS    CIR  Meter Type    Mode    HW Status
+---------------  -------------  --------  -----  -----  ------------  ------  -------------
+arp_req          queue4_group2  copy        600    600  packets       sr_tcm  installed
+arp_resp         queue4_group2  copy        600    600  packets       sr_tcm  installed
+bgp              queue4_group1  trap       6000   6000  packets       sr_tcm  not-installed
+bgpv6            queue4_group1  trap       6000   6000  packets       sr_tcm  not-installed
+dest_nat_miss    queue1_group2  trap        600    600  packets       sr_tcm  installed
+dhcp             queue4_group3  trap        100    100  packets       sr_tcm  installed
+dhcpv6           queue4_group3  trap        100    100  packets       sr_tcm  installed
+eapol            queue4_group1  trap       6000   6000  packets       sr_tcm  installed
+ip2me            queue1_group1  trap       6000   6000  packets       sr_tcm  installed
+lacp             queue4_group1  trap       6000   6000  packets       sr_tcm  installed
+lldp             queue4_group3  trap        100    100  packets       sr_tcm  installed
+neigh_discovery  queue4_group2  copy        600    600  packets       sr_tcm  installed
+neighbor_miss    queue1_group3  trap        200    200  packets       sr_tcm  installed
+sample_packet    queue2_group1  trap       1000   1000  packets       sr_tcm  not-installed
+src_nat_miss     queue1_group2  trap        600    600  packets       sr_tcm  installed
+udld             queue4_group3  trap        100    100  packets       sr_tcm  installed
+```
+
+### Show CoPP Configuration Detailed
+
+Command to display the detailed CoPP configuration of a specific trap ID.
+
+```bash
+admin@sonic:~$ show copp configuration detailed --trapid neighbor_miss
+```
+
+**Sample Output**:
+
+```bash
+Trap Group.................. queue1_group3
+queue....................... 1
+Trap Priority............... 1
+Trap Action................. trap
+Meter Type.................. packets
+Mode........................ sr_tcm
+CBS......................... 200
+CIR......................... 200
+Green Action................ forward
+Yellow Action............... forward
+Red Action.................. drop
+HW Status................... installed
+```
+
+Command to display the detailed CoPP configuration of a specific CoPP group.
+
+```bash
+admin@sonic:~$ show copp configuration detailed --group queue1_group3
+```
+
+**Sample Output**:
+
+```bash
+Trap Id(s).................. neighbor_miss
+Queue....................... 1
+Trap Priority............... 1
+Trap Action................. trap
+Meter Type.................. packets
+Mode........................ sr_tcm
+CBS......................... 200
+CIR......................... 200
+Yellow Action............... forward
+Green Action................ forward
+Red Action.................. drop
 ```

@@ -4,19 +4,34 @@ import os
 import pytest
 
 from click.testing import CliRunner
-from .bgp_commands_input.bgp_neighbor_test_vector import *
+from .bgp_commands_input import bgp_neighbor_test_vector
 
 
 def executor(test_vector, show):
     runner = CliRunner()
-    input = testData[test_vector]
+    input = bgp_neighbor_test_vector.testData[test_vector]
     if test_vector.startswith('bgp_v6'):
         exec_cmd = show.cli.commands["ipv6"].commands["bgp"].commands["neighbors"]
     else:
         exec_cmd = show.cli.commands["ip"].commands["bgp"].commands["neighbors"]
 
     result = runner.invoke(exec_cmd, input['args'])
+    check_result(result, input)
 
+
+def executor_vrf(test_vector, show):
+    runner = CliRunner()
+    input = bgp_neighbor_test_vector.testData[test_vector]
+    if test_vector.startswith('bgp_v6'):
+        exec_cmd = show.cli.commands["ipv6"].commands["bgp"].commands["vrf"]
+    else:
+        exec_cmd = show.cli.commands["ip"].commands["bgp"].commands["vrf"]
+
+    result = runner.invoke(exec_cmd, [input['vrf'], 'neighbors'] + input['args'])
+    check_result(result, input)
+
+
+def check_result(result, input):
     print(result.exit_code)
     print(result.output)
 
@@ -50,6 +65,7 @@ class TestBgpNeighbors(object):
     @pytest.mark.parametrize('setup_single_bgp_instance, test_vector',
                              [
                                  ('bgp_v4_neighbors_output', 'bgp_v4_neighbors'),
+                                 ('bgp_v4_neighbors_output', 'bgp_v4_neighbors_vrf'),
                                  ('bgp_v4_neighbors_output',
                                      'bgp_v4_neighbor_ip_address'),
                                  ('bgp_v4_neighbor_invalid_neigh',
@@ -61,6 +77,7 @@ class TestBgpNeighbors(object):
                                  ('bgp_v4_neighbor_output_recv_routes',
                                      'bgp_v4_neighbor_recv_routes'),
                                  ('bgp_v6_neighbors_output', 'bgp_v6_neighbors'),
+                                 ('bgp_v6_neighbors_output', 'bgp_v6_neighbors_vrf'),
                                  ('bgp_v6_neighbors_output',
                                      'bgp_v6_neighbor_ip_address'),
                                  ('bgp_v6_neighbor_invalid',
@@ -79,6 +96,7 @@ class TestBgpNeighbors(object):
                            test_vector):
         show = setup_bgp_commands
         executor(test_vector, show)
+        executor_vrf(test_vector, show)
 
 
 class TestBgpNeighborsMultiAsic(object):
@@ -118,6 +136,7 @@ class TestBgpNeighborsMultiAsic(object):
                            test_vector):
         show = setup_bgp_commands
         executor(test_vector, show)
+        executor_vrf(test_vector, show)
 
     @classmethod
     def teardown_class(cls):

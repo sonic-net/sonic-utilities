@@ -118,6 +118,9 @@ PORT_MODE = "switchport_mode"
 
 DOM_CONFIG_SUPPORTED_SUBPORTS = ['0', '1']
 
+VNET_NAME_MAX_LEN = 15
+GUID_MAX_LEN = 255
+
 asic_type = None
 
 DSCP_RANGE = click.IntRange(min=0, max=63)
@@ -418,6 +421,51 @@ def is_vrf_exists(config_db, vrf_name):
 
     return False
 
+
+def is_vnet_exists(config_db, vnet_name):
+    """Check if VNET exists
+    """
+    keys = config_db.get_keys("VNET")
+    if keys:
+        if vnet_name in keys:
+            return True
+
+    return False
+
+
+def is_specific_vnet_route_exists(config_db, vnet_name, prefix):
+    """Check if VNET ROUTE WITH PREFIX exists
+    """
+    keys = config_db.get_keys("VNET_ROUTE_TUNNEL")
+    if keys:
+        for k in keys:
+            if k[0] == vnet_name and k[1] == prefix:
+                return True
+
+    return False
+
+
+def is_vnet_route_exists(config_db, vnet_name):
+    """Check if VNET ROUTE exists
+    """
+    keys = config_db.get_keys("VNET_ROUTE_TUNNEL")
+    if keys:
+        for k in keys:
+            if k[0] == vnet_name:
+                return True
+
+    return False
+
+
+def vnet_name_is_valid(ctx, vnet_name):
+    """Check if the vnet name is valid
+    """
+    if not vnet_name.startswith("Vnet"):
+        ctx.fail("'vnet_name' must begin with 'Vnet'.")
+    if len(vnet_name) > VNET_NAME_MAX_LEN:
+        ctx.fail("'vnet_name' length should not exceed {} characters".format(VNET_NAME_MAX_LEN))
+
+
 def is_interface_bind_to_vrf(config_db, interface_name):
     """Get interface if bind to vrf or not
     """
@@ -425,7 +473,7 @@ def is_interface_bind_to_vrf(config_db, interface_name):
     if table_name == "":
         return False
     entry = config_db.get_entry(table_name, interface_name)
-    if entry and entry.get("vrf_name"):
+    if entry and (entry.get("vrf_name") or entry.get("vnet_name")):
         return True
     return False
 
@@ -504,7 +552,7 @@ def get_port_namespace(port):
 def del_interface_bind_to_vrf(config_db, vrf_name):
     """del interface bind to vrf
     """
-    tables = ['INTERFACE', 'PORTCHANNEL_INTERFACE', 'VLAN_INTERFACE', 'LOOPBACK_INTERFACE']
+    tables = ['INTERFACE', 'PORTCHANNEL_INTERFACE', 'VLAN_INTERFACE', 'LOOPBACK_INTERFACE', 'VLAN_SUB_INTERFACE']
     for table_name in tables:
         interface_dict = config_db.get_table(table_name)
         if interface_dict:
@@ -514,6 +562,35 @@ def del_interface_bind_to_vrf(config_db, vrf_name):
                     for ipaddress in interface_ipaddresses:
                         remove_router_interface_ip_address(config_db, interface_name, ipaddress)
                     config_db.set_entry(table_name, interface_name, None)
+
+
+def del_interface_bind_to_vnet(config_db, vnet_name):
+    """del interface bind to vnet
+    """
+    tables = ['INTERFACE', 'PORTCHANNEL_INTERFACE', 'VLAN_INTERFACE', 'LOOPBACK_INTERFACE', 'VLAN_SUB_INTERFACE']
+    for table_name in tables:
+        interface_dict = config_db.get_table(table_name)
+        if interface_dict:
+            for interface_name in interface_dict:
+                if ('vnet_name' in interface_dict[interface_name] and
+                        vnet_name == interface_dict[interface_name]['vnet_name']):
+                    interface_ipaddresses = get_interface_ipaddresses(config_db, interface_name)
+                    for ip in interface_ipaddresses:
+                        remove_router_interface_ip_address(config_db, interface_name, ip)
+                    config_db.set_entry(table_name, interface_name, None)
+
+
+def del_route_bind_to_vnet(config_db, vnet_name):
+    """del all routes bind to vnet
+    """
+    tables = ['VNET_ROUTE_TUNNEL', 'VNET_ROUTE']
+    for table_name in tables:
+        table_dict = config_db.get_table(table_name)
+        if table_dict:
+            for key in table_dict:
+                if key[0] == vnet_name:
+                    config_db.set_entry(table_name, key, None)
+
 
 def set_interface_naming_mode(mode):
     """Modify SONIC_CLI_IFACE_MODE env variable in user .bashrc
@@ -1086,8 +1163,9 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
     return True
 
 def cli_sroute_to_config(ctx, command_str, strict_nh = True):
-    if len(command_str) < 2 or len(command_str) > 9:
-        ctx.fail("argument is not in pattern prefix [vrf <vrf_name>] <A.B.C.D/M> nexthop <[vrf <vrf_name>] <A.B.C.D>>|<dev <dev_name>>!")
+    if len(command_str) < 2 or len(command_str) > 10:
+        ctx.fail("argument is not in pattern prefix [vrf <vrf_name>] <A.B.C.D/M> nexthop [vrf <vrf_name>] \
+                 <A.B.C.D>|<dev <dev_name>>|<A.B.C.D dev <dev_name>>!")
     if "prefix" not in command_str:
         ctx.fail("argument is incomplete, prefix not found!")
     if "nexthop" not in command_str and strict_nh:
@@ -1120,35 +1198,50 @@ def cli_sroute_to_config(ctx, command_str, strict_nh = True):
             ctx.fail("prefix is not in pattern!")
 
     if nexthop_str:
-        if 'nexthop' in nexthop_str and 'vrf' in nexthop_str:
-            # nexthop_str: ['nexthop', 'vrf', Vrf-name, ip]
-            config_entry["nexthop"] = nexthop_str[3]
-            if not is_vrf_exists(config_db, nexthop_str[2]):
-                ctx.fail("VRF %s does not exist!"%(nexthop_str[2]))
+        idx = 1
+        if 'vrf' in nexthop_str:
+            # extract nexthop vrf
+            for vrf in nexthop_str[2].split(','):
+                if not is_vrf_exists(config_db, vrf):
+                    ctx.fail("Nexthop VRF %s does not exist!" % (vrf))
             config_entry["nexthop-vrf"] = nexthop_str[2]
-        elif 'nexthop' in nexthop_str and 'dev' in nexthop_str:
-            # nexthop_str: ['nexthop', 'dev', ifname]
-            config_entry["ifname"] = nexthop_str[2]
-        elif 'nexthop' in nexthop_str:
-            # nexthop_str: ['nexthop', ip]
-            config_entry["nexthop"] = nexthop_str[1]
+            idx = 3
+
+        if nexthop_str[idx] == 'dev':
+            # no nexthop IPs but interface name
+            config_entry["ifname"] = nexthop_str[idx + 1]
         else:
-            ctx.fail("nexthop is not in pattern!")
+            # nexthop IPs present, extract them first
+            config_entry["nexthop"] = nexthop_str[idx]
+            if len(nexthop_str) > idx + 1:
+                if nexthop_str[idx + 1] == 'dev' and len(nexthop_str) > idx + 2:
+                    # extract interface name
+                    config_entry["ifname"] = nexthop_str[idx + 2]
+                else:
+                    ctx.fail("nexthop is not in pattern!")
 
     try:
         ipaddress.ip_network(ip_prefix)
         if 'nexthop' in config_entry:
             nh_list = config_entry['nexthop'].split(',')
             for nh in nh_list:
-                # Nexthop to portchannel
-                if nh.startswith('PortChannel'):
-                    config_db = ctx.obj['config_db']
-                    if not nh in config_db.get_keys('PORTCHANNEL'):
-                        ctx.fail("portchannel does not exist.")
-                else:
-                    ipaddress.ip_address(nh)
+                ipaddress.ip_address(nh)
     except ValueError:
         ctx.fail("ip address is not valid.")
+
+    if 'ifname' in config_entry:
+        ifname_list = config_entry['ifname'].split(',')
+        for ifname in ifname_list:
+            if ifname.startswith('PortChannel'):
+                if ifname not in config_db.get_keys('PORTCHANNEL'):
+                    ctx.fail("portchannel does not exist.")
+            elif ifname.startswith("Vlan"):
+                if ifname not in config_db.get_keys('VLAN_INTERFACE'):
+                    ctx.fail("vlan interface does not exist.")
+            elif ifname not in config_db.get_keys('INTERFACE') and \
+                ifname not in config_db.get_keys('VLAN_SUB_INTERFACE') and \
+                    ifname != 'null':
+                ctx.fail("interface {} does not exist.".format(ifname))
 
     if not vrf_name == "":
         key = vrf_name + "|" + ip_prefix
@@ -1855,7 +1948,8 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
     multiasic_single_file_mode = False
     # If the user give the filename[s], extract the file names.
     if filename is not None:
-        cfg_files = filename.split(',')
+        # strip whitespaces and filter out empty strings
+        cfg_files = [s.strip() for s in filename.split(',') if s.strip()]
 
         if len(cfg_files) == 1 and multi_asic.is_multi_asic():
             multiasic_validate_single_file(cfg_files[0])
@@ -1866,8 +1960,9 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
 
     if filename is not None and filename != "/dev/stdin":
         if multi_asic.is_multi_asic():
-            # Multiasic has not 100% fully validated. Thus pass here.
-            pass
+            for cfg_file in cfg_files:
+                if cfg_file is not None:
+                    config_file_yang_validation(cfg_file)
         else:
             config_file_yang_validation(filename)
 
@@ -2123,7 +2218,16 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
     # get the device type
     device_type = _get_device_type()
     if device_type != 'MgmtToRRouter' and device_type != 'MgmtTsToR' and device_type != 'BmcMgmtToRRouter' and device_type != 'EPMS':
-        clicommon.run_command(['pfcwd', 'start_default'], display_cmd=True)
+        # default behavior to call pfcwd start_default for all platforms
+        default_pfcwd_status = 'enable'
+        if override_config and config_to_check:
+            # If pfcwd is disabled in the golden config, skip starting pfcwd
+            # This is needed for platform which doesn't support lossless traffic.
+            override_metadata = config_to_check.get('DEVICE_METADATA', {}).get('localhost', {})
+            if 'default_pfcwd_status' in override_metadata:
+                default_pfcwd_status = override_metadata['default_pfcwd_status'].lower()
+        if default_pfcwd_status == 'enable':
+            clicommon.run_command(['pfcwd', 'start_default'], display_cmd=True)
 
     # Write latest db version string into db
     db_migrator = '/usr/local/bin/db_migrator.py'
@@ -4624,6 +4728,11 @@ def startup(ctx, interface_name):
         if sp_name in intf_fs:
             config_db.mod_entry("VLAN_SUB_INTERFACE", sp_name, {"admin_status": "up"})
 
+    lo_list = config_db.get_table("LOOPBACK_INTERFACE")
+    for lo in lo_list:
+        if lo in intf_fs:
+            config_db.mod_entry("LOOPBACK_INTERFACE", lo, {"admin_status": "up"})
+
 #
 # 'shutdown' subcommand
 #
@@ -4663,6 +4772,11 @@ def shutdown(ctx, interface_name):
     for sp_name in subport_list:
         if sp_name in intf_fs:
             config_db.mod_entry("VLAN_SUB_INTERFACE", sp_name, {"admin_status": "down"})
+
+    lo_list = config_db.get_table("LOOPBACK_INTERFACE")
+    for lo in lo_list:
+        if lo in intf_fs:
+            config_db.mod_entry("LOOPBACK_INTERFACE", lo, {"admin_status": "down"})
 
 #
 # 'speed' subcommand
@@ -5955,23 +6069,40 @@ def bind(ctx, interface_name, vrf_name):
         if interface_name is None:
             ctx.fail("'interface_name' is None!")
 
-    if not is_vrf_exists(config_db, vrf_name):
-        ctx.fail("VRF %s does not exist!"%(vrf_name))
+    isVnet = False
+    if (vrf_name.startswith('Vnet_')):
+        isVnet = True
+
+    if (isVnet):
+        if not is_vnet_exists(config_db, vrf_name):
+            ctx.fail("VNET %s does not exist!" % (vrf_name))
+    else:
+        if not is_vrf_exists(config_db, vrf_name):
+            ctx.fail("VRF %s does not exist!" % (vrf_name))
 
     table_name = get_interface_table_name(interface_name)
     if table_name == "":
         ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan/Loopback]")
-    if is_interface_bind_to_vrf(config_db, interface_name) is True and \
-        config_db.get_entry(table_name, interface_name).get('vrf_name') == vrf_name:
-        return
+    if is_interface_bind_to_vrf(config_db, interface_name) is True:
+        if (isVnet):
+            if (config_db.get_entry(table_name, interface_name).get('vnet_name') == vrf_name):
+                return
+        else:
+            if (config_db.get_entry(table_name, interface_name).get('vrf_name') == vrf_name):
+                return
+
     # Clean ip addresses if interface configured
     interface_addresses = get_interface_ipaddresses(config_db, interface_name)
-    for ipaddress in interface_addresses:
-        remove_router_interface_ip_address(config_db, interface_name, ipaddress)
+    for ip_address in interface_addresses:
+        remove_router_interface_ip_address(config_db, interface_name, ip_address)
     if table_name == "VLAN_SUB_INTERFACE":
         subintf_entry = config_db.get_entry(table_name, interface_name)
-        if 'vrf_name' in subintf_entry:
-            subintf_entry.pop('vrf_name')
+        if (isVnet):
+            if 'vnet_name' in subintf_entry:
+                subintf_entry.pop('vnet_name')
+        else:
+            if 'vrf_name' in subintf_entry:
+                subintf_entry.pop('vrf_name')
 
     config_db.set_entry(table_name, interface_name, None)
     # When config_db del entry and then add entry with same key, the DEL will lost.
@@ -5985,16 +6116,24 @@ def bind(ctx, interface_name, vrf_name):
         time.sleep(0.01)
     state_db.close(state_db.STATE_DB)
     if table_name == "VLAN_SUB_INTERFACE":
-        subintf_entry['vrf_name'] = vrf_name
-        config_db.set_entry(table_name, interface_name, subintf_entry)
+        if (isVnet):
+            subintf_entry['vnet_name'] = vrf_name
+            config_db.set_entry(table_name, interface_name, subintf_entry)
+        else:
+            subintf_entry['vrf_name'] = vrf_name
+            config_db.set_entry(table_name, interface_name, subintf_entry)
     else:
-        config_db.set_entry(table_name, interface_name, {"vrf_name": vrf_name})
+        if (isVnet):
+            config_db.set_entry(table_name, interface_name, {"vnet_name": vrf_name})
+        else:
+            config_db.set_entry(table_name, interface_name, {"vrf_name": vrf_name})
 
     click.echo("Interface {} IP disabled and address(es) removed due to binding VRF {}.".format(interface_name, vrf_name))
+
+
 #
 # 'unbind' subcommand
 #
-
 @vrf.command()
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @click.pass_context
@@ -6018,6 +6157,8 @@ def unbind(ctx, interface_name):
         subintf_entry = config_db.get_entry(table_name, interface_name)
         if 'vrf_name' in subintf_entry:
             subintf_entry.pop('vrf_name')
+        elif 'vnet_name' in subintf_entry:
+            subintf_entry.pop('vnet_name')
 
     interface_ipaddresses = get_interface_ipaddresses(config_db, interface_name)
     for ipaddress in interface_ipaddresses:
@@ -7139,53 +7280,60 @@ def route(ctx):
     ctx.obj = {}
     ctx.obj['config_db'] = config_db
 
+
 @route.command('add', context_settings={"ignore_unknown_options": True})
-@click.argument('command_str', metavar='prefix [vrf <vrf_name>] <A.B.C.D/M> nexthop <[vrf <vrf_name>] <A.B.C.D>>|<dev <dev_name>>', nargs=-1, type=click.Path())
+@click.argument('command_str', metavar='prefix [vrf <vrf_name>] <A.B.C.D/M> nexthop [vrf <vrf_name>] \
+                <A.B.C.D>|<dev <dev_name>>|<A.B.C.D dev <dev_name>>', nargs=-1, type=click.Path())
 @click.pass_context
 def add_route(ctx, command_str):
     """Add route command"""
     config_db = ctx.obj['config_db']
     key, route = cli_sroute_to_config(ctx, command_str)
 
-    # If defined intf name, check if it belongs to interface
-    if 'ifname' in route:
-        if (not route['ifname'] in config_db.get_keys('VLAN_INTERFACE') and
-            not route['ifname'] in config_db.get_keys('INTERFACE') and
-            not route['ifname'] in config_db.get_keys('PORTCHANNEL_INTERFACE') and
-            not route['ifname'] in config_db.get_keys('VLAN_SUB_INTERFACE') and
-            not route['ifname'] == 'null'):
-            ctx.fail('interface {} doesn`t exist'.format(route['ifname']))
-
     entry_counter = 1
     if 'nexthop' in route:
         entry_counter = len(route['nexthop'].split(','))
+    if 'ifname' in route and len(route['ifname'].split(',')) > entry_counter:
+        entry_counter = len(route['ifname'].split(','))
 
     # Alignment in case the command contains several nexthop ip
     for i in range(entry_counter):
+        # Set vrf to empty string if not defined
         if 'nexthop-vrf' in route:
-            if i > 0:
+            if i >= len(route['nexthop-vrf'].split(',')):
                 vrf = route['nexthop-vrf'].split(',')[0]
                 route['nexthop-vrf'] += ',' + vrf
         else:
             route['nexthop-vrf'] = ''
 
-        if not 'nexthop' in route:
+        # Set nexthop to empty string if not defined
+        if 'nexthop' in route:
+            if i >= len(route['nexthop'].split(',')):
+                route['nexthop'] += ','
+        else:
             route['nexthop'] = ''
 
+        # Set ifname to empty string if not defined
         if 'ifname' in route:
-            if i > 0:
+            if i >= len(route['ifname'].split(',')):
                 route['ifname'] += ','
         else:
             route['ifname'] = ''
 
         # Set default values for distance and blackhole because the command doesn't have such an option
         if 'distance' in route:
-            route['distance'] += ',0'
+            if i >= len(route['distance'].split(',')):
+                route['distance'] += ',0'
         else:
             route['distance'] = '0'
 
         if 'blackhole' in route:
-            route['blackhole'] += ',false'
+            if i >= len(route['blackhole'].split(',')):
+                # If the user configure with "ifname" as "null", set 'blackhole' attribute as true.
+                if route['ifname'].split(',')[i] == 'null':
+                    route['blackhole'] += ',true'
+                else:
+                    route['blackhole'] += ',false'
         else:
             # If the user configure with "ifname" as "null", set 'blackhole' attribute as true.
             if 'ifname' in route and route['ifname'] == 'null':
@@ -7199,28 +7347,30 @@ def add_route(ctx, command_str):
         # If exist update current entry
         current_entry = config_db.get_entry('STATIC_ROUTE', key)
 
-        for entry in ['nexthop', 'nexthop-vrf', 'ifname', 'distance', 'blackhole']:
-            if not entry in current_entry:
-                current_entry[entry] = ''
-            if entry in route:
-                current_entry[entry] += ',' + route[entry]
+        for item in ['nexthop', 'nexthop-vrf', 'ifname', 'distance', 'blackhole']:
+            if item not in current_entry:
+                current_entry[item] = ''
+            if item in route:
+                current_entry[item] += ',' + route[item]
             else:
-                current_entry[entry] += ','
+                current_entry[item] += ','
 
         config_db.set_entry("STATIC_ROUTE", key, current_entry)
     else:
         config_db.set_entry("STATIC_ROUTE", key, route)
 
+
 @route.command('del', context_settings={"ignore_unknown_options": True})
-@click.argument('command_str', metavar='prefix [vrf <vrf_name>] <A.B.C.D/M> nexthop <[vrf <vrf_name>] <A.B.C.D>>|<dev <dev_name>>', nargs=-1, type=click.Path())
+@click.argument('command_str', metavar='prefix [vrf <vrf_name>] <A.B.C.D/M> nexthop [vrf <vrf_name>] \
+                <A.B.C.D>|<dev <dev_name>>|<A.B.C.D dev <dev_name>>', nargs=-1, type=click.Path())
 @click.pass_context
 def del_route(ctx, command_str):
     """Del route command"""
     config_db = ctx.obj['config_db']
     key, route = cli_sroute_to_config(ctx, command_str, strict_nh=False)
     keys = config_db.get_keys('STATIC_ROUTE')
-    prefix_tuple = tuple(key.split('|'))
-    if not tuple(key.split("|")) in keys and not prefix_tuple in keys:
+
+    if not tuple(key.split("|")) in keys:
         ctx.fail('Route {} doesnt exist'.format(key))
     else:
         # If not defined nexthop or intf name remove entire route
@@ -7255,9 +7405,11 @@ def del_route(ctx, command_str):
         # Create tuple from CLI argument
         # config route add prefix 1.4.3.4/32 nexthop vrf Vrf-RED 20.0.0.2
         # ('20.0.0.2', 'Vrf-RED', '')
-        for entry in ['nexthop', 'nexthop-vrf', 'ifname']:
-            if entry in route:
-                cli_tuple += (route[entry],)
+        for item in ['nexthop', 'nexthop-vrf', 'ifname']:
+            if item in route:
+                if ',' in route[item]:
+                    ctx.fail('Only one nexthop can be deleted at a time')
+                cli_tuple += (route[item],)
             else:
                 cli_tuple += ('',)
 
@@ -7627,6 +7779,7 @@ def ecn(profile, rmax, rmin, ymax, ymin, gmax, gmin, rdrop, ydrop, gdrop, verbos
 @click.option('-p', metavar='<profile_name>', type=str, required=True, help="Profile name")
 @click.option('-a', metavar='<alpha>', type=click.IntRange(-8,8), help="Set alpha for profile type dynamic")
 @click.option('-s', metavar='<staticth>', type=click.IntRange(min=0), help="Set staticth for profile type static")
+@click.option('-t', type=click.Choice(["on", "off"]), help="Set packet trimming eligibility")
 @click.option('--verbose', '-vv', is_flag=True, help="Enable verbose output")
 @click.option('--namespace',
               '-n',
@@ -7636,12 +7789,14 @@ def ecn(profile, rmax, rmin, ymax, ymin, gmax, gmin, rdrop, ydrop, gdrop, verbos
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def mmu(p, a, s, namespace, verbose):
+def mmu(p, a, s, t, namespace, verbose):
     """mmuconfig configuration tasks"""
     log.log_info("'mmuconfig -p {}' executing...".format(p))
     command = ['mmuconfig', '-p', str(p)]
     if a is not None: command += ['-a', str(a)]
     if s is not None: command += ['-s', str(s)]
+    if t is not None:
+        command += ['-t', str(t)]
     if namespace is not None:
         command += ['-n', str(namespace)]
     if verbose:
@@ -9271,6 +9426,204 @@ def motd(message):
     config_db.connect()
     config_db.mod_entry(swsscommon.CFG_BANNER_MESSAGE_TABLE_NAME, 'global',
                         {'motd': message})
+
+
+#
+# 'vnet' group ('config vnet ...')
+#
+
+@config.group(cls=clicommon.AbbreviationGroup, name='vnet')
+@click.pass_context
+def vnet(ctx):
+    """VNET-related configuration tasks"""
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    ctx.obj = {}
+    ctx.obj['config_db'] = config_db
+
+
+@vnet.command('add')
+@click.argument('vnet_name', metavar='<vnet_name>', type=str, required=True)
+@click.argument('vni', metavar='<vni>', required=True)
+@click.argument('vxlan_tunnel', metavar='<vxlan_tunnel>', required=True)
+@click.argument('peer_list', metavar='<peer_list>', required=False)
+@click.argument('guid', metavar='<guid>', type=str, required=False)
+@click.argument('scope', metavar='<scope>', required=False)
+@click.argument('advertise_prefix', metavar='<advertise_prefix>', type=bool, required=False)
+@click.argument('overlay_dmac', metavar='<overlay_dmac>', required=False)
+@click.argument('src_mac', metavar='<src_mac>', required=False)
+@click.pass_context
+def add_vnet(ctx, vnet_name, vni, vxlan_tunnel, peer_list, guid, scope, advertise_prefix, overlay_dmac, src_mac):
+    """Add Vnet"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+
+    vnet_name_is_valid(ctx, vnet_name)
+
+    if not vni.isdigit() or clicommon.vni_id_is_valid(int(vni)) is False:
+        ctx.fail("Invalid VNI {}. Valid range [1 to 16777215].".format(vni))
+    if not clicommon.is_vxlan_tunnel_exists(config_db, vxlan_tunnel):
+        ctx.fail("Vxlan tunnel {} does not exist!".format(vxlan_tunnel))
+
+    subvnet_dict = {}
+    subvnet_dict["vni"] = vni
+    subvnet_dict["vxlan_tunnel"] = vxlan_tunnel
+
+    if peer_list:
+        peer_list = peer_list.split(',')
+        for peer in peer_list:
+            vnet_name_is_valid(ctx, peer)
+        subvnet_dict["peer_list"] = peer_list
+
+    if guid:
+        if len(guid) > GUID_MAX_LEN:
+            ctx.fail("'guid' length should not exceed {} characters".format(GUID_MAX_LEN))
+        subvnet_dict["guid"] = guid
+
+    if scope:
+        if scope != 'default':
+            ctx.fail("Only 'default' value is allowed for scope!")
+        subvnet_dict["scope"] = scope
+
+    if advertise_prefix:
+        subvnet_dict["advertise_prefix"] = advertise_prefix
+
+    if overlay_dmac:
+        if not clicommon.is_mac_address_valid(overlay_dmac):
+            ctx.fail("Invalid MAC for overlay dmac {} .".format(overlay_dmac))
+        subvnet_dict["overlay_dmac"] = overlay_dmac
+
+    if src_mac:
+        if not clicommon.is_mac_address_valid(src_mac):
+            ctx.fail("Invalid MAC for src mac {} .".format(src_mac))
+        subvnet_dict["src_mac"] = src_mac
+
+    try:
+        config_db.set_entry('VNET', vnet_name, subvnet_dict)
+    except ValueError as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+    click.echo("VNET {} is added/updated.".format(vnet_name))
+
+
+@vnet.command('del')
+@click.argument('vnet_name', metavar='<vnet_name>', required=True)
+@click.pass_context
+def del_vnet(ctx, vnet_name):
+    """Del Vnet"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+
+    vnet_name_is_valid(ctx, vnet_name)
+
+    if not is_vnet_exists(config_db, vnet_name):
+        ctx.fail("VNET {} does not exist!".format(vnet_name))
+    else:
+        del_interface_bind_to_vnet(config_db, vnet_name)
+        del_route_bind_to_vnet(config_db, vnet_name)
+
+        try:
+            config_db.set_entry('VNET', vnet_name, None)
+        except JsonPatchConflict as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+        click.echo("VNET {} deleted and all associated IP addresses and routes removed.".format(vnet_name))
+
+
+@vnet.command('add-route')
+@click.argument('vnet_name', metavar='<vnet_name>', type=str, required=True)
+@click.argument('prefix', metavar='<prefix>', required=True)
+@click.argument('endpoint', metavar='<endpoint>', required=True)
+@click.argument('vni', metavar='<vni>', required=False)
+@click.argument('mac_address', metavar='<mac_address>', required=False)
+@click.argument('endpoint_monitor', metavar='<endpoint_monitor>', required=False)
+@click.argument('profile', metavar='<profile>', type=str, required=False)
+@click.argument('primary', metavar='<primary>', required=False)
+@click.argument('monitoring', metavar='<monitoring>', type=str, required=False)
+@click.argument('adv_prefix', metavar='<adv_prefix>', required=False)
+@click.pass_context
+def add_vnet_route(ctx, vnet_name, prefix, endpoint, vni, mac_address, endpoint_monitor,
+                   profile, primary, monitoring, adv_prefix):
+    """Add/Update VNET Route"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+
+    vnet_name_is_valid(ctx, vnet_name)
+
+    if not is_vnet_exists(config_db, vnet_name):
+        ctx.fail("VNET {} doesnot exist, cannot add a route!".format(vnet_name))
+    if not clicommon.is_ipprefix(prefix):
+        ctx.fail("Invalid prefix {}".format(prefix))
+    else:
+        if not clicommon.is_ipaddress(endpoint):
+            ctx.fail("Endpoint has invalid IP address {}".format(endpoint))
+
+        subvnet_dict = {}
+        subvnet_dict["endpoint"] = endpoint
+
+        if vni:
+            if not vni.isdigit() or clicommon.vni_id_is_valid(int(vni)) is False:
+                ctx.fail("Invalid VNI {}. Valid range [1 to 16777215].".format(vni))
+            subvnet_dict["vni"] = vni
+
+        if mac_address:
+            if not clicommon.is_mac_address_valid(mac_address):
+                ctx.fail("Invalid MAC {}".format(mac_address))
+            subvnet_dict["mac_address"] = mac_address
+
+        if endpoint_monitor:
+            if not clicommon.is_ipaddress(endpoint_monitor):
+                ctx.fail("Endpoint monitor has invalid IP address {}".format(endpoint_monitor))
+            subvnet_dict["endpoint_monitor"] = endpoint_monitor
+
+        if profile:
+            subvnet_dict['profile'] = profile
+
+        if primary:
+            if not clicommon.is_ipaddress(primary):
+                ctx.fail("Primary has invalid IP address {}".format(primary))
+            subvnet_dict['primary'] = primary
+
+        if monitoring:
+            subvnet_dict['monitoring'] = monitoring
+
+        if adv_prefix:
+            if not clicommon.is_ipprefix(adv_prefix):
+                ctx.fail("Invalid adv_prefix {}".format(adv_prefix))
+            subvnet_dict['adv_prefix'] = adv_prefix
+
+        try:
+            config_db.set_entry('VNET_ROUTE_TUNNEL', (vnet_name, prefix), subvnet_dict)
+        except ValueError as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+        click.echo("VNET route added/updated for the VNET {}.".format(vnet_name))
+
+
+@vnet.command('del-route')
+@click.argument('vnet_name', metavar='<vnet_name>', type=str, required=True)
+@click.argument('prefix', metavar='<prefix>', required=False)
+@click.pass_context
+def del_vnet_route(ctx, vnet_name, prefix):
+    """Del a specific VNET route or all VNET routes"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+
+    vnet_name_is_valid(ctx, vnet_name)
+
+    if not is_vnet_exists(config_db, vnet_name):
+        ctx.fail("VNET {} doesnot exist, cannot delete the route!".format(vnet_name))
+    if not is_vnet_route_exists(config_db, vnet_name):
+        ctx.fail("Routes dont exist for the VNET {}, cant delete it!".format(vnet_name))
+    if prefix:
+        if not clicommon.is_ipprefix(prefix):
+            ctx.fail("Invalid prefix {}".format(prefix))
+        if not is_specific_vnet_route_exists(config_db, vnet_name, prefix):
+            ctx.fail("Route does not exist for the VNET {}, cant delete it!".format(vnet_name))
+        else:
+            for key in config_db.get_table('VNET_ROUTE_TUNNEL'):
+                if key[0] == vnet_name and key[1] == prefix:
+                    try:
+                        config_db.set_entry('VNET_ROUTE_TUNNEL', (vnet_name, prefix), None)
+                    except ValueError as e:
+                        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+                    click.echo("Specific route deleted for the VNET {}.".format(vnet_name))
+    else:
+        del_route_bind_to_vnet(config_db, vnet_name)
+        click.echo("All routes deleted for the VNET {}.".format(vnet_name))
 
 
 if __name__ == '__main__':

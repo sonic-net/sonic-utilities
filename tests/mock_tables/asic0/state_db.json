@@ -339,5 +339,73 @@
     },
     "PORT_CAPACITY_TABLE|PORT_CAPACITY_DATA" : {
         "capacity": "80000"
+    },
+    "ICMP_ECHO_SESSION_TABLE|default|Ethernet8|0x69f578f5|NORMAL" : {
+         "dst_ip": "192.168.0.5",
+         "hw_lookup": "false",
+         "rx_interval": "300",
+         "session_cookie": "0x58767e7a",
+         "session_guid": "0x69f578f5",
+         "src_ip": "10.1.0.36",
+         "state": "Up",
+         "tx_interval": "100"
+    },
+    "ICMP_ECHO_SESSION_TABLE|default|Ethernet0|0x4eb39592|RX" : {
+        "dst_ip": "192.168.0.3",
+        "hw_lookup": "false",
+        "rx_interval": "300",
+        "session_cookie": "0x58767e7a",
+        "session_guid": "0x4eb39592",
+        "src_ip": "10.1.0.36",
+        "state": "Up",
+        "tx_interval": "0"
+    },
+    "ICMP_ECHO_SESSION_TABLE|default|Ethernet128|0x23ffb930|NORMAL" : {
+        "dst_ip": "192.168.0.31",
+        "hw_lookup": "false",
+        "rx_interval": "300",
+        "session_cookie": "0x58767e7a",
+        "session_guid": "0x23ffb930",
+        "src_ip": "10.1.0.36",
+        "state": "Down",
+        "tx_interval": "100"
+
+    },
+    "BFD_SESSION_TABLE|default|default|10.0.1.1": {
+        "state": "DOWN",
+        "type": "async_active",
+        "local_addr" : "10.0.0.1",
+        "tx_interval" :"300",
+        "rx_interval" : "500",
+        "multiplier" : "3",
+        "multihop": "true"
+    },
+    "BFD_SESSION_TABLE|default|Ethernet12|10.0.2.1": {
+        "state": "UP",
+        "type": "async_active",
+        "local_addr" : "10.0.0.1",
+        "tx_interval" :"200",
+        "rx_interval" : "600",
+        "multiplier" : "3",
+        "multihop": "false",
+        "local_discriminator": "88"
+    },
+    "BFD_SESSION_TABLE|default|default|2000::10:1": {
+        "state": "UP",
+        "type": "async_active",
+        "local_addr" : "2000::1",
+        "tx_interval" :"100",
+        "rx_interval" : "700",
+        "multiplier" : "3",
+        "multihop": "false"
+    },
+    "BFD_SESSION_TABLE|VrfRed|default|10.0.1.1": {
+        "state": "UP",
+        "type": "async_active",
+        "local_addr" : "10.0.0.1",
+        "tx_interval" :"400",
+        "rx_interval" : "500",
+        "multiplier" : "5",
+        "multihop": "false"
     }
 }

@@ -2,7 +2,7 @@
 
 import re
 import unittest
-from unittest.mock import Mock, call, patch, mock_open
+from unittest.mock import Mock, call, patch, mock_open, MagicMock
 import pytest
 
 import sonic_package_manager
@@ -600,3 +600,30 @@ def test_download_file_sftp(package_manager):
         username="admin",
         password="test_password"
     )
+
+
+def test_installation_from_file_no_tags(package_manager, mock_docker_api, sonic_fs):
+    # Override the load function to return an image without tags
+    def load_no_tags(filename):
+        class Image:
+            def __init__(self, id):
+                self.id = id
+                self.tags = []
+
+            @property
+            def attrs(self):
+                return {'RepoTags': []}
+
+        return Image(filename)
+
+    mock_docker_api.load = MagicMock(side_effect=load_no_tags)
+
+    sonic_fs.create_file('Azure/docker-test:1.6.0')
+    package_manager.install(tarball='Azure/docker-test:1.6.0')
+
+    # Verify the image was loaded
+    mock_docker_api.load.assert_called_once_with('Azure/docker-test:1.6.0')
+
+    # Get the package from the database and verify the tag was set to the image ID
+    package = package_manager.database.get_package('test-package')
+    assert package.tag == 'Azure/docker-test:1.6.0'

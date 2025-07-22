@@ -396,6 +396,24 @@ class TestShowInterfaces(object):
         mock_run_command.assert_called_once_with(['intfutil', '-c', 'description', '-i', 'Ethernet0', '-n', 'asic0'], display_cmd=True)
 
     @patch('utilities_common.cli.run_command')
+    @patch.object(click.Choice, 'convert', MagicMock(return_value='all'))
+    @patch('sonic_py_common.multi_asic.is_multi_asic', MagicMock(return_value=True))
+    def test_bp_port_description(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands['interfaces'].commands['description'],
+            ['Ethernet-BP0', '-d', 'all', '--verbose'],
+        )
+
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(
+            ['intfutil', '-c', 'description', '-i', 'Ethernet-BP0', '-d', 'all'],
+            display_cmd=True,
+        )
+
+    @patch('utilities_common.cli.run_command')
     @patch.object(click.Choice, 'convert', MagicMock(return_value='asic0'))
     def test_status(self, mock_run_command):
         runner = CliRunner()
@@ -406,6 +424,24 @@ class TestShowInterfaces(object):
         mock_run_command.assert_called_once_with(['intfutil', '-c', 'status', '-i', 'Ethernet0', '-n', 'asic0'], display_cmd=True)
 
     @patch('utilities_common.cli.run_command')
+    @patch.object(click.Choice, 'convert', MagicMock(return_value='all'))
+    @patch('sonic_py_common.multi_asic.is_multi_asic', MagicMock(return_value=True))
+    def test_bp_port_status(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands['interfaces'].commands['status'],
+            ['Ethernet-BP0', '-d', 'all', '--verbose'],
+        )
+
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(
+            ['intfutil', '-c', 'status', '-i', 'Ethernet-BP0', '-d', 'all'],
+            display_cmd=True,
+        )
+
+    @patch('utilities_common.cli.run_command')
     @patch.object(click.Choice, 'convert', MagicMock(return_value='asic0'))
     def test_tpid(self, mock_run_command):
         runner = CliRunner()
@@ -414,6 +450,24 @@ class TestShowInterfaces(object):
         print(result.output)
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['intfutil', '-c', 'tpid', '-i', 'Ethernet0', '-n', 'asic0'], display_cmd=True)
+
+    @patch('utilities_common.cli.run_command')
+    @patch.object(click.Choice, 'convert', MagicMock(return_value='all'))
+    @patch('sonic_py_common.multi_asic.is_multi_asic', MagicMock(return_value=True))
+    def test_bp_port_tpid(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands['interfaces'].commands['tpid'],
+            ['Ethernet-BP0', '-d', 'all', '--verbose'],
+        )
+
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(
+            ['intfutil', '-c', 'tpid', '-i', 'Ethernet-BP0', '-d', 'all'],
+            display_cmd=True,
+        )
 
     @patch('utilities_common.cli.run_command')
     def test_transceiver_lpmode(self, mock_run_command):
@@ -443,6 +497,24 @@ class TestShowInterfaces(object):
         print(result.output)
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['portstat', '-a', '-p', '3', '-i', 'Ethernet0', '-n', 'asic0'], display_cmd=True)
+
+    @patch('utilities_common.cli.run_command')
+    @patch.object(click.Choice, 'convert', MagicMock(return_value='all'))
+    @patch('sonic_py_common.multi_asic.is_multi_asic', MagicMock(return_value=True))
+    def test_bp_port_counters(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands['interfaces'].commands['counters'],
+            ['-i', 'Ethernet-BP0', '-p', '3', '-a', '-d', 'all', '--verbose'],
+        )
+
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(
+            ['portstat', '-a', '-p', '3', '-i', 'Ethernet-BP0', '-s', 'all'],
+            display_cmd=True,
+        )
 
     @patch('utilities_common.cli.run_command')
     def test_counters_error(self, mock_run_command):
@@ -482,6 +554,24 @@ class TestShowInterfaces(object):
         mock_run_command.assert_called_once_with(['intfutil', '-c', 'autoneg', '-i', 'Ethernet0', '-n', 'asic0'], display_cmd=True)
 
     @patch('utilities_common.cli.run_command')
+    @patch.object(click.Choice, 'convert', MagicMock(return_value='all'))
+    @patch('sonic_py_common.multi_asic.is_multi_asic', MagicMock(return_value=True))
+    def test_bp_port_autoneg_status(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands['interfaces'].commands['autoneg'].commands['status'],
+            ['Ethernet-BP0', '-d', 'all', '--verbose'],
+        )
+
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(
+            ['intfutil', '-c', 'autoneg', '-i', 'Ethernet-BP0', '-d', 'all'],
+            display_cmd=True,
+        )
+
+    @patch('utilities_common.cli.run_command')
     @patch.object(click.Choice, 'convert', MagicMock(return_value='asic0'))
     def test_link_training_status(self, mock_run_command):
         runner = CliRunner()
@@ -490,6 +580,59 @@ class TestShowInterfaces(object):
         print(result.output)
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['intfutil', '-c', 'link_training', '-i', 'Ethernet0', '-n', 'asic0'], display_cmd=True)
+
+    @patch('utilities_common.cli.run_command')
+    @patch.object(click.Choice, 'convert', MagicMock(return_value='all'))
+    @patch('sonic_py_common.multi_asic.is_multi_asic', MagicMock(return_value=True))
+    def test_bp_port_link_training_status(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands['interfaces'].commands['link-training'].commands['status'],
+            ['Ethernet-BP0', '-d', 'all', '--verbose'],
+        )
+
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(
+            ['intfutil', '-c', 'link_training', '-i', 'Ethernet-BP0', '-d', 'all'],
+            display_cmd=True,
+        )
+
+    @patch('utilities_common.cli.run_command')
+    @patch.object(click.Choice, 'convert', MagicMock(return_value='asic0'))
+    def test_fec_status(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands['interfaces'].commands['fec'].commands['status'],
+            ['Ethernet0', '-n', 'asic0', '--verbose'],
+        )
+
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(
+            ['intfutil', '-c', 'fec', '-i', 'Ethernet0', '-n', 'asic0'],
+            display_cmd=True,
+        )
+
+    @patch('utilities_common.cli.run_command')
+    @patch.object(click.Choice, 'convert', MagicMock(return_value='all'))
+    @patch('sonic_py_common.multi_asic.is_multi_asic', MagicMock(return_value=True))
+    def test_bp_port_fec_status(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands['interfaces'].commands['fec'].commands['status'],
+            ['Ethernet-BP0', '-d', 'all', '--verbose'],
+        )
+
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(
+            ['intfutil', '-c', 'fec', '-i', 'Ethernet-BP0', '-d', 'all'],
+            display_cmd=True,
+        )
 
     def teardown(self):
         print('TEAR DOWN')
@@ -686,21 +829,18 @@ class TestShowPlatform(object):
 
     @mock.patch('sonic_py_common.device_info.get_platform_json_data')
     @patch('utilities_common.cli.run_command')
-    @patch('os.popen')
-    def test_ssdhealth(self, mock_popen, mock_run_command, mock_plat_json):
+    def test_ssdhealth(self, mock_run_command, mock_plat_json):
         mock_plat_json.return_value = {
             "chassis": {
                  "name": "mock_platform"
             }
         }
-        mock_popen.return_value.readline.return_value = '/dev/sda\n'
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['platform'].commands['ssdhealth'], ['--verbose', '--vendor'])
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_popen.assert_called_once_with('lsblk -o NAME,TYPE -p | grep disk')
-        mock_run_command.assert_called_once_with(['sudo', 'ssdutil', '-d', '/dev/sda', '-v', '-e'], display_cmd=True)
+        mock_run_command.assert_called_once_with(['sudo', 'ssdutil', '-v', '-e'], display_cmd=True)
 
     @patch('utilities_common.cli.run_command')
     def test_pcieinfo(self, mock_run_command):
@@ -1112,3 +1252,29 @@ class TestShowRunningconfiguration(object):
     @classmethod
     def teardown_class(cls):
         print('TEARDOWN')
+
+
+class TestShowSRv6Counters(object):
+    def setup(self):
+        print('SETUP')
+
+    @patch('utilities_common.cli.run_command')
+    def test_srv6_stats(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands['srv6'].commands['stats'], ['--verbose'])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(['srv6stat'], display_cmd=True)
+
+    @patch('utilities_common.cli.run_command')
+    def test_srv6_stats_with_sid(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands['srv6'].commands['stats'], ['1000:2:30::/48', '--verbose'])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(['srv6stat', '-s', '1000:2:30::/48'], display_cmd=True)
+
+    def teardown(self):
+        print('TEAR DOWN')

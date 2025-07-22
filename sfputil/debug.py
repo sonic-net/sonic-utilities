@@ -1,4 +1,5 @@
 import sys
+import time
 import click
 import utilities_common.cli as clicommon
 from utilities_common import platform_sfputil_helper
@@ -19,6 +20,8 @@ ERROR_PORT_CONFIG_LOAD = 4
 ERROR_NOT_IMPLEMENTED = 5
 ERROR_INVALID_PORT = 6
 
+CMIS_MAX_CHANNELS = 8
+TX_RX_OUTPUT_UPDATE_WAIT_TIME = 2  # seconds
 
 @click.group(cls=clicommon.AliasedGroup)
 def debug():
@@ -82,18 +85,61 @@ def set_output(port_name, enable, direction):
     Enable or disable TX/RX output based on direction ('tx' or 'rx').
     """
     sfp = get_sfp_object(port_name)
+    try:
+        api = sfp.get_xcvr_api()
+    except NotImplementedError:
+        click.echo(f"{port_name}: This functionality is not implemented")
+        sys.exit(ERROR_NOT_IMPLEMENTED)
 
     subport = get_subport(port_name)
 
-    media_lane_count = get_media_lane_count(port_name)
-
-    lane_mask = get_subport_lane_mask(int(subport), int(media_lane_count))
-
     try:
         if direction == "tx":
-            sfp.tx_disable_channel(lane_mask, enable == "disable")
+            lane_count = get_media_lane_count(port_name)
+            disable_func = sfp.tx_disable_channel
+            get_status_func = api.get_tx_output_status
+            status_key = "TxOutputStatus"
         elif direction == "rx":
-            sfp.rx_disable_channel(lane_mask, enable == "disable")
+            lane_count = get_host_lane_count(port_name)
+            disable_func = sfp.rx_disable_channel
+            get_status_func = api.get_rx_output_status
+            status_key = "RxOutputStatus"
+
+        lane_mask = get_subport_lane_mask(int(subport), int(lane_count))
+        if not disable_func(lane_mask, enable == "disable"):
+            click.echo(f"{port_name}: {direction.upper()} disable failed for subport {subport}")
+            sys.exit(EXIT_FAIL)
+
+        time.sleep(TX_RX_OUTPUT_UPDATE_WAIT_TIME)
+
+        output_dict = get_status_func()
+        if output_dict is None:
+            click.echo(f"{port_name}: {direction.upper()} output status not available for subport {subport}")
+            sys.exit(EXIT_FAIL)
+
+        for lane in range(1, CMIS_MAX_CHANNELS + 1):
+            if lane_mask & (1 << (lane - 1)):
+                lane_status = output_dict.get(f'{status_key}{lane}')
+                if lane_status is None:
+                    click.echo(
+                        f"{port_name}: {direction.upper()} output status not available for "
+                        f"lane {lane} on subport {subport}"
+                    )
+                    sys.exit(EXIT_FAIL)
+                if enable == "disable":
+                    if lane_status:
+                        click.echo(
+                            f"{port_name}: {direction.upper()} output on lane {lane} is still "
+                            f"enabled on subport {subport}. Restoring state."
+                        )
+                        sys.exit(EXIT_FAIL)
+                else:
+                    if not lane_status:
+                        click.echo(
+                            f"{port_name}: {direction.upper()} output on lane {lane} is still disabled "
+                            f"on subport {subport}. Restoring state."
+                        )
+                        sys.exit(EXIT_FAIL)
 
         click.echo(
             f"{port_name}: {direction.upper()} output "

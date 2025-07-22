@@ -1422,7 +1422,7 @@ collect_mellanox() {
 }
 
 ###############################################################################
-# Collect dfw dumps if any. Applies to only MLNX platform
+# Collect dfw dumps if any and sai.xml file. Applies to MLNX and NVIDIA Bluefield platform
 # Globals:
 #  CMD_PREFIX
 # Arguments:
@@ -1430,12 +1430,13 @@ collect_mellanox() {
 # Returns:
 #  None
 ###############################################################################
-collect_mellanox_dfw_dumps() {
+collect_nvidia_sdk_dumps() {
     trap 'handle_error $? $LINENO' ERR
     local platform=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_platform())")
     local hwsku=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_hwsku())")
     local def_dump_path="/var/log/mellanox/sdk-dumps"
     local sdk_dump_path=`cat /usr/share/sonic/device/${platform}/${hwsku}/sai.profile|grep "SAI_DUMP_STORE_PATH"|cut -d = -f2`
+    local sku_folder="/usr/share/sonic/device/${platform}/${hwsku}"
 
     if [ -z $sdk_dump_path ]; then
         # If the SAI_DUMP_STORE_PATH is not found in device specific sai profile, check in common sai profile
@@ -1476,6 +1477,10 @@ collect_mellanox_dfw_dumps() {
                 ${CMD_PREFIX}save_file ${file} sai_sdk_dump false true
             fi
         fi
+    done
+
+    for file in $(find "$sku_folder" -name "sai_*.xml"); do
+        save_file "$file" sai_sdk_dump true true
     done
 }
 
@@ -1837,6 +1842,8 @@ collect_nvidia_bluefield() {
     else
       echo "Platform dump script $DUMP_FILE does not exist"
     fi
+
+    save_cmd "get_component_versions.py" "component_versions"
 }
 
 ###############################################################################
@@ -2074,7 +2081,7 @@ save_counter_snapshot() {
     save_cmd "echo $counter_t" "date.counter_$idx"
     save_cmd "show interface counters" "interface.counters_$idx"
     if ! $IS_SUPERVISOR; then
-       save_cmd_all_ns "show queue counters" "queue.counters_$idx"
+       save_cmd "show queue counters" "queue.counters_$idx"
     fi
     save_redis "COUNTERS_DB" "COUNTERS_DB_$idx"
 
@@ -2384,7 +2391,7 @@ main() {
     save_sai_failure_dump 
 
     if [[ "$asic" = "mellanox" ]] || [[ "$asic" = "nvidia-bluefield" ]]; then
-        collect_mellanox_dfw_dumps
+        collect_nvidia_sdk_dumps
     fi
 
     finalize

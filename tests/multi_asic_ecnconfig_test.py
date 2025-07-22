@@ -58,6 +58,11 @@ class TestEcnConfigMultiAsic(TestEcnConfigBase):
     def test_ecn_q_set_off_one_masic(self):
         self.executor(testData['ecn_cfg_q_one_ns_off_verbose_masic'])
 
+    def test_ecn_queue_set_q_on_voq(self):
+        os.environ['UTILITIES_UNIT_TESTING_VOQ'] = "1"
+        self.executor(testData['ecn_cfg_q_voq'])
+        os.environ['UTILITIES_UNIT_TESTING_VOQ'] = "0"
+
     @classmethod
     def teardown_class(cls):
         super().teardown_class()
