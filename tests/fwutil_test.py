@@ -98,7 +98,8 @@ class TestComponentUpdateProvider(object):
     @patch('os.path.isdir', return_value=True)
     def test_is_smart_switch_method(self, mock_isdir, mock_validate,
                                     mock_parser_class, mock_platform_class):
-        """Test the new is_smart_switch method"""
+        """Test that the is_smart_switch method correctly returns True
+        when the chassis.is_smartswitch() method returns True."""
         # Setup mock chassis
         mock_chassis = MagicMock()
         mock_chassis.is_smartswitch.return_value = True
@@ -121,7 +122,8 @@ class TestComponentUpdateProvider(object):
     @patch('os.mkdir')
     def test_smartswitch_modular_chassis_parsing(self, mock_mkdir, mock_validate,
                                                  mock_parser_class, mock_platform_class):
-        """Test that SmartSwitch modular chassis is treated as non-modular for parsing"""
+        """Test that SmartSwitch devices with modules are passed as non-modular (False)
+        to the PlatformComponentsParser constructor."""
         # Setup mock chassis that is SmartSwitch and has modules
         mock_chassis = MagicMock()
         mock_chassis.is_smartswitch.return_value = True
