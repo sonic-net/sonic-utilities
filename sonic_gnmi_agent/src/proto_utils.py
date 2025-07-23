@@ -182,7 +182,7 @@ def json_to_proto(key: str, proto_dict: dict):
                 new_dict[key] = parse_ip_prefix(value)
             elif field_map[key].message_type.name == "Guid":
                 new_dict[key] = parse_guid(value)
-           elif field_map[key].message_type.name == "Range":
+            elif field_map[key].message_type.name == "Range":
                 new_dict[key] = parse_range(value)
             elif field_map[key].message_type.name == "ValueOrRange":
                 new_dict[key] = parse_value_or_range(value)
