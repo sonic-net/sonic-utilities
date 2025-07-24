@@ -1951,6 +1951,77 @@ save_log_files() {
 }
 
 ###############################################################################
+# Check BMC presence
+# Arguments:
+#  None
+# Returns:
+#  0 if BMC is supported, 1 otherwise
+###############################################################################
+is_bmc_supported() {
+    local platform=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_platform())")
+    # Check if the required file exists
+    if [ ! -f /usr/share/sonic/device/$platform/bmc.json ]; then
+        return 1
+    else
+        return 0
+    fi
+}
+
+###############################################################################
+# Trigger BMC debug log dump task
+# Arguments:
+#  None
+# Returns:
+#  None
+###############################################################################
+trigger_bmc_debug_log_dump() {
+    trap 'handle_error $? $LINENO' ERR
+    if ! is_bmc_supported; then
+        echo "INFO: BMC is not found on this platform. Skipping..."
+        return
+    fi
+    # Trigger BMC redfish API to start BMC debug log dump task
+    local task_id=$(python3 /usr/local/bin/bmc_techsupport.py -m trigger)
+    echo "$task_id"
+}
+
+###############################################################################
+# Save BMC debug log dump files
+# Globals:
+#  MKDIR, CP, TARDIR, TECHSUPPORT_TIME_INFO
+# Arguments:
+#  $1 - BMC debug log dump task ID
+# Returns:
+#  None
+###############################################################################
+collect_bmc_files() {
+    $MKDIR $V -p $TARDIR/bmc
+    trap 'handle_error $? $LINENO' ERR
+    start_t=$(date +%s%3N)
+    if ! is_bmc_supported; then
+        return
+    fi
+
+    local bmc_debug_log_dump_task_id=$1
+    local TARBALL_XZ="/tmp/bmc_debug_log_dump.tar.xz"
+    # Remove existing tarball files if they exist
+    [ -f "$TARBALL_XZ" ] && rm -f "$TARBALL_XZ"
+
+    # Invoke BMC redfish API to extract BMC debug log dump to "/tmp/bmc_debug_log_dump.tar.xz"
+    python3 /usr/local/bin/bmc_techsupport.py -m collect -p "$TARBALL_XZ" -t "$bmc_debug_log_dump_task_id"
+    if [ -f "$TARBALL_XZ" ]; then
+        $CP $V -rf "$TARBALL_XZ" $TARDIR/bmc
+    else
+        echo "ERROR: File $TARBALL_XZ does not exist."
+    fi
+
+    # Cleanup
+    [ -f "$TARBALL_XZ" ] && rm -f "$TARBALL_XZ"
+    end_t=$(date +%s%3N)
+    echo "[ collect_bmc_files ] : $(($end_t-$start_t)) msec" >> $TECHSUPPORT_TIME_INFO
+}
+
+###############################################################################
 # Save warmboot files
 # Globals:
 #  TARDIR, TARFILE, TAR, DUMPDIR, TECHSUPPORT_TIME_INFO, NOOP
@@ -2176,6 +2247,12 @@ main() {
     echo $BASE > $TECHSUPPORT_TIME_INFO
     start_t=$(date +%s%3N)
 
+    # Trigger BMC debug log dump task - Must be the first task to run
+    bmc_debug_log_dump_task_id=$(trigger_bmc_debug_log_dump)
+    if [ "$bmc_debug_log_dump_task_id" == "-1" ]; then
+        echo "INFO: Fail to trigger BMC debug log dump. Skipping..."
+    fi
+
     # Capture /proc state early
     save_proc /proc/buddyinfo /proc/cmdline /proc/consoles \
         /proc/cpuinfo /proc/devices /proc/diskstats /proc/dma \
@@ -2389,6 +2466,11 @@ main() {
     save_log_files &
     save_crash_files &
     save_warmboot_files &
+
+    if [ "$bmc_debug_log_dump_task_id" != "-1" ]; then
+        collect_bmc_files $bmc_debug_log_dump_task_id &
+    fi
+
     wait
 
     save_to_tar

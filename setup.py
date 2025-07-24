@@ -189,6 +189,7 @@ setup(
         'scripts/memory_threshold_check.py',
         'scripts/memory_threshold_check_handler.py',
         'scripts/techsupport_cleanup.py',
+        'scripts/bmc_techsupport.py',
         'scripts/storm_control.py',
         'scripts/verify_image_sign.sh',
         'scripts/verify_image_sign_common.sh',
