@@ -334,6 +334,26 @@ class TestDualtorNeighborCheck(object):
 
         assert mux_server_to_port_map == result
 
+    def test_get_mux_soc_neighbors(self, mock_log_functions):
+        mux_cables = {
+            "Ethernet4": {
+                "server_ipv4": "192.168.0.2/32",
+                "server_ipv6": "fc02:1000::2/128",
+                "soc_ipv4": "192.168.0.1/32",
+                "state": "active"
+            },
+            "Ethernet8": {
+                "server_ipv4": "192.168.0.4/32",
+                "soc_ipv4": "192.168.0.3/32",
+                "state": "standby"
+            }
+        }
+        expected_soc_ips = ["192.168.0.1", "192.168.0.3"]
+
+        result = dualtor_neighbor_check.get_mux_soc_neighbors(mux_cables)
+
+        assert set(expected_soc_ips) == set(result)
+
     def test_check_neighbor_consistency_no_fdb_entry(self, mock_log_functions):
         mock_log_error, mock_log_warn, _, _ = mock_log_functions
         neighbors = {"192.168.0.2": "ee:86:d8:46:7d:01"}
@@ -358,7 +378,8 @@ class TestDualtorNeighborCheck(object):
             mac_to_port_name_map,
             asic_route_table,
             asic_neigh_table,
-            mux_server_to_port_map
+            mux_server_to_port_map,
+            []
         )
         res = dualtor_neighbor_check.parse_check_results(check_results)
 
@@ -390,7 +411,8 @@ class TestDualtorNeighborCheck(object):
             mac_to_port_name_map,
             asic_route_table,
             asic_neigh_table,
-            mux_server_to_port_map
+            mux_server_to_port_map,
+            []
         )
         res = dualtor_neighbor_check.parse_check_results(check_results)
 
@@ -424,7 +446,8 @@ class TestDualtorNeighborCheck(object):
             mac_to_port_name_map,
             asic_route_table,
             asic_neigh_table,
-            mux_server_to_port_map
+            mux_server_to_port_map,
+            []
         )
         res = dualtor_neighbor_check.parse_check_results(check_results)
 
@@ -458,7 +481,8 @@ class TestDualtorNeighborCheck(object):
             mac_to_port_name_map,
             asic_route_table,
             asic_neigh_table,
-            mux_server_to_port_map
+            mux_server_to_port_map,
+            []
         )
         res = dualtor_neighbor_check.parse_check_results(check_results)
 
@@ -490,7 +514,8 @@ class TestDualtorNeighborCheck(object):
             mac_to_port_name_map,
             asic_route_table,
             asic_neigh_table,
-            mux_server_to_port_map
+            mux_server_to_port_map,
+            []
         )
         res = dualtor_neighbor_check.parse_check_results(check_results)
 
@@ -522,7 +547,8 @@ class TestDualtorNeighborCheck(object):
             mac_to_port_name_map,
             asic_route_table,
             asic_neigh_table,
-            mux_server_to_port_map
+            mux_server_to_port_map,
+            []
         )
         res = dualtor_neighbor_check.parse_check_results(check_results)
 
@@ -556,7 +582,8 @@ class TestDualtorNeighborCheck(object):
             mac_to_port_name_map,
             asic_route_table,
             asic_neigh_table,
-            mux_server_to_port_map
+            mux_server_to_port_map,
+            []
         )
         res = dualtor_neighbor_check.parse_check_results(check_results)
 
@@ -590,7 +617,8 @@ class TestDualtorNeighborCheck(object):
             mac_to_port_name_map,
             asic_route_table,
             asic_neigh_table,
-            mux_server_to_port_map
+            mux_server_to_port_map,
+            []
         )
         res = dualtor_neighbor_check.parse_check_results(check_results)
 
@@ -622,7 +650,398 @@ class TestDualtorNeighborCheck(object):
             mac_to_port_name_map,
             asic_route_table,
             asic_neigh_table,
-            mux_server_to_port_map
+            mux_server_to_port_map,
+            []
+        )
+        res = dualtor_neighbor_check.parse_check_results(check_results)
+
+        assert res is True
+        mock_log_warn.assert_has_calls(expected_log_warn_calls)
+        mock_log_error.assert_not_called()
+
+    def test_check_neighbor_consistency_soc_ip_neighbor(self, mock_log_functions):
+        mock_log_error, mock_log_warn, _, _ = mock_log_functions
+        neighbors = {"192.168.0.1": "aa:bb:cc:dd:ee:ff"}  # SOC IP neighbor
+        mux_states = {"Ethernet4": "active"}
+        hw_mux_states = {"Ethernet4": "active"}
+        mac_to_port_name_map = {"aa:bb:cc:dd:ee:ff": "Ethernet4"}
+        asic_route_table = []
+        asic_neigh_table = ["{\"ip\":\"192.168.0.1\",\"rif\":\"oid:0x6000000000671\",\"switch_id\":\"oid:0x21000000000000\"}"]
+        mux_server_to_port_map = {}
+        mux_soc_neigh_ips = ["192.168.0.1", "192.168.0.3"]  # SOC neighbor IPs
+        expected_output = ["192.168.0.1", "aa:bb:cc:dd:ee:ff", "Ethernet4", "active", "no", "yes", "no", "consistent"]
+        expected_log_output = tabulate.tabulate(
+            [expected_output],
+            headers=dualtor_neighbor_check.NEIGHBOR_ATTRIBUTES,
+            tablefmt="simple"
+        ).split("\n")
+        expected_log_warn_calls = [call(line) for line in expected_log_output]
+
+        check_results = dualtor_neighbor_check.check_neighbor_consistency(
+            neighbors,
+            mux_states,
+            hw_mux_states,
+            mac_to_port_name_map,
+            asic_route_table,
+            asic_neigh_table,
+            mux_server_to_port_map,
+            mux_soc_neigh_ips
+        )
+        res = dualtor_neighbor_check.parse_check_results(check_results)
+
+        assert res is True
+        mock_log_warn.assert_has_calls(expected_log_warn_calls)
+        mock_log_error.assert_not_called()
+
+    def test_check_neighbor_consistency_multiple_neighbors_with_soc_ips(self, mock_log_functions):
+        mock_log_error, mock_log_warn, _, _ = mock_log_functions
+        neighbors = {
+            "192.168.0.2": "ee:86:d8:46:7d:01",  # Server IP
+            "192.168.0.1": "aa:bb:cc:dd:ee:ff",  # SOC IP
+            "192.168.0.5": "11:22:33:44:55:66"   # Regular neighbor
+        }
+        mux_states = {"Ethernet4": "active", "Ethernet8": "standby"}
+        hw_mux_states = {"Ethernet4": "active", "Ethernet8": "standby"}
+        mac_to_port_name_map = {
+            "ee:86:d8:46:7d:01": "Ethernet4",
+            "aa:bb:cc:dd:ee:ff": "Ethernet4",
+            "11:22:33:44:55:66": "Ethernet8"
+        }
+        asic_route_table = [
+            "{\"dest\":\"192.168.0.5/32\",\"switch_id\":\"oid:0x21000000000000\",\"vr\":\"oid:0x3000000000024\"}"
+        ]
+        asic_neigh_table = [
+            "{\"ip\":\"192.168.0.2\",\"rif\":\"oid:0x6000000000671\",\"switch_id\":\"oid:0x21000000000000\"}",
+            "{\"ip\":\"192.168.0.1\",\"rif\":\"oid:0x6000000000671\",\"switch_id\":\"oid:0x21000000000000\"}"
+        ]
+        mux_server_to_port_map = {"192.168.0.2": "Ethernet4"}
+        mux_soc_neigh_ips = ["192.168.0.1", "192.168.0.3"]
+        expected_outputs = [
+            ["192.168.0.1", "aa:bb:cc:dd:ee:ff", "Ethernet4", "active", "no", "yes", "no", "consistent"],
+            ["192.168.0.2", "ee:86:d8:46:7d:01", "Ethernet4", "active", "no", "yes", "no", "consistent"],
+            ["192.168.0.5", "11:22:33:44:55:66", "Ethernet8", "standby", "no", "no", "yes", "consistent"]
+        ]
+        expected_log_output = tabulate.tabulate(
+            expected_outputs,
+            headers=dualtor_neighbor_check.NEIGHBOR_ATTRIBUTES,
+            tablefmt="simple"
+        ).split("\n")
+        expected_log_warn_calls = [call(line) for line in expected_log_output]
+
+        check_results = dualtor_neighbor_check.check_neighbor_consistency(
+            neighbors,
+            mux_states,
+            hw_mux_states,
+            mac_to_port_name_map,
+            asic_route_table,
+            asic_neigh_table,
+            mux_server_to_port_map,
+            mux_soc_neigh_ips
+        )
+        res = dualtor_neighbor_check.parse_check_results(check_results)
+
+        assert res is True
+        mock_log_warn.assert_has_calls(expected_log_warn_calls)
+        mock_log_error.assert_not_called()
+
+    def test_check_neighbor_consistency_no_fdb_entry(self, mock_log_functions):
+        mock_log_error, mock_log_warn, _, _ = mock_log_functions
+        neighbors = {"192.168.0.2": "ee:86:d8:46:7d:01"}
+        mux_states = {"Ethernet4": "active"}
+        hw_mux_states = {"Ethernet4": "active"}
+        mac_to_port_name_map = {"ee:86:d8:46:7d:02": "Ethernet4"}
+        asic_route_table = []
+        asic_neigh_table = []
+        mux_server_to_port_map = {}
+        expected_output = ["192.168.0.2", "ee:86:d8:46:7d:01", "N/A", "N/A", "N/A", "N/A", "N/A", "N/A"]
+        expected_log_output = tabulate.tabulate(
+            [expected_output],
+            headers=dualtor_neighbor_check.NEIGHBOR_ATTRIBUTES,
+            tablefmt="simple"
+        ).split("\n")
+        expected_log_warn_calls = [call(line) for line in expected_log_output]
+
+        check_results = dualtor_neighbor_check.check_neighbor_consistency(
+            neighbors,
+            mux_states,
+            hw_mux_states,
+            mac_to_port_name_map,
+            asic_route_table,
+            asic_neigh_table,
+            mux_server_to_port_map,
+            []
+        )
+        res = dualtor_neighbor_check.parse_check_results(check_results)
+
+        assert res is True
+        mock_log_warn.assert_has_calls(expected_log_warn_calls)
+        mock_log_error.assert_not_called()
+
+    def test_check_neighbor_consistency_consistent_neighbor_mux_active(self, mock_log_functions):
+        mock_log_error, mock_log_warn, _, _ = mock_log_functions
+        neighbors = {"192.168.0.2": "ee:86:d8:46:7d:01"}
+        mux_states = {"Ethernet4": "active"}
+        hw_mux_states = {"Ethernet4": "active"}
+        mac_to_port_name_map = {"ee:86:d8:46:7d:01": "Ethernet4"}
+        asic_route_table = []
+        asic_neigh_table = ["{\"ip\":\"192.168.0.2\",\"rif\":\"oid:0x6000000000671\",\"switch_id\":\"oid:0x21000000000000\"}"]
+        mux_server_to_port_map = {"192.168.0.2": "Ethernet4"}
+        expected_output = ["192.168.0.2", "ee:86:d8:46:7d:01", "Ethernet4", "active", "no", "yes", "no", "consistent"]
+        expected_log_output = tabulate.tabulate(
+            [expected_output],
+            headers=dualtor_neighbor_check.NEIGHBOR_ATTRIBUTES,
+            tablefmt="simple"
+        ).split("\n")
+        expected_log_warn_calls = [call(line) for line in expected_log_output]
+
+        check_results = dualtor_neighbor_check.check_neighbor_consistency(
+            neighbors,
+            mux_states,
+            hw_mux_states,
+            mac_to_port_name_map,
+            asic_route_table,
+            asic_neigh_table,
+            mux_server_to_port_map,
+            []
+        )
+        res = dualtor_neighbor_check.parse_check_results(check_results)
+
+        assert res is True
+        mock_log_warn.assert_has_calls(expected_log_warn_calls)
+        mock_log_error.assert_not_called()
+
+    def test_check_neighbor_consistency_inconsistent_neighbor_mux_active_no_asic_neighbor(self, mock_log_functions):
+        mock_log_error, mock_log_warn, _, _ = mock_log_functions
+        neighbors = {"192.168.0.2": "ee:86:d8:46:7d:01"}
+        mux_states = {"Ethernet4": "active"}
+        hw_mux_states = {"Ethernet4": "active"}
+        mac_to_port_name_map = {"ee:86:d8:46:7d:01": "Ethernet4"}
+        asic_route_table = []
+        asic_neigh_table = []
+        mux_server_to_port_map = {"192.168.0.2": "Ethernet4"}
+        expected_output = ["192.168.0.2", "ee:86:d8:46:7d:01", "Ethernet4", "active", "no", "no", "no", "inconsistent"]
+        expected_log_output = tabulate.tabulate(
+            [expected_output],
+            headers=dualtor_neighbor_check.NEIGHBOR_ATTRIBUTES,
+            tablefmt="simple"
+        ).split("\n")
+        expected_log_warn_calls = [call(line) for line in expected_log_output]
+        expected_log_error_calls = [call("Found neighbors that are inconsistent with mux states: %s", ["192.168.0.2"])]
+        expected_log_error_calls.extend([call(line) for line in expected_log_output])
+
+        check_results = dualtor_neighbor_check.check_neighbor_consistency(
+            neighbors,
+            mux_states,
+            hw_mux_states,
+            mac_to_port_name_map,
+            asic_route_table,
+            asic_neigh_table,
+            mux_server_to_port_map,
+            []
+        )
+        res = dualtor_neighbor_check.parse_check_results(check_results)
+
+        assert res is False
+        mock_log_warn.assert_has_calls(expected_log_warn_calls)
+        mock_log_error.assert_has_calls(expected_log_error_calls)
+
+    def test_check_neighbor_consistency_inconsistent_neighbor_mux_active_asic_tunnel_route(self, mock_log_functions):
+        mock_log_error, mock_log_warn, _, _ = mock_log_functions
+        neighbors = {"192.168.0.2": "ee:86:d8:46:7d:01"}
+        mux_states = {"Ethernet4": "active"}
+        hw_mux_states = {"Ethernet4": "active"}
+        mac_to_port_name_map = {"ee:86:d8:46:7d:01": "Ethernet4"}
+        asic_route_table = ["{\"dest\":\"192.168.0.2/32\",\"switch_id\":\"oid:0x21000000000000\",\"vr\":\"oid:0x3000000000024\"}"]
+        asic_neigh_table = []
+        mux_server_to_port_map = {"192.168.0.2": "Ethernet4"}
+        expected_output = ["192.168.0.2", "ee:86:d8:46:7d:01", "Ethernet4", "active", "no", "no", "yes", "inconsistent"]
+        expected_log_output = tabulate.tabulate(
+            [expected_output],
+            headers=dualtor_neighbor_check.NEIGHBOR_ATTRIBUTES,
+            tablefmt="simple"
+        ).split("\n")
+        expected_log_warn_calls = [call(line) for line in expected_log_output]
+        expected_log_error_calls = [call("Found neighbors that are inconsistent with mux states: %s", ["192.168.0.2"])]
+        expected_log_error_calls.extend([call(line) for line in expected_log_output])
+
+        check_results = dualtor_neighbor_check.check_neighbor_consistency(
+            neighbors,
+            mux_states,
+            hw_mux_states,
+            mac_to_port_name_map,
+            asic_route_table,
+            asic_neigh_table,
+            mux_server_to_port_map,
+            []
+        )
+        res = dualtor_neighbor_check.parse_check_results(check_results)
+
+        assert res is False
+        mock_log_warn.assert_has_calls(expected_log_warn_calls)
+        mock_log_error.assert_has_calls(expected_log_error_calls)
+
+    def test_check_neighbor_consistency_inconsistent_neighbor_mux_active_in_toggle(self, mock_log_functions):
+        mock_log_error, mock_log_warn, _, _ = mock_log_functions
+        neighbors = {"192.168.0.2": "ee:86:d8:46:7d:01"}
+        mux_states = {"Ethernet4": "active"}
+        hw_mux_states = {"Ethernet4": "standby"}
+        mac_to_port_name_map = {"ee:86:d8:46:7d:01": "Ethernet4"}
+        asic_route_table = []
+        asic_neigh_table = []
+        mux_server_to_port_map = {"192.168.0.2": "Ethernet4"}
+        expected_output = ["192.168.0.2", "ee:86:d8:46:7d:01", "Ethernet4", "active", "yes", "no", "no", "inconsistent"]
+        expected_log_output = tabulate.tabulate(
+            [expected_output],
+            headers=dualtor_neighbor_check.NEIGHBOR_ATTRIBUTES,
+            tablefmt="simple"
+        ).split("\n")
+        expected_log_warn_calls = [call(line) for line in expected_log_output]
+
+        check_results = dualtor_neighbor_check.check_neighbor_consistency(
+            neighbors,
+            mux_states,
+            hw_mux_states,
+            mac_to_port_name_map,
+            asic_route_table,
+            asic_neigh_table,
+            mux_server_to_port_map,
+            []
+        )
+        res = dualtor_neighbor_check.parse_check_results(check_results)
+
+        assert res is True
+        mock_log_warn.assert_has_calls(expected_log_warn_calls)
+        mock_log_error.assert_not_called()
+
+    def test_check_neighbor_consistency_consistent_neighbor_mux_standby(self, mock_log_functions):
+        mock_log_error, mock_log_warn, _, _ = mock_log_functions
+        neighbors = {"192.168.0.2": "ee:86:d8:46:7d:01"}
+        mux_states = {"Ethernet4": "standby"}
+        hw_mux_states = {"Ethernet4": "standby"}
+        mac_to_port_name_map = {"ee:86:d8:46:7d:01": "Ethernet4"}
+        asic_route_table = ["{\"dest\":\"192.168.0.2/32\",\"switch_id\":\"oid:0x21000000000000\",\"vr\":\"oid:0x3000000000024\"}"]
+        asic_neigh_table = []
+        mux_server_to_port_map = {"192.168.0.2": "Ethernet4"}
+        expected_output = ["192.168.0.2", "ee:86:d8:46:7d:01", "Ethernet4", "standby", "no", "no", "yes", "consistent"]
+        expected_log_output = tabulate.tabulate(
+            [expected_output],
+            headers=dualtor_neighbor_check.NEIGHBOR_ATTRIBUTES,
+            tablefmt="simple"
+        ).split("\n")
+        expected_log_warn_calls = [call(line) for line in expected_log_output]
+
+        check_results = dualtor_neighbor_check.check_neighbor_consistency(
+            neighbors,
+            mux_states,
+            hw_mux_states,
+            mac_to_port_name_map,
+            asic_route_table,
+            asic_neigh_table,
+            mux_server_to_port_map,
+            []
+        )
+        res = dualtor_neighbor_check.parse_check_results(check_results)
+
+        assert res is True
+        mock_log_warn.assert_has_calls(expected_log_warn_calls)
+        mock_log_error.assert_not_called()
+
+    def test_check_neighbor_consistency_inconsistent_neighbor_mux_standby_no_asic_tunnel_route(self, mock_log_functions):
+        mock_log_error, mock_log_warn, _, _ = mock_log_functions
+        neighbors = {"192.168.0.2": "ee:86:d8:46:7d:01"}
+        mux_states = {"Ethernet4": "standby"}
+        hw_mux_states = {"Ethernet4": "standby"}
+        mac_to_port_name_map = {"ee:86:d8:46:7d:01": "Ethernet4"}
+        asic_route_table = []
+        asic_neigh_table = []
+        mux_server_to_port_map = {"192.168.0.2": "Ethernet4"}
+        expected_output = ["192.168.0.2", "ee:86:d8:46:7d:01", "Ethernet4", "standby", "no", "no", "no", "inconsistent"]
+        expected_log_output = tabulate.tabulate(
+            [expected_output],
+            headers=dualtor_neighbor_check.NEIGHBOR_ATTRIBUTES,
+            tablefmt="simple"
+        ).split("\n")
+        expected_log_warn_calls = [call(line) for line in expected_log_output]
+        expected_log_error_calls = [call("Found neighbors that are inconsistent with mux states: %s", ["192.168.0.2"])]
+        expected_log_error_calls.extend([call(line) for line in expected_log_output])
+
+        check_results = dualtor_neighbor_check.check_neighbor_consistency(
+            neighbors,
+            mux_states,
+            hw_mux_states,
+            mac_to_port_name_map,
+            asic_route_table,
+            asic_neigh_table,
+            mux_server_to_port_map,
+            []
+        )
+        res = dualtor_neighbor_check.parse_check_results(check_results)
+
+        assert res is False
+        mock_log_warn.assert_has_calls(expected_log_warn_calls)
+        mock_log_error.assert_has_calls(expected_log_error_calls)
+
+    def test_check_neighbor_consistency_inconsistent_neighbor_mux_standby_asic_neighbor(self, mock_log_functions):
+        mock_log_error, mock_log_warn, _, _ = mock_log_functions
+        neighbors = {"192.168.0.2": "ee:86:d8:46:7d:01"}
+        mux_states = {"Ethernet4": "standby"}
+        hw_mux_states = {"Ethernet4": "standby"}
+        mac_to_port_name_map = {"ee:86:d8:46:7d:01": "Ethernet4"}
+        asic_route_table = []
+        asic_neigh_table = ["{\"ip\":\"192.168.0.2\",\"rif\":\"oid:0x6000000000671\",\"switch_id\":\"oid:0x21000000000000\"}"]
+        mux_server_to_port_map = {"192.168.0.2": "Ethernet4"}
+        expected_output = ["192.168.0.2", "ee:86:d8:46:7d:01", "Ethernet4", "standby", "no", "yes", "no", "inconsistent"]
+        expected_log_output = tabulate.tabulate(
+            [expected_output],
+            headers=dualtor_neighbor_check.NEIGHBOR_ATTRIBUTES,
+            tablefmt="simple"
+        ).split("\n")
+        expected_log_warn_calls = [call(line) for line in expected_log_output]
+        expected_log_error_calls = [call("Found neighbors that are inconsistent with mux states: %s", ["192.168.0.2"])]
+        expected_log_error_calls.extend([call(line) for line in expected_log_output])
+
+        check_results = dualtor_neighbor_check.check_neighbor_consistency(
+            neighbors,
+            mux_states,
+            hw_mux_states,
+            mac_to_port_name_map,
+            asic_route_table,
+            asic_neigh_table,
+            mux_server_to_port_map,
+            []
+        )
+        res = dualtor_neighbor_check.parse_check_results(check_results)
+
+        assert res is False
+        mock_log_warn.assert_has_calls(expected_log_warn_calls)
+        mock_log_error.assert_has_calls(expected_log_error_calls)
+
+    def test_check_neighbor_consistency_inconsistent_neighbor_mux_standby_in_toggle(self, mock_log_functions):
+        mock_log_error, mock_log_warn, _, _ = mock_log_functions
+        neighbors = {"192.168.0.2": "ee:86:d8:46:7d:01"}
+        mux_states = {"Ethernet4": "standby"}
+        hw_mux_states = {"Ethernet4": "active"}
+        mac_to_port_name_map = {"ee:86:d8:46:7d:01": "Ethernet4"}
+        asic_route_table = []
+        asic_neigh_table = []
+        mux_server_to_port_map = {"192.168.0.2": "Ethernet4"}
+        expected_output = ["192.168.0.2", "ee:86:d8:46:7d:01", "Ethernet4", "standby", "yes", "no", "no", "inconsistent"]
+        expected_log_output = tabulate.tabulate(
+            [expected_output],
+            headers=dualtor_neighbor_check.NEIGHBOR_ATTRIBUTES,
+            tablefmt="simple"
+        ).split("\n")
+        expected_log_warn_calls = [call(line) for line in expected_log_output]
+
+        check_results = dualtor_neighbor_check.check_neighbor_consistency(
+            neighbors,
+            mux_states,
+            hw_mux_states,
+            mac_to_port_name_map,
+            asic_route_table,
+            asic_neigh_table,
+            mux_server_to_port_map,
+            []
         )
         res = dualtor_neighbor_check.parse_check_results(check_results)
 
@@ -654,7 +1073,8 @@ class TestDualtorNeighborCheck(object):
             mac_to_port_name_map,
             asic_route_table,
             asic_neigh_table,
-            mux_server_to_port_map
+            mux_server_to_port_map,
+            []
         )
         res = dualtor_neighbor_check.parse_check_results(check_results)
 
@@ -686,7 +1106,8 @@ class TestDualtorNeighborCheck(object):
             mac_to_port_name_map,
             asic_route_table,
             asic_neigh_table,
-            mux_server_to_port_map
+            mux_server_to_port_map,
+            []
         )
         res = dualtor_neighbor_check.parse_check_results(check_results)
 
@@ -720,7 +1141,8 @@ class TestDualtorNeighborCheck(object):
             mac_to_port_name_map,
             asic_route_table,
             asic_neigh_table,
-            mux_server_to_port_map
+            mux_server_to_port_map,
+            []
         )
         res = dualtor_neighbor_check.parse_check_results(check_results)
 
