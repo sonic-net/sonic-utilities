@@ -1,12 +1,10 @@
 import re
 import click
-# import subprocess
 import utilities_common.cli as clicommon
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 
-
 ##############################################################################
-# 'spanning_tree' group ("show spanning_tree ...")
+#   'spanning_tree' group ("show spanning_tree ...")
 ###############################################################################
 #   STP show commands:-
 #   show spanning_tree
@@ -18,35 +16,20 @@ from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 #
 ###############################################################################
 g_stp_vlanid = 0
-#
-# Utility API's
-#
-
 
 def is_stp_docker_running():
     return True
-#    running_docker = subprocess.check_output('docker ps', shell=True)
-#    if running_docker.find("docker-stp".encode()) == -1:
-#        return False
-#    else:
-#        return True
-
 
 def connect_to_cfg_db():
     config_db = ConfigDBConnector()
     config_db.connect()
     return config_db
 
-
 def connect_to_appl_db():
     appl_db = SonicV2Connector(host="127.0.0.1")
     appl_db.connect(appl_db.APPL_DB)
     return appl_db
 
-
-# Redis DB only supports limiter pattern search wildcards.
-# check https://redis.io/commands/KEYS before using this api
-# Redis-db uses glob-style patterns not regex
 def stp_get_key_from_pattern(db_connect, db, pattern):
     keys = db_connect.keys(db, pattern)
     if keys:
@@ -54,14 +37,11 @@ def stp_get_key_from_pattern(db_connect, db, pattern):
     else:
         return None
 
-
-# get_all doesnt accept regex patterns, it requires exact key
 def stp_get_all_from_pattern(db_connect, db, pattern):
     key = stp_get_key_from_pattern(db_connect, db, pattern)
     if key:
         entry = db_connect.get_all(db, key)
         return entry
-
 
 def stp_is_port_fast_enabled(ifname):
     app_db_entry = stp_get_all_from_pattern(
@@ -70,13 +50,11 @@ def stp_is_port_fast_enabled(ifname):
         return False
     return True
 
-
 def stp_is_uplink_fast_enabled(ifname):
     entry = g_stp_cfg_db.get_entry("STP_PORT", ifname)
     if (entry and ('uplink_fast' in entry) and entry['uplink_fast'] == 'true'):
         return True
     return False
-
 
 def stp_get_entry_from_vlan_tb(db, vlanid):
     entry = stp_get_all_from_pattern(db, db.APPL_DB, "*STP_VLAN_TABLE:Vlan{}".format(vlanid))
@@ -116,7 +94,6 @@ def stp_get_entry_from_vlan_tb(db, vlanid):
 
     return entry
 
-
 def stp_get_entry_from_vlan_intf_tb(db, vlanid, ifname):
     entry = stp_get_all_from_pattern(db, db.APPL_DB, "*STP_VLAN_PORT_TABLE:Vlan{}:{}".format(vlanid, ifname))
     if not entry:
@@ -143,9 +120,6 @@ def stp_get_entry_from_vlan_intf_tb(db, vlanid, ifname):
 
     return entry
 
-
-#
-# This group houses Spanning_tree commands and subgroups
 @click.group(cls=clicommon.AliasedGroup, invoke_without_command=True)
 @click.pass_context
 def spanning_tree(ctx):
@@ -181,7 +155,6 @@ def spanning_tree(ctx):
         for vlanid in vlan_list:
             ctx.invoke(show_stp_vlan, vlanid=vlanid)
 
-
 @spanning_tree.group('vlan', cls=clicommon.AliasedGroup, invoke_without_command=True)
 @click.argument('vlanid', metavar='<vlanid>', required=True, type=int)
 @click.pass_context
@@ -197,7 +170,6 @@ def show_stp_vlan(ctx, vlanid):
     global g_stp_mode
     if g_stp_mode:
         click.echo("Spanning-tree Mode: {}".format(g_stp_mode))
-        # reset so we dont print again
         g_stp_mode = ''
 
     click.echo("")
@@ -256,8 +228,7 @@ def show_stp_vlan(ctx, vlanid):
         for port_num in eth_list:
             ctx.invoke(show_stp_interface, ifname="Ethernet"+str(port_num))
         for port_num in po_list:
-            ctx.invoke(show_stp_interface, ifname="PortChannel"+port_num)
-
+            ctx.invoke(show_stp_interface, ifname="PortChannel"+str(port_num))
 
 @show_stp_vlan.command('interface')
 @click.argument('ifname', metavar='<interface_name>', required=True)
@@ -281,7 +252,6 @@ def show_stp_interface(ctx, ifname):
         vlan_intf_tb_entry['desig_bridge']
         ))
 
-
 @spanning_tree.command('bpdu_guard')
 @click.pass_context
 def show_stp_bpdu_guard(ctx):
@@ -301,7 +271,6 @@ def show_stp_bpdu_guard(ctx):
             if cfg_entry['bpdu_guard_do_disable'] == 'true':
                 disabled = 'No'
                 keys = g_stp_appl_db.keys(g_stp_appl_db.APPL_DB, "*STP_PORT_TABLE:{}".format(ifname))
-                # only 1 key per ifname is expected in BPDU_GUARD_TABLE.
                 if keys:
                     appdb_entry = g_stp_appl_db.get_all(g_stp_appl_db.APPL_DB, keys[0])
                     if appdb_entry and 'bpdu_guard_shutdown' in appdb_entry:
@@ -310,7 +279,6 @@ def show_stp_bpdu_guard(ctx):
                 click.echo("{:17}{:13}{}".format(ifname, "Yes", disabled))
             else:
                 click.echo("{:17}{:13}{}".format(ifname, "No", "NA"))
-
 
 @spanning_tree.command('root_guard')
 @click.pass_context
@@ -348,7 +316,6 @@ def show_stp_root_guard(ctx):
                         else:
                             click.echo("{:17}{:7}{}".format(ifname, vlanid, state))
 
-
 @spanning_tree.group('statistics', cls=clicommon.AliasedGroup, invoke_without_command=True)
 @click.pass_context
 def show_stp_statistics(ctx):
@@ -367,7 +334,6 @@ def show_stp_statistics(ctx):
         vlan_list.sort()
         for vlanid in vlan_list:
             ctx.invoke(show_stp_vlan_statistics, vlanid=vlanid)
-
 
 @show_stp_statistics.command('vlan')
 @click.argument('vlanid', metavar='<vlanid>', required=True, type=int)
@@ -401,3 +367,68 @@ def show_stp_vlan_statistics(ctx, vlanid):
 
                 click.echo("{:17}{:15}{:15}{:15}{}".format(
                     ifname, entry['bpdu_sent'], entry['bpdu_received'], entry['tc_sent'], entry['tc_received']))
+
+
+@click.group()
+@clicommon.pass_db
+def show_spanning_tree(_db):
+    """Show STP information"""
+    pass
+
+
+@show_spanning_tree.command('mst-detail', short_help='Show MSTP detailed information')
+@clicommon.pass_db
+def show_stp_mst_detail(_db):
+    """Show MSTP detailed information"""
+    db = _db.cfgdb
+    stp_global_entry = db.get_entry('STP', "GLOBAL")
+    mode = stp_global_entry.get("mode")
+
+    if mode != "mst":
+        click.echo("STP is not configured in MST mode")
+        return
+
+    mst_instances = db.get_table('STP_MST_INST')
+    for instance_key, instance_data in mst_instances.items():
+        instance_id = instance_key.split('|')[-1]
+        vlans_mapped = instance_data.get('vlan_list', 'None')
+        bridge_priority = instance_data.get('bridge_priority', 'Unknown')
+        click.echo(f"#######  MST{instance_id} (CIST)  Vlans mapped : {vlans_mapped}")
+        bridge_mac = instance_data.get('bridge_mac', 'Unknown')
+        root_mac = instance_data.get('root_mac', 'Unknown')
+        click.echo(f"Bridge Address {bridge_priority}.{bridge_mac}")
+        click.echo(f"Root Address {bridge_priority}.{root_mac}")
+
+        mst_ports = db.get_table('STP_MST_PORT')
+        for port_key, port_data in mst_ports.items():
+            instance, port_name = port_key.split('|')[1:]
+            if instance == instance_id:
+                role = port_data.get('role', 'Unknown')
+                state = port_data.get('state', 'Unknown')
+                cost = port_data.get('path_cost', 'Unknown')
+                priority = port_data.get('priority', 'Unknown')
+                port_id = port_data.get('port_id', 'Unknown')
+                transitions = port_data.get('forward_transitions', '0')
+                bpdu_send = port_data.get('bpdu_send', '0')
+                bpdu_recv = port_data.get('bpdu_recv', '0')
+                designated_bridge = port_data.get('designated_bridge', 'Unknown')
+                designated_cost = port_data.get('designated_cost', '0')
+                designated_port = port_data.get('designated_port', 'Unknown')
+
+                click.echo(f"{port_name} is {role} {state}")
+                click.echo(f"Port info    port id {port_id} priority {priority} cost {cost}")
+                click.echo(f"Designated   Address {designated_bridge} cost {designated_cost}")
+                click.echo(f"Designated bridge Address {designated_bridge} port id {designated_port}")
+                click.echo(f"Timers: forward transitions {transitions}")
+                click.echo(f"Bpdu send {bpdu_send}, received {bpdu_recv}")
+
+
+@click.group()
+def cli():
+    pass
+
+
+cli.add_command(show_spanning_tree, "show_spanning_tree")
+
+if __name__ == "__main__":
+    cli()
