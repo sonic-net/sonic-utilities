@@ -1,6 +1,8 @@
 import os
 import sys
 import textwrap
+import json
+import show.main as show
 from unittest import mock
 
 import pytest
@@ -9,7 +11,6 @@ from click.testing import CliRunner
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
 sys.path.insert(0, modules_path)
-import show.main as show
 
 
 @pytest.fixture(scope='class')
@@ -41,14 +42,63 @@ class TestShowPlatform(object):
             Serial Number: {}
             Model Number: {}
             Hardware Revision: {}
-            """.format(self.TEST_PLATFORM, self.TEST_HWSKU, self.TEST_ASIC_TYPE, self.TEST_ASIC_COUNT, self.TEST_SERIAL, self.TEST_MODEL, self.TEST_REV)
+            """.format(
+               self.TEST_PLATFORM,
+               self.TEST_HWSKU,
+               self.TEST_ASIC_TYPE,
+               self.TEST_ASIC_COUNT,
+               self.TEST_SERIAL,
+               self.TEST_MODEL,
+               self.TEST_REV
+            )
 
-        with mock.patch("sonic_py_common.device_info.get_platform_info",
-                return_value={"platform": self.TEST_PLATFORM, "hwsku": self.TEST_HWSKU, "asic_type": self.TEST_ASIC_TYPE, "asic_count": self.TEST_ASIC_COUNT}):
-            with mock.patch("show.platform.get_chassis_info",
-                            return_value={"serial": self.TEST_SERIAL, "model": self.TEST_MODEL, "revision": self.TEST_REV}):
+        with mock.patch(
+            "sonic_py_common.device_info.get_platform_info",
+            return_value={
+                "platform": self.TEST_PLATFORM,
+                "hwsku": self.TEST_HWSKU,
+                "asic_type": self.TEST_ASIC_TYPE,
+                "asic_count": self.TEST_ASIC_COUNT
+            }
+        ):
+            with mock.patch(
+                "show.platform.get_chassis_info",
+                return_value={
+                    "serial": self.TEST_SERIAL,
+                    "model": self.TEST_MODEL,
+                    "revision": self.TEST_REV
+                }
+            ):
                 result = CliRunner().invoke(show.cli.commands["platform"].commands["summary"], [])
                 assert result.output == textwrap.dedent(expected_output)
+
+
+class TestShowPlatformTemperature(object):
+    """
+        Note: `show platform temperature` simply calls the `tempershow` utility and
+        passes a variety of options. Here we test that the utility is called
+        with the appropriate option(s). The functionality of the underlying
+        `tempershow` utility is expected to be tested by a separate suite of unit tests
+    """
+    def test_temperature(self):
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], [])
+        assert mock_run_command.call_count == 1
+        mock_run_command.assert_called_with(['tempershow'])
+
+    def test_temperature_json(self):
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['--json'])
+        assert mock_run_command.call_count == 1
+        mock_run_command.assert_called_with(['tempershow', '-j'])
+        assert json.loads(mock_run_command.assert_called_with(['tempershow', '-j']))
+
+    def test_temperature_short_json(self):
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['-j'])
+        assert mock_run_command.call_count == 1
+        mock_run_command.assert_called_with(['tempershow', '-j'])
+        assert mock_run_command.assert_called_with(['tempershow', '-j'])
 
 
 class TestShowPlatformPsu(object):
@@ -69,6 +119,7 @@ class TestShowPlatformPsu(object):
             CliRunner().invoke(show.cli.commands['platform'].commands['psustatus'], ['--json'])
         assert mock_run_command.call_count == 1
         mock_run_command.assert_called_with(['psushow', '-s', '-j'], display_cmd=False)
+        assert json.loads(mock_run_command.assert_called_with(['psushow', '-s', '-j']), display_cmd=False)
 
     def test_single_psu(self):
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
@@ -81,6 +132,7 @@ class TestShowPlatformPsu(object):
             CliRunner().invoke(show.cli.commands['platform'].commands['psustatus'], ['--index=1', '--json'])
         assert mock_run_command.call_count == 1
         mock_run_command.assert_called_with(['psushow', '-s', '-i', '1', '-j'], display_cmd=False)
+        assert json.loads(mock_run_command.assert_called_with(['psushow', '-s', '-i', '1', '-j']), display_cmd=False)
 
     def test_verbose(self):
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
