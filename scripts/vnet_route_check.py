@@ -50,7 +50,7 @@ RC_OK = 0
 RC_ERR = -1
 default_vrf_oid = ""
 
-report_level = syslog.LOG_ERR
+report_level = syslog.LOG_WARNING
 write_to_syslog = True
 
 
@@ -374,7 +374,7 @@ def filter_active_vnet_routes(vnet_routes: dict):
             exists, fvs = vnet_route_tunnel_table.get(key)
             if not exists:
                 print_message(syslog.LOG_WARNING, f"VNET_ROUTE_TUNNEL_TABLE|{key} does not exist in STATE DB.")
-                active_routes.append(prefix)  # Treating "prefix" as an active route
+                # Treating "prefix" as an inactive route
                 continue
             fvs_dict = dict(fvs)
             if fvs_dict.get("state") == "active":
