@@ -602,13 +602,13 @@ def test_download_file_sftp(package_manager):
     )
 
 
-def test_installation_from_file_no_tags(package_manager, mock_docker_api, sonic_fs):
-    # Override the load function to return an image without tags
-    def load_no_tags(filename):
+def test_installation_from_file_no_image_references(package_manager, mock_docker_api, sonic_fs):
+    # Override the load function to return an image without image references
+    def load_no_image_references(filename):
         class Image:
             def __init__(self, id):
                 self.id = id
-                self.tags = []
+                self.docker_image_references = []
 
             @property
             def attrs(self):
@@ -616,7 +616,7 @@ def test_installation_from_file_no_tags(package_manager, mock_docker_api, sonic_
 
         return Image(filename)
 
-    mock_docker_api.load = MagicMock(side_effect=load_no_tags)
+    mock_docker_api.load = MagicMock(side_effect=load_no_image_references)
 
     sonic_fs.create_file('Azure/docker-test:1.6.0')
     package_manager.install(tarball='Azure/docker-test:1.6.0')
