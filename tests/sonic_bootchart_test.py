@@ -1,12 +1,12 @@
 import os
 import sys
-import subprocess
 import pytest
 from click.testing import CliRunner
 from unittest.mock import patch, Mock
 import utilities_common
 import importlib.util
 import importlib.machinery
+
 
 def load_source(modname, filename):
     loader = importlib.machinery.SourceFileLoader(modname, filename)
@@ -17,6 +17,7 @@ def load_source(modname, filename):
     sys.modules[module.__name__] = module
     loader.exec_module(module)
     return module
+
 
 sonic_bootchart = load_source('sonic-bootchart', 'scripts/sonic-bootchart')
 

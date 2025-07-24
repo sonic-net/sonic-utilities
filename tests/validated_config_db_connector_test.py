@@ -5,6 +5,7 @@ import jsonpatch
 import importlib.util
 import importlib.machinery
 
+
 def load_source(modname, filename):
     loader = importlib.machinery.SourceFileLoader(modname, filename)
     spec = importlib.util.spec_from_file_location(modname, filename, loader=loader)
@@ -15,8 +16,9 @@ def load_source(modname, filename):
     loader.exec_module(module)
     return module
 
-load_source('validated_config_db_connector', \
-    os.path.join(os.path.dirname(__file__), '..', 'config', 'validated_config_db_connector.py'))
+
+load_source('validated_config_db_connector',
+            os.path.join(os.path.dirname(__file__), '..', 'config', 'validated_config_db_connector.py'))
 import validated_config_db_connector
 
 from unittest import TestCase
@@ -41,7 +43,7 @@ class TestValidatedConfigDBConnector(TestCase):
         Test Class for validated_config_db_connector.py
 
     '''
-    def test_validated_set_entry_empty_table(self): 
+    def test_validated_set_entry_empty_table(self):
         mock_generic_updater = mock.Mock()
         mock_generic_updater.apply_patch = mock.Mock(side_effect=EmptyTableError)
         with mock.patch('validated_config_db_connector.GenericUpdater', return_value=mock_generic_updater):

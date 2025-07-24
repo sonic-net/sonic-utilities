@@ -6,6 +6,7 @@ import importlib.machinery
 from click.testing import CliRunner
 from swsscommon.swsscommon import ConfigDBConnector
 
+
 def load_source(modname, filename):
     loader = importlib.machinery.SourceFileLoader(modname, filename)
     spec = importlib.util.spec_from_file_location(modname, filename, loader=loader)
@@ -16,7 +17,9 @@ def load_source(modname, filename):
     loader.exec_module(module)
     return module
 
-null_route_helper = load_source('null_route_helper', os.path.join(os.path.dirname(__file__), '..', 'scripts','null_route_helper'))
+
+null_route_helper = load_source('null_route_helper', os.path.join(os.path.dirname(__file__), '..',
+                                                                  'scripts', 'null_route_helper'))
 null_route_helper.ConfigDBConnector = ConfigDBConnector
 
 expected_stdout_v4 = "" + \
