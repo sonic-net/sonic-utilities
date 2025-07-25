@@ -179,7 +179,7 @@ return redis.status_reply(cjson.encode(result))
 
 DB_READ_SCRIPT_CONFIG_DB_KEY = "_DUALTOR_NEIGHBOR_CHECK_SCRIPT_SHA1"
 ZERO_MAC = "00:00:00:00:00:00"
-NEIGHBOR_ATTRIBUTES = ["NEIGHBOR", "MAC", "PORT", "MUX_STATE", "IN_MUX_TOGGLE", "NEIGHBOR_IN_ASIC", "TUNNEL_IN_ASIC",
+NEIGHBOR_ATTRIBUTES = ["NEIGHBOR", "MAC", "PORT", "MUX_STATE", "IN_MUX_TOGGLE", "NEIGHBOR_IN_ASIC", "PREFIX_ROUTE",
                        "NEXTHOP_TYPE", "HWSTATUS"]
 NOT_AVAILABLE = "N/A"
 
@@ -406,6 +406,7 @@ def get_mux_server_to_port_map(mux_cables):
             mux_server_to_port_map[server_ipv6] = port
     return mux_server_to_port_map
 
+
 def get_mux_soc_neighbors(mux_cables):
     mux_soc_neighbor_ips = []
     for port, mux_details in mux_cables.items():
@@ -466,14 +467,14 @@ def check_neighbor_consistency(neighbors, mux_states, hw_mux_states, mac_to_port
             continue
 
         check_result["NEIGHBOR_IN_ASIC"] = neighbor_ip in asic_neighs
-        check_result["TUNNEL_IN_ASIC"] = neighbor_ip in asic_route_destinations
+        check_result["PREFIX_ROUTE"] = neighbor_ip in asic_route_destinations
         check_result["NEXTHOP_TYPE"] = route_to_nexthop_map.get(neighbor_ip, NOT_AVAILABLE)
 
         if is_zero_mac:
             # NOTE: for zero-mac neighbors, two situations:
             # 1. new neighbor just learnt, no neighbor entry in ASIC, tunnel route present in ASIC.
             # 2. neighbor expired, neighbor entry still present in ASIC, no tunnel route in ASIC.
-            check_result["HWSTATUS"] = check_result["NEIGHBOR_IN_ASIC"] or check_result["TUNNEL_IN_ASIC"]
+            check_result["HWSTATUS"] = check_result["NEIGHBOR_IN_ASIC"] or check_result["PREFIX_ROUTE"]
         else:
             port_name = mac_to_port_name_map[mac]
             # NOTE: mux server ips are always fixed to the mux port
@@ -489,12 +490,12 @@ def check_neighbor_consistency(neighbors, mux_states, hw_mux_states, mac_to_port
                 # For active mux state, neighbor should be in ASIC and route should point to neighbor nexthop
                 expected_nexthop = "NEIGHBOR"
                 check_result["HWSTATUS"] = (check_result["NEIGHBOR_IN_ASIC"] and
-                                            check_result["TUNNEL_IN_ASIC"] and
+                                            check_result["PREFIX_ROUTE"] and
                                             check_result["NEXTHOP_TYPE"] == expected_nexthop)
             elif mux_state == "standby":
                 # For standby mux state, route should point to tunnel nexthop
                 expected_nexthop = "TUNNEL"
-                check_result["HWSTATUS"] = (check_result["TUNNEL_IN_ASIC"] and
+                check_result["HWSTATUS"] = (check_result["PREFIX_ROUTE"] and
                                             check_result["NEXTHOP_TYPE"] == expected_nexthop)
             else:
                 # skip as unknown mux state
@@ -520,7 +521,7 @@ def parse_check_results(check_results):
         if not is_zero_mac:
             check_result["IN_MUX_TOGGLE"] = bool_to_yes_no[in_toggle]
         check_result["NEIGHBOR_IN_ASIC"] = bool_to_yes_no[check_result["NEIGHBOR_IN_ASIC"]]
-        check_result["TUNNEL_IN_ASIC"] = bool_to_yes_no[check_result["TUNNEL_IN_ASIC"]]
+        check_result["PREFIX_ROUTE"] = bool_to_yes_no[check_result["PREFIX_ROUTE"]]
         check_result["HWSTATUS"] = bool_to_consistency[hwstatus]
         if (not hwstatus):
             if is_zero_mac:
@@ -566,7 +567,7 @@ if __name__ == "__main__":
     mux_server_to_port_map = get_mux_server_to_port_map(mux_cables)
     if_oid_to_port_name_map = get_if_br_oid_to_port_name_map()
     neighbors, mux_states, hw_mux_states, asic_fdb, asic_route_table, asic_neigh_table, \
-            asic_nexthop_table = read_tables_from_db(appl_db)
+        asic_nexthop_table = read_tables_from_db(appl_db)
     mac_to_port_name_map = get_mac_to_port_name_map(asic_fdb, if_oid_to_port_name_map)
     mux_soc_neigh_ips = get_mux_soc_neighbors(mux_cables)
 
