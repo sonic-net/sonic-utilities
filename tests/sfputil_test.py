@@ -1822,23 +1822,35 @@ EEPROM hexdump for port Ethernet4
         assert result.exit_code == EXIT_FAIL
 
     @pytest.mark.parametrize(
-        "direction, lane_count, enable, disable_func_result, output_dict, expected_echo, expected_exit",
+        "direction, lane_count, enable, disable_func_result, disable_status, output_dict, expected_echo, expected_exit",
         [
             # TX disable success
             (
-                "tx", 2, "disable", True, {"TxOutputStatus1": False, "TxOutputStatus2": False},
+                "tx", 2, "disable", True, [True, True], {"TxOutputStatus1": False, "TxOutputStatus2": False},
                 "TX output disabled", None
             ),
             # RX enable success
-            ("rx", 1, "enable", True, {"RxOutputStatus1": True}, "RX output enabled", None),
+            ("rx", 1, "enable", True, [False], {"RxOutputStatus1": True}, "RX output enabled", None),
             # TX disable fails to disable
-            ("tx", 1, "disable", True, {"TxOutputStatus1": True}, "TX output on lane 1 is still enabled", SystemExit),
+            (
+                "tx", 1, "disable", True, [True], {"TxOutputStatus1": True},
+                "TX output on lane 1 is still enabled", SystemExit
+            ),
             # RX enable fails to enable
-            ("rx", 1, "enable", True, {"RxOutputStatus1": False}, "RX output on lane 1 is still disabled", SystemExit),
+            (
+                "rx", 1, "enable", True, [False], {"RxOutputStatus1": False},
+                "RX output on lane 1 is still disabled", SystemExit
+            ),
             # TX disable_func returns False
-            ("tx", 1, "disable", False, {}, "TX disable failed", SystemExit),
+            ("tx", 1, "disable", False, [True], {}, "TX disable failed", SystemExit),
             # RX output_dict is None
-            ("rx", 1, "disable", True, None, "RX output status not available", SystemExit),
+            ("rx", 1, "disable", True, [True], None, "RX output status not available", SystemExit),
+            # disable status is None
+            ("tx", 1, "disable", True, None, None, "disable status not available", SystemExit),
+            # TX disable status is not expected
+            ("tx", 1, "disable", True, [False], None, "TX output on lane 1 is still enabled", SystemExit),
+            # TX enable status is not expected
+            ("tx", 1, "enable", True, [True], None, "TX output on lane 1 is still disabled", SystemExit),
         ]
     )
     @patch("sfputil.debug.get_sfp_object")
@@ -1857,6 +1869,7 @@ EEPROM hexdump for port Ethernet4
         lane_count,
         enable,
         disable_func_result,
+        disable_status,
         output_dict,
         expected_echo,
         expected_exit
@@ -1875,12 +1888,15 @@ EEPROM hexdump for port Ethernet4
         # Mock SFP and API
         mock_sfp = MagicMock()
         mock_api = MagicMock()
+        mock_api.get_cmis_rev.return_value = "5.0"
         if direction == "tx":
             mock_sfp.tx_disable_channel.return_value = disable_func_result
             mock_api.get_tx_output_status.return_value = output_dict
+            mock_api.get_tx_disable.return_value = disable_status
         elif direction == "rx":
             mock_sfp.rx_disable_channel.return_value = disable_func_result
             mock_api.get_rx_output_status.return_value = output_dict
+            mock_api.get_rx_disable.return_value = disable_status
         mock_sfp.get_xcvr_api.return_value = mock_api
         mock_get_sfp_object.return_value = mock_sfp
 
