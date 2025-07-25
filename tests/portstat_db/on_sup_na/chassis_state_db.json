@@ -14,6 +14,9 @@
     "LINECARD_PORT_STAT_MARK_TABLE|sonic-lc3": {
         "timestamp": "2020-07-01 00:00:00"
     },
+    "LINECARD_PORT_STAT_MARK_TABLE|sonic-lc4": {
+        "timestamp": "2020-07-01 00:00:00"
+    },
     "LINECARD_PORT_STAT_TABLE|Ethernet1/1": {
         "state": "U",
         "rx_ok": 100,
@@ -49,6 +52,23 @@
         "tx_ovr": 0
     },
     "LINECARD_PORT_STAT_TABLE|Ethernet11/1": {
+        "state": "N/A",
+        "rx_ok": "N/A",
+        "rx_bps": "N/A",
+        "rx_pps": "N/A",
+        "rx_util": "N/A",
+        "rx_err": "N/A",
+        "rx_drop": "N/A",
+        "rx_ovr": "N/A",
+        "tx_ok": "N/A",
+        "tx_bps": "N/A",
+        "tx_pps": "N/A",
+        "tx_util": "N/A",
+        "tx_err": "N/A",
+        "tx_drop": "N/A",
+        "tx_ovr": "N/A"
+    },
+    "LINECARD_PORT_STAT_TABLE|Ethernet12/1": {
         "state": "N/A",
         "rx_ok": "N/A",
         "rx_bps": "N/A",
