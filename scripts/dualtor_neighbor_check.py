@@ -407,14 +407,6 @@ def get_mux_server_to_port_map(mux_cables):
     return mux_server_to_port_map
 
 
-def get_mux_soc_neighbors(mux_cables):
-    mux_soc_neighbor_ips = []
-    for port, mux_details in mux_cables.items():
-        if "server_ipv4" in mux_details:
-            soc_ipv4 = str(ipaddress.ip_interface(mux_details["soc_ipv4"]).ip)
-            mux_soc_neighbor_ips.append(soc_ipv4)
-    return mux_soc_neighbor_ips
-
 def get_mac_to_port_name_map(asic_fdb, if_oid_to_port_name_map):
     """Return mac to port name map."""
     mac_to_port_name_map = {}
@@ -426,7 +418,7 @@ def get_mac_to_port_name_map(asic_fdb, if_oid_to_port_name_map):
 
 def check_neighbor_consistency(neighbors, mux_states, hw_mux_states, mac_to_port_name_map,
                                asic_route_table, asic_neigh_table, asic_nexthop_table,
-                               mux_server_to_port_map, mux_soc_neigh_ips):
+                               mux_server_to_port_map):
     """Checks if neighbors are consistent with mux states."""
 
     # Parse route table to get route destinations and their nexthop types
@@ -569,7 +561,6 @@ if __name__ == "__main__":
     neighbors, mux_states, hw_mux_states, asic_fdb, asic_route_table, asic_neigh_table, \
         asic_nexthop_table = read_tables_from_db(appl_db)
     mac_to_port_name_map = get_mac_to_port_name_map(asic_fdb, if_oid_to_port_name_map)
-    mux_soc_neigh_ips = get_mux_soc_neighbors(mux_cables)
 
     check_results = check_neighbor_consistency(
         neighbors,
@@ -579,8 +570,7 @@ if __name__ == "__main__":
         asic_route_table,
         asic_neigh_table,
         asic_nexthop_table,
-        mux_server_to_port_map,
-        mux_soc_neigh_ips
+        mux_server_to_port_map
     )
     res = parse_check_results(check_results)
     sys.exit(0 if res else 1)

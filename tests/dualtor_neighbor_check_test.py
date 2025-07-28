@@ -349,26 +349,6 @@ class TestDualtorNeighborCheck(object):
 
         assert mux_server_to_port_map == result
 
-    def test_get_mux_soc_neighbors(self, mock_log_functions):
-        mux_cables = {
-            "Ethernet4": {
-                "server_ipv4": "192.168.0.2/32",
-                "server_ipv6": "fc02:1000::2/128",
-                "soc_ipv4": "192.168.0.1/32",
-                "state": "active"
-            },
-            "Ethernet8": {
-                "server_ipv4": "192.168.0.4/32",
-                "soc_ipv4": "192.168.0.3/32",
-                "state": "standby"
-            }
-        }
-        expected_soc_ips = ["192.168.0.1", "192.168.0.3"]
-
-        result = dualtor_neighbor_check.get_mux_soc_neighbors(mux_cables)
-
-        assert set(expected_soc_ips) == set(result)
-
     def test_check_neighbor_consistency_soc_ip_neighbor(self, mock_log_functions):
         mock_log_error, mock_log_warn, _, _ = mock_log_functions
         neighbors = {"192.168.0.1": "aa:bb:cc:dd:ee:ff"}  # SOC IP neighbor
@@ -386,7 +366,6 @@ class TestDualtorNeighborCheck(object):
             ["{\"ip\":\"192.168.0.1\",\"rif\":\"oid:0x6000000000671\"," +
              "\"switch_id\":\"oid:0x21000000000000\"}"]
         mux_server_to_port_map = {}
-        mux_soc_neigh_ips = ["192.168.0.1", "192.168.0.3"]  # SOC neighbor IPs
         expected_output = \
             ["192.168.0.1", "aa:bb:cc:dd:ee:ff", "Ethernet4", "active", "no", "yes", "yes", "NEIGHBOR", "consistent"]
         expected_log_output = tabulate.tabulate(
@@ -404,8 +383,7 @@ class TestDualtorNeighborCheck(object):
             asic_route_table,
             asic_neigh_table,
             {'oid:0x40000000005c0': {'nexthop_type': 'SAI_NEXT_HOP_TYPE_IP', 'nexthop_id': 'oid:0x40000000005c0'}},
-            mux_server_to_port_map,
-            mux_soc_neigh_ips
+            mux_server_to_port_map
         )
         res = dualtor_neighbor_check.parse_check_results(check_results)
 
@@ -450,7 +428,6 @@ class TestDualtorNeighborCheck(object):
             "{\"ip\":\"192.168.0.5\",\"rif\":\"oid:0x6000000000671\",\"switch_id\":\"oid:0x21000000000000\"}"
         ]
         mux_server_to_port_map = {"192.168.0.2": "Ethernet4"}
-        mux_soc_neigh_ips = ["192.168.0.1", "192.168.0.3"]
         expected_outputs = [
             ["192.168.0.1", "aa:bb:cc:dd:ee:ff", "Ethernet4", "active", "no", "yes", "yes", "NEIGHBOR", "consistent"],
             ["192.168.0.2", "ee:86:d8:46:7d:01", "Ethernet4", "active", "no", "yes", "yes", "NEIGHBOR", "consistent"],
@@ -476,8 +453,7 @@ class TestDualtorNeighborCheck(object):
                 'oid:0x40000000005ae': {'nexthop_type': 'SAI_NEXT_HOP_TYPE_TUNNEL_ENCAP',
                                         'nexthop_id': 'oid:0x40000000005ae'}
             },
-            mux_server_to_port_map,
-            mux_soc_neigh_ips
+            mux_server_to_port_map
         )
         res = dualtor_neighbor_check.parse_check_results(check_results)
 
@@ -510,8 +486,7 @@ class TestDualtorNeighborCheck(object):
             asic_route_table,
             asic_neigh_table,
             {},
-            mux_server_to_port_map,
-            []
+            mux_server_to_port_map
         )
         res = dualtor_neighbor_check.parse_check_results(check_results)
 
@@ -552,8 +527,7 @@ class TestDualtorNeighborCheck(object):
             asic_route_table,
             asic_neigh_table,
             {'oid:0x40000000005c0': {'nexthop_type': 'SAI_NEXT_HOP_TYPE_IP', 'nexthop_id': 'oid:0x40000000005c0'}},
-            mux_server_to_port_map,
-            []
+            mux_server_to_port_map
         )
         res = dualtor_neighbor_check.parse_check_results(check_results)
 
@@ -596,8 +570,7 @@ class TestDualtorNeighborCheck(object):
             asic_neigh_table,
             {'oid:0x40000000005ae': {'nexthop_type': 'SAI_NEXT_HOP_TYPE_TUNNEL_ENCAP',
                                      'nexthop_id': 'oid:0x40000000005ae'}},
-            mux_server_to_port_map,
-            []
+            mux_server_to_port_map
         )
         res = dualtor_neighbor_check.parse_check_results(check_results)
 
@@ -640,8 +613,7 @@ class TestDualtorNeighborCheck(object):
             asic_neigh_table,
             {'oid:0x40000000005ae': {'nexthop_type': 'SAI_NEXT_HOP_TYPE_TUNNEL_ENCAP',
                                      'nexthop_id': 'oid:0x40000000005ae'}},
-            mux_server_to_port_map,
-            []
+            mux_server_to_port_map
         )
         res = dualtor_neighbor_check.parse_check_results(check_results)
 
@@ -682,8 +654,7 @@ class TestDualtorNeighborCheck(object):
             asic_neigh_table,
             {'oid:0x40000000005ae': {'nexthop_type': 'SAI_NEXT_HOP_TYPE_TUNNEL_ENCAP',
                                      'nexthop_id': 'oid:0x40000000005ae'}},
-            mux_server_to_port_map,
-            []
+            mux_server_to_port_map
         )
         res = dualtor_neighbor_check.parse_check_results(check_results)
 
@@ -724,8 +695,7 @@ class TestDualtorNeighborCheck(object):
             asic_neigh_table,
             {'oid:0x40000000005ae': {'nexthop_type': 'SAI_NEXT_HOP_TYPE_TUNNEL_ENCAP',
                                      'nexthop_id': 'oid:0x40000000005ae'}},
-            mux_server_to_port_map,
-            []
+            mux_server_to_port_map
         )
         res = dualtor_neighbor_check.parse_check_results(check_results)
 
@@ -767,8 +737,7 @@ class TestDualtorNeighborCheck(object):
             asic_route_table,
             asic_neigh_table,
             {'oid:0x40000000005c0': {'nexthop_type': 'SAI_NEXT_HOP_TYPE_IP', 'nexthop_id': 'oid:0x40000000005c0'}},
-            mux_server_to_port_map,
-            []
+            mux_server_to_port_map
         )
         res = dualtor_neighbor_check.parse_check_results(check_results)
 
@@ -812,8 +781,7 @@ class TestDualtorNeighborCheck(object):
             asic_neigh_table,
             {'oid:0x40000000005ae': {'nexthop_type': 'SAI_NEXT_HOP_TYPE_IP',
                                      'nexthop_id': 'oid:0x40000000005ae'}},
-            mux_server_to_port_map,
-            []
+            mux_server_to_port_map
         )
         res = dualtor_neighbor_check.parse_check_results(check_results)
 
@@ -854,8 +822,7 @@ class TestDualtorNeighborCheck(object):
             asic_neigh_table,
             {'oid:0x40000000005ae': {'nexthop_type': 'SAI_NEXT_HOP_TYPE_IP',
                                      'nexthop_id': 'oid:0x40000000005ae'}},
-            mux_server_to_port_map,
-            []
+            mux_server_to_port_map
         )
         res = dualtor_neighbor_check.parse_check_results(check_results)
 
@@ -895,8 +862,7 @@ class TestDualtorNeighborCheck(object):
             asic_route_table,
             asic_neigh_table,
             {},
-            mux_server_to_port_map,
-            []
+            mux_server_to_port_map
         )
         res = dualtor_neighbor_check.parse_check_results(check_results)
 
@@ -931,8 +897,7 @@ class TestDualtorNeighborCheck(object):
             asic_route_table,
             asic_neigh_table,
             {},
-            mux_server_to_port_map,
-            []
+            mux_server_to_port_map
         )
         res = dualtor_neighbor_check.parse_check_results(check_results)
 
@@ -968,8 +933,7 @@ class TestDualtorNeighborCheck(object):
             asic_route_table,
             asic_neigh_table,
             {},
-            mux_server_to_port_map,
-            []
+            mux_server_to_port_map
         )
         res = dualtor_neighbor_check.parse_check_results(check_results)
 
