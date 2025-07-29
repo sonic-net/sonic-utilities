@@ -84,6 +84,25 @@ class TestPortChannel(object):
         assert result.exit_code != 0
         assert "Error: PortChan005 is invalid!, name should have prefix 'PortChannel' and suffix '<0-9999>'" in result.output
 
+    def test_delete_portchannel_in_use_by_dhcpv4_relay(self):
+        config.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands["portchannel"].commands["add"], ["PortChannel10"], obj=obj)
+
+        db.cfgdb.set_entry("DHCPV4_RELAY", "Vlan100", {"source_interface": "PortChannel10"})
+
+        result = runner.invoke(config.config.commands["portchannel"].commands["del"], ["PortChannel10"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "Interface 'PortChannel10' is in use by Vlan100" in result.output
+
+        db.cfgdb.set_entry("DHCPV4_RELAY", "Vlan100", None)
+
+
     def test_add_existing_portchannel_again(self):
         runner = CliRunner()
         db = Db()

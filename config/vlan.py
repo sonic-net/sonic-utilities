@@ -184,6 +184,8 @@ def del_vlan(db, vid, multiple, no_restart_dhcp_relay):
                              "First remove vxlan mapping '{}' assigned to VLAN".format(
                               vid, '|'.join(vxmap_key)))
 
+            if vlan in db.cfgdb.get_table('DHCPV4_RELAY'):
+                ctx.fail(f"{vlan} cannot be removed as it is being used in DHCPV4_RELAY table.")
             # set dhcpv4_relay table
             set_dhcp_relay_table('VLAN', config_db, vlan, None)
 

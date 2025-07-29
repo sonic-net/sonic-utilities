@@ -3078,6 +3078,31 @@ class TestConfigLoopback(object):
         assert result.exit_code != 0
         assert "Loopbax1 is invalid, name should have prefix 'Loopback' and suffix '<0-999>'" in result.output
 
+    def test_del_loopback_with_dhcpv4_relay_entry(self):
+        config.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands["loopback"].commands["add"], ["Loopback1"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_entry("LOOPBACK_INTERFACE", "Loopback1") == {}
+
+        db.cfgdb.set_entry("DHCPV4_RELAY", "Vlan100", {
+            "dhcpv4_servers": ["192.0.2.100"],
+            "source_interface": "Loopback1"
+        })
+
+        result = runner.invoke(config.config.commands["loopback"].commands["del"], ["Loopback1"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "Error: Interface 'Loopback1' is in use by Vlan100" in result.output
+
+        db.cfgdb.set_entry("DHCPV4_RELAY", "Vlan200", None)
+
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry", mock.Mock(return_value=True))
     @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
     def test_add_loopback_yang_validation(self):
