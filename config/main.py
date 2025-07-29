@@ -2613,15 +2613,17 @@ def portchannel(db, ctx, namespace):
     config_db.connect()
     ctx.obj = {'db': config_db, 'namespace': str(namespace), 'db_wrap': db}
 
+
 @portchannel.group()
 @click.pass_context
 def mode(ctx):
     """PortChannel mode configuration"""
     pass
+
+
 @mode.command('multi-process')
 @click.argument('action', metavar='<enable|disable>', type=click.Choice(['enable', 'disable'], case_sensitive=False))
 @click.pass_context
-
 def multi_process_mode(ctx, action):
     """Enable or disable multi-process mode for legacy
 
@@ -2631,21 +2633,29 @@ def multi_process_mode(ctx, action):
 
     if action.lower() == "enable":
         try:
-            fvs = {
-                'mode': 'multi-process',
-            }
-            db.set_entry('TEAMD', "GLOBAL", fvs)
-            click.secho("[WARNING] multi-process mode is configured. Please restart the teamd docker to take effect.")
-        except ValueError as e:
+            if db.get_entry('TEAMD', 'GLOBAL') == {}:
+                fvs = {
+                    'mode': 'multi-process',
+                }
+                db.set_entry('TEAMD', "GLOBAL", fvs)
+                click.secho("[WARNING] multi-process mode is configured. "
+                            "Please restart the teamd docker to take effect.")
+            else:
+                click.echo("Multi-process mode is already enabled")
+        except (ValueError, AttributeError) as e:
             # Improved error message with the actual error
-            ctx.fail(f"Configuration is invalid! {str(e)}")
+            ctx.fail(f"Failed to enable multi-process mode: {str(e)}")
 
     elif action.lower() == "disable":
         try:
-            db.set_entry('TEAMD', "GLOBAL", None)
-            click.secho("[WARNING] multi-process mode is removed. Please restart the teamd docker to take effect.")
-        except JsonPatchConflict:
-            ctx.fail("mode is not present.")
+            if db.get_entry('TEAMD', 'GLOBAL'):
+                db.set_entry('TEAMD', "GLOBAL", None)
+                click.secho("[WARNING] multi-process mode is removed. "
+                            "Please restart the teamd docker to take effect.")
+            else:
+                click.echo("Multi-process mode is not currently enabled")
+        except (ValueError, AttributeError) as e:
+            ctx.fail(f"Failed to disable multi-process mode: {str(e)}")
 
 
 @portchannel.command('add')
