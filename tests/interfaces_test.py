@@ -125,25 +125,25 @@ Ethernet1/1  ARISTA01T2  Ethernet1       None                172.16.137.56   Spi
 show_interfaces_portchannel_output = """\
 Flags: A - active, I - inactive, Up - up, Dw - Down, N/A - not available,
        S - selected, D - deselected, * - not synced
-  No.  Team Dev         Protocol     Ports
------  ---------------  -----------  --------------
- 0001  PortChannel0001  LACP(A)(Dw)  Ethernet112(D)
- 0002  PortChannel0002  LACP(A)(Up)  Ethernet116(S)
- 0003  PortChannel0003  LACP(A)(Up)  Ethernet120(S)
- 0004  PortChannel0004  LACP(A)(Up)  N/A
- 1001  PortChannel1001  N/A
+  No.  Team Dev         Protocol      Ports
+-----  ---------------  ------------  --------------
+ 0001  PortChannel0001  LACP(A)(Dw)   Ethernet112(D)
+ 0002  PortChannel0002  LACP(A)(Up)   Ethernet116(S)
+ 0003  PortChannel0003  LACP(A)(Up)   Ethernet120(S)
+ 0004  PortChannel0004  LACP(A)(Up)   Ethernet124(S)
+ 1001  PortChannel1001  LACP(A)(Dw)   Ethernet32(D)
 """
 
 show_interfaces_portchannel_in_alias_mode_output = """\
 Flags: A - active, I - inactive, Up - up, Dw - Down, N/A - not available,
        S - selected, D - deselected, * - not synced
-  No.  Team Dev         Protocol     Ports
------  ---------------  -----------  --------
- 0001  PortChannel0001  LACP(A)(Dw)  etp29(D)
- 0002  PortChannel0002  LACP(A)(Up)  etp30(S)
- 0003  PortChannel0003  LACP(A)(Up)  etp31(S)
- 0004  PortChannel0004  LACP(A)(Up)  N/A
- 1001  PortChannel1001  N/A
+  No.  Team Dev         Protocol      Ports
+-----  ---------------  ------------  --------
+ 0001  PortChannel0001  LACP(A)(Dw)   etp29(D)
+ 0002  PortChannel0002  LACP(A)(Up)   etp30(S)
+ 0003  PortChannel0003  LACP(A)(Up)   etp31(S)
+ 0004  PortChannel0004  LACP(A)(Up)   etp32(S)
+ 1001  PortChannel1001  LACP(A)(Dw)   etp9(D)
 """
 
 show_interfaces_switchport_status_output = """\
@@ -306,7 +306,7 @@ Ethernet96   Never         Unknown  Unknown  Never                       Never
 Ethernet100  Never         Unknown  Unknown  Never                       Never
 Ethernet104  Never         Unknown  Unknown  Never                       Never
 Ethernet108  Never         Unknown  Unknown  Never                       Never
-Ethernet112  Never         Up       Up       Never                       Never
+Ethernet112  Never         Up       Down     Never                       Never
 Ethernet116  Never         Up       Up       Never                       Never
 Ethernet120  Never         Up       Up       Never                       Never
 Ethernet124  Never         Up       Up       Never                       Never

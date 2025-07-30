@@ -19,15 +19,15 @@ show_interface_status_output="""\
      Ethernet28               28    1000M   9100    N/A       etp8            trunk      up       up               RJ45         off
      Ethernet32      13,14,15,16      40G   9100     rs       etp9  PortChannel1001      up       up                N/A         off
      Ethernet36       9,10,11,12      10M   9100    N/A      etp10           routed      up       up               RJ45         off
-    Ethernet112      93,94,95,96      40G   9100     rs      etp29  PortChannel0001      up       up                N/A         off
+    Ethernet112      93,94,95,96      40G   9100     rs      etp29  PortChannel0001    down       up                N/A         off
     Ethernet116      89,90,91,92      40G   9100     rs      etp30  PortChannel0002      up       up                N/A         off
     Ethernet120  101,102,103,104      40G   9100     rs      etp31  PortChannel0003      up       up                N/A         off
     Ethernet124     97,98,99,100      40G   9100   auto      etp32  PortChannel0004      up       up                N/A         off
-PortChannel0001              N/A      40G   9100    N/A        N/A           routed    down       up                N/A         N/A
+PortChannel0001              N/A       0M   9100    N/A        N/A           routed    down       up                N/A         N/A
 PortChannel0002              N/A      40G   9100    N/A        N/A           routed      up       up                N/A         N/A
 PortChannel0003              N/A      40G   9100    N/A        N/A           routed      up       up                N/A         N/A
 PortChannel0004              N/A      40G   9100    N/A        N/A           routed      up       up                N/A         N/A
-PortChannel1001              N/A      40G   9100    N/A        N/A            trunk     N/A      N/A                N/A         N/A
+PortChannel1001              N/A       0M   9100    N/A        N/A            trunk    down       up                N/A         N/A
 """
 
 show_interface_status_Ethernet32_output="""\
@@ -45,7 +45,7 @@ show_interface_description_output="""\
  Ethernet28      up       up       etp8  ARISTA03T1:Ethernet28
  Ethernet32      up       up       etp9          Servers7:eth0
  Ethernet36      up       up      etp10          Servers8:eth0
-Ethernet112      up       up      etp29   ARISTA01T1:Ethernet1
+Ethernet112    down       up      etp29   ARISTA01T1:Ethernet1
 Ethernet116      up       up      etp30   ARISTA02T1:Ethernet1
 Ethernet120      up       up      etp31   ARISTA03T1:Ethernet1
 Ethernet124      up       up      etp32   ARISTA04T1:Ethernet1
@@ -79,7 +79,7 @@ show_interface_auto_neg_status_output = """\
  Ethernet28              N/A    1000M           N/A               N/A     N/A          N/A      up       up
  Ethernet32         disabled      40G           all               N/A     N/A          all      up       up
  Ethernet36              N/A      10M           N/A               N/A     N/A          N/A      up       up
-Ethernet112              N/A      40G           N/A               N/A     N/A          N/A      up       up
+Ethernet112              N/A      40G           N/A               N/A     N/A          N/A    down       up
 Ethernet116              N/A      40G           N/A               N/A     N/A          N/A      up       up
 Ethernet120              N/A      40G           N/A               N/A     N/A          N/A      up       up
 Ethernet124              N/A      40G           N/A               N/A     N/A          N/A      up       up
@@ -106,7 +106,7 @@ show_interface_link_training_status_output = """\
  Ethernet28          N/A         N/A      up       up
  Ethernet32      trained          on      up       up
  Ethernet36          N/A         N/A      up       up
-Ethernet112          off         off      up       up
+Ethernet112          off         off    down       up
 Ethernet116          N/A         N/A      up       up
 Ethernet120          N/A         N/A      up       up
 Ethernet124          N/A         N/A      up       up
@@ -226,7 +226,7 @@ class TestIntfutil(TestCase):
           "--------------------  -------  -----  ------  -------  --------------------\n"
           "            Eth36.10      10M   9100     100       up  802.1q-encapsulation\n"
           "        Ethernet0.10      25G   9100      10       up  802.1q-encapsulation\n"
-          "           Po0001.10      40G   9100     100       up  802.1q-encapsulation"
+          "           Po0001.10       0M   9100     100       up  802.1q-encapsulation"
         )
         self.assertEqual(result.output.strip(), expected_output)
 
@@ -273,7 +273,7 @@ class TestIntfutil(TestCase):
         expected_output = (
             "Sub port interface    Speed    MTU    Vlan    Admin                  Type\n"
           "--------------------  -------  -----  ------  -------  --------------------\n"
-          "           Po0001.10      40G   9100     100       up  802.1q-encapsulation"
+          "           Po0001.10       0M   9100     100       up  802.1q-encapsulation"
         )
         # Test 'intfutil status Po0001.10'
         output = subprocess.check_output(['intfutil', '-c', 'status', '-i', 'Po0001.10'], stderr=subprocess.STDOUT, text=True)

@@ -36,6 +36,7 @@ from sonic_py_common import multi_asic
 
 PORT_STATUS_TABLE_PREFIX = "PORT_TABLE:"
 PORT_STATE_TABLE_PREFIX = "PORT_TABLE|"
+PORT_CHANNEL_MEMBER_STATE_TABLE_PREFIX = "LAG_MEMBER_TABLE|"
 PORT_TRANSCEIVER_TABLE_PREFIX = "TRANSCEIVER_INFO|"
 PORT_LANES_STATUS = "lanes"
 PORT_ALIAS = "alias"
@@ -362,23 +363,44 @@ def po_speed_dict(po_int_dict, appl_db):
             agg_speed_list =  []
             po_list.append(key)
             if len(value) == 1:
-                interface_speed = port_oper_speed_get_raw(appl_db, value[0])
-                if interface_speed is None:
-                    # If no speed was returned, append None without format
-                    po_list.append(None)
+                member_state = appl_db.get_all(appl_db.STATE_DB, PORT_CHANNEL_MEMBER_STATE_TABLE_PREFIX + key + "|" + value[0])
+                oper_status = appl_db.get(appl_db.APPL_DB, PORT_STATUS_TABLE_PREFIX + value[0], PORT_OPER_STATUS)
+                runner_selected = member_state.get('runner.selected', 'N/A')
+                runner_state = member_state.get('runner.state', 'N/A')
+                link_up = member_state.get('link.up', 'N/A')
+                is_selected = runner_selected == 'true'
+                is_link_up = link_up == 'true'
+                is_state_current = runner_state == 'current'
+                if oper_status == "up" and is_selected and is_link_up and is_state_current:
+                    interface_speed = port_oper_speed_get_raw(appl_db, value[0])
                 else:
-                    optics_type = port_optics_get(appl_db, value[0], PORT_OPTICS_TYPE)
-                    interface_speed = port_speed_parse(interface_speed, optics_type)
-                    po_list.append(interface_speed)
+                    interface_speed = 0
+                optics_type = port_optics_get(appl_db, value[0], PORT_OPTICS_TYPE)
+                interface_speed = port_speed_parse(interface_speed, optics_type)
+                po_list.append(interface_speed)
             elif len(value) > 1:
                 for intf in value:
-                    temp_speed = port_oper_speed_get_raw(appl_db, intf)
+                    member_state = appl_db.get_all(appl_db.STATE_DB, PORT_CHANNEL_MEMBER_STATE_TABLE_PREFIX + key + "|" + intf)
+                    oper_status = appl_db.get(appl_db.APPL_DB, PORT_STATUS_TABLE_PREFIX + intf, PORT_OPER_STATUS)
+                    runner_selected = member_state.get('runner.selected', 'N/A')
+                    runner_state = member_state.get('runner.state', 'N/A')
+                    link_up = member_state.get('link.up', 'N/A')
+                    is_selected = runner_selected == 'true'
+                    is_link_up = link_up == 'true'
+                    is_state_current = runner_state == 'current'
                     optics_type = port_optics_get(appl_db, intf, PORT_OPTICS_TYPE)
-                    temp_speed = int(temp_speed) if temp_speed else 0
-                    agg_speed_list.append(temp_speed)
-                    interface_speed = sum(agg_speed_list)
-                    interface_speed = str(interface_speed)
-                    interface_speed = port_speed_parse(interface_speed, optics_type)
+                    if oper_status == "up" and is_selected and is_link_up and is_state_current:
+                        temp_speed = port_oper_speed_get_raw(appl_db, intf)
+                        temp_speed = int(temp_speed) if temp_speed else 0
+                        agg_speed_list.append(temp_speed)
+                        interface_speed = sum(agg_speed_list)
+                        interface_speed = str(interface_speed)
+                        interface_speed = port_speed_parse(interface_speed, optics_type)
+                    else:
+                        agg_speed_list.append(0)
+                        interface_speed = sum(agg_speed_list)
+                        interface_speed = str(interface_speed)
+                        interface_speed = port_speed_parse(interface_speed, optics_type)
                 po_list.append(interface_speed)
             po_speed_dict = dict(po_list[i:i+2] for i in range(0, len(po_list), 2))
         return po_speed_dict
