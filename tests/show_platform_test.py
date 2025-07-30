@@ -91,14 +91,14 @@ class TestShowPlatformTemperature(object):
             CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['--json'])
         assert mock_run_command.call_count == 1
         mock_run_command.assert_called_with(['tempershow', '-j'])
-        assert json.loads(mock_run_command.assert_called_with(['tempershow', '-j']))
+        assert json.loads(mock_run_command)
 
     def test_temperature_short_json(self):
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
             CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['-j'])
         assert mock_run_command.call_count == 1
         mock_run_command.assert_called_with(['tempershow', '-j'])
-        assert mock_run_command.assert_called_with(['tempershow', '-j'])
+        assert json.loads(mock_run_command)
 
 
 class TestShowPlatformPsu(object):
@@ -119,7 +119,7 @@ class TestShowPlatformPsu(object):
             CliRunner().invoke(show.cli.commands['platform'].commands['psustatus'], ['--json'])
         assert mock_run_command.call_count == 1
         mock_run_command.assert_called_with(['psushow', '-s', '-j'], display_cmd=False)
-        assert json.loads(mock_run_command.assert_called_with(['psushow', '-s', '-j']), display_cmd=False)
+        assert json.loads(mock_run_command)
 
     def test_single_psu(self):
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
@@ -132,7 +132,7 @@ class TestShowPlatformPsu(object):
             CliRunner().invoke(show.cli.commands['platform'].commands['psustatus'], ['--index=1', '--json'])
         assert mock_run_command.call_count == 1
         mock_run_command.assert_called_with(['psushow', '-s', '-i', '1', '-j'], display_cmd=False)
-        assert json.loads(mock_run_command.assert_called_with(['psushow', '-s', '-i', '1', '-j']), display_cmd=False)
+        assert json.loads(mock_run_command)
 
     def test_verbose(self):
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
