@@ -62,7 +62,7 @@ def status(db, chassis_module_name):
         # Use default values if any field is missing
         desc = data_dict.get(CHASSIS_MODULE_INFO_DESC_FIELD, 'N/A')
         slot = data_dict.get(CHASSIS_MODULE_INFO_SLOT_FIELD, 'N/A')
-        oper_status = data_dict.get(CHASSIS_MODULE_INFO_OPERSTATUS_FIELD, 'Unknown')
+        oper_status = data_dict.get(CHASSIS_MODULE_INFO_OPERSTATUS_FIELD, ModuleBase.MODULE_STATUS_EMPTY)
         serial = data_dict.get(CHASSIS_MODULE_INFO_SERIAL_FIELD, 'N/A')
 
         # Determine admin_status
