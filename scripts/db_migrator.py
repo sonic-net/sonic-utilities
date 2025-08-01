@@ -64,6 +64,8 @@ class DBMigrator():
         self.TABLE_KEY       = 'DATABASE'
         self.TABLE_FIELD     = 'VERSION'
 
+        self.platform = device_info.get_platform_info().get('platform')
+
         # Generate config_src_data from minigraph and golden config
         self.generate_config_src(namespace)
 
@@ -135,7 +137,7 @@ class DBMigrator():
         minigraph_data = None
         try:
             if os.path.isfile(MINIGRAPH_FILE):
-                minigraph_data = parse_xml(MINIGRAPH_FILE)
+                minigraph_data = parse_xml(MINIGRAPH_FILE, platform=self.platform)
         except Exception as e:
             log.log_error('Caught exception while trying to parse minigraph: ' + str(e))
             pass

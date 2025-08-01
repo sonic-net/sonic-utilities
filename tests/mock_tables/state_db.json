@@ -1759,6 +1759,7 @@
     },
     "PORT_OPERR_TABLE|Ethernet64": {
         "oper_error_status": "2",
+        "oper_error_status_time": "2025-01-17 19:51:12",
         "mac_remote_fault_count": "14483",
         "mac_remote_fault_time": "2025-01-17 19:51:12",
         "mac_local_fault_count": "26",

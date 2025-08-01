@@ -104,7 +104,7 @@ def caclmgrd_validator(old_config, upd_config, keys):
 
 
 def ntp_validator(old_config, upd_config, keys):
-    return _service_restart("ntp-config")
+    return _service_restart("chrony")
 
 def vlanintf_validator(old_config, upd_config, keys):
     old_vlan_intf = old_config.get("VLAN_INTERFACE", {})

@@ -69,7 +69,24 @@ def get_asic_name():
     return asic
 
 
-def rdma_config_update_validator(scope, patch_element):
+def fields_match_exact(cleaned_patch_field, gcu_field):
+    return cleaned_patch_field == gcu_field
+
+
+def fields_match_endswith(cleaned_patch_field, gcu_field):
+    """
+    Checks if cleaned_patch_field ends with gcu_field
+    """
+    field = cleaned_patch_field.split('/')[-1]
+    return field == gcu_field
+
+
+# If exact_field_match is True, then each field in GCU_TABLE_MOD_CONF_FILE must match exactly with
+# the corresponding cleaned field from the patch.
+# If exact_field_match is False, then each field in GCU_TABLE_MOD_CONF_FILE must appear at the end of
+# the corresponding cleaned fields from the patch.
+# remove_port controls the behavior of the _get_fields_in_patch function.
+def rdma_config_update_validator_common(scope, patch_element, exact_field_match=False, remove_port=False):
     asic = get_asic_name()
     if asic == "unknown":
         return False
@@ -77,23 +94,27 @@ def rdma_config_update_validator(scope, patch_element):
     build_version = version_info.get('build_version')
     version_substrings = build_version.split('.')
     branch_version = None
-    
+
     for substring in version_substrings:
         if substring.isdigit() and re.match(r'^\d{8}$', substring):
             branch_version = substring
-    
+
     path = patch_element["path"]
     table = jsonpointer.JsonPointer(path).parts[0]
-    
+
     # Helper function to return relevant cleaned paths, considers case where the jsonpatch value is a dict
-    # For paths like /PFC_WD/Ethernet112/action, remove Ethernet112 from the path so that we can clearly determine the relevant field (i.e. action, not Ethernet112)
+    # If remove_port is True, then for paths like /PFC_WD/Ethernet112/action, remove Ethernet112 from
+    # the path so that we can clearly determine the relevant field (i.e. action, not Ethernet112)
     def _get_fields_in_patch():
         cleaned_fields = []
 
         field_elements = jsonpointer.JsonPointer(path).parts[1:]
-        cleaned_field_elements = [elem for elem in field_elements if not any(char.isdigit() for char in elem)]
+        if remove_port:
+            cleaned_field_elements = [elem for elem in field_elements if not any(char.isdigit() for char in elem)]
+        else:
+            cleaned_field_elements = field_elements
         cleaned_field = '/'.join(cleaned_field_elements).lower()
-        
+
 
         if 'value' in patch_element.keys() and isinstance(patch_element['value'], dict):
             for key in patch_element['value']:
@@ -105,7 +126,7 @@ def rdma_config_update_validator(scope, patch_element):
             cleaned_fields.append(cleaned_field)
 
         return cleaned_fields
-    
+
     if os.path.exists(GCU_TABLE_MOD_CONF_FILE):
         with open(GCU_TABLE_MOD_CONF_FILE, "r") as s:
             gcu_field_operation_conf = json.load(s)
@@ -114,24 +135,27 @@ def rdma_config_update_validator(scope, patch_element):
 
     tables = gcu_field_operation_conf["tables"]
     scenarios = tables[table]["validator_data"]["rdma_config_update_validator"]
-    
-    cleaned_fields = _get_fields_in_patch()
-    for cleaned_field in cleaned_fields:
+    cleaned_patch_fields = _get_fields_in_patch()
+    fields_match = fields_match_exact if exact_field_match else fields_match_endswith
+    for cleaned_patch_field in cleaned_patch_fields:
         scenario = None
         for key in scenarios.keys():
-            if cleaned_field in scenarios[key]["fields"]:
-                scenario = scenarios[key]
+            for gcu_field in scenarios[key]["fields"]:
+                if fields_match(cleaned_patch_field, gcu_field):
+                    scenario = scenarios[key]
+                    break
+            if scenario:
                 break
-    
+
         if scenario is None:
             return False
-        
-        if scenario["platforms"][asic] == "":
+
+        if not scenario["platforms"].get(asic):  # None or empty string
             return False
 
         if patch_element['op'] not in scenario["operations"]:
             return False
-    
+
         if branch_version is not None:
             if asic in scenario["platforms"]:
                 if branch_version < scenario["platforms"][asic]:
@@ -140,6 +164,14 @@ def rdma_config_update_validator(scope, patch_element):
                 return False
 
     return True
+
+
+def rdma_config_update_validator(scope, patch_element):
+    return rdma_config_update_validator_common(scope, patch_element, exact_field_match=True, remove_port=True)
+
+
+def wred_profile_config_update_validator(scope, patch_element):
+    return rdma_config_update_validator_common(scope, patch_element)
 
 
 def read_statedb_entry(scope, table, key, field):

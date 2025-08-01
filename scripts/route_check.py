@@ -444,6 +444,65 @@ def get_interfaces(namespace):
     return sorted(intf)
 
 
+def is_point_to_point_prefix(prefix):
+    """
+    check if a given prefix is a p2p /31 ipv4 prefix or a /126 ipv6 prefix
+    :return sorted list of local p2p IP prefixes
+    """
+    try:
+        network = ipaddress.ip_network(prefix, strict=False)
+        if isinstance(network, ipaddress.IPv4Network) and network.prefixlen == 31:
+            return True
+        if isinstance(network, ipaddress.IPv6Network) and network.prefixlen == 126:
+            return True
+        return False
+    except ValueError:
+        return False
+
+
+def get_local_p2p_ips(namespace):
+    """
+    helper to read p2p local IPs from interface table in APPL-DB.
+    :return sorted list of local p2p IP addresses
+    """
+    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    print_message(syslog.LOG_DEBUG, "APPL DB connected for interfaces")
+    tbl = swsscommon.Table(db, 'INTF_TABLE')
+    keys = tbl.getKeys()
+
+    intf = []
+    for k in keys:
+        lst = re.split(':', k.lower(), maxsplit=1)
+        if len(lst) == 1:
+            # No IP address in key; ignore
+            continue
+
+        ip = lst[1]
+
+        if is_point_to_point_prefix(ip):
+            intf.append(ip)
+
+    print_message(syslog.LOG_DEBUG, json.dumps({"APPL_DB_INTF": sorted(intf)}, indent=4))
+    return sorted(intf)
+
+
+def filter_out_local_p2p_ips(namespace, keys):
+    """
+    helper to filter out local p2p IPs
+    :param keys: APPL-DB:ROUTE_TABLE Routes to check.
+    :return keys filtered out of local
+    """
+    rt = []
+    if_tbl_ips = set(get_local_p2p_ips(namespace))
+
+    for k in keys:
+        if k in if_tbl_ips:
+            continue
+        rt.append(k)
+
+    return rt
+
+
 def filter_out_local_interfaces(namespace, keys):
     """
     helper to filter out local interfaces
@@ -817,6 +876,10 @@ def check_routes_for_namespace(namespace):
 
     # Drop all those for which DEL received
     rt_asic_miss, _ = diff_sorted_lists(rt_asic_miss, deletes)
+
+    # Filter local p2p IPs if any that are reported as missing in APPL_DB
+    if rt_appl_miss:
+        rt_appl_miss = filter_out_local_p2p_ips(namespace, rt_appl_miss)
 
     if rt_appl_miss:
         results["missed_ROUTE_TABLE_routes"] = rt_appl_miss
