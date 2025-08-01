@@ -569,7 +569,7 @@ show_muxcable_tunnel_route_expected_output_json="""\
             "server_ipv4": {
                 "DEST": "10.2.1.1",
                 "kernel": 1,
-                "asic": 1
+                "asic": true
             }
         },
         "Ethernet4": {
@@ -583,7 +583,7 @@ show_muxcable_tunnel_route_expected_output_json="""\
             "soc_ipv6": {
                 "DEST": "fc00::76",
                 "kernel": false,
-                "asic": 1
+                "asic": true
             }
         }
     }
@@ -605,7 +605,7 @@ show_muxcable_tunnel_route_expected_output_port_json="""\
             "server_ipv4": {
                 "DEST": "10.2.1.1",
                 "kernel": 1,
-                "asic": 1
+                "asic": true
             }
         }
     }
