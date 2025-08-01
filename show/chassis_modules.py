@@ -3,6 +3,7 @@ from natsort import natsorted
 from tabulate import tabulate
 from swsscommon.swsscommon import SonicV2Connector
 from utilities_common.chassis import is_smartswitch
+from sonic_platform_base.module_base import ModuleBase
 
 import utilities_common.cli as clicommon
 from sonic_py_common import multi_asic
