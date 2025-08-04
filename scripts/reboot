@@ -55,6 +55,7 @@ DPU_MODULE_NAME=""
 REBOOT_DPU="no"
 PRE_SHUTDOWN="no"
 BLOCKING_MODE="no"
+BLOCKING_MODE_TIMEOUT_IN_SECOND=180
 SHOW_TIMER="no"
 
 function debug()
@@ -257,6 +258,9 @@ function parse_config_file
                 blocking_mode)
                     [ "${value}" = "true" ] && BLOCKING_MODE="yes"
                     ;;
+                blocking_mode_timeout)
+                    [[ "${value}" =~ ^[0-9]+$ ]] && BLOCKING_MODE_TIMEOUT_IN_SECOND=$(value)
+                    ;;
                 show_timer)
                     [ "${value}" = "true" ] && SHOW_TIMER="yes"
                     ;;
@@ -376,6 +380,8 @@ if [[ "${BLOCKING_MODE}" != "yes" ]]; then
     # In non blocking mode, we will remain the original logic.
     exec /sbin/reboot ${REBOOT_FLAGS}
 else
+
+    REBOOT_START_TIME=$(date +%s)
     /sbin/reboot ${REBOOT_FLAGS}
     if [[ "${BLOCKING_MODE}" == "yes" ]]; then
         # In blocking mode, we just deadloop here to avoid more output generated.
@@ -391,6 +397,14 @@ else
                     echo -n "."
                 fi
             fi
+
+            CURRENT_TIME=$(date +%s)
+            ELAPSED=$((CURRENT_TIME - REBOOT_START_TIME))
+            if (( ELAPSED >= BLOCKING_MODE_TIMEOUT_IN_SECOND )); then
+                echo "The reboot used $(ELAPSED)seconds while the timeout is configed as $(BLOCKING_MODE_TIMEOUT_IN_SECOND)seconds"
+                break
+            fi
+
             sleep 10
         done
     fi
