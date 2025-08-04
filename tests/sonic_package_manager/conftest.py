@@ -26,7 +26,7 @@ def mock_docker_api():
     @dataclass
     class Image:
         id: str
-        tags: list[str]
+        docker_image_references: list[str]
 
         @property
         def attrs(self):

@@ -51,10 +51,10 @@ class PackageSource(object):
 
         image = self.install_image(package)
         package.entry.image_id = image.id
-        if image.tags:
-            package.entry.tag = image.tags[0]
+        if image.docker_image_references:
+            package.entry.docker_image_reference = image.docker_image_references[0]
         else:
-            package.entry.tag = image.id
+            package.entry.docker_image_reference = image.id
 
         # if no repository is defined for this package
         # get repository from image
