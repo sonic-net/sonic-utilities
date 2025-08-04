@@ -83,7 +83,8 @@ Ethernet8: SFP EEPROM detected
         Active application selected code assigned to host lane 6: 1
         Active application selected code assigned to host lane 7: 1
         Active application selected code assigned to host lane 8: 1
-        Application Advertisement: 400GAUI-8 C2M (Annex 120E) - Host Assign (0x1) - 400ZR, DWDM, amplified - Media Assign (0x1)
+        Application Advertisement: 400GAUI-8 C2M (Annex 120E) - Host Assign (0x1) - 400ZR, DWDM, amplified - \
+Media Assign (0x1)
                                    400GAUI-8 C2M (Annex 120E) - Host Assign (0x1) - 400ZR, Single Wavelength, \
 Unamplified - Media Assign (0x1)
                                    100GAUI-2 C2M (Annex 135G) - Host Assign (0x55) - 400ZR, DWDM, amplified - \
@@ -260,7 +261,8 @@ Ethernet8: SFP EEPROM detected
         Active application selected code assigned to host lane 6: 1
         Active application selected code assigned to host lane 7: 1
         Active application selected code assigned to host lane 8: 1
-        Application Advertisement: 400GAUI-8 C2M (Annex 120E) - Host Assign (0x1) - 400ZR, DWDM, amplified - Media Assign (0x1)
+        Application Advertisement: 400GAUI-8 C2M (Annex 120E) - Host Assign (0x1) - 400ZR, DWDM, amplified - \
+Media Assign (0x1)
                                    400GAUI-8 C2M (Annex 120E) - Host Assign (0x1) - 400ZR, Single Wavelength, \
 Unamplified - Media Assign (0x1)
                                    100GAUI-2 C2M (Annex 135G) - Host Assign (0x55) - 400ZR, DWDM, amplified - \

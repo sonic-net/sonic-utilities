@@ -710,7 +710,8 @@ def eeprom(port, dump_dom, namespace):
                         click.echo("Sfp.get_transceiver_threshold_info() is currently not implemented for this platform")
                         sys.exit(ERROR_NOT_IMPLEMENTED)
 
-                    output += convert_dom_to_output_string(xcvr_info['type'], is_transceiver_cmis(xcvr_info), xcvr_dom_info)
+                    output += convert_dom_to_output_string(xcvr_info['type'],
+                                                           is_transceiver_cmis(xcvr_info), xcvr_dom_info)
 
             output += '\n'
 
