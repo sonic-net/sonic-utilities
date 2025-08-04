@@ -265,9 +265,10 @@ class TestSfputil(object):
         output = sfputil.convert_sfp_info_to_output_string(sfp_info_dict)
         assert output == expected_output
 
-    @pytest.mark.parametrize("sfp_type, dom_info_dict, expected_output", [
+    @pytest.mark.parametrize("sfp_type, is_sfp_cmis, dom_info_dict, expected_output", [
         (
             'QSFP28 or later',
+            False,
             {
                 'temperature': '41.7539C',
                 'voltage': '3.2577Volts',
@@ -303,6 +304,7 @@ class TestSfputil(object):
         ), 
         (
             'QSFP-DD Double Density 8X Pluggable Transceiver',
+            True,
             {
                 'temperature': '41.7539C',
                 'voltage': '3.2577Volts',
@@ -358,6 +360,7 @@ class TestSfputil(object):
         ),
         (
             'OSFP 8X Pluggable Transceiver',
+            True,
             {
                 'temperature': '41.7539C',
                 'voltage': '3.2577Volts',
@@ -411,8 +414,8 @@ class TestSfputil(object):
         ModuleThresholdValues:
 '''
         )])
-    def test_convert_dom_to_output_string(self, sfp_type, dom_info_dict, expected_output):
-        output = sfputil.convert_dom_to_output_string(sfp_type, dom_info_dict)
+    def test_convert_dom_to_output_string(self, sfp_type, is_sfp_cmis, dom_info_dict, expected_output):
+        output = sfputil.convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict)
         assert output == expected_output
 
     def test_get_physical_port_name(self):

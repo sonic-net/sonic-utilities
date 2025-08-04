@@ -356,7 +356,7 @@ class SFPShow(object):
         return output
 
     # Convert DOM sensor info in DB to CLI output string
-    def convert_dom_to_output_string(self, sfp_type, dom_info_dict):
+    def convert_dom_to_output_string(self, sfp_type, is_sfp_cmis, dom_info_dict):
         indent = ' ' * 8
         output_dom = ''
         channel_threshold_align = 18
@@ -364,7 +364,7 @@ class SFPShow(object):
 
         if sfp_type.startswith('QSFP') or sfp_type.startswith('OSFP'):
             # Channel Monitor
-            if sfp_type.startswith('QSFP-DD') or sfp_type.startswith('OSFP'):
+            if is_sfp_cmis:
                 output_dom += (indent + 'ChannelMonitorValues:\n')
                 sorted_key_table = natsorted(QSFP_DD_DOM_CHANNEL_MONITOR_MAP)
                 output_channel = self.format_dict_value_to_string(
@@ -382,7 +382,7 @@ class SFPShow(object):
                 output_dom += output_channel
 
             # Channel Threshold
-            if sfp_type.startswith('QSFP-DD') or sfp_type.startswith('OSFP'):
+            if is_sfp_cmis:
                 dom_map = SFP_DOM_CHANNEL_THRESHOLD_MAP
             else:
                 dom_map = QSFP_DOM_CHANNEL_THRESHOLD_MAP
@@ -477,7 +477,7 @@ class SFPShow(object):
                     sfp_type = sfp_info_dict['type']
                     dom_info_dict = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_DOM_SENSOR|{}'.format(first_subport)) or {}
                     dom_info_dict.update(state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_DOM_THRESHOLD|{}'.format(first_subport)) or {})
-                    dom_output = self.convert_dom_to_output_string(sfp_type, dom_info_dict)
+                    dom_output = self.convert_dom_to_output_string(sfp_type, 'cmis_rev' in sfp_info_dict, dom_info_dict)
                     output += dom_output
         else:
             if is_rj45_port(interface_name):

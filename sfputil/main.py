@@ -335,9 +335,8 @@ def format_dict_value_to_string(sorted_key_table,
 def convert_sfp_info_to_output_string(sfp_info_dict):
     indent = ' ' * 8
     output = ''
-    sfp_type = sfp_info_dict['type']
-    # CMIS supported module types include QSFP-DD and OSFP
-    if sfp_type.startswith('QSFP-DD') or sfp_type.startswith('OSFP'):
+    is_sfp_cmis = 'cmis_rev' in sfp_info_dict
+    if is_sfp_cmis:
         sorted_qsfp_data_map_keys = sorted(QSFP_DD_DATA_MAP, key=QSFP_DD_DATA_MAP.get)
         for key in sorted_qsfp_data_map_keys:
             if key == 'cable_type':
@@ -385,7 +384,7 @@ def convert_sfp_info_to_output_string(sfp_info_dict):
 
 
 # Convert DOM sensor info in DB to CLI output string
-def convert_dom_to_output_string(sfp_type, dom_info_dict):
+def convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict):
     indent = ' ' * 8
     output_dom = ''
     channel_threshold_align = 18
@@ -393,7 +392,7 @@ def convert_dom_to_output_string(sfp_type, dom_info_dict):
 
     if sfp_type.startswith('QSFP') or sfp_type.startswith('OSFP'):
         # Channel Monitor
-        if sfp_type.startswith('QSFP-DD') or sfp_type.startswith('OSFP'):
+        if is_sfp_cmis:
             output_dom += (indent + 'ChannelMonitorValues:\n')
             sorted_key_table = natsorted(QSFP_DD_DOM_CHANNEL_MONITOR_MAP)
             output_channel = format_dict_value_to_string(
@@ -411,7 +410,7 @@ def convert_dom_to_output_string(sfp_type, dom_info_dict):
             output_dom += output_channel
 
         # Channel Threshold
-        if sfp_type.startswith('QSFP-DD') or sfp_type.startswith('OSFP'):
+        if is_sfp_cmis:
             dom_map = SFP_DOM_CHANNEL_THRESHOLD_MAP
         else:
             dom_map = QSFP_DOM_CHANNEL_THRESHOLD_MAP
@@ -710,7 +709,7 @@ def eeprom(port, dump_dom, namespace):
                         click.echo("Sfp.get_transceiver_threshold_info() is currently not implemented for this platform")
                         sys.exit(ERROR_NOT_IMPLEMENTED)
 
-                    output += convert_dom_to_output_string(xcvr_info['type'], xcvr_dom_info)
+                    output += convert_dom_to_output_string(xcvr_info['type'], 'cmis_rev' in xcvr_info, xcvr_dom_info)
 
             output += '\n'
 
