@@ -426,6 +426,7 @@ def covert_application_advertisement_to_output_string(indent, sfp_info_dict):
         output += '{}\n'.format(app_adv_str)
     return output
 
+
 def is_transceiver_cmis(sfp_info_dict):
     """
     Check if the transceiver is CMIS compliant.
