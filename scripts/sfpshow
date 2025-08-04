@@ -110,7 +110,7 @@ QSFP_DOM_CHANNEL_MONITOR_MAP = {
     'tx4power': 'TX4Power'
 }
 
-QSFP_DD_DOM_CHANNEL_MONITOR_MAP = {
+CMIS_DOM_CHANNEL_MONITOR_MAP = {
     'rx1power': 'RX1Power',
     'rx2power': 'RX2Power',
     'rx3power': 'RX3Power',
@@ -367,10 +367,10 @@ class SFPShow(object):
             # Channel Monitor
             if is_sfp_cmis:
                 output_dom += (indent + 'ChannelMonitorValues:\n')
-                sorted_key_table = natsorted(QSFP_DD_DOM_CHANNEL_MONITOR_MAP)
+                sorted_key_table = natsorted(CMIS_DOM_CHANNEL_MONITOR_MAP)
                 output_channel = self.format_dict_value_to_string(
                     sorted_key_table, dom_info_dict,
-                    QSFP_DD_DOM_CHANNEL_MONITOR_MAP,
+                    CMIS_DOM_CHANNEL_MONITOR_MAP,
                     QSFP_DD_DOM_VALUE_UNIT_MAP)
                 output_dom += output_channel
             else:
@@ -467,6 +467,7 @@ class SFPShow(object):
         sfp_info_dict = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_INFO|{}'.format(interface_name))
         sfp_firmware_info_dict = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_FIRMWARE_INFO|{}'.format(first_subport))
         if sfp_info_dict:
+            is_sfp_cmis = is_transceiver_cmis(sfp_info_dict)
             if sfp_info_dict['type'] == RJ45_PORT_TYPE:
                 output = 'SFP EEPROM is not applicable for RJ45 port\n'
             else:
@@ -478,7 +479,7 @@ class SFPShow(object):
                     sfp_type = sfp_info_dict['type']
                     dom_info_dict = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_DOM_SENSOR|{}'.format(first_subport)) or {}
                     dom_info_dict.update(state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_DOM_THRESHOLD|{}'.format(first_subport)) or {})
-                    dom_output = self.convert_dom_to_output_string(sfp_type, is_transceiver_cmis(sfp_info_dict), dom_info_dict)
+                    dom_output = self.convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict)
                     output += dom_output
         else:
             if is_rj45_port(interface_name):

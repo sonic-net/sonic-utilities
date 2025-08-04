@@ -172,7 +172,7 @@ QSFP_DOM_CHANNEL_MONITOR_MAP = {
     'tx4power': 'TX4Power'
 }
 
-QSFP_DD_DOM_CHANNEL_MONITOR_MAP = {
+CMIS_DOM_CHANNEL_MONITOR_MAP = {
     'rx1power': 'RX1Power',
     'rx2power': 'RX2Power',
     'rx3power': 'RX3Power',
@@ -395,10 +395,10 @@ def convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict):
         # Channel Monitor
         if is_sfp_cmis:
             output_dom += (indent + 'ChannelMonitorValues:\n')
-            sorted_key_table = natsorted(QSFP_DD_DOM_CHANNEL_MONITOR_MAP)
+            sorted_key_table = natsorted(CMIS_DOM_CHANNEL_MONITOR_MAP)
             output_channel = format_dict_value_to_string(
                 sorted_key_table, dom_info_dict,
-                QSFP_DD_DOM_CHANNEL_MONITOR_MAP,
+                CMIS_DOM_CHANNEL_MONITOR_MAP,
                 QSFP_DD_DOM_VALUE_UNIT_MAP)
             output_dom += output_channel
         else:
@@ -678,6 +678,7 @@ def eeprom(port, dump_dom, namespace):
 
                 try:
                     xcvr_info = platform_chassis.get_sfp(physical_port).get_transceiver_info()
+                    is_sfp_cmis = is_transceiver_cmis(xcvr_info)
                 except NotImplementedError:
                     click.echo("Sfp.get_transceiver_info() is currently not implemented for this platform")
                     sys.exit(ERROR_NOT_IMPLEMENTED)
@@ -711,7 +712,7 @@ def eeprom(port, dump_dom, namespace):
                         sys.exit(ERROR_NOT_IMPLEMENTED)
 
                     output += convert_dom_to_output_string(xcvr_info['type'],
-                                                           is_transceiver_cmis(xcvr_info), xcvr_dom_info)
+                                                           is_sfp_cmis, xcvr_dom_info)
 
             output += '\n'
 
