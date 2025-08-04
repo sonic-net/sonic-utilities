@@ -28,6 +28,7 @@ from utilities_common.platform_sfputil_helper import (
 )
 from utilities_common.sfp_helper import covert_application_advertisement_to_output_string
 from utilities_common.sfp_helper import QSFP_DATA_MAP
+from utilities_common.sfp_helper import is_transceiver_cmis
 from tabulate import tabulate
 from utilities_common.general import load_db_config
 
@@ -335,7 +336,7 @@ def format_dict_value_to_string(sorted_key_table,
 def convert_sfp_info_to_output_string(sfp_info_dict):
     indent = ' ' * 8
     output = ''
-    is_sfp_cmis = 'cmis_rev' in sfp_info_dict
+    is_sfp_cmis = is_transceiver_cmis(sfp_info_dict)
     if is_sfp_cmis:
         sorted_qsfp_data_map_keys = sorted(QSFP_DD_DATA_MAP, key=QSFP_DD_DATA_MAP.get)
         for key in sorted_qsfp_data_map_keys:
@@ -709,7 +710,7 @@ def eeprom(port, dump_dom, namespace):
                         click.echo("Sfp.get_transceiver_threshold_info() is currently not implemented for this platform")
                         sys.exit(ERROR_NOT_IMPLEMENTED)
 
-                    output += convert_dom_to_output_string(xcvr_info['type'], 'cmis_rev' in xcvr_info, xcvr_dom_info)
+                    output += convert_dom_to_output_string(xcvr_info['type'], is_transceiver_cmis(xcvr_info), xcvr_dom_info)
 
             output += '\n'
 

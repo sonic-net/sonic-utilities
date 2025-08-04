@@ -29,6 +29,7 @@ from utilities_common.sfp_helper import (
         CCMIS_VDM_TO_LEGACY_STATUS_MAP,
         CCMIS_VDM_THRESHOLD_TO_LEGACY_DOM_THRESHOLD_MAP
 )
+from utilities_common.sfp_helper import is_transceiver_cmis
 from tabulate import tabulate
 
 # Mock the redis DB for unit test purposes
@@ -313,7 +314,7 @@ class SFPShow(object):
     def convert_sfp_info_to_output_string(self, sfp_info_dict, sfp_firmware_info_dict):
         indent = ' ' * 8
         output = ''
-        is_sfp_cmis = 'cmis_rev' in sfp_info_dict
+        is_sfp_cmis = is_transceiver_cmis(sfp_info_dict)
         is_sfp_c_cmis = 'supported_max_tx_power' in sfp_info_dict
 
         if is_sfp_c_cmis:
@@ -477,7 +478,7 @@ class SFPShow(object):
                     sfp_type = sfp_info_dict['type']
                     dom_info_dict = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_DOM_SENSOR|{}'.format(first_subport)) or {}
                     dom_info_dict.update(state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_DOM_THRESHOLD|{}'.format(first_subport)) or {})
-                    dom_output = self.convert_dom_to_output_string(sfp_type, 'cmis_rev' in sfp_info_dict, dom_info_dict)
+                    dom_output = self.convert_dom_to_output_string(sfp_type, is_transceiver_cmis(sfp_info_dict), dom_info_dict)
                     output += dom_output
         else:
             if is_rj45_port(interface_name):
