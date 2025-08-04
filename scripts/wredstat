@@ -88,17 +88,33 @@ def build_json(port, cnstat):
         out.update(ports_stats(k))
     return out
 
+class WredstatWrapper(object):
+    """A wrapper to execute Wredstat cmd over the correct namespaces"""
+    def __init__(self, namespace, voq=False):
+        self.namespace = namespace
+        self.voq = voq
+
+        # Initialize the multi-asic namespace
+        self.multi_asic = multi_asic_util.MultiAsic(constants.DISPLAY_ALL, namespace_option=namespace)
+        self.db = None
+
+    @multi_asic_util.run_on_multi_asic
+    def run(self, save_fresh_stats, port_to_show_stats, json_opt):
+        wredstat = Wredstat(self.multi_asic.current_namespace, self.db, self.voq)
+        if save_fresh_stats:
+           wredstat.save_fresh_stats()
+           return
+
+        if port_to_show_stats!=None:
+           wredstat.get_print_port_stat(port_to_show_stats, json_opt)
+        else:
+           wredstat.get_print_all_stat(json_opt)
+
 
 class Wredstat(object):
-    def __init__(self, namespace, voq=False):
-        self.db = None
-        self.multi_asic = multi_asic_util.MultiAsic(constants.DISPLAY_ALL, namespace)
-        if namespace is not None:
-            for ns in self.multi_asic.get_ns_list_based_on_options():
-                self.db = multi_asic.connect_to_all_dbs_for_ns(ns)
-        else:
-            self.db = SonicV2Connector(use_unix_socket_path=False)
-            self.db.connect(self.db.COUNTERS_DB)
+    def __init__(self, namespace, db, voq):
+        self.db = db
+        self.namespace = namespace
         self.voq = voq
 
         def get_queue_port(table_id):
@@ -377,17 +393,8 @@ Examples:
     if delete_stats:
         cache.remove()
 
-    wredstat = Wredstat( namespace, voq )
-
-    if save_fresh_stats:
-        wredstat.save_fresh_stats()
-        sys.exit(0)
-
-
-    if port_to_show_stats!=None:
-        wredstat.get_print_port_stat(port_to_show_stats, json_opt)
-    else:
-        wredstat.get_print_all_stat(json_opt)
+    wredstat_wrapper = WredstatWrapper(namespace, voq)
+    wredstat_wrapper.run(save_fresh_stats, port_to_show_stats, json_opt)
 
     sys.exit(0)
 
