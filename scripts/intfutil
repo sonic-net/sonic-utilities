@@ -64,6 +64,14 @@ VLAN_SUB_INTERFACE_TYPE = "802.1q-encapsulation"
 
 SUB_PORT = "subport"
 
+def display_table(table, header_desc, use_json=False):
+    sorted_table = natsorted(table)
+    if use_json:
+        print(table_as_json(sorted_table, header_desc))
+    else:
+        print(tabulate(sorted_table, header_desc, tablefmt="simple", stralign='right'))
+
+        
 def get_frontpanel_port_list(config_db):
     ports_dict = config_db.get_table('PORT')
     front_panel_ports_list = []
@@ -484,14 +492,8 @@ class IntfStatus(object):
 
     def display_intf_status(self):
         self.get_intf_status()
-        sorted_table = natsorted(self.table)
-        if self.use_json:
-            print(table_as_json(sorted_table, header_stat if not self.sub_intf_only else header_stat_sub_intf))
-        else:
-            print(tabulate(sorted_table,
-                        header_stat if not self.sub_intf_only else header_stat_sub_intf,
-                        tablefmt="simple",
-                        stralign='right'))
+        header_status = header_stat if not self.sub_intf_only else header_stat_sub_intf
+        display_table(self.table, header_status, self.use_json)
 
     def generate_intf_status(self):
         """
@@ -599,13 +601,7 @@ class IntfDescription(object):
     def display_intf_description(self):
 
         self.get_intf_description()
-
-        # Sorting and tabulating the result table.
-        sorted_table = natsorted(self.table)
-        if self.use_json:
-            print(table_as_json(sorted_table, header_desc))
-        else:
-            print(tabulate(sorted_table, header_desc, tablefmt="simple", stralign='right'))
+        display_table(self.table, header_desc, self.use_json)
 
     def generate_intf_description(self):
         """
@@ -662,13 +658,7 @@ class IntfAutoNegStatus(object):
     def display_autoneg_status(self):
 
         self.get_intf_autoneg_status()
-
-        # Sorting and tabulating the result table.
-        sorted_table = natsorted(self.table)
-        if self.use_json:
-            print(table_as_json(sorted_table, header_autoneg))
-        else:
-            print(tabulate(sorted_table, header_autoneg, tablefmt="simple", stralign='right'))
+        display_table(self.table, header_autoneg, self.use_json)
 
     def generate_autoneg_status(self):
         """
@@ -737,13 +727,7 @@ class IntfTpid(object):
 
     def display_intf_tpid(self):
         self.get_intf_tpid()
-
-        # Sorting and tabulating the result table.
-        sorted_table = natsorted(self.table)
-        if self.use_json:
-            print(table_as_json(sorted_table, header_tpid))
-        else:
-            print(tabulate(sorted_table, header_tpid, tablefmt="simple", stralign='right'))
+        display_table(self.table, header_tpid, self.use_json)
 
     def generate_intf_tpid(self):
         """
@@ -820,12 +804,7 @@ class IntfLinkTrainingStatus(object):
 
     def display_link_training_status(self):
         self.get_intf_link_training_status()
-        # Sorting and tabulating the result table.
-        sorted_table = natsorted(self.table)
-        if self.use_json:
-            print(table_as_json(sorted_table, header_link_training))
-        else:
-            print(tabulate(sorted_table, header_link_training, tablefmt="simple", stralign='right'))
+        display_table(self.table, header_link_training, self.use_json)
 
     @multi_asic_util.run_on_multi_asic
     def get_intf_link_training_status(self):
@@ -883,12 +862,7 @@ class IntfFecStatus(object):
 
     def display_fec_status(self):
         self.get_intf_fec_status()
-        # Sorting and tabulating the result table.
-        sorted_table = natsorted(self.table)
-        if self.use_json:
-            print(table_as_json(sorted_table, header_fec))
-        else:
-            print(tabulate(sorted_table, header_fec, tablefmt="simple", stralign='right'))
+        display_table(self.table, header_fec, self.use_json)
 
     @multi_asic_util.run_on_multi_asic
     def get_intf_fec_status(self):
