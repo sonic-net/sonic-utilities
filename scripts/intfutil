@@ -729,7 +729,6 @@ class IntfTpid(object):
         self.get_intf_tpid()
         display_table(self.table, header_tpid, self.use_json)
 
-
     def generate_intf_tpid(self):
         """
             Generate interface-tpid output
@@ -806,7 +805,6 @@ class IntfLinkTrainingStatus(object):
     def display_link_training_status(self):
         self.get_intf_link_training_status()
         display_table(self.table, header_link_training, self.use_json)
-
 
     @multi_asic_util.run_on_multi_asic
     def get_intf_link_training_status(self):
