@@ -492,14 +492,8 @@ class IntfStatus(object):
 
     def display_intf_status(self):
         self.get_intf_status()
-        sorted_table = natsorted(self.table)
-        if self.use_json:
-            print(table_as_json(sorted_table, header_stat if not self.sub_intf_only else header_stat_sub_intf))
-        else:
-            print(tabulate(sorted_table,
-                        header_stat if not self.sub_intf_only else header_stat_sub_intf,
-                        tablefmt="simple",
-                        stralign='right'))
+        header_status = header_stat if not self.sub_intf_only else header_stat_sub_intf
+        display_table(self.table, header_status, self.use_json)
 
     def generate_intf_status(self):
         """
