@@ -293,6 +293,132 @@ class TestValidateFieldOperation(unittest.TestCase):
             assert generic_config_updater.field_operation_validators.\
                 rdma_config_update_validator(scope, patch_element) is False
 
+    @patch("sonic_py_common.device_info.get_sonic_version_info",
+           mock.Mock(return_value={"build_version": "20250530.12"}))
+    @patch("generic_config_updater.field_operation_validators.get_asic_name",
+           mock.Mock(return_value="th5"))
+    @patch("os.path.exists", mock.Mock(return_value=True))
+    @patch("builtins.open", mock_open(read_data='''{"tables": {"WRED_PROFILE": {"validator_data": {
+        "rdma_config_update_validator": {"ECN tuning": {"fields": [
+            "green_min_threshold", "green_max_threshold", "green_drop_probability"
+        ], "operations": ["replace"], "platforms": {"th5": "20240500"}}}}}}}'''))
+    def test_wred_profile_config_update_validator_lossless(self):
+        patch_element = {
+            "path": "/WRED_PROFILE/AZURE_LOSSLESS/green_min_threshold",
+            "op": "replace",
+            "value": "1234"
+        }
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                wred_profile_config_update_validator(scope, patch_element) is True
+
+    @patch("sonic_py_common.device_info.get_sonic_version_info",
+           mock.Mock(return_value={"build_version": "20250530.12"}))
+    @patch("generic_config_updater.field_operation_validators.get_asic_name",
+           mock.Mock(return_value="th5"))
+    @patch("os.path.exists", mock.Mock(return_value=True))
+    @patch("builtins.open", mock_open(read_data='''{"tables": {"WRED_PROFILE": {"validator_data": {
+        "rdma_config_update_validator": {"ECN tuning": {"fields": [
+            "green_min_threshold", "green_max_threshold", "green_drop_probability"
+        ], "operations": ["replace"], "platforms": {"th5": "20240500"}}}}}}}'''))
+    def test_wred_profile_config_update_validator_lossy(self):
+        patch_element = {
+            "path": "/WRED_PROFILE/AZURE_LOSSY/green_min_threshold",
+            "op": "replace",
+            "value": "1234"
+        }
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                wred_profile_config_update_validator(scope, patch_element) is True
+
+    @patch("sonic_py_common.device_info.get_sonic_version_info",
+           mock.Mock(return_value={"build_version": "20250530.12"}))
+    @patch("generic_config_updater.field_operation_validators.get_asic_name",
+           mock.Mock(return_value="th5"))
+    @patch("os.path.exists", mock.Mock(return_value=True))
+    @patch("builtins.open", mock_open(read_data='''{"tables": {"WRED_PROFILE": {"validator_data": {
+        "rdma_config_update_validator": {"ECN tuning": {"fields": [
+            "green_min_threshold", "green_max_threshold", "green_drop_probability"
+        ], "operations": ["replace"], "platforms": {"th5": "20240500"}}}}}}}'''))
+    def test_wred_profile_config_update_validator_invalid_field(self):
+        patch_element = {
+            "path": "/WRED_PROFILE/AZURE_LOSSY/invalid",
+            "op": "replace",
+            "value": "1234"
+        }
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                wred_profile_config_update_validator(scope, patch_element) is False
+
+    @patch("generic_config_updater.field_operation_validators.get_asic_name",
+           mock.Mock(return_value="unknown"))
+    def test_wred_profile_config_update_validator_unknown_asic(self):
+        patch_element = {
+            "path": "/WRED_PROFILE/AZURE_LOSSY/green_min_threshold",
+            "op": "replace",
+            "value": "1234"
+        }
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                wred_profile_config_update_validator(scope, patch_element) is False
+
+    @patch("sonic_py_common.device_info.get_sonic_version_info",
+           mock.Mock(return_value={"build_version": "SONiC.20220530"}))
+    @patch("generic_config_updater.field_operation_validators.get_asic_name",
+           mock.Mock(return_value="th5"))
+    @patch("os.path.exists", mock.Mock(return_value=True))
+    @patch("builtins.open", mock_open(read_data='''{"tables": {"WRED_PROFILE": {"validator_data": {
+        "rdma_config_update_validator": {"ECN tuning": {"fields": [
+            "green_min_threshold", "green_max_threshold", "green_drop_probability"
+        ], "operations": ["replace"], "platforms": {"th5": "20240500"}}}}}}}'''))
+    def test_wred_profile_config_update_validator_old_version(self):
+        patch_element = {
+            "path": "/WRED_PROFILE/AZURE_LOSSY/green_min_threshold",
+            "op": "replace",
+            "value": "1234"
+        }
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                wred_profile_config_update_validator(scope, patch_element) is False
+
+    @patch("sonic_py_common.device_info.get_sonic_version_info",
+           mock.Mock(return_value={"build_version": "20250530.12"}))
+    @patch("generic_config_updater.field_operation_validators.get_asic_name",
+           mock.Mock(return_value="th5"))
+    @patch("os.path.exists", mock.Mock(return_value=True))
+    @patch("builtins.open", mock_open(read_data='''{"tables": {"WRED_PROFILE": {"validator_data": {
+        "rdma_config_update_validator": {"ECN tuning": {"fields": [
+            "green_min_threshold", "green_max_threshold", "green_drop_probability"
+        ], "operations": ["replace"], "platforms": {"th5": "20240500"}}}}}}}'''))
+    def test_wred_profile_config_update_validator_invalid_op(self):
+        patch_element = {
+            "path": "/WRED_PROFILE/AZURE_LOSSY/green_min_threshold",
+            "op": "add",
+            "value": "1234"
+        }
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                wred_profile_config_update_validator(scope, patch_element) is False
+
+    @patch("sonic_py_common.device_info.get_sonic_version_info",
+           mock.Mock(return_value={"build_version": "20250530.12"}))
+    @patch("generic_config_updater.field_operation_validators.get_asic_name",
+           mock.Mock(return_value="spc1"))
+    @patch("os.path.exists", mock.Mock(return_value=True))
+    @patch("builtins.open", mock_open(read_data='''{"tables": {"WRED_PROFILE": {"validator_data": {
+        "rdma_config_update_validator": {"ECN tuning": {"fields": [
+            "green_min_threshold", "green_max_threshold", "green_drop_probability"
+        ], "operations": ["replace"], "platforms": {"th5": "20240500"}}}}}}}'''))
+    def test_wred_profile_config_update_validator_invalid_asic(self):
+        patch_element = {
+            "path": "/WRED_PROFILE/AZURE_LOSSY/green_min_threshold",
+            "op": "replace",
+            "value": "1234"
+        }
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                wred_profile_config_update_validator(scope, patch_element) is False
+
     def test_validate_field_operation_illegal__pfcwd(self):
         old_config = {"PFC_WD": {"GLOBAL": {"POLL_INTERVAL": "60"}}}
         target_config = {"PFC_WD": {"GLOBAL": {}}}
@@ -497,3 +623,9 @@ class TestGetAsicName(unittest.TestCase):
         mock_get_sonic_version_info.return_value = {'asic_type': 'cisco-8000'}
         for scope in ["localhost", "asic0"]:
             self.assertEqual(fov.get_asic_name(), "cisco-8000")
+
+    @patch('sonic_py_common.device_info.get_sonic_version_info')
+    def test_get_asic_marvell_teralynx(self, mock_get_sonic_version_info):
+        mock_get_sonic_version_info.return_value = {'asic_type': 'marvell-teralynx'}
+        for scope in ["localhost", "asic0"]:
+            self.assertEqual(fov.get_asic_name(), "marvell-teralynx")

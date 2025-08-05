@@ -70,6 +70,7 @@ from . import bgp_cli
 from . import stp
 from . import srv6
 from . import icmp
+from . import copp
 
 # Global Variables
 PLATFORM_JSON = 'platform.json'
@@ -87,8 +88,8 @@ COMMAND_TIMEOUT = 300
 # location (configdb?), so that we prevent the continous execution of this
 # bash oneliner. To be revisited once routing-stack info is tracked somewhere.
 def get_routing_stack():
-    result = None
-    command = "sudo docker ps | grep bgp | awk '{print$2}' | cut -d'-' -f3 | cut -d':' -f1 | head -n 1"
+    result = 'frr'
+    command = "sudo docker ps --format '{{.Image}}\t{{.Names}}' | awk '$2 ~ /^bgp([0-9]+)?$/' | cut -d'-' -f3 | cut -d':' -f1 | head -n 1"  # noqa: E501
 
     try:
         stdout = subprocess.check_output(command, shell=True, text=True, timeout=COMMAND_TIMEOUT)
@@ -324,6 +325,7 @@ cli.add_command(dns.dns)
 cli.add_command(stp.spanning_tree)
 cli.add_command(srv6.srv6)
 cli.add_command(icmp.icmp)
+cli.add_command(copp.copp)
 
 # syslog module
 cli.add_command(syslog.syslog)
@@ -642,13 +644,16 @@ def pfc():
 # 'counters' subcommand ("show interfaces pfccounters")
 @pfc.command()
 @multi_asic_util.multi_asic_click_options
+@click.option('--history', is_flag=True, help="Display historical PFC statistics")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def counters(namespace, display, verbose):
+def counters(namespace, history, display, verbose):
     """Show pfc counters"""
 
     cmd = ['pfcstat', '-s', str(display)]
     if namespace is not None:
         cmd += ['-n', str(namespace)]
+    if history:
+        cmd += ['--history']
 
     run_command(cmd, display_cmd=verbose)
 
@@ -2086,6 +2091,17 @@ def spanning_tree(verbose):
     """Show spanning_tree running configuration"""
     stp_list = ["STP", "STP_PORT", "STP_VLAN", "STP_VLAN_PORT"]
     for key in stp_list:
+        cmd = ['sudo', 'sonic-cfggen', '-d', '--var-json', key]
+        run_command(cmd, display_cmd=verbose)
+
+
+# 'copp' subcommand ("show runningconfiguration copp")
+@runningconfiguration.command()
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+def copp(verbose):
+    """Show copp running configuration"""
+    copp_list = ["COPP_GROUP", "COPP_TRAP"]
+    for key in copp_list:
         cmd = ['sudo', 'sonic-cfggen', '-d', '--var-json', key]
         run_command(cmd, display_cmd=verbose)
 

@@ -1835,17 +1835,20 @@
     "PFC_WD|Ethernet0": {
         "action": "drop",
         "detection_time": "600",
-        "restoration_time": "600"
+        "restoration_time": "600",
+        "pfc_stat_history": "disable"
     },
     "PFC_WD|Ethernet4": {
         "action": "drop",
         "detection_time": "600",
-        "restoration_time": "600"
+        "restoration_time": "600",
+        "pfc_stat_history": "disable"
     },
     "PFC_WD|Ethernet8": {
         "action": "drop",
         "detection_time": "600",
-        "restoration_time": "600"
+        "restoration_time": "600",
+        "pfc_stat_history": "disable"
     },
     "PFC_WD|GLOBAL": {
         "POLL_INTERVAL": "600"
@@ -1942,14 +1945,12 @@
     },
     "MUX_CABLE|Ethernet4": {
         "state": "auto",
-	"prober_type": "software",
         "server_ipv4": "10.3.1.1",
         "server_ipv6": "e801::46",
         "soc_ipv6": "e801::47"
     },
     "MUX_CABLE|Ethernet8": {
         "state": "active",
-	"prober_type": "hardware",
 	"server_ipv4": "10.4.1.1",
 	"server_ipv6": "e802::46"
     },
@@ -2880,5 +2881,16 @@
         "hello_time": "2",
         "max_age": "20",
         "priority": "32768"
+     },
+     "COPP_GROUP|queue4_group1": {
+        "cir":"2000",
+        "cbs":"2000"
+     },
+     "COPP_GROUP|queue1_group3": {
+       "NULL":"NULL"
+     },
+     "COPP_TRAP|neighbor_miss": {
+        "NULL":"NULL"
      }
+
 }
