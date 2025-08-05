@@ -119,6 +119,8 @@ def description(interfacename, namespace, display, verbose):
         interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
 
         cmd += ['-i', str(interfacename)]
+        if multi_asic.is_multi_asic():
+            cmd += ['-d', str(display)]
     else:
         cmd += ['-d', str(display)]
 
@@ -153,6 +155,8 @@ def status(interfacename, namespace, display, verbose):
         interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
 
         cmd += ['-i', str(interfacename)]
+        if multi_asic.is_multi_asic():
+            cmd += ['-d', str(display)]
 
     else:
         cmd += ['-d', str(display)]
@@ -178,6 +182,8 @@ def tpid(interfacename, namespace, display, verbose):
         interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
 
         cmd += ['-i', str(interfacename)]
+        if multi_asic.is_multi_asic():
+            cmd += ['-d', str(display)]
     else:
         cmd += ['-d', str(display)]
 
@@ -531,22 +537,22 @@ def errors(ctx, interfacename):
 
     port_operr_table = get_all_port_errors(interfacename)
 
-    # Define a list of all potential errors
+    # Define a list of all potential errors's DB entries
     ALL_PORT_ERRORS = [
-        "oper_error_status",
-        "mac_local_fault",
-        "mac_remote_fault",
-        "fec_sync_loss",
-        "fec_alignment_loss",
-        "high_ser_error",
-        "high_ber_error",
-        "data_unit_crc_error",
-        "data_unit_misalignment_error",
-        "signal_local_error",
-        "crc_rate",
-        "data_unit_size",
-        "code_group_error",
-        "no_rx_reachability"
+        ("oper_error_status", "oper_error_status_time"),
+        ("mac_local_fault_count", "mac_local_fault_time"),
+        ("mac_remote_fault_count", "mac_remote_fault_time"),
+        ("fec_sync_loss_count", "fec_sync_loss_time"),
+        ("fec_alignment_loss_count", "fec_alignment_loss_time"),
+        ("high_ser_error_count", "high_ser_error_time"),
+        ("high_ber_error_count", "high_ber_error_time"),
+        ("data_unit_crc_error_count", "data_unit_crc_error_time"),
+        ("data_unit_misalignment_error_count", "data_unit_misalignment_error_time"),
+        ("signal_local_error_count", "signal_local_error_time"),
+        ("crc_rate_count", "crc_rate_time"),
+        ("data_unit_size_count", "data_unit_size_time"),
+        ("code_group_error_count", "code_group_error_time"),
+        ("no_rx_reachability_count", "no_rx_reachability_time")
     ]
 
     # Prepare the table headers and body
@@ -554,10 +560,7 @@ def errors(ctx, interfacename):
     body = []
 
     # Populate the table body with all errors, defaulting missing ones to 0 and Never
-    for error in ALL_PORT_ERRORS:
-        count_key = f"{error}_count"
-        time_key = f"{error}_time"
-
+    for count_key, time_key in ALL_PORT_ERRORS:
         if port_operr_table is not None:
             count = port_operr_table.get(count_key, "0")  # Default count to '0'
             timestamp = port_operr_table.get(time_key, "Never")  # Default timestamp to 'Never'
@@ -566,7 +569,7 @@ def errors(ctx, interfacename):
             timestamp = "Never"
 
         # Add to table
-        body.append([error.replace('_', ' '), count, timestamp])
+        body.append([count_key.replace('_', ' ').replace('count', ''), count, timestamp])
 
     # Sort the body for consistent display
     body.sort(key=lambda x: x[0])
@@ -776,6 +779,8 @@ def counters(ctx, namespace, display, interface, printall, period, json_fmt, ver
         if interface is not None:
             interface = try_convert_interfacename_from_alias(ctx, interface)
             cmd += ['-i', str(interface)]
+            if multi_asic.is_multi_asic():
+                cmd += ['-s', str(display)]
         else:
             cmd += ['-s', str(display)]
         if namespace is not None:
@@ -1009,6 +1014,8 @@ def autoneg_status(interfacename, namespace, display, verbose):
         interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
 
         cmd += ['-i', str(interfacename)]
+        if multi_asic.is_multi_asic():
+            cmd += ['-d', str(display)]
     else:
         cmd += ['-d', str(display)]
 
@@ -1046,6 +1053,8 @@ def link_training_status(interfacename, namespace, display, verbose):
         interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
 
         cmd += ['-i', str(interfacename)]
+        if multi_asic.is_multi_asic():
+            cmd += ['-d', str(display)]
     else:
         cmd += ['-d', str(display)]
 
@@ -1082,6 +1091,8 @@ def fec_status(interfacename, namespace, display, verbose):
         interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
 
         cmd += ['-i', str(interfacename)]
+        if multi_asic.is_multi_asic():
+            cmd += ['-d', str(display)]
     else:
         cmd += ['-d', str(display)]
 

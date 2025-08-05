@@ -1,5 +1,6 @@
 # network statistics utility functions #
 
+import datetime
 import json
 
 STATUS_NA = 'N/A'
@@ -78,6 +79,19 @@ def format_number_with_comma(number_in_str):
     if number_in_str.isdecimal():
         return '{:,}'.format(int(number_in_str))
     else:
+        return number_in_str
+
+
+def format_microseconds_as_datetime(number_in_str):
+    """
+        Format the number of microseconds since epoch to a date.
+    """
+    try:
+        microseconds = float(number_in_str)
+        seconds = microseconds / 1_000_000
+        date = datetime.datetime.fromtimestamp(seconds)
+        return date.strftime("%m/%d/%Y, %H:%M:%S")
+    except Exception:
         return number_in_str
 
 
