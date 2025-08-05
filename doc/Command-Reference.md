@@ -250,6 +250,9 @@
     * [Historical Memory Statistics for Last 3 Hours](#historical-memory-statistics-for-last-3-hours)
     * [Historical Memory Statistics for Specific Metric (Used Memory)](#historical-memory-statistics-for-specific-metric-used-memory)
     * [View Memory Statistics Configuration](#view-memory-statistics-configuration)
+* [CoPP Commands](#copp-commands)
+  * [Overview](#overview)
+  * [CoPP show commands](#copp-show-commands)
 ## Document History
 
 | Version | Modification Date | Details |
@@ -8660,6 +8663,7 @@ This command starts PFC Watchdog
   ```
   config pfcwd start --action drop all 400 --restoration-time 400
   config pfcwd start --action forward Ethernet0 Ethernet8 400
+  config pfcwd start --action drop all 400 --restoration-time 400 --pfc-stat-history
   ```
 
 **config pfcwd stop**
@@ -8698,6 +8702,18 @@ This command enables or disables PFCWD's "BIG RED SWITCH"(BRS). After enabling B
   config pfcwd big_red_switch enable
   ```
 
+**config pfcwd pfc_stat_history \<enable/disable\> \<ports>**
+
+This command enables or disables PFCWD's PFC Historical Statistics estimation. After enabling, PFC Watchdog will be configured to estimate pause transitions, total pause time, and the pause time and timstamp of the most recent pause activity on those ports.
+
+NOTE: The estimation will only be performed on ports the PFCWD has been started on, alternatively use the --pfc-stat-history flag with the `start` command to simultaneously enable history on those ports.
+
+- Usage:
+  ```
+  config pfcwd pfc_stat_history enable all
+  config pfcwd pfc_stat_history disable Ethernet0 Ethernet8
+  ```
+
 **config pfcwd start_default**
 
 This command starts PFC Watchdog with the default settings.
@@ -8713,6 +8729,7 @@ Default values are the following:
    - restoration time - 200ms
    - polling interval - 200ms
    - action - 'drop'
+   - pfc stat history - disable
 
 Additionally if number of ports in the system exceeds 32, all times will be multiplied by roughly <num_ports\>/32.
 
@@ -9163,19 +9180,22 @@ This command displays switch trimming global configuration.
   ```bash
   admin@sonic:~$ show switch-trimming global
   +-----------------------------+---------+
-  | Configuration               |   Value |
+  | Configuration               | Value   |
   +=============================+=========+
-  | Packet trimming size        |     200 |
+  | Packet trimming size        | 200     |
   +-----------------------------+---------+
-  | Packet trimming DSCP value  |      20 |
+  | Packet trimming DSCP value  | 20      |
   +-----------------------------+---------+
-  | Packet trimming queue index |       2 |
+  | Packet trimming TC value    | N/A     |
+  +-----------------------------+---------+
+  | Packet trimming queue index | 2       |
   +-----------------------------+---------+
 
   admin@sonic:~$ show switch-trimming global --json
   {
       "size": "200",
       "dscp_value": "20",
+      "tc_value": "N/A",
       "queue_index": "2"
   }
   ```
@@ -9196,22 +9216,21 @@ This command is used to manage switch trimming global configuration.
 - Options:
   - _-s,--size_: size (in bytes) to trim eligible packet
   - _-d,--dscp_: dscp value assigned to a packet after trimming
+  - _-t,--tc_: tc value assigned to a packet after trimming
   - _-q,--queue_: queue index to use for transmission of a packet after trimming
 
 - Examples:
   ```bash
-  admin@sonic:~$ config switch-trimming global \
-  --size '128' \
-  --dscp '48' \
-  --queue '6'
+  admin@sonic:~$ config switch-trimming global --size '128' --dscp '48' --queue '6'
+  admin@sonic:~$ config switch-trimming global --size '128' --dscp '48' --queue 'dynamic'
+  admin@sonic:~$ config switch-trimming global --size '128' --dscp 'from-tc' --tc '6' --queue '6'
+  admin@sonic:~$ config switch-trimming global --size '128' --dscp 'from-tc' --tc '6' --queue 'dynamic'
   ```
 
 - Note:
   - At least one option must be provided
+  - When `--dscp` value is set to `from-tc`, the `--tc` value is used for mapping to DSCP
   - When `--queue` value is set to `dynamic`, the `--dscp` value is used for mapping to the queue
-  ```bash
-  admin@sonic:~$ config switch-trimming global --queue dynamic
-  ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#packet-trimming)
 
@@ -9697,8 +9716,38 @@ This command displays the details of Rx & Tx priority-flow-control (pfc) for all
    ...
    ```
 
+The history flag can be used to view historical statistics:
 
-- NOTE: PFC counters can be cleared by the user with the following command:
+* Usage: see [PFC Watchdog Commands](#pfc-watchdog-commands) on enabling history estimation
+  ```
+  show pfc counters --history
+  ```
+
+* Example:
+  ```
+       Port    Priority    RX Pause Transitions    Total RX Pause Time US    Recent RX Pause Time US    Recent RX Pause Timestamp
+  ---------  ----------  ----------------------  ------------------------  -------------------------  ---------------------------
+  Ethernet0        PFC0                      12                    12,000                      1,200         01/10/2008, 21:20:00
+  Ethernet0        PFC1                      21                    20,001                      2,001         05/18/2033, 03:33:20
+  Ethernet0        PFC2                      22                    20,002                      2,002         05/18/2033, 03:33:20
+  Ethernet0        PFC3                      23                    20,003                      2,003         05/18/2033, 03:33:20
+  Ethernet0        PFC4                      24                    20,004                      2,004         05/18/2033, 03:33:20
+  Ethernet0        PFC5                      25                    20,005                      2,005         05/18/2033, 03:33:20
+  Ethernet0        PFC6                      26                    20,006                      2,006         05/18/2033, 03:33:20
+  Ethernet0        PFC7                      27                    20,007                      2,007         05/18/2033, 03:33:20
+
+  Ethernet4        PFC0                      14                    14,000                      1,400         05/13/2014, 16:53:20
+  Ethernet4        PFC1                      41                    40,001                      4,001         10/02/2096, 07:06:40
+  Ethernet4        PFC2                      42                    40,002                      4,002         10/02/2096, 07:06:40
+  Ethernet4        PFC3                      43                    40,003                      4,003         10/02/2096, 07:06:40
+  Ethernet4        PFC4                      44                    40,004                      4,004         10/02/2096, 07:06:40
+  Ethernet4        PFC5                      45                    40,005                      4,005         10/02/2096, 07:06:40
+  Ethernet4        PFC6                      46                    40,006                      4,006         10/02/2096, 07:06:40
+  Ethernet4        PFC7                      47                    40,007                      4,007         10/02/2096, 07:06:40
+  ```
+
+
+- NOTE: PFC counters (including historical stats) can be cleared by the user with the following command:
   ```
   admin@sonic:~$ sonic-clear pfccounters
   ```
@@ -10862,6 +10911,7 @@ This sub-section explains the show commands for displaying the running configura
 6) acl
 7) ports
 8) syslog
+9) copp
 
 **show runningconfiguration all**
 
@@ -10986,6 +11036,20 @@ This command displays the running configuration of the snmp module.
 
   ```
   admin@sonic:~$ show runningconfiguration ports Ethernet0
+  ```
+
+ **show runningconfiguration copp**
+
+ This command displays the running configuration of copp
+
+- Usage:
+  ```
+  show runningconfiguration copp
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show runningconfiguration copp
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#Startup--Running-Configuration)
@@ -14809,4 +14873,107 @@ Memory Statistics Configuration:
 Enabled:            false
 Sampling Interval:  5
 Retention Period:   15
+```
+---
+# CoPP Commands
+
+## Overview
+This sub-section explains the list of commands available for CoPP (Control Plane Policing) feature.
+
+---
+
+## CoPP Show Commands
+
+These commands are used to display the current CoPP configuration and their status.
+
+### Usage
+```bash
+show copp configuration <detailed> [--trapid <trap_id>] [--group <trap_group>]
+```
+
+**Example**:
+
+```bash
+show copp configuration
+show copp configuration detailed --group queue1_group3
+show copp configuration detailed --trapid neighbor_miss
+```
+
+### Show CoPP Configuration
+
+Command to display the current CoPP configurations and hardware status of the traps.
+
+```bash
+admin@sonic:~$ show copp configuration
+```
+
+**Sample Output**:
+
+```bash
+admin@sonic:~$ show copp configuration
+TrapId           Trap Group     Action      CBS    CIR  Meter Type    Mode    HW Status
+---------------  -------------  --------  -----  -----  ------------  ------  -------------
+arp_req          queue4_group2  copy        600    600  packets       sr_tcm  installed
+arp_resp         queue4_group2  copy        600    600  packets       sr_tcm  installed
+bgp              queue4_group1  trap       6000   6000  packets       sr_tcm  not-installed
+bgpv6            queue4_group1  trap       6000   6000  packets       sr_tcm  not-installed
+dest_nat_miss    queue1_group2  trap        600    600  packets       sr_tcm  installed
+dhcp             queue4_group3  trap        100    100  packets       sr_tcm  installed
+dhcpv6           queue4_group3  trap        100    100  packets       sr_tcm  installed
+eapol            queue4_group1  trap       6000   6000  packets       sr_tcm  installed
+ip2me            queue1_group1  trap       6000   6000  packets       sr_tcm  installed
+lacp             queue4_group1  trap       6000   6000  packets       sr_tcm  installed
+lldp             queue4_group3  trap        100    100  packets       sr_tcm  installed
+neigh_discovery  queue4_group2  copy        600    600  packets       sr_tcm  installed
+neighbor_miss    queue1_group3  trap        200    200  packets       sr_tcm  installed
+sample_packet    queue2_group1  trap       1000   1000  packets       sr_tcm  not-installed
+src_nat_miss     queue1_group2  trap        600    600  packets       sr_tcm  installed
+udld             queue4_group3  trap        100    100  packets       sr_tcm  installed
+```
+
+### Show CoPP Configuration Detailed
+
+Command to display the detailed CoPP configuration of a specific trap ID.
+
+```bash
+admin@sonic:~$ show copp configuration detailed --trapid neighbor_miss
+```
+
+**Sample Output**:
+
+```bash
+Trap Group.................. queue1_group3
+queue....................... 1
+Trap Priority............... 1
+Trap Action................. trap
+Meter Type.................. packets
+Mode........................ sr_tcm
+CBS......................... 200
+CIR......................... 200
+Green Action................ forward
+Yellow Action............... forward
+Red Action.................. drop
+HW Status................... installed
+```
+
+Command to display the detailed CoPP configuration of a specific CoPP group.
+
+```bash
+admin@sonic:~$ show copp configuration detailed --group queue1_group3
+```
+
+**Sample Output**:
+
+```bash
+Trap Id(s).................. neighbor_miss
+Queue....................... 1
+Trap Priority............... 1
+Trap Action................. trap
+Meter Type.................. packets
+Mode........................ sr_tcm
+CBS......................... 200
+CIR......................... 200
+Yellow Action............... forward
+Green Action................ forward
+Red Action.................. drop
 ```

@@ -181,6 +181,8 @@ class ConfigReplacer:
 
         self.logger.log_notice("Verifying config replacement is reflected on ConfigDB.")
         new_config = self.config_wrapper.get_config_db_as_json()
+        self.patch_applier.changeapplier.remove_backend_tables_from_config(target_config)
+        self.patch_applier.changeapplier.remove_backend_tables_from_config(new_config)
         if not (self.patch_wrapper.verify_same_json(target_config, new_config)):
             raise GenericConfigUpdaterError(f"After replacing config, there is still some parts not updated")
 

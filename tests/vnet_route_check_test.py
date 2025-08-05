@@ -567,7 +567,6 @@ test_data = {
     "12": {
         DESCR: "An IPv6 VNET route that is missing in STATE DB and ASIC DB",
         ARGS: "vnet_route_check",
-        RET: -1,
         PRE: {
             APPL_DB: {
                 VXLAN_TUNNEL_TABLE: {
@@ -592,17 +591,6 @@ test_data = {
                 }
             }
         },
-        RESULT: {
-            "results": {
-                "missed_in_asic_db_routes": {
-                    "Vnet_v6": {
-                        "routes": [
-                            "fd01:fc00::1/128"
-                        ]
-                    }
-                }
-            }
-        }
     },
     "13": {
         DESCR: "A VNET route is missing in STATE DB and another inactive route is missing in ASIC DB",
@@ -641,6 +629,34 @@ test_data = {
                 }
             }
         }
+    },
+    "14": {
+        DESCR: "An IPv4 VNET route that is missing in STATE DB and ASIC DB",
+        ARGS: "vnet_route_check",
+        PRE: {
+            APPL_DB: {
+                VXLAN_TUNNEL_TABLE: {
+                    "tunnel_v4": {"src_ip": "10.1.0.32"}
+                },
+                VNET_TABLE: {
+                    "Vnet_v4_in_v4-0": [("vxlan_tunnel", "tunnel_v4"), ("scope", "default"), ("vni", "10002"),
+                                        ("peer_list", "")]
+                },
+                VNET_ROUTE_TABLE: {
+                    "Vnet_v4_in_v4-0:150.62.191.1/32": {"endpoint": "100.251.7.1,100.251.7.2"}
+                }
+            },
+            ASIC_DB: {
+                ASIC_STATE: {
+                    "SAI_OBJECT_TYPE_ROUTER_INTERFACE:oid:0x6000000000d76": {
+                        "SAI_ROUTER_INTERFACE_ATTR_VIRTUAL_ROUTER_ID": "oid:0x3000000000d4b"
+                    },
+                    "SAI_OBJECT_TYPE_VIRTUAL_ROUTER": {
+                         "oid:0x3000000000d4b": {"": ""}
+                    },
+                }
+            }
+        },
     }
 }
 

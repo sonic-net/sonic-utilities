@@ -29,6 +29,7 @@ from utilities_common.sfp_helper import (
         CCMIS_VDM_TO_LEGACY_STATUS_MAP,
         CCMIS_VDM_THRESHOLD_TO_LEGACY_DOM_THRESHOLD_MAP
 )
+from utilities_common.sfp_helper import is_transceiver_cmis
 from tabulate import tabulate
 
 # Mock the redis DB for unit test purposes
@@ -109,7 +110,7 @@ QSFP_DOM_CHANNEL_MONITOR_MAP = {
     'tx4power': 'TX4Power'
 }
 
-QSFP_DD_DOM_CHANNEL_MONITOR_MAP = {
+CMIS_DOM_CHANNEL_MONITOR_MAP = {
     'rx1power': 'RX1Power',
     'rx2power': 'RX2Power',
     'rx3power': 'RX3Power',
@@ -313,7 +314,7 @@ class SFPShow(object):
     def convert_sfp_info_to_output_string(self, sfp_info_dict, sfp_firmware_info_dict):
         indent = ' ' * 8
         output = ''
-        is_sfp_cmis = 'cmis_rev' in sfp_info_dict
+        is_sfp_cmis = is_transceiver_cmis(sfp_info_dict)
         is_sfp_c_cmis = 'supported_max_tx_power' in sfp_info_dict
 
         if is_sfp_c_cmis:
@@ -356,7 +357,7 @@ class SFPShow(object):
         return output
 
     # Convert DOM sensor info in DB to CLI output string
-    def convert_dom_to_output_string(self, sfp_type, dom_info_dict):
+    def convert_dom_to_output_string(self, sfp_type, is_sfp_cmis, dom_info_dict):
         indent = ' ' * 8
         output_dom = ''
         channel_threshold_align = 18
@@ -364,12 +365,12 @@ class SFPShow(object):
 
         if sfp_type.startswith('QSFP') or sfp_type.startswith('OSFP'):
             # Channel Monitor
-            if sfp_type.startswith('QSFP-DD') or sfp_type.startswith('OSFP'):
+            if is_sfp_cmis:
                 output_dom += (indent + 'ChannelMonitorValues:\n')
-                sorted_key_table = natsorted(QSFP_DD_DOM_CHANNEL_MONITOR_MAP)
+                sorted_key_table = natsorted(CMIS_DOM_CHANNEL_MONITOR_MAP)
                 output_channel = self.format_dict_value_to_string(
                     sorted_key_table, dom_info_dict,
-                    QSFP_DD_DOM_CHANNEL_MONITOR_MAP,
+                    CMIS_DOM_CHANNEL_MONITOR_MAP,
                     QSFP_DD_DOM_VALUE_UNIT_MAP)
                 output_dom += output_channel
             else:
@@ -382,7 +383,7 @@ class SFPShow(object):
                 output_dom += output_channel
 
             # Channel Threshold
-            if sfp_type.startswith('QSFP-DD') or sfp_type.startswith('OSFP'):
+            if is_sfp_cmis:
                 dom_map = SFP_DOM_CHANNEL_THRESHOLD_MAP
             else:
                 dom_map = QSFP_DOM_CHANNEL_THRESHOLD_MAP
@@ -466,6 +467,7 @@ class SFPShow(object):
         sfp_info_dict = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_INFO|{}'.format(interface_name))
         sfp_firmware_info_dict = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_FIRMWARE_INFO|{}'.format(first_subport))
         if sfp_info_dict:
+            is_sfp_cmis = is_transceiver_cmis(sfp_info_dict)
             if sfp_info_dict['type'] == RJ45_PORT_TYPE:
                 output = 'SFP EEPROM is not applicable for RJ45 port\n'
             else:
@@ -477,7 +479,7 @@ class SFPShow(object):
                     sfp_type = sfp_info_dict['type']
                     dom_info_dict = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_DOM_SENSOR|{}'.format(first_subport)) or {}
                     dom_info_dict.update(state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_DOM_THRESHOLD|{}'.format(first_subport)) or {})
-                    dom_output = self.convert_dom_to_output_string(sfp_type, dom_info_dict)
+                    dom_output = self.convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict)
                     output += dom_output
         else:
             if is_rj45_port(interface_name):
