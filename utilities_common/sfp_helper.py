@@ -425,3 +425,15 @@ def covert_application_advertisement_to_output_string(indent, sfp_info_dict):
     except Exception:
         output += '{}\n'.format(app_adv_str)
     return output
+
+
+def is_transceiver_cmis(sfp_info_dict):
+    """
+    Check if the transceiver is CMIS compliant.
+    If the sfp_info_dict is None, return False.
+    If 'cmis_rev' is present in the dictionary, return True.
+    Otherwise, return False.
+    """
+    if sfp_info_dict is None:
+        return False
+    return 'cmis_rev' in sfp_info_dict

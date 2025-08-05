@@ -1948,7 +1948,8 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
     multiasic_single_file_mode = False
     # If the user give the filename[s], extract the file names.
     if filename is not None:
-        cfg_files = filename.split(',')
+        # strip whitespaces and filter out empty strings
+        cfg_files = [s.strip() for s in filename.split(',') if s.strip()]
 
         if len(cfg_files) == 1 and multi_asic.is_multi_asic():
             multiasic_validate_single_file(cfg_files[0])
@@ -1958,7 +1959,12 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
             return
 
     if filename is not None and filename != "/dev/stdin":
-        config_file_yang_validation(filename)
+        if multi_asic.is_multi_asic():
+            for cfg_file in cfg_files:
+                if cfg_file is not None:
+                    config_file_yang_validation(cfg_file)
+        else:
+            config_file_yang_validation(filename)
 
     #Stop services before config push
     if not no_service_restart:
@@ -3119,10 +3125,11 @@ def pfcwd():
 @pfcwd.command()
 @click.option('--action', '-a', type=click.Choice(['drop', 'forward', 'alert']))
 @click.option('--restoration-time', '-r', type=click.IntRange(100, 60000))
+@click.option('--pfc-stat-history', is_flag=True, help="Enable historical statistics tracking")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 @click.argument('ports', nargs=-1)
 @click.argument('detection-time', type=click.IntRange(100, 5000))
-def start(action, restoration_time, ports, detection_time, verbose):
+def start(action, restoration_time, pfc_stat_history, ports, detection_time, verbose):
     """
     Start PFC watchdog on port(s). To config all ports, use all as input.
 
@@ -3143,6 +3150,9 @@ def start(action, restoration_time, ports, detection_time, verbose):
 
     if restoration_time:
         cmd += ['--restoration-time', str(restoration_time)]
+
+    if pfc_stat_history:
+        cmd += ['--pfc-stat-history']
 
     clicommon.run_command(cmd, display_cmd=verbose)
 
@@ -3184,6 +3194,21 @@ def big_red_switch(big_red_switch, verbose):
     cmd = ['pfcwd', 'big_red_switch', str(big_red_switch)]
 
     clicommon.run_command(cmd, display_cmd=verbose)
+
+
+@pfcwd.command('pfc_stat_history')
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+@click.argument('pfc_stat_history', type=click.Choice(['enable', 'disable']))
+@click.argument('ports', nargs=-1)
+def pfc_stat_history(ports, pfc_stat_history, verbose):
+    """ Enable/disable PFC Historical Statistics mode on ports"""
+
+    cmd = ['pfcwd', 'pfc_stat_history', pfc_stat_history]
+    ports = set(ports) - set(['ports'])
+    cmd += list(ports)
+
+    clicommon.run_command(cmd, display_cmd=verbose)
+
 
 @pfcwd.command('start_default')
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
