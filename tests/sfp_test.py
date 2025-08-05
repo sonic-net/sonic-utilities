@@ -74,15 +74,33 @@ Ethernet0: SFP EEPROM detected
 
 test_qsfp_dd_eeprom_with_dom_output = """\
 Ethernet8: SFP EEPROM detected
-        Application Advertisement: 400GAUI-8 C2M (Annex 120E) - Active Cable assembly with BER < 2.6x10^-4
-				   IB EDR (Arch.Spec.Vol.2) - Active Cable assembly with BER < 5x10^-5
-				   IB QDR (Arch.Spec.Vol.2) - Active Cable assembly with BER < 10^-12
+        Active Firmware: 2.1.1
+        Active application selected code assigned to host lane 1: 1
+        Active application selected code assigned to host lane 2: 1
+        Active application selected code assigned to host lane 3: 1
+        Active application selected code assigned to host lane 4: 1
+        Active application selected code assigned to host lane 5: 1
+        Active application selected code assigned to host lane 6: 1
+        Active application selected code assigned to host lane 7: 1
+        Active application selected code assigned to host lane 8: 1
+        Application Advertisement: 400GAUI-8 C2M (Annex 120E) - Host Assign (0x1) - 400ZR, DWDM, amplified - \
+Media Assign (0x1)
+                                   400GAUI-8 C2M (Annex 120E) - Host Assign (0x1) - 400ZR, Single Wavelength, \
+Unamplified - Media Assign (0x1)
+                                   100GAUI-2 C2M (Annex 135G) - Host Assign (0x55) - 400ZR, DWDM, amplified - \
+Media Assign (0x1)
+        CMIS Rev: 5.0
         Connector: No separable connector
         Encoding: Not supported for CMIS cables
         Extended Identifier: Power Class 1(10.0W Max)
         Extended RateSelect Compliance: Not supported for CMIS cables
+        Host Lane Count: 8
         Identifier: QSFP-DD Double Density 8X Pluggable Transceiver
+        Inactive Firmware: 1.2.3
         Length Cable Assembly(m): 10
+        Media Interface Technology: 1550 nm DFB
+        Media Lane Count: 1
+        Module Hardware Rev: X.X
         Nominal Bit Rate(100Mbs): Not supported for CMIS cables
         Specification compliance: Not supported for CMIS cables
         Vendor Date Code(YYYY-MM-DD Lot): 2020-05-22
@@ -234,15 +252,33 @@ Ethernet0: SFP EEPROM detected
 
 test_qsfp_dd_eeprom_output = """\
 Ethernet8: SFP EEPROM detected
-        Application Advertisement: 400GAUI-8 C2M (Annex 120E) - Active Cable assembly with BER < 2.6x10^-4
-				   IB EDR (Arch.Spec.Vol.2) - Active Cable assembly with BER < 5x10^-5
-				   IB QDR (Arch.Spec.Vol.2) - Active Cable assembly with BER < 10^-12
+        Active Firmware: 2.1.1
+        Active application selected code assigned to host lane 1: 1
+        Active application selected code assigned to host lane 2: 1
+        Active application selected code assigned to host lane 3: 1
+        Active application selected code assigned to host lane 4: 1
+        Active application selected code assigned to host lane 5: 1
+        Active application selected code assigned to host lane 6: 1
+        Active application selected code assigned to host lane 7: 1
+        Active application selected code assigned to host lane 8: 1
+        Application Advertisement: 400GAUI-8 C2M (Annex 120E) - Host Assign (0x1) - 400ZR, DWDM, amplified - \
+Media Assign (0x1)
+                                   400GAUI-8 C2M (Annex 120E) - Host Assign (0x1) - 400ZR, Single Wavelength, \
+Unamplified - Media Assign (0x1)
+                                   100GAUI-2 C2M (Annex 135G) - Host Assign (0x55) - 400ZR, DWDM, amplified - \
+Media Assign (0x1)
+        CMIS Rev: 5.0
         Connector: No separable connector
         Encoding: Not supported for CMIS cables
         Extended Identifier: Power Class 1(10.0W Max)
         Extended RateSelect Compliance: Not supported for CMIS cables
+        Host Lane Count: 8
         Identifier: QSFP-DD Double Density 8X Pluggable Transceiver
+        Inactive Firmware: 1.2.3
         Length Cable Assembly(m): 10
+        Media Interface Technology: 1550 nm DFB
+        Media Lane Count: 1
+        Module Hardware Rev: X.X
         Nominal Bit Rate(100Mbs): Not supported for CMIS cables
         Specification compliance: Not supported for CMIS cables
         Vendor Date Code(YYYY-MM-DD Lot): 2020-05-22
