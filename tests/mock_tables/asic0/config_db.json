@@ -99,22 +99,26 @@
     "PFC_WD|Ethernet0": {
         "action": "drop",
         "detection_time": "200",
-        "restoration_time": "200"
+        "restoration_time": "200",
+        "pfc_stat_history": "disable"
     },
     "PFC_WD|Ethernet4": {
         "action": "drop",
         "detection_time": "200",
-        "restoration_time": "200"
+        "restoration_time": "200",
+        "pfc_stat_history": "disable"
     },
     "PFC_WD|Ethernet-BP0": {
         "action": "drop",
         "detection_time": "200",
-        "restoration_time": "200"
+        "restoration_time": "200",
+        "pfc_stat_history": "disable"
     },
     "PFC_WD|Ethernet-BP4": {
         "action": "drop",
         "detection_time": "200",
-        "restoration_time": "200"
+        "restoration_time": "200",
+        "pfc_stat_history": "disable"
     },
     "PFC_WD|GLOBAL": {
         "BIG_RED_SWITCH": "enable",

@@ -54,6 +54,7 @@ import os
 import sys
 
 from tabulate import tabulate
+from sonic_py_common import device_info
 
 # mock the redis for unit test purposes #
 try:
@@ -273,6 +274,16 @@ class EcnQ(object):
         self.ports_key.sort(
             key = lambda k: int(k[8:]) if "BP" not in k else int(k[11:]) + 1024
         )
+
+        switch_type  = device_info.get_localhost_info('switch_type', self.config_db)
+        if switch_type == 'voq' or os.environ.get("UTILITIES_UNIT_TESTING_VOQ", "0") == "1":
+            ports_key_temp = []
+            host_name = device_info.get_localhost_info('hostname', self.config_db)
+            asic_name = device_info.get_localhost_info('asic_name', self.config_db)
+            for port_key in self.ports_key:
+                key = '|'.join([host_name, asic_name, port_key])
+                ports_key_temp.append(key)
+            self.ports_key = ports_key_temp
 
     def dump_table_info(self):
         """

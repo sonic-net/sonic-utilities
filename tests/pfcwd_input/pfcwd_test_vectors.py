@@ -1,80 +1,98 @@
 pfcwd_show_config_output="""\
 Changed polling interval to 600ms
-     PORT    ACTION    DETECTION TIME    RESTORATION TIME
----------  --------  ----------------  ------------------
-Ethernet0      drop               600                 600
-Ethernet4      drop               600                 600
-Ethernet8      drop               600                 600
+     PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
+---------  --------  ----------------  ------------------  ---------
+Ethernet0      drop               600                 600    disable
+Ethernet4      drop               600                 600    disable
+Ethernet8      drop               600                 600    disable
 """
 
 pfcwd_show_start_config_output_pass = """\
 Changed polling interval to 600ms
-     PORT    ACTION    DETECTION TIME    RESTORATION TIME
----------  --------  ----------------  ------------------
-Ethernet0   forward               102                 101
-Ethernet4      drop               600                 600
-Ethernet8      drop               600                 600
+     PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
+---------  --------  ----------------  ------------------  ---------
+Ethernet0   forward               102                 101    disable
+Ethernet4      drop               600                 600    disable
+Ethernet8      drop               600                 600    disable
+"""
+
+pfcwd_show_enable_history_config_output_pass = """\
+Changed polling interval to 600ms
+     PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
+---------  --------  ----------------  ------------------  ---------
+Ethernet0      drop               600                 600     enable
+Ethernet4      drop               600                 600    disable
+Ethernet8      drop               600                 600    disable
 """
 
 pfcwd_show_start_action_forward_output = """\
 Changed polling interval to 600ms
-     PORT    ACTION    DETECTION TIME    RESTORATION TIME
----------  --------  ----------------  ------------------
-Ethernet0   forward               302                 301
-Ethernet4   forward               302                 301
-Ethernet8      drop               600                 600
+     PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
+---------  --------  ----------------  ------------------  ---------
+Ethernet0   forward               302                 301    disable
+Ethernet4   forward               302                 301    disable
+Ethernet8      drop               600                 600    disable
 """
 
 pfcwd_show_start_action_alert_output = """\
 Changed polling interval to 600ms
-     PORT    ACTION    DETECTION TIME    RESTORATION TIME
----------  --------  ----------------  ------------------
-Ethernet0     alert               502                 501
-Ethernet4     alert               502                 501
-Ethernet8      drop               600                 600
+     PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
+---------  --------  ----------------  ------------------  ---------
+Ethernet0     alert               502                 501    disable
+Ethernet4     alert               502                 501    disable
+Ethernet8      drop               600                 600    disable
 """
 
 pfcwd_show_start_action_drop_output = """\
 Changed polling interval to 600ms
-     PORT    ACTION    DETECTION TIME    RESTORATION TIME
----------  --------  ----------------  ------------------
-Ethernet0      drop               602                 601
-Ethernet4      drop               602                 601
-Ethernet8      drop               600                 600
+     PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
+---------  --------  ----------------  ------------------  ---------
+Ethernet0      drop               602                 601    disable
+Ethernet4      drop               602                 601    disable
+Ethernet8      drop               600                 600    disable
 """
 
 pfcwd_show_start_default = """\
 Changed polling interval to 200ms
-     PORT    ACTION    DETECTION TIME    RESTORATION TIME
----------  --------  ----------------  ------------------
-Ethernet0      drop               200                 200
-Ethernet4      drop               200                 200
-Ethernet8      drop               600                 600
+     PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
+---------  --------  ----------------  ------------------  ---------
+Ethernet0      drop               200                 200    disable
+Ethernet4      drop               200                 200    disable
+Ethernet8      drop               600                 600    disable
 """
 
-pfcwd_show_start_config_output_fail = """\
+pfcwd_show_start_history_output = """\
+Changed polling interval to 600ms
+     PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
+---------  --------  ----------------  ------------------  ---------
+Ethernet0      drop               600                 601     enable
+Ethernet4      drop               600                 601     enable
+Ethernet8      drop               600                 600    disable
+"""
+
+show_pfc_config_invalid_options_fail = """\
 Failed to run command, invalid options:
 Ethernet1000
 """
 
 pfcwd_show_config_single_port_output="""\
 Changed polling interval to 600ms
-     PORT    ACTION    DETECTION TIME    RESTORATION TIME
----------  --------  ----------------  ------------------
-Ethernet0      drop               600                 600
+     PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
+---------  --------  ----------------  ------------------  ---------
+Ethernet0      drop               600                 600    disable
 """
 
 pfcwd_show_config_multi_port_output="""\
 Changed polling interval to 600ms
-     PORT    ACTION    DETECTION TIME    RESTORATION TIME
----------  --------  ----------------  ------------------
-Ethernet0      drop               600                 600
-Ethernet4      drop               600                 600
+     PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
+---------  --------  ----------------  ------------------  ---------
+Ethernet0      drop               600                 600    disable
+Ethernet4      drop               600                 600    disable
 """
 
 pfcwd_show_config_invalid_port_output="""\
-  PORT    ACTION    DETECTION TIME    RESTORATION TIME
-------  --------  ----------------  ------------------
+  PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
+------  --------  ----------------  ------------------  ---------
 """
 
 pfcwd_show_stats_output="""\
@@ -265,14 +283,14 @@ Changed polling interval to 199ms on asic0
 BIG_RED_SWITCH status is enable on asic0
 Changed polling interval to 199ms on asic1
 BIG_RED_SWITCH status is enable on asic1
-          PORT    ACTION    DETECTION TIME    RESTORATION TIME
---------------  --------  ----------------  ------------------
-     Ethernet0      drop               200                 200
-     Ethernet4      drop               200                 200
-  Ethernet-BP0      drop               200                 200
-  Ethernet-BP4      drop               200                 200
-Ethernet-BP256      drop               200                 200
-Ethernet-BP260      drop               200                 200
+          PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
+--------------  --------  ----------------  ------------------  ---------
+     Ethernet0      drop               200                 200    disable
+     Ethernet4      drop               200                 200    disable
+  Ethernet-BP0      drop               200                 200    disable
+  Ethernet-BP4      drop               200                 200    disable
+Ethernet-BP256      drop               200                 200    disable
+Ethernet-BP260      drop               200                 200    disable
 """
 
 show_pfc_config_start_pass = """\
@@ -280,14 +298,29 @@ Changed polling interval to 199ms on asic0
 BIG_RED_SWITCH status is enable on asic0
 Changed polling interval to 199ms on asic1
 BIG_RED_SWITCH status is enable on asic1
-          PORT    ACTION    DETECTION TIME    RESTORATION TIME
---------------  --------  ----------------  ------------------
-     Ethernet0   forward               102                 101
-     Ethernet4      drop               200                 200
-  Ethernet-BP0      drop               200                 200
-  Ethernet-BP4   forward               102                 101
-Ethernet-BP256      drop               200                 200
-Ethernet-BP260      drop               200                 200
+          PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
+--------------  --------  ----------------  ------------------  ---------
+     Ethernet0   forward               102                 101    disable
+     Ethernet4      drop               200                 200    disable
+  Ethernet-BP0      drop               200                 200    disable
+  Ethernet-BP4   forward               102                 101    disable
+Ethernet-BP256      drop               200                 200    disable
+Ethernet-BP260      drop               200                 200    disable
+"""
+
+show_pfc_config_enable_history_pass = """\
+Changed polling interval to 199ms on asic0
+BIG_RED_SWITCH status is enable on asic0
+Changed polling interval to 199ms on asic1
+BIG_RED_SWITCH status is enable on asic1
+          PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
+--------------  --------  ----------------  ------------------  ---------
+     Ethernet0      drop               200                 200     enable
+     Ethernet4      drop               200                 200    disable
+  Ethernet-BP0      drop               200                 200    disable
+  Ethernet-BP4      drop               200                 200     enable
+Ethernet-BP256      drop               200                 200    disable
+Ethernet-BP260      drop               200                 200    disable
 """
 
 show_pfc_config_start_action_drop_masic = """\
@@ -295,14 +328,14 @@ Changed polling interval to 199ms on asic0
 BIG_RED_SWITCH status is enable on asic0
 Changed polling interval to 199ms on asic1
 BIG_RED_SWITCH status is enable on asic1
-          PORT    ACTION    DETECTION TIME    RESTORATION TIME
---------------  --------  ----------------  ------------------
-     Ethernet0      drop               302                 301
-     Ethernet4      drop               302                 301
-  Ethernet-BP0      drop               302                 301
-  Ethernet-BP4      drop               302                 301
-Ethernet-BP256      drop               302                 301
-Ethernet-BP260      drop               200                 200
+          PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
+--------------  --------  ----------------  ------------------  ---------
+     Ethernet0      drop               302                 301    disable
+     Ethernet4      drop               302                 301    disable
+  Ethernet-BP0      drop               302                 301    disable
+  Ethernet-BP4      drop               302                 301    disable
+Ethernet-BP256      drop               302                 301    disable
+Ethernet-BP260      drop               200                 200    disable
 """
 
 show_pfc_config_start_action_alert_masic = """\
@@ -310,14 +343,14 @@ Changed polling interval to 199ms on asic0
 BIG_RED_SWITCH status is enable on asic0
 Changed polling interval to 199ms on asic1
 BIG_RED_SWITCH status is enable on asic1
-          PORT    ACTION    DETECTION TIME    RESTORATION TIME
---------------  --------  ----------------  ------------------
-     Ethernet0     alert               402                 401
-     Ethernet4     alert               402                 401
-  Ethernet-BP0     alert               402                 401
-  Ethernet-BP4     alert               402                 401
-Ethernet-BP256     alert               402                 401
-Ethernet-BP260      drop               200                 200
+          PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
+--------------  --------  ----------------  ------------------  ---------
+     Ethernet0     alert               402                 401    disable
+     Ethernet4     alert               402                 401    disable
+  Ethernet-BP0     alert               402                 401    disable
+  Ethernet-BP4     alert               402                 401    disable
+Ethernet-BP256     alert               402                 401    disable
+Ethernet-BP260      drop               200                 200    disable
 """
 
 show_pfc_config_start_action_forward_masic = """\
@@ -325,17 +358,32 @@ Changed polling interval to 199ms on asic0
 BIG_RED_SWITCH status is enable on asic0
 Changed polling interval to 199ms on asic1
 BIG_RED_SWITCH status is enable on asic1
-          PORT    ACTION    DETECTION TIME    RESTORATION TIME
---------------  --------  ----------------  ------------------
-     Ethernet0   forward               702                 701
-     Ethernet4   forward               702                 701
-  Ethernet-BP0   forward               702                 701
-  Ethernet-BP4   forward               702                 701
-Ethernet-BP256   forward               702                 701
-Ethernet-BP260      drop               200                 200
+          PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
+--------------  --------  ----------------  ------------------  ---------
+     Ethernet0   forward               702                 701    disable
+     Ethernet4   forward               702                 701    disable
+  Ethernet-BP0   forward               702                 701    disable
+  Ethernet-BP4   forward               702                 701    disable
+Ethernet-BP256   forward               702                 701    disable
+Ethernet-BP260      drop               200                 200    disable
 """
 
-show_pfc_config_start_fail = """\
+pfcwd_show_start_history_output_masic = """\
+Changed polling interval to 199ms on asic0
+BIG_RED_SWITCH status is enable on asic0
+Changed polling interval to 199ms on asic1
+BIG_RED_SWITCH status is enable on asic1
+          PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
+--------------  --------  ----------------  ------------------  ---------
+     Ethernet0      drop               600                 601     enable
+     Ethernet4      drop               600                 601     enable
+  Ethernet-BP0      drop               600                 601     enable
+  Ethernet-BP4      drop               600                 601     enable
+Ethernet-BP256      drop               600                 601     enable
+Ethernet-BP260      drop               200                 200    disable
+"""
+
+show_pfc_config_invalid_options_fail_masic = """\
 Failed to run command, invalid options:
 Ethernet-500
 """
@@ -354,9 +402,9 @@ Changed polling interval to 199ms on asic0
 BIG_RED_SWITCH status is enable on asic0
 Changed polling interval to 199ms on asic1
 BIG_RED_SWITCH status is enable on asic1
-          PORT    ACTION    DETECTION TIME    RESTORATION TIME
---------------  --------  ----------------  ------------------
-     Ethernet0      drop               200                 200
-  Ethernet-BP0      drop               200                 200
-Ethernet-BP256      drop               200                 200
+          PORT    ACTION    DETECTION TIME    RESTORATION TIME    HISTORY
+--------------  --------  ----------------  ------------------  ---------
+     Ethernet0      drop               200                 200    disable
+  Ethernet-BP0      drop               200                 200    disable
+Ethernet-BP256      drop               200                 200    disable
 """
