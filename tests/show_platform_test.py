@@ -72,7 +72,7 @@ class TestShowPlatformTemperature(object):
             print(result.output)
             assert result.exit_code == 0
             try:
-                output_json = json.loads(result.output)
+                json.loads(result.output)
             except json.JSONDecodeError:
                 assert False, "Output is not valid JSON"
         assert mock_run_command.call_count == 1
@@ -85,7 +85,7 @@ class TestShowPlatformTemperature(object):
             print(result.output)
             assert result.exit_code == 0
             try:
-                output_json = json.loads(result.output)
+                json.loads(result.output)
             except json.JSONDecodeError:
                 assert False, "Output is not valid JSON"
         assert mock_run_command.call_count == 1
