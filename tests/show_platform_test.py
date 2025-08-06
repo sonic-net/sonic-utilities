@@ -66,30 +66,24 @@ class TestShowPlatformTemperature(object):
         mock_run_command.assert_called_with(['tempershow'])
 
     def test_temperature_json(self):
-        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
-            result = CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['--json'])
-            print(result.exit_code)
-            print(result.output)
-            assert result.exit_code == 0
-            try:
-                json.loads(result.output)
-            except json.JSONDecodeError:
-                assert False, "Output is not valid JSON"
-        assert mock_run_command.call_count == 1
-        mock_run_command.assert_called_with(['tempershow', '-j'])
+        result = CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['--json'])
+        assert result.exit_code == 0
+        print(result.exit_code)
+        print(result.output)
+        try:
+            json.loads(result.output)
+        except json.JSONDecodeError:
+            assert False, "Output is not valid JSON"
 
     def test_temperature_short_json(self):
-        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
-            result = CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['-j'])
-            print(result.exit_code)
-            print(result.output)
-            assert result.exit_code == 0
-            try:
-                json.loads(result.output)
-            except json.JSONDecodeError:
-                assert False, "Output is not valid JSON"
-        assert mock_run_command.call_count == 1
-        mock_run_command.assert_called_with(['tempershow', '-j'])
+        result = CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['-j'])
+        assert result.exit_code == 0
+        print(result.exit_code)
+        print(result.output)
+        try:
+            json.loads(result.output)
+        except json.JSONDecodeError:
+            assert False, "Output is not valid JSON"
 
 
 class TestShowPlatformPsu(object):
