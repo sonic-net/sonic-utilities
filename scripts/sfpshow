@@ -27,7 +27,9 @@ from utilities_common.sfp_helper import (
         CMIS_VDM_TO_LEGACY_STATUS_MAP,
         CCMIS_STATUS_MAP,
         CCMIS_VDM_TO_LEGACY_STATUS_MAP,
-        CCMIS_VDM_THRESHOLD_TO_LEGACY_DOM_THRESHOLD_MAP
+        CCMIS_VDM_THRESHOLD_TO_LEGACY_DOM_THRESHOLD_MAP,
+        get_data_map_sort_key,
+        get_transceiver_data_map
 )
 from utilities_common.sfp_helper import is_transceiver_cmis
 from tabulate import tabulate
@@ -317,15 +319,18 @@ class SFPShow(object):
         is_sfp_cmis = is_transceiver_cmis(sfp_info_dict)
         is_sfp_c_cmis = 'supported_max_tx_power' in sfp_info_dict
 
-        if is_sfp_c_cmis:
-            data_map = C_CMIS_DATA_MAP
-        elif is_sfp_cmis:
-            data_map = CMIS_DATA_MAP
-        else:
-            data_map = QSFP_DATA_MAP
+        # Get the appropriate data map for this transceiver type
+        data_map = get_transceiver_data_map(sfp_info_dict)
 
-        sorted_data_map_keys = sorted(data_map, key=data_map.get)
-        for key in sorted_data_map_keys:
+        # Combine sfp_info_dict and sfp_firmware_info_dict for sorting
+        combined_dict = sfp_info_dict.copy()
+        if sfp_firmware_info_dict:
+            combined_dict.update(sfp_firmware_info_dict)
+
+        # Use the utility function to get sorted keys from combined dictionary
+        sorted_sfp_info_keys = sorted(combined_dict.keys(), key=get_data_map_sort_key(combined_dict, data_map))
+
+        for key in sorted_sfp_info_keys:
             if key == 'cable_type':
                 output += '{}{}: {}\n'.format(indent, sfp_info_dict['cable_type'], sfp_info_dict['cable_length'])
             elif key == 'cable_length':
@@ -352,7 +357,9 @@ class SFPShow(object):
                 if key in sfp_firmware_info_dict:
                     output += '{}{}: {}\n'.format(indent, data_map[key], sfp_firmware_info_dict[key])
             else:
-                output += '{}{}: {}\n'.format(indent, data_map[key], sfp_info_dict[key])
+                # For both known and unknown keys
+                display_name = data_map.get(key, key)  # Use data_map name if available, otherwise use key
+                output += '{}{}: {}\n'.format(indent, display_name, sfp_info_dict.get(key, 'N/A'))
 
         return output
 

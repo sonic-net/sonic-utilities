@@ -38,8 +38,7 @@ FLAT_MEMORY_MODULE_EEPROM_SFP_INFO_DICT = {
     'cable_length': '3',
     'application_advertisement': 'N/A',
     'specification_compliance': "{'10/40G Ethernet Compliance Code': '40GBASE-CR4'}",
-    'dom_capability': "{'Tx_power_support': 'no', 'Rx_power_support': 'no',\
-                        'Voltage_support': 'no', 'Temp_support': 'no'}",
+    'dom_capability': "N/A",
     'nominal_bit_rate': '255'
 }
 FLAT_MEMORY_MODULE_EEPROM = """Ethernet16: SFP EEPROM detected
@@ -59,6 +58,8 @@ FLAT_MEMORY_MODULE_EEPROM = """Ethernet16: SFP EEPROM detected
         Vendor PN: MCP1600-C003
         Vendor Rev: A2
         Vendor SN: MT1636VS10561
+        dom_capability: N/A
+        type_abbrv_name: QSFP28
 """
 EMPTY_DOM_VALUES = """        ChannelMonitorValues:
         ChannelThresholdValues:
@@ -170,6 +171,8 @@ class TestSfputil(object):
             "        Vendor PN: MCP1600-C003\n"
             "        Vendor Rev: A2\n"
             "        Vendor SN: MT1636VS10561\n"
+            "        dom_capability: {'Tx_power_support': 'no', 'Rx_power_support': 'no', 'Voltage_support': 'no', 'Temp_support': 'no'}\n"
+            "        type_abbrv_name: QSFP28\n"
         ),
         # CMIS compliant module
         (
@@ -200,12 +203,8 @@ class TestSfputil(object):
                 'dom_capability': "{'Tx_power_support': 'no', 'Rx_power_support': 'no', 'Voltage_support': 'no', 'Temp_support': 'no'}",
                 'nominal_bit_rate': '0',
                 'hardware_rev': '0.0',
-                'media_interface_code': '400ZR, DWDM, amplified',
-                'host_electrical_interface': '400GAUI-8 C2M (Annex 120E)',
                 'host_lane_count': 8,
                 'media_lane_count': 1,
-                'host_lane_assignment_option': 1,
-                'media_lane_assignment_option': 1,
                 'active_apsel_hostlane1': 1,
                 'active_apsel_hostlane2': 1,
                 'active_apsel_hostlane3': 1,
@@ -238,14 +237,10 @@ class TestSfputil(object):
             "        Extended Identifier: Power Class 8 (18.0W Max)\n"
             "        Extended RateSelect Compliance: N/A\n"
             "        Hardware Revision: 0.0\n"
-            "        Host Electrical Interface: 400GAUI-8 C2M (Annex 120E)\n"
-            "        Host Lane Assignment Options: 1\n"
             "        Host Lane Count: 8\n"
             "        Identifier: QSFP-DD Double Density 8X Pluggable Transceiver\n"
             "        Length Cable Assembly(m): 0\n"
-            "        Media Interface Code: 400ZR, DWDM, amplified\n"
             "        Media Interface Technology: C-band tunable laser\n"
-            "        Media Lane Assignment Options: 1\n"
             "        Media Lane Count: 1\n"
             "        Nominal Bit Rate(100Mbs): 0\n"
             "        Specification compliance: sm_media_interface\n"
@@ -259,6 +254,8 @@ class TestSfputil(object):
             "        Vendor PN: def\n"
             "        Vendor Rev: ghi\n"
             "        Vendor SN: jkl\n"
+            "        dom_capability: {'Tx_power_support': 'no', 'Rx_power_support': 'no', 'Voltage_support': 'no', 'Temp_support': 'no'}\n"
+            "        type_abbrv_name: QSFP-DD\n"
         ),
     ])
     def test_convert_sfp_info_to_output_string(self, sfp_info_dict, expected_output):
