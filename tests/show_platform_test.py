@@ -1,4 +1,5 @@
 import os
+import json
 import sys
 import textwrap
 from unittest import mock
@@ -66,13 +67,27 @@ class TestShowPlatformTemperature(object):
 
     def test_temperature_json(self):
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
-            CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['--json'])
+            result = CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['--json'])
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            try:
+                output_json = json.loads(result.output)
+            except json.JSONDecodeError:
+                assert False, "Output is not valid JSON"
         assert mock_run_command.call_count == 1
         mock_run_command.assert_called_with(['tempershow', '-j'])
 
     def test_temperature_short_json(self):
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
-            CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['-j'])
+            result = CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['-j'])
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            try:
+                output_json = json.loads(result.output)
+            except json.JSONDecodeError:
+                assert False, "Output is not valid JSON"
         assert mock_run_command.call_count == 1
         mock_run_command.assert_called_with(['tempershow', '-j'])
 
