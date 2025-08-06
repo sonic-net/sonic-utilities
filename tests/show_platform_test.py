@@ -1,4 +1,5 @@
 import os
+import json
 import sys
 import textwrap
 from unittest import mock
@@ -49,6 +50,40 @@ class TestShowPlatform(object):
                             return_value={"serial": self.TEST_SERIAL, "model": self.TEST_MODEL, "revision": self.TEST_REV}):
                 result = CliRunner().invoke(show.cli.commands["platform"].commands["summary"], [])
                 assert result.output == textwrap.dedent(expected_output)
+
+
+class TestShowPlatformTemperature(object):
+    """
+        Note: `show platform temperature` simply calls the `tempershow` utility and
+        passes a variety of options. Here we test that the utility is called
+        with the appropriate option(s). The functionality of the underlying
+        `tempershow` utility is expected to be tested by a separate suite of unit tests
+    """
+    def test_temperature(self):
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], [])
+        assert mock_run_command.call_count == 1
+        mock_run_command.assert_called_with(['tempershow'])
+
+    def test_temperature_json(self):
+        result = CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['--json'])
+        assert result.exit_code == 0
+        print(result.exit_code)
+        print(result.output)
+        try:
+            json.loads(result.output)
+        except json.JSONDecodeError:
+            assert False, "Output is not valid JSON"
+
+    def test_temperature_short_json(self):
+        result = CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['-j'])
+        assert result.exit_code == 0
+        print(result.exit_code)
+        print(result.output)
+        try:
+            json.loads(result.output)
+        except json.JSONDecodeError:
+            assert False, "Output is not valid JSON"
 
 
 class TestShowPlatformPsu(object):
