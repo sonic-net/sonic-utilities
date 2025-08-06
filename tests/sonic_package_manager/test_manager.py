@@ -603,12 +603,12 @@ def test_download_file_sftp(package_manager):
 
 
 def test_installation_from_file_no_image_references(package_manager, mock_docker_api, sonic_fs):
-    # Override the load function to return an image without image references
+    # Override the load function to return an image without tags
     def load_no_image_references(filename):
         class Image:
             def __init__(self, id):
                 self.id = id
-                self.docker_image_references = []
+                self.tags = []
 
             @property
             def attrs(self):
