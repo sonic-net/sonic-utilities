@@ -99,16 +99,16 @@ class WredstatWrapper(object):
         self.db = None
 
     @multi_asic_util.run_on_multi_asic
-    def run(self, save_fresh_stats, port_to_show_stats, json_opt):
+    def run(self, save_fresh_stats, port_to_show_stats, json_opt, non_zero):
         wredstat = Wredstat(self.multi_asic.current_namespace, self.db, self.voq)
         if save_fresh_stats:
            wredstat.save_fresh_stats()
            return
 
         if port_to_show_stats!=None:
-           wredstat.get_print_port_stat(port_to_show_stats, json_opt)
+           wredstat.get_print_port_stat(port_to_show_stats, json_opt, non_zero)
         else:
-           wredstat.get_print_all_stat(json_opt)
+           wredstat.get_print_all_stat(json_opt, non_zero)
 
 
 class Wredstat(object):
@@ -215,7 +215,7 @@ class Wredstat(object):
             cnstat_dict[queue] = get_counters(queue_map[queue])
         return cnstat_dict
 
-    def cnstat_print(self, port, cnstat_dict, json_opt):
+    def cnstat_print(self, port, cnstat_dict, json_opt, non_zero):
         """
         Print the cnstat. If JSON option is True, return data in
         JSON format.
@@ -228,19 +228,25 @@ class Wredstat(object):
                 if json_opt:
                     json_output[port][key] = data
                 continue
-            table.append((port, data['queuetype'] + str(data['queueindex']),
-                        data['wredDrppacket'], data['wredDrpbytes'],
-                        data['ecnpacket'], data['ecnbytes']))
+            if not non_zero or (data['wredDrppacket'] != 'N/A' and data['wredDrppacket'] != '0') or \
+                               (data['wredDrpbytes'] != 'N/A' and data['wredDrpbytes'] != '0')  or \
+                               (data['ecnpacket'] != 'N/A' and data['ecnpacket'] != '0') or \
+                               (data['ecnbytes'] != 'N/A' and data['ecnbytes'] != '0'):
+                table.append((port, data['queuetype'] + str(data['queueindex']),
+                             data['wredDrppacket'], data['wredDrpbytes'],
+                             data['ecnpacket'], data['ecnbytes']))
 
         if json_opt:
-            json_output[port].update(build_json(port, table))
+            if table:
+                json_output[port].update(build_json(port, table))
             return json_output
         else:
-            hdr = voq_header if self.voq else header
-            print(tabulate(table, hdr, tablefmt='simple', stralign='right'))
-            print()
+            if table:
+                hdr = voq_header if self.voq else header
+                print(tabulate(table, hdr, tablefmt='simple', stralign='right'))
+                print()
 
-    def cnstat_diff_print(self, port, cnstat_new_dict, cnstat_old_dict, json_opt):
+    def cnstat_diff_print(self, port, cnstat_new_dict, cnstat_old_dict, json_opt, non_zero):
         """
         Print the difference between two cnstat results. If JSON
         option is True, return data in JSON format.
@@ -258,25 +264,36 @@ class Wredstat(object):
                 old_cntr = cnstat_old_dict.get(key)
 
             if old_cntr is not None:
-                table.append((port, cntr['queuetype'] + str(cntr['queueindex']),
-                            ns_diff(cntr['wredDrppacket'], old_cntr['wredDrppacket']),
-                            ns_diff(cntr['wredDrpbytes'], old_cntr['wredDrpbytes']),
-                            ns_diff(cntr['ecnpacket'], old_cntr['ecnpacket']),
-                            ns_diff(cntr['ecnbytes'], old_cntr['ecnbytes'])))
+                if not non_zero or \
+                    (cntr['wredDrppacket'] != 'N/A' and ns_diff(cntr['wredDrppacket'], old_cntr['wredDrppacket']) != '0') or \
+                    (cntr['wredDrpbytes'] != 'N/A' and ns_diff(cntr['wredDrpbytes'], old_cntr['wredDrpbytes']) != '0') or \
+                    (cntr['ecnpacket'] != 'N/A' and ns_diff(cntr['ecnpacket'], old_cntr['ecnpacket']) != '0') or \
+                    (cntr['ecnbytes'] != 'N/A' and  ns_diff(cntr['ecnbytes'], old_cntr['ecnbytes']) != '0'):
+                    table.append((port, cntr['queuetype'] + str(cntr['queueindex']),
+                             ns_diff(cntr['wredDrppacket'], old_cntr['wredDrppacket']),
+                             ns_diff(cntr['wredDrpbytes'], old_cntr['wredDrpbytes']),
+                             ns_diff(cntr['ecnpacket'], old_cntr['ecnpacket']),
+                             ns_diff(cntr['ecnbytes'], old_cntr['ecnbytes'])))
             else:
-                table.append((port, cntr['queuetype'] + str(cntr['queueindex']),
-                        cntr['wredDrppacket'], cntr['wredDrpbytes'],
-                        cntr['ecnpacket'], cntr['ecnbytes']))
+                if not non_zero or (cntr['wredDrppacket'] != 'N/A' and cntr['wredDrppacket'] != '0') or \
+                               (cntr['wredDrpbytes'] != 'N/A' and cntr['wredDrpbytes'] != '0')  or \
+                               (cntr['ecnpacket'] != 'N/A' and cntr['ecnpacket'] != '0') or \
+                               (cntr['ecnbytes'] != 'N/A' and cntr['ecnbytes'] != '0'):
+                    table.append((port, cntr['queuetype'] + str(cntr['queueindex']),
+                           cntr['wredDrppacket'], cntr['wredDrpbytes'],
+                           cntr['ecnpacket'], cntr['ecnbytes']))
 
         if json_opt:
-            json_output[port].update(build_json(port, table))
+            if table:
+                json_output[port].update(build_json(port, table))
             return json_output
         else:
-            hdr = voq_header if self.voq else header
-            print(tabulate(table, hdr, tablefmt='simple', stralign='right'))
-            print()
+            if table:
+                hdr = voq_header if self.voq else header
+                print(tabulate(table, hdr, tablefmt='simple', stralign='right'))
+                print()
 
-    def get_print_all_stat(self, json_opt):
+    def get_print_all_stat(self, json_opt, non_zero):
         """
         Get stat for each port
         If JSON option is True, collect data for each port and
@@ -293,22 +310,22 @@ class Wredstat(object):
                     cnstat_cached_dict = json.load(open(cnstat_fqn_file_name, 'r'))
                     if json_opt:
                         json_output[port].update({"cached_time":cnstat_cached_dict.get('time')})
-                        json_output.update(self.cnstat_diff_print(port, cnstat_dict, cnstat_cached_dict, json_opt))
+                        json_output.update(self.cnstat_diff_print(port, cnstat_dict, cnstat_cached_dict, json_opt, non_zero))
                     else:
                         print(port + " Last cached time was " + str(cnstat_cached_dict.get('time')))
-                        self.cnstat_diff_print(port, cnstat_dict, cnstat_cached_dict, json_opt)
+                        self.cnstat_diff_print(port, cnstat_dict, cnstat_cached_dict, json_opt, non_zero)
                 except IOError as e:
                     print(e.errno, e)
             else:
                 if json_opt:
-                    json_output.update(self.cnstat_print(port, cnstat_dict, json_opt))
+                    json_output.update(self.cnstat_print(port, cnstat_dict, json_opt, non_zero))
                 else:
-                    self.cnstat_print(port, cnstat_dict, json_opt)
+                    self.cnstat_print(port, cnstat_dict, json_opt, non_zero)
 
         if json_opt:
             print(json_dump(json_output))
 
-    def get_print_port_stat(self, port, json_opt):
+    def get_print_port_stat(self, port, json_opt, non_zero):
         """
         Get stat for the port
         If JSON option is True  print data in JSON format
@@ -327,17 +344,17 @@ class Wredstat(object):
                 cnstat_cached_dict = json.load(open(cnstat_fqn_file_name, 'r'))
                 if json_opt:
                     json_output[port].update({"cached_time":cnstat_cached_dict.get('time')})
-                    json_output.update(self.cnstat_diff_print(port, cnstat_dict, cnstat_cached_dict, json_opt))
+                    json_output.update(self.cnstat_diff_print(port, cnstat_dict, cnstat_cached_dict, json_opt, non_zero))
                 else:
                     print("Last cached time was " + str(cnstat_cached_dict.get('time')))
-                    self.cnstat_diff_print(port, cnstat_dict, cnstat_cached_dict, json_opt)
+                    self.cnstat_diff_print(port, cnstat_dict, cnstat_cached_dict, json_opt, non_zero)
             except IOError as e:
                 print(e.errno, e)
         else:
             if json_opt:
-                json_output.update(self.cnstat_print(port, cnstat_dict, json_opt))
+                json_output.update(self.cnstat_print(port, cnstat_dict, json_opt, non_zero))
             else:
-                self.cnstat_print(port, cnstat_dict, json_opt)
+                self.cnstat_print(port, cnstat_dict, json_opt, non_zero)
 
         if json_opt:
             print(json_dump(json_output))
@@ -374,6 +391,7 @@ Examples:
     parser.add_argument('-v', '--version', action='version', version='%(prog)s 1.0')
     parser.add_argument('-j', '--json_opt', action='store_true', help='Print in JSON format')
     parser.add_argument('-V', '--voq', action='store_true', help='display voq stats')
+    parser.add_argument('-nz', '--non_zero', action='store_true', help='display non-zero wred queue stats')
     parser.add_argument('-n', '--namespace', default=None, help='Display queue counters for specific namespace')
     args = parser.parse_args()
 
@@ -382,6 +400,7 @@ Examples:
     voq = args.voq
     json_opt = args.json_opt
     namespace = args.namespace
+    non_zero = args.non_zero
 
     port_to_show_stats = args.port
 
@@ -394,7 +413,7 @@ Examples:
         cache.remove()
 
     wredstat_wrapper = WredstatWrapper(namespace, voq)
-    wredstat_wrapper.run(save_fresh_stats, port_to_show_stats, json_opt)
+    wredstat_wrapper.run(save_fresh_stats, port_to_show_stats, json_opt, non_zero)
 
     sys.exit(0)
 
