@@ -151,7 +151,7 @@ class TestSfputil(object):
                 'cable_length': '3',
                 'application_advertisement': 'N/A',
                 'specification_compliance': "{'10/40G Ethernet Compliance Code': '40GBASE-CR4'}",
-                'dom_capability': "{'Tx_power_support': 'no', 'Rx_power_support': 'no', 'Voltage_support': 'no', 'Temp_support': 'no'}",
+                'dom_capability': "N/A",
                 'nominal_bit_rate': '255'
             },
             # expected_output
@@ -171,7 +171,7 @@ class TestSfputil(object):
             "        Vendor PN: MCP1600-C003\n"
             "        Vendor Rev: A2\n"
             "        Vendor SN: MT1636VS10561\n"
-            "        dom_capability: {'Tx_power_support': 'no', 'Rx_power_support': 'no', 'Voltage_support': 'no', 'Temp_support': 'no'}\n"
+            "        dom_capability: N/A\n"
             "        type_abbrv_name: QSFP28\n"
         ),
         # CMIS compliant module
@@ -200,7 +200,7 @@ class TestSfputil(object):
                                                   'media_lane_assignment_options': 2}, \
                                               2: {'host_electrical_interface_id': '200GBASE-CR4 (Clause 136)'}}",
                 'specification_compliance': "sm_media_interface",
-                'dom_capability': "{'Tx_power_support': 'no', 'Rx_power_support': 'no', 'Voltage_support': 'no', 'Temp_support': 'no'}",
+                'dom_capability': "N/A",
                 'nominal_bit_rate': '0',
                 'hardware_rev': '0.0',
                 'host_lane_count': 8,
@@ -254,7 +254,7 @@ class TestSfputil(object):
             "        Vendor PN: def\n"
             "        Vendor Rev: ghi\n"
             "        Vendor SN: jkl\n"
-            "        dom_capability: {'Tx_power_support': 'no', 'Rx_power_support': 'no', 'Voltage_support': 'no', 'Temp_support': 'no'}\n"
+            "        dom_capability: N/A\n"
             "        type_abbrv_name: QSFP-DD\n"
         ),
     ])
