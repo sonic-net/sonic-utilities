@@ -359,7 +359,7 @@ class SFPShow(object):
             else:
                 # For both known and unknown keys
                 display_name = data_map.get(key, key)  # Use data_map name if available, otherwise use key
-                value = sfp_info_dict.get(key, sfp_firmware_info_dict.get(key, 'N/A'))
+                value = sfp_info_dict.get(key, sfp_firmware_info_dict.get(key, 'N/A') if sfp_firmware_info_dict else 'N/A')
                 output += '{}{}: {}\n'.format(indent, display_name, value)
 
         return output
