@@ -219,6 +219,32 @@ Vrf103  Ethernet4
         assert ('Vrf100') in db.cfgdb.get_table('VRF')
         assert result.exit_code == 0
 
+        # Add dummy VLAN and DHCP relay config using the VRF
+        vlan = "Vlan100"
+        server_ip = "192.0.2.1"
+        db.cfgdb.mod_entry("VLAN", vlan, {})
+
+        db.cfgdb.set_entry("DHCPV4_RELAY", vlan, {
+            "dhcpv4_servers": [server_ip],
+            "server_vrf": "Vrf100",
+            "link_selection": "enable",
+            "vrf_selection": "enable",
+            "server_id_override": "enable"
+        })
+
+        assert result.exit_code == 0
+
+        # Attempt to delete the VRF in use by DHCPv4_RELAY ὀ~T should failfa
+        result = runner.invoke(config.config.commands["vrf"].commands["del"], ["Vrf100"], obj=vrf_obj)
+        assert result.exit_code != 0
+        assert "VRF 'Vrf100' is in use for dhcp_relay configurations for Vlan100" in result.output
+
+        # Clean up the DHCP config to allow VRF deletion
+        db.cfgdb.set_entry("DHCPV4_RELAY", vlan, None)
+        result = runner.invoke(config.config.commands["vrf"].commands["del"], ["Vrf100"], obj=vrf_obj)
+        assert result.exit_code == 0
+        assert "Vrf100" not in db.cfgdb.get_table("VRF")
+
         result = runner.invoke(config.config.commands["vrf"].commands["add"], ["Vrf1"], obj=vrf_obj)
         assert "VRF Vrf1 already exists!" in result.output
         assert ('Vrf1') in db.cfgdb.get_table('VRF')
