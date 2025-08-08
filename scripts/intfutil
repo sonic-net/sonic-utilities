@@ -27,6 +27,7 @@ from tabulate import tabulate
 from utilities_common import constants
 from utilities_common import multi_asic as multi_asic_util
 from utilities_common.intf_filter import parse_interface_in_filter
+from utilities_common.netstat import table_as_json
 from utilities_common.platform_sfputil_helper import is_rj45_port, RJ45_PORT_TYPE
 from sonic_py_common.interface import get_intf_longname
 from sonic_py_common import multi_asic
@@ -63,6 +64,14 @@ VLAN_SUB_INTERFACE_TYPE = "802.1q-encapsulation"
 
 SUB_PORT = "subport"
 
+def display_table(table, header_desc, use_json=False):
+    sorted_table = natsorted(table)
+    if use_json:
+        print(table_as_json(sorted_table, header_desc))
+    else:
+        print(tabulate(sorted_table, header_desc, tablefmt="simple", stralign='right'))
+
+        
 def get_frontpanel_port_list(config_db):
     ports_dict = config_db.get_table('PORT')
     front_panel_ports_list = []
@@ -422,7 +431,7 @@ header_stat_sub_intf = ['Sub port interface', 'Speed', 'MTU', 'Vlan', 'Admin', '
 
 class IntfStatus(object):
 
-    def __init__(self, intf_name, namespace_option, display_option):
+    def __init__(self, intf_name, namespace_option, display_option, use_json=False):
         """
         Class constructor method
         :param self:
@@ -434,6 +443,7 @@ class IntfStatus(object):
         self.sub_intf_only = False
         self.intf_name = intf_name
         self.sub_intf_name = intf_name
+        self.use_json = use_json
         self.table = []
         self.multi_asic = multi_asic_util.MultiAsic(
             display_option, namespace_option)
@@ -450,11 +460,8 @@ class IntfStatus(object):
 
     def display_intf_status(self):
         self.get_intf_status()
-        sorted_table = natsorted(self.table)
-        print(tabulate(sorted_table,
-                       header_stat if not self.sub_intf_only else header_stat_sub_intf,
-                       tablefmt="simple",
-                       stralign='right'))
+        header_status = header_stat if not self.sub_intf_only else header_stat_sub_intf
+        display_table(self.table, header_status, self.use_json)
 
     def generate_intf_status(self):
         """
@@ -546,10 +553,11 @@ header_desc = ['Interface', 'Oper', 'Admin', 'Alias', 'Description']
 
 class IntfDescription(object):
 
-    def __init__(self, intf_name, namespace_option, display_option):
+    def __init__(self, intf_name, namespace_option, display_option, use_json=False):
         self.db = None
         self.config_db = None
         self.table = []
+        self.use_json = use_json
         self.multi_asic = multi_asic_util.MultiAsic(
             display_option, namespace_option)
 
@@ -561,10 +569,7 @@ class IntfDescription(object):
     def display_intf_description(self):
 
         self.get_intf_description()
-
-        # Sorting and tabulating the result table.
-        sorted_table = natsorted(self.table)
-        print(tabulate(sorted_table, header_desc, tablefmt="simple", stralign='right'))
+        display_table(self.table, header_desc, self.use_json)
 
     def generate_intf_description(self):
         """
@@ -605,10 +610,11 @@ header_autoneg = ['Interface', 'Auto-Neg Mode', 'Speed', 'Adv Speeds', 'Rmt Adv 
 
 class IntfAutoNegStatus(object):
 
-    def __init__(self, intf_name, namespace_option, display_option):
+    def __init__(self, intf_name, namespace_option, display_option, use_json=False):
         self.db = None
         self.config_db = None
         self.table = []
+        self.use_json = use_json
         self.multi_asic = multi_asic_util.MultiAsic(
             display_option, namespace_option)
 
@@ -620,10 +626,7 @@ class IntfAutoNegStatus(object):
     def display_autoneg_status(self):
 
         self.get_intf_autoneg_status()
-
-        # Sorting and tabulating the result table.
-        sorted_table = natsorted(self.table)
-        print(tabulate(sorted_table, header_autoneg, tablefmt="simple", stralign='right'))
+        display_table(self.table, header_autoneg, self.use_json)
 
     def generate_autoneg_status(self):
         """
@@ -672,7 +675,7 @@ header_tpid = ['Interface', 'Alias', 'Oper', 'Admin', 'TPID']
 
 class IntfTpid(object):
 
-    def __init__(self, intf_name, namespace_option, display_option):
+    def __init__(self, intf_name, namespace_option, display_option, use_json=False):
         """
         Class constructor method
         :param self:
@@ -683,6 +686,7 @@ class IntfTpid(object):
         self.config_db = None
         self.intf_name = intf_name
         self.table = []
+        self.use_json = use_json
         self.multi_asic = multi_asic_util.MultiAsic(
             display_option, namespace_option)
 
@@ -691,10 +695,7 @@ class IntfTpid(object):
 
     def display_intf_tpid(self):
         self.get_intf_tpid()
-
-        # Sorting and tabulating the result table.
-        sorted_table = natsorted(self.table)
-        print(tabulate(sorted_table, header_tpid, tablefmt="simple", stralign='right'))
+        display_table(self.table, header_tpid, self.use_json)
 
     def generate_intf_tpid(self):
         """
@@ -756,10 +757,11 @@ header_link_training = ['Interface', 'LT Oper', 'LT Admin', 'Oper', 'Admin']
 
 class IntfLinkTrainingStatus(object):
 
-    def __init__(self, intf_name, namespace_option, display_option):
+    def __init__(self, intf_name, namespace_option, display_option, use_json=False):
         self.db = None
         self.config_db = None
         self.table = []
+        self.use_json = use_json
         self.multi_asic = multi_asic_util.MultiAsic(
             display_option, namespace_option)
 
@@ -770,9 +772,7 @@ class IntfLinkTrainingStatus(object):
 
     def display_link_training_status(self):
         self.get_intf_link_training_status()
-        # Sorting and tabulating the result table.
-        sorted_table = natsorted(self.table)
-        print(tabulate(sorted_table, header_link_training, tablefmt="simple", stralign='right'))
+        display_table(self.table, header_link_training, self.use_json)
 
     @multi_asic_util.run_on_multi_asic
     def get_intf_link_training_status(self):
@@ -815,10 +815,11 @@ header_fec = ['Interface', 'FEC Oper', 'FEC Admin']
 
 class IntfFecStatus(object):
 
-    def __init__(self, intf_name, namespace_option, display_option):
+    def __init__(self, intf_name, namespace_option, display_option, use_json=False):
         self.db = None
         self.config_db = None
         self.table = []
+        self.use_json = use_json
         self.multi_asic = multi_asic_util.MultiAsic(
             display_option, namespace_option)
 
@@ -829,9 +830,7 @@ class IntfFecStatus(object):
 
     def display_fec_status(self):
         self.get_intf_fec_status()
-        # Sorting and tabulating the result table.
-        sorted_table = natsorted(self.table)
-        print(tabulate(sorted_table, header_fec, tablefmt="simple", stralign='right'))
+        display_table(self.table, header_fec, self.use_json)
 
     @multi_asic_util.run_on_multi_asic
     def get_intf_fec_status(self):
@@ -872,26 +871,26 @@ def main():
                                      formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-c', '--command', type=str, help='get interface status or description or auto negotiation status or tpid', default=None)
     parser.add_argument('-i', '--interface', type=str, help='interface information for specific port: Ethernet0', default=None)
+    parser.add_argument('-j', '--json', action='store_true', help='Display in JSON format')
     parser = multi_asic_util.multi_asic_args(parser)
     args = parser.parse_args()
-
     if args.command == "status":
-        interface_stat = IntfStatus(args.interface, args.namespace, args.display)
+        interface_stat = IntfStatus(args.interface, args.namespace, args.display, args.json)
         interface_stat.display_intf_status()
     elif args.command == "description":
-        interface_desc = IntfDescription(args.interface, args.namespace, args.display)
+        interface_desc = IntfDescription(args.interface, args.namespace, args.display, args.json)
         interface_desc.display_intf_description()
     elif args.command == "autoneg":
-        interface_autoneg_status = IntfAutoNegStatus(args.interface, args.namespace, args.display)
+        interface_autoneg_status = IntfAutoNegStatus(args.interface, args.namespace, args.display, args.json)
         interface_autoneg_status.display_autoneg_status()
     elif args.command == "tpid":
-        interface_tpid = IntfTpid(args.interface, args.namespace, args.display)
+        interface_tpid = IntfTpid(args.interface, args.namespace, args.display, args.json)
         interface_tpid.display_intf_tpid()
     elif args.command == "link_training":
-        interface_lt_status = IntfLinkTrainingStatus(args.interface, args.namespace, args.display)
+        interface_lt_status = IntfLinkTrainingStatus(args.interface, args.namespace, args.display, args.json)
         interface_lt_status.display_link_training_status()
     elif args.command == "fec":
-        interface_fec_status = IntfFecStatus(args.interface, args.namespace, args.display)
+        interface_fec_status = IntfFecStatus(args.interface, args.namespace, args.display, args.json)
         interface_fec_status.display_fec_status()
 
     sys.exit(0)
