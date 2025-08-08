@@ -313,11 +313,11 @@ class Watermarkstat(object):
                 table.append(tuple(row_data))
                 json_result.append(dict(zip(self.header_list, [port]+data)))
         
-        namespace_str = f" (Namespace {self.namespace})" if multi_asic.is_multi_asic() else ''
-        print(type["message"] + namespace_str)
         if json_output:
             print(json.dumps(json_result, indent=4))
         else:
+            namespace_str = f" (Namespace {self.namespace})" if multi_asic.is_multi_asic() else ''
+            print(type["message"] + namespace_str)
             print(tabulate(table, self.header_list, tablefmt='simple', stralign='right'))
 
     def send_clear_notification(self, data):
