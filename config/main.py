@@ -1327,7 +1327,7 @@ def apply_patch_wrapper(args):
 
 
 # Function to apply patch for a single ASIC.
-def apply_patch_for_scope(scope_changes, results, config_format, verbose, dry_run, ignore_non_yang_tables, ignore_path):
+def apply_patch_for_scope(scope_changes, results, config_format, verbose, dry_run, ignore_non_yang_tables, ignore_path, sort):
     scope, changes = scope_changes
     # Replace localhost to DEFAULT_NAMESPACE which is db definition of Host
     if scope.lower() == HOST_NAMESPACE or scope == "":
@@ -1344,7 +1344,8 @@ def apply_patch_for_scope(scope_changes, results, config_format, verbose, dry_ru
                                                 verbose,
                                                 dry_run,
                                                 ignore_non_yang_tables,
-                                                ignore_path)
+                                                ignore_path,
+                                                sort)
         results[scope_for_log] = {"success": True, "message": "Success"}
         log.log_notice(f"'apply-patch' executed successfully for {scope_for_log} by {changes} in thread:{thread_id}")
     except Exception as e:
@@ -1713,11 +1714,12 @@ def print_dry_run_message(dry_run):
                show_default=True)
 @click.option('-d', '--dry-run', is_flag=True, default=False, help='test out the command without affecting config state')
 @click.option('-p', '--parallel', is_flag=True, default=False, help='applying the change to all ASICs parallelly')
+@click.option('-s', '--sort', is_flag=True, default=True, help='sort the changes before applying')
 @click.option('-n', '--ignore-non-yang-tables', is_flag=True, default=False, help='ignore validation for tables without YANG models', hidden=True)
 @click.option('-i', '--ignore-path', multiple=True, help='ignore validation for config specified by given path which is a JsonPointer', hidden=True)
 @click.option('-v', '--verbose', is_flag=True, default=False, help='print additional details of what the operation is doing')
 @click.pass_context
-def apply_patch(ctx, patch_file_path, format, dry_run, parallel, ignore_non_yang_tables, ignore_path, verbose):
+def apply_patch(ctx, patch_file_path, format, dry_run, parallel, sort, ignore_non_yang_tables, ignore_path, verbose):
     """Apply given patch of updates to Config. A patch is a JsonPatch which follows rfc6902.
        This command can be used do partial updates to the config with minimum disruption to running processes.
        It allows addition as well as deletion of configs. The patch file represents a diff of ConfigDb(ABNF)
@@ -1767,7 +1769,7 @@ def apply_patch(ctx, patch_file_path, format, dry_run, parallel, ignore_non_yang
             with concurrent.futures.ThreadPoolExecutor() as executor:
                 # Prepare the argument tuples
                 arguments = [(scope_changes, results, config_format,
-                              verbose, dry_run, ignore_non_yang_tables, ignore_path)
+                              verbose, dry_run, ignore_non_yang_tables, ignore_path, sort)
                              for scope_changes in changes_by_scope.items()]
 
                 # Submit all tasks and wait for them to complete
@@ -1782,7 +1784,8 @@ def apply_patch(ctx, patch_file_path, format, dry_run, parallel, ignore_non_yang
                                       config_format,
                                       verbose, dry_run,
                                       ignore_non_yang_tables,
-                                      ignore_path)
+                                      ignore_path,
+                                      sort)
 
         # Check if any updates failed
         failures = [scope for scope, result in results.items() if not result['success']]

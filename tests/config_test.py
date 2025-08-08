@@ -2033,6 +2033,65 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.assertNotEqual(unexpected_exit_code, result.exit_code)
         self.assertTrue(any_error_message in result.output)
 
+    @patch('config.main.validate_patch', mock.Mock(return_value=True))
+    def test_apply_patch_sort_parameter(self):
+        # Arrange
+        expected_exit_code = 0
+        expected_output = "Patch applied successfully"
+
+        # Act
+        result = self.runner.invoke(config.config.commands["apply-patch"],
+                                    [self.any_path, "--sort", "True"],
+                                    catch_exceptions=False)
+
+        # Assert
+        self.assertEqual(expected_exit_code, result.exit_code)
+        self.assertTrue(expected_output in result.output)
+
+        # Act
+        result = self.runner.invoke(config.config.commands["apply-patch"],
+                                    [self.any_path, "--sort", "False"],
+                                    catch_exceptions=False)
+
+        # Assert
+        self.assertEqual(expected_exit_code, result.exit_code)
+        self.assertTrue(expected_output in result.output)
+
+    @patch('config.main.validate_patch', mock.Mock(return_value=True))
+    def test_apply_patch_sort_order_logic(self):
+        # Arrange: patch array in reverse order
+        patch_array = [
+            {"op": "remove", "path": "/patch2"},
+            {"op": "remove", "path": "/patch1"}
+        ]
+        patch_array_sorted = sorted(patch_array, key=lambda x: x["path"])
+        patch_array_text = json.dumps(patch_array)
+        any_path = self.any_path
+
+        # Patch jsonpatch.JsonPatch to return the array as-is
+        with mock.patch('jsonpatch.JsonPatch', side_effect=lambda arr: arr):
+            mock_generic_updater = mock.Mock()
+            with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
+                with mock.patch('builtins.open', mock.mock_open(read_data=patch_array_text)):
+                    # Act: sort True
+                    self.runner.invoke(config.config.commands["apply-patch"],
+                                      [any_path, "--sort", "True"],
+                                      catch_exceptions=False)
+                    # Assert: patches should be sorted
+                    called_patch = mock_generic_updater.apply_patch.call_args[0][0]
+                    self.assertEqual(called_patch, patch_array_sorted)
+
+            mock_generic_updater = mock.Mock()
+            with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
+                with mock.patch('builtins.open', mock.mock_open(read_data=patch_array_text)):
+                    # Act: sort False
+                    self.runner.invoke(config.config.commands["apply-patch"],
+                                      [any_path, "--sort", "False"],
+                                      catch_exceptions=False)
+                    # Assert: patches should be in original order
+                    called_patch = mock_generic_updater.apply_patch.call_args[0][0]
+                    self.assertEqual(called_patch, patch_array)
+
     def test_apply_patch__optional_parameters_passed_correctly(self):
         self.validate_apply_patch_optional_parameter(
             ["--format", ConfigFormat.SONICYANG.name],
@@ -2049,6 +2108,12 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.validate_apply_patch_optional_parameter(
             ["--ignore-path", "/ANY_TABLE"],
             mock.call(self.any_patch, ConfigFormat.CONFIGDB, False, False, False, ("/ANY_TABLE",)))
+        self.validate_apply_patch_optional_parameter(
+            ["--sort"],
+            mock.call(self.any_patch, ConfigFormat.CONFIGDB, False, False, False, True, ()))
+        self.validate_apply_patch_optional_parameter(
+            ["--sort"],
+            mock.call(self.any_patch, ConfigFormat.CONFIGDB, False, False, False, False, ()))
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     def validate_apply_patch_optional_parameter(self, param_args, expected_call):
