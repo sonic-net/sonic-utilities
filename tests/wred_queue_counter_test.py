@@ -1452,7 +1452,7 @@ class TestWredQueue(object):
             show.cli.commands["queue"].commands["wredcounters"],
             ["Ethernet8", "--json", "-nz"]
         )
-        print("result.output:{}".format(result.output))
+        print(result.output)
         print()
         assert result.exit_code == 0
         json_output = json.loads(result.output)
@@ -1522,6 +1522,30 @@ class TestWredQueue(object):
         print(result.output)
         assert result.exit_code == 0
         assert (wredstat_clear_str in result.output)
+
+    def test_queue_counters_after_clear(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["queue"].commands["wredcounters"],
+            ["-nz"]
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        output = result.output.splitlines()
+        f_output = [item for item in output if "time" not in item]
+        assert len(f_output) == 0
+
+    def test_queue_counters_port_after_clear(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["queue"].commands["wredcounters"],
+            ["Ethernet8", "-nz"]
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        output = result.output.splitlines()
+        f_output = [item for item in output if "time" not in item]
+        assert len(f_output) == 0
 
     def test_invalid_port(self):
         wredstat_inv_port = "Port does not exist"

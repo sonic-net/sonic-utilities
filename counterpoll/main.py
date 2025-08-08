@@ -619,6 +619,7 @@ def srv6_disable(ctx):
 @click.option('-n', '--namespace', help='Namespace name',
               required=True if multi_asic.is_multi_asic() else False,
               type=click.Choice(multi_asic.get_namespace_list()))
+@click.pass_context
 def switch(ctx, namespace):
     """ Switch counter commands """
     ctx.obj = connect_to_db(namespace)
@@ -626,8 +627,8 @@ def switch(ctx, namespace):
 
 
 @switch.command(name='interval')
-@clicommon.pass_context
 @click.argument("poll_interval", type=click.IntRange(1000, 60000))
+@click.pass_context
 def switch_interval(ctx, poll_interval):
     """ Set switch counter query interval """
     table = CFG_FLEX_COUNTER_TABLE
@@ -641,7 +642,7 @@ def switch_interval(ctx, poll_interval):
 
 
 @switch.command(name='enable')
-@clicommon.pass_context
+@click.pass_context
 def switch_enable(ctx):
     """ Enable switch counter query """
     table = CFG_FLEX_COUNTER_TABLE
@@ -655,7 +656,7 @@ def switch_enable(ctx):
 
 
 @switch.command(name='disable')
-@clicommon.pass_context
+@click.pass_context
 def switch_disable(ctx):
     """ Disable switch counter query """
     table = CFG_FLEX_COUNTER_TABLE
@@ -665,8 +666,13 @@ def switch_disable(ctx):
         "FLEX_COUNTER_STATUS": DISABLE
     }
 
-    ctx.obj.cfgdb.mod_entry(table, key, data)
+    ctx.obj.mod_entry(table, key, data)
 
+
+@cli.command()
+@click.option('-n', '--namespace', help='Namespace name',
+              required=True if multi_asic.is_multi_asic() else False,
+              type=click.Choice(multi_asic.get_namespace_list()))
 def show(namespace):
     """ Show the counter configuration """
     configdb = connect_to_db(namespace)
@@ -724,12 +730,12 @@ def show(namespace):
     if srv6_info:
         data.append(["SRV6_STAT", srv6_info.get("POLL_INTERVAL", DEFLT_10_SEC),
                     srv6_info.get("FLEX_COUNTER_STATUS", DISABLE)])
-     if switch_info:
-         data.append([
-             "SWITCH_STAT",
-             switch_info.get("POLL_INTERVAL", DEFLT_60_SEC),
-             switch_info.get("FLEX_COUNTER_STATUS", DISABLE)
-         ])
+    if switch_info:
+        data.append([
+            "SWITCH_STAT",
+            switch_info.get("POLL_INTERVAL", DEFLT_60_SEC),
+            switch_info.get("FLEX_COUNTER_STATUS", DISABLE)
+        ])
 
     if is_dpu(configdb) and eni_info:
         data.append(["ENI_STAT", eni_info.get("POLL_INTERVAL", DEFLT_10_SEC),
