@@ -11,7 +11,8 @@ show_pg_wm_shared_output_one_masic = (
     "Ethernet-BP0      0      0      0      0      0      0      0      0"
     "      0      0       0       0       0       0       0       0\n"
     "Ethernet-BP4      0      0      0      0      0      0      0      0"
-    "      0      0       0       0       0       0       0       0\n")
+    "      0      0       0       0       0       0       0       0\n"
+)
 
 show_pg_wm_shared_output_all_masic = (
     "Ingress shared pool occupancy per PG: (Namespace asic0)\n"
@@ -35,7 +36,8 @@ show_pg_wm_shared_output_all_masic = (
     "Ethernet-BP256    100    101    102    103    104    105    106    107"
     "    108    109     110     111     112     113     114     115\n"
     "Ethernet-BP260    200    201    202    203    204    205    206    207"
-    "    208    209     210     211     212     213     214     215\n")
+    "    208    209     210     211     212     213     214     215\n"
+)
 
 show_pg_wm_hdrm_output_one_masic = (
     "Ingress headroom per PG: (Namespace asic1)\n"
@@ -46,7 +48,8 @@ show_pg_wm_hdrm_output_one_masic = (
     "Ethernet-BP256    100    101    102    103    104    105    106    107"
     "    108    109     110     111     112     113     114     115\n"
     "Ethernet-BP260    200    201    202    203    204    205    206    207"
-    "    208    209     210     211     212     213     214     215\n")
+    "    208    209     210     211     212     213     214     215\n"
+)
 
 show_pg_wm_hdrm_output_all_masic = (
     "Ingress headroom per PG: (Namespace asic0)\n"
@@ -70,7 +73,8 @@ show_pg_wm_hdrm_output_all_masic = (
     "Ethernet-BP256    100    101    102    103    104    105    106    107"
     "    108    109     110     111     112     113     114     115\n"
     "Ethernet-BP260    200    201    202    203    204    205    206    207"
-    "    208    209     210     211     212     213     214     215\n")
+    "    208    209     210     211     212     213     214     215\n"
+)
 
 show_pg_persistent_wm_shared_output_one_masic = (
     "Ingress shared pool occupancy per PG: (Namespace asic1)\n"
@@ -81,7 +85,8 @@ show_pg_persistent_wm_shared_output_one_masic = (
     "Ethernet-BP256    200    201    202    203    204    205    206    207"
     "    500    501     502     503     504     505     506     507\n"
     "Ethernet-BP260    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A"
-    "    N/A    N/A     N/A     N/A     N/A     N/A     N/A     N/A\n")
+    "    N/A    N/A     N/A     N/A     N/A     N/A     N/A     N/A\n"
+)
 
 show_pg_persistent_wm_shared_output_all_masic = (
     "Ingress shared pool occupancy per PG: (Namespace asic0)\n"
@@ -105,7 +110,8 @@ show_pg_persistent_wm_shared_output_all_masic = (
     "Ethernet-BP256    200    201    202    203    204    205    206    207"
     "    500    501     502     503     504     505     506     507\n"
     "Ethernet-BP260    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A"
-    "    N/A    N/A     N/A     N/A     N/A     N/A     N/A     N/A\n")
+    "    N/A    N/A     N/A     N/A     N/A     N/A     N/A     N/A\n"
+)
 
 show_pg_persistent_wm_hdrm_output_one_masic = (
     "Ingress headroom per PG: (Namespace asic1)\n"
@@ -116,7 +122,8 @@ show_pg_persistent_wm_hdrm_output_one_masic = (
     "Ethernet-BP256    200    201    202    203    204    205    206    207"
     "    500    501     502     503     504     505     506     507\n"
     "Ethernet-BP260    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A"
-    "    N/A    N/A     N/A     N/A     N/A     N/A     N/A     N/A\n")
+    "    N/A    N/A     N/A     N/A     N/A     N/A     N/A     N/A\n"
+)
 
 show_pg_persistent_wm_hdrm_output_all_masic = (
     "Ingress headroom per PG: (Namespace asic0)\n"
@@ -140,7 +147,8 @@ show_pg_persistent_wm_hdrm_output_all_masic = (
     "Ethernet-BP256    200    201    202    203    204    205    206    207    "
     "500    501     502     503     504     505     506     507\n"
     "Ethernet-BP260    N/A    N/A    N/A    N/A    N/A    N/A    N/A    N/A    "
-    "N/A    N/A     N/A     N/A     N/A     N/A     N/A     N/A\n")
+    "N/A    N/A     N/A     N/A     N/A     N/A     N/A     N/A\n"
+)
 
 show_queue_wm_unicast_output_one_masic = """\
 Egress shared pool occupancy per unicast queue: (Namespace asic1)
@@ -368,7 +376,7 @@ Channel: WATERMARK_CLEAR_REQUEST accessed in namespace: asic1
 Message published to WATERMARK_CLEAR_REQUEST:  ["USER","PG_HEADROOM"]
 """
 
-show_pg_wm_shared_output="""\
+show_pg_wm_shared_output = """\
 Ingress shared pool occupancy per PG:
      Port    PG0    PG1    PG2    PG3    PG4    PG5    PG6    PG7
 ---------  -----  -----  -----  -----  -----  -----  -----  -----
@@ -377,7 +385,7 @@ Ethernet4    400    401    402    403    404    405    406    407
 Ethernet8    800    801    802    803    804    805    806    807
 """
 
-show_pg_wm_shared_output_json="""\
+show_pg_wm_shared_output_json = """\
 [
     {
         "Port": "Ethernet0",
@@ -415,7 +423,7 @@ show_pg_wm_shared_output_json="""\
 ]
 """
 
-show_pg_wm_hdrm_output="""\
+show_pg_wm_hdrm_output = """\
 Ingress headroom per PG:
      Port    PG0    PG1    PG2    PG3    PG4    PG5    PG6    PG7
 ---------  -----  -----  -----  -----  -----  -----  -----  -----
@@ -424,7 +432,7 @@ Ethernet4    400    401    402    403    404    405    406    407
 Ethernet8    800    801    802    803    804    805    806    807
 """
 
-show_pg_wm_hdrm_output_json="""\
+show_pg_wm_hdrm_output_json = """\
 [
     {
         "Port": "Ethernet0",
@@ -462,7 +470,7 @@ show_pg_wm_hdrm_output_json="""\
 ]
 """
 
-show_pg_persistent_wm_shared_output="""\
+show_pg_persistent_wm_shared_output = """\
 Ingress shared pool occupancy per PG:
      Port    PG0    PG1    PG2    PG3    PG4    PG5    PG6    PG7
 ---------  -----  -----  -----  -----  -----  -----  -----  -----
@@ -471,7 +479,7 @@ Ethernet4    500    501    502    503    504    505    506    507
 Ethernet8    900    901    902    903    904    905    906    907
 """
 
-show_pg_persistent_wm_shared_output_json="""\
+show_pg_persistent_wm_shared_output_json = """\
 [
     {
         "Port": "Ethernet0",
@@ -509,7 +517,7 @@ show_pg_persistent_wm_shared_output_json="""\
 ]
 """
 
-show_pg_persistent_wm_hdrm_output="""\
+show_pg_persistent_wm_hdrm_output = """\
 Ingress headroom per PG:
      Port    PG0    PG1    PG2    PG3    PG4    PG5    PG6    PG7
 ---------  -----  -----  -----  -----  -----  -----  -----  -----
@@ -518,7 +526,7 @@ Ethernet4    500    501    502    503    504    505    506    507
 Ethernet8    900    901    902    903    904    905    906    907
 """
 
-show_pg_persistent_wm_hdrm_output_json="""\
+show_pg_persistent_wm_hdrm_output_json = """\
 [
     {
         "Port": "Ethernet0",
@@ -556,7 +564,7 @@ show_pg_persistent_wm_hdrm_output_json="""\
 ]
 """
 
-show_queue_wm_unicast_output="""\
+show_queue_wm_unicast_output = """\
 Egress shared pool occupancy per unicast queue:
      Port      UC0      UC1    UC2    UC3    UC4    UC5    UC6    UC7    UC8    UC9
 ---------  -------  -------  -----  -----  -----  -----  -----  -----  -----  -----
@@ -565,7 +573,7 @@ Ethernet4        0        0      0   1986   2567      0      0      0      0    
 Ethernet8        0        0   1040      0      0      0      0      0   8528   7696
 """
 
-show_queue_wm_unicast_output_json="""\
+show_queue_wm_unicast_output_json = """\
 [
     {
         "Port": "Ethernet0",
@@ -609,7 +617,7 @@ show_queue_wm_unicast_output_json="""\
 ]
 """
 
-show_queue_pwm_unicast_output="""\
+show_queue_pwm_unicast_output = """\
 Egress shared pool occupancy per unicast queue:
      Port      UC0      UC1    UC2    UC3    UC4    UC5    UC6    UC7    UC8    UC9
 ---------  -------  -------  -----  -----  -----  -----  -----  -----  -----  -----
@@ -618,7 +626,7 @@ Ethernet4        0        0      0   2986   3567      0      0      0      0    
 Ethernet8        0        0   2040      0      0      0      0      0   9528   8696
 """
 
-show_queue_pwm_unicast_output_json="""\
+show_queue_pwm_unicast_output_json = """\
 [
     {
         "Port": "Ethernet0",
@@ -662,7 +670,7 @@ show_queue_pwm_unicast_output_json="""\
 ]
 """
 
-show_queue_wm_multicast_output="""\
+show_queue_wm_multicast_output = """\
 Egress shared pool occupancy per multicast queue:
      Port    MC10    MC11    MC12    MC13    MC14    MC15    MC16    MC17    MC18    MC19
 ---------  ------  ------  ------  ------  ------  ------  ------  ------  ------  ------
@@ -671,7 +679,7 @@ Ethernet4     N/A     N/A     N/A     N/A     N/A     N/A     N/A     N/A     N/
 Ethernet8     N/A     N/A     N/A     N/A     N/A     N/A     N/A     N/A     N/A     N/A
 """
 
-show_queue_wm_multicast_output_json="""\
+show_queue_wm_multicast_output_json = """\
 [
     {
         "Port": "Ethernet0",
@@ -716,11 +724,11 @@ show_queue_wm_multicast_output_json="""\
 """
 
 
-show_queue_wm_multicast_neg_output="""\
+show_queue_wm_multicast_neg_output = """\
 Object map from the COUNTERS_DB is empty because the multicast queues are not configured in the CONFIG_DB!
 """
 
-show_queue_wm_all_output="""\
+show_queue_wm_all_output = """\
 Egress shared pool occupancy per all queues:
      Port    ALL20    ALL21    ALL22    ALL23    ALL24    ALL25    ALL26    ALL27    ALL28    ALL29
 ---------  -------  -------  -------  -------  -------  -------  -------  -------  -------  -------
@@ -729,7 +737,7 @@ Ethernet4        0        0        0     1986     2567        0        0        
 Ethernet8       20        5     1998        0        0        0        0        0     8528     7696
 """
 
-show_queue_wm_all_output_json="""\
+show_queue_wm_all_output_json = """\
 [
     {
         "Port": "Ethernet0",
@@ -774,7 +782,7 @@ show_queue_wm_all_output_json="""\
 """
 
 
-show_queue_pwm_all_output="""\
+show_queue_pwm_all_output = """\
 Egress shared pool occupancy per all queues:
      Port    ALL20    ALL21    ALL22    ALL23    ALL24    ALL25    ALL26    ALL27    ALL28    ALL29
 ---------  -------  -------  -------  -------  -------  -------  -------  -------  -------  -------
@@ -783,7 +791,7 @@ Ethernet4      N/A      N/A      N/A      N/A      N/A      N/A      N/A      N/
 Ethernet8      N/A      N/A      N/A      N/A      N/A      N/A      N/A      N/A      N/A      N/A
 """
 
-show_queue_pwm_all_output_json="""\
+show_queue_pwm_all_output_json = """\
 [
     {
         "Port": "Ethernet0",
@@ -827,7 +835,7 @@ show_queue_pwm_all_output_json="""\
 ]
 """
 
-show_buffer_pool_wm_output="""\
+show_buffer_pool_wm_output = """\
 Shared pool maximum occupancy:
                  Pool    Bytes
 ---------------------  -------
@@ -836,7 +844,7 @@ Shared pool maximum occupancy:
 ingress_lossless_pool     3000
 """
 
-show_buffer_pool_persistent_wm_output="""\
+show_buffer_pool_persistent_wm_output = """\
 Shared pool maximum occupancy:
                  Pool    Bytes
 ---------------------  -------
@@ -845,14 +853,14 @@ Shared pool maximum occupancy:
 ingress_lossless_pool     4000
 """
 
-show_hdrm_pool_wm_output="""\
+show_hdrm_pool_wm_output = """\
 Headroom pool maximum occupancy:
                  Pool    Bytes
 ---------------------  -------
 ingress_lossless_pool   432640
 """
 
-show_hdrm_pool_persistent_wm_output="""\
+show_hdrm_pool_persistent_wm_output = """\
 Headroom pool maximum occupancy:
                  Pool    Bytes
 ---------------------  -------
@@ -860,246 +868,357 @@ ingress_lossless_pool   863616
 """
 
 testData = {
-             'show_pg_wm_shared' :  [ {'cmd' : ['priority-group', 'watermark', 'shared'],
-                                       'rc_output': show_pg_wm_shared_output
-                                      }
-                                    ],
-             'show_pg_wm_shared_json' :  [ {'cmd' : ['priority-group', 'watermark', 'shared'],
-                                       'rc_output': show_pg_wm_shared_output_json
-                                      }
-                                    ],
-             'show_pg_wm_hdrm' :  [ {'cmd' : ['priority-group', 'watermark', 'headroom'],
-                                     'rc_output': show_pg_wm_hdrm_output
-                                    }
-                                  ],
-             'show_pg_wm_hdrm_json' :  [ {'cmd' : ['priority-group', 'watermark', 'headroom'],
-                                     'rc_output': show_pg_wm_hdrm_output_json
-                                    }
-                                  ],
-             'show_pg_pwm_shared':  [{'cmd': ['priority-group', 'persistent-watermark', 'shared'],
-                                      'rc_output': show_pg_persistent_wm_shared_output
-                                      }
-                                    ],
-             'show_pg_pwm_shared_json':  [{'cmd': ['priority-group', 'persistent-watermark', 'shared'],
-                                      'rc_output': show_pg_persistent_wm_shared_output_json
-                                      }
-                                    ],
-             'show_pg_pwm_hdrm': [{'cmd': ['priority-group', 'persistent-watermark', 'headroom'],
-                                   'rc_output': show_pg_persistent_wm_hdrm_output
-                                   }
-                                  ],
-             'show_pg_pwm_hdrm_json': [{'cmd': ['priority-group', 'persistent-watermark', 'headroom'],
-                                   'rc_output': show_pg_persistent_wm_hdrm_output_json
-                                   }
-                                  ],
-             'show_q_wm_unicast':  [{'cmd': ['queue', 'watermark', 'unicast'],
-                                     'rc_output': show_queue_wm_unicast_output
-                                     }
-                                    ],
-             'show_q_wm_unicast_json':  [{'cmd': ['queue', 'watermark', 'unicast'],
-                                     'rc_output': show_queue_wm_unicast_output_json
-                                     }
-                                    ],
-             'show_q_pwm_unicast': [{'cmd': ['queue', 'persistent-watermark', 'unicast'],
-                                     'rc_output': show_queue_pwm_unicast_output
-                                     }
-                                    ],
-             'show_q_pwm_unicast_json': [{'cmd': ['queue', 'persistent-watermark', 'unicast'],
-                                     'rc_output': show_queue_pwm_unicast_output_json
-                                     }
-                                    ],
-             'show_q_wm_multicast': [{'cmd': ['queue', 'watermark', 'multicast'],
-                                      'rc_output': show_queue_wm_multicast_output
-                                      }
-                                     ],
-             'show_q_wm_multicast_json': [{'cmd': ['queue', 'watermark', 'multicast'],
-                                      'rc_output': show_queue_wm_multicast_output_json
-                                      }
-                                     ],
-             'show_q_wm_multicast_neg': [{'cmd': ['queue', 'watermark', 'multicast'],
-                                          'rc_output': show_queue_wm_multicast_neg_output
-                                          }
-                                         ],
-             'show_q_pwm_multicast': [{'cmd': ['queue', 'persistent-watermark', 'multicast'],
-                                       'rc_output': show_queue_wm_multicast_output
-                                       }
-                                      ],
-             'show_q_pwm_multicast_json': [{'cmd': ['queue', 'persistent-watermark', 'multicast'],
-                                       'rc_output': show_queue_wm_multicast_output_json
-                                       }
-                                      ],
-             'show_q_wm_all': [{'cmd': ['queue', 'watermark', 'all'],
-                                'rc_output': show_queue_wm_all_output
-                                }
-                               ],
-             'show_q_wm_all_json': [{'cmd': ['queue', 'watermark', 'all'],
-                                'rc_output': show_queue_wm_all_output_json
-                                }
-                               ],
-             'show_q_pwm_all': [{'cmd': ['queue', 'persistent-watermark', 'all'],
-                                 'rc_output': show_queue_pwm_all_output
-                                 }
-                                ],
-             'show_q_pwm_all_json': [{'cmd': ['queue', 'persistent-watermark', 'all'],
-                                 'rc_output': show_queue_pwm_all_output_json
-                                 }
-                                ],
-             'show_buffer_pool_wm': [{'cmd': ['buffer_pool', 'watermark'],
-                                      'rc_output': show_buffer_pool_wm_output
-                                      }
-                                     ],
-             'show_buffer_pool_pwm': [{'cmd': ['buffer_pool', 'persistent-watermark'],
-                                       'rc_output': show_buffer_pool_persistent_wm_output
-                                       }
-                                      ],
-             'show_hdrm_pool_wm':  [{'cmd': ['headroom-pool', 'watermark'],
-                                     'rc_output': show_hdrm_pool_wm_output
-                                     }
-                                    ],
-             'show_hdrm_pool_pwm':  [{'cmd': ['headroom-pool', 'persistent-watermark'],
-                                      'rc_output': show_hdrm_pool_persistent_wm_output
-                                      }
-                                     ],
-             'show_pg_wm_shared_one_masic': [{'cmd': ['priority-group', 'watermark', 'shared'],
-                                              'args': ['--namespace', 'asic0'],
-                                              'rc_output': show_pg_wm_shared_output_one_masic
-                                              }
-                                             ],
-             'show_pg_wm_shared_all_masic': [{'cmd': ['priority-group', 'watermark', 'shared'],
-                                              'rc_output': show_pg_wm_shared_output_all_masic
-                                              }
-                                             ],
-             'show_pg_wm_hdrm_one_masic': [{'cmd': ['priority-group', 'watermark', 'headroom'],
-                                            'args': ['--namespace', 'asic1'],
-                                            'rc_output': show_pg_wm_hdrm_output_one_masic
-                                            }
-                                           ],
-             'show_pg_wm_hdrm_all_masic': [{'cmd': ['priority-group', 'watermark', 'headroom'],
-                                            'rc_output': show_pg_wm_hdrm_output_all_masic
-                                            }
-                                           ],
-             'show_pg_pwm_shared_one_masic': [{'cmd': ['priority-group', 'persistent-watermark', 'shared'],
-                                               'args': ['--namespace', 'asic1'],
-                                               'rc_output': show_pg_persistent_wm_shared_output_one_masic
-                                               }
-                                              ],
-             'show_pg_pwm_shared_all_masic': [{'cmd': ['priority-group', 'persistent-watermark', 'shared'],
-                                               'rc_output': show_pg_persistent_wm_shared_output_all_masic
-                                               }
-                                              ],
-             'show_pg_pwm_hdrm_one_masic': [{'cmd': ['priority-group', 'persistent-watermark', 'headroom'],
-                                             'args': ['--namespace', 'asic1'],
-                                             'rc_output': show_pg_persistent_wm_hdrm_output_one_masic
-                                             }
-                                            ],
-             'show_pg_pwm_hdrm_all_masic': [{'cmd': ['priority-group', 'persistent-watermark', 'headroom'],
-                                             'rc_output': show_pg_persistent_wm_hdrm_output_all_masic
-                                             }
-                                            ],
-             'show_q_wm_unicast_one_masic': [{'cmd': ['queue', 'watermark', 'unicast'],
-                                              'args': ['--namespace', 'asic1'],
-                                              'rc_output': show_queue_wm_unicast_output_one_masic
-                                              }
-                                             ],
-             'show_q_wm_unicast_all_masic': [{'cmd': ['queue', 'watermark', 'unicast'],
-                                              'rc_output': show_queue_wm_unicast_output_all_masic
-                                              }
-                                             ],
-             'show_q_pwm_unicast_one_masic': [{'cmd': ['queue', 'persistent-watermark', 'unicast'],
-                                               'args': ['--namespace', 'asic1'],
-                                               'rc_output': show_queue_pwm_unicast_output_one_masic
-                                               }
-                                              ],
-             'show_q_pwm_unicast_all_masic': [{'cmd': ['queue', 'persistent-watermark', 'unicast'],
-                                               'rc_output': show_queue_pwm_unicast_output_all_masic
-                                               }
-                                              ],
-             'show_q_wm_multicast_one_masic': [{'cmd': ['queue', 'watermark', 'multicast'],
-                                                'args': ['--namespace', 'asic0'],
-                                                'rc_output': show_queue_wm_multicast_output_one_masic
-                                                }
-                                               ],
-             'show_q_wm_multicast_all_masic': [{'cmd': ['queue', 'watermark', 'multicast'],
-                                                'rc_output': show_queue_wm_multicast_output_all_masic
-                                                }
-                                               ],
-             'show_q_pwm_multicast_one_masic': [{'cmd': ['queue', 'persistent-watermark', 'multicast'],
-                                                 'args': ['--namespace', 'asic0'],
-                                                 'rc_output': show_queue_pwm_multicast_output_one_masic
-                                                 }
-                                                ],
-             'show_q_pwm_multicast_all_masic':  [{'cmd': ['queue', 'persistent-watermark', 'multicast'],
-                                                  'rc_output': show_queue_pwm_multicast_output_all_masic
-                                                  }
-                                                 ],
-             'show_q_wm_all_one_masic': [{'cmd': ['queue', 'watermark', 'all'],
-                                          'args': ['--namespace', 'asic1'],
-                                          'rc_output': show_queue_wm_all_output_one_masic
-                                          }
-                                         ],
-             'show_q_wm_all_all_masic': [{'cmd': ['queue', 'watermark', 'all'],
-                                          'rc_output': show_queue_wm_all_output_all_masic
-                                          }
-                                         ],
-             'show_q_pwm_all_one_masic': [{'cmd': ['queue', 'persistent-watermark', 'all'],
-                                           'args': ['--namespace', 'asic1'],
-                                           'rc_output': show_queue_pwm_all_output_one_masic
-                                           }
-                                          ],
-             'show_q_pwm_all_all_masic': [{'cmd': ['queue', 'persistent-watermark', 'all'],
-                                           'rc_output': show_queue_pwm_all_output_all_masic
-                                           }
-                                          ],
-             'show_buffer_pool_wm_one_masic':  [{'cmd': ['buffer_pool', 'watermark'],
-                                                 'args': ['--namespace', 'asic1'],
-                                                 'rc_output': show_buffer_pool_wm_output_one_masic
-                                                 }
-                                                ],
-             'show_buffer_pool_wm_all_masic': [{'cmd': ['buffer_pool', 'watermark'],
-                                                'rc_output': show_buffer_pool_wm_output_all_masic
-                                                }
-                                               ],
-             'show_buffer_pool_pwm_one_masic': [{'cmd': ['buffer_pool', 'persistent-watermark'],
-                                                 'args': ['--namespace', 'asic1'],
-                                                 'rc_output': show_buffer_pool_pwm_output_one_masic
-                                                 }
-                                                ],
-             'show_buffer_pool_pwm_all_masic': [{'cmd': ['buffer_pool', 'persistent-watermark'],
-                                                 'rc_output': show_buffer_pool_pwm_output_all_masic
-                                                 }
-                                                ],
-             'show_hdrm_pool_wm_one_masic': [{'cmd': ['headroom-pool', 'watermark'],
-                                              'args': ['--namespace', 'asic1'],
-                                              'rc_output': show_hdrm_pool_wm_output_one_masic
-                                              }
-                                             ],
-             'show_hdrm_pool_wm_all_masic': [{'cmd': ['headroom-pool', 'watermark'],
-                                              'rc_output': show_hdrm_pool_wm_output_all_masic
-                                              }
-                                             ],
-             'show_hdrm_pool_pwm_one_masic': [{'cmd': ['headroom-pool', 'persistent-watermark'],
-                                               'args': ['--namespace', 'asic1'],
-                                               'rc_output': show_hdrm_pool_pwm_output_one_masic
-                                               }
-                                              ],
-             'show_hdrm_pool_pwm_all_masic': [{'cmd': ['headroom-pool', 'persistent-watermark'],
-                                               'rc_output': show_hdrm_pool_pwm_output_all_masic
-                                               }
-                                              ],
-             'show_invalid_namespace_masic': [{'cmd': ['buffer_pool', 'watermark'],
-                                               'args': ['--namespace', 'asic14'],
-                                               'rc': 2,
-                                               'rc_output': ''
-                                               }
-                                              ],
-             'clear_hdrm_pool_wm_one_masic': [{'cmd': ['clear', 'watermarkstat', '-t',
-                                                       'pg_headroom', '-n', 'asic0', '-c'],
-                                               'rc_output': clear_hdrm_pool_wm_output_one_masic
-                                               }
-                                              ],
-             'clear_hdrm_pool_wm_all_masic': [{'cmd': ['clear', 'watermarkstat', '-t',
-                                                       'pg_headroom', '-c'],
-                                               'rc_output': clear_hdrm_pool_wm_output_all_masic
-                                               }
-                                              ]
-           }
+    "show_pg_wm_shared": [
+        {
+            "cmd": ["priority-group", "watermark", "shared"],
+            "rc_output": show_pg_wm_shared_output,
+        }
+    ],
+    "show_pg_wm_shared_json": [
+        {
+            "cmd": ["priority-group", "watermark", "shared"],
+            "args": ["-j"],
+            "rc_output": show_pg_wm_shared_output_json,
+        }
+    ],
+    "show_pg_wm_hdrm": [
+        {
+            "cmd": ["priority-group", "watermark", "headroom"],
+            "rc_output": show_pg_wm_hdrm_output,
+        }
+    ],
+    "show_pg_wm_hdrm_json": [
+        {
+            "cmd": ["priority-group", "watermark", "headroom"],
+            "args": ["-j"],
+            "rc_output": show_pg_wm_hdrm_output_json,
+        }
+    ],
+    "show_pg_pwm_shared": [
+        {
+            "cmd": ["priority-group", "persistent-watermark", "shared"],
+            "rc_output": show_pg_persistent_wm_shared_output,
+        }
+    ],
+    "show_pg_pwm_shared_json": [
+        {
+            "cmd": ["priority-group", "persistent-watermark", "shared"],
+            "args": ["-j"],
+            "rc_output": show_pg_persistent_wm_shared_output_json,
+        }
+    ],
+    "show_pg_pwm_hdrm": [
+        {
+            "cmd": ["priority-group", "persistent-watermark", "headroom"],
+            "rc_output": show_pg_persistent_wm_hdrm_output,
+        }
+    ],
+    "show_pg_pwm_hdrm_json": [
+        {
+            "cmd": ["priority-group", "persistent-watermark", "headroom"],
+            "args": ["-j"],
+            "rc_output": show_pg_persistent_wm_hdrm_output_json,
+        }
+    ],
+    "show_q_wm_unicast": [
+        {
+            "cmd": ["queue", "watermark", "unicast"],
+            "rc_output": show_queue_wm_unicast_output,
+        }
+    ],
+    "show_q_wm_unicast_json": [
+        {
+            "cmd": ["queue", "watermark", "unicast"],
+            "args": ["-j"],
+            "rc_output": show_queue_wm_unicast_output_json,
+        }
+    ],
+    "show_q_pwm_unicast": [
+        {
+            "cmd": ["queue", "persistent-watermark", "unicast"],
+            "rc_output": show_queue_pwm_unicast_output,
+        }
+    ],
+    "show_q_pwm_unicast_json": [
+        {
+            "cmd": ["queue", "persistent-watermark", "unicast"],
+            "args": ["-j"],
+            "rc_output": show_queue_pwm_unicast_output_json,
+        }
+    ],
+    "show_q_wm_multicast": [
+        {
+            "cmd": ["queue", "watermark", "multicast"],
+            "rc_output": show_queue_wm_multicast_output,
+        }
+    ],
+    "show_q_wm_multicast_json": [
+        {
+            "cmd": ["queue", "watermark", "multicast"],
+            "args": ["-j"],
+            "rc_output": show_queue_wm_multicast_output_json,
+        }
+    ],
+    "show_q_wm_multicast_neg": [
+        {
+            "cmd": ["queue", "watermark", "multicast"],
+            "rc_output": show_queue_wm_multicast_neg_output,
+        }
+    ],
+    "show_q_pwm_multicast": [
+        {
+            "cmd": ["queue", "persistent-watermark", "multicast"],
+            "rc_output": show_queue_wm_multicast_output,
+        }
+    ],
+    "show_q_pwm_multicast_json": [
+        {
+            "cmd": ["queue", "persistent-watermark", "multicast"],
+            "args": ["-j"],
+            "rc_output": show_queue_wm_multicast_output_json,
+        }
+    ],
+    "show_q_wm_all": [
+        {"cmd": ["queue", "watermark", "all"], "rc_output": show_queue_wm_all_output}
+    ],
+    "show_q_wm_all_json": [
+        {
+            "cmd": ["queue", "watermark", "all"],
+            "args": ["-j"],
+            "rc_output": show_queue_wm_all_output_json,
+        }
+    ],
+    "show_q_pwm_all": [
+        {
+            "cmd": ["queue", "persistent-watermark", "all"],
+            "rc_output": show_queue_pwm_all_output,
+        }
+    ],
+    "show_q_pwm_all_json": [
+        {
+            "cmd": ["queue", "persistent-watermark", "all"],
+            "args": ["-j"],
+            "rc_output": show_queue_pwm_all_output_json,
+        }
+    ],
+    "show_buffer_pool_wm": [
+        {"cmd": ["buffer_pool", "watermark"], "rc_output": show_buffer_pool_wm_output}
+    ],
+    "show_buffer_pool_pwm": [
+        {
+            "cmd": ["buffer_pool", "persistent-watermark"],
+            "rc_output": show_buffer_pool_persistent_wm_output,
+        }
+    ],
+    "show_hdrm_pool_wm": [
+        {"cmd": ["headroom-pool", "watermark"], "rc_output": show_hdrm_pool_wm_output}
+    ],
+    "show_hdrm_pool_pwm": [
+        {
+            "cmd": ["headroom-pool", "persistent-watermark"],
+            "rc_output": show_hdrm_pool_persistent_wm_output,
+        }
+    ],
+    "show_pg_wm_shared_one_masic": [
+        {
+            "cmd": ["priority-group", "watermark", "shared"],
+            "args": ["--namespace", "asic0"],
+            "rc_output": show_pg_wm_shared_output_one_masic,
+        }
+    ],
+    "show_pg_wm_shared_all_masic": [
+        {
+            "cmd": ["priority-group", "watermark", "shared"],
+            "rc_output": show_pg_wm_shared_output_all_masic,
+        }
+    ],
+    "show_pg_wm_hdrm_one_masic": [
+        {
+            "cmd": ["priority-group", "watermark", "headroom"],
+            "args": ["--namespace", "asic1"],
+            "rc_output": show_pg_wm_hdrm_output_one_masic,
+        }
+    ],
+    "show_pg_wm_hdrm_all_masic": [
+        {
+            "cmd": ["priority-group", "watermark", "headroom"],
+            "rc_output": show_pg_wm_hdrm_output_all_masic,
+        }
+    ],
+    "show_pg_pwm_shared_one_masic": [
+        {
+            "cmd": ["priority-group", "persistent-watermark", "shared"],
+            "args": ["--namespace", "asic1"],
+            "rc_output": show_pg_persistent_wm_shared_output_one_masic,
+        }
+    ],
+    "show_pg_pwm_shared_all_masic": [
+        {
+            "cmd": ["priority-group", "persistent-watermark", "shared"],
+            "rc_output": show_pg_persistent_wm_shared_output_all_masic,
+        }
+    ],
+    "show_pg_pwm_hdrm_one_masic": [
+        {
+            "cmd": ["priority-group", "persistent-watermark", "headroom"],
+            "args": ["--namespace", "asic1"],
+            "rc_output": show_pg_persistent_wm_hdrm_output_one_masic,
+        }
+    ],
+    "show_pg_pwm_hdrm_all_masic": [
+        {
+            "cmd": ["priority-group", "persistent-watermark", "headroom"],
+            "rc_output": show_pg_persistent_wm_hdrm_output_all_masic,
+        }
+    ],
+    "show_q_wm_unicast_one_masic": [
+        {
+            "cmd": ["queue", "watermark", "unicast"],
+            "args": ["--namespace", "asic1"],
+            "rc_output": show_queue_wm_unicast_output_one_masic,
+        }
+    ],
+    "show_q_wm_unicast_all_masic": [
+        {
+            "cmd": ["queue", "watermark", "unicast"],
+            "rc_output": show_queue_wm_unicast_output_all_masic,
+        }
+    ],
+    "show_q_pwm_unicast_one_masic": [
+        {
+            "cmd": ["queue", "persistent-watermark", "unicast"],
+            "args": ["--namespace", "asic1"],
+            "rc_output": show_queue_pwm_unicast_output_one_masic,
+        }
+    ],
+    "show_q_pwm_unicast_all_masic": [
+        {
+            "cmd": ["queue", "persistent-watermark", "unicast"],
+            "rc_output": show_queue_pwm_unicast_output_all_masic,
+        }
+    ],
+    "show_q_wm_multicast_one_masic": [
+        {
+            "cmd": ["queue", "watermark", "multicast"],
+            "args": ["--namespace", "asic0"],
+            "rc_output": show_queue_wm_multicast_output_one_masic,
+        }
+    ],
+    "show_q_wm_multicast_all_masic": [
+        {
+            "cmd": ["queue", "watermark", "multicast"],
+            "rc_output": show_queue_wm_multicast_output_all_masic,
+        }
+    ],
+    "show_q_pwm_multicast_one_masic": [
+        {
+            "cmd": ["queue", "persistent-watermark", "multicast"],
+            "args": ["--namespace", "asic0"],
+            "rc_output": show_queue_pwm_multicast_output_one_masic,
+        }
+    ],
+    "show_q_pwm_multicast_all_masic": [
+        {
+            "cmd": ["queue", "persistent-watermark", "multicast"],
+            "rc_output": show_queue_pwm_multicast_output_all_masic,
+        }
+    ],
+    "show_q_wm_all_one_masic": [
+        {
+            "cmd": ["queue", "watermark", "all"],
+            "args": ["--namespace", "asic1"],
+            "rc_output": show_queue_wm_all_output_one_masic,
+        }
+    ],
+    "show_q_wm_all_all_masic": [
+        {
+            "cmd": ["queue", "watermark", "all"],
+            "rc_output": show_queue_wm_all_output_all_masic,
+        }
+    ],
+    "show_q_pwm_all_one_masic": [
+        {
+            "cmd": ["queue", "persistent-watermark", "all"],
+            "args": ["--namespace", "asic1"],
+            "rc_output": show_queue_pwm_all_output_one_masic,
+        }
+    ],
+    "show_q_pwm_all_all_masic": [
+        {
+            "cmd": ["queue", "persistent-watermark", "all"],
+            "rc_output": show_queue_pwm_all_output_all_masic,
+        }
+    ],
+    "show_buffer_pool_wm_one_masic": [
+        {
+            "cmd": ["buffer_pool", "watermark"],
+            "args": ["--namespace", "asic1"],
+            "rc_output": show_buffer_pool_wm_output_one_masic,
+        }
+    ],
+    "show_buffer_pool_wm_all_masic": [
+        {
+            "cmd": ["buffer_pool", "watermark"],
+            "rc_output": show_buffer_pool_wm_output_all_masic,
+        }
+    ],
+    "show_buffer_pool_pwm_one_masic": [
+        {
+            "cmd": ["buffer_pool", "persistent-watermark"],
+            "args": ["--namespace", "asic1"],
+            "rc_output": show_buffer_pool_pwm_output_one_masic,
+        }
+    ],
+    "show_buffer_pool_pwm_all_masic": [
+        {
+            "cmd": ["buffer_pool", "persistent-watermark"],
+            "rc_output": show_buffer_pool_pwm_output_all_masic,
+        }
+    ],
+    "show_hdrm_pool_wm_one_masic": [
+        {
+            "cmd": ["headroom-pool", "watermark"],
+            "args": ["--namespace", "asic1"],
+            "rc_output": show_hdrm_pool_wm_output_one_masic,
+        }
+    ],
+    "show_hdrm_pool_wm_all_masic": [
+        {
+            "cmd": ["headroom-pool", "watermark"],
+            "rc_output": show_hdrm_pool_wm_output_all_masic,
+        }
+    ],
+    "show_hdrm_pool_pwm_one_masic": [
+        {
+            "cmd": ["headroom-pool", "persistent-watermark"],
+            "args": ["--namespace", "asic1"],
+            "rc_output": show_hdrm_pool_pwm_output_one_masic,
+        }
+    ],
+    "show_hdrm_pool_pwm_all_masic": [
+        {
+            "cmd": ["headroom-pool", "persistent-watermark"],
+            "rc_output": show_hdrm_pool_pwm_output_all_masic,
+        }
+    ],
+    "show_invalid_namespace_masic": [
+        {
+            "cmd": ["buffer_pool", "watermark"],
+            "args": ["--namespace", "asic14"],
+            "rc": 2,
+            "rc_output": "",
+        }
+    ],
+    "clear_hdrm_pool_wm_one_masic": [
+        {
+            "cmd": ["clear", "watermarkstat", "-t", "pg_headroom", "-n", "asic0", "-c"],
+            "rc_output": clear_hdrm_pool_wm_output_one_masic,
+        }
+    ],
+    "clear_hdrm_pool_wm_all_masic": [
+        {
+            "cmd": ["clear", "watermarkstat", "-t", "pg_headroom", "-c"],
+            "rc_output": clear_hdrm_pool_wm_output_all_masic,
+        }
+    ],
+}
