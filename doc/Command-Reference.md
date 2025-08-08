@@ -169,6 +169,9 @@
 * [Radius](#radius)
   * [Radius show commands](#show-radius-commands)
   * [Radius config commands](#Radius-config-commands)
+* [Switch](#switch)
+  * [Switch Show commands](#switch-show-commands)
+  * [Switch Clear commands](#switch-clear-commands)
 * [sFlow](#sflow)
   * [sFlow Show commands](#sflow-show-commands)
   * [sFlow Config commands](#sflow-config-commands)
@@ -5213,6 +5216,10 @@ The "detailed" subcommand is used to display more detailed interface counters. A
     WRED Red Dropped Packets....................... 0
     WRED Total Dropped Packets..................... 0
 
+    Trimmed Packets................................ 0
+    Trimmed Sent Packets........................... 0
+    Trimmed Dropped Packets........................ 0
+
     Time Since Counters Last Cleared............... None
   ```
 
@@ -5273,11 +5280,11 @@ The "trim" subcommand is used to display the interface packet trimming related s
 - Example:
   ```
   admin@sonic:~$ show interfaces counters trim
-       IFACE    STATE    TRIM_PKTS
-  ----------  -------  -----------
-   Ethernet0        U            0
-   Ethernet8        U          100
-  Ethernet16        U          200
+       IFACE    STATE    TRIM_PKTS    TRIM_TX_PKTS    TRIM_DRP_PKTS
+  ----------  -------  -----------  --------------  ---------------
+   Ethernet0        U            0               0                0
+   Ethernet8        U          100             100                0
+  Ethernet16        U          200             100              100
   ```
 
 **show interfaces description**
@@ -9893,28 +9900,28 @@ This command can be used to clear the counters for all queues of all ports. Note
   ...
 
   admin@sonic:~$ show queue counters --trim
-       Port    TxQ    Trim/pkts
-  ---------  -----  -----------
-  Ethernet0    UC0            0
-  Ethernet0    UC1            0
-  Ethernet0    UC2            0
-  Ethernet0    UC3            0
-  Ethernet0    UC4            0
-  Ethernet0    UC5            0
-  Ethernet0    UC6            0
-  Ethernet0    UC7            0
-  Ethernet0    UC8            0
-  Ethernet0    UC9            0
-  Ethernet0    MC0          N/A
-  Ethernet0    MC1          N/A
-  Ethernet0    MC2          N/A
-  Ethernet0    MC3          N/A
-  Ethernet0    MC4          N/A
-  Ethernet0    MC5          N/A
-  Ethernet0    MC6          N/A
-  Ethernet0    MC7          N/A
-  Ethernet0    MC8          N/A
-  Ethernet0    MC9          N/A
+       Port    TxQ    Trim/pkts    TrimSent/pkts    TrimDrop/pkts
+  ---------  -----  -----------  ---------------  ---------------
+  Ethernet0    UC0            0                0                0
+  Ethernet0    UC1          100              100                0
+  Ethernet0    UC2          200              100              100
+  Ethernet0    UC3          300              300                0
+  Ethernet0    UC4          400              200              200
+  Ethernet0    UC5          500              500                0
+  Ethernet0    UC6          600              300              300
+  Ethernet0    UC7          700              700                0
+  Ethernet0    UC8          800              400              400
+  Ethernet0    UC9          900              900                0
+  Ethernet0    MC0          N/A              N/A              N/A
+  Ethernet0    MC1          N/A              N/A              N/A
+  Ethernet0    MC2          N/A              N/A              N/A
+  Ethernet0    MC3          N/A              N/A              N/A
+  Ethernet0    MC4          N/A              N/A              N/A
+  Ethernet0    MC5          N/A              N/A              N/A
+  Ethernet0    MC6          N/A              N/A              N/A
+  Ethernet0    MC7          N/A              N/A              N/A
+  Ethernet0    MC8          N/A              N/A              N/A
+  Ethernet0    MC9          N/A              N/A              N/A
   ```
 
 Optionally, you can specify an interface name in order to display only that particular interface
@@ -10328,6 +10335,83 @@ This command is to config the radius server for various parameter listed.
   timeout     Specify RADIUS server global timeout <1 - 60>
 
   ```
+
+# Switch
+
+This section explains the various show, configuration and clear commands available for users.
+
+### Switch Show commands
+
+This subsection explains how to display switch configuration or stats.
+
+**show switch counters**
+
+This command displays switch stats.
+
+- Usage:
+  ```bash
+  show switch counters [OPTIONS]
+  show switch counters all [OPTIONS]
+  show switch counters trim [OPTIONS]
+  show switch counters detailed [OPTIONS]
+  ```
+
+- Options:
+  - _-p,--period_: display stats over a specified period (in seconds)
+  - _-d,--display_: show internal interfaces
+  - _-n,--namespace_: namespace name or all
+  - _-j,--json_: display in JSON format
+  - _-v,--verbose_: enable verbose output
+
+- Example:
+  ```bash
+  admin@sonic:~$ show switch counters
+    TrimSent/pkts    TrimDrop/pkts
+  ---------------  ---------------
+              100              100
+
+  admin@sonic:~$ show switch counters all
+    TrimSent/pkts    TrimDrop/pkts
+  ---------------  ---------------
+              100              100
+
+  admin@sonic:~$ show switch counters trim
+    TrimSent/pkts    TrimDrop/pkts
+  ---------------  ---------------
+              100              100
+
+  admin@sonic:~$ show switch counters detailed
+  Trimmed Sent Packets........................... 100
+  Trimmed Dropped Packets........................ 100
+
+  admin@sonic:~$ show switch counters --json
+  {
+      "trim_drop": "100",
+      "trim_sent": "100"
+  }
+  ```
+
+### Switch Clear commands
+
+This subsection explains how to clear switch stats.
+
+**sonic-clear switchcounters**
+
+This command is used to clear switch counters.
+
+- Usage:
+  ```bash
+  sonic-clear switchcounters
+  ```
+
+- Examples:
+  ```bash
+  admin@sonic:~$ sonic-clear switchcounters
+  Cleared switch counters
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#switch)
+
 ## sFlow
 
 ### sFlow Show commands
