@@ -2,6 +2,7 @@
 
 declare -r EXIT_SUCCESS=0
 declare -r EXIT_ERROR=1
+declare -r EXIT_TIMEOUT=1
 declare -r WATCHDOG_UTIL="/usr/local/bin/watchdogutil"
 declare -r PRE_REBOOT_HOOK="pre_reboot_hook"
 
@@ -401,8 +402,8 @@ else
             CURRENT_TIME=$(date +%s)
             ELAPSED=$((CURRENT_TIME - REBOOT_START_TIME))
             if (( ELAPSED >= BLOCKING_MODE_TIMEOUT_IN_SECOND )); then
-                echo "The reboot used $(ELAPSED)seconds while the timeout is configed as $(BLOCKING_MODE_TIMEOUT_IN_SECOND)seconds"
-                break
+                echo "[REBOOT FAILED] The reboot used $(ELAPSED)seconds while the timeout is configed as $(BLOCKING_MODE_TIMEOUT_IN_SECOND)seconds"
+                exit ${EXIT_TIMEOUT}
             fi
 
             sleep 10
