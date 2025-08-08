@@ -110,15 +110,8 @@ class SwitchStat(object):
             def build_json(data):
                 json_dict = {}
 
-                if print_all:  # all counters
-                    json_dict["trim_sent"] = format_number_with_comma(data["trim_tx"])
-                    json_dict["trim_drop"] = format_number_with_comma(data["trim_drp"])
-                elif print_trim:  # trim counters
-                    json_dict["trim_sent"] = format_number_with_comma(data["trim_tx"])
-                    json_dict["trim_drop"] = format_number_with_comma(data["trim_drp"])
-                else:  # standard counters
-                    json_dict["trim_sent"] = format_number_with_comma(data["trim_tx"])
-                    json_dict["trim_drop"] = format_number_with_comma(data["trim_drp"])
+                json_dict["trim_sent"] = format_number_with_comma(data["trim_tx"])
+                json_dict["trim_drop"] = format_number_with_comma(data["trim_drp"])
 
                 return json_dict
 
@@ -205,15 +198,8 @@ class SwitchStat(object):
             def build_json(data, old_data):
                 json_dict = {}
 
-                if print_all:  # all counters
-                    json_dict["trim_sent"] = ns_diff(data["trim_tx"], old_data["trim_tx"])
-                    json_dict["trim_drop"] = ns_diff(data["trim_drp"], old_data["trim_drp"])
-                elif print_trim:  # trim counters
-                    json_dict["trim_sent"] = ns_diff(data["trim_tx"], old_data["trim_tx"])
-                    json_dict["trim_drop"] = ns_diff(data["trim_drp"], old_data["trim_drp"])
-                else:  # standard counters
-                    json_dict["trim_sent"] = ns_diff(data["trim_tx"], old_data["trim_tx"])
-                    json_dict["trim_drop"] = ns_diff(data["trim_drp"], old_data["trim_drp"])
+                json_dict["trim_sent"] = ns_diff(data["trim_tx"], old_data["trim_tx"])
+                json_dict["trim_drop"] = ns_diff(data["trim_drp"], old_data["trim_drp"])
 
                 return json_dict
 

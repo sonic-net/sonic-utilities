@@ -47,8 +47,6 @@ RateStats = namedtuple("RateStats", ratestat_fields)
 The order and count of statistics mentioned below needs to be in sync with the values in portstat script
 So, any fields added/deleted in here should be reflected in portstat script also
 """
-BUCKET_NUM = 52
-
 wred_green_pkt_stat_capable = "false"
 wred_yellow_pkt_stat_capable = "false"
 wred_red_pkt_stat_capable = "false"
@@ -261,7 +259,6 @@ class Portstat(object):
         device and store in a dict
         """
 
-        global BUCKET_NUM
         global wred_green_pkt_stat_capable
         global wred_yellow_pkt_stat_capable
         global wred_red_pkt_stat_capable
@@ -289,22 +286,18 @@ class Portstat(object):
         if (is_wred_stats_reqd is False) or (wred_green_pkt_stat_capable != "true"):
             if ('SAI_PORT_STAT_GREEN_WRED_DROPPED_PACKETS' in counter_bucket_dict.keys()):
                 del counter_bucket_dict['SAI_PORT_STAT_GREEN_WRED_DROPPED_PACKETS']
-                BUCKET_NUM = (BUCKET_NUM - 1)
 
         if (is_wred_stats_reqd is False) or (wred_yellow_pkt_stat_capable != "true"):
             if ('SAI_PORT_STAT_YELLOW_WRED_DROPPED_PACKETS' in counter_bucket_dict.keys()):
                 del counter_bucket_dict['SAI_PORT_STAT_YELLOW_WRED_DROPPED_PACKETS']
-                BUCKET_NUM = (BUCKET_NUM - 1)
 
         if (is_wred_stats_reqd is False) or (wred_red_pkt_stat_capable != "true"):
             if ('SAI_PORT_STAT_RED_WRED_DROPPED_PACKETS' in counter_bucket_dict.keys()):
                 del counter_bucket_dict['SAI_PORT_STAT_RED_WRED_DROPPED_PACKETS']
-                BUCKET_NUM = (BUCKET_NUM - 1)
 
         if (is_wred_stats_reqd is False) or (wred_total_pkt_stat_capable != "true"):
             if ('SAI_PORT_STAT_WRED_DROPPED_PACKETS' in counter_bucket_dict.keys()):
                 del counter_bucket_dict['SAI_PORT_STAT_WRED_DROPPED_PACKETS']
-                BUCKET_NUM = (BUCKET_NUM - 1)
 
         cnstat_dict, ratestat_dict = self.get_cnstat()
         self.cnstat_dict.update(cnstat_dict)
@@ -318,7 +311,7 @@ class Portstat(object):
             """
                 Get the counters from specific table.
             """
-            fields = ["0"]*BUCKET_NUM
+            fields = ["0"] * len(counter_bucket_dict)
 
             _, fvs = counter_table.get(PortCounter(), port)
             fvs = dict(fvs)
@@ -423,7 +416,7 @@ class Portstat(object):
             if key in cnstat_old_dict:
                 old_cntr = cnstat_old_dict.get(key)
             else:
-                old_cntr = NStats._make([0] * BUCKET_NUM)._asdict()
+                old_cntr = NStats._make([0] * len(counter_bucket_dict))._asdict()
 
             if intf_list and key not in intf_list:
                 continue
@@ -573,7 +566,7 @@ class Portstat(object):
             if key in cnstat_old_dict:
                 old_cntr = cnstat_old_dict.get(key)
             else:
-                old_cntr = NStats._make([0] * BUCKET_NUM)._asdict()
+                old_cntr = NStats._make([0] * len(counter_bucket_dict))._asdict()
 
             rates = ratestat_dict.get(key, RateStats._make([STATUS_NA] * len(ratestat_fields)))
 
