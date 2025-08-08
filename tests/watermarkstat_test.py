@@ -31,20 +31,35 @@ class TestWatermarkstat(object):
     def test_show_pg_shared_wm(self):
         self.executor(testData['show_pg_wm_shared'])
 
+    def test_show_pg_shared_wm_json(self):
+        self.executor(testData['show_pg_wm_shared_json'])
+
     def test_show_pg_headroom_wm(self):
         self.executor(testData['show_pg_wm_hdrm'])
+
+    def test_show_pg_headroom_wm_json(self):
+        self.executor(testData['show_pg_wm_hdrm_json'])
 
     def test_show_queue_unicast_wm(self):
         self.executor(testData['show_q_wm_unicast'])
 
+    def test_show_queue_unicast_wm_json(self):
+        self.executor(testData['show_q_wm_unicast_json'])
+
     def test_show_queue_multicast_wm(self):
         self.executor(testData['show_q_wm_multicast'])
+
+    def test_show_queue_multicast_wm_json(self):
+        self.executor(testData['show_q_wm_multicast_json'])
 
     def test_show_queue_multicast_wm_neg(self, q_multicast_wm_neg):
         self.executor(testData['show_q_wm_multicast_neg'])
 
     def test_show_queue_all_wm(self):
         self.executor(testData['show_q_wm_all'])
+
+    def test_show_queue_all_wm_json(self):
+        self.executor(testData['show_q_wm_all_json'])
 
     def test_show_buffer_pool_wm(self):
         self.executor(testData['show_buffer_pool_wm'])
@@ -55,17 +70,32 @@ class TestWatermarkstat(object):
     def test_show_pg_shared_peristent_wm(self):
         self.executor(testData['show_pg_pwm_shared'])
 
+    def test_show_pg_shared_peristent_wm_json(self):
+        self.executor(testData['show_pg_pwm_shared_json'])
+
     def test_show_pg_headroom_persistent_wm(self):
         self.executor(testData['show_pg_pwm_hdrm'])
+
+    def test_show_pg_headroom_persistent_wm_json(self):
+        self.executor(testData['show_pg_pwm_hdrm_json'])
 
     def test_show_queue_unicast_persistent_wm(self):
         self.executor(testData['show_q_pwm_unicast'])
 
+    def test_show_queue_unicast_persistent_wm_json(self):
+        self.executor(testData['show_q_pwm_unicast_json'])
+
     def test_show_queue_multicast_persistent_wm(self):
         self.executor(testData['show_q_pwm_multicast'])
 
+    def test_show_queue_multicast_persistent_wm_json(self):
+        self.executor(testData['show_q_pwm_multicast_json'])
+
     def test_show_queue_all_persistent_wm(self):
         self.executor(testData['show_q_pwm_all'])
+
+    def test_show_queue_all_persistent_wm_json(self):
+        self.executor(testData['show_q_pwm_all_json'])
 
     def test_show_buffer_pool_persistent_wm(self):
         self.executor(testData['show_buffer_pool_pwm'])
