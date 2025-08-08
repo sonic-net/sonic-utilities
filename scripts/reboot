@@ -2,7 +2,7 @@
 
 declare -r EXIT_SUCCESS=0
 declare -r EXIT_ERROR=1
-declare -r EXIT_TIMEOUT=1
+declare -r EXIT_TIMEOUT=2
 declare -r WATCHDOG_UTIL="/usr/local/bin/watchdogutil"
 declare -r PRE_REBOOT_HOOK="pre_reboot_hook"
 
@@ -151,6 +151,7 @@ function show_help_and_exit()
     echo "        -d : DPU module name on a smart switch, option is invalid when on DPU"
     echo "        -p : Pre-shutdown steps on DPU, invalid on NPU"
     echo "        -b : Enable the command to run in blocking mode"
+    echo "        -v : Print out detail logs. For blocking mode will print dots to identify the script is running"
 
     exit ${EXIT_SUCCESS}
 }
