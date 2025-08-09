@@ -99,7 +99,7 @@ def test_package_from_dict():
         'installed': True,
         'built-in': False,
         'image-id': 'abc123',
-        'docker-image-reference': 'latest'
+        'tag': 'latest'
     }
 
     package = package_from_dict('test-package', package_info)
@@ -112,7 +112,7 @@ def test_package_from_dict():
     assert package.installed is True
     assert package.built_in is False
     assert package.image_id == 'abc123'
-    assert package.docker_image_reference == 'latest'
+    assert package.tag == 'latest'
 
 
 def test_package_from_dict_minimal():
@@ -131,4 +131,4 @@ def test_package_from_dict_minimal():
     assert package.installed is False
     assert package.built_in is False
     assert package.image_id is None
-    assert package.docker_image_reference is None
+    assert package.tag is None
