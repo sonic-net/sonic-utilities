@@ -198,6 +198,8 @@ Ethernet72: SFP EEPROM detected
         Vendor PN: some-model    
         Vendor Rev: A3
         Vendor SN: serial1   
+        dom_capability: N/A
+        is_replaceable: True
         ChannelMonitorValues:
                 RX1Power: 0.5dBm
                 RX2Power: 0.3dBm

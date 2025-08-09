@@ -437,3 +437,66 @@ def is_transceiver_cmis(sfp_info_dict):
     if sfp_info_dict is None:
         return False
     return 'cmis_rev' in sfp_info_dict
+
+
+def get_data_map_sort_key(sfp_info_dict, data_map=None):
+    """
+    Create a sorting key function for SFP info keys based on the transceiver type.
+
+    This function returns a key function that can be used with sorted() to order
+    SFP info dictionary keys. Known keys (those present in the appropriate data map)
+    are given priority 0 and sorted by their display name, while unknown keys are
+    given priority 1 and sorted alphabetically by their original key name.
+
+    Args:
+        sfp_info_dict (dict): The SFP info dictionary to determine transceiver type
+        data_map (dict, optional): Custom data map to use. If not provided, will determine
+                                   automatically based on transceiver type.
+
+    Returns:
+        function: A key function that can be used with sorted()
+
+    Example:
+        sorted_keys = sorted(sfp_info_dict.keys(), key=get_data_map_sort_key(sfp_info_dict))
+        # Or with custom data map:
+        sorted_keys = sorted(sfp_info_dict.keys(), key=get_data_map_sort_key(sfp_info_dict, CUSTOM_DATA_MAP))
+    """
+    if data_map is None:
+        data_map = get_transceiver_data_map(sfp_info_dict)
+
+    def get_sort_key(key):
+        """
+        Sort key function that prioritizes known fields over unknown ones.
+        Known fields are sorted by their display names, unknown fields by their key names.
+        """
+        if key in data_map:
+            return (0, data_map[key])  # Priority 0 for known keys, use data_map value
+        else:
+            return (1, key)  # Priority 1 for unknown keys, use key name
+
+    return get_sort_key
+
+
+def get_transceiver_data_map(sfp_info_dict):
+    """
+    Get the appropriate data map based on the transceiver type.
+
+    Args:
+        sfp_info_dict (dict): The SFP info dictionary to determine transceiver type
+
+    Returns:
+        dict: The appropriate data map (C_CMIS_DATA_MAP, CMIS_DATA_MAP, or QSFP_DATA_MAP)
+              Returns QSFP_DATA_MAP as default if sfp_info_dict is None or invalid
+    """
+    if sfp_info_dict is None or not isinstance(sfp_info_dict, dict):
+        return QSFP_DATA_MAP  # Default fallback
+
+    is_sfp_cmis = is_transceiver_cmis(sfp_info_dict)
+    is_sfp_c_cmis = 'supported_max_tx_power' in sfp_info_dict
+
+    if is_sfp_c_cmis:
+        return C_CMIS_DATA_MAP
+    elif is_sfp_cmis:
+        return CMIS_DATA_MAP
+    else:
+        return QSFP_DATA_MAP
