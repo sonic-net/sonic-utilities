@@ -160,7 +160,7 @@ def temperature(output_json):
         try:
             data = json.loads(output)
             click.echo(clicommon.json_dump(data))
-        except:
+        except json.JSONDecodeError:
             click.echo(output)
     else:
         clicommon.run_command(cmd)
