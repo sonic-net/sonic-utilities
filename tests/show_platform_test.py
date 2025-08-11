@@ -1,5 +1,4 @@
 import os
-import json
 import sys
 import textwrap
 from unittest import mock
@@ -91,16 +90,16 @@ class TestShowPlatformTemperature(object):
         mock_run_command.assert_called_with(['tempershow'])
 
     def test_temperature_json(self):
-        with mock.patch('utilities_common.cli.run_command', return_value=rc_output) as mock_run_command:
+        with mock.patch('utilities_common.cli.run_command', return_value=self.rc_output) as mock_run_command:
             result = CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['--json'])
-            assert result.output == textwrap.dedent(rc_output)
+            assert result.output == textwrap.dedent(self.rc_output)
         assert mock_run_command.call_count == 1
         mock_run_command.assert_called_with(['tempershow', '-j'])
 
     def test_temperature_short_json(self):
-        with mock.patch('utilities_common.cli.run_command', return_value=rc_output) as mock_run_command:
+        with mock.patch('utilities_common.cli.run_command', return_value=self.rc_output) as mock_run_command:
             result = CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['-j'])
-            assert result.output == textwrap.dedent(rc_output)
+            assert result.output == textwrap.dedent(self.rc_output)
         assert mock_run_command.call_count == 1
         mock_run_command.assert_called_with(['tempershow', '-j'])
 
