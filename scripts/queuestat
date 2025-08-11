@@ -44,12 +44,35 @@ from utilities_common.cli import json_serial, UserCache
 from utilities_common import constants
 import utilities_common.multi_asic as multi_asic_util
 
-QueueStats = namedtuple("QueueStats", "queueindex, queuetype, totalpacket, totalbytes, droppacket, dropbytes, trimpacket")
-VoqStats = namedtuple("VoqStats", "queueindex, queuetype, totalpacket, totalbytes, droppacket, dropbytes, creditWDpkts")
-std_header = ['Port', 'TxQ', 'Counter/pkts', 'Counter/bytes', 'Drop/pkts', 'Drop/bytes']
-all_header = ['Port', 'TxQ', 'Counter/pkts', 'Counter/bytes', 'Drop/pkts', 'Drop/bytes', 'Trim/pkts']
-trim_header = ['Port', 'TxQ', 'Trim/pkts']
-voq_header = ['Port', 'Voq', 'Counter/pkts', 'Counter/bytes', 'Drop/pkts', 'Drop/bytes', 'Credit-WD-Del/pkts']
+QueueStats = namedtuple(
+    "QueueStats", "queueindex, queuetype, "
+    "totalpacket, totalbytes, droppacket, dropbytes, "
+    "trimpkt, trimsentpkt, trimdroppkt"
+)
+VoqStats = namedtuple(
+    "VoqStats", "queueindex, queuetype, "
+    "totalpacket, totalbytes, droppacket, dropbytes, "
+    "creditWDpkts"
+)
+
+std_header = [
+    'Port', 'TxQ',
+    'Counter/pkts', 'Counter/bytes', 'Drop/pkts', 'Drop/bytes'
+]
+all_header = [
+    'Port', 'TxQ',
+    'Counter/pkts', 'Counter/bytes', 'Drop/pkts', 'Drop/bytes',
+    'Trim/pkts', 'TrimSent/pkts', 'TrimDrop/pkts'
+]
+trim_header = [
+    'Port', 'TxQ',
+    'Trim/pkts', 'TrimSent/pkts', 'TrimDrop/pkts'
+]
+voq_header = [
+    'Port', 'Voq',
+    'Counter/pkts', 'Counter/bytes', 'Drop/pkts', 'Drop/bytes',
+    'Credit-WD-Del/pkts'
+]
 
 counter_bucket_dict = {
     'SAI_QUEUE_STAT_PACKETS': 2,
@@ -59,6 +82,8 @@ counter_bucket_dict = {
 }
 trim_counter_bucket_dict = {
     'SAI_QUEUE_STAT_TRIM_PACKETS': 6,
+    'SAI_QUEUE_STAT_TX_TRIM_PACKETS': 7,
+    'SAI_QUEUE_STAT_DROPPED_TRIM_PACKETS': 8,
 }
 voq_counter_bucket_dict = {
     'SAI_QUEUE_STAT_CREDIT_WD_DELETED_PACKETS': 6
@@ -141,10 +166,14 @@ def build_json(port, cnstat, all=False, trim=False, voq=False):
                     "droppacket": k[4],
                     "dropbytes": k[5],
                     "trimpacket": k[6],
+                    "trimsentpacket": k[7],
+                    "trimdroppacket": k[8],
                 }
             elif trim: # Packet Trimming related statistics
                 p[k[1]] = {
                     "trimpacket": k[2],
+                    "trimsentpacket": k[3],
+                    "trimdroppacket": k[4],
                 }
             else: # Generic statistics
                 p[k[1]] = {
@@ -380,19 +409,19 @@ class Queuestat(object):
                     if not non_zero or \
                             data['totalpacket'] != '0' or data['totalbytes'] != '0' or \
                             data['droppacket'] != '0' or data['dropbytes'] != '0' or \
-                            data['trimpacket'] != '0':
+                            data['trimpkt'] != '0' or data['trimsentpkt'] != '0' or data['trimdroppkt'] != '0':
                         table.append((
                             port, queuetag,
                             data['totalpacket'], data['totalbytes'],
                             data['droppacket'], data['dropbytes'],
-                            data['trimpacket']
+                            data['trimpkt'], data['trimsentpkt'], data['trimdroppkt']
                         ))
                 elif self.trim: # Packet Trimming related statistics
                     if not non_zero or \
-                            data['trimpacket'] != '0':
+                            data['trimpkt'] != '0' or data['trimsentpkt'] != '0' or data['trimdroppkt'] != '0':
                         table.append((
                             port, queuetag,
-                            data['trimpacket']
+                            data['trimpkt'], data['trimsentpkt'], data['trimdroppkt']
                         ))
                 else: # Generic statistics
                     if not non_zero or \
@@ -460,26 +489,30 @@ class Queuestat(object):
                         totalbytes = ns_diff(cntr['totalbytes'], old_cntr['totalbytes'])
                         droppacket = ns_diff(cntr['droppacket'], old_cntr['droppacket'])
                         dropbytes = ns_diff(cntr['dropbytes'], old_cntr['dropbytes'])
-                        trimpacket = ns_diff(cntr['trimpacket'], old_cntr['trimpacket'])
+                        trimpkt = ns_diff(cntr['trimpkt'], old_cntr['trimpkt'])
+                        trimsentpkt = ns_diff(cntr['trimsentpkt'], old_cntr['trimsentpkt'])
+                        trimdroppkt = ns_diff(cntr['trimdroppkt'], old_cntr['trimdroppkt'])
 
                         if not non_zero or \
                                 totalpacket != '0' or totalbytes != '0' or \
                                 droppacket != '0' or dropbytes != '0' or \
-                                trimpacket != '0':
+                                trimpkt != '0' or trimsentpkt != '0' or trimdroppkt != '0':
                             table.append((
                                 port, queuetag,
                                 totalpacket, totalbytes,
                                 droppacket, dropbytes,
-                                trimpacket
+                                trimpkt, trimsentpkt, trimdroppkt
                             ))
                     elif self.trim: # Packet Trimming related statistics
-                        trimpacket = ns_diff(cntr['trimpacket'], old_cntr['trimpacket'])
+                        trimpkt = ns_diff(cntr['trimpkt'], old_cntr['trimpkt'])
+                        trimsentpkt = ns_diff(cntr['trimsentpkt'], old_cntr['trimsentpkt'])
+                        trimdroppkt = ns_diff(cntr['trimdroppkt'], old_cntr['trimdroppkt'])
 
                         if not non_zero or \
-                                trimpacket != '0':
+                                trimpkt != '0' or trimsentpkt != '0' or trimdroppkt != '0':
                             table.append((
                                 port, queuetag,
-                                trimpacket
+                                trimpkt, trimsentpkt, trimdroppkt
                             ))
                     else: # Generic statistics
                         totalpacket = ns_diff(cntr['totalpacket'], old_cntr['totalpacket'])

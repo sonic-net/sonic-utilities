@@ -225,6 +225,13 @@ def srv6counters():
     command = ["srv6stat", "-c"]
     run_command(command)
 
+
+@cli.command()
+def switchcounters():
+    """Clear switch counters"""
+    command = ["switchstat", "-c"]
+    run_command(command)
+
 #
 # 'clear watermarks
 #

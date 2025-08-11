@@ -171,6 +171,7 @@ setup(
         'scripts/storyteller',
         'scripts/syseeprom-to-json',
         'scripts/srv6stat',
+        'scripts/switchstat',
         'scripts/teamd_increase_retry_count.py',
         'scripts/tempershow',
         'scripts/tunnelstat',
