@@ -59,6 +59,31 @@ class TestShowPlatformTemperature(object):
         with the appropriate option(s). The functionality of the underlying
         `tempershow` utility is expected to be tested by a separate suite of unit tests
     """
+    rc_output = """\
+    [
+        {
+            "Sensor": "CB_temp(0x4B)",
+            "Temperature": "29.5",
+            "High_TH": "80.0",
+            "Low_TH": "N/A",
+            "Crit_High_TH": "N/A",
+            "Crit_Low_TH": "N/A",
+            "Warning": "False",
+            "Timestamp": "20240923 00:32:07"
+        },
+        {
+            "Sensor": "CPU_Core_0_temp",
+            "Temperature": "46.0",
+            "High_TH": "82.0",
+            "Low_TH": "N/A",
+            "Crit_High_TH": "104.0",
+            "Crit_Low_TH": "N/A",
+            "Warning": "False",
+            "Timestamp": "20240923 00:32:07"
+        }
+    ]
+    """
+
     def test_temperature(self):
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
             CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], [])
@@ -66,24 +91,18 @@ class TestShowPlatformTemperature(object):
         mock_run_command.assert_called_with(['tempershow'])
 
     def test_temperature_json(self):
-        result = CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['--json'])
-        assert result.exit_code == 0
-        print(result.exit_code)
-        print(result.output)
-        try:
-            json.loads(result.output)
-        except json.JSONDecodeError:
-            assert False, "Output is not valid JSON"
+        with mock.patch('utilities_common.cli.run_command', return_value=rc_output) as mock_run_command:
+            result = CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['--json'])
+            assert result.output == textwrap.dedent(rc_output)
+        assert mock_run_command.call_count == 1
+        mock_run_command.assert_called_with(['tempershow', '-j'])
 
     def test_temperature_short_json(self):
-        result = CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['-j'])
-        assert result.exit_code == 0
-        print(result.exit_code)
-        print(result.output)
-        try:
-            json.loads(result.output)
-        except json.JSONDecodeError:
-            assert False, "Output is not valid JSON"
+        with mock.patch('utilities_common.cli.run_command', return_value=rc_output) as mock_run_command:
+            result = CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['-j'])
+            assert result.output == textwrap.dedent(rc_output)
+        assert mock_run_command.call_count == 1
+        mock_run_command.assert_called_with(['tempershow', '-j'])
 
 
 class TestShowPlatformPsu(object):
