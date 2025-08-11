@@ -3479,22 +3479,89 @@ This command is used to show ipv6 dhcp_relay counters.
             Malformed           0
   ```
 
+**show dhcp_relay ipv4 counters**
+
+This command is used to show ipv4 dhcp_relay counters
+
+- Usage:
+```
+show dhcp_relay ipv4 counters [--dir (TX|RX)] [--type <type>] [<vlan_interface>]
+Options:
+  --dir [TX|RX]
+  --type [Unknown|Discover|Offer|Request|Decline|Ack|Nak|Release|Inform|Bootp]
+```
+
+- Example:
+```
+admin@sonic:~$ show dhcp_relay ipv4 counters Vlan1000 --type Discover
++---------------------+-----------+----+----+
+| Vlan1000 (Discover) | Intf Type | TX | RX |
++---------------------+-----------+----+----+
+| Vlan1000            | VLAN      | 0  | 0  |
+| eth0                | MGMT      | 0  | 0  |
+| Ethernet0           | Downlink  | 0  | 0  |
+| Ethernet1           | Downlink  | 0  | 0  |
+| Ethernet2           | Downlink  | 0  | 0  |
+| Ethernet3           | Downlink  | 0  | 0  |
+| Ethernet4           | Downlink  | 0  | 0  |
+| PortChannel101      | Uplink    | 0  | 0  |
+| PortChannel103      | Uplink    | 0  | 0  |
+| PortChannel105      | Uplink    | 0  | 0  |
+| PortChannel106      | Uplink    | 0  | 0  |
++---------------------+-----------+----+----+
+
+
+admin@sonic:~$ show dhcp_relay ipv4 counters Vlan1000 --dir RX
++----------------+-----------+---------+----------+-------+---------+---------+-----+-----+---------+--------+-------+
+| Vlan1000 (RX)  | Intf Type | Unknown | Discover | Offer | Request | Decline | Ack | Nak | Release | Inform | Bootp |
++----------------+-----------+---------+----------+-------+---------+---------+-----+-----+---------+--------+-------+
+| Vlan1000       | VLAN      | 0       | 0        | 0     | 0       | 0       | 0   | 0   | 0       | 0      | 0     |
+| eth0           | MGMT      | 0       | 0        | 0     | 0       | 0       | 0   | 0   | 0       | 0      | 0     |
+| Ethernet0      | Downlink  | 0       | 0        | 0     | 0       | 0       | 0   | 0   | 0       | 0      | 0     |
+| Ethernet1      | Downlink  | 0       | 0        | 0     | 0       | 0       | 0   | 0   | 0       | 0      | 0     |
+| Ethernet2      | Downlink  | 0       | 0        | 0     | 0       | 0       | 0   | 0   | 0       | 0      | 0     |
+| PortChannel101 | Uplink    | 0       | 0        | 0     | 0       | 0       | 0   | 0   | 0       | 0      | 0     |
+| PortChannel103 | Uplink    | 0       | 0        | 0     | 0       | 0       | 0   | 0   | 0       | 0      | 0     |
+| PortChannel105 | Uplink    | 0       | 0        | 0     | 0       | 0       | 0   | 0   | 0       | 0      | 0     |
+| PortChannel106 | Uplink    | 0       | 0        | 0     | 0       | 0       | 0   | 0   | 0       | 0      | 0     |
++----------------+-----------+---------+----------+-------+---------+---------+-----+-----+---------+--------+-------+
+```
+
 ### DHCP Relay clear commands
 
 This sub-section of commands is used to clear the DHCP Relay counters.
 
-**sonic-clear dhcp_relay ipv6 counter**
+**sonic-clear dhcp_relay ipv6 counters**
 
 This command is used to clear ipv6 dhcp_relay counters.
 
 - Usage:
   ```
-  sonic-clear dhcp_relay ipv6 counter [-i <interface>]
+  sonic-clear dhcp_relay ipv6 counters [-i <interface>]
   ```
 
 - Example:
   ```
   admin@sonic:~$ sudo sonic-clear dhcp_relay ipv6 counters
+  ```
+
+**sonic-clear dhcp_relay ipv4 counters**
+
+This command is used to clear ipv4 dhcp_relay counters.
+
+- Usage:
+  ```
+  sonic-clear dhcp_relay ipv4s counter [-i <interface>] [--dir (TX|RX)] [--type <type>]
+  Options:
+    -i, --interface TEXT
+    --dir [TX|RX]
+    --type [Unknown|Discover|Offer|Request|Decline|Ack|Nak|Release|Inform|Bootp]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo sonic-clear dhcp_relay ipv4 counters
+  Clear DHCPv4 relay counter done
   ```
 
 ### DHCP Relay config commands
