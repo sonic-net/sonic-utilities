@@ -95,14 +95,14 @@ class TestShowPlatformTemperature(object):
             result = CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['--json'])
             assert json.loads(result.output) == json.loads(self.rc_output)
         assert mock_run_command.call_count == 1
-        mock_run_command.assert_called_with(['tempershow', '-j'])
+        mock_run_command.assert_called_with(['tempershow', '-j'], return_cmd=True)
 
     def test_temperature_short_json(self):
         with mock.patch('utilities_common.cli.run_command', return_value=(self.rc_output, 0)) as mock_run_command:
             result = CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['-j'])
             assert json.loads(result.output) == json.loads(self.rc_output)
         assert mock_run_command.call_count == 1
-        mock_run_command.assert_called_with(['tempershow', '-j'])
+        mock_run_command.assert_called_with(['tempershow', '-j'], return_cmd=True)
 
 
 class TestShowPlatformPsu(object):
