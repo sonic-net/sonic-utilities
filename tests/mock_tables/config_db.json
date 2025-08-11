@@ -1832,6 +1832,10 @@
         "POLL_INTERVAL": "10000",
         "FLEX_COUNTER_STATUS": "enable"
     },
+    "FLEX_COUNTER_TABLE|SWITCH": {
+        "POLL_INTERVAL": "60000",
+        "FLEX_COUNTER_STATUS": "enable"
+    },
     "PFC_WD|Ethernet0": {
         "action": "drop",
         "detection_time": "600",

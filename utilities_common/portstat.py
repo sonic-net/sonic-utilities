@@ -29,15 +29,15 @@ NStats = namedtuple("NStats", "rx_ok, rx_err, rx_drop, rx_ovr, tx_ok,\
                     rx_jbr, rx_frag, rx_usize, rx_ovrrun,\
                     fec_corr, fec_uncorr, fec_symbol_err,\
                     wred_grn_drp_pkt, wred_ylw_drp_pkt, wred_red_drp_pkt, wred_tot_drp_pkt,\
-                    trim")
+                    trim, trim_sent, trim_drop")
 header_all = ['IFACE', 'STATE', 'RX_OK', 'RX_BPS', 'RX_PPS', 'RX_UTIL', 'RX_ERR', 'RX_DRP', 'RX_OVR',
-              'TX_OK', 'TX_BPS', 'TX_PPS', 'TX_UTIL', 'TX_ERR', 'TX_DRP', 'TX_OVR', 'TRIM']
+              'TX_OK', 'TX_BPS', 'TX_PPS', 'TX_UTIL', 'TX_ERR', 'TX_DRP', 'TX_OVR', 'TRIM', 'TRIM_TX', 'TRIM_DRP']
 header_std = ['IFACE', 'STATE', 'RX_OK', 'RX_BPS', 'RX_UTIL', 'RX_ERR', 'RX_DRP', 'RX_OVR',
               'TX_OK', 'TX_BPS', 'TX_UTIL', 'TX_ERR', 'TX_DRP', 'TX_OVR']
 header_errors_only = ['IFACE', 'STATE', 'RX_ERR', 'RX_DRP', 'RX_OVR', 'TX_ERR', 'TX_DRP', 'TX_OVR']
 header_fec_only = ['IFACE', 'STATE', 'FEC_CORR', 'FEC_UNCORR', 'FEC_SYMBOL_ERR', 'FEC_PRE_BER', 'FEC_POST_BER']
 header_rates_only = ['IFACE', 'STATE', 'RX_OK', 'RX_BPS', 'RX_PPS', 'RX_UTIL', 'TX_OK', 'TX_BPS', 'TX_PPS', 'TX_UTIL']
-header_trim_only = ['IFACE', 'STATE', 'TRIM_PKTS']
+header_trim_only = ['IFACE', 'STATE', 'TRIM_PKTS', 'TRIM_TX_PKTS', 'TRIM_DRP_PKTS']
 
 rates_key_list = ['RX_BPS', 'RX_PPS', 'RX_UTIL', 'TX_BPS', 'TX_PPS', 'TX_UTIL', 'FEC_PRE_BER', 'FEC_POST_BER']
 ratestat_fields = ("rx_bps",  "rx_pps", "rx_util", "tx_bps", "tx_pps", "tx_util", "fec_pre_ber", "fec_post_ber")
@@ -47,8 +47,6 @@ RateStats = namedtuple("RateStats", ratestat_fields)
 The order and count of statistics mentioned below needs to be in sync with the values in portstat script
 So, any fields added/deleted in here should be reflected in portstat script also
 """
-BUCKET_NUM = 50
-
 wred_green_pkt_stat_capable = "false"
 wred_yellow_pkt_stat_capable = "false"
 wred_red_pkt_stat_capable = "false"
@@ -109,6 +107,8 @@ counter_bucket_dict = {
         47: ['SAI_PORT_STAT_RED_WRED_DROPPED_PACKETS'],
         48: ['SAI_PORT_STAT_WRED_DROPPED_PACKETS'],
         49: ['SAI_PORT_STAT_TRIM_PACKETS'],
+        50: ['SAI_PORT_STAT_TX_TRIM_PACKETS'],
+        51: ['SAI_PORT_STAT_DROPPED_TRIM_PACKETS'],
 }
 
 STATUS_NA = 'N/A'
@@ -259,7 +259,6 @@ class Portstat(object):
         device and store in a dict
         """
 
-        global BUCKET_NUM
         global wred_green_pkt_stat_capable
         global wred_yellow_pkt_stat_capable
         global wred_red_pkt_stat_capable
@@ -287,22 +286,18 @@ class Portstat(object):
         if (is_wred_stats_reqd is False) or (wred_green_pkt_stat_capable != "true"):
             if ('SAI_PORT_STAT_GREEN_WRED_DROPPED_PACKETS' in counter_bucket_dict.keys()):
                 del counter_bucket_dict['SAI_PORT_STAT_GREEN_WRED_DROPPED_PACKETS']
-                BUCKET_NUM = (BUCKET_NUM - 1)
 
         if (is_wred_stats_reqd is False) or (wred_yellow_pkt_stat_capable != "true"):
             if ('SAI_PORT_STAT_YELLOW_WRED_DROPPED_PACKETS' in counter_bucket_dict.keys()):
                 del counter_bucket_dict['SAI_PORT_STAT_YELLOW_WRED_DROPPED_PACKETS']
-                BUCKET_NUM = (BUCKET_NUM - 1)
 
         if (is_wred_stats_reqd is False) or (wred_red_pkt_stat_capable != "true"):
             if ('SAI_PORT_STAT_RED_WRED_DROPPED_PACKETS' in counter_bucket_dict.keys()):
                 del counter_bucket_dict['SAI_PORT_STAT_RED_WRED_DROPPED_PACKETS']
-                BUCKET_NUM = (BUCKET_NUM - 1)
 
         if (is_wred_stats_reqd is False) or (wred_total_pkt_stat_capable != "true"):
             if ('SAI_PORT_STAT_WRED_DROPPED_PACKETS' in counter_bucket_dict.keys()):
                 del counter_bucket_dict['SAI_PORT_STAT_WRED_DROPPED_PACKETS']
-                BUCKET_NUM = (BUCKET_NUM - 1)
 
         cnstat_dict, ratestat_dict = self.get_cnstat()
         self.cnstat_dict.update(cnstat_dict)
@@ -316,7 +311,7 @@ class Portstat(object):
             """
                 Get the counters from specific table.
             """
-            fields = ["0"]*BUCKET_NUM
+            fields = ["0"] * len(counter_bucket_dict)
 
             _, fvs = counter_table.get(PortCounter(), port)
             fvs = dict(fvs)
@@ -421,7 +416,7 @@ class Portstat(object):
             if key in cnstat_old_dict:
                 old_cntr = cnstat_old_dict.get(key)
             else:
-                old_cntr = NStats._make([0] * BUCKET_NUM)._asdict()
+                old_cntr = NStats._make([0] * len(counter_bucket_dict))._asdict()
 
             if intf_list and key not in intf_list:
                 continue
@@ -535,8 +530,16 @@ class Portstat(object):
                     )
                 print("")
 
-            print("Packets Trimmed................................ {}".format(ns_diff(cntr['trim'],
-                                                                                      old_cntr['trim'])))
+            print("Trimmed Packets................................ {}".format(
+                ns_diff(cntr['trim'], old_cntr['trim'])
+            ))
+            print("Trimmed Sent Packets........................... {}".format(
+                ns_diff(cntr['trim_sent'], old_cntr['trim_sent'])
+            ))
+            print("Trimmed Dropped Packets........................ {}".format(
+                ns_diff(cntr['trim_drop'], old_cntr['trim_drop'], raw=True)
+            ))
+            print("")
 
             print("Time Since Counters Last Cleared............... " + str(cnstat_old_dict.get('time')))
 
@@ -563,7 +566,7 @@ class Portstat(object):
             if key in cnstat_old_dict:
                 old_cntr = cnstat_old_dict.get(key)
             else:
-                old_cntr = NStats._make([0] * BUCKET_NUM)._asdict()
+                old_cntr = NStats._make([0] * len(counter_bucket_dict))._asdict()
 
             rates = ratestat_dict.get(key, RateStats._make([STATUS_NA] * len(ratestat_fields)))
 
@@ -599,7 +602,9 @@ class Portstat(object):
                                   ns_diff(cntr["tx_err"], old_cntr["tx_err"]),
                                   ns_diff(cntr["tx_drop"], old_cntr["tx_drop"]),
                                   ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"]),
-                                  ns_diff(cntr["trim"], old_cntr["trim"])))
+                                  ns_diff(cntr["trim"], old_cntr["trim"]),
+                                  ns_diff(cntr["trim_sent"], old_cntr["trim_sent"]),
+                                  ns_diff(cntr["trim_drop"], old_cntr["trim_drop"], raw=True)))
             elif errors_only:
                 header = header_errors_only
 
@@ -650,7 +655,9 @@ class Portstat(object):
 
                 if not nonzero or is_non_zero(ns_diff(cntr['trim'], old_cntr['trim'])):
                     table.append((key, self.get_port_state(key),
-                                  ns_diff(cntr['trim'], old_cntr['trim'])))
+                                  ns_diff(cntr["trim"], old_cntr["trim"]),
+                                  ns_diff(cntr["trim_sent"], old_cntr["trim_sent"]),
+                                  ns_diff(cntr["trim_drop"], old_cntr["trim_drop"], raw=True)))
             else:
                 header = header_std
 
