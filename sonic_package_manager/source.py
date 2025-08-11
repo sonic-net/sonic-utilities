@@ -54,7 +54,7 @@ class PackageSource(object):
         if hasattr(image, 'tags') and image.tags:
             package.entry.docker_image_reference = image.tags[0]
         else:
-            package.entry.tag = image.id
+            package.entry.docker_image_reference = image.id
 
         # if no repository is defined for this package
         # get repository from image
