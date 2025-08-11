@@ -608,13 +608,33 @@ def get_tunnel_route_per_port(db, port_tunnel_route, per_npu_configdb, per_npu_a
         dest_address = mux_cfg_dict.get(name, None)
 
         if dest_address is not None:
+            # Check kernel tunnel route
             kernel_route_keys = per_npu_appl_db[asic_id].keys(
                 per_npu_appl_db[asic_id].APPL_DB, 'TUNNEL_ROUTE_TABLE:*{}'.format(dest_address))
             if_kernel_tunnel_route_programed = kernel_route_keys is not None and len(kernel_route_keys)
 
+            # Mux neighbors use prefix based routes
+            # Check ASIC route with nexthop type verification
             asic_route_keys = per_npu_asic_db[asic_id].keys(
                 per_npu_asic_db[asic_id].ASIC_DB, 'ASIC_STATE:SAI_OBJECT_TYPE_ROUTE_ENTRY:*{}*'.format(dest_address))
-            if_asic_tunnel_route_programed = asic_route_keys is not None and len(asic_route_keys)
+
+            if_asic_tunnel_route_programed = False
+            if asic_route_keys is not None and len(asic_route_keys):
+                # Get the route entry to check nexthop type
+                for route_key in asic_route_keys:
+                    route_data = per_npu_asic_db[asic_id].get_all(per_npu_asic_db[asic_id].ASIC_DB, route_key)
+                    nexthop_id = route_data.get('SAI_ROUTE_ENTRY_ATTR_NEXT_HOP_ID', None)
+
+                    if nexthop_id:
+                        # Check nexthop type
+                        nexthop_key = 'ASIC_STATE:SAI_OBJECT_TYPE_NEXT_HOP:{}'.format(nexthop_id)
+                        nexthop_data = per_npu_asic_db[asic_id].get_all(per_npu_asic_db[asic_id].ASIC_DB, nexthop_key)
+                        nexthop_type = nexthop_data.get('SAI_NEXT_HOP_ATTR_TYPE', None)
+
+                        # Only count as tunnel route if nexthop type is tunnel
+                        if nexthop_type == 'SAI_NEXT_HOP_TYPE_TUNNEL_ENCAP':
+                            if_asic_tunnel_route_programed = True
+                            break
 
             if if_kernel_tunnel_route_programed or if_asic_tunnel_route_programed:
                 port_tunnel_route["TUNNEL_ROUTE"][port] = port_tunnel_route["TUNNEL_ROUTE"].get(port, {})
