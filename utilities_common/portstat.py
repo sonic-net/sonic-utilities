@@ -43,7 +43,7 @@ header_trim_only = ['IFACE', 'STATE', 'TRIM_PKTS']
 rates_key_list = ['RX_BPS', 'RX_PPS', 'RX_UTIL', 'TX_BPS', 'TX_PPS', 'TX_UTIL', 'FEC_PRE_BER',
                   'FEC_POST_BER', 'FEC_PRE_BER_MAX']
 ratestat_fields = ("rx_bps",  "rx_pps", "rx_util", "tx_bps", "tx_pps", "tx_util", "fec_pre_ber", "fec_post_ber",
-                    "fec_pre_ber_max")
+                   "fec_pre_ber_max")
 RateStats = namedtuple("RateStats", ratestat_fields)
 
 """
