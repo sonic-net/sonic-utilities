@@ -439,6 +439,17 @@ def is_transceiver_cmis(sfp_info_dict):
     return 'cmis_rev' in sfp_info_dict
 
 
+def is_transceiver_c_cmis(sfp_info_dict):
+    """
+    Check if the transceiver is C-CMIS compliant.
+    If the sfp_info_dict is None, return False.
+    If 'supported_max_tx_power' is present in the dictionary, return True.
+    Otherwise, return False.
+    """
+    if sfp_info_dict is None:
+        return False
+    return 'supported_max_tx_power' in sfp_info_dict
+
 def get_data_map_sort_key(sfp_info_dict, data_map=None):
     """
     Create a sorting key function for SFP info keys based on the transceiver type.
@@ -492,7 +503,7 @@ def get_transceiver_data_map(sfp_info_dict):
         return QSFP_DATA_MAP  # Default fallback
 
     is_sfp_cmis = is_transceiver_cmis(sfp_info_dict)
-    is_sfp_c_cmis = 'supported_max_tx_power' in sfp_info_dict
+    is_sfp_c_cmis = is_transceiver_c_cmis(sfp_info_dict)
 
     if is_sfp_c_cmis:
         return C_CMIS_DATA_MAP
