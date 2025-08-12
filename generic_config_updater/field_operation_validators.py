@@ -17,13 +17,13 @@ GET_HWSKU_CMD = "sonic-cfggen -d -v DEVICE_METADATA.localhost.hwsku"
 
 def get_asic_name():
     asic = "unknown"
-    
+
     if os.path.exists(GCU_TABLE_MOD_CONF_FILE):
         with open(GCU_TABLE_MOD_CONF_FILE, "r") as s:
             gcu_field_operation_conf = json.load(s)
     else:
         raise GenericConfigUpdaterError("GCU table modification validators config file not found")
-    
+
     asic_mapping = gcu_field_operation_conf["helper_data"]["rdma_config_update_validator"]
     asic_type = device_info.get_sonic_version_info()['asic_type'] 
 

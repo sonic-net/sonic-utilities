@@ -36,7 +36,8 @@
                 "td3": [ "Arista-7050CX3-32C-C32", "Arista-7050CX3-32S-C32", "Arista-7050CX3-32S-D48C8", "Arista-7050CX3-32S-C28S4" ],
                 "td4": [ "Nokia-IXR7220-D4-36D" ],
                 "j2c+": [ "Nokia-IXR7250E-36x100G", "Nokia-IXR7250E-36x400G", "Nokia-IXR7250-X3B" ],
-                "q2c+": [ "Nokia-IXR7250-X1B" ]
+                "q2c+": [ "Nokia-IXR7250-X1B" ],
+                "jr2": [ "Arista-7800R3-48CQ2-C48", "Arista-7800R3-48CQM2-C48" ]
             }
 	}
     },
@@ -56,7 +57,7 @@
                         "operations": ["remove", "add", "replace"],
                         "platforms": {
                             "spc1": "20181100",
-			    "spc2": "20191100",
+                            "spc2": "20191100",
                             "spc3": "20220500",
                             "spc4": "20221100",
                             "spc5": "20241200",
@@ -90,7 +91,7 @@
                         "operations": ["replace"],
                         "platforms": {
                             "spc1": "20191100",
-			    "spc2": "20191100",
+                            "spc2": "20191100",
                             "spc3": "20220500",
                             "spc4": "20221100",
                             "spc5": "20241200",
@@ -121,7 +122,7 @@
                         "operations": ["replace"],
                         "platforms": {
                             "spc1": "20181100",
-			    "spc2": "20191100",
+                            "spc2": "20191100",
                             "spc3": "20220500",
                             "spc4": "20221100",
                             "spc5": "20241200",
@@ -146,7 +147,7 @@
                         "operations": ["replace"],
                         "platforms": {
                             "spc1": "20191100",
-			    "spc2": "20191100",
+                            "spc2": "20191100",
                             "spc3": "20220500",
                             "spc4": "20221100",
                             "spc5": "20241200",
