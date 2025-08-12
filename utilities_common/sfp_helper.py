@@ -450,6 +450,7 @@ def is_transceiver_c_cmis(sfp_info_dict):
         return False
     return 'supported_max_tx_power' in sfp_info_dict
 
+
 def get_data_map_sort_key(sfp_info_dict, data_map=None):
     """
     Create a sorting key function for SFP info keys based on the transceiver type.
