@@ -160,8 +160,8 @@ def temperature(output_json):
         try:
             data = json.loads(output)
             click.echo(clicommon.json_dump(data))
-        except json.JSONDecodeError:
-            click.echo(output)
+        except json.JSONDecodeError as e:
+            click.echo(f"Error: Invalid JSON output: {e}", err=True)
     else:
         clicommon.run_command(cmd)
 
