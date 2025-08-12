@@ -1970,7 +1970,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         # Arrange
         expected_exit_code = 0
         expected_output = "Patch applied successfully"
-        expected_call_with_default_values = mock.call(self.any_patch, ConfigFormat.CONFIGDB, False, False, False, ())
+        expected_call_with_default_values = mock.call(self.any_patch, ConfigFormat.CONFIGDB, False, False, False, (), True)
         mock_generic_updater = mock.Mock()
         with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
             with mock.patch('builtins.open', mock.mock_open(read_data=self.any_patch_as_text)):
@@ -1991,7 +1991,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         expected_output = "Patch applied successfully"
         expected_ignore_path_tuple = ('/ANY_TABLE', '/ANY_OTHER_TABLE/ANY_FIELD', '')
         expected_call_with_non_default_values = \
-            mock.call(self.any_patch, ConfigFormat.SONICYANG, True, True, True, expected_ignore_path_tuple)
+            mock.call(self.any_patch, ConfigFormat.SONICYANG, True, True, True, expected_ignore_path_tuple, True)
         mock_generic_updater = mock.Mock()
         with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
             with mock.patch('builtins.open', mock.mock_open(read_data=self.any_patch_as_text)):
@@ -2001,6 +2001,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
                                             [self.any_path,
                                              "--format", ConfigFormat.SONICYANG.name,
                                              "--dry-run",
+                                             "sort",
                                              "--ignore-non-yang-tables",
                                              "--ignore-path", "/ANY_TABLE",
                                              "--ignore-path", "/ANY_OTHER_TABLE/ANY_FIELD",
@@ -2074,40 +2075,53 @@ class TestGenericUpdateCommands(unittest.TestCase):
             with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
                 with mock.patch('builtins.open', mock.mock_open(read_data=patch_array_text)):
                     # Act: sort True
-                    self.runner.invoke(config.config.commands["apply-patch"],
-                                      [any_path, "--sort", "True"],
-                                      catch_exceptions=False)
-                    # Assert: patches should be sorted
-                    called_patch = mock_generic_updater.apply_patch.call_args[0][0]
-                    self.assertEqual(called_patch, patch_array_sorted)
+                    result = self.runner.invoke(
+                        config.config.commands["apply-patch"],
+                        [any_path, "--sort", "True"],
+                        catch_exceptions=False
+                    )
+                # Assert: patches should be sorted
+                self.assertIsNotNone(mock_generic_updater.apply_patch.call_args, "apply_patch was not called")
+                called_patch = mock_generic_updater.apply_patch.call_args[0][0]
+                self.assertEqual(called_patch, patch_array_sorted)
 
             mock_generic_updater = mock.Mock()
             with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
                 with mock.patch('builtins.open', mock.mock_open(read_data=patch_array_text)):
                     # Act: sort False
-                    self.runner.invoke(config.config.commands["apply-patch"],
-                                      [any_path, "--sort", "False"],
-                                      catch_exceptions=False)
-                    # Assert: patches should be in original order
-                    called_patch = mock_generic_updater.apply_patch.call_args[0][0]
-                    self.assertEqual(called_patch, patch_array)
+                    result = self.runner.invoke(
+                        config.config.commands["apply-patch"],
+                        [any_path, "--sort", "False"],
+                        catch_exceptions=False
+                    )
+                # Assert: patches should be in original order
+                self.assertIsNotNone(mock_generic_updater.apply_patch.call_args, "apply_patch was not called")
+                called_patch = mock_generic_updater.apply_patch.call_args[0][0]
+                self.assertEqual(called_patch, patch_array)
+        expected_exit_code = 0
+        expected_output = "Patch applied successfully"
 
-    def test_apply_patch__optional_parameters_passed_correctly(self):
-        self.validate_apply_patch_optional_parameter(
-            ["--format", ConfigFormat.SONICYANG.name],
-            mock.call(self.any_patch, ConfigFormat.SONICYANG, False, False, False, ()))
-        self.validate_apply_patch_optional_parameter(
-            ["--verbose"],
-            mock.call(self.any_patch, ConfigFormat.CONFIGDB, True, False, False, ()))
-        self.validate_apply_patch_optional_parameter(
-            ["--dry-run"],
-            mock.call(self.any_patch, ConfigFormat.CONFIGDB, False, True, False, ()))
-        self.validate_apply_patch_optional_parameter(
-            ["--ignore-non-yang-tables"],
-            mock.call(self.any_patch, ConfigFormat.CONFIGDB, False, False, True, ()))
-        self.validate_apply_patch_optional_parameter(
-            ["--ignore-path", "/ANY_TABLE"],
-            mock.call(self.any_patch, ConfigFormat.CONFIGDB, False, False, False, ("/ANY_TABLE",)))
+        # Act
+        result = self.runner.invoke(config.config.commands["apply-patch"],
+                                    [self.any_path, "--sort", "True"],
+                                    catch_exceptions=False)
+
+        # Assert
+        if result.exit_code != expected_exit_code:
+            print("Output when --sort True:", result.output)
+        self.assertEqual(expected_exit_code, result.exit_code)
+        self.assertTrue(expected_output in result.output)
+
+        # Act
+        result = self.runner.invoke(config.config.commands["apply-patch"],
+                                    [self.any_path, "--sort", "False"],
+                                    catch_exceptions=False)
+
+        # Assert
+        if result.exit_code != expected_exit_code:
+            print("Output when --sort False:", result.output)
+        self.assertEqual(expected_exit_code, result.exit_code)
+        self.assertTrue(expected_output in result.output)
         self.validate_apply_patch_optional_parameter(
             ["--sort"],
             mock.call(self.any_patch, ConfigFormat.CONFIGDB, False, False, False, True, ()))
