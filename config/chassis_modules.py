@@ -61,7 +61,7 @@ def get_config_module_state(db, chassis_module_name):
 
 def get_state_transition_in_progress(db, chassis_module_name):
     ensure_statedb_connected(db)
-    fvs = db.statedb.get_entry('CHASSIS_MODULE_TABLE', chassis_module_name)
+    fvs = db.statedb.get_entry('CHASSIS_MODULE_INFO_TABLE', chassis_module_name)
     value = fvs.get('state_transition_in_progress', 'False') if fvs else 'False'
     return value
 
@@ -91,7 +91,7 @@ def set_state_transition_in_progress(db, chassis_module_name, value):
 def is_transition_timed_out(db, chassis_module_name):
     ensure_statedb_connected(db)
     state_db = db.statedb
-    fvs = state_db.get_entry('CHASSIS_MODULE_TABLE', chassis_module_name)
+    fvs = state_db.get_entry('CHASSIS_MODULE_INFO_TABLE', chassis_module_name)
     if not fvs:
         return False
     start_time_str = fvs.get('transition_start_time')
