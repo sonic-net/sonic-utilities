@@ -1327,7 +1327,10 @@ def apply_patch_wrapper(args):
 
 
 # Function to apply patch for a single ASIC.
-def apply_patch_for_scope(scope_changes, results, config_format, verbose, dry_run, ignore_non_yang_tables, ignore_path, sort):
+def apply_patch_for_scope(
+    scope_changes, results, config_format, verbose, dry_run, 
+    ignore_non_yang_tables, ignore_path, sort
+):
     scope, changes = scope_changes
     # Replace localhost to DEFAULT_NAMESPACE which is db definition of Host
     if scope.lower() == HOST_NAMESPACE or scope == "":
@@ -1339,13 +1342,9 @@ def apply_patch_for_scope(scope_changes, results, config_format, verbose, dry_ru
 
     try:
         # Call apply_patch with the ASIC-specific changes and predefined parameters
-        GenericUpdater(scope=scope).apply_patch(jsonpatch.JsonPatch(changes),
-                                                config_format,
-                                                verbose,
-                                                dry_run,
-                                                ignore_non_yang_tables,
-                                                ignore_path,
-                                                sort)
+        GenericUpdater(scope=scope).apply_patch(
+            jsonpatch.JsonPatch(changes), config_format, verbose, dry_run, ignore_non_yang_tables, ignore_path, sort
+        )
         results[scope_for_log] = {"success": True, "message": "Success"}
         log.log_notice(f"'apply-patch' executed successfully for {scope_for_log} by {changes} in thread:{thread_id}")
     except Exception as e:

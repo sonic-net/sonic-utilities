@@ -1970,13 +1970,18 @@ class TestGenericUpdateCommands(unittest.TestCase):
         # Arrange
         expected_exit_code = 0
         expected_output = "Patch applied successfully"
-        expected_call_with_default_values = mock.call(self.any_patch, ConfigFormat.CONFIGDB, False, False, False, (), True)
+        expected_call_with_default_values = \
+            mock.call(self.any_patch, ConfigFormat.CONFIGDB, False, False, False, (), True)
         mock_generic_updater = mock.Mock()
         with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
             with mock.patch('builtins.open', mock.mock_open(read_data=self.any_patch_as_text)):
 
                 # Act
-                result = self.runner.invoke(config.config.commands["apply-patch"], [self.any_path], catch_exceptions=False)
+                result = self.runner.invoke(
+                    config.config.commands["apply-patch"],
+                    [self.any_path],
+                    catch_exceptions=False
+                )
 
         # Assert
         self.assertEqual(expected_exit_code, result.exit_code)
@@ -2001,7 +2006,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
                                             [self.any_path,
                                              "--format", ConfigFormat.SONICYANG.name,
                                              "--dry-run",
-                                             "sort",
+                                             "--sort",
                                              "--ignore-non-yang-tables",
                                              "--ignore-path", "/ANY_TABLE",
                                              "--ignore-path", "/ANY_OTHER_TABLE/ANY_FIELD",
@@ -2069,8 +2074,10 @@ class TestGenericUpdateCommands(unittest.TestCase):
         patch_array_text = json.dumps(patch_array)
         any_path = self.any_path
 
-        # Patch jsonpatch.JsonPatch to return the array as-is
-        with mock.patch('jsonpatch.JsonPatch', side_effect=lambda arr: arr):
+        # Patch jsonpatch.JsonPatch to return a mock patch object with __iter__ and __len__
+        class DummyPatch(list):
+            pass
+        with mock.patch('jsonpatch.JsonPatch', side_effect=lambda arr: DummyPatch(arr)):
             mock_generic_updater = mock.Mock()
             with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
                 with mock.patch('builtins.open', mock.mock_open(read_data=patch_array_text)):
@@ -2083,7 +2090,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
                 # Assert: patches should be sorted
                 self.assertIsNotNone(mock_generic_updater.apply_patch.call_args, "apply_patch was not called")
                 called_patch = mock_generic_updater.apply_patch.call_args[0][0]
-                self.assertEqual(called_patch, patch_array_sorted)
+                self.assertEqual(list(called_patch), patch_array_sorted)
 
             mock_generic_updater = mock.Mock()
             with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
@@ -2097,7 +2104,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
                 # Assert: patches should be in original order
                 self.assertIsNotNone(mock_generic_updater.apply_patch.call_args, "apply_patch was not called")
                 called_patch = mock_generic_updater.apply_patch.call_args[0][0]
-                self.assertEqual(called_patch, patch_array)
+                self.assertEqual(list(called_patch), patch_array)
         expected_exit_code = 0
         expected_output = "Patch applied successfully"
 
