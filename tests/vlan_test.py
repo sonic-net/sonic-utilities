@@ -1552,6 +1552,42 @@ class TestVlan(object):
             mock_handle_restart.assert_called_once()
             assert "Restart service dhcp_relay failed with error" not in result.output
 
+    def test_config_add_del_vlan_dhcpv4_relay_with_non_empty_entry(self, mock_restart_dhcp_relay_service):
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(config.config.commands["vlan"].commands["add"], ["999"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_entry("VLAN", "Vlan999") == {"vlanid": "999"}
+
+        # Add a DHCPV4_RELAY entry for Vlan999
+        db.cfgdb.set_entry("DHCPV4_RELAY", "Vlan999", {
+            "dhcpv4_servers": ["192.0.2.1"],
+            "source_interface": "Ethernet4"
+        })
+
+        # Deleting Vlan999 which is being used in DHCPv4 Relay Configuration
+        with mock.patch("utilities_common.dhcp_relay_util.handle_restart_dhcp_relay_service"):
+            result = runner.invoke(config.config.commands["vlan"].commands["del"], ["999"], obj=db)
+            print(result.exit_code)
+            print(result.output)
+
+            assert result.exit_code != 0
+            assert "Vlan999 cannot be removed as it is being used in DHCPV4_RELAY table." in result.output
+
+        # Remove DHCPV4_RELAY entry and try deletion again
+        db.cfgdb.set_entry("DHCPV4_RELAY", "Vlan999", None)
+
+        with mock.patch("utilities_common.dhcp_relay_util.handle_restart_dhcp_relay_service"):
+            result = runner.invoke(config.config.commands["vlan"].commands["del"], ["999"], obj=db)
+            print(result.exit_code)
+            print(result.output)
+
+            assert result.exit_code == 0
+            assert "Vlan999" not in db.cfgdb.get_keys("VLAN")
+
     @pytest.mark.parametrize("ip_version", ["ipv4", "ipv6"])
     def test_config_add_del_vlan_with_dhcp_relay_not_running(self, ip_version):
         runner = CliRunner()
