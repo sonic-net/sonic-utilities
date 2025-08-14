@@ -5223,6 +5223,34 @@ def add_interface_ip(ctx, interface_name, ip_addr, gw, secondary):
         if interface_name is None:
             ctx.fail("'interface_name' is None!")
 
+    try:
+        ip_address = ipaddress.ip_interface(ip_addr)
+    except ValueError as err:
+        ctx.fail("IP address is not valid: {}".format(err))
+
+    if interface_name == 'eth0':
+
+        # Configuring more than 1 IPv4 or more than 1 IPv6 address fails.
+        # Allow only one IPv4 and only one IPv6 address to be configured for IPv6.
+        # If a row already exist, overwrite it (by doing delete and add).
+        mgmtintf_key_list = _get_all_mgmtinterface_keys()
+
+        for key in mgmtintf_key_list:
+            # For loop runs for max 2 rows, once for IPv4 and once for IPv6.
+            # No need to capture the exception since the ip_addr is already validated earlier
+            current_ip = ipaddress.ip_interface(key[1])
+            if (ip_address.version == current_ip.version):
+                # If user has configured IPv4/v6 address and the already available row is also IPv4/v6, delete it here.
+                config_db.set_entry("MGMT_INTERFACE", ("eth0", key[1]), None)
+
+        # Set the new row with new value
+        if not gw:
+            config_db.set_entry("MGMT_INTERFACE", (interface_name, str(ip_address)), {"NULL": "NULL"})
+        else:
+            config_db.set_entry("MGMT_INTERFACE", (interface_name, str(ip_address)), {"gwaddr": gw})
+
+        return
+
     table_name = get_interface_table_name(interface_name)
     if table_name == "":
         ctx.fail(f"{interface_name} is not valid. Valid names [Ethernet/PortChannel/Vlan/Loopback]")
@@ -5284,34 +5312,6 @@ def add_interface_ip(ctx, interface_name, ip_addr, gw, secondary):
             click.echo("Interface {} is in {} mode and needs to be in routed mode!".format(
                 interface_name, interface_mode))
             return
-
-    try:
-        ip_address = ipaddress.ip_interface(ip_addr)
-    except ValueError as err:
-        ctx.fail("IP address is not valid: {}".format(err))
-
-    if interface_name == 'eth0':
-
-        # Configuring more than 1 IPv4 or more than 1 IPv6 address fails.
-        # Allow only one IPv4 and only one IPv6 address to be configured for IPv6.
-        # If a row already exist, overwrite it (by doing delete and add).
-        mgmtintf_key_list = _get_all_mgmtinterface_keys()
-
-        for key in mgmtintf_key_list:
-            # For loop runs for max 2 rows, once for IPv4 and once for IPv6.
-            # No need to capture the exception since the ip_addr is already validated earlier
-            current_ip = ipaddress.ip_interface(key[1])
-            if (ip_address.version == current_ip.version):
-                # If user has configured IPv4/v6 address and the already available row is also IPv4/v6, delete it here.
-                config_db.set_entry("MGMT_INTERFACE", ("eth0", key[1]), None)
-
-        # Set the new row with new value
-        if not gw:
-            config_db.set_entry("MGMT_INTERFACE", (interface_name, str(ip_address)), {"NULL": "NULL"})
-        else:
-            config_db.set_entry("MGMT_INTERFACE", (interface_name, str(ip_address)), {"gwaddr": gw})
-
-        return
 
     if table_name == "VLAN_INTERFACE":
         if not validate_vlan_exists(config_db, interface_name):
