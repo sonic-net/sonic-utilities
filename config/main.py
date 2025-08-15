@@ -977,6 +977,12 @@ def _stop_services():
     except subprocess.CalledProcessError as err:
         pass
 
+    # Get the list of dependencies for sonic.target to fetch timer units
+    for service in _get_sonic_services():
+        if service.endswith('.timer'):
+            # Stop the timer unit
+            clicommon.run_command(['sudo', 'systemctl', 'stop', service], display_cmd=True)
+
     click.echo("Stopping SONiC target ...")
     clicommon.run_command(['sudo', 'systemctl', 'stop', 'sonic.target', '--job-mode', 'replace-irreversibly'])
 
