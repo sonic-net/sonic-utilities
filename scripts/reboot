@@ -2,6 +2,7 @@
 
 declare -r EXIT_SUCCESS=0
 declare -r EXIT_ERROR=1
+declare -r EXIT_TIMEOUT=2
 declare -r WATCHDOG_UTIL="/usr/local/bin/watchdogutil"
 declare -r PRE_REBOOT_HOOK="pre_reboot_hook"
 
@@ -13,6 +14,7 @@ PLATFORM_UPDATE_REBOOT_CAUSE="platform_update_reboot_cause"
 REBOOT_CAUSE_FILE="/host/reboot-cause/reboot-cause.txt"
 PLATFORM_REBOOT_PRE_CHECK="platform_reboot_pre_check"
 REBOOT_TIME=$(date)
+REBOOT_CONFIG_FILE="/etc/sonic/reboot.conf"
 
 # Reboot immediately if we run the kdump capture kernel
 VMCORE_FILE=/proc/vmcore
@@ -53,6 +55,9 @@ SMART_SWITCH="no"
 DPU_MODULE_NAME=""
 REBOOT_DPU="no"
 PRE_SHUTDOWN="no"
+BLOCKING_MODE="no"
+BLOCKING_MODE_TIMEOUT_IN_SECOND=180
+SHOW_TIMER="no"
 
 function debug()
 {
@@ -145,6 +150,8 @@ function show_help_and_exit()
     echo "        -h, -? : getting this help"
     echo "        -d : DPU module name on a smart switch, option is invalid when on DPU"
     echo "        -p : Pre-shutdown steps on DPU, invalid on NPU"
+    echo "        -b : Enable the command to run in blocking mode"
+    echo "        -v : Print out detail logs. For blocking mode will print dots to identify the script is running"
 
     exit ${EXIT_SUCCESS}
 }
@@ -195,13 +202,14 @@ function check_conflict_boot_in_fw_update()
 
 function parse_options()
 {
-    while getopts "h?vfpd:" opt; do
+    while getopts "h?vfpd:b" opt; do
         case ${opt} in
             h|\? )
                 show_help_and_exit
                 ;;
             v )
                 VERBOSE=yes
+                SHOW_TIMER="yes"
                 ;;
             t )
                 TAG_LATEST=no
@@ -215,6 +223,9 @@ function parse_options()
                 ;;
             p )
                 PRE_SHUTDOWN="yes"
+                ;;
+            b )
+                BLOCKING_MODE="yes"
                 ;;
         esac
     done
@@ -239,7 +250,32 @@ function linecard_reboot_notify_supervisor()
     fi
 }
 
+function parse_config_file
+{
+    if [ -f "$REBOOT_CONFIG_FILE" ]; then
+        while IFS='=' read -r key value; do
+            key=$(echo "$key" | xargs)
+            value=$(echo "$value" | xargs)
+            case $key in
+                blocking_mode)
+                    [ "${value}" = "true" ] && BLOCKING_MODE="yes"
+                    ;;
+                blocking_mode_timeout)
+                    [[ "${value}" =~ ^[0-9]+$ ]] && BLOCKING_MODE_TIMEOUT_IN_SECOND=$(value)
+                    ;;
+                show_timer)
+                    [ "${value}" = "true" ] && SHOW_TIMER="yes"
+                    ;;
+                *)
+                    debug "WARNING: Unknown config ${key}=${value} finded in config file ${REBOOT_CONFIG_FILE}" 
+                    ;;
+            esac
+        done < "$REBOOT_CONFIG_FILE"
+    fi
+}
+
 parse_options $@
+parse_config_file
 
 # Exit if not superuser
 if [[ "$EUID" -ne 0 ]]; then
@@ -341,4 +377,37 @@ if [ -x ${DEVPATH}/${PLATFORM}/${PLAT_REBOOT} ]; then
 fi
 
 VERBOSE=yes debug "Issuing OS-level reboot ..." >&2
-exec /sbin/reboot ${REBOOT_FLAGS}
+
+if [[ "${BLOCKING_MODE}" != "yes" ]]; then
+    # In non blocking mode, we will remain the original logic.
+    exec /sbin/reboot ${REBOOT_FLAGS}
+else
+
+    REBOOT_START_TIME=$(date +%s)
+    /sbin/reboot ${REBOOT_FLAGS}
+    if [[ "${BLOCKING_MODE}" == "yes" ]]; then
+        # In blocking mode, we just deadloop here to avoid more output generated.
+        BLOCKING_TIMER=1
+        sleep 1
+        while true; do
+            if [ "${SHOW_TIMER}" == "yes" ]; then
+                if [ "${BLOCKING_TIMER}" -ge 50 ]; then
+                    BLOCKING_TIMER=1
+                    echo "."
+                else
+                    let BLOCKING_TIMER++
+                    echo -n "."
+                fi
+            fi
+
+            CURRENT_TIME=$(date +%s)
+            ELAPSED=$((CURRENT_TIME - REBOOT_START_TIME))
+            if (( ELAPSED >= BLOCKING_MODE_TIMEOUT_IN_SECOND )); then
+                echo "[REBOOT FAILED] The reboot used $(ELAPSED)seconds while the timeout is configed as $(BLOCKING_MODE_TIMEOUT_IN_SECOND)seconds"
+                exit ${EXIT_TIMEOUT}
+            fi
+
+            sleep 10
+        done
+    fi
+fi
