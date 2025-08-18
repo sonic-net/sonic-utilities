@@ -449,7 +449,7 @@ class TestChassisModules(object):
         assert result == show_chassis_system_lags_output_lc4
 
     def test_shutdown_triggers_transition_tracking(self):
-        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True),
             mock.patch("config.chassis_modules.get_config_module_state", return_value='up'):
 
             runner = CliRunner()
@@ -480,7 +480,7 @@ class TestChassisModules(object):
             assert transition_time is not None
 
     def test_shutdown_triggers_transition_in_progress(self):
-        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True),
             mock.patch("config.chassis_modules.get_config_module_state", return_value='up'):
 
             runner = CliRunner()
@@ -507,7 +507,7 @@ class TestChassisModules(object):
             print(f"transition_start_time:{fvs['transition_start_time']}")
 
     def test_shutdown_triggers_transition_timeout(self):
-        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True),
             mock.patch("config.chassis_modules.get_config_module_state", return_value='up'):
 
             runner = CliRunner()
@@ -534,7 +534,7 @@ class TestChassisModules(object):
             print(f"transition_start_time:{fvs['transition_start_time']}")
 
     def test_startup_triggers_transition_tracking(self):
-        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True),
             mock.patch("config.chassis_modules.get_config_module_state", return_value='down'):
 
             runner = CliRunner()
