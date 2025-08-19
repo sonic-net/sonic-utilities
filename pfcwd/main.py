@@ -164,12 +164,12 @@ class PfcwdCli(object):
     def show_stats(self, empty, queues, check_storm=False):
         del self.table[:]
         self.collect_stats(empty, queues)
-        
+
         if check_storm:
             # Check for storms and exit accordingly - no output needed
             storms_detected = any(row[1] == 'stormed' for row in self.table if len(row) > 1)
             sys.exit(1 if storms_detected else 0)
-        
+
         click.echo(tabulate(
             self.table, STATS_HEADER, stralign='right', numalign='right',
             tablefmt='simple'

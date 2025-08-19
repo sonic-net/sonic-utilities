@@ -263,7 +263,7 @@ class TestPfcwd(object):
         import pfcwd.main as pfcwd
         runner = CliRunner()
         db = Db()
-        
+
         # Test with no storms - should exit 0
         result = runner.invoke(
             pfcwd.cli.commands["show"].commands["stats"],
@@ -281,14 +281,14 @@ class TestPfcwd(object):
         from unittest.mock import patch
         runner = CliRunner()
         db = Db()
-        
+
         # Mock the collect_stats method to simulate storm detection
         def mock_collect_stats_with_storm(self, empty, queues, storm_only=False):
             # Create fake table data with a stormed queue
             self.table = [
                 ['Ethernet0:3', 'stormed', '1/0', '100/300', '100/300', '0/200', '0/200']
             ]
-        
+
         with patch.object(pfcwd.PfcwdCli, 'collect_stats', mock_collect_stats_with_storm):
             result = runner.invoke(
                 pfcwd.cli.commands["show"].commands["stats"],
@@ -306,7 +306,7 @@ class TestPfcwd(object):
         from unittest.mock import patch
         runner = CliRunner()
         db = Db()
-        
+
         # Mock the collect_stats method to simulate mixed queue states
         def mock_collect_stats_mixed(self, empty, queues, storm_only=False):
             # Create fake table data with mixed states - should still exit 1 if ANY storm detected
@@ -315,7 +315,7 @@ class TestPfcwd(object):
                 ['Ethernet4:3', 'stormed', '1/0', '100/300', '100/300', '0/200', '0/200'],
                 ['Ethernet8:4', 'operational', '0/0', '50/50', '50/50', '0/0', '0/0']
             ]
-        
+
         with patch.object(pfcwd.PfcwdCli, 'collect_stats', mock_collect_stats_mixed):
             result = runner.invoke(
                 pfcwd.cli.commands["show"].commands["stats"],
@@ -332,7 +332,7 @@ class TestPfcwd(object):
         import pfcwd.main as pfcwd
         runner = CliRunner()
         db = Db()
-        
+
         # Test normal stats command (without --check-storm) - should work as before
         result = runner.invoke(
             pfcwd.cli.commands["show"].commands["stats"],
