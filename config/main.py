@@ -1432,6 +1432,13 @@ def delete_transceiver_tables():
         state_db.delete_all_by_pattern(state_db.STATE_DB, table + state_db_del_pattern)
 
 
+def delete_bgp_peer_table():
+    # Delete all entries in BGP_PEER_CONFIGURED_TABLE in state db.
+    state_db = SonicV2Connector(use_unix_socket_path=True)
+    state_db.connect(state_db.STATE_DB, False)
+    state_db.delete_all_by_pattern(state_db.STATE_DB, "BGP_PEER_CONFIGURED_TABLE|*")
+
+
 def migrate_db_to_lastest(namespace=DEFAULT_NAMESPACE):
     # Migrate DB contents to latest version
     db_migrator = '/usr/local/bin/db_migrator.py'
@@ -2034,6 +2041,7 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
 
             client, config_db = flush_configdb(namespace)
             delete_transceiver_tables()
+            delete_bgp_peer_table()
 
             if load_sysinfo:
                 if namespace is DEFAULT_NAMESPACE:
@@ -2171,6 +2179,7 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
     if not no_service_restart:
         log.log_notice("'load_minigraph' stopping services...")
         delete_transceiver_tables()
+        delete_bgp_peer_table()
         _stop_services()
 
     # For Single Asic platform the namespace list has the empty string
