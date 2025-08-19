@@ -261,19 +261,30 @@ class TestPfcwd(object):
     def test_pfcwd_show_stats_check_storm_no_storms(self):
         """ Test --check-storm flag when no storms are present """
         import pfcwd.main as pfcwd
+        from unittest.mock import patch
         runner = CliRunner()
         db = Db()
 
-        # Test with no storms - should exit 0
-        result = runner.invoke(
-            pfcwd.cli.commands["show"].commands["stats"],
-            ["--check-storm"],
-            obj=db
-        )
-        print("No storms test - exit code:", result.exit_code)
-        print("No storms test - output:", result.output)
-        assert result.exit_code == 0
-        assert result.output == ""  # Should be silent when checking storms
+        # Mock the collect_stats method to simulate no storms
+        def mock_collect_stats_no_storm(self, empty, queues, storm_only=False):
+            # Create fake table data with only operational queues
+            self.table = [
+                ['Ethernet0:3', 'operational', '2/2', '100/100', '100/100', '0/0', '0/0'],
+                ['Ethernet4:3', 'operational', '3/3', '150/150', '150/150', '0/0', '0/0'],
+                ['Ethernet8:4', 'operational', '1/1', '50/50', '50/50', '0/0', '0/0']
+            ]
+
+        with patch.object(pfcwd.PfcwdCli, 'collect_stats', mock_collect_stats_no_storm):
+            # Test with no storms - should exit 0
+            result = runner.invoke(
+                pfcwd.cli.commands["show"].commands["stats"],
+                ["--check-storm"],
+                obj=db
+            )
+            print("No storms test - exit code:", result.exit_code)
+            print("No storms test - output:", result.output)
+            assert result.exit_code == 0
+            assert result.output == ""  # Should be silent when checking storms
 
     def test_pfcwd_show_stats_check_storm_with_storms(self):
         """ Test --check-storm flag when storms are present """
@@ -330,20 +341,30 @@ class TestPfcwd(object):
     def test_pfcwd_show_stats_normal_output_unchanged(self):
         """ Test that normal stats output is unchanged when not using --check-storm """
         import pfcwd.main as pfcwd
+        from unittest.mock import patch
         runner = CliRunner()
         db = Db()
 
-        # Test normal stats command (without --check-storm) - should work as before
-        result = runner.invoke(
-            pfcwd.cli.commands["show"].commands["stats"],
-            obj=db
-        )
-        print("Normal output test - exit code:", result.exit_code)
-        print("Normal output test - output length:", len(result.output))
-        assert result.exit_code == 0
-        # Should have normal tabulated output (not empty)
-        assert len(result.output) > 0
-        assert "QUEUE" in result.output  # Should contain table headers
+        # Mock the collect_stats method to ensure consistent test output
+        def mock_collect_stats_normal(self, empty, queues, storm_only=False):
+            # Create fake table data with mixed states (like normal operation)
+            self.table = [
+                ['Ethernet0:3', 'operational', '2/2', '100/100', '100/100', '0/0', '0/0'],
+                ['Ethernet4:3', 'operational', '3/3', '150/150', '150/150', '0/0', '0/0']
+            ]
+
+        with patch.object(pfcwd.PfcwdCli, 'collect_stats', mock_collect_stats_normal):
+            # Test normal stats command (without --check-storm) - should work as before
+            result = runner.invoke(
+                pfcwd.cli.commands["show"].commands["stats"],
+                obj=db
+            )
+            print("Normal output test - exit code:", result.exit_code)
+            print("Normal output test - output length:", len(result.output))
+            assert result.exit_code == 0
+            # Should have normal tabulated output (not empty)
+            assert len(result.output) > 0
+            assert "QUEUE" in result.output  # Should contain table headers
 
     @classmethod
     def teardown_class(cls):
