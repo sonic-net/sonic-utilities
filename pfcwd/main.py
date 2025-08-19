@@ -161,9 +161,15 @@ class PfcwdCli(object):
 
         self.table += table
 
-    def show_stats(self, empty, queues):
+    def show_stats(self, empty, queues, check_storm=False):
         del self.table[:]
         self.collect_stats(empty, queues)
+        
+        if check_storm:
+            # Check for storms and exit accordingly - no output needed
+            storms_detected = any(row[1] == 'stormed' for row in self.table if len(row) > 1)
+            sys.exit(1 if storms_detected else 0)
+        
         click.echo(tabulate(
             self.table, STATS_HEADER, stralign='right', numalign='right',
             tablefmt='simple'
@@ -434,13 +440,14 @@ class Show(object):
     @show.command()
     @multi_asic_util.multi_asic_click_options
     @click.option('-e', '--empty', is_flag=True)
+    @click.option('--check-storm', is_flag=True, help='Exit 1 if any storms detected, 0 otherwise')
     @click.argument('queues', nargs=-1)
     @clicommon.pass_db
-    def stats(db, namespace, display, empty, queues):
+    def stats(db, namespace, display, empty, check_storm, queues):
         """ Show PFC Watchdog stats per queue """
         if (len(queues)):
             display = constants.DISPLAY_ALL
-        PfcwdCli(db, namespace, display).show_stats(empty, queues)
+        PfcwdCli(db, namespace, display).show_stats(empty, queues, check_storm)
 
     # Show config
     @show.command()
