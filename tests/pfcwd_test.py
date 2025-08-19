@@ -258,6 +258,93 @@ class TestPfcwd(object):
         assert result.exit_code == 1
         assert result.output == pfcwd_show_start_config_output_fail
 
+    def test_pfcwd_show_stats_check_storm_no_storms(self):
+        """ Test --check-storm flag when no storms are present """
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+        
+        # Test with no storms - should exit 0
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["stats"],
+            ["--check-storm"],
+            obj=db
+        )
+        print("No storms test - exit code:", result.exit_code)
+        print("No storms test - output:", result.output)
+        assert result.exit_code == 0
+        assert result.output == ""  # Should be silent when checking storms
+
+    def test_pfcwd_show_stats_check_storm_with_storms(self):
+        """ Test --check-storm flag when storms are present """
+        import pfcwd.main as pfcwd
+        from unittest.mock import patch
+        runner = CliRunner()
+        db = Db()
+        
+        # Mock the collect_stats method to simulate storm detection
+        def mock_collect_stats_with_storm(self, empty, queues, storm_only=False):
+            # Create fake table data with a stormed queue
+            self.table = [
+                ['Ethernet0:3', 'stormed', '1/0', '100/300', '100/300', '0/200', '0/200']
+            ]
+        
+        with patch.object(pfcwd.PfcwdCli, 'collect_stats', mock_collect_stats_with_storm):
+            result = runner.invoke(
+                pfcwd.cli.commands["show"].commands["stats"],
+                ["--check-storm"],
+                obj=db
+            )
+            print("With storms test - exit code:", result.exit_code)
+            print("With storms test - output:", result.output)
+            assert result.exit_code == 1
+            assert result.output == ""  # Should be silent when checking storms
+
+    def test_pfcwd_show_stats_check_storm_mixed_status(self):
+        """ Test --check-storm flag with mixed operational and stormed queues """
+        import pfcwd.main as pfcwd
+        from unittest.mock import patch
+        runner = CliRunner()
+        db = Db()
+        
+        # Mock the collect_stats method to simulate mixed queue states
+        def mock_collect_stats_mixed(self, empty, queues, storm_only=False):
+            # Create fake table data with mixed states - should still exit 1 if ANY storm detected
+            self.table = [
+                ['Ethernet0:3', 'operational', '2/2', '100/100', '100/100', '0/0', '0/0'],
+                ['Ethernet4:3', 'stormed', '1/0', '100/300', '100/300', '0/200', '0/200'],
+                ['Ethernet8:4', 'operational', '0/0', '50/50', '50/50', '0/0', '0/0']
+            ]
+        
+        with patch.object(pfcwd.PfcwdCli, 'collect_stats', mock_collect_stats_mixed):
+            result = runner.invoke(
+                pfcwd.cli.commands["show"].commands["stats"],
+                ["--check-storm"],
+                obj=db
+            )
+            print("Mixed states test - exit code:", result.exit_code)
+            print("Mixed states test - output:", result.output)
+            assert result.exit_code == 1  # Should exit 1 if ANY storms detected
+            assert result.output == ""
+
+    def test_pfcwd_show_stats_normal_output_unchanged(self):
+        """ Test that normal stats output is unchanged when not using --check-storm """
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+        
+        # Test normal stats command (without --check-storm) - should work as before
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["stats"],
+            obj=db
+        )
+        print("Normal output test - exit code:", result.exit_code)
+        print("Normal output test - output length:", len(result.output))
+        assert result.exit_code == 0
+        # Should have normal tabulated output (not empty)
+        assert len(result.output) > 0
+        assert "QUEUE" in result.output  # Should contain table headers
+
     @classmethod
     def teardown_class(cls):
         os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
