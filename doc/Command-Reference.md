@@ -3683,6 +3683,317 @@ This command is used to add or del IPv6 DHCP Relay destination addresses to a VL
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#dhcp-relay)
 
+## DHCP Server
+### DHCP Server show commands
+This sub-section of commands is used to show the DHCP Server configuratoin and status
+**show dhcp_server info**
+
+This command is used to show dhcp_server config.
+- Usage
+  ```
+  show dhcp_server ipv4 info [--with_customize_option] [<dhcp_interface>]
+  ```
+
+- Example
+  ```
+  show dhcp_server ipv4 info Vlan1000
+  +-------------+--------+-------------+---------------+-----------------+---------+
+  | Interface   | Mode   | Gateway     | Netmask       |   Lease Time(s) | State   |
+  +=============+========+=============+===============+=================+=========+
+  | Vlan1000    | PORT   | 192.168.0.1 | 255.255.255.0 |             900 | enabled |
+  +-------------+--------+-------------+---------------+-----------------+---------+
+
+  show dhcp_server ipv4 info --with_customized_options Vlan1000
+  +-------------+--------+-------------+---------------+-----------------+---------+----------------------+
+  | Interface   | Mode   | Gateway     | Netmask       |   Lease Time(s) | State   | Customized Options   |
+  +=============+========+=============+===============+=================+=========+======================+
+  | Vlan1000    | PORT   | 192.168.0.1 | 255.255.255.0 |             900 | enabled | option_1             |
+  +-------------+--------+-------------+---------------+-----------------+---------+----------------------+
+
+  show dhcp_server ipv4 info
+  +-------------+--------+-------------+---------------+-----------------+----------+
+  | Interface   | Mode   | Gateway     | Netmask       |   Lease Time(s) | State    |
+  +=============+========+=============+===============+=================+==========+
+  | Vlan1000    | PORT   | 192.168.0.1 | 255.255.255.0 |             900 | enabled  |
+  +-------------+--------+-------------+---------------+-----------------+----------+
+  | Vlan2000    | PORT   | 192.168.0.1 | 255.255.255.0 |             300 | disabled |
+  +-------------+--------+-------------+---------------+-----------------+----------+
+  ```
+
+**show dhcp_server range**
+
+This command is used to show dhcp_server ip range.
+- Usage
+  ```
+  show dhcp_server ipv4 range [<range_name>]
+  ```
+
+- Example
+  ```
+  show dhcp_server ipv4 range range_1
+  +-------------+-------------+-------------+---------+
+  |IP Range Name |IP Start     |IP End       |IP count |
+  |--------------+-------------+-------------+---------+
+  |range_1        |192.168.0.5  |192.168.0.10 |6        |
+  +--------------+-------------+-------------+---------+
+
+  admin@bjw-can-720dt-2:~$ show dhcp_server ipv4 range range_1
+  +---------+-------------+-------------+------------+
+  | Range   | IP Start    | IP End      |   IP Count |
+  +=========+=============+=============+============+
+  | range_1 | 192.168.0.2 | 192.168.0.2 |          1 |
+  +---------+-------------+-------------+------------+
+
+  show dhcp_server ipv4 range 
+  +---------+-------------+--------------+------------+
+  | Range   | IP Start    | IP End       |   IP Count |
+  +=========+=============+==============+============+
+  | range_2 | 192.168.0.2 | 192.168.0.25 |         24 |
+  +---------+-------------+--------------+------------+
+  | range_1 | 192.168.0.2 | 192.168.0.2  |          1 |
+  +---------+-------------+--------------+------------+
+  | range1  | 192.168.1.2 | 192.168.1.2  |          1 |
+  +---------+-------------+--------------+------------+
+  ```
+
+**show dhcp_server option**
+
+This command is used to show dhcp_server customized option.
+
+- Usage
+  ```
+  show dhcp_server ipv4 option [<option_name>]
+  ```
+
+- Example
+  ```
+  show dhcp_server ipv4 option option_1
+  +---------------+-------------+---------+--------+
+  | Option Name   |   Option ID | Value   | Type   |
+  +===============+=============+=========+========+
+  | option_1      |         223 | host_1  | string |
+  +---------------+-------------+---------+--------+
+
+  show dhcp_server ipv4 option
+  +---------------+-------------+---------+--------+
+  | Option Name   |   Option ID | Value   | Type   |
+  +===============+=============+=========+========+
+  | option_1      |         223 | host_1  | string |
+  +---------------+-------------+---------+--------+
+  | option2       |         222 | 123     | string |
+  +---------------+-------------+---------+--------+
+  ```
+
+**show dhcp_server lease**
+
+This command is used to show dhcp_server lease.
+- Usage
+  ```
+  show dhcp_server ipv4 lease [<dhcp_interface>]
+  ```
+
+- Example
+  ```
+  show dhcp_server ipv4 lease
+  +--------------------+-------------------+-------------+---------------------+---------------------+
+  | Interface          | MAC Address       | IP          | Lease Start         | Lease End           |
+  +====================+===================+=============+=====================+=====================+
+  | Vlan1000|Ethernet5 | 10:70:fd:b6:10:05 | 192.168.0.8 | 2025-08-19 04:11:39 | 2025-08-19 04:26:39 |
+  +--------------------+-------------------+-------------+---------------------+---------------------+
+
+  show dhcp_server ipv4 lease Vlan1000
+  +--------------------+-------------------+-------------+---------------------+---------------------+
+  | Interface          | MAC Address       | IP          | Lease Start         | Lease End           |
+  +====================+===================+=============+=====================+=====================+
+  | Vlan1000|Ethernet5 | 10:70:fd:b6:10:05 | 192.168.0.8 | 2025-08-19 04:11:39 | 2025-08-19 04:26:39 |
+  +--------------------+-------------------+-------------+---------------------+---------------------+
+  ```
+
+**show dhcp_server port**
+
+This command is used to show dhcp_server port binding.
+- Usage
+  ```
+  show dhcp_server ipv4 port [<dhcp_interface>]
+  ```
+
+- Example
+  ```
+  show dhcp_server ipv4 port Vlan1000
+  +---------------------+--------------+
+  | Interface           | Bind         |
+  +=====================+==============+
+  | Vlan1000|Ethernet25 | 192.168.0.28 |
+  +---------------------+--------------+
+  | Vlan1000|Ethernet38 | 192.168.0.41 |
+  +---------------------+--------------+
+  | Vlan1000|Ethernet7  | 192.168.0.10 |
+  +---------------------+--------------+
+  | Vlan1000|Ethernet10 | 192.168.0.13 |
+  +---------------------+--------------+
+  | Vlan1000|Ethernet27 | 192.168.0.30 |
+  +---------------------+--------------+
+  ```
+
+### DHCP Server config commands
+
+This sub-section of commands is used to add or remove the DHCP Server related configuration
+
+**config dhcp_server add**
+
+This command is used to add dhcp_server for DHCP interface.
+
+- Usage
+  ```
+  config dhcp_server ipv4 add --mode <mode> [--dup_gw_nm] [--lease_time <lease_time>] [--gateway <gateway>] [--netmask <netmask>] <dhcp_interface>
+
+  Options:
+     mode: Specify mode of assign IP, currently only support 'PORT'. [required]
+     lease_time: Time that the client can lease IP once. [not required, default value is 900(s)]
+     dup_gw_nm: Indicate whether to use gateway and netmask of server interface. [not required if gateway and netmask is given]
+     gateway: Gateway of DHCP server. [ignored if dup_gw_nm is given]
+     netmask: Netmask of DHCP server. [ignored if dup_gw_nm is given]
+  ```
+
+- Example
+  ```
+  config dhcp_server ipv4 add --mode PORT --dup_gw_nm --lease_time 300 Vlan1000
+  config dhcp_server ipv4 add --mode PORT --lease_time 300 --gateway 192.168.0.1 --netmask 255.255.255.0 Vlan1000
+  ```
+
+**config dhcp_server del**
+
+This command is used to delete all dhcp_server config for DHCP interface, to be clarify that delete a `enable` dhcp_server is not allowed.
+- Usage
+  ```
+  config dhcp_server ipv4 del <dhcp_interface>
+  ```
+
+- Example
+  ```
+  config dhcp_server ipv4 del Vlan1000
+  ```
+
+**config dhcp_server enable/disable**
+
+This command is used to enable or disable dhcp_server for DHCP interface, this state is set to `disable` by default while adding a new dhcp_server.
+- Usage
+  ```
+  config dhcp_server ipv4 (enable | disable) <dhcp_interface>
+  ```
+
+- Example
+  ```
+  config dhcp_server ipv4 enable Vlan1000
+  ```
+
+
+**config dhcp_server update**
+
+This command is used to update dhcp_server config.
+- Usage
+  ```
+  config dhcp_server ipv4 update --mode <mode> [--dup_gw_nm] [--lease_time <lease_time>] [--gateway <gateway>] [--netmask <netmask>] <dhcp_interface>
+  ```
+
+- Example
+  ```
+  config dhcp_server ipv4 update --mode PORT --dup_gw_nm --lease_time 300 Vlan1000
+  ```
+
+**config dhcp_server range add/del/update**
+
+This command is used to config ip range.
+- Usage
+  ```
+  # <ip_end> is not required, if not given, means ip_end is equal to ip_start
+  config dhcp_server ipv4 range add <range_name> <ip_start> [<ip_end>]
+  config dhcp_server ipv4 range update <range_name> <ip_start> [<ip_end>]
+  config dhcp_server ipv4 range del <range_name>
+  ```
+
+- Example
+  ```
+  config dhcp_server ipv4 range add range1 192.168.0.1
+
+  config dhcp_server ipv4 range update range1 192.168.0.2
+
+  config dhcp_server ipv4 range del range1
+  ```
+
+**config dhcp_server bind/unbind**
+
+This command is used to config dhcp ip per interface.
+- Usage
+  ```
+  config dhcp_server ipv4 bind <vlan_interface> <interface> (--range <ip_range_list> | <ip_list>)
+  config dhcp_server ipv4 unbind <vlan_interface> <interface> (--range <ip_range_list> | <ip_list> | all)
+  ```
+
+- Example
+  ```
+  config dhcp_server ipv4 bind Vlan1000 Ethernet1 --range range1
+  config dhcp_server ipv4 bind Vlan2000 Ethernet0 192.168.1.5,192.168.1.6
+  config dhcp_server ipv4 unbind Vlan2000 Ethernet1 --range range1
+  config dhcp_server ipv4 unbind Vlan2000 Ethernet0 192.168.1.5,192.168.1.6
+  ```
+
+**config dhcp_server option add**
+
+This command is used to add dhcp option.
+Type field can refer to [Customize DHCP Packet Options](#customize-dhcp-packet-options).
+
+- Usage
+  ```
+  config dhcp_server ipv4 option add <option_name> <option_id> [<type>] <value>
+  ```
+
+- Example
+  ```
+  config dhcp_server ipv4 option add option_1 223 string host_1
+  ```
+
+**config dhcp_server option del**
+
+This command is used to del dhcp option.
+
+- Usage
+  ```
+  config dhcp_server ipv4 option del <option_name>
+  ```
+
+- Example
+  ```
+  config dhcp_server ipv4 option del option_1
+  ```
+
+**config dhcp_server option bind**
+
+This command is used to bind dhcp option per dhcp interface.
+- Usage
+  ```
+  config dhcp_server ipv4 option bind <dhcp_interface> <option_list>
+  ```
+
+- Example
+  ```
+  config dhcp_server ipv4 option bind Vlan1000 option_1
+  ```
+
+**config dhcp_server option unbind**
+
+This command is used to unbind dhcp option.
+- Usage
+  ```
+  config dhcp_server ipv4 option unbind <dhcp_interface> (--all | <option_name>)
+  ```
+
+- Exampe
+  ```
+  config dhcp_server ipv4 option unbind Vlan1000 --all
+
+  config dhcp_server ipv4 option unbind Vlan1000 option_1
+  ```
 
 ## Drop Counters
 
