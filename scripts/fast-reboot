@@ -517,14 +517,33 @@ function check_docker_exec()
 
 function check_pfc_storm_active()
 {
-    # check if PFC storm is active (abort warmboot) or restored (proceed with warmboot)
-    PFC_STORMED="stormed"
-    pfcwd show stats | grep -i stormed || PFC_STORMED="not_stormed"
-    if [[ "${PFC_STORMED}" = "stormed" ]]; then
-        error "PFC storm detected. Aborting warm-reboot to prevent failure in recovery path..."
+    # Check if PFC storm is active by directly querying the database
+    # This is more robust than parsing pfcwd command output
+    debug "Checking for active PFC storms..."
+    
+    # Get all queue OIDs from COUNTERS_DB
+    local queue_oids=$(sonic-db-cli COUNTERS_DB HVALS COUNTERS_QUEUE_NAME_MAP)
+    local storm_detected=false
+    local stormed_queues=""
+    
+    # Check PFC_WD_STATUS for each queue
+    for queue_oid in $queue_oids; do
+        if [ -n "$queue_oid" ]; then
+            local pfc_status=$(sonic-db-cli COUNTERS_DB HGET "COUNTERS:${queue_oid}" PFC_WD_STATUS)
+            if [[ "${pfc_status}" == "stormed" ]]; then
+                storm_detected=true
+                # Get queue name for this OID for logging
+                local queue_name=$(sonic-db-cli COUNTERS_DB HGETALL COUNTERS_QUEUE_NAME_MAP | grep -B1 "${queue_oid}" | head -n1)
+                stormed_queues="${stormed_queues} ${queue_name}"
+            fi
+        fi
+    done
+    
+    if [ "$storm_detected" = true ]; then
+        error "PFC storm detected on queues:${stormed_queues}. Aborting warm-reboot to prevent failure in recovery path..."
         exit ${EXIT_PFC_STORM_DETECTED}
     else
-        debug "PFC active storm not detected. Safe to proceed w/ warm-reboot..."
+        debug "No active PFC storms detected. Safe to proceed with warm-reboot..."
     fi
 }
 
