@@ -2824,6 +2824,67 @@ def banner(db):
     click.echo(tabulate(messages, headers=hdrs, tablefmt='simple', missingval=''))
 
 
+@cli.command()
+def tx_error_monitor():
+    """Show tx error monitor configuration"""
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    header = ['Poll Interval', 'Threshold']
+    body =[]
+
+    table_dict = config_db.get_entry('TX_ERROR_MONITOR', 'global')  
+
+    if not table_dict:
+        # Initialize table with default values
+        default_config = {
+            'poll_interval': '10',
+            'threshold': '10'
+        }
+        config_db.set_entry('TX_ERROR_MONITOR', 'global', default_config)
+        table_dict = default_config
+        click.echo("TX error monitor initialized with default configuration")
+
+    body.append([
+        table_dict.get('poll_interval', ''),
+        table_dict.get('threshold', '')
+    ])
+
+    click.echo(tabulate(body, header, tablefmt='grid', missingval=''))
+
+
+
+@cli.command()
+def tx_error_state():
+    """Show tx error state for an interface"""
+
+    state_db=SonicV2Connector(host='127.0.0.1')
+    state_db.connect(state_db.STATE_DB)
+
+    header= ['Interface', 'TX Error State']
+    body=[]
+
+    keys=state_db.keys(state_db.STATE_DB, 'TX_ERROR_STATE_TABLE|*')
+
+    if not keys:
+        click.echo("TX error state is not available")
+        return
+
+    sorted_keys=natsorted(keys)
+
+    for key in sorted_keys:
+        port_name=key.split('|')[-1]
+        state = state_db.get_all(state_db.STATE_DB, key)
+        body.append([port_name, state.get('status', 'Unknown')])
+
+    state_db.close(state_db.STATE_DB)
+
+    if not body:
+        click.echo("No tx error state found")
+        return
+
+    click.echo(tabulate(body, header, tablefmt='grid', missingval=''))
+
+
 # Load plugins and register them
 helper = util_base.UtilHelper()
 helper.load_and_register_plugins(plugins, cli)
