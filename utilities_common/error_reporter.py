@@ -11,14 +11,15 @@ import uuid
 
 
 class SonicErrorReportManager:
-    def __init__(self, report_dir="/host/sonic-upgrade-reports", scenario=None):
+    def __init__(self, report_dir="/host/sonic-upgrade-reports",
+                 scenario=None):
         self.report_dir = report_dir
         self.scenario = scenario
         if not os.path.exists(self.report_dir):
             os.makedirs(self.report_dir)
 
     def get_report_path(self, guid):
-        """Get the path for a report file using <scenario>.<eventGuid>.json format."""
+        """Get path for report file using <scenario>.<eventGuid>.json."""
         # Sanitize guid to prevent directory traversal attacks
         # Only allow alphanumeric, dash, underscore, and dot
         safe_guid = re.sub(r'[^a-zA-Z0-9._-]', '_', guid)
@@ -44,7 +45,8 @@ class SonicErrorReportManager:
         """Apply kwargs to customize report fields with defaults."""
         # sonic_upgrade_summary customization
         if 'package_version' in kwargs:
-            report["sonic_upgrade_summary"]["sonic_upgrade_package_version"] = kwargs['package_version']
+            report["sonic_upgrade_summary"][
+                "sonic_upgrade_package_version"] = kwargs['package_version']
 
         # sonic_upgrade_actions customization
         actions = report["sonic_upgrade_actions"]
@@ -203,18 +205,18 @@ class SonicErrorReportManager:
 
         # Clear errors for successful operation
         report["sonic_upgrade_report"]["errors"] = []
-        
+
         # Apply any customizations from kwargs
         self._apply_kwargs_to_report(report, **kwargs)
 
         # Write back atomically
         temp_path = report_path + '.tmp'
-        
+
         with open(temp_path, 'w') as f:
             json.dump(report, f, indent=2)
             f.flush()
             os.fsync(f.fileno())  # Force write to disk
-        
+
         # Atomic rename (on POSIX systems)
         os.rename(temp_path, report_path)
 
