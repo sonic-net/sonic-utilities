@@ -520,6 +520,12 @@ def filter_out_local_interfaces(namespace, keys):
     tbl = swsscommon.Table(db, 'ROUTE_TABLE')
 
     for k in keys:
+        if tbl.get(k)[0] == False:
+            # ISU2023101259067, if kernel route prefix is xxxx::yy/128, fpmsyncd will write ROUTE_TABLE:xxxx::yy without /128 to apll db
+            # then, tbl.get(k) will get content fail because of missing key
+            if "/128" in k:
+                k = k.split("/")[0]
+
         e = dict(tbl.get(k)[1])
 
         ifname = e.get('ifname', '')
