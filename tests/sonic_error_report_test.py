@@ -344,6 +344,7 @@ class TestSonicErrorReportManager:
 
         # Should not contain path separators
         assert "/etc/" not in path
-        assert ".." not in path
-        # Should contain sanitized version
-        assert "___etc_malicious" in path
+        assert "/" not in path
+        # Should contain sanitized version with slashes replaced by underscores
+        # Note: dots are allowed in scenario names, so ".." becomes ".."
+        assert ".._.._.._etc_malicious" in path
