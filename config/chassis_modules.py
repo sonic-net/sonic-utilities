@@ -65,6 +65,7 @@ def get_state_transition_in_progress(db, chassis_module_name):
     value = fvs.get('state_transition_in_progress', 'False') if fvs else 'False'
     return value
 
+
 def set_state_transition_in_progress(db, chassis_module_name, value):
     ensure_statedb_connected(db)
     state_db = db.statedb
