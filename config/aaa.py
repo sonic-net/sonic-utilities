@@ -257,6 +257,24 @@ tacacs.add_command(passkey)
 default.add_command(passkey)
 
 
+@click.command()
+@click.argument('ip', metavar='<ip_address>', required=False)
+@click.pass_context
+def src_ip(ctx, ip):
+    """Specify TACACS+ source ip address"""
+    if ctx.obj == 'default':
+        del_table_key('TACPLUS', 'global', 'src_ip')
+    elif not ip:
+        click.echo('Not support empty argument')
+        return
+    elif is_ipaddress(ip):
+        add_table_kv('TACPLUS', 'global', 'src_ip', ip)
+    else:
+        click.echo('Invalid ip address')
+tacacs.add_command(src_ip)
+default.add_command(src_ip)
+
+
 # cmd: tacacs add <ip_address> --timeout SECOND --key SECRET --type TYPE --port PORT --pri PRIORITY
 @click.command()
 @click.argument('address', metavar='<ip_address>')
