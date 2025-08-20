@@ -61,37 +61,26 @@ def get_config_module_state(db, chassis_module_name):
 
 def get_state_transition_in_progress(db, chassis_module_name):
     ensure_statedb_connected(db)
-    fvs = db.statedb.get_entry('CHASSIS_MODULE_INFO_TABLE', chassis_module_name)
+    fvs = db.statedb.get_entry('CHASSIS_MODULE_TABLE', chassis_module_name)
     value = fvs.get('state_transition_in_progress', 'False') if fvs else 'False'
     return value
 
 def set_state_transition_in_progress(db, chassis_module_name, value):
     ensure_statedb_connected(db)
     state_db = db.statedb
-
-    # Write to the correct table the daemon watches
-    table = 'CHASSIS_MODULE_INFO_TABLE'
-
-    entry = state_db.get_entry(table, chassis_module_name) or {}
+    entry = state_db.get_entry('CHASSIS_MODULE_TABLE', chassis_module_name) or {}
     entry['state_transition_in_progress'] = value
-
     if value == 'True':
         entry['transition_start_time'] = datetime.utcnow().isoformat()
-        # Record the type so the daemon knows this is a shutdown
-        entry['transition_type'] = 'shutdown'
     else:
         entry.pop('transition_start_time', None)
-        entry.pop('transition_type', None)
-        # Explicit deletes using the correct table
-        state_db.delete_field(table, chassis_module_name, 'transition_start_time')
-        state_db.delete_field(table, chassis_module_name, 'transition_type')
+    state_db.set_entry('CHASSIS_MODULE_TABLE', chassis_module_name, entry)
 
-    state_db.set_entry(table, chassis_module_name, entry)
 
 def is_transition_timed_out(db, chassis_module_name):
     ensure_statedb_connected(db)
     state_db = db.statedb
-    fvs = state_db.get_entry('CHASSIS_MODULE_INFO_TABLE', chassis_module_name)
+    fvs = state_db.get_entry('CHASSIS_MODULE_TABLE', chassis_module_name)
     if not fvs:
         return False
     start_time_str = fvs.get('transition_start_time')
@@ -202,7 +191,10 @@ def shutdown_chassis_module(db, chassis_module_name):
             set_state_transition_in_progress(db, chassis_module_name, 'True')
 
         click.echo(f"Shutting down chassis module {chassis_module_name}")
-        config_db.set_entry('CHASSIS_MODULE', chassis_module_name, {'admin_status': 'down'})
+        fvs = {
+            'admin_status': 'down',
+        }
+        config_db.set_entry('CHASSIS_MODULE', chassis_module_name, fvs)
     else:
         click.echo(f"Shutting down chassis module {chassis_module_name}")
         config_db.set_entry('CHASSIS_MODULE', chassis_module_name, {'admin_status': 'down'})

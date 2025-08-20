@@ -449,10 +449,8 @@ class TestChassisModules(object):
         assert result == show_chassis_system_lags_output_lc4
 
     def test_shutdown_triggers_transition_tracking(self):
-        with (
-            mock.patch("config.chassis_modules.is_smartswitch", return_value=True),
-            mock.patch("config.chassis_modules.get_config_module_state", return_value='up')
-        ):
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value='up'):
 
             runner = CliRunner()
             db = Db()
@@ -471,7 +469,8 @@ class TestChassisModules(object):
             print(f"admin_status: {admin_status}")
             assert admin_status == "down"
 
-            state_fvs = db.db.get_all("STATE_DB", "CHASSIS_MODULE_INFO_TABLE|DPU0")
+            # Check STATE_DB for transition flags
+            state_fvs = db.db.get_all("STATE_DB", "CHASSIS_MODULE_TABLE|DPU0")
             transition_flag = state_fvs.get("state_transition_in_progress")
             transition_time = state_fvs.get("transition_start_time")
 
@@ -482,10 +481,8 @@ class TestChassisModules(object):
             assert transition_time is not None
 
     def test_shutdown_triggers_transition_in_progress(self):
-        with (
-            mock.patch("config.chassis_modules.is_smartswitch", return_value=True),
-            mock.patch("config.chassis_modules.get_config_module_state", return_value='up')
-        ):
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value='up'):
 
             runner = CliRunner()
             db = Db()
@@ -506,15 +503,13 @@ class TestChassisModules(object):
             print(result.output)
             assert result.exit_code == 0
 
-            fvs = db.db.get_all("STATE_DB", "CHASSIS_MODULE_INFO_TABLE|DPU0")
+            fvs = db.db.get_all("STATE_DB", "CHASSIS_MODULE_TABLE|DPU0")
             print(f"state_transition_in_progress:{fvs['state_transition_in_progress']}")
             print(f"transition_start_time:{fvs['transition_start_time']}")
 
     def test_shutdown_triggers_transition_timeout(self):
-        with (
-            mock.patch("config.chassis_modules.is_smartswitch", return_value=True),
-            mock.patch("config.chassis_modules.get_config_module_state", return_value='up')
-        ):
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value='up'):
 
             runner = CliRunner()
             db = Db()
@@ -535,15 +530,13 @@ class TestChassisModules(object):
             print(result.output)
             assert result.exit_code == 0
 
-            fvs = db.db.get_all("STATE_DB", "CHASSIS_MODULE_INFO_TABLE|DPU0")
+            fvs = db.db.get_all("STATE_DB", "CHASSIS_MODULE_TABLE|DPU0")
             print(f"state_transition_in_progress:{fvs['state_transition_in_progress']}")
             print(f"transition_start_time:{fvs['transition_start_time']}")
 
     def test_startup_triggers_transition_tracking(self):
-        with (
-            mock.patch("config.chassis_modules.is_smartswitch", return_value=True),
-            mock.patch("config.chassis_modules.get_config_module_state", return_value='down')
-        ):
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value='down'):
 
             runner = CliRunner()
             db = Db()
@@ -556,9 +549,9 @@ class TestChassisModules(object):
             print(result.output)
             assert result.exit_code == 0
 
-            fvs = db.db.get_all("STATE_DB", "CHASSIS_MODULE_INFO_TABLE|DPU0")
-            print(f"state_transition_in_progress:{fvs.get('state_transition_in_progress')}")
-            print(f"transition_start_time:{fvs.get('transition_start_time')}")
+            fvs = db.db.get_all("STATE_DB", "CHASSIS_MODULE_TABLE|DPU0")
+            print(f"state_transition_in_progress:{fvs['state_transition_in_progress']}")
+            print(f"transition_start_time:{fvs['transition_start_time']}")
 
     def test_set_state_transition_in_progress_sets_and_removes_timestamp(self):
         db = mock.MagicMock()
