@@ -37,7 +37,7 @@
                 "td4": [ "Nokia-IXR7220-D4-36D" ],
                 "j2c+": [ "Nokia-IXR7250E-36x100G", "Nokia-IXR7250E-36x400G", "Nokia-IXR7250-X3B" ],
                 "q2c+": [ "Nokia-IXR7250-X1B" ],
-                "jr2": [ "Arista-7800R3-48CQ2-C48", "Arista-7800R3-48CQM2-C48" ]
+                "jr2": [ "Arista-7800R3-48CQ2-C48", "Arista-7800R3-48CQM2-C48", "Arista-7808R3A-FM" ]
             }
 	}
     },
