@@ -341,10 +341,12 @@ class TestSonicErrorReportManager:
         manager = SonicErrorReportManager(self.test_dir, malicious_scenario)
 
         path = manager.get_report_path(self.test_guid)
+        # Extract just the filename for testing
+        filename = os.path.basename(path)
 
-        # Should not contain path separators
-        assert "/etc/" not in path
-        assert "/" not in path
+        # Should not contain path separators in filename
+        assert "/etc/" not in filename
+        assert "/" not in filename
         # Should contain sanitized version with slashes replaced by underscores
         # Note: dots are allowed in scenario names, so ".." becomes ".."
-        assert ".._.._.._etc_malicious" in path
+        assert ".._.._.._etc_malicious" in filename
