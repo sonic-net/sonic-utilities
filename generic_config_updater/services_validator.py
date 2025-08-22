@@ -1,5 +1,6 @@
 import os
 import subprocess
+import shlex
 import time
 from .gu_common import genericUpdaterLogging
 
@@ -24,7 +25,9 @@ def command_wrapper(command):
     if "systemctl" in command:
         command = f"nsenter --target 1 --pid --mount --uts --ipc --net {command}"
     try:
-        result = subprocess.run(command, shell=True, capture_output=False, check=False)
+        # Split command into arguments for shell=False
+        cmd_args = shlex.split(command)
+        result = subprocess.run(cmd_args, capture_output=False, check=False)
         return result.returncode
     except Exception as e:
         logger.log(logger.LOG_PRIORITY_ERROR, 

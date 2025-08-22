@@ -10,23 +10,29 @@ from generic_config_updater.services_validator import vlan_validator, rsyslog_va
 import generic_config_updater.gu_common
 from generic_config_updater.services_validator import ntp_validator
 
-# Mimics os.system call
+# Mimics subprocess.run call
 #
-os_system_calls = []
-os_system_call_index = 0
+subprocess_calls = []
+subprocess_call_index = 0
 time_sleep_calls = []
 time_sleep_call_index = 0
 msg = ""
 
-def mock_os_system_call(cmd):
-    global os_system_calls, os_system_call_index
+class MockSubprocessResult:
+    def __init__(self, returncode):
+        self.returncode = returncode
 
-    assert os_system_call_index < len(os_system_calls)
-    entry = os_system_calls[os_system_call_index]
-    os_system_call_index += 1
-
-    assert cmd == entry["cmd"], msg
-    return entry["rc"]
+def mock_subprocess_run(cmd_args, capture_output=False, check=False):
+    global subprocess_calls, subprocess_call_index
+    
+    assert subprocess_call_index < len(subprocess_calls)
+    entry = subprocess_calls[subprocess_call_index]
+    subprocess_call_index += 1
+    
+    # Convert cmd_args list back to string for comparison
+    cmd_str = ' '.join(cmd_args)
+    assert cmd_str == entry["cmd"], msg
+    return MockSubprocessResult(entry["rc"])
 
 def mock_time_sleep_call(sleep_time):
     global time_sleep_calls, time_sleep_call_index
@@ -237,46 +243,46 @@ test_ntp_data = [
 
 class TestServiceValidator(unittest.TestCase):
 
-    @patch("generic_config_updater.change_applier.os.system")
-    def test_change_apply_os_system(self, mock_os_sys):
-        global os_system_calls, os_system_call_index
+    @patch("generic_config_updater.services_validator.subprocess.run")
+    def test_change_apply_subprocess_run(self, mock_subprocess):
+        global subprocess_calls, subprocess_call_index
 
-        mock_os_sys.side_effect = mock_os_system_call
+        mock_subprocess.side_effect = mock_subprocess_run
 
         for entry in test_data:
             if entry["cmd"]:
-                os_system_calls.append({"cmd": entry["cmd"], "rc": 0 })
+                subprocess_calls.append({"cmd": entry["cmd"], "rc": 0 })
             msg = "case failed: {}".format(str(entry))
 
             vlan_validator(entry["old"], entry["upd"], None)
 
 
-        os_system_calls = []
-        os_system_call_index = 0
+        subprocess_calls = []
+        subprocess_call_index = 0
         for entry in test_rsyslog_data:
             if entry["cmd"]:
                 for c in entry["cmd"].split(","):
-                    os_system_calls.append({"cmd": c, "rc": 0})
+                    subprocess_calls.append({"cmd": c, "rc": 0})
             msg = "case failed: {}".format(str(entry))
 
             rsyslog_validator(entry["old"], entry["upd"], None)
 
 
-        os_system_calls = []
-        os_system_call_index = 0
+        subprocess_calls = []
+        subprocess_call_index = 0
         for entry in test_vlanintf_data:
             if entry["cmd"]:
-                os_system_calls.append({"cmd": entry["cmd"], "rc": 0 })
+                subprocess_calls.append({"cmd": entry["cmd"], "rc": 0 })
             msg = "case failed: {}".format(str(entry))
 
             vlanintf_validator(entry["old"], entry["upd"], None)
 
-        os_system_calls = []
-        os_system_call_index = 0
+        subprocess_calls = []
+        subprocess_call_index = 0
         for entry in test_ntp_data:
             if entry["cmd"]:
                 for c in entry["cmd"].split(","):
-                    os_system_calls.append({"cmd": c, "rc": 0})
+                    subprocess_calls.append({"cmd": c, "rc": 0})
 
             ntp_validator(entry["old"], entry["upd"], None)
 
