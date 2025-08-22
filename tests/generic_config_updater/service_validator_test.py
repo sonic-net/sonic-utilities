@@ -18,21 +18,24 @@ time_sleep_calls = []
 time_sleep_call_index = 0
 msg = ""
 
+
 class MockSubprocessResult:
     def __init__(self, returncode):
         self.returncode = returncode
 
+
 def mock_subprocess_run(cmd_args, capture_output=False, check=False):
     global subprocess_calls, subprocess_call_index
-    
+
     assert subprocess_call_index < len(subprocess_calls)
     entry = subprocess_calls[subprocess_call_index]
     subprocess_call_index += 1
-    
+
     # Convert cmd_args list back to string for comparison
     cmd_str = ' '.join(cmd_args)
     assert cmd_str == entry["cmd"], msg
     return MockSubprocessResult(entry["rc"])
+
 
 def mock_time_sleep_call(sleep_time):
     global time_sleep_calls, time_sleep_call_index
@@ -251,11 +254,10 @@ class TestServiceValidator(unittest.TestCase):
 
         for entry in test_data:
             if entry["cmd"]:
-                subprocess_calls.append({"cmd": entry["cmd"], "rc": 0 })
+                subprocess_calls.append({"cmd": entry["cmd"], "rc": 0})
             msg = "case failed: {}".format(str(entry))
 
             vlan_validator(entry["old"], entry["upd"], None)
-
 
         subprocess_calls = []
         subprocess_call_index = 0
@@ -267,12 +269,11 @@ class TestServiceValidator(unittest.TestCase):
 
             rsyslog_validator(entry["old"], entry["upd"], None)
 
-
         subprocess_calls = []
         subprocess_call_index = 0
         for entry in test_vlanintf_data:
             if entry["cmd"]:
-                subprocess_calls.append({"cmd": entry["cmd"], "rc": 0 })
+                subprocess_calls.append({"cmd": entry["cmd"], "rc": 0})
             msg = "case failed: {}".format(str(entry))
 
             vlanintf_validator(entry["old"], entry["upd"], None)
