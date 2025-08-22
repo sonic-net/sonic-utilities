@@ -140,6 +140,8 @@ function wait_for_dpu_reboot_status()
 # Function to send reboot command to DPU
 function gnmi_reboot_dpu()
 {
+    local DPU_NAME=$1
+
     # Retrieve DPU IP and GNMI port
     dpu_ip=$(get_dpu_ip "${DPU_NAME}")
     port=$(get_gnmi_port "${DPU_NAME}")
