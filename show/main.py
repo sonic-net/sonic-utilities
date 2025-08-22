@@ -2657,10 +2657,8 @@ def peer(db, peer_ip, namespace):
 
 # 'suppress-fib-pending' subcommand ("show suppress-fib-pending")
 @cli.command('suppress-fib-pending')
-@click.option('--namespace', '-n', 'namespace', default=None, show_default=True,
-              type=click.Choice(multi_asic_util.multi_asic_ns_choices()), help='Namespace name or all')
 @clicommon.pass_db
-def suppress_pending_fib(db, namespace):
+def suppress_pending_fib(db):
     """ Show the status of suppress pending FIB feature """
 
     if multi_asic.get_num_asics() > 1:
@@ -2671,9 +2669,6 @@ def suppress_pending_fib(db, namespace):
         masic = False
 
     for ns in namespace_list:
-        if namespace and namespace != ns:
-            continue
-
         config_db = db.cfgdb_clients[ns]
         field_values = config_db.get_entry('DEVICE_METADATA', 'localhost')
         state = field_values.get('suppress-fib-pending', 'enabled').title()
