@@ -1,4 +1,5 @@
 import os
+import subprocess
 import time
 from .gu_common import genericUpdaterLogging
 
@@ -22,7 +23,14 @@ def command_wrapper(command):
     """
     if "systemctl" in command:
         command = f"nsenter --target 1 --pid --mount --uts --ipc --net {command}"
-    return os.system(command)
+    try:
+        result = subprocess.run(command, shell=True, capture_output=False, check=False)
+        return result.returncode
+    except Exception as e:
+        logger.log(logger.LOG_PRIORITY_ERROR, 
+                f"Command execution failed: {command}, error: {e}",
+                print_to_console)
+        return 1
 
 
 def _service_restart(svc_name):
