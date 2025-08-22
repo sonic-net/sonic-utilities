@@ -16,11 +16,11 @@ from packaging import version
 
 
 # Copy necessary directories and files for python package
-if not os.path.exists("./generic_config_updater"):
+if os.path.exists("../generic_config_updater"):
     shutil.copytree("../generic_config_updater", ".")
-if not os.path.exists("./utilities_common"):
+if os.path.exists("../utilities_common"):
     shutil.copytree("../utilities_common", ".")
-if not os.path.exists("./scripts/gcu.py"):
+if os.path.exists("../scripts/gcu.py"):
     if not os.path.exists("./scripts"):
         os.makedirs("./scripts")
     shutil.copy("../scripts/gcu.py", "./scripts/")
