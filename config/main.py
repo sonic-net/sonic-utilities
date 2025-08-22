@@ -2572,8 +2572,15 @@ def suppress_pending_fib(db, state):
     ''' Enable or disable pending FIB suppression. Once enabled,
         BGP will not advertise routes that are not yet installed in the hardware '''
 
-    config_db = db.cfgdb
-    config_db.mod_entry('DEVICE_METADATA', 'localhost', {"suppress-fib-pending": state})
+    namespace_list = [multi_asic.DEFAULT_NAMESPACE]
+
+    # For multi-asic system apply configuration to all asics
+    if multi_asic.get_num_asics() > 1:
+        namespace_list = multi_asic.get_namespaces_from_linux()
+
+    for ns in namespace_list:
+        config_db = db.cfgdb_clients[ns]
+        config_db.mod_entry('DEVICE_METADATA', 'localhost', {"suppress-fib-pending": state})
 
 #
 # 'yang_config_validation' command ('config yang_config_validation ...')
