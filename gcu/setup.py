@@ -7,7 +7,6 @@
 # https://stackoverflow.com/questions/18787036/difference-between-entry-points-console-scripts-and-scripts-in-setup-py
 from __future__ import print_function
 import sys
-import fastentrypoints
 import shutil
 import os
 
@@ -78,11 +77,11 @@ setup(
         'netifaces>=0.10.7',
         'lazy-object-proxy',
     ] + sonic_dependencies,
-    setup_requires= [
+    setup_requires=[
         'pytest-runner',
         'wheel'
     ],
-    extras_require = {
+    extras_require={
     },
     classifiers=[
         'Development Status :: 3 - Alpha',

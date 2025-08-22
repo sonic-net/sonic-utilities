@@ -4,7 +4,7 @@
 Generic Config Updater (GCU) Script
 Provides APIs for configuration management in SONiC:
 1. Create checkpoint
-2. Delete checkpoint  
+2. Delete checkpoint
 3. Config apply-patch
 4. Config replace
 5. Config save
@@ -16,7 +16,6 @@ import json
 import argparse
 import jsonpatch
 import subprocess
-from pathlib import Path
 
 # Add the parent directory to Python path to import sonic-utilities modules
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -24,8 +23,6 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 try:
     from generic_config_updater.generic_updater import GenericUpdater, ConfigFormat
     from generic_config_updater.gu_common import GenericConfigUpdaterError
-    from utilities_common.db import Db
-    from utilities_common import cli as clicommon
     from sonic_py_common import multi_asic
 except ImportError as e:
     print(f"Error importing required modules: {e}", file=sys.stderr)
@@ -60,7 +57,7 @@ def validate_patch(patch):
     try:
         if not isinstance(patch, list):
             return False
-        
+
         for change in patch:
             if not isinstance(change, dict):
                 return False
@@ -78,13 +75,13 @@ def create_checkpoint(args):
     try:
         if args.verbose:
             print(f"Creating checkpoint: {args.checkpoint_name}")
-            
+
         # Use GenericUpdater to create checkpoint
         updater = GenericUpdater()
         updater.checkpoint(args.checkpoint_name, args.verbose)
-        
+
         print_success(f"Checkpoint '{args.checkpoint_name}' created successfully.")
-        
+
     except Exception as ex:
         print_error(f"Failed to create checkpoint '{args.checkpoint_name}': {ex}")
         sys.exit(1)
@@ -95,13 +92,13 @@ def delete_checkpoint(args):
     try:
         if args.verbose:
             print(f"Deleting checkpoint: {args.checkpoint_name}")
-            
+
         # Use GenericUpdater to delete checkpoint
         updater = GenericUpdater()
         updater.delete_checkpoint(args.checkpoint_name, args.verbose)
-        
+
         print_success(f"Checkpoint '{args.checkpoint_name}' deleted successfully.")
-        
+
     except Exception as ex:
         print_error(f"Failed to delete checkpoint '{args.checkpoint_name}': {ex}")
         sys.exit(1)
@@ -112,11 +109,11 @@ def list_checkpoints(args):
     try:
         updater = GenericUpdater()
         checkpoints = updater.list_checkpoints(args.time, args.verbose)
-        
+
         if not checkpoints:
             print("No checkpoints found.")
             return
-            
+
         if args.time and isinstance(checkpoints[0], dict):
             print("Available checkpoints:")
             for checkpoint in checkpoints:
@@ -125,7 +122,7 @@ def list_checkpoints(args):
             print("Available checkpoints:")
             for checkpoint in checkpoints:
                 print(f"  - {checkpoint}")
-                
+
     except Exception as ex:
         print_error(f"Failed to list checkpoints: {ex}")
         sys.exit(1)
@@ -137,24 +134,24 @@ def apply_patch(args):
         if args.verbose:
             print(f"Applying patch from: {args.patch_file}")
             print(f"Format: {args.format}")
-        
+
         # Read and validate patch file
         with open(args.patch_file, 'r') as f:
             patch_content = f.read()
             patch_json = json.loads(patch_content)
             patch = jsonpatch.JsonPatch(patch_json)
-        
+
         if not validate_patch(patch_json):
             raise GenericConfigUpdaterError(f"Invalid patch format in file: {args.patch_file}")
-        
+
         # Apply patch using GenericUpdater
         config_format = ConfigFormat[args.format.upper()]
         updater = GenericUpdater()
-        updater.apply_patch(patch, config_format, args.verbose, False, 
-                          args.ignore_non_yang_tables, args.ignore_path)
-        
+        updater.apply_patch(patch, config_format, args.verbose, False,
+                            args.ignore_non_yang_tables, args.ignore_path)
+
         print_success("Patch applied successfully.")
-            
+
     except Exception as ex:
         print_error(f"Failed to apply patch: {ex}")
         sys.exit(1)
@@ -166,20 +163,20 @@ def replace_config(args):
         if args.verbose:
             print(f"Replacing configuration from: {args.config_file}")
             print(f"Format: {args.format}")
-        
+
         # Read configuration file
         with open(args.config_file, 'r') as f:
             config_content = f.read()
             target_config = json.loads(config_content)
-        
+
         # Replace configuration using GenericUpdater
         config_format = ConfigFormat[args.format.upper()]
         updater = GenericUpdater()
         updater.replace(target_config, config_format, args.verbose, False,
-                       args.ignore_non_yang_tables, args.ignore_path)
-        
+                        args.ignore_non_yang_tables, args.ignore_path)
+
         print_success("Configuration replaced successfully.")
-            
+
     except Exception as ex:
         print_error(f"Failed to replace configuration: {ex}")
         sys.exit(1)
@@ -193,43 +190,43 @@ def save_config(args):
 
         if args.verbose:
             print(f"Saving configuration to: {filename}")
-        
+
         # Get current configuration using sonic-cfggen
         try:
             # Handle multi-ASIC configurations
             if multi_asic.is_multi_asic():
                 # Save all ASIC configurations to a single file
                 all_configs = {}
-                
+
                 # Get host configuration
                 cmd = ["sonic-cfggen", "-d", "--print-data"]
                 result = subprocess.run(cmd, capture_output=True, text=True, check=True)
                 host_config = json.loads(result.stdout)
                 all_configs['localhost'] = host_config
-                
+
                 # Get each ASIC configuration
                 for namespace in multi_asic.get_namespace_list():
                     cmd = ["sonic-cfggen", "-d", "--print-data", "-n", namespace]
                     result = subprocess.run(cmd, capture_output=True, text=True, check=True)
                     asic_config = json.loads(result.stdout)
                     all_configs[namespace] = asic_config
-                
+
                 config_to_save = all_configs
             else:
                 # Single ASIC configuration
                 cmd = ["sonic-cfggen", "-d", "--print-data"]
                 result = subprocess.run(cmd, capture_output=True, text=True, check=True)
                 config_to_save = json.loads(result.stdout)
-            
+
             # Save to file
             with open(filename, 'w') as f:
                 json.dump(config_to_save, f, indent=2)
-            
+
             print_success(f"Configuration saved successfully to '{filename}'.")
-            
+
         except subprocess.CalledProcessError as e:
             raise Exception(f"Failed to get current configuration: {e}")
-            
+
     except Exception as ex:
         print_error(f"Failed to save configuration: {ex}")
         sys.exit(1)
@@ -240,14 +237,14 @@ def rollback_config(args):
     try:
         if args.verbose:
             print(f"Rolling back to checkpoint: {args.checkpoint_name}")
-        
+
         # Rollback using GenericUpdater
         updater = GenericUpdater()
-        updater.rollback(args.checkpoint_name, args.verbose, False, 
-                        args.ignore_non_yang_tables, args.ignore_path)
-        
+        updater.rollback(args.checkpoint_name, args.verbose, False,
+                         args.ignore_non_yang_tables, args.ignore_path)
+
         print_success(f"Configuration rolled back to '{args.checkpoint_name}' successfully.")
-            
+
     except Exception as ex:
         print_error(f"Failed to rollback to checkpoint '{args.checkpoint_name}': {ex}")
         sys.exit(1)
@@ -272,24 +269,24 @@ Examples:
   %(prog)s save backup.json
         """
     )
-    
+
     subparsers = parser.add_subparsers(dest='command', help='Available commands')
-    
+
     # Create checkpoint command
     create_parser = subparsers.add_parser(
         'create-checkpoint',
         help='Create a checkpoint of the current configuration'
     )
     create_parser.add_argument(
-        'checkpoint_name', 
+        'checkpoint_name',
         help='Name for the checkpoint'
     )
     create_parser.add_argument(
-        '-v', '--verbose', 
+        '-v', '--verbose',
         action='store_true',
         help='Print additional details of what the operation is doing'
     )
-    
+
     # Delete checkpoint command
     delete_parser = subparsers.add_parser(
         'delete-checkpoint',
@@ -304,7 +301,7 @@ Examples:
         action='store_true',
         help='Print additional details of what the operation is doing'
     )
-    
+
     # List checkpoints command
     list_parser = subparsers.add_parser(
         'list-checkpoints',
@@ -320,7 +317,7 @@ Examples:
         action='store_true',
         help='Print additional details of what the operation is doing'
     )
-    
+
     # Apply patch command
     apply_parser = subparsers.add_parser(
         'apply-patch',
@@ -352,7 +349,7 @@ Examples:
         default=[],
         help='Ignore validation for config specified by given path (JsonPointer)'
     )
-    
+
     # Replace config command
     replace_parser = subparsers.add_parser(
         'replace',
@@ -384,7 +381,7 @@ Examples:
         default=[],
         help='Ignore validation for config specified by given path (JsonPointer)'
     )
-    
+
     # Save config command
     save_parser = subparsers.add_parser(
         'save',
@@ -400,7 +397,7 @@ Examples:
         action='store_true',
         help='Print additional details of what the operation is doing'
     )
-    
+
     # Rollback config command
     rollback_parser = subparsers.add_parser(
         'rollback',
@@ -426,14 +423,14 @@ Examples:
         default=[],
         help='Ignore validation for config specified by given path (JsonPointer)'
     )
-    
+
     # Parse arguments
     args = parser.parse_args()
-    
+
     if not args.command:
         parser.print_help()
         return
-    
+
     # Validate file paths if provided
     if hasattr(args, 'patch_file') and args.patch_file:
         if not os.path.exists(args.patch_file):
@@ -444,7 +441,7 @@ Examples:
         if not os.path.exists(args.config_file):
             print_error(f"Config file not found: {args.config_file}")
             sys.exit(1)
-    
+
     # Execute the appropriate command
     command_functions = {
         'create-checkpoint': create_checkpoint,
@@ -455,7 +452,7 @@ Examples:
         'save': save_config,
         'rollback': rollback_config
     }
-    
+
     if args.command in command_functions:
         command_functions[args.command](args)
     else:
@@ -466,4 +463,3 @@ Examples:
 
 if __name__ == '__main__':
     main()
-

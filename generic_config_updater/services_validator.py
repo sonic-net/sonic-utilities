@@ -30,9 +30,9 @@ def command_wrapper(command):
         result = subprocess.run(cmd_args, capture_output=False, check=False)
         return result.returncode
     except Exception as e:
-        logger.log(logger.LOG_PRIORITY_ERROR, 
-                f"Command execution failed: {command}, error: {e}",
-                print_to_console)
+        logger.log(logger.LOG_PRIORITY_ERROR,
+                   f"Command execution failed: {command}, error: {e}",
+                   print_to_console)
         return 1
 
 
