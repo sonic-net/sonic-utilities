@@ -436,7 +436,7 @@ Examples:
         if not os.path.exists(args.patch_file):
             print_error(f"Patch file not found: {args.patch_file}")
             sys.exit(1)
-    
+
     if hasattr(args, 'config_file') and args.config_file:
         if not os.path.exists(args.config_file):
             print_error(f"Config file not found: {args.config_file}")
