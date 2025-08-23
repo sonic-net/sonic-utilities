@@ -5,13 +5,17 @@ from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
 
 class TestDebugFrr(object):
-    @patch('subprocess.check_output', MagicMock(return_value='FRRouting'))
-    def setup(self, check_output = None):
+    @pytest.fixture(autouse=True)
+    def setupPatch(self):
         print('SETUP')
-        import debug.main as debug
-        import undebug.main as undebug
-        importlib.reload(debug)
-        importlib.reload(undebug)
+        with patch('subprocess.check_output') as check_output:
+            check_output.return_value = 'FRRouting'
+            import debug.main as debug
+            import undebug.main as undebug
+            importlib.reload(debug)
+            importlib.reload(undebug)
+
+            yield (debug, undebug)
 
     # debug
     @patch('debug.main.run_command')
@@ -378,13 +382,17 @@ class TestDebugFrr(object):
         run_command.assert_called_with(['sudo', 'vtysh', '-c', 'no debug zebra vxlan'])
 
 class TestDebugQuagga(object):
-    @patch('subprocess.check_output', MagicMock(return_value='quagga'))
-    def setup(self, check_output = None):
+    @pytest.fixture(autouse=True)
+    def setupPatch(self):
         print('SETUP')
-        import debug.main as debug
-        import undebug.main as undebug
-        importlib.reload(debug)
-        importlib.reload(undebug)
+        with patch('subprocess.check_output') as check_output:
+            check_output.return_value = 'quagga'
+            import debug.main as debug
+            import undebug.main as undebug
+            importlib.reload(debug)
+            importlib.reload(undebug)
+
+            yield (debug, undebug)
 
     # debug
     @patch('debug.main.run_command')

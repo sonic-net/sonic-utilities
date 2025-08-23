@@ -26,7 +26,7 @@ from utilities_common.db import Db
 
 add_lag_member_with_non_deft_tpid_configured="""\
 Usage: add [OPTIONS] <portchannel_name> <port_name>
-Try "add --help" for help.
+Try 'add --help' for help.
 
 Error: Port TPID of Ethernet20: 0x9200 is not at default 0x8100
 """

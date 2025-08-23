@@ -17,21 +17,21 @@ NOT_EXIST_VLAN_ERROR_MSG ="does not exist"
 
 INVALID_VRF_MSG ="""\
 Usage: bind [OPTIONS] <interface_name> <vrf_name>
-Try "bind --help" for help.
+Try 'bind --help' for help.
 
 Error: VRF Vrf2 does not exist!
 """
 
 INVALID_MGMT_VRF_MSG ="""\
 Usage: bind [OPTIONS] <interface_name> <vrf_name>
-Try "bind --help" for help.
+Try 'bind --help' for help.
 
 Error: VRF mgmt does not exist!
 """
 
 INVALID_VNET_MSG = """\
 Usage: bind [OPTIONS] <interface_name> <vrf_name>
-Try "bind --help" for help.
+Try 'bind --help' for help.
 
 Error: VNET Vnet_2000 does not exist!
 """
