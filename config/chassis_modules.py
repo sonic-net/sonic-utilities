@@ -8,7 +8,19 @@ import utilities_common.cli as clicommon
 from utilities_common.chassis import is_smartswitch, get_all_dpus
 from datetime import datetime, timedelta
 
+# New imports to use centralized APIs
+try:
+    # Prefer swsscommon SonicV2Connector
+    from swsscommon.swsscommon import SonicV2Connector
+except ImportError:
+    # Fallback (if ever needed)
+    from swsssdk import SonicV2Connector
+
+from sonic_platform_base.module_base import ModuleBase
+
 TIMEOUT_SECS = 10
+# CLI uses a single conservative ceiling for timeouts when breaking a stuck transition.
+# (Platform-specific per-op timeouts are applied by platform code during the transition itself.)
 TRANSITION_TIMEOUT = timedelta(seconds=240)  # 4 minutes
 
 
@@ -40,6 +52,41 @@ def modules():
     """Configure chassis modules"""
     pass
 
+# Centralized-transition helpers (use ModuleBase)
+
+def _state_db_conn():
+    """Return a connected SonicV2Connector for STATE_DB."""
+    conn = SonicV2Connector()
+    conn.connect(conn.STATE_DB)
+    return conn
+
+def _transition_entry(module_name: str) -> dict:
+    """Read the transition entry for a module via ModuleBase centralized API."""
+    mb = ModuleBase()
+    conn = _state_db_conn()
+    return mb.get_module_state_transition(conn, module_name) or {}
+
+def _transition_in_progress(module_name: str) -> bool:
+    entry = _transition_entry(module_name)
+    return entry.get("state_transition_in_progress") == "True"
+
+def _mark_transition_start(module_name: str, transition_type: str):
+    """Set transition via centralized API."""
+    mb = ModuleBase()
+    conn = _state_db_conn()
+    mb.set_module_state_transition(conn, module_name, transition_type)
+
+def _mark_transition_clear(module_name: str):
+    """Clear transition via centralized API."""
+    mb = ModuleBase()
+    conn = _state_db_conn()
+    mb.clear_module_state_transition(conn, module_name)
+
+def _transition_timed_out(module_name: str) -> bool:
+    """CLI-side safety ceiling (4 minutes) to break a stuck transition."""
+    mb = ModuleBase()
+    conn = _state_db_conn()
+    return mb.is_module_state_transition_timed_out(conn, module_name, int(TRANSITION_TIMEOUT.total_seconds()))
 
 def ensure_statedb_connected(db):
     if not hasattr(db, 'statedb'):
@@ -57,41 +104,6 @@ def get_config_module_state(db, chassis_module_name):
             return 'up'
     else:
         return fvs['admin_status']
-
-
-def get_state_transition_in_progress(db, chassis_module_name):
-    ensure_statedb_connected(db)
-    fvs = db.statedb.get_entry('CHASSIS_MODULE_TABLE', chassis_module_name)
-    value = fvs.get('state_transition_in_progress', 'False') if fvs else 'False'
-    return value
-
-
-def set_state_transition_in_progress(db, chassis_module_name, value):
-    ensure_statedb_connected(db)
-    state_db = db.statedb
-    entry = state_db.get_entry('CHASSIS_MODULE_TABLE', chassis_module_name) or {}
-    entry['state_transition_in_progress'] = value
-    if value == 'True':
-        entry['transition_start_time'] = datetime.utcnow().isoformat()
-    else:
-        entry.pop('transition_start_time', None)
-    state_db.set_entry('CHASSIS_MODULE_TABLE', chassis_module_name, entry)
-
-
-def is_transition_timed_out(db, chassis_module_name):
-    ensure_statedb_connected(db)
-    state_db = db.statedb
-    fvs = state_db.get_entry('CHASSIS_MODULE_TABLE', chassis_module_name)
-    if not fvs:
-        return False
-    start_time_str = fvs.get('transition_start_time')
-    if not start_time_str:
-        return False
-    try:
-        start_time = datetime.fromisoformat(start_time_str)
-    except ValueError:
-        return False
-    return datetime.utcnow() - start_time > TRANSITION_TIMEOUT
 
 #
 # Name: check_config_module_state_with_timeout
@@ -181,15 +193,15 @@ def shutdown_chassis_module(db, chassis_module_name):
         return
 
     if is_smartswitch():
-        if get_state_transition_in_progress(db, chassis_module_name) == 'True':
-            if is_transition_timed_out(db, chassis_module_name):
-                set_state_transition_in_progress(db, chassis_module_name, 'False')
+        if _transition_in_progress(chassis_module_name):
+            if _transition_timed_out(chassis_module_name):
+                _mark_transition_clear(chassis_module_name)
                 click.echo(f"Previous transition for module {chassis_module_name} timed out. Proceeding with shutdown.")
             else:
                 click.echo(f"Module {chassis_module_name} state transition is already in progress")
                 return
         else:
-            set_state_transition_in_progress(db, chassis_module_name, 'True')
+            _mark_transition_start(chassis_module_name, "shutdown")
 
         click.echo(f"Shutting down chassis module {chassis_module_name}")
         fvs = {
@@ -228,15 +240,15 @@ def startup_chassis_module(db, chassis_module_name):
         return
 
     if is_smartswitch():
-        if get_state_transition_in_progress(db, chassis_module_name) == 'True':
-            if is_transition_timed_out(db, chassis_module_name):
-                set_state_transition_in_progress(db, chassis_module_name, 'False')
+        if _transition_in_progress(chassis_module_name):
+            if _transition_timed_out(chassis_module_name):
+                _mark_transition_clear(chassis_module_name)
                 click.echo(f"Previous transition for module {chassis_module_name} timed out. Proceeding with startup.")
             else:
                 click.echo(f"Module {chassis_module_name} state transition is already in progress")
                 return
         else:
-            set_state_transition_in_progress(db, chassis_module_name, 'True')
+            _mark_transition_start(chassis_module_name, "startup")
 
         click.echo(f"Starting up chassis module {chassis_module_name}")
         fvs = {
