@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/python3
 
 """
 ecnconfig is the utility to
@@ -262,28 +262,35 @@ class EcnQ(object):
         self.updated_q_table = {}
 
     def gen_ports_key(self):
-        port_table = self.config_db.get_table(DEVICE_NEIGHBOR_TABLE_NAME)
-        self.ports_key = list(port_table.keys())
-
-        # Verify at least one port is available
-        if len(self.ports_key) == 0:
-            raise Exception("No active ports detected in table '{}'".format(DEVICE_NEIGHBOR_TABLE_NAME))
-
-        # In multi-ASIC platforms backend ethernet ports are identified as
-        # 'Ethernet-BPxy'. Add 1024 to sort backend ports to the end.
-        self.ports_key.sort(
-            key = lambda k: int(k[8:]) if "BP" not in k else int(k[11:]) + 1024
-        )
-
         switch_type  = device_info.get_localhost_info('switch_type', self.config_db)
         if switch_type == 'voq' or os.environ.get("UTILITIES_UNIT_TESTING_VOQ", "0") == "1":
-            ports_key_temp = []
-            host_name = device_info.get_localhost_info('hostname', self.config_db)
-            asic_name = device_info.get_localhost_info('asic_name', self.config_db)
-            for port_key in self.ports_key:
-                key = '|'.join([host_name, asic_name, port_key])
-                ports_key_temp.append(key)
-            self.ports_key = ports_key_temp
+            system_ports_key= []
+
+            q_table = self.config_db.get_table(QUEUE_TABLE_NAME)
+            queue_key = list(q_table.keys())
+            for x in queue_key:
+                if os.environ.get("UTILITIES_UNIT_TESTING_VOQ", "0") == "1":
+                    key = '|'.join([x[0]])
+                else:
+                    # x[0]->hostname,  x[1]->asic, x[2]->port (QUEUE|ixre-egl-board27|asic0|Ethernet80)
+                    key = '|'.join([x[0], x[1], x[2]])
+                if key not in system_ports_key:
+                    system_ports_key.append(key)
+
+            self.ports_key = system_ports_key
+        else:
+            port_table = self.config_db.get_table(DEVICE_NEIGHBOR_TABLE_NAME)
+            self.ports_key = list(port_table.keys())
+
+            # Verify at least one port is available
+            if len(self.ports_key) == 0:
+                raise Exception("No active ports detected in table '{}'".format(DEVICE_NEIGHBOR_TABLE_NAME))
+
+            # In multi-ASIC platforms backend ethernet ports are identified as
+            # 'Ethernet-BPxy'. Add 1024 to sort backend ports to the end.
+            self.ports_key.sort(
+                key = lambda k: int(k[8:]) if "BP" not in k else int(k[11:]) + 1024
+            )
 
     def dump_table_info(self):
         """
