@@ -183,5 +183,5 @@ stages:
       displayName: 'Build Python 3 wheel for GCU'
 
     - publish: '$(System.DefaultWorkingDirectory)/gcu/dist/'
-      artifact: wheels
+      artifact: gcu_wheels
       displayName: "Publish Python wheels for GCU"
