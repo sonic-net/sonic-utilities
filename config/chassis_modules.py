@@ -52,13 +52,14 @@ def modules():
     """Configure chassis modules"""
     pass
 
-# Centralized-transition helpers (use ModuleBase)
 
+# Centralized-transition helpers (use ModuleBase)
 def _state_db_conn():
     """Return a connected SonicV2Connector for STATE_DB."""
     conn = SonicV2Connector()
     conn.connect(conn.STATE_DB)
     return conn
+
 
 def _transition_entry(module_name: str) -> dict:
     """Read the transition entry for a module via ModuleBase centralized API."""
@@ -66,9 +67,11 @@ def _transition_entry(module_name: str) -> dict:
     conn = _state_db_conn()
     return mb.get_module_state_transition(conn, module_name) or {}
 
+
 def _transition_in_progress(module_name: str) -> bool:
     entry = _transition_entry(module_name)
     return entry.get("state_transition_in_progress") == "True"
+
 
 def _mark_transition_start(module_name: str, transition_type: str):
     """Set transition via centralized API."""
@@ -76,11 +79,13 @@ def _mark_transition_start(module_name: str, transition_type: str):
     conn = _state_db_conn()
     mb.set_module_state_transition(conn, module_name, transition_type)
 
+
 def _mark_transition_clear(module_name: str):
     """Clear transition via centralized API."""
     mb = ModuleBase()
     conn = _state_db_conn()
     mb.clear_module_state_transition(conn, module_name)
+
 
 def _transition_timed_out(module_name: str) -> bool:
     """CLI-side safety ceiling (4 minutes) to break a stuck transition."""
