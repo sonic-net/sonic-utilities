@@ -13,6 +13,7 @@ except ImportError:
 # Keep the same timeout the tests expect (was imported from config.chassis_modules before)
 TRANSITION_TIMEOUT = timedelta(seconds=240)
 
+
 def _state_conn():
     """Get a STATE_DB connector compatible with the test harness/mocks."""
     try:
@@ -23,6 +24,7 @@ def _state_conn():
         v2 = SonicV2Connector(use_unix_socket_path=True)
         v2.connect(v2.STATE_DB)
         return v2
+
 
 def set_state_transition_in_progress(db, chassis_module_name, value):
     """
@@ -35,6 +37,7 @@ def set_state_transition_in_progress(db, chassis_module_name, value):
         ModuleBase.set_module_state_transition(ModuleBase, conn, chassis_module_name, "shutdown")
     else:
         ModuleBase.clear_module_state_transition(ModuleBase, conn, chassis_module_name)
+
 
 def is_transition_timed_out(db, chassis_module_name):
     """
