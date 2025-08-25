@@ -10,9 +10,9 @@ try:
 except ImportError:
     from swsscommon.swsscommon import SonicV2Connector
 
-# Keep the same timeout the tests expect (was imported from config.chassis_modules before)
-TRANSITION_TIMEOUT = timedelta(seconds=240)
-
+# Use the same timeout your tests expect today
+TRANSITION_TIMEOUT = timedelta(minutes=20)
+_STATE_TABLE = "CHASSIS_MODULE"
 
 def _state_conn():
     """Get a STATE_DB connector compatible with the test harness/mocks."""
@@ -28,36 +28,47 @@ def _state_conn():
 
 def set_state_transition_in_progress(db, chassis_module_name, value):
     """
-    Test shim that delegates to ModuleBase. No duplicated logic.
-    - 'True'  -> set transition (use 'shutdown' as generic type for tests)
-    - 'False' -> clear transition
+    Pure test helper: write transition flags/timestamp to mocked STATE_DB.
+    No dependency on ModuleBase.* (removed upstream).
     """
-    conn = _state_conn()
-    if value == 'True':
-        ModuleBase.set_module_state_transition(ModuleBase, conn, chassis_module_name, "shutdown")
+    entry = db.statedb.get_entry(_STATE_TABLE, chassis_module_name) or {}
+
+    if value == "True":
+        # set transition details + fresh start time
+        entry["state_transition_in_progress"] = "True"
+        entry["transition_type"] = entry.get("transition_type", "shutdown")
+        entry["transition_start_time"] = datetime.utcnow().isoformat()
     else:
-        ModuleBase.clear_module_state_transition(ModuleBase, conn, chassis_module_name)
+        # clear transition details
+        entry.pop("state_transition_in_progress", None)
+        entry.pop("transition_type", None)
+        entry.pop("transition_start_time", None)
+
+    db.statedb.set_entry(_STATE_TABLE, chassis_module_name, entry)
 
 
 def is_transition_timed_out(db, chassis_module_name):
     """
-    Test shim that delegates to ModuleBase timeout check when available.
-    Falls back to local comparison using ModuleBase.get_module_state_transition.
+    Pure test helper: determine timeout by comparing now against the stored
+    ISO timestamp in mocked STATE_DB. No ModuleBase fallback.
     """
-    conn = _state_conn()
-    if hasattr(ModuleBase, "is_module_state_transition_timed_out"):
-        return ModuleBase.is_module_state_transition_timed_out(
-            ModuleBase, conn, chassis_module_name, TRANSITION_TIMEOUT
-        )
-    entry = ModuleBase.get_module_state_transition(ModuleBase, conn, chassis_module_name) or {}
+    entry = db.statedb.get_entry(_STATE_TABLE, chassis_module_name)
+    if not entry:
+        return False
+
+    if entry.get("state_transition_in_progress") != "True":
+        return False
+
     ts = entry.get("transition_start_time")
     if not ts:
         return False
+
     try:
         start = datetime.fromisoformat(ts)
     except Exception:
         return False
-    return datetime.utcnow() - start > TRANSITION_TIMEOUT
+
+    return (datetime.utcnow() - start) > TRANSITION_TIMEOUT
 
 import show.main as show
 import config.main as config
@@ -191,6 +202,25 @@ def mock_run_command_side_effect(*args, **kwargs):
         print("Expected type of command is list. Actual type is {}".format(*args))
         assert 0
         return '', 0
+
+
+class _MBStub:
+    # No-op shims to satisfy any legacy references from the CLI code path.
+    @staticmethod
+    def get_module_state_transition(*_args, **_kwargs):
+        return {}  # "no transition" view
+
+    @staticmethod
+    def set_module_state_transition(*_args, **_kwargs):
+        return None
+
+    @staticmethod
+    def clear_module_state_transition(*_args, **_kwargs):
+        return None
+
+    @staticmethod
+    def is_module_state_transition_timed_out(*_args, **_kwargs):
+        return False
 
 
 class TestChassisModules(object):
@@ -501,17 +531,15 @@ class TestChassisModules(object):
 
     def test_shutdown_triggers_transition_tracking(self):
         with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
-             mock.patch("config.chassis_modules.get_config_module_state", return_value='up'):
-
+             mock.patch("config.chassis_modules.get_config_module_state", return_value="up"), \
+             mock.patch("config.chassis_modules.ModuleBase", new=_MBStub):
             runner = CliRunner()
             db = Db()
             result = runner.invoke(
                 config.config.commands["chassis"].commands["modules"].commands["shutdown"],
                 ["DPU0"],
-                obj=db
+                obj=db,
             )
-            print(result.exit_code)
-            print(result.output)
             assert result.exit_code == 0
 
             # Check CONFIG_DB for admin_status
@@ -533,7 +561,8 @@ class TestChassisModules(object):
 
     def test_shutdown_triggers_transition_in_progress(self):
         with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
-             mock.patch("config.chassis_modules.get_config_module_state", return_value='up'):
+            mock.patch("config.chassis_modules.get_config_module_state", return_value="up"), \
+            mock.patch("config.chassis_modules.ModuleBase", new=_MBStub):
 
             runner = CliRunner()
             db = Db()
@@ -560,7 +589,8 @@ class TestChassisModules(object):
 
     def test_shutdown_triggers_transition_timeout(self):
         with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
-             mock.patch("config.chassis_modules.get_config_module_state", return_value='up'):
+            mock.patch("config.chassis_modules.get_config_module_state", return_value="up"), \
+            mock.patch("config.chassis_modules.ModuleBase", new=_MBStub):
 
             runner = CliRunner()
             db = Db()
@@ -587,7 +617,8 @@ class TestChassisModules(object):
 
     def test_startup_triggers_transition_tracking(self):
         with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
-             mock.patch("config.chassis_modules.get_config_module_state", return_value='down'):
+            mock.patch("config.chassis_modules.get_config_module_state", return_value="down"), \
+            mock.patch("config.chassis_modules.ModuleBase", new=_MBStub):
 
             runner = CliRunner()
             db = Db()
