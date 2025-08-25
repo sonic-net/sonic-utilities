@@ -2,11 +2,59 @@ import sys
 import os
 from click.testing import CliRunner
 from datetime import datetime, timedelta
-from config.chassis_modules import (
-    set_state_transition_in_progress,
-    is_transition_timed_out,
-    TRANSITION_TIMEOUT
-)
+
+# ModuleBase centralized APIs
+from sonic_platform_base.module_base import ModuleBase
+try:
+    from swsssdk import SonicV2Connector
+except ImportError:
+    from swsscommon.swsscommon import SonicV2Connector
+
+# Keep the same timeout the tests expect (was imported from config.chassis_modules before)
+TRANSITION_TIMEOUT = timedelta(seconds=240)
+
+def _state_conn():
+    """Get a STATE_DB connector compatible with the test harness/mocks."""
+    try:
+        v2 = SonicV2Connector()
+        v2.connect(v2.STATE_DB)
+        return v2
+    except Exception:
+        v2 = SonicV2Connector(use_unix_socket_path=True)
+        v2.connect(v2.STATE_DB)
+        return v2
+
+def set_state_transition_in_progress(db, chassis_module_name, value):
+    """
+    Test shim that delegates to ModuleBase. No duplicated logic.
+    - 'True'  -> set transition (use 'shutdown' as generic type for tests)
+    - 'False' -> clear transition
+    """
+    conn = _state_conn()
+    if value == 'True':
+        ModuleBase.set_module_state_transition(ModuleBase, conn, chassis_module_name, "shutdown")
+    else:
+        ModuleBase.clear_module_state_transition(ModuleBase, conn, chassis_module_name)
+
+def is_transition_timed_out(db, chassis_module_name):
+    """
+    Test shim that delegates to ModuleBase timeout check when available.
+    Falls back to local comparison using ModuleBase.get_module_state_transition.
+    """
+    conn = _state_conn()
+    if hasattr(ModuleBase, "is_module_state_transition_timed_out"):
+        return ModuleBase.is_module_state_transition_timed_out(
+            ModuleBase, conn, chassis_module_name, TRANSITION_TIMEOUT
+        )
+    entry = ModuleBase.get_module_state_transition(ModuleBase, conn, chassis_module_name) or {}
+    ts = entry.get("transition_start_time")
+    if not ts:
+        return False
+    try:
+        start = datetime.fromisoformat(ts)
+    except Exception:
+        return False
+    return datetime.utcnow() - start > TRANSITION_TIMEOUT
 
 import show.main as show
 import config.main as config
