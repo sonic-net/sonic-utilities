@@ -675,7 +675,7 @@ class TestChassisModules(object):
         assert is_transition_timed_out(db, "DPU0") is False
 
         # Case 3: Invalid format
-        db.statedb.get_entry.return_value = {"transition_start_time": "not-a-date", "state_transition_in_progress": "True"}
+        db.statedb.get_entry.return_value = {"transition_start_time": "bla", "state_transition_in_progress": "True"}
         assert is_transition_timed_out(db, "DPU0") is False
 
         # Case 4: Timed out (must also be in progress)
