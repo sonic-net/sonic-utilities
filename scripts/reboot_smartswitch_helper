@@ -40,8 +40,10 @@ function get_dpu_ip()
 # Function to retrieve GNMI port from CONFIG_DB
 function get_gnmi_port()
 {
-    local DPU_NAME=$1
-    sonic-db-cli CONFIG_DB HGET "DPU_PORT|$DPU_NAME" "gnmi_port"
+    local DPU_NAME=${1:-dpu0}
+    for k in $(sonic-db-cli CONFIG_DB keys "DPU|*$DPU_NAME"); do
+        sonic-db-cli CONFIG_DB hget "$k" 'gnmi_port'
+    done
 }
 
 # Function to get reboot status from DPU
@@ -138,6 +140,8 @@ function wait_for_dpu_reboot_status()
 # Function to send reboot command to DPU
 function gnmi_reboot_dpu()
 {
+    local DPU_NAME=$1
+
     # Retrieve DPU IP and GNMI port
     dpu_ip=$(get_dpu_ip "${DPU_NAME}")
     port=$(get_gnmi_port "${DPU_NAME}")
