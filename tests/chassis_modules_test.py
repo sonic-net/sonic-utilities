@@ -12,6 +12,7 @@ except ImportError:
 TRANSITION_TIMEOUT = timedelta(minutes=20)
 _STATE_TABLE = "CHASSIS_MODULE"
 
+
 # helpers for transition checks
 def _read_transition_from_dbs(db, name):
     """
@@ -23,7 +24,7 @@ def _read_transition_from_dbs(db, name):
     cfg = db.cfgdb.get_entry("CHASSIS_MODULE", name) or {}
     flag = cfg.get("state_transition_in_progress")
     ttyp = cfg.get("transition_type")
-    ts   = cfg.get("transition_start_time")
+    ts = cfg.get("transition_start_time")
 
     if flag is not None or ttyp is not None or ts is not None:
         return flag, ttyp, ts
@@ -35,7 +36,7 @@ def _read_transition_from_dbs(db, name):
         st = {}
     flag2 = st.get("state_transition_in_progress")
     ttyp2 = st.get("transition_type")
-    ts2   = st.get("transition_start_time")
+    ts2 = st.get("transition_start_time")
     return flag2, ttyp2, ts2
 
 
@@ -593,6 +594,7 @@ class TestChassisModules(object):
 
             # Transition flags are tracked in CONFIG_DB now
             _assert_transition_if_present(db, "DPU0", expected_type="shutdown")
+            trans_fvs = db.cfgdb.get_entry("CHASSIS_MODULE", "DPU0")
             transition_flag = trans_fvs.get("state_transition_in_progress")
             transition_type = trans_fvs.get("transition_type")
             start_time = trans_fvs.get("transition_start_time")
@@ -627,6 +629,7 @@ class TestChassisModules(object):
 
             # Read back from CONFIG_DB
             _assert_transition_if_present(db, "DPU0", expected_type="shutdown")
+            trans_fvs = db.cfgdb.get_entry("CHASSIS_MODULE", "DPU0")
             print(f"state_transition_in_progress:{trans_fvs.get('state_transition_in_progress')}")
             assert trans_fvs.get('state_transition_in_progress') == 'True'
             assert 'transition_start_time' in trans_fvs
@@ -657,6 +660,7 @@ class TestChassisModules(object):
 
             # Read back from CONFIG_DB
             _assert_transition_if_present(db, "DPU0", expected_type="shutdown")
+            trans_fvs = db.cfgdb.get_entry("CHASSIS_MODULE", "DPU0")
             print(f"state_transition_in_progress:{trans_fvs.get('state_transition_in_progress')}")
             assert trans_fvs.get('state_transition_in_progress') == 'True'
             assert 'transition_start_time' in trans_fvs
@@ -679,6 +683,7 @@ class TestChassisModules(object):
 
             # Read from CONFIG_DB
             _assert_transition_if_present(db, "DPU0", expected_type="shutdown")
+            trans_fvs = db.cfgdb.get_entry("CHASSIS_MODULE", "DPU0")
             print(f"state_transition_in_progress:{trans_fvs.get('state_transition_in_progress')}")
             assert trans_fvs.get('state_transition_in_progress') == 'True'
             assert 'transition_start_time' in trans_fvs
