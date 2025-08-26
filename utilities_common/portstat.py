@@ -10,7 +10,7 @@ from swsscommon.swsscommon import SonicV2Connector, CounterTable, PortCounter
 
 from utilities_common import constants
 import utilities_common.multi_asic as multi_asic_util
-from utilities_common.netstat import ns_diff, table_as_json, format_brate, format_prate, \
+from utilities_common.netstat import ns_diff, table_as_json, format_brate, format_prate,format_prate_raw, \
                                      format_util, format_number_with_comma, format_util_directly, \
                                      format_fec_ber
 
@@ -592,7 +592,7 @@ class Portstat(object):
                     table.append((key, self.get_port_state(key),
                                   ns_diff(cntr["rx_ok"], old_cntr["rx_ok"]),
                                   format_brate(rates.rx_bps),
-                                  format_prate(rates.rx_pps),
+                                  format_prate_raw(rates.rx_pps),
                                   format_util(rates.rx_bps, port_speed)
                                   if rates.rx_util == STATUS_NA else format_util_directly(rates.rx_util),
                                   ns_diff(cntr["rx_err"], old_cntr["rx_err"]),
@@ -600,7 +600,7 @@ class Portstat(object):
                                   ns_diff(cntr["rx_ovr"], old_cntr["rx_ovr"]),
                                   ns_diff(cntr["tx_ok"], old_cntr["tx_ok"]),
                                   format_brate(rates.tx_bps),
-                                  format_prate(rates.tx_pps),
+                                  format_prate_raw(rates.tx_pps),
                                   format_util(rates.tx_bps, port_speed)
                                   if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util),
                                   ns_diff(cntr["tx_err"], old_cntr["tx_err"]),
@@ -647,12 +647,12 @@ class Portstat(object):
                                   self.get_port_state(key),
                                   ns_diff(cntr["rx_ok"], old_cntr["rx_ok"]),
                                   format_brate(rates.rx_bps),
-                                  format_prate(rates.rx_pps),
+                                  format_prate_raw(rates.rx_pps),
                                   format_util(rates.rx_bps, port_speed)
                                   if rates.rx_util == STATUS_NA else format_util_directly(rates.rx_util),
                                   ns_diff(cntr["tx_ok"], old_cntr["tx_ok"]),
                                   format_brate(rates.tx_bps),
-                                  format_prate(rates.tx_pps),
+                                  format_prate_raw(rates.tx_pps),
                                   format_util(rates.tx_bps, port_speed)
                                   if rates.tx_util == STATUS_NA else format_util_directly(rates.tx_util)))
             elif trim_stats_only:  # Packet Trimming related statistics

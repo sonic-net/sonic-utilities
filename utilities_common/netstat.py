@@ -113,9 +113,9 @@ def format_brate(rate):
     else:
         rate = float(rate)
         if rate > 1000*1000*10:
-            rate = "{:.2f}".format(rate/1000/1000.0)+' MB'
+            rate = "{:.2f}".format(rate/1024/1024.0)+' MB'
         elif rate > 1000*10:
-            rate = "{:.2f}".format(rate/1000.0)+' KB'
+            rate = "{:.2f}".format(rate/1024.0)+' KB'
         else:
             rate = "{:.2f}".format(rate)+' B'
         return rate+'/s'
@@ -130,6 +130,14 @@ def format_prate(rate):
     else:
         return "{:.2f}".format(float(rate))+'/s'
 
+def format_prate_raw(rate):
+    """
+    Show the packet rate.
+    """
+    if rate == STATUS_NA:
+        return STATUS_NA
+    else:
+        return "{:.2f}".format(float(rate))
 
 def format_fec_ber(rate):
     """
@@ -148,7 +156,7 @@ def format_util(brate, port_rate):
     if brate == STATUS_NA or port_rate == STATUS_NA:
         return STATUS_NA
     else:
-        util = brate/(float(port_rate)*1000*1000/8.0)*100
+        util = brate/(float(port_rate)*1024*1024/8.0)*100
         return "{:.2f}%".format(util)
 
 
