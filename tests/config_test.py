@@ -1943,14 +1943,14 @@ class TestGenericUpdateCommands(unittest.TestCase):
     def test_apply_patch__no_params__get_required_params_error_msg(self):
         # Arrange
         unexpected_exit_code = 0
-        expected_output = "Error: Missing argument \"PATCH_FILE_PATH\""
+        expected_output = "Error: Missing argument 'PATCH_FILE_PATH'"
 
         # Act
         result = self.runner.invoke(config.config.commands["apply-patch"])
 
         # Assert
         self.assertNotEqual(unexpected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch__help__gets_help_msg(self):
@@ -1963,7 +1963,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
         # Assert
         self.assertEqual(expected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch__only_required_params__default_values_used_for_optional_params(self):
@@ -1980,7 +1980,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
         # Assert
         self.assertEqual(expected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
         mock_generic_updater.apply_patch.assert_called_once()
         mock_generic_updater.apply_patch.assert_has_calls([expected_call_with_default_values])
 
@@ -2010,7 +2010,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
         # Assert
         self.assertEqual(expected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
         mock_generic_updater.apply_patch.assert_called_once()
         mock_generic_updater.apply_patch.assert_has_calls([expected_call_with_non_default_values])
 
@@ -2031,7 +2031,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
         # Assert
         self.assertNotEqual(unexpected_exit_code, result.exit_code)
-        self.assertTrue(any_error_message in result.output)
+        self.assertIn(any_error_message, result.output)
 
     def test_apply_patch__optional_parameters_passed_correctly(self):
         self.validate_apply_patch_optional_parameter(
@@ -2066,21 +2066,21 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
         # Assert
         self.assertEqual(expected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
         mock_generic_updater.apply_patch.assert_called_once()
         mock_generic_updater.apply_patch.assert_has_calls([expected_call])
 
     def test_replace__no_params__get_required_params_error_msg(self):
         # Arrange
         unexpected_exit_code = 0
-        expected_output = "Error: Missing argument \"TARGET_FILE_PATH\""
+        expected_output = "Error: Missing argument 'TARGET_FILE_PATH'"
 
         # Act
         result = self.runner.invoke(config.config.commands["replace"])
 
         # Assert
         self.assertNotEqual(unexpected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
 
     def test_replace__help__gets_help_msg(self):
         # Arrange
@@ -2092,7 +2092,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
         # Assert
         self.assertEqual(expected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
 
     def test_replace__only_required_params__default_values_used_for_optional_params(self):
         # Arrange
@@ -2108,7 +2108,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
         # Assert
         self.assertEqual(expected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
         mock_generic_updater.replace.assert_called_once()
         mock_generic_updater.replace.assert_has_calls([expected_call_with_default_values])
 
@@ -2137,7 +2137,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
         # Assert
         self.assertEqual(expected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
         mock_generic_updater.replace.assert_called_once()
         mock_generic_updater.replace.assert_has_calls([expected_call_with_non_default_values])
 
@@ -2191,21 +2191,21 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
         # Assert
         self.assertEqual(expected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
         mock_generic_updater.replace.assert_called_once()
         mock_generic_updater.replace.assert_has_calls([expected_call])
 
     def test_rollback__no_params__get_required_params_error_msg(self):
         # Arrange
         unexpected_exit_code = 0
-        expected_output = "Error: Missing argument \"CHECKPOINT_NAME\""
+        expected_output = "Error: Missing argument 'CHECKPOINT_NAME'"
 
         # Act
         result = self.runner.invoke(config.config.commands["rollback"])
 
         # Assert
         self.assertNotEqual(unexpected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
 
     def test_rollback__help__gets_help_msg(self):
         # Arrange
@@ -2217,7 +2217,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
         # Assert
         self.assertEqual(expected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
 
     def test_rollback__only_required_params__default_values_used_for_optional_params(self):
         # Arrange
@@ -2231,7 +2231,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
         # Assert
         self.assertEqual(expected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
         mock_generic_updater.rollback.assert_called_once()
         mock_generic_updater.rollback.assert_has_calls([expected_call_with_default_values])
 
@@ -2258,7 +2258,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
         # Assert
         self.assertEqual(expected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
         mock_generic_updater.rollback.assert_called_once()
         mock_generic_updater.rollback.assert_has_calls([expected_call_with_non_default_values])
 
@@ -2306,21 +2306,21 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
         # Assert
         self.assertEqual(expected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
         mock_generic_updater.rollback.assert_called_once()
         mock_generic_updater.rollback.assert_has_calls([expected_call])
 
     def test_checkpoint__no_params__get_required_params_error_msg(self):
         # Arrange
         unexpected_exit_code = 0
-        expected_output = "Error: Missing argument \"CHECKPOINT_NAME\""
+        expected_output = "Error: Missing argument 'CHECKPOINT_NAME'"
 
         # Act
         result = self.runner.invoke(config.config.commands["checkpoint"])
 
         # Assert
         self.assertNotEqual(unexpected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
 
     def test_checkpoint__help__gets_help_msg(self):
         # Arrange
@@ -2332,7 +2332,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
         # Assert
         self.assertEqual(expected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
 
     def test_checkpoint__only_required_params__default_values_used_for_optional_params(self):
         # Arrange
@@ -2346,7 +2346,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
         # Assert
         self.assertEqual(expected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
         mock_generic_updater.checkpoint.assert_called_once()
         mock_generic_updater.checkpoint.assert_has_calls([expected_call_with_default_values])
 
@@ -2366,7 +2366,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
         # Assert
         self.assertEqual(expected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
         mock_generic_updater.checkpoint.assert_called_once()
         mock_generic_updater.checkpoint.assert_has_calls([expected_call_with_non_default_values])
 
@@ -2405,21 +2405,21 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
         # Assert
         self.assertEqual(expected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
         mock_generic_updater.checkpoint.assert_called_once()
         mock_generic_updater.checkpoint.assert_has_calls([expected_call])
 
     def test_delete_checkpoint__no_params__get_required_params_error_msg(self):
         # Arrange
         unexpected_exit_code = 0
-        expected_output = "Error: Missing argument \"CHECKPOINT_NAME\""
+        expected_output = "Error: Missing argument 'CHECKPOINT_NAME'"
 
         # Act
         result = self.runner.invoke(config.config.commands["delete-checkpoint"])
 
         # Assert
         self.assertNotEqual(unexpected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
 
     def test_delete_checkpoint__help__gets_help_msg(self):
         # Arrange
@@ -2431,7 +2431,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
         # Assert
         self.assertEqual(expected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
 
     def test_delete_checkpoint__only_required_params__default_values_used_for_optional_params(self):
         # Arrange
@@ -2445,7 +2445,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
         # Assert
         self.assertEqual(expected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
         mock_generic_updater.delete_checkpoint.assert_called_once()
         mock_generic_updater.delete_checkpoint.assert_has_calls([expected_call_with_default_values])
 
@@ -2465,7 +2465,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
         # Assert
         self.assertEqual(expected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
         mock_generic_updater.delete_checkpoint.assert_called_once()
         mock_generic_updater.delete_checkpoint.assert_has_calls([expected_call_with_non_default_values])
 
@@ -2504,7 +2504,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
         # Assert
         self.assertEqual(expected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
         mock_generic_updater.delete_checkpoint.assert_called_once()
         mock_generic_updater.delete_checkpoint.assert_has_calls([expected_call])
 
@@ -2518,7 +2518,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
         # Assert
         self.assertEqual(expected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
 
     def test_list_checkpoints__all_optional_params_non_default__non_default_values_used(self):
         # Arrange
@@ -2536,7 +2536,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
         # Assert
         self.assertEqual(expected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
         mock_generic_updater.list_checkpoints.assert_called_once()
         mock_generic_updater.list_checkpoints.assert_has_calls([expected_call_with_non_default_values])
 
@@ -2556,7 +2556,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
         # Assert
         self.assertEqual(expected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
         mock_generic_updater.list_checkpoints.assert_called_once()
         mock_generic_updater.list_checkpoints.assert_has_calls([expected_call_with_time_param])
 
@@ -2595,7 +2595,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
         # Assert
         self.assertEqual(expected_exit_code, result.exit_code)
-        self.assertTrue(expected_output in result.output)
+        self.assertIn(expected_output, result.output)
         mock_generic_updater.list_checkpoints.assert_called_once()
         mock_generic_updater.list_checkpoints.assert_has_calls([expected_call])
 
