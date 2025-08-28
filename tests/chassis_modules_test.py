@@ -716,6 +716,66 @@ class TestChassisModules(object):
         }
         assert is_transition_timed_out(db, "DPU0") is True
 
+    def test__mark_transition_clear_calls_ModuleBase(self):
+        import config.chassis_modules as cm
+        with mock.patch("config.chassis_modules.ModuleBase") as MB, \
+            mock.patch("config.chassis_modules._state_db_conn") as m_conn:
+            inst = MB.return_value
+            cm._mark_transition_clear("DPU0")
+            inst.clear_module_state_transition.assert_called_once_with(m_conn.return_value, "DPU0")
+
+    def test__transition_timed_out_delegates_and_returns(self):
+        import config.chassis_modules as cm
+        with mock.patch("config.chassis_modules.ModuleBase") as MB, \
+            mock.patch("config.chassis_modules._state_db_conn") as m_conn:
+            inst = MB.return_value
+            inst.is_module_state_transition_timed_out.return_value = True
+            out = cm._transition_timed_out("DPU0")
+            assert out is True
+            MB.assert_called_once()  # constructed once
+            inst.is_module_state_transition_timed_out.assert_called_once_with(
+                m_conn.return_value,
+                "DPU0",
+                int(cm.TRANSITION_TIMEOUT.total_seconds()),
+            )
+
+    def test_shutdown_times_out_clears_and_messages(self):
+        # Force the CLI path: transition in progress + timed out => clear + "Proceeding with shutdown."
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+            mock.patch("config.chassis_modules.get_config_module_state", return_value="up"), \
+            mock.patch("config.chassis_modules._transition_in_progress", return_value=True), \
+            mock.patch("config.chassis_modules._transition_timed_out", return_value=True), \
+            mock.patch("config.chassis_modules._mark_transition_clear") as m_clear, \
+            mock.patch("config.chassis_modules.ModuleBase", new=_MBStub):
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["shutdown"],
+                ["DPU0"],
+                obj=db,
+            )
+            assert result.exit_code == 0
+            assert "Previous transition for module DPU0 timed out. Proceeding with shutdown." in result.output
+            m_clear.assert_called_once_with("DPU0")
+
+    def test_startup_times_out_clears_and_messages(self):
+        # Force the CLI path: transition in progress + timed out => clear + "Proceeding with startup."
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+            mock.patch("config.chassis_modules.get_config_module_state", return_value="down"), \
+            mock.patch("config.chassis_modules._transition_in_progress", return_value=True), \
+            mock.patch("config.chassis_modules._transition_timed_out", return_value=True), \
+            mock.patch("config.chassis_modules._mark_transition_clear") as m_clear, \
+            mock.patch("config.chassis_modules.ModuleBase", new=_MBStub):
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["startup"],
+                ["DPU0"],
+                obj=db,
+            )
+            assert result.exit_code == 0
+            assert "Previous transition for module DPU0 timed out. Proceeding with startup." in result.output
+            m_clear.assert_called_once_with("DPU0")
 
     @classmethod
     def teardown_class(cls):
