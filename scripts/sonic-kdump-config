@@ -371,7 +371,7 @@ def get_kdump_ssh_path():
 #
 #  @return The integer value X from USE_KDUMP=X in /etc/default/kdump-tools
 def read_use_kdump():
-    (rc, lines, err_str) = run_command("grep 'USE_KDUMP=.*' %s | cut -d = -f 2" % kdump_cfg, use_shell=False);
+    (rc, lines, err_str) = run_command("grep 'USE_KDUMP=.*' %s | cut -d = -f 2" % kdump_cfg, use_shell=True);
     if rc == 0 and type(lines) == list and len(lines) >= 1:
         try:
             return int(lines[0])
@@ -405,7 +405,7 @@ def write_use_kdump(use_kdump):
 #
 #  @return The integer value X from KDUMP_NUM_DUMPS=X in /etc/default/kdump-tools
 def read_num_dumps():
-    (rc, lines, err_str) = run_command("grep '#*KDUMP_NUM_DUMPS=.*' %s | cut -d = -f 2" % kdump_cfg, use_shell=False);
+    (rc, lines, err_str) = run_command("grep '#*KDUMP_NUM_DUMPS=.*' %s | cut -d = -f 2" % kdump_cfg, use_shell=True);
     if rc == 0 and type(lines) == list and len(lines) >= 1:
         try:
             return int(lines[0])
@@ -448,7 +448,7 @@ def write_kdump_remote():
         print("SSH and SSH_KEY commented out for local configuration.")
 
 def read_ssh_string():
-    (rc, lines, err_str) = run_command("grep '#*SSH=.*' %s | cut -d '=' -f 2 | tr -d '\"'" % kdump_cfg, use_shell=False)
+    (rc, lines, err_str) = run_command("grep '#*SSH=.*' %s | cut -d '=' -f 2 | tr -d '\"'" % kdump_cfg, use_shell=True)
     if rc == 0 and type(lines) == list and len(lines) >= 1:
         try:
             return lines[0].strip()  # Return the SSH string (e.g., user@ip_address)
@@ -479,7 +479,7 @@ def write_ssh_string(ssh_string):
         sys.exit(1)
 
 def read_ssh_path():
-    (rc, lines, err_str) = run_command("grep '#*SSH_KEY=.*' %s | cut -d '=' -f 2 | tr -d '\"'" % kdump_cfg, use_shell=False)
+    (rc, lines, err_str) = run_command("grep '#*SSH_KEY=.*' %s | cut -d '=' -f 2 | tr -d '\"'" % kdump_cfg, use_shell=True)
     if rc == 0 and type(lines) == list and len(lines) >= 1:
         try:
             ssh_path = lines[0].strip()
