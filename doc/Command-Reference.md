@@ -222,6 +222,9 @@
 * [Troubleshooting Commands](#troubleshooting-commands)
   * [Debug Dumps](#debug-dumps)
   * [Event Driven Techsupport Invocation](#event-driven-techsupport-invocation)
+* [TWAMP Light Commands](#twamp-light-commands)
+  * [TWAMP Light Show commands](#twamp-light-show-commands)
+  * [TWAMP Light Config commands](#twamp-light-config-commands)
 * [Routing Stack](#routing-stack)
 * [Quagga BGP Show Commands](#Quagga-BGP-Show-Commands)
 * [ZTP Configuration And Show Commands](#ztp-configuration-and-show-commands)
@@ -263,6 +266,7 @@
 
 | Version | Modification Date | Details |
 | --- | --- | --- |
+| v10 | Sep-26-2024 | Add TWAMP Light show and config commands |
 | v9 | Sep-19-2024 | Add DPU serial console utility |
 | v8 | Oct-09-2023 | Add CMIS firmware upgrade commands |
 | v7 | Jun-22-2023 | Add static DNS show and config commands |
@@ -14071,6 +14075,184 @@ Configure minimum available memory in MB. System will automatically generate a t
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#troubleshooting-commands)
+
+
+## TWAMP Light Commands
+TWAMP Light is an effective, simple, and universal OAM performance measurement mechanism for performance measurement of the network. It is defined by the IP Performance Measurement (IPPM) working group,  is a standard performance measurement protocol applied to IP networks as described in RFC5357. It provides a unified measurement model and unified test packet format for interoperability among devices of different vendors. TWAMP Light uses the client-server model. It generates and maintains the performance measurement data only on the client.  As an IP link detection technology, It can monitor network quality, including latency, jitter, and packet loss. So it is easy to deploy and use.
+
+### TWAMP Light show commands
+
+**show twamp-light session**
+
+This command displays either all TWAMP Light sessions that are configured or only the session specified by "session_name".
+
+- Usage:
+  ```
+  show twamp-light session [<session_name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show twamp-light session
+  Time unit: Monitor Time/Timeout in second; Tx Interval/Stats Interval in millisecond
+  TWAMP-Light Sender Sessions
+  Name     Status    Sender IP:PORT    Reflector IP:PORT    Packet Count    Monitor Time      Tx Interval    Stats Interval    Timeout
+  -------  --------  ----------------  -------------------  --------------  --------------  -------------  ----------------  ---------
+  snd_1    inactive  36.1.1.1:862      36.1.1.2:863         1000            -                          10             11000         10
+  snd_2    inactive  22.1.1.1:862      22.1.1.2:863         -               60                        100             20000         10
+
+  TWAMP-Light Reflector Sessions
+  Name    Status    Sender IP:PORT    Reflector IP:PORT
+  ------  --------  ----------------  -------------------
+  ref_1   active    22.1.1.1:862      22.1.1.2:863
+  ```
+**show twamp-light statistics twoway-loss**
+
+This command displays TWAMP Light session's test result of packet loss. "session_name" can be specified for display only one session.
+
+- Usage:
+  ```
+  show twamp-light statistics twoway-loss [<session_name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show twamp-light statistics twoway-loss
+  Latest two-way loss statistics:
+  Name       Index    Loss Count    Loss Ratio
+  -------  -------  ------------  ------------
+  snd_1          1             0             0
+                 2             0             0
+                 3             0             0
+                 4             0             0
+                 5             0             0
+                 6             0             0
+                 7             0             0
+                 8             0             0
+                 9             0             0
+                10             0             0
+  snd_2          1             0             0
+                 2             0             0
+                 3             0             0
+
+  Total two-way loss statistics:
+  Name       Loss Count(AVG)    Loss Count(MIN)    Loss Count(MAX)    Loss Ratio(AVG)    Loss Ratio(MIN)    Loss Ratio(MAX)
+  -------  -----------------  -----------------  -----------------  -----------------  -----------------  -----------------
+  snd_1                    0                  0                  0                  0                  0                  0
+  snd_2                    0                  0                  0                  0                  0                  0
+  ```
+
+**show twamp-light statistics twoway-delay**
+
+This command displays TWAMP Light session's test result of delay time. "session_name" can be specified for display only one session.
+
+- Usage:
+  ```
+  show twamp-light statistics twoway-delay [<session_name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show twamp-light statistics twoway-delay
+  Latest two-way delay statistics(nsec):
+  Name       Index    Delay(AVG)    Jitter(AVG)
+  -------  -------  ------------  -------------
+  snd_1          1          1761              0
+                 2          1758              0
+                 3          1761              0
+                 4          1761              0
+                 5          1761              0
+                 6          1758              0
+                 7          1759              0
+                 8          1758              0
+                 9          1759              0
+                10          1760              0
+  snd_2          1          3983              1
+                 2          3984              1
+                 3          3987              1
+
+  Total two-way delay statistics(nsec):
+  Name       Delay(AVG)    Delay(MIN)    Delay(MAX)    Jitter(AVG)    Jitter(MIN)    Jitter(MAX)
+  -------  ------------  ------------  ------------  -------------  -------------  -------------
+  snd_1            1759          1691          1825              0              0              3
+  snd_2            3985          3896          4097              0              0              5
+  ```
+
+### TWAMP Light config commands
+
+**config twamp-light sender with packet count mode**
+
+This command is used to create a TWAMP Light sender session with packet count mode. Session information can be specified by the parameter, such as <session_name>, <sender_ip_port>,  <reflector_ip_port>, <packet_count>, <tx_interval>, <timeout>, <statistics_interval>.
+
+- Usage:
+  ```
+  config twamp-light session-sender add packet-count <session_name> [vrf <vrf_name>] <sender_ip_port> <reflector_ip_port> <packet_count> <tx_interval> <timeout> <statistics_interval>
+  ```
+
+- Example:
+  ```
+  sudo config twamp-light session-sender packet-count add snd_1 36.1.1.1 36.1.1.2 1000 10 10 11000
+  ```
+
+**config twamp-light sender with packet continuous mode**
+
+This command is used to create a TWAMP Light sender session with packet continuous mode. Session information can be specified by the parameter, such as <session_name>, <sender_ip_port>,  <reflector_ip_port>, <monitor_time>, <tx_interval>, <timeout>, <statistics_interval>.
+
+- Usage:
+  ```
+  config twamp-light session-sender add continuous <session_name> [vrf <vrf_name>] <sender_ip_port> <reflector_ip_port> <monitor_time> <tx_interval> <timeout> <statistics_interval>
+  ```
+
+- Example:
+  ```
+  sudo config twamp-light session-sender continuous add snd_1 22.1.1.1 22.1.1.2 60 100 10 20000
+  ```
+
+
+**config twamp-light reflector**
+
+This command is used to create a TWAMP Light reflector session. Session information can be specified by the parameter, such as <session_name>, <sender_ip_port>,  <reflector_ip_port>.
+
+- Usage:
+  ```
+  config twamp-light session-reflector add <session_name> [vrf <vrf_name>] <sender_ip_port> <reflector_ip_port>
+  ```
+
+- Example:
+  ```
+  sudo config twamp-light session-reflector add ref_1 22.1.1.1 22.1.1.2
+  ```
+
+**Start TWAMP Light session**
+
+This command is used to start a TWAMP Light sender session. If the parameter "all" is used, all session will be started. If the <session_name> is specified, only the session match the <session_name> will be started.
+
+- Usage:
+  ```
+  config twamp-light session-sender start <session_name|all>
+  ```
+
+- Example:
+  ```
+  sudo config twamp-light session-sender start all
+  ```
+
+**Stop TWAMP Light session**
+
+This command is used to stop a TWAMP Light sender session. If the parameter "all" is used, all session will be stopped. If the <session_name> is specified, only the session match the <session_name> will be stopped.
+
+- Usage:
+  ```
+  config twamp-light session-sender stop <session_name|all>
+  ```
+
+- Example:
+  ```
+  sudo config twamp-light session-sender stop all
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#twamp-light-commands)
+
 
 ## Routing Stack
 

@@ -66,6 +66,7 @@ from . import plugins
 from . import syslog
 from . import dns
 from . import bgp_cli
+from . import twamp_light
 from . import stp
 from . import srv6
 from . import switch
@@ -322,6 +323,7 @@ cli.add_command(vxlan.vxlan)
 cli.add_command(system_health.system_health)
 cli.add_command(warm_restart.warm_restart)
 cli.add_command(dns.dns)
+cli.add_command(twamp_light.twamp_light)
 cli.add_command(stp.spanning_tree)
 cli.add_command(srv6.srv6)
 cli.add_command(switch.switch)
