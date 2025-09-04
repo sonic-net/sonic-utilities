@@ -865,7 +865,7 @@ if [ -x ${LOG_SSD_HEALTH} ]; then
 fi
 
 # Stop any timers to prevent any containers starting in the middle of the process.
-TIMERS=$(systemctl list-dependencies --plain sonic-delayed.target | sed 1d)
+TIMERS=$(systemctl list-dependencies --plain sonic.target | sed 1d | grep '.timer$')
 for timer in ${TIMERS}; do
     debug "Stopping ${timer} ..."
     systemctl stop ${timer}
