@@ -1,12 +1,17 @@
 # tests/queue_counter_test.py
 import json
-import pytest
+import os
+import importlib.util
 from click.testing import CliRunner
 from tabulate import tabulate
 
 # Import the actual queuestat script from sonic-utilities
-import scripts.queuestat as queuestat
+ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), '..'))
+QUEUESTAT_PATH = os.path.join(ROOT, 'scripts', 'queuestat')
 
+spec = importlib.util.spec_from_file_location('queuestat', QUEUESTAT_PATH)
+queuestat = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(queuestat)
 
 def _assert_rate_fields(json_output):
     """
@@ -97,8 +102,7 @@ def test_cli_table_includes_rate_columns_default(monkeypatch):
     We stub the printing function to bypass DB access.
     """
     header = queuestat.std_header
-    #               Port       TxQ  Cnt/pkts  Cnt/bytes  Drop/pkts  Drop/bytes  Pkts/s  Bytes/s  Bits/s
-    row =        ["Ethernet0", "UC0", "10",     "100",     "0",       "0",        "111",  "222",   "333"]
+    row = ["Ethernet0", "UC0", "10","100","0","0","111","222","333"]
 
     def fake_cnstat(self):
         print(tabulate([row], header, tablefmt="simple", stralign="right"))
@@ -127,8 +131,7 @@ def test_cli_table_includes_rate_columns_trim_mode():
     This test uses tabulate directly with queuestat.trim_header to verify structure.
     """
     header = queuestat.trim_header
-    #               Port       TxQ   Trim/pkts TrimSent/pkts TrimDrop/pkts  Pkts/s Bytes/s Bits/s
-    row =        ["Ethernet0", "UC0", "5",       "4",           "1",          "111",  "222",  "333"]
+    row =["Ethernet0", "UC0", "5","4", "1", "111",  "222",  "333"]
 
     out = tabulate([row], header, tablefmt="simple", stralign="right")
 
@@ -146,8 +149,7 @@ def test_cli_table_includes_rate_columns_voq_mode():
     This test uses tabulate directly with queuestat.voq_header to verify structure.
     """
     header = queuestat.voq_header
-    #               Port       Voq   Cnt/pkts Cnt/bytes Drop/pkts Drop/bytes Credit-WD-Del/pkts  Pkts/s Bytes/s Bits/s
-    row =        ["Ethernet0", "VOQ0", "10",    "1000",   "0",      "0",        "2",               "111",  "222",  "333"]
+    row = ["Ethernet0", "VOQ0", "10", "1000", "0", "0", "2","111","222","333"]
 
     out = tabulate([row], header, tablefmt="simple", stralign="right")
 
@@ -157,4 +159,3 @@ def test_cli_table_includes_rate_columns_voq_mode():
     # Row values presence
     for val in ("10", "1000", "0", "2", "111", "222", "333"):
         assert val in out
-
