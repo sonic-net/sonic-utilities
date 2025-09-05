@@ -194,7 +194,8 @@ setup(
         'scripts/verify_image_sign_common.sh',
         'scripts/check_db_integrity.py',
         'scripts/sysreadyshow',
-        'scripts/wredstat'
+        'scripts/wredstat',
+        'scripts/sonic-error-report'
     ],
     entry_points={
         'console_scripts': [
