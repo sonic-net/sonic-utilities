@@ -130,15 +130,6 @@ def format_prate(rate):
     else:
         return "{:.2f}".format(float(rate))+'/s'
 
-def format_prate_raw(rate):
-    """
-    Show the packet rate.
-    """
-    if rate == STATUS_NA:
-        return STATUS_NA
-    else:
-        return "{:.2f}".format(float(rate))
-
 def format_fec_ber(rate):
     """
     Show the ber rate.

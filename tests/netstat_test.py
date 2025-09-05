@@ -19,16 +19,6 @@ def test_format_brate_uses_1024_units():
     # <= 10,000 bytes/s → B path
     assert format_brate(9_999) == "9999.00 B/s"
 
-def test_format_prate_and_prate_raw_behavior():
-    # format_prate keeps '/s'
-    assert format_prate(123.456) == "123.46/s"
-    # new raw variant has no '/s'
-    assert format_prate_raw(123.456) == "123.46"
-
-    # STATUS_NA passes through unchanged in both functions
-    assert format_prate(STATUS_NA) == STATUS_NA
-    assert format_prate_raw(STATUS_NA) == STATUS_NA
-
 def test_format_util_uses_1024_conversion():
     """
     util = brate / (port_rate * 1024 * 1024 / 8) * 100
