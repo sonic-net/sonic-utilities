@@ -1,8 +1,18 @@
+import sys
+from pathlib import Path
+
+
+# Allow running this file directly (python tests/netstat_test.py)
+# by adding the repo root to sys.path so 'utilities_common' is importable.
+sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+
+
 from utilities_common.netstat import (
     format_brate,
     format_util,
     STATUS_NA,
 )
+
 
 def test_format_brate_uses_1024_units():
     # > 10,000,000 bytes/s → MB path (now divides by 1024*1024)
@@ -14,6 +24,7 @@ def test_format_brate_uses_1024_units():
     # <= 10,000 bytes/s → B path
     assert format_brate(9_999) == "9999.00 B/s"
 
+
 def test_format_util_uses_1024_conversion():
     """
     util = brate / (port_rate * 1024 * 1024 / 8) * 100
@@ -23,6 +34,7 @@ def test_format_util_uses_1024_conversion():
     bytes_per_sec_at_line_rate = (port_rate_mbps * 1024 * 1024) / 8.0
     brate = 0.5 * bytes_per_sec_at_line_rate
     assert format_util(brate, port_rate_mbps) == "50.00%"
+
 
 def test_format_util_status_na_passthrough():
     assert format_util(STATUS_NA, 1000) == STATUS_NA
