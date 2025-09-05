@@ -40,15 +40,15 @@ def get_logger():
             class FallbackLogger:
                 def __init__(self):
                     self.logger = logging.getLogger("sonic-error-report")
-                
+
                 def log_info(self, msg):
                     self.logger.info(msg)
-                
+
                 def log_warning(self, msg, also_print_to_console=False):
                     self.logger.warning(msg)
                     if also_print_to_console:
                         sys.stderr.write("WARNING: {}\n".format(msg))
-                
+
                 def log_error(self, msg, also_print_to_console=False):
                     self.logger.error(msg)
                     if also_print_to_console:
