@@ -6,10 +6,13 @@ import sys
 import json
 import argparse
 import os
-from utilities_common.error_reporter import SonicErrorReportManager
+from utilities_common.error_reporter import SonicErrorReportManager, get_logger
 
 
 def main():
+    # Initialize SONiC logger
+    get_logger()  # Ensure logger is initialized
+    
     parser = argparse.ArgumentParser(
         description="SONiC error report management tool",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -97,7 +100,7 @@ File naming:
     try:
         manager = SonicErrorReportManager(args.report_dir, args.scenario)
     except (OSError, IOError) as e:
-        sys.stderr.write("Cannot access report directory '{}': {}\n".format(args.report_dir, e))
+        get_logger().log_error("Cannot access report directory '{}': {}".format(args.report_dir, e))
         # Try to generate a minimal framework error report if possible
         try:
             if args.event_guid and os.path.exists(os.path.dirname(args.report_dir)):
@@ -110,7 +113,7 @@ File naming:
                         "fault_reason": "Framework initialization failed: Cannot access report directory: {}".format(str(e)),
                         "guid": args.event_guid
                     },
-                    "sonic_upgrade_actions": {"reputation_impact": True, "retriable": True, "isolate_on_failure": True, "auto_triage": {"status": False, "triage_queue": "", "triage_action": ""}},
+                    "sonic_upgrade_actions": {"reputation_impact": False, "retriable": True, "isolate_on_failure": False, "auto_triage": {"status": False, "triage_queue": "", "triage_action": ""}},
                     "sonic_upgrade_report": {"duration": "0", "stages": [], "health_checks": [], "errors": [{"name": "FRAMEWORK_INIT_ERROR", "message": "Cannot access report directory"}]}
                 }
                 with open(report_path, 'w') as f:
@@ -120,7 +123,7 @@ File naming:
             pass
         sys.exit(2)
     except Exception as e:
-        sys.stderr.write("Failed to initialize report manager: {}\n".format(e))
+        get_logger().log_error("Failed to initialize report manager: {}".format(e))
         sys.exit(2)
 
     # Helper function to extract kwargs from args
@@ -157,7 +160,7 @@ File naming:
             kwargs = extract_kwargs(args)
             manager.mark_success(args.event_guid, **kwargs)
     except Exception as e:
-        sys.stderr.write("Operation failed: {}\n".format(e))
+        get_logger().log_error("Operation failed: {}".format(e))
         
         # If we have enough context, try to generate a framework error report
         try:

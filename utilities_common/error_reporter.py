@@ -9,6 +9,54 @@ import os
 import re
 import uuid
 
+# Try to import sonic_py_common logger, fall back to standard logging if not available
+try:
+    from sonic_py_common import logger
+    SONIC_LOGGER_AVAILABLE = True
+except ImportError:
+    SONIC_LOGGER_AVAILABLE = False
+
+# Always import logging for fallback functionality
+import logging
+if not SONIC_LOGGER_AVAILABLE:
+    # Set up basic logging as fallback
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+
+# Global logger instance
+sonic_logger = None
+
+
+def get_logger():
+    """Get or create the logger instance (SONiC or fallback)."""
+    global sonic_logger
+    if sonic_logger is None:
+        if SONIC_LOGGER_AVAILABLE:
+            sonic_logger = logger.Logger("sonic-error-report")
+        else:
+            # Create a wrapper for standard logging that mimics SONiC logger interface
+            class FallbackLogger:
+                def __init__(self):
+                    self.logger = logging.getLogger("sonic-error-report")
+                
+                def log_info(self, msg):
+                    self.logger.info(msg)
+                
+                def log_warning(self, msg, also_print_to_console=False):
+                    self.logger.warning(msg)
+                    if also_print_to_console:
+                        sys.stderr.write("WARNING: {}\n".format(msg))
+                
+                def log_error(self, msg, also_print_to_console=False):
+                    self.logger.error(msg)
+                    if also_print_to_console:
+                        sys.stderr.write("ERROR: {}\n".format(msg))
+            
+            sonic_logger = FallbackLogger()
+    return sonic_logger
+
 
 class SonicErrorReportManager:
     def __init__(self, report_dir="/host/sonic-upgrade-reports",
@@ -100,9 +148,9 @@ class SonicErrorReportManager:
                 "guid": guid
             },
             "sonic_upgrade_actions": {
-                "reputation_impact": True,
+                "reputation_impact": False,
                 "retriable": True,
-                "isolate_on_failure": True,
+                "isolate_on_failure": False,
                 "auto_triage": {
                     "status": False,
                     "triage_queue": "",
@@ -135,7 +183,7 @@ class SonicErrorReportManager:
         # Atomic rename (on POSIX systems)
         os.rename(temp_path, report_path)
 
-        sys.stderr.write("Initialized staged report: {}\n".format(report_path))
+        get_logger().log_info("Initialized staged report: {}".format(report_path))
 
         # Return the GUID for programmatic use
         return guid
@@ -145,7 +193,7 @@ class SonicErrorReportManager:
         report_path = self.get_report_path(guid)
 
         if not os.path.exists(report_path):
-            sys.stderr.write("Error: Report {} does not exist\n".format(report_path))
+            get_logger().log_error("Report {} does not exist".format(report_path))
             sys.exit(1)
 
         # Load existing report
@@ -180,14 +228,14 @@ class SonicErrorReportManager:
         # Atomic rename (on POSIX systems)
         os.rename(temp_path, report_path)
 
-        sys.stderr.write("Marked report as failed: {}\n".format(report_path))
+        get_logger().log_info("Marked report as failed: {}".format(report_path))
 
     def mark_success(self, guid, **kwargs):
         """Mark report as successful with success details."""
         report_path = self.get_report_path(guid)
 
         if not os.path.exists(report_path):
-            sys.stderr.write("Warning: Report {} not found\n".format(report_path))
+            get_logger().log_warning("Report {} not found".format(report_path))
             return
 
         # Load existing report
@@ -220,4 +268,4 @@ class SonicErrorReportManager:
         # Atomic rename (on POSIX systems)
         os.rename(temp_path, report_path)
 
-        sys.stderr.write("Marked report as successful: {}\n".format(report_path))
+        get_logger().log_info("Marked report as successful: {}".format(report_path))
