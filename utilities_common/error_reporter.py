@@ -9,7 +9,8 @@ import os
 import re
 import uuid
 
-# Try to import sonic_py_common logger, fall back to standard logging if not available
+# Try to import sonic_py_common logger, fall back to standard logging if not
+# available
 try:
     from sonic_py_common import logger
     SONIC_LOGGER_AVAILABLE = True
@@ -36,7 +37,8 @@ def get_logger():
         if SONIC_LOGGER_AVAILABLE:
             sonic_logger = logger.Logger("sonic-error-report")
         else:
-            # Create a wrapper for standard logging that mimics SONiC logger interface
+            # Create a wrapper for standard logging that mimics SONiC logger
+            # interface
             class FallbackLogger:
                 def __init__(self):
                     self.logger = logging.getLogger("sonic-error-report")
@@ -142,9 +144,10 @@ class SonicErrorReportManager:
         report = {
             "sonic_upgrade_summary": {
                 "script_name": "{}".format(operation_type),
-                "sonic_upgrade_package_version": "1.0.0",  # TODO: Implement versioning
+                "sonic_upgrade_package_version": "1.0.0",  # TODO: Impl ver
                 "fault_code": "124",
-                "fault_reason": "Operation timeout - system became unresponsive",
+                "fault_reason": (
+                    "Operation timeout - system became unresponsive"),
                 "guid": guid
             },
             "sonic_upgrade_actions": {
@@ -183,7 +186,8 @@ class SonicErrorReportManager:
         # Atomic rename (on POSIX systems)
         os.rename(temp_path, report_path)
 
-        get_logger().log_info("Initialized staged report: {}".format(report_path))
+        get_logger().log_info(
+            "Initialized staged report: {}".format(report_path))
 
         # Return the GUID for programmatic use
         return guid
@@ -193,7 +197,8 @@ class SonicErrorReportManager:
         report_path = self.get_report_path(guid)
 
         if not os.path.exists(report_path):
-            get_logger().log_error("Report {} does not exist".format(report_path))
+            get_logger().log_error(
+                "Report {} does not exist".format(report_path))
             sys.exit(1)
 
         # Load existing report
@@ -205,10 +210,13 @@ class SonicErrorReportManager:
         if fault_reason:
             report["sonic_upgrade_summary"]["fault_reason"] = fault_reason
         else:
-            report["sonic_upgrade_summary"]["fault_reason"] = "Operation failed with exit code {}".format(exit_code)
+            report["sonic_upgrade_summary"]["fault_reason"] = (
+                "Operation failed with exit code {}".format(exit_code))
 
         # Clear timeout error and add actual error
-        error_message = fault_reason if fault_reason else "Operation failed with exit code {}".format(exit_code)
+        error_message = (fault_reason if fault_reason else
+                         "Operation failed with exit code {}".format(
+                             exit_code))
         report["sonic_upgrade_report"]["errors"] = [{
             "name": "EXIT_CODE_{}".format(exit_code),
             "message": error_message
@@ -228,7 +236,8 @@ class SonicErrorReportManager:
         # Atomic rename (on POSIX systems)
         os.rename(temp_path, report_path)
 
-        get_logger().log_info("Marked report as failed: {}".format(report_path))
+        get_logger().log_info(
+            "Marked report as failed: {}".format(report_path))
 
     def mark_success(self, guid, **kwargs):
         """Mark report as successful with success details."""
@@ -244,7 +253,8 @@ class SonicErrorReportManager:
 
         # Update summary with success details
         report["sonic_upgrade_summary"]["fault_code"] = "0"
-        report["sonic_upgrade_summary"]["fault_reason"] = "Operation completed successfully"
+        report["sonic_upgrade_summary"]["fault_reason"] = (
+            "Operation completed successfully")
 
         # Update actions for successful operation
         report["sonic_upgrade_actions"]["reputation_impact"] = False
@@ -268,4 +278,5 @@ class SonicErrorReportManager:
         # Atomic rename (on POSIX systems)
         os.rename(temp_path, report_path)
 
-        get_logger().log_info("Marked report as successful: {}".format(report_path))
+        get_logger().log_info(
+            "Marked report as successful: {}".format(report_path))
