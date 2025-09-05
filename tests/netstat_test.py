@@ -1,17 +1,24 @@
+"""Tests for utilities_common.netstat formatting using 1024-based units."""
+
 import sys
 from pathlib import Path
+import importlib
 
 
-# Allow running this file directly (python tests/netstat_test.py)
-# by adding the repo root to sys.path so 'utilities_common' is importable.
-sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
-
-
-from utilities_common.netstat import (
-    format_brate,
-    format_util,
-    STATUS_NA,
-)
+# Try normal import first
+try:
+    from utilities_common.netstat import (
+        format_brate,
+        format_util,
+        STATUS_NA,
+    )
+except ModuleNotFoundError:
+    # Fallback: allow running this file directly by adding repo root to sys.path
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
+    netstat = importlib.import_module("utilities_common.netstat")
+    format_brate = netstat.format_brate
+    format_util = netstat.format_util
+    STATUS_NA = netstat.STATUS_NA
 
 
 def test_format_brate_uses_1024_units():
