@@ -1663,7 +1663,9 @@ def commit(port_name):
 @firmware.command()
 @click.argument('port_name', required=True, default=None)
 @click.argument('filepath', required=True, default=None)
-def upgrade(port_name, filepath):
+@click.option('--delay', metavar='<delay>', type=click.IntRange(0, 10), default=5,
+              help="Delay time before checking firmware switch done")
+def upgrade(port_name, filepath, delay):
     """Upgrade firmware on the transceiver"""
 
     physical_port = logical_port_to_physical_port_index(port_name)
@@ -1692,6 +1694,11 @@ def upgrade(port_name, filepath):
         sys.exit(EXIT_FAIL)
 
     click.echo("Firmware run in mode {} successful".format(default_mode))
+
+    # The cable firmware can be still under initialization immediately after run_firmware
+    # We put a delay here to avoid potential error message in accessing the cable EEPROM
+    if delay:
+        time.sleep(delay)
 
     if is_fw_switch_done(port_name) != 1:
         click.echo('Failed to switch firmware images!')
