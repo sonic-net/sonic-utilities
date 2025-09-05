@@ -53,7 +53,7 @@ def get_logger():
                     self.logger.error(msg)
                     if also_print_to_console:
                         sys.stderr.write("ERROR: {}\n".format(msg))
-            
+
             sonic_logger = FallbackLogger()
     return sonic_logger
 
