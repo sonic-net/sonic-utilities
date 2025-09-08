@@ -18,14 +18,14 @@ def main():
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 Examples:
-  sonic-error-report --scenario update_firmware -e uuid-123 init firmware-update
-  sonic-error-report --scenario fast_reboot_202405 -e uuid-456 init fast-reboot
-  sonic-error-report --scenario update_firmware -e uuid-123 fail 1 --reason "Download failed"
-  sonic-error-report --scenario preload_firmware -e uuid-789 success --duration 60
+  sonic-error-report --scenario <scenario-name> -e uuid-123 init <operation-type>
+  sonic-error-report --scenario <scenario-name> -e uuid-456 init <operation-type>
+  sonic-error-report --scenario <scenario-name> -e uuid-123 fail 1 --reason "Operation failed"
+  sonic-error-report --scenario <scenario-name> -e uuid-789 success --duration 60
 
 File naming:
   Creates: <scenario>.<eventGuid>.json
-  Examples: update_firmware.uuid-123.json, fast_reboot_202405.uuid-456.json
+  Examples: <scenario-name>.uuid-123.json, <scenario-name>.uuid-456.json
         """
     )
 
