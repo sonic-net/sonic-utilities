@@ -70,7 +70,7 @@ def _transition_entry(module_name: str) -> dict:
 
 def _transition_in_progress(module_name: str) -> bool:
     entry = _transition_entry(module_name)
-    return entry.get("state_transition_in_progress") == "True"
+    return entry.get("state_transition_in_progress", "False") == "True"
 
 
 def _mark_transition_start(module_name: str, transition_type: str):

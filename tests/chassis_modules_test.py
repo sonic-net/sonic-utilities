@@ -100,7 +100,7 @@ def is_transition_timed_out(db, chassis_module_name):
     if not entry:
         return False
 
-    if entry.get("state_transition_in_progress") != "True":
+    if entry.get("state_transition_in_progress", "False") != "True":
         return False
 
     ts = entry.get("transition_start_time")
