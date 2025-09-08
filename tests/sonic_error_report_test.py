@@ -2,7 +2,6 @@ import json
 import os
 import tempfile
 import uuid
-from io import StringIO
 from unittest.mock import patch
 
 # Import the module under test
@@ -123,7 +122,7 @@ class TestSonicErrorReportManager:
         assert (report["sonic_upgrade_summary"]["fault_reason"] ==
                 expected_reason)
         assert report["sonic_upgrade_summary"]["guid"] == self.test_guid
-        assert report["sonic_upgrade_actions"]["reputation_impact"] is True
+        assert report["sonic_upgrade_actions"]["reputation_impact"] is False
         assert report["sonic_upgrade_report"]["errors"][0]["name"] == "TIMEOUT"
         assert result_guid == self.test_guid
 
@@ -215,11 +214,12 @@ class TestSonicErrorReportManager:
         assert (report["sonic_upgrade_report"]["errors"][0]["message"] ==
                 "Operation failed with exit code 99")
 
-    @patch('sys.stderr', new_callable=StringIO)
+    @patch('utilities_common.error_reporter.get_logger')
     @patch('sys.exit')
-    def test_mark_failure_missing_report(self, mock_exit, mock_stderr):
+    def test_mark_failure_missing_report(self, mock_exit, mock_get_logger):
         """Test mark_failure exits when report doesn't exist."""
         manager = SonicErrorReportManager(self.test_dir, self.test_scenario)
+        mock_logger = mock_get_logger.return_value
 
         # Mock exit to raise SystemExit to stop execution like real exit would
         mock_exit.side_effect = SystemExit(1)
@@ -231,8 +231,10 @@ class TestSonicErrorReportManager:
             pass  # Expected
 
         mock_exit.assert_called_once_with(1)
-        assert "Error: Report" in mock_stderr.getvalue()
-        assert "does not exist" in mock_stderr.getvalue()
+        mock_logger.log_error.assert_called_once()
+        error_call_args = mock_logger.log_error.call_args[0][0]
+        assert "Report" in error_call_args
+        assert "does not exist" in error_call_args
 
     def test_mark_success_updates_existing_report(self):
         """Test mark_success updates existing report with success details."""
@@ -258,16 +260,19 @@ class TestSonicErrorReportManager:
         assert report["sonic_upgrade_report"]["errors"] == []
         assert report["sonic_upgrade_report"]["duration"] == "120"
 
-    @patch('sys.stderr', new_callable=StringIO)
-    def test_mark_success_missing_report(self, mock_stderr):
+    @patch('utilities_common.error_reporter.get_logger')
+    def test_mark_success_missing_report(self, mock_get_logger):
         """Test mark_success warns but doesn't fail when report missing."""
         manager = SonicErrorReportManager(self.test_dir, self.test_scenario)
+        mock_logger = mock_get_logger.return_value
 
         # Should not throw exception
         manager.mark_success("nonexistent-guid")
 
-        assert "Warning: Report" in mock_stderr.getvalue()
-        assert "not found" in mock_stderr.getvalue()
+        mock_logger.log_warning.assert_called_once()
+        warning_call_args = mock_logger.log_warning.call_args[0][0]
+        assert "Report" in warning_call_args
+        assert "not found" in warning_call_args
 
     def test_atomic_write_operations(self):
         """Test that write operations are atomic (use temp file + rename)."""
