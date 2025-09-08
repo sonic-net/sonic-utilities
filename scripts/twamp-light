@@ -1,0 +1,414 @@
+#!/usr/bin/env python3
+
+"""
+    Script to show TWAMP-Light session
+    Example of the output:
+
+"""
+
+import argparse
+import sys
+import time
+import os
+
+# mock the redis for unit test purposes #
+try: # pragma: no cover
+    if os.environ["UTILITIES_UNIT_TESTING"] == "1":
+        modules_path = os.path.join(os.path.dirname(__file__), "..")
+        test_path = os.path.join(modules_path, "tests")
+        sys.path.insert(0, modules_path)
+        sys.path.insert(0, test_path)
+        import mock_tables.dbconnector
+        mock_db_path = os.path.join(test_path, "twamp_light_input")
+
+        ## asic_db
+        #jsonfile_asic = os.path.join(mock_db_path, 'asic_db')
+        #mock_tables.dbconnector.dedicated_dbs['ASIC_DB'] = jsonfile_asic
+
+        ## counters_db
+        jsonfile_counters = os.path.join(mock_db_path, 'counters_db')
+        mock_tables.dbconnector.dedicated_dbs['COUNTERS_DB'] = jsonfile_counters
+
+        ## CONFIG_DB with different profile
+        mock_variants = { "1": 'config_db',
+                          "2": 'config_db_null'}
+        file_name = mock_variants[os.environ["TWAMPLIGHT_SHOW_MOCK"]]
+        jsonfile_config = os.path.join(mock_db_path, file_name)
+        mock_tables.dbconnector.dedicated_dbs['CONFIG_DB'] = jsonfile_config
+
+        ## state_db
+        jsonfile_state = os.path.join(mock_db_path, 'state_db')
+        mock_tables.dbconnector.dedicated_dbs['STATE_DB'] = jsonfile_state
+
+except KeyError: # pragma: no cover
+    pass
+
+from tabulate import tabulate
+from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
+
+
+class TwampLight(object):
+
+    TWAMP_MODE_FULL = "FULL"
+    TWAMP_MODE_LIGHT = "LIGHT"
+    TWAMP_ROLE_SENDER = "SENDER"
+    TWAMP_ROLE_REFLECTOR = "REFLECTOR"
+    TWAMP_STATISTICS_TWOWAY_DELAY = "twoway-delay"
+    TWAMP_STATISTICS_TWOWAY_LOSS = "twoway-loss"
+    CFG_TWAMP_SESSION_TABLE_NAME = "TWAMP_SESSION"
+    STATE_TWAMP_SESSION_TABLE_NAME = "TWAMP_SESSION_TABLE"
+    COUNTERS_TWAMP_SESSION_NAME_MAP_TABLE_NAME = "COUNTERS_TWAMP_SESSION_NAME_MAP"
+    COUNTER_TABLE_PREFIX = 'COUNTERS:'
+    COUNTER_TABLE_INDEX  = ':INDEX:'
+    COUNTER_TABLE_INDEX0 = 0
+
+    def __init__(self):
+        super(TwampLight,self).__init__()
+        self.config_db = ConfigDBConnector()
+        self.state_db = SonicV2Connector(host="127.0.0.1")
+        self.counters_db = SonicV2Connector(host="127.0.0.1")
+
+        self.session_db_info = {}
+        self.name_map_db_info = {}
+        self.stats_db_info = {}
+
+    def fetch_session_info(self):
+        self.config_db.connect()
+        self.state_db.connect(self.state_db.STATE_DB)
+
+        self.read_session_info()
+        self.read_session_state_info()
+
+    def fetch_statistics_info(self, session_name, brief, lastest_number):
+        self.config_db.connect()
+        self.state_db.connect(self.state_db.STATE_DB)
+        self.counters_db.connect(self.counters_db.COUNTERS_DB)
+
+        self.read_statistics_info(session_name, brief, lastest_number)
+
+    def read_session_info(self):
+        """
+        Read CFG_TWAMP_SESSION_TABLE_NAME table from configuration database
+        :return:
+        """
+        self.session_db_info = self.config_db.get_table(self.CFG_TWAMP_SESSION_TABLE_NAME)
+
+    def get_session_db_info(self):
+        return self.session_db_info
+
+    def read_session_state_info(self):
+        """
+        Read STATE_TWAMP_SESSION_TABLE_NAME table from configuration database
+        :return:
+        """
+        for key in self.get_session_db_info():
+            state_db_info = self.state_db.get_all(self.state_db.STATE_DB, "{}|{}".format(self.STATE_TWAMP_SESSION_TABLE_NAME, key))
+            self.session_db_info[key]["status"] = state_db_info.get("status", "inactive") if state_db_info else "error"
+
+    def read_statistics_info(self, session_name, brief, lastest_number):
+        """
+        Read COUNTERS table from counters database
+        :return:
+        """
+        self.name_map_db_info = self.counters_db.get_all(self.counters_db.COUNTERS_DB, self.COUNTERS_TWAMP_SESSION_NAME_MAP_TABLE_NAME)
+        if not self.name_map_db_info:
+            return
+
+        for name,oid in self.name_map_db_info.items():
+            if session_name and name != session_name:
+                continue
+            self.stats_db_info[name] = {}
+            if brief:
+                counters_keys = self.counters_db.keys(self.counters_db.COUNTERS_DB, self.COUNTER_TABLE_PREFIX + oid)
+            else:
+                counters_keys = self.counters_db.keys(self.counters_db.COUNTERS_DB, self.COUNTER_TABLE_PREFIX + oid + '*')
+            if counters_keys:
+                tmp_db_info = {}
+                for key in counters_keys:
+                    counters_db_info = self.counters_db.get_all(self.counters_db.COUNTERS_DB, key)
+                    if self.COUNTER_TABLE_INDEX in key:
+                        index = int(key.split(self.COUNTER_TABLE_INDEX)[1])
+                    else:
+                        index = self.COUNTER_TABLE_INDEX0
+                    tmp_db_info[index] = {}
+                    tmp_db_info[index]["tx_packets"]   = counters_db_info.get("SAI_TWAMP_SESSION_STAT_TX_PACKETS", "")
+                    tmp_db_info[index]["tx_bytes"]     = counters_db_info.get("SAI_TWAMP_SESSION_STAT_TX_BYTE", "")
+                    tmp_db_info[index]["rx_packets"]   = counters_db_info.get("SAI_TWAMP_SESSION_STAT_RX_PACKETS", "")
+                    tmp_db_info[index]["rx_bytes"]     = counters_db_info.get("SAI_TWAMP_SESSION_STAT_RX_BYTE", "")
+                    tmp_db_info[index]["drop_packets"] = counters_db_info.get("SAI_TWAMP_SESSION_STAT_DROP_PACKETS", "")
+                    tmp_db_info[index]["max_latency"]  = counters_db_info.get("SAI_TWAMP_SESSION_STAT_MAX_LATENCY", "")
+                    tmp_db_info[index]["min_latency"]  = counters_db_info.get("SAI_TWAMP_SESSION_STAT_MIN_LATENCY", "")
+                    tmp_db_info[index]["avg_latency"]  = counters_db_info.get("SAI_TWAMP_SESSION_STAT_AVG_LATENCY", "")
+                    tmp_db_info[index]["max_jitter"]   = counters_db_info.get("SAI_TWAMP_SESSION_STAT_MAX_JITTER", "")
+                    tmp_db_info[index]["min_jitter"]   = counters_db_info.get("SAI_TWAMP_SESSION_STAT_MIN_JITTER", "")
+                    tmp_db_info[index]["avg_jitter"]   = counters_db_info.get("SAI_TWAMP_SESSION_STAT_AVG_JITTER", "")
+                tmp_db_info_sort = sorted(tmp_db_info.keys())[lastest_number:]
+                self.stats_db_info[name][self.COUNTER_TABLE_INDEX0] = tmp_db_info[self.COUNTER_TABLE_INDEX0]
+                for index in tmp_db_info_sort:
+                    self.stats_db_info[name][index] = tmp_db_info[index]
+
+    def get_stats_db_info(self):
+        return self.stats_db_info
+
+    def display_sender_session(self, session_name):
+        """
+        Show twamp session configuration.
+        :param session_name: Optional. Twamp-Light session name. Filter sessions by specified name.
+        :return:
+        """
+        output_summary = ''
+        output_summary += "Time unit: Monitor Time/Timeout in second; Tx Interval/Stats Interval in millisecond\n"
+        sender_header = ("Name", "Status", "Sender IP:PORT", "Reflector IP:PORT",
+                         "Packet Count", "Monitor Time", "Tx Interval", "Stats Interval", "Timeout")
+
+        sender_data = []
+        for key, val in self.get_session_db_info().items():
+            if session_name and key != session_name:
+                continue
+            if val.get("role", "") != self.TWAMP_ROLE_SENDER:
+                continue
+
+            sender_data.append([key, val.get("status", ""),
+                                "{}:{}".format(val.get("src_ip", ""), val.get("src_udp_port", "")), "{}:{}".format(val.get("dst_ip", ""), val.get("dst_udp_port", "")),
+                                val.get("packet_count", "-"), val.get("monitor_time", "-"), val.get("tx_interval", "-"), val.get("statistics_interval", ""), val.get("timeout", "")])
+
+        output_summary += "TWAMP-Light Sender Sessions\n"
+        output_summary += tabulate(sender_data, headers=sender_header, tablefmt="simple", missingval="") + "\n"
+        print(output_summary)
+
+    def display_reflector_session(self, session_name):
+        """
+        Show twamp session configuration.
+        :param session_name: Optional. Twamp-Light session name. Filter sessions by specified name.
+        :return:
+        """
+        output_summary = ''
+        reflector_header = ("Name", "Status", "Sender IP:PORT", "Reflector IP:PORT")
+
+        reflector_data = []
+        for key, val in self.get_session_db_info().items():
+            if session_name and key != session_name:
+                continue
+            if val.get("role", "") != self.TWAMP_ROLE_REFLECTOR:
+                continue
+
+            reflector_data.append([key, val.get("status", ""),
+                                   "{}:{}".format(val.get("src_ip", ""), val.get("src_udp_port", "")), "{}:{}".format(val.get("dst_ip", ""), val.get("dst_udp_port", ""))])
+
+        output_summary += "TWAMP-Light Reflector Sessions\n"
+        output_summary += tabulate(reflector_data, headers=reflector_header, tablefmt="simple", missingval="") + "\n"
+        print(output_summary)
+
+    def display_statistics_twoway_delay_index(self, session_name):
+        """
+        Show twamp session statistics.
+        :param session_name: Optional. Twamp-Light session name. Filter sessions by specified name.
+        :return:
+        """
+        statistics_header = ("Name", "Index", "Delay(AVG)", "Jitter(AVG)")
+        print("Latest two-way delay statistics(nsec):")
+        statistics_data = []
+        session_data = []
+        for key, val in self.get_stats_db_info().items():
+            if session_name and key != session_name:
+                continue
+            insert_key = True
+            for index, stats_info in val.items():
+                if index == self.COUNTER_TABLE_INDEX0:
+                    continue
+                avg_latency = stats_info.get("avg_latency", "")
+                if insert_key:
+                    session_data.append([key, index, avg_latency, stats_info.get("avg_jitter", "")])
+                    insert_key = False
+                else:
+                    session_data.append(["", index, avg_latency, stats_info.get("avg_jitter", "")])
+            statistics_data += session_data
+            session_data = []
+        print(tabulate(statistics_data, headers=statistics_header, tablefmt="simple", missingval=""))
+        print("")
+
+    def display_statistics_twoway_delay_total(self, session_name):
+        """
+        Show twamp session statistics.
+        :param session_name: Optional. Twamp-Light session name. Filter sessions by specified name.
+        :return:
+        """
+        statistics_header = ("Name", "Delay(AVG)", "Delay(MIN)", "Delay(MAX)", "Jitter(AVG)", "Jitter(MIN)", "Jitter(MAX)")
+        print("Total two-way delay statistics(nsec):")
+        statistics_data = []
+        for name, val in self.get_stats_db_info().items():
+            if session_name and name != session_name:
+                continue
+            for index, stats_info in val.items():
+                if index != self.COUNTER_TABLE_INDEX0:
+                    continue
+                avg_latency = stats_info.get("avg_latency", "")
+                min_latency = stats_info.get("min_latency", "")
+                max_latency = stats_info.get("max_latency", "")
+                statistics_data.append([name,
+                                        avg_latency, min_latency, max_latency,
+                                        stats_info.get("avg_jitter", ""), stats_info.get("min_jitter", ""), stats_info.get("max_jitter", "")])
+
+        print(tabulate(statistics_data, headers=statistics_header, tablefmt="simple", missingval=""))
+        print("")
+
+    def display_statistics_twoway_delay(self, session_name, brief):
+        """
+        Show twamp session statistics.
+        :param session_name: Optional. Twamp-Light session name. Filter sessions by specified name.
+        :return:
+        """
+        if not brief:
+            self.display_statistics_twoway_delay_index(session_name)
+        self.display_statistics_twoway_delay_total(session_name)
+
+    def display_statistics_twoway_loss_index(self, session_name):
+        """
+        Show twamp session statistics.
+        :param session_name: Optional. Twamp-Light session name. Filter sessions by specified name.
+        :return:
+        """
+        statistics_header = ("Name", "Index", "Loss Count", "Loss Ratio")
+        print("Latest two-way loss statistics:")
+        statistics_data = []
+        session_data = []
+        for key, val in self.get_stats_db_info().items():
+            if session_name and key != session_name:
+                continue
+            insert_key = True
+            for index, stats_info in val.items():
+                if index == self.COUNTER_TABLE_INDEX0:
+                    continue
+                tx_packets = int(stats_info.get("tx_packets", "0"))
+                rx_packets = int(stats_info.get("rx_packets", "0"))
+                drop_packets = tx_packets - rx_packets
+                drop_ratio = drop_packets * 100 / tx_packets if tx_packets else 0
+                if insert_key:
+                    session_data.append([key, index, drop_packets, drop_ratio])
+                    insert_key = False
+                else:
+                    session_data.append(["", index, drop_packets, drop_ratio])
+            statistics_data += session_data
+            session_data = []
+        print(tabulate(statistics_data, headers=statistics_header, tablefmt="simple", missingval=""))
+        print("")
+
+    def display_statistics_twoway_loss_total(self, session_name):
+        """
+        Show twamp session statistics.
+        :param session_name: Optional. Twamp-Light session name. Filter sessions by specified name.
+        :return:
+        """
+        statistics_header = ("Name", "Loss Count(AVG)", "Loss Count(MIN)", "Loss Count(MAX)", "Loss Ratio(AVG)", "Loss Ratio(MIN)", "Loss Ratio(MAX)")
+        print("Total two-way loss statistics:")
+        statistics_data = []
+        for name, val in self.get_stats_db_info().items():
+            if session_name and name != session_name:
+                continue
+            if not val:
+                continue
+            avg_drop_packets = 0
+            min_drop_packets = 0
+            max_drop_packets = 0
+            avg_drop_ratio = 0
+            min_drop_ratio = 0
+            max_drop_ratio = 0
+            total_tx_packets = 0
+            total_drop_packets = 0
+            total_index = 0
+            for index, stats_info in val.items():
+                if index == self.COUNTER_TABLE_INDEX0:
+                    continue
+                total_index += 1
+                tx_packets = int(stats_info.get("tx_packets", "0"))
+                rx_packets = int(stats_info.get("rx_packets", "0"))
+                drop_packets = tx_packets - rx_packets
+                total_tx_packets += tx_packets
+                total_drop_packets += drop_packets
+                if 1 == total_index:
+                    min_drop_packets = drop_packets
+                else:
+                    min_drop_packets = drop_packets if drop_packets < min_drop_packets else min_drop_packets
+                max_drop_packets = drop_packets if drop_packets > max_drop_packets else max_drop_packets
+                if tx_packets:
+                    drop_ratio = drop_packets * 100 / tx_packets
+                    if 1 == total_index:
+                        min_drop_ratio = drop_ratio
+                    else:
+                        min_drop_ratio = drop_ratio if drop_ratio < min_drop_ratio else min_drop_ratio
+                    max_drop_ratio = drop_ratio if drop_ratio > max_drop_ratio else max_drop_ratio
+                else:
+                    min_drop_ratio = 0
+                    max_drop_ratio = 0
+            avg_drop_packets = total_drop_packets / total_index if total_index else 0
+            avg_drop_ratio = total_drop_packets * 100 / total_tx_packets if total_tx_packets else 0
+            statistics_data.append([name,
+                                    avg_drop_packets, min_drop_packets, max_drop_packets,
+                                    avg_drop_ratio, min_drop_ratio, max_drop_ratio])
+
+        print(tabulate(statistics_data, headers=statistics_header, tablefmt="simple", missingval=""))
+        print("")
+
+    def display_statistics_twoway_loss(self, session_name, brief):
+        """
+        Show twamp session statistics.
+        :param session_name: Optional. Twamp-Light session name. Filter sessions by specified name.
+        :return:
+        """
+        if not brief:
+            self.display_statistics_twoway_loss_index(session_name)
+        self.display_statistics_twoway_loss_total(session_name)
+
+    def display_session(self, role, session_name):
+        if role is None or role == self.TWAMP_ROLE_SENDER:
+            self.display_sender_session(session_name)
+        if role is None or role == self.TWAMP_ROLE_REFLECTOR:
+            self.display_reflector_session(session_name)
+
+    def display_statistics(self, statistics_type, session_name, brief):
+        if statistics_type == self.TWAMP_STATISTICS_TWOWAY_DELAY:
+            self.display_statistics_twoway_delay(session_name, brief)
+        elif statistics_type == self.TWAMP_STATISTICS_TWOWAY_LOSS:
+            self.display_statistics_twoway_loss(session_name, brief)
+
+def main():
+    parser = argparse.ArgumentParser(description='Display the TWAMP-Light information',
+                                     formatter_class=argparse.RawTextHelpFormatter,
+                                     epilog="""
+    Examples:
+    twamp-light
+    twamp-light -n session1
+    twamp-light -n session2 -t twoway-delay
+    twamp-light -n session3 -t twoway-loss -b
+    twamp-light -n session4 -t twoway-loss -l 10
+    """)
+
+    parser.add_argument('-r', '--role', type=str, help='TWAMP-Light role', default=None)
+    parser.add_argument('-n', '--sessionname', type=str, help='TWAMP-Light session name', default=None)
+    parser.add_argument('-t', '--statisticstype', type=str, help='TWAMP-Light statistics type choose from twoway-delay, twoway-loss', default=None)
+    parser.add_argument('-b', '--brief', action='store_true', help='TWAMP-Light brief info')
+    parser.add_argument('-l', '--lastestnumber', type=int, help='TWAMP-Light lastest number set of statistics info', default=None)
+    args = parser.parse_args()
+
+    role = args.role
+    session_name = args.sessionname
+    statistics_type = args.statisticstype
+    brief = args.brief
+    lastest_number = (0 - args.lastestnumber) if args.lastestnumber else 0
+
+    try:
+        twamplight = TwampLight()
+
+        if statistics_type:
+            twamplight.fetch_statistics_info(session_name, brief, lastest_number)
+            twamplight.display_statistics(statistics_type, session_name, brief)
+        else:
+            twamplight.fetch_session_info()
+            twamplight.fetch_statistics_info(session_name, True, 0)
+            twamplight.display_session(role, session_name)
+    except Exception as e:
+        print(str(e))
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()
