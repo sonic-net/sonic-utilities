@@ -22,7 +22,7 @@ def get_default_value(schema_property):
     """Get the default value for a property from its schema definition."""
     if 'default' in schema_property:
         return schema_property['default']
-    
+
     prop_type = schema_property.get('type')
     if prop_type == 'string':
         return ""
@@ -54,13 +54,13 @@ def generate_object_from_schema(schema):
     """Generate an object from a schema definition."""
     if 'properties' not in schema:
         return {}
-    
+
     result = {}
     properties = schema['properties']
-    
+
     for prop_name, prop_schema in properties.items():
         result[prop_name] = get_default_value(prop_schema)
-    
+
     return result
 
 
@@ -68,14 +68,14 @@ def generate_template_from_schema(schema_path, output_path):
     """Generate a template JSON file from a JSON schema."""
     with open(schema_path, 'r') as f:
         schema = json.load(f)
-    
+
     # Generate the template from the root schema
     template = generate_object_from_schema(schema)
-    
+
     # Write the template to file
     with open(output_path, 'w') as f:
         json.dump(template, f, indent=2)
-    
+
     print("Generated template: {}".format(output_path))
     print("Template content:")
     print(json.dumps(template, indent=2))
@@ -86,11 +86,11 @@ def main():
     script_dir = os.path.dirname(os.path.abspath(__file__))
     schema_path = os.path.join(script_dir, 'error_report_schema.json')
     output_path = os.path.join(script_dir, 'error_report_template.json')
-    
+
     if not os.path.exists(schema_path):
         print("Error: Schema file not found at {}".format(schema_path))
         return 1
-    
+
     generate_template_from_schema(schema_path, output_path)
     return 0
 

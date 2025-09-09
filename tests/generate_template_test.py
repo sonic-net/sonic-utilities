@@ -5,10 +5,7 @@ import sys
 import json
 import tempfile
 import unittest
-from unittest.mock import patch, mock_open
-
-# Add the parent directory to the path to import the module
-sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
+from unittest.mock import patch
 
 from utilities_common.generate_template_from_schema import (
     get_default_value,
@@ -16,6 +13,9 @@ from utilities_common.generate_template_from_schema import (
     generate_template_from_schema,
     main
 )
+
+# Add the parent directory to the path to import the module
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 
 class TestGenerateTemplateFromSchema(unittest.TestCase):
