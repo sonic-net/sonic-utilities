@@ -206,6 +206,16 @@ def shutdown_chassis_module(db, chassis_module_name):
                 click.echo(f"Module {chassis_module_name} state transition is already in progress")
                 return
         else:
+            # race-proof against opposite transition (use our STATE_DB helper)
+            conn = _state_db_conn()
+            row = conn.get_all(conn.STATE_DB, f"CHASSIS_MODULE_TABLE|{chassis_module_name}") or {}
+            last_type = row.get("transition_type")
+            oper = row.get("oper_status")
+            # If a startup was just initiated and the module hasn't reached Online yet, block shutdown
+            if last_type == "startup" and oper != "Online":
+                click.echo(f"Module {chassis_module_name} has a startup transition underway; try again later.")
+                return
+
             _mark_transition_start(chassis_module_name, "shutdown")
 
         click.echo(f"Shutting down chassis module {chassis_module_name}")
@@ -253,6 +263,16 @@ def startup_chassis_module(db, chassis_module_name):
                 click.echo(f"Module {chassis_module_name} state transition is already in progress")
                 return
         else:
+            # race-proof against opposite transition (use our STATE_DB helper)
+            conn = _state_db_conn()
+            row = conn.get_all(conn.STATE_DB, f"CHASSIS_MODULE_TABLE|{chassis_module_name}") or {}
+            last_type = row.get("transition_type")
+            oper = row.get("oper_status")
+            # If a shutdown was just initiated and the module hasn't reached Offline yet, block startup
+            if last_type == "shutdown" and oper != "Offline":
+                click.echo(f"Module {chassis_module_name} has a shutdown transition underway; try again later.")
+                return
+
             _mark_transition_start(chassis_module_name, "startup")
 
         click.echo(f"Starting up chassis module {chassis_module_name}")

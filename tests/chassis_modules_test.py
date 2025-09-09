@@ -2,6 +2,7 @@ import sys
 import os
 from click.testing import CliRunner
 from datetime import datetime, timedelta
+from types import SimpleNamespace
 
 try:
     from swsssdk import SonicV2Connector
@@ -267,6 +268,14 @@ class _MBStub:
         return False
 
 
+# helper: stub for _state_db_conn used by CLI race-guard
+def _stub_state_conn(row=None):
+    """Return an object with STATE_DB and get_all() to satisfy race-guard reads."""
+    if row is None:
+        row = {}
+    return SimpleNamespace(STATE_DB=6, get_all=lambda _db, _key: row)
+
+
 class TestChassisModules(object):
     @classmethod
     def setup_class(cls):
@@ -407,7 +416,6 @@ class TestChassisModules(object):
             chassisdb.connect("CHASSIS_STATE_DB")
             chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic6", "asic_id_in_module", "0")
             chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic6", "asic_pci_address", "nokia-bdb:4:0")
-            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic6", "name", "FABRIC-CARD0")
             chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic7", "asic_id_in_module", "1")
             chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic7", "asic_pci_address", "nokia-bdb:4:1")
             chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic7", "name", "FABRIC-CARD0")
@@ -576,7 +584,8 @@ class TestChassisModules(object):
     def test_shutdown_triggers_transition_tracking(self):
         with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
              mock.patch("config.chassis_modules.get_config_module_state", return_value="up"), \
-             mock.patch("config.chassis_modules.ModuleBase", new=_MBStub):
+             mock.patch("config.chassis_modules.ModuleBase", new=_MBStub), \
+             mock.patch("config.chassis_modules._state_db_conn", return_value=_stub_state_conn()):
             runner = CliRunner()
             db = Db()
             result = runner.invoke(
@@ -597,7 +606,8 @@ class TestChassisModules(object):
     def test_shutdown_triggers_transition_in_progress(self):
         with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
              mock.patch("config.chassis_modules.get_config_module_state", return_value="up"), \
-             mock.patch("config.chassis_modules.ModuleBase", new=_MBStub):
+             mock.patch("config.chassis_modules.ModuleBase", new=_MBStub), \
+             mock.patch("config.chassis_modules._state_db_conn", return_value=_stub_state_conn()):
 
             runner = CliRunner()
             db = Db()
@@ -625,7 +635,8 @@ class TestChassisModules(object):
     def test_shutdown_triggers_transition_timeout(self):
         with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
              mock.patch("config.chassis_modules.get_config_module_state", return_value="up"), \
-             mock.patch("config.chassis_modules.ModuleBase", new=_MBStub):
+             mock.patch("config.chassis_modules.ModuleBase", new=_MBStub), \
+             mock.patch("config.chassis_modules._state_db_conn", return_value=_stub_state_conn()):
 
             runner = CliRunner()
             db = Db()
@@ -653,7 +664,8 @@ class TestChassisModules(object):
     def test_startup_triggers_transition_tracking(self):
         with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
              mock.patch("config.chassis_modules.get_config_module_state", return_value="down"), \
-             mock.patch("config.chassis_modules.ModuleBase", new=_MBStub):
+             mock.patch("config.chassis_modules.ModuleBase", new=_MBStub), \
+             mock.patch("config.chassis_modules._state_db_conn", return_value=_stub_state_conn()):
 
             runner = CliRunner()
             db = Db()
