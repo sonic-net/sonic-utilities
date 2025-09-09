@@ -416,6 +416,7 @@ class TestChassisModules(object):
             chassisdb.connect("CHASSIS_STATE_DB")
             chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic6", "asic_id_in_module", "0")
             chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic6", "asic_pci_address", "nokia-bdb:4:0")
+            chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic6", "name", "FABRIC-CARD0")
             chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic7", "asic_id_in_module", "1")
             chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic7", "asic_pci_address", "nokia-bdb:4:1")
             chassisdb.set("CHASSIS_STATE_DB", "CHASSIS_FABRIC_ASIC_TABLE|asic7", "name", "FABRIC-CARD0")
