@@ -68,6 +68,38 @@ class SonicErrorReportManager:
         if not os.path.exists(self.report_dir):
             os.makedirs(self.report_dir)
 
+    def _load_report_template(self):
+        """Load the default report template from JSON file."""
+        template_path = os.path.join(os.path.dirname(__file__), 
+                                     'error_report_template.json')
+        try:
+            with open(template_path, 'r') as f:
+                return json.load(f)
+        except (IOError, json.JSONDecodeError) as e:
+            get_logger().log_error(
+                "Failed to load report template: {}".format(e))
+            # Fallback to minimal structure if template loading fails
+            return {
+                "sonic_upgrade_summary": {
+                    "script_name": "",
+                    "fault_code": "255",
+                    "fault_reason": "Template loading failed",
+                    "guid": ""
+                },
+                "sonic_upgrade_actions": {
+                    "reputation_impact": False,
+                    "retriable": True,
+                    "isolate_on_failure": False,
+                    "auto_triage": {"status": False, "triage_queue": "", "triage_action": ""}
+                },
+                "sonic_upgrade_report": {
+                    "duration": "0",
+                    "stages": [],
+                    "health_checks": [],
+                    "errors": [{"name": "TEMPLATE_ERROR", "message": str(e)}]
+                }
+            }
+
     def get_report_path(self, guid):
         """Get path for report file using <scenario>.<eventGuid>.json."""
         # Sanitize guid to prevent directory traversal attacks
@@ -141,35 +173,13 @@ class SonicErrorReportManager:
             guid = str(uuid.uuid4())
         else:
             guid = str(guid)  # Convert to string in case UUID object is passed
-        report = {
-            "sonic_upgrade_summary": {
-                "script_name": "{}".format(operation_type),
-                "sonic_upgrade_package_version": "1.0.0",  # TODO: Impl ver
-                "fault_code": "124",
-                "fault_reason": (
-                    "Operation timeout - system became unresponsive"),
-                "guid": guid
-            },
-            "sonic_upgrade_actions": {
-                "reputation_impact": False,
-                "retriable": True,
-                "isolate_on_failure": False,
-                "auto_triage": {
-                    "status": False,
-                    "triage_queue": "",
-                    "triage_action": ""
-                }
-            },
-            "sonic_upgrade_report": {
-                "duration": "0",
-                "stages": [],
-                "health_checks": [],
-                "errors": [{
-                    "name": "TIMEOUT",
-                    "message": "Operation timed out or system crashed"
-                }]
-            }
-        }
+            
+        # Load template from JSON file
+        report = self._load_report_template()
+        
+        # Fill in dynamic values
+        report["sonic_upgrade_summary"]["script_name"] = "{}".format(operation_type)
+        report["sonic_upgrade_summary"]["guid"] = guid
 
         # Apply any customizations from kwargs
         self._apply_kwargs_to_report(report, **kwargs)
