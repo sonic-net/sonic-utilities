@@ -128,7 +128,7 @@ class TestGenerateTemplateFromSchema(unittest.TestCase):
                 }
             }
         }
-        
+
         expected_template = {
             "summary": {
                 "version": "1.0.0",
@@ -145,11 +145,11 @@ class TestGenerateTemplateFromSchema(unittest.TestCase):
 
         try:
             generate_template_from_schema(schema_path, template_path)
-            
+
             # Read the generated template
             with open(template_path, 'r') as f:
                 result = json.load(f)
-            
+
             self.assertEqual(result, expected_template)
         finally:
             # Clean up
@@ -162,7 +162,7 @@ class TestGenerateTemplateFromSchema(unittest.TestCase):
         """Test main function success path."""
         mock_exists.return_value = True
         mock_generate.return_value = None
-        
+
         result = main()
         self.assertEqual(result, 0)
         mock_generate.assert_called_once()
@@ -171,7 +171,7 @@ class TestGenerateTemplateFromSchema(unittest.TestCase):
     def test_main_schema_not_found(self, mock_exists):
         """Test main function when schema file doesn't exist."""
         mock_exists.return_value = False
-        
+
         result = main()
         self.assertEqual(result, 1)
 
@@ -182,7 +182,7 @@ class TestGenerateTemplateFromSchema(unittest.TestCase):
         """Test that main function prints expected output."""
         mock_exists.return_value = True
         mock_generate.return_value = None
-        
+
         main()
         # Verify that generate_template_from_schema was called
         mock_generate.assert_called_once()
