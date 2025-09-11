@@ -93,7 +93,6 @@ setup(
         'generic_config_updater': ['gcu_services_validator.conf.json', 'gcu_field_operation_validators.conf.json'],
         'show': ['aliases.ini'],
         'sonic_installer': ['aliases.ini'],
-        'utilities_common': ['error_report_template.json', 'error_report_schema.json'],
         'tests': ['acl_input/*',
                   'db_migrator_input/*.json',
                   'db_migrator_input/config_db/*.json',

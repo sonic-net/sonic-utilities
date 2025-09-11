@@ -70,7 +70,7 @@ class SonicErrorReportManager:
 
     def _load_report_template(self):
         """Load the default report template from JSON file."""
-        template_path = os.path.join(os.path.dirname(__file__),
+        template_path = os.path.join(os.path.dirname(__file__), 
                                      'error_report_template.json')
         try:
             with open(template_path, 'r') as f:
@@ -173,10 +173,10 @@ class SonicErrorReportManager:
             guid = str(uuid.uuid4())
         else:
             guid = str(guid)  # Convert to string in case UUID object is passed
-
+            
         # Load template from JSON file
         report = self._load_report_template()
-
+        
         # Fill in dynamic values
         report["sonic_upgrade_summary"]["script_name"] = "{}".format(operation_type)
         report["sonic_upgrade_summary"]["guid"] = guid
