@@ -87,7 +87,6 @@ class TestConfigIP(object):
                 ["Ethernet12", "1.1.1.1/24"],
                 obj=obj)
         print(result.exit_code, result.output)
-        assert result.exit_code == 0
         assert "Interface Ethernet12 is a member of vlan" in result.output
 
         # config int ip add Ethernet12.10 1.1.1.1/24
@@ -104,7 +103,6 @@ class TestConfigIP(object):
                 ["PortChannel1001", "1.1.1.1/24"],
                 obj=obj)
         print(result.exit_code, result.output)
-        assert result.exit_code == 0
         assert "Interface PortChannel1001 is a member of vlan" in result.output
 
         # config int ip add PortChannel1001.10 1.1.1.1/24
@@ -113,7 +111,6 @@ class TestConfigIP(object):
                 ["PortChannel1001.10", "1.1.1.1/24"],
                 obj=obj)
         print(result.exit_code, result.output)
-        assert result.exit_code == 0
         assert "Interface PortChannel1001 is a member of vlan" in result.output
 
 

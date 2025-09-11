@@ -5288,7 +5288,7 @@ def add_interface_ip(ctx, interface_name, ip_addr, gw, secondary):
     # Add a validation to check this interface is not a member in vlan before
     vlan_member_table = config_db.get_table('VLAN_MEMBER')
     if (interface_is_in_vlan(vlan_member_table, base_interface_name)):
-        click.fail("Interface {} is a member of vlan\nAborting!".format(base_interface_name))
+        ctx.fail("Interface {} is a member of vlan\nAborting!".format(base_interface_name))
         return
 
     if base_table_name == "INTERFACE" or base_table_name == "PORTCHANNEL_INTERFACE":
