@@ -104,7 +104,7 @@ class TestMultiAsicDropstat(object):
         print("return_code: {}".format(return_code))
         print("result = {}".format(result))
         assert return_code == 2
-        assert "invalid choice: asic5" in result
+        assert "'asic5' is not one of" in result
 
     def test_show_dropcount_version(self):
         return_code, result = get_result_and_return_code([
