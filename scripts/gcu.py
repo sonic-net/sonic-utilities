@@ -16,14 +16,19 @@ import json
 import argparse
 import jsonpatch
 import subprocess
+import threading
+import concurrent.futures
 
 # Add the parent directory to Python path to import sonic-utilities modules
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
 
 try:
-    from generic_config_updater.generic_updater import GenericUpdater, ConfigFormat
-    from generic_config_updater.gu_common import GenericConfigUpdaterError
+    from generic_config_updater.generic_updater import GenericUpdater, ConfigFormat, extract_scope
+    from generic_config_updater.gu_common import GenericConfigUpdaterError, HOST_NAMESPACE
     from sonic_py_common import multi_asic
+    from utilities_common.db import Db
+    import utilities_common.cli as clicommon
+    from swsscommon.swsscommon import ConfigDBConnector
 except ImportError as e:
     print(f"Error importing required modules: {e}", file=sys.stderr)
     sys.exit(1)
@@ -68,6 +73,56 @@ def validate_patch(patch):
         return True
     except Exception:
         return False
+
+
+def multiasic_save_to_singlefile(filename):
+    """Save all ASIC configurations to a single file in multi-asic mode"""
+    all_configs = {}
+    
+    # Get host configuration
+    cmd = ["sonic-cfggen", "-d", "--print-data"]
+    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+    host_config = json.loads(result.stdout)
+    all_configs['localhost'] = host_config
+    
+    # Get each ASIC configuration
+    for namespace in multi_asic.get_namespace_list():
+        cmd = ["sonic-cfggen", "-d", "--print-data", "-n", namespace]
+        result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+        asic_config = json.loads(result.stdout)
+        all_configs[namespace] = asic_config
+    
+    # Save to file
+    with open(filename, 'w') as f:
+        json.dump(all_configs, f, indent=2)
+
+
+def apply_patch_for_scope(scope_changes, results, config_format, verbose, dry_run, ignore_non_yang_tables, ignore_path):
+    """Apply patch for a single ASIC scope"""
+    scope, changes = scope_changes
+    # Replace localhost to DEFAULT_NAMESPACE which is db definition of Host
+    if scope.lower() == HOST_NAMESPACE or scope == "":
+        scope = multi_asic.DEFAULT_NAMESPACE
+
+    scope_for_log = scope if scope else HOST_NAMESPACE
+    thread_id = threading.get_ident()
+    
+    try:
+        # Call apply_patch with the ASIC-specific changes
+        GenericUpdater(scope=scope).apply_patch(jsonpatch.JsonPatch(changes),
+                                                config_format,
+                                                verbose,
+                                                dry_run,
+                                                ignore_non_yang_tables,
+                                                ignore_path)
+        results[scope_for_log] = {"success": True, "message": "Success"}
+    except Exception as e:
+        results[scope_for_log] = {"success": False, "message": str(e)}
+
+
+def apply_patch_wrapper(args):
+    """Wrapper for apply_patch_for_scope to support ThreadPoolExecutor"""
+    return apply_patch_for_scope(*args)
 
 
 def create_checkpoint(args):
@@ -144,11 +199,68 @@ def apply_patch(args):
         if not validate_patch(patch_json):
             raise GenericConfigUpdaterError(f"Invalid patch format in file: {args.patch_file}")
 
-        # Apply patch using GenericUpdater
         config_format = ConfigFormat[args.format.upper()]
-        updater = GenericUpdater()
-        updater.apply_patch(patch, config_format, args.verbose, False,
-                            args.ignore_non_yang_tables, args.ignore_path)
+        
+        # For multi-asic, extract scope and apply patches per ASIC
+        if multi_asic.is_multi_asic():
+            results = {}
+            changes_by_scope = {}
+
+            # Iterate over each change in the JSON Patch
+            for change in patch:
+                scope, modified_path = extract_scope(change["path"])
+                
+                # Modify the 'path' in the change to remove the scope
+                change["path"] = modified_path
+                
+                # Check if the scope is already in our dictionary, if not, initialize it
+                if scope not in changes_by_scope:
+                    changes_by_scope[scope] = []
+                
+                # Add the modified change to the appropriate list based on scope
+                changes_by_scope[scope].append(change)
+
+            # Empty case to force validate YANG model
+            if not changes_by_scope:
+                asic_list = [multi_asic.DEFAULT_NAMESPACE]
+                asic_list.extend(multi_asic.get_namespace_list())
+                for asic in asic_list:
+                    changes_by_scope[asic] = []
+
+            # Apply changes for each scope
+            if args.parallel:
+                with concurrent.futures.ThreadPoolExecutor() as executor:
+                    # Prepare the argument tuples
+                    arguments = [(scope_changes, results, config_format,
+                                args.verbose, False, args.ignore_non_yang_tables, args.ignore_path)
+                                for scope_changes in changes_by_scope.items()]
+
+                    # Submit all tasks and wait for them to complete
+                    futures = [executor.submit(apply_patch_wrapper, arguments) for arguments in arguments]
+
+                    # Wait for all tasks to complete
+                    concurrent.futures.wait(futures)
+            else:
+                # Apply changes for each scope sequentially
+                for scope_changes in changes_by_scope.items():
+                    apply_patch_for_scope(scope_changes,
+                                        results,
+                                        config_format,
+                                        args.verbose, False,
+                                        args.ignore_non_yang_tables,
+                                        args.ignore_path)
+
+            # Check if any updates failed
+            failures = [scope for scope, result in results.items() if not result['success']]
+            
+            if failures:
+                failure_messages = '\n'.join([f"- {failed_scope}: {results[failed_scope]['message']}" for failed_scope in failures])
+                raise GenericConfigUpdaterError(f"Failed to apply patch on the following scopes:\n{failure_messages}")
+        else:
+            # Single ASIC mode - use traditional approach
+            updater = GenericUpdater()
+            updater.apply_patch(patch, config_format, args.verbose, False,
+                                args.ignore_non_yang_tables, args.ignore_path)
 
         print_success("Patch applied successfully.")
 
@@ -191,32 +303,15 @@ def save_config(args):
         if args.verbose:
             print(f"Saving configuration to: {filename}")
 
-        # Get current configuration using sonic-cfggen
-        try:
-            # Handle multi-ASIC configurations
-            if multi_asic.is_multi_asic():
-                # Save all ASIC configurations to a single file
-                all_configs = {}
-
-                # Get host configuration
-                cmd = ["sonic-cfggen", "-d", "--print-data"]
-                result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-                host_config = json.loads(result.stdout)
-                all_configs['localhost'] = host_config
-
-                # Get each ASIC configuration
-                for namespace in multi_asic.get_namespace_list():
-                    cmd = ["sonic-cfggen", "-d", "--print-data", "-n", namespace]
-                    result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-                    asic_config = json.loads(result.stdout)
-                    all_configs[namespace] = asic_config
-
-                config_to_save = all_configs
-            else:
-                # Single ASIC configuration
-                cmd = ["sonic-cfggen", "-d", "--print-data"]
-                result = subprocess.run(cmd, capture_output=True, text=True, check=True)
-                config_to_save = json.loads(result.stdout)
+        # In multi-asic mode, save all ASIC configurations to single file
+        if multi_asic.is_multi_asic():
+            multiasic_save_to_singlefile(filename)
+            print_success(f"Configuration saved successfully to '{filename}'.")
+        else:
+            # Single ASIC configuration
+            cmd = ["sonic-cfggen", "-d", "--print-data"]
+            result = subprocess.run(cmd, capture_output=True, text=True, check=True)
+            config_to_save = json.loads(result.stdout)
 
             # Save to file
             with open(filename, 'w') as f:
@@ -224,9 +319,9 @@ def save_config(args):
 
             print_success(f"Configuration saved successfully to '{filename}'.")
 
-        except subprocess.CalledProcessError as e:
-            raise Exception(f"Failed to get current configuration: {e}")
-
+    except subprocess.CalledProcessError as e:
+        print_error(f"Failed to get current configuration: {e}")
+        sys.exit(1)
     except Exception as ex:
         print_error(f"Failed to save configuration: {ex}")
         sys.exit(1)
@@ -337,6 +432,11 @@ Examples:
         '-v', '--verbose',
         action='store_true',
         help='Print additional details of what the operation is doing'
+    )
+    apply_parser.add_argument(
+        '-p', '--parallel',
+        action='store_true',
+        help='Apply changes to all ASICs in parallel (multi-asic only)'
     )
     apply_parser.add_argument(
         '--ignore-non-yang-tables',
