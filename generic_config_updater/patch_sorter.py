@@ -338,8 +338,11 @@ class MoveWrapper:
                 moves.extend(self._extend_moves(move, diff))
 
     def validate(self, move, diff):
+        # Generate simulated config once, not once per validator as this performs
+        # a deep copy
+        simulated_config = move.apply(diff.current_config)
         for validator in self.move_validators:
-            if not validator.validate(move, diff):
+            if not validator.validate(move, diff, simulated_config):
                 return False
         return True
 
@@ -586,7 +589,7 @@ class RemoveCreateOnlyDependencyMoveValidator:
         self.path_addressing = path_addressing
         self.create_only_filter = CreateOnlyFilter(path_addressing).get_filter()
 
-    def validate(self, move, diff):
+    def validate(self, move, diff, simulated_config):
         current_config = diff.current_config
         target_config = diff.target_config # Final config after applying whole patch
 
@@ -613,8 +616,6 @@ class RemoveCreateOnlyDependencyMoveValidator:
             target_members = target_config[table_to_check]
             if not target_members:
                 continue
-
-            simulated_config = move.apply(current_config) # Config after applying just this move
 
             for member_name in current_members:
                 if member_name not in target_members:
@@ -668,7 +669,7 @@ class DeleteWholeConfigMoveValidator:
     """
     A class to validate not deleting whole config as it is not supported by JsonPatch lib.
     """
-    def validate(self, move, diff):
+    def validate(self, move, diff, simulated_config):
         if move.op_type == OperationType.REMOVE and move.path == "":
             return False
         return True
@@ -680,8 +681,7 @@ class FullConfigMoveValidator:
     def __init__(self, config_wrapper):
         self.config_wrapper = config_wrapper
 
-    def validate(self, move, diff):
-        simulated_config = move.apply(diff.current_config)
+    def validate(self, move, diff, simulated_config):
         is_valid, error = self.config_wrapper.validate_config_db_config(simulated_config)
         return is_valid
 
@@ -698,8 +698,7 @@ class CreateOnlyMoveValidator:
         # TODO: create-only fields are hard-coded for now, it should be moved to YANG models
         self.create_only_filter = CreateOnlyFilter(path_addressing).get_filter()
 
-    def validate(self, move, diff):
-        simulated_config = move.apply(diff.current_config)
+    def validate(self, move, diff, simulated_config):
         # get create-only paths from current config, simulated config and also target config
         # simulated config is the result of the move
         # target config is the final config
@@ -796,7 +795,7 @@ class NoDependencyMoveValidator:
         self.path_addressing = path_addressing
         self.config_wrapper = config_wrapper
 
-    def validate(self, move, diff):
+    def validate(self, move, diff, simulated_config):
         operation_type = move.op_type
         path = move.path
 
@@ -810,13 +809,13 @@ class NoDependencyMoveValidator:
             if not self._validate_paths_config([path], diff.current_config):
                 return False
         elif operation_type == OperationType.REPLACE:
-            if not self._validate_replace(move, diff):
+            if not self._validate_replace(move, diff, simulated_config):
                 return False
 
         return True
 
     # NOTE: this function can be used for validating JsonChange as well which might have more than one move.
-    def _validate_replace(self, move, diff):
+    def _validate_replace(self, move, diff, simulated_config):
         """
         The table below shows how mixed deletion/addition within replace affect this validation.
 
@@ -847,7 +846,6 @@ class NoDependencyMoveValidator:
         if A is added and refA is added: return False
         return True
         """
-        simulated_config = move.apply(diff.current_config)
         deleted_paths, added_paths = self._get_paths(diff.current_config, simulated_config, [])
 
         # For deleted paths, we check the current config has no dependencies between nodes under the removed path
@@ -947,8 +945,7 @@ class NoEmptyTableMoveValidator:
     def __init__(self, path_addressing):
         self.path_addressing = path_addressing
 
-    def validate(self, move, diff):
-        simulated_config = move.apply(diff.current_config)
+    def validate(self, move, diff, simulated_config):
         op_path = move.path
 
         if op_path == "": # If updating whole file
@@ -984,13 +981,12 @@ class RequiredValueMoveValidator:
         self.path_addressing = path_addressing
         self.identifier = RequiredValueIdentifier(path_addressing)
 
-    def validate(self, move, diff):
+    def validate(self, move, diff, simulated_config):
         # ignore full config removal because it is not possible by JsonPatch lib
         if move.op_type == OperationType.REMOVE and move.path == "":
             return
 
         current_config = diff.current_config
-        simulated_config = move.apply(current_config) # Config after applying just this move
         target_config = diff.target_config # Final config after applying whole patch
 
         # data dictionary:
