@@ -16,7 +16,6 @@ import json
 import argparse
 import jsonpatch
 import subprocess
-import threading
 import concurrent.futures
 
 # Add the parent directory to Python path to import sonic-utilities modules
