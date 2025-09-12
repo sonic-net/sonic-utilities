@@ -26,9 +26,6 @@ try:
     from generic_config_updater.generic_updater import GenericUpdater, ConfigFormat, extract_scope
     from generic_config_updater.gu_common import GenericConfigUpdaterError, HOST_NAMESPACE
     from sonic_py_common import multi_asic
-    from utilities_common.db import Db
-    import utilities_common.cli as clicommon
-    from swsscommon.swsscommon import ConfigDBConnector
 except ImportError as e:
     print(f"Error importing required modules: {e}", file=sys.stderr)
     sys.exit(1)
@@ -78,20 +75,20 @@ def validate_patch(patch):
 def multiasic_save_to_singlefile(filename):
     """Save all ASIC configurations to a single file in multi-asic mode"""
     all_configs = {}
-    
+
     # Get host configuration
     cmd = ["sonic-cfggen", "-d", "--print-data"]
     result = subprocess.run(cmd, capture_output=True, text=True, check=True)
     host_config = json.loads(result.stdout)
     all_configs['localhost'] = host_config
-    
+
     # Get each ASIC configuration
     for namespace in multi_asic.get_namespace_list():
         cmd = ["sonic-cfggen", "-d", "--print-data", "-n", namespace]
         result = subprocess.run(cmd, capture_output=True, text=True, check=True)
         asic_config = json.loads(result.stdout)
         all_configs[namespace] = asic_config
-    
+
     # Save to file
     with open(filename, 'w') as f:
         json.dump(all_configs, f, indent=2)
@@ -105,8 +102,7 @@ def apply_patch_for_scope(scope_changes, results, config_format, verbose, dry_ru
         scope = multi_asic.DEFAULT_NAMESPACE
 
     scope_for_log = scope if scope else HOST_NAMESPACE
-    thread_id = threading.get_ident()
-    
+
     try:
         # Call apply_patch with the ASIC-specific changes
         GenericUpdater(scope=scope).apply_patch(jsonpatch.JsonPatch(changes),
@@ -200,7 +196,7 @@ def apply_patch(args):
             raise GenericConfigUpdaterError(f"Invalid patch format in file: {args.patch_file}")
 
         config_format = ConfigFormat[args.format.upper()]
-        
+
         # For multi-asic, extract scope and apply patches per ASIC
         if multi_asic.is_multi_asic():
             results = {}
@@ -209,14 +205,14 @@ def apply_patch(args):
             # Iterate over each change in the JSON Patch
             for change in patch:
                 scope, modified_path = extract_scope(change["path"])
-                
+
                 # Modify the 'path' in the change to remove the scope
                 change["path"] = modified_path
-                
+
                 # Check if the scope is already in our dictionary, if not, initialize it
                 if scope not in changes_by_scope:
                     changes_by_scope[scope] = []
-                
+
                 # Add the modified change to the appropriate list based on scope
                 changes_by_scope[scope].append(change)
 
@@ -231,12 +227,15 @@ def apply_patch(args):
             if args.parallel:
                 with concurrent.futures.ThreadPoolExecutor() as executor:
                     # Prepare the argument tuples
-                    arguments = [(scope_changes, results, config_format,
-                                args.verbose, False, args.ignore_non_yang_tables, args.ignore_path)
-                                for scope_changes in changes_by_scope.items()]
+                    arguments = [
+                        (scope_changes, results, config_format,
+                         args.verbose, False, args.ignore_non_yang_tables, args.ignore_path)
+                        for scope_changes in changes_by_scope.items()
+                    ]
 
                     # Submit all tasks and wait for them to complete
-                    futures = [executor.submit(apply_patch_wrapper, arguments) for arguments in arguments]
+                    futures = [executor.submit(apply_patch_wrapper, arguments)
+                               for arguments in arguments]
 
                     # Wait for all tasks to complete
                     concurrent.futures.wait(futures)
@@ -244,18 +243,23 @@ def apply_patch(args):
                 # Apply changes for each scope sequentially
                 for scope_changes in changes_by_scope.items():
                     apply_patch_for_scope(scope_changes,
-                                        results,
-                                        config_format,
-                                        args.verbose, False,
-                                        args.ignore_non_yang_tables,
-                                        args.ignore_path)
+                                          results,
+                                          config_format,
+                                          args.verbose, False,
+                                          args.ignore_non_yang_tables,
+                                          args.ignore_path)
 
             # Check if any updates failed
             failures = [scope for scope, result in results.items() if not result['success']]
-            
+
             if failures:
-                failure_messages = '\n'.join([f"- {failed_scope}: {results[failed_scope]['message']}" for failed_scope in failures])
-                raise GenericConfigUpdaterError(f"Failed to apply patch on the following scopes:\n{failure_messages}")
+                failure_messages = '\n'.join([
+                    f"- {failed_scope}: {results[failed_scope]['message']}"
+                    for failed_scope in failures
+                ])
+                raise GenericConfigUpdaterError(
+                    f"Failed to apply patch on the following scopes:\n{failure_messages}"
+                )
         else:
             # Single ASIC mode - use traditional approach
             updater = GenericUpdater()
