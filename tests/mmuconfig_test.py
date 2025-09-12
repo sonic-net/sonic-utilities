@@ -87,6 +87,12 @@ class TestMmuConfig(TestMmuConfigBase):
     def test_mmu_staticth_config(self):
         self.executor(testData['mmu_cfg_static_th'])
 
+    def test_mmu_alpha_zero_config(self):
+        self.executor(testData['mmu_cfg_alpha_zero'])
+
+    def test_mmu_staticth_zero_config(self):
+        self.executor(testData['mmu_cfg_static_th_zero'])
+
     def test_mmu_trim_config(self):
         self.executor(testData['mmu_cfg_trim'])
 

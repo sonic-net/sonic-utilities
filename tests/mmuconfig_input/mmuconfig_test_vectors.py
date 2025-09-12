@@ -269,13 +269,30 @@ testData = {
                                    'cmp_args': [',ingress_lossless_profile_hbm,static_th,12121213'],
                                    'rc_msg': ''
                                    },
-             'mmu_cfg_alpha' :    {'cmd' : ['config'],
-                                   'args' : ['-p', 'alpha_profile', '-a', '2'],
-                                   'rc' : 0,
-                                   'db_table' : 'BUFFER_PROFILE',
-                                   'cmp_args': [',alpha_profile,dynamic_th,2'],
-                                   'rc_msg' : ''
-                                  },
+             'mmu_cfg_static_th_zero': {
+                'cmd': ['config'],
+                'args': ['-p', 'ingress_lossless_profile_hbm', '-s', '0'],
+                'rc': 0,
+                'db_table': 'BUFFER_PROFILE',
+                'cmp_args': [',ingress_lossless_profile_hbm,static_th,0'],
+                'rc_msg': ''
+             },
+             'mmu_cfg_alpha': {
+               'cmd': ['config'],
+               'args': ['-p', 'alpha_profile', '-a', '2'],
+               'rc': 0,
+               'db_table': 'BUFFER_PROFILE',
+               'cmp_args': [',alpha_profile,dynamic_th,2'],
+               'rc_msg': ''
+             },
+             'mmu_cfg_alpha_zero': {
+                'cmd': ['config'],
+                'args': ['-p', 'alpha_profile', '-a', '0'],
+                'rc': 0,
+                'db_table': 'BUFFER_PROFILE',
+                'cmp_args': [',alpha_profile,dynamic_th,0'],
+                'rc_msg': ''
+             },
              'mmu_cfg_alpha_invalid': {'cmd': ['config'],
                                        'args': ['-p', 'alpha_profile', '-a', '12'],
                                        'rc': 2,
