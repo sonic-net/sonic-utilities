@@ -93,6 +93,29 @@ def _transition_timed_out(module_name: str) -> bool:
     conn = _state_db_conn()
     return mb.is_module_state_transition_timed_out(conn, module_name, int(TRANSITION_TIMEOUT.total_seconds()))
 
+# shared helper
+def _block_if_conflicting_transition(chassis_module_name: str, conflict_type: str, target_oper_status: str) -> bool:
+    """
+    Return True if a conflicting transition is in progress and the module has
+    not yet reached the target oper status; otherwise False.
+
+    Uses centralized ModuleBase transition API via _transition_entry() for
+    consistency, and reads oper_status from CHASSIS_MODULE_TABLE.
+    """
+    entry = _transition_entry(chassis_module_name) or {}
+    in_prog = str(entry.get("state_transition_in_progress", "False")).lower() == "true"
+    last_type = entry.get("transition_type")
+
+    # Current oper_status (keep this simple read from STATE_DB)
+    conn = _state_db_conn()
+    row = conn.get_all(conn.STATE_DB, f"CHASSIS_MODULE_TABLE|{chassis_module_name}") or {}
+    oper = row.get("oper_status")
+
+    if in_prog and last_type == conflict_type and oper != target_oper_status:
+        click.echo(f"Module {chassis_module_name} has a {conflict_type} transition underway; try again later.")
+        return True
+    return False
+
 def ensure_statedb_connected(db):
     if not hasattr(db, 'statedb'):
         chassisdb = db.db
@@ -206,16 +229,9 @@ def shutdown_chassis_module(db, chassis_module_name):
                 click.echo(f"Module {chassis_module_name} state transition is already in progress")
                 return
         else:
-            # race-proof against opposite transition (use our STATE_DB helper)
-            conn = _state_db_conn()
-            row = conn.get_all(conn.STATE_DB, f"CHASSIS_MODULE_TABLE|{chassis_module_name}") or {}
-            last_type = row.get("transition_type")
-            oper = row.get("oper_status")
-            # If a startup was just initiated and the module hasn't reached Online yet, block shutdown
-            if last_type == "startup" and oper != "Online":
-                click.echo(f"Module {chassis_module_name} has a startup transition underway; try again later.")
+            # Use centralized API & shared helper (minimal change)
+            if _block_if_conflicting_transition(chassis_module_name, conflict_type="startup", target_oper_status="Online"):
                 return
-
             _mark_transition_start(chassis_module_name, "shutdown")
 
         click.echo(f"Shutting down chassis module {chassis_module_name}")
@@ -263,16 +279,9 @@ def startup_chassis_module(db, chassis_module_name):
                 click.echo(f"Module {chassis_module_name} state transition is already in progress")
                 return
         else:
-            # race-proof against opposite transition (use our STATE_DB helper)
-            conn = _state_db_conn()
-            row = conn.get_all(conn.STATE_DB, f"CHASSIS_MODULE_TABLE|{chassis_module_name}") or {}
-            last_type = row.get("transition_type")
-            oper = row.get("oper_status")
-            # If a shutdown was just initiated and the module hasn't reached Offline yet, block startup
-            if last_type == "shutdown" and oper != "Offline":
-                click.echo(f"Module {chassis_module_name} has a shutdown transition underway; try again later.")
+            # Use centralized API & shared helper (minimal change)
+            if _block_if_conflicting_transition(chassis_module_name, conflict_type="shutdown", target_oper_status="Offline"):
                 return
-
             _mark_transition_start(chassis_module_name, "startup")
 
         click.echo(f"Starting up chassis module {chassis_module_name}")

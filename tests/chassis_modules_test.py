@@ -10,7 +10,7 @@ except ImportError:
     from swsscommon.swsscommon import SonicV2Connector
 
 # Use the same timeout your tests expect today
-TRANSITION_TIMEOUT = timedelta(minutes=20)
+TRANSITION_TIMEOUT = timedelta(minutes=4)
 _STATE_TABLE = "CHASSIS_MODULE"
 
 
