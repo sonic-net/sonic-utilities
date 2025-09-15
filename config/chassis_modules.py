@@ -231,7 +231,7 @@ def shutdown_chassis_module(db, chassis_module_name):
                 return
         else:
             # Use centralized API & shared helper (minimal change)
-            if _block_if_conflicting_transition(chassis_module_name, \
+            if _block_if_conflicting_transition(chassis_module_name,
                    conflict_type="startup", target_oper_status="Online"):
                 return
             _mark_transition_start(chassis_module_name, "shutdown")
@@ -282,7 +282,7 @@ def startup_chassis_module(db, chassis_module_name):
                 return
         else:
             # Use centralized API & shared helper (minimal change)
-            if _block_if_conflicting_transition(chassis_module_name, \
+            if _block_if_conflicting_transition(chassis_module_name,
                    conflict_type="shutdown", target_oper_status="Offline"):
                 return
             _mark_transition_start(chassis_module_name, "startup")
