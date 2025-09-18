@@ -790,6 +790,43 @@ class TestChassisModules(object):
             assert "Previous transition for module DPU0 timed out. Proceeding with startup." in result.output
             m_clear.assert_called_once_with("DPU0")
 
+    def test__state_db_conn_caches_and_tolerates_connect_error(monkeypatch):
+        # Import the module under test
+        import importlib
+        cm = importlib.import_module("config.chassis_modules")
+
+        # Reset cache
+        cm._STATE_DB_CONN = None
+
+        # Fake connector to track init/connect calls; connect raises once (and is swallowed)
+        counters = {"inits": 0, "connects": 0}
+
+        class FakeConnector:
+            STATE_DB = object()
+
+            def __init__(self):
+                counters["inits"] += 1
+
+            def connect(self, which):
+                counters["connects"] += 1
+                # Simulate environments where connect isn't required / fails harmlessly
+                raise RuntimeError("simulated connect failure")
+
+        # Patch the factory used by _state_db_conn
+        monkeypatch.setattr(cm, "SonicV2Connector", FakeConnector, raising=True)
+
+        # First call: constructs connector, tries connect (raises), swallows, caches, returns
+        c1 = cm._state_db_conn()
+        assert isinstance(c1, FakeConnector)
+        assert counters["inits"] == 1
+        assert counters["connects"] == 1
+
+        # Second call: returns cached instance; no new init/connect
+        c2 = cm._state_db_conn()
+        assert c2 is c1
+        assert counters["inits"] == 1
+        assert counters["connects"] == 1
+
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
