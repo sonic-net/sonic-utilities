@@ -791,14 +791,13 @@ class TestChassisModules(object):
             m_clear.assert_called_once_with("DPU0")
 
     def test__state_db_conn_caches_and_tolerates_connect_error(monkeypatch):
-        # Import the module under test
         import importlib
         cm = importlib.import_module("config.chassis_modules")
 
-        # Reset cache
-        cm._STATE_DB_CONN = None
+        # Isolate: ensure caches are empty just for this test, and restore after.
+        monkeypatch.setattr(cm, "_STATE_DB_CONN", None, raising=False)
+        monkeypatch.setattr(cm, "_MB_SINGLETON", None, raising=False)
 
-        # Fake connector to track init/connect calls; connect raises once (and is swallowed)
         counters = {"inits": 0, "connects": 0}
 
         class FakeConnector:
@@ -809,13 +808,13 @@ class TestChassisModules(object):
 
             def connect(self, which):
                 counters["connects"] += 1
-                # Simulate environments where connect isn't required / fails harmlessly
+                # Simulate environments where connect isn't required / fails harmlessly.
                 raise RuntimeError("simulated connect failure")
 
-        # Patch the factory used by _state_db_conn
+        # Patch the connector used by _state_db_conn
         monkeypatch.setattr(cm, "SonicV2Connector", FakeConnector, raising=True)
 
-        # First call: constructs connector, tries connect (raises), swallows, caches, returns
+        # First call: constructs connector, attempts connect (exception swallowed), caches it
         c1 = cm._state_db_conn()
         assert isinstance(c1, FakeConnector)
         assert counters["inits"] == 1
