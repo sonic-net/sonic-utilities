@@ -31,7 +31,9 @@ _STATE_DB_CONN = None
 def _module_base():
     """Return a cached ModuleBase instance."""
     global _MB_SINGLETON
-    if _MB_SINGLETON is None:
+    # Recreate if not initialized OR if the cached instance was created from an
+    # older/unpatched class (common in unit tests that patch ModuleBase).
+    if _MB_SINGLETON is None or _MB_SINGLETON.__class__ is not ModuleBase:
         _MB_SINGLETON = ModuleBase()
     return _MB_SINGLETON
 
