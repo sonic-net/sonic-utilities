@@ -5,9 +5,9 @@ from datetime import datetime, timedelta
 from types import SimpleNamespace
 
 try:
-    from swsssdk import SonicV2Connector
-except ImportError:
     from swsscommon.swsscommon import SonicV2Connector
+except ImportError:
+    from swsssdk import SonicV2Connect
 
 # Use the same timeout your tests expect today
 TRANSITION_TIMEOUT = timedelta(minutes=4)
