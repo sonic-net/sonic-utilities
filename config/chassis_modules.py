@@ -24,6 +24,7 @@ TIMEOUT_SECS = 10
 TRANSITION_TIMEOUT = timedelta(seconds=240)  # 4 minutes
 
 _MB_SINGLETON = None
+_STATE_DB_CONN = None
 
 def _module_base():
     """Return a cached ModuleBase instance."""
