@@ -23,6 +23,7 @@ TIMEOUT_SECS = 10
 # (Platform-specific per-op timeouts are applied by platform code during the transition itself.)
 TRANSITION_TIMEOUT = timedelta(seconds=240)  # 4 minutes
 
+
 _MB_SINGLETON = None
 _STATE_DB_CONN = None
 
