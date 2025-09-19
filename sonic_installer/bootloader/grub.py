@@ -93,7 +93,10 @@ class GrubBootloader(OnieInstallerBootloader):
         config.close()
         for line in menuentry.split('\n'):
             line = line.strip()
-            if line.startswith('linux '):
+            if line.startswith('linuxefi '):
+                cmdline = line[9:].strip()
+                break
+            elif line.startswith('linux '):
                 cmdline = line[6:].strip()
                 break
         return cmdline
@@ -106,7 +109,10 @@ class GrubBootloader(OnieInstallerBootloader):
         new_menuentry = old_menuentry
         for line in old_menuentry.split('\n'):
             line = line.strip()
-            if line.startswith('linux '):
+            if line.startswith('linuxefi '):
+                new_menuentry = old_menuentry.replace(line, "linuxefi " + cmdline)
+                break
+            elif line.startswith('linux '):
                 new_menuentry = old_menuentry.replace(line, "linux " + cmdline)
                 break
         config = open(HOST_PATH + '/grub/grub.cfg', 'w')
