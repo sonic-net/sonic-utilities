@@ -61,6 +61,13 @@ FLAT_MEMORY_MODULE_EEPROM = """Ethernet16: SFP EEPROM detected
         dom_capability: N/A
         type_abbrv_name: QSFP28
 """
+EMPTY_DOM_VALUES = """        ChannelMonitorValues:
+        ChannelThresholdValues:
+        ModuleMonitorValues:
+        ModuleThresholdValues:
+
+
+"""
 
 class TestSfputil(object):
     def test_format_dict_value_to_string(self):
@@ -676,7 +683,7 @@ Ethernet0  N/A
     @patch('sfputil.main.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
     @patch('sfputil.main.is_port_type_rj45', MagicMock(return_value=False))
     @pytest.mark.parametrize("exception, xcvr_api_none, expected_output", [
-        (None, False, '''DOM values not supported for flat memory module\n\n'''),
+        (None, False, EMPTY_DOM_VALUES),
         (NotImplementedError, False, '''API is currently not implemented for this platform\n\n'''),
         (None, True, '''API is none while getting DOM info!\n\n''')
     ])
