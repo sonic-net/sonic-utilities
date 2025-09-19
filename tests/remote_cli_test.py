@@ -12,6 +12,7 @@ import select
 import socket
 import termios
 import getpass
+import signal
 
 MULTI_LC_REXEC_OUTPUT = '''======== LINE-CARD0|sonic-lc1 output: ========
 hello world
@@ -83,7 +84,18 @@ def mock_getpass(prompt="Password:", stream=None):
 
 
 class TestRemoteExec(object):
-    __getpass = getpass.getpass
+    # Store the original function at class definition time to avoid recursion
+    _original_getpass = getpass.getpass
+
+    @staticmethod
+    def __getpass(prompt="Password:", stream=None):
+        """SIGTTOU-safe wrapper for getpass.getpass() for Python 3.13 compatibility"""
+        original_sigttou_handler = signal.signal(signal.SIGTTOU, signal.SIG_IGN)
+        try:
+            # Call the original function, in case getpass.getpass has been overridden
+            return TestRemoteExec._original_getpass(prompt, stream)
+        finally:
+            signal.signal(signal.SIGTTOU, original_sigttou_handler)
 
     @classmethod
     def setup_class(cls):
@@ -225,9 +237,10 @@ class TestRemoteExec(object):
         runner = CliRunner()
         getpass.getpass = TestRemoteExec.__getpass
         LINECARD_NAME = "all"
-        result = runner.invoke(
-            rexec.cli, [LINECARD_NAME, "-c", "show version"])
+
+        result = runner.invoke(rexec.cli, [LINECARD_NAME, "-c", "show version"])
         getpass.getpass = mock_getpass
+
         print(result.output)
         assert result.exit_code == 1, result.output
         assert "Aborted" in result.output
