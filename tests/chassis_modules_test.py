@@ -799,16 +799,18 @@ class TestChassisModules(object):
 
         class FakeConnector:
             STATE_DB = object()
+
             def __init__(self):
                 counters["inits"] += 1
+
             def connect(self, which):
                 counters["connects"] += 1
                 # Simulate an environment where connect isn't required / fails harmlessly.
                 raise RuntimeError("simulated connect failure")
 
         with mock.patch("config.chassis_modules._STATE_DB_CONN", None, create=True), \
-            mock.patch("config.chassis_modules._MB_SINGLETON", None, create=True), \
-            mock.patch("config.chassis_modules.SonicV2Connector", FakeConnector, create=True):
+             mock.patch("config.chassis_modules._MB_SINGLETON", None, create=True), \
+             mock.patch("config.chassis_modules.SonicV2Connector", FakeConnector, create=True):
 
             # First call: constructs connector, attempts connect (exception swallowed), caches it
             c1 = cm._state_db_conn()
