@@ -790,42 +790,47 @@ class TestChassisModules(object):
             assert "Previous transition for module DPU0 timed out. Proceeding with startup." in result.output
             m_clear.assert_called_once_with("DPU0")
 
-    def test__state_db_conn_caches_and_tolerates_connect_error():
+    def test__state_db_conn_caches_and_tolerates_connect_error(self):
         import sys
         import types
-        from unittest import mock
         import importlib
+        from unittest import mock
 
+        # 1) Pre-stub BOTH bindings so import never hits real deps
         swsscommon = types.ModuleType("swsscommon")
         swsscommon_sub = types.ModuleType("swsscommon.swsscommon")
 
-        class PlaceholderCommon:
+        class _PlaceholderCommon:
             pass
 
-        swsscommon_sub.SonicV2Connector = PlaceholderCommon
+        swsscommon_sub.SonicV2Connector = _PlaceholderCommon
         swsscommon.swsscommon = swsscommon_sub
 
         swsssdk = types.ModuleType("swsssdk")
 
-        class PlaceholderSdk:
+        class _PlaceholderSdk:
             pass
 
-        swsssdk.SonicV2Connector = PlaceholderSdk
+        swsssdk.SonicV2Connector = _PlaceholderSdk
 
-        with mock.patch.dict(sys.modules, {
-            # preferred path
-            "swsscommon": swsscommon,
-            "swsscommon.swsscommon": swsscommon_sub,
-            # fallback path
-            "swsssdk": swsssdk,
-        }, clear=False):
-
+        with mock.patch.dict(
+            sys.modules,
+            {
+                "swsscommon": swsscommon,
+                "swsscommon.swsscommon": swsscommon_sub,
+                "swsssdk": swsssdk,
+            },
+            clear=False,
+        ):
+            # 2) Import (or reload) the module under test so it binds to our stubs
             cm = importlib.import_module("config.chassis_modules")
             cm = importlib.reload(cm)
 
+            # 3) Reset caches inside the module for isolation
             with mock.patch("config.chassis_modules._STATE_DB_CONN", None, create=True), \
                  mock.patch("config.chassis_modules._MB_SINGLETON", None, create=True):
 
+                # 4) Patch the connector symbol used by _state_db_conn
                 counters = {"inits": 0, "connects": 0}
 
                 class FakeConnector:
@@ -840,13 +845,11 @@ class TestChassisModules(object):
                         raise RuntimeError("simulated connect failure")
 
                 with mock.patch("config.chassis_modules.SonicV2Connector", FakeConnector, create=True):
-                    # First call should create + attempt connect (swallowed) + cache
                     c1 = cm._state_db_conn()
                     assert isinstance(c1, FakeConnector)
                     assert counters["inits"] == 1
                     assert counters["connects"] == 1
 
-                    # Second call should return cached instance, no new init/connect
                     c2 = cm._state_db_conn()
                     assert c2 is c1
                     assert counters["inits"] == 1
