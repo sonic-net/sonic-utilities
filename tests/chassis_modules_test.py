@@ -800,6 +800,7 @@ class TestChassisModules(object):
         swsscommon = types.ModuleType("swsscommon")
         swsscommon_sub = types.ModuleType("swsscommon.swsscommon")
         # Provide a placeholder; we will override inside the module later
+
         class Placeholder:
             pass
         swsscommon_sub.SonicV2Connector = Placeholder
@@ -815,15 +816,17 @@ class TestChassisModules(object):
 
             # 3) Reset caches in the module
             with mock.patch("config.chassis_modules._STATE_DB_CONN", None, create=True), \
-                mock.patch("config.chassis_modules._MB_SINGLETON", None, create=True):
+                 mock.patch("config.chassis_modules._MB_SINGLETON", None, create=True):
 
                 # 4) Patch the connector symbol used by _state_db_conn
                 counters = {"inits": 0, "connects": 0}
 
                 class FakeConnector:
                     STATE_DB = object()
+
                     def __init__(self):
                         counters["inits"] += 1
+
                     def connect(self, which):
                         counters["connects"] += 1
                         # Raise to exercise the swallow-on-connect-failure path
