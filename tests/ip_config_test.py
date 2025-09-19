@@ -81,6 +81,38 @@ class TestConfigIP(object):
         assert result.exit_code != 0
         assert NOT_EXIST_VLAN_ERROR_MSG in result.output
 
+        # config int ip add Ethernet12 1.1.1.1/24
+        result = runner.invoke(
+                config.config.commands["interface"].commands["ip"].commands["add"],
+                ["Ethernet12", "1.1.1.1/24"],
+                obj=obj)
+        print(result.exit_code, result.output)
+        assert "Interface Ethernet12 is a member of vlan" in result.output
+
+        # config int ip add Ethernet12.10 1.1.1.1/24
+        result = runner.invoke(
+                config.config.commands["interface"].commands["ip"].commands["add"],
+                ["Ethernet12.10", "1.1.1.1/24"],
+                obj=obj)
+        print(result.exit_code, result.output)
+        assert "Interface Ethernet12 is a member of vlan" in result.output
+
+        # config int ip add PortChannel1001 1.1.1.1/24
+        result = runner.invoke(
+                config.config.commands["interface"].commands["ip"].commands["add"],
+                ["PortChannel1001", "1.1.1.1/24"],
+                obj=obj)
+        print(result.exit_code, result.output)
+        assert "Interface PortChannel1001 is a member of vlan" in result.output
+
+        # config int ip add PortChannel1001.10 1.1.1.1/24
+        result = runner.invoke(
+                config.config.commands["interface"].commands["ip"].commands["add"],
+                ["PortChannel1001.10", "1.1.1.1/24"],
+                obj=obj)
+        print(result.exit_code, result.output)
+        assert "Interface PortChannel1001 is a member of vlan" in result.output
+
 
     def test_add_del_interface_valid_ipv4(self):
         db = Db()
@@ -104,6 +136,24 @@ class TestConfigIP(object):
         print(result.exit_code, result.output)
         assert result.exit_code == 0
         assert ('Eth36.10', '32.11.10.1/24') in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
+
+        # config int ip add PortChannel0001.10 32.11.10.1/24
+        result = runner.invoke(
+                config.config.commands["interface"].commands["ip"].commands["add"],
+                ["PortChannel0001.10", "32.11.10.1/24"],
+                obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert ('PortChannel0001.10', '32.11.10.1/24') in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
+
+        # config int ip add Po0001.11 32.11.10.1/24
+        result = runner.invoke(
+                config.config.commands["interface"].commands["ip"].commands["add"],
+                ["Po0001.11", "32.11.10.1/24"],
+                obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert ('Po0001.11', '32.11.10.1/24') in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
 
         # config int ip remove Ethernet64 10.10.10.1/24
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
@@ -136,6 +186,26 @@ class TestConfigIP(object):
             assert result.exit_code == 0
             assert mock_run_command.call_count == 1
             assert ('Eth36.10', '32.11.10.1/24') not in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
+
+        # config int ip remove PortChannel0001.10 10.11.10.1/24
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(
+                    config.config.commands["interface"].commands["ip"].commands["remove"],
+                    ["PortChannel0001.10", "10.11.10.1/24"],
+                    obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 1
+            assert ('PortChannel0001.10', '10.11.10.1/24') not in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
+
+        # config int ip remove Po0001.11 32.11.10.1/24
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"],
+                                   ["Po0001.11", "32.11.10.1/24"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 1
+            assert ('Po0001.11', '32.11.10.1/24') not in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
 
         # config int ip add vlan1000 10.21.20.1/24 as secondary
         result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["add"],
@@ -211,6 +281,80 @@ class TestConfigIP(object):
         print(result.output)
         print(result.exit_code)
         assert 'Error: Ethernet32 is configured as a member of portchannel.' in result.output
+
+        result = runner.invoke(
+                config.config.commands["interface"].commands["ip"].commands["add"],
+                ["Ethernet32.10", "100.10.10.1/24"],
+                obj=obj)
+        assert result.exit_code != 0
+        print(result.output)
+        print(result.exit_code)
+        assert 'Error: Ethernet32 is configured as a member of portchannel.' in result.output
+
+        result = runner.invoke(
+                config.config.commands["interface"].commands["ip"].commands["add"],
+                ["Eth32.10", "100.10.10.1/24"],
+                obj=obj)
+        assert result.exit_code != 0
+        print(result.output)
+        print(result.exit_code)
+        assert 'Error: Ethernet32 is configured as a member of portchannel.' in result.output
+
+    def test_ip_add_on_interface_with_no_port(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'config_db': db.cfgdb}
+
+        # config int ip add Ethernet51 100.10.10.1/24
+        result = runner.invoke(
+                config.config.commands["interface"].commands["ip"].commands["add"],
+                ["Ethernet51", "100.10.10.1/24"],
+                obj=obj)
+        assert result.exit_code != 0
+        print(result.output)
+        print(result.exit_code)
+        assert 'Error: Interface Ethernet51 does not exist' in result.output
+
+        # config int ip add Ethernet51.10 100.10.10.1/24
+        result = runner.invoke(
+                config.config.commands["interface"].commands["ip"].commands["add"],
+                ["Ethernet51.10", "100.10.10.1/24"],
+                obj=obj)
+        assert result.exit_code != 0
+        print(result.output)
+        print(result.exit_code)
+        assert 'Error: Interface Ethernet51.10 does not exist' in result.output
+
+        # config int ip add Eth51.10 32.11.10.1/24
+        result = runner.invoke(
+                config.config.commands["interface"].commands["ip"].commands["add"],
+                ["Eth51.10", "32.11.10.1/24"],
+                obj=obj)
+        assert result.exit_code != 0
+        print(result.output)
+        print(result.exit_code)
+        assert 'Error: Interface Eth51.10 does not exist' in result.output
+
+        # config int ip add PortChanne51.10 32.11.10.1/24
+        result = runner.invoke(
+                config.config.commands["interface"].commands["ip"].commands["add"],
+                ["PortChannel51.10", "32.11.10.1/24"],
+                obj=obj)
+        assert result.exit_code != 0
+        print(result.output)
+        print(result.exit_code)
+        assert 'Error: Interface PortChannel51.10 does not exist' in result.output
+
+        # config int ip add Po51.10 32.11.10.1/24
+        result = runner.invoke(
+                config.config.commands["interface"].commands["ip"].commands["add"],
+                ["Po51.10", "32.11.10.1/24"],
+                obj=obj)
+        assert result.exit_code != 0
+        print(result.output)
+        print(result.exit_code)
+        assert 'Error: Interface Po51.10 does not exist' in result.output
+
 
     '''  Tests for IPv6 '''
 
