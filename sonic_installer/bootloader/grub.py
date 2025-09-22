@@ -21,6 +21,8 @@ from .onie import OnieInstallerBootloader
 PLATFORMS_ASIC = "installer/platforms_asic"
 BOOT_PARAMETER_PREFIX_LINUX = "linux "
 BOOT_PARAMETER_PREFIX_LINUXEFI = "linuxefi "
+LEN_BOOT_PARAMETER_PREFIX_LINUX = len(BOOT_PARAMETER_PREFIX_LINUX)
+LEN_BOOT_PARAMETER_PREFIX_LINUXEFI = len(BOOT_PARAMETER_PREFIX_LINUXEFI)
 
 class GrubBootloader(OnieInstallerBootloader):
 
@@ -96,10 +98,10 @@ class GrubBootloader(OnieInstallerBootloader):
         for line in menuentry.split('\n'):
             line = line.strip()
             if line.startswith(BOOT_PARAMETER_PREFIX_LINUXEFI):
-                cmdline = line[len(BOOT_PARAMETER_PREFIX_LINUXEFI):].strip()
+                cmdline = line[LEN_BOOT_PARAMETER_PREFIX_LINUXEFI:].strip()
                 break
             elif line.startswith(BOOT_PARAMETER_PREFIX_LINUX):
-                cmdline = line[len(BOOT_PARAMETER_PREFIX_LINUX):].strip()
+                cmdline = line[LEN_BOOT_PARAMETER_PREFIX_LINUX:].strip()
                 break
         return cmdline
 
