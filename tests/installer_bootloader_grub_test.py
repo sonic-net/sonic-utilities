@@ -89,9 +89,13 @@ def test_set_fips_grub():
     shutil.rmtree(tmp_host_path)
 
 
-@patch("sonic_installer.bootloader.grub.HOST_PATH",
-       os.path.join(os.path.dirname(os.path.abspath(__file__)),
-       'installer_bootloader_input/_tmp_host'))
+@patch(
+    "sonic_installer.bootloader.grub.HOST_PATH",
+    os.path.join(
+        os.path.dirname(os.path.abspath(__file__)),
+        'installer_bootloader_input/_tmp_host'
+    )
+)
 def test_set_fips_grub_efi():
     # Prepare the grub.cfg in the _tmp_host folder
     current_path = os.path.dirname(os.path.abspath(__file__))
