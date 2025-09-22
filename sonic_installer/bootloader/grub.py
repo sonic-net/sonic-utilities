@@ -19,6 +19,8 @@ from ..common import (
 from .onie import OnieInstallerBootloader
 
 PLATFORMS_ASIC = "installer/platforms_asic"
+BOOT_PARAMETER_PREFIX_LINUX = "linux "
+BOOT_PARAMETER_PREFIX_LINUXEFI = "linuxefi "
 
 class GrubBootloader(OnieInstallerBootloader):
 
@@ -93,11 +95,11 @@ class GrubBootloader(OnieInstallerBootloader):
         config.close()
         for line in menuentry.split('\n'):
             line = line.strip()
-            if line.startswith('linuxefi '):
-                cmdline = line[9:].strip()
+            if line.startswith(BOOT_PARAMETER_PREFIX_LINUXEFI):
+                cmdline = line[len(BOOT_PARAMETER_PREFIX_LINUXEFI):].strip()
                 break
-            elif line.startswith('linux '):
-                cmdline = line[6:].strip()
+            elif line.startswith(BOOT_PARAMETER_PREFIX_LINUX):
+                cmdline = line[len(BOOT_PARAMETER_PREFIX_LINUX):].strip()
                 break
         return cmdline
 
@@ -109,11 +111,11 @@ class GrubBootloader(OnieInstallerBootloader):
         new_menuentry = old_menuentry
         for line in old_menuentry.split('\n'):
             line = line.strip()
-            if line.startswith('linuxefi '):
-                new_menuentry = old_menuentry.replace(line, "linuxefi " + cmdline)
+            if line.startswith(BOOT_PARAMETER_PREFIX_LINUXEFI):
+                new_menuentry = old_menuentry.replace(line, BOOT_PARAMETER_PREFIX_LINUXEFI + cmdline)
                 break
-            elif line.startswith('linux '):
-                new_menuentry = old_menuentry.replace(line, "linux " + cmdline)
+            elif line.startswith(BOOT_PARAMETER_PREFIX_LINUX):
+                new_menuentry = old_menuentry.replace(line, BOOT_PARAMETER_PREFIX_LINUX + cmdline)
                 break
         config = open(HOST_PATH + '/grub/grub.cfg', 'w')
         config.write(old_config.replace(old_menuentry, new_menuentry))
