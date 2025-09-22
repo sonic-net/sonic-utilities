@@ -29,10 +29,11 @@ def is_dpu(db):
 
 
 def connect_to_db(namespace):
-    if not SonicDBConfig.isGlobalInit():
-        SonicDBConfig.initializeGlobalConfig()
     if namespace is None:
         namespace = DEFAULT_NAMESPACE
+    else:
+        if not SonicDBConfig.isGlobalInit():
+            SonicDBConfig.initializeGlobalConfig()
     configdb = ConfigDBConnector(use_unix_socket_path=True, namespace=str(namespace))
     configdb.connect()
     return configdb
