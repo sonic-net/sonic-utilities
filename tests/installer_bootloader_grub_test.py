@@ -93,17 +93,18 @@ def test_set_fips_grub():
     "sonic_installer.bootloader.grub.HOST_PATH",
     os.path.join(
         os.path.dirname(os.path.abspath(__file__)),
-        'installer_bootloader_input/_tmp_host'
+        'installer_bootloader_input/_tmp_host_efi'
     )
 )
 def test_set_fips_grub_efi():
     # Prepare the grub.cfg in the _tmp_host folder
     current_path = os.path.dirname(os.path.abspath(__file__))
     grub_config = os.path.join(current_path, 'installer_bootloader_input/host/grub/grub_efi.cfg')
-    tmp_host_path = os.path.join(current_path, 'installer_bootloader_input/_tmp_host')
+    tmp_host_path = os.path.join(current_path, 'installer_bootloader_input/_tmp_host_efi')
     tmp_grub_path = os.path.join(tmp_host_path, 'grub')
     os.makedirs(tmp_grub_path, exist_ok=True)
-    shutil.copy(grub_config, tmp_grub_path)
+    tmp_grub_config = os.path.join(tmp_grub_path, 'grub.cfg')
+    shutil.copy(grub_config, tmp_grub_config)
 
     image = 'SONiC-OS-internal-202205.57377412-84a9a7f11b'
     bootloader = grub.GrubBootloader()
