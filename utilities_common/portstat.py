@@ -36,7 +36,7 @@ header_std = ['IFACE', 'STATE', 'RX_OK', 'RX_BPS', 'RX_UTIL', 'RX_ERR', 'RX_DRP'
               'TX_OK', 'TX_BPS', 'TX_UTIL', 'TX_ERR', 'TX_DRP', 'TX_OVR']
 header_errors_only = ['IFACE', 'STATE', 'RX_ERR', 'RX_DRP', 'RX_OVR', 'TX_ERR', 'TX_DRP', 'TX_OVR']
 header_fec_only = ['IFACE', 'STATE', 'FEC_CORR', 'FEC_UNCORR', 'FEC_SYMBOL_ERR', 'FEC_PRE_BER',
-                   'FEC_POST_BER', 'FEC_PRE_BER_MAX', 'FEC_FLR', 'FEC_FLR_PREDICTED']
+                   'FEC_POST_BER', 'FEC_PRE_BER_MAX', 'FLR(O)', 'FLR(P)']
 header_rates_only = ['IFACE', 'STATE', 'RX_OK', 'RX_BPS', 'RX_PPS', 'RX_UTIL', 'TX_OK', 'TX_BPS', 'TX_PPS', 'TX_UTIL']
 header_trim_only = ['IFACE', 'STATE', 'TRIM_PKTS', 'TRIM_TX_PKTS', 'TRIM_DRP_PKTS']
 
