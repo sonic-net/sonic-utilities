@@ -192,12 +192,12 @@ Ethernet72: SFP EEPROM detected
         Supported Max TX Power: N/A
         Supported Min Laser Frequency: N/A
         Supported Min TX Power: N/A
-        Vendor Date Code(YYYY-MM-DD Lot): 2022-05-28
-        Vendor Name: vendor1
+        Vendor Date Code(YYYY-MM-DD Lot): 2022-05-28   
+        Vendor Name: vendor1          
         Vendor OUI: some-oui
-        Vendor PN: some-model
+        Vendor PN: some-model    
         Vendor Rev: A3
-        Vendor SN: serial1
+        Vendor SN: serial1   
         dom_capability: N/A
         is_replaceable: True
         ChannelMonitorValues:
