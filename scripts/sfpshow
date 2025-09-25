@@ -328,7 +328,8 @@ class SFPShow(object):
             combined_dict.update(sfp_firmware_info_dict)
 
         # Use the utility function to get sorted keys from combined dictionary
-        sorted_sfp_info_keys = sorted(combined_dict.keys(), key=get_data_map_sort_key(combined_dict, data_map))
+        sorted_sfp_info_keys = sorted(combined_dict.keys(),
+                                      key=get_data_map_sort_key(combined_dict, data_map))
 
         for key in sorted_sfp_info_keys:
             if key == 'cable_type':
