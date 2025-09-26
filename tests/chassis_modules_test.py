@@ -795,7 +795,7 @@ class TestChassisModules(object):
 
         # Reset caches inside the module for isolation
         with mock.patch("config.chassis_modules._STATE_DB_CONN", None, create=True), \
-            mock.patch("config.chassis_modules._MB_SINGLETON", None, create=True):
+             mock.patch("config.chassis_modules._MB_SINGLETON", None, create=True):
 
             counters = {"inits": 0, "connects": 0}
 
