@@ -3,11 +3,7 @@ import os
 from click.testing import CliRunner
 from datetime import datetime, timedelta
 from types import SimpleNamespace
-
-try:
-    from swsscommon.swsscommon import SonicV2Connector  # noqa: F401
-except ImportError:  # pragma: no cover
-    from swsssdk import SonicV2Connector  # type: ignore  # noqa: F401
+from swsscommon.swsscommon import SonicV2Connector  # noqa: F401
 
 # Use the same timeout your tests expect today
 TRANSITION_TIMEOUT = timedelta(minutes=4)
@@ -61,14 +57,13 @@ def _assert_transition_if_present(db, name, expected_type=None):
 
 def _state_conn():
     """Get a STATE_DB connector compatible with the test harness/mocks."""
+    v2 = SonicV2Connector()
     try:
-        v2 = SonicV2Connector()
         v2.connect(v2.STATE_DB)
-        return v2
     except Exception:
-        v2 = SonicV2Connector(use_unix_socket_path=True)
-        v2.connect(v2.STATE_DB)
-        return v2
+        # Some environments autoconnect or mocks don't support connect; tolerate it.
+        pass
+    return v2
 
 
 def set_state_transition_in_progress(db, chassis_module_name, value):
@@ -791,69 +786,42 @@ class TestChassisModules(object):
             m_clear.assert_called_once_with("DPU0")
 
     def test__state_db_conn_caches_and_tolerates_connect_error(self):
-        import sys
-        import types
         import importlib
         from unittest import mock
+        import config.chassis_modules as cm
 
-        # 1) Pre-stub BOTH bindings so import never hits real deps
-        swsscommon = types.ModuleType("swsscommon")
-        swsscommon_sub = types.ModuleType("swsscommon.swsscommon")
+        # Reload to ensure a clean module state
+        cm = importlib.reload(cm)
 
-        class _PlaceholderCommon:
-            pass
+        # Reset caches inside the module for isolation
+        with mock.patch("config.chassis_modules._STATE_DB_CONN", None, create=True), \
+            mock.patch("config.chassis_modules._MB_SINGLETON", None, create=True):
 
-        swsscommon_sub.SonicV2Connector = _PlaceholderCommon
-        swsscommon.swsscommon = swsscommon_sub
+            counters = {"inits": 0, "connects": 0}
 
-        swsssdk = types.ModuleType("swsssdk")
+            class FakeConnector:
+                STATE_DB = object()
 
-        class _PlaceholderSdk:
-            pass
+                def __init__(self):
+                    counters["inits"] += 1
 
-        swsssdk.SonicV2Connector = _PlaceholderSdk
+                def connect(self, which):
+                    counters["connects"] += 1
+                    # Exercise the try/except path; should not raise out of _state_db_conn()
+                    raise RuntimeError("simulated connect failure")
 
-        with mock.patch.dict(
-            sys.modules,
-            {
-                "swsscommon": swsscommon,
-                "swsscommon.swsscommon": swsscommon_sub,
-                "swsssdk": swsssdk,
-            },
-            clear=False,
-        ):
-            # 2) Import (or reload) the module under test so it binds to our stubs
-            cm = importlib.import_module("config.chassis_modules")
-            cm = importlib.reload(cm)
+            # Patch the swsscommon connector symbol used by _state_db_conn
+            with mock.patch("config.chassis_modules.SonicV2Connector", FakeConnector, create=True):
+                c1 = cm._state_db_conn()
+                assert isinstance(c1, FakeConnector)
+                assert counters["inits"] == 1
+                assert counters["connects"] == 1
 
-            # 3) Reset caches inside the module for isolation
-            with mock.patch("config.chassis_modules._STATE_DB_CONN", None, create=True), \
-                 mock.patch("config.chassis_modules._MB_SINGLETON", None, create=True):
-
-                # 4) Patch the connector symbol used by _state_db_conn
-                counters = {"inits": 0, "connects": 0}
-
-                class FakeConnector:
-                    STATE_DB = object()
-
-                    def __init__(self):
-                        counters["inits"] += 1
-
-                    def connect(self, which):
-                        counters["connects"] += 1
-                        # Exercise the try/except path
-                        raise RuntimeError("simulated connect failure")
-
-                with mock.patch("config.chassis_modules.SonicV2Connector", FakeConnector, create=True):
-                    c1 = cm._state_db_conn()
-                    assert isinstance(c1, FakeConnector)
-                    assert counters["inits"] == 1
-                    assert counters["connects"] == 1
-
-                    c2 = cm._state_db_conn()
-                    assert c2 is c1
-                    assert counters["inits"] == 1
-                    assert counters["connects"] == 1
+                # Second call is cached
+                c2 = cm._state_db_conn()
+                assert c2 is c1
+                assert counters["inits"] == 1
+                assert counters["connects"] == 1
 
     @classmethod
     def teardown_class(cls):

@@ -7,15 +7,7 @@ import subprocess
 import utilities_common.cli as clicommon
 from utilities_common.chassis import is_smartswitch, get_all_dpus
 from datetime import datetime, timedelta
-
-# New imports to use centralized APIs
-try:
-    # Prefer swsscommon SonicV2Connector
-    from swsscommon.swsscommon import SonicV2Connector
-except ImportError:
-    # Fallback (if ever needed)
-    from swsssdk import SonicV2Connector
-
+from swsscommon.swsscommon import SonicV2Connector
 from sonic_platform_base.module_base import ModuleBase
 
 TIMEOUT_SECS = 10
