@@ -584,7 +584,7 @@ class SFPShow(object):
         if field is None:
             return 'N/A'
         elif prefix in {'prefec_ber'}:
-            if type(field) == bool:
+            if isinstance(field, bool):
                 return str(field)
             elif field != 0:
                 return "{:.2E}".format(field)
