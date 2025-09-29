@@ -581,13 +581,15 @@ class SFPShow(object):
             return pm_prefix.replace('_', '')
 
     def beautify_pm_field(self, prefix, field):
-        if type(field) == bool:
-            return str(field)
-
         if field is None:
             return 'N/A'
         elif prefix in {'prefec_ber'}:
-            return "{:.2E}".format(field) if field != 0 else '0.0'
+            if type(field) == bool:
+                return str(field)
+            elif field != 0:
+                return "{:.2E}".format(field)
+            else:
+                return '0.0'
         else:
             return str(field)
 
