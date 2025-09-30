@@ -913,6 +913,65 @@ save_sys() {
     chmod ugo+rw -R $DUMPDIR/$BASE/sys
 }
 
+save_sysfs() {
+    trap 'handle_error $? $LINENO' ERR
+    local src="$1"
+    local dest="$2"
+    shift 2
+    # sys files we do not want to include in dump
+    local excludes=("$@")
+
+    $MKDIR $V -p "$dest"
+
+    should_skip() {
+        local base="$1"
+        for ex in "${excludes[@]}"; do
+            [[ "$base" == "$ex" ]] && return 0
+        done
+        return 1
+    }
+
+    # Copy files directly under src
+    for f in "$src"/*; do
+        if [ -f "$f" ]; then
+            local base="$(basename "$f")"
+            should_skip "$base" && continue
+            local target="$dest/$base"
+
+            if $NOOP; then
+                echo "cat $f > $target 2>/dev/null"
+            else
+                cat "$f" > "$target" 2>/dev/null
+            fi
+        fi
+    done
+
+    # Copy sub folders
+    for d in "$src"/*; do
+        if [ -d "$d" ]; then
+            local subdir_dest="$dest/$(basename "$d")"
+            $MKDIR $V -p "$subdir_dest"
+
+            # copy only files inside sub folder, not sub-sub folders
+            for f in "$d"/*; do
+                if [ -f "$f" ]; then
+                    local base="$(basename "$f")"
+                    should_skip "$base" && continue
+                    local target="$subdir_dest/$base"
+
+                    if $NOOP; then
+                        echo "cat $f > $target 2>/dev/null"
+                    else
+                        cat "$f" > "$target" 2>/dev/null
+                    fi
+                fi
+            done
+        fi
+    done
+
+    chmod ugo+rw -R "$dest"
+}
+
 ###############################################################################
 # Given list of pstore directories or files, saves subdirectories and files to tar.
 # Globals:
@@ -1409,6 +1468,12 @@ collect_mellanox() {
         save_cmd "dpuctl dpu-status" "dpu_status"
     fi
 
+    local sdk_sysfs_src_path="/sys/module/sx_core/asic0"
+    local sdk_sysfs_dest_path="$TARDIR/sdk_sysfs/sx_core/asic0"
+    local excludes_sysfs_files=(rx_los tx_disable module_info module_latched_flag_info power_mode power_mode_policy reinsert reset)
+
+    save_sysfs "$sdk_sysfs_src_path" "$sdk_sysfs_dest_path" "${excludes_sysfs_files[@]}" &
+
     # Save CMIS-host-management related files
     local cmis_host_mgmt_path="cmis-host-mgmt"
 
@@ -1423,6 +1488,8 @@ collect_mellanox() {
     fi
 
     save_cmd "show interfaces autoneg status" "autoneg.status"
+
+    wait
 }
 
 ###############################################################################
