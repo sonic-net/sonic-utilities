@@ -230,6 +230,27 @@ class ConfigMgmt():
         self.sysLog(msg="Write in DB: {}".format(data))
         configdb.mod_config(sonic_cfggen.FormatConverter.output_to_db(data))
 
+        # Handle deletion of column key when it's value is 'None' using set_entry
+        # data: config data in a dictionary form
+        # {
+        #     'TABLE_NAME': { 'row_key': {'column_key': None, ...}, ...}
+        # }
+        for table_name, table_data in sonic_cfggen.FormatConverter.output_to_db(data).items():
+            if table_data is None:
+                continue
+            for row_key, row_val in table_data.items():
+                if row_val is None:
+                    continue
+                elif isinstance(row_val, dict):
+                    entry = configdb.get_entry(table_name, row_key)
+                    if entry and isinstance(entry, dict):
+                        need_modification = 0
+                        for col_key, col_val in row_val.items():
+                            if col_key in entry and col_val is None:
+                                need_modification = 1
+                                del entry[col_key]
+                        if need_modification == 1:
+                            configdb.set_entry(table_name, row_key, entry)
         return
 
     def add_module(self, yang_module_str):
