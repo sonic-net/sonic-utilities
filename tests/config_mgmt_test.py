@@ -196,6 +196,100 @@ class TestConfigMgmt(TestCase):
 
         return
 
+    def test_writeConfigDB_CABLE_LENGTH_None_deletion(self):
+        '''
+        Test handle deletion of nested column keys when value is None.
+        This covers the CABLE_LENGTH case where structure is:
+        {'CABLE_LENGTH': {'AZURE': {'Ethernet0': None}}}
+
+        The code should delete 'Ethernet0' column from the 'AZURE' entry
+        '''
+        # Mock ConfigDBConnector
+        mock_configdb = mock.MagicMock()
+
+        # Setup: jDiff matching the user's example
+        jDiff = {
+            'BUFFER_PG': {
+                'Ethernet0|0': None,
+                'Ethernet0|1-2': None,
+                'Ethernet0|3-4': None,
+                'Ethernet0|5-7': None
+            },
+            'BUFFER_QUEUE': {
+                'Ethernet0|0-2': None,
+                'Ethernet0|3-4': None,
+                'Ethernet0|5-7': None
+            },
+            'CABLE_LENGTH': {
+                'AZURE': {
+                    'Ethernet0': None  # This column should be deleted from AZURE entry
+                }
+            },
+            'INTERFACE': {
+                'Ethernet0': None,
+                'Ethernet0|10.0.0.0/31': None
+            },
+            'PORT': {
+                'Ethernet0': None
+            },
+            'QUEUE': {}
+        }
+
+        # Mock existing entries in config DB
+        # CABLE_LENGTH/AZURE entry has Ethernet0 and other ports
+        mock_configdb.get_entry = mock.MagicMock(side_effect=lambda table, key: {
+            ('CABLE_LENGTH', 'AZURE'): {
+                'Ethernet0': '5m',
+                'Ethernet1': '10m',
+                'Ethernet2': '15m'
+            }
+        }.get((table, key), {}))
+
+        mock_configdb.mod_config = mock.MagicMock()
+        mock_configdb.set_entry = mock.MagicMock()
+
+        # Create ConfigMgmt instance with mocked configdb
+        curConfig = deepcopy(configDbJson)
+        self.writeJson(curConfig, config_mgmt.CONFIG_DB_JSON_FILE)
+        cm = config_mgmt.ConfigMgmt(
+            source=config_mgmt.CONFIG_DB_JSON_FILE,
+            configdb=mock_configdb
+        )
+
+        # Execute: Call writeConfigDB with jDiff containing None values
+        cm.writeConfigDB(jDiff)
+
+        # Verify: mod_config was called first
+        assert mock_configdb.mod_config.called, "mod_config should be called"
+
+        # Verify: set_entry was called for CABLE_LENGTH table
+        cable_length_calls = [
+            call for call in mock_configdb.set_entry.call_args_list
+            if call[0][0] == 'CABLE_LENGTH' and call[0][1] == 'AZURE'
+        ]
+
+        assert len(cable_length_calls) == 1, \
+            "set_entry should be called once for CABLE_LENGTH AZURE"
+
+        # Get the modified entry passed to set_entry
+        modified_entry = cable_length_calls[0][0][2]
+
+        # Verify: Ethernet0 column was deleted from the AZURE entry
+        assert 'Ethernet0' not in modified_entry, \
+            "Ethernet0 column should be deleted from CABLE_LENGTH AZURE entry"
+
+        # Verify: Other ports remain in the entry
+        assert 'Ethernet1' in modified_entry, \
+            "Ethernet1 should remain in CABLE_LENGTH AZURE entry"
+        assert modified_entry['Ethernet1'] == '10m', \
+            "Ethernet1 value should be unchanged"
+        assert 'Ethernet2' in modified_entry, \
+            "Ethernet2 should remain in CABLE_LENGTH AZURE entry"
+        assert modified_entry['Ethernet2'] == '15m', \
+            "Ethernet2 value should be unchanged"
+
+        return
+
     def tearDown(self):
         try:
             os.remove(config_mgmt.CONFIG_DB_JSON_FILE)
