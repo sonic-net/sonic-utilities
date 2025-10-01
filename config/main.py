@@ -1722,7 +1722,8 @@ def print_dry_run_message(dry_run):
 @click.option('-i', '--ignore-path', multiple=True, help='ignore validation for config specified by given path which is a JsonPointer', hidden=True)
 @click.option('-v', '--verbose', is_flag=True, default=False, help='print additional details of what the operation is doing')
 @click.pass_context
-def apply_patch(ctx, patch_file_path, format, dry_run, parallel, unsorted, ignore_non_yang_tables, ignore_path, verbose):
+def apply_patch(ctx, patch_file_path, format, dry_run, parallel, unsorted,
+                ignore_non_yang_tables, ignore_path, verbose):
     """Apply given patch of updates to Config. A patch is a JsonPatch which follows rfc6902.
        This command can be used do partial updates to the config with minimum disruption to running processes.
        It allows addition as well as deletion of configs. The patch file represents a diff of ConfigDb(ABNF)

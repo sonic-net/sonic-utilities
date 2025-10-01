@@ -782,7 +782,7 @@ class TestDecorator(unittest.TestCase):
         self.decorator.apply(Files.SINGLE_OPERATION_SONIC_YANG_PATCH)
 
         # Assert
-        self.decorated_patch_applier.apply.assert_has_calls([call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH)])
+        self.decorated_patch_applier.apply.assert_has_calls([call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH, unsorted=False)])
 
     def test_replace__calls_decorated_replacer(self):
         # Act
@@ -833,9 +833,9 @@ class TestSonicYangDecorator(unittest.TestCase):
 
         # Assert
         sonic_yang_decorator.patch_wrapper.convert_sonic_yang_patch_to_config_db_patch.assert_has_calls(
-            [call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH)])
+            [call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH, unsorted=False)])
         sonic_yang_decorator.decorated_patch_applier.apply.assert_has_calls(
-            [call(Files.SINGLE_OPERATION_CONFIG_DB_PATCH)])
+            [call(Files.SINGLE_OPERATION_CONFIG_DB_PATCH, unsorted=False)])
 
     def test_replace__converts_to_config_db_and_calls_decorated_class(self):
         # Arrange
@@ -884,7 +884,7 @@ class TestConfigLockDecorator(unittest.TestCase):
         # Assert
         config_lock_decorator.config_lock.acquire_lock.assert_called_once()
         config_lock_decorator.decorated_patch_applier.apply.assert_has_calls(
-            [call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH)])
+            [call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH, unsorted=False)])
         config_lock_decorator.config_lock.release_lock.assert_called_once()
 
     def test_replace__lock_config(self):
