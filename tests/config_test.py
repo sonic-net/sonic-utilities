@@ -4159,6 +4159,115 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
                     # Ensure ConfigDBConnector was never instantiated or called
                     mock_config_db_connector.assert_not_called()
 
+    @patch('config.main.validate_patch', mock.Mock(return_value=True))
+    def test_apply_patch_dryrun_unsorted_multiasic(self):
+        # Mock open to simulate file reading
+        with patch('builtins.open', mock_open(read_data=json.dumps(self.patch_content)), create=True) as mocked_open:
+            # Mock GenericUpdater to avoid actual patch application
+            with patch('config.main.GenericUpdater') as mock_generic_updater:
+                mock_generic_updater.return_value.apply_patch = MagicMock()
+
+                # Mock ConfigDBConnector to ensure it's not called during dry-run
+                with patch('config.main.ConfigDBConnector') as mock_config_db_connector:
+
+                    print("Multi ASIC: {}".format(multi_asic.is_multi_asic()))
+                    # Invocation of the command with the CliRunner
+                    result = self.runner.invoke(config.config.commands["apply-patch"],
+                                                [self.patch_file_path,
+                                                 "--format", ConfigFormat.SONICYANG.name,
+                                                 "--dry-run",
+                                                 "--unsorted",
+                                                 "--ignore-non-yang-tables",
+                                                 "--ignore-path", "/ANY_TABLE",
+                                                 "--ignore-path", "/ANY_OTHER_TABLE/ANY_FIELD",
+                                                 "--ignore-path", "",
+                                                 "--verbose"],
+                                                catch_exceptions=False)
+
+                    print("Exit Code: {}, output: {}".format(result.exit_code, result.output))
+                    # Assertions and verifications
+                    self.assertEqual(result.exit_code, 0, "Command should succeed")
+                    self.assertIn("Patch applied successfully.", result.output)
+
+                    # Verify mocked_open was called as expected
+                    mocked_open.assert_called_with(self.patch_file_path, 'r')
+
+                    # Ensure ConfigDBConnector was never instantiated or called
+                    mock_config_db_connector.assert_not_called()
+
+    @patch('config.main.validate_patch', mock.Mock(return_value=True))
+    @patch('config.main.concurrent.futures.wait', autospec=True)
+    def test_apply_patch_dryrun_unsorted_parallel_multiasic(self, MockThreadPoolWait):
+        # Mock open to simulate file reading
+        with patch('builtins.open', mock_open(read_data=json.dumps(self.patch_content)), create=True) as mocked_open:
+            # Mock GenericUpdater to avoid actual patch application
+            with patch('config.main.GenericUpdater') as mock_generic_updater:
+                mock_generic_updater.return_value.apply_patch = MagicMock()
+
+                # Mock ConfigDBConnector to ensure it's not called during dry-run
+                with patch('config.main.ConfigDBConnector') as mock_config_db_connector:
+
+                    print("Multi ASIC: {}".format(multi_asic.is_multi_asic()))
+                    # Invocation of the command with the CliRunner
+                    result = self.runner.invoke(config.config.commands["apply-patch"],
+                                                [self.patch_file_path,
+                                                 "--format", ConfigFormat.SONICYANG.name,
+                                                 "--dry-run",
+                                                 "--unsorted",
+                                                 "--parallel",
+                                                 "--ignore-non-yang-tables",
+                                                 "--ignore-path", "/ANY_TABLE",
+                                                 "--ignore-path", "/ANY_OTHER_TABLE/ANY_FIELD",
+                                                 "--ignore-path", "",
+                                                 "--verbose"],
+                                                catch_exceptions=False)
+
+                    print("Exit Code: {}, output: {}".format(result.exit_code, result.output))
+                    # Assertions and verifications
+                    self.assertEqual(result.exit_code, 0, "Command should succeed")
+                    self.assertIn("Patch applied successfully.", result.output)
+
+                    # Assertions to check if ThreadPoolExecutor was used correctly
+                    MockThreadPoolWait.assert_called_once()
+
+                    # Verify mocked_open was called as expected
+                    mocked_open.assert_called_with(self.patch_file_path, 'r')
+
+                    # Ensure ConfigDBConnector was never instantiated or called
+                    mock_config_db_connector.assert_not_called()
+
+    @patch('config.main.validate_patch', mock.Mock(return_value=True))
+    def test_apply_patch_unsorted_parallel_with_error_multiasic(self):
+        # Mock open to simulate file reading
+        with patch('builtins.open', mock_open(read_data=json.dumps(self.patch_content)), create=True) as mocked_open:
+            # Mock GenericUpdater to avoid actual patch application
+            with patch('config.main.GenericUpdater') as mock_generic_updater:
+                # Simulate an error during apply_patch
+                mock_generic_updater.return_value.apply_patch.side_effect = Exception("Simulated error")
+
+                print("Multi ASIC: {}".format(multi_asic.is_multi_asic()))
+                # Invocation of the command with the CliRunner
+                result = self.runner.invoke(config.config.commands["apply-patch"],
+                                            [self.patch_file_path,
+                                             "--format", ConfigFormat.SONICYANG.name,
+                                             "--dry-run",
+                                             "--unsorted",
+                                             "--parallel",
+                                             "--ignore-non-yang-tables",
+                                             "--ignore-path", "/ANY_TABLE",
+                                             "--ignore-path", "/ANY_OTHER_TABLE/ANY_FIELD",
+                                             "--ignore-path", "",
+                                             "--verbose"],
+                                            catch_exceptions=True)
+
+                print("Exit Code: {}, output: {}".format(result.exit_code, result.output))
+                # Assertions and verifications
+                self.assertNotEqual(result.exit_code, 0, "Command should fail due to simulated error")
+                self.assertIn("Simulated error", result.output)
+
+                # Verify mocked_open was called as expected
+                mocked_open.assert_called_with(self.patch_file_path, 'r')
+
     @patch('config.main.subprocess.Popen')
     @patch('config.main.SonicYangCfgDbGenerator.validate_config_db_json', mock.Mock(return_value=True))
     def test_apply_patch_validate_patch_multiasic(self, mock_subprocess_popen):

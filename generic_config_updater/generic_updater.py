@@ -1,4 +1,5 @@
 import json
+import jsonpatch
 import jsonpointer
 import os
 import subprocess
@@ -6,7 +7,7 @@ import subprocess
 from datetime import datetime, timezone
 from enum import Enum
 from .gu_common import HOST_NAMESPACE, GenericConfigUpdaterError, EmptyTableError, ConfigWrapper, \
-                    DryRunConfigWrapper, PatchWrapper, genericUpdaterLogging
+                    DryRunConfigWrapper, JsonChange, PatchWrapper, genericUpdaterLogging
 from .patch_sorter import StrictPatchSorter, NonStrictPatchSorter, ConfigSplitter, \
                         TablesWithoutYangConfigSplitter, IgnorePathsFromYangConfigSplitter
 from .change_applier import ChangeApplier, DryRunChangeApplier
@@ -101,7 +102,7 @@ class PatchApplier:
         self.patchsorter = patchsorter if patchsorter is not None else StrictPatchSorter(self.config_wrapper, self.patch_wrapper)
         self.changeapplier = changeapplier if changeapplier is not None else ChangeApplier(scope=self.scope)
 
-    def apply(self, patch, sort=True):
+    def apply(self, patch, unsorted=False):
         scope = self.scope if self.scope else HOST_NAMESPACE
         self.logger.log_notice(f"{scope}: Patch application starting.")
         self.logger.log_notice(f"{scope}: Patch: {patch}")
@@ -128,12 +129,12 @@ class PatchApplier:
                                 which is not allowed in ConfigDb. \
                                 Table{'s' if len(empty_tables) != 1 else ''}: {empty_tables_txt}")
         # Generate list of changes to apply
-        if sort:
-            self.logger.log_notice(f"{scope}: sorting patch updates.")
-            changes = self.patchsorter.sort(patch)
-        else:
+        if unsorted:
             self.logger.log_notice(f"{scope}: converting patch to JsonChange.")
             changes = [JsonChange(jsonpatch.JsonPatch([element])) for element in patch]
+        else:
+            self.logger.log_notice(f"{scope}: sorting patch updates.")
+            changes = self.patchsorter.sort(patch)
 
         changes_len = len(changes)
         self.logger.log_notice(f"The {scope} patch was converted into {changes_len} " \
@@ -419,8 +420,8 @@ class Decorator(PatchApplier, ConfigReplacer, FileSystemConfigRollbacker):
         self.decorated_config_replacer = decorated_config_replacer
         self.decorated_config_rollbacker = decorated_config_rollbacker
 
-    def apply(self, patch):
-        self.decorated_patch_applier.apply(patch)
+    def apply(self, patch, unsorted=False):
+        self.decorated_patch_applier.apply(patch, unsorted=unsorted)
 
     def replace(self, target_config):
         self.decorated_config_replacer.replace(target_config)
@@ -450,9 +451,9 @@ class SonicYangDecorator(Decorator):
         self.patch_wrapper = patch_wrapper
         self.config_wrapper = config_wrapper
 
-    def apply(self, patch):
+    def apply(self, patch, unsorted=False):
         config_db_patch = self.patch_wrapper.convert_sonic_yang_patch_to_config_db_patch(patch)
-        Decorator.apply(self, config_db_patch)
+        Decorator.apply(self, config_db_patch, unsorted=unsorted)
 
     def replace(self, target_config):
         config_db_target_config = self.config_wrapper.convert_sonic_yang_to_config_db(target_config)
@@ -473,8 +474,8 @@ class ConfigLockDecorator(Decorator):
                            scope=scope)
         self.config_lock = config_lock
 
-    def apply(self, patch, sort=True):
-        self.execute_write_action(Decorator.apply, self, patch)
+    def apply(self, patch, unsorted=False):
+        self.execute_write_action(Decorator.apply, self, patch, unsorted=unsorted)
 
     def replace(self, target_config):
         self.execute_write_action(Decorator.replace, self, target_config)
@@ -485,9 +486,9 @@ class ConfigLockDecorator(Decorator):
     def checkpoint(self, checkpoint_name):
         self.execute_write_action(Decorator.checkpoint, self, checkpoint_name)
 
-    def execute_write_action(self, action, *args):
+    def execute_write_action(self, action, *args, **kwargs):
         self.config_lock.acquire_lock()
-        action(*args)
+        action(*args, **kwargs)
         self.config_lock.release_lock()
 
 
@@ -621,9 +622,9 @@ class GenericUpdater:
         self.generic_update_factory = \
             generic_update_factory if generic_update_factory is not None else GenericUpdateFactory(scope=scope)
 
-    def apply_patch(self, patch, config_format, verbose, dry_run, ignore_non_yang_tables, ignore_paths, sort=True):
+    def apply_patch(self, patch, config_format, verbose, dry_run, ignore_non_yang_tables, ignore_paths, unsorted=False):
         patch_applier = self.generic_update_factory.create_patch_applier(config_format, verbose, dry_run, ignore_non_yang_tables, ignore_paths)
-        patch_applier.apply(patch, sort)
+        patch_applier.apply(patch, unsorted=unsorted)
 
     def replace(self, target_config, config_format, verbose, dry_run, ignore_non_yang_tables, ignore_paths):
         config_replacer = self.generic_update_factory.create_config_replacer(config_format, verbose, dry_run, ignore_non_yang_tables, ignore_paths)
