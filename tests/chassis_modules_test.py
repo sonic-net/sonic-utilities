@@ -726,25 +726,26 @@ class TestChassisModules(object):
 
     def test__mark_transition_clear_calls_ModuleBase(self):
         import config.chassis_modules as cm
-        from config.chassis_modules import ModuleBase as MB
-        with mock.patch("config.chassis_modules.ModuleBase", new_callable=lambda: MB) as m_mb, \
-             mock.patch("config.chassis_modules._state_db_conn"):
-            inst = m_mb.return_value
+        with mock.patch("config.chassis_modules.ModuleBase") as mock_mb, \
+             mock.patch("config.chassis_modules._state_db_conn") as mock_conn:
+            mock_instance = mock_mb.return_value
+            mock_instance.clear_module_state_transition.return_value = True
             cm._mark_transition_clear("DPU0")
-            self.assertEqual(1, inst.mark_module_state_transition_clear.call_count)
-            inst.mark_module_state_transition_clear.assert_called_with("DPU0")
+            self.assertEqual(1, mock_instance.clear_module_state_transition.call_count)
+            mock_instance.clear_module_state_transition.assert_called_with(mock_conn.return_value, "DPU0")
 
     def test__transition_timed_out_delegates_and_returns(self):
         import config.chassis_modules as cm
-        from config.chassis_modules import ModuleBase as MB
-        with mock.patch("config.chassis_modules.ModuleBase", new_callable=lambda: MB) as m_mb, \
-             mock.patch("config.chassis_modules._state_db_conn"):
-            inst = m_mb.return_value
-            inst.is_module_state_transition_timed_out.return_value = True
+        with mock.patch("config.chassis_modules.ModuleBase") as mock_mb, \
+             mock.patch("config.chassis_modules._state_db_conn") as mock_conn, \
+             mock.patch("config.chassis_modules.TRANSITION_TIMEOUT") as mock_timeout:
+            mock_instance = mock_mb.return_value
+            mock_instance.is_module_state_transition_timed_out.return_value = True
+            mock_timeout.total_seconds.return_value = 240
             out = cm._transition_timed_out("DPU0")
             self.assertTrue(out)
-            self.assertEqual(1, inst.is_module_state_transition_timed_out.call_count)
-            inst.is_module_state_transition_timed_out.assert_called_with("DPU0")
+            self.assertEqual(1, mock_instance.is_module_state_transition_timed_out.call_count)
+            mock_instance.is_module_state_transition_timed_out.assert_called_with(mock_conn.return_value, "DPU0", 240)
 
     def test_shutdown_times_out_clears_and_messages(self):
         # Force the CLI path: transition in progress + timed out => clear + "Proceeding with shutdown."
