@@ -50,7 +50,7 @@ def _assert_transition_if_present(db, name, expected_type=None):
     assert flag == "True"
     if expected_type is not None and ttyp is not None:
         # Some images don't store type; assert when present.
-        assert ttyp in (expected_type, )
+        assert ttyp == expected_type
     if ts is not None:
         assert isinstance(ts, str) and len(ts) > 0
 
@@ -252,11 +252,11 @@ class _MBStub:
 
     @staticmethod
     def set_module_state_transition(*_args, **_kwargs):
-        return None
+        return True  # Return success
 
     @staticmethod
     def clear_module_state_transition(*_args, **_kwargs):
-        return None
+        return True  # Return success
 
     @staticmethod
     def is_module_state_transition_timed_out(*_args, **_kwargs):
@@ -753,7 +753,7 @@ class TestChassisModules(object):
              mock.patch("config.chassis_modules.get_config_module_state", return_value="up"), \
              mock.patch("config.chassis_modules._transition_in_progress", return_value=True), \
              mock.patch("config.chassis_modules._transition_timed_out", return_value=True), \
-             mock.patch("config.chassis_modules._mark_transition_clear") as m_clear, \
+             mock.patch("config.chassis_modules._mark_transition_clear", return_value=True) as m_clear, \
              mock.patch("config.chassis_modules.ModuleBase", new=_MBStub):
             runner = CliRunner()
             db = Db()
@@ -772,7 +772,7 @@ class TestChassisModules(object):
              mock.patch("config.chassis_modules.get_config_module_state", return_value="down"), \
              mock.patch("config.chassis_modules._transition_in_progress", return_value=True), \
              mock.patch("config.chassis_modules._transition_timed_out", return_value=True), \
-             mock.patch("config.chassis_modules._mark_transition_clear") as m_clear, \
+             mock.patch("config.chassis_modules._mark_transition_clear", return_value=True) as m_clear, \
              mock.patch("config.chassis_modules.ModuleBase", new=_MBStub):
             runner = CliRunner()
             db = Db()
@@ -822,6 +822,88 @@ class TestChassisModules(object):
                 assert c2 is c1
                 assert counters["inits"] == 1
                 assert counters["connects"] == 1
+
+    def test_shutdown_fails_when_clear_transition_fails(self):
+        # Test the case where _mark_transition_clear returns False
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value="up"), \
+             mock.patch("config.chassis_modules._transition_in_progress", return_value=True), \
+             mock.patch("config.chassis_modules._transition_timed_out", return_value=True), \
+             mock.patch("config.chassis_modules._mark_transition_clear", return_value=False) as m_clear, \
+             mock.patch("config.chassis_modules.ModuleBase", new=_MBStub):
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["shutdown"],
+                ["DPU0"],
+                obj=db,
+            )
+            assert result.exit_code == 0
+            assert "Failed to clear timed out transition for module DPU0" in result.output
+            m_clear.assert_called_once_with("DPU0")
+            # Verify that the module config was not changed since the clear failed
+            cfg_fvs = db.cfgdb.get_entry("CHASSIS_MODULE", "DPU0")
+            assert cfg_fvs.get("admin_status") != "down"
+
+    def test_startup_fails_when_clear_transition_fails(self):
+        # Test the case where _mark_transition_clear returns False
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value="down"), \
+             mock.patch("config.chassis_modules._transition_in_progress", return_value=True), \
+             mock.patch("config.chassis_modules._transition_timed_out", return_value=True), \
+             mock.patch("config.chassis_modules._mark_transition_clear", return_value=False) as m_clear, \
+             mock.patch("config.chassis_modules.ModuleBase", new=_MBStub):
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["startup"],
+                ["DPU0"],
+                obj=db,
+            )
+            assert result.exit_code == 0
+            assert "Failed to clear timed out transition for module DPU0" in result.output
+            m_clear.assert_called_once_with("DPU0")
+
+    def test_shutdown_fails_when_start_transition_fails(self):
+        # Test the case where _mark_transition_start returns False
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value="up"), \
+             mock.patch("config.chassis_modules._transition_in_progress", return_value=False), \
+             mock.patch("config.chassis_modules._block_if_conflicting_transition", return_value=False), \
+             mock.patch("config.chassis_modules._mark_transition_start", return_value=False) as m_start, \
+             mock.patch("config.chassis_modules.ModuleBase", new=_MBStub):
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["shutdown"],
+                ["DPU0"],
+                obj=db,
+            )
+            assert result.exit_code == 0
+            assert "Failed to start shutdown transition for module DPU0" in result.output
+            m_start.assert_called_once_with("DPU0", "shutdown")
+            # Verify that the module config was not changed since the start failed
+            cfg_fvs = db.cfgdb.get_entry("CHASSIS_MODULE", "DPU0")
+            assert cfg_fvs.get("admin_status") != "down"
+
+    def test_startup_fails_when_start_transition_fails(self):
+        # Test the case where _mark_transition_start returns False
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value="down"), \
+             mock.patch("config.chassis_modules._transition_in_progress", return_value=False), \
+             mock.patch("config.chassis_modules._block_if_conflicting_transition", return_value=False), \
+             mock.patch("config.chassis_modules._mark_transition_start", return_value=False) as m_start, \
+             mock.patch("config.chassis_modules.ModuleBase", new=_MBStub):
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["startup"],
+                ["DPU0"],
+                obj=db,
+            )
+            assert result.exit_code == 0
+            assert "Failed to start startup transition for module DPU0" in result.output
+            m_start.assert_called_once_with("DPU0", "startup")
 
     @classmethod
     def teardown_class(cls):

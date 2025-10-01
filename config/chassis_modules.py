@@ -25,7 +25,7 @@ def _module_base():
     global _MB_SINGLETON
     # Recreate if not initialized OR if the cached instance was created from an
     # older/unpatched class (common in unit tests that patch ModuleBase).
-    if _MB_SINGLETON is None or _MB_SINGLETON.__class__ is not ModuleBase:
+    if _MB_SINGLETON is None or not isinstance(_MB_SINGLETON, ModuleBase):
         _MB_SINGLETON = ModuleBase()
     return _MB_SINGLETON
 
@@ -94,14 +94,14 @@ def _mark_transition_start(module_name: str, transition_type: str):
     """Set transition via centralized API."""
     mb = _module_base()
     conn = _state_db_conn()
-    mb.set_module_state_transition(conn, module_name, transition_type)
+    return mb.set_module_state_transition(conn, module_name, transition_type)
 
 
 def _mark_transition_clear(module_name: str):
     """Clear transition via centralized API."""
     mb = _module_base()
     conn = _state_db_conn()
-    mb.clear_module_state_transition(conn, module_name)
+    return mb.clear_module_state_transition(conn, module_name)
 
 
 def _transition_timed_out(module_name: str) -> bool:
@@ -277,7 +277,9 @@ def shutdown_chassis_module(db, chassis_module_name):
     if is_smartswitch():
         if _transition_in_progress(chassis_module_name):
             if _transition_timed_out(chassis_module_name):
-                _mark_transition_clear(chassis_module_name)
+                if not _mark_transition_clear(chassis_module_name):
+                    click.echo(f"Failed to clear timed out transition for module {chassis_module_name}")
+                    return
                 click.echo(f"Previous transition for module {chassis_module_name} timed out. Proceeding with shutdown.")
             else:
                 click.echo(f"Module {chassis_module_name} state transition is already in progress")
@@ -288,7 +290,9 @@ def shutdown_chassis_module(db, chassis_module_name):
                                                 conflict_type="startup",
                                                 target_oper_status="Online"):
                 return
-            _mark_transition_start(chassis_module_name, "shutdown")
+            if not _mark_transition_start(chassis_module_name, "shutdown"):
+                click.echo(f"Failed to start shutdown transition for module {chassis_module_name}")
+                return
 
         click.echo(f"Shutting down chassis module {chassis_module_name}")
         fvs = {
@@ -329,7 +333,9 @@ def startup_chassis_module(db, chassis_module_name):
     if is_smartswitch():
         if _transition_in_progress(chassis_module_name):
             if _transition_timed_out(chassis_module_name):
-                _mark_transition_clear(chassis_module_name)
+                if not _mark_transition_clear(chassis_module_name):
+                    click.echo(f"Failed to clear timed out transition for module {chassis_module_name}")
+                    return
                 click.echo(f"Previous transition for module {chassis_module_name} timed out. Proceeding with startup.")
             else:
                 click.echo(f"Module {chassis_module_name} state transition is already in progress")
@@ -340,7 +346,9 @@ def startup_chassis_module(db, chassis_module_name):
                                                 conflict_type="shutdown",
                                                 target_oper_status="Offline"):
                 return
-            _mark_transition_start(chassis_module_name, "startup")
+            if not _mark_transition_start(chassis_module_name, "startup"):
+                click.echo(f"Failed to start startup transition for module {chassis_module_name}")
+                return
 
         click.echo(f"Starting up chassis module {chassis_module_name}")
         fvs = {
