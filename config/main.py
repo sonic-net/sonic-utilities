@@ -7580,7 +7580,7 @@ def parse_acl_table_info(table_name, table_type, description, ports, stage):
 
     table_info["ports"] = port_list
 
-    table_info["stage"] = stage
+    table_info["stage"] = stage.upper()
 
     return table_info
 
