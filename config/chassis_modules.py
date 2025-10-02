@@ -27,7 +27,7 @@ def _module_base():
     # older/unpatched class (common in unit tests that patch ModuleBase).
     try:
         should_recreate = (_MB_SINGLETON is None or
-                          not isinstance(_MB_SINGLETON, ModuleBase))
+                           not isinstance(_MB_SINGLETON, ModuleBase))
     except TypeError:
         # Handle case where ModuleBase is mocked and not a proper type
         should_recreate = _MB_SINGLETON is None
