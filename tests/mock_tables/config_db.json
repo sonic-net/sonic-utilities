@@ -857,7 +857,10 @@
     "KDUMP|config": {
         "enabled": "false",
         "memory": "256MB",
-        "num_dumps": "3"
+        "num_dumps": "3",
+        "remote": "false",
+        "ssh_string": "admin@127.0.0.1",
+        "ssh_path": "/home/admin/.ssh"
     },
     "FEATURE|bgp": {
         "state": "enabled",
