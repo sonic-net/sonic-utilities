@@ -731,7 +731,7 @@ class TestChassisModules(object):
             mock_instance = mock_mb.return_value
             mock_instance.clear_module_state_transition.return_value = True
             cm._mark_transition_clear("DPU0")
-            self.assertEqual(1, mock_instance.clear_module_state_transition.call_count)
+            assert mock_instance.clear_module_state_transition.call_count == 1
             mock_instance.clear_module_state_transition.assert_called_with(mock_conn.return_value, "DPU0")
 
     def test__transition_timed_out_delegates_and_returns(self):
@@ -743,8 +743,8 @@ class TestChassisModules(object):
             mock_instance.is_module_state_transition_timed_out.return_value = True
             mock_timeout.total_seconds.return_value = 240
             out = cm._transition_timed_out("DPU0")
-            self.assertTrue(out)
-            self.assertEqual(1, mock_instance.is_module_state_transition_timed_out.call_count)
+            assert out == True
+            assert mock_instance.is_module_state_transition_timed_out.call_count == 1
             mock_instance.is_module_state_transition_timed_out.assert_called_with(mock_conn.return_value, "DPU0", 240)
 
     def test_shutdown_times_out_clears_and_messages(self):
