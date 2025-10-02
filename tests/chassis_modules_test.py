@@ -743,7 +743,7 @@ class TestChassisModules(object):
             mock_instance.is_module_state_transition_timed_out.return_value = True
             mock_timeout.total_seconds.return_value = 240
             out = cm._transition_timed_out("DPU0")
-            assert out == True
+            assert out
             assert mock_instance.is_module_state_transition_timed_out.call_count == 1
             mock_instance.is_module_state_transition_timed_out.assert_called_with(mock_conn.return_value, "DPU0", 240)
 
