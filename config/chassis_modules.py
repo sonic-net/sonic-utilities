@@ -25,7 +25,14 @@ def _module_base():
     global _MB_SINGLETON
     # Recreate if not initialized OR if the cached instance was created from an
     # older/unpatched class (common in unit tests that patch ModuleBase).
-    if _MB_SINGLETON is None or not isinstance(_MB_SINGLETON, ModuleBase):
+    try:
+        should_recreate = (_MB_SINGLETON is None or
+                          not isinstance(_MB_SINGLETON, ModuleBase))
+    except TypeError:
+        # Handle case where ModuleBase is mocked and not a proper type
+        should_recreate = _MB_SINGLETON is None
+
+    if should_recreate:
         _MB_SINGLETON = ModuleBase()
     return _MB_SINGLETON
 
