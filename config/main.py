@@ -9277,7 +9277,7 @@ def timezone(timezone):
         click.echo(f'Timezone {timezone} does not conform format')
         sys.exit(1)
 
-    config_db = ConfigDBConnector()
+    config_db = ValidatedConfigDBConnector(ConfigDBConnector())
     config_db.connect()
     config_db.mod_entry(swsscommon.CFG_DEVICE_METADATA_TABLE_NAME, 'localhost',
                         {'timezone': timezone})
