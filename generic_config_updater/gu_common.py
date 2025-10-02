@@ -5,7 +5,6 @@ from jsonpointer import JsonPointer
 import sonic_yang
 import sonic_yang_ext
 import subprocess
-import yang as ly
 import copy
 import re
 import os
@@ -145,9 +144,7 @@ class ConfigWrapper:
                                         self.validate_lanes]
 
         try:
-            tmp_config_db_as_json = copy.deepcopy(config_db_as_json)
-
-            sy.loadData(tmp_config_db_as_json)
+            sy.loadData(config_db_as_json)
 
             sy.validate_data_tree()
 
@@ -321,10 +318,10 @@ class ConfigWrapper:
     def crop_tables_without_yang(self, config_db_as_json):
         sy = self.create_sonic_yang_with_loaded_models()
 
-        sy.jIn = copy.deepcopy(config_db_as_json)
-
+        # Current sonic-yang-mgmt guarantees _cropConfigDB() will deep copy if
+        # it needs to modify.
+        sy.jIn = config_db_as_json
         sy.tablesWithOutYang = dict()
-
         sy._cropConfigDB()
 
         return sy.jIn
@@ -352,7 +349,7 @@ class ConfigWrapper:
             loaded_models_sy.loadYangModel() # This call takes a long time (100s of ms) because it reads files from disk
             self.sonic_yang_with_loaded_models = loaded_models_sy
 
-        return copy.copy(self.sonic_yang_with_loaded_models)
+        return self.sonic_yang_with_loaded_models
 
 class DryRunConfigWrapper(ConfigWrapper):
     # This class will simulate all read/write operations to ConfigDB on a virtual storage unit.
@@ -610,17 +607,11 @@ class PathAddressing:
     def _find_leafref_paths(self, path, config):
         sy = self._create_sonic_yang_with_loaded_models()
 
-        tmp_config = copy.deepcopy(config)
-
-        sy.loadData(tmp_config)
+        sy.loadData(config)
 
         xpath = self.convert_path_to_xpath(path, config, sy)
 
-        leaf_xpaths = self._get_inner_leaf_xpaths(xpath, sy)
-
-        ref_xpaths = []
-        for xpath in leaf_xpaths:
-            ref_xpaths.extend(sy.find_data_dependencies(xpath))
+        ref_xpaths = sy.find_data_dependencies(xpath)
 
         ref_paths = []
         ref_paths_set = set()
@@ -632,22 +623,6 @@ class PathAddressing:
 
         ref_paths.sort()
         return ref_paths
-
-    def _get_inner_leaf_xpaths(self, xpath, sy):
-        if xpath == "/": # Point to Root element which contains all xpaths
-            nodes = sy.root.tree_for()
-        else: # Otherwise get all nodes that match xpath
-            nodes = sy.root.find_path(xpath).data()
-
-        for node in nodes:
-            for inner_node in node.tree_dfs():
-                # TODO: leaflist also can be used as the 'path' argument in 'leafref' so add support to leaflist
-                if self._is_leaf_node(inner_node):
-                    yield inner_node.path()
-
-    def _is_leaf_node(self, node):
-        schema = node.schema()
-        return ly.LYS_LEAF == schema.nodetype()
 
     def convert_path_to_xpath(self, path, config, sy):
         """
