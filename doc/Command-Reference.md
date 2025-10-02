@@ -5656,6 +5656,34 @@ The "fec-stats" subcommand is used to disply the interface fec related statistic
   Ethernet16        U           0             0                 0        1.77e-20        0.00e+00           1.37e-13
   ```
 
+For debugging link related issues where you need to clear the FEC histogram and monitor the link again, use the following command
+
+- Example (for all ports):
+  ```
+  root@sonic:~# portstat -fh 
+  Last cached time was 2025-10-02T16:43:57.934081
+        IFACE           BIN0        BIN1       BIN2    BIN3    BIN4    BIN5    BIN6    BIN7    BIN8    BIN9    BIN10    BIN11    BIN12    BIN13    BIN14    BIN15
+  -----------  -------------  ----------  ---------  ------  ------  ------  ------  ------  ------  ------  -------  -------  -------  -------  -------  -------
+    Ethernet0  4,374,661,575         340          1       0       0       0       0       0       0       0        0        0        0        0        0        0
+    Ethernet8  4,374,590,263       8,069          9       0       0       0       0       0       0       0        0        0        0        0        0        0
+   Ethernet16  4,374,660,911       3,187          4       0       0       0       0       0       0       0        0        0        0        0        0        0
+   Ethernet24  4,374,594,305      57,484        502       0       0       0       0       0       0       0        0        0        0        0        0        0
+   Ethernet32  4,374,649,615         116          0       0       0       0       0       0       0       0        0        0        0        0        0        0
+   Ethernet40  4,374,650,913       1,212          1       0       0       0       0       0       0       0        0        0        0        0        0        0
+  ```
+
+ - Example (for a particular port):
+  ```
+  root@sonic:~# portstat -fh -i Ethernet504
+  Last cached time was 2025-10-02T16:43:57.934081
+        IFACE         BIN0    BIN1    BIN2    BIN3    BIN4    BIN5    BIN6    BIN7    BIN8    BIN9    BIN10    BIN11    BIN12    BIN13    BIN14    BIN15
+  -----------  -----------  ------  ------  ------  ------  ------  ------  ------  ------  ------  -------  -------  -------  -------  -------  -------
+  Ethernet504  624,891,017  13,331     172       0       0       0       0       0       0       0        0        0        0        0        0        0
+  root@str-7060x6-c09-u25:~#
+  ``` 
+
+  To clear the FEC histogram use `portstat -c`. NOTE: This will clear all counters. 
+
 The "trim" subcommand is used to display the interface packet trimming related statistic.
 
 - Example:
