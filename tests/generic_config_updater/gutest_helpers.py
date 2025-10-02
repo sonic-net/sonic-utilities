@@ -12,6 +12,9 @@ class MockSideEffectDict:
 
     def side_effect_func(self, *args, **kwargs):
         l = [str(arg) for arg in args]
+        # If 'unsorted' is in kwargs, append its value as a string to the key tuple
+        if 'unsorted' in kwargs:
+            l.append(str(kwargs['unsorted']))
         key = tuple(l)
         value = self.map.get(key)
         if value is None:

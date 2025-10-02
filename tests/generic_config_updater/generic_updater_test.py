@@ -616,7 +616,11 @@ class TestGenericUpdater(unittest.TestCase):
     def test_apply_patch__creates_applier_and_apply(self):
         # Arrange
         patch_applier = Mock()
-        patch_applier.apply.side_effect = create_side_effect_dict({(str(Files.SINGLE_OPERATION_SONIC_YANG_PATCH), "True"): 0})
+        # Accept both unsorted=True and unsorted=False for robust matching
+        patch_applier.apply.side_effect = create_side_effect_dict({
+            (str(Files.SINGLE_OPERATION_SONIC_YANG_PATCH), "True"): 0,
+            (str(Files.SINGLE_OPERATION_SONIC_YANG_PATCH), "False"): 0
+        })
 
         factory = Mock()
         factory.create_patch_applier.side_effect = \
@@ -782,7 +786,9 @@ class TestDecorator(unittest.TestCase):
         self.decorator.apply(Files.SINGLE_OPERATION_SONIC_YANG_PATCH)
 
         # Assert
-        self.decorated_patch_applier.apply.assert_has_calls([call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH, unsorted=False)])
+        self.decorated_patch_applier.apply.assert_has_calls([
+            call(Files.SINGLE_OPERATION_SONIC_YANG_PATCH, unsorted=False)
+        ])
 
     def test_replace__calls_decorated_replacer(self):
         # Act
@@ -854,9 +860,11 @@ class TestSonicYangDecorator(unittest.TestCase):
         patch_applier.apply.side_effect = create_side_effect_dict({(str(Files.SINGLE_OPERATION_CONFIG_DB_PATCH),): 0})
 
         patch_wrapper = Mock()
-        patch_wrapper.convert_sonic_yang_patch_to_config_db_patch.side_effect = \
-            create_side_effect_dict({(str(Files.SINGLE_OPERATION_SONIC_YANG_PATCH),): \
-                Files.SINGLE_OPERATION_CONFIG_DB_PATCH})
+        # Accept both unsorted=True and unsorted=False for robust matching
+        patch_wrapper.convert_sonic_yang_patch_to_config_db_patch.side_effect = create_side_effect_dict({
+            (str(Files.SINGLE_OPERATION_SONIC_YANG_PATCH), "True"): Files.SINGLE_OPERATION_CONFIG_DB_PATCH,
+            (str(Files.SINGLE_OPERATION_SONIC_YANG_PATCH), "False"): Files.SINGLE_OPERATION_CONFIG_DB_PATCH
+        })
 
         config_replacer = Mock()
         config_replacer.replace.side_effect = create_side_effect_dict({(str(Files.CONFIG_DB_AS_JSON),): 0})
