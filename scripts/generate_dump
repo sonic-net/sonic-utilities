@@ -2085,6 +2085,7 @@ save_counter_snapshot() {
 
     save_cmd "echo $counter_t" "date.counter_$idx"
     save_cmd "show interface counters" "interface.counters_$idx"
+    save_cmd "show interface counters fec-stats" "interface.counters.fec-stats_$idx"
     if ! $IS_SUPERVISOR; then
        save_cmd "show queue counters" "queue.counters_$idx"
     fi
