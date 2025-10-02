@@ -727,7 +727,8 @@ class TestChassisModules(object):
     def test__mark_transition_clear_calls_ModuleBase(self):
         import config.chassis_modules as cm
         with mock.patch("config.chassis_modules.ModuleBase") as mock_mb, \
-             mock.patch("config.chassis_modules._state_db_conn") as mock_conn:
+             mock.patch("config.chassis_modules._state_db_conn") as mock_conn, \
+             mock.patch("config.chassis_modules._MB_SINGLETON", None, create=True):
             mock_instance = mock_mb.return_value
             mock_instance.clear_module_state_transition.return_value = True
             cm._mark_transition_clear("DPU0")
@@ -738,7 +739,8 @@ class TestChassisModules(object):
         import config.chassis_modules as cm
         with mock.patch("config.chassis_modules.ModuleBase") as mock_mb, \
              mock.patch("config.chassis_modules._state_db_conn") as mock_conn, \
-             mock.patch("config.chassis_modules.TRANSITION_TIMEOUT") as mock_timeout:
+             mock.patch("config.chassis_modules.TRANSITION_TIMEOUT") as mock_timeout, \
+             mock.patch("config.chassis_modules._MB_SINGLETON", None, create=True):
             mock_instance = mock_mb.return_value
             mock_instance.is_module_state_transition_timed_out.return_value = True
             mock_timeout.total_seconds.return_value = 240
