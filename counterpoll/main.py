@@ -1,12 +1,10 @@
 import click
-import utilities_common.cli as clicommon
-
+import os
+from sonic_py_common import device_info, multi_asic
 from tabulate import tabulate
-from sonic_py_common import device_info
 from flow_counter_util.route import exit_if_route_flow_counter_not_support
-from swsscommon.swsscommon import ConfigDBConnector
+from swsscommon.swsscommon import ConfigDBConnector, SonicDBConfig
 from swsscommon.swsscommon import CFG_FLEX_COUNTER_TABLE_NAME as CFG_FLEX_COUNTER_TABLE
-
 
 BUFFER_POOL_WATERMARK = "BUFFER_POOL_WATERMARK"
 PORT_BUFFER_DROP = "PORT_BUFFER_DROP"
@@ -18,6 +16,7 @@ ENABLE = "enable"
 DEFLT_60_SEC= "default (60000)"
 DEFLT_10_SEC= "default (10000)"
 DEFLT_1_SEC = "default (1000)"
+DEFAULT_NAMESPACE = ''
 
 
 def is_dpu(db):
@@ -29,203 +28,246 @@ def is_dpu(db):
         return False
 
 
+def connect_to_db(namespace):
+    if namespace is None:
+        namespace = DEFAULT_NAMESPACE
+    else:
+        if not SonicDBConfig.isGlobalInit():
+            SonicDBConfig.initializeGlobalConfig()
+    configdb = ConfigDBConnector(use_unix_socket_path=True, namespace=str(namespace))
+    configdb.connect()
+    return configdb
+
+
 @click.group()
 def cli():
     """ SONiC Static Counter Poll configurations """
 
+
 # Queue counter commands
 @cli.group()
-def queue():
+@click.option('-n', '--namespace', help='Namespace name',
+              required=True if multi_asic.is_multi_asic() else False,
+              type=click.Choice(multi_asic.get_namespace_list()))
+@click.pass_context
+def queue(ctx, namespace):
     """ Queue counter commands """
+    ctx.obj = connect_to_db(namespace)
 
-@queue.command()
+
+@queue.command(name='interval')
 @click.argument('poll_interval', type=click.IntRange(100, 30000))
-def interval(poll_interval):
+@click.pass_context
+def queue_interval(ctx, poll_interval):
     """ Set queue counter query interval """
-    configdb = ConfigDBConnector()
-    configdb.connect()
     queue_info = {}
     if poll_interval is not None:
         queue_info['POLL_INTERVAL'] = poll_interval
-    configdb.mod_entry("FLEX_COUNTER_TABLE", "QUEUE", queue_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "QUEUE", queue_info)
 
-@queue.command()
-def enable():
+
+@queue.command(name='enable')
+@click.pass_context
+def queue_enable(ctx):
     """ Enable queue counter query """
-    configdb = ConfigDBConnector()
-    configdb.connect()
     queue_info = {}
     queue_info['FLEX_COUNTER_STATUS'] = 'enable'
-    configdb.mod_entry("FLEX_COUNTER_TABLE", "QUEUE", queue_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "QUEUE", queue_info)
 
-@queue.command()
-def disable():
+
+@queue.command(name='disable')
+@click.pass_context
+def queue_disable(ctx):
     """ Disable queue counter query """
-    configdb = ConfigDBConnector()
-    configdb.connect()
     queue_info = {}
     queue_info['FLEX_COUNTER_STATUS'] = 'disable'
-    configdb.mod_entry("FLEX_COUNTER_TABLE", "QUEUE", queue_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "QUEUE", queue_info)
+
 
 # Port counter commands
 @cli.group()
-def port():
+@click.option('-n', '--namespace', help='Namespace name',
+              required=True if multi_asic.is_multi_asic() else False,
+              type=click.Choice(multi_asic.get_namespace_list()))
+@click.pass_context
+def port(ctx, namespace):
     """ Port counter commands """
+    ctx.obj = connect_to_db(namespace)
 
-@port.command()
+
+@port.command(name='interval')
 @click.argument('poll_interval', type=click.IntRange(100, 30000))
-def interval(poll_interval):
+@click.pass_context
+def port_interval(ctx, poll_interval):
     """ Set port counter query interval """
-    configdb = ConfigDBConnector()
-    configdb.connect()
     port_info = {}
     if poll_interval is not None:
         port_info['POLL_INTERVAL'] = poll_interval
-    configdb.mod_entry("FLEX_COUNTER_TABLE", "PORT", port_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "PORT", port_info)
 
-@port.command()
-def enable():
+
+@port.command(name='enable')
+@click.pass_context
+def port_enable(ctx):
     """ Enable port counter query """
-    configdb = ConfigDBConnector()
-    configdb.connect()
     port_info = {}
     port_info['FLEX_COUNTER_STATUS'] = 'enable'
-    configdb.mod_entry("FLEX_COUNTER_TABLE", "PORT", port_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "PORT", port_info)
 
-@port.command()
-def disable():
+
+@port.command(name='disable')
+@click.pass_context
+def port_disable(ctx):
     """ Disable port counter query """
-    configdb = ConfigDBConnector()
-    configdb.connect()
     port_info = {}
     port_info['FLEX_COUNTER_STATUS'] = 'disable'
-    configdb.mod_entry("FLEX_COUNTER_TABLE", "PORT", port_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "PORT", port_info)
+
 
 # Port buffer drop counter commands
 @cli.group()
-def port_buffer_drop():
+@click.option('-n', '--namespace', help='Namespace name',
+              required=True if multi_asic.is_multi_asic() else False,
+              type=click.Choice(multi_asic.get_namespace_list()))
+@click.pass_context
+def port_buffer_drop(ctx, namespace):
     """ Port buffer drop  counter commands """
+    ctx.obj = connect_to_db(namespace)
 
-@port_buffer_drop.command()
+
+@port_buffer_drop.command(name='interval')
 @click.argument('poll_interval', type=click.IntRange(30000, 300000))
-def interval(poll_interval):
-    """
-    Set port_buffer_drop counter query interval
+@click.pass_context
+def port_buffer_drop_interval(ctx, poll_interval):
+    """ Set port_buffer_drop counter query interval
     This counter group causes high CPU usage when polled,
     hence the allowed interval is between 30s and 300s.
     This is a short term solution and
-    should be changed once the performance is enhanced
-    """
-    configdb = ConfigDBConnector()
-    configdb.connect()
+    should be changed once the performance is enhanced """
     port_info = {}
     if poll_interval:
         port_info['POLL_INTERVAL'] = poll_interval
-    configdb.mod_entry("FLEX_COUNTER_TABLE", PORT_BUFFER_DROP, port_info)
+    if os.geteuid() != 0 and os.environ.get("UTILITIES_UNIT_TESTING", "0") == "1":
+        ctx.obj = connect_to_db(DEFAULT_NAMESPACE)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", PORT_BUFFER_DROP, port_info)
 
-@port_buffer_drop.command()
-def enable():
+
+@port_buffer_drop.command(name='enable')
+@click.pass_context
+def port_buffer_drop_enable(ctx):
     """ Enable port counter query """
-    configdb = ConfigDBConnector()
-    configdb.connect()
     port_info = {}
     port_info['FLEX_COUNTER_STATUS'] = ENABLE
-    configdb.mod_entry("FLEX_COUNTER_TABLE", PORT_BUFFER_DROP, port_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", PORT_BUFFER_DROP, port_info)
 
-@port_buffer_drop.command()
-def disable():
+
+@port_buffer_drop.command(name='disable')
+@click.pass_context
+def port_buffer_drop_disable(ctx):
     """ Disable port counter query """
-    configdb = ConfigDBConnector()
-    configdb.connect()
     port_info = {}
     port_info['FLEX_COUNTER_STATUS'] = DISABLE
-    configdb.mod_entry("FLEX_COUNTER_TABLE", PORT_BUFFER_DROP, port_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", PORT_BUFFER_DROP, port_info)
 
 
 # Ingress PG drop packet stat
 @cli.group()
+@click.option('-n', '--namespace', help='Namespace name',
+              required=True if multi_asic.is_multi_asic() else False,
+              type=click.Choice(multi_asic.get_namespace_list()))
 @click.pass_context
-def pg_drop(ctx):
+def pg_drop(ctx, namespace):
     """  Ingress PG drop counter commands """
-    ctx.obj = ConfigDBConnector()
-    ctx.obj.connect()
+    ctx.obj = connect_to_db(namespace)
 
-@pg_drop.command()
+
+@pg_drop.command(name='interval')
 @click.argument('poll_interval', type=click.IntRange(1000, 30000))
 @click.pass_context
-def interval(ctx, poll_interval):
+def pg_drop_interval(ctx, poll_interval):
     """
     Set pg_drop packets counter query interval
     interval is between 1s and 30s.
     """
-
     port_info = {}
     port_info['POLL_INTERVAL'] = poll_interval
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", PG_DROP, port_info)
 
-@pg_drop.command()
-@click.pass_context
-def enable(ctx):
-    """ Enable pg_drop counter query """
 
+@pg_drop.command(name='enable')
+@click.pass_context
+def pg_drop_enable(ctx):
+    """ Enable pg_drop counter query """
     port_info = {}
     port_info['FLEX_COUNTER_STATUS'] = ENABLE
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", PG_DROP, port_info)
 
-@pg_drop.command()
-@click.pass_context
-def disable(ctx):
-    """ Disable pg_drop counter query """
 
+@pg_drop.command(name='disable')
+@click.pass_context
+def pg_drop_disable(ctx):
+    """ Disable pg_drop counter query """
     port_info = {}
     port_info['FLEX_COUNTER_STATUS'] = DISABLE
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", PG_DROP, port_info)
 
+
 # RIF counter commands
 @cli.group()
-def rif():
+@click.option('-n', '--namespace', help='Namespace name',
+              required=True if multi_asic.is_multi_asic() else False,
+              type=click.Choice(multi_asic.get_namespace_list()))
+@click.pass_context
+def rif(ctx, namespace):
     """ RIF counter commands """
+    ctx.obj = connect_to_db(namespace)
 
-@rif.command()
+
+@rif.command(name='interval')
 @click.argument('poll_interval')
-def interval(poll_interval):
+@click.pass_context
+def rif_interval(ctx, poll_interval):
     """ Set rif counter query interval """
-    configdb = ConfigDBConnector()
-    configdb.connect()
     rif_info = {}
     if poll_interval is not None:
         rif_info['POLL_INTERVAL'] = poll_interval
-    configdb.mod_entry("FLEX_COUNTER_TABLE", "RIF", rif_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "RIF", rif_info)
 
-@rif.command()
-def enable():
+
+@rif.command(name='enable')
+@click.pass_context
+def rif_enable(ctx):
     """ Enable rif counter query """
-    configdb = ConfigDBConnector()
-    configdb.connect()
     rif_info = {}
     rif_info['FLEX_COUNTER_STATUS'] = 'enable'
-    configdb.mod_entry("FLEX_COUNTER_TABLE", "RIF", rif_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "RIF", rif_info)
 
-@rif.command()
-def disable():
+
+@rif.command(name='disable')
+@click.pass_context
+def rif_disable(ctx):
     """ Disable rif counter query """
-    configdb = ConfigDBConnector()
-    configdb.connect()
     rif_info = {}
     rif_info['FLEX_COUNTER_STATUS'] = 'disable'
-    configdb.mod_entry("FLEX_COUNTER_TABLE", "RIF", rif_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "RIF", rif_info)
+
 
 # Watermark counter commands
 @cli.group()
-def watermark():
+@click.option('-n', '--namespace', help='Namespace name',
+              required=True if multi_asic.is_multi_asic() else False,
+              type=click.Choice(multi_asic.get_namespace_list()))
+@click.pass_context
+def watermark(ctx, namespace):
     """ Watermark counter commands """
+    ctx.obj = connect_to_db(namespace)
 
-@watermark.command()
+
+@watermark.command(name='interval')
 @click.argument('poll_interval', type=click.IntRange(1000, 60000))
-def interval(poll_interval):
+@click.pass_context
+def watermark_interval(ctx, poll_interval):
     """ Set watermark counter query interval for both queue and PG watermarks """
-    configdb = ConfigDBConnector()
-    configdb.connect()
     queue_wm_info = {}
     pg_wm_info = {}
     buffer_pool_wm_info = {}
@@ -233,178 +275,202 @@ def interval(poll_interval):
         queue_wm_info['POLL_INTERVAL'] = poll_interval
         pg_wm_info['POLL_INTERVAL'] = poll_interval
         buffer_pool_wm_info['POLL_INTERVAL'] = poll_interval
-    configdb.mod_entry("FLEX_COUNTER_TABLE", "QUEUE_WATERMARK", queue_wm_info)
-    configdb.mod_entry("FLEX_COUNTER_TABLE", "PG_WATERMARK", pg_wm_info)
-    configdb.mod_entry("FLEX_COUNTER_TABLE", BUFFER_POOL_WATERMARK, buffer_pool_wm_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "QUEUE_WATERMARK", queue_wm_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "PG_WATERMARK", pg_wm_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", BUFFER_POOL_WATERMARK, buffer_pool_wm_info)
 
-@watermark.command()
-def enable():
+
+@watermark.command(name='enable')
+@click.pass_context
+def watermark_enable(ctx):
     """ Enable watermark counter query """
-    configdb = ConfigDBConnector()
-    configdb.connect()
     fc_info = {}
     fc_info['FLEX_COUNTER_STATUS'] = 'enable'
-    configdb.mod_entry("FLEX_COUNTER_TABLE", "QUEUE_WATERMARK", fc_info)
-    configdb.mod_entry("FLEX_COUNTER_TABLE", "PG_WATERMARK", fc_info)
-    configdb.mod_entry("FLEX_COUNTER_TABLE", BUFFER_POOL_WATERMARK, fc_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "QUEUE_WATERMARK", fc_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "PG_WATERMARK", fc_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", BUFFER_POOL_WATERMARK, fc_info)
 
-@watermark.command()
-def disable():
+
+@watermark.command(name='disable')
+@click.pass_context
+def watermark_disable(ctx):
     """ Disable watermark counter query """
-    configdb = ConfigDBConnector()
-    configdb.connect()
     fc_info = {}
     fc_info['FLEX_COUNTER_STATUS'] = 'disable'
-    configdb.mod_entry("FLEX_COUNTER_TABLE", "QUEUE_WATERMARK", fc_info)
-    configdb.mod_entry("FLEX_COUNTER_TABLE", "PG_WATERMARK", fc_info)
-    configdb.mod_entry("FLEX_COUNTER_TABLE", BUFFER_POOL_WATERMARK, fc_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "QUEUE_WATERMARK", fc_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "PG_WATERMARK", fc_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", BUFFER_POOL_WATERMARK, fc_info)
+
 
 # ACL counter commands
 @cli.group()
+@click.option('-n', '--namespace', help='Namespace name',
+              required=True if multi_asic.is_multi_asic() else False,
+              type=click.Choice(multi_asic.get_namespace_list()))
 @click.pass_context
-def acl(ctx):
+def acl(ctx, namespace):
     """  ACL counter commands """
-    ctx.obj = ConfigDBConnector()
-    ctx.obj.connect()
+    ctx.obj = connect_to_db(namespace)
 
-@acl.command()
+
+@acl.command(name='interval')
 @click.argument('poll_interval', type=click.IntRange(1000, 30000))
 @click.pass_context
-def interval(ctx, poll_interval):
+def acl_interval(ctx, poll_interval):
     """
     Set ACL counters query interval
     interval is between 1s and 30s.
     """
-
     fc_group_cfg = {}
     fc_group_cfg['POLL_INTERVAL'] = poll_interval
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", ACL, fc_group_cfg)
 
-@acl.command()
-@click.pass_context
-def enable(ctx):
-    """ Enable ACL counter query """
 
+@acl.command(name='enable')
+@click.pass_context
+def acl_enable(ctx):
+    """ Enable ACL counter query """
     fc_group_cfg = {}
     fc_group_cfg['FLEX_COUNTER_STATUS'] = ENABLE
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", ACL, fc_group_cfg)
 
-@acl.command()
-@click.pass_context
-def disable(ctx):
-    """ Disable ACL counter query """
 
+@acl.command(name='disable')
+@click.pass_context
+def acl_disable(ctx):
+    """ Disable ACL counter query """
     fc_group_cfg = {}
     fc_group_cfg['FLEX_COUNTER_STATUS'] = DISABLE
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", ACL, fc_group_cfg)
 
+
 # Tunnel counter commands
 @cli.group()
-def tunnel():
+@click.option('-n', '--namespace', help='Namespace name',
+              required=True if multi_asic.is_multi_asic() else False,
+              type=click.Choice(multi_asic.get_namespace_list()))
+@click.pass_context
+def tunnel(ctx, namespace):
     """ Tunnel counter commands """
+    ctx.obj = connect_to_db(namespace)
 
-@tunnel.command()
+
+@tunnel.command(name='interval')
 @click.argument('poll_interval', type=click.IntRange(100, 30000))
-def interval(poll_interval):
+@click.pass_context
+def tunnel_interval(ctx, poll_interval):
     """ Set tunnel counter query interval """
-    configdb = ConfigDBConnector()
-    configdb.connect()
     tunnel_info = {}
     tunnel_info['POLL_INTERVAL'] = poll_interval
-    configdb.mod_entry("FLEX_COUNTER_TABLE", "TUNNEL", tunnel_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "TUNNEL", tunnel_info)
 
-@tunnel.command()
-def enable():
+
+@tunnel.command(name='enable')
+@click.pass_context
+def tunnel_enable(ctx):
     """ Enable tunnel counter query """
-    configdb = ConfigDBConnector()
-    configdb.connect()
     tunnel_info = {}
     tunnel_info['FLEX_COUNTER_STATUS'] = ENABLE
-    configdb.mod_entry("FLEX_COUNTER_TABLE", "TUNNEL", tunnel_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "TUNNEL", tunnel_info)
 
-@tunnel.command()
-def disable():
+
+@tunnel.command(name='disable')
+@click.pass_context
+def tunnel_disable(ctx):
     """ Disable tunnel counter query """
-    configdb = ConfigDBConnector()
-    configdb.connect()
     tunnel_info = {}
     tunnel_info['FLEX_COUNTER_STATUS'] = DISABLE
-    configdb.mod_entry("FLEX_COUNTER_TABLE", "TUNNEL", tunnel_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "TUNNEL", tunnel_info)
+
 
 # Trap flow counter commands
 @cli.group()
+@click.option('-n', '--namespace', help='Namespace name',
+              required=True if multi_asic.is_multi_asic() else False,
+              type=click.Choice(multi_asic.get_namespace_list()))
 @click.pass_context
-def flowcnt_trap(ctx):
+def flowcnt_trap(ctx, namespace):
     """ Trap flow counter commands """
-    ctx.obj = ConfigDBConnector()
-    ctx.obj.connect()
+    ctx.obj = connect_to_db(namespace)
 
-@flowcnt_trap.command()
+
+@flowcnt_trap.command(name='interval')
 @click.argument('poll_interval', type=click.IntRange(1000, 30000))
 @click.pass_context
-def interval(ctx, poll_interval):
+def flowcnt_trap_interval(ctx, poll_interval):
     """ Set trap flow counter query interval """
     fc_info = {}
     fc_info['POLL_INTERVAL'] = poll_interval
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "FLOW_CNT_TRAP", fc_info)
 
-@flowcnt_trap.command()
+
+@flowcnt_trap.command(name='enable')
 @click.pass_context
-def enable(ctx):
+def flowcnt_trap_enable(ctx):
     """ Enable trap flow counter query """
     fc_info = {}
     fc_info['FLEX_COUNTER_STATUS'] = 'enable'
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "FLOW_CNT_TRAP", fc_info)
 
-@flowcnt_trap.command()
+
+@flowcnt_trap.command(name='disable')
 @click.pass_context
-def disable(ctx):
+def flowcnt_trap_disable(ctx):
     """ Disable trap flow counter query """
     fc_info = {}
     fc_info['FLEX_COUNTER_STATUS'] = 'disable'
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "FLOW_CNT_TRAP", fc_info)
 
+
 # Route flow counter commands
 @cli.group()
+@click.option('-n', '--namespace', help='Namespace name',
+              required=True if multi_asic.is_multi_asic() else False,
+              type=click.Choice(multi_asic.get_namespace_list()))
 @click.pass_context
-def flowcnt_route(ctx):
+def flowcnt_route(ctx, namespace):
     """ Route flow counter commands """
+    ctx.obj = connect_to_db(namespace)
     exit_if_route_flow_counter_not_support()
-    ctx.obj = ConfigDBConnector()
-    ctx.obj.connect()
 
-@flowcnt_route.command()
+
+@flowcnt_route.command(name='interval')
 @click.argument('poll_interval', type=click.IntRange(1000, 30000))
 @click.pass_context
-def interval(ctx, poll_interval):
+def flowcnt_route_interval(ctx, poll_interval):
     """ Set route flow counter query interval """
     fc_info = {}
     fc_info['POLL_INTERVAL'] = poll_interval
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "FLOW_CNT_ROUTE", fc_info)
 
-@flowcnt_route.command()
+
+@flowcnt_route.command(name='enable')
 @click.pass_context
-def enable(ctx):
+def flowcnt_route_enable(ctx):
     """ Enable route flow counter query """
     fc_info = {}
     fc_info['FLEX_COUNTER_STATUS'] = 'enable'
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "FLOW_CNT_ROUTE", fc_info)
 
-@flowcnt_route.command()
+
+@flowcnt_route.command(name='disable')
 @click.pass_context
-def disable(ctx):
+def flowcnt_route_disable(ctx):
     """ Disable route flow counter query """
     fc_info = {}
     fc_info['FLEX_COUNTER_STATUS'] = 'disable'
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "FLOW_CNT_ROUTE", fc_info)
 
+
 # ENI counter commands
 @click.group()
+@click.option('-n', '--namespace', help='Namespace name',
+              required=True if multi_asic.is_multi_asic() else False,
+              type=click.Choice(multi_asic.get_namespace_list()))
 @click.pass_context
-def eni(ctx):
+def eni(ctx, namespace):
     """ ENI counter commands """
-    ctx.obj = ConfigDBConnector()
-    ctx.obj.connect()
+    ctx.obj = connect_to_db(namespace)
 
 
 @eni.command(name='interval')
@@ -437,11 +503,13 @@ def eni_disable(ctx):
 
 # WRED queue counter commands
 @cli.group()
+@click.option('-n', '--namespace', help='Namespace name',
+              required=True if multi_asic.is_multi_asic() else False,
+              type=click.Choice(multi_asic.get_namespace_list()))
 @click.pass_context
-def wredqueue(ctx):
+def wredqueue(ctx, namespace):
     """ WRED queue counter commands """
-    ctx.obj = ConfigDBConnector()
-    ctx.obj.connect()
+    ctx.obj = connect_to_db(namespace)
 
 
 @wredqueue.command(name='interval')
@@ -474,11 +542,13 @@ def wredqueue_disable(ctx):
 
 # WRED port counter commands
 @cli.group()
+@click.option('-n', '--namespace', help='Namespace name',
+              required=True if multi_asic.is_multi_asic() else False,
+              type=click.Choice(multi_asic.get_namespace_list()))
 @click.pass_context
-def wredport(ctx):
+def wredport(ctx, namespace):
     """ WRED port counter commands """
-    ctx.obj = ConfigDBConnector()
-    ctx.obj.connect()
+    ctx.obj = connect_to_db(namespace)
 
 
 @wredport.command(name='interval')
@@ -511,33 +581,35 @@ def wredport_disable(ctx):
 
 # SRv6 counter commands
 @cli.group()
+@click.option('-n', '--namespace', help='Namespace name',
+              required=True if multi_asic.is_multi_asic() else False,
+              type=click.Choice(multi_asic.get_namespace_list()))
 @click.pass_context
-def srv6(ctx):
+def srv6(ctx, namespace):
     """ SRv6 counter commands """
-    ctx.obj = ConfigDBConnector()
-    ctx.obj.connect()
+    ctx.obj = connect_to_db(namespace)
 
 
-@srv6.command()
-@click.pass_context
+@srv6.command(name='interval')
 @click.argument('poll_interval', type=click.IntRange(1000, 30000))
-def interval(ctx, poll_interval):  # noqa: F811
+@click.pass_context
+def srv6_interval(ctx, poll_interval):
     """ Set SRv6 counter query interval """
     srv6_info = {'POLL_INTERVAL': poll_interval}
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "SRV6", srv6_info)
 
 
-@srv6.command()
+@srv6.command(name='enable')
 @click.pass_context
-def enable(ctx):  # noqa: F811
+def srv6_enable(ctx):
     """ Enable SRv6 counter query """
     srv6_info = {'FLEX_COUNTER_STATUS': ENABLE}
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "SRV6", srv6_info)
 
 
-@srv6.command()
+@srv6.command(name='disable')
 @click.pass_context
-def disable(ctx):  # noqa: F811
+def srv6_disable(ctx):
     """ Disable SRv6 counter query """
     srv6_info = {'FLEX_COUNTER_STATUS': DISABLE}
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", "SRV6", srv6_info)
@@ -545,15 +617,20 @@ def disable(ctx):  # noqa: F811
 
 # Switch counter commands
 @cli.group()
-def switch():
+@click.option('-n', '--namespace', help='Namespace name',
+              required=True if multi_asic.is_multi_asic() else False,
+              type=click.Choice(multi_asic.get_namespace_list()))
+@click.pass_context
+def switch(ctx, namespace):
     """ Switch counter commands """
+    ctx.obj = connect_to_db(namespace)
     pass
 
 
-@switch.command()
-@clicommon.pass_db
+@switch.command(name='interval')
 @click.argument("poll_interval", type=click.IntRange(1000, 60000))
-def interval(db, poll_interval):  # noqa: F811
+@click.pass_context
+def switch_interval(ctx, poll_interval):
     """ Set switch counter query interval """
     table = CFG_FLEX_COUNTER_TABLE
     key = "SWITCH"
@@ -562,12 +639,12 @@ def interval(db, poll_interval):  # noqa: F811
         "POLL_INTERVAL": poll_interval
     }
 
-    db.cfgdb.mod_entry(table, key, data)
+    ctx.obj.mod_entry(table, key, data)
 
 
-@switch.command()
-@clicommon.pass_db
-def enable(db):  # noqa: F811
+@switch.command(name='enable')
+@click.pass_context
+def switch_enable(ctx):
     """ Enable switch counter query """
     table = CFG_FLEX_COUNTER_TABLE
     key = "SWITCH"
@@ -576,12 +653,12 @@ def enable(db):  # noqa: F811
         "FLEX_COUNTER_STATUS": ENABLE
     }
 
-    db.cfgdb.mod_entry(table, key, data)
+    ctx.obj.mod_entry(table, key, data)
 
 
-@switch.command()
-@clicommon.pass_db
-def disable(db):  # noqa: F811
+@switch.command(name='disable')
+@click.pass_context
+def switch_disable(ctx):
     """ Disable switch counter query """
     table = CFG_FLEX_COUNTER_TABLE
     key = "SWITCH"
@@ -590,14 +667,16 @@ def disable(db):  # noqa: F811
         "FLEX_COUNTER_STATUS": DISABLE
     }
 
-    db.cfgdb.mod_entry(table, key, data)
+    ctx.obj.mod_entry(table, key, data)
 
 
 @cli.command()
-def show():
+@click.option('-n', '--namespace', help='Namespace name',
+              required=True if multi_asic.is_multi_asic() else False,
+              type=click.Choice(multi_asic.get_namespace_list()))
+def show(namespace):
     """ Show the counter configuration """
-    configdb = ConfigDBConnector()
-    configdb.connect()
+    configdb = connect_to_db(namespace)
     queue_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'QUEUE')
     port_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'PORT')
     port_drop_info = configdb.get_entry('FLEX_COUNTER_TABLE', PORT_BUFFER_DROP)
