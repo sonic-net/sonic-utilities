@@ -133,7 +133,7 @@ class TestPortChannel(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code != 0
-        assert 'Invalid value for "--fast-rate"'  in result.output
+        assert 'Invalid value for \'--fast-rate\'' in result.output
 
     def test_add_portchannel_member_with_invalid_name(self):
         runner = CliRunner()

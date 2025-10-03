@@ -99,7 +99,7 @@ def get_module_ip_and_access_from_state_db(module_name):
     return linecard_ip, access
 
 
-def get_all_linecards(ctx, args, incomplete) -> list:
+def get_all_linecards(ctx, param, incomplete) -> list:
     """
     Return a list of all accessible linecard names. This function is used to 
     autocomplete linecard names in the CLI.
