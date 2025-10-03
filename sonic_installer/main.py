@@ -1,4 +1,5 @@
 import configparser
+import json
 import os
 import re
 import shutil
@@ -627,19 +628,38 @@ def install(url, force, skip_platform_check=False, skip_migration=False, skip_pa
     echo_and_log('Done')
 
 
+def format_list_output(data, output_format):
+    """Format image list data according to the specified format"""
+    if output_format == 'json':
+        return json.dumps(data, indent=2)
+    else:  # human format (default)
+        lines = []
+        lines.append(f"Current: {data['current']}")
+        lines.append(f"Next: {data['next']}")
+        lines.append("Available: ")
+        for image in data['available']:
+            lines.append(image)
+        return '\n'.join(lines)
+
+
 # List installed images
 @sonic_installer.command('list')
-def list_command():
+@click.option('--format', type=click.Choice(['human', 'json']), 
+              default='human', help='Output format (human, json)')
+def list_command(format):
     """ Print installed images """
     bootloader = get_bootloader()
-    images = bootloader.get_installed_images()
-    curimage = bootloader.get_current_image()
-    nextimage = bootloader.get_next_image()
-    click.echo("Current: " + curimage)
-    click.echo("Next: " + nextimage)
-    click.echo("Available: ")
-    for image in images:
-        click.echo(image)
+    
+    # Collect data in structured format
+    data = {
+        'current': bootloader.get_current_image(),
+        'next': bootloader.get_next_image(),
+        'available': bootloader.get_installed_images()
+    }
+    
+    # Format and display output
+    output = format_list_output(data, format)
+    click.echo(output)
 
 
 # Set default image for boot
