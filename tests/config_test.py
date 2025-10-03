@@ -11,6 +11,8 @@ import sys
 import unittest
 import ipaddress
 
+import config.main as cfg
+
 from datetime import timezone
 from unittest import mock
 from jsonpatch import JsonPatchConflict
@@ -388,6 +390,25 @@ def mock_run_command_side_effect_disabled_timer(*args, **kwargs):
             return '0', 0
         else:
             return '', 0
+
+
+def test__VRF():
+    cfg._iface_vrf("eth0")
+    cfg._iface_vrf("lo")
+    cfg._iface_vrf("bla")
+
+
+def test__capture_restore_default_routes():
+    routes1 = cfg._capture_default_routes("bla")
+    routes1.append({"fam": [-4], "vrf": 0, "gw": "255.255.255.255", "metric": 1})
+    cfg._restore_default_routes("bla", routes1)
+    routes2 = cfg._capture_default_routes("lo")
+    routes2.append({"fam": [-4], "vrf": 0, "gw": "255.255.255.255", "metric": 1})
+    cfg._restore_default_routes("lo", routes2)
+    routes3 = cfg._capture_default_routes("eth0")
+    routes3.append({"fam": [-4], "vrf": 0, "gw": "255.255.255.255", "metric": 1})
+    cfg._restore_default_routes("eth0", routes3)
+
 
 # Load sonic-cfggen from source since /usr/local/bin/sonic-cfggen does not have .py extension.
 sonic_cfggen = load_module_from_source('sonic_cfggen', '/usr/local/bin/sonic-cfggen')
