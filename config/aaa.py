@@ -156,43 +156,58 @@ authentication.add_command(login)
 
 # cmd: aaa authorization
 @click.command()
-@click.argument('protocol', nargs=-1, type=click.Choice([ "tacacs+", "local", "tacacs+ local"]))
+@click.argument('protocol', nargs=-1, type=click.Choice([ "tacacs+", "local"]))
 @clicommon.pass_db
 def authorization(db, protocol):
-    """Switch AAA authorization [tacacs+ | local | '\"tacacs+ local\"']"""
+    """
+    Switch AAA authorization default
+               authorization {tacacs+ | local} [local]
+    """
     if len(protocol) == 0:
         click.echo('Argument "protocol" is required')
         return
 
-    if len(protocol) == 1 and (protocol[0] == 'tacacs+' or protocol[0] == 'local'):
-        add_table_kv(db, 'AAA', 'authorization', 'login', protocol[0])
-    elif len(protocol) == 1 and protocol[0] == 'tacacs+ local':
-        add_table_kv(db, 'AAA', 'authorization', 'login', 'tacacs+,local')
-    else:
-        click.echo('Not a valid command')
+    if len(protocol) > 2:
+        click.fail('Only two "protocol" can be set at most')
+
+
+    if protocol[0] == 'local' and len(protocol) != 1:
+        click.fail('Invalidated parameter')
+
+    if len(protocol) != len(set(protocol)):
+        click.fail('Invalidated parameter')
+
+    add_table_kv(db, 'AAA', 'authorization', 'login', ','.join(protocol))
 aaa.add_command(authorization)
 
 # cmd: aaa accounting
 @click.command()
-@click.argument('protocol', nargs=-1, type=click.Choice(["disable", "tacacs+", "local", "tacacs+ local"]))
+@click.argument('protocol', nargs=-1, type=click.Choice(["disable", "tacacs+", "local"]))
 @clicommon.pass_db
 def accounting(db, protocol):
-    """Switch AAA accounting [disable | tacacs+ | local | '\"tacacs+ local\"']"""
+    """
+    Switch AAA accounting disable
+               accounting {tacacs+ | local} [tacacs+ | local]
+    """
     if len(protocol) == 0:
         click.echo('Argument "protocol" is required')
         return
 
-    if len(protocol) == 1:
-        if protocol[0] == 'tacacs+' or protocol[0] == 'local':
-            add_table_kv(db, 'AAA', 'accounting', 'login', protocol[0])
-        elif protocol[0] == 'tacacs+ local':
-            add_table_kv(db, 'AAA', 'accounting', 'login', 'tacacs+,local')
-        elif protocol[0] == 'disable':
-            del_table_key(db, 'AAA', 'accounting', 'login')
-        else:
-            click.echo('Not a valid command')
-    else:
-        click.echo('Not a valid command')
+    if len(protocol) > 2:
+        click.fail('Only two "protocol" can be set at most')
+
+    if 'disable' in protocol:
+        if len(protocol) >= 2:
+            click.fail('Invalidated parameter')
+
+        del_table_key(db, 'AAA', 'accounting', 'login')
+        return
+
+    if len(protocol) != len(set(protocol)):
+        click.fail('Invalidated parameter')
+        
+    add_table_kv(db, 'AAA', 'accounting', 'login', ','.join(protocol))
+
 aaa.add_command(accounting)
 
 @click.group()
