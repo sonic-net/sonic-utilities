@@ -38,7 +38,6 @@ header_std = ['IFACE', 'STATE', 'RX_OK', 'RX_BPS', 'RX_UTIL', 'RX_ERR', 'RX_DRP'
               'TX_OK', 'TX_BPS', 'TX_UTIL', 'TX_ERR', 'TX_DRP', 'TX_OVR']
 header_errors_only = ['IFACE', 'STATE', 'RX_ERR', 'RX_DRP', 'RX_OVR', 'TX_ERR', 'TX_DRP', 'TX_OVR']
 header_fec_only = ['IFACE', 'STATE', 'FEC_CORR', 'FEC_UNCORR', 'FEC_SYMBOL_ERR', 'FEC_PRE_BER', 'FEC_POST_BER']
-
 header_fec_hist_only = ['IFACE', 'BIN0', 'BIN1', 'BIN2', 'BIN3', 'BIN4', 'BIN5', 'BIN6', 'BIN7',
                         'BIN8', 'BIN9', 'BIN10', 'BIN11', 'BIN12', 'BIN13', 'BIN14', 'BIN15']
 header_rates_only = ['IFACE', 'STATE', 'RX_OK', 'RX_BPS', 'RX_PPS', 'RX_UTIL', 'TX_OK', 'TX_BPS', 'TX_PPS', 'TX_UTIL']
