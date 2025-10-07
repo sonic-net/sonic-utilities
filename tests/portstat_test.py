@@ -77,7 +77,7 @@ portstat_fec_histogram = """\
 Ethernet0  1,000,000  900,000  800,000  700,000  600,000  500,000  400,000  300,000       0       0        0        0        0        0        0        0
 Ethernet4        N/A      N/A      N/A      N/A      N/A      N/A      N/A      N/A     N/A     N/A      N/A      N/A      N/A      N/A      N/A      N/A
 Ethernet8        N/A      N/A      N/A      N/A      N/A      N/A      N/A      N/A     N/A     N/A      N/A      N/A      N/A      N/A      N/A      N/A
-"""
+"""  # noqa: E501
 
 intf_fec_counters_period = """\
 The rates are calculated within 3 seconds period
@@ -432,7 +432,7 @@ class TestPortStat(object):
 
     def test_portstat_fec_histogram(self):
         return_code, result = get_result_and_return_code(
-        ['portstat', '-fh'])
+            ['portstat', '-fh'])
         print("return_code: {}".format(return_code))
         print("result = {}".format(result))
         assert return_code == 0
