@@ -71,6 +71,14 @@ BIN14                                   0
 BIN15                                   0
 """
 
+portstat_fec_histogram = """\
+    IFACE       BIN0     BIN1     BIN2     BIN3     BIN4     BIN5     BIN6     BIN7    BIN8    BIN9    BIN10    BIN11    BIN12    BIN13    BIN14    BIN15
+---------  ---------  -------  -------  -------  -------  -------  -------  -------  ------  ------  -------  -------  -------  -------  -------  -------
+Ethernet0  1,000,000  900,000  800,000  700,000  600,000  500,000  400,000  300,000       0       0        0        0        0        0        0        0
+Ethernet4        N/A      N/A      N/A      N/A      N/A      N/A      N/A      N/A     N/A     N/A      N/A      N/A      N/A      N/A      N/A      N/A
+Ethernet8        N/A      N/A      N/A      N/A      N/A      N/A      N/A      N/A     N/A     N/A      N/A      N/A      N/A      N/A      N/A      N/A
+"""  # noqa: E501
+
 intf_fec_counters_period = """\
 The rates are calculated within 3 seconds period
     IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR
@@ -421,6 +429,14 @@ class TestPortStat(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output == intf_fec_counters_fec_hist
+
+    def test_portstat_fec_histogram(self):
+        return_code, result = get_result_and_return_code(
+            ['portstat', '-fh'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(result))
+        assert return_code == 0
+        assert result == portstat_fec_histogram
 
     def test_show_intf_fec_counters_period(self):
         runner = CliRunner()
