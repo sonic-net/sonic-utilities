@@ -5370,15 +5370,15 @@ This show command displays the port auto negotiation status for all interfaces i
 - Example:
   ```
   admin@sonic:~$ show interfaces autoneg status
-    Interface    Auto-Neg Mode    Speed    Adv Speeds    Type    Adv Types    Oper    Admin
-  -----------  ---------------  -------  ------------  ------  -----------  ------  -------
-    Ethernet0          enabled      25G       10G,25G      CR       CR,CR4      up       up
-    Ethernet4         disabled     100G           all     CR4          all      up       up
+    Interface    Auto-Neg Mode    Speed    Adv Speeds    Rmt Adv Speeds     Type      Adv Types    Oper    Admin
+  -----------  ---------------  -------  ------------  ----------------   ---------  -----------  ------   ------
+    Ethernet0          enabled      25G       10G,25G        N/A             CR        CR,CR4      up       up
+    Ethernet4         disabled     100G           all        N/A            CR4           all      up       up
 
   admin@sonic:~$ show interfaces autoneg status Ethernet8
-    Interface    Auto-Neg Mode    Speed    Adv Speeds    Type    Adv Types    Oper    Admin
-  -----------  ---------------  -------  ------------  ------  -----------  ------  -------
-    Ethernet8         disabled     100G           N/A     CR4          N/A      up       up
+    Interface    Auto-Neg Mode    Speed    Adv Speeds    Rmt Adv Speeds    Type    Adv Types    Oper    Admin
+  -----------  ---------------  -------  ------------  ----------------  ------  -----------  ------  -------
+    Ethernet8         disabled     100G           N/A         N/A           CR4          N/A      up       up
   ```
 
 **show interfaces breakout (Versions >= 202006)**
@@ -5650,11 +5650,11 @@ The "fec-stats" subcommand is used to disply the interface fec related statistic
 - Example:
   ```
   admin@ctd615:~$ show interfaces counters fec-stats
-        IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER    FEC_PRE_BER_MAX
-  -----------  -------  ----------  ------------  ----------------  -------------  --------------    ---------------
-   Ethernet0        U           0             0                 0        1.48e-20        0.00e+00           1.78e-16
-   Ethernet8        U           0             0                 0        1.98e-19        0.00e+00           1.67e-14
-  Ethernet16        U           0             0                 0        1.77e-20        0.00e+00           1.37e-13
+        IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER   
+  -----------  -------  ----------  ------------  ----------------  -------------  --------------   
+   Ethernet0        U           0             0                 0        1.48e-20        0.00e+00           
+   Ethernet8        U           0             0                 0        1.98e-19        0.00e+00           
+  Ethernet16        U           0             0                 0        1.77e-20        0.00e+00           
   ```
 
 The "trim" subcommand is used to display the interface packet trimming related statistic.
@@ -5662,11 +5662,11 @@ The "trim" subcommand is used to display the interface packet trimming related s
 - Example:
   ```
   admin@sonic:~$ show interfaces counters trim
-       IFACE    STATE    TRIM_PKTS    TRIM_TX_PKTS    TRIM_DRP_PKTS
-  ----------  -------  -----------  --------------  ---------------
-   Ethernet0        U            0               0                0
-   Ethernet8        U          100             100                0
-  Ethernet16        U          200             100              100
+       IFACE    STATE    TRIM_PKTS    
+  ----------  -------  -----------  
+   Ethernet0        U            0              
+   Ethernet8        U          100             
+  Ethernet16        U          200        
   ```
 
 **show interfaces description**
@@ -5948,32 +5948,32 @@ This command displays some more fields such as Lanes, Speed, MTU, Type, Asymmetr
 - Example (show interface status of all interfaces):
   ```
   admin@sonic:~$ show interfaces status
-  Interface            Lanes    Speed    MTU            Alias    Oper    Admin    Type    Asym PFC
+  Interface   Lanes   Speed    MTU    FEC        Alias    Vlan Oper    Admin    Type    Asym PFC
   -----------  ---------------  -------  -----  ---------------  ------  -------  ------  ----------
-  Ethernet0      49,50,51,52     100G   9100   hundredGigE1/1    down       up     N/A         off
-  Ethernet4      53,54,55,56     100G   9100   hundredGigE1/2    down       up     N/A         off
-  Ethernet8      57,58,59,60     100G   9100   hundredGigE1/3    down     down     N/A         off
+  Ethernet0      49,50,51,52     100G   9100   rs    hundredGigE1/1    down       up     N/A         off
+  Ethernet4      53,54,55,56     100G   9100   rs    hundredGigE1/2    down       up     N/A         off
+  Ethernet8      57,58,59,60     100G   9100   rs    hundredGigE1/3    down     down     N/A         off
   <contiues to display all the interfaces>
   ```
 
 - Example (to only display the status for interface Ethernet0):
   ```
   admin@sonic:~$ show interface status Ethernet0
-  Interface     Lanes    Speed    MTU            Alias    Oper    Admin
-  -----------  --------  -------  -----   --------------  ------  -------
-  Ethernet0   101,102      40G   9100   fortyGigE1/1/1      up       up
+  Interface     Lanes    Speed    MTU     FEC       Alias    Vlan  Oper    Admin   type   Asym PFC
+  -----------  --------  -------  -----  ----- --------------  ------  -------  -------  ---------
+  Ethernet0   101,102      40G   9100   fortyGigE1/1/1   rs   up  routed      up    QSFP28 or later   off
   ```
 
 - Example (to only display the status for range of interfaces):
   ```
   admin@sonic:~$ show interfaces status Ethernet8,Ethernet168-180
-  Interface              Lanes    Speed    MTU            Alias     Oper    Admin    Type   Asym PFC
-  -----------  -----------------  -------  -----  ---------------  ------  -------  ------  ----------
-    Ethernet8      49,50,51,52     100G    9100    hundredGigE3     down     down     N/A         N/A
-  Ethernet168       9,10,11,12     100G    9100    hundredGigE43    down     down     N/A         N/A
-  Ethernet172      13,14,15,16     100G    9100    hundredGigE44    down     down     N/A         N/A
-  Ethernet176  109,110,111,112     100G    9100    hundredGigE45    down     down     N/A         N/A
-  Ethernet180  105,106,107,108     100G    9100    hundredGigE46    down     down     N/A         N/A
+  Interface    Lanes    Speed    MTU    FEC        Alias     Vlan     Oper    Admin    Type   Asym PFC
+  ------- -------  -----------------  -------  -----  -----  ---------------  ------  -------  ------  ----------
+    Ethernet8      49,50,51,52     100G    9100    rs   hundredGigE3     N/A     down     down     N/A         N/A
+  Ethernet168       9,10,11,12     100G    9100    rs   hundredGigE43       N/A     down     down     N/A         N/A
+  Ethernet172      13,14,15,16     100G    9100    rs   hundredGigE44    N/A  down     down     N/A         N/A
+  Ethernet176  109,110,111,112     100G    9100    rs   hundredGigE45    N/A    down     down     N/A         N/A
+  Ethernet180  105,106,107,108     100G    9100    rs   hundredGigE46    N/A  down     down     N/A         N/A
   ```
 
 
@@ -6710,9 +6710,9 @@ The user must log out and log back in for changes to take effect. Note that the 
   default
 
   admin@sonic:~$ show interface status Ethernet0
-    Interface     Lanes    Speed    MTU            Alias    Oper    Admin
-  -----------  --------  -------  -----   --------------  ------  -------
-    Ethernet0   101,102      40G   9100   fortyGigE1/1/1      up       up
+    Interface     Lanes    Speed    MTU  FEC     Alias            Vlan Oper    Admin  type  Asym PFC
+  -----------  --------  -------  -----  ----  --------------    ------  ------- ----------
+    Ethernet0   101,102      40G   9100   rs   fortyGigE1/1/1     routed up       up  QSFP28 or later off
 
   admin@sonic:~$ sudo config interface_naming_mode alias
   Please logout and log back in for changes take effect.
@@ -6726,9 +6726,8 @@ The user must log out and log back in for changes to take effect. Note that the 
 
   admin@sonic:~$ sudo config interface fortyGigE1/1/1 shutdown
   admin@sonic:~$ show interface status fortyGigE1/1/1
-    Interface     Lanes    Speed    MTU            Alias    Oper    Admin
-  -----------  --------  -------  -----   --------------  ------  -------
-    Ethernet0   101,102      40G   9100   fortyGigE1/1/1    down     down
+    Interface     Lanes    Speed    MTU   FEC         Alias     Vlan  Oper    Admin   type    Asym PFC
+  -----------  --------  -------  -----   ----  --------------   ------ ------  -------   ----------  ---------
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#interface-naming-mode)
