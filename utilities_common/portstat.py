@@ -310,7 +310,7 @@ class Portstat(object):
             """
                 Get the counters from specific table.
             """
-            fields = ["0"]*BUCKET_NUM
+            fields = ["0"] * len(counter_bucket_dict)
 
             _, fvs = counter_table.get(PortCounter(), port)
             fvs = dict(fvs)
@@ -403,7 +403,7 @@ class Portstat(object):
         return STATUS_NA
 
     def cnstat_print(self, cnstat_dict, ratestat_dict, intf_list, use_json, print_all,
-                     errors_only, fec_stats_only, rates_only, trim_stats_only, detail=False):
+                     errors_only, fec_stats_only, rates_only, trim_stats_only, fec_hist_only, detail=False):
         """
             Print the cnstat.
         """
@@ -517,7 +517,7 @@ class Portstat(object):
             if key in cnstat_old_dict:
                 old_cntr = cnstat_old_dict.get(key)
             else:
-                old_cntr = NStats._make([0] * BUCKET_NUM)._asdict()
+                old_cntr = NStats._make([0] * len(counter_bucket_dict))._asdict()
 
             if intf_list and key not in intf_list:
                 continue
