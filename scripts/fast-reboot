@@ -24,6 +24,7 @@ DEVPATH="/usr/share/sonic/device"
 PLATFORM=$(sonic-cfggen -H -v DEVICE_METADATA.localhost.platform)
 PLATFORM_PLUGIN="${REBOOT_TYPE}_plugin"
 LOG_SSD_HEALTH="/usr/local/bin/log_ssd_health"
+SSD_UTIL="/usr/local/bin/ssdutil"
 PLATFORM_FWUTIL_AU_REBOOT_HANDLE="platform_fw_au_reboot_handle"
 PLATFORM_REBOOT_PRE_CHECK="platform_reboot_pre_check"
 SSD_FW_UPDATE="ssd-fw-upgrade"
@@ -53,6 +54,7 @@ EXIT_TEAMD_RETRY_COUNT_FAILURE=23
 EXIT_NO_MIRROR_SESSION_ACLS=24
 EXIT_PFC_STORM_DETECTED=25
 EXIT_LEFTOVER_CPA_TUNNEL=30
+EXIT_SDD_HEALTH_FAILURE=40
 
 function error()
 {
@@ -556,6 +558,29 @@ function reboot_pre_check()
     rm ${filename}
 
     check_db_integrity
+
+    # Check SSD health
+    if [ -x "${SSD_UTIL}" ]; then
+        debug "Checking ssd health before ${REBOOT_TYPE}..."
+        health_line=$(${SSD_UTIL} | grep -E "Health\s*:\s*[0-9]+\.?[0-9]*%" || true)
+
+        if [ -z "$health_line" ]; then
+            debug "Warning: Health line not found in ${SSD_UTIL} output."
+        else
+            # Extract the numeric value X from "Health       : X%"
+            health_value=$(echo "$health_line" | sed -n 's/[^0-9]*\([0-9]\+\).*/\1/p')
+
+            # Check if health_value is a valid number
+            if [ -z "$health_value" ]; then
+                debug "Warning: Could not find health percentage."
+            elif [ "$health_value" -gt 0 ]; then
+                debug "SSD Health is $health_value% — OK."
+            else
+                error "Warning: Health is $health_value% — Possible drive failure!"
+                exit "${EXIT_SDD_HEALTH_FAILURE}"
+            fi
+        fi
+    fi
 
     # Make sure /host has enough space for warm reboot temp files
     avail=$(df -k /host | tail -1 | awk '{ print $4 }')
