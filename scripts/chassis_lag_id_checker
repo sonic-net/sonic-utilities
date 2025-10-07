@@ -34,14 +34,12 @@ import sys
 import argparse
 import sonic_py_common.multi_asic as multi_asic
 import sonic_py_common.device_info as device_info
-from utilities_common import cli
 
 
 def run_redis_dump(cmd_args):
     """Run redis-dump with given command arguments and return parsed JSON output."""
     try:
-        #result = subprocess.run(cmd_args, capture_output=True, text=True)
-        result = cli.run_command(cmd_args)
+        result = subprocess.run(cmd_args, capture_output=True, text=True)
         if result.returncode != 0:
             logging.error(f"Command failed: {result.stderr}")
             raise RuntimeError(f"Command failed: {result.stderr}")
