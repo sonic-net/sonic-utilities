@@ -51,7 +51,7 @@ RateStats = namedtuple("RateStats", ratestat_fields)
 The order and count of statistics mentioned below needs to be in sync with the values in portstat script
 So, any fields added/deleted in here should be reflected in portstat script also
 """
-BUCKET_NUM = 50
+BUCKET_NUM = 66
 
 wred_green_pkt_stat_capable = "false"
 wred_yellow_pkt_stat_capable = "false"
@@ -310,7 +310,7 @@ class Portstat(object):
             """
                 Get the counters from specific table.
             """
-            fields = ["0"] * len(counter_bucket_dict)
+            fields = ["0"]*BUCKET_NUM
 
             _, fvs = counter_table.get(PortCounter(), port)
             fvs = dict(fvs)
@@ -460,6 +460,26 @@ class Portstat(object):
                               format_number_with_comma(data['fec_symbol_err']),
                               format_fec_ber(rates.fec_pre_ber),
                               format_fec_ber(rates.fec_post_ber)))
+            elif fec_hist_only:
+                header = header_fec_hist_only
+
+                table.append((key,
+                              format_number_with_comma(data['fec_bin0']),
+                              format_number_with_comma(data['fec_bin1']),
+                              format_number_with_comma(data['fec_bin2']),
+                              format_number_with_comma(data['fec_bin3']),
+                              format_number_with_comma(data['fec_bin4']),
+                              format_number_with_comma(data['fec_bin5']),
+                              format_number_with_comma(data['fec_bin6']),
+                              format_number_with_comma(data['fec_bin7']),
+                              format_number_with_comma(data['fec_bin8']),
+                              format_number_with_comma(data['fec_bin9']),
+                              format_number_with_comma(data['fec_bin10']),
+                              format_number_with_comma(data['fec_bin11']),
+                              format_number_with_comma(data['fec_bin12']),
+                              format_number_with_comma(data['fec_bin13']),
+                              format_number_with_comma(data['fec_bin14']),
+                              format_number_with_comma(data['fec_bin15'])))
             elif rates_only:
                 header = header_rates_only
                 table.append((key, self.get_port_state(key),
@@ -517,7 +537,7 @@ class Portstat(object):
             if key in cnstat_old_dict:
                 old_cntr = cnstat_old_dict.get(key)
             else:
-                old_cntr = NStats._make([0] * len(counter_bucket_dict))._asdict()
+                old_cntr = NStats._make([0] * BUCKET_NUM)._asdict()
 
             if intf_list and key not in intf_list:
                 continue
