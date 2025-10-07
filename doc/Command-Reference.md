@@ -3428,14 +3428,7 @@ This command is used to show ipv4 dhcp_relay helper.
 - Example:
   ```
   admin@sonic:~$ show dhcp_relay ipv4 helper
-  +-------------+----------------------+
-  |   Interface |   DHCP Relay Address |
-  +=============+======================+
-  |   Vlan1000  |        192.0.0.1     |
-  |             |        192.0.0.2     |
-  |             |        192.0.0.3     |
-  |             |        192.0.0.4     |
-  +-------------+----------------------+
+
   ```
   
 **show dhcp_relay ipv6 destination**
@@ -3450,14 +3443,7 @@ This command is used to show ipv6 dhcp_relay destination.
 - Example:
   ```
   admin@sonic:~$ show dhcp_relay ipv6 destination
-  +-------------+---------------------+
-  |  Interface  |  DHCP Relay Address |
-  +=============+=====================+
-  |  Vlan1000   |       fc02:2000::1  |
-  |             |       fc02:2000::2  |
-  |             |       fc02:2000::3  |
-  |             |       fc02:2000::4  |
-  +-------------+---------------------+
+  
   ```
 
 **show dhcp_relay ipv6 counters**
