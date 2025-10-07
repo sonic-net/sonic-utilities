@@ -27,6 +27,12 @@ class StateDBHelper:
         for field, value in entry.items():
             self.db.set("STATE_DB", redis_key, field, value)
 
+    def delete_field(self, table, key, field):
+        """Delete a specific field from table|key."""
+        redis_key = f"{table}|{key}"
+        client = self.db.get_redis_client("STATE_DB")
+        return client.hdel(redis_key, field)
+
 #
 # 'chassis_modules' group ('config chassis_modules ...')
 #
@@ -74,7 +80,9 @@ def set_state_transition_in_progress(db, chassis_module_name, value):
     if value == 'True':
         entry['transition_start_time'] = datetime.utcnow().isoformat()
     else:
+        # Remove transition_start_time from both local entry and database
         entry.pop('transition_start_time', None)
+        state_db.delete_field('CHASSIS_MODULE_TABLE', chassis_module_name, 'transition_start_time')
     state_db.set_entry('CHASSIS_MODULE_TABLE', chassis_module_name, entry)
 
 
