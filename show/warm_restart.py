@@ -1,5 +1,7 @@
 import click
 import utilities_common.cli as clicommon
+import utilities_common.multi_asic as multi_asic_util
+from sonic_py_common import multi_asic
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from tabulate import tabulate
 
@@ -11,14 +13,38 @@ def warm_restart():
 
 
 @warm_restart.command()
+@click.option('--namespace', '-n', 'namespace', default=None, help='Namespace name')
 @click.option('-s', '--redis-unix-socket-path', help='unix socket path for redis connection')
-def state(redis_unix_socket_path):
+def state(namespace, redis_unix_socket_path):
     """Show warm restart state"""
-    kwargs = {}
-    if redis_unix_socket_path:
-        kwargs['unix_socket_path'] = redis_unix_socket_path
 
-    db = SonicV2Connector(host='127.0.0.1')
+    if redis_unix_socket_path:
+        click.secho(
+            "Warning: '-s|--redis-unix-socket-path' has no effect and is left for compatibility",
+            fg="red", err=True)
+
+    if namespace and namespace not in multi_asic.get_namespace_list():
+        raise click.UsageError("Invalid namespace: {}".format(namespace))
+
+    asic_namespaces = multi_asic.get_namespace_list()
+    all_namespaces = asic_namespaces
+    if multi_asic.is_multi_asic():
+        all_namespaces = [multi_asic_util.constants.DEFAULT_NAMESPACE] + asic_namespaces
+    if namespace is not None and namespace not in asic_namespaces:
+        raise click.UsageError("Invalid namespace: {}".format(namespace))
+
+    namespaces = [namespace] if namespace else all_namespaces
+
+    for namespace in namespaces:
+        if len(namespaces) > 1:
+            namespace_str = namespace or "global"
+            click.echo(f"\nFor namespace {namespace_str}:\n")
+
+        show_warm_restart_state_for_namespace(namespace)
+
+
+def show_warm_restart_state_for_namespace(namespace):
+    db = SonicV2Connector(namespace=namespace)
     db.connect(db.STATE_DB, False)   # Make one attempt only
 
     TABLE_NAME_SEPARATOR = '|'
@@ -53,19 +79,41 @@ def state(redis_unix_socket_path):
 
 
 @warm_restart.command()
+@click.option('--namespace', '-n', 'namespace', default=None, help='Namespace name')
 @click.option('-s', '--redis-unix-socket-path', help='unix socket path for redis connection')
-def config(redis_unix_socket_path):
+def config(namespace, redis_unix_socket_path):
     """Show warm restart config"""
     kwargs = {}
     if redis_unix_socket_path:
         kwargs['unix_socket_path'] = redis_unix_socket_path
-    config_db = ConfigDBConnector(**kwargs)
+
+    if namespace is not None and redis_unix_socket_path:
+        raise click.UsageError("Cannot specify both namespace and redis unix socket path")
+
+    asic_namespaces = multi_asic.get_namespace_list()
+    all_namespaces = asic_namespaces
+    if multi_asic.is_multi_asic():
+        all_namespaces = [multi_asic_util.constants.DEFAULT_NAMESPACE] + asic_namespaces
+    if namespace is not None and namespace not in asic_namespaces:
+        raise click.UsageError("Invalid namespace: {}".format(namespace))
+
+    namespaces = [namespace] if namespace else all_namespaces
+
+    for namespace in namespaces:
+        if len(namespaces) > 1:
+            namespace_str = namespace or "global"
+            click.echo(f"\nFor namespace {namespace_str}:\n")
+
+        show_warm_restart_config_for_namespace(namespace, **kwargs)
+
+def show_warm_restart_config_for_namespace(namespace, **kwargs):
+    config_db = ConfigDBConnector(namespace=namespace, **kwargs)
     config_db.connect(wait_for_init=False)
     data = config_db.get_table('WARM_RESTART')
     # Python dictionary keys() Method
     keys = list(data.keys())
 
-    state_db = SonicV2Connector(host='127.0.0.1')
+    state_db = SonicV2Connector(namespace=namespace)
     state_db.connect(state_db.STATE_DB, False)   # Make one attempt only
     TABLE_NAME_SEPARATOR = '|'
     prefix = 'WARM_RESTART_ENABLE_TABLE' + TABLE_NAME_SEPARATOR

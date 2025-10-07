@@ -3812,92 +3812,156 @@ def warm_restart(ctx, redis_unix_socket_path):
     # Note: redis_unix_socket_path is a path string, and the ground truth is now from database_config.json.
     # We only use it as a bool indicator on either unix_socket_path or tcp port
     use_unix_socket_path = bool(redis_unix_socket_path)
-    config_db = ConfigDBConnector(use_unix_socket_path=use_unix_socket_path)
-    config_db.connect(wait_for_init=False)
-
-    # warm restart enable/disable config is put in stateDB, not persistent across cold reboot, not saved to config_DB.json file
-    state_db = SonicV2Connector(use_unix_socket_path=use_unix_socket_path)
-    state_db.connect(state_db.STATE_DB, False)
     TABLE_NAME_SEPARATOR = '|'
     prefix = 'WARM_RESTART_ENABLE_TABLE' + TABLE_NAME_SEPARATOR
-    ctx.obj = {'db': config_db, 'state_db': state_db, 'prefix': prefix}
+    ctx.obj = {'prefix': prefix}
+
+    asic_namespaces = multi_asic.get_namespace_list()
+    all_namespaces = asic_namespaces
+    if multi_asic.is_multi_asic():
+        all_namespaces = [multi_asic_util.constants.DEFAULT_NAMESPACE] + asic_namespaces
+    ctx.obj["all_namespaces"] = all_namespaces
+    ctx.obj["asic_namespaces"] = asic_namespaces
+    ctx.obj["state_db"] = {}
+    ctx.obj["config_db"] = {}
+    for namespace in all_namespaces:
+        config_db = ConfigDBConnector(namespace=namespace, use_unix_socket_path=use_unix_socket_path);
+        config_db.connect(wait_for_init=False)
+        state_db = SonicV2Connector(namespace=namespace, use_unix_socket_path=use_unix_socket_path);
+        state_db.connect(state_db.STATE_DB, False)
+        ctx.obj["state_db"][namespace] = state_db
+        ctx.obj["config_db"][namespace] = config_db
+
 
 @warm_restart.command('enable')
+@click.option('--namespace', '-n', 'namespace', default=None, help='Namespace name')
 @click.argument('module', metavar='<module>', default='system', required=False)
 @click.pass_context
-def warm_restart_enable(ctx, module):
-    state_db = ctx.obj['state_db']
-    config_db = ctx.obj['db']
+def warm_restart_enable(ctx, namespace, module):
+    if namespace is not None:
+        if namespace not in ctx.obj["all_namespaces"]:
+            raise click.UsageError("Invalid namespace: {}".format(namespace))
+    namespaces = [namespace] if namespace else ctx.obj["all_namespaces"]
+
+    config_db = ctx.obj["config_db"][multi_asic_util.constants.DEFAULT_NAMESPACE]
     feature_table = config_db.get_table('FEATURE')
     if module != 'system' and module not in feature_table:
         sys.exit('Feature {} is unknown'.format(module))
     prefix = ctx.obj['prefix']
     _hash = '{}{}'.format(prefix, module)
-    state_db.set(state_db.STATE_DB, _hash, 'enable', 'true')
-    state_db.close(state_db.STATE_DB)
+
+    for namespace in namespaces:
+        state_db = ctx.obj["state_db"][namespace]
+        state_db.set(state_db.STATE_DB, _hash, 'enable', 'true')
+        state_db.close(state_db.STATE_DB)
+
 
 @warm_restart.command('disable')
+@click.option('--namespace', '-n', 'namespace', default=None, help='Namespace name')
 @click.argument('module', metavar='<module>', default='system', required=False)
 @click.pass_context
-def warm_restart_disable(ctx, module):
-    state_db = ctx.obj['state_db']
-    config_db = ctx.obj['db']
+def warm_restart_disable(ctx, namespace, module):
+    if namespace is not None:
+        if namespace not in ctx.obj["all_namespaces"]:
+            raise click.UsageError("Invalid namespace: {}".format(namespace))
+    namespaces = [namespace] if namespace else ctx.obj["all_namespaces"]
+
+    config_db = ctx.obj["config_db"][multi_asic_util.constants.DEFAULT_NAMESPACE]
     feature_table = config_db.get_table('FEATURE')
     if module != 'system' and module not in feature_table:
         sys.exit('Feature {} is unknown'.format(module))
     prefix = ctx.obj['prefix']
     _hash = '{}{}'.format(prefix, module)
-    state_db.set(state_db.STATE_DB, _hash, 'enable', 'false')
-    state_db.close(state_db.STATE_DB)
+
+    for namespace in namespaces:
+        state_db = ctx.obj["state_db"][namespace]
+        state_db.set(state_db.STATE_DB, _hash, 'enable', 'false')
+        state_db.close(state_db.STATE_DB)
+
 
 @warm_restart.command('neighsyncd_timer')
+@click.option('--namespace', '-n', 'namespace', default=None, help='Namespace name')
 @click.argument('seconds', metavar='<seconds>', required=True, type=int)
 @click.pass_context
-def warm_restart_neighsyncd_timer(ctx, seconds):
-    db = ValidatedConfigDBConnector(ctx.obj['db'])
+def warm_restart_neighsyncd_timer(ctx, namespace, seconds):
+    if namespace is not None:
+        if namespace not in ctx.obj["asic_namespaces"]:
+            raise click.UsageError("Invalid namespace: {}".format(namespace))
+    namespaces = [namespace] if namespace else ctx.obj["asic_namespaces"]
+
     if ADHOC_VALIDATION:
         if seconds not in range(1, 9999):
             ctx.fail("neighsyncd warm restart timer must be in range 1-9999")
-    try:
-        db.mod_entry('WARM_RESTART', 'swss', {'neighsyncd_timer': seconds})
-    except ValueError as e:
-        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+    for namespace in namespaces:
+        db = ValidatedConfigDBConnector(ctx.obj["config_db"][namespace])
+        try:
+            db.mod_entry('WARM_RESTART', 'swss', {'neighsyncd_timer': seconds})
+        except ValueError as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
 
 @warm_restart.command('bgp_timer')
+@click.option('--namespace', '-n', 'namespace', default=None, help='Namespace name')
 @click.argument('seconds', metavar='<seconds>', required=True, type=int)
 @click.pass_context
-def warm_restart_bgp_timer(ctx, seconds):
-    db = ValidatedConfigDBConnector(ctx.obj['db'])
+def warm_restart_bgp_timer(ctx, namespace, seconds):
+    if namespace is not None:
+        if namespace not in ctx.obj["asic_namespaces"]:
+            raise click.UsageError("Invalid namespace: {}".format(namespace))
+    namespaces = [namespace] if namespace else ctx.obj["asic_namespaces"]
+
     if ADHOC_VALIDATION:
         if seconds not in range(1, 3600):
             ctx.fail("bgp warm restart timer must be in range 1-3600")
-    try:
-        db.mod_entry('WARM_RESTART', 'bgp', {'bgp_timer': seconds})
-    except ValueError as e:
-        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+    for namespace in namespaces:
+        db = ValidatedConfigDBConnector(ctx.obj["config_db"][namespace])
+        try:
+            db.mod_entry('WARM_RESTART', 'bgp', {'bgp_timer': seconds})
+        except ValueError as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
 
 @warm_restart.command('teamsyncd_timer')
+@click.option('--namespace', '-n', 'namespace', default=None, help='Namespace name')
 @click.argument('seconds', metavar='<seconds>', required=True, type=int)
 @click.pass_context
-def warm_restart_teamsyncd_timer(ctx, seconds):
-    db = ValidatedConfigDBConnector(ctx.obj['db'])
+def warm_restart_teamsyncd_timer(ctx, namespace, seconds):
+    if namespace is not None:
+        if namespace not in ctx.obj["asic_namespaces"]:
+            raise click.UsageError("Invalid namespace: {}".format(namespace))
+    namespaces = [namespace] if namespace else ctx.obj["asic_namespaces"]
+
     if ADHOC_VALIDATION:
         if seconds not in range(1, 3600):
-            ctx.fail("teamsyncd warm restart timer must be in range 1-3600")
-    try:
-        db.mod_entry('WARM_RESTART', 'teamd', {'teamsyncd_timer': seconds})
-    except ValueError as e:
-        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+            ctx.fail("bgp warm restart timer must be in range 1-3600")
+
+    for namespace in namespaces:
+        db = ValidatedConfigDBConnector(ctx.obj["config_db"][namespace])
+        try:
+            db.mod_entry('WARM_RESTART', 'teamd', {'teamsyncd_timer': seconds})
+        except ValueError as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
 
 @warm_restart.command('bgp_eoiu')
+@click.option('--namespace', '-n', 'namespace', default=None, help='Namespace name')
 @click.argument('enable', metavar='<enable>', default='true', required=False, type=click.Choice(["true", "false"]))
 @click.pass_context
-def warm_restart_bgp_eoiu(ctx, enable):
-    db = ValidatedConfigDBConnector(ctx.obj['db'])
-    try:
-        db.mod_entry('WARM_RESTART', 'bgp', {'bgp_eoiu': enable})
-    except ValueError as e:
-        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+def warm_restart_bgp_eoiu(ctx, namespace, enable):
+    if namespace is not None:
+        if namespace not in ctx.obj["asic_namespaces"]:
+            raise click.UsageError("Invalid namespace: {}".format(namespace))
+    namespaces = [namespace] if namespace else ctx.obj["asic_namespaces"]
+
+    for namespace in namespaces:
+        db = ValidatedConfigDBConnector(ctx.obj["config_db"][namespace])
+        try:
+            db.mod_entry('WARM_RESTART', 'bgp', {'bgp_eoiu': enable})
+        except ValueError as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
 
 def vrf_add_management_vrf(config_db):
     """Enable management vrf in config DB"""
