@@ -170,6 +170,10 @@ def rdma_config_update_validator(scope, patch_element):
     return rdma_config_update_validator_common(scope, patch_element, exact_field_match=True, remove_port=True)
 
 
+def buffer_profile_config_update_validator(scope, patch_element):
+    return rdma_config_update_validator_common(scope, patch_element)
+
+
 def wred_profile_config_update_validator(scope, patch_element):
     return rdma_config_update_validator_common(scope, patch_element)
 
