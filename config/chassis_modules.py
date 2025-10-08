@@ -96,13 +96,11 @@ def is_transition_timed_out(db, chassis_module_name):
     if not start_time_str:
         return False
     try:
-        # Try ISO format first
-        start_time = datetime.fromisoformat(start_time_str)
+        # Try ISO format first (handles most cases including timezone info)
+        start_time = datetime.fromisoformat(start_time_str.replace('Z', '+00:00'))
     except ValueError:
-        try:
-            start_time = datetime.strptime(start_time_str, '%Y-%m-%d %H:%M:%S.%f')
-        except ValueError:
-            return False
+        # If ISO fails, return False to be safe (timestamp format not supported)
+        return False
 
     # Ensure both datetimes are offset-naive for comparison
     if start_time.tzinfo is not None:
