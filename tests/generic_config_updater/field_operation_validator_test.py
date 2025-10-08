@@ -244,7 +244,8 @@ class TestValidateFieldOperation:
     @pytest.mark.parametrize(
         "asic", [
             "spc4",
-            "spc5"
+            "spc5",
+            "th5"
         ]
     )
     @pytest.mark.parametrize(
