@@ -6,7 +6,7 @@ import re
 import subprocess
 import utilities_common.cli as clicommon
 from utilities_common.chassis import is_smartswitch, get_all_dpus
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 TIMEOUT_SECS = 10
 TRANSITION_TIMEOUT = timedelta(seconds=240)  # 4 minutes
@@ -96,15 +96,17 @@ def is_transition_timed_out(db, chassis_module_name):
     if not start_time_str:
         return False
     try:
-        # Try ISO format first (handles most cases including timezone info)
-        start_time = datetime.fromisoformat(start_time_str.replace('Z', '+00:00'))
+        # Handle Zulu time format more robustly
+        if start_time_str.endswith('Z'):
+            start_time_str = start_time_str[:-1] + '+00:00'
+        start_time = datetime.fromisoformat(start_time_str)
     except ValueError:
         # If ISO fails, return False to be safe (timestamp format not supported)
         return False
 
-    # Ensure both datetimes are offset-naive for comparison
+    # Convert timezone-aware datetime to UTC naive for comparison
     if start_time.tzinfo is not None:
-        start_time = start_time.replace(tzinfo=None)
+        start_time = start_time.astimezone(timezone.utc).replace(tzinfo=None)
 
     return datetime.utcnow() - start_time > TRANSITION_TIMEOUT
 
