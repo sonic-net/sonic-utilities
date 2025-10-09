@@ -1,7 +1,7 @@
 import sys
 import os
 from click.testing import CliRunner
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from config.chassis_modules import (
     set_state_transition_in_progress,
     is_transition_timed_out,
@@ -490,7 +490,7 @@ class TestChassisModules(object):
             fvs = {
                 'admin_status': 'up',
                 'state_transition_in_progress': 'True',
-                'transition_start_time': datetime.utcnow().isoformat()
+                'transition_start_time': datetime.now(timezone.utc).isoformat()
             }
             db.cfgdb.set_entry('CHASSIS_MODULE', "DPU0", fvs)
 
@@ -517,7 +517,7 @@ class TestChassisModules(object):
             fvs = {
                 'admin_status': 'up',
                 'state_transition_in_progress': 'True',
-                'transition_start_time': (datetime.utcnow() - timedelta(minutes=30)).isoformat()
+                'transition_start_time': (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat()
             }
             db.cfgdb.set_entry('CHASSIS_MODULE', "DPU0", fvs)
 
@@ -593,12 +593,12 @@ class TestChassisModules(object):
         assert is_transition_timed_out(db, "DPU0") is False
 
         # Case 4: Timed out
-        old_time = (datetime.utcnow() - TRANSITION_TIMEOUT - timedelta(seconds=1)).isoformat()
+        old_time = (datetime.now(timezone.utc) - TRANSITION_TIMEOUT - timedelta(seconds=1)).isoformat()
         db.statedb.get_entry.return_value = {"transition_start_time": old_time}
         assert is_transition_timed_out(db, "DPU0") is True
 
         # Case 5: Not timed out yet
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         db.statedb.get_entry.return_value = {"transition_start_time": now}
         assert is_transition_timed_out(db, "DPU0") is False
 
@@ -618,8 +618,7 @@ class TestChassisModules(object):
         # Test timezone-aware datetime handling (covers line 109)
         db = mock.MagicMock()
         db.statedb = mock.MagicMock()
-        tz_time = (datetime.utcnow() - TRANSITION_TIMEOUT - timedelta(seconds=1)).replace(
-            tzinfo=timezone.utc).isoformat()
+        tz_time = (datetime.now(timezone.utc) - TRANSITION_TIMEOUT - timedelta(seconds=1)).isoformat()
         db.statedb.get_entry.return_value = {"transition_start_time": tz_time}
         assert is_transition_timed_out(db, "DPU0") is True
 

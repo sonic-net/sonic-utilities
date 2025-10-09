@@ -78,7 +78,7 @@ def set_state_transition_in_progress(db, chassis_module_name, value):
     entry = state_db.get_entry('CHASSIS_MODULE_TABLE', chassis_module_name) or {}
     entry['state_transition_in_progress'] = value
     if value == 'True':
-        entry['transition_start_time'] = datetime.utcnow().isoformat()
+        entry['transition_start_time'] = datetime.now(timezone.utc).isoformat()
     else:
         # Remove transition_start_time from both local entry and database
         entry.pop('transition_start_time', None)
@@ -96,19 +96,17 @@ def is_transition_timed_out(db, chassis_module_name):
     if not start_time_str:
         return False
     try:
-        # Handle Zulu time format more robustly
-        if start_time_str.endswith('Z'):
-            start_time_str = start_time_str[:-1] + '+00:00'
         start_time = datetime.fromisoformat(start_time_str)
     except ValueError:
-        # If ISO fails, return False to be safe (timestamp format not supported)
         return False
 
-    # Convert timezone-aware datetime to UTC naive for comparison
-    if start_time.tzinfo is not None:
-        start_time = start_time.astimezone(timezone.utc).replace(tzinfo=None)
+    # Use UTC everywhere for consistent comparison
+    current_time = datetime.now(timezone.utc)
+    if start_time.tzinfo is None:
+        # If stored time is naive, assume it's UTC
+        start_time = start_time.replace(tzinfo=timezone.utc)
 
-    return datetime.utcnow() - start_time > TRANSITION_TIMEOUT
+    return current_time - start_time > TRANSITION_TIMEOUT
 
 #
 # Name: check_config_module_state_with_timeout
