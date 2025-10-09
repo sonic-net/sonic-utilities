@@ -153,6 +153,19 @@ def format_fec_flr(rate):
         return "{:.2e}".format(float(rate))
 
 
+def format_fec_flr_predicted(flr, r_squared):
+    """
+    Show the predicted flr rate with R-squared confidence.
+    """
+    if flr == STATUS_NA:
+        return STATUS_NA
+    elif flr == 0:
+        return "0"
+    else:
+        r_squared_pct = r_squared * 100
+        return "{:.2e} ({:.0f}%)".format(float(flr), r_squared_pct)
+
+
 def format_util(brate, port_rate):
     """
         Calculate the util.
