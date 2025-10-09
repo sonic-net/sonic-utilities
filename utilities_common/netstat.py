@@ -140,6 +140,7 @@ def format_fec_ber(rate):
     else:
         return "{:.2e}".format(float(rate))
 
+
 def format_fec_flr(rate):
     """
     Show the flr rate.
