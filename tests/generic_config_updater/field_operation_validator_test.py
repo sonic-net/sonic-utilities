@@ -34,6 +34,36 @@ class TestValidateFieldOperation(unittest.TestCase):
             assert generic_config_updater.field_operation_validators.\
                 port_config_update_validator(scope, patch_element) is True
 
+    @patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=True))
+    @patch("generic_config_updater.field_operation_validators.read_statedb_entry",
+           mock.Mock(return_value="123,234"))
+    def test_port_config_update_validator_invalid_speed_for_chassis(self):
+        # 235 is in supported speeds, but for chassis, skip speed validation
+        patch_element = {"path": "/PORT/Ethernet3", "op": "add", "value": {"speed": 235}}
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                port_config_update_validator(scope, patch_element) is True
+
+    @patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=False))
+    @patch("generic_config_updater.field_operation_validators.read_statedb_entry",
+           mock.Mock(return_value="123,234"))
+    def test_port_config_update_validator_valid_speed_for_nonchassis(self):
+        # 234 is not in supported speeds, but for chassis, skip speed validation
+        patch_element = {"path": "/PORT/Ethernet3", "op": "add", "value": {"speed": 234}}
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                port_config_update_validator(scope, patch_element) is True
+
+    @patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=False))
+    @patch("generic_config_updater.field_operation_validators.read_statedb_entry",
+           mock.Mock(return_value="123,234"))
+    def test_port_config_update_validator_invalid_speed_for_nonchassis(self):
+        # 235 is not in supported speeds, but for chassis, skip speed validation
+        patch_element = {"path": "/PORT/Ethernet3", "op": "add", "value": {"speed": 235}}
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                port_config_update_validator(scope, patch_element) is False
+
     @patch("generic_config_updater.field_operation_validators.read_statedb_entry",
            mock.Mock(return_value="123,234"))
     def test_port_config_update_validator_valid_speed_existing_state_db(self):
