@@ -3739,7 +3739,6 @@ This command is used to show dhcp_server ip range.
 - Example
   ```
   show dhcp_server ipv4 range range_1
-
   +---------+-------------+--------------+------------+
   | Range   | IP Start    | IP End       |   IP Count |
   +=========+=============+==============+============+
