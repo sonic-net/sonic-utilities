@@ -47,19 +47,19 @@ Ethernet9      N/A        0      0.00 B/s       0.00/s        N/A         0     
 intf_fec_counters = """\
     IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER    FEC_PRE_BER_MAX    FLR(O)    FLR(P) (Accuracy)
 ---------  -------  ----------  ------------  ----------------  -------------  --------------  -----------------  --------  -------------------
-Ethernet0        D     130,402             3                 4            N/A             N/A                N/A       N/A                  N/A
-Ethernet4      N/A     110,412             1                 0            N/A             N/A                N/A       N/A                  N/A
-Ethernet8      N/A     100,317             0                 0            N/A             N/A                N/A       N/A                  N/A
+Ethernet0        D     130,402             3                 4            N/A             N/A                N/A  4.21e-10       7.81e-10 (89%)
+Ethernet4      N/A     110,412             1                 0            N/A             N/A                N/A         0                    0
+Ethernet8      N/A     100,317             0                 0            N/A             N/A                N/A         0       4.81e-10 (89%)
 Ethernet9      N/A           0             0                 0            N/A             N/A                N/A       N/A                  N/A
-"""
+"""  # noqa: E501
 
 intf_fec_counters_nonzero = """\
     IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER    FEC_PRE_BER_MAX    FLR(O)    FLR(P) (Accuracy)
 ---------  -------  ----------  ------------  ----------------  -------------  --------------  -----------------  --------  -------------------
-Ethernet0        D     130,402             3                 4            N/A             N/A                N/A       N/A                  N/A
-Ethernet4      N/A     110,412             1                 0            N/A             N/A                N/A       N/A                  N/A
-Ethernet8      N/A     100,317             0                 0            N/A             N/A                N/A       N/A                  N/A
-"""
+Ethernet0        D     130,402             3                 4            N/A             N/A                N/A  4.21e-10       7.81e-10 (89%)
+Ethernet4      N/A     110,412             1                 0            N/A             N/A                N/A  0                           0
+Ethernet8      N/A     100,317             0                 0            N/A             N/A                N/A  0              4.81e-10 (89%)
+"""  # noqa: E501
 
 intf_fec_counters_fec_hist = """\
 Symbol Errors Per Codeword      Codewords
@@ -86,11 +86,11 @@ intf_fec_counters_period = """\
 The rates are calculated within 3 seconds period
     IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER    FEC_PRE_BER_MAX    FLR(O)    FLR(P) (Accuracy)
 ---------  -------  ----------  ------------  ----------------  -------------  --------------  -----------------  --------  -------------------
-Ethernet0        D           0             0                 0            N/A             N/A                N/A       N/A                  N/A
-Ethernet4      N/A           0             0                 0            N/A             N/A                N/A       N/A                  N/A
-Ethernet8      N/A           0             0                 0            N/A             N/A                N/A       N/A                  N/A
+Ethernet0        D           0             0                 0            N/A             N/A                N/A  4.21e-10       7.81e-10 (89%)
+Ethernet4      N/A           0             0                 0            N/A             N/A                N/A         0                    0
+Ethernet8      N/A           0             0                 0            N/A             N/A                N/A         0       4.81e-10 (89%)
 Ethernet9      N/A           0             0                 0            N/A             N/A                N/A       N/A                  N/A
-"""
+"""  # noqa: E501
 
 intf_counters_period = """\
 The rates are calculated within 3 seconds period
