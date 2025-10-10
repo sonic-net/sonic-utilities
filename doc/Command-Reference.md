@@ -3436,8 +3436,7 @@ This command is used to show ipv4 dhcp_relay helper.
   |             |        192.0.0.3     |
   |             |        192.0.0.4     |
   +-------------+----------------------+
-  ```
-  
+  ```  
 **show dhcp_relay ipv6 destination**
 
 This command is used to show ipv6 dhcp_relay destination.
@@ -3742,11 +3741,11 @@ This command is used to show dhcp_server ip range.
   show dhcp_server ipv4 range range_1
 
   admin@bjw-can-720dt-2:~$ show dhcp_server ipv4 range range_1
-  +---------+-------------+-------------+------------+
-  | Range   | IP Start    | IP End      |   IP Count |
-  +=========+=============+=============+============+
-  | range_1 | 192.168.0.2 | 192.168.0.2 |          1 |
-  +---------+-------------+-------------+------------+
+  +---------+-------------+--------------+------------+
+  | Range   | IP Start    | IP End       |   IP Count |
+  +=========+=============+==============+============+
+  | range_1 | 192.168.0.5 | 192.168.0.10 |          6 |
+  +---------+-------------+--------------+------------+
 
   show dhcp_server ipv4 range 
   +---------+-------------+--------------+------------+
