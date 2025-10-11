@@ -484,19 +484,19 @@ def test_mirror_session_capability_function():
 
         # Test rx direction
         result = config.is_port_mirror_capability_supported("rx")
-        assert result == True
+        assert result is True
 
         # Test tx direction
         result = config.is_port_mirror_capability_supported("tx")
-        assert result == True
+        assert result is True
 
         # Test both direction
         result = config.is_port_mirror_capability_supported("both")
-        assert result == True
+        assert result is True
 
         # Test no direction (should check both)
         result = config.is_port_mirror_capability_supported(None)
-        assert result == True
+        assert result is True
 
     # Test 2: Test with partial capability support
     with mock.patch('config.main.SonicV2Connector') as mock_connector:
@@ -514,19 +514,19 @@ def test_mirror_session_capability_function():
 
         # Test rx direction (should pass)
         result = config.is_port_mirror_capability_supported("rx")
-        assert result == True
+        assert result is True
 
         # Test tx direction (should fail)
         result = config.is_port_mirror_capability_supported("tx")
-        assert result == False
+        assert result is False
 
         # Test both direction (should fail)
         result = config.is_port_mirror_capability_supported("both")
-        assert result == False
+        assert result is False
 
         # Test no direction (should fail)
         result = config.is_port_mirror_capability_supported(None)
-        assert result == False
+        assert result is False
 
     # Test 3: Test with no capability support
     with mock.patch('config.main.SonicV2Connector') as mock_connector:
@@ -543,20 +543,20 @@ def test_mirror_session_capability_function():
         }.get((entry, field), "false")
 
         # All directions should fail
-        assert config.is_port_mirror_capability_supported("rx") == False
-        assert config.is_port_mirror_capability_supported("tx") == False
-        assert config.is_port_mirror_capability_supported("both") == False
-        assert config.is_port_mirror_capability_supported(None) == False
+        assert config.is_port_mirror_capability_supported("rx") is False
+        assert config.is_port_mirror_capability_supported("tx") is False
+        assert config.is_port_mirror_capability_supported("both") is False
+        assert config.is_port_mirror_capability_supported(None) is False
 
     # Test 4: Test exception handling (backward compatibility)
     with mock.patch('config.main.SonicV2Connector') as mock_connector:
         mock_connector.side_effect = Exception("Connection failed")
 
         # Should return True for backward compatibility when exception occurs
-        assert config.is_port_mirror_capability_supported("rx") == True
-        assert config.is_port_mirror_capability_supported("tx") == True
-        assert config.is_port_mirror_capability_supported("both") == True
-        assert config.is_port_mirror_capability_supported(None) == True
+        assert config.is_port_mirror_capability_supported("rx") is True
+        assert config.is_port_mirror_capability_supported("tx") is True
+        assert config.is_port_mirror_capability_supported("both") is True
+        assert config.is_port_mirror_capability_supported(None) is True
 
 
 def test_mirror_session_capability_integration():

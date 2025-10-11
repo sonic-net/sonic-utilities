@@ -1118,6 +1118,7 @@ def interface_has_mirror_config(ctx, mirror_table, dst_port, src_port, direction
 
     return False
 
+
 def is_port_mirror_capability_supported(direction, namespace=None):
     """ Check if port mirror capability is supported for the given direction """
     try:
@@ -1142,7 +1143,7 @@ def is_port_mirror_capability_supported(direction, namespace=None):
                 return False
 
         return True
-    except Exception as e:
+    except Exception:
         # If we can't check capability, assume it's supported for backward compatibility
         return True
 
