@@ -157,7 +157,7 @@ def sort_dict(data):
 
 
 def get_config_db_as_json():
-    return get_config_json() 
+    return get_config_json()
 
 
 # Read given JSON file

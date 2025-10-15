@@ -2127,7 +2127,6 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.assertEqual(len(filtered_ops), len(patch_ops), "All patch ops should remain as there are no duplicates")
         self.assertEqual(filtered_ops, patch_ops, "Filtered ops should match original ops")
 
-    @patch('config.main.get_config_db_as_json', MagicMock(return_value={}))
     def test_filter_duplicate_patch_operations_non_list_field(self):
         from config.main import filter_duplicate_patch_operations
         import jsonpatch
@@ -2150,7 +2149,6 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.assertEqual(len(filtered_ops), len(patch_ops), "Both add ops should remain for non-list field")
         self.assertEqual(filtered_ops, patch_ops, "Filtered ops should match original ops")
 
-    @patch('config.main.get_config_db_as_json', MagicMock(return_value={}))
     def test_filter_duplicate_patch_operations_empty_config(self):
         from config.main import filter_duplicate_patch_operations
         import jsonpatch
@@ -4194,7 +4192,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.filter_duplicate_patch_operations', mock.Mock(side_effect=lambda patch, config: patch))
-    @patch('generic_config_updater.generic_updater.get_config_json', MagicMock(return_value={}))
+    @patch('config.main.get_config_db_as_json', MagicMock(return_value={}))
     @patch('config.main.concurrent.futures.wait', autospec=True)
     def test_apply_patch_check_running_in_not_parallel_multiasic(self, MockThreadPoolWait):
         # Mock open to simulate file reading
@@ -4234,7 +4232,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.filter_duplicate_patch_operations', mock.Mock(side_effect=lambda patch, config: patch))
-    @patch('generic_config_updater.generic_updater.get_config_json', MagicMock(return_value={}))
+    @patch('config.main.get_config_db_as_json', MagicMock(return_value={}))
     def test_apply_patch_parallel_with_error_multiasic(self):
         # Mock open to simulate file reading
         with patch('builtins.open', mock_open(read_data=json.dumps(self.patch_content)), create=True) as mocked_open:
@@ -4404,16 +4402,32 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
             "Three adds are duplicates, three are new and should remain in multi-asic config"
         )
 
-    @patch('config.main.validate_patch', mock.Mock(return_value=True))
-    @patch('generic_config_updater.generic_updater.get_config_json', MagicMock(return_value={}))
     def test_filter_duplicate_patch_operations_empty_config_multiasic(self):
         from config.main import filter_duplicate_patch_operations
         import jsonpatch
-        # Empty config
+        # Empty config with ACL_TABLE and ports array
         config = {
-            "localhost": {},
-            "asic0": {},
-            "asic1": {}
+            "localhost": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": []
+                    }
+                }
+            },
+            "asic0": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": []
+                    }
+                }
+            },
+            "asic1": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": []
+                    }
+                }
+            }
         }
         # Patch tries to add ports to each ASIC's ACL_TABLE leaf-list
         patch_ops = [
@@ -4436,7 +4450,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
 
     @patch('config.main.subprocess.Popen')
     @patch('config.main.SonicYangCfgDbGenerator.validate_config_db_json', mock.Mock(return_value=True))
-    @patch('generic_config_updater.generic_updater.get_config_json', MagicMock(return_value={}))
+    @patch('config.main.get_config_db_as_json', MagicMock(return_value={}))
     def test_apply_patch_validate_patch_multiasic(self, mock_subprocess_popen):
         mock_instance = MagicMock()
         mock_instance.communicate.return_value = (json.dumps(self.all_config), 0)
