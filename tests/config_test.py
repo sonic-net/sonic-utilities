@@ -4706,7 +4706,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
         # change back to single asic config
         from .mock_tables import dbconnector
-        from .mock_tables import mock_single_asic        importlib.reload(mock_single_asic)
+        from .mock_tables import mock_single_asic
         dbconnector.load_database_config()
 
 
