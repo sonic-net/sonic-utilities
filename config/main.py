@@ -155,6 +155,11 @@ def sort_dict(data):
             data[table] = OrderedDict(natsorted(data[table].items()))
     return OrderedDict(natsorted(data.items()))
 
+
+def get_config_db_as_json():
+    return get_config_json() 
+
+
 # Read given JSON file
 def read_json_file(fileName):
     try:
@@ -1775,7 +1780,7 @@ def apply_patch(ctx, patch_file_path, format, dry_run, parallel, ignore_non_yang
             text = fh.read()
             patch_as_json = json.loads(text)
             patch = jsonpatch.JsonPatch(patch_as_json)
-        all_running_config = get_config_json()
+        all_running_config = get_config_db_as_json()
 
         patch = filter_duplicate_patch_operations(patch, all_running_config)
         if not validate_patch(patch, all_running_config):

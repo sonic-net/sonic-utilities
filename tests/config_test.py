@@ -1969,7 +1969,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.filter_duplicate_patch_operations', mock.Mock(side_effect=lambda patch, config: patch))
-    @patch('config.get_config_json', MagicMock(return_value={}))
+    @patch('config.main.get_config_db_as_json', MagicMock(return_value={}))
     def test_apply_patch__only_required_params__default_values_used_for_optional_params(self):
         # Arrange
         expected_exit_code = 0
@@ -1990,7 +1990,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.filter_duplicate_patch_operations', mock.Mock(side_effect=lambda patch, config: patch))
-    @patch('config.get_config_json', MagicMock(return_value={}))
+    @patch('config.main.get_config_db_as_json', MagicMock(return_value={}))
     def test_apply_patch__all_optional_params_non_default__non_default_values_used(self):
         # Arrange
         expected_exit_code = 0
@@ -2022,7 +2022,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.filter_duplicate_patch_operations', mock.Mock(side_effect=lambda patch, config: patch))
-    @patch('config.get_config_json', MagicMock(return_value={}))
+    @patch('config.main.get_config_db_as_json', MagicMock(return_value={}))
     def test_apply_patch__exception_thrown__error_displayed_error_code_returned(self):
         # Arrange
         unexpected_exit_code = 0
@@ -2041,7 +2041,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.assertNotEqual(unexpected_exit_code, result.exit_code)
         self.assertTrue(any_error_message in result.output)
 
-    @patch('config.get_config_json', MagicMock(return_value={}))
+    @patch('config.main.get_config_db_as_json', MagicMock(return_value={}))
     def test_apply_patch__optional_parameters_passed_correctly(self):
         self.validate_apply_patch_optional_parameter(
             ["--format", ConfigFormat.SONICYANG.name],
@@ -2127,7 +2127,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.assertEqual(len(filtered_ops), len(patch_ops), "All patch ops should remain as there are no duplicates")
         self.assertEqual(filtered_ops, patch_ops, "Filtered ops should match original ops")
 
-    @patch('config.get_config_json', MagicMock(return_value={}))
+    @patch('config.main.get_config_db_as_json', MagicMock(return_value={}))
     def test_filter_duplicate_patch_operations_non_list_field(self):
         from config.main import filter_duplicate_patch_operations
         import jsonpatch
@@ -2150,7 +2150,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.assertEqual(len(filtered_ops), len(patch_ops), "Both add ops should remain for non-list field")
         self.assertEqual(filtered_ops, patch_ops, "Filtered ops should match original ops")
 
-    @patch('config.get_config_json', MagicMock(return_value={}))
+    @patch('config.main.get_config_db_as_json', MagicMock(return_value={}))
     def test_filter_duplicate_patch_operations_empty_config(self):
         from config.main import filter_duplicate_patch_operations
         import jsonpatch
@@ -4009,7 +4009,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.filter_duplicate_patch_operations', mock.Mock(side_effect=lambda patch, config: patch))
-    @patch('config.get_config_json', MagicMock(return_value={}))
+    @patch('config.main.get_config_db_as_json', MagicMock(return_value={}))
     def test_apply_patch_multiasic(self):
         # Mock open to simulate file reading
         with patch('builtins.open', mock_open(read_data=json.dumps(self.patch_content)), create=True) as mocked_open:
@@ -4031,7 +4031,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.filter_duplicate_patch_operations', mock.Mock(side_effect=lambda patch, config: patch))
-    @patch('config.get_config_json', MagicMock(return_value={}))
+    @patch('config.main.get_config_db_as_json', MagicMock(return_value={}))
     def test_apply_patch_dryrun_multiasic(self):
         # Mock open to simulate file reading
         with patch('builtins.open', mock_open(read_data=json.dumps(self.patch_content)), create=True) as mocked_open:
@@ -4068,7 +4068,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.filter_duplicate_patch_operations', mock.Mock(side_effect=lambda patch, config: patch))
-    @patch('config.get_config_json', MagicMock(return_value={}))
+    @patch('config.main.get_config_db_as_json', MagicMock(return_value={}))
     @patch('config.main.concurrent.futures.wait', autospec=True)
     def test_apply_patch_dryrun_parallel_multiasic(self, MockThreadPoolWait):
         # Mock open to simulate file reading
@@ -4110,7 +4110,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.filter_duplicate_patch_operations', mock.Mock(side_effect=lambda patch, config: patch))
-    @patch('config.get_config_json', MagicMock(return_value={}))
+    @patch('config.main.get_config_db_as_json', MagicMock(return_value={}))
     @patch('config.main.concurrent.futures.wait', autospec=True)
     def test_apply_patch_check_running_in_parallel_multiasic(self, MockThreadPoolWait):
         # Mock open to simulate file reading
@@ -4151,7 +4151,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.filter_duplicate_patch_operations', mock.Mock(side_effect=lambda patch, config: patch))
-    @patch('generic_config_updater.generic_updater.get_config_json', MagicMock(return_value={}))
+    @patch('config.main.get_config_db_as_json', MagicMock(return_value={}))
     @patch('config.main.apply_patch_wrapper')
     def test_apply_patch_check_apply_call_parallel_multiasic(self, mock_apply_patch):
         # Mock open to simulate file reading
