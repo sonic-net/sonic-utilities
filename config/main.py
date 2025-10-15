@@ -1358,7 +1358,7 @@ def filter_duplicate_patch_operations(patch, all_running_config):
     if not any(op.get("path", "").endswith("/-") for op in patch):
         return
     all_target_config = patch.apply(all_running_config)
-    
+
     # check all_target_config for duplicate entries in leaf-list
     def find_duplicate_entries_in_config(config):
         duplicates = {}

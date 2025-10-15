@@ -1969,6 +1969,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.filter_duplicate_patch_operations', mock.Mock(side_effect=lambda patch, config: patch))
+    @patch('config.main.get_running_config', mock.Mock(return_value={}))
     def test_apply_patch__only_required_params__default_values_used_for_optional_params(self):
         # Arrange
         expected_exit_code = 0
@@ -1989,6 +1990,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.filter_duplicate_patch_operations', mock.Mock(side_effect=lambda patch, config: patch))
+    @patch('config.main.get_running_config', mock.Mock(return_value={}))
     def test_apply_patch__all_optional_params_non_default__non_default_values_used(self):
         # Arrange
         expected_exit_code = 0
@@ -2020,6 +2022,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.filter_duplicate_patch_operations', mock.Mock(side_effect=lambda patch, config: patch))
+    @patch('config.main.get_running_config', mock.Mock(return_value={}))
     def test_apply_patch__exception_thrown__error_displayed_error_code_returned(self):
         # Arrange
         unexpected_exit_code = 0
@@ -2038,6 +2041,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.assertNotEqual(unexpected_exit_code, result.exit_code)
         self.assertTrue(any_error_message in result.output)
 
+    @patch('config.main.get_running_config', mock.Mock(return_value={}))
     def test_apply_patch__optional_parameters_passed_correctly(self):
         self.validate_apply_patch_optional_parameter(
             ["--format", ConfigFormat.SONICYANG.name],
@@ -2123,6 +2127,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.assertEqual(len(filtered_ops), len(patch_ops), "All patch ops should remain as there are no duplicates")
         self.assertEqual(filtered_ops, patch_ops, "Filtered ops should match original ops")
 
+    @patch('config.main.get_running_config', mock.Mock(return_value={}))
     def test_filter_duplicate_patch_operations_non_list_field(self):
         from config.main import filter_duplicate_patch_operations
         import jsonpatch
@@ -2144,7 +2149,8 @@ class TestGenericUpdateCommands(unittest.TestCase):
         filtered_ops = list(filtered_patch)
         self.assertEqual(len(filtered_ops), len(patch_ops), "Both add ops should remain for non-list field")
         self.assertEqual(filtered_ops, patch_ops, "Filtered ops should match original ops")
-    
+
+    @patch('config.main.get_running_config', mock.Mock(return_value={}))
     def test_filter_duplicate_patch_operations_empty_config(self):
         from config.main import filter_duplicate_patch_operations
         import jsonpatch
@@ -4003,6 +4009,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.filter_duplicate_patch_operations', mock.Mock(side_effect=lambda patch, config: patch))
+    @patch('config.main.get_running_config', mock.Mock(return_value={}))
     def test_apply_patch_multiasic(self):
         # Mock open to simulate file reading
         with patch('builtins.open', mock_open(read_data=json.dumps(self.patch_content)), create=True) as mocked_open:
@@ -4024,6 +4031,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.filter_duplicate_patch_operations', mock.Mock(side_effect=lambda patch, config: patch))
+    @patch('config.main.get_running_config', mock.Mock(return_value={}))
     def test_apply_patch_dryrun_multiasic(self):
         # Mock open to simulate file reading
         with patch('builtins.open', mock_open(read_data=json.dumps(self.patch_content)), create=True) as mocked_open:
@@ -4060,6 +4068,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.filter_duplicate_patch_operations', mock.Mock(side_effect=lambda patch, config: patch))
+    @patch('config.main.get_running_config', mock.Mock(return_value={}))
     @patch('config.main.concurrent.futures.wait', autospec=True)
     def test_apply_patch_dryrun_parallel_multiasic(self, MockThreadPoolWait):
         # Mock open to simulate file reading
@@ -4101,6 +4110,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.filter_duplicate_patch_operations', mock.Mock(side_effect=lambda patch, config: patch))
+    @patch('config.main.get_running_config', mock.Mock(return_value={}))
     @patch('config.main.concurrent.futures.wait', autospec=True)
     def test_apply_patch_check_running_in_parallel_multiasic(self, MockThreadPoolWait):
         # Mock open to simulate file reading
@@ -4141,6 +4151,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.filter_duplicate_patch_operations', mock.Mock(side_effect=lambda patch, config: patch))
+    @patch('config.main.get_running_config', mock.Mock(return_value={}))
     @patch('config.main.apply_patch_wrapper')
     def test_apply_patch_check_apply_call_parallel_multiasic(self, mock_apply_patch):
         # Mock open to simulate file reading
@@ -4183,6 +4194,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.filter_duplicate_patch_operations', mock.Mock(side_effect=lambda patch, config: patch))
+    @patch('config.main.get_running_config', mock.Mock(return_value={}))
     @patch('config.main.concurrent.futures.wait', autospec=True)
     def test_apply_patch_check_running_in_not_parallel_multiasic(self, MockThreadPoolWait):
         # Mock open to simulate file reading
@@ -4222,6 +4234,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.filter_duplicate_patch_operations', mock.Mock(side_effect=lambda patch, config: patch))
+    @patch('config.main.get_running_config', mock.Mock(return_value={}))
     def test_apply_patch_parallel_with_error_multiasic(self):
         # Mock open to simulate file reading
         with patch('builtins.open', mock_open(read_data=json.dumps(self.patch_content)), create=True) as mocked_open:
@@ -4339,7 +4352,11 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         patch = jsonpatch.JsonPatch(patch_ops)
         filtered_patch = filter_duplicate_patch_operations(patch, config)
         filtered_ops = list(filtered_patch)
-        self.assertEqual(len(filtered_ops), len(patch_ops), "No adds are duplicates, none should be filtered out in multi-asic config")
+        self.assertEqual(
+            len(filtered_ops),
+            len(patch_ops),
+            "No adds are duplicates, none should be filtered out in multi-asic config"
+        )
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     def test_filter_duplicate_patch_operations_mixed_multiasic(self):
@@ -4381,9 +4398,14 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         patch = jsonpatch.JsonPatch(patch_ops)
         filtered_patch = filter_duplicate_patch_operations(patch, config)
         filtered_ops = list(filtered_patch)
-        self.assertEqual(len(filtered_ops), 3, "Three adds are duplicates, three are new and should remain in multi-asic config")
+        self.assertEqual(
+            len(filtered_ops),
+            3,
+            "Three adds are duplicates, three are new and should remain in multi-asic config"
+        )
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
+    @patch('config.main.get_running_config', mock.Mock(return_value={}))
     def test_filter_duplicate_patch_operations_empty_config_multiasic(self):
         from config.main import filter_duplicate_patch_operations
         import jsonpatch
@@ -4405,10 +4427,16 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         patch = jsonpatch.JsonPatch(patch_ops)
         filtered_patch = filter_duplicate_patch_operations(patch, config)
         filtered_ops = list(filtered_patch)
-        self.assertEqual(len(filtered_ops), len(patch_ops), "No adds are duplicates in empty config, none should be filtered out in multi-asic config")
+        self.assertEqual(
+            len(filtered_ops),
+            len(patch_ops),
+            "No adds are duplicates in empty config, "
+            "none should be filtered out in multi-asic config"
+        )
 
     @patch('config.main.subprocess.Popen')
     @patch('config.main.SonicYangCfgDbGenerator.validate_config_db_json', mock.Mock(return_value=True))
+    @patch('config.main.get_running_config', mock.Mock(return_value={}))
     def test_apply_patch_validate_patch_multiasic(self, mock_subprocess_popen):
         mock_instance = MagicMock()
         mock_instance.communicate.return_value = (json.dumps(self.all_config), 0)
@@ -4678,8 +4706,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
         # change back to single asic config
         from .mock_tables import dbconnector
-        from .mock_tables import mock_single_asic
-        importlib.reload(mock_single_asic)
+        from .mock_tables import mock_single_asic        importlib.reload(mock_single_asic)
         dbconnector.load_database_config()
 
 
