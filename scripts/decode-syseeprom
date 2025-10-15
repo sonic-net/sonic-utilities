@@ -16,24 +16,71 @@ import re
 import sys
 import errno
 
-import sonic_platform
-from sonic_platform_base.sonic_eeprom.eeprom_tlvinfo import TlvInfoDecoder
-from sonic_py_common import device_info, logger
-from swsscommon.swsscommon import SonicV2Connector
-from tabulate import tabulate
-
+from sonic_py_common import device_info
 
 EEPROM_INFO_TABLE = 'EEPROM_INFO'
 SYSLOG_IDENTIFIER = 'decode-syseeprom'
 
-log = logger.Logger(SYSLOG_IDENTIFIER)
+# Lazy-loaded modules
+_sonic_platform = None
+_TlvInfoDecoder = None
+_SonicV2Connector = None
+_tabulate = None
+_logger = None
+
+
+def _get_logger():
+    """Lazy load logger module"""
+    global _logger
+    if _logger is None:
+        from sonic_py_common import logger
+        _logger = logger.Logger(SYSLOG_IDENTIFIER)
+    return _logger
+
+
+def _get_sonic_platform():
+    """Lazy load sonic_platform module"""
+    global _sonic_platform
+    if _sonic_platform is None:
+        import sonic_platform
+        _sonic_platform = sonic_platform
+    return _sonic_platform
+
+
+def _get_TlvInfoDecoder():
+    """Lazy load TlvInfoDecoder class"""
+    global _TlvInfoDecoder
+    if _TlvInfoDecoder is None:
+        from sonic_platform_base.sonic_eeprom.eeprom_tlvinfo import TlvInfoDecoder
+        _TlvInfoDecoder = TlvInfoDecoder
+    return _TlvInfoDecoder
+
+
+def _get_SonicV2Connector():
+    """Lazy load SonicV2Connector class"""
+    global _SonicV2Connector
+    if _SonicV2Connector is None:
+        from swsscommon.swsscommon import SonicV2Connector
+        _SonicV2Connector = SonicV2Connector
+    return _SonicV2Connector
+
+
+def _get_tabulate():
+    """Lazy load tabulate function"""
+    global _tabulate
+    if _tabulate is None:
+        from tabulate import tabulate
+        _tabulate = tabulate
+    return _tabulate
 
 def instantiate_eeprom_object():
     eeprom = None
 
     try:
+        sonic_platform = _get_sonic_platform()
         eeprom = sonic_platform.platform.Platform().get_chassis().get_eeprom()
     except Exception as e:
+        log = _get_logger()
         log.log_error('Failed to obtain EEPROM object due to {}'.format(repr(e)))
         eeprom = None
 
@@ -67,6 +114,7 @@ def print_eeprom_dict(tlv_dict):
     for tlv in tlv_dict['tlv_list']:
         tlv_table_body.append([tlv['name'], tlv['code'], tlv['length'], tlv['value']])
 
+    tabulate = _get_tabulate()
     print(tabulate(tlv_table_body, tlv_table_header, tablefmt='simple'))
 
     print('')
@@ -80,6 +128,7 @@ def print_eeprom_dict(tlv_dict):
 def read_eeprom_from_db():
     tlv_dict = {}
 
+    SonicV2Connector = _get_SonicV2Connector()
     db = SonicV2Connector(host="127.0.0.1")
     db.connect(db.STATE_DB)
 
@@ -94,6 +143,7 @@ def read_eeprom_from_db():
     tlv_dict['header']['length'] = tlv_header.get('Total Length', 'N/A')
 
     tlv_dict['tlv_list'] = []
+    TlvInfoDecoder = _get_TlvInfoDecoder()
     concerned_tlvs = []
     concerned_tlvs.extend(range(TlvInfoDecoder._TLV_CODE_PRODUCT_NAME, TlvInfoDecoder._TLV_CODE_SERVICE_TAG + 1))
     concerned_tlvs.append(TlvInfoDecoder._TLV_CODE_VENDOR_EXT)
@@ -129,6 +179,7 @@ def read_eeprom_from_db():
 
 
 def get_tlv_value_from_db(tlv_code):
+    SonicV2Connector = _get_SonicV2Connector()
     db = SonicV2Connector(host="127.0.0.1")
     db.connect(db.STATE_DB)
 
@@ -145,6 +196,7 @@ def get_tlv_value_from_db(tlv_code):
 def print_mgmt_mac(use_db=False):
     base_mac_addr = None
     if use_db:
+        TlvInfoDecoder = _get_TlvInfoDecoder()
         base_mac_addr = get_tlv_value_from_db(TlvInfoDecoder._TLV_CODE_MAC_BASE)
     else:
         eeprom = instantiate_eeprom_object()
@@ -167,6 +219,7 @@ def print_mgmt_mac(use_db=False):
 def print_serial(use_db=False):
     serial = None
     if use_db:
+        TlvInfoDecoder = _get_TlvInfoDecoder()
         serial = get_tlv_value_from_db(TlvInfoDecoder._TLV_CODE_SERIAL_NUMBER)
     else:
         eeprom = instantiate_eeprom_object()
@@ -188,6 +241,7 @@ def print_serial(use_db=False):
 def print_model(use_db=False):
     model = None
     if use_db:
+        TlvInfoDecoder = _get_TlvInfoDecoder()
         model = get_tlv_value_from_db(TlvInfoDecoder._TLV_CODE_PRODUCT_NAME)
     else:
         eeprom = instantiate_eeprom_object()
