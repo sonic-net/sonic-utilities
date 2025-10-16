@@ -2070,6 +2070,96 @@ class TestGenericUpdateCommands(unittest.TestCase):
         mock_generic_updater.apply_patch.assert_called_once()
         mock_generic_updater.apply_patch.assert_has_calls([expected_call])
 
+    def test_filter_duplicate_patch_operations_basic(self):
+        from config.main import filter_duplicate_patch_operations
+        import jsonpatch
+        # Patch tries to add duplicate port to ACL_TABLE leaf-list
+        patch_ops = [
+            {"op": "add", "path": "/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet1"},
+            {"op": "add", "path": "/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet2"},
+            {"op": "add", "path": "/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet3"}
+        ]
+        patch = jsonpatch.JsonPatch(patch_ops)
+        config = {
+            "ACL_TABLE": {
+                "MY_ACL_TABLE": {
+                    "ports": ["Ethernet1", "Ethernet2"]
+                }
+            }
+        }
+        filtered_patch = filter_duplicate_patch_operations(patch, config)
+        # Only the non-duplicate add ops should remain
+        filtered_ops = list(filtered_patch)
+        self.assertEqual(len(filtered_ops), 1, "Only Ethernet3 add op should remain")
+        self.assertEqual(filtered_ops[0]['value'], "Ethernet3", "Only Ethernet3 add op should remain")
+
+    def test_filter_duplicate_patch_operations_no_duplicates(self):
+        from config.main import filter_duplicate_patch_operations
+        import jsonpatch
+        # Patch does not contain any duplicate ops
+        patch_ops = [
+            {"op": "add", "path": "/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet3"},
+            {"op": "remove", "path": "/ACL_TABLE/MY_ACL_TABLE/ports/0"},
+            {"op": "replace", "path": "/ACL_TABLE/MY_ACL_TABLE/description", "value": "New description"}
+        ]
+        patch = jsonpatch.JsonPatch(patch_ops)
+        config = {
+            "ACL_TABLE": {
+                "MY_ACL_TABLE": {
+                    "ports": ["Ethernet1", "Ethernet2"],
+                    "description": "Old description"
+                }
+            }
+        }
+        filtered_patch = filter_duplicate_patch_operations(patch, config)
+        # All ops should remain as there are no duplicates
+        filtered_ops = list(filtered_patch)
+        self.assertEqual(len(filtered_ops), len(patch_ops), "All patch ops should remain as there are no duplicates")
+        self.assertEqual(filtered_ops, patch_ops, "Filtered ops should match original ops")
+
+    def test_filter_duplicate_patch_operations_non_list_field(self):
+        from config.main import filter_duplicate_patch_operations
+        import jsonpatch
+        # Patch tries to add duplicate entries to a non-list field
+        patch_ops = [
+            {"op": "add", "path": "/PORT/Ethernet0/description", "value": "Desc1"},
+            {"op": "add", "path": "/PORT/Ethernet0/description", "value": "Desc2"}
+        ]
+        patch = jsonpatch.JsonPatch(patch_ops)
+        config = {
+            "PORT": {
+                "Ethernet0": {
+                    "description": "Existing description"
+                }
+            }
+        }
+        filtered_patch = filter_duplicate_patch_operations(patch, config)
+        # Both ops should remain as description is not a list field
+        filtered_ops = list(filtered_patch)
+        self.assertEqual(len(filtered_ops), len(patch_ops), "Both add ops should remain for non-list field")
+        self.assertEqual(filtered_ops, patch_ops, "Filtered ops should match original ops")
+
+    def test_filter_duplicate_patch_operations_empty_config(self):
+        from config.main import filter_duplicate_patch_operations
+        import jsonpatch
+        patch_ops = [
+            {"op": "add", "path": "/PORT/Ethernet0/allowed_vlans/-", "value": "100"},
+            {"op": "add", "path": "/PORT/Ethernet0/allowed_vlans/-", "value": "200"}
+        ]
+        patch = jsonpatch.JsonPatch(patch_ops)
+        config = {
+            "PORT": {
+                "Ethernet0": {
+                    "allowed_vlans": []
+                }
+            }
+        }
+        filtered_patch = filter_duplicate_patch_operations(patch, config)
+        # All ops should remain as config is empty and has no existing entries
+        filtered_ops = list(filtered_patch)
+        self.assertEqual(len(filtered_ops), len(patch_ops), "All add ops should remain for empty list")
+        self.assertEqual(filtered_ops, patch_ops, "Filtered ops should match original ops")
+
     def test_replace__no_params__get_required_params_error_msg(self):
         # Arrange
         unexpected_exit_code = 0
@@ -4158,6 +4248,182 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
 
                     # Ensure ConfigDBConnector was never instantiated or called
                     mock_config_db_connector.assert_not_called()
+
+    def test_filter_duplicate_patch_operations_basic_multiasic(self):
+        from config.main import filter_duplicate_patch_operations
+        import jsonpatch
+        # Multi-ASIC config: each ASIC has its own ACL_TABLE
+        config = {
+            "localhost": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": ["Ethernet1", "Ethernet2"]
+                    }
+                }
+            },
+            "asic0": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": ["Ethernet3", "Ethernet4"]
+                    }
+                }
+            },
+            "asic1": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": ["Ethernet5", "Ethernet6"]
+                    }
+                }
+            }
+        }
+        # Patch tries to add duplicate ports to each ASIC's ACL_TABLE leaf-list
+        patch_ops = [
+            {"op": "add", "path": "/localhost/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet1"},
+            {"op": "add", "path": "/localhost/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet2"},
+            {"op": "add", "path": "/asic0/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet3"},
+            {"op": "add", "path": "/asic0/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet4"},
+            {"op": "add", "path": "/asic1/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet5"},
+            {"op": "add", "path": "/asic1/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet6"}
+        ]
+        patch = jsonpatch.JsonPatch(patch_ops)
+        filtered_patch = filter_duplicate_patch_operations(patch, config)
+        filtered_ops = list(filtered_patch)
+        self.assertEqual(len(filtered_ops), 0, "All adds are duplicates, should be filtered out in multi-asic config")
+
+    def test_filter_duplicate_patch_operations_no_duplicates_multiasic(self):
+        from config.main import filter_duplicate_patch_operations
+        import jsonpatch
+        # Multi-ASIC config: each ASIC has its own ACL_TABLE
+        config = {
+            "localhost": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": ["Ethernet1", "Ethernet2"]
+                    }
+                }
+            },
+            "asic0": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": ["Ethernet3", "Ethernet4"]
+                    }
+                }
+            },
+            "asic1": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": ["Ethernet5", "Ethernet6"]
+                    }
+                }
+            }
+        }
+        # Patch tries to add new ports to each ASIC's ACL_TABLE leaf-list
+        patch_ops = [
+            {"op": "add", "path": "/localhost/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet7"},
+            {"op": "add", "path": "/localhost/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet8"},
+            {"op": "add", "path": "/asic0/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet9"},
+            {"op": "add", "path": "/asic0/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet10"},
+            {"op": "add", "path": "/asic1/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet11"},
+            {"op": "add", "path": "/asic1/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet12"}
+        ]
+        patch = jsonpatch.JsonPatch(patch_ops)
+        filtered_patch = filter_duplicate_patch_operations(patch, config)
+        filtered_ops = list(filtered_patch)
+        self.assertEqual(
+            len(filtered_ops),
+            len(patch_ops),
+            "No adds are duplicates, none should be filtered out in multi-asic config"
+        )
+
+    def test_filter_duplicate_patch_operations_mixed_multiasic(self):
+        from config.main import filter_duplicate_patch_operations
+        import jsonpatch
+        # Multi-ASIC config: each ASIC has its own ACL_TABLE
+        config = {
+            "localhost": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": ["Ethernet1", "Ethernet2"]
+                    }
+                }
+            },
+            "asic0": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": ["Ethernet3", "Ethernet4"]
+                    }
+                }
+            },
+            "asic1": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": ["Ethernet5", "Ethernet6"]
+                    }
+                }
+            }
+        }
+        # Patch tries to add some duplicate and some new ports to each ASIC's ACL_TABLE leaf-list
+        patch_ops = [
+            {"op": "add", "path": "/localhost/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet1"},  # duplicate
+            {"op": "add", "path": "/localhost/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet8"},  # new
+            {"op": "add", "path": "/asic0/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet3"},      # duplicate
+            {"op": "add", "path": "/asic0/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet10"},    # new
+            {"op": "add", "path": "/asic1/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet5"},      # duplicate
+            {"op": "add", "path": "/asic1/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet12"}     # new
+        ]
+        patch = jsonpatch.JsonPatch(patch_ops)
+        filtered_patch = filter_duplicate_patch_operations(patch, config)
+        filtered_ops = list(filtered_patch)
+        self.assertEqual(
+            len(filtered_ops),
+            3,
+            "Three adds are duplicates, three are new and should remain in multi-asic config"
+        )
+
+    def test_filter_duplicate_patch_operations_empty_config_multiasic(self):
+        from config.main import filter_duplicate_patch_operations
+        import jsonpatch
+        config = {
+            "localhost": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": []
+                    }
+                }
+            },
+            "asic0": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": []
+                    }
+                }
+            },
+            "asic1": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": []
+                    }
+                }
+            }
+        }
+        # Patch tries to add ports to each ASIC's ACL_TABLE leaf-list
+        patch_ops = [
+            {"op": "add", "path": "/localhost/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet1"},
+            {"op": "add", "path": "/localhost/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet2"},
+            {"op": "add", "path": "/asic0/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet3"},
+            {"op": "add", "path": "/asic0/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet4"},
+            {"op": "add", "path": "/asic1/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet5"},
+            {"op": "add", "path": "/asic1/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet6"}
+        ]
+        patch = jsonpatch.JsonPatch(patch_ops)
+        filtered_patch = filter_duplicate_patch_operations(patch, config)
+        filtered_ops = list(filtered_patch)
+        self.assertEqual(
+            len(filtered_ops),
+            len(patch_ops),
+            "No adds are duplicates in empty list, "
+            "none should be filtered out in multi-asic config"
+        )
 
     @patch('config.main.subprocess.Popen')
     @patch('config.main.SonicYangCfgDbGenerator.validate_config_db_json', mock.Mock(return_value=True))

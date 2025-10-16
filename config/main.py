@@ -1352,15 +1352,60 @@ def apply_patch_for_scope(scope_changes, results, config_format, verbose, dry_ru
         log.log_error(f"'apply-patch' executed failed for {scope_for_log} by {changes} due to {str(e)}")
 
 
-def validate_patch(patch):
-    try:
-        command = ["show", "runningconfiguration", "all"]
-        proc = subprocess.Popen(command, text=True, stdout=subprocess.PIPE)
-        all_running_config, returncode = proc.communicate()
-        if returncode:
-            log.log_notice(f"Fetch all runningconfiguration failed as output:{all_running_config}")
-            return False
+# Function to filter out duplicate patch operations that would cause duplicate entries in leaf-lists.
+def filter_duplicate_patch_operations(patch, all_running_config):
+    # Return early if no patch operation targets a leaf-list append (path endswith "/-")
+    if not any(op.get("path", "").endswith("/-") for op in patch):
+        return patch
+    all_target_config = patch.apply(all_running_config)
 
+    # check all_target_config for duplicate entries in leaf-list
+    def find_duplicate_entries_in_config(config):
+        duplicates = {}
+
+        def _check(obj, path=""):
+            if isinstance(obj, dict):
+                for k, v in obj.items():
+                    _check(v, f"{path}/{k}" if path else f"/{k}")
+            elif isinstance(obj, list):
+                seen = set()
+                dups = set()
+                for item in obj:
+                    if item in seen:
+                        dups.add(item)
+                    else:
+                        seen.add(item)
+                if dups:
+                    duplicates[path] = list(dups)
+                for idx, item in enumerate(obj):
+                    _check(item, f"{path}[{idx}]")
+        _check(config)
+        return duplicates
+
+    dups = find_duplicate_entries_in_config(all_target_config)
+
+    if not dups:
+        return patch
+
+    ops_to_remove = set()
+    for path, dup_values in dups.items():
+        list_path = path
+        for op_idx, op in enumerate(patch):
+            # Only consider 'add' ops to the end of a list
+            if op.get("op") == "add" and op.get("path", "").endswith("/-"):
+                # Check if op targets the same list path and value is a duplicate
+                if (
+                    op.get("path").startswith(list_path)
+                    and op.get("value") in dup_values
+                ):
+                    ops_to_remove.add(op_idx)
+
+    # Remove the duplicate-causing ops from patch
+    return jsonpatch.JsonPatch([op for idx, op in enumerate(patch) if idx not in ops_to_remove])
+
+
+def validate_patch(patch, all_running_config):
+    try:
         # Structure validation and simulate apply patch.
         all_target_config = patch.apply(json.loads(all_running_config))
 
@@ -1732,7 +1777,14 @@ def apply_patch(ctx, patch_file_path, format, dry_run, parallel, ignore_non_yang
             patch_as_json = json.loads(text)
             patch = jsonpatch.JsonPatch(patch_as_json)
 
-        if not validate_patch(patch):
+        command = ["show", "runningconfiguration", "all"]
+        proc = subprocess.Popen(command, text=True, stdout=subprocess.PIPE)
+        all_running_config, returncode = proc.communicate()
+        if returncode:
+            raise GenericConfigUpdaterError(f"Fetch all runningconfiguration failed as {returncode}")
+
+        patch = filter_duplicate_patch_operations(patch, all_running_config)
+        if not validate_patch(patch, all_running_config):
             raise GenericConfigUpdaterError(f"Failed validating patch:{patch}")
 
         results = {}
