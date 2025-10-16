@@ -1361,7 +1361,7 @@ def apply_patch_for_scope(scope_changes, results, config_format, verbose, dry_ru
 def filter_duplicate_patch_operations(patch, all_running_config):
     # Return early if no patch operation targets a leaf-list append (path endswith "/-")
     if not any(op.get("path", "").endswith("/-") for op in patch):
-        return
+        return patch
     all_target_config = patch.apply(all_running_config)
 
     # check all_target_config for duplicate entries in leaf-list
@@ -1383,8 +1383,7 @@ def filter_duplicate_patch_operations(patch, all_running_config):
                 if dups:
                     duplicates[path] = list(dups)
                 for idx, item in enumerate(obj):
-                    _check(item, f"{path}[{idx}]")
-
+                    _check(v, f"{path}/{k}" if path else f"/{k}")
         _check(config)
         return duplicates
 

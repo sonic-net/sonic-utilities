@@ -1941,6 +1941,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.filter_duplicate_patch_operations', mock.Mock(side_effect=lambda patch, config: patch))
+    @patch('config.main.get_config_db_as_json', MagicMock(return_value={}))
     def test_apply_patch__no_params__get_required_params_error_msg(self):
         # Arrange
         unexpected_exit_code = 0
@@ -1955,6 +1956,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.filter_duplicate_patch_operations', mock.Mock(side_effect=lambda patch, config: patch))
+    @patch('config.main.get_config_db_as_json', MagicMock(return_value={}))
     def test_apply_patch__help__gets_help_msg(self):
         # Arrange
         expected_exit_code = 0
@@ -2061,6 +2063,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.filter_duplicate_patch_operations', mock.Mock(side_effect=lambda patch, config: patch))
+    @patch('config.main.get_config_db_as_json', MagicMock(return_value={}))
     def validate_apply_patch_optional_parameter(self, param_args, expected_call):
         # Arrange
         expected_exit_code = 0
@@ -2152,17 +2155,22 @@ class TestGenericUpdateCommands(unittest.TestCase):
     def test_filter_duplicate_patch_operations_empty_config(self):
         from config.main import filter_duplicate_patch_operations
         import jsonpatch
-        # Patch tries to add entries to a list field in an empty config
         patch_ops = [
             {"op": "add", "path": "/PORT/Ethernet0/allowed_vlans/-", "value": "100"},
             {"op": "add", "path": "/PORT/Ethernet0/allowed_vlans/-", "value": "200"}
         ]
         patch = jsonpatch.JsonPatch(patch_ops)
-        config = {}  # Empty config
+        config = {
+            "PORT": {
+                "Ethernet0": {
+                    "allowed_vlans": []
+                }
+            }
+        }
         filtered_patch = filter_duplicate_patch_operations(patch, config)
         # All ops should remain as config is empty and has no existing entries
         filtered_ops = list(filtered_patch)
-        self.assertEqual(len(filtered_ops), len(patch_ops), "All add ops should remain for empty config")
+        self.assertEqual(len(filtered_ops), len(patch_ops), "All add ops should remain for empty list")
         self.assertEqual(filtered_ops, patch_ops, "Filtered ops should match original ops")
 
     def test_replace__no_params__get_required_params_error_msg(self):
@@ -4405,7 +4413,6 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
     def test_filter_duplicate_patch_operations_empty_config_multiasic(self):
         from config.main import filter_duplicate_patch_operations
         import jsonpatch
-        # Empty config with ACL_TABLE and ports array
         config = {
             "localhost": {
                 "ACL_TABLE": {
@@ -4444,7 +4451,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         self.assertEqual(
             len(filtered_ops),
             len(patch_ops),
-            "No adds are duplicates in empty config, "
+            "No adds are duplicates in empty list, "
             "none should be filtered out in multi-asic config"
         )
 
