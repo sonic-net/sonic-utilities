@@ -1370,7 +1370,7 @@ def filter_duplicate_patch_operations(patch, all_running_config):
     if not any(op.get("path", "").endswith("/-") for op in patch):
         return patch
     config = json.loads(all_running_config) if isinstance(all_running_config, str) else all_running_config
-    all_target_config = patch.apply(json.loads(config))
+    all_target_config = patch.apply(config)
 
     # check all_target_config for duplicate entries in leaf-list
     def find_duplicate_entries_in_config(config):
@@ -1467,7 +1467,7 @@ def validate_patch(patch, all_running_config):
     try:
         # Structure validation and simulate apply patch.
         config = json.loads(all_running_config) if isinstance(all_running_config, str) else all_running_config
-        all_target_config = patch.apply(json.loads(config))
+        all_target_config = patch.apply(config)
 
         # Verify target config by YANG models
         target_config = all_target_config.pop(HOST_NAMESPACE) if multi_asic.is_multi_asic() else all_target_config

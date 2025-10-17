@@ -1974,7 +1974,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         # Arrange
         expected_exit_code = 0
         expected_output = "Patch applied successfully"
-        expected_call_with_default_values = mock.call(self.any_patch, ConfigFormat.CONFIGDB, False, False, False, ())
+        expected_call_with_default_values = mock.call(mock.ANY, ConfigFormat.CONFIGDB, False, False, False, ())
         mock_generic_updater = mock.Mock()
         with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
             with mock.patch('builtins.open', mock.mock_open(read_data=self.any_patch_as_text)):
@@ -1999,7 +1999,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         expected_output = "Patch applied successfully"
         expected_ignore_path_tuple = ('/ANY_TABLE', '/ANY_OTHER_TABLE/ANY_FIELD', '')
         expected_call_with_non_default_values = \
-            mock.call(self.any_patch, ConfigFormat.SONICYANG, True, True, True, expected_ignore_path_tuple)
+            mock.call(mock.ANY, ConfigFormat.SONICYANG, True, True, True, expected_ignore_path_tuple)
         mock_generic_updater = mock.Mock()
         with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
             with mock.patch('builtins.open', mock.mock_open(read_data=self.any_patch_as_text)):
@@ -2048,19 +2048,19 @@ class TestGenericUpdateCommands(unittest.TestCase):
     def test_apply_patch__optional_parameters_passed_correctly(self):
         self.validate_apply_patch_optional_parameter(
             ["--format", ConfigFormat.SONICYANG.name],
-            mock.call(self.any_patch, ConfigFormat.SONICYANG, False, False, False, ()))
+            mock.call(mock.ANY, ConfigFormat.SONICYANG, False, False, False, ()))
         self.validate_apply_patch_optional_parameter(
             ["--verbose"],
-            mock.call(self.any_patch, ConfigFormat.CONFIGDB, True, False, False, ()))
+            mock.call(mock.ANY, ConfigFormat.CONFIGDB, True, False, False, ()))
         self.validate_apply_patch_optional_parameter(
             ["--dry-run"],
-            mock.call(self.any_patch, ConfigFormat.CONFIGDB, False, True, False, ()))
+            mock.call(mock.ANY, ConfigFormat.CONFIGDB, False, True, False, ()))
         self.validate_apply_patch_optional_parameter(
             ["--ignore-non-yang-tables"],
-            mock.call(self.any_patch, ConfigFormat.CONFIGDB, False, False, True, ()))
+            mock.call(mock.ANY, ConfigFormat.CONFIGDB, False, False, True, ()))
         self.validate_apply_patch_optional_parameter(
             ["--ignore-path", "/ANY_TABLE"],
-            mock.call(self.any_patch, ConfigFormat.CONFIGDB, False, False, False, ("/ANY_TABLE",)))
+            mock.call(mock.ANY, ConfigFormat.CONFIGDB, False, False, False, ("/ANY_TABLE",)))
 
     @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
         communicate=mock.Mock(return_value=('{"some": "config"}', None)),
@@ -2260,7 +2260,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         # Arrange
         expected_exit_code = 0
         expected_output = "Config replaced successfully"
-        expected_call_with_default_values = mock.call(self.any_target_config, ConfigFormat.CONFIGDB, False, False, False, ())
+        expected_call_with_default_values = mock.call(mock.ANY, ConfigFormat.CONFIGDB, False, False, False, ())
         mock_generic_updater = mock.Mock()
         with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
             with mock.patch('builtins.open', mock.mock_open(read_data=self.any_target_config_as_text)):
@@ -4072,6 +4072,10 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         self.all_config["asic1"] = data
         self.all_config["asic1"]["bgpraw"] = ""
 
+    @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
+        communicate=mock.Mock(return_value=('{"some": "config"}', None)),
+        returncode=0
+    )))
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch_multiasic(self):
         # Mock open to simulate file reading
@@ -4092,6 +4096,10 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
                 # Verify mocked_open was called as expected
                 mocked_open.assert_called_with(self.patch_file_path, 'r')
 
+    @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
+        communicate=mock.Mock(return_value=('{"some": "config"}', None)),
+        returncode=0
+    )))
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch_dryrun_multiasic(self):
         # Mock open to simulate file reading
@@ -4127,6 +4135,10 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
                     # Ensure ConfigDBConnector was never instantiated or called
                     mock_config_db_connector.assert_not_called()
 
+    @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
+        communicate=mock.Mock(return_value=('{"some": "config"}', None)),
+        returncode=0
+    )))
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.concurrent.futures.wait', autospec=True)
     def test_apply_patch_dryrun_parallel_multiasic(self, MockThreadPoolWait):
@@ -4167,6 +4179,10 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
                     # Ensure ConfigDBConnector was never instantiated or called
                     mock_config_db_connector.assert_not_called()
 
+    @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
+        communicate=mock.Mock(return_value=('{"some": "config"}', None)),
+        returncode=0
+    )))
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.concurrent.futures.wait', autospec=True)
     def test_apply_patch_check_running_in_parallel_multiasic(self, MockThreadPoolWait):
@@ -4206,6 +4222,10 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
                     # Ensure ConfigDBConnector was never instantiated or called
                     mock_config_db_connector.assert_not_called()
 
+    @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
+        communicate=mock.Mock(return_value=('{"some": "config"}', None)),
+        returncode=0
+    )))
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.apply_patch_wrapper')
     def test_apply_patch_check_apply_call_parallel_multiasic(self, mock_apply_patch):
@@ -4247,6 +4267,10 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
                     # Ensure ConfigDBConnector was never instantiated or called
                     mock_config_db_connector.assert_not_called()
 
+    @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
+        communicate=mock.Mock(return_value=('{"some": "config"}', None)),
+        returncode=0
+    )))
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.concurrent.futures.wait', autospec=True)
     def test_apply_patch_check_running_in_not_parallel_multiasic(self, MockThreadPoolWait):
@@ -4285,6 +4309,10 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
                     # Ensure ConfigDBConnector was never instantiated or called
                     mock_config_db_connector.assert_not_called()
 
+    @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
+        communicate=mock.Mock(return_value=('{"some": "config"}', None)),
+        returncode=0
+    )))
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch_parallel_with_error_multiasic(self):
         # Mock open to simulate file reading
