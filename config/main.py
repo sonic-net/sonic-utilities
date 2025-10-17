@@ -1364,7 +1364,6 @@ def apply_patch_for_scope(scope_changes, results, config_format, verbose, dry_ru
         log.log_error(f"'apply-patch' executed failed for {scope_for_log} by {changes} due to {str(e)}")
 
 
-# Function to filter out duplicate patch operations that would cause duplicate entries in leaf-lists.
 def filter_duplicate_patch_operations(patch, all_running_config):
     # Return early if no patch operation targets a leaf-list append (path endswith "/-")
     if not any(op.get("path", "").endswith("/-") for op in patch):
@@ -1372,7 +1371,6 @@ def filter_duplicate_patch_operations(patch, all_running_config):
     config = json.loads(all_running_config) if isinstance(all_running_config, str) else all_running_config
     all_target_config = patch.apply(config)
 
-    # check all_target_config for duplicate entries in leaf-list
     def find_duplicate_entries_in_config(config):
         duplicates = {}
 
@@ -1404,9 +1402,7 @@ def filter_duplicate_patch_operations(patch, all_running_config):
     for path, dup_values in dups.items():
         list_path = path
         for op_idx, op in enumerate(patch):
-            # Only consider 'add' ops to the end of a list
             if op.get("op") == "add" and op.get("path", "").endswith("/-"):
-                # Check if op targets the same list path and value is a duplicate
                 if (
                     op.get("path").startswith(list_path)
                     and op.get("value") in dup_values
@@ -1429,7 +1425,6 @@ def append_emptytables_if_required(patch, all_running_config):
             if not path_parts:
                 continue
 
-            # Multi-ASIC table path handling
             if path_parts[0].startswith('asic') or path_parts[0] == HOST_NAMESPACE:
                 if len(path_parts) < 2:
                     continue
@@ -1440,13 +1435,12 @@ def append_emptytables_if_required(patch, all_running_config):
             try:
                 jsonpointer.resolve_pointer(config, table_path)
             except jsonpointer.JsonPointerException as ex:
-                print(f"Table {table_path} is missing in running config: {ex}")
+                log.log_info(f"Table {table_path} is missing in running config: {ex}")
                 missing_tables.add(table_path)
 
     if not missing_tables:
         return patch
 
-    # Add missing empty tables
     for table in missing_tables:
         insert_idx = None
         for idx, op in enumerate(patch_ops):
@@ -1459,7 +1453,6 @@ def append_emptytables_if_required(patch, all_running_config):
         else:
             patch_ops.append(empty_table_patch)
 
-    # Return a new JsonPatch object
     return type(patch)(patch_ops)
 
 
@@ -1839,8 +1832,12 @@ def apply_patch(ctx, patch_file_path, format, dry_run, parallel, ignore_non_yang
 
         all_running_config = get_all_running_config()
 
+        # Pre-process patch to filter duplicate leaf-list appends.
         patch = filter_duplicate_patch_operations(patch, all_running_config)
+
+        # Pre-process patch to append empty tables if required.
         patch = append_emptytables_if_required(patch, all_running_config)
+
         if not validate_patch(patch, all_running_config):
             raise GenericConfigUpdaterError(f"Failed validating patch:{patch}")
 

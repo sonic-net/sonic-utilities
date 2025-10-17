@@ -72,14 +72,6 @@ def get_config_json():
     return all_running_config
 
 
-def get_empty_tables_with_path(config):
-    empty_tables = []
-    for key in config.keys():
-        if not config[key]:
-            empty_tables.append(key)
-    return empty_tables
-
-
 class ConfigLock:
     def acquire_lock(self):
         # TODO: Implement ConfigLock
