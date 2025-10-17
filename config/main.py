@@ -1417,34 +1417,32 @@ def filter_duplicate_patch_operations(patch, all_running_config):
 
 
 def append_emptytables_if_required(patch, all_running_config):
-    # Convert running config from string to JSON if needed
     config = json.loads(all_running_config) if isinstance(all_running_config, str) else all_running_config
     missing_tables = set()
 
-    # If patch is a JsonPatch object, get its list of operations
     patch_ops = list(patch) if hasattr(patch, '__iter__') else patch
 
-    # Analyze each operation in the patch
     for operation in patch_ops:
         if 'path' in operation:
             path_parts = operation['path'].strip('/').split('/')
             if not path_parts:
                 continue
+
+            # Multi-ASIC table path handling
             if path_parts[0].startswith('asic'):
                 if len(path_parts) < 2:
                     continue
                 table_path = f"/{path_parts[0]}/{path_parts[1]}"
-                table_config = config.get(path_parts[0], {})
-                table_key = path_parts[1]
             else:
                 table_path = f"/{path_parts[0]}"
-                table_config = config
-                table_key = path_parts[0]
+
             try:
-                jsonpointer.resolve_pointer(table_config, table_key)
-            except jsonpointer.JsonPointerException:
+                jsonpointer.resolve_pointer(config, table_path)
+            except jsonpointer.JsonPointerException as ex:
+                print(f"Table {table_path} is missing in running config: {ex}")
                 missing_tables.add(table_path)
 
+    # Add missing empty tables
     for table in missing_tables:
         insert_idx = None
         for idx, op in enumerate(patch_ops):

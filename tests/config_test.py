@@ -4481,6 +4481,82 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
             "none should be filtered out in multi-asic config"
         )
 
+    def test_test_append_emptytables_if_required_basic_config_multiasic(self):
+        from config.main import append_emptytables_if_required
+        # Multi-ASIC config: each ASIC has its own PORT table
+        config = {
+            "localhost": {
+                "PORT": {
+                    "Ethernet0": {
+                        "mtu": "9100"
+                    }
+                }
+            },
+            "asic0": {
+                "PORT": {
+                    "Ethernet1": {
+                        "mtu": "9100"
+                    }
+                }
+            },
+            "asic1": {
+                "PORT": {
+                    "Ethernet2": {
+                        "mtu": "9100"
+                    }
+                }
+            }
+        }
+        # Patch does not include PORT table for asic1
+        patch_ops = [
+            {"op": "add", "path": "/localhost/BGP_NEIGHBOR/ARISTA01T1", "value": "10.0.0.1"},
+            {"op": "add", "path": "/asic0/BGP_NEIGHBOR/ARISTA02T1", "value": "10.0.0.2"},
+            {"op": "add", "path": "/asic1/BGP_NEIGHBOR/ARISTA02T1", "value": "10.0.0.3"}
+        ]
+        updated_patch = append_emptytables_if_required(patch_ops, config)
+        assert len(updated_patch) == 6, "BGP_NEIGHBOR table for each namespae should be added to the patch"
+        assert updated_patch[0]["path"] == "/localhost/BGP_NEIGHBOR" and updated_patch[0]["value"] == {}
+        assert updated_patch[1]["path"] == patch_ops[0]["path"] and updated_patch[1]["value"] == patch_ops[0]["value"]
+        assert updated_patch[2]["path"] == "/asic0/BGP_NEIGHBOR" and updated_patch[2]["value"] == {}
+        assert updated_patch[3]["path"] == patch_ops[1]["path"] and updated_patch[3]["value"] == patch_ops[1]["value"]
+        assert updated_patch[4]["path"] == "/asic1/BGP_NEIGHBOR" and updated_patch[4]["value"] == {}
+        assert updated_patch[5]["path"] == patch_ops[2]["path"] and updated_patch[5]["value"] == patch_ops[2]["value"]
+
+    def test_test_append_emptytables_if_required_no_additional_tables_multiasic(self):
+        from config.main import append_emptytables_if_required
+        # Multi-ASIC config: each ASIC has its own PORT table
+        config = {
+            "localhost": {
+                "PORT": {
+                    "Ethernet0": {
+                        "mtu": "9100"
+                    }
+                }
+            },
+            "asic0": {
+                "PORT": {
+                    "Ethernet1": {
+                        "mtu": "9100"
+                    }
+                }
+            },
+            "asic1": {
+                "PORT": {
+                    "Ethernet2": {
+                        "mtu": "9100"
+                    }
+                }
+            }
+        }
+        # Patch already includes PORT table for each namespace
+        patch_ops = [
+            {"op": "add", "path": "/localhost/PORT/Ethernet0/mtu", "value": "9200"},
+            {"op": "add", "path": "/asic0/PORT/Ethernet1/mtu", "value": "9200"},
+            {"op": "add", "path": "/asic1/PORT/Ethernet2/mtu", "value": "9200"}
+        ]
+        updated_patch = append_emptytables_if_required(patch_ops, config)
+        assert len(updated_patch) == len(patch_ops), "No additional tables should be added to the patch"
+
     @patch('config.main.subprocess.Popen')
     @patch('config.main.SonicYangCfgDbGenerator.validate_config_db_json', mock.Mock(return_value=True))
     def test_apply_patch_validate_patch_multiasic(self, mock_subprocess_popen):
