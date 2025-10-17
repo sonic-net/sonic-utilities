@@ -1965,6 +1965,10 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.assertEqual(expected_exit_code, result.exit_code)
         self.assertTrue(expected_output in result.output)
 
+    @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
+        communicate=mock.Mock(return_value=('{"some": "config"}', None)),
+        returncode=0
+    )))
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch__only_required_params__default_values_used_for_optional_params(self):
         # Arrange
@@ -1984,6 +1988,10 @@ class TestGenericUpdateCommands(unittest.TestCase):
         mock_generic_updater.apply_patch.assert_called_once()
         mock_generic_updater.apply_patch.assert_has_calls([expected_call_with_default_values])
 
+    @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
+        communicate=mock.Mock(return_value=('{"some": "config"}', None)),
+        returncode=0
+    )))
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch__all_optional_params_non_default__non_default_values_used(self):
         # Arrange
@@ -2014,6 +2022,10 @@ class TestGenericUpdateCommands(unittest.TestCase):
         mock_generic_updater.apply_patch.assert_called_once()
         mock_generic_updater.apply_patch.assert_has_calls([expected_call_with_non_default_values])
 
+    @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
+        communicate=mock.Mock(return_value=('{"some": "config"}', None)),
+        returncode=0
+    )))
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch__exception_thrown__error_displayed_error_code_returned(self):
         # Arrange
@@ -2050,6 +2062,10 @@ class TestGenericUpdateCommands(unittest.TestCase):
             ["--ignore-path", "/ANY_TABLE"],
             mock.call(self.any_patch, ConfigFormat.CONFIGDB, False, False, False, ("/ANY_TABLE",)))
 
+    @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
+        communicate=mock.Mock(return_value=('{"some": "config"}', None)),
+        returncode=0
+    )))
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     def validate_apply_patch_optional_parameter(self, param_args, expected_call):
         # Arrange

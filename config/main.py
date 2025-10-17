@@ -1369,7 +1369,8 @@ def filter_duplicate_patch_operations(patch, all_running_config):
     # Return early if no patch operation targets a leaf-list append (path endswith "/-")
     if not any(op.get("path", "").endswith("/-") for op in patch):
         return patch
-    all_target_config = patch.apply(json.loads(all_running_config))
+    config = json.loads(all_running_config) if isinstance(all_running_config, str) else all_running_config
+    all_target_config = patch.apply(json.loads(config))
 
     # check all_target_config for duplicate entries in leaf-list
     def find_duplicate_entries_in_config(config):
@@ -1429,7 +1430,7 @@ def append_emptytables_if_required(patch, all_running_config):
                 continue
 
             # Multi-ASIC table path handling
-            if path_parts[0].startswith('asic'):
+            if path_parts[0].startswith('asic') or path_parts[0] == HOST_NAMESPACE:
                 if len(path_parts) < 2:
                     continue
                 table_path = f"/{path_parts[0]}/{path_parts[1]}"
@@ -1462,7 +1463,8 @@ def append_emptytables_if_required(patch, all_running_config):
 def validate_patch(patch, all_running_config):
     try:
         # Structure validation and simulate apply patch.
-        all_target_config = patch.apply(json.loads(all_running_config))
+        config = json.loads(all_running_config) if isinstance(all_running_config, str) else all_running_config
+        all_target_config = patch.apply(json.loads(config))
 
         # Verify target config by YANG models
         target_config = all_target_config.pop(HOST_NAMESPACE) if multi_asic.is_multi_asic() else all_target_config
