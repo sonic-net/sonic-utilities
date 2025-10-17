@@ -1443,6 +1443,9 @@ def append_emptytables_if_required(patch, all_running_config):
                 print(f"Table {table_path} is missing in running config: {ex}")
                 missing_tables.add(table_path)
 
+    if not missing_tables:
+        return patch
+
     # Add missing empty tables
     for table in missing_tables:
         insert_idx = None
