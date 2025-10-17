@@ -18,11 +18,12 @@ import itertools
 import copy
 import tempfile
 import sonic_yang
+import jsonpointer
 
 from jsonpatch import JsonPatchConflict
 from jsonpointer import JsonPointerException
 from collections import OrderedDict
-from generic_config_updater.generic_updater import GenericUpdater, ConfigFormat, extract_scope
+from generic_config_updater.generic_updater import GenericUpdater, ConfigFormat, extract_scope, get_empty_tables
 from generic_config_updater.gu_common import HOST_NAMESPACE, GenericConfigUpdaterError
 from minigraph import parse_device_desc_xml, minigraph_encoder
 from natsort import natsorted
@@ -141,6 +142,17 @@ sonic_cfggen = load_module_from_source('sonic_cfggen', '/usr/local/bin/sonic-cfg
 #
 # Helper functions
 #
+
+
+# Get all running configuration in JSON format
+def get_all_running_config():
+    command = ["show", "runningconfiguration", "all"]
+    proc = subprocess.Popen(command, text=True, stdout=subprocess.PIPE)
+    all_running_config, returncode = proc.communicate()
+    if returncode:
+        raise GenericConfigUpdaterError(f"Fetch all runningconfiguration failed as {returncode}")
+    return all_running_config
+
 
 # Sort nested dict
 def sort_dict(data):
@@ -1357,7 +1369,7 @@ def filter_duplicate_patch_operations(patch, all_running_config):
     # Return early if no patch operation targets a leaf-list append (path endswith "/-")
     if not any(op.get("path", "").endswith("/-") for op in patch):
         return patch
-    all_target_config = patch.apply(all_running_config)
+    all_target_config = patch.apply(json.loads(all_running_config))
 
     # check all_target_config for duplicate entries in leaf-list
     def find_duplicate_entries_in_config(config):
@@ -1402,6 +1414,51 @@ def filter_duplicate_patch_operations(patch, all_running_config):
 
     # Remove the duplicate-causing ops from patch
     return jsonpatch.JsonPatch([op for idx, op in enumerate(patch) if idx not in ops_to_remove])
+
+
+def append_emptytables_if_required(patch, all_running_config):
+    # Convert running config from string to JSON if needed
+    config = json.loads(all_running_config) if isinstance(all_running_config, str) else all_running_config
+    missing_tables = set()
+
+    # If patch is a JsonPatch object, get its list of operations
+    patch_ops = list(patch) if hasattr(patch, '__iter__') else patch
+
+    # Analyze each operation in the patch
+    for operation in patch_ops:
+        if 'path' in operation:
+            path_parts = operation['path'].strip('/').split('/')
+            if not path_parts:
+                continue
+            if path_parts[0].startswith('asic'):
+                if len(path_parts) < 2:
+                    continue
+                table_path = f"/{path_parts[0]}/{path_parts[1]}"
+                table_config = config.get(path_parts[0], {})
+                table_key = path_parts[1]
+            else:
+                table_path = f"/{path_parts[0]}"
+                table_config = config
+                table_key = path_parts[0]
+            try:
+                jsonpointer.resolve_pointer(table_config, table_key)
+            except jsonpointer.JsonPointerException:
+                missing_tables.add(table_path)
+
+    for table in missing_tables:
+        insert_idx = None
+        for idx, op in enumerate(patch_ops):
+            if 'path' in op and op['path'].startswith(table):
+                insert_idx = idx
+                break
+        empty_table_patch = {"op": "add", "path": table, "value": {}}
+        if insert_idx is not None:
+            patch_ops.insert(insert_idx, empty_table_patch)
+        else:
+            patch_ops.append(empty_table_patch)
+
+    # Return a new JsonPatch object
+    return type(patch)(patch_ops)
 
 
 def validate_patch(patch, all_running_config):
@@ -1777,13 +1834,10 @@ def apply_patch(ctx, patch_file_path, format, dry_run, parallel, ignore_non_yang
             patch_as_json = json.loads(text)
             patch = jsonpatch.JsonPatch(patch_as_json)
 
-        command = ["show", "runningconfiguration", "all"]
-        proc = subprocess.Popen(command, text=True, stdout=subprocess.PIPE)
-        all_running_config, returncode = proc.communicate()
-        if returncode:
-            raise GenericConfigUpdaterError(f"Fetch all runningconfiguration failed as {returncode}")
+        all_running_config = get_all_running_config()
 
         patch = filter_duplicate_patch_operations(patch, all_running_config)
+        patch = append_emptytables_if_required(patch, all_running_config)
         if not validate_patch(patch, all_running_config):
             raise GenericConfigUpdaterError(f"Failed validating patch:{patch}")
 

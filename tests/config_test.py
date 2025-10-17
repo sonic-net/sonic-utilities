@@ -2160,6 +2160,62 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.assertEqual(len(filtered_ops), len(patch_ops), "All add ops should remain for empty list")
         self.assertEqual(filtered_ops, patch_ops, "Filtered ops should match original ops")
 
+    def test_append_emptytables_if_required_basic_config(self):
+        from config.main import append_emptytables_if_required
+        import jsonpatch
+
+        patch_ops = [
+            {"op": "add", "path": "/ACL_TABLE2/ports", "value": ["Ethernet1", "Ethernet2"]}
+        ]
+        patch = jsonpatch.JsonPatch(patch_ops)
+        config = {
+            "ACL_TABLE": {
+                "ports": ["Ethernet3"]
+            }
+        }
+        updated_patch = append_emptytables_if_required(patch, config)
+        updated_ops = list(updated_patch)
+        assert len(updated_ops) == 2, "Patch should have 2 operations after appending empty tables"
+        assert updated_ops[0]['path'] == "/ACL_TABLE2", "First op should create ACL_TABLE2"
+        assert updated_ops[0]['op'] == "add", "First op should be an add operation"
+        assert updated_ops[1] == patch_ops[0], "Second op should be the original add operation"
+
+    def test_append_emptytables_if_required_no_action_needed(self):
+        from config.main import append_emptytables_if_required
+        import jsonpatch
+
+        patch_ops = [
+            {"op": "add", "path": "/ACL_TABLE/ports", "value": ["Ethernet1", "Ethernet2"]}
+        ]
+        patch = jsonpatch.JsonPatch(patch_ops)
+        config = {
+            "ACL_TABLE": {
+                "ports": ["Ethernet3"]
+            }
+        }
+        updated_patch = append_emptytables_if_required(patch, config)
+        updated_ops = list(updated_patch)
+        assert len(updated_ops) == 1, "Patch should remain unchanged with 1 operation"
+        assert updated_ops[0] == patch_ops[0], "Patch operation should remain unchanged"
+
+    def test_append_emptytables_if_required_multiple_tables(self):
+        from config.main import append_emptytables_if_required
+        import jsonpatch
+
+        patch_ops = [
+            {"op": "add", "path": "/TABLE1/field", "value": "value1"},
+            {"op": "add", "path": "/TABLE2/field", "value": "value2"}
+        ]
+        patch = jsonpatch.JsonPatch(patch_ops)
+        config = {}
+        updated_patch = append_emptytables_if_required(patch, config)
+        updated_ops = list(updated_patch)
+        assert len(updated_ops) == 4, "Patch should have 4 operations after appending empty tables"
+        assert updated_ops[0]['path'] == "/TABLE1", "First op should create TABLE1"
+        assert updated_ops[1] == patch_ops[0], "Second op should be the original TABLE1 add operation"
+        assert updated_ops[2]['path'] == "/TABLE2", "Third op should create TABLE2"
+        assert updated_ops[3] == patch_ops[1], "Fourth op should be the original TABLE2 add operation"
+
     def test_replace__no_params__get_required_params_error_msg(self):
         # Arrange
         unexpected_exit_code = 0
