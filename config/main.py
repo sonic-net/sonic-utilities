@@ -23,7 +23,7 @@ import jsonpointer
 from jsonpatch import JsonPatchConflict
 from jsonpointer import JsonPointerException
 from collections import OrderedDict
-from generic_config_updater.generic_updater import GenericUpdater, ConfigFormat, extract_scope, get_empty_tables
+from generic_config_updater.generic_updater import GenericUpdater, ConfigFormat, extract_scope
 from generic_config_updater.gu_common import HOST_NAMESPACE, GenericConfigUpdaterError
 from minigraph import parse_device_desc_xml, minigraph_encoder
 from natsort import natsorted
