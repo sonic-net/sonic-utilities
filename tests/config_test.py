@@ -4558,7 +4558,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
             {"op": "add", "path": "/asic1/BGP_NEIGHBOR/ARISTA02T1", "value": "10.0.0.3"}
         ]
         updated_patch = append_emptytables_if_required(patch_ops, config)
-        assert len(updated_patch) == 6, "BGP_NEIGHBOR table for each namespae should be added to the patch"
+        assert len(updated_patch) == 6, "BGP_NEIGHBOR table for each namespace should be added to the patch"
         assert updated_patch[0]["path"] == "/localhost/BGP_NEIGHBOR" and updated_patch[0]["value"] == {}
         assert updated_patch[1]["path"] == patch_ops[0]["path"] and updated_patch[1]["value"] == patch_ops[0]["value"]
         assert updated_patch[2]["path"] == "/asic0/BGP_NEIGHBOR" and updated_patch[2]["value"] == {}

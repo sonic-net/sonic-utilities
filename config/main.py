@@ -148,7 +148,10 @@ sonic_cfggen = load_module_from_source('sonic_cfggen', '/usr/local/bin/sonic-cfg
 def get_all_running_config():
     command = ["show", "runningconfiguration", "all"]
     proc = subprocess.Popen(command, text=True, stdout=subprocess.PIPE)
-    all_running_config, returncode = proc.communicate()
+
+    all_running_config, stderr_output = proc.communicate()
+    returncode = proc.returncode
+
     if returncode:
         raise GenericConfigUpdaterError(f"Fetch all runningconfiguration failed as {returncode}")
     return all_running_config
@@ -1417,7 +1420,7 @@ def append_emptytables_if_required(patch, all_running_config):
     config = json.loads(all_running_config) if isinstance(all_running_config, str) else all_running_config
     missing_tables = set()
 
-    patch_ops = list(patch) if hasattr(patch, '__iter__') else patch
+    patch_ops = list(patch) if isinstance(patch, (list, jsonpatch.JsonPatch)) else patch
 
     for operation in patch_ops:
         if 'path' in operation:
@@ -1453,7 +1456,7 @@ def append_emptytables_if_required(patch, all_running_config):
         else:
             patch_ops.append(empty_table_patch)
 
-    return type(patch)(patch_ops)
+    return jsonpatch.JsonPatch(patch_ops)
 
 
 def validate_patch(patch, all_running_config):
