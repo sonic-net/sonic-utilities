@@ -4558,13 +4558,14 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
             {"op": "add", "path": "/asic1/BGP_NEIGHBOR/ARISTA02T1", "value": "10.0.0.3"}
         ]
         updated_patch = append_emptytables_if_required(patch_ops, config)
-        assert len(list(updated_patch)) == 6, "BGP_NEIGHBOR table for each namespace should be added to the patch"
-        assert updated_patch[0]["path"] == "/localhost/BGP_NEIGHBOR" and updated_patch[0]["value"] == {}
-        assert updated_patch[1]["path"] == patch_ops[0]["path"] and updated_patch[1]["value"] == patch_ops[0]["value"]
-        assert updated_patch[2]["path"] == "/asic0/BGP_NEIGHBOR" and updated_patch[2]["value"] == {}
-        assert updated_patch[3]["path"] == patch_ops[1]["path"] and updated_patch[3]["value"] == patch_ops[1]["value"]
-        assert updated_patch[4]["path"] == "/asic1/BGP_NEIGHBOR" and updated_patch[4]["value"] == {}
-        assert updated_patch[5]["path"] == patch_ops[2]["path"] and updated_patch[5]["value"] == patch_ops[2]["value"]
+        updated_patch_list = list(updated_patch)
+        assert len(updated_patch_list) == 6, "BGP_NEIGHBOR table for each namespace should be added to the patch"
+        assert updated_patch_list[0] == {"op": "add", "path": "/localhost/BGP_NEIGHBOR", "value": {}}
+        assert updated_patch_list[2] == {"op": "add", "path": "/asic0/BGP_NEIGHBOR", "value": {}}
+        assert updated_patch_list[4] == {"op": "add", "path": "/asic1/BGP_NEIGHBOR", "value": {}}
+        assert updated_patch_list[1] == patch_ops[0]
+        assert updated_patch_list[3] == patch_ops[1]
+        assert updated_patch_list[5] == patch_ops[2]
 
     def test_test_append_emptytables_if_required_no_additional_tables_multiasic(self):
         from config.main import append_emptytables_if_required
