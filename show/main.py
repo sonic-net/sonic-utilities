@@ -33,7 +33,6 @@ try:
     if os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] == "multi_asic":
         import mock_tables.mock_multi_asic
         reload(mock_tables.mock_multi_asic)
-        reload(mock_tables.dbconnector)
         mock_tables.dbconnector.load_namespace_config()
 
 except KeyError:
@@ -2697,9 +2696,22 @@ def peer(db, peer_ip, namespace):
 def suppress_pending_fib(db):
     """ Show the status of suppress pending FIB feature """
 
-    field_values = db.cfgdb.get_entry('DEVICE_METADATA', 'localhost')
-    state = field_values.get('suppress-fib-pending', 'disabled').title()
-    click.echo(state)
+    if multi_asic.get_num_asics() > 1:
+        namespace_list = multi_asic.get_namespaces_from_linux()
+        masic = True
+    else:
+        namespace_list = [multi_asic.DEFAULT_NAMESPACE]
+        masic = False
+
+    for ns in namespace_list:
+        config_db = db.cfgdb_clients[ns]
+        field_values = config_db.get_entry('DEVICE_METADATA', 'localhost')
+        state = field_values.get('suppress-fib-pending', 'enabled').title()
+
+        if masic:
+            click.echo("{}: {}".format(ns, state))
+        else:
+            click.echo("{}".format(state))
 
 
 # asic-sdk-health-event subcommand ("show asic-sdk-health-event")

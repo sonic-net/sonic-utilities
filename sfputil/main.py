@@ -28,7 +28,7 @@ from utilities_common.platform_sfputil_helper import (
 )
 from utilities_common.sfp_helper import covert_application_advertisement_to_output_string
 from utilities_common.sfp_helper import QSFP_DATA_MAP
-from utilities_common.sfp_helper import is_transceiver_cmis
+from utilities_common.sfp_helper import is_transceiver_cmis, get_data_map_sort_key
 from tabulate import tabulate
 from utilities_common.general import load_db_config
 
@@ -338,8 +338,10 @@ def convert_sfp_info_to_output_string(sfp_info_dict):
     output = ''
     is_sfp_cmis = is_transceiver_cmis(sfp_info_dict)
     if is_sfp_cmis:
-        sorted_qsfp_data_map_keys = sorted(QSFP_DD_DATA_MAP, key=QSFP_DD_DATA_MAP.get)
-        for key in sorted_qsfp_data_map_keys:
+        # Use the utility function with the local QSFP_DD_DATA_MAP for CMIS transceivers
+        get_sort_key = get_data_map_sort_key(sfp_info_dict, QSFP_DD_DATA_MAP)
+        sorted_qsfp_dd_info_keys = sorted(sfp_info_dict.keys(), key=get_sort_key)
+        for key in sorted_qsfp_dd_info_keys:
             if key == 'cable_type':
                 output += '{}{}: {}\n'.format(indent, sfp_info_dict['cable_type'], sfp_info_dict['cable_length'])
             elif key == 'cable_length':
@@ -355,14 +357,15 @@ def convert_sfp_info_to_output_string(sfp_info_dict):
             elif key == 'application_advertisement':
                 output += covert_application_advertisement_to_output_string(indent, sfp_info_dict)
             else:
-                try:
-                    output += '{}{}: {}\n'.format(indent, QSFP_DD_DATA_MAP[key], sfp_info_dict[key])
-                except (KeyError, ValueError) as e:
-                    output += '{}{}: N/A\n'.format(indent, QSFP_DD_DATA_MAP[key])
+                # For both known and unknown keys, use the data map display name if available
+                display_name = QSFP_DD_DATA_MAP.get(key, key)  # Use data_map name if available, otherwise use key
+                output += '{}{}: {}\n'.format(indent, display_name, sfp_info_dict.get(key, 'N/A'))
 
     else:
-        sorted_qsfp_data_map_keys = sorted(QSFP_DATA_MAP, key=QSFP_DATA_MAP.get)
-        for key in sorted_qsfp_data_map_keys:
+        # Use the utility function with QSFP_DATA_MAP for non-CMIS transceivers
+        get_sort_key = get_data_map_sort_key(sfp_info_dict, QSFP_DATA_MAP)
+        sorted_qsfp_info_keys = sorted(sfp_info_dict.keys(), key=get_sort_key)
+        for key in sorted_qsfp_info_keys:
             if key == 'cable_type':
                 output += '{}{}: {}\n'.format(indent, sfp_info_dict['cable_type'], sfp_info_dict['cable_length'])
             elif key == 'cable_length':
@@ -379,7 +382,9 @@ def convert_sfp_info_to_output_string(sfp_info_dict):
                 except ValueError as e:
                     output += '{}N/A\n'.format((indent * 2))
             else:
-                output += '{}{}: {}\n'.format(indent, QSFP_DATA_MAP[key], sfp_info_dict[key])
+                # For both known and unknown keys, use the data map display name if available
+                display_name = QSFP_DATA_MAP.get(key, key)  # Use data_map name if available, otherwise use key
+                output += '{}{}: {}\n'.format(indent, display_name, sfp_info_dict.get(key, 'N/A'))
 
     return output
 

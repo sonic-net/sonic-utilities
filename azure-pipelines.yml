@@ -175,3 +175,13 @@ stages:
     - publish: '$(System.DefaultWorkingDirectory)/dist/'
       artifact: wheels
       displayName: "Publish Python wheels"
+
+    - script: |
+        set -e
+        pushd gcu
+        python3 -m build -n
+      displayName: 'Build Python 3 wheel for GCU'
+
+    - publish: '$(System.DefaultWorkingDirectory)/gcu/dist/'
+      artifact: gcu_wheels
+      displayName: "Publish Python wheels for GCU"

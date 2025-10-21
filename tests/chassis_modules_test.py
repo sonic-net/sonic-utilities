@@ -618,7 +618,7 @@ class TestChassisModules(object):
             fvs = {
                 'admin_status': 'up',
                 'state_transition_in_progress': 'True',
-                'transition_start_time': datetime.utcnow().isoformat()
+                'transition_start_time': datetime.now(timezone.utc).isoformat()
             }
             db.cfgdb.set_entry('CHASSIS_MODULE', "DPU0", fvs)
 
@@ -647,7 +647,7 @@ class TestChassisModules(object):
             fvs = {
                 'admin_status': 'up',
                 'state_transition_in_progress': 'True',
-                'transition_start_time': (datetime.utcnow() - timedelta(minutes=30)).isoformat()
+                'transition_start_time': (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat()
             }
             db.cfgdb.set_entry('CHASSIS_MODULE', "DPU0", fvs)
 
@@ -912,6 +912,26 @@ class TestChassisModules(object):
             assert result.exit_code == 0
             assert "Failed to start startup transition for module DPU0" in result.output
             m_start.assert_called_once_with("DPU0", "startup")
+
+    def test_delete_field(self):
+        """Single test to cover missing delete_field and timezone handling lines"""
+        from config.chassis_modules import StateDBHelper
+        from datetime import timezone
+
+        # Test delete_field method (covers lines 32-34)
+        mock_sonic_db = mock.MagicMock()
+        mock_redis_client = mock.MagicMock()
+        mock_sonic_db.get_redis_client.return_value = mock_redis_client
+        helper = StateDBHelper(mock_sonic_db)
+        helper.delete_field('TEST_TABLE', 'test_key', 'test_field')
+        mock_redis_client.hdel.assert_called_once_with("TEST_TABLE|test_key", "test_field")
+
+        # Test timezone-aware datetime handling (covers line 109)
+        db = mock.MagicMock()
+        db.statedb = mock.MagicMock()
+        tz_time = (datetime.now(timezone.utc) - TRANSITION_TIMEOUT - timedelta(seconds=1)).isoformat()
+        db.statedb.get_entry.return_value = {"transition_start_time": tz_time}
+        assert is_transition_timed_out(db, "DPU0") is True
 
     @classmethod
     def teardown_class(cls):

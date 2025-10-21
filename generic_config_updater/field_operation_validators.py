@@ -196,6 +196,9 @@ def port_config_update_validator(scope, patch_element):
                 return False
             return True
         if field == "speed":
+            # For chassis, skip speed validation as desired speed is not in supported_speeds of StateDB.
+            if device_info.is_chassis():
+                return True
             supported_speeds_str = read_statedb_entry(scope, "PORT_TABLE", port, "supported_speeds") or ''
             try:
                 supported_speeds = [int(s) for s in supported_speeds_str.split(',') if s]

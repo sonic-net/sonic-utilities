@@ -1,4 +1,6 @@
 import os
+import subprocess
+import shlex
 import time
 from .gu_common import genericUpdaterLogging
 
@@ -16,17 +18,35 @@ def set_verbose(verbose=False):
         logger.set_min_log_priority_notice()
 
 
+def command_wrapper(command):
+    """
+    Wrapper for system commands to support GCU in container.
+    """
+    if "systemctl" in command:
+        command = f"nsenter --target 1 --pid --mount --uts --ipc --net {command}"
+    try:
+        # Split command into arguments for shell=False
+        cmd_args = shlex.split(command)
+        result = subprocess.run(cmd_args, capture_output=False, check=False)
+        return result.returncode
+    except Exception as e:
+        logger.log(logger.LOG_PRIORITY_ERROR,
+                   f"Command execution failed: {command}, error: {e}",
+                   print_to_console)
+        return 1
+
+
 def _service_restart(svc_name):
-    rc = os.system(f"systemctl restart {svc_name}")
+    rc = command_wrapper(f"systemctl restart {svc_name}")
     if rc != 0:
         # This failure is likely due to too many restarts
         #
-        rc = os.system(f"systemctl reset-failed {svc_name}")
+        rc = command_wrapper(f"systemctl reset-failed {svc_name}")
         logger.log(logger.LOG_PRIORITY_ERROR, 
                 f"Service has been reset. rc={rc}; Try restart again...",
                 print_to_console)
 
-        rc = os.system(f"systemctl restart {svc_name}")
+        rc = command_wrapper(f"systemctl restart {svc_name}")
         if rc != 0:
             # Even with reset-failed, restart fails.
             # Give a pause before retry.
@@ -35,7 +55,7 @@ def _service_restart(svc_name):
                     f"Restart failed for {svc_name} rc={rc} after reset; Pause for 10s & retry",
                     print_to_console)
             time.sleep(10)
-            rc = os.system(f"systemctl restart {svc_name}")
+            rc = command_wrapper(f"systemctl restart {svc_name}")
 
     if rc == 0:
         logger.log(logger.LOG_PRIORITY_NOTICE,
@@ -53,8 +73,8 @@ def rsyslog_validator(old_config, upd_config, keys):
     upd_syslog = upd_config.get("SYSLOG_SERVER", {})
 
     if old_syslog != upd_syslog:
-        os.system("systemctl reset-failed rsyslog-config rsyslog")
-        rc = os.system("systemctl restart rsyslog-config")
+        command_wrapper("systemctl reset-failed rsyslog-config rsyslog")
+        rc = command_wrapper("systemctl restart rsyslog-config")
         if rc != 0:
             return False
     return True
@@ -122,7 +142,7 @@ def vlanintf_validator(old_config, upd_config, keys):
     deleted_keys = list(set(old_keys) - set(upd_keys))
     for key in deleted_keys:
         iface, iface_ip = key
-        rc = os.system(f"ip neigh flush dev {iface} {iface_ip}")
+        rc = command_wrapper(f"ip neigh flush dev {iface} {iface_ip}")
         if rc:
             return False
     return True

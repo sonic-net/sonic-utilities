@@ -36,6 +36,12 @@ def _module_base():
         _MB_SINGLETON = ModuleBase()
     return _MB_SINGLETON
 
+    def delete_field(self, table, key, field):
+        """Delete a specific field from table|key."""
+        redis_key = f"{table}|{key}"
+        client = self.db.get_redis_client("STATE_DB")
+        return client.hdel(redis_key, field)
+
 #
 # 'chassis_modules' group ('config chassis_modules ...')
 #

@@ -196,9 +196,9 @@ def main(show_config, profile, alpha, staticth, trim, namespace, verbose):
             mmu_cfg.list()
         # Buffershow cannot modify profiles
         elif config and profile:
-            if alpha:
+            if alpha is not None:
                 mmu_cfg.set(profile, DYNAMIC_THRESHOLD, alpha)
-            elif staticth:
+            elif staticth is not None:
                 mmu_cfg.set(profile, STATIC_THRESHOLD, staticth)
             elif trim:
                 mmu_cfg.set(profile, PACKET_TRIMMING, trim)
