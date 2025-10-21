@@ -6,7 +6,7 @@ import re
 import subprocess
 import utilities_common.cli as clicommon
 from utilities_common.chassis import is_smartswitch, get_all_dpus
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from swsscommon.swsscommon import SonicV2Connector
 from sonic_platform_base.module_base import ModuleBase
 
@@ -36,21 +36,6 @@ def _module_base():
         _MB_SINGLETON = ModuleBase()
     return _MB_SINGLETON
 
-class StateDBHelper:
-    def __init__(self, sonic_db):
-        self.db = sonic_db
-
-    def get_entry(self, table, key):
-        """Fetch all fields from table|key."""
-        redis_key = f"{table}|{key}"
-        return self.db.get_all("STATE_DB", redis_key) or {}
-
-    def set_entry(self, table, key, entry):
-        """Set multiple fields to table|key."""
-        redis_key = f"{table}|{key}"
-        for field, value in entry.items():
-            self.db.set("STATE_DB", redis_key, field, value)
-
 #
 # 'chassis_modules' group ('config chassis_modules ...')
 #
@@ -70,7 +55,7 @@ def _state_db_conn():
     """Return a cached SonicV2Connector for STATE_DB (lazy init)."""
     global _STATE_DB_CONN
     if _STATE_DB_CONN is None:
-        conn = SonicV2Connector()
+        conn = SonicV2Connector(use_string_keys=True)
         try:
             conn.connect(conn.STATE_DB)
         except Exception:
@@ -91,10 +76,11 @@ def _transition_in_progress(module_name: str) -> bool:
     """Return True if STATE_DB marks the module’s transition as in progress.
 
     Uses `_transition_entry(module_name)` and checks whether
-    `state_transition_in_progress` is exactly the string "True" (strict check).
+    `state_transition_in_progress` is a truthy string.
     """
     entry = _transition_entry(module_name)
-    return entry.get("state_transition_in_progress", "False") == "True"
+    in_prog_str = str(entry.get("state_transition_in_progress", "False")).lower()
+    return in_prog_str in ("true", "1", "yes", "on")
 
 
 def _mark_transition_start(module_name: str, transition_type: str):
@@ -176,12 +162,6 @@ def _block_if_conflicting_transition(chassis_module_name: str, conflict_type: st
         click.echo(f"Module {chassis_module_name} has a {conflict_type} transition underway; try again later.")
         return True
     return False
-
-def ensure_statedb_connected(db):
-    if not hasattr(db, 'statedb'):
-        chassisdb = db.db
-        chassisdb.connect("STATE_DB")
-        db.statedb = StateDBHelper(chassisdb)
 
 def get_config_module_state(db, chassis_module_name):
     config_db = db.cfgdb

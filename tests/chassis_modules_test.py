@@ -1,13 +1,13 @@
 import sys
 import os
 from click.testing import CliRunner
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from types import SimpleNamespace
 from swsscommon.swsscommon import SonicV2Connector  # noqa: F401
 
 # Use the same timeout your tests expect today
 TRANSITION_TIMEOUT = timedelta(minutes=4)
-_STATE_TABLE = "CHASSIS_MODULE"
+_STATE_TABLE = "CHASSIS_MODULE_TABLE"
 
 
 # helpers for transition checks
@@ -57,7 +57,7 @@ def _assert_transition_if_present(db, name, expected_type=None):
 
 def _state_conn():
     """Get a STATE_DB connector compatible with the test harness/mocks."""
-    v2 = SonicV2Connector()
+    v2 = SonicV2Connector(use_string_keys=True)
     try:
         v2.connect(v2.STATE_DB)
     except Exception:
@@ -71,20 +71,22 @@ def set_state_transition_in_progress(db, chassis_module_name, value):
     Pure test helper: write transition flags/timestamp to mocked STATE_DB.
     No dependency on ModuleBase.* (removed upstream).
     """
-    entry = db.statedb.get_entry(_STATE_TABLE, chassis_module_name) or {}
+    conn = _state_conn()
+    key = f"{_STATE_TABLE}|{chassis_module_name}"
+    entry = conn.get_all(conn.STATE_DB, key) or {}
 
     if value == "True":
         # set transition details + fresh start time
         entry["state_transition_in_progress"] = "True"
         entry["transition_type"] = entry.get("transition_type", "shutdown")
-        entry["transition_start_time"] = datetime.utcnow().isoformat()
+        entry["transition_start_time"] = datetime.now(timezone.utc).isoformat()
     else:
         # clear transition details
         entry.pop("state_transition_in_progress", None)
         entry.pop("transition_type", None)
         entry.pop("transition_start_time", None)
 
-    db.statedb.set_entry(_STATE_TABLE, chassis_module_name, entry)
+    conn.set(conn.STATE_DB, key, entry)
 
 
 def is_transition_timed_out(db, chassis_module_name):
@@ -92,7 +94,9 @@ def is_transition_timed_out(db, chassis_module_name):
     Pure test helper: determine timeout by comparing now against the stored
     ISO timestamp in mocked STATE_DB. No ModuleBase fallback.
     """
-    entry = db.statedb.get_entry(_STATE_TABLE, chassis_module_name)
+    conn = _state_conn()
+    key = f"{_STATE_TABLE}|{chassis_module_name}"
+    entry = conn.get_all(conn.STATE_DB, key)
     if not entry:
         return False
 
@@ -105,10 +109,12 @@ def is_transition_timed_out(db, chassis_module_name):
 
     try:
         start = datetime.fromisoformat(ts)
+        if start.tzinfo is None:
+            start = start.replace(tzinfo=timezone.utc)
     except Exception:
         return False
 
-    return (datetime.utcnow() - start) > TRANSITION_TIMEOUT
+    return (datetime.now(timezone.utc) - start) > TRANSITION_TIMEOUT
 
 import show.main as show
 import config.main as config
