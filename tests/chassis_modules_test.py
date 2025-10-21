@@ -71,7 +71,7 @@ def set_state_transition_in_progress(db, chassis_module_name, value):
     Pure test helper: write transition flags/timestamp to mocked STATE_DB.
     No dependency on ModuleBase.* (removed upstream).
     """
-    conn = _state_conn()
+    conn = db.statedb  # Use the mock from the test
     key = f"{_STATE_TABLE}|{chassis_module_name}"
 
     if value == "True":
@@ -95,7 +95,7 @@ def is_transition_timed_out(db, chassis_module_name):
     Pure test helper: determine timeout by comparing now against the stored
     ISO timestamp in mocked STATE_DB. No ModuleBase fallback.
     """
-    conn = _state_conn()
+    conn = db.statedb  # Use the mock from the test
     key = f"{_STATE_TABLE}|{chassis_module_name}"
     entry = conn.get_all(conn.STATE_DB, key)
     if not entry:
