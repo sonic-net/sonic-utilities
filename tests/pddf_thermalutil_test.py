@@ -268,7 +268,11 @@ class TestPddfThermalutil:
             output_lines = result.output.split("\n")
             temp2_line = [line for line in output_lines if "TEMP2" in line]
             assert len(temp2_line) == 1
-            assert "N/A" in temp2_line[0]
+            # Parse columns and verify structure
+            temp2_cols = [col for col in re.split(r"\s{2,}", temp2_line[0].strip()) if col]
+            assert len(temp2_cols) == 2
+            assert temp2_cols[0] == "TEMP2", f"Expected sensor name TEMP2, got {temp2_cols[0]}"
+            assert "N/A" in temp2_cols[1], f"Expected N/A in value column, got {temp2_cols[1]}"
 
     def test_gettemp_empty_sensor_list(self):
         """Test with no thermal sensors"""
