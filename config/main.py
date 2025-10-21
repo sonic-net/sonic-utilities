@@ -4673,6 +4673,26 @@ def remove():
     "Remove BGP neighbor configuration from the device"
     pass
 
+@neighbor.command('add')
+@click.argument("ip_addr", metavar="<ip_addr>", required=True)
+@click.argument('remote-as', metavar="<remote-as>", required=True, type=int)
+@click.argument('description', metavar="<neighbor_description", required=False)
+def add_neighbor(ip_addr, remote_as, description):
+    """
+    Add neighbor for given neighbor ip address and remote AS.
+    """
+    config_db = ConfigDBConnector()
+    config_db.connect()
+
+    entry ={
+        "remote-as": remote_as
+    }
+    if description:
+        entry["description"] = description
+
+    config_db.set_entry("BGP_NEIGHBOR", ip_addr, entry)
+    click.echo(f"Added BGP neighbor {ip_addr} with remote-as {remote_as}")
+
 @remove.command('neighbor')
 @click.argument('neighbor_ip_or_hostname', metavar='<neighbor_ip_or_hostname>', required=True)
 def remove_neighbor(neighbor_ip_or_hostname):
