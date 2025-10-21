@@ -73,20 +73,21 @@ def set_state_transition_in_progress(db, chassis_module_name, value):
     """
     conn = _state_conn()
     key = f"{_STATE_TABLE}|{chassis_module_name}"
-    entry = conn.get_all(conn.STATE_DB, key) or {}
 
     if value == "True":
         # set transition details + fresh start time
-        entry["state_transition_in_progress"] = "True"
-        entry["transition_type"] = entry.get("transition_type", "shutdown")
-        entry["transition_start_time"] = datetime.now(timezone.utc).isoformat()
+        entry = {
+            "state_transition_in_progress": "True",
+            "transition_type": "shutdown",
+            "transition_start_time": datetime.now(timezone.utc).isoformat()
+        }
+        for field, val in entry.items():
+            conn.set(conn.STATE_DB, key, field, val)
     else:
         # clear transition details
-        entry.pop("state_transition_in_progress", None)
-        entry.pop("transition_type", None)
-        entry.pop("transition_start_time", None)
-
-    conn.set(conn.STATE_DB, key, entry)
+        conn.delete(conn.STATE_DB, key, "state_transition_in_progress")
+        conn.delete(conn.STATE_DB, key, "transition_type")
+        conn.delete(conn.STATE_DB, key, "transition_start_time")
 
 
 def is_transition_timed_out(db, chassis_module_name):
@@ -688,43 +689,43 @@ class TestChassisModules(object):
         db.statedb = mock.MagicMock()
 
         # Case 1: Set to 'True' adds timestamp
-        db.statedb.get_entry.return_value = {}
+        db.statedb.get_all.return_value = {}
         set_state_transition_in_progress(db, "DPU0", "True")
-        args = db.statedb.set_entry.call_args[0]
-        updated_entry = args[2]
-        assert updated_entry["state_transition_in_progress"] == "True"
-        assert "transition_start_time" in updated_entry
+        # Check that 'set' was called for the transition fields
+        calls = db.statedb.set.call_args_list
+        assert any(call[0][2] == "state_transition_in_progress" and call[0][3] == "True" for call in calls)
+        assert any(call[0][2] == "transition_start_time" for call in calls)
 
         # Case 2: Set to 'False' removes timestamp and flag
-        db.statedb.get_entry.return_value = {
+        db.statedb.get_all.return_value = {
             "state_transition_in_progress": "True",
             "transition_start_time": "2025-05-01T01:00:00"
         }
         set_state_transition_in_progress(db, "DPU0", "False")
-        args = db.statedb.set_entry.call_args[0]
-        updated_entry = args[2]
-        assert "state_transition_in_progress" not in updated_entry
-        assert "transition_start_time" not in updated_entry
+        # Check that 'delete' was called for the transition fields
+        calls = db.statedb.delete.call_args_list
+        assert any(call[0][2] == "state_transition_in_progress" for call in calls)
+        assert any(call[0][2] == "transition_start_time" for call in calls)
 
     def test_is_transition_timed_out_all_paths(self):
         db = mock.MagicMock()
         db.statedb = mock.MagicMock()
 
         # Case 1: No entry
-        db.statedb.get_entry.return_value = None
+        db.statedb.get_all.return_value = None
         assert is_transition_timed_out(db, "DPU0") is False
 
         # Case 2: No transition_start_time
-        db.statedb.get_entry.return_value = {"state_transition_in_progress": "True"}
+        db.statedb.get_all.return_value = {"state_transition_in_progress": "True"}
         assert is_transition_timed_out(db, "DPU0") is False
 
         # Case 3: Invalid format
-        db.statedb.get_entry.return_value = {"transition_start_time": "bla", "state_transition_in_progress": "True"}
+        db.statedb.get_all.return_value = {"transition_start_time": "bla", "state_transition_in_progress": "True"}
         assert is_transition_timed_out(db, "DPU0") is False
 
         # Case 4: Timed out (must also be in progress)
         old_time = (datetime.utcnow() - TRANSITION_TIMEOUT - timedelta(seconds=1)).isoformat()
-        db.statedb.get_entry.return_value = {
+        db.statedb.get_all.return_value = {
             "transition_start_time": old_time,
             "state_transition_in_progress": "True",
         }
@@ -810,13 +811,22 @@ class TestChassisModules(object):
             class FakeConnector:
                 STATE_DB = object()
 
-                def __init__(self):
+                def __init__(self, **kwargs):
                     counters["inits"] += 1
 
                 def connect(self, which):
                     counters["connects"] += 1
                     # Exercise the try/except path; should not raise out of _state_db_conn()
                     raise RuntimeError("simulated connect failure")
+
+                def get_all(self, db, key):
+                    return {}
+
+                def set(self, db, key, field, value):
+                    pass
+
+                def delete(self, db, key, field):
+                    pass
 
             # Patch the swsscommon connector symbol used by _state_db_conn
             with mock.patch("config.chassis_modules.SonicV2Connector", FakeConnector, create=True):
