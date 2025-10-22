@@ -2088,7 +2088,6 @@ class TestGenericUpdateCommands(unittest.TestCase):
 
     def test_filter_duplicate_patch_operations_basic(self):
         from config.main import filter_duplicate_patch_operations
-        import jsonpatch
         # Patch tries to add duplicate port to ACL_TABLE leaf-list
         patch_ops = [
             {"op": "add", "path": "/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet1"},
@@ -2103,15 +2102,13 @@ class TestGenericUpdateCommands(unittest.TestCase):
                 }
             }
         }
-        filtered_patch = filter_duplicate_patch_operations(patch, config)
+        filtered_patch_ops = filter_duplicate_patch_operations(patch_ops, json.dumps(config))
         # Only the non-duplicate add ops should remain
-        filtered_ops = list(filtered_patch)
-        self.assertEqual(len(filtered_ops), 1, "Only Ethernet3 add op should remain")
-        self.assertEqual(filtered_ops[0]['value'], "Ethernet3", "Only Ethernet3 add op should remain")
+        self.assertEqual(len(filtered_patch_ops), 1, "Only Ethernet3 add op should remain")
+        self.assertEqual(filtered_patch_ops[0]['value'], "Ethernet3", "Only Ethernet3 add op should remain")
 
     def test_filter_duplicate_patch_operations_no_duplicates(self):
         from config.main import filter_duplicate_patch_operations
-        import jsonpatch
         # Patch does not contain any duplicate ops
         patch_ops = [
             {"op": "add", "path": "/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet3"},
@@ -2127,15 +2124,13 @@ class TestGenericUpdateCommands(unittest.TestCase):
                 }
             }
         }
-        filtered_patch = filter_duplicate_patch_operations(patch, config)
+        filtered_patch_ops = filter_duplicate_patch_operations(patch_ops, json.dumps(config))
         # All ops should remain as there are no duplicates
-        filtered_ops = list(filtered_patch)
-        self.assertEqual(len(filtered_ops), len(patch_ops), "All patch ops should remain as there are no duplicates")
-        self.assertEqual(filtered_ops, patch_ops, "Filtered ops should match original ops")
+        self.assertEqual(len(filtered_patch_ops), len(patch_ops), "All patch ops should remain as there are no duplicates")
+        self.assertEqual(filtered_patch_ops, patch_ops, "Filtered ops should match original ops")
 
     def test_filter_duplicate_patch_operations_non_list_field(self):
         from config.main import filter_duplicate_patch_operations
-        import jsonpatch
         # Patch tries to add duplicate entries to a non-list field
         patch_ops = [
             {"op": "add", "path": "/PORT/Ethernet0/description", "value": "Desc1"},
@@ -2149,15 +2144,13 @@ class TestGenericUpdateCommands(unittest.TestCase):
                 }
             }
         }
-        filtered_patch = filter_duplicate_patch_operations(patch, config)
+        filtered_patch_ops = filter_duplicate_patch_operations(patch_ops, json.dumps(config))
         # Both ops should remain as description is not a list field
-        filtered_ops = list(filtered_patch)
-        self.assertEqual(len(filtered_ops), len(patch_ops), "Both add ops should remain for non-list field")
-        self.assertEqual(filtered_ops, patch_ops, "Filtered ops should match original ops")
+        self.assertEqual(len(filtered_patch_ops), len(patch_ops), "Both add ops should remain for non-list field")
+        self.assertEqual(filtered_patch_ops, patch_ops, "Filtered ops should match original ops")
 
     def test_filter_duplicate_patch_operations_empty_config(self):
         from config.main import filter_duplicate_patch_operations
-        import jsonpatch
         patch_ops = [
             {"op": "add", "path": "/PORT/Ethernet0/allowed_vlans/-", "value": "100"},
             {"op": "add", "path": "/PORT/Ethernet0/allowed_vlans/-", "value": "200"}
@@ -2170,67 +2163,56 @@ class TestGenericUpdateCommands(unittest.TestCase):
                 }
             }
         }
-        filtered_patch = filter_duplicate_patch_operations(patch, config)
+        filtered_patch_ops = filter_duplicate_patch_operations(patch_ops, json.dumps(config))
         # All ops should remain as config is empty and has no existing entries
-        filtered_ops = list(filtered_patch)
-        self.assertEqual(len(filtered_ops), len(patch_ops), "All add ops should remain for empty list")
-        self.assertEqual(filtered_ops, patch_ops, "Filtered ops should match original ops")
+        self.assertEqual(len(filtered_patch_ops), len(patch_ops), "All add ops should remain for empty list")
+        self.assertEqual(filtered_patch_ops, patch_ops, "Filtered ops should match original ops")
 
     def test_append_emptytables_if_required_basic_config(self):
         from config.main import append_emptytables_if_required
-        import jsonpatch
 
         patch_ops = [
             {"op": "add", "path": "/ACL_TABLE2/ports", "value": ["Ethernet1", "Ethernet2"]}
         ]
-        patch = jsonpatch.JsonPatch(patch_ops)
         config = {
             "ACL_TABLE": {
                 "ports": ["Ethernet3"]
             }
         }
-        updated_patch = append_emptytables_if_required(patch, config)
-        updated_ops = list(updated_patch)
-        assert len(updated_ops) == 2, "Patch should have 2 operations after appending empty tables"
-        assert updated_ops[0]['path'] == "/ACL_TABLE2", "First op should create ACL_TABLE2"
-        assert updated_ops[0]['op'] == "add", "First op should be an add operation"
-        assert updated_ops[1] == patch_ops[0], "Second op should be the original add operation"
+        updated_patch_ops = append_emptytables_if_required(patch_ops, json.dumps(config))
+        assert len(updated_patch_ops) == 2, "Patch should have 2 operations after appending empty tables"
+        assert updated_patch_ops[0]['path'] == "/ACL_TABLE2", "First op should create ACL_TABLE2"
+        assert updated_patch_ops[0]['op'] == "add", "First op should be an add operation"
+        assert updated_patch_ops[1] == patch_ops[0], "Second op should be the original add operation"
 
     def test_append_emptytables_if_required_no_action_needed(self):
         from config.main import append_emptytables_if_required
-        import jsonpatch
-
         patch_ops = [
             {"op": "add", "path": "/ACL_TABLE/ports", "value": ["Ethernet1", "Ethernet2"]}
         ]
-        patch = jsonpatch.JsonPatch(patch_ops)
         config = {
             "ACL_TABLE": {
                 "ports": ["Ethernet3"]
             }
         }
-        updated_patch = append_emptytables_if_required(patch, config)
-        updated_ops = list(updated_patch)
-        assert len(updated_ops) == 1, "Patch should remain unchanged with 1 operation"
-        assert updated_ops[0] == patch_ops[0], "Patch operation should remain unchanged"
+        updated_patch_ops = append_emptytables_if_required(patch_ops, json.dumps(config))
+        assert len(updated_patch_ops) == 1, "Patch should remain unchanged with 1 operation"
+        assert updated_patch_ops[0] == patch_ops[0], "Patch operation should remain unchanged"
 
     def test_append_emptytables_if_required_multiple_tables(self):
         from config.main import append_emptytables_if_required
-        import jsonpatch
 
         patch_ops = [
             {"op": "add", "path": "/TABLE1/field", "value": "value1"},
             {"op": "add", "path": "/TABLE2/field", "value": "value2"}
         ]
-        patch = jsonpatch.JsonPatch(patch_ops)
         config = {}
-        updated_patch = append_emptytables_if_required(patch, config)
-        updated_ops = list(updated_patch)
-        assert len(updated_ops) == 4, "Patch should have 4 operations after appending empty tables"
-        assert updated_ops[0]['path'] == "/TABLE1", "First op should create TABLE1"
-        assert updated_ops[1] == patch_ops[0], "Second op should be the original TABLE1 add operation"
-        assert updated_ops[2]['path'] == "/TABLE2", "Third op should create TABLE2"
-        assert updated_ops[3] == patch_ops[1], "Fourth op should be the original TABLE2 add operation"
+        updated_patch_ops = append_emptytables_if_required(patch_ops, json.dumps(config))
+        assert len(updated_patch_ops) == 4, "Patch should have 4 operations after appending empty tables"
+        assert updated_patch_ops[0]['path'] == "/TABLE1", "First op should create TABLE1"
+        assert updated_patch_ops[1] == patch_ops[0], "Second op should be the original TABLE1 add operation"
+        assert updated_patch_ops[2]['path'] == "/TABLE2", "Third op should create TABLE2"
+        assert updated_patch_ops[3] == patch_ops[1], "Fourth op should be the original TABLE2 add operation"
 
     def test_replace__no_params__get_required_params_error_msg(self):
         # Arrange
