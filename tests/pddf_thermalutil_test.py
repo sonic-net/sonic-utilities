@@ -4,7 +4,6 @@ Unit tests for pddf_thermalutil
 
 import sys
 import os
-import re
 from unittest import mock
 from click.testing import CliRunner
 from pddf_thermalutil.main import cli
