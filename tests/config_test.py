@@ -2094,7 +2094,6 @@ class TestGenericUpdateCommands(unittest.TestCase):
             {"op": "add", "path": "/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet2"},
             {"op": "add", "path": "/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet3"}
         ]
-        patch = jsonpatch.JsonPatch(patch_ops)
         config = {
             "ACL_TABLE": {
                 "MY_ACL_TABLE": {
@@ -2115,7 +2114,6 @@ class TestGenericUpdateCommands(unittest.TestCase):
             {"op": "remove", "path": "/ACL_TABLE/MY_ACL_TABLE/ports/0"},
             {"op": "replace", "path": "/ACL_TABLE/MY_ACL_TABLE/description", "value": "New description"}
         ]
-        patch = jsonpatch.JsonPatch(patch_ops)
         config = {
             "ACL_TABLE": {
                 "MY_ACL_TABLE": {
@@ -2126,7 +2124,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         }
         filtered_patch_ops = filter_duplicate_patch_operations(patch_ops, json.dumps(config))
         # All ops should remain as there are no duplicates
-        self.assertEqual(len(filtered_patch_ops), len(patch_ops), "All patch ops should remain as there are no duplicates")
+        self.assertEqual(len(filtered_patch_ops), len(patch_ops), "All patch should remain as no duplicates")
         self.assertEqual(filtered_patch_ops, patch_ops, "Filtered ops should match original ops")
 
     def test_filter_duplicate_patch_operations_non_list_field(self):
@@ -2136,7 +2134,6 @@ class TestGenericUpdateCommands(unittest.TestCase):
             {"op": "add", "path": "/PORT/Ethernet0/description", "value": "Desc1"},
             {"op": "add", "path": "/PORT/Ethernet0/description", "value": "Desc2"}
         ]
-        patch = jsonpatch.JsonPatch(patch_ops)
         config = {
             "PORT": {
                 "Ethernet0": {
@@ -2155,7 +2152,6 @@ class TestGenericUpdateCommands(unittest.TestCase):
             {"op": "add", "path": "/PORT/Ethernet0/allowed_vlans/-", "value": "100"},
             {"op": "add", "path": "/PORT/Ethernet0/allowed_vlans/-", "value": "200"}
         ]
-        patch = jsonpatch.JsonPatch(patch_ops)
         config = {
             "PORT": {
                 "Ethernet0": {
