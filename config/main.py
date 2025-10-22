@@ -1372,7 +1372,9 @@ def filter_duplicate_patch_operations(patch, all_running_config):
     if not any(op.get("path", "").endswith("/-") for op in patch):
         return patch
     config = json.loads(all_running_config) if isinstance(all_running_config, str) else all_running_config
-    all_target_config = patch.apply(config)
+
+    patch_copy = jsonpatch.JsonPatch([copy.deepcopy(op) for op in patch])
+    all_target_config = patch_copy.apply(config)
 
     def find_duplicate_entries_in_config(config):
         duplicates = {}
@@ -1420,7 +1422,7 @@ def append_emptytables_if_required(patch, all_running_config):
     config = json.loads(all_running_config) if isinstance(all_running_config, str) else all_running_config
     missing_tables = set()
 
-    patch_ops = list(patch) if isinstance(patch, (list, jsonpatch.JsonPatch)) else patch
+    patch_ops = [copy.deepcopy(op) for op in patch]
 
     for operation in patch_ops:
         if 'path' in operation:
@@ -1835,11 +1837,11 @@ def apply_patch(ctx, patch_file_path, format, dry_run, parallel, ignore_non_yang
 
         all_running_config = get_all_running_config()
 
-        # Pre-process patch to filter duplicate leaf-list appends.
-        patch = filter_duplicate_patch_operations(patch, all_running_config)
-
         # Pre-process patch to append empty tables if required.
         patch = append_emptytables_if_required(patch, all_running_config)
+
+        # Pre-process patch to filter duplicate leaf-list appends.
+        patch = filter_duplicate_patch_operations(patch, all_running_config)
 
         if not validate_patch(patch, all_running_config):
             raise GenericConfigUpdaterError(f"Failed validating patch:{patch}")
