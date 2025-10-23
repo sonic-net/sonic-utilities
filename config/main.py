@@ -9861,5 +9861,410 @@ def del_vnet_route(ctx, vnet_name, prefix):
         click.echo("All routes deleted for the VNET {}.".format(vnet_name))
 
 
+#
+# 'igmp-snooping' group ('config igmp-snooping ...')
+#
+@config.group()
+@click.pass_context
+@click.option('-s', '--redis-unix-socket-path', help='unix socket path for redis connection')
+def igmp_snooping(ctx, redis_unix_socket_path):
+    """igmp-snooping configuration tasks"""
+    kwargs = {}
+    if redis_unix_socket_path:
+        kwargs['unix_socket_path'] = redis_unix_socket_path
+    config_db = ConfigDBConnector(**kwargs)
+    config_db.connect(wait_for_init=False)
+    ctx.obj = {'db': config_db}
+    pass
+
+@igmp_snooping.command("enable")
+@click.argument('vid', metavar='<vlan>', required=True, type=int)
+@click.pass_context
+def igmp_snooping_enable(ctx, vid):
+    """Enable for a VLAN"""
+    db = ctx.obj['db']
+    vlan_valid = clicommon.is_vlanid_in_range(int(vid))
+    if vlan_valid == False:
+        ctx.fail("Invalid VlanId!!")
+    vlan_name = 'Vlan{}'.format(vid)
+    vlan = db.get_entry('VLAN', vlan_name)
+    if len(vlan) == 0:
+        ctx.fail("{} doesn't exist".format(vlan_name))
+    l2mc_enable = db.get_entry('L2MC', vlan_name)
+    if len(l2mc_enable) < 1:
+        igmp_snooping_fvs = {
+            'enabled' : 'true',
+            'querier' : 'false',
+            'version' : '2',
+            'fast-leave': 'false',
+            'query-interval':'125',
+            'query-max-response-time': '10',
+            'last-member-query-interval': '1000',
+        }
+    else :
+        igmp_snooping_fvs = {'enabled' : 'true',}
+    db.mod_entry('L2MC', vlan_name, igmp_snooping_fvs)
+
+@igmp_snooping.command('disable')
+@click.argument('vid', metavar='<vlan>', required=True, type=int)
+@click.pass_context
+def igmp_snooping_disable(ctx, vid):
+    """Disable for a VLAN"""
+    db = ctx.obj['db']
+    vlan_valid = clicommon.is_vlanid_in_range(int(vid))
+    if vlan_valid == False:
+        ctx.fail("Invalid VlanId!!")
+    vlan_name = 'Vlan{}'.format(vid)
+    vlan = db.get_entry('VLAN', vlan_name)
+    if len(vlan) == 0:
+        ctx.fail("{} doesn't exist".format(vlan_name))
+    db.set_entry('L2MC', vlan_name, None)
+
+@igmp_snooping.command('last-member-query-interval')
+@click.argument('vid', metavar='<vlan>', required=True, type=int)
+@click.argument('lm_query', metavar='<(100,25500)ms>', required=True, type=click.IntRange(100,25500))
+@click.pass_context
+def igmp_snooping_lmq_interval(ctx, vid, lm_query):
+    """Last Member Query Interval for a VLAN"""
+    db = ctx.obj['db']
+    vlan_valid = clicommon.is_vlanid_in_range(int(vid))
+    if vlan_valid == False:
+        ctx.fail("Invalid VlanId!!")
+    vlan_name = 'Vlan{}'.format(vid)
+    vlan = db.get_entry('VLAN', vlan_name)
+    if len(vlan) == 0:
+        ctx.fail("{} doesn't exist".format(vlan_name))
+    lmq_name = format(lm_query)
+    db.mod_entry('L2MC', vlan_name, {'last-member-query-interval': lmq_name})
+
+@igmp_snooping.command('query-max-response-time')
+@click.argument('vid', metavar='<vlan>', required=True, type=int)
+@click.argument('qmr_time', metavar='<(1,25)seconds>', required=True, type=click.IntRange(1,25))
+@click.pass_context
+def igmp_snooping_qmr_interval(ctx, vid, qmr_time):
+    """Query Max Response Time  for a VLAN"""
+    db = ctx.obj['db']
+    vlan_valid = clicommon.is_vlanid_in_range(int(vid))
+    if vlan_valid == False:
+        ctx.fail("Invalid VlanId!!")
+    vlan_name = 'Vlan{}'.format(vid)
+    vlan = db.get_entry('VLAN', vlan_name)
+    if len(vlan) == 0:
+        ctx.fail("{} doesn't exist".format(vlan_name))
+    qmr_time_name = format(qmr_time)
+    db.mod_entry('L2MC', vlan_name, {'query-max-response-time': qmr_time_name})
+
+@igmp_snooping.command('query-interval')
+@click.argument('vid', metavar='<vlan>', required=True, type=int)
+@click.argument('q_time', metavar='<(1,18000)seconds>', required=True, type=click.IntRange(1,18000))
+@click.pass_context
+def igmp_snooping_q_interval(ctx, vid, q_time):
+    """IGMP Query Interval for a VLAN"""
+    db = ctx.obj['db']
+    vlan_valid = clicommon.is_vlanid_in_range(int(vid))
+    if vlan_valid == False:
+        ctx.fail("Invalid VlanId!!")
+    vlan_name = 'Vlan{}'.format(vid)
+    vlan = db.get_entry('VLAN', vlan_name)
+    if len(vlan) == 0:
+        ctx.fail("{} doesn't exist".format(vlan_name))
+    q_time_name = format(q_time)
+    db.mod_entry('L2MC', vlan_name, {'query-interval': q_time_name})
+
+
+@igmp_snooping.command('optimised_multicast_flood')
+@click.argument('optimised_multicast_flood', metavar='<enable|disable>', required=True)
+@click.argument('vid', metavar='<vlan>', required=True, type=int)
+@click.pass_context
+def igmp_snooping_optimised_multicast_flood(ctx, vid, optimised_multicast_flood):
+    """IGMP optimised multicast flood"""
+    db = ctx.obj['db']
+    vlan_valid = clicommon.is_vlanid_in_range(int(vid))
+    if vlan_valid == False:
+        ctx.fail("Invalid VlanId!!")
+    if optimised_multicast_flood != 'enable' and optimised_multicast_flood != 'disable':
+            ctx.fail("Error: Invalid argument {}, expect either enable or disable".format(optimised_multicast_flood))
+    vlan_name = 'Vlan{}'.format(vid)
+    vlan = db.get_entry('VLAN', vlan_name)
+    if len(vlan) == 0:
+        ctx.fail("{} doesn't exist".format(vlan_name))
+    l2mc_enable = db.get_entry('L2MC', vlan_name)
+    if len(l2mc_enable) < 1:
+        ctx.fail("{} doesn't enable IGMP Snooping".format(vlan_name))
+    
+    db.mod_entry('L2MC_SUPPRESS', vlan_name, {'optimised-multicast-flood': optimised_multicast_flood})
+
+@igmp_snooping.command('link_local_groups_suppression')
+@click.argument('link_local_groups_suppression', metavar='<enable|disable>', required=True)
+@click.argument('vid', metavar='<vlan>', required=True, type=int)
+@click.pass_context
+def igmp_snooping_optimised_multicast_flood(ctx, vid, link_local_groups_suppression):
+    """IGMP optimised multicast flood"""
+    db = ctx.obj['db']
+    vlan_valid = clicommon.is_vlanid_in_range(int(vid))
+    if vlan_valid == False:
+        ctx.fail("Invalid VlanId!!")
+    if link_local_groups_suppression != 'enable' and link_local_groups_suppression != 'disable':
+            ctx.fail("Error: Invalid argument {}, expect either enable or disable".format(link_local_groups_suppression))
+    vlan_name = 'Vlan{}'.format(vid)
+    vlan = db.get_entry('VLAN', vlan_name)
+    if len(vlan) == 0:
+        ctx.fail("{} doesn't exist".format(vlan_name))
+    l2mc_enable = db.get_entry('L2MC', vlan_name)
+    if len(l2mc_enable) < 1:
+        ctx.fail("{} doesn't enable IGMP Snooping".format(vlan_name))
+    
+    db.mod_entry('L2MC_SUPPRESS', vlan_name, {'link-local-groups-suppression': link_local_groups_suppression})
+
+@igmp_snooping.command('version')
+@click.argument('vid', metavar='<vlan>', required=True, type=int)
+@click.argument('version', metavar='<(1,3)ver>', required=True, type=click.IntRange(1,3))
+@click.pass_context
+def igmp_snooping_version(ctx, vid, version):
+    """IGMP Version"""
+    db = ctx.obj['db']
+    vlan_valid = clicommon.is_vlanid_in_range(int(vid))
+    if vlan_valid == False:
+        ctx.fail("Invalid VlanId!!")
+    vlan_name = 'Vlan{}'.format(vid)
+    vlan = db.get_entry('VLAN', vlan_name)
+    if len(vlan) == 0:
+        ctx.fail("{} doesn't exist".format(vlan_name))
+    ver_name = format(version)
+    db.mod_entry('L2MC', vlan_name, {'version': ver_name})
+
+@igmp_snooping.group('querier')
+@clicommon.pass_db
+def igmp_snooping_querier(config_db):
+    """Configure IGMP snooping  querier"""
+    pass
+
+@igmp_snooping_querier.command('enable')
+@click.argument('vid', metavar='<vlan>', required=True, type=int)
+@click.pass_context
+def igmp_snooping_querier_enable(ctx, vid):
+    """Enable IGMP Querier for a VLAN"""
+    db = ctx.obj['db']
+    vlan_valid = clicommon.is_vlanid_in_range(int(vid))
+    if vlan_valid == False:
+        ctx.fail("Invalid VlanId!!")
+    vlan_name = 'Vlan{}'.format(vid)
+    vlan = db.get_entry('VLAN', vlan_name)
+    if len(vlan) == 0:
+        ctx.fail("{} doesn't exist".format(vlan_name))
+    db.mod_entry('L2MC', vlan_name, {'querier': 'true'})
+
+@igmp_snooping_querier.command('disable')
+@click.argument('vid', metavar='<vlan>', required=True, type=int)
+@click.pass_context
+def igmp_snooping_querier_disable(ctx, vid):
+    """Disable IGMP Querier for a VLAN"""
+    db = ctx.obj['db']
+    vlan_valid = clicommon.is_vlanid_in_range(int(vid))
+    if vlan_valid == False:
+        ctx.fail("Invalid VlanId!!")
+    vlan_name = 'Vlan{}'.format(vid)
+    vlan = db.get_entry('VLAN', vlan_name)
+    if len(vlan) == 0:
+        ctx.fail("{} doesn't exist".format(vlan_name))
+    db.mod_entry('L2MC', vlan_name, {'querier': 'false'})
+
+@igmp_snooping.group('fast-leave')
+@clicommon.pass_db
+def igmp_snooping_fast_leave(config_db):
+    """Configure IGMP snooping fast-leave"""
+    pass
+
+@igmp_snooping_fast_leave.command('enable')
+@click.argument('vid', metavar='<vlan>', required=True, type=int)
+@click.pass_context
+def igmp_snooping_fast_leave_enable(ctx, vid):
+    """Enable IGMP fast-leave for a VLAN"""
+    db = ctx.obj['db']
+    vlan_valid = clicommon.is_vlanid_in_range(int(vid))
+    if vlan_valid == False:
+        ctx.fail("Invalid VlanId!!")
+    vlan_name = 'Vlan{}'.format(vid)
+    vlan = db.get_entry('VLAN', vlan_name)
+    if len(vlan) == 0:
+        ctx.fail("{} doesn't exist".format(vlan_name))
+    db.mod_entry('L2MC', vlan_name, {'fast-leave': 'true'})
+
+@igmp_snooping_fast_leave.command('disable')
+@click.argument('vid', metavar='<vlan>', required=True, type=int)
+@click.pass_context
+def igmp_snooping_fast_leave_disable(ctx, vid):
+    """Disable IGMP fast-leave for a VLAN"""
+    db = ctx.obj['db']
+    vlan_valid = clicommon.is_vlanid_in_range(int(vid))
+    if vlan_valid == False:
+        ctx.fail("Invalid VlanId!!")
+    vlan_name = 'Vlan{}'.format(vid)
+    vlan = db.get_entry('VLAN', vlan_name)
+    if len(vlan) == 0:
+        ctx.fail("{} doesn't exist".format(vlan_name))
+    db.mod_entry('L2MC', vlan_name, {'fast-leave': 'false'})
+
+@igmp_snooping.group('static-group')
+@clicommon.pass_db
+def igmp_snooping_static_group(config_db):
+    """Configure IGMP snooping static-group"""
+    pass
+
+@igmp_snooping_static_group.command('add')
+@click.argument('vid', metavar='<vlan>', required=True, type=int)
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument("ip_addr", metavar="<ip_addr>", required=True)
+@click.pass_context
+def igmp_snooping_static_add(ctx, vid, interface_name, ip_addr):
+    """Add static-group for VLAN"""
+    db = ctx.obj['db']
+    vlan_valid = clicommon.is_vlanid_in_range(int(vid))
+    if vlan_valid == False:
+        ctx.fail("Invalid VlanId!!")
+    vlan_name = 'Vlan{}'.format(vid)
+    vlan = db.get_entry('VLAN', vlan_name)
+    if len(vlan) == 0:
+        ctx.fail("{} doesn't exist".format(vlan_name))
+    # check vlan l2mc enable
+    # l2mc_enable = db.get_entry('L2MC', vlan_name)
+    # if len(l2mc_enable) == 0:
+    #     ctx.fail("{} is not L2MC enable".format(vlan_name))
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+    port_tables = db.get_table("PORT")
+    lag_tables = db.get_table("PORTCHANNEL")
+    if interface_name not in port_tables and interface_name not in lag_tables:
+        ctx.fail("Interface %s does not exist!" %interface_name)
+    
+    try:
+        ip_address = ipaddress.ip_address(ip_addr)
+    except ValueError as err:
+        ctx.fail("IP address is not valid: {}".format(err))
+
+    if not ip_address.is_multicast:
+        ctx.fail("IP address {} is not multicast".format(str(ip_address)))
+
+    if ip_address < ipaddress.IPv4Address("224.0.0.0") or ip_address > ipaddress.IPv4Address("239.255.255.255"):
+        ctx.fail("IP address {} is outside the valid multicast range".format(str(ip_address)))
+
+    if ip_address < ipaddress.IPv4Address("224.0.0.0") or ip_address <= ipaddress.IPv4Address("224.0.0.255"):
+        ctx.fail("IP address {} is reserved multicast".format(str(ip_address)))
+    
+    #check interface is a vlan member
+    # key = vlan_name +"|"+ interface_name
+    # vlanmember = db.get_entry('VLAN_MEMBER', key)
+    # if len(vlanmember) == 0:
+    #     ctx.fail("{} is not a member of {}".format(interface_name,vlan_name))
+    
+    static_group_key = vlan_name+'|'+ip_addr
+    l2mc_name = db.get_entry('L2MC_STATIC_GROUP', static_group_key)
+    members = l2mc_name.get('static-members', [])
+    if interface_name in members:
+        ctx.fail("{} is already a member of {}".format(interface_name,members))
+    members.append(interface_name)
+    l2mc_name['static-members'] = members
+    db.set_entry('L2MC_STATIC_GROUP', static_group_key, l2mc_name)
+    static_group_mem_key = vlan_name+'|'+ip_addr+'|'+interface_name
+    db.set_entry('L2MC_STATIC_MEMBER', static_group_mem_key, {'port':interface_name})
+
+@igmp_snooping_static_group.command('del')
+@click.argument('vid', metavar='<vlan>', required=True, type=int)
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument("ip_addr", metavar="<ip_addr>", required=True)
+@click.pass_context
+def igmp_snooping_static_del(ctx, vid, interface_name, ip_addr):
+    """Del static-group for VLAN"""
+    db = ctx.obj['db']
+    vlan_valid = clicommon.is_vlanid_in_range(int(vid))
+    if vlan_valid == False:
+        ctx.fail("Invalid VlanId!!")
+    vlan_name = 'Vlan{}'.format(vid)
+    vlan = db.get_entry('VLAN', vlan_name)
+    if len(vlan) == 0:
+        ctx.fail("{} doesn't exist".format(vlan_name))
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+    static_group_key = vlan_name+'|'+ip_addr
+    l2mc_name = db.get_entry('L2MC_STATIC_GROUP', static_group_key)
+    members = l2mc_name.get('static-members', [])
+    if interface_name not in members:
+        ctx.fail("{} is not a member of {}".format(interface_name, members))
+    members.remove(interface_name)
+    if len(members) == 0:
+        del l2mc_name['static-members']
+        db.set_entry('L2MC_STATIC_GROUP', static_group_key, None)
+    else:
+        l2mc_name['static-members'] = members
+        db.set_entry('L2MC_STATIC_GROUP', static_group_key, l2mc_name)
+    static_group_mem_key = vlan_name+'|'+ip_addr+'|'+interface_name
+    db.set_entry('L2MC_STATIC_MEMBER', static_group_mem_key, None)
+
+@igmp_snooping.group('mrouter')
+@clicommon.pass_db
+def igmp_snooping_mrouter(config_db):
+    """Configure IGMP snooping mrouter"""
+    pass
+
+@igmp_snooping_mrouter.command('add')
+@click.argument('vid', metavar='<vlan>', required=True, type=int)
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.pass_context
+def igmp_snooping_mrouter_add(ctx, vid, interface_name):
+    """Add router interface for VLAN"""
+    db = ctx.obj['db']
+    vlan_valid = clicommon.is_vlanid_in_range(int(vid))
+    if vlan_valid == False:
+        ctx.fail("Invalid VlanId!!")
+    vlan_name = 'Vlan{}'.format(vid)
+    vlan = db.get_entry('VLAN', vlan_name)
+    if len(vlan) == 0:
+        ctx.fail("{} doesn't exist".format(vlan_name))
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+    port_tables = db.get_table("PORT")
+    lag_tables = db.get_table("PORTCHANNEL")
+    if interface_name not in port_tables and interface_name not in lag_tables:
+        ctx.fail("Interface %s does not exist!" %interface_name)
+
+    mrouter_mem_key = vlan_name+'|'+interface_name
+    l2mc_name = db.get_entry('L2MC_MROUTER', mrouter_mem_key)
+    if len(l2mc_name) != 0:
+        ctx.fail("{} is already a member of {}".format(interface_name,vlan_name))
+    db.set_entry('L2MC_MROUTER', mrouter_mem_key, {'mrouter_port':interface_name})
+
+@igmp_snooping_mrouter.command('del')
+@click.argument('vid', metavar='<vlan>', required=True, type=int)
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.pass_context
+def igmp_snooping_mrouter_del(ctx, vid, interface_name):
+    """Remove router interface from VLAN"""
+    db = ctx.obj['db']
+    vlan_valid = clicommon.is_vlanid_in_range(int(vid))
+    if vlan_valid == False:
+        ctx.fail("Invalid VlanId!!")
+    vlan_name = 'Vlan{}'.format(vid)
+    vlan = db.get_entry('VLAN', vlan_name)
+    if len(vlan) == 0:
+        ctx.fail("{} doesn't exist".format(vlan_name))
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    mrouter_mem_key = vlan_name+'|'+interface_name
+    l2mc_name = db.get_entry('L2MC_MROUTER', mrouter_mem_key)
+    if len(l2mc_name) == 0:
+        ctx.fail("{} is not a member of {}".format(interface_name,vlan_name))
+    db.set_entry('L2MC_MROUTER', mrouter_mem_key, None)
+
+
 if __name__ == '__main__':
     config()
