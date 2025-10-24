@@ -11061,9 +11061,9 @@ This command displays the global SNMP configuration that includes the location, 
   Emerald City
 
 
-  SNMP_CONTACT    SNMP_CONTACT_EMAIL
-  --------------  --------------------
-  joe             joe@contoso.com
+  CONTACT
+  --------------
+  joe joe@contoso.com
 
 
   Community String    Community Type
@@ -11116,9 +11116,9 @@ This command displays the SNMP contact setting.
 - Example:
   ```
   admin@sonic:~$ show runningconfiguration snmp contact
-  Contact    Contact Email
-  ---------  ---------------
-  joe        joe@contoso.com
+  Contact
+  ---------
+  joe joe@contoso.com
   ```
 
 - Usage:
@@ -11129,7 +11129,7 @@ This command displays the SNMP contact setting.
 - Example:
   ```
   admin@sonic:~$ show runningconfiguration snmp contact --json
-  {'joe': 'joe@contoso.com'}
+  {'Contact': 'joe joe@contoso.com'}
   ```
 
 **show runningconfiguration snmp community**
@@ -11229,13 +11229,13 @@ This command is used to add, delete, or modify the SNMP contact.
 
 - Usage:
   ```
-  config snmp contact add <contact> <contact_email>
+  config snmp contact add <contact>
   ```
 
 - Example:
   ```
   admin@sonic:~$ sudo config snmp contact add joe joe@contoso.com
-  Contact name joe and contact email joe@contoso.com have been added to configuration
+  Contact joe joe@contoso.com has been added to configuration
   Restarting SNMP service...
   ```
 
@@ -11246,20 +11246,20 @@ This command is used to add, delete, or modify the SNMP contact.
 
 - Example:
   ```
-  admin@sonic:~$ sudo config snmp contact del joe
-  SNMP contact joe removed from configuration
+  admin@sonic:~$ sudo config snmp contact del joe joe@contoso.com 
+  SNMP contact joe joe@contoso.com removed from configuration
   Restarting SNMP service...
   ```
 
 - Usage:
   ```
-  config snmp contact modify <contact> <contact_email>
+  config snmp contact modify <contact>
   ```
 
 - Example:
   ```
   admin@sonic:~$ sudo config snmp contact modify test test@contoso.com
-  SNMP contact test and contact email test@contoso.com updated
+  SNMP contact test test@contoso.com updated
   Restarting SNMP service...
   ```
 

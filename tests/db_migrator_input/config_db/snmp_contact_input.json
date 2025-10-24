@@ -1,0 +1,8 @@
+{
+    "SNMP|CONTACT": {
+        "test-name": "test-email@test.com"
+    },
+    "VERSIONS|DATABASE": {
+            "VERSION": "version_202505_01"
+    }
+}

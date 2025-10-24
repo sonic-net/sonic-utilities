@@ -4195,41 +4195,27 @@ def replace_community(db, current_community, new_community):
 def contact(db):
     pass
 
-
-def is_valid_email(email):
-    return bool(re.search(r"^[\w\.\+\-]+\@[\w]+\.[a-z]{2,3}$", email))
-
-
 @contact.command('add')
-@click.argument('contact', metavar='<contact_name>', required=True)
-@click.argument('contact_email', metavar='<contact_email>', required=True)
+@click.argument('contact', metavar='<contact>', required=True, nargs=-1)
 @clicommon.pass_db
-def add_contact(db, contact, contact_email):
-    """ Add snmp contact name and email """
-    snmp = db.cfgdb.get_table("SNMP")
+def add_contact(db, contact):
+    """ Add snmp contact"""
+    config_db = ValidatedConfigDBConnector(db.cfgdb)
+    if isinstance(contact, tuple):
+        contact = " ".join(contact)
+    snmp = config_db.get_table("SNMP")
     try:
         if snmp['CONTACT']:
-            click.echo("Contact already exists.  Use sudo config snmp contact modify instead")
+            click.echo("Contact already exists, Use sudo config snmp contact modify instead")
             sys.exit(1)
-        else:
-            db.cfgdb.set_entry('SNMP', 'CONTACT', {contact: contact_email}) # TODO: ERROR IN YANG MODEL. Contact name is not defined as key
-            click.echo("Contact name {} and contact email {} have been added to "
-                       "configuration".format(contact, contact_email))
-            try:
-                click.echo("Restarting SNMP service...")
-                clicommon.run_command(['systemctl', 'reset-failed', 'snmp.service'], display_cmd=False)
-                clicommon.run_command(['systemctl', 'restart', 'snmp.service'], display_cmd=False)
-            except SystemExit as e:
-                click.echo("Restart service snmp failed with error {}".format(e))
-                raise click.Abort()
     except KeyError:
         if "CONTACT" not in snmp.keys():
-            if not is_valid_email(contact_email):
-                click.echo("Contact email {} is not valid".format(contact_email))
-                sys.exit(2)
-            db.cfgdb.set_entry('SNMP', 'CONTACT', {contact: contact_email})
-            click.echo("Contact name {} and contact email {} have been added to "
-                       "configuration".format(contact, contact_email))
+            try:
+                config_db.set_entry('SNMP', 'CONTACT', {'Contact': contact})
+                click.echo("SNMP Contact {} has been added to configuration".format(contact))
+            except ValueError as e:
+                ctx = click.get_current_context()
+                ctx.fail("Failed to set SNMP contact. Error: {}".format(e))
             try:
                 click.echo("Restarting SNMP service...")
                 clicommon.run_command(['systemctl', 'reset-failed', 'snmp.service'], display_cmd=False)
@@ -4240,18 +4226,22 @@ def add_contact(db, contact, contact_email):
 
 
 @contact.command('del')
-@click.argument('contact', metavar='<contact_name>', required=True)
+@click.argument('contact', metavar='<contact>', required=True, nargs=-1)
 @clicommon.pass_db
-def del_contact(db, contact):
-    """ Delete snmp contact name and email """
+def delete_contact(db, contact):
+    """ Delete snmp contact"""
+    config_db = ValidatedConfigDBConnector(db.cfgdb)
+    if isinstance(contact, tuple):
+        contact = " ".join(contact)
     snmp = db.cfgdb.get_table("SNMP")
     try:
-        if not contact in (list(snmp['CONTACT'].keys()))[0]:
-            click.echo("SNMP contact {} is not configured".format(contact))
-            sys.exit(1)
-        else:
-            db.cfgdb.set_entry('SNMP', 'CONTACT', None)
-            click.echo("SNMP contact {} removed from configuration".format(contact))
+        if contact == snmp['CONTACT']['Contact']:
+            try:
+                config_db.set_entry('SNMP', 'CONTACT', None)
+                click.echo("SNMP Contact {} removed from configuration".format(contact))
+            except (ValueError, JsonPatchConflict) as e:
+                ctx = click.get_current_context()
+                ctx.fail("Failed to remove SNMP contact from configuration. Error: {}".format(e))
             try:
                 click.echo("Restarting SNMP service...")
                 clicommon.run_command(['systemctl', 'reset-failed', 'snmp.service'], display_cmd=False)
@@ -4259,48 +4249,36 @@ def del_contact(db, contact):
             except SystemExit as e:
                 click.echo("Restart service snmp failed with error {}".format(e))
                 raise click.Abort()
+        else:
+            click.echo("SNMP Contact {} does not exist.".format(contact))
+            sys.exit(1)
     except KeyError:
         if "CONTACT" not in snmp.keys():
-            click.echo("Contact name {} is not configured".format(contact))
+            click.echo("SNMP Contact {} is not configured".format(contact))
             sys.exit(2)
 
 
 @contact.command('modify')
-@click.argument('contact', metavar='<contact>', required=True)
-@click.argument('contact_email', metavar='<contact email>', required=True)
+@click.argument('contact', metavar='<contact>', required=True, nargs=-1)
 @clicommon.pass_db
-def modify_contact(db, contact, contact_email):
+def modify_contact(db, contact):
     """ Modify snmp contact"""
-    snmp = db.cfgdb.get_table("SNMP")
+    config_db = ValidatedConfigDBConnector(db.cfgdb)
+    if isinstance(contact, tuple):
+        contact = " ".join(contact)
+    snmp = config_db.get_table("SNMP")
     try:
-        current_snmp_contact_name = (list(snmp['CONTACT'].keys()))[0]
-        if current_snmp_contact_name == contact:
-            current_snmp_contact_email = snmp['CONTACT'][contact]
-        else:
-            current_snmp_contact_email = ''
-        if contact == current_snmp_contact_name and contact_email == current_snmp_contact_email:
-            click.echo("SNMP contact {} {} already exists".format(contact, contact_email))
+        snmp_contact = snmp['CONTACT']['Contact']
+        if contact == snmp_contact:
+            click.echo("SNMP contact {} already exists".format(contact))
             sys.exit(1)
-        elif contact == current_snmp_contact_name and contact_email != current_snmp_contact_email:
-            if not is_valid_email(contact_email):
-                click.echo("Contact email {} is not valid".format(contact_email))
-                sys.exit(2)
-            db.cfgdb.mod_entry('SNMP', 'CONTACT', {contact: contact_email})
-            click.echo("SNMP contact {} email updated to {}".format(contact, contact_email))
-            try:
-                click.echo("Restarting SNMP service...")
-                clicommon.run_command(['systemctl', 'reset-failed', 'snmp.service'], display_cmd=False)
-                clicommon.run_command(['systemctl', 'restart', 'snmp.service'], display_cmd=False)
-            except SystemExit as e:
-                click.echo("Restart service snmp failed with error {}".format(e))
-                raise click.Abort()
         else:
-            if not is_valid_email(contact_email):
-                click.echo("Contact email {} is not valid".format(contact_email))
-                sys.exit(2)
-            db.cfgdb.set_entry('SNMP', 'CONTACT', None)
-            db.cfgdb.set_entry('SNMP', 'CONTACT', {contact: contact_email})
-            click.echo("SNMP contact {} and contact email {} updated".format(contact, contact_email))
+            try:
+                config_db.mod_entry('SNMP', 'CONTACT', {'Contact': contact})
+                click.echo("SNMP contact {} modified in configuration".format(contact))
+            except ValueError as e:
+                ctx = click.get_current_context()
+                ctx.fail("Failed to modify SNMP contact. Error: {}".format(e))
             try:
                 click.echo("Restarting SNMP service...")
                 clicommon.run_command(['systemctl', 'reset-failed', 'snmp.service'], display_cmd=False)
@@ -4309,9 +4287,8 @@ def modify_contact(db, contact, contact_email):
                 click.echo("Restart service snmp failed with error {}".format(e))
                 raise click.Abort()
     except KeyError:
-        if "CONTACT" not in snmp.keys():
-            click.echo("Contact name {} is not configured".format(contact))
-            sys.exit(3)
+        click.echo("Cannot modify SNMP Contact.  You must use 'config snmp contact add' command.")
+        sys.exit(2)
 
 
 @snmp.group(cls=clicommon.AbbreviationGroup)
