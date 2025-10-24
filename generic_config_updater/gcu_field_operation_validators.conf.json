@@ -52,6 +52,7 @@
                             "detection_time",
                             "action",
                             "global/poll_interval",
+                            "pfc_stat_history",
                             ""
                         ],
                         "operations": ["remove", "add", "replace"],
