@@ -113,14 +113,18 @@
             }
         },
         "BUFFER_PROFILE": {
-            "field_operation_validators": [ "generic_config_updater.field_operation_validators.rdma_config_update_validator" ],
+            "field_operation_validators": [
+                "generic_config_updater.field_operation_validators.buffer_profile_config_update_validator"
+            ],
             "validator_data": {
                 "rdma_config_update_validator": {
                     "Dynamic threshold tuning": {
                         "fields": [
                             "dynamic_th"
                         ],
-                        "operations": ["replace"],
+                        "operations": [
+                            "replace"
+                        ],
                         "platforms": {
                             "spc1": "20181100",
                             "spc2": "20191100",
@@ -145,7 +149,9 @@
                         "fields": [
                             "xoff"
                         ],
-                        "operations": ["replace"],
+                        "operations": [
+                            "replace"
+                        ],
                         "platforms": {
                             "spc1": "20191100",
                             "spc2": "20191100",
@@ -163,6 +169,20 @@
                             "q2c+": "20241100",
                             "j2c+": "20220500",
                             "cisco-8000": "20201200"
+                        }
+                    },
+                    "Packet trimming eligibility modification": {
+                        "fields": [
+                            "packet_discard_action"
+                        ],
+                        "operations": [
+                            "add",
+                            "replace"
+                        ],
+                        "platforms": {
+                            "spc4": "20241200",
+                            "spc5": "20241200",
+                            "th5": "20241200"
                         }
                     }
                 }
