@@ -336,7 +336,7 @@ class TestValidateFieldOperation(unittest.TestCase):
         patch_element = {
             "path": "/PFC_WD/Ethernet8/pfc_stat_history",
             "op": "replace",
-            "value": "100"
+            "value": "enable"
         }
         for scope in ["localhost", "asic0"]:
             assert generic_config_updater.field_operation_validators.\
