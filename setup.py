@@ -275,7 +275,7 @@ setup(
         'responses',
         'pytest',
         'mockredispy>=2.9.3',
-        'deepdiff==6.2.2'
+        'deepdiff==8.6.1'
     ],
     extras_require = {
         'testing': [
@@ -283,7 +283,7 @@ setup(
             'responses',
             'pytest',
             'mockredispy>=2.9.3',
-            'deepdiff==6.2.2'
+            'deepdiff==8.6.1'
         ],
     },
     classifiers=[
