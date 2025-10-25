@@ -187,10 +187,11 @@ def write_json_file(json_input, fileName):
     except Exception as e:
         raise Exception(str(e))
 
-def _get_breakout_options(ctx, args, incomplete):
+
+def _get_breakout_options(ctx, param, incomplete):
     """ Provides dynamic mode option as per user argument i.e. interface name """
     all_mode_options = []
-    interface_name = args[-1]
+    interface_name = ctx.params["interface_name"]
 
     breakout_cfg_file = device_info.get_path_to_port_config_file()
 
@@ -5106,7 +5107,7 @@ def advertised_types(ctx, interface_name, interface_type_list, verbose):
 
 @interface.command()
 @click.argument('interface_name', metavar='<interface_name>', required=True)
-@click.argument('mode', required=True, type=click.STRING, autocompletion=_get_breakout_options)
+@click.argument('mode', required=True, type=click.STRING, shell_complete=_get_breakout_options)
 @click.option('-f', '--force-remove-dependencies', is_flag=True,  help='Clear all dependencies internally first.')
 @click.option('-l', '--load-predefined-config', is_flag=True,  help='load predefied user configuration (alias, lanes, speed etc) first.')
 @click.option('-y', '--yes', is_flag=True, callback=_abort_if_false, expose_value=False, prompt='Do you want to Breakout the port, continue?')
@@ -9372,7 +9373,7 @@ def clock():
     pass
 
 
-def get_tzs(ctx, args, incomplete):
+def get_tzs(ctx, param, incomplete):
     ret = clicommon.run_command(['timedatectl', 'list-timezones'],
                                 display_cmd=False, ignore_error=False,
                                 return_cmd=True)
@@ -9385,7 +9386,7 @@ def get_tzs(ctx, args, incomplete):
 
 @clock.command()
 @click.argument('timezone', metavar='<timezone_name>', required=True,
-                autocompletion=get_tzs)
+                shell_complete=get_tzs)
 def timezone(timezone):
     """Set system timezone"""
 

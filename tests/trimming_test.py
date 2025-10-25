@@ -80,25 +80,25 @@ class TestTrimming:
             pytest.param(
                 os.path.join(mock_state_path, "all"),
                 ["--size", "-1"],
-                "is not in the valid range of",
+                "is not in the range",
                 id="size-out-of-bound"
             ),
             pytest.param(
                 os.path.join(mock_state_path, "all"),
                 ["--dscp", "-1"],
-                "is not in the valid range of",
+                "is not in the range",
                 id="dscp-out-of-bound"
             ),
             pytest.param(
                 os.path.join(mock_state_path, "all"),
                 ["--tc", "-1"],
-                "is not in the valid range of",
+                "is not in the range",
                 id="tc-out-of-bound"
             ),
             pytest.param(
                 os.path.join(mock_state_path, "all"),
                 ["--queue", "-1"],
-                "is not in the valid range of",
+                "is not in the range",
                 id="queue-out-of-bound"
             ),
             pytest.param(
