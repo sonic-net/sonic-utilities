@@ -27,7 +27,21 @@ def command_wrapper(command):
     try:
         # Split command into arguments for shell=False
         cmd_args = shlex.split(command)
-        result = subprocess.run(cmd_args, capture_output=False, check=False)
+        result = subprocess.run(cmd_args, capture_output=True, check=False, text=True)
+        
+        if result.returncode != 0:
+            logger.log(logger.LOG_PRIORITY_ERROR,
+                       f"Command failed: '{command}', returncode: {result.returncode}",
+                       print_to_console)
+            if result.stdout:
+                logger.log(logger.LOG_PRIORITY_ERROR,
+                           f"stdout: {result.stdout}",
+                           print_to_console)
+            if result.stderr:
+                logger.log(logger.LOG_PRIORITY_ERROR,
+                           f"stderr: {result.stderr}",
+                           print_to_console)
+        
         return result.returncode
     except Exception as e:
         logger.log(logger.LOG_PRIORITY_ERROR,
@@ -144,5 +158,8 @@ def vlanintf_validator(old_config, upd_config, keys):
         iface, iface_ip = key
         rc = command_wrapper(f"ip neigh flush dev {iface} {iface_ip}")
         if rc:
+            logger.log(logger.LOG_PRIORITY_ERROR,
+                       f"vlanintf_validator: Failed to flush neighbors for {iface} {iface_ip}, returncode={rc}",
+                       print_to_console)
             return False
     return True
