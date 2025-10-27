@@ -1214,3 +1214,28 @@ def dhcp_mitigation_rate(db, interfacename):
 
     header = ['Interface', 'DHCP Mitigation Rate']
     click.echo(tabulate(tablelize(keys), header, tablefmt="simple", stralign='left'))
+
+
+#
+# fast-linkup group (show interfaces fast-linkup ...)
+#
+
+
+@interfaces.group(name='fast-linkup', cls=clicommon.AliasedGroup)
+def fast_linkup():
+    """Show interface fast-linkup information"""
+    pass
+
+
+@fast_linkup.command(name='status')
+@click.pass_context
+def fast_linkup_status(ctx):
+    """show interfaces fast-linkup status"""
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    ports = config_db.get_table('PORT') or {}
+    rows = []
+    for ifname, entry in natsorted(ports.items()):
+        fast_linkup = entry.get('fast_linkup', 'false')
+        rows.append([ifname, fast_linkup])
+    click.echo(tabulate(rows, headers=['Interface', 'fast_linkup'], tablefmt='outline'))
