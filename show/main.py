@@ -2875,6 +2875,29 @@ def banner(db):
     click.echo(tabulate(messages, headers=hdrs, tablefmt='simple', missingval=''))
 
 
+#
+# 'switch-fast-linkup' command group ("show switch-fast-linkup ...")
+#
+@cli.group(cls=clicommon.AliasedGroup, name='switch-fast-linkup', context_settings=CONTEXT_SETTINGS)
+@click.pass_context
+def switch_fast_linkup_group(ctx):
+    """Show fast link-up feature configuration (global)"""
+    pass
+
+
+@switch_fast_linkup_group.command(name='global')
+@click.option('--json', 'json_output', is_flag=True, default=False, help='JSON output')
+@clicommon.pass_db
+def show_fast_linkup_global(db, json_output):
+    data = db.cfgdb.get_entry('SWITCH_FAST_LINKUP', 'GLOBAL') or {}
+    if json_output:
+        import json
+        click.echo(json.dumps(data, indent=2))
+        return
+    rows = [[k, v] for k, v in data.items()]
+    click.echo(tabulate(rows, headers=['Field', 'Value'], tablefmt='grid'))
+
+
 # Load plugins and register them
 helper = util_base.UtilHelper()
 helper.load_and_register_plugins(plugins, cli)
