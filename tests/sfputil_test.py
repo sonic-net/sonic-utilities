@@ -38,8 +38,7 @@ FLAT_MEMORY_MODULE_EEPROM_SFP_INFO_DICT = {
     'cable_length': '3',
     'application_advertisement': 'N/A',
     'specification_compliance': "{'10/40G Ethernet Compliance Code': '40GBASE-CR4'}",
-    'dom_capability': "{'Tx_power_support': 'no', 'Rx_power_support': 'no',\
-                        'Voltage_support': 'no', 'Temp_support': 'no'}",
+    'dom_capability': "N/A",
     'nominal_bit_rate': '255'
 }
 FLAT_MEMORY_MODULE_EEPROM = """Ethernet16: SFP EEPROM detected
@@ -59,6 +58,15 @@ FLAT_MEMORY_MODULE_EEPROM = """Ethernet16: SFP EEPROM detected
         Vendor PN: MCP1600-C003
         Vendor Rev: A2
         Vendor SN: MT1636VS10561
+        dom_capability: N/A
+        type_abbrv_name: QSFP28
+"""
+EMPTY_DOM_VALUES = """        ChannelMonitorValues:
+        ChannelThresholdValues:
+        ModuleMonitorValues:
+        ModuleThresholdValues:
+
+
 """
 
 class TestSfputil(object):
@@ -143,7 +151,7 @@ class TestSfputil(object):
                 'cable_length': '3',
                 'application_advertisement': 'N/A',
                 'specification_compliance': "{'10/40G Ethernet Compliance Code': '40GBASE-CR4'}",
-                'dom_capability': "{'Tx_power_support': 'no', 'Rx_power_support': 'no', 'Voltage_support': 'no', 'Temp_support': 'no'}",
+                'dom_capability': "N/A",
                 'nominal_bit_rate': '255'
             },
             # expected_output
@@ -163,6 +171,8 @@ class TestSfputil(object):
             "        Vendor PN: MCP1600-C003\n"
             "        Vendor Rev: A2\n"
             "        Vendor SN: MT1636VS10561\n"
+            "        dom_capability: N/A\n"
+            "        type_abbrv_name: QSFP28\n"
         ),
         # CMIS compliant module
         (
@@ -190,15 +200,11 @@ class TestSfputil(object):
                                                   'media_lane_assignment_options': 2}, \
                                               2: {'host_electrical_interface_id': '200GBASE-CR4 (Clause 136)'}}",
                 'specification_compliance': "sm_media_interface",
-                'dom_capability': "{'Tx_power_support': 'no', 'Rx_power_support': 'no', 'Voltage_support': 'no', 'Temp_support': 'no'}",
+                'dom_capability': "N/A",
                 'nominal_bit_rate': '0',
                 'hardware_rev': '0.0',
-                'media_interface_code': '400ZR, DWDM, amplified',
-                'host_electrical_interface': '400GAUI-8 C2M (Annex 120E)',
                 'host_lane_count': 8,
                 'media_lane_count': 1,
-                'host_lane_assignment_option': 1,
-                'media_lane_assignment_option': 1,
                 'active_apsel_hostlane1': 1,
                 'active_apsel_hostlane2': 1,
                 'active_apsel_hostlane3': 1,
@@ -231,14 +237,10 @@ class TestSfputil(object):
             "        Extended Identifier: Power Class 8 (18.0W Max)\n"
             "        Extended RateSelect Compliance: N/A\n"
             "        Hardware Revision: 0.0\n"
-            "        Host Electrical Interface: 400GAUI-8 C2M (Annex 120E)\n"
-            "        Host Lane Assignment Options: 1\n"
             "        Host Lane Count: 8\n"
             "        Identifier: QSFP-DD Double Density 8X Pluggable Transceiver\n"
             "        Length Cable Assembly(m): 0\n"
-            "        Media Interface Code: 400ZR, DWDM, amplified\n"
             "        Media Interface Technology: C-band tunable laser\n"
-            "        Media Lane Assignment Options: 1\n"
             "        Media Lane Count: 1\n"
             "        Nominal Bit Rate(100Mbs): 0\n"
             "        Specification compliance: sm_media_interface\n"
@@ -252,15 +254,18 @@ class TestSfputil(object):
             "        Vendor PN: def\n"
             "        Vendor Rev: ghi\n"
             "        Vendor SN: jkl\n"
+            "        dom_capability: N/A\n"
+            "        type_abbrv_name: QSFP-DD\n"
         ),
     ])
     def test_convert_sfp_info_to_output_string(self, sfp_info_dict, expected_output):
         output = sfputil.convert_sfp_info_to_output_string(sfp_info_dict)
         assert output == expected_output
 
-    @pytest.mark.parametrize("sfp_type, dom_info_dict, expected_output", [
+    @pytest.mark.parametrize("sfp_type, is_sfp_cmis, dom_info_dict, expected_output", [
         (
             'QSFP28 or later',
+            False,
             {
                 'temperature': '41.7539C',
                 'voltage': '3.2577Volts',
@@ -296,6 +301,7 @@ class TestSfputil(object):
         ), 
         (
             'QSFP-DD Double Density 8X Pluggable Transceiver',
+            True,
             {
                 'temperature': '41.7539C',
                 'voltage': '3.2577Volts',
@@ -351,6 +357,7 @@ class TestSfputil(object):
         ),
         (
             'OSFP 8X Pluggable Transceiver',
+            True,
             {
                 'temperature': '41.7539C',
                 'voltage': '3.2577Volts',
@@ -404,8 +411,8 @@ class TestSfputil(object):
         ModuleThresholdValues:
 '''
         )])
-    def test_convert_dom_to_output_string(self, sfp_type, dom_info_dict, expected_output):
-        output = sfputil.convert_dom_to_output_string(sfp_type, dom_info_dict)
+    def test_convert_dom_to_output_string(self, sfp_type, is_sfp_cmis, dom_info_dict, expected_output):
+        output = sfputil.convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict)
         assert output == expected_output
 
     def test_get_physical_port_name(self):
@@ -676,7 +683,7 @@ Ethernet0  N/A
     @patch('sfputil.main.platform_sfputil', MagicMock(is_logical_port=MagicMock(return_value=1)))
     @patch('sfputil.main.is_port_type_rj45', MagicMock(return_value=False))
     @pytest.mark.parametrize("exception, xcvr_api_none, expected_output", [
-        (None, False, '''DOM values not supported for flat memory module\n\n'''),
+        (None, False, EMPTY_DOM_VALUES),
         (NotImplementedError, False, '''API is currently not implemented for this platform\n\n'''),
         (None, True, '''API is none while getting DOM info!\n\n''')
     ])
@@ -1822,23 +1829,29 @@ EEPROM hexdump for port Ethernet4
         assert result.exit_code == EXIT_FAIL
 
     @pytest.mark.parametrize(
-        "direction, lane_count, enable, disable_func_result, output_dict, expected_echo, expected_exit",
+        "direction, lane_count, enable, disable_func_result, cmis_version, output_dict, expected_echo, expected_exit",
         [
             # TX disable success
             (
-                "tx", 2, "disable", True, {"TxOutputStatus1": False, "TxOutputStatus2": False},
+                "tx", 2, "disable", True, "5.3", {"TxOutputStatus1": False, "TxOutputStatus2": False},
                 "TX output disabled", None
             ),
             # RX enable success
-            ("rx", 1, "enable", True, {"RxOutputStatus1": True}, "RX output enabled", None),
+            ("rx", 1, "enable", True, "5.0", {"RxOutputStatus1": True}, "RX output enabled", None),
             # TX disable fails to disable
-            ("tx", 1, "disable", True, {"TxOutputStatus1": True}, "TX output on lane 1 is still enabled", SystemExit),
+            (
+                "tx", 1, "disable", True, "5.0", {"TxOutputStatus1": True},
+                "TX output on lane 1 is still enabled", SystemExit
+            ),
             # RX enable fails to enable
-            ("rx", 1, "enable", True, {"RxOutputStatus1": False}, "RX output on lane 1 is still disabled", SystemExit),
-            # TX disable_func returns False
-            ("tx", 1, "disable", False, {}, "TX disable failed", SystemExit),
-            # RX output_dict is None
-            ("rx", 1, "disable", True, None, "RX output status not available", SystemExit),
+            (
+                "rx", 1, "enable", True, "5.0", {"RxOutputStatus1": False},
+                "RX output on lane 1 is still disabled", SystemExit
+            ),
+            # CMIS version is None
+            ("tx", 1, "disable", False, None, {}, "CMIS revision not available", SystemExit),
+            # CMIS version is below 5.0
+            ("rx", 1, "disable", True, "4.0", None, "This functionality is not supported", SystemExit),
         ]
     )
     @patch("sfputil.debug.get_sfp_object")
@@ -1857,6 +1870,7 @@ EEPROM hexdump for port Ethernet4
         lane_count,
         enable,
         disable_func_result,
+        cmis_version,
         output_dict,
         expected_echo,
         expected_exit
@@ -1875,6 +1889,7 @@ EEPROM hexdump for port Ethernet4
         # Mock SFP and API
         mock_sfp = MagicMock()
         mock_api = MagicMock()
+        mock_api.get_cmis_rev.return_value = cmis_version
         if direction == "tx":
             mock_sfp.tx_disable_channel.return_value = disable_func_result
             mock_api.get_tx_output_status.return_value = output_dict

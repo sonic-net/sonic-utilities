@@ -171,6 +171,7 @@ setup(
         'scripts/storyteller',
         'scripts/syseeprom-to-json',
         'scripts/srv6stat',
+        'scripts/switchstat',
         'scripts/teamd_increase_retry_count.py',
         'scripts/tempershow',
         'scripts/tunnelstat',
@@ -193,7 +194,8 @@ setup(
         'scripts/verify_image_sign_common.sh',
         'scripts/check_db_integrity.py',
         'scripts/sysreadyshow',
-        'scripts/wredstat'
+        'scripts/wredstat',
+        'scripts/sonic-error-report'
     ],
     entry_points={
         'console_scripts': [

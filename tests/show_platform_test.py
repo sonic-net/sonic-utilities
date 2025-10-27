@@ -1,4 +1,5 @@
 import os
+import json
 import sys
 import textwrap
 from unittest import mock
@@ -49,6 +50,59 @@ class TestShowPlatform(object):
                             return_value={"serial": self.TEST_SERIAL, "model": self.TEST_MODEL, "revision": self.TEST_REV}):
                 result = CliRunner().invoke(show.cli.commands["platform"].commands["summary"], [])
                 assert result.output == textwrap.dedent(expected_output)
+
+
+class TestShowPlatformTemperature(object):
+    """
+        Note: `show platform temperature` simply calls the `tempershow` utility and
+        passes a variety of options. Here we test that the utility is called
+        with the appropriate option(s). The functionality of the underlying
+        `tempershow` utility is expected to be tested by a separate suite of unit tests
+    """
+    rc_output = """\
+    [
+        {
+            "Sensor": "CB_temp(0x4B)",
+            "Temperature": "29.5",
+            "High_TH": "80.0",
+            "Low_TH": "N/A",
+            "Crit_High_TH": "N/A",
+            "Crit_Low_TH": "N/A",
+            "Warning": "False",
+            "Timestamp": "20240923 00:32:07"
+        },
+        {
+            "Sensor": "CPU_Core_0_temp",
+            "Temperature": "46.0",
+            "High_TH": "82.0",
+            "Low_TH": "N/A",
+            "Crit_High_TH": "104.0",
+            "Crit_Low_TH": "N/A",
+            "Warning": "False",
+            "Timestamp": "20240923 00:32:07"
+        }
+    ]
+    """
+
+    def test_temperature(self):
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], [])
+        assert mock_run_command.call_count == 1
+        mock_run_command.assert_called_with(['tempershow'])
+
+    def test_temperature_json(self):
+        with mock.patch('utilities_common.cli.run_command', return_value=(self.rc_output, 0)) as mock_run_command:
+            result = CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['--json'])
+            assert json.loads(result.output) == json.loads(self.rc_output)
+        assert mock_run_command.call_count == 1
+        mock_run_command.assert_called_with(['tempershow', '-j'], return_cmd=True)
+
+    def test_temperature_short_json(self):
+        with mock.patch('utilities_common.cli.run_command', return_value=(self.rc_output, 0)) as mock_run_command:
+            result = CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['-j'])
+            assert json.loads(result.output) == json.loads(self.rc_output)
+        assert mock_run_command.call_count == 1
+        mock_run_command.assert_called_with(['tempershow', '-j'], return_cmd=True)
 
 
 class TestShowPlatformPsu(object):

@@ -1,4 +1,5 @@
 import os
+import json
 import subprocess
 import sys
 
@@ -150,11 +151,19 @@ def fan():
 
 # 'temperature' subcommand ("show platform temperature")
 @platform.command()
-def temperature():
+@click.option('-j', '--json', 'output_json', is_flag=True, help="Output in JSON format")
+def temperature(output_json):
     """Show device temperature information"""
     cmd = ['tempershow']
-    clicommon.run_command(cmd)
-
+    if output_json:
+        output, _ = clicommon.run_command(cmd+["-j"], return_cmd=True)
+        try:
+            data = json.loads(output)
+            click.echo(clicommon.json_dump(data))
+        except json.JSONDecodeError as e:
+            click.echo(f"Error: Invalid JSON output: {e}", err=True)
+    else:
+        clicommon.run_command(cmd)
 
 # 'voltage' subcommand ("show platform voltage")
 @platform.command()

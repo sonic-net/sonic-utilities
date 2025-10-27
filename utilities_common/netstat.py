@@ -1,11 +1,13 @@
 # network statistics utility functions #
 
+import datetime
 import json
 
 STATUS_NA = 'N/A'
 PORT_RATE = 40
 
-def ns_diff(newstr, oldstr):
+
+def ns_diff(newstr, oldstr, raw=False):
     """
         Calculate the diff.
     """
@@ -17,7 +19,7 @@ def ns_diff(newstr, oldstr):
         oldstr = '0'
 
     new, old = int(newstr), int(oldstr)
-    return '{:,}'.format(max(0, new - old))
+    return '{:,}'.format((new - old) if raw else max(0, new - old))
 
 def ns_brate(newstr, oldstr, delta):
     """
@@ -71,13 +73,34 @@ def table_as_json(table, header):
     return json.dumps(output, indent=4, sort_keys=True)
 
 
-def format_number_with_comma(number_in_str):
+def format_number_with_comma(number_in_str, raw=False):
     """
         Format the number with comma.
     """
+    if raw:
+        if number_in_str.startswith('-', 0, 1) and number_in_str[1:].isdecimal():
+            return '{:,}'.format(int(number_in_str))
+        elif number_in_str.isdecimal():
+            return '{:,}'.format(int(number_in_str))
+        else:
+            return number_in_str
+
     if number_in_str.isdecimal():
         return '{:,}'.format(int(number_in_str))
     else:
+        return number_in_str
+
+
+def format_microseconds_as_datetime(number_in_str):
+    """
+        Format the number of microseconds since epoch to a date.
+    """
+    try:
+        microseconds = float(number_in_str)
+        seconds = microseconds / 1_000_000
+        date = datetime.datetime.fromtimestamp(seconds)
+        return date.strftime("%m/%d/%Y, %H:%M:%S")
+    except Exception:
         return number_in_str
 
 
@@ -116,6 +139,31 @@ def format_fec_ber(rate):
         return STATUS_NA
     else:
         return "{:.2e}".format(float(rate))
+
+
+def format_fec_flr(rate):
+    """
+    Show the flr rate.
+    """
+    if rate == STATUS_NA:
+        return STATUS_NA
+    elif rate == 0:
+        return "0"
+    else:
+        return "{:.2e}".format(float(rate))
+
+
+def format_fec_flr_predicted(flr, r_squared):
+    """
+    Show the predicted flr rate with R-squared confidence.
+    """
+    if flr == STATUS_NA:
+        return STATUS_NA
+    elif flr == 0:
+        return "0"
+    else:
+        r_squared_pct = r_squared * 100
+        return "{:.2e} ({:.0f}%)".format(float(flr), r_squared_pct)
 
 
 def format_util(brate, port_rate):

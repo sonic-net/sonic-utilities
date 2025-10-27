@@ -971,19 +971,28 @@
             "RX_BPS": "2.e9",
             "RX_PPS": "247.e3",
             "TX_BPS": "1.5e9",
-            "TX_PPS": "183.e3"
+            "TX_PPS": "183.e3",
+            "FEC_FLR": "4.2068052397918e-10",
+            "FEC_FLR_PREDICTED": "7.8068058627918e-10",
+            "FEC_FLR_R_SQUARED": "0.89447685070757"
     },
     "RATES:oid:0x1000000000013": {
             "RX_BPS": "204800",
             "RX_PPS": "200",
             "TX_BPS": "204848",
-            "TX_PPS": "201"
+            "TX_PPS": "201",
+            "FEC_FLR": "0",
+            "FEC_FLR_PREDICTED": "0",
+            "FEC_FLR_R_SQUARED": "0"
     },
     "RATES:oid:0x1000000000014": {
             "RX_BPS": "1.35e6",
             "RX_PPS": "9000",
             "TX_BPS": "13.37e6",
-            "TX_PPS": "9000"
+            "TX_PPS": "9000",
+            "FEC_FLR": "0",
+            "FEC_FLR_PREDICTED": "4.8055058627918e-10",
+            "FEC_FLR_R_SQUARED": "0.89447685070757"
     },
     "RATES:oid:0x1000000000015": {
             "RX_BPS": "0",
@@ -1238,7 +1247,9 @@
         "SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S13": "0",
         "SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S14": "0",
         "SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S15": "0",
-        "SAI_PORT_STAT_TRIM_PACKETS": "0"
+        "SAI_PORT_STAT_TRIM_PACKETS": "0",
+        "SAI_PORT_STAT_DROPPED_TRIM_PACKETS": "0",
+        "SAI_PORT_STAT_TX_TRIM_PACKETS": "0"
     },
     "COUNTERS:oid:0x1000000000013": {
         "SAI_PORT_STAT_IF_IN_UCAST_PKTS": "4",
@@ -1303,7 +1314,9 @@
         "SAI_PORT_STAT_YELLOW_WRED_DROPPED_PACKETS":"33",
         "SAI_PORT_STAT_RED_WRED_DROPPED_PACKETS":"51",
         "SAI_PORT_STAT_WRED_DROPPED_PACKETS":"101",
-        "SAI_PORT_STAT_TRIM_PACKETS": "100"
+        "SAI_PORT_STAT_TRIM_PACKETS": "100",
+        "SAI_PORT_STAT_DROPPED_TRIM_PACKETS": "50",
+        "SAI_PORT_STAT_TX_TRIM_PACKETS": "50"
     },
     "COUNTERS:oid:0x1000000000014": {
         "SAI_PORT_STAT_IF_IN_UCAST_PKTS": "6",
@@ -1363,7 +1376,10 @@
         "SAI_PORT_STAT_ETHER_STATS_JABBERS": "0",
         "SAI_PORT_STAT_IF_IN_FEC_CORRECTABLE_FRAMES": "100317",
         "SAI_PORT_STAT_IF_IN_FEC_NOT_CORRECTABLE_FRAMES": "0",
-        "SAI_PORT_STAT_IF_IN_FEC_SYMBOL_ERRORS": "0"
+        "SAI_PORT_STAT_IF_IN_FEC_SYMBOL_ERRORS": "0",
+        "SAI_PORT_STAT_TRIM_PACKETS": "20000",
+        "SAI_PORT_STAT_DROPPED_TRIM_PACKETS": "10000",
+        "SAI_PORT_STAT_TX_TRIM_PACKETS": "10000"
     },
     "COUNTERS:oid:0x1000000000015": {
         "SAI_PORT_STAT_IF_IN_UCAST_PKTS": "0",

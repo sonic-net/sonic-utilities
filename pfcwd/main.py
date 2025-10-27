@@ -38,6 +38,7 @@ DEFAULT_RESTORATION_TIME = 200
 DEFAULT_POLL_INTERVAL = 200
 DEFAULT_PORT_NUM = 32
 DEFAULT_ACTION = 'drop'
+DEFAULT_PFC_HISTORY_STATUS = "disable"
 
 STATS_DESCRIPTION = [
     ('STORM DETECTED/RESTORED', 'PFC_WD_QUEUE_STATS_DEADLOCK_DETECTED', 'PFC_WD_QUEUE_STATS_DEADLOCK_RESTORED'),
@@ -50,7 +51,8 @@ STATS_DESCRIPTION = [
 CONFIG_DESCRIPTION = [
     ('ACTION',           'action',           'drop'),
     ('DETECTION TIME',   'detection_time',   'N/A'),
-    ('RESTORATION TIME', 'restoration_time', 'infinite')
+    ('RESTORATION TIME', 'restoration_time', 'infinite'),
+    ('HISTORY',          'pfc_stat_history', 'disable')
 ]
 
 STATS_HEADER = ('QUEUE', 'STATUS',) + list(zip(*STATS_DESCRIPTION))[0]
@@ -161,9 +163,15 @@ class PfcwdCli(object):
 
         self.table += table
 
-    def show_stats(self, empty, queues):
+    def show_stats(self, empty, queues, check_storm=False):
         del self.table[:]
         self.collect_stats(empty, queues)
+
+        if check_storm:
+            # Check for storms and exit accordingly - no output needed
+            storms_detected = any(row[1] == 'stormed' for row in self.table if len(row) > 1)
+            sys.exit(1 if storms_detected else 0)
+
         click.echo(tabulate(
             self.table, STATS_HEADER, stralign='right', numalign='right',
             tablefmt='simple'
@@ -248,34 +256,47 @@ class PfcwdCli(object):
             tablefmt='simple'
         ))
 
-    def start(self, action, restoration_time, ports, detection_time):
+    def start(self, action, restoration_time, ports, detection_time, pfc_stat_history):
         invalid_ports = self.get_invalid_ports(ports)
         if len(invalid_ports):
             click.echo("Failed to run command, invalid options:")
             for opt in invalid_ports:
                 click.echo(opt)
             sys.exit(1)
-        self.start_cmd(action, restoration_time, ports, detection_time)
+        self.start_cmd(action, restoration_time, ports, detection_time, pfc_stat_history)
 
+    def pfc_stat_history(self, pfc_stat_history, ports):
+        invalid_ports = self.get_invalid_ports(ports)
+        if len(invalid_ports):
+            click.echo("Failed to run command, invalid options:")
+            for opt in invalid_ports:
+                click.echo(opt)
+            sys.exit(1)
+        self.pfc_stat_history_cmd(pfc_stat_history, ports)
 
-    def verify_pfc_enable_status_per_port(self, port, pfcwd_info):
+    def verify_pfc_enable_status_per_port(self, port, pfcwd_info, overwrite=True):
         pfc_status = self.config_db.get_entry(PORT_QOS_MAP, port).get('pfc_enable')
         if pfc_status is None:
             log.log_warning("SKIPPED: PFC is not enabled on port: {}".format(port), also_print_to_console=True)
             return
 
-        self.config_db.mod_entry(
-            CONFIG_DB_PFC_WD_TABLE_NAME, port, None
-        )
-        self.config_db.mod_entry(
-            CONFIG_DB_PFC_WD_TABLE_NAME, port, pfcwd_info
-        )
+        if overwrite:
+            # don't clear existing pfc history setting unless set explicitely
+            cur_pfc_history = self.config_db.get_entry(
+                CONFIG_DB_PFC_WD_TABLE_NAME, port
+            ).get("pfc_stat_history", DEFAULT_PFC_HISTORY_STATUS)
 
-    @multi_asic_util.run_on_multi_asic
-    def start_cmd(self, action, restoration_time, ports, detection_time):
-        if os.geteuid() != 0:
-            sys.exit("Root privileges are required for this operation")
+            pfcwd_info.setdefault("pfc_stat_history", cur_pfc_history)
 
+            self.config_db.set_entry(
+                CONFIG_DB_PFC_WD_TABLE_NAME, port, pfcwd_info
+            )
+        else:
+            self.config_db.mod_entry(
+                CONFIG_DB_PFC_WD_TABLE_NAME, port, pfcwd_info
+            )
+
+    def configure_ports(self, ports, pfcwd_info, overwrite=True):
         all_ports = get_all_ports(
             self.db, self.multi_asic.current_namespace,
             self.multi_asic.display_option
@@ -283,6 +304,20 @@ class PfcwdCli(object):
 
         if len(ports) == 0:
             ports = all_ports
+
+        for port in ports:
+            if port == "all":
+                for p in all_ports:
+                    self.verify_pfc_enable_status_per_port(p, pfcwd_info, overwrite)
+            else:
+                if port not in all_ports:
+                    continue
+                self.verify_pfc_enable_status_per_port(port, pfcwd_info, overwrite)
+
+    @multi_asic_util.run_on_multi_asic
+    def start_cmd(self, action, restoration_time, ports, detection_time, pfc_stat_history):
+        if os.geteuid() != 0:
+            sys.exit("Root privileges are required for this operation")
 
         pfcwd_info = {
             'detection_time': detection_time,
@@ -297,15 +332,10 @@ class PfcwdCli(object):
                 "restoration time not defined; default to 2 times "
                 "detection time: {} ms".format(2 * detection_time)
             )
+        if pfc_stat_history:
+            pfcwd_info["pfc_stat_history"] = "enable"
 
-        for port in ports:
-            if port == "all":
-                for p in all_ports:
-                    self.verify_pfc_enable_status_per_port(p, pfcwd_info)
-            else:
-                if port not in all_ports:
-                    continue
-                self.verify_pfc_enable_status_per_port(port, pfcwd_info)
+        self.configure_ports(ports, pfcwd_info, overwrite=True)
 
     @multi_asic_util.run_on_multi_asic
     def interval(self, poll_interval):
@@ -391,11 +421,12 @@ class PfcwdCli(object):
         pfcwd_info = {
             'detection_time': DEFAULT_DETECTION_TIME * multiply,
             'restoration_time': DEFAULT_RESTORATION_TIME * multiply,
-            'action': DEFAULT_ACTION
+            'action': DEFAULT_ACTION,
+            'pfc_stat_history': DEFAULT_PFC_HISTORY_STATUS
         }
 
         for port in active_ports:
-            self.verify_pfc_enable_status_per_port(port, pfcwd_info)
+            self.verify_pfc_enable_status_per_port(port, pfcwd_info, overwrite=True)
 
         pfcwd_info = {}
         pfcwd_info['POLL_INTERVAL'] = DEFAULT_POLL_INTERVAL * multiply
@@ -423,6 +454,15 @@ class PfcwdCli(object):
             pfcwd_info
         )
 
+    @multi_asic_util.run_on_multi_asic
+    def pfc_stat_history_cmd(self, pfc_stat_history, ports):
+        if os.geteuid() != 0:
+            sys.exit("Root privileges are required for this operation")
+
+        pfcwd_info = {
+            'pfc_stat_history': pfc_stat_history
+        }
+        self.configure_ports(ports, pfcwd_info, overwrite=False)
 
 # Show stats
 class Show(object):
@@ -434,13 +474,14 @@ class Show(object):
     @show.command()
     @multi_asic_util.multi_asic_click_options
     @click.option('-e', '--empty', is_flag=True)
+    @click.option('--check-storm', is_flag=True, help='Exit 1 if any storms detected, 0 otherwise')
     @click.argument('queues', nargs=-1)
     @clicommon.pass_db
-    def stats(db, namespace, display, empty, queues):
+    def stats(db, namespace, display, empty, check_storm, queues):
         """ Show PFC Watchdog stats per queue """
         if (len(queues)):
             display = constants.DISPLAY_ALL
-        PfcwdCli(db, namespace, display).show_stats(empty, queues)
+        PfcwdCli(db, namespace, display).show_stats(empty, queues, check_storm)
 
     # Show config
     @show.command()
@@ -459,20 +500,21 @@ class Start(object):
         '--action', '-a', type=click.Choice(['drop', 'forward', 'alert'])
     )
     @click.option('--restoration-time', '-r', type=click.IntRange(100, 60000))
+    @click.option('--pfc-stat-history', is_flag=True)
     @click.argument('ports', nargs=-1)
     @click.argument('detection-time', type=click.IntRange(100, 5000))
     @clicommon.pass_db
-    def start(db, action, restoration_time, ports, detection_time):
+    def start(db, action, restoration_time, ports, detection_time, pfc_stat_history):
         """
         Start PFC watchdog on port(s). To config all ports, use all as input.
 
         Example:
 
-        sudo pfcwd start --action drop all 400 --restoration-time 400
+        sudo pfcwd start --action drop all 400 --restoration-time 400 --pfc-stat-history enable
 
         """
         PfcwdCli(db).start(
-            action, restoration_time, ports, detection_time
+            action, restoration_time, ports, detection_time, pfc_stat_history
         )
 
 
@@ -525,7 +567,19 @@ class BigRedSwitch(object):
         PfcwdCli(db).big_red_switch(big_red_switch)
 
 
+# Enable/disable PFC WD PFC_STAT_HISTORY mode
+class PfcStatHistory(object):
+    @cli.command('pfc_stat_history')
+    @click.argument('pfc_stat_history', type=click.Choice(['enable', 'disable']))
+    @click.argument('ports', nargs=-1)
+    @clicommon.pass_db
+    def pfc_stat_history(db, pfc_stat_history, ports):
+        """ Enable/disable PFC Historical Statistics mode on ports"""
+        PfcwdCli(db).pfc_stat_history(pfc_stat_history, ports)
+
+
 def get_pfcwd_clis():
+    cli.add_command(PfcStatHistory().pfc_stat_history)
     cli.add_command(BigRedSwitch().big_red_switch)
     cli.add_command(CounterPoll().counter_poll)
     cli.add_command(StartDefault().start_default)

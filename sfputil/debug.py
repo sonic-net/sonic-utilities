@@ -93,6 +93,20 @@ def set_output(port_name, enable, direction):
 
     subport = get_subport(port_name)
 
+    if hasattr(api, 'get_cmis_rev'):
+        cmis_rev = api.get_cmis_rev()
+        if cmis_rev is None:
+            click.echo(f"{port_name}: CMIS revision not available for subport {subport}")
+            sys.exit(EXIT_FAIL)
+
+        # OutputStatusRx and OutputStatusTx are supported from CMIS 5.0
+        if float(cmis_rev) < 5.0:
+            click.echo(
+                f"{port_name}: This functionality is not supported"
+                f" with CMIS version {cmis_rev}, requires CMIS 5.0 and above"
+            )
+            sys.exit(EXIT_FAIL)
+
     try:
         if direction == "tx":
             lane_count = get_media_lane_count(port_name)

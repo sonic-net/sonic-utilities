@@ -6,7 +6,7 @@ import re
 import subprocess
 import utilities_common.cli as clicommon
 from utilities_common.chassis import is_smartswitch, get_all_dpus
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 
 TIMEOUT_SECS = 10
 TRANSITION_TIMEOUT = timedelta(seconds=240)  # 4 minutes
@@ -26,6 +26,12 @@ class StateDBHelper:
         redis_key = f"{table}|{key}"
         for field, value in entry.items():
             self.db.set("STATE_DB", redis_key, field, value)
+
+    def delete_field(self, table, key, field):
+        """Delete a specific field from table|key."""
+        redis_key = f"{table}|{key}"
+        client = self.db.get_redis_client("STATE_DB")
+        return client.hdel(redis_key, field)
 
 #
 # 'chassis_modules' group ('config chassis_modules ...')
@@ -72,8 +78,9 @@ def set_state_transition_in_progress(db, chassis_module_name, value):
     entry = state_db.get_entry('CHASSIS_MODULE_TABLE', chassis_module_name) or {}
     entry['state_transition_in_progress'] = value
     if value == 'True':
-        entry['transition_start_time'] = datetime.utcnow().isoformat()
+        entry['transition_start_time'] = datetime.now(timezone.utc).isoformat()
     else:
+        # Remove transition_start_time from both local entry and database
         entry.pop('transition_start_time', None)
         state_db.delete_field('CHASSIS_MODULE_TABLE', chassis_module_name, 'transition_start_time')
     state_db.set_entry('CHASSIS_MODULE_TABLE', chassis_module_name, entry)
@@ -92,7 +99,14 @@ def is_transition_timed_out(db, chassis_module_name):
         start_time = datetime.fromisoformat(start_time_str)
     except ValueError:
         return False
-    return datetime.utcnow() - start_time > TRANSITION_TIMEOUT
+
+    # Use UTC everywhere for consistent comparison
+    current_time = datetime.now(timezone.utc)
+    if start_time.tzinfo is None:
+        # If stored time is naive, assume it's UTC
+        start_time = start_time.replace(tzinfo=timezone.utc)
+
+    return current_time - start_time > TRANSITION_TIMEOUT
 
 #
 # Name: check_config_module_state_with_timeout

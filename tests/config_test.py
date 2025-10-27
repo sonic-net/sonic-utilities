@@ -1965,12 +1965,16 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.assertEqual(expected_exit_code, result.exit_code)
         self.assertTrue(expected_output in result.output)
 
+    @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
+        communicate=mock.Mock(return_value=('{"some": "config"}', None)),
+        returncode=0
+    )))
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch__only_required_params__default_values_used_for_optional_params(self):
         # Arrange
         expected_exit_code = 0
         expected_output = "Patch applied successfully"
-        expected_call_with_default_values = mock.call(self.any_patch, ConfigFormat.CONFIGDB, False, False, False, ())
+        expected_call_with_default_values = mock.call(mock.ANY, ConfigFormat.CONFIGDB, False, False, False, ())
         mock_generic_updater = mock.Mock()
         with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
             with mock.patch('builtins.open', mock.mock_open(read_data=self.any_patch_as_text)):
@@ -1984,6 +1988,10 @@ class TestGenericUpdateCommands(unittest.TestCase):
         mock_generic_updater.apply_patch.assert_called_once()
         mock_generic_updater.apply_patch.assert_has_calls([expected_call_with_default_values])
 
+    @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
+        communicate=mock.Mock(return_value=('{"some": "config"}', None)),
+        returncode=0
+    )))
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch__all_optional_params_non_default__non_default_values_used(self):
         # Arrange
@@ -1991,7 +1999,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         expected_output = "Patch applied successfully"
         expected_ignore_path_tuple = ('/ANY_TABLE', '/ANY_OTHER_TABLE/ANY_FIELD', '')
         expected_call_with_non_default_values = \
-            mock.call(self.any_patch, ConfigFormat.SONICYANG, True, True, True, expected_ignore_path_tuple)
+            mock.call(mock.ANY, ConfigFormat.SONICYANG, True, True, True, expected_ignore_path_tuple)
         mock_generic_updater = mock.Mock()
         with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
             with mock.patch('builtins.open', mock.mock_open(read_data=self.any_patch_as_text)):
@@ -2014,6 +2022,10 @@ class TestGenericUpdateCommands(unittest.TestCase):
         mock_generic_updater.apply_patch.assert_called_once()
         mock_generic_updater.apply_patch.assert_has_calls([expected_call_with_non_default_values])
 
+    @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
+        communicate=mock.Mock(return_value=('{"some": "config"}', None)),
+        returncode=0
+    )))
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch__exception_thrown__error_displayed_error_code_returned(self):
         # Arrange
@@ -2036,20 +2048,24 @@ class TestGenericUpdateCommands(unittest.TestCase):
     def test_apply_patch__optional_parameters_passed_correctly(self):
         self.validate_apply_patch_optional_parameter(
             ["--format", ConfigFormat.SONICYANG.name],
-            mock.call(self.any_patch, ConfigFormat.SONICYANG, False, False, False, ()))
+            mock.call(mock.ANY, ConfigFormat.SONICYANG, False, False, False, ()))
         self.validate_apply_patch_optional_parameter(
             ["--verbose"],
-            mock.call(self.any_patch, ConfigFormat.CONFIGDB, True, False, False, ()))
+            mock.call(mock.ANY, ConfigFormat.CONFIGDB, True, False, False, ()))
         self.validate_apply_patch_optional_parameter(
             ["--dry-run"],
-            mock.call(self.any_patch, ConfigFormat.CONFIGDB, False, True, False, ()))
+            mock.call(mock.ANY, ConfigFormat.CONFIGDB, False, True, False, ()))
         self.validate_apply_patch_optional_parameter(
             ["--ignore-non-yang-tables"],
-            mock.call(self.any_patch, ConfigFormat.CONFIGDB, False, False, True, ()))
+            mock.call(mock.ANY, ConfigFormat.CONFIGDB, False, False, True, ()))
         self.validate_apply_patch_optional_parameter(
             ["--ignore-path", "/ANY_TABLE"],
-            mock.call(self.any_patch, ConfigFormat.CONFIGDB, False, False, False, ("/ANY_TABLE",)))
+            mock.call(mock.ANY, ConfigFormat.CONFIGDB, False, False, False, ("/ANY_TABLE",)))
 
+    @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
+        communicate=mock.Mock(return_value=('{"some": "config"}', None)),
+        returncode=0
+    )))
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     def validate_apply_patch_optional_parameter(self, param_args, expected_call):
         # Arrange
@@ -2069,6 +2085,130 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.assertTrue(expected_output in result.output)
         mock_generic_updater.apply_patch.assert_called_once()
         mock_generic_updater.apply_patch.assert_has_calls([expected_call])
+
+    def test_filter_duplicate_patch_operations_basic(self):
+        from config.main import filter_duplicate_patch_operations
+        # Patch tries to add duplicate port to ACL_TABLE leaf-list
+        patch_ops = [
+            {"op": "add", "path": "/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet1"},
+            {"op": "add", "path": "/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet2"},
+            {"op": "add", "path": "/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet3"}
+        ]
+        config = {
+            "ACL_TABLE": {
+                "MY_ACL_TABLE": {
+                    "ports": ["Ethernet1", "Ethernet2"]
+                }
+            }
+        }
+        filtered_patch_ops = filter_duplicate_patch_operations(patch_ops, json.dumps(config))
+        # Only the non-duplicate add ops should remain
+        self.assertEqual(len(filtered_patch_ops), 1, "Only Ethernet3 add op should remain")
+        self.assertEqual(filtered_patch_ops[0]['value'], "Ethernet3", "Only Ethernet3 add op should remain")
+
+    def test_filter_duplicate_patch_operations_no_duplicates(self):
+        from config.main import filter_duplicate_patch_operations
+        # Patch does not contain any duplicate ops
+        patch_ops = [
+            {"op": "add", "path": "/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet3"},
+            {"op": "remove", "path": "/ACL_TABLE/MY_ACL_TABLE/ports/0"},
+            {"op": "replace", "path": "/ACL_TABLE/MY_ACL_TABLE/description", "value": "New description"}
+        ]
+        config = {
+            "ACL_TABLE": {
+                "MY_ACL_TABLE": {
+                    "ports": ["Ethernet1", "Ethernet2"],
+                    "description": "Old description"
+                }
+            }
+        }
+        filtered_patch_ops = filter_duplicate_patch_operations(patch_ops, json.dumps(config))
+        # All ops should remain as there are no duplicates
+        self.assertEqual(len(filtered_patch_ops), len(patch_ops), "All patch should remain as no duplicates")
+        self.assertEqual(filtered_patch_ops, patch_ops, "Filtered ops should match original ops")
+
+    def test_filter_duplicate_patch_operations_non_list_field(self):
+        from config.main import filter_duplicate_patch_operations
+        # Patch tries to add duplicate entries to a non-list field
+        patch_ops = [
+            {"op": "add", "path": "/PORT/Ethernet0/description", "value": "Desc1"},
+            {"op": "add", "path": "/PORT/Ethernet0/description", "value": "Desc2"}
+        ]
+        config = {
+            "PORT": {
+                "Ethernet0": {
+                    "description": "Existing description"
+                }
+            }
+        }
+        filtered_patch_ops = filter_duplicate_patch_operations(patch_ops, json.dumps(config))
+        # Both ops should remain as description is not a list field
+        self.assertEqual(len(filtered_patch_ops), len(patch_ops), "Both add ops should remain for non-list field")
+        self.assertEqual(filtered_patch_ops, patch_ops, "Filtered ops should match original ops")
+
+    def test_filter_duplicate_patch_operations_empty_config(self):
+        from config.main import filter_duplicate_patch_operations
+        patch_ops = [
+            {"op": "add", "path": "/PORT/Ethernet0/allowed_vlans/-", "value": "100"},
+            {"op": "add", "path": "/PORT/Ethernet0/allowed_vlans/-", "value": "200"}
+        ]
+        config = {
+            "PORT": {
+                "Ethernet0": {
+                    "allowed_vlans": []
+                }
+            }
+        }
+        filtered_patch_ops = filter_duplicate_patch_operations(patch_ops, json.dumps(config))
+        # All ops should remain as config is empty and has no existing entries
+        self.assertEqual(len(filtered_patch_ops), len(patch_ops), "All add ops should remain for empty list")
+        self.assertEqual(filtered_patch_ops, patch_ops, "Filtered ops should match original ops")
+
+    def test_append_emptytables_if_required_basic_config(self):
+        from config.main import append_emptytables_if_required
+
+        patch_ops = [
+            {"op": "add", "path": "/ACL_TABLE2/ports", "value": ["Ethernet1", "Ethernet2"]}
+        ]
+        config = {
+            "ACL_TABLE": {
+                "ports": ["Ethernet3"]
+            }
+        }
+        updated_patch_ops = append_emptytables_if_required(patch_ops, json.dumps(config))
+        assert len(updated_patch_ops) == 2, "Patch should have 2 operations after appending empty tables"
+        assert updated_patch_ops[0]['path'] == "/ACL_TABLE2", "First op should create ACL_TABLE2"
+        assert updated_patch_ops[0]['op'] == "add", "First op should be an add operation"
+        assert updated_patch_ops[1] == patch_ops[0], "Second op should be the original add operation"
+
+    def test_append_emptytables_if_required_no_action_needed(self):
+        from config.main import append_emptytables_if_required
+        patch_ops = [
+            {"op": "add", "path": "/ACL_TABLE/ports", "value": ["Ethernet1", "Ethernet2"]}
+        ]
+        config = {
+            "ACL_TABLE": {
+                "ports": ["Ethernet3"]
+            }
+        }
+        updated_patch_ops = append_emptytables_if_required(patch_ops, json.dumps(config))
+        assert len(updated_patch_ops) == 1, "Patch should remain unchanged with 1 operation"
+        assert updated_patch_ops[0] == patch_ops[0], "Patch operation should remain unchanged"
+
+    def test_append_emptytables_if_required_multiple_tables(self):
+        from config.main import append_emptytables_if_required
+
+        patch_ops = [
+            {"op": "add", "path": "/TABLE1/field", "value": "value1"},
+            {"op": "add", "path": "/TABLE2/field", "value": "value2"}
+        ]
+        config = {}
+        updated_patch_ops = append_emptytables_if_required(patch_ops, json.dumps(config))
+        assert len(updated_patch_ops) == 4, "Patch should have 4 operations after appending empty tables"
+        assert updated_patch_ops[0]['path'] == "/TABLE1", "First op should create TABLE1"
+        assert updated_patch_ops[1] == patch_ops[0], "Second op should be the original TABLE1 add operation"
+        assert updated_patch_ops[2]['path'] == "/TABLE2", "Third op should create TABLE2"
+        assert updated_patch_ops[3] == patch_ops[1], "Fourth op should be the original TABLE2 add operation"
 
     def test_replace__no_params__get_required_params_error_msg(self):
         # Arrange
@@ -2098,7 +2238,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         # Arrange
         expected_exit_code = 0
         expected_output = "Config replaced successfully"
-        expected_call_with_default_values = mock.call(self.any_target_config, ConfigFormat.CONFIGDB, False, False, False, ())
+        expected_call_with_default_values = mock.call(mock.ANY, ConfigFormat.CONFIGDB, False, False, False, ())
         mock_generic_updater = mock.Mock()
         with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
             with mock.patch('builtins.open', mock.mock_open(read_data=self.any_target_config_as_text)):
@@ -3413,12 +3553,26 @@ class TestConfigDropcounters(object):
         group = 'BAD'
         desc = 'more port ingress drops'
 
+        # Parameters for configurable drop monitor
+        dct = '10'  # Drop count threshold
+        ict = '2'  # Incident count threshold
+        window = '300'
+
         runner = CliRunner()
-        result = runner.invoke(config.config.commands['dropcounters'].commands['install'], [counter_name, counter_type, reasons, '-d', desc, '-g', group, '-a', alias])
+        result = runner.invoke(config.config.commands['dropcounters'].commands['install'],
+                               [counter_name, counter_type, reasons, '-d', desc, '-g', group,
+                               '-a', alias, '-w', window, '-dct', dct, '-ict', ict])
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['dropconfig', '-c', 'install', '-n', str(counter_name), '-t', str(counter_type), '-r', str(reasons), '-a', str(alias), '-g', str(group), '-d', str(desc)], display_cmd=False)
+        mock_run_command.assert_called_once_with(['dropconfig', '-c', 'install',
+                                                  '-n', str(counter_name),
+                                                  '-t', str(counter_type),
+                                                  '-r', str(reasons), '-a', str(alias),
+                                                  '-g', str(group), '-d', str(desc),
+                                                  '-w', str(window), '-dct', str(dct),
+                                                  '-ict', str(ict)],
+                                                 display_cmd=False)
 
     @patch('utilities_common.cli.run_command')
     def test_delete(self, mock_run_command):
@@ -3435,11 +3589,13 @@ class TestConfigDropcounters(object):
         counter_name = 'DEBUG_2'
         reasons = '[EXCEEDS_L2_MTU,DECAP_ERROR]'
         runner = CliRunner()
-        result = runner.invoke(config.config.commands['dropcounters'].commands['add-reasons'], [counter_name, reasons, '-v'])
+        result = runner.invoke(config.config.commands['dropcounters'].commands['add-reasons'],
+                               [counter_name, reasons, '-v'])
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['dropconfig', '-c', 'add', '-n', str(counter_name), '-r', str(reasons)], display_cmd=True)
+        mock_run_command.assert_called_once_with(['dropconfig', '-c', 'add', '-n', str(counter_name),
+                                                  '-r', str(reasons)], display_cmd=True)
 
     @patch('utilities_common.cli.run_command')
     def test_remove_reasons(self, mock_run_command):
@@ -3489,6 +3645,39 @@ class TestConfigDropcountersMasic(object):
         mock_run_command.assert_called_once_with(['dropconfig', '-c', 'install', '-n', str(counter_name),
                                                   '-t', str(counter_type), '-r', str(reasons), '-a', str(alias),
                                                   '-g', str(group), '-d', str(desc),
+                                                  '-ns', str(namespace)], display_cmd=False)
+
+    @patch('utilities_common.cli.run_command')
+    def test_enable_monitor_multi_asic(self, mock_run_command):
+        counter_name = 'DEBUG_2'
+        window = '300'
+        dct = '10'  # Drop count threshold
+        ict = '5'  # Incident count threshold
+        namespace = 'asic0'
+
+        runner = CliRunner()
+        result = runner.invoke(config.config.commands['dropcounters'].commands['enable-monitor'],
+                               ['-c', counter_name, '-w', window, '-dct', dct, '-ict', ict,
+                               '-n', namespace])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(['dropconfig', '-c', 'enable_drop_monitor', '-n', str(counter_name),
+                                                  '-w', str(window), '-dct', str(dct), '-ict', str(ict),
+                                                  '-ns', str(namespace)], display_cmd=False)
+
+    @patch('utilities_common.cli.run_command')
+    def test_disable_monitor_multi_asic(self, mock_run_command):
+        counter_name = 'DEBUG_2'
+        namespace = 'asic0'
+
+        runner = CliRunner()
+        result = runner.invoke(config.config.commands['dropcounters'].commands['disable-monitor'],
+                               ['-c', counter_name, '-n', namespace])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(['dropconfig', '-c', 'disable_drop_monitor', '-n', str(counter_name),
                                                   '-ns', str(namespace)], display_cmd=False)
 
     @patch('utilities_common.cli.run_command')
@@ -3886,6 +4075,10 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         self.all_config["asic1"] = data
         self.all_config["asic1"]["bgpraw"] = ""
 
+    @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
+        communicate=mock.Mock(return_value=('{"some": "config"}', None)),
+        returncode=0
+    )))
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch_multiasic(self):
         # Mock open to simulate file reading
@@ -3906,6 +4099,10 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
                 # Verify mocked_open was called as expected
                 mocked_open.assert_called_with(self.patch_file_path, 'r')
 
+    @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
+        communicate=mock.Mock(return_value=('{"some": "config"}', None)),
+        returncode=0
+    )))
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch_dryrun_multiasic(self):
         # Mock open to simulate file reading
@@ -3941,6 +4138,10 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
                     # Ensure ConfigDBConnector was never instantiated or called
                     mock_config_db_connector.assert_not_called()
 
+    @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
+        communicate=mock.Mock(return_value=('{"some": "config"}', None)),
+        returncode=0
+    )))
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.concurrent.futures.wait', autospec=True)
     def test_apply_patch_dryrun_parallel_multiasic(self, MockThreadPoolWait):
@@ -3981,6 +4182,10 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
                     # Ensure ConfigDBConnector was never instantiated or called
                     mock_config_db_connector.assert_not_called()
 
+    @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
+        communicate=mock.Mock(return_value=('{"some": "config"}', None)),
+        returncode=0
+    )))
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.concurrent.futures.wait', autospec=True)
     def test_apply_patch_check_running_in_parallel_multiasic(self, MockThreadPoolWait):
@@ -4020,6 +4225,10 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
                     # Ensure ConfigDBConnector was never instantiated or called
                     mock_config_db_connector.assert_not_called()
 
+    @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
+        communicate=mock.Mock(return_value=('{"some": "config"}', None)),
+        returncode=0
+    )))
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.apply_patch_wrapper')
     def test_apply_patch_check_apply_call_parallel_multiasic(self, mock_apply_patch):
@@ -4061,6 +4270,10 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
                     # Ensure ConfigDBConnector was never instantiated or called
                     mock_config_db_connector.assert_not_called()
 
+    @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
+        communicate=mock.Mock(return_value=('{"some": "config"}', None)),
+        returncode=0
+    )))
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     @patch('config.main.concurrent.futures.wait', autospec=True)
     def test_apply_patch_check_running_in_not_parallel_multiasic(self, MockThreadPoolWait):
@@ -4099,6 +4312,10 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
                     # Ensure ConfigDBConnector was never instantiated or called
                     mock_config_db_connector.assert_not_called()
 
+    @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
+        communicate=mock.Mock(return_value=('{"some": "config"}', None)),
+        returncode=0
+    )))
     @patch('config.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch_parallel_with_error_multiasic(self):
         # Mock open to simulate file reading
@@ -4135,11 +4352,265 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
                     # Ensure ConfigDBConnector was never instantiated or called
                     mock_config_db_connector.assert_not_called()
 
+    def test_filter_duplicate_patch_operations_basic_multiasic(self):
+        from config.main import filter_duplicate_patch_operations
+        import jsonpatch
+        # Multi-ASIC config: each ASIC has its own ACL_TABLE
+        config = {
+            "localhost": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": ["Ethernet1", "Ethernet2"]
+                    }
+                }
+            },
+            "asic0": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": ["Ethernet3", "Ethernet4"]
+                    }
+                }
+            },
+            "asic1": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": ["Ethernet5", "Ethernet6"]
+                    }
+                }
+            }
+        }
+        # Patch tries to add duplicate ports to each ASIC's ACL_TABLE leaf-list
+        patch_ops = [
+            {"op": "add", "path": "/localhost/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet1"},
+            {"op": "add", "path": "/localhost/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet2"},
+            {"op": "add", "path": "/asic0/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet3"},
+            {"op": "add", "path": "/asic0/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet4"},
+            {"op": "add", "path": "/asic1/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet5"},
+            {"op": "add", "path": "/asic1/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet6"}
+        ]
+        patch = jsonpatch.JsonPatch(patch_ops)
+        filtered_patch = filter_duplicate_patch_operations(patch, config)
+        filtered_ops = list(filtered_patch)
+        self.assertEqual(len(filtered_ops), 0, "All adds are duplicates, should be filtered out in multi-asic config")
+
+    def test_filter_duplicate_patch_operations_no_duplicates_multiasic(self):
+        from config.main import filter_duplicate_patch_operations
+        import jsonpatch
+        # Multi-ASIC config: each ASIC has its own ACL_TABLE
+        config = {
+            "localhost": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": ["Ethernet1", "Ethernet2"]
+                    }
+                }
+            },
+            "asic0": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": ["Ethernet3", "Ethernet4"]
+                    }
+                }
+            },
+            "asic1": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": ["Ethernet5", "Ethernet6"]
+                    }
+                }
+            }
+        }
+        # Patch tries to add new ports to each ASIC's ACL_TABLE leaf-list
+        patch_ops = [
+            {"op": "add", "path": "/localhost/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet7"},
+            {"op": "add", "path": "/localhost/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet8"},
+            {"op": "add", "path": "/asic0/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet9"},
+            {"op": "add", "path": "/asic0/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet10"},
+            {"op": "add", "path": "/asic1/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet11"},
+            {"op": "add", "path": "/asic1/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet12"}
+        ]
+        patch = jsonpatch.JsonPatch(patch_ops)
+        filtered_patch = filter_duplicate_patch_operations(patch, config)
+        filtered_ops = list(filtered_patch)
+        self.assertEqual(
+            len(filtered_ops),
+            len(patch_ops),
+            "No adds are duplicates, none should be filtered out in multi-asic config"
+        )
+
+    def test_filter_duplicate_patch_operations_mixed_multiasic(self):
+        from config.main import filter_duplicate_patch_operations
+        import jsonpatch
+        # Multi-ASIC config: each ASIC has its own ACL_TABLE
+        config = {
+            "localhost": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": ["Ethernet1", "Ethernet2"]
+                    }
+                }
+            },
+            "asic0": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": ["Ethernet3", "Ethernet4"]
+                    }
+                }
+            },
+            "asic1": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": ["Ethernet5", "Ethernet6"]
+                    }
+                }
+            }
+        }
+        # Patch tries to add some duplicate and some new ports to each ASIC's ACL_TABLE leaf-list
+        patch_ops = [
+            {"op": "add", "path": "/localhost/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet1"},  # duplicate
+            {"op": "add", "path": "/localhost/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet8"},  # new
+            {"op": "add", "path": "/asic0/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet3"},      # duplicate
+            {"op": "add", "path": "/asic0/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet10"},    # new
+            {"op": "add", "path": "/asic1/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet5"},      # duplicate
+            {"op": "add", "path": "/asic1/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet12"}     # new
+        ]
+        patch = jsonpatch.JsonPatch(patch_ops)
+        filtered_patch = filter_duplicate_patch_operations(patch, config)
+        filtered_ops = list(filtered_patch)
+        self.assertEqual(
+            len(filtered_ops),
+            3,
+            "Three adds are duplicates, three are new and should remain in multi-asic config"
+        )
+
+    def test_filter_duplicate_patch_operations_empty_config_multiasic(self):
+        from config.main import filter_duplicate_patch_operations
+        import jsonpatch
+        config = {
+            "localhost": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": []
+                    }
+                }
+            },
+            "asic0": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": []
+                    }
+                }
+            },
+            "asic1": {
+                "ACL_TABLE": {
+                    "MY_ACL_TABLE": {
+                        "ports": []
+                    }
+                }
+            }
+        }
+        # Patch tries to add ports to each ASIC's ACL_TABLE leaf-list
+        patch_ops = [
+            {"op": "add", "path": "/localhost/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet1"},
+            {"op": "add", "path": "/localhost/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet2"},
+            {"op": "add", "path": "/asic0/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet3"},
+            {"op": "add", "path": "/asic0/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet4"},
+            {"op": "add", "path": "/asic1/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet5"},
+            {"op": "add", "path": "/asic1/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet6"}
+        ]
+        patch = jsonpatch.JsonPatch(patch_ops)
+        filtered_patch = filter_duplicate_patch_operations(patch, config)
+        filtered_ops = list(filtered_patch)
+        self.assertEqual(
+            len(filtered_ops),
+            len(patch_ops),
+            "No adds are duplicates in empty list, "
+            "none should be filtered out in multi-asic config"
+        )
+
+    def test_test_append_emptytables_if_required_basic_config_multiasic(self):
+        from config.main import append_emptytables_if_required
+        # Multi-ASIC config: each ASIC has its own PORT table
+        config = {
+            "localhost": {
+                "PORT": {
+                    "Ethernet0": {
+                        "mtu": "9100"
+                    }
+                }
+            },
+            "asic0": {
+                "PORT": {
+                    "Ethernet1": {
+                        "mtu": "9100"
+                    }
+                }
+            },
+            "asic1": {
+                "PORT": {
+                    "Ethernet2": {
+                        "mtu": "9100"
+                    }
+                }
+            }
+        }
+        # Patch does not include PORT table for asic1
+        patch_ops = [
+            {"op": "add", "path": "/localhost/BGP_NEIGHBOR/ARISTA01T1", "value": "10.0.0.1"},
+            {"op": "add", "path": "/asic0/BGP_NEIGHBOR/ARISTA02T1", "value": "10.0.0.2"},
+            {"op": "add", "path": "/asic1/BGP_NEIGHBOR/ARISTA02T1", "value": "10.0.0.3"}
+        ]
+        updated_patch = append_emptytables_if_required(patch_ops, config)
+        updated_patch_list = list(updated_patch)
+        assert len(updated_patch_list) == 6, "BGP_NEIGHBOR table for each namespace should be added to the patch"
+        assert updated_patch_list[0] == {"op": "add", "path": "/localhost/BGP_NEIGHBOR", "value": {}}
+        assert updated_patch_list[2] == {"op": "add", "path": "/asic0/BGP_NEIGHBOR", "value": {}}
+        assert updated_patch_list[4] == {"op": "add", "path": "/asic1/BGP_NEIGHBOR", "value": {}}
+        assert updated_patch_list[1] == patch_ops[0]
+        assert updated_patch_list[3] == patch_ops[1]
+        assert updated_patch_list[5] == patch_ops[2]
+
+    def test_test_append_emptytables_if_required_no_additional_tables_multiasic(self):
+        from config.main import append_emptytables_if_required
+        # Multi-ASIC config: each ASIC has its own PORT table
+        config = {
+            "localhost": {
+                "PORT": {
+                    "Ethernet0": {
+                        "mtu": "9100"
+                    }
+                }
+            },
+            "asic0": {
+                "PORT": {
+                    "Ethernet1": {
+                        "mtu": "9100"
+                    }
+                }
+            },
+            "asic1": {
+                "PORT": {
+                    "Ethernet2": {
+                        "mtu": "9100"
+                    }
+                }
+            }
+        }
+        # Patch already includes PORT table for each namespace
+        patch_ops = [
+            {"op": "add", "path": "/localhost/PORT/Ethernet0/mtu", "value": "9200"},
+            {"op": "add", "path": "/asic0/PORT/Ethernet1/mtu", "value": "9200"},
+            {"op": "add", "path": "/asic1/PORT/Ethernet2/mtu", "value": "9200"}
+        ]
+        updated_patch = append_emptytables_if_required(patch_ops, config)
+        assert len(updated_patch) == len(patch_ops), "No additional tables should be added to the patch"
+
     @patch('config.main.subprocess.Popen')
     @patch('config.main.SonicYangCfgDbGenerator.validate_config_db_json', mock.Mock(return_value=True))
     def test_apply_patch_validate_patch_multiasic(self, mock_subprocess_popen):
         mock_instance = MagicMock()
         mock_instance.communicate.return_value = (json.dumps(self.all_config), 0)
+        mock_instance.returncode = 0
         mock_subprocess_popen.return_value = mock_instance
 
         # Mock open to simulate file reading

@@ -1,15 +1,15 @@
+import pytest
 import mock
 import unittest
 import generic_config_updater
 import generic_config_updater.field_operation_validators as fov
 import generic_config_updater.gu_common as gu_common
 
-from unittest.mock import MagicMock, Mock, mock_open
+from unittest.mock import mock_open
 from mock import patch
-from sonic_py_common.device_info import get_hwsku, get_sonic_version_info
 
 
-class TestValidateFieldOperation(unittest.TestCase):
+class TestValidateFieldOperation:
 
     @patch("generic_config_updater.field_operation_validators.read_statedb_entry", mock.Mock(return_value=""))
     def test_port_config_update_validator_valid_speed_no_state_db(self):
@@ -33,6 +33,36 @@ class TestValidateFieldOperation(unittest.TestCase):
         for scope in ["localhost", "asic0"]:
             assert generic_config_updater.field_operation_validators.\
                 port_config_update_validator(scope, patch_element) is True
+
+    @patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=True))
+    @patch("generic_config_updater.field_operation_validators.read_statedb_entry",
+           mock.Mock(return_value="123,234"))
+    def test_port_config_update_validator_invalid_speed_for_chassis(self):
+        # 235 is in supported speeds, but for chassis, skip speed validation
+        patch_element = {"path": "/PORT/Ethernet3", "op": "add", "value": {"speed": 235}}
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                port_config_update_validator(scope, patch_element) is True
+
+    @patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=False))
+    @patch("generic_config_updater.field_operation_validators.read_statedb_entry",
+           mock.Mock(return_value="123,234"))
+    def test_port_config_update_validator_valid_speed_for_nonchassis(self):
+        # 234 is not in supported speeds, but for chassis, skip speed validation
+        patch_element = {"path": "/PORT/Ethernet3", "op": "add", "value": {"speed": 234}}
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                port_config_update_validator(scope, patch_element) is True
+
+    @patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=False))
+    @patch("generic_config_updater.field_operation_validators.read_statedb_entry",
+           mock.Mock(return_value="123,234"))
+    def test_port_config_update_validator_invalid_speed_for_nonchassis(self):
+        # 235 is not in supported speeds, but for chassis, skip speed validation
+        patch_element = {"path": "/PORT/Ethernet3", "op": "add", "value": {"speed": 235}}
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                port_config_update_validator(scope, patch_element) is False
 
     @patch("generic_config_updater.field_operation_validators.read_statedb_entry",
            mock.Mock(return_value="123,234"))
@@ -203,6 +233,46 @@ class TestValidateFieldOperation(unittest.TestCase):
             assert generic_config_updater.field_operation_validators.\
                 rdma_config_update_validator(scope, patch_element) is False
 
+    @pytest.mark.parametrize(
+        "field,value,op", [
+            pytest.param("xoff", "1000", "replace"),
+            pytest.param("dynamic_th", "0", "replace"),
+            pytest.param("packet_discard_action", "trim", "add"),
+            pytest.param("packet_discard_action", "drop", "replace")
+        ]
+    )
+    @pytest.mark.parametrize(
+        "asic", [
+            "spc4",
+            "spc5",
+            "th5"
+        ]
+    )
+    @pytest.mark.parametrize(
+        "scope", [
+            "localhost",
+            "asic0"
+        ]
+    )
+    def test_buffer_profile_config_update_validator(self, scope, asic, field, value, op):
+        patch_element = {
+            "path": "/BUFFER_PROFILE/sample_profile/{}".format(field),
+            "op": op,
+            "value": value
+        }
+
+        with (
+            patch(
+                "generic_config_updater.field_operation_validators.get_asic_name",
+                return_value=asic
+            ),
+            patch(
+                "sonic_py_common.device_info.get_sonic_version_info",
+                return_value={"build_version": "SONiC.20241200"}
+            )
+        ):
+            assert fov.buffer_profile_config_update_validator(scope, patch_element) is True
+
     @patch("sonic_py_common.device_info.get_sonic_version_info",
            mock.Mock(return_value={"build_version": "SONiC.20220530"}))
     @patch("generic_config_updater.field_operation_validators.get_asic_name",
@@ -292,6 +362,25 @@ class TestValidateFieldOperation(unittest.TestCase):
         for scope in ["localhost", "asic0"]:
             assert generic_config_updater.field_operation_validators.\
                 rdma_config_update_validator(scope, patch_element) is False
+
+    @patch("sonic_py_common.device_info.get_sonic_version_info",
+           mock.Mock(return_value={"build_version": "SONiC.20220530"}))
+    @patch("generic_config_updater.field_operation_validators.get_asic_name",
+           mock.Mock(return_value="spc1"))
+    @patch("os.path.exists", mock.Mock(return_value=True))
+    @patch("builtins.open", mock_open(read_data='''{"tables": {"PFC_WD": {"validator_data": {
+        "rdma_config_update_validator": {"PFCWD enable/disable": {"fields": [
+            "restoration_time", "detection_time", "action", "global/poll_interval", "pfc_stat_history"
+        ], "operations": ["remove", "replace", "add"], "platforms": {"spc1": "20181100"}}}}}}}'''))
+    def test_rdma_config_update_validator_spc_asic_pfc_stat_history(self):
+        patch_element = {
+            "path": "/PFC_WD/Ethernet8/pfc_stat_history",
+            "op": "replace",
+            "value": "enable"
+        }
+        for scope in ["localhost", "asic0"]:
+            assert generic_config_updater.field_operation_validators.\
+                rdma_config_update_validator(scope, patch_element) is True
 
     @patch("sonic_py_common.device_info.get_sonic_version_info",
            mock.Mock(return_value={"build_version": "20250530.12"}))
@@ -423,7 +512,7 @@ class TestValidateFieldOperation(unittest.TestCase):
         old_config = {"PFC_WD": {"GLOBAL": {"POLL_INTERVAL": "60"}}}
         target_config = {"PFC_WD": {"GLOBAL": {}}}
         config_wrapper = gu_common.ConfigWrapper()
-        self.assertRaises(
+        pytest.raises(
             gu_common.IllegalPatchOperationError,
             config_wrapper.validate_field_operation,
             old_config,
@@ -464,7 +553,7 @@ class TestValidateFieldOperation(unittest.TestCase):
             }
         }
         config_wrapper = gu_common.ConfigWrapper()
-        self.assertRaises(
+        pytest.raises(
             gu_common.IllegalPatchOperationError,
             config_wrapper.validate_field_operation,
             old_config,
@@ -607,6 +696,15 @@ class TestGetAsicName(unittest.TestCase):
         mock_popen.return_value.communicate.return_value = ["Nokia-IXR7250E-36x100G", 0]
         for scope in ["localhost", "asic0"]:
             self.assertEqual(fov.get_asic_name(), "j2c+")
+
+    @patch('sonic_py_common.device_info.get_sonic_version_info')
+    @patch('subprocess.Popen')
+    def test_get_asic_jr2(self, mock_popen, mock_get_sonic_version_info):
+        mock_get_sonic_version_info.return_value = {'asic_type': 'broadcom'}
+        mock_popen.return_value = mock.Mock()
+        mock_popen.return_value.communicate.return_value = ["Arista-7800R3-48CQ2-C48", 0]
+        for scope in ["localhost", "asic0"]:
+            self.assertEqual(fov.get_asic_name(), "jr2")
 
     @patch('sonic_py_common.device_info.get_sonic_version_info')
     @patch('subprocess.Popen')

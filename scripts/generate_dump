@@ -794,6 +794,7 @@ save_frr_info() {
     save_vtysh "show ipv6 route vrf all nexthop-group" "frr.ip6_route.nhg"
     save_vtysh "show zebra fpm stats" "frr.fpm.stats"
     save_vtysh "show zebra dplane detailed" "frr.dplane"
+    save_vtysh "show zebra dplane providers" "frr.dplane.providers"
     save_vtysh "show interface vrf all" "frr.interfaces"
     save_vtysh "show zebra" "frr.zebra"
     save_vtysh "show zebra client" "frr.zebra.client"
@@ -807,8 +808,8 @@ save_frr_info() {
     save_vtysh "show mpls fec" "frr.mpls.fec"
     save_vtysh "show nexthop-group rib" "frr.nhg.rib"
     save_vtysh "show route-map" "frr.route_map"
-    save_vtysh "show thread cpu" "frr.thread_cpu"
-    save_vtysh "show thread poll" "frr.thread_poll"
+    save_vtysh "show event cpu" "frr.event_cpu"
+    save_vtysh "show event poll" "frr.event_poll"
     save_vtysh "show debugging hashtable" "frr.debugging_hashtable"
     save_vtysh "show work-queues" "frr.work_queues"
     save_vtysh "show memory" "frr.memory"
@@ -911,6 +912,65 @@ save_sys() {
     done
 
     chmod ugo+rw -R $DUMPDIR/$BASE/sys
+}
+
+save_sysfs() {
+    trap 'handle_error $? $LINENO' ERR
+    local src="$1"
+    local dest="$2"
+    shift 2
+    # sys files we do not want to include in dump
+    local excludes=("$@")
+
+    $MKDIR $V -p "$dest"
+
+    should_skip() {
+        local base="$1"
+        for ex in "${excludes[@]}"; do
+            [[ "$base" == "$ex" ]] && return 0
+        done
+        return 1
+    }
+
+    # Copy files directly under src
+    for f in "$src"/*; do
+        if [ -f "$f" ]; then
+            local base="$(basename "$f")"
+            should_skip "$base" && continue
+            local target="$dest/$base"
+
+            if $NOOP; then
+                echo "cat $f > $target 2>/dev/null"
+            else
+                cat "$f" > "$target" 2>/dev/null
+            fi
+        fi
+    done
+
+    # Copy sub folders
+    for d in "$src"/*; do
+        if [ -d "$d" ]; then
+            local subdir_dest="$dest/$(basename "$d")"
+            $MKDIR $V -p "$subdir_dest"
+
+            # copy only files inside sub folder, not sub-sub folders
+            for f in "$d"/*; do
+                if [ -f "$f" ]; then
+                    local base="$(basename "$f")"
+                    should_skip "$base" && continue
+                    local target="$subdir_dest/$base"
+
+                    if $NOOP; then
+                        echo "cat $f > $target 2>/dev/null"
+                    else
+                        cat "$f" > "$target" 2>/dev/null
+                    fi
+                fi
+            done
+        fi
+    done
+
+    chmod ugo+rw -R "$dest"
 }
 
 ###############################################################################
@@ -1343,6 +1403,7 @@ collect_mellanox() {
     local platform=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_platform())")
     local platform_folder="/usr/share/sonic/device/${platform}"
     local hwsku=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_hwsku())")
+    local is_smartswitch=$(python3 -c "from sonic_py_common import device_info; print(device_info.is_smartswitch())")
     local sku_folder="/usr/share/sonic/device/${platform}/${hwsku}"
     local cmis_host_mgmt_files=(
         "/tmp/nv-syncd-shared/sai.profile"
@@ -1404,6 +1465,15 @@ collect_mellanox() {
     fi
 
     save_cmd "get_component_versions.py" "component_versions"
+    if [[ $is_smartswitch == "True" ]]; then
+        save_cmd "dpuctl dpu-status" "dpu_status"
+    fi
+
+    local sdk_sysfs_src_path="/sys/module/sx_core/asic0"
+    local sdk_sysfs_dest_path="$TARDIR/sdk_sysfs/sx_core/asic0"
+    local excludes_sysfs_files=(rx_los tx_disable module_info module_latched_flag_info power_mode power_mode_policy reinsert reset)
+
+    save_sysfs "$sdk_sysfs_src_path" "$sdk_sysfs_dest_path" "${excludes_sysfs_files[@]}" &
 
     # Save CMIS-host-management related files
     local cmis_host_mgmt_path="cmis-host-mgmt"
@@ -1419,6 +1489,8 @@ collect_mellanox() {
     fi
 
     save_cmd "show interfaces autoneg status" "autoneg.status"
+
+    wait
 }
 
 ###############################################################################

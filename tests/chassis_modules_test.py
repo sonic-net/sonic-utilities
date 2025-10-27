@@ -1,7 +1,7 @@
 import sys
 import os
 from click.testing import CliRunner
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from config.chassis_modules import (
     set_state_transition_in_progress,
     is_transition_timed_out,
@@ -46,11 +46,12 @@ FABRIC-CARD1      fabric-card               18        Offline              up  F
 """
 
 show_chassis_midplane_output="""\
-      Name     IP-Address    Reachability
-----------  -------------  --------------
-LINE-CARD0  192.168.1.100            True
-LINE-CARD1    192.168.1.2           False
-LINE-CARD2    192.168.1.1            True
+      Name    IP-Address    Reachability
+----------  ------------  --------------
+LINE-CARD0   192.168.3.1            True
+LINE-CARD1   192.168.4.1           False
+LINE-CARD2   192.168.5.1            True
+LINE-CARD3   192.168.6.1            True
 """
 
 show_chassis_system_ports_output_asic0="""\
@@ -346,7 +347,7 @@ class TestChassisModules(object):
         result = runner.invoke(show.cli.commands["chassis"].commands["modules"].commands["midplane-status"], [])
         print(result.output)
         result_lines = result.output.strip('\n').split('\n')
-        modules = ["LINE-CARD0", "LINE-CARD1", "LINE-CARD2"]
+        modules = ["LINE-CARD0", "LINE-CARD1", "LINE-CARD2", "LINE-CARD3"]
         for i, module in enumerate(modules):
             assert module in result_lines[i + warning_lines + header_lines]
         assert len(result_lines) == warning_lines + header_lines + len(modules)
@@ -489,7 +490,7 @@ class TestChassisModules(object):
             fvs = {
                 'admin_status': 'up',
                 'state_transition_in_progress': 'True',
-                'transition_start_time': datetime.utcnow().isoformat()
+                'transition_start_time': datetime.now(timezone.utc).isoformat()
             }
             db.cfgdb.set_entry('CHASSIS_MODULE', "DPU0", fvs)
 
@@ -516,7 +517,7 @@ class TestChassisModules(object):
             fvs = {
                 'admin_status': 'up',
                 'state_transition_in_progress': 'True',
-                'transition_start_time': (datetime.utcnow() - timedelta(minutes=30)).isoformat()
+                'transition_start_time': (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat()
             }
             db.cfgdb.set_entry('CHASSIS_MODULE', "DPU0", fvs)
 
@@ -592,14 +593,34 @@ class TestChassisModules(object):
         assert is_transition_timed_out(db, "DPU0") is False
 
         # Case 4: Timed out
-        old_time = (datetime.utcnow() - TRANSITION_TIMEOUT - timedelta(seconds=1)).isoformat()
+        old_time = (datetime.now(timezone.utc) - TRANSITION_TIMEOUT - timedelta(seconds=1)).isoformat()
         db.statedb.get_entry.return_value = {"transition_start_time": old_time}
         assert is_transition_timed_out(db, "DPU0") is True
 
         # Case 5: Not timed out yet
-        now = datetime.utcnow().isoformat()
+        now = datetime.now(timezone.utc).isoformat()
         db.statedb.get_entry.return_value = {"transition_start_time": now}
         assert is_transition_timed_out(db, "DPU0") is False
+
+    def test_delete_field(self):
+        """Single test to cover missing delete_field and timezone handling lines"""
+        from config.chassis_modules import StateDBHelper
+        from datetime import timezone
+
+        # Test delete_field method (covers lines 32-34)
+        mock_sonic_db = mock.MagicMock()
+        mock_redis_client = mock.MagicMock()
+        mock_sonic_db.get_redis_client.return_value = mock_redis_client
+        helper = StateDBHelper(mock_sonic_db)
+        helper.delete_field('TEST_TABLE', 'test_key', 'test_field')
+        mock_redis_client.hdel.assert_called_once_with("TEST_TABLE|test_key", "test_field")
+
+        # Test timezone-aware datetime handling (covers line 109)
+        db = mock.MagicMock()
+        db.statedb = mock.MagicMock()
+        tz_time = (datetime.now(timezone.utc) - TRANSITION_TIMEOUT - timedelta(seconds=1)).isoformat()
+        db.statedb.get_entry.return_value = {"transition_start_time": tz_time}
+        assert is_transition_timed_out(db, "DPU0") is True
 
     @classmethod
     def teardown_class(cls):
