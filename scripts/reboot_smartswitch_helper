@@ -6,6 +6,9 @@ declare -r MODULE_REBOOT_SMARTSWITCH="SMARTSWITCH"
 
 declare -r EXIT_DPU_DOWN=2
 
+# Set default platform JSON path if not already set
+PLATFORM_JSON_PATH=${PLATFORM_JSON_PATH:-"/usr/share/sonic/platform/platform.json"}
+
 # Function to print debug message
 function log_message() {
     local message=$1
@@ -87,6 +90,34 @@ function module_post_startup()
     if [ $? -ne 0 ]; then
         log_message "ERROR: Module post-startup vendor API failed"
     fi
+}
+
+# Function to set state_transition_in_progress flag
+function set_module_state_transition_flag()
+{
+    local DPU_NAME=$1
+    local FLAG_VALUE=$2
+    python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.set_module_state_transition('${DPU_NAME}', ${FLAG_VALUE})"
+    if [ $? -ne 0 ]; then
+        log_message "ERROR: Setting module state transition flag failed"
+    fi
+}
+
+# Function to clear state_transition_in_progress flag
+function clear_module_state_transition_flag()
+{
+    local DPU_NAME=$1
+    python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.clear_module_state_transition('${DPU_NAME}')"
+    if [ $? -ne 0 ]; then
+        log_message "ERROR: Clearing module state transition flag failed"
+    fi
+}
+
+# Function to get state_transition_in_progress flag
+function get_module_state_transition_flag()
+{
+    local DPU_NAME=$1
+    python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.get_module_state_transition('${DPU_NAME}')"
 }
 
 # Function to reboot DPU
@@ -171,7 +202,7 @@ function reboot_dpu()
     local REBOOT_TYPE=$2
     local DPU_INDEX=${DPU_NAME//[!0-9]/}
 
-    debug "User requested rebooting device ${DPU_NAME} ..."
+    log_message "User requested rebooting device ${DPU_NAME} ..."
 
     # Check if the DPU operation status is online before rebooting
     local oper_status
@@ -187,6 +218,16 @@ function reboot_dpu()
         fi
     fi
 
+    if [[ "$REBOOT_TYPE" != $MODULE_REBOOT_SMARTSWITCH ]]; then
+        # get and set the state_transition_in_progress flag before reboot
+        if not get_module_state_transition_flag "${DPU_NAME}"; then
+            set_module_state_transition_flag "${DPU_NAME}" true
+        else
+            log_message "ERROR: state_transition_in_progress flag is already set for ${DPU_NAME}"
+            return ${EXIT_ERROR}
+        fi
+    fi
+        
     # Send reboot command to DPU
     gnmi_reboot_dpu "${DPU_NAME}"
     if [ $? -ne 0 ]; then
@@ -213,6 +254,11 @@ function reboot_dpu()
 
     if [[ "$REBOOT_TYPE" != $MODULE_REBOOT_SMARTSWITCH ]]; then
         module_post_startup ${DPU_NAME} ${DPU_BUS_INFO}
+        if [ $? -ne 0 ]; then
+            log_message "ERROR: Failed to rescan PCI module for ${DPU_NAME}"
+            return ${EXIT_ERROR}
+        fi
+        clear_module_state_transition_flag ${DPU_NAME}
     fi
 }
 

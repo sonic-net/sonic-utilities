@@ -161,3 +161,132 @@ class TestModuleHelper:
         result = module_helper.module_post_startup("DPU1")
         assert result is False
         mock_log_error.assert_called_once_with("Module post-startup status for module DPU1: False")
+
+    def test_set_module_state_transition_success(self,
+                                                mock_load_platform_chassis,
+                                                mock_try_get_args,
+                                                mock_try_get):
+        mock_try_get_args.return_value = 1
+        mock_try_get.return_value = True
+        mock_module = mock.MagicMock()
+        mock_module.set_module_state_transition.return_value = True
+        module_helper.platform_chassis.get_module.return_value = mock_module
+
+        result = module_helper.set_module_state_transition("DPU1", True)
+        assert result is True
+
+    def test_set_module_state_transition_invalid_index(self,
+                                                      mock_load_platform_chassis,
+                                                      mock_try_get_args):
+        mock_try_get_args.return_value = INVALID_MODULE_INDEX
+
+        result = module_helper.set_module_state_transition("DPU1", True)
+        assert result is False
+
+    def test_set_module_state_transition_method_not_found(self,
+                                                         mock_load_platform_chassis,
+                                                         mock_try_get_args,
+                                                         mock_log_error):
+        mock_try_get_args.return_value = 1
+        mock_module = object()
+        module_helper.platform_chassis.get_module.return_value = mock_module
+
+        result = module_helper.set_module_state_transition("DPU1", True)
+        assert result is False
+        mock_log_error.assert_called_once_with("Set module state transition method not found in platform chassis")
+
+    def test_set_module_state_transition_operation_failed(self,
+                                                         mock_load_platform_chassis,
+                                                         mock_try_get_args,
+                                                         mock_try_get,
+                                                         mock_log_error):
+        mock_try_get_args.return_value = 1
+        mock_try_get.return_value = False
+        mock_module = mock.MagicMock()
+        mock_module.set_module_state_transition.return_value = False
+        module_helper.platform_chassis.get_module.return_value = mock_module
+
+        result = module_helper.set_module_state_transition("DPU1", True)
+        assert result is False
+        mock_log_error.assert_called_once_with("Set module state transition flag status for module DPU1: False")
+
+    def test_clear_module_state_transition_success(self,
+                                                  mock_load_platform_chassis,
+                                                  mock_try_get_args,
+                                                  mock_try_get):
+        mock_try_get_args.return_value = 1
+        mock_try_get.return_value = True
+        mock_module = mock.MagicMock()
+        mock_module.clear_module_state_transition.return_value = True
+        module_helper.platform_chassis.get_module.return_value = mock_module
+
+        result = module_helper.clear_module_state_transition("DPU1")
+        assert result is True
+
+    def test_clear_module_state_transition_invalid_index(self,
+                                                        mock_load_platform_chassis,
+                                                        mock_try_get_args):
+        mock_try_get_args.return_value = INVALID_MODULE_INDEX
+
+        result = module_helper.clear_module_state_transition("DPU1")
+        assert result is False
+
+    def test_clear_module_state_transition_method_not_found(self,
+                                                           mock_load_platform_chassis,
+                                                           mock_try_get_args,
+                                                           mock_log_error):
+        mock_try_get_args.return_value = 1
+        mock_module = object()
+        module_helper.platform_chassis.get_module.return_value = mock_module
+
+        result = module_helper.clear_module_state_transition("DPU1")
+        assert result is False
+        mock_log_error.assert_called_once_with("Clear module state transition method not found in platform chassis")
+
+    def test_clear_module_state_transition_operation_failed(self,
+                                                           mock_load_platform_chassis,
+                                                           mock_try_get_args,
+                                                           mock_try_get,
+                                                           mock_log_error):
+        mock_try_get_args.return_value = 1
+        mock_try_get.return_value = False
+        mock_module = mock.MagicMock()
+        mock_module.clear_module_state_transition.return_value = False
+        module_helper.platform_chassis.get_module.return_value = mock_module
+
+        result = module_helper.clear_module_state_transition("DPU1")
+        assert result is False
+        mock_log_error.assert_called_once_with("Clear module state transition flag status for module DPU1: False")
+
+    def test_get_module_state_transition_success(self,
+                                                mock_load_platform_chassis,
+                                                mock_try_get_args,
+                                                mock_try_get):
+        mock_try_get_args.return_value = 1
+        mock_try_get.return_value = True
+        mock_module = mock.MagicMock()
+        mock_module.get_module_state_transition.return_value = True
+        module_helper.platform_chassis.get_module.return_value = mock_module
+
+        result = module_helper.get_module_state_transition("DPU1")
+        assert result is True
+
+    def test_get_module_state_transition_invalid_index(self,
+                                                      mock_load_platform_chassis,
+                                                      mock_try_get_args):
+        mock_try_get_args.return_value = INVALID_MODULE_INDEX
+
+        result = module_helper.get_module_state_transition("DPU1")
+        assert result is False
+
+    def test_get_module_state_transition_method_not_found(self,
+                                                         mock_load_platform_chassis,
+                                                         mock_try_get_args,
+                                                         mock_log_error):
+        mock_try_get_args.return_value = 1
+        mock_module = object()
+        module_helper.platform_chassis.get_module.return_value = mock_module
+
+        result = module_helper.get_module_state_transition("DPU1")
+        assert result is False
+        mock_log_error.assert_called_once_with("Get module state transition method not found in platform chassis")
