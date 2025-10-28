@@ -258,10 +258,7 @@ def get_ip_intfs_in_namespace(af, namespace, display):
         for _, cidr in ifaddresses:
             local_ip = cidr.split('/', 1)[0]
             try:
-                if bgp_peer:
-                    neighbor_name, neighbor_ip = bgp_peer[local_ip]
-                else:
-                    neighbor_name, neighbor_ip = 'N/A', 'N/A'
+                neighbor_name, neighbor_ip = bgp_peer[local_ip]
             except (KeyError, TypeError):
                 neighbor_name, neighbor_ip = 'N/A', 'N/A'
             bgp_neighs[cidr] = [neighbor_name, neighbor_ip]
