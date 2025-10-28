@@ -1072,7 +1072,7 @@ class TestDhcpv4RelayMigrator(object):
         dbmgtr = db_migrator.DBMigrator(None)
 
         # Set the flag to True
-        dbmgtr.configDB.set_entry("DEVICE_METADATA", "localhost", {
+        dbmgtr.configDB.set_entry("FEATURE", "dhcp_relay", {
             "has_sonic_dhcpv4_relay": "True"
         })
 
@@ -1084,7 +1084,7 @@ class TestDhcpv4RelayMigrator(object):
         dbmgtr = db_migrator.DBMigrator(None)
 
         # Set the flag to False
-        dbmgtr.configDB.set_entry("DEVICE_METADATA", "localhost", {
+        dbmgtr.configDB.set_entry("FEATURE", "dhcp_relay", {
             "has_sonic_dhcpv4_relay": "False"
         })
 
@@ -1096,7 +1096,7 @@ class TestDhcpv4RelayMigrator(object):
         dbmgtr = db_migrator.DBMigrator(None)
 
         # Ensure flag is not set
-        dbmgtr.configDB.set_entry("DEVICE_METADATA", "localhost", {})
+        dbmgtr.configDB.set_entry("FEATURE", "dhcp_relay", {})
 
         assert dbmgtr.check_has_sonic_dhcpv4_relay_flag() is False
 
@@ -1214,7 +1214,7 @@ class TestDhcpv4RelayMigrator(object):
         dbmgtr = db_migrator.DBMigrator(None)
 
         # Set flag to True and setup VLAN with dhcp_servers
-        dbmgtr.configDB.set_entry("DEVICE_METADATA", "localhost", {"has_sonic_dhcpv4_relay": "True"})
+        dbmgtr.configDB.set_entry("FEATURE", "dhcp_relay", {"has_sonic_dhcpv4_relay": "True"})
         vlan_name = f"Vlan{vlan_id}"
         dbmgtr.configDB.set_entry("VLAN", vlan_name, {"vlanid": vlan_id, "dhcp_servers": [dhcp_server]})
 

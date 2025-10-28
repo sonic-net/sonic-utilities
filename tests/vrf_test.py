@@ -224,6 +224,8 @@ Vrf103  Ethernet4
         server_ip = "192.0.2.1"
         db.cfgdb.mod_entry("VLAN", vlan, {})
 
+        db.cfgdb.set_entry("FEATURE", "dhcp_relay", {"has_sonic_dhcpv4_relay": "True"})
+
         db.cfgdb.set_entry("DHCPV4_RELAY", vlan, {
             "dhcpv4_servers": [server_ip],
             "server_vrf": "Vrf100",

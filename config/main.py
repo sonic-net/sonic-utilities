@@ -1621,6 +1621,12 @@ def config_file_yang_validation(filename):
 
 def check_dhcpv4_relay_dependencies(db, object_name, object_type):
     """Checks if to be deleted interface/VRF is used in DHCPV4_RELAY table."""
+    # Check if has_sonic_dhcpv4_relay flag is enabled
+    feature_table = db.get_table("FEATURE")
+    dhcp_relay_feature = feature_table.get("dhcp_relay", {})
+    if dhcp_relay_feature.get("has_sonic_dhcpv4_relay") != "True":
+        return
+
     for relay_vlan, data in db.get_table('DHCPV4_RELAY').items():
         if object_type == 'interface':
             source_intf = data.get('source_interface')

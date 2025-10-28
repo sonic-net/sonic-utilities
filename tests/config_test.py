@@ -3230,6 +3230,9 @@ class TestConfigLoopback(object):
         assert result.exit_code == 0
         assert db.cfgdb.get_entry("LOOPBACK_INTERFACE", "Loopback1") == {}
 
+        # Enable has_sonic_dhcpv4_relay flag
+        db.cfgdb.set_entry("FEATURE", "dhcp_relay", {"has_sonic_dhcpv4_relay": "True"})
+
         db.cfgdb.set_entry("DHCPV4_RELAY", "Vlan100", {
             "dhcpv4_servers": ["192.0.2.100"],
             "source_interface": "Loopback1"
