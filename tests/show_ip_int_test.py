@@ -167,8 +167,12 @@ class TestMultiAsicShowIpInt(object):
 
 @pytest.mark.usefixtures('setup_teardown_fastpath')
 class TestShowIpIntFastPath(object):
+    @mock.patch('os.path.exists', mock.MagicMock(return_value=False))
+    @mock.patch('subprocess.Popen')
     @mock.patch('subprocess.check_output')
-    def test_show_ip_intf_v4_fast_path(self, mock_check_output):
+    def test_show_ip_intf_v4_fast_path(self, mock_check_output, mock_popen):
+        mock_popen.return_value.communicate.return_value = ('1', '')
+        mock_popen.return_value.wait.return_value = 0
         mock_check_output.return_value = """\
 1: lo    inet 127.0.0.1/8 scope host lo
 2: Ethernet0    inet 20.1.1.1/24 scope global Ethernet0
