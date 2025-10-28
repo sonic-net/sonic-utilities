@@ -28,7 +28,7 @@ def command_wrapper(command):
         # Split command into arguments for shell=False
         cmd_args = shlex.split(command)
         result = subprocess.run(cmd_args, capture_output=True, check=False, text=True)
-        
+
         if result.returncode != 0:
             logger.log(logger.LOG_PRIORITY_ERROR,
                        f"Command failed: '{command}', returncode: {result.returncode}",
@@ -41,7 +41,7 @@ def command_wrapper(command):
                 logger.log(logger.LOG_PRIORITY_ERROR,
                            f"stderr: {result.stderr}",
                            print_to_console)
-        
+
         return result.returncode
     except Exception as e:
         logger.log(logger.LOG_PRIORITY_ERROR,
