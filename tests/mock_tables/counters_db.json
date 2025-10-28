@@ -971,13 +971,19 @@
             "RX_BPS": "2.e9",
             "RX_PPS": "247.e3",
             "TX_BPS": "1.5e9",
-            "TX_PPS": "183.e3"
+            "TX_PPS": "183.e3",
+            "FEC_FLR": "0",
+            "FEC_FLR_PREDICTED": "0",
+            "FEC_FLR_R_SQUARED": "0"
     },
     "RATES:oid:0x1000000000013": {
             "RX_BPS": "204800",
             "RX_PPS": "200",
             "TX_BPS": "204848",
-            "TX_PPS": "201"
+            "TX_PPS": "201",
+            "FEC_FLR": "4.2068052397918e-10",
+            "FEC_FLR_PREDICTED": "7.8068058627918e-10",
+            "FEC_FLR_R_SQUARED": "0.89447685070757"
     },
     "RATES:oid:0x1000000000014": {
             "RX_BPS": "1.35e6",
