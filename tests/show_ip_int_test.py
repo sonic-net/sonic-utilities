@@ -171,7 +171,14 @@ class TestShowIpIntFastPath(object):
     @mock.patch('subprocess.Popen')
     @mock.patch('subprocess.check_output')
     def test_show_ip_intf_v4_fast_path(self, mock_check_output, mock_popen):
-        mock_popen.return_value.communicate.return_value = ('1', '')
+        # Mock the communicate() call to return different values for admin and oper state checks
+        mock_popen.return_value.communicate.side_effect = [
+            ('0x1003', ''), ('1', ''),  # lo
+            ('0x1003', ''), ('1', ''),  # Ethernet0
+            ('0x1003', ''), ('1', ''),  # PortChannel0001
+            ('0x1003', ''), ('1', ''),  # Vlan100
+            ('0x1003', ''), ('1', ''),  # eth0
+        ]
         mock_popen.return_value.wait.return_value = 0
         mock_check_output.return_value = """\
 1: lo    inet 127.0.0.1/8 scope host lo
