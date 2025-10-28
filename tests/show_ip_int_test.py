@@ -180,19 +180,12 @@ class TestMultiAsicShowIpInt(object):
 @pytest.mark.usefixtures('setup_teardown_fastpath')
 class TestShowIpIntFastPath(object):
     @mock.patch('os.path.exists', mock.MagicMock(return_value=True))
-    @mock.patch('subprocess.Popen')
-    @mock.patch('subprocess.check_output')
-    def test_show_ip_intf_v4_fast_path(self, mock_check_output, mock_popen):
-        # Mock the communicate() call to return different values for admin and oper state checks
-        mock_popen.return_value.communicate.side_effect = [
-            ('0x1043', ''), ('1', ''),  # lo
-            ('0x1043', ''), ('0', ''),  # Ethernet0
-            ('0x1043', ''), ('0', ''),  # PortChannel0001
-            ('0x1043', ''), ('0', ''),  # Vlan100
-            ('0x1043', ''), ('1', ''),  # eth0
-        ]
-        mock_popen.return_value.wait.return_value = 0
-        mock_check_output.return_value = """\
+    def test_show_ip_intf_v4_fast_path(self):
+        # Store original subprocess functions
+        original_check_output = subprocess.check_output
+        original_popen = subprocess.Popen
+
+        ip_addr_output = """\
 1: lo    inet 127.0.0.1/8 scope host lo
 2: Ethernet0    inet 20.1.1.1/24 scope global Ethernet0
 2: Ethernet0    inet 21.1.1.1/24 scope global Ethernet0
@@ -200,6 +193,43 @@ class TestShowIpIntFastPath(object):
 4: Vlan100    inet 40.1.1.1/24 scope global Vlan100
 5: eth0    inet 10.0.0.1/24 scope global eth0
 """
-        return_code, result = get_result_and_return_code(["ipintutil"])
-        assert return_code == 0
-        verify_fastpath_output(result, show_ipv4_intf_with_multple_ips)
+
+        # Track how many times Popen has been called to provide correct side_effect values
+        popen_call_count = [0]
+        communicate_side_effects = [
+            ('0x1043', ''), ('1', ''),  # lo
+            ('0x1043', ''), ('0', ''),  # Ethernet0
+            ('0x1043', ''), ('0', ''),  # PortChannel0001
+            ('0x1043', ''), ('0', ''),  # Vlan100
+            ('0x1043', ''), ('1', ''),  # eth0
+        ]
+
+        # Selectively mock check_output: only mock 'ip' command calls
+        def selective_check_output(cmd, *args, **kwargs):
+            # If this is a call to 'ip' command (from within ipintutil script)
+            if isinstance(cmd, list) and 'ip' in cmd and 'addr' in cmd:
+                return ip_addr_output
+            # Otherwise, call the real subprocess.check_output (for running ipintutil itself)
+            return original_check_output(cmd, *args, **kwargs)
+
+        # Selectively mock Popen: only mock 'cat' command calls for state files
+        def selective_popen(cmd, *args, **kwargs):
+            # If this is a call to 'cat' command (for reading interface state)
+            if isinstance(cmd, list) and 'cat' in cmd:
+                mock_proc = mock.MagicMock()
+                idx = popen_call_count[0]
+                if idx < len(communicate_side_effects):
+                    mock_proc.communicate.return_value = communicate_side_effects[idx]
+                    popen_call_count[0] += 1
+                else:
+                    mock_proc.communicate.return_value = ('', '')
+                mock_proc.wait.return_value = 0
+                return mock_proc
+            # Otherwise, call the real subprocess.Popen
+            return original_popen(cmd, *args, **kwargs)
+
+        with mock.patch('subprocess.check_output', side_effect=selective_check_output):
+            with mock.patch('subprocess.Popen', side_effect=selective_popen):
+                return_code, result = get_result_and_return_code(["ipintutil"])
+                assert return_code == 0
+                verify_fastpath_output(result, show_ipv4_intf_with_multple_ips)
