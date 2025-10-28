@@ -2,6 +2,7 @@ import os
 import pytest
 import subprocess
 from click.testing import CliRunner
+from unittest import mock
 
 import show.main as show
 from .utils import get_result_and_return_code
@@ -85,6 +86,14 @@ def setup_teardown_multi_asic():
     os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
 
 
+@pytest.fixture(scope="class")
+def setup_teardown_fastpath():
+    os.environ["PATH"] += os.pathsep + scripts_path
+    os.environ["UTILITIES_UNIT_TESTING"] = "1"
+    yield
+    os.environ["UTILITIES_UNIT_TESTING"] = "0"
+
+
 def verify_output(output, expected_output):
     lines = output.splitlines()
     ignored_intfs = ['eth0', 'lo']
@@ -154,3 +163,20 @@ class TestMultiAsicShowIpInt(object):
         return_code, result = get_result_and_return_code(['ipintutil', '-a', 'ipv5'])
         assert return_code == 1
         assert result == show_error_invalid_af
+
+
+@pytest.mark.usefixtures('setup_teardown_fastpath')
+class TestShowIpIntFastPath(object):
+    @mock.patch('subprocess.check_output')
+    def test_show_ip_intf_v4_fast_path(self, mock_check_output):
+        mock_check_output.return_value = """\
+1: lo    inet 127.0.0.1/8 scope host lo
+2: Ethernet0    inet 20.1.1.1/24 scope global Ethernet0
+2: Ethernet0    inet 21.1.1.1/24 scope global Ethernet0
+3: PortChannel0001    inet 30.1.1.1/24 scope global PortChannel0001
+4: Vlan100    inet 40.1.1.1/24 scope global Vlan100
+5: eth0    inet 10.0.0.1/24 scope global eth0
+"""
+        return_code, result = get_result_and_return_code(["ipintutil"])
+        assert return_code == 0
+        verify_output(result, show_ipv4_intf_with_multple_ips)
