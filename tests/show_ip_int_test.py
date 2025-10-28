@@ -194,6 +194,12 @@ class TestShowIpIntFastPath(object):
 5: eth0    inet 10.0.0.1/24 scope global eth0
 """
 
+        # Mock BGP neighbor data
+        bgp_neighbors = {
+            '20.1.1.1': {'local_addr': '20.1.1.1', 'name': 'T2-Peer', 'neighbor': '20.1.1.5'},
+            '30.1.1.1': {'local_addr': '30.1.1.1', 'name': 'T0-Peer', 'neighbor': '30.1.1.5'}
+        }
+
         # Track how many times Popen has been called to provide correct side_effect values
         popen_call_count = [0]
         communicate_side_effects = [
@@ -228,8 +234,13 @@ class TestShowIpIntFastPath(object):
             # Otherwise, call the real subprocess.Popen
             return original_popen(cmd, *args, **kwargs)
 
-        with mock.patch('subprocess.check_output', side_effect=selective_check_output):
-            with mock.patch('subprocess.Popen', side_effect=selective_popen):
-                return_code, result = get_result_and_return_code(["ipintutil"])
-                assert return_code == 0
-                verify_fastpath_output(result, show_ipv4_intf_with_multple_ips)
+        # Mock ConfigDBConnector for BGP neighbor data
+        mock_config_db = mock.MagicMock()
+        mock_config_db.get_table.return_value = bgp_neighbors
+
+        with mock.patch('swsscommon.ConfigDBConnector', return_value=mock_config_db):
+            with mock.patch('subprocess.check_output', side_effect=selective_check_output):
+                with mock.patch('subprocess.Popen', side_effect=selective_popen):
+                    return_code, result = get_result_and_return_code(["ipintutil"])
+                    assert return_code == 0
+                    verify_fastpath_output(result, show_ipv4_intf_with_multple_ips)
