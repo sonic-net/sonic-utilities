@@ -106,6 +106,18 @@ def verify_output(output, expected_output):
     assert new_output == expected_output
 
 
+def verify_fastpath_output(output, expected_output):
+    lines = output.splitlines()
+    ignored_intfs = ['eth0', 'lo']
+    for intf in ignored_intfs:
+        # the output should have line to display the ip address of eth0 and lo
+        assert len([line for line in lines if intf in line]) == 1
+
+    new_output = '\n'.join([line for line in lines if not any(i in line for i in ignored_intfs)])
+    print(new_output)
+    assert new_output == expected_output
+
+
 @pytest.mark.usefixtures('setup_teardown_single_asic')
 class TestShowIpInt(object):
 
@@ -190,4 +202,4 @@ class TestShowIpIntFastPath(object):
 """
         return_code, result = get_result_and_return_code(["ipintutil"])
         assert return_code == 0
-        verify_output(result, show_ipv4_intf_with_multple_ips)
+        verify_fastpath_output(result, show_ipv4_intf_with_multple_ips)
