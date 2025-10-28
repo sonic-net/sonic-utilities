@@ -337,7 +337,7 @@ def get_ip_intfs(af, namespace, display):
 def main():
     # This script gets the ip interfaces from different linux
     # network namespaces. This can be only done from root user.
-    if os.geteuid() != 0 and os.environ.get("UTILITIES_UNIT_TESTING", "0") != "2":
+    if os.geteuid() != 0 and os.environ.get("UTILITIES_UNIT_TESTING", "0") not in ["1", "2"]:
         sys.exit("Root privileges required for this operation")
 
     parser = multi_asic_util.multi_asic_args()
