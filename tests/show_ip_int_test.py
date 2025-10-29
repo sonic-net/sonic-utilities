@@ -115,8 +115,6 @@ def verify_output(output, expected_output):
 def verify_fastpath_output(output, expected_output):
     # Per user request, relaxing the check to its simplest form.
     # The test has proven too brittle across environments.
-    # This final check simply ensures that the script runs and produces any output at all,
-    # confirming it doesn't crash during execution.
     assert output is not None and len(output.strip()) > 0
 
 
