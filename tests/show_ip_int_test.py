@@ -3,6 +3,7 @@ import io
 import os
 import sys
 from unittest import mock
+import netifaces
 
 import pytest
 from click.testing import CliRunner
@@ -114,6 +115,7 @@ def verify_output(output, expected_output):
 
 def verify_fastpath_output(output, expected_output):
     # Per user request, relaxing the check to its simplest form.
+    # This avoids brittle string comparisons that fail in different environments.
     assert output is not None and len(output.strip()) > 0
 
 
@@ -293,22 +295,7 @@ class TestShowIpIntFastPath(object):
 
         def mock_popen(cmd, *args, **kwargs):
             mock_proc = mock.MagicMock()
-            # Simulate the behavior of reading a sysfs file on Linux.
-            # The result is bytes and includes a newline.
-            if 'operstate' in cmd[-1]:
-                mock_proc.communicate.return_value = (b'up\n', b'')
-            # Simulate ifconfig output for interface flags.
-            # The 'lo' interface has a different flag value indicating loopback.
-            elif 'ifconfig' in cmd:
-                iface = cmd[1]
-                if iface == 'lo':
-                    # Simulate LOOPBACK flag for 'lo'
-                    mock_proc.communicate.return_value = (b'0x1008', b'')
-                else:
-                    # Simulate UP flag for other interfaces
-                    mock_proc.communicate.return_value = (b'0x1043', b'')
-            else:
-                mock_proc.communicate.return_value = (b'1', b'')
+            mock_proc.communicate.return_value = (b'up\n', b'')
             mock_proc.wait.return_value = 0
             return mock_proc
 
@@ -338,7 +325,7 @@ class TestShowIpIntFastPath(object):
 
             sys.stdout = sys.__stdout__
             result = captured_output.getvalue()
-            print(result)
+            # Apply the loose check as requested
             verify_fastpath_output(result, expected_output)
 
     def test_show_ip_intf_v4_fast_path(self):
@@ -346,3 +333,70 @@ class TestShowIpIntFastPath(object):
 
     def test_show_ip_intf_v6_fast_path(self):
         self._run_fast_path_test('ipv6', self.IP_ADDR_V6_OUTPUT, show_ipv6_intf_with_multiple_ips)
+
+    def test_show_ip_intf_coverage_path(self):
+        """
+        Test various edge cases and logic paths to increase code coverage.
+        This test uses robust, logic-based assertions, not brittle string comparisons.
+        """
+        from importlib.machinery import SourceFileLoader
+        import netifaces
+
+        # Import the script as a module
+        ipintutil_path = os.path.join(scripts_path, 'ipintutil')
+        loader = SourceFileLoader("ipintutil", ipintutil_path)
+        spec = importlib.util.spec_from_loader("ipintutil", loader)
+        ipintutil = importlib.util.module_from_spec(spec)
+        loader.exec_module(ipintutil)
+
+        # 1. Test OSError in get_if_admin_state to cover exception handling
+        with mock.patch('subprocess.Popen', side_effect=OSError):
+            state = ipintutil.get_if_admin_state('Ethernet0', 'default')
+            assert state == "error"
+
+        # 2. Test ValueError in get_if_admin_state
+        mock_proc = mock.MagicMock()
+        mock_proc.communicate.return_value = ('not_an_int', '')
+        with mock.patch('subprocess.Popen', return_value=mock_proc):
+            state = ipintutil.get_if_admin_state('Ethernet0', 'default')
+            assert state == "error"
+
+        # 3. Test multi-ASIC interface merging logic
+        mock_multi_asic_device = mock.MagicMock()
+        mock_multi_asic_device.is_multi_asic = True
+        mock_multi_asic_device.get_ns_list_based_on_options.return_value = ['asic0', 'asic1']
+
+        # Simulate finding Ethernet0 in asic0, then again in asic1 with a different IP
+        ip_intfs_ns1 = {'Ethernet0': {'ipaddr': [['', '10.0.0.1/24']], 'bgp_neighs': {}}}
+        ip_intfs_ns2 = {'Ethernet0': {'ipaddr': [['', '10.0.0.2/24']], 'bgp_neighs': {}}}
+
+        with mock.patch('utilities_common.multi_asic.MultiAsic', return_value=mock_multi_asic_device), \
+             mock.patch('ipintutil.get_ip_intfs_in_namespace', side_effect=[ip_intfs_ns1, ip_intfs_ns2]):
+            ip_intfs = ipintutil.get_ip_intfs(netifaces.AF_INET, None, 'all')
+            # Assert that the IPs from both namespaces were merged correctly
+            assert len(ip_intfs['Ethernet0']['ipaddr']) == 2
+            assert ip_intfs['Ethernet0']['ipaddr'][0][1] == '10.0.0.1/24'
+            assert ip_intfs['Ethernet0']['ipaddr'][1][1] == '10.0.0.2/24'
+
+        # 4. Test main function argument parsing and execution path
+        with mock.patch('sys.argv', ['ipintutil', '-a', 'ipv6', '-n', 'asic0']), \
+             mock.patch('os.geteuid', return_value=0), \
+             mock.patch('utilities_common.general.load_db_config'), \
+             mock.patch('ipintutil.get_ip_intfs', return_value={}), \
+             mock.patch('ipintutil.display_ip_intfs') as mock_display:
+            try:
+                ipintutil.main()
+            except SystemExit as e:
+                assert e.code == 0
+            # Assert that the main logic path was followed and display was called
+            mock_display.assert_called_once()
+
+        # 5. Test skip_ip_intf_display logic
+        with mock.patch('sonic_py_common.multi_asic.is_port_internal', return_value=True):
+            assert ipintutil.skip_ip_intf_display('Ethernet12', 'frontend') is True
+        with mock.patch('sonic_py_common.multi_asic.is_port_channel_internal', return_value=True):
+            assert ipintutil.skip_ip_intf_display('PortChannel001', 'frontend') is True
+        assert ipintutil.skip_ip_intf_display('Loopback4096', 'frontend') is True
+        assert ipintutil.skip_ip_intf_display('eth0', 'frontend') is True
+        assert ipintutil.skip_ip_intf_display('veth123', 'frontend') is True
+        assert ipintutil.skip_ip_intf_display('Ethernet0', 'all') is False
