@@ -194,8 +194,76 @@ class TestShowIpIntFastPath(object):
 
         # Import the script as a module
         ipintutil_path = os.path.join(scripts_path, 'ipintutil')
-        spec = importlib.util.spec_from_file_location("ipintutil", ipintutil_path)
+        from importlib.machinery import SourceFileLoader
+        loader = SourceFileLoader("ipintutil", ipintutil_path)
+        spec = importlib.util.spec_from_loader("ipintutil", loader)
         ipintutil = importlib.util.module_from_spec(spec)
+
+        # Provide lightweight stubs for external modules if they are absent to prevent ImportError
+        import types
+        # sonic_py_common.multi_asic stubs
+        if 'sonic_py_common' not in sys.modules:
+            sonic_py_common = types.ModuleType('sonic_py_common')
+            spc_multi_asic = types.ModuleType('multi_asic')
+            spc_multi_asic.is_port_internal = lambda iface, ns=None: False
+            spc_multi_asic.is_port_channel_internal = lambda iface, ns=None: False
+            spc_multi_asic.is_multi_asic = lambda : False
+            spc_multi_asic.get_all_namespaces = lambda : {'front_ns': [], 'back_ns': [], 'fabric_ns': []}
+            sonic_py_common.multi_asic = spc_multi_asic
+            sys.modules['sonic_py_common'] = sonic_py_common
+            sys.modules['sonic_py_common.multi_asic'] = spc_multi_asic
+
+        # utilities_common.constants & general & multi_asic stubs
+        if 'utilities_common' not in sys.modules:
+            utilities_common = types.ModuleType('utilities_common')
+            uc_constants = types.ModuleType('constants')
+            uc_constants.DISPLAY_ALL = 'all'
+            uc_constants.DISPLAY_EXTERNAL = 'frontend'
+            uc_constants.DEFAULT_NAMESPACE = ''
+            utilities_common.constants = uc_constants
+            uc_general = types.ModuleType('general')
+            uc_general.load_db_config = lambda : None
+            utilities_common.general = uc_general
+            uc_multi_asic = types.ModuleType('multi_asic')
+            class _UC_MultiAsic:
+                def __init__(self, namespace_option=None, display_option='all', db=None):
+                    self.namespace_option = namespace_option
+                    self.display_option = display_option
+                    self.is_multi_asic = False
+                    self.db = db
+                def get_ns_list_based_on_options(self):
+                    return ['']
+            uc_multi_asic.MultiAsic = _UC_MultiAsic
+            utilities_common.multi_asic = uc_multi_asic
+            sys.modules['utilities_common'] = utilities_common
+            sys.modules['utilities_common.constants'] = uc_constants
+            sys.modules['utilities_common.general'] = uc_general
+            sys.modules['utilities_common.multi_asic'] = uc_multi_asic
+
+        # swsscommon stub (ConfigDBConnector patched later)
+        if 'swsscommon' not in sys.modules:
+            swsscommon_root = types.ModuleType('swsscommon')
+            swsscommon_inner = types.ModuleType('swsscommon')
+            class _StubCfgDB:
+                def connect(self):
+                    pass
+                def get_table(self, name):
+                    return {}
+            swsscommon_inner.ConfigDBConnector = _StubCfgDB
+            swsscommon_root.swsscommon = swsscommon_inner
+            sys.modules['swsscommon'] = swsscommon_root
+            sys.modules['swsscommon.swsscommon'] = swsscommon_inner
+
+        # netaddr stub (only needed for import; fast path doesn't use it)
+        if 'netaddr' not in sys.modules:
+            netaddr_stub = types.ModuleType('netaddr')
+            class IPAddress:
+                def __init__(self, addr):
+                    self.addr = addr
+                def netmask_bits(self):
+                    return 24
+            netaddr_stub.IPAddress = IPAddress
+            sys.modules['netaddr'] = netaddr_stub
 
         # Mock the BGP neighbor data
         bgp_neighbors = {
@@ -254,7 +322,7 @@ class TestShowIpIntFastPath(object):
                         with mock.patch('utilities_common.multi_asic.MultiAsic', return_value=mock_multi_asic_device):
                             with mock.patch('os.path.exists', return_value=True):
                                 # Load and execute the module
-                                spec.loader.exec_module(ipintutil)
+                                loader.exec_module(ipintutil)
 
                                 # Capture stdout
                                 captured_output = io.StringIO()
