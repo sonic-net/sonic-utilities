@@ -300,13 +300,14 @@ class TestShowIpIntFastPath(object):
 
         def mock_popen(cmd, *args, **kwargs):
             mock_proc = mock.MagicMock()
-            # Default to 'up' for operstate checks, '1' for ifconfig flags (UP)
+            # Simulate the behavior of reading a sysfs file on Linux.
+            # The result is bytes and includes a newline.
             if 'operstate' in cmd[-1]:
-                mock_proc.communicate.return_value = ('up', '')
+                mock_proc.communicate.return_value = (b'up\n', b'')
             elif 'ifconfig' in cmd:
-                mock_proc.communicate.return_value = ('0x1043', '')
+                mock_proc.communicate.return_value = (b'0x1043', b'')
             else:
-                mock_proc.communicate.return_value = ('1', '')
+                mock_proc.communicate.return_value = (b'1', b'')
             mock_proc.wait.return_value = 0
             return mock_proc
 
