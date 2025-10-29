@@ -53,6 +53,7 @@ load_minigraph_platform_false_path = os.path.join(load_minigraph_input_path, "pl
 load_minigraph_command_output="""\
 Acquired lock on {0}
 Disabling container and routeCheck monitoring ...
+Running command: sudo systemctl stop featured.timer
 Stopping SONiC target ...
 Running command: /usr/local/bin/sonic-cfggen -H -m --write-to-db
 Running command: config qos reload --no-dynamic-buffer --no-delay
@@ -70,6 +71,7 @@ Failed to acquire lock on {0}
 
 load_minigraph_command_bypass_lock_output = """\
 Bypass lock on {}
+Running command: sudo systemctl stop featured.timer
 Stopping SONiC target ...
 Running command: /usr/local/bin/sonic-cfggen -H -m --write-to-db
 Running command: config qos reload --no-dynamic-buffer --no-delay
@@ -81,6 +83,7 @@ Please note setting loaded from minigraph will be lost after system reboot. To p
 
 load_minigraph_platform_plugin_command_output="""\
 Acquired lock on {0}
+Running command: sudo systemctl stop featured.timer
 Stopping SONiC target ...
 Running command: /usr/local/bin/sonic-cfggen -H -m --write-to-db
 Running command: config qos reload --no-dynamic-buffer --no-delay
@@ -165,6 +168,7 @@ Exit: 4. Command: kill 104 failed.
 
 RELOAD_CONFIG_DB_OUTPUT = """\
 Acquired lock on {0}
+Running command: sudo systemctl stop featured.timer
 Stopping SONiC target ...
 Running command: /usr/local/bin/sonic-cfggen -j /tmp/config.json --write-to-db
 Restarting SONiC target ...
@@ -178,6 +182,7 @@ Failed to acquire lock on {0}
 
 RELOAD_CONFIG_DB_BYPASS_LOCK_OUTPUT = """\
 Bypass lock on {0}
+Running command: sudo systemctl stop featured.timer
 Stopping SONiC target ...
 Running command: /usr/local/bin/sonic-cfggen -j /tmp/config.json --write-to-db
 Restarting SONiC target ...
@@ -186,6 +191,7 @@ Reloading Monit configuration ...
 
 RELOAD_YANG_CFG_OUTPUT = """\
 Acquired lock on {0}
+Running command: sudo systemctl stop featured.timer
 Stopping SONiC target ...
 Running command: /usr/local/bin/sonic-cfggen -Y /tmp/config.json --write-to-db
 Restarting SONiC target ...
@@ -195,6 +201,7 @@ Released lock on {0}
 
 RELOAD_MASIC_CONFIG_DB_OUTPUT = """\
 Acquired lock on {0}
+Running command: sudo systemctl stop featured.timer
 Stopping SONiC target ...
 Running command: /usr/local/bin/sonic-cfggen -j /tmp/config.json --write-to-db
 Running command: /usr/local/bin/sonic-cfggen -j /tmp/config0.json -n asic0 --write-to-db
@@ -219,6 +226,7 @@ Released lock on {0}
 
 reload_config_masic_onefile_output = """\
 Acquired lock on {0}
+Running command: sudo systemctl stop featured.timer
 Stopping SONiC target ...
 Restarting SONiC target ...
 Reloading Monit configuration ...
@@ -227,6 +235,7 @@ Released lock on {0}
 
 reload_config_masic_onefile_gen_sysinfo_output = """\
 Acquired lock on {0}
+Running command: sudo systemctl stop featured.timer
 Stopping SONiC target ...
 Running command: /usr/local/bin/sonic-cfggen -H -k Mellanox-SN3800-D112C8 --write-to-db
 Running command: /usr/local/bin/sonic-cfggen -H -k multi_asic -n asic0 --write-to-db
@@ -1148,7 +1157,7 @@ class TestLoadMinigraph(object):
             # Verify "systemctl reset-failed" is called for services under sonic.target
             mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'swss'])
             mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'pmon'])
-            assert mock_run_command.call_count == 21
+            assert mock_run_command.call_count == 23
 
     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs',
                 mock.MagicMock(return_value=("dummy_path", None)))
@@ -1194,7 +1203,7 @@ class TestLoadMinigraph(object):
                     load_minigraph_command_bypass_lock_output.format(config.SYSTEM_RELOAD_LOCK)
                 mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'swss'])
                 mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'pmon'])
-                assert mock_run_command.call_count == 15
+                assert mock_run_command.call_count == 17
             finally:
                 flock.release_flock(fd)
 
@@ -1213,7 +1222,7 @@ class TestLoadMinigraph(object):
             # Verify "systemctl reset-failed" is called for services under sonic.target
             mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'swss'])
             mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'pmon'])
-            assert mock_run_command.call_count == 15
+            assert mock_run_command.call_count == 17
 
     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs', mock.MagicMock(return_value=(load_minigraph_platform_false_path, None)))
     def test_load_minigraph_platform_plugin_fail(self, get_cmd_module, setup_single_broadcom_asic):
