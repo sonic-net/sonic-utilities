@@ -243,7 +243,8 @@ class TestShowIpIntFastPath(object):
         mock_multi_asic_device.is_multi_asic = False
         mock_multi_asic_device.get_ns_list_based_on_options.return_value = ['']  # DEFAULT_NAMESPACE
 
-        with mock.patch('swsscommon.swsscommon.ConfigDBConnector', return_value=mock_config_db):
+        with mock.patch('swsscommon.swsscommon.ConfigDBConnector', return_value=mock_config_db), \
+             mock.patch('swsscommon.swsscommon.DBConnector', mock.MagicMock()):
             with mock.patch('utilities_common.general.load_db_config'):
                 with mock.patch('utilities_common.multi_asic.MultiAsic', return_value=mock_multi_asic_device):
                     with mock.patch('subprocess.check_output', side_effect=selective_check_output):
