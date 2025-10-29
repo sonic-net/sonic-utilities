@@ -300,7 +300,13 @@ class TestShowIpIntFastPath(object):
 
         def mock_popen(cmd, *args, **kwargs):
             mock_proc = mock.MagicMock()
-            mock_proc.communicate.return_value = ('0x1043', '') if 'ifconfig' in cmd else ('1', '')
+            # Default to 'up' for operstate checks, '1' for ifconfig flags (UP)
+            if 'operstate' in cmd[-1]:
+                mock_proc.communicate.return_value = ('up', '')
+            elif 'ifconfig' in cmd:
+                mock_proc.communicate.return_value = ('0x1043', '')
+            else:
+                mock_proc.communicate.return_value = ('1', '')
             mock_proc.wait.return_value = 0
             return mock_proc
 
