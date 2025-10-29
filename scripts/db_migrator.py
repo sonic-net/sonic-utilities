@@ -935,6 +935,36 @@ class DBMigrator():
             except Exception as e:
                 log.log_error(f"Failed to migrate DHCP servers for {vlan_key}: {str(e)}")
 
+    def migrate_ipinip_tunnel_ecn_mode_mellanox(self):
+        """
+        Migrate IPINIP_TUNNEL ecn mode to copy_from_outer.
+
+        Prior to 202511, on Mellanox platform, the ecn mode of IPINIP tunnel was set to standard.
+        """
+
+        table_name = 'TUNNEL_DECAP_TABLE'
+        keys_to_migrate = [
+            'IPINIP_SUBNET',
+            'IPINIP_TUNNEL',
+            'IPINIP_SUBNET_V6',
+            'IPINIP_V6_TUNNEL'
+        ]
+
+        for k, v in self.appDB.get_table(table_name).items():
+            if k in keys_to_migrate:
+                log.log_info(f"Migrating APPL_DB {k}, ecn mode: {v.get('ecn_mode')} -> copy_from_outer")
+                v['ecn_mode'] = 'copy_from_outer'
+                self.appDB.set_entry(table_name, k, v)
+
+        state_db_keys = self.stateDB.keys(self.stateDB.STATE_DB, f"{table_name}:*")
+        if not state_db_keys:
+            return
+        for key in keys_to_migrate:
+            state_db_key = f"{table_name}:{key}"
+            if state_db_key in state_db_keys:
+                ecn_mode = self.stateDB.get(self.stateDB.STATE_DB, state_db_key, 'ecn_mode')
+                log.log_info(f"Migrating STATE_DB {state_db_key}, ecn mode: {ecn_mode} -> copy_from_outer")
+                self.stateDB.set(self.stateDB.STATE_DB, state_db_key, 'ecn_mode', 'copy_from_outer')
 
     def version_unknown(self):
         """
@@ -1396,6 +1426,8 @@ class DBMigrator():
         Version 202511_01
         """
         log.log_info('Handling version_202511_01')
+        if self.asic_type == "mellanox":
+            self.migrate_ipinip_tunnel_ecn_mode_mellanox()
         self.set_version('version_202605_01')
         return 'version_202605_01'
 
