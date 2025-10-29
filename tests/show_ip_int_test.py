@@ -238,13 +238,19 @@ class TestShowIpIntFastPath(object):
         mock_config_db = mock.MagicMock()
         mock_config_db.get_table.return_value = bgp_neighbors
 
+        # Mock MultiAsic to avoid Redis connection
+        mock_multi_asic_device = mock.MagicMock()
+        mock_multi_asic_device.is_multi_asic = False
+        mock_multi_asic_device.get_ns_list_based_on_options.return_value = ['']  # DEFAULT_NAMESPACE
+
         with mock.patch('swsscommon.swsscommon.ConfigDBConnector', return_value=mock_config_db):
             with mock.patch('utilities_common.general.load_db_config'):
-                with mock.patch('subprocess.check_output', side_effect=selective_check_output):
-                    with mock.patch('subprocess.Popen', side_effect=selective_popen):
-                        return_code, result = get_result_and_return_code(["ipintutil"])
-                        if return_code != 0:
-                            print(f"Script failed with return code {return_code}")
-                            print(f"Error output: {result}")
-                        assert return_code == 0, f"Script failed: {result}"
-                        verify_fastpath_output(result, show_ipv4_intf_with_multple_ips)
+                with mock.patch('utilities_common.multi_asic.MultiAsic', return_value=mock_multi_asic_device):
+                    with mock.patch('subprocess.check_output', side_effect=selective_check_output):
+                        with mock.patch('subprocess.Popen', side_effect=selective_popen):
+                            return_code, result = get_result_and_return_code(["ipintutil"])
+                            if return_code != 0:
+                                print(f"Script failed with return code {return_code}")
+                                print(f"Error output: {result}")
+                            assert return_code == 0, f"Script failed: {result}"
+                            verify_fastpath_output(result, show_ipv4_intf_with_multple_ips)
