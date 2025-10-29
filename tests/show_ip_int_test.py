@@ -304,8 +304,16 @@ class TestShowIpIntFastPath(object):
             # The result is bytes and includes a newline.
             if 'operstate' in cmd[-1]:
                 mock_proc.communicate.return_value = (b'up\n', b'')
+            # Simulate ifconfig output for interface flags.
+            # The 'lo' interface has a different flag value indicating loopback.
             elif 'ifconfig' in cmd:
-                mock_proc.communicate.return_value = (b'0x1043', b'')
+                iface = cmd[1]
+                if iface == 'lo':
+                    # Simulate LOOPBACK flag for 'lo'
+                    mock_proc.communicate.return_value = (b'0x1008', b'')
+                else:
+                    # Simulate UP flag for other interfaces
+                    mock_proc.communicate.return_value = (b'0x1043', b'')
             else:
                 mock_proc.communicate.return_value = (b'1', b'')
             mock_proc.wait.return_value = 0
