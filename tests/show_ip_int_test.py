@@ -89,9 +89,11 @@ def setup_teardown_multi_asic():
 @pytest.fixture(scope="class")
 def setup_teardown_fastpath():
     os.environ["PATH"] += os.pathsep + scripts_path
-    os.environ["UTILITIES_UNIT_TESTING"] = "1"
+    os.environ["UTILITIES_UNIT_TESTING"] = "2"
+    os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
     yield
     os.environ["UTILITIES_UNIT_TESTING"] = "0"
+    os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
 
 
 def verify_output(output, expected_output):
@@ -179,79 +181,7 @@ class TestMultiAsicShowIpInt(object):
 
 @pytest.mark.usefixtures('setup_teardown_fastpath')
 class TestShowIpIntFastPath(object):
-    @mock.patch('os.path.exists', mock.MagicMock(return_value=True))
     def test_show_ip_intf_v4_fast_path(self):
-        # Store original subprocess functions
-        original_check_output = subprocess.check_output
-        original_popen = subprocess.Popen
-
-        ip_addr_output = """\
-1: lo    inet 127.0.0.1/8 scope host lo
-2: Ethernet0    inet 20.1.1.1/24 scope global Ethernet0
-2: Ethernet0    inet 21.1.1.1/24 scope global Ethernet0
-3: PortChannel0001    inet 30.1.1.1/24 scope global PortChannel0001
-4: Vlan100    inet 40.1.1.1/24 scope global Vlan100
-5: eth0    inet 10.0.0.1/24 scope global eth0
-"""
-
-        # Mock BGP neighbor data
-        bgp_neighbors = {
-            '20.1.1.1': {'local_addr': '20.1.1.1', 'name': 'T2-Peer', 'neighbor': '20.1.1.5'},
-            '30.1.1.1': {'local_addr': '30.1.1.1', 'name': 'T0-Peer', 'neighbor': '30.1.1.5'}
-        }
-
-        # Track how many times Popen has been called to provide correct side_effect values
-        popen_call_count = [0]
-        communicate_side_effects = [
-            ('0x1043', ''), ('1', ''),  # lo
-            ('0x1043', ''), ('0', ''),  # Ethernet0
-            ('0x1043', ''), ('0', ''),  # PortChannel0001
-            ('0x1043', ''), ('0', ''),  # Vlan100
-            ('0x1043', ''), ('1', ''),  # eth0
-        ]
-
-        # Selectively mock check_output: only mock 'ip' command calls
-        def selective_check_output(cmd, *args, **kwargs):
-            # If this is a call to 'ip' command (from within ipintutil script)
-            if isinstance(cmd, list) and 'ip' in cmd and 'addr' in cmd:
-                return ip_addr_output
-            # Otherwise, call the real subprocess.check_output (for running ipintutil itself)
-            return original_check_output(cmd, *args, **kwargs)
-
-        # Selectively mock Popen: only mock 'cat' command calls for state files
-        def selective_popen(cmd, *args, **kwargs):
-            # If this is a call to 'cat' command (for reading interface state)
-            if isinstance(cmd, list) and 'cat' in cmd:
-                mock_proc = mock.MagicMock()
-                idx = popen_call_count[0]
-                if idx < len(communicate_side_effects):
-                    mock_proc.communicate.return_value = communicate_side_effects[idx]
-                    popen_call_count[0] += 1
-                else:
-                    mock_proc.communicate.return_value = ('', '')
-                mock_proc.wait.return_value = 0
-                return mock_proc
-            # Otherwise, call the real subprocess.Popen
-            return original_popen(cmd, *args, **kwargs)
-
-        # Mock ConfigDBConnector for BGP neighbor data
-        mock_config_db = mock.MagicMock()
-        mock_config_db.get_table.return_value = bgp_neighbors
-
-        # Mock MultiAsic to avoid Redis connection
-        mock_multi_asic_device = mock.MagicMock()
-        mock_multi_asic_device.is_multi_asic = False
-        mock_multi_asic_device.get_ns_list_based_on_options.return_value = ['']  # DEFAULT_NAMESPACE
-
-        with mock.patch('swsscommon.swsscommon.ConfigDBConnector', return_value=mock_config_db), \
-             mock.patch('swsscommon.swsscommon.DBConnector', mock.MagicMock()):
-            with mock.patch('utilities_common.general.load_db_config'):
-                with mock.patch('utilities_common.multi_asic.MultiAsic', return_value=mock_multi_asic_device):
-                    with mock.patch('subprocess.check_output', side_effect=selective_check_output):
-                        with mock.patch('subprocess.Popen', side_effect=selective_popen):
-                            return_code, result = get_result_and_return_code(["ipintutil"])
-                            if return_code != 0:
-                                print(f"Script failed with return code {return_code}")
-                                print(f"Error output: {result}")
-                            assert return_code == 0, f"Script failed: {result}"
-                            verify_fastpath_output(result, show_ipv4_intf_with_multple_ips)
+        return_code, result = get_result_and_return_code(["ipintutil"])
+        assert return_code == 0
+        verify_fastpath_output(result, show_ipv4_intf_with_multple_ips)
