@@ -114,7 +114,6 @@ def verify_output(output, expected_output):
 
 def verify_fastpath_output(output, expected_output):
     # Per user request, relaxing the check to its simplest form.
-    # The test has proven too brittle across environments.
     assert output is not None and len(output.strip()) > 0
 
 
