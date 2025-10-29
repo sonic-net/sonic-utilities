@@ -273,7 +273,7 @@ TEMP1          temp1\t +35.0 C (high = +120.0 C, crit = N/A)
             assert result.exit_code == 0
             assert expected_output == result.output
 
-    def test_gettemp_mixed_zero_temperaturs(self):
+    def test_gettemp_mixed_zero_temperatures(self):
         """
         Test a realistic scenario with multiple DCDC and ASIC sensors
         matching the original bug report
