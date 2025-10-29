@@ -185,21 +185,38 @@ class TestMultiAsicShowIpInt(object):
 
 @pytest.mark.usefixtures('setup_teardown_fastpath')
 class TestShowIpIntFastPath(object):
-    def test_show_ip_intf_v4_fast_path(self):
-        """
-        Test the fast path by directly importing and calling the functions.
-        This achieves code coverage of the fast path without subprocess issues.
-        """
-        import netifaces
+    """
+    Test the fast path by directly importing and calling the functions.
+    This achieves code coverage of the fast path without subprocess issues.
+    """
+    # Mock data for IPv4 and IPv6 tests
+    IP_ADDR_V4_OUTPUT = """\
+1: lo    inet 127.0.0.1/8 scope host lo
+2: Ethernet0    inet 20.1.1.1/24 scope global Ethernet0
+2: Ethernet0    inet 21.1.1.1/24 scope global Ethernet0
+3: PortChannel0001    inet 30.1.1.1/24 scope global PortChannel0001
+4: Vlan100    inet 40.1.1.1/24 scope global Vlan100
+5: eth0    inet 10.0.0.1/24 scope global eth0
+"""
+    IP_ADDR_V6_OUTPUT = """\
+1: lo    inet6 ::1/128 scope host
+2: Ethernet0    inet6 2100::1/64 scope global
+2: Ethernet0    inet6 aa00::1/64 scope global
+2: Ethernet0    inet6 fe80::64be:a1ff:fe85:c6c4/64 scope link
+3: PortChannel0001    inet6 ab00::1/64 scope global
+3: PortChannel0001    inet6 fe80::cc8d:60ff:fe08:139f/64 scope link
+4: Vlan100    inet6 cc00::1/64 scope global
+4: Vlan100    inet6 fe80::c029:3fff:fe41:cf56/64 scope link
+5: eth0    inet6 fe80::42:c6ff:fe52:832c/64 scope link
+"""
+    BGP_NEIGHBORS = {
+        '20.1.1.1': {'local_addr': '20.1.1.1', 'neighbor': '20.1.1.5', 'name': 'T2-Peer'},
+        '30.1.1.1': {'local_addr': '30.1.1.1', 'neighbor': '30.1.1.5', 'name': 'T0-Peer'}
+    }
 
-        # Import the script as a module
-        ipintutil_path = os.path.join(scripts_path, 'ipintutil')
-        from importlib.machinery import SourceFileLoader
-        loader = SourceFileLoader("ipintutil", ipintutil_path)
-        spec = importlib.util.spec_from_loader("ipintutil", loader)
-        ipintutil = importlib.util.module_from_spec(spec)
-
-        # Provide lightweight stubs for external modules if they are absent to prevent ImportError
+    @pytest.fixture(scope="class", autouse=True)
+    def setup_stubs(self):
+        """Provide lightweight stubs for external modules if they are absent."""
         import types
         # sonic_py_common.multi_asic stubs
         if 'sonic_py_common' not in sys.modules:
@@ -207,13 +224,13 @@ class TestShowIpIntFastPath(object):
             spc_multi_asic = types.ModuleType('multi_asic')
             spc_multi_asic.is_port_internal = lambda iface, ns=None: False
             spc_multi_asic.is_port_channel_internal = lambda iface, ns=None: False
-            spc_multi_asic.is_multi_asic = lambda : False
-            spc_multi_asic.get_all_namespaces = lambda : {'front_ns': [], 'back_ns': [], 'fabric_ns': []}
+            spc_multi_asic.is_multi_asic = lambda: False
+            spc_multi_asic.get_all_namespaces = lambda: {'front_ns': [], 'back_ns': [], 'fabric_ns': []}
             sonic_py_common.multi_asic = spc_multi_asic
             sys.modules['sonic_py_common'] = sonic_py_common
             sys.modules['sonic_py_common.multi_asic'] = spc_multi_asic
 
-        # utilities_common.constants & general & multi_asic stubs
+        # utilities_common stubs
         if 'utilities_common' not in sys.modules:
             utilities_common = types.ModuleType('utilities_common')
             uc_constants = types.ModuleType('constants')
@@ -222,15 +239,17 @@ class TestShowIpIntFastPath(object):
             uc_constants.DEFAULT_NAMESPACE = ''
             utilities_common.constants = uc_constants
             uc_general = types.ModuleType('general')
-            uc_general.load_db_config = lambda : None
+            uc_general.load_db_config = lambda: None
             utilities_common.general = uc_general
             uc_multi_asic = types.ModuleType('multi_asic')
+
             class _UC_MultiAsic:
                 def __init__(self, namespace_option=None, display_option='all', db=None):
                     self.namespace_option = namespace_option
                     self.display_option = display_option
                     self.is_multi_asic = False
                     self.db = db
+
                 def get_ns_list_based_on_options(self):
                     return ['']
             uc_multi_asic.MultiAsic = _UC_MultiAsic
@@ -240,106 +259,82 @@ class TestShowIpIntFastPath(object):
             sys.modules['utilities_common.general'] = uc_general
             sys.modules['utilities_common.multi_asic'] = uc_multi_asic
 
-        # swsscommon stub (ConfigDBConnector patched later)
+        # swsscommon stub
         if 'swsscommon' not in sys.modules:
             swsscommon_root = types.ModuleType('swsscommon')
             swsscommon_inner = types.ModuleType('swsscommon')
+
             class _StubCfgDB:
-                def connect(self):
-                    pass
-                def get_table(self, name):
-                    return {}
+                def connect(self): pass
+                def get_table(self, name): return {}
             swsscommon_inner.ConfigDBConnector = _StubCfgDB
             swsscommon_root.swsscommon = swsscommon_inner
             sys.modules['swsscommon'] = swsscommon_root
             sys.modules['swsscommon.swsscommon'] = swsscommon_inner
 
-        # netaddr stub (only needed for import; fast path doesn't use it)
+        # netaddr stub
         if 'netaddr' not in sys.modules:
             netaddr_stub = types.ModuleType('netaddr')
+
             class IPAddress:
-                def __init__(self, addr):
-                    self.addr = addr
-                def netmask_bits(self):
-                    return 24
+                def __init__(self, addr): self.addr = addr
+                def netmask_bits(self): return 24
             netaddr_stub.IPAddress = IPAddress
             sys.modules['netaddr'] = netaddr_stub
 
-        # Mock the BGP neighbor data
-        bgp_neighbors = {
-            '20.1.1.1': {'local_addr': '20.1.1.1', 'neighbor': '20.1.1.5', 'name': 'T2-Peer'},
-            '30.1.1.1': {'local_addr': '30.1.1.1', 'neighbor': '30.1.1.5', 'name': 'T0-Peer'}
-        }
+    def _run_fast_path_test(self, ip_version, ip_addr_output, expected_output):
+        """Helper to run fast path test for a given IP version."""
+        import netifaces
+        from importlib.machinery import SourceFileLoader
 
-        # Mock subprocess.check_output for ip addr show
-        ip_addr_output = """\
-1: lo    inet 127.0.0.1/8 scope host lo
-2: Ethernet0    inet 20.1.1.1/24 scope global Ethernet0
-2: Ethernet0    inet 21.1.1.1/24 scope global Ethernet0
-3: PortChannel0001    inet 30.1.1.1/24 scope global PortChannel0001
-4: Vlan100    inet 40.1.1.1/24 scope global Vlan100
-5: eth0    inet 10.0.0.1/24 scope global eth0
-"""
-
-        # Mock Popen for interface state checks
-        popen_call_count = [0]
-        communicate_side_effects = [
-            ('0x1043', ''), ('1', ''),  # lo
-            ('0x1043', ''), ('0', ''),  # Ethernet0
-            ('0x1043', ''), ('0', ''),  # Ethernet0 (oper state)
-            ('0x1043', ''), ('0', ''),  # PortChannel0001
-            ('0x1043', ''), ('0', ''),  # PortChannel0001 (oper state)
-            ('0x1043', ''), ('0', ''),  # Vlan100
-            ('0x1043', ''), ('0', ''),  # Vlan100 (oper state)
-            ('0x1043', ''), ('1', ''),  # eth0
-        ]
+        # Import the script as a module
+        ipintutil_path = os.path.join(scripts_path, 'ipintutil')
+        loader = SourceFileLoader("ipintutil", ipintutil_path)
+        spec = importlib.util.spec_from_loader("ipintutil", loader)
+        ipintutil = importlib.util.module_from_spec(spec)
 
         def mock_check_output(cmd, *args, **kwargs):
-            return ip_addr_output
+            if "ip -o addr show" in cmd:
+                return ip_addr_output
+            return ""
 
         def mock_popen(cmd, *args, **kwargs):
             mock_proc = mock.MagicMock()
-            idx = popen_call_count[0]
-            if idx < len(communicate_side_effects):
-                mock_proc.communicate.return_value = communicate_side_effects[idx]
-                popen_call_count[0] += 1
-            else:
-                mock_proc.communicate.return_value = ('', '')
+            mock_proc.communicate.return_value = ('0x1043', '') if 'ifconfig' in cmd else ('1', '')
             mock_proc.wait.return_value = 0
             return mock_proc
 
         mock_config_db = mock.MagicMock()
-        mock_config_db.get_table.return_value = bgp_neighbors
+        mock_config_db.get_table.return_value = self.BGP_NEIGHBORS
 
         mock_multi_asic_device = mock.MagicMock()
         mock_multi_asic_device.is_multi_asic = False
         mock_multi_asic_device.get_ns_list_based_on_options.return_value = ['']
 
-        with mock.patch('subprocess.check_output', side_effect=mock_check_output):
-            with mock.patch('subprocess.Popen', side_effect=mock_popen):
-                with mock.patch('swsscommon.swsscommon.ConfigDBConnector', return_value=mock_config_db):
-                    with mock.patch('utilities_common.general.load_db_config'):
-                        with mock.patch('utilities_common.multi_asic.MultiAsic', return_value=mock_multi_asic_device):
-                            with mock.patch('os.path.exists', return_value=True):
-                                # Load and execute the module
-                                loader.exec_module(ipintutil)
+        with mock.patch('subprocess.check_output', side_effect=mock_check_output), \
+             mock.patch('subprocess.Popen', side_effect=mock_popen), \
+             mock.patch('swsscommon.swsscommon.ConfigDBConnector', return_value=mock_config_db), \
+             mock.patch('utilities_common.general.load_db_config'), \
+             mock.patch('utilities_common.multi_asic.MultiAsic', return_value=mock_multi_asic_device), \
+             mock.patch('os.path.exists', return_value=True):
 
-                                # Capture stdout
-                                captured_output = io.StringIO()
-                                sys.stdout = captured_output
+            loader.exec_module(ipintutil)
 
-                                # Force admin state to 'error' (ValueError path is harder to mock minimally)
-                                # so that the fast path output matches the existing expected fixture
-                                with mock.patch.object(ipintutil, 'get_if_admin_state', return_value='error'):
-                                    # Call get_ip_intfs_in_namespace directly to test fast path
-                                    ip_intfs = ipintutil.get_ip_intfs_in_namespace(netifaces.AF_INET, '', 'all')
+            captured_output = io.StringIO()
+            sys.stdout = captured_output
 
-                                # Display the results
-                                ipintutil.display_ip_intfs(ip_intfs, 'ipv4')
+            with mock.patch.object(ipintutil, 'get_if_admin_state', return_value='error'):
+                family = netifaces.AF_INET if ip_version == 'ipv4' else netifaces.AF_INET6
+                ip_intfs = ipintutil.get_ip_intfs_in_namespace(family, '', 'all')
+                ipintutil.display_ip_intfs(ip_intfs, ip_version)
 
-                                # Reset stdout
-                                sys.stdout = sys.__stdout__
+            sys.stdout = sys.__stdout__
+            result = captured_output.getvalue()
+            print(result)
+            verify_fastpath_output(result, expected_output)
 
-                                result = captured_output.getvalue()
-                                print(result)
-                                verify_fastpath_output(result, show_ipv4_intf_with_multple_ips)
+    def test_show_ip_intf_v4_fast_path(self):
+        self._run_fast_path_test('ipv4', self.IP_ADDR_V4_OUTPUT, show_ipv4_intf_with_multple_ips)
+
+    def test_show_ip_intf_v6_fast_path(self):
+        self._run_fast_path_test('ipv6', self.IP_ADDR_V6_OUTPUT, show_ipv6_intf_with_multiple_ips)
