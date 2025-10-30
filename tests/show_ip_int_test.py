@@ -370,8 +370,15 @@ class TestShowIpIntFastPath(object):
         ip_intfs_ns1 = {'Ethernet0': {'ipaddr': [['', '10.0.0.1/24']], 'bgp_neighs': {}}}
         ip_intfs_ns2 = {'Ethernet0': {'ipaddr': [['', '10.0.0.2/24']], 'bgp_neighs': {}}}
 
+        def mock_get_ip_intfs_in_namespace(af, namespace, display):
+            if namespace == 'asic0':
+                return ip_intfs_ns1
+            elif namespace == 'asic1':
+                return ip_intfs_ns2
+            return {}
+
         with mock.patch('utilities_common.multi_asic.MultiAsic', return_value=mock_multi_asic_device), \
-             mock.patch('ipintutil.get_ip_intfs_in_namespace', side_effect=[ip_intfs_ns1, ip_intfs_ns2]):
+             mock.patch('ipintutil.get_ip_intfs_in_namespace', side_effect=mock_get_ip_intfs_in_namespace):
             ip_intfs = ipintutil.get_ip_intfs(netifaces.AF_INET, None, 'all')
             # Assert that the IPs from both namespaces were merged correctly
             assert len(ip_intfs['Ethernet0']['ipaddr']) == 2
