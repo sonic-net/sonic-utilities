@@ -337,3 +337,44 @@ class TestDumpStateMultiAsic(object):
         result = runner.invoke(dump.state, ["port", "Ethernet0", "--namespace", "asic3"], obj=match_engine_masic)
         assert result.output == "Namespace option is not valid. Choose one of ['asic0', 'asic1']\n", result
 
+class TestMultiAsicInit:
+    """Test multi-asic initialization in dump command group"""
+
+    @mock.patch('dump.plugins.dump_modules', {})
+    @mock.patch('dump.main.SonicDBConfig')
+    @mock.patch('dump.main.multi_asic')
+    def test_multi_asic_global_config_init(self, mock_multi_asic, mock_sonic_db_config):
+        """Test that SonicDBConfig.initializeGlobalConfig() is called when multi-asic and not initialized"""
+        mock_multi_asic.is_multi_asic.return_value = True
+        mock_sonic_db_config.isGlobalInit.return_value = False
+        runner = CliRunner()
+        result = runner.invoke(dump.state, ['port', 'Ethernet0'])
+        mock_multi_asic.is_multi_asic.assert_called()
+        mock_sonic_db_config.isGlobalInit.assert_called()
+        mock_sonic_db_config.initializeGlobalConfig.assert_called_once()
+
+    @mock.patch('dump.plugins.dump_modules', {})
+    @mock.patch('dump.main.SonicDBConfig')
+    @mock.patch('dump.main.multi_asic')
+    def test_multi_asic_already_initialized(self, mock_multi_asic, mock_sonic_db_config):
+        """Test that initializeGlobalConfig() is NOT called when already initialized"""
+        mock_multi_asic.is_multi_asic.return_value = True
+        mock_sonic_db_config.isGlobalInit.return_value = True
+        runner = CliRunner()
+        result = runner.invoke(dump.state, ['port', 'Ethernet0'])
+        mock_multi_asic.is_multi_asic.assert_called()
+        mock_sonic_db_config.isGlobalInit.assert_called()
+        mock_sonic_db_config.initializeGlobalConfig.assert_not_called()
+
+    @mock.patch('dump.plugins.dump_modules', {})
+    @mock.patch('dump.main.SonicDBConfig')
+    @mock.patch('dump.main.multi_asic')
+    def test_single_asic_no_init(self, mock_multi_asic, mock_sonic_db_config):
+        """Test that initializeGlobalConfig() is NOT called on single-asic systems"""
+        mock_multi_asic.is_multi_asic.return_value = False
+        runner = CliRunner()
+        result = runner.invoke(dump.state, ['port', 'Ethernet0'])
+        mock_multi_asic.is_multi_asic.assert_called()
+        mock_sonic_db_config.isGlobalInit.assert_not_called()
+        mock_sonic_db_config.initializeGlobalConfig.assert_not_called()
+
