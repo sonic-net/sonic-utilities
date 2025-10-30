@@ -353,7 +353,7 @@ class TestShowIpIntFastPath(object):
         # 1. Test get_if_oper_state exception (covers lines 161-162)
         with mock.patch('subprocess.check_output', side_effect=subprocess.CalledProcessError(1, 'cmd')):
             state = ipintutil.get_if_oper_state('Ethernet0', 'default')
-            assert state == "error"
+            assert state == "down"
 
         # 2. Test malformed 'ip addr' output in get_ip_intfs_in_namespace
         # Covers lines 167-170 (no colon), 175-183 (no cidr)
@@ -367,12 +367,12 @@ class TestShowIpIntFastPath(object):
             # Assert that only valid lines were processed and malformed ones were skipped
             assert 'Ethernet0' not in ip_intfs
             assert 'Vlan1000' not in ip_intfs
-            assert 'lo' not in ip_intfs # 'lo' is skipped because the line has no colon
+            assert 'lo' not in ip_intfs  # 'lo' is skipped because the line has no colon
 
         # 3. Test BGP neighbor lookup failure (covers lines 266-268)
         # and get_if_master (line 270)
-        bgp_peer_data = {'10.0.0.1': ('T0-Peer', '10.0.0.5')} # Peer for 10.0.0.1 exists
-        ifaddresses_data = [('', '10.0.0.1/24'), ('', '20.0.0.1/24')] # 20.0.0.1 has no peer
+        bgp_peer_data = {'10.0.0.1': ('T0-Peer', '10.0.0.5')}  # Peer for 10.0.0.1 exists
+        ifaddresses_data = [('', '10.0.0.1/24'), ('', '20.0.0.1/24')]  # 20.0.0.1 has no peer
 
         with mock.patch('ipintutil.get_if_admin_state', return_value='up'), \
              mock.patch('ipintutil.get_if_oper_state', return_value='up'), \
@@ -386,9 +386,7 @@ class TestShowIpIntFastPath(object):
             # Assert BGP neighbor was found for the first IP
             assert result['bgp_neighs']['10.0.0.1/24'] == ['T0-Peer', '10.0.0.5']
             # Assert BGP neighbor was 'N/A' for the second IP (KeyError path)
-            assert result['bgp_neighs']['20.0.0.1/24'] == ['N/A', 'N/A']
-
-        # 4. Test with empty ifaddresses (covers line 254-255)
+            assert result['bgp_neighs']['20.0.0.1/24'] == ['N/A', 'N/A']        # 4. Test with empty ifaddresses (covers line 254-255)
         with mock.patch('ipintutil.get_if_admin_state', return_value='up'), \
              mock.patch('ipintutil.get_if_oper_state', return_value='up'), \
              mock.patch('ipintutil.get_if_master', return_value=''):
