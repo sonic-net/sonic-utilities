@@ -1119,3 +1119,74 @@ class TestMultiAsicPortStat(object):
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
         remove_tmp_cnstat_file()
+
+
+class TestPortstatGetDbClient(object):
+    """Test the get_db_client method for caching DB connections"""
+
+    def test_get_db_client_creates_new_connection(self):
+        """Test that get_db_client creates a new connection when none exists"""
+        from unittest import mock
+        from utilities_common.portstat import Portstat
+        from utilities_common.constants import DEFAULT_NAMESPACE
+
+        portstat = Portstat(namespace=DEFAULT_NAMESPACE, display_option='')
+
+        with mock.patch('sonic_py_common.multi_asic.connect_to_all_dbs_for_ns') as mock_connect:
+            mock_db_client = mock.MagicMock()
+            mock_connect.return_value = mock_db_client
+
+            result = portstat.get_db_client('asic0')
+
+            mock_connect.assert_called_once_with('asic0')
+
+            assert result == mock_db_client
+
+            assert portstat.db_clients['asic0'] == mock_db_client
+
+    def test_get_db_client_returns_cached_connection(self):
+        """Test that get_db_client returns cached connection on subsequent calls"""
+        from unittest import mock
+        from utilities_common.portstat import Portstat
+        from utilities_common.constants import DEFAULT_NAMESPACE
+
+        portstat = Portstat(namespace=DEFAULT_NAMESPACE, display_option='')
+
+        with mock.patch('sonic_py_common.multi_asic.connect_to_all_dbs_for_ns') as mock_connect:
+            mock_db_client = mock.MagicMock()
+            mock_connect.return_value = mock_db_client
+            result1 = portstat.get_db_client('asic0')
+            result2 = portstat.get_db_client('asic0')
+            mock_connect.assert_called_once_with('asic0')
+
+            assert result1 == result2
+            assert result1 == mock_db_client
+
+    def test_get_db_client_multiple_namespaces(self):
+        """Test that get_db_client handles multiple namespaces correctly"""
+        from unittest import mock
+        from utilities_common.portstat import Portstat
+        from utilities_common.constants import DEFAULT_NAMESPACE
+
+        portstat = Portstat(namespace=DEFAULT_NAMESPACE, display_option='')
+
+        with mock.patch('sonic_py_common.multi_asic.connect_to_all_dbs_for_ns') as mock_connect:
+            mock_db_client_asic0 = mock.MagicMock()
+            mock_db_client_asic1 = mock.MagicMock()
+
+            def side_effect(ns):
+                if ns == 'asic0':
+                    return mock_db_client_asic0
+                elif ns == 'asic1':
+                    return mock_db_client_asic1
+
+            mock_connect.side_effect = side_effect
+            result_asic0 = portstat.get_db_client('asic0')
+            result_asic1 = portstat.get_db_client('asic1')
+            assert mock_connect.call_count == 2
+            mock_connect.assert_any_call('asic0')
+            mock_connect.assert_any_call('asic1')
+            assert result_asic0 == mock_db_client_asic0
+            assert result_asic1 == mock_db_client_asic1
+            assert portstat.db_clients['asic0'] == mock_db_client_asic0
+            assert portstat.db_clients['asic1'] == mock_db_client_asic1
