@@ -279,7 +279,6 @@ class TestShowIpIntFastPath(object):
 
     def _run_fast_path_test(self, ip_version, ip_addr_output, expected_output):
         """Helper to run fast path test for a given IP version."""
-        import netifaces
         from importlib.machinery import SourceFileLoader
 
         # Import the script as a module
@@ -340,13 +339,14 @@ class TestShowIpIntFastPath(object):
         This test uses robust, logic-based assertions, not brittle string comparisons.
         """
         from importlib.machinery import SourceFileLoader
-        import netifaces
 
         # Import the script as a module
         ipintutil_path = os.path.join(scripts_path, 'ipintutil')
         loader = SourceFileLoader("ipintutil", ipintutil_path)
         spec = importlib.util.spec_from_loader("ipintutil", loader)
         ipintutil = importlib.util.module_from_spec(spec)
+        # Add the dynamically loaded module to sys.modules
+        sys.modules['ipintutil'] = ipintutil
         loader.exec_module(ipintutil)
 
         # 1. Test OSError in get_if_admin_state to cover exception handling
