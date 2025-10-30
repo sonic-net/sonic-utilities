@@ -1,4 +1,5 @@
 import os
+import re
 import pytest
 import subprocess
 import traceback
@@ -10,8 +11,74 @@ from jsonpatch import JsonPatchConflict
 import config.main as config
 import config.validated_config_db_connector as validated_config_db_connector
 import show.main as show
+import clear.main as clear
 from utilities_common.db import Db
 from mock import patch
+
+EXPECTED_SHOW_LACP_INFO_PORTCHANNEL_WITH_NO_MEMBERS_OUTPUT = """\
+--------------------------------------------------------------------------
+LAG: PortChannel0004 is up, mode LACP
+Minimum number of links to bring PortChannel up is 1
+address is 52:54:00:f2:e1:23
+Fallback: Disabled
+Fast_rate: Disabled
+Retry_count_feature: Enabled
+Retry_count: 3
+MTU: 9100
+LACP: mode ACTIVE, priority 65535, address 52:54:00:f2:e1:23
+LAG MEMBER: None
+--------------------------------------------------------------------------
+"""
+
+EXPECTED_SHOW_LACP_INFO_PORTCHANNEL_WITH_DESELECTED_MEMBER_OUTPUT = """\
+--------------------------------------------------------------------------
+LAG: PortChannel0001 is down, mode LACP
+Minimum number of links to bring PortChannel up is 1
+address is 52:54:00:f2:e1:23
+Fallback: Disabled
+Fast_rate: Disabled
+Retry_count_feature: Enabled
+Retry_count: 3
+MTU: 9100
+LACP: mode ACTIVE, priority 65535, address 52:54:00:f2:e1:23
+LAG MEMBER: Ethernet112(deselected)
+    LACP Actor: port 113, address 52:54:00:f2:e1:23, key 11
+    LACP Actor State: (Act, Agg, Def)
+    LACP Partner: port 0, address 00:00:00:00:00:00, key 0
+    LACP Partner State: (Tmo)
+    Statistics:
+        lacpdu_illegal_pkts: 0
+        lacpdu_rx_stats: 0
+        lacpdu_tx_stats: 1103
+        last rx lacpdu at: N/A
+        last tx lacpdu at: 2025-06-26T07:54:23.926776098Z
+--------------------------------------------------------------------------
+"""
+
+EXPECTED_SHOW_LACP_INFO_PORTCHANNEL_WITH_SELECTED_MEMBER_OUTPUT = """\
+--------------------------------------------------------------------------
+LAG: PortChannel0002 is up, mode LACP
+Minimum number of links to bring PortChannel up is 1
+address is 52:54:00:f2:e1:23
+Fallback: Disabled
+Fast_rate: Disabled
+Retry_count_feature: Enabled
+Retry_count: 3
+MTU: 9100
+LACP: mode ACTIVE, priority 65535, address 52:54:00:f2:e1:23
+LAG MEMBER: Ethernet116(selected)
+    LACP Actor: port 117, address 52:54:00:f2:e1:23, key 12
+    LACP Actor State: (Act, Agg, Sync, Coll, Dist)
+    LACP Partner: port 1, address 1e:af:77:fc:79:ee, key 13
+    LACP Partner State: (Act, Agg, Sync, Coll, Dist)
+    Statistics:
+        lacpdu_illegal_pkts: 0
+        lacpdu_rx_stats: 1003
+        lacpdu_tx_stats: 1103
+        last rx lacpdu at: 2025-06-26T07:54:23.926776098Z
+        last tx lacpdu at: 2025-06-26T07:54:23.926776098Z
+--------------------------------------------------------------------------
+"""
 
 class TestPortChannel(object):
 
@@ -450,6 +517,102 @@ class TestPortChannel(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output == ""
+
+    def test_show_interfaces_portchannel_info_portchannel_with_no_members(self):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(show.cli.commands["interfaces"].commands["portchannel"].commands["info"],
+                               ["PortChannel0004"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert (re.sub(r'\s+', ' ', result.output.strip())) == (re.sub(
+                r'\s+', ' ', EXPECTED_SHOW_LACP_INFO_PORTCHANNEL_WITH_NO_MEMBERS_OUTPUT.strip()))
+
+    def test_show_interfaces_portchannel_info_portchannel_with_deselected_member(self):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(show.cli.commands["interfaces"].commands["portchannel"].commands["info"],
+                               ["PortChannel0001"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert (re.sub(r'\s+', ' ', result.output.strip())) == (re.sub(
+                r'\s+', ' ', EXPECTED_SHOW_LACP_INFO_PORTCHANNEL_WITH_DESELECTED_MEMBER_OUTPUT.strip()))
+
+    def test_show_interfaces_portchannel_info_portchannel_with_selected_member(self):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(show.cli.commands["interfaces"].commands["portchannel"].commands["info"],
+                               ["PortChannel0002"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert (re.sub(r'\s+', ' ', result.output.strip())) == (re.sub(
+                r'\s+', ' ', EXPECTED_SHOW_LACP_INFO_PORTCHANNEL_WITH_SELECTED_MEMBER_OUTPUT.strip()))
+
+    def test_show_interfaces_portchannel_info_portchannel_non_exists(self):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(show.cli.commands["interfaces"].commands["portchannel"].commands["info"],
+                               ["PortChannel107"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert "No such PortChannel interface" in result.output
+
+    def test_show_interfaces_portchannel_info(self):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(show.cli.commands["interfaces"].commands["portchannel"].commands["info"],
+                               [], obj=db, catch_exceptions=False)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+
+    @patch('clear.portchannel.clicommon.run_command')
+    def test_clear_portchannel_statistics(self, run_command):
+        runner = CliRunner()
+        db = Db()
+        # Clearing stats for all LAGs
+        result = runner.invoke(clear.cli.commands['portchannel'].commands['statistics'], obj=db, catch_exceptions=False)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+
+        # Clearing stats for specific PortChannel - Exists
+        result = runner.invoke(clear.cli.commands['portchannel'].commands['statistics'], ['PortChannel0001'], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        run_command.assert_called_with('sudo teamdctl PortChannel0001 clear statistics', shell=True)
+        run_command.reset_mock()
+
+        # Clearing stats for specific PortChannel member - Exists
+        result = runner.invoke(clear.cli.commands['portchannel'].commands['statistics'],
+                               ['PortChannel0001', 'Ethernet112'], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        run_command.assert_called_with('sudo teamdctl PortChannel0001 clear statistics port Ethernet112', shell=True)
+        run_command.reset_mock()
+
+        # Clearing stats for specific PortChannel - Not Exists
+        result = runner.invoke(clear.cli.commands['portchannel'].commands['statistics'], ['PortChannel107'], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        if "No such portchannel interface" in result.output:
+            assert not run_command.called, "run_command should not be called when PortChannel is missing"
+
+        # Clearing stats for specific PortChannel member - Not Exists
+        result = runner.invoke(clear.cli.commands['portchannel'].commands['statistics'],
+                               ['PortChannel0001', 'Ethernet4'], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        if "No such portchannel or portchannel member interface" in result.output:
+            assert not run_command.called, "run_command should not be called when PortChannel is missing"
 
     @classmethod
     def teardown_class(cls):
