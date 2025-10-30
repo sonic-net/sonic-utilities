@@ -7,7 +7,7 @@ from tabulate import tabulate
 from sonic_py_common import multi_asic
 from utilities_common.constants import DEFAULT_NAMESPACE
 from dump.match_infra import RedisSource, JsonSource, MatchEngine, CONN
-from swsscommon.swsscommon import ConfigDBConnector
+from swsscommon.swsscommon import ConfigDBConnector, SonicDBConfig
 from dump import plugins
 
 # Autocompletion Helper
@@ -31,6 +31,8 @@ def show_modules(ctx, param, value):
 @click.pass_context
 def dump(ctx):
     ctx.obj = MatchEngine()
+    if multi_asic.is_multi_asic() and not SonicDBConfig.isGlobalInit():
+        SonicDBConfig.initializeGlobalConfig()
 
 
 @dump.command()
