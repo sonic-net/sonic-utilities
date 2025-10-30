@@ -386,7 +386,7 @@ class TestShowIpIntFastPath(object):
             # Assert BGP neighbor was found for the first IP
             assert result['bgp_neighs']['10.0.0.1/24'] == ['T0-Peer', '10.0.0.5']
             # Assert BGP neighbor was 'N/A' for the second IP (KeyError path)
-            assert result['bgp_neighs']['20.0.0.1/24'] == ['N/A', 'N/A']        # 4. Test with empty ifaddresses (covers line 254-255)
+            assert result['bgp_neighs']['20.0.0.1/24'] == ['N/A', 'N/A']
         with mock.patch('ipintutil.get_if_admin_state', return_value='up'), \
              mock.patch('ipintutil.get_if_oper_state', return_value='up'), \
              mock.patch('ipintutil.get_if_master', return_value=''):
