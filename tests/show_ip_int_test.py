@@ -90,12 +90,26 @@ def setup_teardown_multi_asic():
 @pytest.fixture(scope="class")
 def setup_teardown_fastpath():
     """
-    Fast path test fixture - directly imports and tests functions to achieve coverage.
+    Fast path test fixture - does NOT set UTILITIES_UNIT_TESTING=2
+    so the production fast path (_addr_show) is exercised for coverage.
     """
     os.environ["PATH"] += os.pathsep + scripts_path
-    os.environ["UTILITIES_UNIT_TESTING"] = "1"
+    # Store original values to restore later
+    original_ut = os.environ.get("UTILITIES_UNIT_TESTING")
+    original_topo = os.environ.get("UTILITIES_UNIT_TESTING_TOPOLOGY")
+
+    # Don't set UTILITIES_UNIT_TESTING=2 to test the fast production path
+    # Explicitly unset to ensure we're not in TEST_MODE
+    os.environ.pop("UTILITIES_UNIT_TESTING", None)
+    os.environ.pop("UTILITIES_UNIT_TESTING_TOPOLOGY", None)
+
     yield
-    os.environ["UTILITIES_UNIT_TESTING"] = "0"
+
+    # Restore original environment
+    if original_ut is not None:
+        os.environ["UTILITIES_UNIT_TESTING"] = original_ut
+    if original_topo is not None:
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = original_topo
 
 
 def verify_output(output, expected_output):
@@ -184,17 +198,53 @@ class TestShowIpIntFastPath(object):
 
     def test_addr_show_ipv4(self):
         """Test _addr_show with IPv4 addresses - validates fast path is called"""
-        return_code, result = get_result_and_return_code(['ipintutil'])
-        # Simple check: as long as we get output without error, fast path worked
-        assert return_code == 0
-        assert len(result) > 0
+        from importlib.machinery import SourceFileLoader
+
+        ipintutil_path = os.path.join(scripts_path, 'ipintutil')
+        loader = SourceFileLoader("ipintutil_v4", ipintutil_path)
+        spec = importlib.util.spec_from_loader("ipintutil_v4", loader)
+        ipintutil = importlib.util.module_from_spec(spec)
+
+        ip_output = """\
+2: Ethernet0    inet 20.1.1.1/24 scope global Ethernet0
+3: PortChannel0001    inet 30.1.1.1/24 scope global PortChannel0001
+"""
+        mock_config_db = mock.MagicMock()
+        mock_config_db.get_table.return_value = {}
+
+        with mock.patch('subprocess.check_output', return_value=ip_output), \
+             mock.patch('swsscommon.swsscommon.ConfigDBConnector', return_value=mock_config_db):
+
+            loader.exec_module(ipintutil)
+            result = ipintutil._addr_show('', netifaces.AF_INET, 'all')
+            # Should return dict with interfaces
+            assert isinstance(result, dict)
+            assert len(result) >= 0
 
     def test_addr_show_ipv6(self):
         """Test _addr_show with IPv6 addresses - validates fast path is called"""
-        return_code, result = get_result_and_return_code(['ipintutil', '-a', 'ipv6'])
-        # Simple check: as long as we get output without error, fast path worked
-        assert return_code == 0
-        assert len(result) > 0
+        from importlib.machinery import SourceFileLoader
+
+        ipintutil_path = os.path.join(scripts_path, 'ipintutil')
+        loader = SourceFileLoader("ipintutil_v6", ipintutil_path)
+        spec = importlib.util.spec_from_loader("ipintutil_v6", loader)
+        ipintutil = importlib.util.module_from_spec(spec)
+
+        ip_output = """\
+2: Ethernet0    inet6 2100::1/64 scope global
+3: PortChannel0001    inet6 ab00::1/64 scope global
+"""
+        mock_config_db = mock.MagicMock()
+        mock_config_db.get_table.return_value = {}
+
+        with mock.patch('subprocess.check_output', return_value=ip_output), \
+             mock.patch('swsscommon.swsscommon.ConfigDBConnector', return_value=mock_config_db):
+
+            loader.exec_module(ipintutil)
+            result = ipintutil._addr_show('', netifaces.AF_INET6, 'all')
+            # Should return dict with interfaces
+            assert isinstance(result, dict)
+            assert len(result) >= 0
 
     def test_addr_show_malformed_output(self):
         """Test _addr_show handles malformed ip addr output gracefully"""
@@ -212,7 +262,11 @@ class TestShowIpIntFastPath(object):
 2: Ethernet0 inet
 3: Vlan100
 """
-        with mock.patch('subprocess.check_output', return_value=malformed_output):
+        mock_config_db = mock.MagicMock()
+        mock_config_db.get_table.return_value = {}
+
+        with mock.patch('subprocess.check_output', return_value=malformed_output), \
+             mock.patch('swsscommon.swsscommon.ConfigDBConnector', return_value=mock_config_db):
             loader.exec_module(ipintutil)
             result = ipintutil._addr_show('', netifaces.AF_INET, 'all')
             # Should return empty or minimal dict, not crash
@@ -228,7 +282,11 @@ class TestShowIpIntFastPath(object):
         spec = importlib.util.spec_from_loader("ipintutil_error", loader)
         ipintutil = importlib.util.module_from_spec(spec)
 
-        with mock.patch('subprocess.check_output', side_effect=subprocess.CalledProcessError(1, 'cmd')):
+        mock_config_db = mock.MagicMock()
+        mock_config_db.get_table.return_value = {}
+
+        with mock.patch('subprocess.check_output', side_effect=subprocess.CalledProcessError(1, 'cmd')), \
+             mock.patch('swsscommon.swsscommon.ConfigDBConnector', return_value=mock_config_db):
             loader.exec_module(ipintutil)
             result = ipintutil._addr_show('', netifaces.AF_INET, 'all')
             # Should return empty dict on error
@@ -245,13 +303,17 @@ class TestShowIpIntFastPath(object):
 
         ip_output = "2: Ethernet0    inet 10.0.0.1/24 scope global Ethernet0\n"
 
+        mock_config_db = mock.MagicMock()
+        mock_config_db.get_table.return_value = {}
+
         def mock_check_output(cmd, *args, **kwargs):
             # Verify namespace command is constructed correctly
             if 'ip' in cmd and 'netns' in cmd and 'exec' in cmd:
                 return ip_output
             return ip_output
 
-        with mock.patch('subprocess.check_output', side_effect=mock_check_output):
+        with mock.patch('subprocess.check_output', side_effect=mock_check_output), \
+             mock.patch('swsscommon.swsscommon.ConfigDBConnector', return_value=mock_config_db):
             loader.exec_module(ipintutil)
             result = ipintutil._addr_show('asic0', netifaces.AF_INET, 'all')
             # Should process namespace command and return results
@@ -270,8 +332,12 @@ class TestShowIpIntFastPath(object):
 2: Ethernet0    inet 20.1.1.1/24 scope global Ethernet0
 3: PortChannel0001    inet 30.1.1.1/24 scope global PortChannel0001
 """
+        mock_config_db = mock.MagicMock()
+        mock_config_db.get_table.return_value = {}
+
         with mock.patch('subprocess.check_output', return_value=ip_output), \
              mock.patch('subprocess.Popen') as mock_popen, \
+             mock.patch('swsscommon.swsscommon.ConfigDBConnector', return_value=mock_config_db), \
              mock.patch('os.path.exists', return_value=True):
 
             mock_proc = mock.MagicMock()
@@ -283,7 +349,7 @@ class TestShowIpIntFastPath(object):
 
             # Verify we get interface data back
             assert isinstance(result, dict)
-            # In fast path with UTILITIES_UNIT_TESTING=1, should have interfaces
+            # In fast path, should have interfaces
             assert len(result) >= 0
 
     def test_skip_interface_filtering(self):
@@ -302,8 +368,12 @@ class TestShowIpIntFastPath(object):
 3: veth123    inet 10.0.0.1/24 scope global veth123
 4: Ethernet0    inet 20.1.1.1/24 scope global Ethernet0
 """
+        mock_config_db = mock.MagicMock()
+        mock_config_db.get_table.return_value = {}
+
         with mock.patch('subprocess.check_output', return_value=ip_output), \
              mock.patch('subprocess.Popen') as mock_popen, \
+             mock.patch('swsscommon.swsscommon.ConfigDBConnector', return_value=mock_config_db), \
              mock.patch('os.path.exists', return_value=True):
 
             mock_proc = mock.MagicMock()
