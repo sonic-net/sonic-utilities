@@ -339,6 +339,7 @@ class TestShowIpIntFastPath(object):
         This test uses robust, logic-based assertions, not brittle string comparisons.
         """
         from importlib.machinery import SourceFileLoader
+        import subprocess
 
         # Import the script as a module
         ipintutil_path = os.path.join(scripts_path, 'ipintutil')
@@ -349,43 +350,66 @@ class TestShowIpIntFastPath(object):
         sys.modules['ipintutil'] = ipintutil
         loader.exec_module(ipintutil)
 
-        # 1. Test OSError in get_if_admin_state to cover exception handling
-        with mock.patch('subprocess.Popen', side_effect=OSError):
-            state = ipintutil.get_if_admin_state('Ethernet0', 'default')
+        # 1. Test get_if_oper_state exception (covers lines 161-162)
+        with mock.patch('subprocess.check_output', side_effect=subprocess.CalledProcessError(1, 'cmd')):
+            state = ipintutil.get_if_oper_state('Ethernet0', 'default')
             assert state == "error"
 
-        # 2. Test ValueError in get_if_admin_state
-        mock_proc = mock.MagicMock()
-        mock_proc.communicate.return_value = ('not_an_int', '')
-        with mock.patch('subprocess.Popen', return_value=mock_proc):
-            state = ipintutil.get_if_admin_state('Ethernet0', 'default')
-            assert state == "error"
+        # 2. Test malformed 'ip addr' output in get_ip_intfs_in_namespace
+        # Covers lines 167-170 (no colon), 175-183 (no cidr)
+        malformed_ip_addr_output = """\
+1 lo    inet 127.0.0.1/8 scope host lo
+2: Ethernet0    inet
+3: Vlan1000
+"""
+        with mock.patch('subprocess.check_output', return_value=malformed_ip_addr_output):
+            ip_intfs = ipintutil.get_ip_intfs_in_namespace(netifaces.AF_INET, '', 'all')
+            # Assert that only valid lines were processed and malformed ones were skipped
+            assert 'Ethernet0' not in ip_intfs
+            assert 'Vlan1000' not in ip_intfs
+            assert 'lo' not in ip_intfs # 'lo' is skipped because the line has no colon
 
-        # 3. Test multi-ASIC interface merging logic
-        mock_multi_asic_device = mock.MagicMock()
-        mock_multi_asic_device.is_multi_asic = True
-        mock_multi_asic_device.get_ns_list_based_on_options.return_value = ['asic0', 'asic1']
+        # 3. Test BGP neighbor lookup failure (covers lines 266-268)
+        # and get_if_master (line 270)
+        bgp_peer_data = {'10.0.0.1': ('T0-Peer', '10.0.0.5')} # Peer for 10.0.0.1 exists
+        ifaddresses_data = [('', '10.0.0.1/24'), ('', '20.0.0.1/24')] # 20.0.0.1 has no peer
 
-        # Simulate finding Ethernet0 in asic0, then again in asic1 with a different IP
-        ip_intfs_ns1 = {'Ethernet0': {'ipaddr': [['', '10.0.0.1/24']], 'bgp_neighs': {}}}
-        ip_intfs_ns2 = {'Ethernet0': {'ipaddr': [['', '10.0.0.2/24']], 'bgp_neighs': {}}}
+        with mock.patch('ipintutil.get_if_admin_state', return_value='up'), \
+             mock.patch('ipintutil.get_if_oper_state', return_value='up'), \
+             mock.patch('ipintutil.get_if_master', return_value='bond0'):
 
-        def mock_get_ip_intfs_in_namespace(af, namespace, display):
-            if namespace == 'asic0':
-                return ip_intfs_ns1
-            elif namespace == 'asic1':
-                return ip_intfs_ns2
-            return {}
+            result = ipintutil.get_ip_intf_info(
+                'Ethernet0', ifaddresses_data, bgp_peer_data, 'default'
+            )
+            # Assert master interface is correctly identified
+            assert result['master'] == 'bond0'
+            # Assert BGP neighbor was found for the first IP
+            assert result['bgp_neighs']['10.0.0.1/24'] == ['T0-Peer', '10.0.0.5']
+            # Assert BGP neighbor was 'N/A' for the second IP (KeyError path)
+            assert result['bgp_neighs']['20.0.0.1/24'] == ['N/A', 'N/A']
 
-        with mock.patch('utilities_common.multi_asic.MultiAsic', return_value=mock_multi_asic_device), \
-             mock.patch('ipintutil.get_ip_intfs_in_namespace', side_effect=mock_get_ip_intfs_in_namespace):
-            ip_intfs = ipintutil.get_ip_intfs(netifaces.AF_INET, None, 'all')
-            # Assert that the IPs from both namespaces were merged correctly
-            assert len(ip_intfs['Ethernet0']['ipaddr']) == 2
-            assert ip_intfs['Ethernet0']['ipaddr'][0][1] == '10.0.0.1/24'
-            assert ip_intfs['Ethernet0']['ipaddr'][1][1] == '10.0.0.2/24'
+        # 4. Test with empty ifaddresses (covers line 254-255)
+        with mock.patch('ipintutil.get_if_admin_state', return_value='up'), \
+             mock.patch('ipintutil.get_if_oper_state', return_value='up'), \
+             mock.patch('ipintutil.get_if_master', return_value=''):
 
-        # 4. Test main function argument parsing and execution path
+            result = ipintutil.get_ip_intf_info(
+                'Ethernet4', [], bgp_peer_data, 'default'
+            )
+            # Assert that it returns None when there are no addresses
+            assert result is None
+
+        # 5. Test skip_ip_intf_display logic (covers lines 172-173)
+        with mock.patch('sonic_py_common.multi_asic.is_port_internal', return_value=True):
+            assert ipintutil.skip_ip_intf_display('Ethernet12', 'frontend') is True
+        with mock.patch('sonic_py_common.multi_asic.is_port_channel_internal', return_value=True):
+            assert ipintutil.skip_ip_intf_display('PortChannel001', 'frontend') is True
+        assert ipintutil.skip_ip_intf_display('Loopback4096', 'frontend') is True
+        assert ipintutil.skip_ip_intf_display('eth0', 'frontend') is True
+        assert ipintutil.skip_ip_intf_display('veth123', 'frontend') is True
+        assert ipintutil.skip_ip_intf_display('Ethernet0', 'all') is False
+
+        # 6. Test main function argument parsing and execution path
         with mock.patch('sys.argv', ['ipintutil', '-a', 'ipv6', '-n', 'asic0']), \
              mock.patch('os.geteuid', return_value=0), \
              mock.patch('utilities_common.general.load_db_config'), \
@@ -397,13 +421,3 @@ class TestShowIpIntFastPath(object):
                 assert e.code == 0
             # Assert that the main logic path was followed and display was called
             mock_display.assert_called_once()
-
-        # 5. Test skip_ip_intf_display logic
-        with mock.patch('sonic_py_common.multi_asic.is_port_internal', return_value=True):
-            assert ipintutil.skip_ip_intf_display('Ethernet12', 'frontend') is True
-        with mock.patch('sonic_py_common.multi_asic.is_port_channel_internal', return_value=True):
-            assert ipintutil.skip_ip_intf_display('PortChannel001', 'frontend') is True
-        assert ipintutil.skip_ip_intf_display('Loopback4096', 'frontend') is True
-        assert ipintutil.skip_ip_intf_display('eth0', 'frontend') is True
-        assert ipintutil.skip_ip_intf_display('veth123', 'frontend') is True
-        assert ipintutil.skip_ip_intf_display('Ethernet0', 'all') is False
