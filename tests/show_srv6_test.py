@@ -1,6 +1,3 @@
-import os
-import pytest
-from unittest import mock
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
 
@@ -15,7 +12,7 @@ The tests use mocking to simulate database responses and verify correct output f
 Test Coverage:
 - show srv6 locators: All locators, specific locator, empty data, defaults, non-existent locator
 - show srv6 static_sids: All SIDs, specific SID, empty data, defaults, invalid key format
-- Offloading status: Tests ASIC_DB interaction and offload status determination  
+- Offloading status: Tests ASIC_DB interaction and offload status determination
 - Error handling: Database connection errors, malformed ASIC data
 - Table formatting: Verifies headers and data formatting
 
@@ -25,7 +22,7 @@ To run these tests:
 
 To run specific test class:
     python -m pytest tests/show_srv6_test.py::TestShowSRv6Locators -v
-    python -m pytest tests/show_srv6_test.py::TestShowSRv6StaticSids -v  
+    python -m pytest tests/show_srv6_test.py::TestShowSRv6StaticSids -v
     python -m pytest tests/show_srv6_test.py::TestShowSRv6EdgeCases -v
 
 To run with more verbose output:
@@ -33,9 +30,9 @@ To run with more verbose output:
 """
 
 # NOTE: The current SRv6 implementation in show/srv6.py doesn't have proper error
-# handling for ASIC_DB JSON parsing. These tests reveal areas where the implementation 
+# handling for ASIC_DB JSON parsing. These tests reveal areas where the implementation
 # could be improved with try-catch blocks around:
-# 1. entry.split(":", 2) operations 
+# 1. entry.split(":", 2) operations
 # 2. json.loads() calls
 # 3. Field access like fields["sid"], fields["locator_block_len"], etc.
 # The malformed data test cases below will currently cause the implementation to fail
@@ -51,13 +48,13 @@ class TestShowSRv6Locators(object):
         # Mock ConfigDBConnector
         mock_db = MagicMock()
         mock_config_db.return_value = mock_db
-        
+
         # Mock data for SRV6_MY_LOCATORS table
         mock_locators_data = {
             'Locator1': {
                 'prefix': '2001:db8:1::/48',
                 'block_len': '32',
-                'node_len': '16', 
+                'node_len': '16',
                 'func_len': '16'
             },
             'Locator2': {
@@ -68,13 +65,13 @@ class TestShowSRv6Locators(object):
             }
         }
         mock_db.get_table.return_value = mock_locators_data
-        
+
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['srv6'].commands['locators'])
-        
+
         print(result.exit_code)
         print(result.output)
-        
+
         assert result.exit_code == 0
         assert 'Locator1' in result.output
         assert 'Locator2' in result.output
@@ -88,7 +85,7 @@ class TestShowSRv6Locators(object):
         # Mock ConfigDBConnector
         mock_db = MagicMock()
         mock_config_db.return_value = mock_db
-        
+
         # Mock data for SRV6_MY_LOCATORS table
         mock_locators_data = {
             'Locator1': {
@@ -100,18 +97,18 @@ class TestShowSRv6Locators(object):
             'Locator2': {
                 'prefix': '2001:db8:2::/48',
                 'block_len': '40',
-                'node_len': '8', 
+                'node_len': '8',
                 'func_len': '16'
             }
         }
         mock_db.get_table.return_value = mock_locators_data
-        
+
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['srv6'].commands['locators'], ['Locator1'])
-        
+
         print(result.exit_code)
         print(result.output)
-        
+
         assert result.exit_code == 0
         assert 'Locator1' in result.output
         assert 'Locator2' not in result.output
@@ -125,13 +122,13 @@ class TestShowSRv6Locators(object):
         mock_db = MagicMock()
         mock_config_db.return_value = mock_db
         mock_db.get_table.return_value = {}
-        
+
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['srv6'].commands['locators'])
-        
+
         print(result.exit_code)
         print(result.output)
-        
+
         assert result.exit_code == 0
         # Should show header but no data rows
         assert 'Locator' in result.output
@@ -139,12 +136,12 @@ class TestShowSRv6Locators(object):
         mock_db.connect.assert_called_once()
         mock_db.get_table.assert_called_once_with('SRV6_MY_LOCATORS')
 
-    @patch('show.srv6.ConfigDBConnector')  
+    @patch('show.srv6.ConfigDBConnector')
     def test_show_srv6_locators_with_defaults(self, mock_config_db):
         # Mock ConfigDBConnector
         mock_db = MagicMock()
         mock_config_db.return_value = mock_db
-        
+
         # Mock data with missing optional fields (should use defaults)
         mock_locators_data = {
             'Locator1': {
@@ -153,13 +150,13 @@ class TestShowSRv6Locators(object):
             }
         }
         mock_db.get_table.return_value = mock_locators_data
-        
+
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['srv6'].commands['locators'])
-        
+
         print(result.exit_code)
         print(result.output)
-        
+
         assert result.exit_code == 0
         assert 'Locator1' in result.output
         assert '2001:db8:1::/48' in result.output
@@ -182,7 +179,7 @@ class TestShowSRv6StaticSids(object):
         # Mock ConfigDBConnector
         mock_db = MagicMock()
         mock_config_db.return_value = mock_db
-        
+
         # Mock data for SRV6_MY_SIDS table
         mock_sids_data = {
             ('Locator1', '2001:db8:1::1/128'): {
@@ -197,20 +194,22 @@ class TestShowSRv6StaticSids(object):
             }
         }
         mock_db.get_table.return_value = mock_sids_data
-        
+
         # Mock SonicV2Connector for ASIC_DB
         mock_asic_db = MagicMock()
         mock_sonic_v2.return_value = mock_asic_db
         mock_asic_db.keys.return_value = [
-            'ASIC_STATE:SAI_OBJECT_TYPE_SRV6_SID:{"dest":"10.0.0.1/32","sid":"2001:db8:1::1","locator_block_len":"32","locator_node_len":"16","function_len":"16"}'
+            'ASIC_STATE:SAI_OBJECT_TYPE_SRV6_SID:{"dest":"10.0.0.1/32",\
+            "sid":"2001:db8:1::1","locator_block_len":"32","locator_node_len":"16",\
+            "function_len":"16"}'
         ]
-        
+
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands['srv6'].commands['static_sids'])
-        
+        result = runner.invoke(show.cli.commands['srv6'].commands['static-sids'])
+
         print(result.exit_code)
         print(result.output)
-        
+
         assert result.exit_code == 0
         assert '2001:db8:1::1/128' in result.output
         assert '2001:db8:2::1/128' in result.output
@@ -232,7 +231,7 @@ class TestShowSRv6StaticSids(object):
         # Mock ConfigDBConnector
         mock_db = MagicMock()
         mock_config_db.return_value = mock_db
-        
+
         # Mock data for SRV6_MY_SIDS table
         mock_sids_data = {
             ('Locator1', '2001:db8:1::1/128'): {
@@ -247,18 +246,18 @@ class TestShowSRv6StaticSids(object):
             }
         }
         mock_db.get_table.return_value = mock_sids_data
-        
-        # Mock SonicV2Connector for ASIC_DB  
+
+        # Mock SonicV2Connector for ASIC_DB
         mock_asic_db = MagicMock()
         mock_sonic_v2.return_value = mock_asic_db
         mock_asic_db.keys.return_value = []
-        
+
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['srv6'].commands['static_sids'], ['2001:db8:1::1'])
-        
+
         print(result.exit_code)
         print(result.output)
-        
+
         assert result.exit_code == 0
         assert '2001:db8:1::1/128' in result.output
         assert '2001:db8:2::1/128' not in result.output
@@ -273,7 +272,7 @@ class TestShowSRv6StaticSids(object):
         # Mock ConfigDBConnector
         mock_db = MagicMock()
         mock_config_db.return_value = mock_db
-        
+
         # Mock data for SRV6_MY_SIDS table
         mock_sids_data = {
             ('Locator1', '2001:db8:1::1/64'): {
@@ -283,32 +282,34 @@ class TestShowSRv6StaticSids(object):
             }
         }
         mock_db.get_table.return_value = mock_sids_data
-        
+
         # Mock SonicV2Connector for ASIC_DB with matching SID
         mock_asic_db = MagicMock()
         mock_sonic_v2.return_value = mock_asic_db
         mock_asic_db.keys.return_value = [
-            'ASIC_STATE:SAI_OBJECT_TYPE_SRV6_SID:{"dest":"10.0.0.1/32","sid":"2001:db8:1::1","locator_block_len":"32","locator_node_len":"16","function_len":"16"}'
+            'ASIC_STATE:SAI_OBJECT_TYPE_SRV6_SID:{"dest":"10.0.0.1/32",\
+            "sid":"2001:db8:1::1","locator_block_len":"32","locator_node_len":"16",\
+            "function_len":"16"}'
         ]
-        
+
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands['srv6'].commands['static_sids'])
-        
+        result = runner.invoke(show.cli.commands['srv6'].commands['static-sids'])
+
         print(result.exit_code)
         print(result.output)
-        
+
         assert result.exit_code == 0
         assert '2001:db8:1::1/64' in result.output
         assert 'True' in result.output  # Should be offloaded
         mock_db.connect.assert_called_once()
 
-    @patch('show.srv6.SonicV2Connector')  
+    @patch('show.srv6.SonicV2Connector')
     @patch('show.srv6.ConfigDBConnector')
     def test_show_srv6_static_sids_not_offloaded(self, mock_config_db, mock_sonic_v2):
         # Mock ConfigDBConnector
         mock_db = MagicMock()
         mock_config_db.return_value = mock_db
-        
+
         # Mock data for SRV6_MY_SIDS table
         mock_sids_data = {
             ('Locator1', '2001:db8:1::1/64'): {
@@ -318,42 +319,42 @@ class TestShowSRv6StaticSids(object):
             }
         }
         mock_db.get_table.return_value = mock_sids_data
-        
+
         # Mock SonicV2Connector for ASIC_DB with no matching SID
         mock_asic_db = MagicMock()
         mock_sonic_v2.return_value = mock_asic_db
         mock_asic_db.keys.return_value = []  # No offloaded SIDs
-        
+
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands['srv6'].commands['static_sids'])
-        
+        result = runner.invoke(show.cli.commands['srv6'].commands['static-sids'])
+
         print(result.exit_code)
         print(result.output)
-        
+
         assert result.exit_code == 0
         assert '2001:db8:1::1/64' in result.output
         assert 'False' in result.output  # Should not be offloaded
         mock_db.connect.assert_called_once()
 
     @patch('show.srv6.SonicV2Connector')
-    @patch('show.srv6.ConfigDBConnector') 
+    @patch('show.srv6.ConfigDBConnector')
     def test_show_srv6_static_sids_empty(self, mock_config_db, mock_sonic_v2):
         # Mock ConfigDBConnector with empty data
         mock_db = MagicMock()
         mock_config_db.return_value = mock_db
         mock_db.get_table.return_value = {}
-        
+
         # Mock SonicV2Connector for ASIC_DB
         mock_asic_db = MagicMock()
         mock_sonic_v2.return_value = mock_asic_db
         mock_asic_db.keys.return_value = []
-        
+
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands['srv6'].commands['static_sids'])
-        
+        result = runner.invoke(show.cli.commands['srv6'].commands['static-sids'])
+
         print(result.exit_code)
         print(result.output)
-        
+
         assert result.exit_code == 0
         # Should show header but no data rows
         assert 'SID' in result.output
@@ -368,7 +369,7 @@ class TestShowSRv6StaticSids(object):
         # Mock ConfigDBConnector
         mock_db = MagicMock()
         mock_config_db.return_value = mock_db
-        
+
         # Mock data with missing optional fields (should use defaults)
         mock_sids_data = {
             ('Locator1', '2001:db8:1::1/128'): {
@@ -376,18 +377,18 @@ class TestShowSRv6StaticSids(object):
             }
         }
         mock_db.get_table.return_value = mock_sids_data
-        
+
         # Mock SonicV2Connector for ASIC_DB
         mock_asic_db = MagicMock()
         mock_sonic_v2.return_value = mock_asic_db
         mock_asic_db.keys.return_value = []
-        
+
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands['srv6'].commands['static_sids'])
-        
+        result = runner.invoke(show.cli.commands['srv6'].commands['static-sids'])
+
         print(result.exit_code)
         print(result.output)
-        
+
         assert result.exit_code == 0
         assert '2001:db8:1::1/128' in result.output
         assert 'Locator1' in result.output
@@ -401,7 +402,7 @@ class TestShowSRv6StaticSids(object):
         # Mock ConfigDBConnector
         mock_db = MagicMock()
         mock_config_db.return_value = mock_db
-        
+
         # Mock data with invalid key format (should be skipped)
         mock_sids_data = {
             ('InvalidKey',): {  # Only one element, should be skipped
@@ -412,18 +413,18 @@ class TestShowSRv6StaticSids(object):
             }
         }
         mock_db.get_table.return_value = mock_sids_data
-        
+
         # Mock SonicV2Connector for ASIC_DB
         mock_asic_db = MagicMock()
         mock_sonic_v2.return_value = mock_asic_db
         mock_asic_db.keys.return_value = []
-        
+
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands['srv6'].commands['static_sids'])
-        
+        result = runner.invoke(show.cli.commands['srv6'].commands['static-sids'])
+
         print(result.exit_code)
         print(result.output)
-        
+
         assert result.exit_code == 0
         # Should only show the valid entry
         assert '2001:db8:1::1/128' in result.output
@@ -445,7 +446,7 @@ class TestShowSRv6EdgeCases(object):
         # Mock ConfigDBConnector
         mock_db = MagicMock()
         mock_config_db.return_value = mock_db
-        
+
         # Mock data for SRV6_MY_LOCATORS table
         mock_locators_data = {
             'Locator1': {
@@ -456,13 +457,13 @@ class TestShowSRv6EdgeCases(object):
             }
         }
         mock_db.get_table.return_value = mock_locators_data
-        
+
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['srv6'].commands['locators'], ['NonExistentLocator'])
-        
+
         print(result.exit_code)
         print(result.output)
-        
+
         assert result.exit_code == 0
         # Should show header but no data rows since locator doesn't exist
         assert 'Locator' in result.output
@@ -477,7 +478,7 @@ class TestShowSRv6EdgeCases(object):
         # Mock ConfigDBConnector
         mock_db = MagicMock()
         mock_config_db.return_value = mock_db
-        
+
         # Mock data for SRV6_MY_SIDS table
         mock_sids_data = {
             ('Locator1', '2001:db8:1::1/128'): {
@@ -487,18 +488,18 @@ class TestShowSRv6EdgeCases(object):
             }
         }
         mock_db.get_table.return_value = mock_sids_data
-        
+
         # Mock SonicV2Connector to raise exception on keys() call
         mock_asic_db = MagicMock()
         mock_sonic_v2.return_value = mock_asic_db
         mock_asic_db.keys.side_effect = Exception("Connection failed")
-        
+
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands['srv6'].commands['static_sids'])
-        
+        result = runner.invoke(show.cli.commands['srv6'].commands['static-sids'])
+
         print(result.exit_code)
         print(result.output)
-        
+
         # Test should still complete but SID should show as not offloaded
         assert result.exit_code == 0
         assert '2001:db8:1::1/128' in result.output
@@ -511,7 +512,7 @@ class TestShowSRv6EdgeCases(object):
         # Mock ConfigDBConnector
         mock_db = MagicMock()
         mock_config_db.return_value = mock_db
-        
+
         # Mock data for SRV6_MY_SIDS table
         mock_sids_data = {
             ('Locator1', '2001:db8:1::1/128'): {
@@ -519,7 +520,7 @@ class TestShowSRv6EdgeCases(object):
             }
         }
         mock_db.get_table.return_value = mock_sids_data
-        
+
         # Mock SonicV2Connector for ASIC_DB with malformed data
         mock_asic_db = MagicMock()
         mock_sonic_v2.return_value = mock_asic_db
@@ -528,13 +529,13 @@ class TestShowSRv6EdgeCases(object):
             'ASIC_STATE:SAI_OBJECT_TYPE_SRV6_SID:INVALID_JSON',  # This should be skipped due to JSON error
             'ASIC_STATE:SAI_OBJECT_TYPE_SRV6_SID:{"incomplete":"data"}'  # This should be skipped due to missing fields
         ]
-        
+
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands['srv6'].commands['static_sids'])
-        
+        result = runner.invoke(show.cli.commands['srv6'].commands['static-sids'])
+
         print(result.exit_code)
         print(result.output)
-        
+
         # Test should complete successfully despite malformed ASIC data
         assert result.exit_code == 0
         assert '2001:db8:1::1/128' in result.output
@@ -547,13 +548,13 @@ class TestShowSRv6EdgeCases(object):
         mock_db = MagicMock()
         mock_config_db.return_value = mock_db
         mock_db.connect.side_effect = Exception("Database connection failed")
-        
+
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['srv6'].commands['locators'])
-        
+
         print(result.exit_code)
         print(result.output)
-        
+
         # Should raise exception and exit with non-zero code
         assert result.exit_code != 0
 
@@ -564,13 +565,13 @@ class TestShowSRv6EdgeCases(object):
         mock_db = MagicMock()
         mock_config_db.return_value = mock_db
         mock_db.connect.side_effect = Exception("Database connection failed")
-        
+
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands['srv6'].commands['static_sids'])
-        
+        result = runner.invoke(show.cli.commands['srv6'].commands['static-sids'])
+
         print(result.exit_code)
         print(result.output)
-        
+
         # Should raise exception and exit with non-zero code
         assert result.exit_code != 0
 
@@ -579,7 +580,7 @@ class TestShowSRv6EdgeCases(object):
         # Mock ConfigDBConnector
         mock_db = MagicMock()
         mock_config_db.return_value = mock_db
-        
+
         # Mock data for SRV6_MY_LOCATORS table
         mock_locators_data = {
             'TestLocator': {
@@ -590,19 +591,19 @@ class TestShowSRv6EdgeCases(object):
             }
         }
         mock_db.get_table.return_value = mock_locators_data
-        
+
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['srv6'].commands['locators'])
-        
+
         print(result.exit_code)
         print(result.output)
-        
+
         assert result.exit_code == 0
         # Verify all expected headers are present
         headers = ['Locator', 'Prefix', 'Block Len', 'Node Len', 'Func Len']
         for header in headers:
             assert header in result.output
-        
+
         # Verify data is formatted correctly in the output
         assert 'TestLocator' in result.output
         assert '2001:db8:100::/48' in result.output
@@ -616,7 +617,7 @@ class TestShowSRv6EdgeCases(object):
         # Mock ConfigDBConnector
         mock_db = MagicMock()
         mock_config_db.return_value = mock_db
-        
+
         # Mock data for SRV6_MY_SIDS table
         mock_sids_data = {
             ('TestLocator', '2001:db8:100::100/128'): {
@@ -626,24 +627,24 @@ class TestShowSRv6EdgeCases(object):
             }
         }
         mock_db.get_table.return_value = mock_sids_data
-        
+
         # Mock SonicV2Connector for ASIC_DB
         mock_asic_db = MagicMock()
         mock_sonic_v2.return_value = mock_asic_db
         mock_asic_db.keys.return_value = []
-        
+
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands['srv6'].commands['static_sids'])
-        
+        result = runner.invoke(show.cli.commands['srv6'].commands['static-sids'])
+
         print(result.exit_code)
         print(result.output)
-        
+
         assert result.exit_code == 0
         # Verify all expected headers are present
         headers = ['SID', 'Locator', 'Action', 'Decap DSCP Mode', 'Decap VRF', 'Offloaded']
         for header in headers:
             assert header in result.output
-        
+
         # Verify data is formatted correctly in the output
         assert '2001:db8:100::100/128' in result.output
         assert 'TestLocator' in result.output
