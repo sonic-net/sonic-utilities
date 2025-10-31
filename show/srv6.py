@@ -25,15 +25,28 @@ def locators(locator):
 
     header = ["Locator", "Prefix", "Block Len", "Node Len", "Func Len"]
     table = []
-    for k in natsorted(data.keys()):
-        entry = data[k]
-        table.append([
-            k,
-            entry.get("prefix"),
-            entry.get("block_len", 32),
-            entry.get("node_len", 16),
-            entry.get("func_len", 16)
-        ])
+    if locator:
+        # filter to show only the requested locator
+        if locator in data:
+            entry = data[locator]
+            table.append([
+                locator,
+                entry.get("prefix"),
+                entry.get("block_len", 32),
+                entry.get("node_len", 16),
+                entry.get("func_len", 16)
+            ])
+    else:
+        # show all locators
+        for k in natsorted(data.keys()):
+            entry = data[k]
+            table.append([
+                k,
+                entry.get("prefix"),
+                entry.get("block_len", 32),
+                entry.get("node_len", 16),
+                entry.get("func_len", 16)
+            ])
     click.echo(tabulate(table, header))
 
 
@@ -51,19 +64,19 @@ def static_sids(sid):
         if sid and sid not in k:
             # skip not relevant SIDs
             continue
-        if "|" not in k:
+        if len(k) < 2:
             # skip SIDs that does not have locators
             continue
 
-        loc = k.split("|")[0]
-        sid_prefix = k.split("|")[1]
+        loc = k[0]
+        sid_prefix = k[1]
         v["locator"] = loc
         sid_dict[sid_prefix] = v
 
     # query ASIC_DB to check whether the SID is offloaded to the ASIC
     db = SonicV2Connector(host="localhost")
     db.connect(db.ASIC_DB)
-    asic_data = db.keys("*SID*")
+    asic_data = db.keys(db.ASIC_DB, "*SID*")
     asic_sids = set()
     for entry in asic_data:
         # extract ASIC SID entry data
