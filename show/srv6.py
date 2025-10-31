@@ -18,7 +18,7 @@ def srv6():
 # `show srv6 locators`
 @srv6.command()
 @click.argument("locator", required=False)
-def locators():
+def locators(locator):
     config_db = ConfigDBConnector()
     config_db.connect()
     data = config_db.get_table(CONFIG_DB_MY_LOCATORS_TABLE)
