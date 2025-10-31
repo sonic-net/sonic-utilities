@@ -1054,3 +1054,173 @@ class TestIPinIPTunnelMigrator(object):
             expected_keys = expected_appl_db.get_all(expected_appl_db.APPL_DB, key)
             diff = DeepDiff(resulting_keys, expected_keys, ignore_order=True)
             assert not diff
+
+
+class TestDhcpv4RelayMigrator(object):
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "2"
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+        dbconnector.dedicated_dbs['CONFIG_DB'] = None
+
+    def test_check_has_sonic_dhcpv4_relay_flag_true(self):
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'dns_nameserver_expected')
+        import db_migrator
+        dbmgtr = db_migrator.DBMigrator(None)
+
+        # Set the flag to True
+        dbmgtr.configDB.set_entry("DEVICE_METADATA", "localhost", {
+            "has_sonic_dhcpv4_relay": "True"
+        })
+
+        assert dbmgtr.check_has_sonic_dhcpv4_relay_flag() is True
+
+    def test_check_has_sonic_dhcpv4_relay_flag_false(self):
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'dns_nameserver_expected')
+        import db_migrator
+        dbmgtr = db_migrator.DBMigrator(None)
+
+        # Set the flag to False
+        dbmgtr.configDB.set_entry("DEVICE_METADATA", "localhost", {
+            "has_sonic_dhcpv4_relay": "False"
+        })
+
+        assert dbmgtr.check_has_sonic_dhcpv4_relay_flag() is False
+
+    def test_check_has_sonic_dhcpv4_relay_flag_not_set(self):
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'dns_nameserver_expected')
+        import db_migrator
+        dbmgtr = db_migrator.DBMigrator(None)
+
+        # Ensure flag is not set
+        dbmgtr.configDB.set_entry("DEVICE_METADATA", "localhost", {})
+
+        assert dbmgtr.check_has_sonic_dhcpv4_relay_flag() is False
+
+    def test_migrate_dhcp_servers_to_dhcpv4_relay_success(self):
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'dns_nameserver_expected')
+        import db_migrator
+        dbmgtr = db_migrator.DBMigrator(None)
+
+        # Setup initial VLAN with dhcp_servers
+        dbmgtr.configDB.set_entry("VLAN", "Vlan100", {
+            "vlanid": "100",
+            "dhcp_servers": ["192.0.2.1", "192.0.2.2"]
+        })
+
+        # Run migration
+        dbmgtr.migrate_dhcp_servers_to_dhcpv4_relay()
+
+        # Verify DHCPV4_RELAY entry created
+        relay_entry = dbmgtr.configDB.get_entry("DHCPV4_RELAY", "Vlan100")
+        assert relay_entry.get("dhcpv4_servers") == ["192.0.2.1", "192.0.2.2"]
+
+        # Verify dhcp_servers removed from VLAN
+        vlan_entry = dbmgtr.configDB.get_entry("VLAN", "Vlan100")
+        assert "dhcp_servers" not in vlan_entry
+        assert vlan_entry.get("vlanid") == "100"
+
+    def test_migrate_dhcp_servers_skip_if_no_dhcp_servers(self):
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'dns_nameserver_expected')
+        import db_migrator
+        dbmgtr = db_migrator.DBMigrator(None)
+
+        # Setup VLAN without dhcp_servers
+        dbmgtr.configDB.set_entry("VLAN", "Vlan200", {"vlanid": "200"})
+
+        # Run migration
+        dbmgtr.migrate_dhcp_servers_to_dhcpv4_relay()
+
+        # Verify no DHCPV4_RELAY entry created
+        relay_entry = dbmgtr.configDB.get_entry("DHCPV4_RELAY", "Vlan200")
+        assert not relay_entry or "dhcpv4_servers" not in relay_entry
+
+    def test_migrate_dhcp_servers_skip_if_already_migrated(self):
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'dns_nameserver_expected')
+        import db_migrator
+        dbmgtr = db_migrator.DBMigrator(None)
+
+        # Setup VLAN with dhcp_servers
+        dbmgtr.configDB.set_entry("VLAN", "Vlan300", {
+            "vlanid": "300",
+            "dhcp_servers": ["192.0.2.1"]
+        })
+
+        # Setup existing DHCPV4_RELAY entry
+        dbmgtr.configDB.set_entry("DHCPV4_RELAY", "Vlan300", {
+            "dhcpv4_servers": ["10.0.0.1"]
+        })
+
+        # Run migration
+        dbmgtr.migrate_dhcp_servers_to_dhcpv4_relay()
+
+        # Verify existing entry not overwritten
+        relay_entry = dbmgtr.configDB.get_entry("DHCPV4_RELAY", "Vlan300")
+        assert relay_entry.get("dhcpv4_servers") == ["10.0.0.1"]
+
+        vlan_entry = dbmgtr.configDB.get_entry("VLAN", "Vlan300")
+        assert "dhcp_servers" not in vlan_entry
+
+    def test_migrate_dhcp_servers_multiple_vlans(self):
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'dns_nameserver_expected')
+        import db_migrator
+        dbmgtr = db_migrator.DBMigrator(None)
+
+        # Setup multiple VLANs with dhcp_servers
+        dbmgtr.configDB.set_entry("VLAN", "Vlan400", {
+            "vlanid": "400",
+            "dhcp_servers": ["192.0.2.10"]
+        })
+        dbmgtr.configDB.set_entry("VLAN", "Vlan500", {
+            "vlanid": "500",
+            "dhcp_servers": ["192.0.2.20"]
+        })
+
+        # Run migration
+        dbmgtr.migrate_dhcp_servers_to_dhcpv4_relay()
+
+        # Verify both VLANs migrated
+        relay_entry_400 = dbmgtr.configDB.get_entry("DHCPV4_RELAY", "Vlan400")
+        assert relay_entry_400.get("dhcpv4_servers") == ["192.0.2.10"]
+
+        relay_entry_500 = dbmgtr.configDB.get_entry("DHCPV4_RELAY", "Vlan500")
+        assert relay_entry_500.get("dhcpv4_servers") == ["192.0.2.20"]
+
+        # Verify dhcp_servers removed from both VLANs
+        vlan_entry_400 = dbmgtr.configDB.get_entry("VLAN", "Vlan400")
+        assert "dhcp_servers" not in vlan_entry_400
+
+        vlan_entry_500 = dbmgtr.configDB.get_entry("VLAN", "Vlan500")
+        assert "dhcp_servers" not in vlan_entry_500
+
+    @pytest.mark.parametrize("version_method,vlan_id,dhcp_server", [
+        ("version_202305_01", "100", "192.0.2.1"),
+        ("version_202311_01", "200", "192.0.2.2"),
+        ("version_202311_02", "300", "192.0.2.3"),
+        ("version_202311_03", "400", "192.0.2.4"),
+        ("version_202405_01", "500", "192.0.2.5"),
+        ("version_202405_02", "600", "192.0.2.6"),
+        ("version_202411_01", "700", "192.0.2.7"),
+        ("version_202411_02", "800", "192.0.2.8"),
+        ("version_202505_01", "900", "192.0.2.9"),
+    ])
+    def test_version_methods_with_dhcp_migration(self, version_method, vlan_id, dhcp_server):
+        """Test all version methods call dhcp migration when flag is True"""
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'dns_nameserver_expected')
+        import db_migrator
+        dbmgtr = db_migrator.DBMigrator(None)
+
+        # Set flag to True and setup VLAN with dhcp_servers
+        dbmgtr.configDB.set_entry("DEVICE_METADATA", "localhost", {"has_sonic_dhcpv4_relay": "True"})
+        vlan_name = f"Vlan{vlan_id}"
+        dbmgtr.configDB.set_entry("VLAN", vlan_name, {"vlanid": vlan_id, "dhcp_servers": [dhcp_server]})
+
+        # Call the version method dynamically
+        getattr(dbmgtr, version_method)()
+
+        # Verify migration was executed
+        relay_entry = dbmgtr.configDB.get_entry("DHCPV4_RELAY", vlan_name)
+        assert relay_entry.get("dhcpv4_servers") == [dhcp_server]
