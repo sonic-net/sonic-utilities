@@ -403,7 +403,7 @@ def show_routes(args, namespace, display, verbose, ipver):
             return
 
         # Multi-asic show ip route with additional parms are handled by going to FRR directly and get those outputs from each namespace
-        if found_other_parms:
+        if found_other_parms and not found_json:
             print("{}:".format(ns))
             print(output)
             continue
@@ -429,7 +429,7 @@ def show_routes(args, namespace, display, verbose, ipver):
         else:
             print_ip_routes(combined_route, filter_by_ip)
     else:
-        new_string = json.dumps(combined_route,sort_keys=True, indent=4)
+        new_string = json.dumps(combined_route, sort_keys=True, indent=4)
         print(new_string)
 
 '''
