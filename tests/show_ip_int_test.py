@@ -1,6 +1,5 @@
 import importlib.util
 import os
-import sys
 from unittest import mock
 import netifaces
 import pytest
@@ -249,7 +248,6 @@ class TestShowIpIntFastPath(object):
     def test_addr_show_malformed_output(self):
         """Test _addr_show handles malformed ip addr output gracefully"""
         from importlib.machinery import SourceFileLoader
-        import subprocess
 
         ipintutil_path = os.path.join(scripts_path, 'ipintutil')
         loader = SourceFileLoader("ipintutil_malformed", ipintutil_path)

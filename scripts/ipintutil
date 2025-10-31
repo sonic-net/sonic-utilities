@@ -189,15 +189,23 @@ def _addr_show(namespace, af, display):
 
 def get_ip_intfs_in_namespace(af, namespace, display):
     """
-    Get all the ip interfaces from the kernel for the given namespace
-    (FAST path: only consider interfaces that actually have addresses).
-    In unit tests (UTILITIES_UNIT_TESTING=2), use the legacy mock-friendly path.
+    Get all the IP interfaces from the kernel for the given namespace.
+
+    Behavior:
+      - Production (default): FAST path (enumerate only interfaces that actually have addresses) via `ip -o addr`.
+      - Unit tests (UTILITIES_UNIT_TESTING=2): legacy mock-friendly path for existing fixtures.
+      - Override: if UTILITIES_FORCE_PROD_ENUM is truthy, use the FAST path even when UTILITIES_UNIT_TESTING=2.
+
+    This keeps current tests working without changes, while enabling optional coverage of the prod path.
     """
     ip_intfs = {}
     bgp_peer = get_bgp_peer()
 
+    # Allow forcing prod enumerator in UT runs without changing tests by default.
+    force_prod = str(os.environ.get("UTILITIES_FORCE_PROD_ENUM", "")).strip().lower() in ("1", "true", "yes", "on")
+
     # --- Legacy mock-friendly path (UT) ---
-    if TEST_MODE:
+    if TEST_MODE and not force_prod:
         interfaces = multi_asic_util.multi_asic_get_ip_intf_from_ns(namespace)
         for iface in interfaces:
             if namespace != constants.DEFAULT_NAMESPACE and skip_ip_intf_display(iface, display):
@@ -212,21 +220,15 @@ def get_ip_intfs_in_namespace(af, namespace, display):
             ifaddresses = []
             bgp_neighs = {}
             for ipaddr in ipaddresses[af]:
-                neighbor_name = 'N/A'
-                neighbor_ip = 'N/A'
                 local_ip = str(ipaddr['addr'])
                 if af == netifaces.AF_INET:
                     netmask = netaddr.IPAddress(ipaddr['netmask']).netmask_bits()
                 else:
                     netmask = ipaddr['netmask'].split('/', 1)[-1]
-                local_ip_with_mask = "{}/{}".format(local_ip, str(netmask))
-                ifaddresses.append(["", local_ip_with_mask])
-                try:
-                    neighbor_name = bgp_peer[local_ip][0]
-                    neighbor_ip = bgp_peer[local_ip][1]
-                except KeyError:
-                    pass
-                bgp_neighs.update({local_ip_with_mask: [neighbor_name, neighbor_ip]})
+                cidr = f"{local_ip}/{netmask}"
+                ifaddresses.append(["", cidr])
+                neigh = bgp_peer.get(local_ip, ['N/A', 'N/A'])
+                bgp_neighs[cidr] = [neigh[0], neigh[1]]
 
             if not ifaddresses:
                 continue
@@ -235,7 +237,7 @@ def get_ip_intfs_in_namespace(af, namespace, display):
             oper = get_if_oper_state(iface, namespace)
             master = get_if_master(iface)
 
-            ip_intf_attr = {
+            ip_intfs[iface] = {
                 "vrf": master,
                 "ipaddr": natsorted(ifaddresses),
                 "admin": admin,
@@ -243,8 +245,6 @@ def get_ip_intfs_in_namespace(af, namespace, display):
                 "bgp_neighs": bgp_neighs,
                 "ns": namespace
             }
-
-            ip_intfs[iface] = ip_intf_attr
         return ip_intfs
 
     # --- FAST production path (only devices that actually have IPs) ---
@@ -257,17 +257,14 @@ def get_ip_intfs_in_namespace(af, namespace, display):
         bgp_neighs = {}
         for _, cidr in ifaddresses:
             local_ip = cidr.split('/', 1)[0]
-            try:
-                neighbor_name, neighbor_ip = bgp_peer[local_ip]
-            except (KeyError, TypeError):
-                neighbor_name, neighbor_ip = 'N/A', 'N/A'
-            bgp_neighs[cidr] = [neighbor_name, neighbor_ip]
+            neigh = bgp_peer.get(local_ip, ['N/A', 'N/A'])
+            bgp_neighs[cidr] = [neigh[0], neigh[1]]
 
         admin = get_if_admin_state(iface, namespace)
         oper = get_if_oper_state(iface, namespace)
         master = get_if_master(iface)
 
-        ip_intf_attr = {
+        ip_intfs[iface] = {
             "vrf": master,
             "ipaddr": natsorted(ifaddresses),
             "admin": admin,
@@ -275,8 +272,6 @@ def get_ip_intfs_in_namespace(af, namespace, display):
             "bgp_neighs": bgp_neighs,
             "ns": namespace
         }
-
-        ip_intfs[iface] = ip_intf_attr
 
     return ip_intfs
 
