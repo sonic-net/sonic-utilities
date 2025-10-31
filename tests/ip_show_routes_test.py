@@ -169,4 +169,3 @@ class TestShowIpRouteCommands(object):
                         bgp_routes_found = True
                         break
         assert bgp_routes_found, "BGP routes should be present in filtered output"
-
