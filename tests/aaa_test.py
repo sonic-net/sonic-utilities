@@ -1,4 +1,4 @@
-import imp
+import importlib
 import os
 import sys
 
@@ -174,9 +174,9 @@ class TestAaa(object):
         os.environ['UTILITIES_UNIT_TESTING'] = "1"
         print("SETUP")
         import config.main
-        imp.reload(config.main)
+        importlib.reload(config.main)
         import show.main
-        imp.reload(show.main)
+        importlib.reload(show.main)
 
     @classmethod
     def teardown_class(cls):
