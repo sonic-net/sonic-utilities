@@ -47,7 +47,7 @@ def static_sids(sid):
 
     # parse the keys to get the locator for each sid
     sid_dict = dict()
-    for k, v in data:
+    for k, v in data.items():
         if sid and sid not in k:
             # skip not relevant SIDs
             continue
