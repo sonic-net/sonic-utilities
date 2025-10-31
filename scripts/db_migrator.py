@@ -1266,8 +1266,8 @@ class DBMigrator():
         return 'version_202305_01'
 
     def check_has_sonic_dhcpv4_relay_flag(self):
-        device_metadata_table = self.configDB.get_table("FEATURE")
-        dhcp_relay_feature = device_metadata_table.get("dhcp_relay", {})
+        device_metadata_table = self.configDB.get_table("DEVICE_METADATA")
+        dhcp_relay_feature = device_metadata_table.get("localhost", {})
         if dhcp_relay_feature.get("has_sonic_dhcpv4_relay") == "True":
             return True
         return False

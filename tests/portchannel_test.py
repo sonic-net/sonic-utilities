@@ -93,7 +93,7 @@ class TestPortChannel(object):
         result = runner.invoke(config.config.commands["portchannel"].commands["add"], ["PortChannel10"], obj=obj)
 
         # Enable has_sonic_dhcpv4_relay flag
-        db.cfgdb.set_entry("FEATURE", "dhcp_relay", {"has_sonic_dhcpv4_relay": "True"})
+        db.cfgdb.set_entry("DEVICE_METADATA", "localhost", {"has_sonic_dhcpv4_relay": "True"})
 
         db.cfgdb.set_entry("DHCPV4_RELAY", "Vlan100", {"source_interface": "PortChannel10"})
 

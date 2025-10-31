@@ -225,7 +225,7 @@ Vrf103  Ethernet4
         db.cfgdb.mod_entry("VLAN", vlan, {})
 
         # Enable has_sonic_dhcpv4_relay flag
-        db.cfgdb.set_entry("FEATURE", "dhcp_relay", {"has_sonic_dhcpv4_relay": "True"})
+        db.cfgdb.set_entry("DEVICE_METADATA", "localhost", {"has_sonic_dhcpv4_relay": "True"})
 
         db.cfgdb.set_entry("DHCPV4_RELAY", vlan, {
             "dhcpv4_servers": [server_ip],
