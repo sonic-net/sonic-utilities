@@ -36,7 +36,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "10.0.0.1"
+                    "ip": "10.0.0.1",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -45,7 +46,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "10.0.0.5"
+                    "ip": "10.0.0.5",
+                    "weight": "1"
                 }
             ],
             "prefix": "0.0.0.0/0",
@@ -178,7 +180,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "10.0.0.5"
+                    "ip": "10.0.0.5",
+                    "weight": "1"
                 }
             ],
             "prefix": "100.1.0.3/32",
@@ -206,7 +209,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "10.0.0.1"
+                    "ip": "10.0.0.1",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -215,7 +219,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "10.0.0.5"
+                    "ip": "10.0.0.5",
+                    "weight": "1"
                 }
             ],
             "prefix": "192.168.0.0/32",
@@ -243,7 +248,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "10.0.0.1"
+                    "ip": "10.0.0.1",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -252,7 +258,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "10.0.0.5"
+                    "ip": "10.0.0.5",
+                    "weight": "1"
                 }
             ],
             "prefix": "192.168.0.1/32",
@@ -280,7 +287,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel4001",
-                    "ip": "10.0.0.1"
+                    "ip": "10.0.0.1",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -289,7 +297,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "Ethernet-BP4",
-                    "ip": "10.0.0.5"
+                    "ip": "10.0.0.5",
+                    "weight": "1"
                 }
             ],
             "prefix": "192.168.0.192/32",
@@ -317,7 +326,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "10.0.0.1"
+                    "ip": "10.0.0.1",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -326,7 +336,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "10.0.0.5"
+                    "ip": "10.0.0.5",
+                    "weight": "1"
                 }
             ],
             "prefix": "192.168.0.193/32",
@@ -354,7 +365,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "10.0.0.1"
+                    "ip": "10.0.0.1",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -363,7 +375,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "10.0.0.5"
+                    "ip": "10.0.0.5",
+                    "weight": "1"
                 }
             ],
             "prefix": "192.168.0.208/32",
@@ -391,7 +404,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "10.0.0.1"
+                    "ip": "10.0.0.1",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -400,7 +414,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "10.0.0.5"
+                    "ip": "10.0.0.5",
+                    "weight": "1"
                 }
             ],
             "prefix": "192.168.0.209/32",
@@ -428,7 +443,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "10.0.0.1"
+                    "ip": "10.0.0.1",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -437,7 +453,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "10.0.0.5"
+                    "ip": "10.0.0.5",
+                    "weight": "1"
                 }
             ],
             "prefix": "192.168.0.224/32",
@@ -465,7 +482,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "10.0.0.1"
+                    "ip": "10.0.0.1",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -474,7 +492,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "10.0.0.5"
+                    "ip": "10.0.0.5",
+                    "weight": "1"
                 }
             ],
             "prefix": "192.168.0.225/32",
@@ -502,7 +521,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "10.0.0.1"
+                    "ip": "10.0.0.1",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -511,7 +531,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "10.0.0.5"
+                    "ip": "10.0.0.5",
+                    "weight": "1"
                 }
             ],
             "prefix": "192.168.0.240/32",
@@ -539,7 +560,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "10.0.0.1"
+                    "ip": "10.0.0.1",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -548,7 +570,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "10.0.0.5"
+                    "ip": "10.0.0.5",
+                    "weight": "1"
                 }
             ],
             "prefix": "192.168.0.241/32",
@@ -576,7 +599,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "10.0.0.1"
+                    "ip": "10.0.0.1",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -585,7 +609,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "10.0.0.5"
+                    "ip": "10.0.0.5",
+                    "weight": "1"
                 }
             ],
             "prefix": "192.168.0.32/32",
@@ -613,7 +638,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "Ethernet-BP0",
-                    "ip": "10.0.0.1"
+                    "ip": "10.0.0.1",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -622,7 +648,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "Ethernet-BP4",
-                    "ip": "10.0.0.5"
+                    "ip": "10.0.0.5",
+                    "weight": "1"
                 }
             ],
             "prefix": "192.168.0.96/32",
@@ -650,7 +677,8 @@
                     "flags": 3,
                     "interfaceIndex": 727,
                     "interfaceName": "PortChannel0002",
-                    "ip": "10.0.0.1"
+                    "ip": "10.0.0.1",
+                    "weight": "1"
                 },
                 {
                     "active": true,
@@ -659,7 +687,8 @@
                     "flags": 3,
                     "interfaceIndex": 728,
                     "interfaceName": "PortChannel0005",
-                    "ip": "10.0.0.5"
+                    "ip": "10.0.0.5",
+                    "weight": "1"
                 }
             ],
             "prefix": "192.168.0.97/32",
