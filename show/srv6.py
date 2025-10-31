@@ -81,7 +81,7 @@ def static_sids(sid):
     for entry in asic_data:
         # extract ASIC SID entry data
         _, _, json_str = entry.split(":", 2)
-        
+
         # Parse JSON part
         fields = json.loads(json_str)
         sid_ip = fields["sid"]
