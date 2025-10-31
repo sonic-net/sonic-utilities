@@ -14,9 +14,10 @@ def srv6():
     """Show SRv6 related information"""
     pass
 
+# `show srv6 locators`
 @srv6.command()
 @click.argument("locator", required=False)
-def my_locators():
+def locators():
     config_db = ConfigDBConnector()
     config_db.connect()
     data = config_db.get_table(CONFIG_DB_MY_LOCATORS_TABLE)
@@ -34,7 +35,8 @@ def my_locators():
         ])
     click.echo(tabulate(table, header))
         
-    
+
+# `show srv6 static-sids`
 @srv6.command()
 @click.argument('sid', required=False)
 def static_sids(sid):
