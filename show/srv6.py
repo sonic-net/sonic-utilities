@@ -80,13 +80,17 @@ def static_sids(sid):
     asic_sids = set()
     for entry in asic_data:
         # extract ASIC SID entry data
-        _, _, json_str = entry.split(":", 2)
+        try:
+            _, _, json_str = entry.split(":", 2)
+        except ValueError:
+            continue
 
         # Parse JSON part
         try:
             fields = json.loads(json_str)
         except json.JSONDecodeError:
             continue
+
         sid_ip = fields["sid"]
         block_len = int(fields["locator_block_len"])
         node_len = int(fields["locator_node_len"])

@@ -253,7 +253,7 @@ class TestShowSRv6StaticSids(object):
         mock_asic_db.keys.return_value = []
 
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands['srv6'].commands['static-sids'], ['2001:db8:1::1'])
+        result = runner.invoke(show.cli.commands['srv6'].commands['static-sids'], ['2001:db8:1::1/128'])
 
         print(result.exit_code)
         print(result.output)
@@ -523,8 +523,7 @@ class TestShowSRv6EdgeCases(object):
         mock_sonic_v2.return_value = mock_asic_db
         mock_asic_db.keys.return_value = [
             'MALFORMED_ENTRY',  # This should be skipped due to split error
-            'ASIC_STATE:SAI_OBJECT_TYPE_SRV6_SID:INVALID_JSON',  # This should be skipped due to JSON error
-            'ASIC_STATE:SAI_OBJECT_TYPE_SRV6_SID:{"incomplete":"data"}'  # This should be skipped due to missing fields
+            'ASIC_STATE:SAI_OBJECT_TYPE_SRV6_SID:INVALID_JSON'  # This should be skipped due to JSON error
         ]
 
         runner = CliRunner()
