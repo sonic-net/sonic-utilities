@@ -450,7 +450,7 @@ class TestChassisModules(object):
     def test_shutdown_smartswitch_module(self):
         with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
              mock.patch("config.chassis_modules.get_config_module_state", return_value='up'), \
-             mock.patch("config.chassis_modules.ModuleHelper.get_module_state_transition", return_value='False'):
+             mock.patch("config.chassis_modules.ModuleHelper.get_module_state_transition", return_value=False):
 
             runner = CliRunner()
             db = Db()
@@ -473,7 +473,7 @@ class TestChassisModules(object):
     def test_shutdown_smartswitch_transition_in_progress(self):
         with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
              mock.patch("config.chassis_modules.get_config_module_state", return_value='up'), \
-             mock.patch("config.chassis_modules.ModuleHelper.get_module_state_transition", return_value='True'):
+             mock.patch("config.chassis_modules.ModuleHelper.get_module_state_transition", return_value=True):
 
             runner = CliRunner()
             db = Db()
@@ -510,7 +510,7 @@ class TestChassisModules(object):
     def test_startup_smartswitch_module(self):
         with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
              mock.patch("config.chassis_modules.get_config_module_state", return_value='down'), \
-             mock.patch("config.chassis_modules.ModuleHelper.get_module_state_transition", return_value='False'):
+             mock.patch("config.chassis_modules.ModuleHelper.get_module_state_transition", return_value=False):
 
             runner = CliRunner()
             db = Db()
@@ -533,7 +533,7 @@ class TestChassisModules(object):
     def test_startup_smartswitch_transition_in_progress(self):
         with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
              mock.patch("config.chassis_modules.get_config_module_state", return_value='down'), \
-             mock.patch("config.chassis_modules.ModuleHelper.get_module_state_transition", return_value='True'):
+             mock.patch("config.chassis_modules.ModuleHelper.get_module_state_transition", return_value=True):
 
             runner = CliRunner()
             db = Db()

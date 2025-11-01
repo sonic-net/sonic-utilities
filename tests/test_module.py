@@ -200,8 +200,8 @@ class TestModuleHelper:
                                                           mock_try_get_args,
                                                           mock_try_get,
                                                           mock_log_error):
-        mock_try_get_args.return_value = 1
-        mock_try_get.return_value = False
+        # First call returns valid module index, second call returns False (operation failed)
+        mock_try_get_args.side_effect = [1, False]
         mock_module = mock.MagicMock()
         mock_module.set_module_state_transition.return_value = False
         module_helper.platform_chassis.get_module.return_value = mock_module
@@ -248,8 +248,8 @@ class TestModuleHelper:
                                                             mock_try_get_args,
                                                             mock_try_get,
                                                             mock_log_error):
-        mock_try_get_args.return_value = 1
-        mock_try_get.return_value = False
+        # First call returns valid module index, second call returns False (operation failed)
+        mock_try_get_args.side_effect = [1, False]
         mock_module = mock.MagicMock()
         mock_module.clear_module_state_transition.return_value = False
         module_helper.platform_chassis.get_module.return_value = mock_module
@@ -262,8 +262,8 @@ class TestModuleHelper:
                                                  mock_load_platform_chassis,
                                                  mock_try_get_args,
                                                  mock_try_get):
-        mock_try_get_args.return_value = 1
-        mock_try_get.return_value = True
+        # First call returns valid module index, second call returns True (operation result)
+        mock_try_get_args.side_effect = [1, True]
         mock_module = mock.MagicMock()
         mock_module.get_module_state_transition.return_value = True
         module_helper.platform_chassis.get_module.return_value = mock_module
