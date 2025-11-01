@@ -83,7 +83,10 @@ def static_sids(sid):
         _, _, json_str = entry.split(":", 2)
 
         # Parse JSON part
-        fields = json.loads(json_str)
+        try:
+            fields = json.loads(json_str)
+        except json.JSONDecodeError:
+            continue
         sid_ip = fields["sid"]
         block_len = int(fields["locator_block_len"])
         node_len = int(fields["locator_node_len"])
