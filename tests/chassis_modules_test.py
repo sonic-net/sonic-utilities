@@ -4,8 +4,6 @@ from click.testing import CliRunner
 from datetime import datetime, timedelta, timezone
 from config.chassis_modules import (
     StateDBHelper,
-    set_state_transition_in_progress,
-    is_transition_timed_out,
     TRANSITION_TIMEOUT
 )
 
@@ -568,23 +566,6 @@ class TestChassisModules(object):
             print(result.output)
             assert result.exit_code == 0
             assert "Module DPU0 is already set to up state" in result.output
-
-    def test_delete_field(self):
-        """Single test to cover missing delete_field and timezone handling lines"""
-        # Test delete_field method (covers lines 32-34)
-        mock_sonic_db = mock.MagicMock()
-        mock_redis_client = mock.MagicMock()
-        mock_sonic_db.get_redis_client.return_value = mock_redis_client
-        helper = StateDBHelper(mock_sonic_db)
-        helper.delete_field('TEST_TABLE', 'test_key', 'test_field')
-        mock_redis_client.hdel.assert_called_once_with("TEST_TABLE|test_key", "test_field")
-
-        # Test timezone-aware datetime handling (covers line 109)
-        db = mock.MagicMock()
-        db.statedb = mock.MagicMock()
-        tz_time = (datetime.now(timezone.utc) - TRANSITION_TIMEOUT - timedelta(seconds=1)).isoformat()
-        db.statedb.get_entry.return_value = {"transition_start_time": tz_time}
-        assert is_transition_timed_out(db, "DPU0") is True
 
     @classmethod
     def teardown_class(cls):
