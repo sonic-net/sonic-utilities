@@ -902,6 +902,28 @@ class DBMigrator():
             if keys:
                 self.configDB.delete(self.configDB.CONFIG_DB, authorization_key)
 
+    def migrate_ipinip_tunnel_ecn_mode_mellanox(self):
+        """
+        Migrate IPINIP_TUNNEL ecn mode to copy_from_outer.
+
+        Prior to 202505, on Mellanox platform, the ecn mode of IPINIP tunnel was set to standard.
+        """
+
+        table_name = 'TUNNEL_DECAP_TABLE'
+        keys_to_migrate = [
+            'IPINIP_SUBNET',
+            'IPINIP_TUNNEL',
+            'IPINIP_SUBNET_V6',
+            'IPINIP_V6_TUNNEL'
+        ]
+
+        table = self.appDB.get_table(table_name)
+        for k, v in table.items():
+            if k in keys_to_migrate:
+                log.log_info(f"Migrating {k}, ecn mode: {v.get('ecn_mode')} -> copy_from_outer")
+                v['ecn_mode'] = 'copy_from_outer'
+                self.appDB.set_entry(table_name, k, v)
+
     def version_unknown(self):
         """
         version_unknown tracks all SONiC versions that doesn't have a version
@@ -1313,6 +1335,9 @@ class DBMigrator():
         """
         log.log_info('Handling version_202505_01')
         self.migrate_flex_counter_delay_status_removal()
+
+        if self.asic_type == "mellanox":
+            self.migrate_ipinip_tunnel_ecn_mode_mellanox()
         return None
 
     def get_version(self):
