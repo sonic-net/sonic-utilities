@@ -220,14 +220,14 @@ function reboot_dpu()
 
     if [[ "$REBOOT_TYPE" != $MODULE_REBOOT_SMARTSWITCH ]]; then
         # get and set the state_transition_in_progress flag before reboot
-        if not get_module_state_transition_flag "${DPU_NAME}"; then
+        if ! get_module_state_transition_flag "${DPU_NAME}"; then
             set_module_state_transition_flag "${DPU_NAME}" true
         else
             log_message "ERROR: state_transition_in_progress flag is already set for ${DPU_NAME}"
             return ${EXIT_ERROR}
         fi
     fi
-        
+   
     # Send reboot command to DPU
     gnmi_reboot_dpu "${DPU_NAME}"
     if [ $? -ne 0 ]; then

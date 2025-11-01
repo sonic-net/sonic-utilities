@@ -150,7 +150,7 @@ class ModuleHelper:
         module_index = self.try_get_args(self.platform_chassis.get_module_index, module_name,
                                          default=INVALID_MODULE_INDEX)
         if module_index < 0:
-            log.log_error("Unable to get module-index for {}". format(module_name))
+            log.log_error("Unable to get module-index for {}".format(module_name))
             return False
 
         if not hasattr(self.platform_chassis.get_module(module_index), 'set_module_state_transition'):
@@ -159,8 +159,9 @@ class ModuleHelper:
 
         log.log_info("Setting state_transition_in_progress flag for module {} to {}...".format(module_name, flag_value))
         # Map boolean flag_value to appropriate transition type
-        transition_type = "reboot" if flag_value else "shutdown"  # Use reboot as default transition type when setting flag to True
-        status = self.try_get_args(self.platform_chassis.get_module(module_index).set_module_state_transition, module_name, transition_type, default=False)
+        transition_type = "reboot" if flag_value else "shutdown"
+        status = self.try_get_args(self.platform_chassis.get_module(module_index).set_module_state_transition,
+                                   module_name, transition_type, default=False)
         if not status:
             log.log_error("Set module state transition flag status for module {}: {}".format(module_name, status))
             return False
@@ -180,7 +181,7 @@ class ModuleHelper:
         module_index = self.try_get_args(self.platform_chassis.get_module_index, module_name,
                                          default=INVALID_MODULE_INDEX)
         if module_index < 0:
-            log.log_error("Unable to get module-index for {}". format(module_name))
+            log.log_error("Unable to get module-index for {}".format(module_name))
             return False
 
         if not hasattr(self.platform_chassis.get_module(module_index), 'clear_module_state_transition'):
@@ -188,7 +189,8 @@ class ModuleHelper:
             return False
 
         log.log_info("Clearing state_transition_in_progress flag for module {}...".format(module_name))
-        status = self.try_get_args(self.platform_chassis.get_module(module_index).clear_module_state_transition, module_name, default=False)
+        status = self.try_get_args(self.platform_chassis.get_module(module_index).clear_module_state_transition,
+                                   module_name, default=False)
         if not status:
             log.log_error("Clear module state transition flag status for module {}: {}".format(module_name, status))
             return False
@@ -208,7 +210,7 @@ class ModuleHelper:
         module_index = self.try_get_args(self.platform_chassis.get_module_index, module_name,
                                          default=INVALID_MODULE_INDEX)
         if module_index < 0:
-            log.log_error("Unable to get module-index for {}". format(module_name))
+            log.log_error("Unable to get module-index for {}".format(module_name))
             return False
 
         if not hasattr(self.platform_chassis.get_module(module_index), 'get_module_state_transition'):
@@ -216,4 +218,5 @@ class ModuleHelper:
             return False
 
         log.log_info("Getting state_transition_in_progress flag for module {}...".format(module_name))
-        return self.try_get_args(self.platform_chassis.get_module(module_index).get_module_state_transition, module_name, default=False)
+        return self.try_get_args(self.platform_chassis.get_module(module_index).get_module_state_transition,
+                                 module_name, default=False)
