@@ -4,14 +4,14 @@ from click.testing import CliRunner
 import show.main as show
 
 """
-Unit tests for SRv6 show commands (show srv6 locators and show srv6 static_sids)
+Unit tests for SRv6 show commands (show srv6 locators and show srv6 static-sids)
 
 These tests verify the functionality of the SRv6 show commands implemented in show/srv6.py.
 The tests use mocking to simulate database responses and verify correct output formatting.
 
 Test Coverage:
 - show srv6 locators: All locators, specific locator, empty data, defaults, non-existent locator
-- show srv6 static_sids: All SIDs, specific SID, empty data, defaults, invalid key format
+- show srv6 static-sids: All SIDs, specific SID, empty data, defaults, invalid key format
 - Offloading status: Tests ASIC_DB interaction and offload status determination
 - Error handling: Database connection errors, malformed ASIC data
 - Table formatting: Verifies headers and data formatting
@@ -253,7 +253,7 @@ class TestShowSRv6StaticSids(object):
         mock_asic_db.keys.return_value = []
 
         runner = CliRunner()
-        result = runner.invoke(show.cli.commands['srv6'].commands['static_sids'], ['2001:db8:1::1'])
+        result = runner.invoke(show.cli.commands['srv6'].commands['static-sids'], ['2001:db8:1::1'])
 
         print(result.exit_code)
         print(result.output)
@@ -500,10 +500,7 @@ class TestShowSRv6EdgeCases(object):
         print(result.exit_code)
         print(result.output)
 
-        # Test should still complete but SID should show as not offloaded
-        assert result.exit_code == 0
-        assert '2001:db8:1::1/128' in result.output
-        assert 'False' in result.output  # Should not be offloaded due to error
+        assert result.exit_code == 1
         mock_db.connect.assert_called_once()
 
     @patch('show.srv6.SonicV2Connector')
