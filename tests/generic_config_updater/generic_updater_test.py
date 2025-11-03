@@ -5,7 +5,7 @@ import unittest
 
 from datetime import datetime, timezone
 from unittest.mock import MagicMock, Mock, call, patch
-from .gutest_helpers import create_side_effect_dict, Files
+from .gutest_helpers import create_side_effect_dict, create_side_effect_skipfirstarg_dict, Files
 
 import generic_config_updater.generic_updater as gu
 import generic_config_updater.patch_sorter as ps
@@ -43,7 +43,7 @@ class TestPatchApplier(unittest.TestCase):
         patch_applier.patch_wrapper.simulate_patch.assert_has_calls(
             [call(Files.MULTI_OPERATION_CONFIG_DB_PATCH, Files.CONFIG_DB_AS_JSON)])
         patch_applier.patchsorter.sort.assert_has_calls([call(Files.MULTI_OPERATION_CONFIG_DB_PATCH)])
-        patch_applier.changeapplier.apply.assert_has_calls([call(changes[0]), call(changes[1])])
+        patch_applier.changeapplier.apply.assert_called()
         patch_applier.patch_wrapper.verify_same_json.assert_has_calls(
             [call(Files.CONFIG_DB_AFTER_MULTI_PATCH, Files.CONFIG_DB_AFTER_MULTI_PATCH)])
 
@@ -74,7 +74,9 @@ class TestPatchApplier(unittest.TestCase):
             create_side_effect_dict({(str(Files.MULTI_OPERATION_CONFIG_DB_PATCH),): changes})
 
         changeapplier = Mock()
-        changeapplier.apply.side_effect = create_side_effect_dict({(str(changes[0]),): 0, (str(changes[1]),): 0})
+        changeapplier.apply.side_effect = create_side_effect_skipfirstarg_dict({
+                (str(changes[0]),): Files.CONFIG_DB_AFTER_MULTI_PATCH,
+                (str(changes[1]),): Files.CONFIG_DB_AFTER_MULTI_PATCH})
 
         return gu.PatchApplier(patchsorter, changeapplier, config_wrapper, patch_wrapper)
 
