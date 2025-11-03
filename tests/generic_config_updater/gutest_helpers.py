@@ -5,6 +5,7 @@ import shutil
 import sys
 import unittest
 from unittest.mock import MagicMock, Mock, call
+from generic_config_updater.patch_sorter import JsonMoveGroup
 
 class MockSideEffectDict:
     def __init__(self, map):
@@ -19,8 +20,52 @@ class MockSideEffectDict:
 
         return value
 
+    def side_effect_skiplastarg_func(self, *args):
+        arglist = [str(args[i]) for i in range(len(args)-1)]
+        key = tuple(arglist)
+        value = self.map.get(key)
+        if value is None:
+            raise ValueError(f"Given arguments were not found in arguments map.\n  Arguments: {key}\n  Map: {self.map}")
+
+        return value
+
+    def side_effect_skipfirstarg_func(self, *args):
+        arglist = [str(args[i+1]) for i in range(len(args)-1)]
+        key = tuple(arglist)
+        value = self.map.get(key)
+        if value is None:
+            raise ValueError(f"Given arguments were not found in arguments map.\n  Arguments: {key}\n  Map: {self.map}")
+
+        return value
+
+    def side_effect_jsonmovegroup_func(self, *args):
+        arglist = [str(arg) for arg in args]
+        key = tuple(arglist)
+        value = self.map.get(key)
+        if value is None:
+            raise ValueError(f"Given arguments were not found in arguments map.\n  Arguments: {key}\n  Map: {self.map}")
+
+        rv = []
+        for val in value:
+            rv.append(JsonMoveGroup(val))
+        return rv
+
+
 def create_side_effect_dict(map):
     return MockSideEffectDict(map).side_effect_func
+
+
+def create_side_effect_skiplastarg_dict(map):
+    return MockSideEffectDict(map).side_effect_skiplastarg_func
+
+
+def create_side_effect_skipfirstarg_dict(map):
+    return MockSideEffectDict(map).side_effect_skipfirstarg_func
+
+
+def create_side_effect_jsonmovegroup_dict(map):
+    return MockSideEffectDict(map).side_effect_jsonmovegroup_func
+
 
 class FilesLoader:
     def __init__(self):
