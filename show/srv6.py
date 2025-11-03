@@ -51,12 +51,18 @@ def get_locators(namespace, locator):
 # `show srv6 locators`
 @srv6.command()
 @click.argument("locator", required=False)
-def locators(locator):
+@multi_asic_util.multi_asic_click_options
+def locators(locator, namespace, display):
     header = ["Locator", "Prefix", "Block Len", "Node Len", "Func Len"]
     table = []
-    for ns in multi_asic.get_all_namespaces():
-        ns_table = get_locators(ns, locator)
+    if multi_asic.is_multi_asic() and not namespace:
+        namespaces = multi_asic.get_all_namespaces()
+        for ns in namespaces:
+            ns_table = get_locators(ns, locator)
         table.extend(ns_table)
+    else:
+        # default or single namespace
+        table = get_locators(namespace, locator)
     click.echo(tabulate(table, header))
 
 
@@ -129,14 +135,14 @@ def static_sids(sid, namespace, display):
     # format and print the sid dictionaries
     header = ["SID", "Locator", "Action", "Decap DSCP Mode", "Decap VRF", "Offloaded"]
     table = []
-    if namespace:
-        # single namespace
-        table = get_static_sids(namespace, sid)
-    else:
+    if multi_asic.is_multi_asic() and not namespace:
         namespaces = multi_asic.get_all_namespaces()
         for ns in namespaces:
             ns_table = get_static_sids(ns, sid)
             table.extend(ns_table)
+    else:
+        # default or single namespace
+        table = get_static_sids(namespace, sid)
     
     click.echo(tabulate(table, header))
 
