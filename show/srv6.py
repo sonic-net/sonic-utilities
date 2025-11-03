@@ -56,7 +56,7 @@ def locators(locator, namespace, display):
     header = ["Locator", "Prefix", "Block Len", "Node Len", "Func Len"]
     table = []
     if multi_asic.is_multi_asic() and not namespace:
-        namespaces = multi_asic.get_all_namespaces()
+        namespaces = multi_asic.get_namespace_list()
         for ns in namespaces:
             ns_table = get_locators(ns, locator)
             table.extend(ns_table)
@@ -136,7 +136,7 @@ def static_sids(sid, namespace, display):
     header = ["SID", "Locator", "Action", "Decap DSCP Mode", "Decap VRF", "Offloaded"]
     table = []
     if multi_asic.is_multi_asic() and not namespace:
-        namespaces = multi_asic.get_all_namespaces()
+        namespaces = multi_asic.get_namespace_list()
         for ns in namespaces:
             ns_table = get_static_sids(ns, sid)
             table.extend(ns_table)
