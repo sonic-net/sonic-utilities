@@ -59,7 +59,7 @@ def locators(locator, namespace, display):
         namespaces = multi_asic.get_all_namespaces()
         for ns in namespaces:
             ns_table = get_locators(ns, locator)
-        table.extend(ns_table)
+            table.extend(ns_table)
     else:
         # default or single namespace
         table = get_locators(namespace, locator)
