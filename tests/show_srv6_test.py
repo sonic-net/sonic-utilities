@@ -430,7 +430,7 @@ class TestShowSRv6StaticSids(object):
         assert '2001:db8:1::1/128' in result.output
         assert 'Locator1' in result.output
         # Invalid key should not appear
-        assert 'InvalidKey' not in result.output
+        assert f"Warning: SID entry InvalidKey is malformed" in result.output
         mock_db.connect.assert_called_once()
 
     def teardown_method(self):
