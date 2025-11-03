@@ -1,6 +1,8 @@
 import click
 import json
 import utilities_common.cli as clicommon
+import utilities_common.multi_asic as multi_asic_util
+from sonic_py_common import multi_asic
 from swsscommon.swsscommon import ConfigDBConnector, SonicV2Connector
 from natsort import natsorted
 from tabulate import tabulate
@@ -15,15 +17,11 @@ def srv6():
     pass
 
 
-# `show srv6 locators`
-@srv6.command()
-@click.argument("locator", required=False)
-def locators(locator):
-    config_db = ConfigDBConnector()
+def get_locators(namespace, locator):
+    config_db = ConfigDBConnector(namespace=namespace)
     config_db.connect()
     data = config_db.get_table(CONFIG_DB_MY_LOCATORS_TABLE)
 
-    header = ["Locator", "Prefix", "Block Len", "Node Len", "Func Len"]
     table = []
     if locator:
         # filter to show only the requested locator
@@ -47,14 +45,23 @@ def locators(locator):
                 entry.get("node_len", 16),
                 entry.get("func_len", 16)
             ])
+    return table
+
+
+# `show srv6 locators`
+@srv6.command()
+@click.argument("locator", required=False)
+def locators(locator):
+    header = ["Locator", "Prefix", "Block Len", "Node Len", "Func Len"]
+    table = []
+    for ns in multi_asic.get_all_namespaces():
+        ns_table = get_locators(ns, locator)
+        table.extend(ns_table)
     click.echo(tabulate(table, header))
 
 
-# `show srv6 static-sids`
-@srv6.command()
-@click.argument('sid', required=False)
-def static_sids(sid):
-    config_db = ConfigDBConnector()
+def get_static_sids(namespace, sid):
+    config_db = ConfigDBConnector(namespace=namespace)
     config_db.connect()
     data = config_db.get_table(CONFIG_DB_MY_SID_TABLE)
 
@@ -74,7 +81,7 @@ def static_sids(sid):
         sid_dict[sid_prefix] = v
 
     # query ASIC_DB to check whether the SID is offloaded to the ASIC
-    db = SonicV2Connector(host="localhost")
+    db = SonicV2Connector(namespace=namespace)
     db.connect(db.ASIC_DB)
     asic_data = db.keys(db.ASIC_DB, "*SID*")
     asic_sids = set()
@@ -97,9 +104,7 @@ def static_sids(sid):
         func_len = int(fields["function_len"])
         sid_prefix = sid_ip + f"/{block_len + node_len + func_len}"
         asic_sids.add(sid_prefix)
-
-    # format and print the sid dictionaries
-    header = ["SID", "Locator", "Action", "Decap DSCP Mode", "Decap VRF", "Offloaded"]
+    
     table = []
     for sid_prefix in natsorted(sid_dict.keys()):
         entry = sid_dict[sid_prefix]
@@ -111,6 +116,27 @@ def static_sids(sid):
             entry.get("decap_vrf", "N/A"),
             True if sid_prefix in asic_sids else False
         ])
+    return table
+
+
+# `show srv6 static-sids`
+@srv6.command()
+@click.argument('sid', required=False)
+@multi_asic_util.multi_asic_click_options
+def static_sids(sid, namespace, display):
+    """Show SRv6 static SIDs"""
+    # format and print the sid dictionaries
+    header = ["SID", "Locator", "Action", "Decap DSCP Mode", "Decap VRF", "Offloaded"]
+    table = []
+    if namespace:
+        # single namespace
+        table = get_static_sids(namespace, sid)
+    else:
+        namespaces = multi_asic.get_all_namespaces()
+        for ns in namespaces:
+            ns_table = get_static_sids(ns, sid)
+            table.extend(ns_table)
+    
     click.echo(tabulate(table, header))
 
 
