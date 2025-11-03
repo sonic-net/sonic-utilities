@@ -73,6 +73,7 @@ def get_static_sids(namespace, sid):
             continue
         if len(k) < 2:
             # skip SIDs that does not have locators
+            click.echo(f"Warning: SID entry {k} is malformed", err=True)
             continue
 
         loc = k[0]
