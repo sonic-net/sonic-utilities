@@ -2875,5 +2875,441 @@ def banner(db):
 helper = util_base.UtilHelper()
 helper.load_and_register_plugins(plugins, cli)
 
+
+@cli.group(cls=clicommon.AliasedGroup)
+def igmp_snooping():
+    """Show igmp-snooping related information"""
+    pass
+
+@igmp_snooping.command('vlan')
+@click.argument('vlan-id', required=True)
+def igmp_snooping_vlan(vlan_id):
+    """ IGMP snooping vlan <vlan-id>"""
+
+    app_mrouter_dict = {}
+    igmp_snooping_fvs = {
+            'enabled' : 'true',
+            'querier' : 'false',
+            'version' : '2',
+            'fast-leave': 'false',
+            'query-interval':'125',
+            'query-max-response-time': '10',
+            'last-member-query-interval': '1000',
+            'optimised-multicast-flood' : 'false',
+            'link-local-groups-suppression' : 'false',
+            }
+
+    config_db = ConfigDBConnector()
+    config_db.connect()
+
+    cfg_l2mc_table = config_db.get_table('L2MC')
+    if not cfg_l2mc_table:
+        return
+
+    app_db = SonicV2Connector(host='127.0.0.1')
+    app_db.connect(app_db.APPL_DB) 
+    app_l2mc_mrouter_keys = app_db.keys(app_db.APPL_DB, 'L2MC_MROUTER_TABLE:*')
+
+    if app_l2mc_mrouter_keys:
+
+        for key in app_l2mc_mrouter_keys:
+            list_items = key.split(':')
+
+            mrouter_vlan_id = str(list_items[1].strip("Vlan"))
+            mrouter_interface = list_items[2]
+
+            if mrouter_vlan_id in app_mrouter_dict:
+                app_mrouter_dict [str(mrouter_vlan_id)].append(mrouter_interface)
+            else:
+                app_mrouter_dict [str(mrouter_vlan_id)] = [mrouter_interface]
+
+        #click.echo ("APP_DB: {}".format(app_mrouter_dict))
+
+    cfg_l2mc_sorted_table = natsorted(cfg_l2mc_table)
+
+    key = "Vlan"+str(vlan_id)
+    data = config_db.get_entry('L2MC', key)
+    app_l2mc_supress_key = "L2MC_SUPPRESS_TABLE:Vlan" + str(vlan_id)
+
+    if not data:
+        return
+
+    querier_status = data.get('querier')
+    if not querier_status:
+        querier_status = igmp_snooping_fvs['querier']
+
+    operation_mode = data.get('version')
+    if not operation_mode:
+        operation_mode = igmp_snooping_fvs['version']
+
+    fast_leave = data.get('fast-leave')
+    if not fast_leave:
+        fast_leave = igmp_snooping_fvs['fast-leave']
+
+    if fast_leave == 'false':
+        fast_leave_status = 'Disabled'
+    else:
+        fast_leave_status = 'Enabled'
+
+    max_response_time = data.get('query-max-response-time')
+    if not max_response_time:
+        max_response_time = igmp_snooping_fvs['query-max-response-time']
+
+    last_member_query_interval = data.get('last-member-query-interval')
+    if not last_member_query_interval:
+        last_member_query_interval = igmp_snooping_fvs['last-member-query-interval']
+
+    query_interval = data.get('query-interval')
+    if not query_interval:
+        query_interval = igmp_snooping_fvs['query-interval']
+
+    optimised_multicast_flood = app_db.get(app_db.APPL_DB, app_l2mc_supress_key, 'optimised-multicast-flood')
+    if not optimised_multicast_flood:
+        optimised_multicast_flood = igmp_snooping_fvs['optimised-multicast-flood']
+    else :
+        if optimised_multicast_flood == 'enable':
+            optimised_multicast_flood = 'true'
+        else:
+            optimised_multicast_flood = 'false'
+    
+    link_local_groups_suppression = app_db.get(app_db.APPL_DB, app_l2mc_supress_key, 'link-local-groups-suppression')
+    if not link_local_groups_suppression:
+        link_local_groups_suppression = igmp_snooping_fvs['link-local-groups-suppression']
+    else :
+        if link_local_groups_suppression == 'enable':
+            link_local_groups_suppression = 'true'
+        else:
+            link_local_groups_suppression = 'false'
+
+
+    click.echo("\nVlan ID: " + vlan_id)
+    app_memb_intf_string = ""
+    if len(app_mrouter_dict) != 0:
+        if vlan_id in app_mrouter_dict:
+            for memb_intf in app_mrouter_dict[str(vlan_id)]:
+                #print comma in between
+                if app_memb_intf_string == "":
+                    app_memb_intf_string = memb_intf
+                else:
+                    app_memb_intf_string = app_memb_intf_string + ", " + memb_intf
+    click.echo("Multicast Router ports: " + app_memb_intf_string)
+    click.echo("Querier - " + querier_status)
+    click.echo("IGMP Operation mode: IGMPv" + operation_mode)
+    click.echo("Is Fast-Leave Enabled: " + fast_leave_status)
+    click.echo("Max Response time = " + max_response_time)
+    click.echo("Query Interval = " + query_interval)
+    click.echo("Last Member Query Interval = " + last_member_query_interval )
+    click.echo("Optimised Multicast Flood = " + optimised_multicast_flood )
+    click.echo("Link Local Groups Suppression = " + link_local_groups_suppression + "\n")
+
+    return
+
+@igmp_snooping.command('all')
+def igmp_snooping_vlan():
+    """ IGMP snooping all"""
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    vlan_dict = {}
+
+    l2mc_keys = config_db.get_keys('L2MC')
+    if not l2mc_keys:
+        return
+
+    for key in l2mc_keys:
+        vlan_id = str(key.strip("Vlan"))
+        if vlan_id in vlan_dict:
+            vlan_dict[vlan_id].append(vlan_id)
+        else:
+            vlan_dict[vlan_id] = [vlan_id]
+    
+    for vlan_id in natsorted(vlan_dict):
+        app_mrouter_dict = {}
+        igmp_snooping_fvs = { 
+                'enabled' : 'true', 
+                'querier' : 'false', 
+                'version' : '2', 
+                'fast-leave': 'false', 
+                'query-interval':'125', 
+                'query-max-response-time': '10', 
+                'last-member-query-interval': '1000', 
+                'optimised-multicast-flood' : 'false',
+                'link-local-groups-suppression' : 'false',
+                }  
+     
+        app_db = SonicV2Connector(host='127.0.0.1') 
+        app_db.connect(app_db.APPL_DB)  
+        app_l2mc_mrouter_keys = app_db.keys(app_db.APPL_DB, 'L2MC_MROUTER_TABLE:*') 
+     
+        if app_l2mc_mrouter_keys: 
+     
+            for key in app_l2mc_mrouter_keys: 
+                list_items = key.split(':') 
+     
+                mrouter_vlan_id = str(list_items[1].strip("Vlan")) 
+                mrouter_interface = list_items[2] 
+     
+                if mrouter_vlan_id in app_mrouter_dict: 
+                    app_mrouter_dict [str(mrouter_vlan_id)].append(mrouter_interface) 
+                else: 
+                    app_mrouter_dict [str(mrouter_vlan_id)] = [mrouter_interface] 
+     
+            #click.echo ("APP_DB: {}".format(app_mrouter_dict)) 
+     
+        key = "Vlan"+str(vlan_id) 
+        data = config_db.get_entry('L2MC', key) 
+        app_l2mc_supress_key = "L2MC_SUPPRESS_TABLE:Vlan" + str(vlan_id)
+
+     
+        if not data: 
+            return 
+     
+        querier_status = data.get('querier') 
+        if not querier_status: 
+            querier_status = igmp_snooping_fvs['querier'] 
+     
+        operation_mode = data.get('version') 
+        if not operation_mode: 
+            operation_mode = igmp_snooping_fvs['version'] 
+     
+        fast_leave = data.get('fast-leave') 
+        if not fast_leave: 
+            fast_leave = igmp_snooping_fvs['fast-leave'] 
+     
+        if fast_leave == 'false': 
+            fast_leave_status = 'Disabled' 
+        else: 
+            fast_leave_status = 'Enabled' 
+     
+        max_response_time = data.get('query-max-response-time') 
+        if not max_response_time: 
+            max_response_time = igmp_snooping_fvs['query-max-response-time'] 
+     
+        last_member_query_interval = data.get('last-member-query-interval') 
+        if not last_member_query_interval: 
+            last_member_query_interval = igmp_snooping_fvs['last-member-query-interval'] 
+     
+        query_interval = data.get('query-interval') 
+        if not query_interval: 
+            query_interval = igmp_snooping_fvs['query-interval'] 
+
+        optimised_multicast_flood = app_db.get(app_db.APPL_DB, app_l2mc_supress_key, 'optimised-multicast-flood')
+
+        if not optimised_multicast_flood:
+            optimised_multicast_flood = igmp_snooping_fvs['optimised-multicast-flood']
+        else :
+            if optimised_multicast_flood == 'enable':
+                optimised_multicast_flood = 'true'
+            else:
+                optimised_multicast_flood = 'false'
+        
+
+        link_local_groups_suppression = app_db.get(app_db.APPL_DB, app_l2mc_supress_key, 'link-local-groups-suppression')
+        if not link_local_groups_suppression:
+            link_local_groups_suppression = igmp_snooping_fvs['link-local-groups-suppression']
+        else :
+            if link_local_groups_suppression == 'enable':
+                link_local_groups_suppression = 'true'
+            else:
+                link_local_groups_suppression = 'false'
+     
+        click.echo("\nVlan ID: " + vlan_id) 
+        app_memb_intf_string = "" 
+        if len(app_mrouter_dict) != 0: 
+            if vlan_id in app_mrouter_dict: 
+                for memb_intf in app_mrouter_dict[str(vlan_id)]: 
+                    #print comma in between 
+                    if app_memb_intf_string == "": 
+                        app_memb_intf_string = memb_intf 
+                    else: 
+                        app_memb_intf_string = app_memb_intf_string + ", " + memb_intf 
+        click.echo("Multicast Router ports: " + app_memb_intf_string) 
+        click.echo("Querier - " + querier_status) 
+        click.echo("IGMP Operation mode: IGMPv" + operation_mode) 
+        click.echo("Is Fast-Leave Enabled: " + fast_leave_status) 
+        click.echo("Max Response time = " + max_response_time) 
+        click.echo("Query Interval = " + query_interval) 
+        click.echo("Last Member Query Interval = " + last_member_query_interval )
+        click.echo("Optimised Multicast Flood = " + optimised_multicast_flood )
+        click.echo("Link Local Groups Suppression = " + link_local_groups_suppression + "\n")
+    click.echo("Total number of entries:  " + str(len(l2mc_keys))+"\n")
+
+#
+# 'groups' group ("show igmp_snooping igmp_snooping_groups")
+#
+@igmp_snooping.group('groups')
+@click.pass_context
+def igmp_snooping_groups(ctx):
+    """Show IP IGMP snooping information"""
+    pass
+
+@igmp_snooping_groups.command('all')
+def igmp_snooping_groups_all():
+    """ IGMP snooping groups all """
+    app_db = SonicV2Connector(host='127.0.0.1')
+    app_db.connect(app_db.APPL_DB) 
+
+    vlan_dict = {}
+    member_type_dict = {}
+    member_table_dict = {}
+    mrouter_type_dict = {}
+    mrouter_table_dict = {}
+
+    vlan_table_keys = app_db.keys(app_db.APPL_DB, 'L2MC_VLAN_TABLE:*')
+
+    member_table_keys = app_db.keys(app_db.APPL_DB, 'L2MC_MEMBER_TABLE:*')
+    mrouter_table_keys = app_db.keys(app_db.APPL_DB, 'L2MC_MROUTER_TABLE:*')
+
+    for key in vlan_table_keys:
+        list_items = key.split(':')
+        vlan_id = str(list_items[1].strip("Vlan"))
+        if vlan_id in vlan_dict:
+            vlan_dict[vlan_id].append(vlan_id)
+        else:
+            vlan_dict[vlan_id] = [vlan_id]
+    
+    for key in member_table_keys:
+        list_items = key.split(':')
+
+        vlan_id = str(list_items[1].strip("Vlan"))
+        source = list_items[2]
+        group = list_items[3]
+        member = list_items[4]
+        member_type = app_db.get(app_db.APPL_DB, key, 'type')
+
+        if (vlan_id,source,group) in member_table_dict:
+            member_table_dict[(vlan_id,source,group)].append(member)
+        else:
+            member_table_dict[(vlan_id,source,group)] = [member]
+        member_type_dict[(vlan_id,source,group,member)] = [member_type]
+
+    for key in mrouter_table_keys:
+        list_items = key.split(':')
+
+        vlan_id = str(list_items[1].strip("Vlan"))
+        member = list_items[2]
+        mrouter_type = app_db.get(app_db.APPL_DB, key, 'type')
+
+        if (vlan_id) in mrouter_table_dict:
+            mrouter_table_dict[(vlan_id)].append(member)
+        else:
+            mrouter_table_dict[(vlan_id)] = [member]
+        mrouter_type_dict[vlan_id,member] = [mrouter_type]
+
+    for vlan_iter in natsorted(vlan_dict):
+        click.echo("\nVlan ID : " + vlan_iter)
+        click.echo("--------------")
+        count = 0
+        for v in natsorted(mrouter_table_dict):
+            if v == vlan_iter:
+                mrout_intf_string = ""
+                mrouter_type_string = ""
+                click.echo("Mrouters Ports: " )
+                for mrout_intf in mrouter_table_dict[(v)]:
+                    mrout_intf_string = mrout_intf
+                    for mrouter_type in mrouter_type_dict[(v,mrout_intf)]:
+                        mrouter_type_string = mrouter_type
+                        click.echo("  " + mrout_intf_string + "(" + mrouter_type_string + ")")
+                
+        for v,s,g in natsorted(member_table_dict):
+
+            if v == vlan_iter:
+                count += 1
+                s_entry = s
+                if s == "0.0.0.0":
+                    s_entry = "*"
+                click.echo(str(count) + " " + "(" + s_entry + ", " + g + ")")
+                click.echo("  Members Ports: ")
+                memb_intf_string = ""
+                member_type_string = ""
+                for memb_intf in member_table_dict[(v,s,g)]:
+                    memb_intf_string = memb_intf
+                    for member_type in member_type_dict[(v,s,g,memb_intf)]:
+                        member_type_string = member_type
+                        click.echo("    " + memb_intf_string + "(" + member_type_string + ")")
+        click.echo("Total number of entries: "+str(count)+"\n")
+
+    return
+
+@igmp_snooping_groups.command('vlan')
+@click.argument('vlan-id', required=True)
+def igmp_snooping_groups_vlan(vlan_id):
+    """ IGMP snooping groups vlan <vlan-id>"""
+    app_db = SonicV2Connector(host='127.0.0.1')
+    app_db.connect(app_db.APPL_DB) 
+
+    member_type_dict = {}
+    member_table_dict = {}
+    mrouter_type_dict = {}
+    mrouter_table_dict = {}
+
+    vlan_table_keys = app_db.keys(app_db.APPL_DB, 'L2MC_VLAN_TABLE:*')
+
+    member_table_keys = app_db.keys(app_db.APPL_DB, 'L2MC_MEMBER_TABLE:*')
+    mrouter_table_keys = app_db.keys(app_db.APPL_DB, 'L2MC_MROUTER_TABLE:*') 
+    
+    for key in member_table_keys:
+        list_items = key.split(':')
+
+        vlan_id_val = str(list_items[1].strip("Vlan"))
+        if vlan_id_val != vlan_id:
+            continue
+
+        source = list_items[2]
+        group = list_items[3]
+        member = list_items[4]
+        member_type = app_db.get(app_db.APPL_DB, key, 'type')
+
+        if (vlan_id,source,group) in member_table_dict:
+            member_table_dict[(vlan_id,source,group)].append(member)
+        else:
+            member_table_dict[(vlan_id,source,group)] = [member]
+        member_type_dict[(vlan_id,source,group,member)] = [member_type]
+    
+    for key in mrouter_table_keys:
+        list_items = key.split(':')
+
+        vlan_id_val = str(list_items[1].strip("Vlan"))
+        if vlan_id_val != vlan_id:
+            continue
+        member = list_items[2]
+        mrouter_type = app_db.get(app_db.APPL_DB, key, 'type')
+
+        if (vlan_id) in mrouter_table_dict:
+            mrouter_table_dict[(vlan_id)].append(member)
+        else:
+            mrouter_table_dict[(vlan_id)] = [member]
+        mrouter_type_dict[(vlan_id,member)] = [mrouter_type]
+
+    click.echo("\nVlan ID : " + vlan_id)
+    click.echo("--------------")
+    for v in natsorted(mrouter_table_dict):
+        mrout_intf_string = ""
+        mrouter_type_string = ""
+        click.echo("Mrouters Ports: " )
+        for mrout_intf in mrouter_table_dict[(v)]:
+            mrout_intf_string = mrout_intf
+            for mrouter_type in mrouter_type_dict[(v,mrout_intf)]:
+                mrouter_type_string = mrouter_type
+                click.echo("  " + mrout_intf_string + "(" + mrouter_type_string + ")" )
+    
+    count = 0
+    for v,s,g in natsorted(member_table_dict):
+        count += 1
+        s_entry = s
+        if s == "0.0.0.0":
+            s_entry = "*"
+        click.echo(str(count) + " " + "(" + s_entry + ", " + g + ")")
+        click.echo("  Members Ports: ")
+        memb_intf_string = ""
+        member_type_string = ""
+        for memb_intf in member_table_dict[(v,s,g)]:
+            memb_intf_string = memb_intf
+            for member_type in member_type_dict[(v,s,g,memb_intf)]:
+                member_type_string = member_type
+                click.echo("    " + memb_intf_string + "(" + member_type_string + ")" )
+    click.echo("Total number of entries: "+str(count)+"\n")
+
+    return
+
 if __name__ == '__main__':
     cli()
