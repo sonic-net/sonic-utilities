@@ -111,7 +111,7 @@ def get_static_sids(namespace, sid):
         func_len = int(fields["function_len"])
         sid_prefix = sid_ip + f"/{block_len + node_len + func_len}"
         asic_sids.add(sid_prefix)
-    
+
     table = []
     for sid_prefix in natsorted(sid_dict.keys()):
         entry = sid_dict[sid_prefix]
@@ -143,7 +143,7 @@ def static_sids(sid, namespace, display):
     else:
         # default or single namespace
         table = get_static_sids(namespace, sid)
-    
+
     click.echo(tabulate(table, header))
 
 
