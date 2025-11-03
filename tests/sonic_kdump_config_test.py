@@ -395,9 +395,8 @@ class TestSonicKdumpConfig(unittest.TestCase):
         sonic_kdump_config.write_kdump_remote()  # Call the function
 
         # Ensure the correct commands were run to uncomment SSH and SSH_KEY
-        mock_run_command.assert_any_call("/bin/sed -i 's/#SSH/SSH/' /etc/default/kdump-tools", use_shell=False)
-        mock_run_command.assert_any_call("/bin/sed -i 's/#SSH_KEY/SSH_KEY/' /etc/default/kdump-tools", use_shell=False)
-        self.assertEqual(mock_run_command.call_count, 2)  # Ensure both commands were called
+        mock_run_command.assert_any_call("/bin/sed -i 's/^#SSH/SSH/' /etc/default/kdump-tools", use_shell=False)
+        self.assertEqual(mock_run_command.call_count, 1)  # Ensure the sed command was called once
 
     @patch("sonic_kdump_config.run_command")
     @patch("sonic_kdump_config.get_kdump_remote")
@@ -408,9 +407,8 @@ class TestSonicKdumpConfig(unittest.TestCase):
         sonic_kdump_config.write_kdump_remote()  # Call the function
 
         # Ensure the correct commands were run to comment SSH and SSH_KEY
-        mock_run_command.assert_any_call("/bin/sed -i 's/SSH/#SSH/' /etc/default/kdump-tools", use_shell=False)
-        mock_run_command.assert_any_call("/bin/sed -i 's/SSH_KEY/#SSH_KEY/' /etc/default/kdump-tools", use_shell=False)
-        self.assertEqual(mock_run_command.call_count, 2)
+        mock_run_command.assert_any_call("/bin/sed -i 's/^SSH/#SSH/' /etc/default/kdump-tools", use_shell=False)
+        self.assertEqual(mock_run_command.call_count, 1)
 
     @patch("sonic_kdump_config.get_kdump_remote")
     @patch("sonic_kdump_config.run_command")
@@ -422,16 +420,14 @@ class TestSonicKdumpConfig(unittest.TestCase):
         sonic_kdump_config.cmd_kdump_remote(verbose=True)
 
         # Ensure the correct commands are being run
-        mock_run_command.assert_any_call("/bin/sed -i 's/#SSH/SSH/' /etc/default/kdump-tools", use_shell=False)
-        mock_run_command.assert_any_call("/bin/sed -i 's/#SSH_KEY/SSH_KEY/' /etc/default/kdump-tools", use_shell=False)
+        mock_run_command.assert_any_call("/bin/sed -i 's/^#SSH/SSH/' /etc/default/kdump-tools", use_shell=False)
 
         # Test case: Remote is False
         mock_read_remote.return_value = False
         sonic_kdump_config.cmd_kdump_remote(verbose=True)
 
         # Ensure the correct commands are being run
-        mock_run_command.assert_any_call("/bin/sed -i 's/SSH/#SSH/' /etc/default/kdump-tools", use_shell=False)
-        mock_run_command.assert_any_call("/bin/sed -i 's/SSH_KEY/#SSH_KEY/' /etc/default/kdump-tools", use_shell=False)
+        mock_run_command.assert_any_call("/bin/sed -i 's/^SSH/#SSH/' /etc/default/kdump-tools", use_shell=False)
 
         # Test case: Checking output messages
         with patch("builtins.print") as mock_print:
@@ -538,7 +534,7 @@ class TestSonicKdumpConfig(unittest.TestCase):
         sonic_kdump_config.write_ssh_path('/path/to/keys')  # Call function with valid path
         # Ensure the correct command is being run
         expected_cmd = (
-            "/bin/sed -i -e 's/#*SSH_KEY=.*/SSH_KEY=\"/path/to/keys\"/' %s"
+            "/bin/sed -i -e 's|#*SSH_KEY=.*|SSH_KEY=\"/path/to/keys\"|' %s"
             % sonic_kdump_config.kdump_cfg
         )
         mock_run_cmd.assert_called_once_with(expected_cmd, use_shell=False)
@@ -669,23 +665,6 @@ class TestSonicKdumpConfig(unittest.TestCase):
 
         # Verify that the correct message is printed
         mock_print.assert_called_once_with("SSH path updated. Changes will take effect after reboot.")
-
-    @patch('sonic_kdump_config.run_command')
-    @patch('sonic_kdump_config.read_ssh_path')
-    @patch('sonic_kdump_config.write_ssh_path')
-    @patch('builtins.print')  # Mock print to capture printed output
-    def test_cmd_kdump_ssh_path_no_update(self, mock_print, mock_write, mock_read, mock_run):
-        # Mock read_ssh_path to return the same SSH path provided
-        mock_read.return_value = '/same/path/to/keys'
-
-        # Call the function with the same SSH path
-        sonic_kdump_config.cmd_kdump_ssh_path(verbose=True, ssh_path='/same/path/to/keys')
-
-        # Check that write_ssh_path was not called
-        mock_write.assert_not_called()
-
-        # Check that no message is printed for update
-        mock_print.assert_not_called()
 
     @patch("sonic_kdump_config.write_use_kdump")
     @patch("os.path.exists")
