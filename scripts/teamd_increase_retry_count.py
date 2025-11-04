@@ -2,6 +2,7 @@
 
 import subprocess
 import json
+from pyroute2 import netns
 from scapy.config import conf
 conf.ipv6_enabled = False
 conf.verb = False
@@ -18,10 +19,10 @@ import time
 import argparse
 import signal
 
-from sonic_py_common import logger
-from swsscommon.swsscommon import DBConnector, Table
+from sonic_py_common import logger, multi_asic
+from swsscommon.swsscommon import DBConnector, Table, SonicDBConfig, SonicDBKey
 
-log = logger.Logger()
+log = None 
 revertTeamdRetryCountChanges = False
 DEFAULT_RETRY_COUNT = 3
 EXTENDED_RETRY_COUNT = 5
@@ -88,9 +89,11 @@ class LacpPacketListenThread(Thread):
         sniff(stop_filter=self.lacpPacketCallback, iface=self.port, filter="ether proto {} and ether src {}".format(LACP_ETHERTYPE, self.targetMacAddress),
                 store=0, timeout=30, started_callback=self.sendReadyEvent.set)
 
-def getPortChannels():
-    applDb = DBConnector("APPL_DB", 0)
-    configDb = DBConnector("CONFIG_DB", 0)
+def getPortChannels(namespace=""):
+    key = SonicDBKey(namespace)
+    is_tcp_conn = False
+    applDb = DBConnector("APPL_DB", 0, is_tcp_conn, key)
+    configDb = DBConnector("CONFIG_DB", 0, is_tcp_conn, key)
     portChannelTable = Table(applDb, "LAG_TABLE")
     portChannels = portChannelTable.getKeys()
     activePortChannels = []
@@ -159,12 +162,18 @@ def getPortChannels():
 
     return set([portChannelData[x]["portChannel"] for x in portChannelData.keys() if portChannelData[x]["adminUp"]])
 
-def getPortChannelConfig(portChannelName):
-    (processStdout, _) = getCmdOutput(["teamdctl", portChannelName, "state", "dump"])
+def getPortChannelConfig(portChannelName, namespace=""):
+    teamdctl_command = ["teamdctl"]
+    if namespace:
+        teamdctl_command += ["-n", namespace.removeprefix("asic")]
+    (processStdout, _) = getCmdOutput(teamdctl_command + [portChannelName, "state", "dump"])
     return json.loads(processStdout)
 
-def getLldpNeighbors():
-    (processStdout, _) = getCmdOutput(["lldpctl", "-f", "json"])
+def getLldpNeighbors(namespace=""):
+    container = "lldp"
+    if namespace:
+        container += namespace.removeprefix("asic")
+    (processStdout, _) = getCmdOutput(["docker", "exec", container, "lldpctl", "-f", "json"])
     return json.loads(processStdout)
 
 def craftLacpPacket(portChannelConfig, portName, isResetPacket=False, newVersion=True):
@@ -215,11 +224,15 @@ def getCmdOutput(cmd):
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE)
     return proc.communicate()[0], proc.returncode
 
-def main(probeOnly=False):
+def main(probeOnly=False, namespace=""):
     if os.geteuid() != 0:
         log.log_error("Root privileges required for this operation", also_print_to_console=True)
         sys.exit(1)
-    portChannels = getPortChannels()
+    if namespace:
+        netns.setns(namespace)
+    if multi_asic.is_multi_asic():
+        SonicDBConfig.initializeGlobalConfig()
+    portChannels = getPortChannels(namespace)
     if not portChannels:
         log.log_info("No port channels retrieved; exiting")
         return
@@ -227,7 +240,7 @@ def main(probeOnly=False):
     if probeOnly:
         for portChannel in portChannels:
             config = getPortChannelConfig(portChannel)
-            lldpInfo = getLldpNeighbors()
+            lldpInfo = getLldpNeighbors(namespace)
             portChannelChecked = False
             for portName in config["ports"].keys():
                 if not "runner" in config["ports"][portName] or \
@@ -288,11 +301,11 @@ def main(probeOnly=False):
         global revertTeamdRetryCountChanges
         signal.signal(signal.SIGUSR1, abortTeamdChanges)
         signal.signal(signal.SIGTERM, abortTeamdChanges)
-        (_, rc) = getCmdOutput(["config", "portchannel", "retry-count", "get", list(portChannels)[0]])
+        (_, rc) = getCmdOutput(["config", "portchannel", "-n", namespace, "retry-count", "get", list(portChannels)[0]])
         if rc == 0:
             # Currently running on SONiC version with teamd retry count feature
             for portChannel in portChannels:
-                getCmdOutput(["config", "portchannel", "retry-count", "set", portChannel, str(EXTENDED_RETRY_COUNT)])
+                getCmdOutput(["config", "portchannel", "-n", namespace, "retry-count", "set", portChannel, str(EXTENDED_RETRY_COUNT)])
             pid = os.fork()
             if pid == 0:
                 # Running in a new process, detached from parent process
@@ -300,7 +313,7 @@ def main(probeOnly=False):
                     time.sleep(15)
                 if revertTeamdRetryCountChanges:
                     for portChannel in portChannels:
-                        getCmdOutput(["config", "portchannel", "retry-count", "set", portChannel, str(DEFAULT_RETRY_COUNT)])
+                        getCmdOutput(["config", "portchannel", "-n", namespace, "retry-count", "set", portChannel, str(DEFAULT_RETRY_COUNT)])
         else:
             lacpPackets = []
             revertLacpPackets = []
@@ -326,5 +339,10 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Teamd retry count changer.')
     parser.add_argument('--probe-only', action='store_true',
             help='Probe the peer devices only, to verify that they support the teamd retry count feature')
+    parser.add_argument('-n', '--namespace', default="", type=str, help='namespace to use')
     args = parser.parse_args()
-    main(args.probe_only)
+    log_identifier = "teamd_increase_retry_count"
+    if args.namespace:
+        log_identifier += f"_{args.namespace}"
+    log = logger.Logger(log_identifier=log_identifier)
+    main(args.probe_only, args.namespace)
