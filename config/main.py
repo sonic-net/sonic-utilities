@@ -1188,7 +1188,8 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
     # Check port mirror capability before allowing configuration
     # If direction is provided, check the specific direction
     if not is_port_mirror_capability_supported(direction):
-        ctx.fail("Error: Port mirror direction '{}' is not supported by the ASIC".format(direction if direction else 'both'))
+        ctx.fail("Error: Port mirror direction '{}' is not supported by the ASIC".format(
+            direction if direction else 'both'))
 
     return True
 
