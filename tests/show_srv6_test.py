@@ -1,4 +1,4 @@
-import os
+from utilities_common import constants
 import pytest
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
@@ -42,19 +42,18 @@ To run with more verbose output:
 
 @pytest.fixture(scope="class")
 def setup_teardown_single_asic():
-    os.environ["UTILITIES_UNIT_TESTING"] = "2"
-    os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
+    single_asic_patch = patch("utilities_common.multi_asic.multi_asic_ns_choices", return_value=[constants.DEFAULT_NAMESPACE])
+    single_asic_patch.start()
     yield
-    os.environ["UTILITIES_UNIT_TESTING"] = "0"
+    single_asic_patch.stop()
 
 
 @pytest.fixture(scope="class")
 def setup_teardown_multi_asic():
-    os.environ["UTILITIES_UNIT_TESTING"] = "2"
-    os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
+    multi_asic_patch = patch("utilities_common.multi_asic.multi_asic_ns_choices", return_value=['asic0', 'asic1'])
+    multi_asic_patch.start()
     yield
-    os.environ["UTILITIES_UNIT_TESTING"] = "0"
-    os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
+    multi_asic_patch.stop()
 
 
 @pytest.mark.usefixtures('setup_teardown_single_asic')
