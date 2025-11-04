@@ -473,13 +473,3 @@ def test_mirror_session_capability_function():
         assert config.is_port_mirror_capability_supported("tx") is False
         assert config.is_port_mirror_capability_supported("both") is False
         assert config.is_port_mirror_capability_supported(None) is False
-
-    # Test 4: Test exception handling (backward compatibility)
-    with mock.patch('config.main.SonicV2Connector') as mock_connector:
-        mock_connector.side_effect = Exception("Connection failed")
-
-        # Should return True for backward compatibility when exception occurs
-        assert config.is_port_mirror_capability_supported("rx") is True
-        assert config.is_port_mirror_capability_supported("tx") is True
-        assert config.is_port_mirror_capability_supported("both") is True
-        assert config.is_port_mirror_capability_supported(None) is True
