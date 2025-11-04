@@ -8786,6 +8786,38 @@ def global_sample_direction(ctx, direction):
     except ValueError as e:
         ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
+def is_sflow_mirror_on_drop_supported():
+    state_db = SonicV2Connector(use_unix_socket_path=True)
+    state_db.connect(state_db.STATE_DB, False)
+    entry_name="SWITCH_CAPABILITY|switch"
+    supported = state_db.get(state_db.STATE_DB, entry_name, "MIRROR_ON_DROP_CAPABLE")
+    return supported
+
+#
+# 'sflow' command ('config sflow drop-monitor-limit ...')
+#
+@sflow.command('drop-monitor-limit')
+@click.argument('limit', metavar='<packet_per_second>', required=True, type=int)
+@click.pass_context
+def drop_monitor_limit(ctx, limit):
+    """Enable and rate limit dropped packet notifications. (1-500, 0 to disable)"""
+    if ADHOC_VALIDATION:
+        if is_sflow_mirror_on_drop_supported() == 'false':
+            ctx.fail("Drop monitor is not supported on this platform")
+
+    if limit not in range(0, 501):
+        click.echo("Drop monitor limit must be between 1-500 (0 to disable)")
+
+    config_db = ctx.obj['db']
+    sflow_tbl = config_db.get_table('SFLOW')
+
+    if not sflow_tbl:
+        sflow_tbl = {'global': {'admin_state': 'down'}}
+
+    sflow_tbl['global']['drop_monitor_limit'] = limit
+    config_db.mod_entry('SFLOW', 'global', sflow_tbl['global'])
+
+
 def is_valid_sample_rate(rate):
     return rate.isdigit() and int(rate) in range(256, 8388608 + 1)
 
