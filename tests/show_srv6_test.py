@@ -1,9 +1,8 @@
-from utilities_common import constants
-import pytest
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
 
-import show.main as show
+with patch("utilities_common.multi_asic.multi_asic_ns_choices", return_value=['asic0', 'asic1']):
+    import show.main as show
 
 """
 Unit tests for SRv6 show commands (show srv6 locators and show srv6 static-sids)
@@ -33,30 +32,7 @@ To run with more verbose output:
     python -m pytest tests/show_srv6_test.py -v -s
 """
 
-# NOTE: The current SRv6 implementation in show/srv6.py now includes proper error
-# handling for ASIC_DB JSON parsing with try-catch blocks around:
-# 1. entry.split(":", 2) operations
-# 2. json.loads() calls
-# 3. Field access like fields["sid"], fields["locator_block_len"], etc.
 
-
-@pytest.fixture(scope="class")
-def setup_teardown_single_asic():
-    single_asic_patch = patch("utilities_common.multi_asic.multi_asic_ns_choices", return_value=[constants.DEFAULT_NAMESPACE])
-    single_asic_patch.start()
-    yield
-    single_asic_patch.stop()
-
-
-@pytest.fixture(scope="class")
-def setup_teardown_multi_asic():
-    multi_asic_patch = patch("utilities_common.multi_asic.multi_asic_ns_choices", return_value=['asic0', 'asic1'])
-    multi_asic_patch.start()
-    yield
-    multi_asic_patch.stop()
-
-
-@pytest.mark.usefixtures('setup_teardown_single_asic')
 class TestShowSRv6Locators(object):
     def setup_method(self):
         print('SETUP')
@@ -187,7 +163,6 @@ class TestShowSRv6Locators(object):
         print('TEAR DOWN')
 
 
-@pytest.mark.usefixtures('setup_teardown_single_asic')
 class TestShowSRv6StaticSids(object):
     def setup_method(self):
         print('SETUP')
@@ -456,7 +431,6 @@ class TestShowSRv6StaticSids(object):
         print('TEAR DOWN')
 
 
-@pytest.mark.usefixtures('setup_teardown_single_asic')
 class TestShowSRv6EdgeCases(object):
     def setup_method(self):
         print('SETUP')
@@ -673,7 +647,6 @@ class TestShowSRv6EdgeCases(object):
         print('TEAR DOWN')
 
 
-@pytest.mark.usefixtures('setup_teardown_multi_asic')
 class TestShowSRv6MultiAsic(object):
     def setup_method(self):
         print('SETUP MULTI-ASIC')
