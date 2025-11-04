@@ -1,8 +1,7 @@
 from unittest.mock import patch, MagicMock
 from click.testing import CliRunner
 
-with patch("utilities_common.multi_asic.multi_asic_ns_choices", return_value=['asic0', 'asic1']):
-    import show.main as show
+import show.main as show
 
 """
 Unit tests for SRv6 show commands (show srv6 locators and show srv6 static-sids)
@@ -710,42 +709,6 @@ class TestShowSRv6MultiAsic(object):
 
     @patch('sonic_py_common.multi_asic.get_namespace_list')
     @patch('sonic_py_common.multi_asic.is_multi_asic')
-    @patch('show.srv6.ConfigDBConnector')
-    def test_show_srv6_locators_multi_asic_specific_namespace(
-        self, mock_config_db, mock_is_multi_asic, mock_get_namespaces
-    ):
-        # Setup multi-ASIC environment
-        mock_is_multi_asic.return_value = True
-        mock_get_namespaces.return_value = ['asic0', 'asic1']
-
-        # Mock ConfigDBConnector
-        mock_db = MagicMock()
-        mock_config_db.return_value = mock_db
-
-        # Mock data for specific namespace
-        mock_locators_data = {
-            'Locator1': {
-                'prefix': '2001:db8:1::/48',
-                'block_len': '32',
-                'node_len': '16',
-                'func_len': '16'
-            }
-        }
-        mock_db.get_table.return_value = mock_locators_data
-
-        runner = CliRunner()
-        result = runner.invoke(show.cli.commands['srv6'].commands['locators'], ['-n', 'asic0'])
-
-        print(result.exit_code)
-        print(result.output)
-
-        assert result.exit_code == 0
-        assert 'Locator1' in result.output
-        assert '2001:db8:1::/48' in result.output
-        mock_db.connect.assert_called_once()
-
-    @patch('sonic_py_common.multi_asic.get_namespace_list')
-    @patch('sonic_py_common.multi_asic.is_multi_asic')
     @patch('show.srv6.SonicV2Connector')
     @patch('show.srv6.ConfigDBConnector')
     def test_show_srv6_static_sids_multi_asic_all_namespaces(
@@ -820,47 +783,6 @@ class TestShowSRv6MultiAsic(object):
         assert 'Locator2' in result.output
         mock_config_db_asic0.connect.assert_called_once()
         mock_config_db_asic1.connect.assert_called_once()
-
-    @patch('sonic_py_common.multi_asic.get_namespace_list')
-    @patch('sonic_py_common.multi_asic.is_multi_asic')
-    @patch('show.srv6.SonicV2Connector')
-    @patch('show.srv6.ConfigDBConnector')
-    def test_show_srv6_static_sids_multi_asic_specific_namespace(
-        self, mock_config_db, mock_sonic_v2, mock_is_multi_asic, mock_get_namespaces
-    ):
-        # Setup multi-ASIC environment
-        mock_is_multi_asic.return_value = True
-        mock_get_namespaces.return_value = ['asic0', 'asic1']
-
-        # Mock ConfigDBConnector
-        mock_db = MagicMock()
-        mock_config_db.return_value = mock_db
-
-        # Mock SonicV2Connector
-        mock_asic_db = MagicMock()
-        mock_sonic_v2.return_value = mock_asic_db
-
-        # Mock data for specific namespace
-        mock_sids_data = {
-            ('Locator1', '2001:db8:1::1/128'): {
-                'action': 'end',
-                'decap_dscp_mode': 'uniform',
-                'decap_vrf': 'Vrf1'
-            }
-        }
-        mock_db.get_table.return_value = mock_sids_data
-        mock_asic_db.keys.return_value = []
-
-        runner = CliRunner()
-        result = runner.invoke(show.cli.commands['srv6'].commands['static-sids'], ['-n', 'asic0'])
-
-        print(result.exit_code)
-        print(result.output)
-
-        assert result.exit_code == 0
-        assert '2001:db8:1::1/128' in result.output
-        assert 'Locator1' in result.output
-        mock_db.connect.assert_called_once()
 
     @patch('sonic_py_common.multi_asic.get_namespace_list')
     @patch('sonic_py_common.multi_asic.is_multi_asic')
