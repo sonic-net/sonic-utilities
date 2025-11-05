@@ -1221,6 +1221,24 @@ save_platform_info() {
 }
 
 ###############################################################################
+# Save chassis modules related info
+# Globals:
+#  None
+# Arguments:
+#  None
+# Returns:
+#  None
+###############################################################################
+save_chassis_modules_info() {
+    trap 'handle_error $? $LINENO' ERR
+    if ! $IS_SUPERVISOR; then
+        return
+    fi
+    save_cmd "show chassis modules status" "chassis_modules.status"
+    save_cmd "show chassis modules midplane-status" "chassis_modules.midplane_status"
+}
+
+###############################################################################
 # Runs a comamnd and saves its output to the incrementally built tar.
 # Globals:
 #  LOGDIR
@@ -2291,6 +2309,9 @@ main() {
     save_cmd "systemd-analyze plot" "systemd.analyze.plot.svg" &
     wait
 
+    save_chassis_modules_info &
+    wait
+    
     save_platform_info &
     save_cmd "show vlan brief" "vlan.summary" &
     save_cmd "show version" "version" &
