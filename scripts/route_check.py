@@ -698,12 +698,13 @@ def check_frr_pending_routes(namespace):
 
                 if entry.get('failed', False):
                     failed_rt.append(route_prefix)
-        if not missed_rt or not failed_rt:
+
+        if not missed_rt and not failed_rt:
             break
 
         time.sleep(FRR_WAIT_TIME)
-    print_message(syslog.LOG_DEBUG, "FRR missed routes: {}".format(missed_rt, indent=4))
-    print_message(syslog.LOG_DEBUG, "FRR failed routes: {}".format(failed_rt, indent=4))
+    print_message(syslog.LOG_DEBUG, "FRR missed routes: {}".format(json.dumps(missed_rt, indent=4)))
+    print_message(syslog.LOG_DEBUG, "FRR failed routes: {}".format(json.dumps(failed_rt, indent=4)))
     return missed_rt, failed_rt
 
 
