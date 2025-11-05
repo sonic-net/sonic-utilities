@@ -699,6 +699,7 @@ def check_frr_pending_routes(namespace):
                 if entry.get('failed', False):
                     failed_rt.append(route_prefix)
 
+
         if not missed_rt and not failed_rt:
             break
 
@@ -911,7 +912,8 @@ def check_routes_for_namespace(namespace):
             if is_suppress_fib_pending_enabled(namespace):
                 mitigate_installed_not_offloaded_frr_routes(namespace, rt_frr_miss, rt_appl)
         if rt_frr_failed:
-            print_message(syslog.LOG_ERR, "Some routes have failed state in FRR {}: {}".format(namespace, rt_frr_failed))
+            print_message(syslog.LOG_ERR, "Some routes have failed state in FRR {} \
+                          : {}".format(namespace, rt_frr_failed))
 
     return results, adds, deletes
 
