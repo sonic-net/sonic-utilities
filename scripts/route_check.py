@@ -699,7 +699,6 @@ def check_frr_pending_routes(namespace):
                 if entry.get('failed', False):
                     failed_rt.append(route_prefix)
 
-
         if not missed_rt and not failed_rt:
             break
 
