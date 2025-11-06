@@ -6038,6 +6038,11 @@ Double tab i.e. <tab><tab> to see the available breakout option customized for e
 
 - Usage:
   ```
+  Usage: config interface breakout [OPTIONS] <interface_name> MODE [FEC]
+    [FEC]   Fec mode which is optional
+  ```
+  *Versions <= 202505*
+  ```
   sudo config interface breakout  --help
   Usage: config interface breakout [OPTIONS] <interface_name> MODE
 
@@ -6052,7 +6057,14 @@ Double tab i.e. <tab><tab> to see the available breakout option customized for e
       -v, --verbose                   Enable verbose output
       -?, -h, --help                  Show this message and exit.
   ```
-- Example :
+- Example:
+  ```
+  admin@sonic:~$ sudo config interface breakout  Ethernet0 <tab><tab> "rs"
+  <tab provides option for breakout mode>
+  1x100G[40G]  2x50G        4x25G[10G]
+  "rs" Fec mode RS
+  ```
+- Example (Versions <= 202505):
   ```
   admin@sonic:~$ sudo config interface breakout  Ethernet0 <tab><tab>
   <tab provides option for breakout mode>
