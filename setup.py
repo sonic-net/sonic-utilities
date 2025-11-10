@@ -252,7 +252,7 @@ setup(
         'natsort>=6.2.1',  # 6.2.1 is the last version which supports Python 2. Can update once we no longer support Python 2
         'netaddr>=0.8.0',
         'netifaces>=0.10.7',
-        'paramiko==2.11.0',
+        'paramiko>=2.11.0',
         'pexpect>=4.8.0',
         'semantic-version>=2.8.5',
         'prettyprinter>=0.18.0',
