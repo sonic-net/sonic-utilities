@@ -226,11 +226,9 @@ testData = {
                                                                  'onn', 'Ethernet0', '--namespace',
                                                                  'asic0'],
                                                          'rc': 2,
-                                                         'rc_msg': ('Usage: cli config asymmetric [OPTIONS] '
-                                                                    '[on|off] INTERFACE\nTry "cli config '
-                                                                    'asymmetric --help" for help.\n\n'
-                                                                    'Error: Invalid value for "[on|off]": '
-                                                                    'invalid choice: onn. (choose from on, off)')
+                                                         'rc_msg': ('Invalid value for '
+                                                                    '\'{on|off}\': \'onn\' is not '
+                                                                    'one of \'on\', \'off\'')
                                                          },
              'pfc_config_asymmetric_all_masic': {'cmd': ['config', 'asymmetric',
                                                          'on', 'Ethernet0'],
@@ -241,11 +239,9 @@ testData = {
              'pfc_config_asymmetric_invalid_all_masic': {'cmd': ['config', 'asymmetric',
                                                                  'onn', 'Ethernet0'],
                                                          'rc': 2,
-                                                         'rc_msg': ('Usage: cli config asymmetric [OPTIONS] '
-                                                                    '[on|off] INTERFACE\nTry "cli config '
-                                                                    'asymmetric --help" for help.\n\n'
-                                                                    'Error: Invalid value for "[on|off]": '
-                                                                    'invalid choice: onn. (choose from on, off)')
+                                                         'rc_msg': ('Invalid value for '
+                                                                    '\'{on|off}\': \'onn\' is not '
+                                                                    'one of \'on\', \'off\'')
                                                          },
              'pfc_config_priority_one_masic': {'cmd': ['config', 'priority',
                                                        'on', 'Ethernet0', '5',
@@ -258,12 +254,9 @@ testData = {
                                                                'onn', 'Ethernet0', '5',
                                                                '--namespace', 'asic0'],
                                                        'rc': 2,
-                                                       'rc_msg': ('Usage: cli config priority [OPTIONS] '
-                                                                  '[on|off] INTERFACE [0|1|2|3|4|5|6|7]\n'
-                                                                  'Try "cli config priority --help" for '
-                                                                  'help.\n\nError: Invalid value for '
-                                                                  '"[on|off]": invalid choice: onn. '
-                                                                  '(choose from on, off)')
+                                                       'rc_msg': ('Invalid value for '
+                                                                  '\'{on|off}\': \'onn\' is not '
+                                                                  'one of \'on\', \'off\'')
                                                        },
              'pfc_config_priority_all_masic': {'cmd': ['config', 'priority',
                                                        'on', 'Ethernet0', '5'],
@@ -276,11 +269,8 @@ testData = {
              'pfc_config_priority_invalid_all_masic': {'cmd': ['config', 'priority',
                                                                'onn', 'Ethernet0', '5'],
                                                        'rc': 2,
-                                                       'rc_msg': ('Usage: cli config priority [OPTIONS] '
-                                                                  '[on|off] INTERFACE [0|1|2|3|4|5|6|7]\n'
-                                                                  'Try "cli config priority --help" for '
-                                                                  'help.\n\nError: Invalid value for '
-                                                                  '"[on|off]": invalid choice: onn. '
-                                                                  '(choose from on, off)')
+                                                       'rc_msg': ('Invalid value for '
+                                                                  '\'{on|off}\': \'onn\' is not '
+                                                                  'one of \'on\', \'off\'')
                                                        },
 }
