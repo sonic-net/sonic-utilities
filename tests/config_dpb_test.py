@@ -700,6 +700,51 @@ class TestConfigDPB(object):
 
         return
 
+    @pytest.mark.usefixtures('mock_func')
+    def test_config_breakout_fec_cases(self, sonic_db):
+        '''
+        Test fec case of breakout port. Such as:
+        Wrong fec config, valid fec config
+        @Param: sonic_db [PyFixture], db.cfgdb -> Config DB.
+        '''
+
+        db = sonic_db
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb}
+
+        # Input Data
+        interface = 'Ethernet0'
+        curMode = '4x25G[10G]'
+        newMode = '2x50G'
+        fecMode = 'rs'
+
+        print("Mocked Child ports data-> {}".format([get_child_ports_mock(interface, curMode),
+                                                    get_child_ports_mock(interface, newMode)]))
+
+        config.get_child_ports = mock.MagicMock(side_effect=[get_child_ports_mock(interface, curMode),
+                                                get_child_ports_mock(interface, newMode)])
+
+        # Valid FEC
+        result = runner.invoke(config.config.commands["interface"].commands["breakout"],
+                               ['{}'.format(interface), '{}'.format(newMode), '{}'.format(fecMode), '-v', '-y'],
+                               obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 1
+
+        # Input Data
+        interface = 'Ethernet0'
+        newMode = '2x50G'
+        fecMode = 'fec'  # Invalid value neither 'rs' nor 'fc'
+
+        # Wrong mode
+        result = runner.invoke(config.config.commands["interface"].commands["breakout"],
+                               ['{}'.format(interface), '{}'.format(newMode), '{}'.format(fecMode), '-v', '-y'],
+                               obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 1
+
+        return
+
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
