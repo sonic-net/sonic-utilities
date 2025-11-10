@@ -8806,7 +8806,7 @@ def drop_monitor_limit(ctx, limit):
             ctx.fail("Drop monitor is not supported on this platform")
 
     if limit not in range(0, 501):
-        click.echo("Drop monitor limit must be between 1-500 (0 to disable)")
+        ctx.fail("Drop monitor limit must be between 1-500 (0 to disable)")
 
     config_db = ctx.obj['db']
     sflow_tbl = config_db.get_table('SFLOW')
