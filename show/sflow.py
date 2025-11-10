@@ -82,7 +82,7 @@ def show_sflow_global(config_db):
     else:
         click.echo("default")
 
-    drop_monitor_limit = sflow_info.get('global', {}).get('drop_monitor_limit', 0)
+    drop_monitor_limit = sflow_info.get('global', {}).get('drop_monitor_limit', 0) if sflow_info else 0
     click.echo("  sFlow Drop Notification Limit:".ljust(ljust_len) + "{}".format(drop_monitor_limit))
 
     click.echo("  sFlow AgentID:".ljust(ljust_len), nl=False)
