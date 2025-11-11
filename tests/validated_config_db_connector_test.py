@@ -1,24 +1,12 @@
 import os
-import sys
 import mock
 import jsonpatch
-import importlib.util
-import importlib.machinery
-
-
-def load_source(modname, filename):
-    loader = importlib.machinery.SourceFileLoader(modname, filename)
-    spec = importlib.util.spec_from_file_location(modname, filename, loader=loader)
-    module = importlib.util.module_from_spec(spec)
-    # The module is always executed and not cached in sys.modules.
-    # Uncomment the following line to cache the module.
-    sys.modules[module.__name__] = module
-    loader.exec_module(module)
-    return module
+from .utils import load_source
 
 
 load_source('validated_config_db_connector',
-            os.path.join(os.path.dirname(__file__), '..', 'config', 'validated_config_db_connector.py'))
+            os.path.join(os.path.dirname(__file__), '..', 'config', 'validated_config_db_connector.py'),
+            cache_module=True)
 import validated_config_db_connector
 
 from unittest import TestCase

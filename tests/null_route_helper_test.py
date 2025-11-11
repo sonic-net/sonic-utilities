@@ -1,21 +1,9 @@
 import pytest
 import os
-import importlib.util
-import importlib.machinery
+from .utils import load_source
 
 from click.testing import CliRunner
 from swsscommon.swsscommon import ConfigDBConnector
-
-
-def load_source(modname, filename):
-    loader = importlib.machinery.SourceFileLoader(modname, filename)
-    spec = importlib.util.spec_from_file_location(modname, filename, loader=loader)
-    module = importlib.util.module_from_spec(spec)
-    # The module is always executed and not cached in sys.modules.
-    # Uncomment the following line to cache the module.
-    # sys.modules[module.__name__] = module
-    loader.exec_module(module)
-    return module
 
 
 null_route_helper = load_source('null_route_helper', os.path.join(os.path.dirname(__file__), '..',
