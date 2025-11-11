@@ -5261,11 +5261,11 @@ The "fec-stats" subcommand is used to disply the interface fec related statistic
 - Example:
   ```
   admin@ctd615:~$ show interfaces counters fec-stats
-        IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER    FLR(O)    FLR(P) (Accuracy)
-  -----------  -------  ----------  ------------  ----------------  -------------  --------------    --------  -------------------
-   Ethernet0        U           0             0                 0        1.48e-20        0.00e+00    4.31e-10       7.81e-10 (89%)
-   Ethernet8        U           0             0                 0        1.98e-19        0.00e+00           0       4.81e-10 (84%)
-  Ethernet16        U           0             0                 0        1.77e-20        0.00e+00    1.24e-10       6.03e-09 (79%)
+      IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER    FEC_PRE_BER_MAX    FLR(O)    FLR(P) (Accuracy)
+-----------  -------  ----------  ------------  ----------------  -------------  --------------    ---------------  --------  -------------------
+ Ethernet0        U           0             0                 0        1.48e-20        0.00e+00           1.78e-16  4.31e-10       7.81e-10 (89%)
+ Ethernet8        U           0             0                 0        1.98e-19        0.00e+00           1.67e-14         0       4.81e-10 (84%)
+Ethernet16        U           0             0                 0        1.77e-20        0.00e+00           1.37e-13  1.24e-10       6.03e-09 (79%)
   ```
 
 For debugging link related issues where you need to clear the FEC histogram and monitor the link again, use the following command
