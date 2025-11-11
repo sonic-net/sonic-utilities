@@ -53,6 +53,7 @@ load_minigraph_platform_false_path = os.path.join(load_minigraph_input_path, "pl
 load_minigraph_command_output="""\
 Acquired lock on {0}
 Disabling container and routeCheck monitoring ...
+Running command: sudo systemctl stop featured.timer
 Stopping SONiC target ...
 Running command: /usr/local/bin/sonic-cfggen -H -m --write-to-db
 Running command: config qos reload --no-dynamic-buffer --no-delay
@@ -70,6 +71,7 @@ Failed to acquire lock on {0}
 
 load_minigraph_command_bypass_lock_output = """\
 Bypass lock on {}
+Running command: sudo systemctl stop featured.timer
 Stopping SONiC target ...
 Running command: /usr/local/bin/sonic-cfggen -H -m --write-to-db
 Running command: config qos reload --no-dynamic-buffer --no-delay
@@ -81,6 +83,7 @@ Please note setting loaded from minigraph will be lost after system reboot. To p
 
 load_minigraph_platform_plugin_command_output="""\
 Acquired lock on {0}
+Running command: sudo systemctl stop featured.timer
 Stopping SONiC target ...
 Running command: /usr/local/bin/sonic-cfggen -H -m --write-to-db
 Running command: config qos reload --no-dynamic-buffer --no-delay
@@ -165,6 +168,7 @@ Exit: 4. Command: kill 104 failed.
 
 RELOAD_CONFIG_DB_OUTPUT = """\
 Acquired lock on {0}
+Running command: sudo systemctl stop featured.timer
 Stopping SONiC target ...
 Running command: /usr/local/bin/sonic-cfggen -j /tmp/config.json --write-to-db
 Restarting SONiC target ...
@@ -178,6 +182,7 @@ Failed to acquire lock on {0}
 
 RELOAD_CONFIG_DB_BYPASS_LOCK_OUTPUT = """\
 Bypass lock on {0}
+Running command: sudo systemctl stop featured.timer
 Stopping SONiC target ...
 Running command: /usr/local/bin/sonic-cfggen -j /tmp/config.json --write-to-db
 Restarting SONiC target ...
@@ -186,6 +191,7 @@ Reloading Monit configuration ...
 
 RELOAD_YANG_CFG_OUTPUT = """\
 Acquired lock on {0}
+Running command: sudo systemctl stop featured.timer
 Stopping SONiC target ...
 Running command: /usr/local/bin/sonic-cfggen -Y /tmp/config.json --write-to-db
 Restarting SONiC target ...
@@ -195,6 +201,7 @@ Released lock on {0}
 
 RELOAD_MASIC_CONFIG_DB_OUTPUT = """\
 Acquired lock on {0}
+Running command: sudo systemctl stop featured.timer
 Stopping SONiC target ...
 Running command: /usr/local/bin/sonic-cfggen -j /tmp/config.json --write-to-db
 Running command: /usr/local/bin/sonic-cfggen -j /tmp/config0.json -n asic0 --write-to-db
@@ -219,6 +226,7 @@ Released lock on {0}
 
 reload_config_masic_onefile_output = """\
 Acquired lock on {0}
+Running command: sudo systemctl stop featured.timer
 Stopping SONiC target ...
 Restarting SONiC target ...
 Reloading Monit configuration ...
@@ -227,6 +235,7 @@ Released lock on {0}
 
 reload_config_masic_onefile_gen_sysinfo_output = """\
 Acquired lock on {0}
+Running command: sudo systemctl stop featured.timer
 Stopping SONiC target ...
 Running command: /usr/local/bin/sonic-cfggen -H -k Mellanox-SN3800-D112C8 --write-to-db
 Running command: /usr/local/bin/sonic-cfggen -H -k multi_asic -n asic0 --write-to-db
@@ -307,7 +316,7 @@ def mock_run_command_side_effect(*args, **kwargs):
         if command == "systemctl list-dependencies --plain sonic-delayed.target | sed '1d'":
             return 'snmp.timer', 0
         elif command == "systemctl list-dependencies --plain sonic.target":
-            return 'sonic.target\nswss', 0
+            return 'sonic.target\nswss\nfeatured.timer', 0
         elif command == "systemctl is-enabled snmp.timer":
             return 'enabled', 0
         elif command == 'cat /var/run/dhclient.eth0.pid':
@@ -1058,7 +1067,7 @@ class TestLoadMinigraph(object):
                 (load_minigraph_command_output.format(config.SYSTEM_RELOAD_LOCK))
             # Verify "systemctl reset-failed" is called for services under sonic.target
             mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'swss'])
-            assert mock_run_command.call_count == 16
+            assert mock_run_command.call_count == 19
 
     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs',
                 mock.MagicMock(return_value=("dummy_path", None)))
@@ -1102,7 +1111,7 @@ class TestLoadMinigraph(object):
                 assert result.exit_code == 0
                 assert result.output == \
                     load_minigraph_command_bypass_lock_output.format(config.SYSTEM_RELOAD_LOCK)
-                assert mock_run_command.call_count == 12
+                assert mock_run_command.call_count == 15
             finally:
                 flock.release_flock(fd)
 
@@ -1120,7 +1129,7 @@ class TestLoadMinigraph(object):
                 (load_minigraph_platform_plugin_command_output.format(config.SYSTEM_RELOAD_LOCK))
             # Verify "systemctl reset-failed" is called for services under sonic.target
             mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'swss'])
-            assert mock_run_command.call_count == 12
+            assert mock_run_command.call_count == 15
 
     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs', mock.MagicMock(return_value=(load_minigraph_platform_false_path, None)))
     def test_load_minigraph_platform_plugin_fail(self, get_cmd_module, setup_single_broadcom_asic):
@@ -3217,6 +3226,34 @@ class TestConfigLoopback(object):
         print(result.output)
         assert result.exit_code != 0
         assert "Loopbax1 is invalid, name should have prefix 'Loopback' and suffix '<0-999>'" in result.output
+
+    def test_del_loopback_with_dhcpv4_relay_entry(self):
+        config.ADHOC_VALIDATION = True
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands["loopback"].commands["add"], ["Loopback1"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_entry("LOOPBACK_INTERFACE", "Loopback1") == {}
+
+        # Enable has_sonic_dhcpv4_relay flag
+        db.cfgdb.set_entry("DEVICE_METADATA", "localhost", {"has_sonic_dhcpv4_relay": "True"})
+
+        db.cfgdb.set_entry("DHCPV4_RELAY", "Vlan100", {
+            "dhcpv4_servers": ["192.0.2.100"],
+            "source_interface": "Loopback1"
+        })
+
+        result = runner.invoke(config.config.commands["loopback"].commands["del"], ["Loopback1"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "Error: Interface 'Loopback1' is in use by Vlan100" in result.output
+
+        db.cfgdb.set_entry("DHCPV4_RELAY", "Vlan200", None)
 
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry", mock.Mock(return_value=True))
     @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))

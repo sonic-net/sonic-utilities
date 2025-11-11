@@ -992,6 +992,12 @@ def _stop_services():
     except subprocess.CalledProcessError as err:
         pass
 
+    # Get the list of dependencies for sonic.target to fetch timer units
+    for service in _get_sonic_services():
+        if service.endswith('.timer'):
+            # Stop the timer unit
+            clicommon.run_command(['sudo', 'systemctl', 'stop', service], display_cmd=True)
+
     click.echo("Stopping SONiC target ...")
     clicommon.run_command(['sudo', 'systemctl', 'stop', 'sonic.target', '--job-mode', 'replace-irreversibly'])
 
@@ -1617,6 +1623,28 @@ def config_file_yang_validation(filename):
                         fg='magenta')
             raise click.Abort()
     return True
+
+
+def check_dhcpv4_relay_dependencies(db, object_name, object_type):
+    """Checks if to be deleted interface/VRF is used in DHCPV4_RELAY table."""
+    # Check if has_sonic_dhcpv4_relay flag is enabled
+    feature_table = db.get_table("DEVICE_METADATA")
+    dhcp_relay_feature = feature_table.get("localhost", {})
+    if dhcp_relay_feature.get("has_sonic_dhcpv4_relay") != "True":
+        return
+
+    for relay_vlan, data in db.get_table('DHCPV4_RELAY').items():
+        if object_type == 'interface':
+            source_intf = data.get('source_interface')
+            if source_intf == object_name:
+                raise ValueError(f"Interface '{object_name}' is in use by {relay_vlan}")
+
+        elif object_type == 'vrf':
+            server_vrf = data.get('server_vrf')
+            if server_vrf == object_name:
+                raise ValueError(f"VRF '{object_name}' is in use for dhcp_relay configurations for {relay_vlan}")
+        else:
+            raise ValueError("Unsupported object_type: {}".format(object_type))
 
 
 # This is our main entrypoint - the main 'config' command
@@ -2796,6 +2824,12 @@ def remove_portchannel(ctx, portchannel_name):
 
         if len([(k, v) for k, v in db.get_table('PORTCHANNEL_MEMBER') if k == portchannel_name]) != 0: # TODO: MISSING CONSTRAINT IN YANG MODEL
             ctx.fail("Error: Portchannel {} contains members. Remove members before deleting Portchannel!".format(portchannel_name))
+
+        # Dont proceed if the port channel is used in dhcpv4_relay
+        try:
+            check_dhcpv4_relay_dependencies(db, portchannel_name, 'interface')
+        except ValueError as e:
+            ctx.fail(str(e))
 
     try:
         db.set_entry('PORTCHANNEL', portchannel_name, None)
@@ -7365,6 +7399,12 @@ def del_vrf(ctx, vrf_name):
         syslog_vrf = syslog_data.get("vrf")
         if syslog_vrf == syslog_vrf_dev:
             ctx.fail("Failed to remove VRF device: {} is in use by SYSLOG_SERVER|{}".format(syslog_vrf, syslog_entry))
+    # Dont proceed if the vrf is used in dhcpv4_relay
+    try:
+        check_dhcpv4_relay_dependencies(config_db, vrf_name, 'vrf')
+    except ValueError as e:
+        ctx.fail(str(e))
+
     if not is_vrf_exists(config_db, vrf_name):
         ctx.fail("VRF {} does not exist!".format(vrf_name))
     elif (vrf_name == 'mgmt' or vrf_name == 'management'):
@@ -8542,6 +8582,12 @@ def del_loopback(ctx, loopback_name):
         lo_intfs = [k for k, v in lo_config_db.items() if type(k) != tuple]
         if loopback_name not in lo_intfs:
             ctx.fail("{} does not exist".format(loopback_name))
+
+    # Dont proceed if the loopback is used in dhcpv4_relay
+    try:
+        check_dhcpv4_relay_dependencies(config_db, loopback_name, 'interface')
+    except ValueError as e:
+        ctx.fail(str(e))
 
     ips = [ k[1] for k in lo_config_db if type(k) == tuple and k[0] == loopback_name ]
     for ip in ips:
