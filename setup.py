@@ -283,7 +283,7 @@ setup(
             'responses',
             'pytest',
             'mockredispy>=2.9.3',
-            'deepdiff>= 6.2.2'
+            'deepdiff>=6.2.2'
         ],
     },
     classifiers=[
