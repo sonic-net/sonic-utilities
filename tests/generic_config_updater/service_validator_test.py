@@ -20,11 +20,13 @@ msg = ""
 
 
 class MockSubprocessResult:
-    def __init__(self, returncode):
+    def __init__(self, returncode, stdout="", stderr=""):
         self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
 
 
-def mock_subprocess_run(cmd_args, capture_output=False, check=False):
+def mock_subprocess_run(cmd_args, capture_output=False, check=False, text=True):
     global subprocess_calls, subprocess_call_index
 
     assert subprocess_call_index < len(subprocess_calls)
@@ -34,7 +36,12 @@ def mock_subprocess_run(cmd_args, capture_output=False, check=False):
     # Convert cmd_args list back to string for comparison
     cmd_str = ' '.join(cmd_args)
     assert cmd_str == entry["cmd"], msg
-    return MockSubprocessResult(entry["rc"])
+
+    # Get stdout and stderr from entry, default to empty strings
+    stdout = entry.get("stdout", "")
+    stderr = entry.get("stderr", "")
+
+    return MockSubprocessResult(entry["rc"], stdout, stderr)
 
 
 def mock_time_sleep_call(sleep_time):
@@ -255,8 +262,9 @@ test_vlanintf_failure_data = [
             "upd": {},
             "cmd": "ip neigh flush dev Vlan9999 192.168.99.1/24",
             "rc": 1,
+            "stderr": "Cannot find device \"Vlan9999\"\n",
             "expected_result": False,
-            "description": "VLAN interface not found - command fails"
+            "description": "VLAN interface not found - command fails with stderr"
         },
         {
             "old": {
@@ -275,8 +283,10 @@ test_vlanintf_failure_data = [
             },
             "cmd": "ip neigh flush dev Vlan9999 10.10.10.1/24",
             "rc": 255,
+            "stdout": "Flushing neighbors...\n",
+            "stderr": "Device \"Vlan9999\" does not exist.\n",
             "expected_result": False,
-            "description": "Non-existent VLAN deletion fails with error code"
+            "description": "Non-existent VLAN deletion fails with both stdout and stderr"
         }
    ]
 
@@ -349,7 +359,12 @@ class TestServiceValidator(unittest.TestCase):
             subprocess_call_index = 0
 
             if entry["cmd"]:
-                subprocess_calls.append({"cmd": entry["cmd"], "rc": entry["rc"]})
+                call_entry = {"cmd": entry["cmd"], "rc": entry["rc"]}
+                if "stdout" in entry:
+                    call_entry["stdout"] = entry["stdout"]
+                if "stderr" in entry:
+                    call_entry["stderr"] = entry["stderr"]
+                subprocess_calls.append(call_entry)
 
             msg = "case failed: {} - {}".format(entry["description"], str(entry))
 
