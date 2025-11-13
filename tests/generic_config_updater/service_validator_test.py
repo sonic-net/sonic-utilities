@@ -20,11 +20,13 @@ msg = ""
 
 
 class MockSubprocessResult:
-    def __init__(self, returncode):
+    def __init__(self, returncode, stdout="", stderr=""):
         self.returncode = returncode
+        self.stdout = stdout
+        self.stderr = stderr
 
 
-def mock_subprocess_run(cmd_args, capture_output=False, check=False):
+def mock_subprocess_run(cmd_args, capture_output=False, check=False, text=True):
     global subprocess_calls, subprocess_call_index
 
     assert subprocess_call_index < len(subprocess_calls)
@@ -34,7 +36,12 @@ def mock_subprocess_run(cmd_args, capture_output=False, check=False):
     # Convert cmd_args list back to string for comparison
     cmd_str = ' '.join(cmd_args)
     assert cmd_str == entry["cmd"], msg
-    return MockSubprocessResult(entry["rc"])
+
+    # Get stdout and stderr from entry, default to empty strings
+    stdout = entry.get("stdout", "")
+    stderr = entry.get("stderr", "")
+
+    return MockSubprocessResult(entry["rc"], stdout, stderr)
 
 
 def mock_time_sleep_call(sleep_time):
@@ -244,6 +251,46 @@ test_ntp_data = [
    ]
 
 
+test_vlanintf_failure_data = [
+        {
+            "old": {
+                "VLAN_INTERFACE": {
+                    "Vlan9999": {},
+                    "Vlan9999|192.168.99.1/24": {}
+                }
+            },
+            "upd": {},
+            "cmd": "ip neigh flush dev Vlan9999 192.168.99.1/24",
+            "rc": 1,
+            "stderr": "Cannot find device \"Vlan9999\"\n",
+            "expected_result": False,
+            "description": "VLAN interface not found - command fails with stderr"
+        },
+        {
+            "old": {
+                "VLAN_INTERFACE": {
+                    "Vlan1000": {},
+                    "Vlan1000|192.168.0.1/21": {},
+                    "Vlan9999": {},
+                    "Vlan9999|10.10.10.1/24": {}
+                }
+            },
+            "upd": {
+                "VLAN_INTERFACE": {
+                    "Vlan1000": {},
+                    "Vlan1000|192.168.0.1/21": {}
+                }
+            },
+            "cmd": "ip neigh flush dev Vlan9999 10.10.10.1/24",
+            "rc": 255,
+            "stdout": "Flushing neighbors...\n",
+            "stderr": "Device \"Vlan9999\" does not exist.\n",
+            "expected_result": False,
+            "description": "Non-existent VLAN deletion fails with both stdout and stderr"
+        }
+   ]
+
+
 class TestServiceValidator(unittest.TestCase):
 
     @patch("generic_config_updater.services_validator.subprocess.run")
@@ -300,3 +347,28 @@ class TestServiceValidator(unittest.TestCase):
 
             caclmgrd_validator(entry["old"], entry["upd"], None)
 
+    @patch("generic_config_updater.services_validator.subprocess.run")
+    def test_vlanintf_validator_failure_vlan_not_found(self, mock_subprocess):
+        """Test vlanintf_validator when trying to flush neighbors on non-existent VLAN"""
+        global subprocess_calls, subprocess_call_index
+
+        mock_subprocess.side_effect = mock_subprocess_run
+
+        for entry in test_vlanintf_failure_data:
+            subprocess_calls = []
+            subprocess_call_index = 0
+
+            if entry["cmd"]:
+                call_entry = {"cmd": entry["cmd"], "rc": entry["rc"]}
+                if "stdout" in entry:
+                    call_entry["stdout"] = entry["stdout"]
+                if "stderr" in entry:
+                    call_entry["stderr"] = entry["stderr"]
+                subprocess_calls.append(call_entry)
+
+            msg = "case failed: {} - {}".format(entry["description"], str(entry))
+
+            result = vlanintf_validator(entry["old"], entry["upd"], None)
+
+            assert result == entry["expected_result"], \
+                f"{msg} - Expected {entry['expected_result']} but got {result}"
