@@ -198,3 +198,17 @@ def firmware(args):
         subprocess.check_call(cmd)
     except subprocess.CalledProcessError as e:
         sys.exit(e.returncode)
+
+
+# 'leakage' subcommand ("show platform leakage status")
+@platform.group()
+def leakage():
+    """Show platform leakage information"""
+    pass
+
+
+@leakage.command()
+def status():
+    """Show platform leakage status"""
+    cmd = ["leakageshow"]
+    clicommon.run_command(cmd)
