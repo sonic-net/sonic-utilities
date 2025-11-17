@@ -231,7 +231,7 @@ function reboot_dpu()
             return ${EXIT_ERROR}
         fi
     fi
-   
+
     # Send reboot command to DPU
     gnmi_reboot_dpu "${DPU_NAME}"
     if [ $? -ne 0 ]; then
@@ -244,32 +244,32 @@ function reboot_dpu()
         return ${EXIT_ERROR}
     fi
 
-    module_pre_shutdown ${DPU_NAME}
+    module_pre_shutdown "${DPU_NAME}"
     if [ $? -ne 0 ]; then
         log_message "ERROR: Failed to pre-shutdown the module for ${DPU_NAME}"
         if [[ "$REBOOT_TYPE" != $MODULE_REBOOT_SMARTSWITCH ]]; then
-            clear_module_state_transition_flag ${DPU_NAME}
+            clear_module_state_transition_flag "${DPU_NAME}"
         fi
         return ${EXIT_ERROR}
     fi
 
-    reboot_dpu_platform ${DPU_NAME} ${REBOOT_TYPE}
+    reboot_dpu_platform "${DPU_NAME}" "${REBOOT_TYPE}"
     if [ $? -ne 0 ]; then
         log_message "ERROR: Failed to reboot the module for ${DPU_NAME}"
         if [[ "$REBOOT_TYPE" != $MODULE_REBOOT_SMARTSWITCH ]]; then
-            clear_module_state_transition_flag ${DPU_NAME}
+            clear_module_state_transition_flag "${DPU_NAME}"
         fi
         return ${EXIT_ERROR}
     fi
 
     if [[ "$REBOOT_TYPE" != $MODULE_REBOOT_SMARTSWITCH ]]; then
-        module_post_startup ${DPU_NAME}
+        module_post_startup "${DPU_NAME}"
         if [ $? -ne 0 ]; then
             log_message "ERROR: Failed to startup the module for ${DPU_NAME}"
-            clear_module_state_transition_flag ${DPU_NAME}
+            clear_module_state_transition_flag "${DPU_NAME}"
             return ${EXIT_ERROR}
         fi
-        clear_module_state_transition_flag ${DPU_NAME}
+        clear_module_state_transition_flag "${DPU_NAME}"
     fi
 }
 
