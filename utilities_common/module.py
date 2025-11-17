@@ -141,7 +141,7 @@ class ModuleHelper:
 
         Args:
             module_name (str): The name of the module.
-            flag_value (bool): The value to set for the state_transition_in_progress flag.
+            flag_value (bool): When True, sets transition_type to 'reboot'; when False, sets to 'shutdown'.
 
         Returns:
             bool: True if the flag was successfully set, False otherwise.

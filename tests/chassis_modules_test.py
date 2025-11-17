@@ -2,10 +2,6 @@ import sys
 import os
 from click.testing import CliRunner
 from datetime import datetime, timedelta, timezone
-from config.chassis_modules import (
-    StateDBHelper,
-    TRANSITION_TIMEOUT
-)
 
 import show.main as show
 import config.main as config
