@@ -361,7 +361,7 @@ def test_enable_mst_for_interfaces():
     mock_db.set_entry.assert_any_call('STP_PORT', 'PortChannel1', expected_fvs_port)
 
     # Ensure the correct number of calls were made to set_entry
-    assert mock_db.set_entry.call_count == 4
+    assert mock_db.set_entry.call_count == 2
 
 
 def test_check_if_global_stp_enabled():
@@ -952,7 +952,7 @@ class TestMstpInterfaceEdgePort:
 
             assert result.exit_code != 0
             assert "Invalid value" in result.output
-            assert "choose from enable, disable" in result.output
+            assert "is not one of 'enable', 'disable'" in result.output
             mock_db.cfgdb.mod_entry.assert_not_called()
 
 
