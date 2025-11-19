@@ -1156,21 +1156,6 @@ class TestShowStpFunctions:
             assert result['root_port'] == 'Ethernet0'
             assert result['bridge_priority'] == '32768'
 
-    def test_get_mst_instance_entry_empty_config(self, mock_appl_db):
-        """Test get_mst_instance_entry with empty configuration """
-        mock_entry = {}
-        with patch('show.stp.stp_get_all_from_pattern', return_value=mock_entry):
-            result = show_stp.get_mst_instance_entry(0)
-            assert result['bridge_address'] == 'NA'
-            assert result['root_address'] == 'NA'
-            assert result['regional_root_address'] == 'NA'
-            assert result['root_path_cost'] == '0'
-            assert result['regional_root_cost'] == '0'
-            assert result['root_port'] == ''
-            assert result['remaining_hops'] == '20'
-            assert result['vlan@'] == ''
-            assert result['bridge_priority'] == '32768'
-
     def test_get_mst_instance_entry_none_return(self):
         """Test get_mst_instance_entry with None return """
         with patch('show.stp.stp_get_all_from_pattern', return_value=None):
@@ -1193,17 +1178,6 @@ class TestShowStpFunctions:
             assert result['path_cost'] == '20000'
             assert result['port_state'] == 'FORWARDING'
             assert result['role'] == 'DESIGNATED'
-
-    def test_get_mst_port_entry_empty_config(self):
-        """Test get_mst_port_entry with empty configuration """
-        mock_entry = {}
-        with patch('show.stp.stp_get_all_from_pattern', return_value=mock_entry):
-            result = show_stp.get_mst_port_entry(0, 'Ethernet0')
-            assert result['port_number'] == 'NA'
-            assert result['priority'] == '128'
-            assert result['path_cost'] == '0'
-            assert result['port_state'] == 'NA'
-            assert result['role'] == 'NA'
 
     def test_get_mst_port_entry_none_return(self):
         """Test get_mst_port_entry with None return """
@@ -1327,7 +1301,9 @@ class TestShowStpFunctions:
         mock_entry = {
             'bridge_address': '8000.001122334455',
             'root_address': '8000.001122334455',
+            'regional_root_address': '8000.001122334455',
             'root_path_cost': '0',
+            'regional_root_cost': '0',
             'root_port': '',
             'remaining_hops': '20',
             'vlan@': '1',
@@ -1528,52 +1504,56 @@ class TestShowStpFunctions:
 
     def test_get_mst_instance_entry_all_defaults(self):
         """Test get_mst_instance_entry checking all default assignments"""
-        # Pass a dict that will be modified by the function
+        # The function expects a dict to be returned and modifies it
+        # Return an empty dict that will get default values added
         mock_entry = {}
 
-        # Mock stp_get_all_from_pattern to return our dict
-        def mock_get_pattern(*args, **kwargs):
-            # Return the mock_entry which will be modified by get_mst_instance_entry
-            return mock_entry
-
-        with patch('show.stp.stp_get_all_from_pattern', side_effect=mock_get_pattern):
+        with patch('show.stp.stp_get_all_from_pattern', return_value=mock_entry):
             result = show_stp.get_mst_instance_entry(5)
-            # The function modifies and returns the dict, adding defaults
+            # The function adds default values to the returned dict
             assert result is not None
+            assert result == mock_entry  # Should be the same object
             assert 'bridge_address' in result
             assert result['bridge_address'] == 'NA'
             assert 'root_address' in result
             assert result['root_address'] == 'NA'
             assert 'regional_root_address' in result
+            assert result['regional_root_address'] == 'NA'
             assert 'root_path_cost' in result
+            assert result['root_path_cost'] == '0'
             assert 'regional_root_cost' in result
+            assert result['regional_root_cost'] == '0'
             assert 'root_port' in result
+            assert result['root_port'] == ''
             assert 'remaining_hops' in result
+            assert result['remaining_hops'] == '20'
             assert 'root_hello_time' in result
             assert 'root_forward_delay' in result
             assert 'root_max_age' in result
             assert 'hold_time' in result
             assert 'vlan@' in result
+            assert result['vlan@'] == ''
             assert 'bridge_priority' in result
+            assert result['bridge_priority'] == '32768'
 
     def test_get_mst_port_entry_all_defaults(self):
         """Test get_mst_port_entry checking all default assignments"""
-        # Pass a dict that will be modified by the function
+        # The function expects a dict to be returned and modifies it
+        # Return an empty dict that will get default values added
         mock_entry = {}
 
-        # Mock stp_get_all_from_pattern to return our dict
-        def mock_get_pattern(*args, **kwargs):
-            # Return the mock_entry which will be modified by get_mst_port_entry
-            return mock_entry
-
-        with patch('show.stp.stp_get_all_from_pattern', side_effect=mock_get_pattern):
+        with patch('show.stp.stp_get_all_from_pattern', return_value=mock_entry):
             result = show_stp.get_mst_port_entry(0, 'Ethernet0')
-            # The function modifies and returns the dict, adding defaults
+            # The function adds default values to the returned dict
             assert result is not None
+            assert result == mock_entry  # Should be the same object
             assert 'port_number' in result
             assert result['port_number'] == 'NA'
             assert 'priority' in result
             assert result['priority'] == '128'
             assert 'path_cost' in result
+            assert result['path_cost'] == '0'
             assert 'port_state' in result
+            assert result['port_state'] == 'NA'
             assert 'role' in result
+            assert result['role'] == 'NA'
