@@ -1,6 +1,6 @@
 import pytest
 import click
-from unittest.mock import MagicMock, patch, Mock
+from unittest.mock import MagicMock, patch
 from click.testing import CliRunner
 from config.stp import (
     get_intf_list_in_vlan_member_table,
