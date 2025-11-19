@@ -435,7 +435,7 @@ def enable_mst_instance0(db):
         'bridge_priority': MST_DEFAULT_BRIDGE_PRIORITY
     }
     instance_id = 0
-    db.set_entry('STP_MST_INST', f"MST_INSTANCE:INSTANCE{instance_id}", mst_inst_fvs)
+    db.set_entry('STP_MST_INST', f"MST_INSTANCE|{instance_id}", mst_inst_fvs)
 
 
 def enable_mst_for_interfaces(db):
@@ -460,13 +460,11 @@ def enable_mst_for_interfaces(db):
 
     for port_key in port_dict:
         if port_key in intf_list_in_vlan_member_table:
-            db.set_entry('STP_MST_PORT', f"MST_INSTANCE|0|{port_key}", fvs_mst_port)
             db.set_entry('STP_PORT', port_key, fvs_port)
 
     po_ch_dict = natsorted(db.get_table('PORTCHANNEL'))
     for po_ch_key in po_ch_dict:
         if po_ch_key in intf_list_in_vlan_member_table:
-            db.set_entry('STP_MST_PORT', f"MST_INSTANCE|0|{po_ch_key}", fvs_mst_port)
             db.set_entry('STP_PORT', po_ch_key, fvs_port)
 
 
@@ -534,9 +532,8 @@ def spanning_tree_enable(_db, mode):
         fvs = {'mode': mode
                }
         db.set_entry('STP', "GLOBAL", fvs)
-
         enable_mst_for_interfaces(db)
-        enable_mst_instance0(db)
+
 
 
 # cmd: STP disable
