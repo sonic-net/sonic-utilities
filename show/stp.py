@@ -448,7 +448,8 @@ def format_vlan_list(vlan_list_str):
 
     # close last range
     ranges.append(f"{start}-{prev}" if start != prev else str(start))
-    return ",".join(ranges) 
+    return ",".join(ranges)
+
 
 def get_mst_global_info():
     """Get MST global configuration information"""
@@ -477,8 +478,8 @@ def get_mst_global_info():
 
 def get_mst_instance_entry(mst_id):
     """Get MST instance entry from application database"""
-    entry = stp_get_all_from_pattern(g_stp_appl_db, g_stp_appl_db.APPL_DB, 
-                            "*STP_MST_INST_TABLE:{}".format(mst_id))
+    entry = stp_get_all_from_pattern(g_stp_appl_db, g_stp_appl_db.APPL_DB,
+                "*STP_MST_INST_TABLE:{}".format(mst_id))
     if not entry:
         return entry
 
@@ -516,7 +517,7 @@ def get_mst_instance_entry(mst_id):
 def get_mst_port_entry(mst_id, ifname):
     """Get MST port entry from application database"""
     entry = stp_get_all_from_pattern(g_stp_appl_db, g_stp_appl_db.APPL_DB,
-                                      "*STP_MST_PORT_TABLE:{}:{}".format(mst_id, ifname))
+                "*STP_MST_PORT_TABLE:{}:{}".format(mst_id, ifname))
     if not entry:
         return None
 
@@ -566,7 +567,7 @@ def show_mstp_summary(ctx):
 
 def show_mst_instance_detail(mst_id):
     """Display detailed information for a specific MST instance"""
-    
+
     mst_entry = get_mst_instance_entry(mst_id)
     if not mst_entry:
         return
@@ -581,7 +582,6 @@ def show_mst_instance_detail(mst_id):
 
     # Bridge information
     bridge_addr = format_bridge_id(mst_entry['bridge_address'])
-    bridge_priority = mst_entry.get('bridge_priority', '32768')
     click.echo("Bridge               Address {}".format(bridge_addr))
 
     # Root information
@@ -602,7 +602,7 @@ def show_mst_instance_detail(mst_id):
     if mst_id == 0:
         reg_root_addr = format_bridge_id(mst_entry['regional_root_address'])
         click.echo("Regional Root        Address  {}".format(reg_root_addr))
-        
+
         reg_root_cost = mst_entry.get('regional_root_cost', '0')
         rem_hops = mst_entry.get('remaining_hops', '20')
         click.echo("                     Internal cost {}                Rem hops {}".format(
@@ -619,7 +619,7 @@ def show_mst_instance_detail(mst_id):
 
         # Configured parameters
         click.echo("Configured           Hello Time  {}, Forward Delay {}, Max Age {}, Max Hops {}".format(
-            mst_global['hello_time'], mst_global['forward_delay'], 
+            mst_global['hello_time'], mst_global['forward_delay'],
             mst_global['max_age'], mst_global['max_hops']))
     else:
         # For non-CIST instances
@@ -634,8 +634,7 @@ def show_mst_instance_detail(mst_id):
     click.echo("---------------    --------     ----------      -------    ---------   -----------")
 
     # Get all ports for this instance
-    port_keys = g_stp_appl_db.keys(g_stp_appl_db.APPL_DB, 
-                                    "*STP_MST_PORT_TABLE:{}:*".format(mst_id))
+    port_keys = g_stp_appl_db.keys(g_stp_appl_db.APPL_DB, "*STP_MST_PORT_TABLE:{}:*".format(mst_id))
     if port_keys:
         intf_list = []
         for key in port_keys:
@@ -654,6 +653,7 @@ def show_mst_instance_detail(mst_id):
 
         for ifname in eth_list + po_list:
             show_mst_port_info(mst_id, ifname)
+
 
 def show_mst_port_info(mst_id, ifname):
     """Display port information for MST instance"""
@@ -700,7 +700,7 @@ def show_mst_region_info():
 
     # Count configured instances (excluding CIST)
     keys = g_stp_appl_db.keys(g_stp_appl_db.APPL_DB, "*STP_MST_INST_TABLE:*")
-    instance_count = len([k for k in keys if not k.endswith(':0')]) if keys else 0
+    instance_count = len([k for k in keys if not k.endswith(':0')]) if keys else 0  
 
     click.echo("Instances configured            : {}".format(instance_count))
 
@@ -710,10 +710,10 @@ def show_mst_region_info():
 
     # Bridge timers
     click.echo("Bridge Timers                   : MaxAge {}s Hello {}s FwdDly {}s MaxHops {}".format(
-        mst_global['max_age'], mst_global['hello_time'], 
+        mst_global['max_age'], mst_global['hello_time'],
         mst_global['forward_delay'], mst_global['max_hops']))
 
     # CIST Root timers (typically same as bridge timers)
     click.echo("CIST Root Timers                : MaxAge {}s Hello {}s FwdDly {}s MaxHops {}".format(
-        mst_global['max_age'], mst_global['hello_time'], 
+        mst_global['max_age'], mst_global['hello_time'],
         mst_global['forward_delay'], mst_global['max_hops']))
