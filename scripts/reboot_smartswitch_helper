@@ -6,9 +6,6 @@ declare -r MODULE_REBOOT_SMARTSWITCH="SMARTSWITCH"
 
 declare -r EXIT_DPU_DOWN=2
 
-# Set default platform JSON path if not already set
-PLATFORM_JSON_PATH=${PLATFORM_JSON_PATH:-"/usr/share/sonic/platform/platform.json"}
-
 # Function to print debug message
 function log_message() {
     local message=$1
