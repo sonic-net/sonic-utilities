@@ -479,7 +479,7 @@ def get_mst_global_info():
 def get_mst_instance_entry(mst_id):
     """Get MST instance entry from application database"""
     entry = stp_get_all_from_pattern(g_stp_appl_db, g_stp_appl_db.APPL_DB,
-        "*STP_MST_INST_TABLE:{}".format(mst_id))
+                                    "*STP_MST_INST_TABLE:{mst_id}")
     if not entry:
         return entry
 
@@ -517,7 +517,7 @@ def get_mst_instance_entry(mst_id):
 def get_mst_port_entry(mst_id, ifname):
     """Get MST port entry from application database"""
     entry = stp_get_all_from_pattern(g_stp_appl_db, g_stp_appl_db.APPL_DB,
-        "*STP_MST_PORT_TABLE:{}:{}".format(mst_id, ifname))
+                                     "*STP_MST_PORT_TABLE:{mst_id}:{ifname}")
     if not entry:
         return None
 
