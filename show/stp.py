@@ -423,7 +423,7 @@ def format_vlan_list(vlan_list_str):
     """Convert vlan mask string to readable vlan ranges"""
     if not vlan_list_str:
         return ""
-   
+
     """Convert comma VLAN list to merged ranges. Example:
        '1,2,4,5,6,10,11,12,20' b'1-2,4-6,10-12,20'
     """
@@ -448,16 +448,14 @@ def format_vlan_list(vlan_list_str):
 
     # close last range
     ranges.append(f"{start}-{prev}" if start != prev else str(start))
-
     return ",".join(ranges) 
-
 
 def get_mst_global_info():
     """Get MST global configuration information"""
     mst_global = g_stp_cfg_db.get_entry("STP_MST", "GLOBAL")
     if not mst_global:
         mst_global = {}
-    
+
     # Set defaults if not present
     if 'name' not in mst_global:
         mst_global['name'] = ''
@@ -473,17 +471,17 @@ def get_mst_global_info():
         mst_global['forward_delay'] = '15'
     if 'hold_count' not in mst_global:
         mst_global['hold_count'] = '6'
-    
+
     return mst_global
 
 
 def get_mst_instance_entry(mst_id):
     """Get MST instance entry from application database"""
     entry = stp_get_all_from_pattern(g_stp_appl_db, g_stp_appl_db.APPL_DB, 
-                                      "*STP_MST_INST_TABLE:{}".format(mst_id))
+                            "*STP_MST_INST_TABLE:{}".format(mst_id))
     if not entry:
-        return None
-    
+        return entry
+
     # Set defaults for missing fields
     if 'bridge_address' not in entry:
         entry['bridge_address'] = 'NA'
@@ -511,7 +509,7 @@ def get_mst_instance_entry(mst_id):
         entry['vlan@'] = ''
     if 'bridge_priority' not in entry:
         entry['bridge_priority'] = '32768'
-    
+
     return entry
 
 
@@ -521,7 +519,7 @@ def get_mst_port_entry(mst_id, ifname):
                                       "*STP_MST_PORT_TABLE:{}:{}".format(mst_id, ifname))
     if not entry:
         return None
-    
+
     # Set defaults for missing fields
     if 'port_number' not in entry:
         entry['port_number'] = 'NA'
@@ -533,7 +531,7 @@ def get_mst_port_entry(mst_id, ifname):
         entry['port_state'] = 'NA'
     if 'role' not in entry:
         entry['role'] = 'NA'
-    
+
     return entry
 
 
@@ -541,28 +539,27 @@ def get_mst_port_entry(mst_id, ifname):
 @click.pass_context
 def show_mstp_summary(ctx):
     """Show MSTP spanning tree information in detailed format"""
-    
     # Print mode
     click.echo("Spanning-tree Mode: MSTP")
-    
+
     # Get all MST instances
     keys = g_stp_appl_db.keys(g_stp_appl_db.APPL_DB, "*STP_MST_INST_TABLE:*")
     if not keys:
         return
-    
+
     mst_list = []
     for key in keys:
         result = re.search(r'STP_MST_INST_TABLE:(\d+)', key)
         if result:
             mst_id = int(result.group(1))
             mst_list.append(mst_id)
-    
+
     mst_list.sort()
-    
+
     # Display each MST instance
     for mst_id in mst_list:
         show_mst_instance_detail(mst_id)
-    
+
     # Display MST region information at the end
     show_mst_region_info()
 
@@ -573,34 +570,34 @@ def show_mst_instance_detail(mst_id):
     mst_entry = get_mst_instance_entry(mst_id)
     if not mst_entry:
         return
-    
+
     mst_global = get_mst_global_info()
-    
+
     # Print instance header
     vlan_str = mst_entry.get('vlan@', '')
     vlan_list = format_vlan_list(vlan_str)
     click.echo("")
     click.echo("#######  MST{:<8} Vlans mapped : {}".format(mst_id, vlan_list))
-    
+
     # Bridge information
     bridge_addr = format_bridge_id(mst_entry['bridge_address'])
     bridge_priority = mst_entry.get('bridge_priority', '32768')
     click.echo("Bridge               Address {}".format(bridge_addr))
-    
+
     # Root information
     root_addr = format_bridge_id(mst_entry['root_address'])
     click.echo("Root                 Address {}".format(root_addr))
-    
+
     root_port = mst_entry.get('root_port', '')
     root_path_cost = mst_entry.get('root_path_cost', '0')
-    
+
     if root_port:
         click.echo("                     Port     {}                  Path cost {}".format(
             root_port, root_path_cost))
     else:
         click.echo("                     Port     Root                  Path cost {}".format(
             root_path_cost))
-    
+
     # Regional Root (for CIST)
     if mst_id == 0:
         reg_root_addr = format_bridge_id(mst_entry['regional_root_address'])
@@ -610,16 +607,16 @@ def show_mst_instance_detail(mst_id):
         rem_hops = mst_entry.get('remaining_hops', '20')
         click.echo("                     Internal cost {}                Rem hops {}".format(
             reg_root_cost, rem_hops))
-        
+
         # Operational parameters
         hello_time = mst_entry.get('root_hello_time', mst_global['hello_time'])
         fwd_delay = mst_entry.get('root_forward_delay', mst_global['forward_delay'])
         max_age = mst_entry.get('root_max_age', mst_global['max_age'])
         hold_count = mst_entry.get('hold_time', mst_global['hold_count'])
-        
+
         click.echo("Operational          Hello Time  {}, Forward Delay {}, Max Age {}, Txholdcount {}".format(
             hello_time, fwd_delay, max_age, hold_count))
-        
+
         # Configured parameters
         click.echo("Configured           Hello Time  {}, Forward Delay {}, Max Age {}, Max Hops {}".format(
             mst_global['hello_time'], mst_global['forward_delay'], 
@@ -629,13 +626,13 @@ def show_mst_instance_detail(mst_id):
         rem_hops = mst_entry.get('remaining_hops', '20')
         click.echo("                     Port    Root            Path cost {}    Rem Hops {}".format(
             root_path_cost, rem_hops))
-    
+
     click.echo("")
-    
+
     # Port information table header
     click.echo("Interface           Role        State           Cost       Prio.Nbr    Type")
     click.echo("---------------    --------     ----------      -------    ---------   -----------")
-    
+
     # Get all ports for this instance
     port_keys = g_stp_appl_db.keys(g_stp_appl_db.APPL_DB, 
                                     "*STP_MST_PORT_TABLE:{}:*".format(mst_id))
@@ -646,82 +643,76 @@ def show_mst_instance_detail(mst_id):
             if result:
                 ifname = result.group(1)
                 intf_list.append(ifname)
-        
+
         # Sort interfaces: Ethernet first, then PortChannel
         eth_list = [ifname for ifname in intf_list if ifname.startswith("Ethernet")]
         po_list = [ifname for ifname in intf_list if ifname.startswith("PortChannel")]
-        
+
         # Sort by numeric part
         eth_list.sort(key=lambda x: int(re.search(r'\d+', x).group()))
         po_list.sort(key=lambda x: int(re.search(r'\d+', x).group()))
-        
+
         for ifname in eth_list + po_list:
             show_mst_port_info(mst_id, ifname)
 
-
 def show_mst_port_info(mst_id, ifname):
     """Display port information for MST instance"""
-    
+
     port_entry = get_mst_port_entry(mst_id, ifname)
     if not port_entry:
         return
-    
+
     role = port_entry.get('role', 'UNKNOWN').upper()
     state = port_entry.get('port_state', 'UNKNOWN').upper()
     cost = port_entry.get('path_cost', '0')
     priority = port_entry.get('priority', '128')
     port_num = port_entry.get('port_number', '0')
-    
+
     # Determine link type (typically P2P for point-to-point)
     link_type = 'P2P'
-    
     # Format priority.port number
     prio_nbr = "{}.{}".format(priority, port_num)
-    
     click.echo("{:<19}{:<13}{:<16}{:<11}{:<12}{}".format(
         ifname, role, state, cost, prio_nbr, link_type))
 
 
 def show_mst_region_info():
     """Display MST region configuration information"""
-    
+
     mst_global = get_mst_global_info()
-    
     # Get CIST information for some global stats
     cist_entry = get_mst_instance_entry(0)
-    
     click.echo("")
     click.echo("Region Name                     : {}".format(mst_global['name']))
     click.echo("Revision                        : {}".format(mst_global['revision']))
-    
     if cist_entry:
         bridge_id = cist_entry.get('bridge_address', 'NA')
         root_id = cist_entry.get('root_address', 'NA')
         ext_cost = cist_entry.get('root_path_cost', '0')
-        
+
         # Remove dots and format as continuous hex
         cist_bridge_id = bridge_id.replace('.', '') if bridge_id != 'NA' else '0'
         cist_root_id = root_id.replace('.', '') if root_id != 'NA' else '0'
-        
+
         click.echo("CIST Bridge Identifier          : {}".format(cist_bridge_id))
         click.echo("CIST Root Identifier            : {}".format(cist_root_id))
         click.echo("CIST External Path Cost         : {}".format(ext_cost))
-    
+
     # Count configured instances (excluding CIST)
     keys = g_stp_appl_db.keys(g_stp_appl_db.APPL_DB, "*STP_MST_INST_TABLE:*")
     instance_count = len([k for k in keys if not k.endswith(':0')]) if keys else 0
-    
+
     click.echo("Instances configured            : {}".format(instance_count))
-    
+
     # Topology change information
     click.echo("Last Topology Change            : 0s")
     click.echo("Number of Topology Changes      : 0")
-    
+
     # Bridge timers
     click.echo("Bridge Timers                   : MaxAge {}s Hello {}s FwdDly {}s MaxHops {}".format(
         mst_global['max_age'], mst_global['hello_time'], 
         mst_global['forward_delay'], mst_global['max_hops']))
-    
+
     # CIST Root timers (typically same as bridge timers)
     click.echo("CIST Root Timers                : MaxAge {}s Hello {}s FwdDly {}s MaxHops {}".format(
         mst_global['max_age'], mst_global['hello_time'], 
