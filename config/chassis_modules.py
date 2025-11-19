@@ -7,25 +7,34 @@ import subprocess
 import utilities_common.cli as clicommon
 from utilities_common.chassis import is_smartswitch, get_all_dpus
 from datetime import datetime, timedelta, timezone
+from swsscommon.swsscommon import SonicV2Connector
+from sonic_platform_base.module_base import ModuleBase
 
 TIMEOUT_SECS = 10
+# CLI uses a single conservative ceiling for timeouts when breaking a stuck transition.
+# (Platform-specific per-op timeouts are applied by platform code during the transition itself.)
 TRANSITION_TIMEOUT = timedelta(seconds=240)  # 4 minutes
 
 
-class StateDBHelper:
-    def __init__(self, sonic_db):
-        self.db = sonic_db
+_MB_SINGLETON = None
+_STATE_DB_CONN = None
 
-    def get_entry(self, table, key):
-        """Fetch all fields from table|key."""
-        redis_key = f"{table}|{key}"
-        return self.db.get_all("STATE_DB", redis_key) or {}
 
-    def set_entry(self, table, key, entry):
-        """Set multiple fields to table|key."""
-        redis_key = f"{table}|{key}"
-        for field, value in entry.items():
-            self.db.set("STATE_DB", redis_key, field, value)
+def _module_base():
+    """Return a cached ModuleBase instance."""
+    global _MB_SINGLETON
+    # Recreate if not initialized OR if the cached instance was created from an
+    # older/unpatched class (common in unit tests that patch ModuleBase).
+    try:
+        should_recreate = (_MB_SINGLETON is None or
+                           not isinstance(_MB_SINGLETON, ModuleBase))
+    except TypeError:
+        # Handle case where ModuleBase is mocked and not a proper type
+        should_recreate = _MB_SINGLETON is None
+
+    if should_recreate:
+        _MB_SINGLETON = ModuleBase()
+    return _MB_SINGLETON
 
     def delete_field(self, table, key, field):
         """Delete a specific field from table|key."""
@@ -47,11 +56,118 @@ def modules():
     pass
 
 
-def ensure_statedb_connected(db):
-    if not hasattr(db, 'statedb'):
-        chassisdb = db.db
-        chassisdb.connect("STATE_DB")
-        db.statedb = StateDBHelper(chassisdb)
+# Centralized-transition helpers (use ModuleBase)
+def _state_db_conn():
+    """Return a cached SonicV2Connector for STATE_DB (lazy init)."""
+    global _STATE_DB_CONN
+    if _STATE_DB_CONN is None:
+        conn = SonicV2Connector(use_string_keys=True)
+        try:
+            conn.connect(conn.STATE_DB)
+        except Exception:
+            # Some bindings autoconnect; keep tolerant behavior
+            pass
+        _STATE_DB_CONN = conn
+    return _STATE_DB_CONN
+
+
+def _transition_entry(module_name: str) -> dict:
+    """Read the transition entry for a module via ModuleBase centralized API."""
+    mb = _module_base()
+    conn = _state_db_conn()
+    return mb.get_module_state_transition(conn, module_name) or {}
+
+
+def _transition_in_progress(module_name: str) -> bool:
+    """Return True if STATE_DB marks the module’s transition as in progress.
+
+    Uses `_transition_entry(module_name)` and checks whether
+    `state_transition_in_progress` is a truthy string.
+    """
+    entry = _transition_entry(module_name)
+    in_prog_str = str(entry.get("state_transition_in_progress", "False")).lower()
+    return in_prog_str in ("true", "1", "yes", "on")
+
+
+def _mark_transition_start(module_name: str, transition_type: str):
+    """Set transition via centralized API."""
+    mb = _module_base()
+    conn = _state_db_conn()
+    return mb.set_module_state_transition(conn, module_name, transition_type)
+
+
+def _mark_transition_clear(module_name: str):
+    """Clear transition via centralized API."""
+    mb = _module_base()
+    conn = _state_db_conn()
+    return mb.clear_module_state_transition(conn, module_name)
+
+
+def _transition_timed_out(module_name: str) -> bool:
+    """CLI-side safety ceiling (4 minutes) to break a stuck transition."""
+    mb = _module_base()
+    conn = _state_db_conn()
+    return mb.is_module_state_transition_timed_out(conn, module_name, int(TRANSITION_TIMEOUT.total_seconds()))
+
+
+# shared helper
+def _block_if_conflicting_transition(chassis_module_name: str, conflict_type: str, target_oper_status: str) -> bool:
+    """
+    Gate a CLI action if a conflicting module transition is still in progress.
+
+    This helper reads the centralized transition state (via `_transition_entry()`)
+    and the current `oper_status` from `CHASSIS_MODULE_TABLE`. It **blocks**
+    (returns True) when:
+      1) the module currently has `state_transition_in_progress == True`, and
+      2) the last recorded `transition_type` matches the requested `conflict_type`
+         (e.g., "startup", "shutdown", or "reboot"), and
+      3) the module has **not** yet reached the `target_oper_status` expected to
+         resolve that transition (e.g., "Online" after startup, "Offline" after shutdown).
+
+    If the above conditions are not all true, the function allows the caller to proceed
+    (returns False).
+
+    Args:
+        chassis_module_name: Module name (e.g., "DPU0").
+        conflict_type: The transition type that would conflict with the caller's action.
+            Typical values: "startup", "shutdown", "reboot".
+        target_oper_status: The oper status that indicates the conflicting transition has
+            effectively completed from the caller’s perspective (e.g., "Online" for startup,
+            "Offline" for shutdown).
+
+    Returns:
+        bool: True if the function **blocked** the action (a conflicting transition is underway
+        and the module hasn't reached `target_oper_status` yet); False if the caller may proceed.
+
+    Side Effects:
+        - Prints a user-facing message via `click.echo(...)` when blocking.
+        - No database writes are performed.
+
+    Notes:
+        - Truthiness of `state_transition_in_progress` is normalized with a case-insensitive
+          string check, so both boolean True and string "True" are handled.
+        - Missing or empty transition rows result in no block (returns False).
+        - There is an inherent race window between this check and the subsequent action;
+          callers should treat this as a best-effort gate and keep operations idempotent.
+
+    Example:
+        # Block shutdown if a startup is still running and the module is not yet Online
+        if _block_if_conflicting_transition("DPU0", "startup", "Online"):
+            return  # tell CLI to try again later
+    """
+    entry = _transition_entry(chassis_module_name) or {}
+    in_prog = str(entry.get("state_transition_in_progress", "False")).lower() == "true"
+    last_type = entry.get("transition_type")
+
+    # Current oper_status (keep this simple read from STATE_DB)
+    conn = _state_db_conn()
+    row = conn.get_all(conn.STATE_DB, f"CHASSIS_MODULE_TABLE|{chassis_module_name}") or {}
+    oper = row.get("oper_status")
+
+    if in_prog and last_type == conflict_type and oper != target_oper_status:
+        click.echo(f"Module {chassis_module_name} has a {conflict_type} transition underway; try again later.")
+        return True
+    return False
 
 def get_config_module_state(db, chassis_module_name):
     config_db = db.cfgdb
@@ -63,50 +179,6 @@ def get_config_module_state(db, chassis_module_name):
             return 'up'
     else:
         return fvs['admin_status']
-
-
-def get_state_transition_in_progress(db, chassis_module_name):
-    ensure_statedb_connected(db)
-    fvs = db.statedb.get_entry('CHASSIS_MODULE_TABLE', chassis_module_name)
-    value = fvs.get('state_transition_in_progress', 'False') if fvs else 'False'
-    return value
-
-
-def set_state_transition_in_progress(db, chassis_module_name, value):
-    ensure_statedb_connected(db)
-    state_db = db.statedb
-    entry = state_db.get_entry('CHASSIS_MODULE_TABLE', chassis_module_name) or {}
-    entry['state_transition_in_progress'] = value
-    if value == 'True':
-        entry['transition_start_time'] = datetime.now(timezone.utc).isoformat()
-    else:
-        # Remove transition_start_time from both local entry and database
-        entry.pop('transition_start_time', None)
-        state_db.delete_field('CHASSIS_MODULE_TABLE', chassis_module_name, 'transition_start_time')
-    state_db.set_entry('CHASSIS_MODULE_TABLE', chassis_module_name, entry)
-
-
-def is_transition_timed_out(db, chassis_module_name):
-    ensure_statedb_connected(db)
-    state_db = db.statedb
-    fvs = state_db.get_entry('CHASSIS_MODULE_TABLE', chassis_module_name)
-    if not fvs:
-        return False
-    start_time_str = fvs.get('transition_start_time')
-    if not start_time_str:
-        return False
-    try:
-        start_time = datetime.fromisoformat(start_time_str)
-    except ValueError:
-        return False
-
-    # Use UTC everywhere for consistent comparison
-    current_time = datetime.now(timezone.utc)
-    if start_time.tzinfo is None:
-        # If stored time is naive, assume it's UTC
-        start_time = start_time.replace(tzinfo=timezone.utc)
-
-    return current_time - start_time > TRANSITION_TIMEOUT
 
 #
 # Name: check_config_module_state_with_timeout
@@ -196,15 +268,24 @@ def shutdown_chassis_module(db, chassis_module_name):
         return
 
     if is_smartswitch():
-        if get_state_transition_in_progress(db, chassis_module_name) == 'True':
-            if is_transition_timed_out(db, chassis_module_name):
-                set_state_transition_in_progress(db, chassis_module_name, 'False')
+        if _transition_in_progress(chassis_module_name):
+            if _transition_timed_out(chassis_module_name):
+                if not _mark_transition_clear(chassis_module_name):
+                    click.echo(f"Failed to clear timed out transition for module {chassis_module_name}")
+                    return
                 click.echo(f"Previous transition for module {chassis_module_name} timed out. Proceeding with shutdown.")
             else:
                 click.echo(f"Module {chassis_module_name} state transition is already in progress")
                 return
         else:
-            set_state_transition_in_progress(db, chassis_module_name, 'True')
+            # Use centralized API & shared helper (minimal change)
+            if _block_if_conflicting_transition(chassis_module_name,
+                                                conflict_type="startup",
+                                                target_oper_status="Online"):
+                return
+            if not _mark_transition_start(chassis_module_name, "shutdown"):
+                click.echo(f"Failed to start shutdown transition for module {chassis_module_name}")
+                return
 
         click.echo(f"Shutting down chassis module {chassis_module_name}")
         fvs = {
@@ -243,15 +324,24 @@ def startup_chassis_module(db, chassis_module_name):
         return
 
     if is_smartswitch():
-        if get_state_transition_in_progress(db, chassis_module_name) == 'True':
-            if is_transition_timed_out(db, chassis_module_name):
-                set_state_transition_in_progress(db, chassis_module_name, 'False')
+        if _transition_in_progress(chassis_module_name):
+            if _transition_timed_out(chassis_module_name):
+                if not _mark_transition_clear(chassis_module_name):
+                    click.echo(f"Failed to clear timed out transition for module {chassis_module_name}")
+                    return
                 click.echo(f"Previous transition for module {chassis_module_name} timed out. Proceeding with startup.")
             else:
                 click.echo(f"Module {chassis_module_name} state transition is already in progress")
                 return
         else:
-            set_state_transition_in_progress(db, chassis_module_name, 'True')
+            # Use centralized API & shared helper (minimal change)
+            if _block_if_conflicting_transition(chassis_module_name,
+                                                conflict_type="shutdown",
+                                                target_oper_status="Offline"):
+                return
+            if not _mark_transition_start(chassis_module_name, "startup"):
+                click.echo(f"Failed to start startup transition for module {chassis_module_name}")
+                return
 
         click.echo(f"Starting up chassis module {chassis_module_name}")
         fvs = {
