@@ -1276,7 +1276,7 @@ class TestShowStpFunctions:
              patch('show.stp.click.echo') as mock_echo:
 
             show_stp.show_mst_instance_detail(0)
-            
+
             # Verify the function was called and output was generated
             assert mock_echo.called
             output_str = ' '.join([str(call[0][0]) for call in mock_echo.call_args_list])
@@ -1316,7 +1316,7 @@ class TestShowStpFunctions:
              patch('show.stp.click.echo') as mock_echo:
 
             show_stp.show_mst_instance_detail(1)
-            
+
             # Verify the function was called and output was generated
             assert mock_echo.called
             output_str = ' '.join([str(call[0][0]) for call in mock_echo.call_args_list])
@@ -1355,7 +1355,7 @@ class TestShowStpFunctions:
              patch('show.stp.get_mst_global_info', return_value=mock_global), \
              patch('show.stp.g_stp_appl_db', mock_appl_db), \
              patch('show.stp.show_mst_port_info') as mock_show_port:
-            
+
             show_stp.show_mst_instance_detail(0)
             assert mock_show_port.call_count == 3
             # Check that Ethernet ports are shown before PortChannel
@@ -1383,9 +1383,9 @@ class TestShowStpFunctions:
         # Call the function directly since it's not a Click command
         with patch('show.stp.get_mst_port_entry', return_value=mock_port_entry), \
              patch('show.stp.click.echo') as mock_echo:
-            
+
             show_stp.show_mst_port_info(0, 'Ethernet0')
-            
+
             # Verify the function was called and output was generated
             assert mock_echo.called
             output_str = str(mock_echo.call_args[0][0])
@@ -1434,7 +1434,7 @@ class TestShowStpFunctions:
              patch('show.stp.click.echo') as mock_echo:
 
             show_stp.show_mst_region_info()
-            
+
             # Verify the function was called and output was generated
             assert mock_echo.called
             output_str = ' '.join([str(call[0][0]) for call in mock_echo.call_args_list])
@@ -1464,7 +1464,7 @@ class TestShowStpFunctions:
              patch('show.stp.click.echo') as mock_echo:
 
             show_stp.show_mst_region_info()
-            
+
             # Verify the function was called and output was generated
             assert mock_echo.called
             output_str = ' '.join([str(call[0][0]) for call in mock_echo.call_args_list])
@@ -1530,12 +1530,12 @@ class TestShowStpFunctions:
         """Test get_mst_instance_entry checking all default assignments"""
         # Pass a dict that will be modified by the function
         mock_entry = {}
-        
+
         # Mock stp_get_all_from_pattern to return our dict
         def mock_get_pattern(*args, **kwargs):
             # Return the mock_entry which will be modified by get_mst_instance_entry
             return mock_entry
-        
+
         with patch('show.stp.stp_get_all_from_pattern', side_effect=mock_get_pattern):
             result = show_stp.get_mst_instance_entry(5)
             # The function modifies and returns the dict, adding defaults
@@ -1560,12 +1560,12 @@ class TestShowStpFunctions:
         """Test get_mst_port_entry checking all default assignments"""
         # Pass a dict that will be modified by the function
         mock_entry = {}
-        
+
         # Mock stp_get_all_from_pattern to return our dict
         def mock_get_pattern(*args, **kwargs):
             # Return the mock_entry which will be modified by get_mst_port_entry
             return mock_entry
-        
+
         with patch('show.stp.stp_get_all_from_pattern', side_effect=mock_get_pattern):
             result = show_stp.get_mst_port_entry(0, 'Ethernet0')
             # The function modifies and returns the dict, adding defaults
