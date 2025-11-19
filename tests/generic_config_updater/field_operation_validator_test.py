@@ -279,7 +279,7 @@ class TestValidateFieldOperation:
             "path": "/BUFFER_PROFILE/pg_lossless_40000_5m_profile",
             "op": "remove"
         }
-        
+
         # Object-level remove should be allowed without ASIC/version validation
         assert fov.buffer_profile_config_update_validator("localhost", patch_element) is True
 
@@ -290,7 +290,7 @@ class TestValidateFieldOperation:
             "op": "add",
             "value": {"size": "1024", "pool": "ingress_lossless_pool"}
         }
-        
+
         # Object-level add should be allowed
         assert fov.buffer_profile_config_update_validator("localhost", patch_element) is True
 
@@ -301,7 +301,7 @@ class TestValidateFieldOperation:
             "op": "move",  # Unsupported operation
             "from": "/BUFFER_PROFILE/old_profile"
         }
-        
+
         assert fov.buffer_profile_config_update_validator("localhost", patch_element) is False
 
     def test_buffer_profile_config_update_validator_field_level_uses_existing_validation(self):
@@ -311,9 +311,9 @@ class TestValidateFieldOperation:
             "op": "replace",
             "value": "2"
         }
-        
+
         # Mock the existing validation to return True
-        with patch("generic_config_updater.field_operation_validators.rdma_config_update_validator_common", 
+        with patch("generic_config_updater.field_operation_validators.rdma_config_update_validator_common",
                    return_value=True):
             assert fov.buffer_profile_config_update_validator("localhost", patch_element) is True
 

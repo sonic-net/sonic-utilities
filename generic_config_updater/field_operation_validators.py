@@ -178,22 +178,22 @@ def buffer_profile_config_update_validator(scope, patch_element):
     """
     path = patch_element["path"]
     path_parts = jsonpointer.JsonPointer(path).parts
-    
+
     # Determine if this is an object-level operation (entire profile) or field-level operation
     # Object-level: /BUFFER_PROFILE/profile_name (2 parts)
     # Field-level: /BUFFER_PROFILE/profile_name/field_name (3+ parts)
     is_object_level = len(path_parts) == 2  # table + profile_name only
-    
+
     if is_object_level:
         # For object-level operations, we're more permissive
         # Allow add/remove/replace operations for entire profile objects
         allowed_object_operations = ['add', 'remove', 'replace']
-        
+
         if patch_element['op'] in allowed_object_operations:
             return True  # Allow object-level operations
         else:
             return False  # Disallow unsupported operations
-    
+
     # For field-level operations, use the existing validation logic
     return rdma_config_update_validator_common(scope, patch_element)
 
