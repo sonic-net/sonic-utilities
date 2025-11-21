@@ -425,7 +425,7 @@ def test_enable_mst_instance0():
 
     # Assert that set_entry was called with the correct arguments
     mock_db.set_entry.assert_called_once_with(
-        'STP_MST_INST', 'MST_INSTANCE:INSTANCE0', expected_mst_inst_fvs
+        'STP_MST_INST', 'MST_INSTANCE|0', expected_mst_inst_fvs
     )
 
 
@@ -954,7 +954,7 @@ class TestMstpInterfaceEdgePort:
 
             assert result.exit_code != 0
             assert "Invalid value" in result.output
-            assert "is not one of 'enable', 'disable'" in result.output
+            assert "choose from enable, disable" in result.output
             mock_db.cfgdb.mod_entry.assert_not_called()
 
 
