@@ -1680,6 +1680,18 @@ def version(verbose):
     platform_info = device_info.get_platform_info()
     chassis_info = platform.get_chassis_info()
 
+    if platform_info['asic_type'] == 'broadcom':
+        asic_info = _get_broadcom_info()
+        asic_info_str = []
+        asic_info_str.extend(
+            # NOTE: No ':' because that is in the output as well.
+            ["ASIC API {}".format(line) for line in asic_info['versions']])
+        asic_info_str.extend(
+            ["ASIC Model: {}".format(line) for line in asic_info['units']])
+        asic_info_str = '\n'.join(asic_info_str)
+    else:
+        asic_info = None
+
     sys_uptime_cmd = ["uptime"]
     sys_uptime = subprocess.Popen(sys_uptime_cmd, text=True, stdout=subprocess.PIPE)
 
@@ -1696,6 +1708,8 @@ def version(verbose):
     click.echo("HwSKU: {}".format(platform_info['hwsku']))
     click.echo("ASIC: {}".format(platform_info['asic_type']))
     click.echo("ASIC Count: {}".format(platform_info['asic_count']))
+    if asic_info:
+        click.echo(asic_info_str)
     click.echo("Serial Number: {}".format(chassis_info['serial']))
     click.echo("Model Number: {}".format(chassis_info['model']))
     click.echo("Hardware Revision: {}".format(chassis_info['revision']))
@@ -1705,6 +1719,31 @@ def version(verbose):
     cmd = ['sudo', 'docker', 'images', '--format', "table {{.Repository}}\\t{{.Tag}}\\t{{.ID}}\\t{{.Size}}"]
     p = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE)
     click.echo(p.stdout.read())
+
+
+def _get_broadcom_info():
+    def _bcmcmd(command):
+        try:
+            res = subprocess.check_output(
+                # NOTE: There's also -n $UNIT in the bcmcmd shell script.
+                ['bcmcmd', '-t', '1', command],
+                stderr=subprocess.DEVNULL, text=True)
+        except (FileNotFoundError, PermissionError, subprocess.CalledProcessError) as e:
+            res = str(e)
+        lines = [
+            line.strip() for line in res.split('\n')
+            if line.strip() not in (
+                '', command, 'drivshell>')]
+        res = '\n'.join(lines)
+        return res
+
+    ret = {
+        # Slow: these calls easily take 2x300ms.
+        'versions': _bcmcmd('bsv').replace('\n', ' ').split(', '),
+        'units': _bcmcmd('show unit').split('\n'),
+        # 'monitor_version': _bcmcmd('ver'),
+    }
+    return ret
 
 #
 # 'environment' command ("show environment")
