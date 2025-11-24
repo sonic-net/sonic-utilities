@@ -631,11 +631,12 @@ class TestBgpCommandsSingleAsic(object):
         indirect=['setup_single_bgp_instance_chassis']
     )
     @patch.object(multi_asic.MultiAsic, 'get_display_option', display_all)
-    @patch.object(device_info, 'is_chassis', mock.MagicMock(return_value=True))
+    @patch('sonic_py_common.device_info.get_platform_info')
     def test_bgp_summary_v4_all_chassis(
         self, mock_is_chassis, setup_bgp_commands,
         setup_single_bgp_instance_chassis
     ):
+        mock_is_chassis.return_value = {'switch_type': 'voq'}
         show = setup_bgp_commands
         runner = CliRunner()
         result = runner.invoke(
