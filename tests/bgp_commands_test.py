@@ -16,7 +16,6 @@ from unittest.mock import patch
 
 from sonic_py_common import device_info
 from sonic_py_common import multi_asic as masic
-
 show_bgp_summary_v4 = """\
 
 IPv4 Unicast Summary:
