@@ -9457,7 +9457,32 @@ config platform mlnx
 
 This command is valid only on mellanox devices. The sub-commands for "config platform" gets populated only on mellanox platforms. There are no other subcommands on non-Mellanox devices and hence this command appears empty and useless in other platforms. 
 
-The platform mellanox command currently includes no sub command.
+The platform mellanox section also includes `show` subcommands described below.
+
+**show platform mlnx mpo-status**
+
+This command displays the MPO → lane mapping for CPO ports on Mellanox platforms. Each lane cell shows the interface and its current oper status.
+
+- Usage:
+  ```
+  show platform mlnx mpo-status
+  ```
+
+- Example (single-ASIC):
+  ```
+  MPO  Lane 1           Lane 2           Lane 3           Lane 4
+  ---- ---------------- ---------------- ---------------- ----------------
+    1  Ethernet0(UP)     Ethernet0(UP)    Ethernet0(UP)    Ethernet0(UP)
+    2  Ethernet4(DOWN)   Ethernet4(DOWN)  Ethernet6(UP)    Ethernet7(UP)
+  ```
+
+- Example (multi-ASIC):
+  ```
+  MPO  Lane 1                 Lane 2                  Lane 3                  Lane 4
+  ---- ---------------------- ----------------------- ----------------------- ----------------------
+    1  Ethernet0/asic0(UP)    Ethernet512/asic1(UP)   Ethernet1024/asic2(UP)  Ethernet1536/asic3(UP)
+    2  Ethernet1/asic0(DOWN)  Ethernet513/asic1(UP)   Ethernet1025/asic2(UP)  Ethernet1537/asic3(UP)
+  ```
 
 ### Barefoot Platform Specific Commands
 

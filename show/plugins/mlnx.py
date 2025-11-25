@@ -28,7 +28,11 @@ try:
     import click
     from shlex import join
     from lxml import etree as ET
-    from sonic_py_common import device_info
+    from tabulate import tabulate
+    from sonic_py_common import device_info, multi_asic
+    from swsscommon.swsscommon import ConfigDBConnector, SonicV2Connector
+    import utilities_common.cli as clicommon
+    from utilities_common.db import Db
 except ImportError as e:
     raise ImportError("%s - required module not found" % str(e))
 
@@ -41,6 +45,135 @@ TMP_SNIFFER_CONF_FILE = '/tmp/tmp.conf'
 HWSKU_PATH = '/usr/share/sonic/hwsku/'
 
 SAI_PROFILE_DELIMITER = '='
+
+UP_STATUS = 'UP'
+DOWN_STATUS = 'DOWN'
+ETHERNET_PREFIX = 'Ethernet'
+PORT_TABLE = 'PORT'
+PORT_TYPE_CPO = 'CPO'
+MPO_LANES = 4   
+
+# ------------------------ MPO helpers ------------------------
+
+def is_cpo_port(rdb, port):
+    """
+    Determine whether a given port is a CPO type port.
+    Fetch 'type' from STATE_DB 'TRANSCEIVER_INFO|<port>' and match 'CPO'.
+    """
+    try:
+        val = rdb.get(rdb.STATE_DB, f"TRANSCEIVER_INFO|{port}", "type")
+        return val == PORT_TYPE_CPO
+    except Exception:
+        return False
+
+def get_cpo_ports_sorted(port_tbl, ns=None):
+    """
+    Return Ethernet ports in this namespace which are CPO type, sorted by numeric index.
+    """
+    try:
+        # Use Db helper to get per-namespace STATE_DB connector
+        db = Db()
+        rdb = db.db if ns is None else db.db_clients[ns]
+        cpo_ports = [p for p in port_tbl if p.startswith(ETHERNET_PREFIX) and is_cpo_port(rdb, p)]
+    except Exception as e:
+        click.echo(f"Warning: failed to get CPO ports list: {e}", err=True)
+        return []
+    return sorted(cpo_ports, key=lambda p: int(p.replace(ETHERNET_PREFIX, '')))
+
+def get_ports_oper_status(ports, ns=None):
+    """
+    Fetch oper_status for ports from APPL_DB and return mapping to 'UP'/'DOWN'.
+    """
+    status_map = {}
+    try:
+        db = Db()
+        rdb = db.db if ns is None else db.db_clients[ns]
+        for p in ports:
+            v = rdb.get(rdb.APPL_DB, f"PORT_TABLE:{p}", "oper_status")
+            status_map[p] = UP_STATUS if v and v.upper() == UP_STATUS else DOWN_STATUS
+    except Exception as e:
+        pass
+    return status_map
+
+def create_single_asic_mpo_rows():
+    """
+    Build rows for single-ASIC: MPO from CONFIG_DB PORT.lanes for CPO ports only.
+    """
+    try:
+        db = Db()
+        cfg_db = db.cfgdb
+        port_tbl = cfg_db.get_table(PORT_TABLE)
+    except Exception as e:
+        raise click.ClickException(f"Failed to read {PORT_TABLE} from CONFIG_DB: {e}")
+    # Pre-fetch status for all CPO ports
+    cpo_ports = get_cpo_ports_sorted(port_tbl=port_tbl)
+    if len(cpo_ports) == 0:
+        raise click.ClickException("No CPO ports found")
+    status_map = get_ports_oper_status(ports=cpo_ports)
+    mpo_to_lanes = {}
+    for port_name in cpo_ports:
+        attrs = port_tbl[port_name]
+        lanes_str = attrs.get('lanes')
+        if not lanes_str:
+            continue
+        try:
+            lane_nums = [int(x.strip()) for x in lanes_str.split(',') if x.strip() != '']
+        except Exception:
+            continue
+        for ln in lane_nums:
+            mpo_idx = (ln // MPO_LANES) + 1
+            lane_pos = ln % MPO_LANES
+            if mpo_idx not in mpo_to_lanes:
+                mpo_to_lanes[mpo_idx] = ['-','-','-','-']   
+            mpo_to_lanes[mpo_idx][lane_pos] = f"{port_name}({status_map.get(port_name, DOWN_STATUS)})"
+    # Build final rows, ordered by MPO index
+    rows = [[mpo] + mpo_to_lanes[mpo] for mpo in sorted(mpo_to_lanes.keys())]
+    return rows
+
+def create_multi_asic_mpo_rows():
+    """
+    Build rows for multi-ASIC: MPO m = m-th CPO port of each ASIC in order.
+    """
+    namespaces = multi_asic.get_namespace_list()
+    per_ns_port_lists = []
+    per_ns_status = {}
+    try:
+        db = Db()
+        for ns in namespaces:
+            cfg_ns = db.cfgdb_clients[ns]
+            port_tbl = cfg_ns.get_table(PORT_TABLE)
+            cpo_list = get_cpo_ports_sorted(port_tbl=port_tbl, ns=ns)
+            if len(cpo_list) == 0:
+                click.echo(f"Warning: no CPO ports found in namespace {ns}", err=True)
+                continue
+            per_ns_port_lists.append((ns, cpo_list))
+            per_ns_status[ns] = get_ports_oper_status(ports=cpo_list, ns=ns)
+    except Exception as e:
+        raise click.ClickException(f"Failed to read DBs for namespaces: {e}")
+    if len(per_ns_port_lists) == 0:
+        raise click.ClickException("No CPO ports found across namespaces")
+    ports_number = max(len(port_list) for _, port_list in per_ns_port_lists)
+    # Build MPO data structure: mapping from mpo index to a list of interfaces per lane
+    # For multi-asic, mpo index and lane are determined as instructed
+    mpo_to_lanes = {}
+    total_interfaces = []
+    # Collect the (ns, port_name) pairs across all namespaces
+    for ns, port_list in per_ns_port_lists:
+        for port in port_list:
+            total_interfaces.append((ns, port))
+    total_interfaces.sort(key=lambda x: int(x[1].replace(ETHERNET_PREFIX, '')))
+    # Now for each interface, calculate its MPO index and lane position
+    for lane, (ns, port) in enumerate(total_interfaces):
+        mpo_idx = (lane % ports_number) + 1
+        lane_pos = (lane // ports_number)
+        if mpo_idx not in mpo_to_lanes:
+            mpo_to_lanes[mpo_idx] = ['-','-','-','-']
+        status = per_ns_status.get(ns, {}).get(port, DOWN_STATUS)
+        name_with_ns = f"{port}/{ns}" if ns else port
+        mpo_to_lanes[mpo_idx][lane_pos] = f"{name_with_ns}({status})"
+    # Build final rows, ordered by MPO index
+    rows = [[mpo] + mpo_to_lanes[mpo] for mpo in sorted(mpo_to_lanes.keys())]
+    return rows
 
 # run command
 def run_command(command, display_cmd=False, ignore_error=False, print_to_console=True):
@@ -140,6 +273,18 @@ def issu_status():
 
     click.echo('ISSU is enabled' if res else 'ISSU is disabled')
 
+@mlnx.command('mpo-status')
+def mpo_status():
+    """Show MPO → interface mapping status (CPO ports only)."""
+    headers = ['MPO', 'Lane 1', 'Lane 2', 'Lane 3', 'Lane 4']
+    multi = multi_asic.is_multi_asic()
+    if not multi:
+        # Single-ASIC: derive mapping directly from lanes
+        rows = create_single_asic_mpo_rows()
+    else:
+        # Multi-ASIC: MPO m is composed of the m-th port on each ASIC (namespace)
+        rows = create_multi_asic_mpo_rows()
+    click.echo(tabulate(rows, headers, tablefmt="outline"))
 
 def register(cli):
     version_info = device_info.get_sonic_version_info()
