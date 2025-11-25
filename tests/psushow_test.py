@@ -98,7 +98,7 @@ PSU 2  0J6J4K   CN-0J6J4K-17972-5AF-008M-A00  A                 12.18          1
         # Test trying to display a non-existent PSU
         expected_output = '''\
 Error: PSU 3 is not available. Number of supported PSUs: 2
-Error: failed to get PSU status from state DB
+PSU not detected
 '''
         for arg in ['-s', '--status']:
             with mock.patch('sys.argv', ['psushow', arg, '-i', '3']):
@@ -196,7 +196,7 @@ Error: failed to get PSU status from state DB
         # Test trying to display a non-existent PSU
         expected_output = '''\
 Error: PSU 3 is not available. Number of supported PSUs: 2
-Error: failed to get PSU status from state DB
+PSU not detected
 '''
         for arg in ['-j', '--json']:
             with mock.patch('sys.argv', ['psushow', '-s', '-i', '3', arg]):
