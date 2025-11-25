@@ -9,7 +9,7 @@ done
 
 CONTAINER_ID=""
 if [ $# > 0 ]; then
-    CONTAINER_ID=$(xargs -0 -L1 -a /proc/${1}/cgroup | grep -oP "system.slice/docker-\K\w+")
+    CONTAINER_ID=$(xargs -0 -L1 -a /proc/${1}/cgroup | grep -oP "(?:system.slice/docker-\K\w+)|(?:pids:/docker/\K\w+)")
     ns=`xargs -0 -L1 -a /proc/${1}/environ | grep -e "^NAMESPACE_ID" | cut -f2 -d'='`
     if [ ! -z ${ns} ]; then
         PREFIX=${PREFIX}${ns}.
