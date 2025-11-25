@@ -932,7 +932,7 @@ save_sdk_sysfs() {
         return 1
     }
 
-    copy_file() {
+    copy_file_content() {
         local f="$1"
         local target="$2"
         if $NOOP; then
@@ -947,7 +947,7 @@ save_sdk_sysfs() {
         if [[ -f "$f" ]]; then
             local base="$(basename "$f")"
             should_skip "$base" && continue
-            copy_file "$f" "$dest/$base"
+            copy_file_content "$f" "$dest/$base"
         fi
     done
 
@@ -980,7 +980,7 @@ save_sdk_sysfs() {
                     [[ "$only_copy_presence_files" == true && "$base" != "present" && "$base" != "hw_present" ]] && continue
                     [[ "$frequency_support" == "0" && "$base" == "frequency" ]] && continue
 
-                    copy_file "$f" "$subdir_dest/$base"
+                    copy_file_content "$f" "$subdir_dest/$base"
                 fi
             done
         fi
