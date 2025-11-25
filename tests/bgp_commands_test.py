@@ -559,9 +559,9 @@ class TestBgpCommandsSingleAsic(object):
         indirect=['setup_single_bgp_instance_chassis']
     )
     @patch.object(multi_asic.MultiAsic, 'get_display_option', display_external)
-    @patch.object(device_info, 'is_chassis', mock.MagicMock(return_value=True))
+    @patch.object(device_info, 'is_voq_chassis', mock.MagicMock(return_value=True))
     def test_bgp_summary_v4_chassis(
-        self, mock_is_chassis, setup_bgp_commands,
+        self, setup_bgp_commands,
         setup_single_bgp_instance_chassis
     ):
         show = setup_bgp_commands
@@ -577,9 +577,9 @@ class TestBgpCommandsSingleAsic(object):
         indirect=['setup_single_bgp_instance_chassis']
     )
     @patch.object(multi_asic.MultiAsic, 'get_display_option', display_external)
-    @patch.object(device_info, 'is_chassis', mock.MagicMock(return_value=True))
+    @patch.object(device_info, 'is_voq_chassis', mock.MagicMock(return_value=True))
     def test_bgp_vrf_summary_v4_chassis(
-        self, mock_is_chassis, setup_bgp_commands,
+        self, setup_bgp_commands,
         setup_single_bgp_instance_chassis
     ):
         show = setup_bgp_commands
@@ -595,9 +595,9 @@ class TestBgpCommandsSingleAsic(object):
         indirect=['setup_single_bgp_instance_chassis']
     )
     @patch.object(multi_asic.MultiAsic, 'get_display_option', display_external)
-    @patch.object(device_info, 'is_chassis', mock.MagicMock(return_value=True))
+    @patch.object(device_info, 'is_voq_chassis', mock.MagicMock(return_value=True))
     def test_bgp_summary_v6_chassis(
-        self, mock_is_chassis, setup_bgp_commands,
+        self, setup_bgp_commands,
         setup_single_bgp_instance_chassis
     ):
         show = setup_bgp_commands
@@ -613,9 +613,9 @@ class TestBgpCommandsSingleAsic(object):
         indirect=['setup_single_bgp_instance_chassis']
     )
     @patch.object(multi_asic.MultiAsic, 'get_display_option', display_external)
-    @patch.object(device_info, 'is_chassis', mock.MagicMock(return_value=True))
+    @patch.object(device_info, 'is_voq_chassis', mock.MagicMock(return_value=True))
     def test_bgp_vrf_summary_v6_chassis(
-        self, mock_is_chassis, setup_bgp_commands,
+        self, setup_bgp_commands,
         setup_single_bgp_instance_chassis
     ):
         show = setup_bgp_commands
