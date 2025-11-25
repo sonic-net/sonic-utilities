@@ -1712,9 +1712,12 @@ def version(verbose):
 
 @cli.command()
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def environment(verbose):
+@click.option('--json', '-j', is_flag=True, help="Output in json format")
+def environment(verbose, json):
     """Show environmentals (voltages, fans, temps)"""
     cmd = ['sudo', 'sensors']
+    if json:
+        cmd.append('-j')
     run_command(cmd, display_cmd=verbose)
 
 

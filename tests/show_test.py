@@ -1067,6 +1067,13 @@ class TestShow(object):
         mock_run_command.assert_called_with(['sudo', 'sensors'], display_cmd=True)
 
     @patch('show.main.run_command')
+    def test_show_environment_json(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands['environment'], ['--json'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['sudo', 'sensors', '-j'], display_cmd=False)
+
+    @patch('show.main.run_command')
     def test_show_users(self, mock_run_command):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['users'], ['--verbose'])
