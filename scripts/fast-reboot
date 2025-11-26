@@ -817,8 +817,8 @@ function save_counters_folder() {
 }
 
 function check_warm_restart_in_progress() {
-    sonic-db-cli STATE_DB keys "WARM_RESTART_ENABLE_TABLE|*" | while read key ; do
-        if [ -n "$key" ] && [[ x"$(sonic-db-cli STATE_DB hget $key enable)" == x"true" ]]; then
+    sonic-db-cli -n "$NETNS" STATE_DB keys "WARM_RESTART_ENABLE_TABLE|*" | while read key ; do
+        if [ -n "$key" ] && [[ x"$(sonic-db-cli -n "$NETNS" STATE_DB hget $key enable)" == x"true" ]]; then
             if [[ x"${FORCE}" == x"yes" ]]; then
                 debug "Ignoring warm restart flag for ${key#*|}"
             else
@@ -905,7 +905,7 @@ case "$REBOOT_TYPE" in
         config warm_restart enable system
         ;;
     "warm-reboot")
-        check_warm_restart_in_progress
+        execute_in_namespaces all check_warm_restart_in_progress
         if [[ "$sonic_asic_type" == "mellanox" ]]; then
             REBOOT_TYPE="fastfast-reboot"
             BOOT_TYPE_ARG="fastfast"
