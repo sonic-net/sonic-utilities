@@ -829,6 +829,10 @@ function check_warm_restart_in_progress() {
     done
 }
 
+function enable_warm_restart() {
+    config warm_restart enable -n "$NETNS" system
+}
+
 function check_conflict_boot_in_fw_update() {
     # Make sure firmware auto update is not scheduled for a different reboot
     FIRMWARE_AU_STATUS_DIR="/tmp/firmwareupdate"
@@ -916,7 +920,7 @@ case "$REBOOT_TYPE" in
             BOOT_TYPE_ARG="warm"
         fi
         trap clear_boot EXIT HUP INT QUIT TERM KILL ABRT ALRM
-        config warm_restart enable system
+        execute_in_namespaces all enable_warm_restart
         ;;
     "express-reboot")
         check_warm_restart_in_progress
