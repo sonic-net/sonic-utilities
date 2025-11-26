@@ -235,7 +235,9 @@ setup(
     },
     install_requires=[
         'bcrypt>=3.2.2',
-        'click>=8.0, <8.3',  # Click 8.3 has some bug with mutual exclusions
+        'click>=8.0, <8.2',  # Click 8.3 has some bug with mutual exclusions,
+                             # and 8.2 changes the exit code from 0 to 2 when
+                             # no args are provided
         'cryptography>=3.3.2',
         'urllib3>=2',
         'click-log>=0.3.2',
