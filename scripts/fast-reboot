@@ -92,7 +92,7 @@ function debug()
 #   - If NUM_ASIC > 1:
 #       - For each ASIC, runs the command in its namespace in the background and tracks the PIDs.
 #       - If scope is "all", also runs the command once globally.
-#       - Waits for all spawned processes, exiting if all fail.
+#       - Waits for all spawned processes, exiting any one fails.
 #   - Otherwise, runs the command as is.
 function execute_in_namespaces()
 {
@@ -127,18 +127,7 @@ function execute_in_namespaces()
             wait "$pid" && rc=0 || rc=$?
             # If the command failed, remove the ASIC from the list
             if [[ $rc -ne 0 ]]; then
-                # TODO(stepanb): Consider adding a user-controllable flag to specify desired behavior on pre-reboot check failures.
-                # For example, if a check fails for an ASIC, we could:
-                #   - Proceed with the script for the remaining ASICs.
-                #   - Pause and allow the user to review failures and potentially resolve issues before retrying with all ASICs.
                 error "Command $cmd failed for $dev returned $rc"
-                # Remove failed ASIC from the list
-                ASIC_LIST=(${ASIC_LIST[@]/$dev})
-            fi
-            # All ASICs failed, exit with an error
-            if [ ${#ASIC_LIST[@]} -eq 0 ]; then
-                error "All ASICs failed, exiting with error"
-                # Return the error code of the last failed command
                 exit $rc
             fi
         done
