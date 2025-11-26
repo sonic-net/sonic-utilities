@@ -1053,6 +1053,10 @@ function pause_orchagent()
     debug "Orchagent paused successfully"
 }
 
+# After orchagent pause, there's no rollback if anything goes wrong on Multi-ASIC devices, force execution
+if [[ $NUM_ASIC -gt 1 ]]; then
+    FORCE=yes
+fi
 
 if [[ "$REBOOT_TYPE" = "warm-reboot" || "$REBOOT_TYPE" = "fastfast-reboot" || "$REBOOT_TYPE" = "express-reboot" || "$REBOOT_TYPE" = "fast-reboot" ]]; then
     execute_in_namespaces asic pause_orchagent
