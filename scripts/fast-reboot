@@ -20,6 +20,7 @@ ASSISTANT_IP_LIST=""
 ASSISTANT_SCRIPT="/usr/local/bin/neighbor_advertiser"
 LAG_KEEPALIVE_SCRIPT="/usr/local/bin/lag_keepalive.py"
 WATCHDOG_UTIL="/usr/local/bin/watchdogutil"
+SKIP_ASIC_LIST=""
 DEVPATH="/usr/share/sonic/device"
 PLATFORM=$(sonic-cfggen -H -v DEVICE_METADATA.localhost.platform)
 PLATFORM_PLUGIN="${REBOOT_TYPE}_plugin"
@@ -83,11 +84,11 @@ function debug()
 
 # Executes a given command in parallel for multiple ASICs, or globally depending on scope.
 # Exports the NETNS and DEV environment variables to the command.
-# 
+#
 # Arguments:
 #   $1  scope: Set to "all" to run both once globally and per ASIC; otherwise, runs only per ASIC.
 #   $@  cmd:  The command (with arguments) to execute.
-# 
+#
 # Behavior:
 #   - If NUM_ASIC > 1:
 #       - For each ASIC, runs the command in its namespace in the background and tracks the PIDs.
@@ -100,7 +101,7 @@ function execute_in_namespaces()
     shift
     local -r cmd="$@"
     if [[ $NUM_ASIC -gt 1 ]]; then
-        local -A pid_map 
+        local -A pid_map
 
         # Spawn a background process for each ASIC
         for dev in ${ASIC_LIST[@]}; do
@@ -232,13 +233,14 @@ function showHelpAndExit()
     echo "    -u    : include ssd-upgrader-part in boot options"
     echo "    -n    : don't require peer devices to be running SONiC with retry count feature [default]"
     echo "    -N    : require peer devices to be running SONiC with retry count feature"
+    echo "    -m    : comma-separated list of ASIC numbers to skip during reboot (multi-ASIC only)"
 
     exit "${EXIT_SUCCESS}"
 }
 
 function parseOptions()
 {
-    while getopts "vfidh?rkxc:sDunN" opt; do #TODO "t" is missing
+    while getopts "vfidh?rkxc:sDunNm:" opt; do #TODO "t" is missing
         case ${opt} in
             h|\? )
                 showHelpAndExit
@@ -285,8 +287,41 @@ function parseOptions()
             N )
                 REQUIRE_TEAMD_RETRY_COUNT=yes
                 ;;
+            m )
+                SKIP_ASIC_LIST=${OPTARG}
+                ;;
         esac
     done
+}
+
+function filter_asic_list()
+{
+    # Only apply ASIC filtering on multi-ASIC devices
+    if [[ -n "${SKIP_ASIC_LIST}" && $NUM_ASIC -gt 1 ]]; then
+        # Convert comma-separated list to array
+        IFS=',' read -ra SKIP_ASICS <<< "${SKIP_ASIC_LIST}"
+
+        # Build new ASIC list excluding the skipped ones
+        local NEW_ASIC_LIST=()
+        for asic in "${ASIC_LIST[@]}"; do
+            local skip=0
+            for skip_asic in "${SKIP_ASICS[@]}"; do
+                if [[ $asic -eq $skip_asic ]]; then
+                    skip=1
+                    break
+                fi
+            done
+            if [[ $skip -eq 0 ]]; then
+                NEW_ASIC_LIST+=($asic)
+            fi
+        done
+
+        # Update ASIC_LIST
+        ASIC_LIST=("${NEW_ASIC_LIST[@]}")
+
+        # Log the skipped ASICs
+        debug "Skipping warm-reboot on ASICs: ${SKIP_ASIC_LIST}"
+    fi
 }
 
 function clear_boot()
@@ -688,7 +723,7 @@ function check_pfc_storm_active()
     if [[ -n $NETNS ]]; then
         options+="-n $NETNS"
     fi
-    
+
     if pfcwd show stats $options --check-storm >/dev/null 2>&1; then
         debug "No active PFC storms detected. Safe to proceed with warm-reboot..."
     else
@@ -846,6 +881,9 @@ function check_conflict_boot_in_fw_update() {
 
 # main starts here
 parseOptions $@
+
+# Filter ASIC list based on -m option
+filter_asic_list
 
 # Check root privileges
 if [[ "$EUID" -ne 0 ]]
