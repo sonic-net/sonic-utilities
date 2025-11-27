@@ -254,11 +254,11 @@ def breakout_warnUser_extraTables(cm, final_delPorts, confirm=True):
     """
     try:
         # check if any extra tables exist
-        eTables = cm.tablesWithOutYang()
+        eTables = cm.tables_without_yang()
         if len(eTables):
             # find relavent tables in extra tables, i.e. one which can have deleted
             # ports
-            tables = cm.configWithKeys(configIn=eTables, keys=final_delPorts)
+            tables = cm.config_with_keys(config_in=eTables, keys=final_delPorts)
             click.secho("Below Config can not be verified, It may cause harm "\
                 "to the system\n {}".format(json.dumps(tables, indent=2)))
             click.confirm('Do you wish to Continue?', abort=True)
@@ -266,11 +266,11 @@ def breakout_warnUser_extraTables(cm, final_delPorts, confirm=True):
         raise Exception("Failed in breakout_warnUser_extraTables. Error: {}".format(str(e)))
     return
 
-def breakout_Ports(cm, delPorts=list(), portJson=dict(), force=False, \
-    loadDefConfig=False, verbose=False):
+def breakout_Ports(cm, del_ports=list(), port_json=dict(), force=False, \
+    load_def_config=False, verbose=False):
 
-    deps, ret = cm.breakOutPort(delPorts=delPorts,  portJson=portJson, \
-                    force=force, loadDefConfig=loadDefConfig)
+    deps, ret = cm.break_out_port(del_ports=del_ports,  port_json=port_json, \
+                    force=force, load_def_config=load_def_config)
     # check if DPB failed
     if ret == False:
         if not force and deps:
@@ -5255,11 +5255,11 @@ def breakout(ctx, interface_name, mode, verbose, force_remove_dependencies, load
         breakout_warnUser_extraTables(cm, final_delPorts, confirm=True)
 
         # Create a dictionary containing all the added ports with its capabilities like alias, lanes, speed etc.
-        portJson = dict(); portJson['PORT'] = port_dict
+        port_json = dict(); port_json['PORT'] = port_dict
 
         # breakout_Ports will abort operation on failure, So no need to check return
-        breakout_Ports(cm, delPorts=final_delPorts, portJson=portJson, force=force_remove_dependencies,
-                       loadDefConfig=load_predefined_config, verbose=verbose)
+        breakout_Ports(cm, del_ports=final_delPorts, port_json=port_json, force=force_remove_dependencies,
+                       load_def_config=load_predefined_config, verbose=verbose)
 
         # Set Current Breakout mode in config DB
         brkout_cfg_keys = config_db.get_keys('BREAKOUT_CFG')
