@@ -937,7 +937,7 @@ def check_routes_for_namespace(namespace):
 
     nh_group_usage = get_crm_nexthop_group_usage(namespace)
 
-    if nh_group_usage > NEXT_HOP_THRESHOLD:
+    if nh_group_usage is not None and nh_group_usage > NEXT_HOP_THRESHOLD:
         results["exceed_nexthop_group_threshold"] = nh_group_usage
 
     if results:
