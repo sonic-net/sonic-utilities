@@ -831,7 +831,7 @@ def get_crm_nexthop_group_usage(namespace):
 
     if stats_found:
         for field, value in crm_stats_values:
-            print("CRM field: {}, value: {}".format(field, value))
+            print_message(syslog.LOG_DEBUG, "CRM field: {}, value: {}".format(field, value))
             if field == 'crm_stats_nexthop_group_used':
                 nh_group_used = int(value)
             elif field == 'crm_stats_nexthop_group_available':
