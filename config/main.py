@@ -2610,7 +2610,7 @@ def override_config_table(db, input_config_db, dry_run):
             # config during initialization.
             try:
                 cm = ConfigMgmt(configdb=config_db)
-                cm.validateConfigData()
+                cm.validate_config_data()
             except Exception as ex:
                 click.secho("Failed to validate running config. Error: {}".format(ex), fg="magenta")
                 sys.exit(1)
@@ -2624,7 +2624,7 @@ def override_config_table(db, input_config_db, dry_run):
             try:
                 # YANG validate of config minigraph generated
                 cm = ConfigMgmt(configdb=config_db)
-                cm.validateConfigData()
+                cm.validate_config_data()
             except Exception as ex:
                 log.log_warning("Failed to validate running config. Alerting: {}".format(ex))
 
@@ -2643,7 +2643,7 @@ def validate_config_by_cm(cm, config_json, jname):
     tmp_config_json = copy.deepcopy(config_json)
     try:
         cm.loadData(tmp_config_json)
-        cm.validateConfigData()
+        cm.validate_config_data()
     except Exception as ex:
         click.secho("Failed to validate {}. Error: {}".format(jname, ex), fg="magenta")
         sys.exit(1)
@@ -2653,7 +2653,7 @@ def validate_config_by_cm_alerting(cm, config_json, jname):
     tmp_config_json = copy.deepcopy(config_json)
     try:
         cm.loadData(tmp_config_json)
-        cm.validateConfigData()
+        cm.validate_config_data()
     except Exception as ex:
         log.log_warning("Failed to validate {}. Alerting: {}".format(jname, ex))
 

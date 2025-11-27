@@ -34,7 +34,7 @@ class TestConfigMgmt(TestCase):
         curConfig = deepcopy(configDbJson)
         self.writeJson(curConfig, config_mgmt.CONFIG_DB_JSON_FILE)
         cm = config_mgmt.ConfigMgmt(source=config_mgmt.CONFIG_DB_JSON_FILE)
-        assert cm.validateConfigData() == True
+        assert cm.validate_config_data() == True
         return
 
     def test_table_without_yang(self):
@@ -50,14 +50,14 @@ class TestConfigMgmt(TestCase):
         curConfig = deepcopy(configDbJson)
         self.writeJson(curConfig, config_mgmt.CONFIG_DB_JSON_FILE)
         cmdpb = config_mgmt.ConfigMgmtDPB(source=config_mgmt.CONFIG_DB_JSON_FILE)
-        out = cmdpb.configWithKeys(portBreakOutConfigDbJson,
+        out = cmdpb.config_with_keys(portBreakOutConfigDbJson,
                                    ["Ethernet8", "Ethernet9"])
         assert "VLAN" not in out
         assert "INTERFACE" not in out
         for k in out['ACL_TABLE']:
             # only ports must be chosen
             len(out['ACL_TABLE'][k]) == 1
-        out = cmdpb.configWithKeys(portBreakOutConfigDbJson,
+        out = cmdpb.config_with_keys(portBreakOutConfigDbJson,
                                    ["Ethernet10", "Ethernet11"])
         assert "INTERFACE" in out
         for k in out['ACL_TABLE']:
@@ -105,7 +105,7 @@ class TestConfigMgmt(TestCase):
         # function
         cmdpb._create_config_to_load = mock.MagicMock(side_effect=cmdpb._create_config_to_load)
 
-        # Try to breakout and see if writeConfigDB is called thrice
+        # Try to breakout and see if write_config_db is called thrice
         deps, ret = cmdpb.break_out_port(del_ports=dPorts, port_json=pJson, \
             force=True, load_def_config=False)
 
@@ -122,14 +122,14 @@ class TestConfigMgmt(TestCase):
         assert args['DEVICE_METADATA']['localhost']['mac'] == \
             ['00:11:22:BB:CC:DD', '00:11:22:bb:cc:dd']
 
-        # verify correct function call to writeConfigDB
-        assert cmdpb.writeConfigDB.call_count == 3
-        print(cmdpb.writeConfigDB.call_args_list[0])
-        # args is populated if call is done as writeConfigDB(a, b), kwargs is
-        # populated if call is done as writeConfigDB(A=a, B=b)
-        (args, kwargs) = cmdpb.writeConfigDB.call_args_list[0]
+        # verify correct function call to write_config_db
+        assert cmdpb.write_config_db.call_count == 3
+        print(cmdpb.write_config_db.call_args_list[0])
+        # args is populated if call is done as write_config_db(a, b), kwargs is
+        # populated if call is done as write_config_db(A=a, B=b)
+        (args, kwargs) = cmdpb.write_config_db.call_args_list[0]
         print(args)
-        # in case of tuple also, we should have only one element writeConfigDB
+        # in case of tuple also, we should have only one element write_config_db
         if type(args) == tuple:
             args = args[0]
         # Make sure no DEVICE_METADATA in the args to func
@@ -177,10 +177,10 @@ class TestConfigMgmt(TestCase):
         deps, ret = cmdpb.break_out_port(del_ports=dPorts, port_json=pJson, \
             force=True, load_def_config=False)
 
-        # verify correct function call to writeConfigDB after _shutdownIntf()
-        assert cmdpb.writeConfigDB.call_count == 3
-        print(cmdpb.writeConfigDB.call_args_list[0])
-        (args, kwargs) = cmdpb.writeConfigDB.call_args_list[0]
+        # verify correct function call to write_config_db after _shutdownIntf()
+        assert cmdpb.write_config_db.call_count == 3
+        print(cmdpb.write_config_db.call_args_list[0])
+        (args, kwargs) = cmdpb.write_config_db.call_args_list[0]
         print(args)
 
         # in case of tuple also, we should have only one element
@@ -225,7 +225,7 @@ class TestConfigMgmt(TestCase):
         self.writeJson(curConfig, config_mgmt.CONFIG_DB_JSON_FILE)
         cmdpb = config_mgmt.ConfigMgmtDPB(source=config_mgmt.CONFIG_DB_JSON_FILE)
         # mock funcs
-        cmdpb.writeConfigDB = mock.MagicMock(return_value=True)
+        cmdpb.write_config_db = mock.MagicMock(return_value=True)
         cmdpb._verifyAsicDB = mock.MagicMock(return_value=True)
         from .mock_tables import dbconnector
         return cmdpb
@@ -347,8 +347,8 @@ class TestConfigMgmt(TestCase):
             void
         '''
         calls = [mock.call(delConfig), mock.call(addConfig)]
-        assert cmdpb.writeConfigDB.call_count == 3
-        cmdpb.writeConfigDB.assert_has_calls(calls, any_order=False)
+        assert cmdpb.write_config_db.call_count == 3
+        cmdpb.write_config_db.assert_has_calls(calls, any_order=False)
         return
 
     def postUpdateConfig(self, curConfig, delConfig, addConfig):
@@ -551,7 +551,7 @@ class TestConfigMgmt(TestCase):
                                        force=False, load_def_config=False)
         # Expected Result
         assert ret == False and len(deps) == 3
-        assert cmdpb.writeConfigDB.call_count == 0
+        assert cmdpb.write_config_db.call_count == 0
         return
 
     def dpb_port8_4x25G_2x50G_f_l(self, curConfig):
