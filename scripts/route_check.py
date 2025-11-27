@@ -839,8 +839,12 @@ def get_crm_nexthop_group_usage(namespace):
 
     if nh_group_used is None or nh_group_available is None:
         print_message(syslog.LOG_ERR, "Failed to get nexthop group CRM stats")
+        return None
 
     total_nexthop_groups = nh_group_used + nh_group_available
+    if total_nexthop_groups == 0:
+        print_message(syslog.LOG_DEBUG, "No nexthop groups configured")
+        return 0.0
     nh_group_usage = nh_group_used / total_nexthop_groups * 100
     return nh_group_usage
 
