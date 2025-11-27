@@ -819,7 +819,7 @@ def filter_out_vlan_neigh_route_miss(namespace, rt_appl_miss, rt_asic_miss):
 
 
 def get_crm_nexthop_group_usage(namespace):
-    db = swsscommon.DBConnector(COUNTERS_DB_NAME, 0, True)
+    db = swsscommon.DBConnector(COUNTERS_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
     print_message(syslog.LOG_DEBUG, "COUNTERS DB {} connected".format(namespace))
     crm_resources = swsscommon.Table(db, 'CRM')
     stats_result = crm_resources.get('STATS')
