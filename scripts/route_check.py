@@ -837,14 +837,14 @@ def get_crm_nexthop_group_usage(namespace):
             elif field == 'crm_stats_nexthop_group_available':
                 nh_group_available = int(value)
 
-    if nh_group_used is None or nh_group_available is None:
+    if nh_group_used is None and nh_group_available is None:
         print_message(syslog.LOG_ERR, "Failed to get nexthop group CRM stats")
         return None
 
     total_nexthop_groups = nh_group_used + nh_group_available
     if total_nexthop_groups == 0:
         print_message(syslog.LOG_DEBUG, "No nexthop groups configured")
-        return 0.0
+        return None
     nh_group_usage = nh_group_used / total_nexthop_groups * 100
     return nh_group_usage
 
@@ -941,7 +941,9 @@ def check_routes_for_namespace(namespace):
 
     nh_group_usage = get_crm_nexthop_group_usage(namespace)
 
-    if nh_group_usage is not None and nh_group_usage > NEXT_HOP_THRESHOLD:
+    if nh_group_usage is None:
+        results["missed_nexthop_group_crm_stats"] = "Could not fetch nexthop group CRM stats/No nexthop groups configured"
+    elif nh_group_usage > NEXT_HOP_THRESHOLD:
         results["exceed_nexthop_group_threshold"] = nh_group_usage
 
     if results:
