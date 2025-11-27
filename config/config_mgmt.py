@@ -28,7 +28,7 @@ sonic_cfggen = load_module_from_source(
 
 # Globals
 YANG_DIR = "/usr/local/yang-models"
-CONFIG_DB_JSON_FILE = "/etc/sonic/confib_db.json"
+CONFIG_DB_JSON_FILE = "/etc/sonic/config_db.json"
 # TODO: Find a place for it on sonic switch.
 DEFAULT_CONFIG_DB_JSON_FILE = "/etc/sonic/port_breakout_config_db.json"
 
@@ -489,13 +489,13 @@ class ConfigMgmtDPB(ConfigMgmt):
             del_ports (list): ports to be deleted.
             port_json (dict): Config DB json Part of all Ports, generated
                 from platform.json.
-            force (bool): if false return dependecies, else delete
+            force (bool): if false return dependencies, else delete
                 dependencies.
             load_def_config: If load_def_config, add default config for
                 ports as well.
 
         Returns:
-            (deps, ret) (tuple)[list, bool]: dependecies and success/failure.
+            (deps, ret) (tuple)[list, bool]: dependencies and success/failure.
         """
         MAX_WAIT = 60
         try:
@@ -548,17 +548,17 @@ class ConfigMgmtDPB(ConfigMgmt):
 
     def _delete_ports(self, ports=list(), force=False):
         """
-        Delete ports and dependecies from data tree, validate and return
+        Delete ports and dependencies from data tree, validate and return
         resultant config.
 
         Parameters:
             ports (list): list of ports
-            force (bool): if false return dependecies, else delete
+            force (bool): if false return dependencies, else delete
                 dependencies.
 
         Returns:
             (config_to_load, deps, ret) (tuple)[dict, list, bool]:
-                config, dependecies and success/fail.
+                config, dependencies and success/fail.
         """
         config_to_load = None
         deps = None
@@ -568,12 +568,12 @@ class ConfigMgmtDPB(ConfigMgmt):
             self.sys_log(do_print=True, msg="Start Port Deletion")
             deps = list()
 
-            # Get all dependecies for ports
+            # Get all dependencies for ports
             for port in ports:
                 xPathPort = self.sy.findXpathPortLeaf(port)
                 self.sys_log(
                     do_print=True,
-                    msg="Find dependecies for port {}".format(port),
+                    msg="Find dependencies for port {}".format(port),
                 )
                 dep = self.sy.find_data_dependencies(str(xPathPort))
                 if dep:
@@ -620,7 +620,7 @@ class ConfigMgmtDPB(ConfigMgmt):
 
     def _add_ports(self, port_json=dict(), load_def_config=True):
         """
-        Add ports and default confug in data tree, validate and return
+        Add ports and default config in data tree, validate and return
         resultant config.
 
         Parameters:
@@ -667,7 +667,7 @@ class ConfigMgmtDPB(ConfigMgmt):
                 self._merge_configs(self.configdb_json_out, def_config, True)
 
             # create a tree with merged config and validate, if validation
-            # is sucessful, then configdb_json_out contains final and valid
+            # is successful, then configdb_json_out contains final and valid
             # config.
             self.sy.loadData(self.configdb_json_out)
             if not self.validate_config_data():
@@ -814,7 +814,7 @@ class ConfigMgmtDPB(ConfigMgmt):
 
     def config_with_keys(self, config_in=dict(), keys=list()):
         """
-        This function returns the config with relavant keys in Input Config.
+        This function returns the config with relevant keys in Input Config.
         It calls _search_keys_in_config.
 
         Parameters:
@@ -906,7 +906,7 @@ class ConfigMgmtDPB(ConfigMgmt):
 
     def _create_config_to_load(self, diff, inp, outp):
         """
-        Create the config to write in Config DB, i.e. compitible with
+        Create the config to write in Config DB, i.e. compatible with
         mod_config(). This functions has 3 inner functions:
         -- _delete_handler: to handle delete in diff. See example below.
         -- _insert_handler: to handle insert in diff. See example below.
@@ -926,7 +926,7 @@ class ConfigMgmtDPB(ConfigMgmt):
                 once diff is applied.
 
         Returns:
-            config_to_load (dict): config in a format compitible with
+            config_to_load (dict): config in a format compatible with
                 mod_Config().
         """
 
