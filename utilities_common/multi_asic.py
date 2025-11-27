@@ -45,11 +45,9 @@ class MultiAsic(object):
         '''
         The function determines if the passed cli_object has to be displayed or not.
         returns true if the display_option is external and  the cli object is internal.
-        returns false, if the cli option is all or if it the platform is single ASIC.
+        returns false, if the cli option is all.
 
         '''
-        if not self.is_multi_asic and not device_info.is_chassis():
-            return False
         if self.get_display_option() == constants.DISPLAY_ALL:
             return False
         return self.is_object_internal(object_type, cli_object)
@@ -87,10 +85,7 @@ def multi_asic_display_choices():
 
 
 def multi_asic_display_default_option():
-    if not multi_asic.is_multi_asic() and not device_info.is_chassis():
-        return constants.DISPLAY_ALL
-    else:
-        return constants.DISPLAY_EXTERNAL
+    return constants.DISPLAY_EXTERNAL
 
 
 _multi_asic_click_option_display = click.option('--display',
