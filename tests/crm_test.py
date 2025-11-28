@@ -1973,7 +1973,7 @@ class TestCrmMultiAsic(object):
         assert result.exit_code == 1
         assert (
             "Error: Low threshold value must be less than high threshold value: "
-            f" {high_value} for percentage type." in result.output
+            f"{high_value} for percentage type." in result.output
         )
 
     def test_crm_config_thresholds_high_less_than_low(self):

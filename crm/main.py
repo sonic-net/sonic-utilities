@@ -428,13 +428,13 @@ def low(ctx, value):
     if threshold_type == 'percentage':
         if value < 0 or value > 100:
             raise click.ClickException(
-                'Error: Low threshold value must be between 0 and 100 for '
+                'Low threshold value must be between 0 and 100 for '
                 'percentage type.')
 
         high_value = crm_info.get(high_attr, None)
         if high_value is not None and value >= int(high_value):
             raise click.ClickException(
-                'Error: Low threshold value must be less than high threshold '
+                'Low threshold value must be less than high threshold '
                 f'value: {high_value} for percentage type.')
 
     attr = ''
@@ -464,13 +464,13 @@ def high(ctx, value):
     if threshold_type == 'percentage':
         if value < 0 or value > 100:
             raise click.ClickException(
-                'Error: High threshold value must be between 0 and 100 for '
+                'High threshold value must be between 0 and 100 for '
                 'percentage type.')
 
         low_value = crm_info.get(low_attr, None)
         if low_value is not None and value <= int(low_value):
             raise click.ClickException(
-                'Error: High threshold value must be greater than low threshold '
+                'High threshold value must be greater than low threshold '
                 f'value: {low_value} for percentage type.')
 
     attr = ''
