@@ -471,13 +471,13 @@ def high(ctx, value):
         low_value = crm_info.get(low_attr, None)
         if low_value is not None and value <= int(low_value):
             raise click.ClickException(
-                'Error: Low threshold value must be less than high threshold '
+                'Error: High threshold value must be greater than low threshold '
                 f'value: {low_value} for percentage type.')
 
     attr = ''
     if ctx.obj["crm"].addr_family != None:
         attr += ctx.obj["crm"].addr_family + '_'
-    attr += ctx.obj["crm"].res_type + '_' + 'low_threshold'
+    attr += ctx.obj["crm"].res_type + '_' + 'high_threshold'
     ctx.obj["crm"].config(attr, value)
 
 route.add_command(type)

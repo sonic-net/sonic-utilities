@@ -1926,59 +1926,102 @@ class TestCrmMultiAsic(object):
         runner = CliRunner()
         db = Db()
 
-        result = runner.invoke(crm.cli, ['config', 'thresholds', 'ipv4', 'route', 'high', '150'], obj=db)
+        result = runner.invoke(
+            crm.cli,
+            ['config', 'thresholds', 'ipv4', 'route', 'high', '150'],
+            obj=db,
+        )
         print(sys.stderr, result.output)
         assert result.exit_code == 1
-        assert "Error: Invalid value for threshold: 150. Percentage threshold must be <= 100." in result.output
+        assert (
+            "Error: High threshold value must be between 0 and 100 for percentage type."
+            in result.output
+        )
         
-        result = runner.invoke(crm.cli, ['config', 'thresholds', 'ipv6', 'neighbor', 'low', '101'], obj=db)
+        result = runner.invoke(
+            crm.cli,
+            ['config', 'thresholds', 'ipv6', 'neighbor', 'low', '101'],
+            obj=db,
+        )
         print(sys.stderr, result.output)
         assert result.exit_code == 1
-        assert "Error: Invalid value for threshold: 101. Percentage threshold must be <= 100." in result.output
+        assert (
+            "Error: Low threshold value must be between 0 and 100 for percentage type."
+            in result.output
+        )
 
     def test_crm_config_thresholds_low_greater_than_high(self):
         runner = CliRunner()
         db = Db()
 
-        result = runner.invoke(crm.cli, ['config', 'thresholds', 'ipv4', 'route', 'high', '90'], obj=db)
+        high_value = '90'
+        result = runner.invoke(
+            crm.cli,
+            ['config', 'thresholds', 'ipv4', 'route', 'high', high_value],
+            obj=db,
+        )
         print(sys.stderr, result.output)
         assert result.exit_code == 0
         
-        result = runner.invoke(crm.cli, ['config', 'thresholds', 'ipv4', 'route', 'low', '95'], obj=db)
+        low_value = '95'
+        result = runner.invoke(
+            crm.cli,
+            ['config', 'thresholds', 'ipv4', 'route', 'low', low_value],
+            obj=db,
+        )
         print(sys.stderr, result.output)
         assert result.exit_code == 1
-        assert "Error: Invalid value for threshold: 95. Low threshold must be less than high threshold (90)." in result.output
+        assert (
+            "Error: Low threshold value must be less than high threshold value: "
+            f" {high_value} for percentage type." in result.output
+        )
 
     def test_crm_config_thresholds_high_less_than_low(self):
         runner = CliRunner()
         db = Db()
-
-        result = runner.invoke(crm.cli, ['config', 'thresholds', 'ipv6', 'route', 'low', '50'], obj=db)
+        low_value = '50'
+        result = runner.invoke(
+            crm.cli,
+            ['config', 'thresholds', 'ipv6', 'route', 'low', low_value],
+            obj=db,
+        )
         print(sys.stderr, result.output)
         assert result.exit_code == 0
         
-        result = runner.invoke(crm.cli, ['config', 'thresholds', 'ipv6', 'route', 'high', '40'], obj=db)
+        high_value = '40'
+        result = runner.invoke(
+            crm.cli,
+            ['config', 'thresholds', 'ipv6', 'route', 'high', high_value],
+            obj=db,
+        )
         print(sys.stderr, result.output)
         assert result.exit_code == 1
-        assert "Error: Invalid value for threshold: 40. High threshold must be greater than low threshold (50)." in result.output
+        assert (
+            "Error: High threshold value must be greater than low threshold value: "
+            f"{low_value} for percentage type." in result.output
+        )
 
     def test_crm_config_thresholds_valid_values(self):
         runner = CliRunner()
         db = Db()
 
-        result = runner.invoke(crm.cli, ['config', 'thresholds', 'ipv4', 'route', 'high', '100'], obj=db)
+        result = runner.invoke(
+            crm.cli, ['config', 'thresholds', 'ipv4', 'route', 'high', '100'], obj=db)
         print(sys.stderr, result.output)
         assert result.exit_code == 0
         
-        result = runner.invoke(crm.cli, ['config', 'thresholds', 'ipv4', 'route', 'low', '50'], obj=db)
+        result = runner.invoke(
+            crm.cli, ['config', 'thresholds', 'ipv4', 'route', 'low', '50'], obj=db)
         print(sys.stderr, result.output)
         assert result.exit_code == 0
         
-        result = runner.invoke(crm.cli, ['config', 'thresholds', 'ipv6', 'neighbor', 'low', '30'], obj=db)
+        result = runner.invoke(
+            crm.cli, ['config', 'thresholds', 'ipv6', 'neighbor', 'low', '30'], obj=db)
         print(sys.stderr, result.output)
         assert result.exit_code == 0
         
-        result = runner.invoke(crm.cli, ['config', 'thresholds', 'ipv6', 'neighbor', 'high', '80'], obj=db)
+        result = runner.invoke(
+            crm.cli, ['config', 'thresholds', 'ipv6', 'neighbor', 'high', '80'], obj=db)
         print(sys.stderr, result.output)
         assert result.exit_code == 0
 
