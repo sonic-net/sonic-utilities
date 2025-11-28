@@ -443,7 +443,6 @@ def low(ctx, value):
     attr += ctx.obj["crm"].res_type + '_' + 'low_threshold'
     ctx.obj["crm"].config(attr, value)
 
-    
 @click.command()
 @click.argument('value', type=click.INT)
 @click.pass_context
