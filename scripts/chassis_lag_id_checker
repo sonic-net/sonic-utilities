@@ -17,7 +17,7 @@ It performs the following steps:
 - Exits with a non-zero status if mismatches are found.
 
 Intended to be run on line cards (not on the supervisor) of a VOQ chassis
-device. 
+device.
 Usage:
     python3 chassis_lag_id_checker [--log-level LEVEL]
 
