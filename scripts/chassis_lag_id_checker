@@ -40,6 +40,7 @@ def run_redis_dump(cmd_args):
     """Run redis-dump with given command arguments and return parsed JSON output."""
     try:
         result = subprocess.run(cmd_args, capture_output=True, text=True)
+        logging.debug(f"Command: {cmd_args} output: {result.stdout}")
         if result.returncode != 0:
             logging.error(f"Command failed: {result.stderr}")
             raise RuntimeError(f"Command failed: {result.stderr}")
@@ -58,6 +59,7 @@ def extract_lag_ids_from_asic_db(db_output, key_pattern, lag_id_field):
             if lag_id is None:
                 logging.error(f"{key} has bad lag_id")
             lag_ids.add(lag_id)
+    logging.debug(f"Extracted LAG IDs from ASIC DB: {lag_ids}")
     return lag_ids
 
 
@@ -76,9 +78,11 @@ def get_lag_ids_asic_namespace(asic_netns):
             "redis-dump", "-d", "1", "-k", "*SAI_OBJECT_TYPE_LAG:*", "-y"
         ]
     asic_db_output = run_redis_dump(asic_cmd)
-    return extract_lag_ids_from_asic_db(
+    lag_id_ns = extract_lag_ids_from_asic_db(
         asic_db_output, "SAI_OBJECT_TYPE_LAG", "SAI_LAG_ATTR_SYSTEM_PORT_AGGREGATE_ID"
     )
+    logging.debug(f"LAG IDs in ASIC namespace {asic_netns}: {lag_id_ns}")
+    return lag_id_ns
 
 
 def get_chassis_lag_db_table():
@@ -119,6 +123,7 @@ def check_lag_id_sync():
 
     chassis_db_lag_table = get_chassis_lag_db_table()
     lag_ids_in_chassis_db = extract_table_ids_from_chassis_db(chassis_db_lag_table)
+    logging.debug(f"LAG IDs in chassis_db: {lag_ids_in_chassis_db}")
 
     asic_namespace = multi_asic.get_namespace_list()
     diff_summary = {}
