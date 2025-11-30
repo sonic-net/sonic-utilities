@@ -58,6 +58,7 @@ def extract_lag_ids_from_asic_db(db_output, key_pattern, lag_id_field):
             lag_id = info.get('value', {}).get(lag_id_field, None)
             if lag_id is None:
                 logging.error(f"{key} has bad lag_id")
+                continue  # Skip adding None to the set
             lag_ids.add(lag_id)
     logging.debug(f"Extracted LAG IDs from ASIC DB: {lag_ids}")
     return lag_ids
