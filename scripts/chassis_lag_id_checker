@@ -126,9 +126,9 @@ def check_lag_id_sync():
     lag_ids_in_chassis_db = extract_table_ids_from_chassis_db(chassis_db_lag_table)
     logging.debug(f"LAG IDs in chassis_db: {lag_ids_in_chassis_db}")
 
-    asic_namespace = multi_asic.get_namespace_list()
+    asic_namespaces = multi_asic.get_namespace_list()
     diff_summary = {}
-    for asic_namespace in asic_namespace:
+    for asic_namespace in asic_namespaces:
         diff = compare_lag_ids(lag_ids_in_chassis_db, asic_namespace)
         asic_name = "localhost" if asic_namespace == multi_asic.DEFAULT_NAMESPACE else asic_namespace
         diff_summary[asic_name] = get_lag_key_mismatches(chassis_db_lag_table, diff)
