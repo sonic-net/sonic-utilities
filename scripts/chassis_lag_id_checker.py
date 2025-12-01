@@ -17,7 +17,7 @@ It performs the following steps:
 - Exits with a non-zero status if mismatches are found.
 
 Intended to be run on line cards (not on the supervisor) of a VOQ chassis
-device. 
+device.
 Usage:
     python3 chassis_lag_id_checker [--log-level LEVEL]
 
@@ -30,13 +30,13 @@ Arguments:
 import subprocess
 import json
 import logging
-import sys
 import argparse
 import sonic_py_common.multi_asic as multi_asic
 import sonic_py_common.device_info as device_info
 RC_OK = 0
 RC_ERR = -1
 RC_REDIS_ERR = -2
+
 
 def run_redis_dump(cmd_args):
     """Run redis-dump with given command arguments and return parsed JSON output."""
@@ -101,7 +101,7 @@ def get_chassis_lag_db_table():
     chassis_db_table = chassis_db_raw.get('SYSTEM_LAG_ID_TABLE', {}).get('value', {})
     if not chassis_db_table:
         logging.error("No SYSTEM_LAG_ID_TABLE found in chassis_db")
-        return RC_REDIS_ERR
+        return {}
     return chassis_db_table
 
 
@@ -116,19 +116,23 @@ def compare_lag_ids(lag_ids_in_chassis_db, asic):
 def check_lag_id_sync():
     """Check if LAG IDs in chassis_db and asic_db are in sync."""
 
+    rc = RC_OK
+    diff_summary = {}
     chassis_db_lag_table = get_chassis_lag_db_table()
+    if not chassis_db_lag_table:
+        return RC_ERR, diff_summary
     lag_ids_in_chassis_db = extract_table_ids_from_chassis_db(chassis_db_lag_table)
     logging.debug(f"LAG IDs in chassis_db: {lag_ids_in_chassis_db}")
 
     asic_namespaces = multi_asic.get_namespace_list()
-    diff_summary = {}
+
     for asic_namespace in asic_namespaces:
         diff = compare_lag_ids(lag_ids_in_chassis_db, asic_namespace)
         asic_name = "localhost" if asic_namespace == multi_asic.DEFAULT_NAMESPACE else asic_namespace
         # Convert set to list for JSON/logging friendliness
         diff_summary[asic_name] = sorted(list(diff))
 
-    return diff_summary
+    return rc, diff_summary
 
 
 def main():
@@ -146,7 +150,10 @@ def main():
         logging.info("Not supported on supervisor. Exiting....")
         return RC_OK
 
-    diff_summary = check_lag_id_sync()
+    rc, diff_summary = check_lag_id_sync()
+    if rc != RC_OK:
+        return rc
+
     mismatches_found = False
     for asic, mismatches in diff_summary.items():
         if mismatches:
@@ -163,4 +170,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-

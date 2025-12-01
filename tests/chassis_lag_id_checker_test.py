@@ -1,17 +1,16 @@
+
 import pytest
 import sys
 import logging
-import types
 import json
 import sonic_py_common.multi_asic as multi_asic
 import sonic_py_common.device_info as device_info
-
 sys.path.append("scripts")
 import chassis_lag_id_checker
 
-MULTI_ASIC_MISMATCH_LOGS = """CRITICAL root:chassis_lag_id_checker.py:153 Mismatched LAG keys in asic0: ['264', '265', '266']
-CRITICAL root:chassis_lag_id_checker.py:153 Mismatched LAG keys in asic1: ['264', '265', '266']
-CRITICAL root:chassis_lag_id_checker.py:157 Summary of mismatches:
+MULTI_ASIC_MISMATCH_LOGS = """CRITICAL root:chassis_lag_id_checker.py:160 Mismatched LAG keys in asic0: ['264', '265', '266']
+CRITICAL root:chassis_lag_id_checker.py:160 Mismatched LAG keys in asic1: ['264', '265', '266']
+CRITICAL root:chassis_lag_id_checker.py:164 Summary of mismatches:
 {
     "asic0": [
         "264",
@@ -26,8 +25,8 @@ CRITICAL root:chassis_lag_id_checker.py:157 Summary of mismatches:
 }
 """
 SINGLE_ASIC_MISMATCH_LOGS = """
-CRITICAL root:chassis_lag_id_checker.py:153 Mismatched LAG keys in localhost: ['264', '265', '266']
-CRITICAL root:chassis_lag_id_checker.py:157 Summary of mismatches:
+CRITICAL root:chassis_lag_id_checker.py:160 Mismatched LAG keys in localhost: ['264', '265', '266']
+CRITICAL root:chassis_lag_id_checker.py:164 Summary of mismatches:
 {
     "localhost": [
         "264",
@@ -35,6 +34,7 @@ CRITICAL root:chassis_lag_id_checker.py:157 Summary of mismatches:
         "266"
     ]
 }"""
+
 
 @pytest.fixture
 def mock_run_redis_dump(monkeypatch):
@@ -87,19 +87,26 @@ def mock_run_redis_dump(monkeypatch):
         elif "SYSTEM_LAG_ID_TABLE" in str(cmd_args):
             # Simulate Chassis DB output
             return {
-                 "SYSTEM_LAG_ID_TABLE": {
+                "SYSTEM_LAG_ID_TABLE": {
                     "expireat": 1764524950.7635868,
                     "ttl": -0.001,
                     "type": "hash",
                     "value": {
-                    "sonic-lc1-1|asic0|PortChannel112": "262",
-                    "sonic-lc1-1|asic0|PortChannel116": "263",
-                    "sonic-lc2-1|asic0|PortChannel100": "264",
-                    "sonic-lc3-1|asic0|PortChannel149": "265",
-                    "sonic-lc3-1|asic0|PortChannel150": "266",
+                        "sonic-lc1-1|asic0|PortChannel112": "262",
+                        "sonic-lc1-1|asic0|PortChannel116": "263",
+                        "sonic-lc2-1|asic0|PortChannel100": "264",
+                        "sonic-lc3-1|asic0|PortChannel149": "265",
+                        "sonic-lc3-1|asic0|PortChannel150": "266",
                     }
-                 }
+                }
             }
+        return {}
+    monkeypatch.setattr(chassis_lag_id_checker, "run_redis_dump", _mock)
+
+
+@pytest.fixture
+def run_redis_dump_empty(monkeypatch):
+    def _mock(cmd_args):
         return {}
     monkeypatch.setattr(chassis_lag_id_checker, "run_redis_dump", _mock)
 
@@ -155,12 +162,11 @@ def mock_run_redis_dump_mismatch(monkeypatch):
         elif "SYSTEM_LAG_ID_TABLE" in str(cmd_args):
             # Simulate Chassis DB output
             return {
-                 "SYSTEM_LAG_ID_TABLE": {
+                "SYSTEM_LAG_ID_TABLE": {
                     "expireat": 1764524950.7635868,
                     "ttl": -0.001,
                     "type": "hash",
                     "value": {
-
                         "sonic-lc1-1|asic0|PortChannel112": "262",
                         "sonic-lc1-1|asic0|PortChannel116": "263"
                     }
@@ -170,10 +176,10 @@ def mock_run_redis_dump_mismatch(monkeypatch):
     monkeypatch.setattr(chassis_lag_id_checker, "run_redis_dump", _mock)
 
 
-
 @pytest.fixture
 def mock_multi_asic(monkeypatch):
     monkeypatch.setattr(multi_asic, "get_namespace_list", lambda: ["asic0", "asic1"])
+
 
 @pytest.fixture
 def mock_single_asic(monkeypatch):
@@ -185,10 +191,12 @@ def mock_device_info(monkeypatch):
     monkeypatch.setattr(device_info, "is_voq_chassis", lambda: True)
     monkeypatch.setattr(device_info, "is_supervisor", lambda: False)
 
+
 @pytest.fixture
 def mock_device_info_no_voq(monkeypatch):
     monkeypatch.setattr(device_info, "is_voq_chassis", lambda: False)
-    
+
+
 @pytest.fixture
 def mock_device_info_supervisor(monkeypatch):
     monkeypatch.setattr(device_info, "is_voq_chassis", lambda: True)
@@ -217,56 +225,75 @@ def test_extract_table_ids_from_chassis_db():
 def test_compare_lag_ids(mock_run_redis_dump, mock_multi_asic):
     lag_ids_in_chassis_db = {"262", "264"}
     diff = chassis_lag_id_checker.compare_lag_ids(lag_ids_in_chassis_db, "asic0")
-    assert diff ==  {'263', '265', '266'}
+    assert diff == {'263', '265', '266'}
 
 
 def test_check_lag_id_sync(mock_run_redis_dump, mock_multi_asic):
-    diff_summary = chassis_lag_id_checker.check_lag_id_sync()
-    assert "asic0" in diff_summary
+    rc, diff_summary = chassis_lag_id_checker.check_lag_id_sync()
+    assert rc == 0
+    assert {'asic0': [], 'asic1': []} == diff_summary
+
 
 def test_check_no_voq_chassis(monkeypatch, mock_run_redis_dump, mock_device_info_no_voq, caplog):
     caplog.set_level(logging.INFO)
-    monkeypatch.setattr(sys, "argv", ["chassis_lag_id_checker.py"]) 
+    monkeypatch.setattr(sys, "argv", ["chassis_lag_id_checker.py"])
     rc = chassis_lag_id_checker.main()
     assert rc == 0
-    assert caplog.text.strip() == "INFO     root:chassis_lag_id_checker.py:142 Not a voq chassis device. Exiting....."
+    assert caplog.text.strip() == "INFO     root:chassis_lag_id_checker.py:146 Not a voq chassis device. Exiting....."
 
 
 def test_check_no_supervisor(monkeypatch, mock_run_redis_dump, mock_device_info_supervisor, caplog):
     caplog.set_level(logging.INFO)
-    monkeypatch.setattr(sys, "argv", ["chassis_lag_id_checker.py"]) 
+    monkeypatch.setattr(sys, "argv", ["chassis_lag_id_checker.py"])
     rc = chassis_lag_id_checker.main()
     assert rc == 0
-    assert caplog.text.strip() == "INFO     root:chassis_lag_id_checker.py:146 Not supported on supervisor. Exiting...."
-
+    assert caplog.text.strip() == "INFO     root:chassis_lag_id_checker.py:150 Not supported on supervisor. Exiting...."
 
 
 def test_no_mismatch(monkeypatch, mock_run_redis_dump, mock_multi_asic, mock_device_info):
     # Ensure main sees predictable args
-    monkeypatch.setattr(sys, "argv", ["chassis_lag_id_checker.py"]) 
+    monkeypatch.setattr(sys, "argv", ["chassis_lag_id_checker.py"])
     rc = chassis_lag_id_checker.main()
     assert rc == 0
+
 
 def test_no_mismatch_single_asic(monkeypatch, mock_run_redis_dump, mock_single_asic, mock_device_info):
     # Ensure main sees predictable args
-    monkeypatch.setattr(sys, "argv", ["chassis_lag_id_checker.py"]) 
+    monkeypatch.setattr(sys, "argv", ["chassis_lag_id_checker.py"])
     rc = chassis_lag_id_checker.main()
     assert rc == 0
 
+
 def test_with_mismatch(monkeypatch, mock_run_redis_dump_mismatch, mock_multi_asic, mock_device_info, caplog):
     caplog.set_level(logging.CRITICAL)
-    monkeypatch.setattr(sys, "argv", ["chassis_lag_id_checker.py"]) 
+    monkeypatch.setattr(sys, "argv", ["chassis_lag_id_checker.py"])
     rc = chassis_lag_id_checker.main()
     assert caplog.text.strip() == MULTI_ASIC_MISMATCH_LOGS.strip()
     assert rc == -1
-    
 
-def test_with_mismatch_single_asic(monkeypatch, mock_run_redis_dump_mismatch, mock_single_asic, mock_device_info, caplog):
+
+def test_with_mismatch_single_asic(monkeypatch, mock_run_redis_dump_mismatch,
+                                   mock_single_asic, mock_device_info, caplog):
     caplog.set_level(logging.CRITICAL)
-    monkeypatch.setattr(sys, "argv", ["chassis_lag_id_checker.py"]) 
+    monkeypatch.setattr(sys, "argv", ["chassis_lag_id_checker.py"])
     rc = chassis_lag_id_checker.main()
+    # The following line is within 120 columns
     assert caplog.text.strip() == SINGLE_ASIC_MISMATCH_LOGS.strip()
     assert rc == -1
+
+
+def test_redis_dump_no_output(monkeypatch, run_redis_dump_empty,
+                              mock_multi_asic, mock_device_info, caplog):
+    caplog.set_level(logging.ERROR)
+    monkeypatch.setattr(sys, "argv", ["chassis_lag_id_checker.py"])
+    rc = chassis_lag_id_checker.main()
+    assert rc == -1
+    expected_msg = (
+        "ERROR    root:chassis_lag_id_checker.py:103 "
+        "No SYSTEM_LAG_ID_TABLE found in chassis_db"
+    )
+    assert caplog.text.strip() == expected_msg
+
 
 def test_run_redis_dump_failure(monkeypatch):
     class FakeCompleted:
@@ -281,7 +308,7 @@ def test_run_redis_dump_failure(monkeypatch):
     monkeypatch.setattr(chassis_lag_id_checker.subprocess, "run", fake_run)
     out = chassis_lag_id_checker.run_redis_dump(["redis-dump", "-d", "1", "-y"])
     assert out == {}  # script logs and returns {}
-    
+
 
 def test_run_redis_dump(monkeypatch, caplog):
     # Create a fake CompletedProcess-like object
@@ -295,7 +322,8 @@ def test_run_redis_dump(monkeypatch, caplog):
     def fake_run(cmd_args, capture_output=True, text=True):
         assert capture_output and text
         if "-k" in cmd_args and "*SAI_OBJECT_TYPE_LAG:*" in cmd_args:
-            payload = {"SAI_OBJECT_TYPE_LAG:oid:1": {"value": {"SAI_LAG_ATTR_SYSTEM_PORT_AGGREGATE_ID": "100"}}}
+            payload = {"SAI_OBJECT_TYPE_LAG:oid:1": {
+                "value": {"SAI_LAG_ATTR_SYSTEM_PORT_AGGREGATE_ID": "100"}}}
             return FakeCompleted(stdout=json.dumps(payload))
         elif "-k" in cmd_args and "SYSTEM_LAG_ID_TABLE" in cmd_args:
             payload = {"SYSTEM_LAG_ID_TABLE": {"value": {"hostname|asic0|PortChannel1": "100"}}}
