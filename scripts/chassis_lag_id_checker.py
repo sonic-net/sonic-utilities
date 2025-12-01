@@ -17,7 +17,7 @@ It performs the following steps:
 - Exits with a non-zero status if mismatches are found.
 
 Intended to be run on line cards (not on the supervisor) of a VOQ chassis
-device.
+device. 
 Usage:
     python3 chassis_lag_id_checker [--log-level LEVEL]
 
@@ -34,7 +34,9 @@ import sys
 import argparse
 import sonic_py_common.multi_asic as multi_asic
 import sonic_py_common.device_info as device_info
-
+RC_OK = 0
+RC_ERR = -1
+RC_REDIS_ERR = -2
 
 def run_redis_dump(cmd_args):
     """Run redis-dump with given command arguments and return parsed JSON output."""
@@ -58,7 +60,6 @@ def extract_lag_ids_from_asic_db(db_output, key_pattern, lag_id_field):
             lag_id = info.get('value', {}).get(lag_id_field, None)
             if lag_id is None:
                 logging.error(f"{key} has bad lag_id")
-                continue  # Skip adding None to the set
             lag_ids.add(lag_id)
     logging.debug(f"Extracted LAG IDs from ASIC DB: {lag_ids}")
     return lag_ids
@@ -100,17 +101,8 @@ def get_chassis_lag_db_table():
     chassis_db_table = chassis_db_raw.get('SYSTEM_LAG_ID_TABLE', {}).get('value', {})
     if not chassis_db_table:
         logging.error("No SYSTEM_LAG_ID_TABLE found in chassis_db")
-        sys.exit(2)
+        return RC_REDIS_ERR
     return chassis_db_table
-
-
-def get_lag_key_mismatches(chassis_db_table, diff):
-    """Return list of keys from chassis_db_table whose values are in diff."""
-    mismatches = []
-    for key, value in chassis_db_table.items():
-        if value in diff:
-            mismatches.append(key)
-    return mismatches
 
 
 def compare_lag_ids(lag_ids_in_chassis_db, asic):
@@ -133,7 +125,8 @@ def check_lag_id_sync():
     for asic_namespace in asic_namespaces:
         diff = compare_lag_ids(lag_ids_in_chassis_db, asic_namespace)
         asic_name = "localhost" if asic_namespace == multi_asic.DEFAULT_NAMESPACE else asic_namespace
-        diff_summary[asic_name] = get_lag_key_mismatches(chassis_db_lag_table, diff)
+        # Convert set to list for JSON/logging friendliness
+        diff_summary[asic_name] = sorted(list(diff))
 
     return diff_summary
 
@@ -147,11 +140,11 @@ def main():
 
     if not device_info.is_voq_chassis():
         logging.info("Not a voq chassis device. Exiting.....")
-        return
+        return RC_OK
 
     if device_info.is_supervisor():
         logging.info("Not supported on supervisor. Exiting....")
-        return
+        return RC_OK
 
     diff_summary = check_lag_id_sync()
     mismatches_found = False
@@ -162,11 +155,12 @@ def main():
 
     if mismatches_found:
         logging.critical("Summary of mismatches:\n%s", json.dumps(diff_summary, indent=4))
-        sys.exit(1)
+        return RC_ERR
     else:
         logging.info("All ASICs are in sync with chassis_db")
+        return RC_OK
 
 
 if __name__ == "__main__":
     main()
-    sys.exit(0)
+
