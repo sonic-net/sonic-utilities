@@ -5,8 +5,8 @@ import logging
 import json
 import sonic_py_common.multi_asic as multi_asic
 import sonic_py_common.device_info as device_info
-sys.path.append("scripts")
-import chassis_lag_id_checker
+sys.path.append("scripts") # noqa: E402
+import chassis_lag_id_checker # noqa: E402
 
 MULTI_ASIC_MISMATCH_LOGS = """CRITICAL root:chassis_lag_id_checker.py:160 Mismatched LAG keys in asic0: ['264', '265', '266']
 CRITICAL root:chassis_lag_id_checker.py:160 Mismatched LAG keys in asic1: ['264', '265', '266']
