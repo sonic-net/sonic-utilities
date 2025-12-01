@@ -7,6 +7,8 @@ from natsort import natsorted
 from sonic_py_common import multi_asic, device_info
 from utilities_common import constants
 from utilities_common.general import load_db_config
+import subprocess
+import json
 
 
 class MultiAsic(object):
@@ -164,6 +166,17 @@ def multi_asic_args(parser=None):
     parser.add_argument('-n', '--namespace', default=None,
                         help='Display interfaces for specific namespace')
     return parser
+
+### Function to get the address info for all interfaces in a namespace
+def multi_asic_get_addr_info_from_ns(namespace):
+    ip_addr_db_ns_cmd = f"ip netns exec {namespace} " if namespace != constants.DEFAULT_NAMESPACE else ""
+    ip_addr_db_ns_cmd += " ip -json addr show"
+    out = subprocess.check_output(ip_addr_db_ns_cmd, shell=True)
+    data = json.loads(out)
+    if_db = {}
+    for item in data:
+        if_db[item["ifname"]] = item
+    return if_db 
 
 def multi_asic_get_ip_intf_from_ns(namespace):
     import pyroute2
