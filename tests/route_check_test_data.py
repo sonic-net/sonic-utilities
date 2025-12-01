@@ -29,6 +29,8 @@ FEATURE_TABLE = 'FEATURE'
 SEPARATOR = ":"
 DEVICE_METADATA = "DEVICE_METADATA"
 MUX_CABLE = "MUX_CABLE"
+CRM_TABLE = 'CRM'
+CRM_STATS = 'STATS'
 
 LOCALHOST = "localhost"
 
@@ -81,8 +83,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -120,8 +122,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -175,8 +177,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -233,8 +235,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -283,8 +285,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -324,8 +326,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -382,8 +384,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -420,8 +422,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -459,8 +461,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -511,8 +513,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -548,8 +550,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -613,8 +615,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -693,8 +695,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -749,8 +751,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -805,8 +807,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -862,8 +864,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -902,8 +904,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -965,8 +967,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -1012,8 +1014,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -1099,8 +1101,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -1182,8 +1184,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -1254,8 +1256,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -1324,8 +1326,8 @@ TEST_DATA = {
                 }
             },
             COUNTERS_DB: {
-                "CRM": {
-                    "STATS": {
+                CRM_TABLE: {
+                    CRM_STATS: {
                         "crm_stats_nexthop_group_used": "20",
                         "crm_stats_nexthop_group_available": "80"
                     }
@@ -1386,8 +1388,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -1455,8 +1457,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -1533,8 +1535,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -1592,8 +1594,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -1679,8 +1681,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -1772,8 +1774,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -1876,8 +1878,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "20",
                             "crm_stats_nexthop_group_available": "80"
                         }
@@ -1968,8 +1970,8 @@ TEST_DATA = {
                     }
                 },
                 COUNTERS_DB: {
-                    "CRM": {
-                        "STATS": {
+                    CRM_TABLE: {
+                        CRM_STATS: {
                             "crm_stats_nexthop_group_used": "85",
                             "crm_stats_nexthop_group_available": "15"
                         }
