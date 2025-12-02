@@ -830,12 +830,20 @@ def get_crm_nexthop_group_usage(namespace):
     nh_group_available = None
 
     if stats_found:
-        for field, value in crm_stats_values.items():
-            print_message(syslog.LOG_DEBUG, "CRM field: {}, value: {}".format(field, value))
-            if field == 'crm_stats_nexthop_group_used':
-                nh_group_used = int(value)
-            elif field == 'crm_stats_nexthop_group_available':
-                nh_group_available = int(value)
+        if isinstance(crm_stats_values, dict):
+            for field, value in crm_stats_values.items():
+                print_message(syslog.LOG_DEBUG, "CRM field: {}, value: {}".format(field, value))
+                if field == 'crm_stats_nexthop_group_used':
+                    nh_group_used = int(value)
+                elif field == 'crm_stats_nexthop_group_available':
+                    nh_group_available = int(value)
+        elif isinstance(crm_stats_values, (list, tuple)):
+            for field, value in crm_stats_values:
+                print_message(syslog.LOG_DEBUG, "CRM field: {}, value: {}".format(field, value))
+                if field == 'crm_stats_nexthop_group_used':
+                    nh_group_used = int(value)
+                elif field == 'crm_stats_nexthop_group_available':
+                    nh_group_available = int(value)
 
     if nh_group_used is None and nh_group_available is None:
         print_message(syslog.LOG_ERR, "Failed to get nexthop group CRM stats")
