@@ -934,7 +934,15 @@ TEST_DATA = {
                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                    }
-               }
+               },
+                COUNTERS_DB: {
+                    CRM_TABLE: {
+                        CRM_STATS: {
+                            "crm_stats_nexthop_group_used": "20",
+                            "crm_stats_nexthop_group_available": "80"
+                        }
+                    }
+                }
            },
         }
     },
@@ -1043,7 +1051,15 @@ TEST_DATA = {
                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                    }
-               }
+               },
+                COUNTERS_DB: {
+                    CRM_TABLE: {
+                        CRM_STATS: {
+                            "crm_stats_nexthop_group_used": "20",
+                            "crm_stats_nexthop_group_available": "80"
+                        }
+                    }
+                }
            },
         },
         RESULT: {
@@ -1958,14 +1974,21 @@ TEST_DATA = {
                     ROUTE_TABLE: {
                         "0.0.0.0/0": {"ifname": "portchannel0"},
                         "10.10.196.12/31": {"ifname": "portchannel0"},
+                        "10.10.196.20/31": {"ifname": "portchannel0"},
+                        "10.10.196.30/31": {"ifname": "lo"}
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
+                        "PortChannel1023:2603:10b0:503:df4::5d/126": {},
+                        "PortChannel1024": {}
                     }
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
                         ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 },
@@ -1981,7 +2004,7 @@ TEST_DATA = {
         },
         RESULT: {
             DEFAULTNS: {
-                "exceed_nexthop_group_threshold": 85
+                "exceed_nexthop_group_threshold": 85.0
             }
         },
         RET: -1,
@@ -1997,14 +2020,21 @@ TEST_DATA = {
                     ROUTE_TABLE: {
                         "0.0.0.0/0": {"ifname": "portchannel0"},
                         "10.10.196.12/31": {"ifname": "portchannel0"},
+                        "10.10.196.20/31": {"ifname": "portchannel0"},
+                        "10.10.196.30/31": {"ifname": "lo"}
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
+                        "PortChannel1023:2603:10b0:503:df4::5d/126": {},
+                        "PortChannel1024": {}
                     }
                 },
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
                         ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 },
