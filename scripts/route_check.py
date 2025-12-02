@@ -819,6 +819,8 @@ def filter_out_vlan_neigh_route_miss(namespace, rt_appl_miss, rt_asic_miss):
 
 
 def get_crm_nexthop_group_usage(namespace):
+    """Get CRM nexthop group usage percentage."""
+
     db = swsscommon.DBConnector(COUNTERS_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
     print_message(syslog.LOG_DEBUG, "COUNTERS DB {} connected".format(namespace))
     crm_resources = swsscommon.Table(db, 'CRM')
@@ -843,7 +845,8 @@ def get_crm_nexthop_group_usage(namespace):
                 nh_group_available = int(value)
 
     if nh_group_used is None and nh_group_available is None:
-        print_message(syslog.LOG_DEBUG, "Failed to get nexthop group CRM stats")
+        # NOTE: CRM STATS may not ready in counters DB when device just boots up.
+        print_message(syslog.LOG_DEBUG, "Cannot get CRM stats, skipping nexthop group usage check")
         return None
 
     total_nexthop_groups = nh_group_used + nh_group_available
