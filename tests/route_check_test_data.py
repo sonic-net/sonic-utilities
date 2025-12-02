@@ -120,14 +120,6 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "10.10.10.10/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
-                    }
                 }
             }
         },
@@ -174,14 +166,6 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "20.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "3603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
-                    }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
                     }
                 }
             }
@@ -233,14 +217,6 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
-                    }
                 }
             }
         }
@@ -283,14 +259,6 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df5::1/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "101.0.0.0/24" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
-                    }
                 }
             }
         }
@@ -323,14 +291,6 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
-                    }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
                     }
                 }
             }
@@ -382,14 +342,6 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "50.1.1.0/24" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "50.2.2.0/24" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
-                    }
                 }
             }
         }
@@ -419,14 +371,6 @@ TEST_DATA = {
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
                         ASIC_RT_ENTRY_KEY_PREFIX + "fc02:1000::99/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
-                    }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
                     }
                 }
             }
@@ -458,14 +402,6 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
-                    }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
                     }
                 }
             }
@@ -511,14 +447,6 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "192.168.0.3/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "fc02:1000::3/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
-                    }
                 }
             }
         }
@@ -547,14 +475,6 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
-                    }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
                     }
                 },
             },
@@ -612,14 +532,6 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
-                    }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
                     }
                 },
             },
@@ -694,14 +606,6 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
-                    }
-                },
             },
         },
         FRR_ROUTES: {
@@ -748,14 +652,6 @@ TEST_DATA = {
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
                         ASIC_RT_ENTRY_KEY_PREFIX + "2000:31::1/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
-                    }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
                     }
                 }
             }
@@ -804,14 +700,6 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "20.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "192.168.0.101/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "192.168.0.102/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
-                    }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
                     }
                 }
             }
@@ -862,14 +750,6 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
-                    }
                 }
             }
         }
@@ -903,14 +783,6 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
-                    }
-                }
             },
             ASIC1: {
                 APPL_DB: {
@@ -933,14 +805,6 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
-                    }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
                     }
                 }
            },
@@ -972,14 +836,6 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
-                    }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
                     }
                 }
             }
@@ -1020,14 +876,6 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
-                    }
                 }
             },
             ASIC1: {
@@ -1051,16 +899,8 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
-                    }
                 }
-           },
+            },
         },
         RESULT: {
             ASIC0: {
@@ -1114,14 +954,6 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
-                    }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
                     }
                 },
             },
@@ -1199,14 +1031,6 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
-                    }
-                },
             },
         },
         FRR_ROUTES: {
@@ -1271,14 +1095,6 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
-                    }
-                },
             },
         },
         FRR_ROUTES: {
@@ -1312,43 +1128,33 @@ TEST_DATA = {
         NAMESPACE: [''],
         ARGS: "route_check -m INFO -i 1000",
         PRE: {
-            DEFAULTNS: {
-                CONFIG_DB: {
-                    DEVICE_METADATA: {
-                        LOCALHOST: {
-                        }
+            CONFIG_DB: {
+                DEVICE_METADATA: {
+                    LOCALHOST: {
                     }
+                }
+            },
+            APPL_DB: {
+                ROUTE_TABLE: {
+                    "0.0.0.0/0": {"ifname": "portchannel0"},
+                    "10.10.196.12/31": {"ifname": "portchannel0"},
                 },
-                APPL_DB: {
-                    ROUTE_TABLE: {
-                        "0.0.0.0/0": {"ifname": "portchannel0"},
-                        "10.10.196.12/31": {"ifname": "portchannel0"},
-                    },
-                    INTF_TABLE: {
-                        "PortChannel1013:10.10.196.24/31": {},
-                        "PortChannel1023:2603:10b0:503:df4::5d/126": {},
-                        "PortChannel1024": {}
-                    },
-                    MY_SID_TABLE: {
-                        "32:16:0:0:fcbb:bbbb:1::": {}
-                    }
+                INTF_TABLE: {
+                    "PortChannel1013:10.10.196.24/31": {},
+                    "PortChannel1023:2603:10b0:503:df4::5d/126": {},
+                    "PortChannel1024": {}
                 },
-                ASIC_DB: {
-                    RT_ENTRY_TABLE: {
-                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
-                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
-                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
-                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
-                        ASIC_SID_ENTRY_KEY_PREFIX + "fcbb:bbbb:1::" + ASIC_SID_ENTRY_KEY_SUFFIX: {}
-                    }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
-                    }
+                MY_SID_TABLE: {
+                    "32:16:0:0:fcbb:bbbb:1::": {}
+                }
+            },
+            ASIC_DB: {
+                RT_ENTRY_TABLE: {
+                    ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                    ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                    ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                    ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                    ASIC_SID_ENTRY_KEY_PREFIX + "fcbb:bbbb:1::" + ASIC_SID_ENTRY_KEY_SUFFIX: {}
                 }
             },
         },
@@ -1403,14 +1209,6 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
-                    }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
                     }
                 },
             },
@@ -1472,14 +1270,6 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_SID_ENTRY_KEY_PREFIX + "fcbb:bbbb:1::" + ASIC_SID_ENTRY_KEY_SUFFIX: {}
-                    }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
                     }
                 },
             },
@@ -1551,15 +1341,7 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "3603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
-                    }
-                },
+                }
             }
         },
         RESULT: {
@@ -1609,14 +1391,6 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
-                    }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
                     }
                 },
             },
@@ -1696,14 +1470,6 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
-                    }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
                     }
                 },
             },
@@ -1789,14 +1555,6 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
-                    }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
                     }
                 },
             },
@@ -1893,14 +1651,6 @@ TEST_DATA = {
                         ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
-                    }
-                },
-                COUNTERS_DB: {
-                    CRM_TABLE: {
-                        CRM_STATS: {
-                            "crm_stats_nexthop_group_used": "20",
-                            "crm_stats_nexthop_group_available": "80"
-                        }
                     }
                 },
             },
@@ -2010,43 +1760,5 @@ TEST_DATA = {
             }
         },
         RET: -1,
-    },
-    "34": {
-        DESCR: "couldn't get CRM stats",
-        MULTI_ASIC: False,
-        NAMESPACE: [''],
-        ARGS: "route_check -m INFO -i 1000",
-        PRE: {
-            DEFAULTNS: {
-                APPL_DB: {
-                    ROUTE_TABLE: {
-                        "0.0.0.0/0": {"ifname": "portchannel0"},
-                        "10.10.196.12/31": {"ifname": "portchannel0"},
-                        "10.10.196.20/31": {"ifname": "portchannel0"},
-                        "10.10.196.30/31": {"ifname": "lo"}
-                    },
-                    INTF_TABLE: {
-                        "PortChannel1013:10.10.196.24/31": {},
-                        "PortChannel1023:2603:10b0:503:df4::5d/126": {},
-                        "PortChannel1024": {}
-                    }
-                },
-                ASIC_DB: {
-                    RT_ENTRY_TABLE: {
-                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
-                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
-                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
-                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
-                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
-                    }
-                },
-            }
-        },
-        RESULT: {
-            DEFAULTNS: {
-                "missed_nexthop_group_crm_stats": "Could not fetch nexthop group CRM stats/No nexthop groups configured"
-            }
-        },
-        RET: -1,
-    },
+    }
 }
