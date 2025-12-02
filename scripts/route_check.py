@@ -213,8 +213,8 @@ def diff_sorted_lists(t1, t2):
     t1_x = t2_x = 0
     t1_miss = []
     t2_miss = []
-    t1_len = len(t1)
-    t2_len = len(t2)
+    t1_len = len(t1);
+    t2_len = len(t2);
     while t1_x < t1_len and t2_x < t2_len:
         d = cmps(t1[t1_x], t2[t2_x])
         if (d == 0):
