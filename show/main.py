@@ -2934,6 +2934,9 @@ def igmp_snooping_vlan(vlan_id):
 
     if not data:
         return
+    
+    if data.get('enabled', "").lower() != "true":
+            return
 
     enabled_statue = data.get('enabled') 
     if enabled_statue == 'false': 
@@ -3067,6 +3070,9 @@ def igmp_snooping_vlan():
      
         if not data: 
             return 
+
+        if data.get('enabled', "").lower() != "true":
+            return
 
         enabled_statue = data.get('enabled') 
         if enabled_statue == 'false': 
@@ -3358,6 +3364,9 @@ def mld_snooping_vlan(vlan_id):
     cfg_l2mc_table = config_db.get_table('MLD_L2MC')
     if not cfg_l2mc_table:
         return
+    
+    if cfg_l2mc_table.get('enabled', "").lower() != "true":
+        return
 
     app_db = SonicV2Connector(host='127.0.0.1')
     app_db.connect(app_db.APPL_DB) 
@@ -3519,6 +3528,9 @@ def mld_snooping_vlan():
      
         if not data: 
             return 
+        
+        if data.get('enabled', "").lower() != "true":
+            return
 
         enabled_statue = data.get('enabled') 
         if enabled_statue == 'false': 
