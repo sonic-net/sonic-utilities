@@ -58,7 +58,7 @@ class DBMigrator():
                      none-zero values.
               build: sequentially increase within a minor version domain.
         """
-        self.CURRENT_VERSION = 'version_202511_01'
+        self.CURRENT_VERSION = 'version_202605_01'
 
         self.TABLE_NAME      = 'VERSIONS'
         self.TABLE_KEY       = 'DATABASE'
@@ -1396,6 +1396,14 @@ class DBMigrator():
         Version 202511_01
         """
         log.log_info('Handling version_202511_01')
+        self.set_version('version_202605_01')
+        return 'version_202605_01'
+
+    def version_202605_01(self):
+        """
+        Version 202605_01
+        """
+        log.log_info('Handling version_202605_01')
         return None
 
     def get_version(self):
