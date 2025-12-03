@@ -1,0 +1,85 @@
+#!/usr/bin/env python3
+
+"""
+    Script to show fan status.
+"""
+
+import os
+import sys
+from tabulate import tabulate
+from natsort import natsorted
+
+# mock the redis for unit test purposes #
+try:
+    if os.environ["UTILITIES_UNIT_TESTING"] == "1":
+        modules_path = os.path.join(os.path.dirname(__file__), "..")
+        test_path = os.path.join(modules_path, "tests")
+        sys.path.insert(0, modules_path)
+        sys.path.insert(0, test_path)
+        import mock_tables.dbconnector
+except KeyError:
+    pass
+
+from swsscommon.swsscommon import SonicV2Connector
+
+header = ['Drawer', 'LED', 'FAN', 'Speed', 'Direction', 'Presence', 'Status', 'Timestamp']
+
+FAN_TABLE_NAME = 'FAN_INFO'
+DRAWER_FIELD_NAME = 'drawer_name'
+SPEED_FIELD_NAME = 'speed'
+DIRECTION_FIELD_NAME = 'direction'
+PRESENCE_FIELD_NAME = 'presence'
+STATUS_FIELD_NAME = 'status'
+LED_STATUS_FIELD_NAME = 'led_status'
+TIMESTAMP_FIELD_NAME = 'timestamp'
+
+
+class FanShow(object):
+    def __init__(self):
+        self.db = SonicV2Connector(host="127.0.0.1")
+        self.db.connect(self.db.STATE_DB)
+
+    def show(self):
+        keys = self.db.keys(self.db.STATE_DB, FAN_TABLE_NAME + '*')
+        if not keys:
+            print('Fan Not detected\n')
+            return
+
+        table = []
+        for key in natsorted(keys):
+            key_list = key.split('|')
+            if len(key_list) != 2: # error data in DB, log it and ignore
+                print('Warn: Invalid key in table FAN_INFO: {}'.format(key))
+                continue
+
+            name = key_list[1]
+            data_dict = self.db.get_all(self.db.STATE_DB, key)
+            try:
+                speed = float(data_dict[SPEED_FIELD_NAME])
+                if speed > 100:
+                    speed = '{}RPM'.format(int(speed))
+                else:
+                    speed = '{}%'.format(data_dict[SPEED_FIELD_NAME])
+            except ValueError as e:
+                speed = data_dict[SPEED_FIELD_NAME]
+
+            presence = data_dict[PRESENCE_FIELD_NAME].lower()
+            presence = 'Present' if presence == 'true' else 'Not Present'
+            status = data_dict[STATUS_FIELD_NAME]
+            status_lower = status.lower()
+            if status_lower == 'true':
+                status = 'OK'
+            elif status_lower == 'false':
+                status = 'Not OK'
+
+            table.append((data_dict[DRAWER_FIELD_NAME], data_dict[LED_STATUS_FIELD_NAME], name, speed, data_dict[DIRECTION_FIELD_NAME], presence, status,
+                          data_dict[TIMESTAMP_FIELD_NAME]))
+        if table:
+            print(tabulate(table, header, tablefmt='simple', stralign='right'))
+        else:
+            print('No fan status data available\n')
+
+
+if __name__ == "__main__":
+    fanShow = FanShow()
+    fanShow.show()

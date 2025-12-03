@@ -1,0 +1,11 @@
+{
+    "DNS_NAMESERVER|1.1.1.1": {
+        "state": "enabled"
+    },
+    "DNS_NAMESERVER|2001:1001:110:1001::1": {
+        "state": "enabled"
+    },
+    "VERSIONS|DATABASE": {
+        "VERSION": "version_202405_01"
+    }
+}

@@ -1,0 +1,5 @@
+{
+    "SWITCH_TABLE:switch": {
+        "ecmp_hash_seed" : "600"
+    }
+}

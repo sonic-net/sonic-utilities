@@ -1,0 +1,106 @@
+{
+    "0.0.0.0/0": [
+        {
+            "prefix": "0.0.0.0/0",
+            "prefixLen": 0,
+            "protocol": "bgp",
+            "vrfId": 0,
+            "vrfName": "default",
+            "selected": true,
+            "destSelected": true,
+            "distance": 200,
+            "metric": 0,
+            "installed": true,
+            "table": 254,
+            "internalStatus": 16,
+            "internalFlags": 13,
+            "internalNextHopNum": 8,
+            "internalNextHopActiveNum": 8,
+            "nexthopGroupId": 465,
+            "installedNexthopGroupId": 465,
+            "uptime": "04w0d12h",
+            "nexthops": [
+                {
+                    "flags": 5,
+                    "ip": "20.1.0.128",
+                    "afi": "ipv4",
+                    "active": true,
+                    "recursive": true,
+                    "weight": 1
+                },
+                {
+                    "flags": 11,
+                    "fib": true,
+                    "ip": "20.1.0.128",
+                    "afi": "ipv4",
+                    "interfaceIndex": 26,
+                    "interfaceName": "Ethernet-IB1",
+                    "resolver": true,
+                    "active": true,
+                    "onLink": true,
+                    "weight": 1
+                },
+                {
+                    "flags": 5,
+                    "ip": "20.1.8.128",
+                    "afi": "ipv4",
+                    "active": true,
+                    "recursive": true,
+                    "weight": 1
+                },
+                {
+                    "flags": 11,
+                    "fib": true,
+                    "ip": "20.1.8.128",
+                    "afi": "ipv4",
+                    "interfaceIndex": 26,
+                    "interfaceName": "Ethernet-IB1",
+                    "resolver": true,
+                    "active": true,
+                    "onLink": true,
+                    "weight": 1
+                },
+                {
+                    "flags": 5,
+                    "ip": "20.1.16.128",
+                    "afi": "ipv4",
+                    "active": true,
+                    "recursive": true,
+                    "weight": 1
+                },
+                {
+                    "flags": 11,
+                    "fib": true,
+                    "ip": "20.1.16.128",
+                    "afi": "ipv4",
+                    "interfaceIndex": 26,
+                    "interfaceName": "Ethernet-IB1",
+                    "resolver": true,
+                    "active": true,
+                    "onLink": true,
+                    "weight": 1
+                },
+                {
+                    "flags": 5,
+                    "ip": "20.1.24.128",
+                    "afi": "ipv4",
+                    "active": true,
+                    "recursive": true,
+                    "weight": 1
+                },
+                {
+                    "flags": 11,
+                    "fib": true,
+                    "ip": "20.1.24.128",
+                    "afi": "ipv4",
+                    "interfaceIndex": 26,
+                    "interfaceName": "Ethernet-IB1",
+                    "resolver": true,
+                    "active": true,
+                    "onLink": true,
+                    "weight": 1
+                }
+            ]
+        }
+    ]
+}

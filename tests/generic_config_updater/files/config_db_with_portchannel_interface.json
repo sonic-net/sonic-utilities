@@ -1,0 +1,10 @@
+{
+    "PORTCHANNEL": {
+        "PortChannel0001": {
+            "admin_status": "up"
+        }
+    },
+    "PORTCHANNEL_INTERFACE": {
+        "PortChannel0001|1.1.1.1/24": {}
+    }
+}

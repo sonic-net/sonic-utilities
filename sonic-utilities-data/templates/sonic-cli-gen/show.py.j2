@@ -1,0 +1,254 @@
+{% from "common.j2" import cli_name -%}
+"""
+Auto-generated show CLI plugin.
+{% if source_template is defined %}
+Source template: {{ source_template }}
+{% endif %}
+{% if source_yang_module is defined %}
+Source YANG module: {{ source_yang_module }}
+{% endif %}
+"""
+
+import click
+import tabulate
+import natsort
+import utilities_common.cli as clicommon
+
+
+{% macro column_name(name) -%}
+{{ name|upper|replace("_", " ")|replace("-", " ") }}
+{%- endmacro %}
+
+
+def format_attr_value(entry, attr):
+    """ Helper that formats attribute to be presented in the table output.
+
+    Args:
+        entry (Dict[str, str]): CONFIG DB entry configuration.
+        attr (Dict): Attribute metadata.
+
+    Returns:
+        str: formatted attribute value.
+    """
+
+    if attr["is-leaf-list"]:
+        return "\n".join(entry.get(attr["name"], []))
+    return entry.get(attr["name"], "N/A")
+
+
+def format_group_value(entry, attrs):
+    """ Helper that formats grouped attribute to be presented in the table output.
+
+    Args:
+        entry (Dict[str, str]): CONFIG DB entry configuration.
+        attrs (List[Dict]): Attributes metadata that belongs to the same group.
+
+    Returns:
+        str: formatted group attributes.
+    """
+
+    data = []
+    for attr in attrs:
+        if entry.get(attr["name"]):
+            data.append((attr["name"] + ":", format_attr_value(entry, attr)))
+    return tabulate.tabulate(data, tablefmt="plain")
+
+
+{# Generates a python list that represents a row in the table view.
+E.g:
+Jinja2:
+{{
+    gen_row("entry", [
+            {"name": "leaf1"},
+            {"name": "leaf_1"},
+            {"name": "leaf_2"},
+            {"name": "leaf_3", "group": "group_0"}
+        ])
+}}
+Result:
+[
+    format_attr_value(
+        entry,
+        {'name': 'leaf1'}
+    ),
+    format_attr_value(
+        entry,
+        {'name': 'leaf_1'}
+    ),
+    format_attr_value(
+        entry,
+        {'name': 'leaf_2'}
+    ),
+    format_group_value(
+        entry,
+        [{'name': 'leaf_3', 'group': 'group_0'}]
+    ),
+]
+#}
+{% macro gen_row(entry, attrs) -%}
+[
+{%- for attr in attrs|rejectattr("group", "defined") %}
+    format_attr_value(
+        {{ entry }},
+        {{ attr }}
+    ),
+{%- endfor %}
+{%- for group, attrs in attrs|selectattr("group", "defined")|groupby("group") %}
+{%- if group == "" %}
+{%- for attr in attrs %}
+    format_attr_value(
+        {{ entry }},
+        {{ attr }}
+    ),
+{%- endfor %}
+{%- else %}
+    format_group_value(
+        {{ entry }},
+        {{ attrs }}
+    ),
+{%- endif %}
+{%- endfor %}
+]
+{% endmacro %}
+
+{# Generates a list that represents a header in table view.
+E.g:
+Jinja2: {{
+        gen_header([
+            {"name": "key"},
+            {"name": "leaf_1"},
+            {"name": "leaf_2"},
+            {"name": "leaf_3", "group": "group_0"}
+        ])
+      }}
+
+Result:
+[
+    "KEY",
+    "LEAF 1",
+    "LEAF 2",
+    "GROUP 0",
+]
+
+#}
+{% macro gen_header(attrs) -%}
+[
+{% for attr in attrs|rejectattr("group", "defined") -%}
+    "{{ column_name(attr.name) }}",
+{% endfor -%}
+{% for group, attrs in attrs|selectattr("group", "defined")|groupby("group") -%}
+{%- if group == "" %}
+{% for attr in attrs -%}
+    "{{ column_name(attr.name) }}",
+{% endfor -%}
+{%- else %}
+    "{{ column_name(group) }}",
+{%- endif %}
+{% endfor -%}
+]
+{% endmacro %}
+
+
+{% for table in tables %}
+{% if "static-objects" in table %}
+{# For static objects generate a command group called against table name.
+E.g:
+@click.group(name="table-name",
+             cls=clicommon.AliasedGroup)
+def TABLE_NAME():
+    """ TABLE DESCRIPTION """
+
+    pass
+#}
+@click.group(name="{{ cli_name(table.name) }}",
+             cls=clicommon.AliasedGroup)
+def {{ table.name }}():
+    """ {{ table.description }} """
+
+    pass
+
+{% for object in table["static-objects"] %}
+{# For every object in static table generate a command
+in the group to show individual object configuration.
+CLI command is named against the object key in DB.
+E.g:
+@TABLE_NAME.command(name="object-name")
+@clicommon.pass_db
+def TABLE_NAME_object_name(db):
+    ...
+#}
+@{{ table.name }}.command(name="{{ cli_name(object.name) }}")
+@clicommon.pass_db
+def {{ table.name }}_{{ object.name }}(db):
+    """ {{ object.description }} """
+
+    header = {{ gen_header(object.attrs) }}
+    body = []
+
+    table = db.cfgdb.get_table("{{ table.name }}")
+    entry = table.get("{{ object.name }}", {})
+    row = {{ gen_row("entry", object.attrs) }}
+    body.append(row)
+    click.echo(tabulate.tabulate(body, header))
+
+{% endfor %}
+{% elif "dynamic-objects" in table %}
+{% if table["dynamic-objects"]|length > 1 %}
+@click.group(name="{{ cli_name(table.name) }}",
+             cls=clicommon.AliasedGroup)
+def {{ table.name }}():
+    """ {{ table.description }} """
+
+    pass
+{% endif %}
+{% for object in table["dynamic-objects"] %}
+{# Generate another nesting group in case table holds two types of objects #}
+{% if table["dynamic-objects"]|length > 1 %}
+{% set group = table.name %}
+{% set name = object.name %}
+{% else %}
+{% set group = "click" %}
+{% set name = table.name %}
+{% endif %}
+
+{# Generate an implementation to display table. #}
+@{{ group }}.group(name="{{ cli_name(name) }}",
+             cls=clicommon.AliasedGroup,
+             invoke_without_command=True)
+@clicommon.pass_db
+def {{ name }}(db):
+    """ {{ object.description }} [Callable command group] """
+
+    header = {{ gen_header(object["keys"] + object.attrs) }}
+    body = []
+
+    table = db.cfgdb.get_table("{{ table.name }}")
+    for key in natsort.natsorted(table):
+        entry = table[key]
+        if not isinstance(key, tuple):
+            key = (key,)
+
+        row = [*key] + {{ gen_row("entry", object.attrs) }}
+        body.append(row)
+
+    click.echo(tabulate.tabulate(body, header))
+{% endfor %}
+{% endif %}
+{% endfor %}
+
+def register(cli):
+    """ Register new CLI nodes in root CLI.
+
+    Args:
+        cli (click.core.Command): Root CLI node.
+    Raises:
+        Exception: when root CLI already has a command
+                   we are trying to register.
+    """
+
+{%- for table in tables %}
+    cli_node = {{ table.name }}
+    if cli_node.name in cli.commands:
+        raise Exception(f"{cli_node.name} already exists in CLI")
+    cli.add_command({{ table.name }})
+{%- endfor %}

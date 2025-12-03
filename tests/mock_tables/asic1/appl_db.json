@@ -1,0 +1,103 @@
+{
+    "PORT_TABLE:Ethernet64": {
+        "oper_status": "up",
+        "lanes": "29,30,31,32",
+        "description": "ARISTA01T2:Ethernet3/2/1",
+        "pfc_asym": "off",
+        "mtu": "9100",
+        "alias": "Ethernet1/17",
+        "admin_status": "up",
+        "role": "Ext",
+        "speed": "40000",
+        "asic_port_name": "Eth0-ASIC1"
+    },
+    "PORT_TABLE:Ethernet-BP256": {
+        "oper_status": "up",
+        "lanes": "61,62,63,64",
+        "description": "ASIC0:Eth16-ASIC0",
+        "pfc_asym": "off",
+        "mtu": "9100",
+        "alias": "Ethernet-BP256",
+        "admin_status": "up",
+        "speed": "40000",
+        "asic_port_name": "Eth0-ASIC1"
+    },
+    "PORT_TABLE:Ethernet-BP260": {
+        "oper_status": "up",
+        "lanes": "57,58,59,60",
+        "description": "ASIC0:Eth17-ASIC0",
+        "pfc_asym": "off",
+        "mtu": "9100",
+        "alias": "Ethernet-BP260",
+        "admin_status": "up",
+        "speed": "40000",
+        "asic_port_name": "Eth1-ASIC1"
+    },
+    "PORT_TABLE:Ethernet-IB1": {
+        "admin_status": "up",
+        "alias": "Ethernet-IB1",
+        "asic_port_name": "Rcy-ASIC1",
+        "description": "",
+        "index": "152",
+        "lanes": "109,0,0,0,0,0,0,0",
+        "mtu": "9100",
+        "oper_status": "up",
+        "role": "Int",
+        "speed": "100000"
+    },
+    "SYSTEM_PORT_TABLE:Linecard1|Asic0|Ethernet0": {
+        "core_index": "0", 
+        "core_port_index": "1", 
+        "speed": "100000", 
+        "switch_id": "0", 
+        "system_port_id": "1"
+    }, 
+    "SYSTEM_PORT_TABLE:Linecard1|Asic0|Ethernet-IB0": {
+        "core_index": "1", 
+        "core_port_index": "6", 
+        "speed": "10000", 
+        "switch_id": "0", 
+        "system_port_id": "13"
+    }, 
+    "SYSTEM_PORT_TABLE:Linecard1|Asic1|Ethernet12": {
+        "core_index": "0", 
+        "core_port_index": "1", 
+        "speed": "100000", 
+        "switch_id": "2", 
+        "system_port_id": "65"
+    }, 
+    "SYSTEM_PORT_TABLE:Linecard1|Asic2|Ethernet24": {
+        "core_index": "0", 
+        "core_port_index": "1", 
+        "speed": "100000", 
+        "switch_id": "4", 
+        "system_port_id": "129"
+    }, 
+    "SYSTEM_PORT_TABLE:Linecard2|Asic0|Ethernet0": {
+        "core_index": "0", 
+        "core_port_index": "1", 
+        "speed": "100000", 
+        "switch_id": "6", 
+        "system_port_id": "193"
+    }, 
+    "LAG_TABLE:PortChannel4009": {
+        "admin_status": "up",
+        "oper_status": "up",
+        "mtu": "9100"
+    },
+    "LAG_MEMBER_TABLE:PortChannel4009:Ethernet-BP256": {
+        "status": "enabled"
+    },
+    "LAG_MEMBER_TABLE:PortChannel4009:Ethernet-BP260": {
+        "status": "enabled"
+    },
+    "INTF_TABLE:Ethernet64": {
+	"mpls":"enable"
+    },
+    "INTF_TABLE:Ethernet-BP256": {
+	"mpls":"disable"
+    },
+    "INTF_TABLE:Ethernet-BP260": {
+	"mpls":"enable"
+    }
+}

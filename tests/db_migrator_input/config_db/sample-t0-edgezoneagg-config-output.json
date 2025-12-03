@@ -1,0 +1,123 @@
+{
+    "DEVICE_NEIGHBOR_METADATA|ARISTA01T1": {
+        "hwsku": "Arista-VM",
+        "mgmt_addr": "10.64.247.200",
+        "type": "EdgeZoneAggregator"
+    },
+    "DEVICE_NEIGHBOR_METADATA|ARISTA02T1": {
+        "hwsku": "Arista-VM",
+        "mgmt_addr": "10.64.247.200",
+        "type": "EdgeZoneAggregator"
+    },
+    "DEVICE_NEIGHBOR_METADATA|ARISTA03T1": {
+        "hwsku": "Arista-VM",
+        "mgmt_addr": "10.64.247.200",
+        "type": "EdgeZoneAggregator"
+    },
+    "DEVICE_NEIGHBOR_METADATA|ARISTA04T1": {
+        "hwsku": "Arista-VM",
+        "mgmt_addr": "10.64.247.200",
+        "type": "EdgeZoneAggregator"
+    },
+    "DEVICE_NEIGHBOR|Ethernet0": {
+        "name": "ARISTA01T1",
+        "port": "Ethernet1"
+    },
+    "DEVICE_NEIGHBOR|Ethernet4": {
+        "name": "ARISTA02T1",
+        "port": "Ethernet1"
+    },
+    "DEVICE_NEIGHBOR|Ethernet8": {
+        "name": "ARISTA03T1",
+        "port": "Ethernet1"
+    },
+    "DEVICE_NEIGHBOR|Ethernet12": {
+        "name": "ARISTA04T1",
+        "port": "Ethernet1"
+    },
+    "DEVICE_NEIGHBOR|Ethernet16": {
+        "name": "Servers1",
+        "port": "eth0"
+    },
+    "DEVICE_NEIGHBOR|Ethernet20": {
+        "name": "Servers2",
+        "port": "eth0"
+    },
+    "PORT|Ethernet0": {
+        "admin_status": "up",
+        "alias": "Ethernet1/1",
+        "description": "",
+        "index": "1",
+        "lanes": "77,78",
+        "mtu": "9100",
+        "pfc_asym": "off",
+        "speed": "100000",
+        "tpid": "0x8100"
+    },
+    "PORT|Ethernet4": {
+        "admin_status": "up",
+        "alias": "Ethernet2/1",
+        "description": "",
+        "index": "2",
+        "lanes": "79,80",
+        "mtu": "9100",
+        "pfc_asym": "off",
+        "speed": "100000",
+        "tpid": "0x8100"
+    },
+    "PORT|Ethernet8": {
+        "admin_status": "up",
+        "alias": "Ethernet3/1",
+        "description": "",
+        "index": "3",
+        "lanes": "81,82",
+        "mtu": "9100",
+        "pfc_asym": "off",
+        "speed": "100000",
+        "tpid": "0x8100"
+    },
+    "PORT|Ethernet12": {
+        "admin_status": "up",
+        "alias": "Ethernet4/1",
+        "description": "",
+        "index": "4",
+        "lanes": "83,84",
+        "mtu": "9100",
+        "pfc_asym": "off",
+        "speed": "100000",
+        "tpid": "0x8100"
+    },
+    "PORT|Ethernet16": {
+        "admin_status": "up",
+        "alias": "Ethernet5/1",
+        "description": "",
+        "index": "5",
+        "lanes": "85,86",
+        "mtu": "9100",
+        "pfc_asym": "off",
+        "speed": "100000",
+        "tpid": "0x8100"
+    },
+    "PORT|Ethernet20": {
+        "admin_status": "up",
+        "alias": "Ethernet6/1",
+        "description": "",
+        "index": "6",
+        "lanes": "87,88",
+        "mtu": "9100",
+        "pfc_asym": "off",
+        "speed": "100000",
+        "tpid": "0x8100"
+    },
+    "CABLE_LENGTH|AZURE": {
+        "Ethernet0": "40m",
+        "Ethernet4": "40m",
+        "Ethernet8": "40m",
+        "Ethernet12": "40m",
+        "Ethernet16": "5m",
+        "Ethernet20": "5m"
+    },
+    "VERSIONS|DATABASE": {
+        "VERSION": "version_4_0_1"
+    }
+}

@@ -1,0 +1,230 @@
+#!/usr/bin/env python3
+
+""" Script to list LLDP neighbors in a summary view instead of default detailed view
+
+    Example output:
+
+    admin@sonic:~$ lldpshow
+    Capability codes: (R) Router, (B) Bridge, (O) Other
+    LocalPort    RemoteDevice           RemotePortID     Capability  RemotePortDescr
+    ------------ ---------------------  ---------------- ----------- ----------------------------------------
+    Ethernet0    <neighbor0_hostname>    Ethernet1/51    BR          <my_hostname>:fortyGigE0/0
+    Ethernet4    <neighbor1_hostname>    Ethernet1/51    BR          <my_hostname>:fortyGigE0/4
+    Ethernet8    <neighbor2_hostname>    Ethernet1/51    BR          <my_hostname>:fortyGigE0/8
+    Ethernet12   <neighbor3_hostname>    Ethernet1/51    BR          <my_hostname>:fortyGigE0/12
+    ...          ...                     ...             ...         ...
+    Ethernet124  <neighborN_hostname>    Ethernet4/20/1  BR          <my_hostname>:fortyGigE0/124
+    eth0         <mgmt_neighbor_name>    Ethernet1/25    BR          Ethernet1/25
+    -----------------------------------------------------
+    Total entries displayed:  33
+"""
+
+import argparse
+import re
+import subprocess
+import sys
+from lxml import etree as ET
+
+from sonic_py_common import device_info
+from utilities_common import constants
+from swsscommon.swsscommon import ConfigDBConnector
+from utilities_common.general import load_db_config, get_feature_state_data
+from tabulate import tabulate
+
+BACKEND_ASIC_INTERFACE_NAME_PREFIX = 'Ethernet-BP'
+
+LLDP_INTERFACE_LIST_IN_HOST_NAMESPACE = ''
+LLDP_INSTANCE_IN_HOST_NAMESPACE = ''
+LLDP_DEFAULT_INTERFACE_LIST_IN_ASIC_NAMESPACE = ''
+SPACE_TOKEN = ' '
+
+
+class Lldpshow(object):
+    def __init__(self):
+        self.lldpraw = []
+        self.lldpsum = {}
+        self.lldp_interface = []
+        self.lldp_instance = []
+        self.err = None
+        # So far only find Router and Bridge two capabilities in lldpctl, so any other capacility types will be read as Other
+        # if further capability type is supported like WLAN, can just add the tag definition here
+        self.ctags = {'Router': 'R', 'Bridge': 'B'}
+
+        # Load database config files
+        load_db_config()
+
+        # For multi-asic platforms we will get only front-panel interface to display
+        namespaces = device_info.get_all_namespaces()
+        per_asic_configdb = {}
+        for instance_num, front_asic_namespaces in enumerate(namespaces['front_ns']):
+            per_asic_configdb[front_asic_namespaces] = ConfigDBConnector(
+                use_unix_socket_path=True, namespace=front_asic_namespaces)
+            per_asic_configdb[front_asic_namespaces].connect()
+            # Initalize Interface list to be ''. We will do string append of the interfaces below.
+            self.lldp_interface.append(LLDP_DEFAULT_INTERFACE_LIST_IN_ASIC_NAMESPACE)
+            self.lldp_instance.append(instance_num)
+            keys = per_asic_configdb[front_asic_namespaces].get_keys("PORT")
+            for key in keys:
+                if key.startswith(BACKEND_ASIC_INTERFACE_NAME_PREFIX):
+                    continue
+                self.lldp_interface[instance_num] += key + SPACE_TOKEN
+
+        # LLDP running in host namespace
+        config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=constants.DEFAULT_NAMESPACE)
+        config_db.connect()
+        global_scope, asic_scope = get_feature_state_data(config_db, "lldp")
+        if global_scope == "True":
+            self.lldp_instance.append(LLDP_INSTANCE_IN_HOST_NAMESPACE)
+            self.lldp_interface.append(LLDP_INTERFACE_LIST_IN_HOST_NAMESPACE)
+
+    def get_info(self, lldp_detail_info, lldp_port):
+        """
+        use 'lldpctl' command to gather local lldp detailed information
+        """
+        for lldp_instace_num in range(len(self.lldp_instance)):
+            lldp_interface_list = lldp_port if lldp_port is not None else self.lldp_interface[lldp_instace_num]
+            # In detail mode we will pass interface list (only front ports) and get O/P as plain text
+            # and in table format we will get xml output
+            if not lldp_detail_info:
+                lldp_args = ['-f', 'xml']
+            elif lldp_interface_list == '':
+                lldp_args = []
+            else:
+                lldp_args = lldp_interface_list.split(' ')
+            lldp_cmd = ['sudo', 'docker', 'exec', '-i', 'lldp{}'.format(self.lldp_instance[lldp_instace_num]), 'lldpctl'] + lldp_args
+            p = subprocess.Popen(lldp_cmd, stdout=subprocess.PIPE, text=True)
+            (output, err) = p.communicate()
+            ## Wait for end of command. Get return returncode ##
+            returncode = p.wait()
+            # if no error, get the lldpctl result
+            if returncode == 0:
+                # ignore the output if given port is not present
+                if lldp_port is not None and lldp_port not in output:
+                    continue
+                self.lldpraw.append(output)
+                if lldp_port is not None:
+                    break
+            else:
+                self.err = err
+
+        if self.err:
+            self.lldpraw = []
+
+    def parse_cap(self, capabs):
+        """
+        capabilities that are turned on for each interface
+        """
+        capability = ""
+        for cap in capabs:
+            if cap.attrib['enabled'] == 'on':
+                captype = cap.attrib['type']
+                if captype in self.ctags.keys():
+                    capability += self.ctags[captype]
+                else:
+                    capability += 'O'
+        return capability
+
+    def parse_info(self, lldp_detail_info):
+        """
+        Parse the lldp detailed infomation into dict
+        """
+        if lldp_detail_info:
+            return
+        for lldpraw in self.lldpraw:
+            neis = ET.fromstring(lldpraw.encode())
+            intfs = neis.findall('interface')
+            for intf in intfs:
+                l_intf = intf.attrib['name']
+                if l_intf.startswith(BACKEND_ASIC_INTERFACE_NAME_PREFIX):
+                    continue
+                remote_port = intf.find('port')
+                r_portid = remote_port.find('id').text
+                key = l_intf + "#" + r_portid
+                self.lldpsum[key] = {}
+                self.lldpsum[key]['l_intf'] = l_intf
+                self.lldpsum[key]['r_portid'] = r_portid
+                chassis = intf.find('chassis')
+                capabs = chassis.findall('capability')
+                capab = self.parse_cap(capabs)
+                rmt_name = chassis.find('name')
+                if rmt_name is not None:
+                    self.lldpsum[key]['r_name'] = rmt_name.text
+                else:
+                    self.lldpsum[key]['r_name'] = ''
+                rmt_desc = remote_port.find('descr')
+                if rmt_desc is not None:
+                    self.lldpsum[key]['r_portname'] = rmt_desc.text
+                else:
+                    self.lldpsum[key]['r_portname'] = ''
+                self.lldpsum[key]['capability'] = capab
+
+    def sort_sum(self, summary):
+        """ Sort the summary information in the way that is expected(natural string)."""
+        def alphanum_key(key):
+            key = key.split("#")[0]
+            return [re.findall('[A-Za-z]+', key) + [int(port_num)
+                                                    for port_num in re.findall(r'\d+', key)]]
+        return sorted(summary, key=alphanum_key)
+
+    def get_summary_output(self, lldp_detail_info):
+        """
+        returns summary result of lldp neighbors
+        """
+        output_summary = ''
+        # In detail mode output is plain text
+        if self.lldpraw and lldp_detail_info:
+            lldp_output = ''
+            for lldp_detail_output in self.lldpraw:
+                lldp_output += lldp_detail_output
+            output_summary += lldp_output + "\n"
+        elif self.lldpraw:
+            lldpstatus = []
+            output_summary += "Capability codes: (R) Router, (B) Bridge, (O) Other\n"
+            header = ['LocalPort', 'RemoteDevice', 'RemotePortID', 'Capability', 'RemotePortDescr']
+            sortedsum = self.sort_sum(self.lldpsum)
+            for key in sortedsum:
+                lldpstatus.append([self.lldpsum[key]['l_intf'], self.lldpsum[key]['r_name'], self.lldpsum[key]['r_portid'],
+                                   self.lldpsum[key]['capability'], self.lldpsum[key]['r_portname']])
+            output_summary += tabulate(lldpstatus, header) + "\n"
+            output_summary += ('-'.rjust(50, '-')) + "\n"
+            output_summary += "Total entries displayed:  {}".format(len(self.lldpsum))
+        elif self.err is not None:
+            output_summary += "Error: {}".format(self.err)
+        return output_summary
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Display the LLDP neighbors',
+                                     formatter_class=argparse.RawTextHelpFormatter,
+                                     epilog="""
+                                      Examples:
+                                      lldpshow
+                                      lldpshow -d
+                                      lldpshow -d -p Ethernet0
+                                      lldpshow -p Ethernet0
+                                      """)
+
+    parser.add_argument('-d', '--detail', action='store_true', help='LLDP neighbors detail information', default=False)
+    parser.add_argument('-p', '--port', type=str, help='LLDP neighbors detail information for given port', default=None)
+    parser.add_argument('-v', '--version', action='version', version='%(prog)s 1.0')
+    args = parser.parse_args()
+
+    lldp_detail_info = args.detail
+    lldp_port = args.port
+
+    if lldp_port and not lldp_detail_info:
+        lldp_detail_info = True
+
+    try:
+        lldp = Lldpshow()
+        lldp.get_info(lldp_detail_info, lldp_port)
+        lldp.parse_info(lldp_detail_info)
+        output_summary = lldp.get_summary_output(lldp_detail_info)
+        print(output_summary)
+    except Exception as e:
+        print(str(e), file=sys.stderr)
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,8 @@
+build_version: 'master.487-a98cf221'
+debian_version: '10.6'
+kernel_version: '4.19.0-9-2-amd64'
+asic_type: broadcom
+commit_id: 'a98cf221'
+build_date: Thu Nov 12 12:21:45 UTC 2020
+build_number: 487
+built_by: johnar@jenkins-worker-8

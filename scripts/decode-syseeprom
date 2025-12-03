@@ -1,0 +1,277 @@
+#!/usr/bin/env python3
+
+"""
+    Command-line utility for obtaining system EEPROM data
+    It can either read the information directly from the EEPROM
+    or read information cached in State DB via syseerpomd
+"""
+
+#############################################################################
+#
+# This is the main script that handles eeprom encoding and decoding
+#
+import optparse
+import os
+import re
+import sys
+import errno
+
+from sonic_platform_base.sonic_eeprom.eeprom_tlvinfo import TlvInfoDecoder
+from sonic_py_common import device_info, logger
+from swsscommon.swsscommon import SonicV2Connector
+from tabulate import tabulate
+
+
+EEPROM_INFO_TABLE = 'EEPROM_INFO'
+SYSLOG_IDENTIFIER = 'decode-syseeprom'
+
+log = logger.Logger(SYSLOG_IDENTIFIER)
+
+def instantiate_eeprom_object():
+    eeprom = None
+
+    try:
+        import sonic_platform
+        eeprom = sonic_platform.platform.Platform().get_chassis().get_eeprom()
+    except Exception as e:
+        log.log_error('Failed to obtain EEPROM object due to {}'.format(repr(e)))
+        eeprom = None
+
+    return eeprom
+
+
+def read_and_print_eeprom():
+    eeprom = instantiate_eeprom_object()
+    if not eeprom:
+        return False
+
+    sys_eeprom_data = eeprom.read_eeprom()
+    eeprom.decode_eeprom(sys_eeprom_data)
+
+
+def print_eeprom_dict(tlv_dict):
+    '''
+    Pretty print EEPROM contents from a dictionary
+    '''
+    if not tlv_dict:
+        print('Unable to retrieve system EEPROM info')
+        return
+
+    print('TlvInfo Header:')
+    print('   Id String:    {}'.format(tlv_dict['header']['id']))
+    print('   Version:      {}'.format(tlv_dict['header']['version']))
+    print('   Total Length: {}'.format(tlv_dict['header']['length']))
+
+    tlv_table_header = ['TLV Name', 'Code', 'Len', 'Value']
+    tlv_table_body = []
+    for tlv in tlv_dict['tlv_list']:
+        tlv_table_body.append([tlv['name'], tlv['code'], tlv['length'], tlv['value']])
+
+    print(tabulate(tlv_table_body, tlv_table_header, tablefmt='simple'))
+
+    print('')
+
+    if tlv_dict['checksum_valid']:
+        print('(checksum valid)')
+    else:
+        print('(*** checksum invalid)')
+
+
+def read_eeprom_from_db():
+    tlv_dict = {}
+
+    db = SonicV2Connector(host="127.0.0.1")
+    db.connect(db.STATE_DB)
+
+    initialized = db.get(db.STATE_DB, '{}|{}'.format(EEPROM_INFO_TABLE, 'State'), 'Initialized')
+    if initialized != '1':
+        return None
+
+    tlv_header = db.get_all(db.STATE_DB, '{}|{}'.format(EEPROM_INFO_TABLE, 'TlvHeader'))
+    tlv_dict['header'] = {}
+    tlv_dict['header']['id'] = tlv_header.get('Id String', 'N/A')
+    tlv_dict['header']['version'] = tlv_header.get('Version', 'N/A')
+    tlv_dict['header']['length'] = tlv_header.get('Total Length', 'N/A')
+
+    tlv_dict['tlv_list'] = []
+    concerned_tlvs = []
+    concerned_tlvs.extend(range(TlvInfoDecoder._TLV_CODE_PRODUCT_NAME, TlvInfoDecoder._TLV_CODE_SERVICE_TAG + 1))
+    concerned_tlvs.append(TlvInfoDecoder._TLV_CODE_VENDOR_EXT)
+    concerned_tlvs.append(TlvInfoDecoder._TLV_CODE_CRC_32)
+    for tlv_code in concerned_tlvs:
+        tlv_code_string = '0x{:02X}'.format(tlv_code)
+
+        tlv_data = db.get_all(db.STATE_DB, '{}|{}'.format(EEPROM_INFO_TABLE, tlv_code_string.lower()))
+        if not tlv_data:
+            continue
+
+        if tlv_code == TlvInfoDecoder._TLV_CODE_VENDOR_EXT:
+            num_vendor_ext = int(tlv_data.get('Num_vendor_ext', '0'))
+            for i in range(num_vendor_ext):
+                tlv = {}
+                tlv['code'] = tlv_code_string
+                tlv['name'] = tlv_data.get('Name_{}'.format(i), 'N/A')
+                tlv['length'] = tlv_data.get('Len_{}'.format(i), 'N/A')
+                tlv['value'] = tlv_data.get('Value_{}'.format(i), 'N/A')
+                tlv_dict['tlv_list'].append(tlv)
+        else:
+            tlv = {}
+            tlv['code'] = tlv_code_string
+            tlv['name'] = tlv_data.get('Name', 'N/A')
+            tlv['length'] = tlv_data.get('Len', 'N/A')
+            tlv['value'] = tlv_data.get('Value', 'N/A')
+            tlv_dict['tlv_list'].append(tlv)
+
+    checksum_valid = db.get(db.STATE_DB, '{}|{}'.format(EEPROM_INFO_TABLE, 'Checksum'), 'Valid')
+    tlv_dict['checksum_valid'] = (checksum_valid == '1')
+
+    return tlv_dict
+
+
+def get_tlv_value_from_db(tlv_code):
+    db = SonicV2Connector(host="127.0.0.1")
+    db.connect(db.STATE_DB)
+
+    initialized = db.get(db.STATE_DB, '{}|{}'.format(EEPROM_INFO_TABLE, 'State'), 'Initialized')
+    if initialized != '1':
+        print('Failed to read system EEPROM info from DB')
+        return None
+
+    tlv_code_string = '0x{:02x}'.format(tlv_code)
+
+    return db.get(db.STATE_DB, '{}|{}'.format(EEPROM_INFO_TABLE, tlv_code_string), 'Value')
+
+
+def print_mgmt_mac(use_db=False):
+    base_mac_addr = None
+    if use_db:
+        base_mac_addr = get_tlv_value_from_db(TlvInfoDecoder._TLV_CODE_MAC_BASE)
+    else:
+        eeprom = instantiate_eeprom_object()
+        if not eeprom:
+            print('Failed to read system EEPROM info')
+            return
+
+        # TODO: Some vendors override eeprom.base_mac_addr() such that it doesn't take EEPROM data
+        # as a parameter. Refactor sonic_eeprom such that the function reads the EEPROM data itself
+        # and doesn't require the parameter (this will also require modifying some vendor's implementations.
+        try:
+            base_mac_addr = eeprom.base_mac_addr()
+        except TypeError:
+            base_mac_addr = eeprom.base_mac_addr(eeprom.read_eeprom())
+
+    if base_mac_addr:
+        print(base_mac_addr)
+
+
+def print_serial(use_db=False):
+    serial = None
+    if use_db:
+        serial = get_tlv_value_from_db(TlvInfoDecoder._TLV_CODE_SERIAL_NUMBER)
+    else:
+        eeprom = instantiate_eeprom_object()
+        if not eeprom:
+            print('Failed to read system EEPROM info')
+            return
+
+        # TODO: Some vendors override eeprom.serial_number_str() such that it doesn't take EEPROM data
+        # as a parameter. Refactor sonic_eeprom such that the function reads the EEPROM data itself
+        # and doesn't require the parameter (this will also require modifying some vendor's implementations.
+        try:
+            serial = eeprom.serial_number_str()
+        except TypeError:
+            serial = eeprom.serial_number_str(eeprom.read_eeprom())
+
+    print(serial)
+
+
+def print_model(use_db=False):
+    model = None
+    if use_db:
+        model = get_tlv_value_from_db(TlvInfoDecoder._TLV_CODE_PRODUCT_NAME)
+    else:
+        eeprom = instantiate_eeprom_object()
+        if not eeprom:
+            print('Failed to read system EEPROM info')
+            return
+
+        # TODO: Some vendors override eeprom.modelstr() such that it doesn't take EEPROM data
+        # as a parameter. Refactor sonic_eeprom such that the function reads the EEPROM data itself
+        # and doesn't require the parameter (this will also require modifying some vendor's implementations.
+        try:
+            model = eeprom.modelstr()
+        except TypeError:
+            model = eeprom.modelstr(eeprom.read_eeprom())
+
+    print(model)
+
+
+#-------------------------------------------------------------------------------
+#
+# sets global variable "optcfg"
+#
+def get_cmdline_opts():
+    optcfg = optparse.OptionParser(usage='usage: {} [-s][-m]'.format(sys.argv[0]))
+    optcfg.add_option('-d', dest='db', action='store_true',
+                      default=False, help='print eeprom from database')
+    optcfg.add_option('-s', dest='serial', action='store_true',
+                      default=False, help='print device serial number/service tag')
+    optcfg.add_option('-p', dest='modelstr', action='store_true', default=False,
+                      help='print the device product name')
+    optcfg.add_option('-m', dest='mgmtmac', action='store_true', default=False,
+                      help='print the base mac address for management interfaces')
+    return optcfg.parse_args()
+
+
+def main():
+    support_eeprom_db = True
+    if not os.geteuid() == 0:
+        print('Root privileges are required for this operation')
+        return 1
+
+    (opts, args) = get_cmdline_opts()
+
+    # Get platform name
+    platform = device_info.get_platform()
+
+    # Currently, don't support eeprom db on Arista platform
+    platforms_without_eeprom_db = ['.*arista.*', '.*kvm.*']
+    if any(re.match(p, platform) for p in platforms_without_eeprom_db):
+        support_eeprom_db = False
+
+    # Currently, kvm does not support eeprom
+    platforms_without_eeprom = ['.*kvm.*']
+    if any(re.match(p, platform) for p in platforms_without_eeprom):
+        print('Platform {} does not support EEPROM'.format(platform))
+        return errno.ENODEV
+
+    use_db = opts.db and support_eeprom_db
+
+    if opts.mgmtmac:
+        print_mgmt_mac(use_db)
+    elif opts.serial:
+        print_serial(use_db)
+    elif opts.modelstr:
+        print_model(use_db)
+    else:
+        if use_db:
+            tlv_dict = read_eeprom_from_db()
+            if not tlv_dict:
+                print('Failed to read system EEPROM info from DB')
+                return 2
+            print_eeprom_dict(tlv_dict)
+        else:
+            read_and_print_eeprom()
+
+    return 0
+
+
+if __name__ == '__main__':
+    try:
+        sys.exit(main())
+    except KeyboardInterrupt:
+        print('\nInterrupted\n', file=sys.stderr)
+        sys.exit(3)
+    except (RuntimeError, OSError, IOError) as errstr:
+        print('{}: ERROR : {}\n'.format(sys.argv[0], str(errstr)), file=sys.stderr)
+        sys.exit(4)

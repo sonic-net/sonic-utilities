@@ -1,0 +1,8 @@
+_pddf_fanutil_completion() {
+    COMPREPLY=( $( env COMP_WORDS="${COMP_WORDS[*]}" \
+                   COMP_CWORD=$COMP_CWORD \
+                   _PDDF_FANUTIL_COMPLETE=complete $1 ) )
+    return 0
+}
+
+complete -F _pddf_fanutil_completion -o default pddf_fanutil;

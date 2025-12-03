@@ -1,0 +1,8 @@
+_sonic_package_manager_completion() {
+    COMPREPLY=( $( env COMP_WORDS="${COMP_WORDS[*]}" \
+                   COMP_CWORD=$COMP_CWORD \
+                   _SONIC_PACKAGE_MANAGER_COMPLETE=complete $1 ) )
+    return 0
+}
+
+complete -F _sonic_package_manager_completion -o default sonic-package-manager;

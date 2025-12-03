@@ -1,0 +1,29 @@
+{
+    "10.0.0.4/31": [
+        {
+            "destSelected": true,
+            "distance": 0,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopNum": 1,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "directlyConnected": true,
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0008"
+                }
+            ],
+            "prefix": "10.0.0.4/31",
+            "protocol": "connected",
+            "selected": true,
+            "table": 254,
+            "uptime": "2d22h01m"
+        }
+    ]
+}

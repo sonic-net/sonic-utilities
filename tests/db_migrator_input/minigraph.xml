@@ -1,0 +1,29 @@
+<DeviceMiniGraph xmlns="Microsoft.Search.Autopilot.Evolution" xmlns:i="http://www.w3.org/2001/XMLSchema-instance">
+  <CpgDec/>
+  <DpgDec>
+    <DeviceDataPlaneInfo>
+      <LoopbackIPInterfaces/>
+      <ManagementIPInterfaces/>
+      <Hostname>SONiC-Dummy</Hostname>
+      <PortChannelInterfaces/>
+      <VlanInterfaces/>
+      <IPInterfaces/>
+      <AclInterfaces/>
+    </DeviceDataPlaneInfo>
+  </DpgDec>
+  <PngDec>
+   <Devices>
+      <Device i:type="TorRouter">
+        <Hostname>SONiC-Dummy</Hostname>
+      </Device>
+    </Devices>
+   </PngDec>
+  <MetadataDeclaration>
+    <Devices xmlns:a="http://schemas">
+      <a:DeviceMetadata>
+        <a:Properties/>
+      </a:DeviceMetadata>
+    </Devices>
+  </MetadataDeclaration>
+  <Hostname>SONiC-Dummy</Hostname>
+</DeviceMiniGraph>

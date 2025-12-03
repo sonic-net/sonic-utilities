@@ -1,0 +1,131 @@
+{
+    "PORT_TABLE:Ethernet0": {
+        "lanes": "33,34,35,36",
+        "description": "ARISTA01T2:Ethernet3/1/1",
+        "pfc_asym": "off",
+        "mtu": "9100",
+        "alias": "Ethernet1/1",
+        "oper_status": "up",
+        "admin_status": "up",
+        "role": "Ext",
+        "speed": "40000",
+        "asic_port_name": "Eth0-ASIC0"
+    },
+    "PORT_TABLE:Ethernet4": {
+        "oper_status": "up",
+        "lanes": "29,30,31,32",
+        "description": "ARISTA01T2:Ethernet3/2/1",
+        "pfc_asym": "off",
+        "mtu": "9100",
+        "alias": "Ethernet1/2",
+        "admin_status": "up",
+        "role": "Ext",
+        "speed": "40000",
+        "asic_port_name": "Eth1-ASIC0"
+    },
+    "PORT_TABLE:Ethernet-BP0": {
+        "oper_status": "up",
+        "lanes": "93,94,95,96",
+        "description": "ASIC1:Eth0-ASIC1",
+        "pfc_asym": "off",
+        "mtu": "9100",
+        "alias": "Ethernet-BP0",
+        "admin_status": "up",
+        "role": "Int",
+        "speed": "40000",
+        "asic_port_name": "Eth16-ASIC0"
+    },
+    "PORT_TABLE:Ethernet-BP4": {
+        "oper_status": "up",
+        "lanes": "97,98,99,100",
+        "description": "ASIC1:Eth1-ASIC1",
+        "pfc_asym": "off",
+        "mtu": "9100",
+        "alias": "Ethernet-BP4",
+        "admin_status": "up",
+        "role": "Int",
+        "speed": "40000",
+        "asic_port_name": "Eth17-ASIC0"
+    },
+    "PORT_TABLE:Ethernet-IB0": {
+        "admin_status": "up",
+        "alias": "Ethernet-IB0",
+        "asic_port_name": "Rcy-ASIC0",
+        "description": "",
+        "index": "148",
+        "lanes": "109,0,0,0,0,0,0,0",
+        "mtu": "9100",
+        "oper_status": "up",
+        "role": "Int",
+        "speed": "100000"
+    },
+    "SYSTEM_PORT_TABLE:Linecard1|Asic0|Ethernet0": {
+        "core_index": "0", 
+        "core_port_index": "1", 
+        "speed": "100000", 
+        "switch_id": "0", 
+        "system_port_id": "1"
+    }, 
+    "SYSTEM_PORT_TABLE:Linecard1|Asic0|Ethernet-IB0": {
+        "core_index": "1", 
+        "core_port_index": "6", 
+        "speed": "10000", 
+        "switch_id": "0", 
+        "system_port_id": "13"
+    }, 
+    "SYSTEM_PORT_TABLE:Linecard1|Asic1|Ethernet12": {
+        "core_index": "0", 
+        "core_port_index": "1", 
+        "speed": "100000", 
+        "switch_id": "2", 
+        "system_port_id": "65"
+    }, 
+    "SYSTEM_PORT_TABLE:Linecard1|Asic2|Ethernet24": {
+        "core_index": "0", 
+        "core_port_index": "1", 
+        "speed": "100000", 
+        "switch_id": "4", 
+        "system_port_id": "129"
+    }, 
+    "SYSTEM_PORT_TABLE:Linecard2|Asic0|Ethernet0": {
+        "core_index": "0", 
+        "core_port_index": "1", 
+        "speed": "100000", 
+        "switch_id": "6", 
+        "system_port_id": "193"
+    }, 
+    "LAG_MEMBER_TABLE:PortChannel1002:Ethernet0": {
+        "status": "disabled"
+    },
+    "LAG_MEMBER_TABLE:PortChannel1002:Ethernet4": {
+        "status": "enabled"
+    },
+    "LAG_MEMBER_TABLE:PortChannel4001:Ethernet-BP0": {
+        "status": "enabled"
+    },
+    "LAG_MEMBER_TABLE:PortChannel4001:Ethernet-BP4": {
+        "status": "enabled"
+    },
+    "LAG_TABLE:PortChannel1002": {
+        "admin_status": "up",
+        "mtu": "9100",
+        "oper_status": "up"
+    },
+    "LAG_TABLE:PortChannel4001": {
+        "admin_status": "up",
+        "mtu": "9100",
+        "oper_status": "up"
+    }, 
+    "INTF_TABLE:Ethernet0": {
+	"mpls":"enable"
+    },
+    "INTF_TABLE:Ethernet4": {
+	"mpls":"disable"
+    },
+    "INTF_TABLE:Ethernet-BP0": {
+	"mpls":"enable"
+    },
+    "INTF_TABLE:Ethernet-BP4": {
+	"mpls":"disable"
+    }
+}

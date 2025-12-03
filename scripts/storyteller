@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+
+'''Story Teller: Utility to help analyze log for certain sequence of events.
+
+e.g.: reboot (including warm/fast reboot), interface flapping, etc.
+'''
+
+import argparse
+import os
+import subprocess
+import sys
+
+from shlex import quote
+from sonic_py_common.general import getstatusoutput_noshell_pipe
+
+regex_dict = {
+                'acl'       : r'acl\|ACL\|Acl',
+                'bgp'       : 'bgpcfgd',
+                'crash'     : r'what\|unexpected exception\|notify_OA_about_syncd_exception\|SIG\|not expected',
+                'interface' : r'updatePortOperStatus\|Configure .* to',
+                'lag'       : r'link becomes\|addLag\|PortChannel.*oper state',
+                'reboot'    : r'BOOT\|rc.local\|old_config\|minigraph.xml\|Rebooting\|reboot\|executeOperationsOnAsic\|getAsicView\|dumpVidToAsicOperatioId\|neighbor_adv\|Pausing\|shutdown\|warm',
+                'service'   : r'Starting\|Stopping\|Started\|Stopped',
+                'linkprober': r'Received link prober event, new state'
+             }
+
+
+reference_file = '/tmp/storyteller_time_reference'
+
+def exec_cmd(cmd):
+    # Use universal_newlines (instead of text) so that this tool can work with any python versions.
+    out = subprocess.Popen(cmd, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, universal_newlines=True)
+    stdout, stderr = out.communicate()
+    return out.returncode, stdout, stderr
+
+
+def build_options(after=0, before=0, context=0):
+    options = []
+    if after:
+        options += ['-A', str(after)]
+    if before:
+        options += ['-B', str(before)]
+    if context:
+        options += ['-C', str(context)]
+
+    return options
+
+
+def find_log(logpath, log, regex, after=0, before=0, context=0, field=0):
+    options = build_options(after, before, context)
+    if field <= 0:
+        cmd0 = ['find', logpath, "-name", "{}*".format(log), "-newer", reference_file]
+        cmd1 = ["xargs", "ls", "-rt"]
+        cmd2 = ["xargs", "zgrep", "-a"] + options + [regex]
+    else:
+        cmd0 = ['find', logpath, "-name", "{}*".format(log), "-newer", reference_file]
+        cmd1 = ["sort", "-rn", "-t", ".", "-k", "{0},{0}".format(field)]
+        cmd2 = ["xargs", "zgrep", "-a"] + options + [regex]
+
+    _, out = getstatusoutput_noshell_pipe(cmd0, cmd1, cmd2)
+    '''
+        Opportunity to improve:
+            output (out) can be split to lines and send to a filter to
+            decide if a line should be printed out or not.
+    '''
+    print(out)
+
+
+def build_regex(category):
+    regex = []
+    for c in category.split(','):
+        # if c is not found, add c to grep list directly
+        regex.append(regex_dict[c] if c in regex_dict else c)
+
+    return r'\|'.join(x for x in regex)
+
+
+def configure_time_filter(since):
+    ret_code, _, _ = exec_cmd(['date', '--date', since])
+    if ret_code:
+        print('invalid date "{}"'.format(since))
+        sys.exit(1)
+
+    exec_cmd(['touch', '--date', since, reference_file])
+
+
+def main():
+    if os.geteuid() != 0:
+        exit("Root privileges are required for this operation")
+
+    parser = argparse.ArgumentParser(description='Story Teller')
+
+    parser.add_argument('-l', '--log', help='log file prefix, e.g. syslog; default: syslog',
+                        type=str, required=False, default='syslog')
+    parser.add_argument('-c', '--category', help='Categories: bgp, crash, interface, lag, reboot, service, linkprober Specify multiple categories as c1,c2,c3; default: reboot',
+                        type=str, required=False, default='reboot')
+    parser.add_argument('-p', '--logpath', help='log file path, e.g. /var/log; default: /var/log',
+                        type=str, required=False, default='/var/log')
+    parser.add_argument('-A', '--after', help='Show N lines after match',
+                        type=int, required=False, default=0)
+    parser.add_argument('-B', '--before', help='Show N lines before match',
+                        type=int, required=False, default=0)
+    parser.add_argument('-C', '--context', help='Show N lines before and after match',
+                        type=int, required=False, default=0)
+    parser.add_argument('-s', '--since', help='Filter logs since the given date',
+                        type=str, required=False, default="@0")
+    parser.add_argument('-f', '--sortfield', help='Use Nth field separted by "." in file name to sort. e.g. syslog.1.gz: -f 2, swss.rec.2.gz: -f 3, default 0: sort by timestamp',
+                        type=int, required=False, default=0)
+
+    args = parser.parse_args()
+
+    # sanitize all string inputs
+    log = quote(args.log)
+    log_path = quote(args.logpath)
+    category = quote(args.category)
+    since = quote(args.since)
+
+    reg = build_regex(category)
+    configure_time_filter(since)
+
+    find_log(log_path, log, reg, args.after, args.before, args.context, args.sortfield)
+
+
+if __name__ == '__main__':
+    main()

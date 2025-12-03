@@ -1,0 +1,18 @@
+{
+    "INTF_TABLE:lo:10.1.0.32/32" : {
+        "scope": "global",
+        "family": "IPv4"
+    },
+    "INTF_TABLE:lo:FC00:1::32/128" : {
+        "scope": "global",
+        "family": "IPv6"
+    },
+    "INTF_TABLE:lo:10.20.8.199/32" : {
+        "scope": "global",
+        "family": "IPv4"
+    },
+    "INTF_TABLE:lo:2001:506:28:500::1/128" : {
+        "scope": "global",
+        "family": "IPv6"
+    }
+}

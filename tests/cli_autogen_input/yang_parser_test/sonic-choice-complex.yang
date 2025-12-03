@@ -1,0 +1,91 @@
+module sonic-choice-complex {
+
+    yang-version 1.1;
+
+    namespace "http://github.com/Azure/choice-complex";
+    prefix choice-complex;
+
+    import sonic-grouping-1 {
+        prefix sgroup1;
+    }
+
+    import sonic-grouping-2 {
+        prefix sgroup2;
+    }
+
+    grouping GR_5 {
+        leaf GR_5_LEAF_1 {
+            type string;
+        }
+
+        leaf GR_5_LEAF_2 {
+            type string;
+        }
+    }
+
+    grouping GR_6 {
+        leaf GR_6_LEAF_1 {
+            type string;
+        }
+
+        leaf GR_6_LEAF_2 {
+            type string;
+        }
+    }
+
+    container sonic-choice-complex {
+        /* sonic-choice-complex - top level container */
+
+        container TABLE_1 {
+            /* TABLE_1 - table container */
+
+            description "TABLE_1 description";
+
+            container OBJECT_1 {
+                /* OBJECT_1 - object container, it have
+                 * 1 choice, which have 2 cases.
+                 * first case have: 1 leaf, 1 leaf-list, 1 uses
+                 * second case have: 2 leafs, 2 leaf-lists, 2 uses
+                 */
+
+                description "OBJECT_1 description";
+
+                choice CHOICE_1 {
+                    case CHOICE_1_CASE_1 {
+                        leaf LEAF_1 {
+                            type uint16;
+                        }
+
+                        leaf-list LEAF_LIST_1 {
+                            type string;
+                        }
+
+                        uses sgroup1:GR_1;
+                    }
+
+                    case CHOICE_1_CASE_2 {
+                        leaf LEAF_2 {
+                            type string;
+                        }
+
+                        leaf LEAF_3 {
+                            type string;
+                        }
+
+                        leaf-list LEAF_LIST_2 {
+                            type string;
+                        }
+
+                        leaf-list LEAF_LIST_3 {
+                            type string;
+                        }
+
+                        uses GR_5;
+                        uses sgroup1:GR_2;
+                        uses sgroup2:GR_3;
+                    }
+                }
+            }
+        }
+    }
+}

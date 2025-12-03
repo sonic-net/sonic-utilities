@@ -1,0 +1,39 @@
+{
+    "20c0:a8c7:0:81::/64": [
+        {
+            "destSelected": true, 
+            "distance": 20, 
+            "installed": true, 
+            "internalFlags": 8, 
+            "internalNextHopActiveNum": 2, 
+            "internalNextHopNum": 2, 
+            "internalStatus": 16, 
+            "metric": 0, 
+            "nexthops": [
+                {
+                    "active": true, 
+                    "afi": "ipv6", 
+                    "fib": true, 
+                    "flags": 3, 
+                    "interfaceIndex": 928, 
+                    "interfaceName": "PortChannel0011", 
+                    "ip": "fc00::e"
+                }, 
+                {
+                    "active": true, 
+                    "afi": "ipv6", 
+                    "fib": true, 
+                    "flags": 3, 
+                    "interfaceIndex": 927, 
+                    "interfaceName": "PortChannel0008", 
+                    "ip": "fc00::a"
+                }
+            ], 
+            "prefix": "20c0:a8c7:0:81::/64", 
+            "protocol": "bgp", 
+            "selected": true, 
+            "table": 254, 
+            "uptime": "2d13h40m"
+        }
+    ]
+}

@@ -1,0 +1,89 @@
+{
+        "PORT|Ethernet176": {
+                "admin_status" : "up",
+                "alias": "etp45",
+                "index": "45",
+                "lanes": "176",
+                "speed": "25000"
+        },
+        "PORT|Ethernet164": {
+                "admin_status" : "up",
+                "alias": "etp42",
+                "index": "42",
+                "lanes": "164",
+                "speed": "25000"
+        },
+        "PORT|Ethernet160": {
+                "admin_status" : "up",
+                "alias": "etp41",
+                "index": "41",
+                "lanes": "160",
+                "speed": "25000"
+        },
+        "PORT|Ethernet156": {
+                "admin_status" : "up",
+                "alias": "etp40",
+                "index": "40",
+                "lanes": "156",
+                "speed": "25000"
+        },
+        "PORT|Ethernet0": {
+                "alias": "etp1",
+                "description": "etp1",
+                "index": "0",
+                "lanes": "25,26,27,28",
+                "mtu": "9100",
+                "pfc_asym": "off",
+                "speed": "40000"
+        },
+        "PORT|Ethernet4": {
+                "admin_status": "up",
+                "alias": "etp2",
+                "description": "Servers0:eth0",
+                "index": "1",
+                "lanes": "29,30,31,32",
+                "mtu": "9100",
+                "pfc_asym": "off",
+                "speed": "40000"
+        },
+        "SFLOW_COLLECTOR|prod": {
+                "collector_ip": "fe80::6e82:6aff:fe1e:cd8e",
+                "collector_port": "6343",
+                "collector_vrf": "mgmt"
+        },
+        "SFLOW_COLLECTOR|ser5": {
+                "collector_ip": "172.21.35.15",
+                "collector_port": "6343",
+                "collector_vrf": "default"
+        },
+        "ACL_RULE|EVERFLOW|RULE_6": {
+                "PACKET_ACTION": "FORWARD",
+                "PRIORITY": "9994",
+                "TCP_FLAGS": "0x12/0x12"
+        },
+        "ACL_RULE|EVERFLOW|RULE_08": {
+                "PACKET_ACTION": "FORWARD",
+                "PRIORITY": "9992",
+                "SRC_IP": "10.0.0.3/32"
+        },
+        "ACL_TABLE|SSH_ONLY": {
+                "policy_desc": "SSH_ONLY",
+                "services@": "SSH",
+                "type": "CTRLPLANE"
+        },
+        "SFLOW|global": {
+                "admin_state": "up",
+                "polling_interval": "0"
+        },
+        "PORT|Ethernet60": {
+                "admin_status": "up",
+                "alias": "etp16",
+                "description": "Servers14:eth0",
+                "index": "15",
+                "lanes": "61,62,63,64",
+                "mtu": "9100",
+                "tpid": "0x8100",
+                "pfc_asym": "off",
+                "speed": "40000"
+        }
+}

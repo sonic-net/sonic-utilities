@@ -1,0 +1,58 @@
+[
+    {
+        "op": "remove",
+        "path": "/PORT/Ethernet2"
+    },
+    {
+        "op": "remove",
+        "path": "/PORT/Ethernet1"
+    },
+    {
+        "op": "remove",
+        "path": "/PORT/Ethernet3"
+    },
+    {
+        "op": "replace",
+        "path": "/PORT/Ethernet0/alias",
+        "value": "Eth1"
+    },
+    {
+        "op": "replace",
+        "path": "/PORT/Ethernet0/lanes",
+        "value": "65, 66, 67, 68"
+    },
+    {
+        "op": "replace",
+        "path": "/PORT/Ethernet0/description",
+        "value": "Ethernet0 100G link"
+    },
+    {
+        "op": "replace",
+        "path": "/PORT/Ethernet0/speed",
+        "value": "100000"
+    },
+    {
+        "op": "remove",
+        "path": "/VLAN_MEMBER/Vlan100|Ethernet1"
+    },
+    {
+        "op": "remove",
+        "path": "/VLAN_MEMBER/Vlan100|Ethernet3"
+    },
+    {
+        "op": "remove",
+        "path": "/VLAN_MEMBER/Vlan100|Ethernet2"
+    },
+    {
+        "op": "remove",
+        "path": "/ACL_TABLE/NO-NSW-PACL-V4/ports/1"
+    },
+    {
+        "op": "remove",
+        "path": "/ACL_TABLE/NO-NSW-PACL-V4/ports/1"
+    },
+    {
+        "op": "remove",
+        "path": "/ACL_TABLE/NO-NSW-PACL-V4/ports/1"
+    }
+]

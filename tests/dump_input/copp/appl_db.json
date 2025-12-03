@@ -1,0 +1,36 @@
+{
+    "COPP_TABLE:queue4_group2": {
+        "cbs": "6000",
+        "cir": "6000",
+        "meter_type": "packets",
+        "mode": "sr_tcm",
+        "queue": "1",
+        "red_action": "drop",
+        "trap_action": "trap",
+        "trap_priority": "1",
+        "trap_ids": "arp_req,arp_resp,neigh_discovery,snmp"   
+     },
+     "COPP_TABLE:queue2_group1": {
+        "cbs": "2000",
+        "cir": "2000",
+        "meter_type": "packets",
+        "mode": "sr_tcm",
+        "queue": "1",
+        "red_action": "drop",
+        "trap_action": "trap",
+        "trap_priority": "1",
+        "trap_ids": "sample_packet"   
+     },
+     "COPP_TABLE:queue4_group1": {
+        "trap_action":"trap",
+        "trap_priority":"4",
+        "queue": "4",
+        "trap_ids": "bgp,bgpv6,ospfv6,ospf"   
+     },
+     "COPP_TABLE:queue1_group2":{
+        "trap_ids": "src_nat_miss",
+        "trap_action":"trap",
+        "trap_priority":"4",
+        "queue": "4"
+     }
+}

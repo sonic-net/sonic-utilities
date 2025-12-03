@@ -1,0 +1,217 @@
+{
+    "TRANSCEIVER_INFO|Ethernet20": {
+        "type": "QSFP28 or later",
+        "vendor_rev": "AC",
+        "serial": "MT1706FT02064",
+        "manufacturer": "Mellanox",
+        "model": "MFA1A00-C003",
+        "vendor_oui": "00-02-c9",
+        "vendor_date": "2017-01-13 ",
+        "connector": "No separable connector",
+        "encoding": "64B66B",
+        "ext_identifier": "Power Class 3(2.5W max), CDR present in Rx Tx",
+        "ext_rateselect_compliance": "QSFP+ Rate Select Version 1",
+        "cable_type": "Length Cable Assembly(m)",
+        "cable_length": "3",
+        "specification_compliance": "{'10/40G Ethernet Compliance Code': '40G Active Cable (XLPPI)'}",
+        "nominal_bit_rate": "255",
+        "application_advertisement": "N/A"
+    },
+    "TRANSCEIVER_DOM_SENSOR|Ethernet20": {
+        "temperature": "30.9258",
+        "voltage": "3.2824",
+        "rx1power": "0.3802",
+        "rx2power": "-0.4871",
+        "rx3power": "-0.0860",
+        "rx4power": "0.3830",
+        "tx1bias": "6.7500",
+        "tx2bias": "6.7500",
+        "tx3bias": "6.7500",
+        "tx4bias": "6.7500",
+        "tx1power": "N/A",
+        "tx2power": "N/A",
+        "tx3power": "N/A",
+        "tx4power": "N/A",
+        "rxpowerhighalarm": "3.4001",
+        "rxpowerhighwarning": "2.4000",
+        "rxpowerlowalarm": "-13.5067",
+        "rxpowerlowwarning": "-9.5001",
+        "txbiashighalarm": "10.0000",
+        "txbiashighwarning": "9.5000",
+        "txbiaslowalarm": "0.5000",
+        "txbiaslowwarning": "1.0000",
+        "temphighalarm": "75.0000",
+        "temphighwarning": "70.0000",
+        "templowalarm": "-5.0000",
+        "templowwarning": "0.0000",
+        "vcchighalarm": "3.6300",
+        "vcchighwarning": "3.4650",
+        "vcclowalarm": "2.9700",
+        "vcclowwarning": "3.1349"
+    },
+    "CHASSIS_INFO|chassis 1": {
+        "psu_num": "2"
+    },
+    "PSU_INFO|PSU 1": {
+        "presence": "true",
+        "status": "true",
+        "led_status": "green"
+    },
+    "PSU_INFO|PSU 2": {
+        "presence": "true",
+        "status": "true",
+        "led_status": "green"
+    },
+    "SWITCH_CAPABILITY|switch": {
+        "MIRROR": "true",
+        "MIRRORV6": "true",
+        "ACL_ACTION|PACKET_ACTION": "FORWARD"
+    },
+    "ACL_STAGE_CAPABILITY_TABLE|INGRESS": {
+        "action_list": "PACKET_ACTION,REDIRECT_ACTION,MIRROR_INGRESS_ACTION"
+    },
+    "ACL_STAGE_CAPABILITY_TABLE|EGRESS": {
+        "action_list": "PACKET_ACTION,MIRROR_EGRESS_ACTION"
+    },
+    "DEBUG_COUNTER_CAPABILITIES|PORT_INGRESS_DROPS": {
+        "reasons": "[IP_HEADER_ERROR,NO_L3_HEADER]",
+        "count": "4"
+    },
+    "DEBUG_COUNTER_CAPABILITIES|SWITCH_EGRESS_DROPS": {
+        "reasons": "[ACL_ANY,L2_ANY,L3_ANY]",
+        "count": "2"
+    },
+    "LAG_MEMBER_TABLE|PortChannel1015|Ethernet20": {
+        "runner.actor_lacpdu_info.state": "5",
+        "runner.state": "disabled",
+        "runner.partner_lacpdu_info.port": "0",
+        "runner.actor_lacpdu_info.port": "113",
+        "runner.selected": "false",
+        "runner.partner_lacpdu_info.state": "0",
+        "ifinfo.dev_addr": "52:54:00:f2:e1:23",
+        "runner.partner_lacpdu_info.system": "00:00:00:00:00:00",
+        "link_watches.list.link_watch_0.up": "false",
+        "runner.actor_lacpdu_info.system": "52:54:00:f2:e1:23",
+        "runner.aggregator.selected": "false",
+        "runner.aggregator.id": "0",
+        "link.up": "false",
+        "ifinfo.ifindex": "98"
+    },
+    "LAG_MEMBER_TABLE|PortChannel1016|Ethernet24": {
+        "runner.actor_lacpdu_info.state": "61",
+        "runner.state": "current",
+        "runner.partner_lacpdu_info.port": "1",
+        "runner.actor_lacpdu_info.port": "117",
+        "runner.selected": "true",
+        "runner.partner_lacpdu_info.state": "61",
+        "ifinfo.dev_addr": "52:54:00:f2:e1:23",
+        "runner.partner_lacpdu_info.system": "1e:af:77:fc:79:ee",
+        "link_watches.list.link_watch_0.up": "false",
+        "runner.actor_lacpdu_info.system": "52:54:00:f2:e1:23",
+        "runner.aggregator.selected": "true",
+        "runner.aggregator.id": "97",
+        "link.up": "true",
+        "ifinfo.ifindex": "97"
+    },
+    "LAG_MEMBER_TABLE|PortChannel4011|Ethernet-BP20": {
+        "runner.actor_lacpdu_info.state": "61",
+        "runner.state": "current",
+        "runner.partner_lacpdu_info.port": "1",
+        "runner.actor_lacpdu_info.port": "121",
+        "runner.selected": "true",
+        "runner.partner_lacpdu_info.state": "61",
+        "ifinfo.dev_addr": "52:54:00:f2:e1:23",
+        "runner.partner_lacpdu_info.system": "16:0e:58:6f:3c:dd",
+        "link_watches.list.link_watch_0.up": "false",
+        "runner.actor_lacpdu_info.system": "52:54:00:f2:e1:23",
+        "runner.aggregator.selected": "true",
+        "runner.aggregator.id": "100",
+        "link.up": "true",
+        "ifinfo.ifindex": "100"
+    },
+    "LAG_TABLE|PortChannel1015": {
+        "runner.fallback": "false",
+        "team_device.ifinfo.dev_addr": "52:54:00:f2:e1:23",
+        "team_device.ifinfo.ifindex": "71",
+        "setup.pid": "32",
+        "state": "ok",
+        "runner.fast_rate": "false",
+        "setup.kernel_team_mode_name": "loadbalance",
+        "runner.active": "true"
+    },
+    "LAG_TABLE|PortChannel1016": {
+        "runner.fallback": "false",
+        "team_device.ifinfo.dev_addr": "52:54:00:f2:e1:23",
+        "team_device.ifinfo.ifindex": "72",
+        "setup.pid": "40",
+        "state": "ok",
+        "runner.fast_rate": "false",
+        "setup.kernel_team_mode_name": "loadbalance",
+        "runner.active": "true"
+    },
+    "LAG_TABLE|PortChannel4011": {
+        "runner.fallback": "false",
+        "team_device.ifinfo.dev_addr": "52:54:00:f2:e1:23",
+        "team_device.ifinfo.ifindex": "73",
+        "setup.pid": "48",
+        "state": "ok",
+        "runner.fast_rate": "false",
+        "setup.kernel_team_mode_name": "loadbalance",
+        "runner.active": "true"
+    },
+    "LAG_TABLE|PortChannel4012": {
+        "runner.fallback": "false",
+        "team_device.ifinfo.dev_addr": "52:54:00:f2:e1:23",
+        "team_device.ifinfo.ifindex": "74",
+        "setup.pid": "56",
+        "state": "ok",
+        "runner.fast_rate": "false",
+        "setup.kernel_team_mode_name": "loadbalance",
+        "runner.active": "true"
+    },
+    "FAN_INFO|fan1": {
+        "drawer_name": "drawer1",
+        "presence": "True",
+        "model": "N/A",
+        "serial": "N/A",
+        "status": "True",
+        "direction": "intake",
+        "speed": "30",
+        "speed_tolerance": "50",
+        "speed_target": "20",
+        "led_status": "red",
+        "timestamp": "20200813 01:32:30"
+    },
+    "FAN_INFO|fan2": {
+        "drawer_name": "drawer2",
+        "presence": "True",
+        "model": "N/A",
+        "serial": "N/A",
+        "status": "False",
+        "direction": "intake",
+        "speed": "50",
+        "speed_tolerance": "50",
+        "speed_target": "50",
+        "led_status": "green",
+        "timestamp": "20200813 01:32:30"
+    },
+    "FAN_INFO|fan3": {
+        "drawer_name": "drawer3",
+        "presence": "True",
+        "model": "N/A",
+        "serial": "N/A",
+        "status": "Updating",
+        "direction": "intake",
+        "speed": "50",
+        "speed_tolerance": "50",
+        "speed_target": "50",
+        "led_status": "green",
+        "timestamp": "20200813 01:32:30"
+    },
+    "ACL_TABLE_TABLE|DATAACL_5" : {
+        "status": "Active"
+    },
+    "ACL_RULE_TABLE|DATAACL_5|RULE_1" : {
+        "status": "Active"
+    }
+}

@@ -1,0 +1,88 @@
+#!/usr/bin/python3
+
+'''
+    Script to show Voltage and Current Sensor status.
+'''
+from tabulate import tabulate
+from natsort import natsorted
+import argparse
+import os
+import sys
+
+# mock the redis for unit test purposes #
+try:
+    if os.environ["UTILITIES_UNIT_TESTING"] == "1":
+        modules_path = os.path.join(os.path.dirname(__file__), "..")
+        test_path = os.path.join(modules_path, "tests")
+        sys.path.insert(0, modules_path)
+        sys.path.insert(0, test_path)
+        import mock_tables.dbconnector
+except KeyError:
+    pass
+
+from swsscommon.swsscommon import SonicV2Connector
+
+header = ['Sensor', '', 'High TH', 'Low TH', 'Crit High TH', 'Crit Low TH', 'Warning', 'Timestamp']
+
+TIMESTAMP_FIELD_NAME = 'timestamp'
+UNIT_FIELD_NAME = 'unit'
+HIGH_THRESH_FIELD_NAME = 'high_threshold'
+LOW_THRESH_FIELD_NAME = 'low_threshold'
+CRIT_HIGH_THRESH_FIELD_NAME = 'critical_high_threshold'
+CRIT_LOW_THRESH_FIELD_NAME = 'critical_low_threshold'
+WARNING_STATUS_FIELD_NAME = 'warning_status'
+VOLTAGE_INFO_TABLE_NAME = 'VOLTAGE_INFO'
+CURRENT_INFO_TABLE_NAME = 'CURRENT_INFO'
+
+
+class SensorShow(object):
+    def __init__(self, type):
+        self.db = SonicV2Connector(use_unix_socket_path=True)
+        self.db.connect(self.db.STATE_DB)
+        self.field_name = type
+        header[1] = type.capitalize()
+
+        if type == "voltage":
+            self.table_name = VOLTAGE_INFO_TABLE_NAME
+        else:
+            self.table_name = CURRENT_INFO_TABLE_NAME
+
+    def show(self):
+        keys = self.db.keys(self.db.STATE_DB, self.table_name + '*')
+        if not keys:
+            print('Sensor not detected')
+            return
+
+        table = []
+        for key in natsorted(keys):
+            key_list = key.split('|')
+            if len(key_list) != 2: # error data in DB, log it and ignore
+                print('Warn: Invalid key in table {}: {}'.format(self.table_name, key))
+                continue
+
+            name = key_list[1]
+            data_dict = self.db.get_all(self.db.STATE_DB, key)
+            #print(name, data_dict)
+            table.append((name, 
+                          "{} {}".format(data_dict[self.field_name], data_dict[UNIT_FIELD_NAME]), 
+                          data_dict[HIGH_THRESH_FIELD_NAME],
+                          data_dict[LOW_THRESH_FIELD_NAME],
+                          data_dict[CRIT_HIGH_THRESH_FIELD_NAME],
+                          data_dict[CRIT_LOW_THRESH_FIELD_NAME],
+                          data_dict[WARNING_STATUS_FIELD_NAME],
+                          data_dict[TIMESTAMP_FIELD_NAME]
+                          ))
+        
+        if table:
+            print(tabulate(table, header, tablefmt='simple', stralign='right'))
+        else:
+            print('No sensor data available')
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser()
+    parser.add_argument("-t", "--type", help="sensor type", required=True, choices=['voltage', 'current'])
+    args = parser.parse_args()
+
+    sensor_show = SensorShow(args.type)
+    sensor_show.show()

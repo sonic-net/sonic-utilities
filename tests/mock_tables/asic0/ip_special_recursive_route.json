@@ -1,0 +1,39 @@
+{
+    "193.11.208.0/25": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 2,
+            "internalNextHopNum": 2,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv4",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 728,
+                    "interfaceName": "PortChannel0005",
+                    "ip": "10.0.0.5"
+                },
+                {
+                    "active": true,
+                    "afi": "ipv4",
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 727,
+                    "interfaceName": "PortChannel0002",
+                    "ip": "10.0.0.1"
+                }
+            ],
+            "prefix": "193.11.208.0/25",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "00:14:32"
+        }
+    ]
+}

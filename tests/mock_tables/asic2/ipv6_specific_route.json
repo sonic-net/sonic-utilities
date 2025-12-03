@@ -1,0 +1,29 @@
+{
+    "2603:10e2:400::/128": [
+        {
+            "destSelected": true,
+            "distance": 0,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 1,
+            "internalNextHopNum": 1,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "directlyConnected": true,
+                    "fib": true,
+                    "flags": 3,
+                    "interfaceIndex": 726,
+                    "interfaceName": "Loopback4096"
+                }
+            ],
+            "prefix": "2603:10e2:400::/128",
+            "protocol": "connected",
+            "selected": true,
+            "table": 254,
+            "uptime": "2d22h02m"
+        }
+    ]
+}

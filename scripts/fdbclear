@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+
+"""
+    Script to clear MAC/FDB entries learnt in Hardware
+
+    usage: fdbclear [-p PORT] [-v VLAN]
+    optional arguments:
+      -p,  --port              FDB learned on specific port: Ethernet0
+      -v,  --vlan              FDB learned on specific Vlan: 1000
+
+    Example of the output:
+
+"""
+
+import argparse
+import json
+import sys
+
+from swsscommon.swsscommon import SonicV2Connector
+
+class FdbClear(object):
+
+
+    def __init__(self):
+        super(FdbClear,self).__init__()
+        self.db = SonicV2Connector(host="127.0.0.1")
+        self.db.connect(self.db.APPL_DB)
+        return
+
+    def send_notification(self, op, data):
+        opdata = [op,data]
+        msg = json.dumps(opdata,separators=(',',':'))
+        self.db.publish('APPL_DB','FLUSHFDBREQUEST', msg)
+        return
+
+def main():
+
+    parser = argparse.ArgumentParser(description='Clear FDB entries', formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument('-p', '--port', type=str, help='Clear FDB learned on specific port: Ethernet0', default=None)
+    parser.add_argument('-v', '--vlan', type=str, help='Clear FDB learned on specific Vlan: 1001', default=None)
+    args = parser.parse_args()
+
+    try:
+        fdb = FdbClear()
+        if args.vlan is not None and args.port is not None:
+            fdb.send_notification("PORTVLAN", args.port+'|'+args.vlan)
+            print("Port {} + Vlan{} FDB entries are cleared.".format(args.port, args.vlan))
+        elif args.vlan is not None:
+            fdb.send_notification("VLAN", args.vlan)
+            print("Vlan{} FDB entries are cleared.".format(args.vlan))
+        elif args.port is not None:
+            fdb.send_notification("PORT", args.port)
+            print("Port {} FDB entries are cleared.".format(args.port))
+        else:
+            fdb.send_notification("ALL", "ALL")
+            print("FDB entries are cleared.")
+    except Exception as e:
+        print(str(e))
+        sys.exit(1)
+
+if __name__ == "__main__":
+    main()

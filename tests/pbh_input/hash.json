@@ -1,0 +1,40 @@
+{
+    "PBH_HASH_FIELD|inner_dst_ipv4": {
+        "hash_field": "INNER_DST_IPV4",
+        "ip_mask": "255.0.0.0",
+        "sequence_id": "3"
+    },
+    "PBH_HASH_FIELD|inner_dst_ipv6": {
+        "hash_field": "INNER_DST_IPV6",
+        "ip_mask": "ffff::",
+        "sequence_id": "4"
+    },
+    "PBH_HASH_FIELD|inner_ip_proto": {
+        "hash_field": "INNER_IP_PROTOCOL",
+        "sequence_id": "1"
+    },
+    "PBH_HASH_FIELD|inner_l4_dst_port": {
+        "hash_field": "INNER_L4_DST_PORT",
+        "sequence_id": "2"
+    },
+    "PBH_HASH_FIELD|inner_l4_src_port": {
+        "hash_field": "INNER_L4_SRC_PORT",
+        "sequence_id": "2"
+    },
+    "PBH_HASH_FIELD|inner_src_ipv4": {
+        "hash_field": "INNER_SRC_IPV4",
+        "ip_mask": "0.0.0.255",
+        "sequence_id": "3"
+    },
+    "PBH_HASH_FIELD|inner_src_ipv6": {
+        "hash_field": "INNER_SRC_IPV6",
+        "ip_mask": "::ffff",
+        "sequence_id": "4"
+    },
+    "PBH_HASH|inner_v4_hash": {
+        "hash_field_list@": "inner_ip_proto,inner_l4_dst_port,inner_l4_src_port,inner_dst_ipv4,inner_src_ipv4"
+    },
+    "PBH_HASH|inner_v6_hash": {
+        "hash_field_list@": "inner_ip_proto,inner_l4_dst_port,inner_l4_src_port,inner_dst_ipv6,inner_src_ipv6"
+    }
+}

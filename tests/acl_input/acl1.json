@@ -1,0 +1,449 @@
+{
+	"acl": {
+		"acl-sets": {
+			"acl-set": {
+				"sonic-ssh-only": {
+					"acl-entries": {
+						"acl-entry": {
+							"1": {
+								"config": {
+									"sequence-id": 1
+								},
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"ip": {
+									"config": {
+										"protocol": "IP_TCP",
+										"source-ip-address": "192.168.0.0/18"
+									}
+								},
+								"transport": {
+									"config": {
+										"destination-port": "22"
+									}
+								}
+							},
+							"2": {
+								"config": {
+									"sequence-id": 2
+								},
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"ip": {
+									"config": {
+										"protocol": "IP_TCP",
+										"source-ip-address": "192.168.192.0/18"
+									}
+								},
+								"transport": {
+									"config": {
+										"destination-port": "22"
+									}
+								}
+							}
+						}
+					},
+					"config": {
+						"name": "sonic-ssh-only"
+					}
+				},
+				"Sonic-SNMP_ACL": {
+					"acl-entries": {
+						"acl-entry": {
+							"1": {
+								"config": {
+									"sequence-id": 1
+								},
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"ip": {
+									"config": {
+										"protocol": "IP_UDP",
+										"source-ip-address": "192.168.0.0/18"
+									}
+								}
+							}
+						}
+					},
+					"config": {
+						"name": "Sonic-SNMP_ACL"
+					}
+				},
+				"sonic-everflow": {
+					"acl-entries": {
+						"acl-entry": {
+							"1": {
+								"config": {
+									"sequence-id": 1
+								},
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"ip": {
+									"config": {
+										"protocol": "IP_TCP",
+										"source-ip-address": "127.0.0.1/32",
+										"destination-ip-address": "127.0.0.1/32"
+									}
+								},
+								"transport": {
+									"config": {
+										"source-port": "0",
+										"destination-port": "0"
+									}
+								}
+							}
+						}
+					},
+					"config": {
+						"name": "sonic-everflow"
+					}
+				},
+				"everflowV6": {
+					"acl-entries": {
+						"acl-entry": {
+							"1": {
+								"config": {
+									"sequence-id": 1
+								},
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"ip": {
+									"config": {
+										"protocol": "IP_TCP",
+										"source-ip-address": "::1/128",
+										"destination-ip-address": "::1/128"
+									}
+								},
+								"transport": {
+									"config": {
+										"source-port": "0",
+										"destination-port": "0"
+									}
+								}
+							}
+						}
+					},
+					"config": {
+						"name": "everflowV6"
+					}
+				},
+				"DATAACL": {
+					"acl-entries": {
+						"acl-entry": {
+							"1": {
+								"config": {
+									"sequence-id": 1
+								},
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"ip": {
+									"config": {
+										"protocol": "IP_ICMP",
+										"source-ip-address": "20.0.0.2/32",
+										"destination-ip-address": "30.0.0.3/32"
+									}
+								},
+								"icmp": {
+									"config": {
+										"type": "3",
+										"code": "0"
+									}
+								}
+							},
+							"2": {
+								"config": {
+									"sequence-id": 2
+								},
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"l2": {
+									"config": {
+										"vlan-id": "369"
+									}
+								},
+								"ip": {
+									"config": {
+										"protocol": "IP_TCP",
+										"source-ip-address": "20.0.0.2/32",
+										"destination-ip-address": "30.0.0.3/32"
+									}
+								}
+							},
+							"3": {
+								"config": {
+									"sequence-id": 3
+								},
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"l2": {
+									"config": {
+										"vlan-id": "369",
+										"ethertype": "ETHERTYPE_LLDP"
+									}
+								}
+							}
+						}
+					}
+				},
+				"DATAACL_2": {
+					"acl-entries": {
+						"acl-entry": {
+							"1": {
+								"config": {
+									"sequence-id": 1
+								},
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"ip": {
+									"config": {
+										"protocol": "IP_ICMP",
+										"source-ip-address": "::1/128",
+										"destination-ip-address": "::1/128"
+									}
+								},
+								"icmp": {
+									"config": {
+										"type": "1",
+										"code": "0"
+									}
+								}
+							},
+							"100": {
+								"config": {
+									"sequence-id": 100
+								},
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"ip": {
+									"config": {
+										"protocol": "IP_ICMP",
+										"source-ip-address": "::1/128",
+										"destination-ip-address": "::1/128"
+									}
+								},
+								"icmp": {
+									"config": {
+										"type": "128"
+									}
+								}
+							}
+						}
+					}
+				},
+				"bmc_acl_northbound": {
+					"acl-entries": {
+						"acl-entry": {
+							"1": {
+								"config": {
+									"sequence-id": 1
+								},
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"ip": {
+									"config": {
+										"protocol": "0",
+										"source-ip-address": "172.17.0.200/30"
+									}
+								},
+								"input_interface": {
+									"interface_ref": {
+										"config": {
+											"interface": "Ethernet0,Ethernet1,Ethernet2,Ethernet3,Ethernet4,Ethernet5,Ethernet6,Ethernet7,Ethernet8,Ethernet9,Ethernet10,Ethernet11,Ethernet12,Ethernet13,Ethernet14,Ethernet15,Ethernet16,Ethernet17,Ethernet18,Ethernet19,Ethernet20,Ethernet21,Ethernet22,Ethernet23,Ethernet25,Ethernet26,Ethernet27,Ethernet28,Ethernet29,Ethernet30,Ethernet31,Ethernet32,Ethernet33,Ethernet34,Ethernet35,Ethernet36,Ethernet37,Ethernet38,Ethernet39,Ethernet40,Ethernet41,Ethernet42,Ethernet43,Ethernet44,Ethernet45"
+										}
+									}
+								}
+							},
+							"2": {
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"config": {
+									"sequence-id": 2
+								},
+								"ip": {
+									"config": {
+										"protocol": "1"
+									}
+								},
+								"icmp": {
+									"config": {
+										"type": "136",
+										"code": "0"
+									}
+								}
+							}
+						}
+					},
+					"config": {
+						"name": "bmc_acl_northbound"
+					}
+				},
+				"bmc_acl_northbound_v6": {
+					"acl-entries": {
+						"acl-entry": {
+							"1": {
+								"config": {
+									"sequence-id": 1
+								},
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"ip": {
+									"config": {
+										"protocol": "0",
+										"destination-ip-address": "fc02::/64"
+									}
+								}
+							},
+							"2": {
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"config": {
+									"sequence-id": 2
+								},
+								"ip": {
+									"config": {
+										"protocol": "58"
+									}
+								},
+								"icmp": {
+									"config": {
+										"type": "136",
+										"code": "0"
+									}
+								}
+							}
+						}
+					},
+					"config": {
+						"name": "bmc_acl_northbound_v6"
+					}
+				},
+				"DATAACLV4V6": {
+					"acl-entries": {
+						"acl-entry": {
+							"1": {
+								"config": {
+									"sequence-id": 1
+								},
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"l2": {
+									"config": {
+										"vlan-id": "369",
+										"ethertype": "ETHERTYPE_IPV4"
+									}
+								},
+								"ip": {
+									"config": {
+										"protocol": "IP_TCP",
+										"source-ip-address": "20.0.0.2/32",
+										"destination-ip-address": "30.0.0.3/32"
+									}
+								}
+							},
+							"2": {
+								"config": {
+									"sequence-id": 2
+								},
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"l2": {
+									"config": {
+										"ethertype": "ETHERTYPE_IPV6"
+									}
+								},
+								"ip": {
+									"config": {
+										"protocol": "IP_ICMP",
+										"source-ip-address": "::1/128",
+										"destination-ip-address": "::1/128"
+									}
+								},
+								"icmp": {
+									"config": {
+										"type": "1",
+										"code": "0"
+									}
+								}
+							},
+							"3": {
+								"config": {
+									"sequence-id": 3
+								},
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"l2": {
+									"config": {
+										"ethertype": "ETHERTYPE_IPV6"
+									}
+								},
+								"ip": {
+									"config": {
+										"protocol": "IP_ICMP",
+										"source-ip-address": "::1/128",
+										"destination-ip-address": "::1/128"
+									}
+								},
+								"icmp": {
+									"config": {
+										"type": "128"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}

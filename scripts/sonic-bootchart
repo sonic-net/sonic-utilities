@@ -1,0 +1,141 @@
+#!/usr/bin/env python3
+
+import click
+import sys
+import configparser
+import functools
+import os
+import glob
+from tabulate import tabulate
+import utilities_common.cli as clicommon
+
+SYSTEMD_BOOTCHART = "/lib/systemd/systemd-bootchart"
+BOOTCHART_CONF = "/etc/systemd/bootchart.conf"
+BOOTCHART_DEFAULT_OUTPUT_DIR = "/run/log/"
+BOOTCHART_DEFAULT_OUTPUT_GLOB = os.path.join(BOOTCHART_DEFAULT_OUTPUT_DIR, "bootchart-*.svg")
+
+class BootChartConfigParser(configparser.ConfigParser):
+    """ Custom bootchart config parser. Changes the way ConfigParser passes options """
+
+    def optionxform(self, option):
+        """ Pass options as is, without modifications """
+        return option
+
+
+def exit_cli(*args, **kwargs):
+    """ Print a message and exit with rc 1. """
+    click.secho(*args, **kwargs)
+    sys.exit(1)
+
+
+def root_privileges_required(func):
+    """ Decorates a function, so that the function is invoked
+    only if the user is root. """
+    @functools.wraps(func)
+    def wrapped_function(*args, **kwargs):
+        """ Wrapper around func. """
+        if os.geteuid() != 0:
+            exit_cli("Root privileges required for this operation", fg="red")
+        return func(*args, **kwargs)
+
+    wrapped_function.__doc__ += "\n\n NOTE: This command requires elevated (root) privileges to run."
+    return wrapped_function
+
+
+def check_bootchart_installed():
+    """ Fails imidiatelly if bootchart is not installed """
+    if not os.path.exists(SYSTEMD_BOOTCHART):
+        exit_cli("systemd-bootchart is not installed", fg="red")
+
+
+def get_enabled_status():
+    """ Get systemd-bootchart status """
+    output, _ = clicommon.run_command(['systemctl', 'is-enabled', 'systemd-bootchart'], return_cmd=True)
+    return output
+
+def get_active_status():
+    """ Get systemd-bootchart status """
+    output, _ = clicommon.run_command(['systemctl', 'is-active', 'systemd-bootchart'], return_cmd=True)
+    return output
+
+def get_output_files():
+    bootchart_output_files = []
+    for bootchart_output_file in glob.glob(BOOTCHART_DEFAULT_OUTPUT_GLOB):
+        bootchart_output_files.append(bootchart_output_file)
+    return "\n".join(bootchart_output_files)
+
+
+@click.group()
+def cli():
+    """ Main CLI group """
+    check_bootchart_installed()
+
+
+@cli.command()
+@root_privileges_required
+def enable():
+    """ Enable bootchart """
+    clicommon.run_command(['systemctl', 'enable', 'systemd-bootchart'], display_cmd=True)
+
+
+@cli.command()
+@root_privileges_required
+def disable():
+    """ Disable bootchart """
+    clicommon.run_command(['systemctl', 'disable', 'systemd-bootchart'], display_cmd=True)
+
+
+@cli.command()
+@click.option('--time', type=click.IntRange(min=1), required=True)
+@click.option('--frequency', type=click.IntRange(min=1), required=True)
+@root_privileges_required
+def config(time, frequency):
+    """ Configure bootchart """
+    samples = time * frequency
+
+    config = {
+        'Samples': str(samples),
+        'Frequency': str(frequency),
+    }
+    bootchart_config = BootChartConfigParser()
+    bootchart_config.read(BOOTCHART_CONF)
+    bootchart_config['Bootchart'].update(config)
+    with open(BOOTCHART_CONF, 'w') as config_file:
+        bootchart_config.write(config_file, space_around_delimiters=False)
+
+
+@cli.command()
+def show():
+    """ Display bootchart configuration """
+    bootchart_config = BootChartConfigParser()
+    bootchart_config.read(BOOTCHART_CONF)
+
+    try:
+        samples = int(bootchart_config["Bootchart"]["Samples"])
+        frequency = int(bootchart_config["Bootchart"]["Frequency"])
+    except KeyError as key:
+        raise click.ClickException(f"Failed to parse bootchart config: {key} not found")
+    except ValueError as err:
+        raise click.ClickException(f"Failed to parse bootchart config: {err}")
+
+    try:
+        time = samples // frequency
+    except ZeroDivisionError:
+        raise click.ClickException(f"Invalid frequency value: {frequency}")
+
+    field_values = {
+            "Status": get_enabled_status(),
+            "Operational Status": get_active_status(),
+            "Frequency": frequency,
+            "Time (sec)": time,
+            "Output": get_output_files(),
+    }
+
+    click.echo(tabulate([field_values.values()], field_values.keys()))
+
+
+def main():
+    cli()
+
+if __name__ == "__main__":
+    main()

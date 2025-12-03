@@ -1,0 +1,48 @@
+{
+    "CHASSIS_MODULE_HOSTNAME_TABLE|LINE-CARD0": {
+        "module_hostname": "sonic-lc1"
+    }, 
+    "CHASSIS_MODULE_HOSTNAME_TABLE|LINE-CARD1": {
+        "module_hostname": "sonic-lc2"
+    },
+    "CHASSIS_MODULE_HOSTNAME_TABLE|LINE-CARD2": {
+        "module_hostname": "sonic-lc3"
+    },
+    "LINECARD_PORT_STAT_MARK_TABLE|sonic-lc1": {
+        "timestamp": "2020-07-01 00:00:00"
+    },
+    "LINECARD_PORT_STAT_TABLE|Ethernet1/1": {
+        "state": "U",
+        "rx_ok": 100,
+        "rx_bps": 10,
+        "rx_pps": 1,
+        "rx_util": 0,
+        "rx_err": 0,
+        "rx_drop": 0,
+        "rx_ovr": 0,
+        "tx_ok": 100,
+        "tx_bps": 10,
+        "tx_pps": 1,
+        "tx_util": 0,
+        "tx_err": 0,
+        "tx_drop": 0,
+        "tx_ovr": 0
+    },
+    "LINECARD_PORT_STAT_TABLE|Ethernet2/1": {
+        "state": "U",
+        "rx_ok": 100,
+        "rx_bps": 10,
+        "rx_pps": 1,
+        "rx_util": 0,
+        "rx_err": 0,
+        "rx_drop": 0,
+        "rx_ovr": 0,
+        "tx_ok": 100,
+        "tx_bps": 10,
+        "tx_pps": 1,
+        "tx_util": 0,
+        "tx_err": 0,
+        "tx_drop": 0,
+        "tx_ovr": 0
+    }
+}

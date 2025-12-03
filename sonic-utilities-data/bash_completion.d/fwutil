@@ -1,0 +1,11 @@
+shopt -s extglob
+
+_fwutil_completion() {
+    COMPREPLY=( $( env COMP_WORDS="${COMP_WORDS[*]}" \
+                   COMP_CWORD=$COMP_CWORD \
+                   _FWUTIL_COMPLETE=complete $1 ) )
+    COMPREPLY=( ${COMPREPLY[*]//*(-install|-update)/} )
+    return 0
+}
+
+complete -F _fwutil_completion -o default fwutil;

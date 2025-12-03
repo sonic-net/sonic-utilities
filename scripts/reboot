@@ -1,0 +1,413 @@
+#!/bin/bash
+
+declare -r EXIT_SUCCESS=0
+declare -r EXIT_ERROR=1
+declare -r EXIT_TIMEOUT=2
+declare -r WATCHDOG_UTIL="/usr/local/bin/watchdogutil"
+declare -r PRE_REBOOT_HOOK="pre_reboot_hook"
+
+source reboot_smartswitch_helper
+
+DEVPATH="/usr/share/sonic/device"
+PLAT_REBOOT="platform_reboot"
+PLATFORM_UPDATE_REBOOT_CAUSE="platform_update_reboot_cause"
+REBOOT_CAUSE_FILE="/host/reboot-cause/reboot-cause.txt"
+PLATFORM_REBOOT_PRE_CHECK="platform_reboot_pre_check"
+REBOOT_TIME=$(date)
+REBOOT_CONFIG_FILE="/etc/sonic/reboot.conf"
+
+# Reboot immediately if we run the kdump capture kernel
+VMCORE_FILE=/proc/vmcore
+if [ -e $VMCORE_FILE -a -s $VMCORE_FILE ]; then
+        echo "We have a /proc/vmcore, then we just kdump'ed"
+        echo "Kernel Panic [Time: ${REBOOT_TIME}]" > ${REBOOT_CAUSE_FILE}
+        makedumpfile --dump-dmesg /proc/vmcore /tmp/dmesg
+        if  grep -q "Kernel panic - not syncing: Out of memory" /tmp/dmesg; then
+            echo "Kernel Panic - Out of memory [Time: ${REBOOT_TIME}]" > ${REBOOT_CAUSE_FILE}
+        fi
+        sync
+        PLATFORM=$(grep -oP 'sonic_platform=\K\S+' /proc/cmdline)
+        if [ ! -z "${PLATFORM}" -a -x ${DEVPATH}/${PLATFORM}/${PLAT_REBOOT} ]; then
+            exec ${DEVPATH}/${PLATFORM}/${PLAT_REBOOT}
+        fi
+        # If no platform-specific reboot tool, just run /sbin/reboot
+        /sbin/reboot
+        echo b > /proc/sysrq-trigger
+fi
+
+REBOOT_USER=$(logname)
+PLATFORM=$(sonic-cfggen -H -v DEVICE_METADATA.localhost.platform)
+ASIC_TYPE=$(sonic-cfggen -y /etc/sonic/sonic_version.yml -v asic_type)
+SUBTYPE=$(sonic-cfggen -d -v DEVICE_METADATA.localhost.subtype)
+ASAN=$(sonic-cfggen -y /etc/sonic/sonic_version.yml -v asan)
+VERBOSE=no
+EXIT_NEXT_IMAGE_NOT_EXISTS=4
+EXIT_SONIC_INSTALLER_VERIFY_REBOOT=21
+EXIT_PLATFORM_FW_AU_FAILURE=22
+PLATFORM_FWUTIL_AU_REBOOT_HANDLE="platform_fw_au_reboot_handle"
+PLATFORM_JSON_FILE="platform.json"
+PLATFORM_JSON_PATH="${DEVPATH}/${PLATFORM}/${PLATFORM_JSON_FILE}"
+REBOOT_SCRIPT_NAME=$(basename $0)
+REBOOT_TYPE="${REBOOT_SCRIPT_NAME}"
+TAG_LATEST=no
+REBOOT_FLAGS=""
+SMART_SWITCH="no"
+DPU_MODULE_NAME=""
+REBOOT_DPU="no"
+PRE_SHUTDOWN="no"
+BLOCKING_MODE="no"
+BLOCKING_MODE_TIMEOUT_IN_SECOND=180
+SHOW_TIMER="no"
+
+function debug()
+{
+    if [[ x"${VERBOSE}" == x"yes" ]]; then
+        echo `date` $@
+    fi
+    logger "$@"
+}
+
+function tag_images()
+{
+    if test -f /usr/local/bin/ctrmgr_tools.py
+    then
+        if [[ x"${TAG_LATEST}" == x"yes" ]]; then
+            /usr/local/bin/ctrmgr_tools.py tag-all
+        fi
+    fi
+}
+
+function stop_pmon_service()
+{
+     CONTAINER_STOP_RC=0
+     debug "Stopping pmon docker"
+     if [[ "${PRE_SHUTDOWN}" == "yes" ]]; then
+         systemctl disable pmon
+     fi
+     systemctl stop pmon || debug "Ignore stopping pmon error $?"
+     docker kill pmon &> /dev/null || CONTAINER_STOP_RC=$?
+     if [[ $CONTAINER_STOP_RC -ne 0 ]]; then
+        debug "Failed killing container pmon RC $CONTAINER_STOP_RC ."
+     fi
+}
+
+function stop_sonic_services()
+{
+    if [[ x"$SUBTYPE" == x"DualToR" ]]; then
+        debug "DualToR detected, stopping mux container before reboot..."
+        systemctl stop mux
+    fi
+
+    if [[ x"$ASIC_TYPE" != x"mellanox" ]]; then
+        ASIC_CONF=${DEVPATH}/$PLATFORM/asic.conf
+        if [ -f "$ASIC_CONF" ]; then
+            source $ASIC_CONF
+        fi
+        if [[ ($NUM_ASIC -gt 1) ]]; then
+            asic_num=0
+            while [[ ($asic_num -lt $NUM_ASIC) ]]; do
+                debug "Stopping syncd$asic_num process..."
+                docker exec -i syncd$asic_num /usr/bin/syncd_request_shutdown --cold > /dev/null
+                ((asic_num = asic_num + 1))
+            done
+        else
+            debug "Stopping syncd process..."
+            docker exec -i syncd /usr/bin/syncd_request_shutdown --cold > /dev/null
+        fi
+        sleep 3
+    fi
+    stop_pmon_service
+}
+
+function stop_services_asan()
+{
+    debug "Stopping swss for ASAN"
+    systemctl stop swss
+}
+
+function clear_warm_boot()
+{
+    # If reboot is requested, make sure the outstanding warm-boot is cleared
+    # So the system will come up from a cold boot.
+    WARM_DIR="/host/warmboot"
+    REDIS_FILE=dump.rdb
+    TIMESTAMP=`date +%Y%m%d-%H%M%S`
+    if [[ -f ${WARM_DIR}/${REDIS_FILE} ]]; then
+        mv -f ${WARM_DIR}/${REDIS_FILE} ${WARM_DIR}/${REDIS_FILE}.${TIMESTAMP} || /bin/true
+    fi
+    /sbin/kexec -u || /bin/true
+}
+
+SCRIPT=$0
+
+function show_help_and_exit()
+{
+    echo "Usage ${SCRIPT} [options]"
+    echo "    Request rebooting the device. Invoke platform-specific tool when available."
+    echo "    This script will shutdown syncd before rebooting."
+    echo " "
+    echo "    Available options:"
+    echo "        -h, -? : getting this help"
+    echo "        -d : DPU module name on a smart switch, option is invalid when on DPU"
+    echo "        -p : Pre-shutdown steps on DPU, invalid on NPU"
+    echo "        -b : Enable the command to run in blocking mode"
+    echo "        -v : Print out detail logs. For blocking mode will print dots to identify the script is running"
+
+    exit ${EXIT_SUCCESS}
+}
+
+function setup_reboot_variables()
+{
+    NEXT_SONIC_IMAGE=$(sonic-installer list | grep "Next: " | cut -d ' ' -f 2)
+    IMAGE_PATH="/host/image-${NEXT_SONIC_IMAGE#SONiC-OS-}"
+}
+
+function reboot_pre_check()
+{
+    # Make sure that the file system is normal: read-write able
+    filename="/host/test-`date +%Y%m%d-%H%M%S`"
+    ERR=0
+    touch ${filename} || ERR=$?
+    if [[ ${ERR} -ne 0 ]]; then
+        # Continue rebooting in this case, but log the error
+        VERBOSE=yes debug "Filesystem might be read-only or full ..."
+    fi
+    rm ${filename}
+
+    if [ -x ${DEVPATH}/${PLATFORM}/${PLATFORM_REBOOT_PRE_CHECK} ]; then
+        ${DEVPATH}/${PLATFORM}/${PLATFORM_REBOOT_PRE_CHECK}
+        [[ $? -ne 0 ]] && exit $?
+    fi
+
+    # Verify the next image by sonic-installer
+    local message=$(sonic-installer verify-next-image 2>&1)
+    if [ $? -ne 0 ]; then
+        VERBOSE=yes debug "Failed to verify next image: ${message}"
+        exit ${EXIT_SONIC_INSTALLER_VERIFY_REBOOT}
+    fi
+}
+
+function check_conflict_boot_in_fw_update()
+{
+    # Make sure firmware auto update is not scheduled for a different reboot
+    FIRMWARE_AU_STATUS_DIR="/tmp/firmwareupdate"
+    FW_AU_TASK_FILE_REGEX="${FIRMWARE_AU_STATUS_DIR}/*_fw_au_task"
+    FW_AU_TASK_FILE_EXP="${FIRMWARE_AU_STATUS_DIR}/cold_fw_au_task"
+    FW_AU_TASK_FILE=$(compgen -G ${FW_AU_TASK_FILE_REGEX}) || true
+    if [[ -n "${FW_AU_TASK_FILE}" ]] && [[ ! -f "${FW_AU_TASK_FILE_EXP}" ]]; then
+        VERBOSE=yes debug "Firmware auto update scheduled for a different reboot: ${FW_AU_TASK_FILE}"
+        exit ${EXIT_ERROR}
+    fi
+}
+
+function parse_options()
+{
+    while getopts "h?vfpd:b" opt; do
+        case ${opt} in
+            h|\? )
+                show_help_and_exit
+                ;;
+            v )
+                VERBOSE=yes
+                SHOW_TIMER="yes"
+                ;;
+            t )
+                TAG_LATEST=no
+                ;;
+            f )
+                REBOOT_FLAGS+=" -f"
+                ;;
+            d )
+                REBOOT_DPU="yes"
+                DPU_MODULE_NAME="$OPTARG"
+                ;;
+            p )
+                PRE_SHUTDOWN="yes"
+                ;;
+            b )
+                BLOCKING_MODE="yes"
+                ;;
+        esac
+    done
+}
+
+function linecard_reboot_notify_supervisor()
+{
+    is_linecard=$(python3 -c 'from sonic_py_common import device_info; print("True") if device_info.is_chassis() == True and device_info.is_supervisor() == False else print("False")')
+    if [ $is_linecard == "True" ]; then
+        key=$(sonic-db-cli STATE_DB keys "CHASSIS_MODULE_TABLE|LINE-CARD*")
+        status=$?
+        if [ $status -eq 0 ]; then
+            module="${key#CHASSIS_MODULE_TABLE}"
+            if [ ! -z module ]; then
+                sonic-db-cli CHASSIS_STATE_DB hset "CHASSIS_MODULE_REBOOT_INFO_TABLE${module}" "reboot" "expected"
+                status=$?
+                if [ $status -ne 0 ]; then
+                    debug "Failed to notify Supervisor: Linecard reboot is expected"
+                fi
+            fi
+        fi
+    fi
+}
+
+function parse_config_file
+{
+    if [ -f "$REBOOT_CONFIG_FILE" ]; then
+        while IFS='=' read -r key value; do
+            key=$(echo "$key" | xargs)
+            value=$(echo "$value" | xargs)
+            case $key in
+                blocking_mode)
+                    [ "${value}" = "true" ] && BLOCKING_MODE="yes"
+                    ;;
+                blocking_mode_timeout)
+                    [[ "${value}" =~ ^[0-9]+$ ]] && BLOCKING_MODE_TIMEOUT_IN_SECOND=$(value)
+                    ;;
+                show_timer)
+                    [ "${value}" = "true" ] && SHOW_TIMER="yes"
+                    ;;
+                *)
+                    debug "WARNING: Unknown config ${key}=${value} finded in config file ${REBOOT_CONFIG_FILE}" 
+                    ;;
+            esac
+        done < "$REBOOT_CONFIG_FILE"
+    fi
+}
+
+parse_options $@
+parse_config_file
+
+# Exit if not superuser
+if [[ "$EUID" -ne 0 ]]; then
+    echo "This command must be run as root" >&2
+    exit ${EXIT_ERROR}
+fi
+
+debug "User requested rebooting device ..."
+
+handle_smart_switch "$REBOOT_DPU" "$PRE_SHUTDOWN" "$DPU_MODULE_NAME"
+smart_switch_result=$?
+if [[ $smart_switch_result -ne 0 ]]; then
+    exit $smart_switch_result
+fi
+
+# On a smartswitch, complete the DPU reboot and exit
+smartswitch=$(is_smartswitch)
+if [ "$smartswitch" == "True" ] && [ "$REBOOT_DPU" == "yes" ]; then
+    exit $smart_switch_result
+fi
+
+check_conflict_boot_in_fw_update
+
+setup_reboot_variables
+reboot_pre_check
+
+# Tag remotely deployed images as local
+tag_images
+
+# Linecard reboot notify supervisor
+linecard_reboot_notify_supervisor
+
+# Stop SONiC services gracefully.
+stop_sonic_services
+
+# Stop ASAN-enabled services so the report can be generated
+if [[ x"$ASAN" == x"yes" ]]; then
+    stop_services_asan
+fi
+
+clear_warm_boot
+
+# Update the reboot cause file to reflect that user issued 'reboot' command
+# Upon next boot, the contents of this file will be used to determine the
+# cause of the previous reboot
+echo "User issued 'reboot' command [User: ${REBOOT_USER}, Time: ${REBOOT_TIME}]" > ${REBOOT_CAUSE_FILE}
+sync
+/sbin/fstrim -av
+sleep 3
+
+if [[ -x ${DEVPATH}/${PLATFORM}/${PLATFORM_FWUTIL_AU_REBOOT_HANDLE} ]]; then
+    debug "Handling task file for boot type ${REBOOT_TYPE}"
+    ${DEVPATH}/${PLATFORM}/${PLATFORM_FWUTIL_AU_REBOOT_HANDLE} ${REBOOT_TYPE} || PLATFORM_FW_AU_RC=$?
+    if [[ $PLATFORM_FW_AU_RC -ne 0 ]]; then
+        debug "ERROR: Failed to handle the platform firmware auto-update for ${REBOOT_TYPE} Exit code: $PLATFORM_FW_AU_RC"
+        exit "${EXIT_PLATFORM_FW_AU_FAILURE}"
+    fi
+fi
+
+if [ -x ${DEVPATH}/${PLATFORM}/${PLATFORM_UPDATE_REBOOT_CAUSE} ]; then
+    debug "updating reboot cause for ${PLATFORM}"
+    ${DEVPATH}/${PLATFORM}/${PLATFORM_UPDATE_REBOOT_CAUSE}
+fi
+
+if [ -x ${DEVPATH}/${PLATFORM}/${PRE_REBOOT_HOOK} ]; then
+    debug "Executing the pre-reboot script"
+    ${DEVPATH}/${PLATFORM}/${PRE_REBOOT_HOOK}
+    EXIT_CODE="$?"
+    if [[ "${EXIT_CODE}" != "${EXIT_SUCCESS}" ]]; then
+        debug "WARNING: Failed to handle pre-reboot script: rc=${EXIT_CODE}"
+    fi
+fi
+
+if [ -x ${WATCHDOG_UTIL} ]; then
+    debug "Enabling the Watchdog before reboot"
+    ${WATCHDOG_UTIL} arm
+fi
+
+if [[ "${PRE_SHUTDOWN}" == "yes" ]]; then
+    debug "${DPU_MODULE_NAME} pre-shutdown steps are completed"
+    exit ${EXIT_SUCCESS}
+fi
+
+if [ -x ${DEVPATH}/${PLATFORM}/${PLAT_REBOOT} ]; then
+    VERBOSE=yes debug "Rebooting with platform ${PLATFORM} specific tool ..."
+    ${DEVPATH}/${PLATFORM}/${PLAT_REBOOT} $@
+
+    # There are a couple reasons execution reaches here:
+    #
+    # 1. The vendor platform reboot returned after scheduled the platform specific reboot.
+    #    This is a vendor platform reboot code bug but it happens.
+    # 2. The vendor platform reboot failed. e.g. due to platform driver didn't load properly.
+    #
+    # As result if the reboot script reaches here. We should make the reboot happen.
+    # Sleep 1 second before calling /sbin/reboot to accommodate situation #1 above.
+    sleep 1
+
+    VERBOSE=yes debug "Platform specific reboot failed!" >&2
+fi
+
+VERBOSE=yes debug "Issuing OS-level reboot ..." >&2
+
+if [[ "${BLOCKING_MODE}" != "yes" ]]; then
+    # In non blocking mode, we will remain the original logic.
+    exec /sbin/reboot ${REBOOT_FLAGS}
+else
+
+    REBOOT_START_TIME=$(date +%s)
+    /sbin/reboot ${REBOOT_FLAGS}
+    if [[ "${BLOCKING_MODE}" == "yes" ]]; then
+        # In blocking mode, we just deadloop here to avoid more output generated.
+        BLOCKING_TIMER=1
+        sleep 1
+        while true; do
+            if [ "${SHOW_TIMER}" == "yes" ]; then
+                if [ "${BLOCKING_TIMER}" -ge 50 ]; then
+                    BLOCKING_TIMER=1
+                    echo "."
+                else
+                    let BLOCKING_TIMER++
+                    echo -n "."
+                fi
+            fi
+
+            CURRENT_TIME=$(date +%s)
+            ELAPSED=$((CURRENT_TIME - REBOOT_START_TIME))
+            if (( ELAPSED >= BLOCKING_MODE_TIMEOUT_IN_SECOND )); then
+                echo "[REBOOT FAILED] The reboot used $(ELAPSED)seconds while the timeout is configed as $(BLOCKING_MODE_TIMEOUT_IN_SECOND)seconds"
+                exit ${EXIT_TIMEOUT}
+            fi
+
+            sleep 10
+        done
+    fi
+fi

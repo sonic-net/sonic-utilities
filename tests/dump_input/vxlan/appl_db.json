@@ -1,0 +1,34 @@
+{
+    "VXLAN_TUNNEL_MAP_TABLE:vtep_1336:map_1336_Vlan2345": {
+        "vlan": "Vlan2345",
+        "vni": "1336"
+    },
+    "VXLAN_TUNNEL_MAP_TABLE:vtep_1336:map_1337_Vlan2346": {
+        "vlan": "Vlan2346",
+        "vni": "1337"
+    },
+    "VXLAN_TUNNEL_TABLE:vtep_1111": {
+        "src_ip": "10.1.0.31"
+    },
+    "VXLAN_TUNNEL_TABLE:vtep_1336": {
+        "src_ip": "10.1.0.32"
+    },
+    "VXLAN_TUNNEL_TABLE:vtep_2312": {
+        "src_ip": "10.1.0.33"
+    },
+    "VXLAN_TUNNEL_TABLE:vtep_1000": {
+        "src_ip": "10.1.0.34"
+    },
+    "VXLAN_REMOTE_VNI_TABLE:Vlan2345:11.1.0.32": {
+        "vni": "1336"
+    },
+    "VXLAN_REMOTE_VNI_TABLE:Vlan2345:11.1.0.33": {
+        "vni": "1336"
+    },
+    "VXLAN_REMOTE_VNI_TABLE:Vlan2345:11.1.0.34": {
+        "vni": "1336"
+    },
+    "VXLAN_REMOTE_VNI_TABLE:Vlan2345:11.1.0.35": {
+        "vni": "1336"
+    }
+}

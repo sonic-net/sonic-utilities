@@ -1,0 +1,6 @@
+[
+    {
+        "op": "remove",
+        "path": "/sonic-vlan:sonic-vlan/sonic-vlan:VLAN_MEMBER/VLAN_MEMBER_LIST/2"
+    }
+]

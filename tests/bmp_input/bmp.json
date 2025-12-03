@@ -1,0 +1,9 @@
+{
+    "BMP": {
+        "table": {
+            "bgp_neighbor_table": "false",
+            "bgp_rib_in_table": "false",
+            "bgp_rib_out_table": "false"
+        }
+    }
+}

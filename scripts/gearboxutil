@@ -1,0 +1,227 @@
+#!/usr/bin/env python3
+
+import sys
+from tabulate import tabulate
+from natsort import natsorted
+
+import os
+
+# mock the redis for unit test purposes #
+try:
+    if os.environ["UTILITIES_UNIT_TESTING"] == "1":
+        modules_path = os.path.join(os.path.dirname(__file__), "..")
+        tests_path = os.path.join(modules_path, "tests")
+        sys.path.insert(0, modules_path)
+        sys.path.insert(0, tests_path)
+        import mock_tables.dbconnector
+        client = mock_tables.dbconnector.redis.StrictRedis()
+        if client.keys() is None:
+            raise Exception("Invalid mock_table keys")
+except KeyError:
+    pass
+
+from swsscommon.swsscommon import SonicV2Connector
+
+
+# ========================== Common gearbox-utils logic ==========================
+
+GEARBOX_TABLE_PHY_PREFIX = "_GEARBOX_TABLE:phy:{}"
+GEARBOX_TABLE_INTERFACE_PREFIX = "_GEARBOX_TABLE:interface:{}"
+GEARBOX_TABLE_PORT_PREFIX = "_GEARBOX_TABLE:phy:{}:ports:{}"
+
+PORT_TABLE_ETHERNET_PREFIX = "PORT_TABLE:{}"
+
+PHY_NAME = "name"
+PHY_ID = "phy_id"
+PHY_FIRMWARE_MAJOR_VERSION = "firmware_major_version"
+PHY_LINE_LANES = "line_lanes"
+PHY_SYSTEM_LANES = "system_lanes"
+
+PORT_OPER_STATUS = "oper_status"
+PORT_ADMIN_STATUS = "admin_status"
+PORT_SYSTEM_SPEED = "system_speed"
+PORT_LINE_SPEED = "line_speed"
+
+INTF_NAME = "name"
+INTF_LANES = "lanes"
+INTF_SPEED = "speed"
+
+def get_appl_key_attr(db, key, attr, lane_count=1):
+    """
+    Get APPL_DB key attribute
+    """
+
+    val = db.get(db.APPL_DB, key, attr)
+    if val is None:
+        return "N/A"
+
+    if "speed" in attr:
+        if val == "0":
+            return "N/A"
+
+        speed = int(val[:-3])
+
+        if (speed % lane_count == 0):
+            speed = speed // lane_count
+        else:
+            return "N/A"
+            
+        val = '{}G'.format(str(speed))
+
+    return val
+
+def db_connect_appl():
+    appl_db = SonicV2Connector(use_unix_socket_path=False)
+    if appl_db is None:
+        return None
+    appl_db.connect(appl_db.APPL_DB)
+    return appl_db
+
+def db_connect_state():
+    """
+    Connect to REDIS STATE DB and get optics info
+    """
+    state_db = SonicV2Connector(use_unix_socket_path=False)
+    if state_db is None:
+        return None
+    state_db.connect(state_db.STATE_DB, False)   # Make one attempt only
+    return state_db
+
+def appl_db_keys_get(appl_db):
+    """
+    Get APPL_DB Keys
+    """
+    return appl_db.keys(appl_db.APPL_DB, GEARBOX_TABLE_PHY_PREFIX.format("*"))
+
+def appl_db_interface_keys_get(appl_db):
+    """
+    Get APPL_DB Keys
+    """
+    return appl_db.keys(appl_db.APPL_DB, GEARBOX_TABLE_INTERFACE_PREFIX.format("*"))
+
+# ========================== phy-status logic ==========================
+
+phy_header_status = ['PHY Id', 'Name', 'Firmware']
+
+class PhyStatus(object):
+
+    def display_phy_status(self, appl_db_keys):
+        """
+        Generate phy status output
+        """
+        table = []
+        key = []
+
+        for key in appl_db_keys:
+            if 'lanes' in key or 'ports' in key:
+                continue
+            list_items = key.split(':')
+            phy_id = list_items[2]
+            data_row = (
+                phy_id,
+                get_appl_key_attr(self.appl_db, GEARBOX_TABLE_PHY_PREFIX.format(phy_id), PHY_NAME),
+                get_appl_key_attr(self.appl_db, GEARBOX_TABLE_PHY_PREFIX.format(phy_id), PHY_FIRMWARE_MAJOR_VERSION))
+            table.append(data_row)
+
+        # Sorting and tabulating the result table.
+        sorted_table = natsorted(table)
+        print(tabulate(sorted_table, phy_header_status, tablefmt="simple", stralign='right'))
+
+    def __init__(self):
+        self.appl_db = db_connect_appl()
+        if self.appl_db is None:
+            return
+
+        appl_db_keys = appl_db_keys_get(self.appl_db)
+        if appl_db_keys is None:
+            return
+
+        self.display_phy_status(appl_db_keys)
+
+# ========================== interface-status logic ==========================
+
+intf_header_status = ['PHY Id', 'Interface', 'MAC Lanes', 'MAC Lane Speed', 'PHY Lanes', 'PHY Lane Speed', 'Line Lanes', 'Line Lane Speed', 'Oper', 'Admin']
+
+class InterfaceStatus(object):
+
+    def display_intf_status(self, appl_db_keys):
+        """
+        Generate phy status output
+        """
+        table = []
+        key = []
+
+        for key in appl_db_keys:
+            list_items = key.split(':')
+            index = list_items[2]
+            
+            name = get_appl_key_attr(self.appl_db, GEARBOX_TABLE_INTERFACE_PREFIX.format(index), INTF_NAME),
+            name = name[0]
+                        
+            mac_lanes = get_appl_key_attr(self.appl_db, PORT_TABLE_ETHERNET_PREFIX.format(name), INTF_LANES)
+            lanes = mac_lanes.split(',')
+            lane_count = 0
+            for lane in lanes:
+                lane_count += 1
+
+            phy_id = get_appl_key_attr(self.appl_db, GEARBOX_TABLE_INTERFACE_PREFIX.format(index), PHY_ID)
+                        
+            data_row = (
+                phy_id,
+                name,
+                mac_lanes,
+                get_appl_key_attr(self.appl_db, PORT_TABLE_ETHERNET_PREFIX.format(name), INTF_SPEED, lane_count),
+                get_appl_key_attr(self.appl_db, GEARBOX_TABLE_INTERFACE_PREFIX.format(index), PHY_SYSTEM_LANES),
+                get_appl_key_attr(self.appl_db, GEARBOX_TABLE_PORT_PREFIX.format(phy_id, index), PORT_SYSTEM_SPEED),
+                get_appl_key_attr(self.appl_db, GEARBOX_TABLE_INTERFACE_PREFIX.format(index), PHY_LINE_LANES),
+                get_appl_key_attr(self.appl_db, GEARBOX_TABLE_PORT_PREFIX.format(phy_id, index), PORT_LINE_SPEED),
+                get_appl_key_attr(self.appl_db, PORT_TABLE_ETHERNET_PREFIX.format(name), PORT_OPER_STATUS),
+                get_appl_key_attr(self.appl_db, PORT_TABLE_ETHERNET_PREFIX.format(name), PORT_ADMIN_STATUS))
+
+            table.append(data_row)
+
+        # Sorting and tabulating the result table.
+        sorted_table = natsorted(table)
+        print(tabulate(sorted_table, intf_header_status, tablefmt="simple", stralign='right'))
+
+    def __init__(self):
+        self.appl_db = db_connect_appl()
+        if self.appl_db is None:
+            return
+
+        appl_db_keys = appl_db_interface_keys_get(self.appl_db)
+        if appl_db_keys is None:
+            return
+
+        self.display_intf_status(appl_db_keys)
+
+def main(args):
+    """
+    phy status
+    interfaces status
+    interfaces counters
+    """
+
+    if len(args) == 0:
+        print("No valid arguments provided")
+        return
+
+    cmd1 = args[0]
+    if cmd1 != "phys" and cmd1 != "interfaces":
+        print("No valid command provided")
+        return
+
+    cmd2 = args[1]
+    if cmd2 != "status" and cmd2 != "counters":
+        print("No valid command provided")
+        return
+
+    if cmd1 == "phys" and cmd2 == "status":
+        PhyStatus()
+    elif cmd1 == "interfaces" and cmd2 == "status":
+        InterfaceStatus()
+
+    sys.exit(0)
+
+if __name__ == "__main__":
+    main(sys.argv[1:])

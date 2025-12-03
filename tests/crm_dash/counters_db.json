@@ -1,0 +1,54 @@
+{
+  "CRM:DASH_ACL_GROUP_STATS:0x6a00000000002d": {
+    "expireat": 1680172664.591134,
+    "ttl": -0.001,
+    "type": "hash",
+    "value": {
+      "crm_stats_dash_ipv4_acl_rule_available": "200000000",
+      "crm_stats_dash_ipv4_acl_rule_used": "100"
+    }
+  },
+  "CRM:DASH_ACL_GROUP_STATS:0x6a00000000009d": {
+    "expireat": 1680172664.5912013,
+    "ttl": -0.001,
+    "type": "hash",
+    "value": {
+      "crm_stats_dash_ipv6_acl_rule_available": "200000000",
+      "crm_stats_dash_ipv6_acl_rule_used": "1000"
+    }
+  },
+  "CRM:STATS": {
+    "expireat": 1680172664.5911696,
+    "ttl": -0.001,
+    "type": "hash",
+    "value": {
+      "crm_stats_dash_eni_available": "1000000",
+      "crm_stats_dash_eni_ether_address_map_available": "1000000",
+      "crm_stats_dash_eni_ether_address_map_used": "9",
+      "crm_stats_dash_eni_used": "9",
+      "crm_stats_dash_ipv4_acl_group_available": "200000000",
+      "crm_stats_dash_ipv4_acl_group_used": "27",
+      "crm_stats_dash_ipv4_inbound_routing_available": "200000000",
+      "crm_stats_dash_ipv4_inbound_routing_used": "9",
+      "crm_stats_dash_ipv4_outbound_ca_to_pa_available": "1000000",
+      "crm_stats_dash_ipv4_outbound_ca_to_pa_used": "0",
+      "crm_stats_dash_ipv4_outbound_routing_available": "1000000",
+      "crm_stats_dash_ipv4_outbound_routing_used": "9",
+      "crm_stats_dash_ipv4_pa_validation_available": "1000000",
+      "crm_stats_dash_ipv4_pa_validation_used": "0",
+      "crm_stats_dash_ipv6_acl_group_available": "200000000",
+      "crm_stats_dash_ipv6_acl_group_used": "0",
+      "crm_stats_dash_ipv6_inbound_routing_available": "200000000",
+      "crm_stats_dash_ipv6_inbound_routing_used": "0",
+      "crm_stats_dash_ipv6_outbound_ca_to_pa_available": "1000000",
+      "crm_stats_dash_ipv6_outbound_ca_to_pa_used": "0",
+      "crm_stats_dash_ipv6_outbound_routing_available": "1000000",
+      "crm_stats_dash_ipv6_outbound_routing_used": "0",
+      "crm_stats_dash_ipv6_pa_validation_available": "1000000",
+      "crm_stats_dash_ipv6_pa_validation_used": "0",
+      "crm_stats_dash_vnet_available": "200000000",
+      "crm_stats_dash_vnet_used": "2"
+    }
+  }
+}
+

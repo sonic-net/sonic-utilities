@@ -1,0 +1,54 @@
+{
+    "LAG_TABLE|PortChannel001":{
+        "runner.active": "true",
+        "runner.fallback": "false",
+        "runner.fast_rate": "false",
+        "setup.kernel_team_mode_name": "loadbalance",
+        "setup.pid": "27",
+        "state": "ok",
+        "team_device.ifinfo.dev_addr": "1c:34:da:1c:9f:00",
+        "team_device.ifinfo.ifindex": "137"
+    },
+    "LAG_TABLE|PortChannel002":{
+        "runner.active": "true",
+        "runner.fallback": "false",
+        "runner.fast_rate": "false",
+        "setup.kernel_team_mode_name": "loadbalance",
+        "setup.pid": "35",
+        "state": "ok",
+        "team_device.ifinfo.dev_addr": "1c:34:da:1c:9f:00",
+        "team_device.ifinfo.ifindex": "138"
+    },
+    "LAG_MEMBER_TABLE|PortChannel001|Ethernet4":{
+        "ifinfo.dev_addr": "1c:34:da:1c:9f:00",
+        "ifinfo.ifindex": "203",
+        "link.up": "true",
+        "link_watches.list.link_watch_0.up": "true",
+        "runner.actor_lacpdu_info.port": "5",
+        "runner.actor_lacpdu_info.state": "69",
+        "runner.actor_lacpdu_info.system": "1c:34:da:1c:9f:00",
+        "runner.aggregator.id": "0",
+        "runner.aggregator.selected": "false",
+        "runner.partner_lacpdu_info.port": "0",
+        "runner.partner_lacpdu_info.state": "2",
+        "runner.partner_lacpdu_info.system": "00:00:00:00:00:00",
+        "runner.selected": "false",
+        "runner.state": "defaulted"
+    },
+    "LAG_MEMBER_TABLE|PortChannel001|Ethernet0":{
+        "ifinfo.dev_addr": "1c:34:da:1c:9f:00",
+        "ifinfo.ifindex": "202",
+        "link.up": "true",
+        "link_watches.list.link_watch_0.up": "true",
+        "runner.actor_lacpdu_info.port": "0",
+        "runner.actor_lacpdu_info.state": "69",
+        "runner.actor_lacpdu_info.system": "1c:34:da:1c:9f:00",
+        "runner.aggregator.id": "0",
+        "runner.aggregator.selected": "false",
+        "runner.partner_lacpdu_info.port": "0",
+        "runner.partner_lacpdu_info.state": "2",
+        "runner.partner_lacpdu_info.system": "00:00:00:00:00:00",
+        "runner.selected": "false",
+        "runner.state": "defaulted"
+    }
+}

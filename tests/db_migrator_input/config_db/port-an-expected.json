@@ -1,0 +1,43 @@
+{
+    "PORT|Ethernet0": {
+        "index": "0",
+        "lanes": "0,1",
+        "description": "etp1a",
+        "mtu": "9100",
+        "alias": "etp1a",
+        "pfc_asym": "off",
+        "speed": "10000",
+        "fec": "none",
+        "autoneg": "on",
+        "adv_speeds": "10000",
+        "dhcp_rate_limit": "100"
+    },
+    "PORT|Ethernet2": {
+        "index": "0",
+        "lanes": "2,3",
+        "description": "Servers0:eth0",
+        "admin_status": "up",
+        "mtu": "9100",
+        "alias": "etp1b",
+        "pfc_asym": "off",
+        "speed": "25000",
+        "fec": "none",
+        "autoneg": "off",
+        "dhcp_rate_limit": "300"
+    },
+    "PORT|Ethernet4": {
+        "index": "1",
+        "lanes": "4,5",
+        "description": "Servers1:eth0",
+        "admin_status": "up",
+        "mtu": "9100",
+        "alias": "etp2a",
+        "pfc_asym": "off",
+        "speed": "50000",
+        "fec": "none",
+        "dhcp_rate_limit": "300"
+    },
+    "VERSIONS|DATABASE": {
+        "VERSION": "version_3_0_1"
+    }
+}

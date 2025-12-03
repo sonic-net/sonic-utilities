@@ -1,0 +1,840 @@
+#!/usr/bin/env python3
+
+"""
+    Script to show SFP EEPROM and presence status.
+    This script gets the SFP data from State DB, unlike sfputil
+    which accesses the transceiver directly.
+"""
+
+import ast
+import os
+import re
+import sys
+from typing import Dict
+
+import click
+from natsort import natsorted
+from utilities_common import platform_sfputil_helper
+from sonic_py_common import multi_asic
+from utilities_common.general import load_db_config
+from utilities_common.sfp_helper import covert_application_advertisement_to_output_string
+from utilities_common.sfp_helper import (
+        QSFP_DATA_MAP,
+        CMIS_DATA_MAP,
+        C_CMIS_DATA_MAP,
+        QSFP_STATUS_MAP,
+        CMIS_STATUS_MAP,
+        CMIS_VDM_TO_LEGACY_STATUS_MAP,
+        CCMIS_STATUS_MAP,
+        CCMIS_VDM_TO_LEGACY_STATUS_MAP,
+        CCMIS_VDM_THRESHOLD_TO_LEGACY_DOM_THRESHOLD_MAP,
+        get_data_map_sort_key,
+        get_transceiver_data_map
+)
+from utilities_common.sfp_helper import is_transceiver_cmis
+from tabulate import tabulate
+
+# Mock the redis DB for unit test purposes
+try:
+    if os.environ["UTILITIES_UNIT_TESTING"] == "2":
+        modules_path = os.path.join(os.path.dirname(__file__), "..")
+        test_path = os.path.join(modules_path, "tests")
+        sys.path.insert(0, modules_path)
+        sys.path.insert(0, test_path)
+        import mock_tables.dbconnector
+        from mock_platform_sfputil.mock_platform_sfputil import mock_platform_sfputil_helper
+        mock_platform_sfputil_helper()
+    if os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] == "multi_asic":
+        import mock_tables.mock_multi_asic
+        mock_tables.dbconnector.load_namespace_config()
+except KeyError:
+    pass
+
+from utilities_common import multi_asic as multi_asic_util
+from utilities_common.platform_sfputil_helper import is_rj45_port, RJ45_PORT_TYPE
+
+# TODO: We should share these maps and the formatting functions between sfputil and sfpshow
+SFP_DOM_CHANNEL_MONITOR_MAP = {
+    'rx1power': 'RXPower',
+    'tx1bias': 'TXBias',
+    'tx1power': 'TXPower'
+}
+
+SFP_DOM_CHANNEL_THRESHOLD_MAP = {
+    'txpowerhighalarm':   'TxPowerHighAlarm',
+    'txpowerlowalarm':    'TxPowerLowAlarm',
+    'txpowerhighwarning': 'TxPowerHighWarning',
+    'txpowerlowwarning':  'TxPowerLowWarning',
+    'rxpowerhighalarm':   'RxPowerHighAlarm',
+    'rxpowerlowalarm':    'RxPowerLowAlarm',
+    'rxpowerhighwarning': 'RxPowerHighWarning',
+    'rxpowerlowwarning':  'RxPowerLowWarning',
+    'txbiashighalarm':    'TxBiasHighAlarm',
+    'txbiaslowalarm':     'TxBiasLowAlarm',
+    'txbiashighwarning':  'TxBiasHighWarning',
+    'txbiaslowwarning':   'TxBiasLowWarning'
+}
+
+QSFP_DOM_CHANNEL_THRESHOLD_MAP = {
+    'rxpowerhighalarm':   'RxPowerHighAlarm',
+    'rxpowerlowalarm':    'RxPowerLowAlarm',
+    'rxpowerhighwarning': 'RxPowerHighWarning',
+    'rxpowerlowwarning':  'RxPowerLowWarning',
+    'txbiashighalarm':    'TxBiasHighAlarm',
+    'txbiaslowalarm':     'TxBiasLowAlarm',
+    'txbiashighwarning':  'TxBiasHighWarning',
+    'txbiaslowwarning':   'TxBiasLowWarning'
+}
+
+DOM_MODULE_THRESHOLD_MAP = {
+    'temphighalarm':  'TempHighAlarm',
+    'templowalarm':   'TempLowAlarm',
+    'temphighwarning': 'TempHighWarning',
+    'templowwarning': 'TempLowWarning',
+    'vcchighalarm':   'VccHighAlarm',
+    'vcclowalarm':    'VccLowAlarm',
+    'vcchighwarning': 'VccHighWarning',
+    'vcclowwarning':  'VccLowWarning'
+}
+
+QSFP_DOM_CHANNEL_MONITOR_MAP = {
+    'rx1power': 'RX1Power',
+    'rx2power': 'RX2Power',
+    'rx3power': 'RX3Power',
+    'rx4power': 'RX4Power',
+    'tx1bias':  'TX1Bias',
+    'tx2bias':  'TX2Bias',
+    'tx3bias':  'TX3Bias',
+    'tx4bias':  'TX4Bias',
+    'tx1power': 'TX1Power',
+    'tx2power': 'TX2Power',
+    'tx3power': 'TX3Power',
+    'tx4power': 'TX4Power'
+}
+
+CMIS_DOM_CHANNEL_MONITOR_MAP = {
+    'rx1power': 'RX1Power',
+    'rx2power': 'RX2Power',
+    'rx3power': 'RX3Power',
+    'rx4power': 'RX4Power',
+    'rx5power': 'RX5Power',
+    'rx6power': 'RX6Power',
+    'rx7power': 'RX7Power',
+    'rx8power': 'RX8Power',
+    'tx1bias':  'TX1Bias',
+    'tx2bias':  'TX2Bias',
+    'tx3bias':  'TX3Bias',
+    'tx4bias':  'TX4Bias',
+    'tx5bias':  'TX5Bias',
+    'tx6bias':  'TX6Bias',
+    'tx7bias':  'TX7Bias',
+    'tx8bias':  'TX8Bias',
+    'tx1power': 'TX1Power',
+    'tx2power': 'TX2Power',
+    'tx3power': 'TX3Power',
+    'tx4power': 'TX4Power',
+    'tx5power': 'TX5Power',
+    'tx6power': 'TX6Power',
+    'tx7power': 'TX7Power',
+    'tx8power': 'TX8Power'
+}
+
+DOM_MODULE_MONITOR_MAP = {
+    'temperature': 'Temperature',
+    'voltage': 'Vcc'
+}
+
+DOM_CHANNEL_THRESHOLD_UNIT_MAP = {
+    'txpowerhighalarm':   'dBm',
+    'txpowerlowalarm':    'dBm',
+    'txpowerhighwarning': 'dBm',
+    'txpowerlowwarning':  'dBm',
+    'rxpowerhighalarm':   'dBm',
+    'rxpowerlowalarm':    'dBm',
+    'rxpowerhighwarning': 'dBm',
+    'rxpowerlowwarning':  'dBm',
+    'txbiashighalarm':    'mA',
+    'txbiaslowalarm':     'mA',
+    'txbiashighwarning':  'mA',
+    'txbiaslowwarning':   'mA'
+}
+
+DOM_MODULE_THRESHOLD_UNIT_MAP = {
+    'temphighalarm':   'C',
+    'templowalarm':    'C',
+    'temphighwarning': 'C',
+    'templowwarning':  'C',
+    'vcchighalarm':    'Volts',
+    'vcclowalarm':     'Volts',
+    'vcchighwarning':  'Volts',
+    'vcclowwarning':   'Volts'
+}
+
+DOM_VALUE_UNIT_MAP = {
+    'rx1power': 'dBm',
+    'rx2power': 'dBm',
+    'rx3power': 'dBm',
+    'rx4power': 'dBm',
+    'tx1bias': 'mA',
+    'tx2bias': 'mA',
+    'tx3bias': 'mA',
+    'tx4bias': 'mA',
+    'tx1power': 'dBm',
+    'tx2power': 'dBm',
+    'tx3power': 'dBm',
+    'tx4power': 'dBm',
+    'temperature': 'C',
+    'voltage': 'Volts'
+}
+
+QSFP_DD_DOM_VALUE_UNIT_MAP = {
+    'rx1power': 'dBm',
+    'rx2power': 'dBm',
+    'rx3power': 'dBm',
+    'rx4power': 'dBm',
+    'rx5power': 'dBm',
+    'rx6power': 'dBm',
+    'rx7power': 'dBm',
+    'rx8power': 'dBm',
+    'tx1bias': 'mA',
+    'tx2bias': 'mA',
+    'tx3bias': 'mA',
+    'tx4bias': 'mA',
+    'tx5bias': 'mA',
+    'tx6bias': 'mA',
+    'tx7bias': 'mA',
+    'tx8bias': 'mA',
+    'tx1power': 'dBm',
+    'tx2power': 'dBm',
+    'tx3power': 'dBm',
+    'tx4power': 'dBm',
+    'tx5power': 'dBm',
+    'tx6power': 'dBm',
+    'tx7power': 'dBm',
+    'tx8power': 'dBm',
+    'temperature': 'C',
+    'voltage': 'Volts'
+}
+
+ZR_PM_HEADER = ['Parameter', 'Unit', 'Min', 'Avg', 'Max',
+                'Threshold\nHigh\nAlarm', 'Threshold\nHigh\nWarning',
+                'Threshold\nCrossing\nAlert-High',
+                'Threshold\nLow\nAlarm', 'Threshold\nLow\nWarning',
+                'Threshold\nCrossing\nAlert-Low']
+
+ZR_PM_VALUE_KEY_SUFFIXS = ['min', 'avg', 'max']
+
+ZR_PM_THRESHOLD_KEY_SUFFIXS = ['highalarm',
+                               'highwarning', 'lowalarm', 'lowwarning']
+
+# mapping from parameter_name to [unit, parameter_key_prefix]
+ZR_PM_INFO_MAP = {
+    'Tx Power': ['dBm', 'tx_power'],
+    'Rx Total Power': ['dBm', 'rx_tot_power'],
+    'Rx Signal Power': ['dBm', 'rx_sig_power'],
+    'CD-short link': ['ps/nm', 'cd'],
+    'PDL': ['dB', 'pdl'],
+    'OSNR': ['dB', 'osnr'],
+    'eSNR': ['dB', 'esnr'],
+    'CFO': ['MHz', 'cfo'],
+    'DGD': ['ps', 'dgd'],
+    'SOPMD': ['ps^2', 'sopmd'],
+    'SOP ROC': ['krad/s', 'soproc'],
+    'Pre-FEC BER': ['N/A', 'prefec_ber'],
+    'Post-FEC BER': ['N/A', 'uncorr_frames'],
+    'EVM': ['%', 'evm']
+}
+
+ZR_PM_NOT_APPLICABLE_STR = 'Transceiver performance monitoring not applicable'
+
+QSFP_STATUS_NOT_APPLICABLE_STR = 'Transceiver status info not applicable'
+
+def display_invalid_intf_eeprom(intf_name):
+    output = intf_name + ': SFP EEPROM Not detected\n'
+    click.echo(output)
+
+
+def display_invalid_intf_presence(intf_name):
+    header = ['Port', 'Presence']
+    port_table = []
+    port_table.append((intf_name, 'Not present'))
+    click.echo(tabulate(port_table, header))
+
+
+def display_invalid_intf_pm(intf_name):
+    output = intf_name + ': %s\n' % ZR_PM_NOT_APPLICABLE_STR
+    click.echo(output)
+
+def display_invalid_intf_status(intf_name):
+    output = intf_name + ': %s\n' % QSFP_STATUS_NOT_APPLICABLE_STR
+    click.echo(output)
+
+class SFPShow(object):
+    def __init__(self, intf_name, namespace_option, dump_dom=False):
+        super(SFPShow, self).__init__()
+        self.db = None
+        self.intf_name = intf_name
+        self.dump_dom = dump_dom
+        self.table = []
+        self.intf_eeprom: Dict[str, str] = {}
+        self.intf_pm: Dict[str, str] = {}
+        self.intf_status: Dict[str, str] = {}
+        self.multi_asic = multi_asic_util.MultiAsic(namespace_option=namespace_option)
+
+    # Convert dict values to cli output string
+    def format_dict_value_to_string(self, sorted_key_table,
+                                    dom_info_dict, dom_value_map,
+                                    dom_unit_map, alignment=0):
+        output = ''
+        indent = ' ' * 8
+        separator = ": "
+        for key in sorted_key_table:
+            if dom_info_dict is not None and key in dom_info_dict and dom_info_dict[key] != 'N/A':
+                value = dom_info_dict[key]
+                units = ''
+                if type(value) != str or (value != 'Unknown' and not value.endswith(dom_unit_map[key])):
+                    units = dom_unit_map[key]
+                output += '{}{}{}{}{}\n'.format((indent * 2),
+                                                dom_value_map[key],
+                                                separator.rjust(len(separator) + alignment - len(dom_value_map[key])),
+                                                value,
+                                                units)
+        return output
+
+    # Convert sfp status in DB to cli output string
+    def convert_sfp_status_to_output_string(self, sfp_status_dict, status_map):
+        indent = ' ' * 8
+        output = ''
+        for key in status_map.keys():
+            if key not in sfp_status_dict:
+                continue
+            output += '{}{}: {}\n'.format(indent, status_map[key], sfp_status_dict[key])
+
+        return output
+
+    # Convert sfp info in DB to cli output string
+    def convert_sfp_info_to_output_string(self, sfp_info_dict, sfp_firmware_info_dict):
+        indent = ' ' * 8
+        output = ''
+        is_sfp_cmis = is_transceiver_cmis(sfp_info_dict)
+        is_sfp_c_cmis = 'supported_max_tx_power' in sfp_info_dict
+
+        # Get the appropriate data map for this transceiver type
+        data_map = get_transceiver_data_map(sfp_info_dict)
+
+        # Combine sfp_info_dict and sfp_firmware_info_dict for sorting
+        combined_dict = sfp_info_dict.copy()
+        if sfp_firmware_info_dict:
+            combined_dict.update(sfp_firmware_info_dict)
+
+        # Use the utility function to get sorted keys from combined dictionary
+        sorted_sfp_info_keys = sorted(combined_dict.keys(),
+                                      key=get_data_map_sort_key(combined_dict, data_map))
+
+        for key in sorted_sfp_info_keys:
+            if key == 'cable_type':
+                output += '{}{}: {}\n'.format(indent, sfp_info_dict['cable_type'], sfp_info_dict['cable_length'])
+            elif key == 'cable_length':
+                pass
+            elif key == 'specification_compliance' and not(is_sfp_cmis):
+                if sfp_info_dict['type'] == "QSFP-DD Double Density 8X Pluggable Transceiver":
+                    output += '{}{}: {}\n'.format(indent, QSFP_DATA_MAP[key], sfp_info_dict[key])
+                else:
+                    output += '{}{}:\n'.format(indent, QSFP_DATA_MAP['specification_compliance'])
+
+                    spec_compliance_dict = {}
+                    try:
+                        spec_compliance_dict = ast.literal_eval(sfp_info_dict['specification_compliance'])
+                        sorted_compliance_key_table = natsorted(spec_compliance_dict)
+                        for compliance_key in sorted_compliance_key_table:
+                            output += '{}{}: {}\n'.format((indent * 2), compliance_key, spec_compliance_dict[compliance_key])
+                    except ValueError as e:
+                        output += '{}N/A\n'.format((indent * 2))
+            elif key == 'application_advertisement':
+                output += covert_application_advertisement_to_output_string(indent, sfp_info_dict)
+            elif key == 'active_firmware' or key == 'inactive_firmware':
+                output += '{}{}: {}\n'.format(indent, data_map[key], sfp_firmware_info_dict[key] if key in sfp_firmware_info_dict else 'N/A')
+            elif key.startswith(('e1_', 'e2_')):
+                if key in sfp_firmware_info_dict:
+                    output += '{}{}: {}\n'.format(indent, data_map[key], sfp_firmware_info_dict[key])
+            else:
+                # For both known and unknown keys
+                display_name = data_map.get(key, key)  # Use data_map name if available, otherwise use key
+                value = sfp_info_dict.get(key, sfp_firmware_info_dict.get(key, 'N/A') if sfp_firmware_info_dict else 'N/A')
+                output += '{}{}: {}\n'.format(indent, display_name, value)
+
+        return output
+
+    # Convert DOM sensor info in DB to CLI output string
+    def convert_dom_to_output_string(self, sfp_type, is_sfp_cmis, dom_info_dict):
+        indent = ' ' * 8
+        output_dom = ''
+        channel_threshold_align = 18
+        module_threshold_align = 15
+
+        if sfp_type.startswith('QSFP') or sfp_type.startswith('OSFP'):
+            # Channel Monitor
+            if is_sfp_cmis:
+                output_dom += (indent + 'ChannelMonitorValues:\n')
+                sorted_key_table = natsorted(CMIS_DOM_CHANNEL_MONITOR_MAP)
+                output_channel = self.format_dict_value_to_string(
+                    sorted_key_table, dom_info_dict,
+                    CMIS_DOM_CHANNEL_MONITOR_MAP,
+                    QSFP_DD_DOM_VALUE_UNIT_MAP)
+                output_dom += output_channel
+            else:
+                output_dom += (indent + 'ChannelMonitorValues:\n')
+                sorted_key_table = natsorted(QSFP_DOM_CHANNEL_MONITOR_MAP)
+                output_channel = self.format_dict_value_to_string(
+                    sorted_key_table, dom_info_dict,
+                    QSFP_DOM_CHANNEL_MONITOR_MAP,
+                    DOM_VALUE_UNIT_MAP)
+                output_dom += output_channel
+
+            # Channel Threshold
+            if is_sfp_cmis:
+                dom_map = SFP_DOM_CHANNEL_THRESHOLD_MAP
+            else:
+                dom_map = QSFP_DOM_CHANNEL_THRESHOLD_MAP
+
+            output_dom += (indent + 'ChannelThresholdValues:\n')
+            sorted_key_table = natsorted(dom_map)
+            output_channel_threshold = self.format_dict_value_to_string(
+                sorted_key_table, dom_info_dict,
+                dom_map,
+                DOM_CHANNEL_THRESHOLD_UNIT_MAP,
+                channel_threshold_align)
+            output_dom += output_channel_threshold
+
+            # Module Monitor
+            output_dom += (indent + 'ModuleMonitorValues:\n')
+            sorted_key_table = natsorted(DOM_MODULE_MONITOR_MAP)
+            output_module = self.format_dict_value_to_string(
+                sorted_key_table, dom_info_dict,
+                DOM_MODULE_MONITOR_MAP,
+                DOM_VALUE_UNIT_MAP)
+            output_dom += output_module
+
+            # Module Threshold
+            output_dom += (indent + 'ModuleThresholdValues:\n')
+            sorted_key_table = natsorted(DOM_MODULE_THRESHOLD_MAP)
+            output_module_threshold = self.format_dict_value_to_string(
+                sorted_key_table, dom_info_dict,
+                DOM_MODULE_THRESHOLD_MAP,
+                DOM_MODULE_THRESHOLD_UNIT_MAP,
+                module_threshold_align)
+            output_dom += output_module_threshold
+
+        else:
+            output_dom += (indent + 'MonitorData:\n')
+            sorted_key_table = natsorted(SFP_DOM_CHANNEL_MONITOR_MAP)
+            output_channel = self.format_dict_value_to_string(
+                sorted_key_table, dom_info_dict,
+                SFP_DOM_CHANNEL_MONITOR_MAP,
+                DOM_VALUE_UNIT_MAP)
+            output_dom += output_channel
+
+            sorted_key_table = natsorted(DOM_MODULE_MONITOR_MAP)
+            output_module = self.format_dict_value_to_string(
+                sorted_key_table, dom_info_dict,
+                DOM_MODULE_MONITOR_MAP,
+                DOM_VALUE_UNIT_MAP)
+            output_dom += output_module
+
+            output_dom += (indent + 'ThresholdData:\n')
+
+            # Module Threshold
+            sorted_key_table = natsorted(DOM_MODULE_THRESHOLD_MAP)
+            output_module_threshold = self.format_dict_value_to_string(
+                sorted_key_table, dom_info_dict,
+                DOM_MODULE_THRESHOLD_MAP,
+                DOM_MODULE_THRESHOLD_UNIT_MAP,
+                module_threshold_align)
+            output_dom += output_module_threshold
+
+            # Channel Threshold
+            sorted_key_table = natsorted(SFP_DOM_CHANNEL_THRESHOLD_MAP)
+            output_channel_threshold = self.format_dict_value_to_string(
+                sorted_key_table, dom_info_dict,
+                SFP_DOM_CHANNEL_THRESHOLD_MAP,
+                DOM_CHANNEL_THRESHOLD_UNIT_MAP,
+                channel_threshold_align)
+            output_dom += output_channel_threshold
+
+        return output_dom
+
+    # Convert sfp info and dom sensor info in DB to cli output string
+    def convert_interface_sfp_info_to_cli_output_string(self, state_db, interface_name, dump_dom):
+        output = ''
+
+        first_subport = platform_sfputil_helper.get_first_subport(interface_name)
+        if first_subport is None:
+            click.echo("Error: Unable to get first subport for {} while converting SFP info".format(interface_name))
+            output = "SFP EEPROM Not detected\n"
+            return output
+
+        sfp_info_dict = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_INFO|{}'.format(interface_name))
+        sfp_firmware_info_dict = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_FIRMWARE_INFO|{}'.format(first_subport))
+        if sfp_info_dict:
+            is_sfp_cmis = is_transceiver_cmis(sfp_info_dict)
+            if sfp_info_dict['type'] == RJ45_PORT_TYPE:
+                output = 'SFP EEPROM is not applicable for RJ45 port\n'
+            else:
+                output = 'SFP EEPROM detected\n'
+                sfp_info_output = self.convert_sfp_info_to_output_string(sfp_info_dict, sfp_firmware_info_dict)
+                output += sfp_info_output
+
+                if dump_dom:
+                    sfp_type = sfp_info_dict['type']
+                    dom_info_dict = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_DOM_SENSOR|{}'.format(first_subport)) or {}
+                    dom_info_dict.update(state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_DOM_THRESHOLD|{}'.format(first_subport)) or {})
+                    dom_output = self.convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict)
+                    output += dom_output
+        else:
+            if is_rj45_port(interface_name):
+                output = 'SFP EEPROM is not applicable for RJ45 port\n'
+            else:
+                output = "SFP EEPROM Not detected\n"
+
+        return output
+
+    def convert_vdm_fields_to_legacy_fields(self, state_db, interface_name, dict_to_be_updated, vdm_to_legacy_field_map, vdm_field_type):
+        """
+        Converts VDM fields from the database into legacy field names
+        and updates the provided dictionary with the converted values.
+
+        This function ensures backward compatibility by mapping VDM fields to their corresponding
+        legacy field names based on the specified field type ('FLAG' or 'THRESHOLD').
+
+        Args:
+            state_db: The database connection object used to retrieve VDM data.
+            interface_name (str): The name of the interface for which VDM data is being retrieved.
+            dict_to_be_updated (dict): The dictionary to be updated with the converted legacy field names and values.
+            vdm_to_legacy_field_map (dict): A mapping of VDM field names to their corresponding legacy field name prefixes.
+            vdm_field_type (str): Specifies the type of VDM fields to process. It can be either 'FLAG' or 'THRESHOLD'.
+        """
+        if dict_to_be_updated is None:
+            return
+        if vdm_field_type not in ['FLAG', 'THRESHOLD']:
+            return
+
+        # Retrieve VDM data from the database
+        vdm_halarm_db_dict = state_db.get_all(state_db.STATE_DB, f'TRANSCEIVER_VDM_HALARM_{vdm_field_type}|{interface_name}') or {}
+        vdm_lalarm_db_dict = state_db.get_all(state_db.STATE_DB, f'TRANSCEIVER_VDM_LALARM_{vdm_field_type}|{interface_name}') or {}
+        vdm_hwarning_db_dict = state_db.get_all(state_db.STATE_DB, f'TRANSCEIVER_VDM_HWARN_{vdm_field_type}|{interface_name}') or {}
+        vdm_lwarning_db_dict = state_db.get_all(state_db.STATE_DB, f'TRANSCEIVER_VDM_LWARN_{vdm_field_type}|{interface_name}') or {}
+
+        # Define threshold types and their corresponding dictionaries
+        VDM_THRESHOLD_TYPES = {
+            'highalarm': vdm_halarm_db_dict,
+            'lowalarm': vdm_lalarm_db_dict,
+            'highwarning': vdm_hwarning_db_dict,
+            'lowwarning': vdm_lwarning_db_dict
+        }
+
+        # Process each VDM field and update the dictionary
+        for vdm_field, legacy_field_prefix in vdm_to_legacy_field_map.items():
+            for threshold_type, vdm_db_dict in VDM_THRESHOLD_TYPES.items():
+                if vdm_field in vdm_db_dict:
+                    if vdm_field_type == 'FLAG':
+                        legacy_field_name = f"{legacy_field_prefix}{threshold_type}_flag"
+                    else:
+                        legacy_field_name = f"{legacy_field_prefix}{threshold_type}"
+                    dict_to_be_updated[legacy_field_name] = vdm_db_dict[vdm_field]
+
+    # Convert sfp status info in DB to cli output string
+    def convert_interface_sfp_status_to_cli_output_string(self, state_db, interface_name):
+        first_subport = platform_sfputil_helper.get_first_subport(interface_name)
+        if first_subport is None:
+            click.echo("Error: Unable to get first subport for {} while converting SFP status".format(interface_name))
+            output = QSFP_STATUS_NOT_APPLICABLE_STR + '\n'
+            return output
+
+        sfp_status_dict = state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_STATUS|{}'.format(first_subport))
+        if sfp_status_dict:
+            # Additional handling to ensure that the CLI output remains the same
+            # after restructuring the diagnostic data in the state DB
+            sfp_status_dict.update(state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_STATUS_SW|{}'.format(interface_name)) or {})
+            sfp_status_dict.update(state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_STATUS_FLAG|{}'.format(first_subport)) or {})
+            sfp_status_dict.update(state_db.get_all(state_db.STATE_DB, 'TRANSCEIVER_DOM_FLAG|{}'.format(first_subport)) or {})
+        if sfp_status_dict and len(sfp_status_dict) > 2:
+            # common section
+            output = '\n' + self.convert_sfp_status_to_output_string(sfp_status_dict, QSFP_STATUS_MAP)
+            # CMIS specific section
+            if 'module_state' in sfp_status_dict:
+                self.convert_vdm_fields_to_legacy_fields(state_db, first_subport, sfp_status_dict, CMIS_VDM_TO_LEGACY_STATUS_MAP, 'FLAG')
+                output += self.convert_sfp_status_to_output_string(sfp_status_dict, CMIS_STATUS_MAP)
+            # C-CMIS specific section
+            if 'tuning_in_progress' in sfp_status_dict:
+                self.convert_vdm_fields_to_legacy_fields(state_db, first_subport, sfp_status_dict, CCMIS_VDM_TO_LEGACY_STATUS_MAP, 'FLAG')
+                output += self.convert_sfp_status_to_output_string(sfp_status_dict, CCMIS_STATUS_MAP)
+        else:
+            output = QSFP_STATUS_NOT_APPLICABLE_STR + '\n'
+        return output
+
+    def convert_pm_prefix_to_threshold_prefix(self, pm_prefix):
+        if pm_prefix == 'uncorr_frames':
+            return 'postfecber'
+        elif pm_prefix == 'cd':
+            return 'cdshort'
+        else:
+            return pm_prefix.replace('_', '')
+
+    def beautify_pm_field(self, prefix, field):
+        if field is None:
+            return 'N/A'
+        elif prefix in {'prefec_ber'}:
+            if isinstance(field, bool):
+                return str(field)
+            elif field != 0:
+                return "{:.2E}".format(field)
+            else:
+                return '0.0'
+        else:
+            return str(field)
+
+    def convert_interface_sfp_pm_to_cli_output_string(self, state_db, interface_name):
+        first_subport = platform_sfputil_helper.get_first_subport(interface_name)
+        if first_subport is None:
+            click.echo("Error: Unable to get first subport for {} while converting SFP PM".format(interface_name))
+            output = ZR_PM_NOT_APPLICABLE_STR + '\n'
+            return output
+
+        sfp_pm_dict = state_db.get_all(
+            self.db.STATE_DB, 'TRANSCEIVER_PM|{}'.format(first_subport))
+        sfp_threshold_dict = state_db.get_all(
+            state_db.STATE_DB, 'TRANSCEIVER_DOM_THRESHOLD|{}'.format(first_subport))
+        # Convert VDM THRESHOLD fields to legacy DOM THRESHOLD fields
+        self.convert_vdm_fields_to_legacy_fields(state_db, first_subport, sfp_threshold_dict, CCMIS_VDM_THRESHOLD_TO_LEGACY_DOM_THRESHOLD_MAP, 'THRESHOLD')
+        table = []
+        indent_num = 4
+        indent = ' ' * indent_num
+        if sfp_pm_dict:
+            output = '\n' + indent
+            for param_name, (unit, prefix) in ZR_PM_INFO_MAP.items():
+                row = [param_name, unit]
+                values = []
+                for suffix in ZR_PM_VALUE_KEY_SUFFIXS:
+                    key = prefix + '_' + suffix
+                    values.append(
+                        float(sfp_pm_dict[key]) if key in sfp_pm_dict else None)
+
+                thresholds = []
+                for suffix in ZR_PM_THRESHOLD_KEY_SUFFIXS:
+                    key = self.convert_pm_prefix_to_threshold_prefix(
+                        prefix) + suffix
+                    if key in sfp_threshold_dict and sfp_threshold_dict[key] != 'N/A':
+                        thresholds.append(float(sfp_threshold_dict[key]))
+                    else:
+                        thresholds.append(None)
+
+                tca_high, tca_low = None, None
+                if values[2] is not None and thresholds[0] is not None:
+                    # TCA-High: max > high_alarm
+                    tca_high = values[2] > thresholds[0]
+                if values[0] is not None and thresholds[2] is not None:
+                    # TCA-low: min < low_alarm
+                    tca_low = values[0] < thresholds[2]
+
+                for field in values + thresholds[:2] + [tca_high] + thresholds[2:] + [tca_low]:
+                    row.append(self.beautify_pm_field(prefix, field))
+                table.append(row)
+
+            output += tabulate(table,
+                               ZR_PM_HEADER, disable_numparse=True).replace('\n', '\n' + indent)
+            output += '\n'
+        else:
+            output = ZR_PM_NOT_APPLICABLE_STR + '\n'
+        return output
+
+    def is_valid_physical_port(self, port_name):
+        role = self.db.get(self.db.APPL_DB, 'PORT_TABLE:{}'.format(port_name), multi_asic.PORT_ROLE)
+        return multi_asic.is_front_panel_port(port_name, role)
+
+    @multi_asic_util.run_on_multi_asic
+    def get_eeprom(self):
+        if self.intf_name is not None:
+            self.intf_eeprom[self.intf_name] = self.convert_interface_sfp_info_to_cli_output_string(
+                self.db, self.intf_name, self.dump_dom)
+        else:
+            port_table_keys = self.db.keys(self.db.APPL_DB, "PORT_TABLE:*")
+            for i in port_table_keys:
+                interface = re.split(':', i, maxsplit=1)[-1].strip()
+                if interface and self.is_valid_physical_port(interface):
+                    self.intf_eeprom[interface] = self.convert_interface_sfp_info_to_cli_output_string(
+                        self.db, interface, self.dump_dom)
+
+    def convert_interface_sfp_presence_state_to_cli_output_string(self, state_db, interface_name):
+        sfp_info_dict = state_db.get_all(self.db.STATE_DB, 'TRANSCEIVER_INFO|{}'.format(interface_name))
+        if sfp_info_dict:
+            output = 'Present'
+        else:
+            output = 'Not present'
+        return output
+
+
+    @multi_asic_util.run_on_multi_asic
+    def get_presence(self):
+        port_table = []
+
+        if self.intf_name is not None:
+            presence_string = self.convert_interface_sfp_presence_state_to_cli_output_string(self.db, self.intf_name)
+            port_table.append((self.intf_name, presence_string))
+        else:
+            port_table_keys = self.db.keys(self.db.APPL_DB, "PORT_TABLE:*")
+            for i in port_table_keys:
+                key = re.split(':', i, maxsplit=1)[-1].strip()
+                if key and self.is_valid_physical_port(key):
+                    presence_string = self.convert_interface_sfp_presence_state_to_cli_output_string(self.db, key)
+                    port_table.append((key, presence_string))
+
+        self.table += port_table
+
+    @multi_asic_util.run_on_multi_asic
+    def get_pm(self):
+        if self.intf_name is not None:
+            self.intf_pm[self.intf_name] = self.convert_interface_sfp_pm_to_cli_output_string(
+                self.db, self.intf_name)
+        else:
+            port_table_keys = self.db.keys(self.db.APPL_DB, "PORT_TABLE:*")
+            for i in port_table_keys:
+                interface = re.split(':', i, maxsplit=1)[-1].strip()
+                if interface and self.is_valid_physical_port(interface):
+                    self.intf_pm[interface] = self.convert_interface_sfp_pm_to_cli_output_string(
+                        self.db, interface)
+
+    @multi_asic_util.run_on_multi_asic
+    def get_status(self):
+        if self.intf_name is not None:
+            self.intf_status[self.intf_name] = self.convert_interface_sfp_status_to_cli_output_string(
+                self.db, self.intf_name)
+        else:
+            port_table_keys = self.db.keys(self.db.APPL_DB, "PORT_TABLE:*")
+            for i in port_table_keys:
+                interface = re.split(':', i, maxsplit=1)[-1].strip()
+                if interface and self.is_valid_physical_port(interface):
+                    self.intf_status[interface] = self.convert_interface_sfp_status_to_cli_output_string(
+                        self.db, interface)
+
+    def display_eeprom(self):
+        click.echo("\n".join([f"{k}: {v}" for k, v in natsorted(self.intf_eeprom.items())]))
+
+    def display_presence(self):
+        header = ['Port', 'Presence']
+        sorted_port_table = natsorted(self.table)
+        click.echo(tabulate(sorted_port_table, header))
+
+    def display_pm(self):
+        click.echo(
+            "\n".join([f"{k}: {v}" for k, v in natsorted(self.intf_pm.items())]))
+
+    def display_status(self):
+        click.echo(
+            "\n".join([f"{k}: {v}" for k, v in natsorted(self.intf_status.items())]))
+# This is our main entrypoint - the main 'sfpshow' command
+
+
+@click.group()
+def cli():
+    """sfpshow - Command line utility for display SFP transceivers information"""
+    # Load platform-specific sfputil class
+    platform_sfputil_helper.load_platform_sfputil()
+
+    # Load port info
+    platform_sfputil_helper.platform_sfputil_read_porttab_mappings()
+
+
+# 'eeprom' subcommand
+
+
+@cli.command()
+@click.option('-p', '--port', metavar='<port_name>', help="Display SFP EEPROM data for port <port_name> only")
+@click.option('-d', '--dom', 'dump_dom', is_flag=True, help="Also display Digital Optical Monitoring (DOM) data")
+@click.option('-n', '--namespace', default=None, help="Display interfaces for specific namespace")
+def eeprom(port, dump_dom, namespace):
+    if port and multi_asic.is_multi_asic() and namespace is None:
+        try:
+            namespace = multi_asic.get_namespace_for_port(port)
+        except Exception:
+            display_invalid_intf_eeprom(port)
+            sys.exit(1)
+
+    sfp = SFPShow(port, namespace, dump_dom)
+    sfp.get_eeprom()
+    sfp.display_eeprom()
+
+# 'info' subcommand
+
+@cli.command()
+@click.option('-p', '--port', metavar='<port_name>', help="Display SFP EEPROM data for port <port_name> only")
+@click.option('-n', '--namespace', default=None, help="Display interfaces for specific namespace")
+def info(port, namespace):
+    if port and multi_asic.is_multi_asic() and namespace is None:
+        try:
+            namespace = multi_asic.get_namespace_for_port(port)
+        except Exception:
+            display_invalid_intf_eeprom(port)
+            sys.exit(1)
+
+    sfp = SFPShow(port, namespace)
+    sfp.get_eeprom()
+    sfp.display_eeprom()
+
+# 'presence' subcommand
+
+
+@cli.command()
+@click.option('-p', '--port', metavar='<port_name>', help="Display SFP presence for port <port_name> only")
+@click.option('-n', '--namespace', default=None, help="Display interfaces for specific namespace")
+def presence(port, namespace):
+    if port and multi_asic.is_multi_asic() and namespace is None:
+        try:
+            namespace = multi_asic.get_namespace_for_port(port)
+        except Exception:
+            display_invalid_intf_presence(port)
+            sys.exit(1)
+
+    sfp = SFPShow(port, namespace)
+    sfp.get_presence()
+    sfp.display_presence()
+
+# 'pm' subcommand
+
+
+@cli.command()
+@click.option('-p', '--port', metavar='<port_name>', help="Display SFP PM for port <port_name> only")
+@click.option('-n', '--namespace', default=None, help="Display interfaces for specific namespace")
+def pm(port, namespace):
+    if port and multi_asic.is_multi_asic() and namespace is None:
+        try:
+            namespace = multi_asic.get_namespace_for_port(port)
+        except Exception:
+            display_invalid_intf_pm(port)
+            sys.exit(1)
+
+    sfp = SFPShow(port, namespace)
+    sfp.get_pm()
+    sfp.display_pm()
+
+# 'pm' subcommand
+
+
+@cli.command()
+@click.option('-p', '--port', metavar='<port_name>', help="Display SFP status for port <port_name> only")
+@click.option('-n', '--namespace', default=None, help="Display interfaces for specific namespace")
+def status(port, namespace):
+    if port and multi_asic.is_multi_asic() and namespace is None:
+        try:
+            namespace = multi_asic.get_namespace_for_port(port)
+        except Exception:
+            display_invalid_intf_status(port)
+            sys.exit(1)
+
+    sfp = SFPShow(port, namespace)
+    sfp.get_status()
+    sfp.display_status()
+
+
+if __name__ == "__main__":
+    load_db_config()
+    cli()

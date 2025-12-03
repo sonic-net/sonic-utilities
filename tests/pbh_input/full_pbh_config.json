@@ -1,0 +1,81 @@
+{
+    "PBH_HASH_FIELD|inner_dst_ipv4": {
+        "hash_field": "INNER_DST_IPV4",
+        "ip_mask": "255.0.0.0",
+        "sequence_id": "3"
+    },
+    "PBH_HASH_FIELD|inner_dst_ipv6": {
+        "hash_field": "INNER_DST_IPV6",
+        "ip_mask": "ffff::",
+        "sequence_id": "4"
+    },
+    "PBH_HASH_FIELD|inner_ip_proto": {
+        "hash_field": "INNER_IP_PROTOCOL",
+        "sequence_id": "1"
+    },
+    "PBH_HASH_FIELD|inner_l4_dst_port": {
+        "hash_field": "INNER_L4_DST_PORT",
+        "sequence_id": "2"
+    },
+    "PBH_HASH_FIELD|inner_l4_src_port": {
+        "hash_field": "INNER_L4_SRC_PORT",
+        "sequence_id": "2"
+    },
+    "PBH_HASH_FIELD|inner_src_ipv4": {
+        "hash_field": "INNER_SRC_IPV4",
+        "ip_mask": "0.0.0.255",
+        "sequence_id": "3"
+    },
+    "PBH_HASH_FIELD|inner_src_ipv6": {
+        "hash_field": "INNER_SRC_IPV6",
+        "ip_mask": "::ffff",
+        "sequence_id": "4"
+    },
+    "PBH_HASH|inner_v4_hash": {
+        "hash_field_list@": "inner_ip_proto,inner_l4_dst_port,inner_l4_src_port,inner_dst_ipv4,inner_src_ipv4"
+    },
+    "PBH_HASH|inner_v6_hash": {
+        "hash_field_list@": "inner_ip_proto,inner_l4_dst_port,inner_l4_src_port,inner_dst_ipv6,inner_src_ipv6"
+    },
+    "PORT|Ethernet0": {
+        "NULL": "NULL"
+    },
+    "PORT|Ethernet4": {
+        "NULL": "NULL"
+    },
+    "PORTCHANNEL|PortChannel0001": {
+        "NULL": "NULL"
+    },
+    "PORTCHANNEL|PortChannel0002": {
+        "NULL": "NULL"
+    },
+    "PBH_TABLE|pbh_table1": {
+        "description": "NVGRE",
+        "interface_list@": "Ethernet0,Ethernet4"
+    },
+    "PBH_TABLE|pbh_table2": {
+        "description": "VxLAN",
+        "interface_list@": "PortChannel0001,PortChannel0002"
+    },
+    "PBH_TABLE|pbh_table3": {
+        "description": "NVGRE and VxLAN",
+        "interface_list@": "Ethernet0,Ethernet4,PortChannel0001,PortChannel0002"
+    },
+    "PBH_RULE|pbh_table1|nvgre": {
+        "priority": "1",
+        "gre_key": "0x2500/0xffffff00",
+        "inner_ether_type": "0x86dd",
+        "hash": "inner_v6_hash",
+        "packet_action": "SET_ECMP_HASH",
+        "flow_counter": "ENABLED"
+    },
+    "PBH_RULE|pbh_table2|vxlan": {
+        "priority": "2",
+        "ip_protocol": "0x11",
+        "inner_ether_type": "0x0800",
+        "l4_dst_port": "0x12b5",
+        "hash": "inner_v4_hash",
+        "packet_action": "SET_LAG_HASH",
+        "flow_counter": "ENABLED"
+    }
+}

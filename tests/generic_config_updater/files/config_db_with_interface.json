@@ -1,0 +1,30 @@
+{
+    "INTERFACE": {
+        "Ethernet8": {},
+        "Ethernet8|10.0.0.1/30": {
+            "family": "IPv4",
+            "scope": "global"
+        },
+        "Ethernet9": {}
+    },
+    "PORT": {
+        "Ethernet8": {
+            "admin_status": "up",
+            "alias": "eth8",
+            "description": "Ethernet8",
+            "fec": "rs",
+            "lanes": "65",
+            "mtu": "9000",
+            "speed": "25000"
+        },
+        "Ethernet9": {
+            "admin_status": "up",
+            "alias": "eth9",
+            "description": "Ethernet9",
+            "fec": "rs",
+            "lanes": "6",
+            "mtu": "9000",
+            "speed": "25000"
+        }
+    }
+}

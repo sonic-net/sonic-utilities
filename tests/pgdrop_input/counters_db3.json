@@ -1,0 +1,62 @@
+{
+    "COUNTERS_PORT_NAME_MAP": {
+        "Ethernet0": "oid:0x1000000000012",
+        "Ethernet4": "oid:0x1000000000013",
+        "Ethernet8": "oid:0x1000000000014"
+    },
+    "COUNTERS_PG_NAME_MAP": {
+        "Ethernet0:0": "oid:0x1a00000000034f",
+        "Ethernet0:1": "oid:0x1a000000000350",
+        "Ethernet0:2": "oid:0x1a000000000351",
+        "Ethernet0:3": "oid:0x1a000000000352",
+        "Ethernet0:4": "oid:0x1a000000000353",
+        "Ethernet0:5": "oid:0x1a000000000354",
+        "Ethernet0:6": "oid:0x1a000000000355",
+        "Ethernet0:7": "oid:0x1a000000000356",
+        "Ethernet4:0": "oid:0x1a000000000377",
+        "Ethernet4:1": "oid:0x1a000000000378",
+        "Ethernet4:2": "oid:0x1a000000000379",
+        "Ethernet4:3": "oid:0x1a00000000037a",
+        "Ethernet4:4": "oid:0x1a00000000037b",
+        "Ethernet4:5": "oid:0x1a00000000037c",
+        "Ethernet4:6": "oid:0x1a00000000037d",
+        "Ethernet4:7": "oid:0x1a00000000037e",
+        "Ethernet8:0": "oid:0x1a00000000039f",
+        "Ethernet8:1": "oid:0x1a0000000003a0",
+        "Ethernet8:2": "oid:0x1a0000000003a1",
+        "Ethernet8:3": "oid:0x1a0000000003a2",
+        "Ethernet8:4": "oid:0x1a0000000003a3",
+        "Ethernet8:5": "oid:0x1a0000000003a4",
+        "Ethernet8:6": "oid:0x1a0000000003a5",
+        "Ethernet8:7": "oid:0x1a0000000003a6"
+     },
+    "COUNTERS_PG_PORT_MAP": {
+    },
+
+    "COUNTERS_PG_INDEX_MAP": {
+        "oid:0x1a00000000034f": "0",
+        "oid:0x1a000000000350": "1",
+        "oid:0x1a000000000351": "2",
+        "oid:0x1a000000000352": "3",
+        "oid:0x1a000000000353": "4",
+        "oid:0x1a000000000354": "5",
+        "oid:0x1a000000000355": "6",
+        "oid:0x1a000000000356": "7",
+        "oid:0x1a000000000377": "0",
+        "oid:0x1a000000000378": "1",
+        "oid:0x1a000000000379": "2",
+        "oid:0x1a00000000037a": "3",
+        "oid:0x1a00000000037b": "4",
+        "oid:0x1a00000000037c": "5",
+        "oid:0x1a00000000037d": "6",
+        "oid:0x1a00000000037e": "7",
+        "oid:0x1a00000000039f": "0",
+        "oid:0x1a0000000003a0": "1",
+        "oid:0x1a0000000003a1": "2",
+        "oid:0x1a0000000003a2": "3",
+        "oid:0x1a0000000003a3": "4",
+        "oid:0x1a0000000003a4": "5",
+        "oid:0x1a0000000003a5": "6",
+        "oid:0x1a0000000003a6": "7"
+    }
+}

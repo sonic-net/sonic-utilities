@@ -1,0 +1,8 @@
+{
+    "MGMT_VRF_CONFIG|vrf_global": {
+        "mgmtVrfEnabled": "true"
+    },
+    "VRF|Vrf-Data": {
+        "NULL": "NULL"
+    }
+}

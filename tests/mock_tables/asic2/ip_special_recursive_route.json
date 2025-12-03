@@ -1,0 +1,35 @@
+{
+    "193.11.208.0/25": [
+        {
+            "destSelected": true,
+            "distance": 20,
+            "installed": true,
+            "internalFlags": 8,
+            "internalNextHopActiveNum": 0,
+            "internalNextHopNum": 0,
+            "internalStatus": 16,
+            "metric": 0,
+            "nexthops": [
+                {
+                    "active": true,
+                    "afi": "ipv4",
+                    "flags": 5,
+                    "ip": "10.0.0.9",
+                    "recursive": true
+                },
+                {
+                    "active": true,
+                    "afi": "ipv4",
+                    "flags": 5,
+                    "ip": "10.0.0.1",
+                    "recursive": true
+                }
+            ],
+            "prefix": "193.11.208.0/25",
+            "protocol": "bgp",
+            "selected": true,
+            "table": 254,
+            "uptime": "00:14:35"
+        }
+    ]
+}

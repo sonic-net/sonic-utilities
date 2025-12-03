@@ -1,0 +1,17 @@
+{
+	"COPP_TRAP|snmp_grp": {
+		"trap_ids": "snmp,bfd",
+        "trap_group": "queue4_group2"
+	},
+	"COPP_GROUP|queue2_group1":{
+	    "cbs": "2000",
+        "cir": "2000"
+	},
+	"COPP_TRAP|vrrpv6": {
+        "trap_ids": "vrrpv6",
+        "trap_group": "queue5_group2"
+    },
+    "COPP_TRAP|bgp":{
+        "trap_ids": "ospfv6,ospf"
+    }
+}

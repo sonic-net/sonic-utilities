@@ -1,0 +1,9 @@
+_sonic_clear_completion() {
+    COMPREPLY=( $( env COMP_WORDS="${COMP_WORDS[*]}" \
+                   COMP_CWORD=$COMP_CWORD \
+                   _SONIC_CLEAR_COMPLETE=complete sonic-clear ) )
+    return 0
+}
+
+complete -F _sonic_clear_completion -o default sonic-clear;
+complete -F _sonic_clear_completion clear;

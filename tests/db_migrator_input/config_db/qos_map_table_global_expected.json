@@ -1,0 +1,12 @@
+{
+    "VERSIONS|DATABASE": {
+        "VERSION": "version_2_0_1"
+    },
+    "DSCP_TO_TC_MAP|AZURE": {
+        "0": "0",
+        "1": "1"
+    },
+    "PORT_QOS_MAP|global": {
+        "dscp_to_tc_map": "AZURE"
+    }
+}

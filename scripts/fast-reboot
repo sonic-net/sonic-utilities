@@ -1,0 +1,998 @@
+#!/bin/bash -e
+
+# reboot DBus service, which uses this script, doesn't use a login shell
+REBOOT_USER="$(logname 2> /dev/null || whoami)"
+REBOOT_TIME=$(date)
+REBOOT_CAUSE_FILE="/host/reboot-cause/reboot-cause.txt"
+WARM_DIR=/host/warmboot
+REDIS_FILE=dump.rdb
+CONFIG_DB_FILE=/etc/sonic/config_db.json
+REBOOT_SCRIPT_NAME=$(basename $0)
+REBOOT_TYPE="${REBOOT_SCRIPT_NAME}"
+SHUTDOWN_ORDER_FILE="/etc/sonic/${REBOOT_TYPE}_order"
+VERBOSE=no
+FORCE=no
+IGNORE_ASIC=no
+IGNORE_DB_CHECK=no
+STRICT=no
+REBOOT_METHOD="/sbin/kexec -e"
+ASSISTANT_IP_LIST=""
+ASSISTANT_SCRIPT="/usr/local/bin/neighbor_advertiser"
+LAG_KEEPALIVE_SCRIPT="/usr/local/bin/lag_keepalive.py"
+WATCHDOG_UTIL="/usr/local/bin/watchdogutil"
+DEVPATH="/usr/share/sonic/device"
+PLATFORM=$(sonic-cfggen -H -v DEVICE_METADATA.localhost.platform)
+PLATFORM_PLUGIN="${REBOOT_TYPE}_plugin"
+LOG_SSD_HEALTH="/usr/local/bin/log_ssd_health"
+PLATFORM_FWUTIL_AU_REBOOT_HANDLE="platform_fw_au_reboot_handle"
+PLATFORM_REBOOT_PRE_CHECK="platform_reboot_pre_check"
+SSD_FW_UPDATE="ssd-fw-upgrade"
+SSD_FW_UPDATE_BOOT_OPTION=no
+TAG_LATEST=yes
+DETACH=no
+LOG_PATH="/var/log/${REBOOT_TYPE}.txt"
+UIMAGE_HDR_SIZE=64
+REQUIRE_TEAMD_RETRY_COUNT=no
+
+# Require 100M available on the hard drive for warm reboot temp files,
+# Size is in 1K blocks:
+MIN_HD_SPACE_NEEDED=100000
+
+EXIT_SUCCESS=0
+EXIT_FAILURE=1
+EXIT_NOT_SUPPORTED=2
+EXIT_FILE_SYSTEM_FULL=3
+EXIT_NEXT_IMAGE_NOT_EXISTS=4
+EXIT_ORCHAGENT_SHUTDOWN=10
+EXIT_SYNCD_SHUTDOWN=11
+EXIT_DB_INTEGRITY_FAILURE=15
+EXIT_NO_CONTROL_PLANE_ASSISTANT=20
+EXIT_SONIC_INSTALLER_VERIFY_REBOOT=21
+EXIT_PLATFORM_FW_AU_FAILURE=22
+EXIT_TEAMD_RETRY_COUNT_FAILURE=23
+EXIT_NO_MIRROR_SESSION_ACLS=24
+EXIT_PFC_STORM_DETECTED=25
+EXIT_LEFTOVER_CPA_TUNNEL=30
+
+function error()
+{
+    echo $@ >&2
+    logger -p user.err "Error seen during warm-reboot shutdown process: $@"
+}
+
+function debug()
+{
+    if [[ x"${VERBOSE}" == x"yes" ]]; then
+        echo $(date) $@
+    fi
+    logger "$@"
+}
+
+function showHelpAndExit()
+{
+    echo "Usage: ${REBOOT_SCRIPT_NAME} [options]"
+    echo "    -h,-? : get this help"
+    echo "    -v    : turn on verbose"
+    echo "    -f    : force execution - ignore Orchagent RESTARTCHECK failure"
+    echo "    -i    : force execution - ignore ASIC MD5-checksum-verification"
+    echo "    -d    : force execution - ignore database integrity check"
+    echo "    -r    : reboot with /sbin/reboot"
+    echo "    -k    : reboot with /sbin/kexec -e [default]"
+    echo "    -x    : execute script with -x flag"
+    echo "    -c    : specify control plane assistant IP list"
+    echo "    -s    : strict mode: do not proceed without:"
+    echo "            - control plane assistant IP list."
+    echo "    -t    : Don't tag the current kube images as latest"
+    echo "    -D    : detached mode - closing terminal will not cause stopping reboot"
+    echo "    -u    : include ssd-upgrader-part in boot options"
+    echo "    -n    : don't require peer devices to be running SONiC with retry count feature [default]"
+    echo "    -N    : require peer devices to be running SONiC with retry count feature"
+
+    exit "${EXIT_SUCCESS}"
+}
+
+function parseOptions()
+{
+    while getopts "vfidh?rkxc:sDunN" opt; do #TODO "t" is missing
+        case ${opt} in
+            h|\? )
+                showHelpAndExit
+                ;;
+            v )
+                VERBOSE=yes
+                ;;
+            f )
+                FORCE=yes
+                ;;
+            i )
+                IGNORE_ASIC=yes
+                ;;
+            d )
+                IGNORE_DB_CHECK=yes
+                ;;
+            r )
+                REBOOT_METHOD="/sbin/reboot"
+                ;;
+            k )
+                REBOOT_METHOD="/sbin/kexec -e"
+                ;;
+            x )
+                set -x
+                ;;
+            c )
+                ASSISTANT_IP_LIST=${OPTARG}
+                ;;
+            s )
+                STRICT=yes
+                ;;
+            t )
+                TAG_LATEST=no
+                ;;
+            D )
+                DETACH=yes
+                ;;
+            u )
+                SSD_FW_UPDATE_BOOT_OPTION=yes
+                ;;
+            n )
+                REQUIRE_TEAMD_RETRY_COUNT=no
+                ;;
+            N )
+                REQUIRE_TEAMD_RETRY_COUNT=yes
+                ;;
+        esac
+    done
+}
+
+function clear_boot()
+{
+    # common_clear
+    debug "${REBOOT_TYPE} failure ($?) cleanup ..."
+
+    /sbin/kexec -u -a || /bin/true
+
+    teardown_control_plane_assistant
+
+    #clear_warm_boot
+    result=$(timeout 10s config warm_restart disable; res=$?; if [[ $res == 124 ]]; then echo timeout; else echo "code ($res)"; fi) || /bin/true
+    debug "Cancel warm-reboot: ${result}"
+
+    TIMESTAMP=$(date +%Y%m%d-%H%M%S)
+    if [[ -f ${WARM_DIR}/${REDIS_FILE} ]]; then
+        mv -f ${WARM_DIR}/${REDIS_FILE} ${WARM_DIR}/${REDIS_FILE}.${TIMESTAMP} || /bin/true
+    fi
+
+    #clear_fast_boot
+    if [[ "$REBOOT_TYPE" = "fast-reboot" ]]; then
+        sonic-db-cli STATE_DB HSET "FAST_RESTART_ENABLE_TABLE|system" "enable" "false" &>/dev/null || /bin/true
+    fi
+}
+
+function init_warm_reboot_states()
+{
+    # If the current running instance was booted up with warm reboot. Then
+    # the current DB contents will likely mark warm reboot is done.
+    # Clear these states so that the next boot up image won't get confused.
+    if [[ "$REBOOT_TYPE" = "warm-reboot" || "$REBOOT_TYPE" = "fastfast-reboot" || "$REBOOT_TYPE" = "express-reboot" || "$REBOOT_TYPE" = "fast-reboot" ]]; then
+        sonic-db-cli STATE_DB eval "
+            for _, key in ipairs(redis.call('keys', 'WARM_RESTART_TABLE|*')) do
+                redis.call('hdel', key, 'state')
+            end
+        " 0 >/dev/null
+    fi
+}
+
+function initialize_pre_shutdown()
+{
+    debug "Initialize pre-shutdown ..."
+    TABLE="WARM_RESTART_TABLE|warm-shutdown"
+    RESTORE_COUNT=$(sonic-db-cli STATE_DB hget "${TABLE}" restore_count)
+    if [[ -z "$RESTORE_COUNT" ]]; then
+        sonic-db-cli STATE_DB hset "${TABLE}" "restore_count" "0" > /dev/null
+    fi
+    sonic-db-cli STATE_DB hset "${TABLE}" "state" "requesting" > /dev/null
+}
+
+function request_pre_shutdown()
+{
+    if [ -x ${DEVPATH}/${PLATFORM}/${PLATFORM_REBOOT_PRE_CHECK} ]; then
+        debug "Requesting platform reboot pre-check ..."
+    	${DEVPATH}/${PLATFORM}/${PLATFORM_REBOOT_PRE_CHECK} ${REBOOT_TYPE}
+    fi
+    if [[ "$REBOOT_TYPE" = "express-reboot" ]]; then
+        debug "Requesting express boot pre-shutdown ..."
+        STATE=$(timeout 5s docker exec syncd /usr/bin/syncd_request_shutdown --pxe &> /dev/null; if [[ $? == 124 ]]; then echo "timed out"; fi)
+    else
+        debug "Requesting pre-shutdown ..."
+        STATE=$(timeout 5s docker exec syncd /usr/bin/syncd_request_shutdown --pre &> /dev/null; if [[ $? == 124 ]]; then echo "timed out"; fi)
+    fi
+    if [[ x"${STATE}" == x"timed out" ]]; then
+        error "Failed to request pre-shutdown"
+    fi
+}
+
+function wait_for_pre_shutdown_complete_or_fail()
+{
+    debug "Waiting for pre-shutdown ..."
+    TABLE="WARM_RESTART_TABLE|warm-shutdown"
+    STATE="requesting"
+    declare -i waitcount
+    declare -i retrycount
+    retrycount=0
+    start_time=$SECONDS
+    elapsed_time=$(($SECONDS - $start_time))
+    # Wait up to 60 seconds for pre-shutdown to complete
+    while [[ ${elapsed_time} -lt 60 ]]; do
+        # timeout doesn't work with -i option of "docker exec". Therefore we have
+        # to invoke docker exec directly below.
+        STATE=$(timeout 5s sonic-db-cli STATE_DB hget "${TABLE}" state; if [[ $? == 124 ]]; then echo "timed out"; fi)
+
+        if [[ x"${STATE}" == x"timed out" ]]; then
+            retrycount+=1
+            debug "Timed out getting pre-shutdown state, retry count ${retrycount} ..."
+            if [[ retrycount -gt 2 ]]; then
+                break
+            fi
+        elif [[ x"${STATE}" != x"requesting" ]]; then
+            break
+        else
+            sleep 0.1
+        fi
+        elapsed_time=$(($SECONDS - $start_time))
+    done
+
+    if [[ x"${STATE}" != x"pre-shutdown-succeeded" ]]; then
+        debug "Syncd pre-shutdown failed, state: ${STATE} ..."
+    else
+        debug "Pre-shutdown succeeded, state: ${STATE} ..."
+    fi
+}
+
+function backup_database()
+{
+    debug "Backing up database ..."
+
+    if [[ "$REBOOT_TYPE" = "fastfast-reboot" || "$REBOOT_TYPE" = "express-reboot" || "$REBOOT_TYPE" = "fast-reboot" ]]; then
+        # Advanced reboot: dump state to host disk
+        sonic-db-cli ASIC_DB FLUSHDB > /dev/null
+        sonic-db-cli COUNTERS_DB FLUSHDB > /dev/null
+        sonic-db-cli FLEX_COUNTER_DB FLUSHDB > /dev/null
+    fi
+
+    if [[ "$REBOOT_TYPE" = "fast-reboot" ]]; then
+        # Flush RESTAP_DB in fast-reboot to avoid stale status
+        sonic-db-cli RESTAPI_DB FLUSHDB > /dev/null
+    fi
+
+    # Dump redis content to a file 'dump.rdb' in warmboot directory
+    mkdir -p $WARM_DIR
+    # Delete keys in stateDB except FDB_TABLE|*, MIRROR_SESSION_TABLE|*, WARM_RESTART_ENABLE_TABLE|*, FG_ROUTE_TABLE|*
+    sonic-db-cli STATE_DB eval "
+        for _, k in ipairs(redis.call('keys', '*')) do
+            if string.match(k, 'PORT_TABLE|Ethernet') then
+                for i, f in ipairs(redis.call('hgetall', k)) do
+                    if i % 2 == 1 then
+                        if not string.match(f, 'host_tx_ready') \
+                            and not string.match(f, 'NPU_SI_SETTINGS_SYNC_STATUS') \
+                            and not string.match(f, 'CMIS_REINIT_REQUIRED') then
+                            redis.call('hdel', k, f)
+                        end
+                    end
+                end
+            elseif not string.match(k, 'FDB_TABLE|') and not string.match(k, 'WARM_RESTART_TABLE|') \
+                                          and not string.match(k, 'MIRROR_SESSION_TABLE|') \
+                                          and not string.match(k, 'FG_ROUTE_TABLE|') \
+                                          and not string.match(k, 'WARM_RESTART_ENABLE_TABLE|') \
+                                          and not string.match(k, 'TRANSCEIVER_INFO|') \
+                                          and not string.match(k, 'VXLAN_TUNNEL_TABLE|') \
+                                          and not string.match(k, 'BUFFER_MAX_PARAM_TABLE|') \
+                                          and not string.match(k, 'STORAGE_INFO|') \
+                                          and not string.match(k, 'FAST_RESTART_ENABLE_TABLE|') then
+                redis.call('del', k)
+            end
+        end
+    " 0 > /dev/null
+
+    # move all db data into the instance where APPL_DB locates
+    target_db_inst=`centralize_database APPL_DB`
+
+    # Dump redis content to a file 'dump.rdb' in warmboot directory
+    docker cp database:/var/lib/$target_db_inst/$REDIS_FILE $WARM_DIR
+    STATE=$(timeout 5s docker exec database rm /var/lib/$target_db_inst/$REDIS_FILE; if [[ $? == 124 ]]; then echo "timed out"; fi)
+    if [[ x"${STATE}" == x"timed out" ]]; then
+        error "Timed out during attempting to remove Redis dump file from database container"
+    fi
+}
+
+function check_mirror_session_acls()
+{
+    debug "Checking if mirror session ACLs (arp, nd) programmed to ASIC successfully"
+    ACL_ARP="missing"
+    ACL_ND="missing"
+    start_time=${SECONDS}
+    elapsed_time=$((${SECONDS} - ${start_time}))
+    retry_count=0
+    while [[ ${elapsed_time} -lt 10 ]]; do
+	CHECK_ACL_ENTRIES=0
+        retry_count=$((retry_count + 1))
+        ACL_OUTPUT=$(sonic-db-cli ASIC_DB KEYS "*" | grep SAI_OBJECT_TYPE_ACL_ENTRY) || CHECK_ACL_ENTRIES=$?
+	if [[ ${CHECK_ACL_ENTRIES} -ne 0 ]]; then
+	    debug "Failed to retrieve SAI_OBJECT_TYPE_ACL_ENTRY from redis, retrying... (Attempt: ${retry_count})"
+	    sleep 0.1
+	    elapsed_time=$((${SECONDS} - ${start_time}))
+	    continue
+	fi
+	ACL_ENTRIES=( ${ACL_OUTPUT} )
+	if [[ ${#ACL_ENTRIES[@]} -eq 0 ]]; then
+	    debug "NO SAI_OBJECT_TYPE_ACL_ENTRY objects found, retrying... (Attempt: ${retry_count})"
+	    sleep 0.1
+	    elapsed_time=$((${SECONDS} - ${start_time}))
+	    continue
+	fi
+        for ACL_ENTRY in ${ACL_ENTRIES[@]}; do
+            ACL_PRIORITY=$(sonic-db-cli ASIC_DB HGET ${ACL_ENTRY} SAI_ACL_ENTRY_ATTR_PRIORITY)
+            if [[ ${ACL_PRIORITY} -eq 8888 ]]; then
+                ACL_ARP="found"
+            fi
+            if [[ ${ACL_PRIORITY} -eq 8887 ]]; then
+                ACL_ND="found"
+            fi
+        done
+        if [[ "${ACL_ARP}" = "found" && "${ACL_ND}" = "found" ]]; then
+            break
+        fi
+        sleep 0.1
+        elapsed_time=$((${SECONDS} - ${start_time}))
+    done
+    if [[ "${ACL_ARP}" != "found" || "${ACL_ND}" != "found" ]]; then
+        error "Failed to program mirror session ACLs on ASIC. ACLs: ARP=${ACL_ARP} ND=${ACL_ND}"
+        exit ${EXIT_NO_MIRROR_SESSION_ACLS}
+    fi
+    debug "Mirror session ACLs (arp, nd) programmed to ASIC successfully"
+}
+
+function abort_reboot_if_cpa_tunnel_is_leftover()
+{
+    # Devices containing any temporary CPA configuration at this point are indicative of cleanup issues
+    # from the previous warm-reboot. Warm-rebooting now is at risk of causing dataplane downtime.
+    # If any temporary CPA configuration is found, abort the warm-reboot.
+    # This preserves the current state of the system including the logs_before_reboot so that the leftover config
+    # can be debugged, cleaned up and the warm-reboot attempted again.
+
+    local has_leftover_tunnel=false
+    local has_leftover_tunnel_term_table_entry=false
+
+    local tunnel_list=$(redis-cli -n 1 KEYS "ASIC_STATE:SAI_OBJECT_TYPE_TUNNEL:*")
+    for key in $tunnel_list; do
+        if [[ $(redis-cli -n 1 HGET "$key" "SAI_TUNNEL_ATTR_TYPE") == "SAI_TUNNEL_TYPE_VXLAN" ]]; then
+            debug "Found leftover SAI_OBJECT_TYPE_TUNNEL with SAI_TUNNEL_ATTR_TYPE: SAI_TUNNEL_TYPE_VXLAN. (key = $key)"
+            has_leftover_tunnel=true
+        fi
+    done
+
+    local tunnel_term_table_entry_list=$(redis-cli -n 1 KEYS "ASIC_STATE:SAI_OBJECT_TYPE_TUNNEL_TERM_TABLE_ENTRY:*")
+    for key in $tunnel_term_table_entry_list; do
+        if [[ $(redis-cli -n 1 HGET "$key" "SAI_TUNNEL_TERM_TABLE_ENTRY_ATTR_TUNNEL_TYPE") == "SAI_TUNNEL_TYPE_VXLAN" ]]; then
+            debug "Found leftover SAI_OBJECT_TYPE_TUNNEL_TERM_TABLE_ENTRY with SAI_TUNNEL_TERM_TABLE_ENTRY_ATTR_TUNNEL_TYPE: SAI_TUNNEL_TYPE_VXLAN. (key = $key)"
+            has_leftover_tunnel_term_table_entry=true
+        fi
+    done
+
+    if [[ $has_leftover_tunnel == true || $has_leftover_tunnel_term_table_entry == true ]]; then
+        error "Device has leftover CPA tunnel configuration. Aborting warm-reboot."
+        exit "${EXIT_LEFTOVER_CPA_TUNNEL}"
+    fi
+}
+
+function setup_control_plane_assistant()
+{
+    abort_reboot_if_cpa_tunnel_is_leftover
+
+    if [[ -n "${ASSISTANT_IP_LIST}" && -x ${ASSISTANT_SCRIPT} ]]; then
+        # TH3 HW is not capable of VxLAN programming thus skipping TH3 platforms
+        if [[ "${HWSKU}" != "DellEMC-Z9332f-M-O16C64" && "${HWSKU}" != "DellEMC-Z9332f-M-O16C64-lab" ]]; then
+            debug "Setting up control plane assistant: ${ASSISTANT_IP_LIST} ..."
+            ${ASSISTANT_SCRIPT} -s ${ASSISTANT_IP_LIST} -m set
+	    check_mirror_session_acls
+        else
+            debug "${HWSKU} Not capable to support CPA. Skipping gracefully ..."
+        fi
+    elif [[ X"${STRICT}" == X"yes" ]]; then
+        debug "Strict mode: fail due to lack of control plane assistant ..."
+        exit ${EXIT_NO_CONTROL_PLANE_ASSISTANT}
+    fi
+}
+
+function teardown_control_plane_assistant()
+{
+    if [[ -n "${ASSISTANT_IP_LIST}" && -x ${ASSISTANT_SCRIPT} ]]; then
+        # TH3 HW is not capable of VxLAN programming thus skipping TH3 platforms
+        if [[ "${HWSKU}" != "DellEMC-Z9332f-M-O16C64" && "${HWSKU}" != "DellEMC-Z9332f-M-O16C64-lab" ]]; then
+            debug "Tearing down control plane assistant: ${ASSISTANT_IP_LIST} ..."
+            ${ASSISTANT_SCRIPT} -s ${ASSISTANT_IP_LIST} -m reset
+        fi
+    fi
+}
+
+function is_secureboot() {
+    grep -Eq 'secure_boot_enable=[1y]' /proc/cmdline
+}
+
+function setup_reboot_variables()
+{
+    # Kernel and initrd image
+    HWSKU=$(show platform summary --json | python -c 'import sys, json; print(json.load(sys.stdin)["hwsku"])')
+    CURR_SONIC_IMAGE=$(sonic-installer list | grep "Current: " | cut -d ' ' -f 2)
+    NEXT_SONIC_IMAGE=$(sonic-installer list | grep "Next: " | cut -d ' ' -f 2)
+    IMAGE_PATH="/host/image-${NEXT_SONIC_IMAGE#SONiC-OS-}"
+    if [ "$NEXT_SONIC_IMAGE" = "$CURR_SONIC_IMAGE" ]; then
+        if [[ -f ${DEVPATH}/${PLATFORM}/installer.conf ]]; then
+            . ${DEVPATH}/${PLATFORM}/installer.conf
+        fi
+    else
+        tmp_dir=`mktemp -d`
+        mount -o ro $IMAGE_PATH/fs.squashfs $tmp_dir
+        if [[ -f $tmp_dir/${DEVPATH}/${PLATFORM}/installer.conf ]]; then
+            . $tmp_dir/${DEVPATH}/${PLATFORM}/installer.conf
+        fi
+        umount $tmp_dir
+        rm -rf $tmp_dir
+    fi
+
+    if grep -q aboot_platform= /host/machine.conf; then
+        if is_secureboot; then
+            KERNEL_IMAGE=""
+            BOOT_OPTIONS="SONIC_BOOT_TYPE=${BOOT_TYPE_ARG} secure_boot_enable=1"
+        else
+            KERNEL_IMAGE="$(ls $IMAGE_PATH/boot/vmlinuz-*)"
+            BOOT_OPTIONS="$(cat "$IMAGE_PATH/kernel-cmdline" | tr '\n' ' ') ${KEXEC_LOAD_EXTRA_CMDLINE_LINUX} SONIC_BOOT_TYPE=${BOOT_TYPE_ARG}"
+        fi
+        INITRD=$(echo $KERNEL_IMAGE | sed 's/vmlinuz/initrd.img/g')
+    elif grep -q onie_platform= /host/machine.conf; then
+        if [ -r /host/grub/grub.cfg ]; then
+            KERNEL_OPTIONS=$(cat /host/grub/grub.cfg | sed "/$NEXT_SONIC_IMAGE'/,/}/"'!'"g" | grep linux)
+            KERNEL_IMAGE="/host$(echo $KERNEL_OPTIONS | cut -d ' ' -f 2)"
+            BOOT_OPTIONS="$(echo $KERNEL_OPTIONS | sed -e 's/\s*linux\s*/BOOT_IMAGE=/') ${KEXEC_LOAD_EXTRA_CMDLINE_LINUX} SONIC_BOOT_TYPE=${BOOT_TYPE_ARG}"
+            INITRD=$(echo $KERNEL_IMAGE | sed 's/vmlinuz/initrd.img/g')
+        # Handle architectures supporting Device Tree
+        elif [ -f /sys/firmware/devicetree/base/chosen/bootargs ]; then
+            KERNEL_IMAGE="$(ls $IMAGE_PATH/boot/vmlinuz-*)"
+            # Fetch next_boot variable
+            SONIC_IMAGE_NAME="$( fw_printenv boot_next | cut -d '=' -f 2- )"
+            SUFFIX=""
+            if [[ ${SONIC_IMAGE_NAME} == "run sonic_image_2" ]]; then
+                SUFFIX="_old"
+            fi
+            SONIC_BOOTARGS="$(fw_printenv sonic_bootargs${SUFFIX} | cut -d '=' -f 2- )"
+            if [[ ! -z "${SONIC_BOOTARGS}" ]]; then
+                LINUX_BOOTARGS="$( fw_printenv linuxargs${SUFFIX} | cut -d '=' -f 2- )"
+                BAUDRATE="$( fw_printenv baudrate | cut -d '=' -f 2- )"
+                BOOT_OPTIONS="$(echo $SONIC_BOOTARGS | sed -e "s/\${baudrate}/$BAUDRATE/g")"
+                BOOT_OPTIONS="$(echo $BOOT_OPTIONS | sed -e "s@\${linuxargs$SUFFIX}@$LINUX_BOOTARGS@g")"
+                BOOT_OPTIONS="$(echo $BOOT_OPTIONS | sed -e 's/.$//') ${KEXEC_LOAD_EXTRA_CMDLINE_LINUX} SONIC_BOOT_TYPE=${BOOT_TYPE_ARG}"
+            else
+                # Fetch bootargs from device tree of the current image
+                BOOT_OPTIONS="$(cat /sys/firmware/devicetree/base/chosen/bootargs | sed 's/.$//') ${KEXEC_LOAD_EXTRA_CMDLINE_LINUX} SONIC_BOOT_TYPE=${BOOT_TYPE_ARG}"
+            fi
+            INITRD=$(echo $KERNEL_IMAGE | sed 's/vmlinuz/initrd.img/g')
+
+            # If initrd is a U-Boot uImage, remove the uImage header
+            if file ${INITRD} | grep -q uImage; then
+                INITRD_RAW=$(echo $KERNEL_IMAGE | sed 's/vmlinuz/initrd-raw.img/g')
+                tail -c+$((${UIMAGE_HDR_SIZE}+1)) < ${INITRD} > ${INITRD_RAW}
+                INITRD=${INITRD_RAW}
+            fi
+        else
+            error "Unknown ONIE platform bootloader. ${REBOOT_TYPE} is not supported."
+            exit "${EXIT_NOT_SUPPORTED}"
+        fi
+    else
+        error "Unknown bootloader. ${REBOOT_TYPE} is not supported."
+        exit "${EXIT_NOT_SUPPORTED}"
+    fi
+    if [[ x"${SSD_FW_UPDATE_BOOT_OPTION}" == x"yes" ]]; then
+        local sonic_dev=$(blkid -L SONiC-OS)
+        local fstype=$(blkid -o value -s TYPE ${sonic_dev})
+        BOOT_OPTIONS="${BOOT_OPTIONS} ssd-upgrader-part=${sonic_dev},${fstype}"
+    fi
+
+    if [[ "$sonic_asic_type" == "mellanox" ]]; then
+        # Set governor to performance to speed up boot process.
+        # The governor is reset back to kernel default in warmboot-finalizer script.
+        BOOT_OPTIONS="${BOOT_OPTIONS} cpufreq.default_governor=performance"
+    fi
+}
+
+function check_docker_exec()
+{
+    containers="radv bgp lldp swss database teamd syncd"
+    for container in $containers; do
+        STATE=$(timeout 1s docker exec $container echo "success"; if [[ $? == 124 ]]; then echo "timed out"; fi)
+        if [[ x"${STATE}" == x"timed out" ]]; then
+            error "Docker exec on $container timedout"
+            exit "${EXIT_FAILURE}"
+        fi
+    done
+}
+
+function check_pfc_storm_active()
+{
+    debug "Checking for active PFC storms..."
+    
+    if pfcwd show stats --check-storm >/dev/null 2>&1; then
+        debug "No active PFC storms detected. Safe to proceed with warm-reboot..."
+    else
+        error "PFC storm detected. Aborting warm-reboot to prevent failure in recovery path..."
+        exit ${EXIT_PFC_STORM_DETECTED}
+    fi
+}
+
+function check_db_integrity()
+{
+    if [[ "$REBOOT_TYPE" = "warm-reboot" || "$REBOOT_TYPE" = "fastfast-reboot" || "$REBOOT_TYPE" = "express-reboot" || "$REBOOT_TYPE" = "fast-reboot" ]]; then
+        CHECK_DB_INTEGRITY=0
+        /usr/local/bin/check_db_integrity.py || CHECK_DB_INTEGRITY=$?
+        if [[ CHECK_DB_INTEGRITY -ne 0 ]]; then
+            if [[ x"${IGNORE_DB_CHECK}" == x"yes" ]]; then
+                debug "Ignoring Database integrity checks..."
+            else
+                error "Failed to validate DB's integrity. Exit code: ${CHECK_DB_INTEGRITY}. \
+                    Use '-d' option to force ignore this check."
+                exit ${EXIT_DB_INTEGRITY_FAILURE}
+            fi
+        fi
+    fi
+}
+
+function reboot_pre_check()
+{
+    check_pfc_storm_active
+    check_docker_exec
+    # Make sure that the file system is normal: read-write able
+    filename="/host/test-$(date +%Y%m%d-%H%M%S)"
+    if [[ ! -f ${filename} ]]; then
+        touch ${filename}
+    fi
+    rm ${filename}
+
+    check_db_integrity
+
+    # Make sure /host has enough space for warm reboot temp files
+    avail=$(df -k /host | tail -1 | awk '{ print $4 }')
+    if [[ ${avail} -lt ${MIN_HD_SPACE_NEEDED} ]]; then
+        debug "/host has ${avail}K bytes available, not enough for warm reboot."
+        exit ${EXIT_FILE_SYSTEM_FULL}
+    fi
+
+    # Verify the next image by sonic-installer
+    INSTALLER_VERIFY_RC=0
+    sonic-installer verify-next-image > /dev/null || INSTALLER_VERIFY_RC=$?
+    if [[ INSTALLER_VERIFY_RC -ne 0 ]]; then
+        error "Failed to verify next image. Exit code: $INSTALLER_VERIFY_RC"
+        exit ${EXIT_SONIC_INSTALLER_VERIFY_REBOOT}
+    fi
+
+    # Make sure ASIC configuration has not changed between images
+    ASIC_CONFIG_CHECK_SCRIPT="/usr/local/bin/asic_config_check"
+    ASIC_CONFIG_CHECK_SUCCESS=0
+    if [[ "$REBOOT_TYPE" = "warm-reboot" || "$REBOOT_TYPE" = "fastfast-reboot" || "$REBOOT_TYPE" = "express-reboot" ]]; then
+        ASIC_CONFIG_CHECK_EXIT_CODE=0
+        ${ASIC_CONFIG_CHECK_SCRIPT} || ASIC_CONFIG_CHECK_EXIT_CODE=$?
+
+        if [[ "${ASIC_CONFIG_CHECK_EXIT_CODE}" != "${ASIC_CONFIG_CHECK_SUCCESS}" ]]; then
+            if [[ x"${IGNORE_ASIC}" == x"yes" ]]; then
+                debug "Ignoring ASIC config checksum failure..."
+            else
+                error "ASIC config may have changed: errno=${ASIC_CONFIG_CHECK_EXIT_CODE}"
+                exit "${EXIT_FAILURE}"
+            fi
+        fi
+    fi
+}
+
+function load_aboot_secureboot_kernel() {
+    local next_image="$IMAGE_PATH/sonic.swi"
+    echo "Loading next image from $next_image"
+    unzip -qp "$next_image" boot0 | \
+        swipath=$next_image kexec=true loadonly=true ENV_EXTRA_CMDLINE="$BOOT_OPTIONS" bash -
+}
+
+function invoke_kexec() {
+    /sbin/kexec -l "$KERNEL_IMAGE" --initrd="$INITRD" --append="$BOOT_OPTIONS" $@
+}
+
+function load_kernel() {
+    # Load kernel into the memory
+    invoke_kexec -a
+}
+
+function load_kernel_secure() {
+    # Load kernel into the memory secure
+    # -s flag is for enforcing the new load kernel(vmlinuz) to be signed and verify.
+    # not using -a flag, this flag can fallback to an old kexec load that do not support Secure Boot verification
+    invoke_kexec -s
+}
+
+function unload_kernel()
+{
+    # Unload the previously loaded kernel if any loaded
+    if [[ "$(cat /sys/kernel/kexec_loaded)" -eq 1 ]]; then
+        /sbin/kexec -u -a
+    fi
+}
+
+function save_counters_folder() {
+    if [[ "$REBOOT_TYPE" = "warm-reboot" ]]; then
+        debug "Saving counters folder before warmboot..."
+        counters_folder="/host/counters"
+        counters_cache="/tmp/cache"
+        if [[ ! -d $counters_folder ]]; then
+            mkdir $counters_folder
+        fi
+        if [[ -d $counters_cache ]]; then
+           cp -rf $counters_cache $counters_folder
+        fi
+    fi
+}
+
+function check_warm_restart_in_progress() {
+    sonic-db-cli STATE_DB keys "WARM_RESTART_ENABLE_TABLE|*" | while read key ; do
+        if [ -n "$key" ] && [[ x"$(sonic-db-cli STATE_DB hget $key enable)" == x"true" ]]; then
+            if [[ x"${FORCE}" == x"yes" ]]; then
+                debug "Ignoring warm restart flag for ${key#*|}"
+            else
+                echo "Warm restart flag for ${key#*|} is set. Please check if a warm restart for ${key#*|} is in progress."
+                exit "${EXIT_FAILURE}"
+            fi
+        fi
+    done
+}
+
+function check_conflict_boot_in_fw_update() {
+    # Make sure firmware auto update is not scheduled for a different reboot
+    FIRMWARE_AU_STATUS_DIR="/tmp/firmwareupdate"
+    FW_AU_TASK_FILE_REGEX="${FIRMWARE_AU_STATUS_DIR}/*_fw_au_task"
+    case "$REBOOT_TYPE" in
+        "fast-reboot")
+            FW_AU_TASK_FILE_EXP="${FIRMWARE_AU_STATUS_DIR}/fast_fw_au_task"
+            ;;
+        "warm-reboot")
+            FW_AU_TASK_FILE_EXP="${FIRMWARE_AU_STATUS_DIR}/warm_fw_au_task"
+            ;;
+        "express-reboot")
+            FW_AU_TASK_FILE_EXP="${FIRMWARE_AU_STATUS_DIR}/express_fw_au_task"
+            ;;
+    esac
+    FW_AU_TASK_FILE=$(compgen -G ${FW_AU_TASK_FILE_REGEX}) || true
+    if [[ -n "${FW_AU_TASK_FILE}" ]] && [[ ! -f "${FW_AU_TASK_FILE_EXP}" ]]; then
+        error "Firmware auto update scheduled for a different reboot: ${FW_AU_TASK_FILE}"
+        exit "${EXIT_FAILURE}"
+    fi
+}
+
+# main starts here
+parseOptions $@
+
+# Check root privileges
+if [[ "$EUID" -ne 0 ]]
+then
+    echo "This command must be run as root" >&2
+    exit "${EXIT_FAILURE}"
+fi
+
+debug "Starting $REBOOT_TYPE"
+
+# re-run the script in background mode with detaching from the terminal session
+if [[ x"${DETACH}" == x"yes" && x"${ALREADY_DETACHED}" == x"" ]]; then
+   echo "Detaching the process from the terminal session. Redirecting output to ${LOG_PATH}."
+   ALREADY_DETACHED=yes $0 "$@" &>$LOG_PATH & disown %%
+   exit $?
+fi
+
+sonic_asic_type=$(sonic-cfggen -y /etc/sonic/sonic_version.yml -v asic_type)
+if [[ "$REBOOT_TYPE" = "express-reboot" ]] && [[ "$sonic_asic_type" != "cisco-8000" ]]; then
+    echo "eXpress Boot is not supported"
+    exit "${EXIT_FAILURE}"
+fi
+
+check_conflict_boot_in_fw_update
+
+
+# Check reboot type supported
+BOOT_TYPE_ARG="cold"
+case "$REBOOT_TYPE" in
+    "fast-reboot")
+        check_warm_restart_in_progress
+        BOOT_TYPE_ARG=$REBOOT_TYPE
+        trap clear_boot EXIT HUP INT QUIT TERM KILL ABRT ALRM
+        sonic-db-cli STATE_DB HSET "FAST_RESTART_ENABLE_TABLE|system" "enable" "true" &>/dev/null
+        config warm_restart teamsyncd_timer 1
+        config warm_restart enable system
+        ;;
+    "warm-reboot")
+        check_warm_restart_in_progress
+        if [[ "$sonic_asic_type" == "mellanox" ]]; then
+            REBOOT_TYPE="fastfast-reboot"
+            BOOT_TYPE_ARG="fastfast"
+            # source mlnx-ffb.sh file with
+            # functions to check ISSU upgrade possibility
+            source mlnx-ffb.sh
+        else
+            BOOT_TYPE_ARG="warm"
+        fi
+        trap clear_boot EXIT HUP INT QUIT TERM KILL ABRT ALRM
+        config warm_restart enable system
+        ;;
+    "express-reboot")
+        check_warm_restart_in_progress
+        BOOT_TYPE_ARG="express"
+        trap clear_boot EXIT HUP INT QUIT TERM KILL ABRT ALRM
+        config warm_restart enable system
+        ;;
+    *)
+        error "Not supported reboot type: $REBOOT_TYPE"
+        exit "${EXIT_NOT_SUPPORTED}"
+        ;;
+esac
+
+save_counters_folder
+
+unload_kernel
+
+setup_reboot_variables
+
+reboot_pre_check
+
+if test -f /usr/local/bin/ctrmgr_tools.py
+then
+    if [[ x"${TAG_LATEST}" == x"yes" ]]; then
+        /usr/local/bin/ctrmgr_tools.py tag-all
+    fi
+fi
+
+# Install new FW for mellanox platforms before control plane goes down
+# So on boot switch will not spend time to upgrade FW increasing the CP downtime
+if [[ "$sonic_asic_type" == "mellanox" ]]; then
+    MLNX_EXIT_SUCCESS=0
+    MLNX_EXIT_FW_ERROR=100
+    MLNX_EXIT_FFB_FAILURE=101
+
+    MLNX_FW_UPGRADE_SCRIPT="/usr/bin/mlnx-fw-upgrade.sh"
+
+
+    if [[ "$REBOOT_TYPE" = "fastfast-reboot" ]]; then
+        check_ffb || {
+            error "Warm reboot is not supported"
+            exit "${MLNX_EXIT_FFB_FAILURE}"
+        }
+    fi
+
+    debug "Prepare MLNX ASIC to ${REBOOT_TYPE}: install new FW if required"
+
+    ${MLNX_FW_UPGRADE_SCRIPT} --upgrade
+    MLNX_EXIT_CODE="$?"
+    if [[ "${MLNX_EXIT_CODE}" != "${MLNX_EXIT_SUCCESS}" ]]; then
+        error "Failed to burn MLNX FW: errno=${MLNX_EXIT_CODE}"
+        exit "${MLNX_EXIT_FW_ERROR}"
+    fi
+fi
+
+if is_secureboot && grep -q aboot_machine= /host/machine.conf; then
+    load_aboot_secureboot_kernel
+else
+    # check if secure boot is enable in UEFI
+    CHECK_SECURE_UPGRADE_ENABLED=0
+    SECURE_UPGRADE_ENABLED=$(mokutil --sb-state 2>/dev/null | grep -c "enabled") || CHECK_SECURE_UPGRADE_ENABLED=$?
+    if [[ CHECK_SECURE_UPGRADE_ENABLED -ne 0 ]]; then
+        debug "Loading kernel without secure boot"
+        load_kernel
+    else
+        debug "Loading kernel with secure boot"
+        load_kernel_secure
+    fi
+fi
+
+init_warm_reboot_states
+
+# start sending LACPDUs to keep the LAGs refreshed
+# the process will die in 30s
+debug "Starting lag_keepalive to send LACPDUs ..."
+timeout --foreground 30 python3 ${LAG_KEEPALIVE_SCRIPT} --fork-into-background
+# give the lag_keepalive script a chance to send some LACPDUs
+sleep 5
+
+setup_control_plane_assistant
+
+TEAMD_INCREASE_RETRY_COUNT=0
+if [[ "${REBOOT_TYPE}" = "warm-reboot" || "${REBOOT_TYPE}" = "fastfast-reboot" || "$REBOOT_TYPE" = "express-reboot" ]]; then
+    TEAMD_RETRY_COUNT_PROBE_RC=0
+    /usr/local/bin/teamd_increase_retry_count.py --probe-only || TEAMD_RETRY_COUNT_PROBE_RC=$?
+    if [[ ${TEAMD_RETRY_COUNT_PROBE_RC} -ne 0 ]]; then
+        if [[ "${REQUIRE_TEAMD_RETRY_COUNT}" = "yes" ]]; then
+            error "Could not confirm that all neighbor devices are running SONiC with the retry count feature"
+            exit "${EXIT_TEAMD_RETRY_COUNT_FAILURE}"
+        else
+            debug "Warning: Retry count feature support unknown for one or more neighbor devices; assuming that it's not available"
+        fi
+    else
+        TEAMD_INCREASE_RETRY_COUNT=1
+    fi
+fi
+
+if [[ "$REBOOT_TYPE" = "warm-reboot" || "$REBOOT_TYPE" = "fastfast-reboot" || "$REBOOT_TYPE" = "express-reboot" || "$REBOOT_TYPE" = "fast-reboot" ]]; then
+    # Freeze orchagent for warm restart
+    # Ask orchagent_restart_check to try freeze 5 times with interval of 2 seconds,
+    # it is possible that the orchagent is in transient state and no opportunity to freeze
+    # Note: assume that 2*5 seconds is enough for orchagent to process the request and response to freeze or not
+    debug "Pausing orchagent ..."
+    docker exec -i swss /usr/bin/orchagent_restart_check -w 2000 -r 5 > /dev/null || RESTARTCHECK_RC=$?
+    if [[ RESTARTCHECK_RC -ne 0 ]]; then
+        error "RESTARTCHECK failed"
+        if [[ x"${FORCE}" == x"yes" ]]; then
+            debug "Ignoring orchagent pausing failure ..."
+        else
+            exit "${EXIT_ORCHAGENT_SHUTDOWN}"
+        fi
+    fi
+fi
+
+if [[ ( "${REBOOT_TYPE}" = "warm-reboot" || "${REBOOT_TYPE}" = "fastfast-reboot" || "${REBOOT_TYPE}" = "express-reboot" ) && "${TEAMD_INCREASE_RETRY_COUNT}" -eq 1 ]]; then
+    /usr/local/bin/teamd_increase_retry_count.py
+fi
+
+# We are fully committed to reboot from this point on because critical
+# service will go down and we cannot recover from it.
+set +e
+
+if [[ "$REBOOT_TYPE" = "fast-reboot" ]]; then
+    # Clear all routes except of default and connected routes for faster reconciliation time.
+    debug "Clearing routes..."
+    FILTER_ROUTES=0
+    python /usr/local/bin/fast-reboot-filter-routes.py || FILTER_ROUTES=$?
+    if [[ FILTER_ROUTES -ne 0 ]]; then
+        error "Preserving connected and default routes failed."
+    else
+        debug "Routes deleted from APP-DB, default and connected routes preserved."
+    fi
+fi
+
+# disable trap-handlers which were set before
+trap '' EXIT HUP INT QUIT TERM KILL ABRT ALRM
+
+if [ -x ${LOG_SSD_HEALTH} ]; then
+    debug "Collecting logs to check ssd health before ${REBOOT_TYPE}..."
+    ${LOG_SSD_HEALTH}
+fi
+
+# Stop any timers to prevent any containers starting in the middle of the process.
+TIMERS=$(systemctl list-dependencies --plain sonic.target | sed 1d | grep '.timer$')
+for timer in ${TIMERS}; do
+    debug "Stopping ${timer} ..."
+    systemctl stop ${timer}
+    debug "Stopped ${timer} ..."
+done
+
+if [[ "${REBOOT_TYPE}" == "express-reboot" ]]; then
+    SHUTDOWN_ORDER_FILE="/etc/sonic/warm-reboot_order"
+fi
+
+if [[ -f ${SHUTDOWN_ORDER_FILE} ]]; then
+    SERVICES_TO_STOP="$(cat ${SHUTDOWN_ORDER_FILE})"
+else
+    error "No shutdown sequence file found: ${SHUTDOWN_ORDER_FILE}"
+    exit "${EXIT_FAILURE}"
+fi
+
+for service in ${SERVICES_TO_STOP}; do
+    # Skip the masked services
+    state=$(systemctl is-enabled ${service})
+    if [[ $state == "masked" ]]; then
+        continue
+    fi
+
+    debug "Stopping ${service} ..."
+
+    # TODO: These exceptions for nat, sflow, lldp
+    # have to be coded in corresponding service scripts
+
+    if [[ "${service}" = "nat" ]]; then
+        /usr/local/bin/dump_nat_entries.py
+    fi
+
+    if [[ "${service}" = "nat" || "${service}" = "sflow" || "${service}" = "lldp" ]]; then
+        container kill "${service}"  &> /dev/null || debug "Docker ${service} is not running ($?) ..."
+    fi
+
+    if [[ "${service}" = "syncd" ]]; then
+        systemctl stop ${service} || debug "Ignore stopping ${service} service error $?"
+    else
+        systemctl stop ${service}
+    fi
+
+    debug "Stopped ${service}"
+
+    if [[ "${service}" = "swss" ]]; then
+        if [[ "$REBOOT_TYPE" = "warm-reboot" || "$REBOOT_TYPE" = "fastfast-reboot" || "$REBOOT_TYPE" = "express-reboot" ]]; then
+            # Pre-shutdown syncd
+            initialize_pre_shutdown
+
+            request_pre_shutdown
+
+            wait_for_pre_shutdown_complete_or_fail
+        fi
+
+    fi
+done
+
+backup_database
+
+# Stop the docker container engine. Otherwise we will have a broken docker storage
+systemctl stop docker.service || debug "Ignore stopping docker service error $?"
+
+# Stop kernel modules for Nephos platform
+if [[ "$sonic_asic_type" = 'nephos' ]];
+then
+  systemctl stop nps-modules-`uname -r`.service || debug "Ignore stopping nps service error $?"
+fi
+
+# Stop opennsl modules for Broadcom platform
+if [[ "$sonic_asic_type" = 'broadcom' ]];
+then
+  service_name=$(systemctl list-units --plain --no-pager --no-legend --type=service | grep opennsl | cut -f 1 -d' ')
+  systemctl stop "$service_name"
+fi
+
+if [[ "$sonic_asic_type" = 'clounix' ]];
+then
+  systemctl stop clx-modules.service || debug "Ignore stopping clounix service error $?"
+fi
+
+# Update the reboot cause file to reflect that user issued this script
+# Upon next boot, the contents of this file will be used to determine the
+# cause of the previous reboot
+echo "User issued '${REBOOT_SCRIPT_NAME}' command [User: ${REBOOT_USER}, Time: ${REBOOT_TIME}]" > ${REBOOT_CAUSE_FILE}
+
+# Wait until all buffers synced with disk
+sync
+sleep 1
+sync
+
+if [[ -x ${DEVPATH}/${PLATFORM}/${PLATFORM_FWUTIL_AU_REBOOT_HANDLE} ]]; then
+    debug "Handling task file for boot type ${REBOOT_TYPE}"
+    ${DEVPATH}/${PLATFORM}/${PLATFORM_FWUTIL_AU_REBOOT_HANDLE} ${REBOOT_TYPE} || PLATFORM_FW_AU_RC=$?
+    if [[ $PLATFORM_FW_AU_RC -ne 0 ]]; then
+        debug "ERROR: Failed to handle the platform firmware auto-update for ${REBOOT_TYPE} Exit code: $PLATFORM_FW_AU_RC"
+        exit "${EXIT_PLATFORM_FW_AU_FAILURE}"
+    fi
+fi
+
+# Enable Watchdog Timer
+if [ -x ${WATCHDOG_UTIL} ]; then
+    debug "Enabling Watchdog before ${REBOOT_TYPE}"
+    ${WATCHDOG_UTIL} arm
+fi
+
+# Run platform specific reboot plugin
+if [ -x ${DEVPATH}/${PLATFORM}/${PLATFORM_PLUGIN} ]; then
+    debug "Running ${PLATFORM} specific plugin..."
+    ${DEVPATH}/${PLATFORM}/${PLATFORM_PLUGIN}
+fi
+
+# Reboot: explicitly call Linux native reboot under sbin
+debug "Rebooting with ${REBOOT_METHOD} to ${NEXT_SONIC_IMAGE} ..."
+
+LOGS_ON_TMPFS=0
+df --output=fstype /var/log* | grep -c 'tmpfs' || LOGS_ON_TMPFS=$?
+if [[ LOGS_ON_TMPFS -eq 0 ]]; then
+    debug "Backup shutdown logs to /host/logs_before_reboot"
+    mkdir -p /host/logs_before_reboot || /bin/true
+    # maxdepth 2: find files within 2 nested directories (eg. /var/log/ and /var/log/swss/)
+    # mmin 30: find files written in past 30 minutes
+    find /var/log -maxdepth 2 -mmin -30 -type f | xargs -I {} cp {} /host/logs_before_reboot/ || /bin/true
+fi
+
+exec ${REBOOT_METHOD}
+
+# Should never reach here
+error "${REBOOT_TYPE} failed!"
+exit "${EXIT_FAILURE}"

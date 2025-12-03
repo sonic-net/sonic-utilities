@@ -1,0 +1,9 @@
+{
+    "CRM": {
+        "Config": {
+            "acl_counter_high_threshold": "90",
+            "acl_counter_low_threshold": "70",
+            "acl_counter_threshold_type": "free"
+        }
+    }
+}

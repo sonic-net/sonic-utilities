@@ -1,0 +1,15 @@
+{
+        "FDB_TABLE:Vlan10:04:3f:72:ce:80:8b":{
+                "port" : "Ethernet252",
+                "type" : "static"
+        },
+        "VXLAN_FDB_TABLE:Vlan10:04:3f:72:ce:80:8c":{
+                "port" : "Ethernet252",
+                "type" : "dynamic",
+                "end_point_ip" : "192.234.11.233"
+        },
+        "MCLAG_FDB_TABLE:Vlan10:04:3f:72:ce:80:8d":{
+                "port" : "Ethernet252",
+                "type" : "dynamic"
+        }
+}

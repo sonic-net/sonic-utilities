@@ -1,0 +1,49 @@
+{
+    "INTERFACE|Ethernet16": {
+            "NULL" : "NULL"
+    },
+    "INTERFACE|Ethernet16|3.3.3.1/24": {
+            "NULL" : "NULL"
+    },
+    "VLAN_INTERFACE|Vlan10": {
+            "NULL" : "NULL"
+    },
+    "VLAN_INTERFACE|Vlan10|2.2.2.1/24": {
+            "NULL" : "NULL"
+    },
+    "PORTCHANNEL_INTERFACE|PortChannel1111": {
+            "NULL": "NULL"
+    },
+    "PORTCHANNEL_INTERFACE|PortChannel1111|1.1.1.1/24": {
+            "NULL": "NULL"
+    },
+    "PORTCHANNEL_INTERFACE|PortChannel1234": {
+            "NULL": "NULL"
+    },
+    "PORTCHANNEL_INTERFACE|PortChannel1234|7.7.7.1/24": {
+            "NULL": "NULL"
+    },
+    "PORTCHANNEL_MEMBER|PortChannel1234|Ethernet120": {
+            "NULL": "NULL"
+    },
+    "PORTCHANNEL_MEMBER|PortChannel1234|Ethernet124": {
+            "NULL": "NULL"
+    },
+    "VLAN_SUB_INTERFACE|Eth0.1": {
+            "admin_status": "up",
+            "vlan": "10"
+    },
+    "VLAN_SUB_INTERFACE|Eth0.1|9.9.9.9/24": {
+            "NULL": "NULL"
+    },
+    "LOOPBACK_INTERFACE|Loopback0": {
+            "NULL": "NULL"
+    },
+    "LOOPBACK_INTERFACE|Loopback0|10.1.0.1/32": {
+            "NULL": "NULL"
+    },
+    "VLAN_SUB_INTERFACE|Eth4.1": {
+        "admin_status": "up",
+        "vlan": "100"
+    }
+}

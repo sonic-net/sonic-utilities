@@ -1,0 +1,514 @@
+import ast
+
+QSFP_DATA_MAP = {
+    'model': 'Vendor PN',
+    'vendor_oui': 'Vendor OUI',
+    'vendor_date': 'Vendor Date Code(YYYY-MM-DD Lot)',
+    'manufacturer': 'Vendor Name',
+    'vendor_rev': 'Vendor Rev',
+    'serial': 'Vendor SN',
+    'type': 'Identifier',
+    'ext_identifier': 'Extended Identifier',
+    'ext_rateselect_compliance': 'Extended RateSelect Compliance',
+    'cable_length': 'cable_length',
+    'cable_type': 'Length',
+    'nominal_bit_rate': 'Nominal Bit Rate(100Mbs)',
+    'specification_compliance': 'Specification compliance',
+    'encoding': 'Encoding',
+    'connector': 'Connector',
+    'application_advertisement': 'Application Advertisement'
+}
+
+QSFP_CMIS_DELTA_DATA_MAP = {
+    'host_lane_count': 'Host Lane Count',
+    'media_lane_count': 'Media Lane Count',
+    'active_apsel_hostlane1': 'Active application selected code assigned to host lane 1',
+    'active_apsel_hostlane2': 'Active application selected code assigned to host lane 2',
+    'active_apsel_hostlane3': 'Active application selected code assigned to host lane 3',
+    'active_apsel_hostlane4': 'Active application selected code assigned to host lane 4',
+    'active_apsel_hostlane5': 'Active application selected code assigned to host lane 5',
+    'active_apsel_hostlane6': 'Active application selected code assigned to host lane 6',
+    'active_apsel_hostlane7': 'Active application selected code assigned to host lane 7',
+    'active_apsel_hostlane8': 'Active application selected code assigned to host lane 8',
+    'media_interface_technology': 'Media Interface Technology',
+    'hardware_rev': 'Module Hardware Rev',
+    'cmis_rev': 'CMIS Rev',
+    'active_firmware': 'Active Firmware',
+    'inactive_firmware': 'Inactive Firmware',
+    'e1_active_firmware': 'E1 Active Firmware',
+    'e1_inactive_firmware': 'E1 Inactive Firmware',
+    'e1_server_firmware': 'E1 Server Firmware',
+    'e2_active_firmware': 'E2 Active Firmware',
+    'e2_inactive_firmware': 'E2 Inactive Firmware',
+    'e2_server_firmware': 'E2 Server Firmware'
+}
+
+C_CMIS_DELTA_DATA_MAP = {
+    'supported_max_tx_power': 'Supported Max TX Power',
+    'supported_min_tx_power': 'Supported Min TX Power',
+    'supported_max_laser_freq': 'Supported Max Laser Frequency',
+    'supported_min_laser_freq': 'Supported Min Laser Frequency',
+}
+
+CMIS_DATA_MAP = {**QSFP_DATA_MAP, **QSFP_CMIS_DELTA_DATA_MAP}
+C_CMIS_DATA_MAP = {**CMIS_DATA_MAP, **C_CMIS_DELTA_DATA_MAP}
+
+# Common fileds for all types:
+# For non-CMIS, only first 1 or 4 lanes are applicable.
+# For CMIS, all 8 lanes are applicable.
+QSFP_STATUS_MAP = {
+    'cmis_state': 'CMIS State (SW)',
+    'tx1fault': 'Tx fault flag on media lane 1',
+    'tx2fault': 'Tx fault flag on media lane 2',
+    'tx3fault': 'Tx fault flag on media lane 3',
+    'tx4fault': 'Tx fault flag on media lane 4',
+    'tx5fault': 'Tx fault flag on media lane 5',
+    'tx6fault': 'Tx fault flag on media lane 6',
+    'tx7fault': 'Tx fault flag on media lane 7',
+    'tx8fault': 'Tx fault flag on media lane 8',
+    'rx1los': 'Rx loss of signal flag on media lane 1',
+    'rx2los': 'Rx loss of signal flag on media lane 2',
+    'rx3los': 'Rx loss of signal flag on media lane 3',
+    'rx4los': 'Rx loss of signal flag on media lane 4',
+    'rx5los': 'Rx loss of signal flag on media lane 5',
+    'rx6los': 'Rx loss of signal flag on media lane 6',
+    'rx7los': 'Rx loss of signal flag on media lane 7',
+    'rx8los': 'Rx loss of signal flag on media lane 8',
+    'tx1disable': 'TX disable status on lane 1',
+    'tx2disable': 'TX disable status on lane 2',
+    'tx3disable': 'TX disable status on lane 3',
+    'tx4disable': 'TX disable status on lane 4',
+    'tx5disable': 'TX disable status on lane 5',
+    'tx6disable': 'TX disable status on lane 6',
+    'tx7disable': 'TX disable status on lane 7',
+    'tx8disable': 'TX disable status on lane 8',
+    'tx_disabled_channel': 'Disabled TX channels'
+}
+
+# CMIS specific fields (excluding C-CMIS specific):
+CMIS_STATUS_MAP = {
+    'module_state': 'Current module state',
+    'module_fault_cause': 'Reason of entering the module fault state',
+    'datapath_firmware_fault': 'Datapath firmware fault',
+    'module_firmware_fault': 'Module firmware fault',
+    'module_state_changed': 'Module state changed',
+    'DP1State': 'Data path state indicator on host lane 1',
+    'DP2State': 'Data path state indicator on host lane 2',
+    'DP3State': 'Data path state indicator on host lane 3',
+    'DP4State': 'Data path state indicator on host lane 4',
+    'DP5State': 'Data path state indicator on host lane 5',
+    'DP6State': 'Data path state indicator on host lane 6',
+    'DP7State': 'Data path state indicator on host lane 7',
+    'DP8State': 'Data path state indicator on host lane 8',
+    'tx1OutputStatus': 'Tx output status on media lane 1',
+    'tx2OutputStatus': 'Tx output status on media lane 2',
+    'tx3OutputStatus': 'Tx output status on media lane 3',
+    'tx4OutputStatus': 'Tx output status on media lane 4',
+    'tx5OutputStatus': 'Tx output status on media lane 5',
+    'tx6OutputStatus': 'Tx output status on media lane 6',
+    'tx7OutputStatus': 'Tx output status on media lane 7',
+    'tx8OutputStatus': 'Tx output status on media lane 8',
+    'rx1OutputStatusHostlane': 'Rx output status on host lane 1',
+    'rx2OutputStatusHostlane': 'Rx output status on host lane 2',
+    'rx3OutputStatusHostlane': 'Rx output status on host lane 3',
+    'rx4OutputStatusHostlane': 'Rx output status on host lane 4',
+    'rx5OutputStatusHostlane': 'Rx output status on host lane 5',
+    'rx6OutputStatusHostlane': 'Rx output status on host lane 6',
+    'rx7OutputStatusHostlane': 'Rx output status on host lane 7',
+    'rx8OutputStatusHostlane': 'Rx output status on host lane 8',
+    'tx1los_hostlane': 'Tx loss of signal flag on host lane 1',
+    'tx2los_hostlane': 'Tx loss of signal flag on host lane 2',
+    'tx3los_hostlane': 'Tx loss of signal flag on host lane 3',
+    'tx4los_hostlane': 'Tx loss of signal flag on host lane 4',
+    'tx5los_hostlane': 'Tx loss of signal flag on host lane 5',
+    'tx6los_hostlane': 'Tx loss of signal flag on host lane 6',
+    'tx7los_hostlane': 'Tx loss of signal flag on host lane 7',
+    'tx8los_hostlane': 'Tx loss of signal flag on host lane 8',
+    'tx1cdrlol_hostlane': 'Tx clock and data recovery loss of lock on host lane 1',
+    'tx2cdrlol_hostlane': 'Tx clock and data recovery loss of lock on host lane 2',
+    'tx3cdrlol_hostlane': 'Tx clock and data recovery loss of lock on host lane 3',
+    'tx4cdrlol_hostlane': 'Tx clock and data recovery loss of lock on host lane 4',
+    'tx5cdrlol_hostlane': 'Tx clock and data recovery loss of lock on host lane 5',
+    'tx6cdrlol_hostlane': 'Tx clock and data recovery loss of lock on host lane 6',
+    'tx7cdrlol_hostlane': 'Tx clock and data recovery loss of lock on host lane 7',
+    'tx8cdrlol_hostlane': 'Tx clock and data recovery loss of lock on host lane 8',
+    'rx1cdrlol': 'Rx clock and data recovery loss of lock on media lane 1',
+    'rx2cdrlol': 'Rx clock and data recovery loss of lock on media lane 2',
+    'rx3cdrlol': 'Rx clock and data recovery loss of lock on media lane 3',
+    'rx4cdrlol': 'Rx clock and data recovery loss of lock on media lane 4',
+    'rx5cdrlol': 'Rx clock and data recovery loss of lock on media lane 5',
+    'rx6cdrlol': 'Rx clock and data recovery loss of lock on media lane 6',
+    'rx7cdrlol': 'Rx clock and data recovery loss of lock on media lane 7',
+    'rx8cdrlol': 'Rx clock and data recovery loss of lock on media lane 8',
+    'config_state_hostlane1': 'Configuration status for the data path of host line 1',
+    'config_state_hostlane2': 'Configuration status for the data path of host line 2',
+    'config_state_hostlane3': 'Configuration status for the data path of host line 3',
+    'config_state_hostlane4': 'Configuration status for the data path of host line 4',
+    'config_state_hostlane5': 'Configuration status for the data path of host line 5',
+    'config_state_hostlane6': 'Configuration status for the data path of host line 6',
+    'config_state_hostlane7': 'Configuration status for the data path of host line 7',
+    'config_state_hostlane8': 'Configuration status for the data path of host line 8',
+    'dpinit_pending_hostlane1': 'Data path configuration updated on host lane 1',
+    'dpinit_pending_hostlane2': 'Data path configuration updated on host lane 2',
+    'dpinit_pending_hostlane3': 'Data path configuration updated on host lane 3',
+    'dpinit_pending_hostlane4': 'Data path configuration updated on host lane 4',
+    'dpinit_pending_hostlane5': 'Data path configuration updated on host lane 5',
+    'dpinit_pending_hostlane6': 'Data path configuration updated on host lane 6',
+    'dpinit_pending_hostlane7': 'Data path configuration updated on host lane 7',
+    'dpinit_pending_hostlane8': 'Data path configuration updated on host lane 8',
+    'tempHAlarm': 'Temperature high alarm flag',
+    'tempHWarn': 'Temperature high warning flag',
+    'tempLWarn': 'Temperature low warning flag',
+    'tempLAlarm': 'Temperature low alarm flag',
+    'vccHAlarm': 'Vcc high alarm flag',
+    'vccHWarn': 'Vcc high warning flag',
+    'vccLWarn': 'Vcc low warning flag',
+    'vccLAlarm': 'Vcc low alarm flag',
+    'tx1powerHAlarm': 'Tx power high alarm flag on lane 1',
+    'tx2powerHAlarm': 'Tx power high alarm flag on lane 2',
+    'tx3powerHAlarm': 'Tx power high alarm flag on lane 3',
+    'tx4powerHAlarm': 'Tx power high alarm flag on lane 4',
+    'tx5powerHAlarm': 'Tx power high alarm flag on lane 5',
+    'tx6powerHAlarm': 'Tx power high alarm flag on lane 6',
+    'tx7powerHAlarm': 'Tx power high alarm flag on lane 7',
+    'tx8powerHAlarm': 'Tx power high alarm flag on lane 8',
+    'tx1powerHWarn': 'Tx power high warning flag on lane 1',
+    'tx2powerHWarn': 'Tx power high warning flag on lane 2',
+    'tx3powerHWarn': 'Tx power high warning flag on lane 3',
+    'tx4powerHWarn': 'Tx power high warning flag on lane 4',
+    'tx5powerHWarn': 'Tx power high warning flag on lane 5',
+    'tx6powerHWarn': 'Tx power high warning flag on lane 6',
+    'tx7powerHWarn': 'Tx power high warning flag on lane 7',
+    'tx8powerHWarn': 'Tx power high warning flag on lane 8',
+    'tx1powerLWarn': 'Tx power low warning flag on lane 1',
+    'tx2powerLWarn': 'Tx power low warning flag on lane 2',
+    'tx3powerLWarn': 'Tx power low warning flag on lane 3',
+    'tx4powerLWarn': 'Tx power low warning flag on lane 4',
+    'tx5powerLWarn': 'Tx power low warning flag on lane 5',
+    'tx6powerLWarn': 'Tx power low warning flag on lane 6',
+    'tx7powerLWarn': 'Tx power low warning flag on lane 7',
+    'tx8powerLWarn': 'Tx power low warning flag on lane 8',
+    'tx1powerLAlarm': 'Tx power low alarm flag on lane 1',
+    'tx2powerLAlarm': 'Tx power low alarm flag on lane 2',
+    'tx3powerLAlarm': 'Tx power low alarm flag on lane 3',
+    'tx4powerLAlarm': 'Tx power low alarm flag on lane 4',
+    'tx5powerLAlarm': 'Tx power low alarm flag on lane 5',
+    'tx6powerLAlarm': 'Tx power low alarm flag on lane 6',
+    'tx7powerLAlarm': 'Tx power low alarm flag on lane 7',
+    'tx8powerLAlarm': 'Tx power low alarm flag on lane 8',
+    'rx1powerHAlarm': 'Rx power high alarm flag on lane 1',
+    'rx2powerHAlarm': 'Rx power high alarm flag on lane 2',
+    'rx3powerHAlarm': 'Rx power high alarm flag on lane 3',
+    'rx4powerHAlarm': 'Rx power high alarm flag on lane 4',
+    'rx5powerHAlarm': 'Rx power high alarm flag on lane 5',
+    'rx6powerHAlarm': 'Rx power high alarm flag on lane 6',
+    'rx7powerHAlarm': 'Rx power high alarm flag on lane 7',
+    'rx8powerHAlarm': 'Rx power high alarm flag on lane 8',
+    'rx1powerHWarn': 'Rx power high warning flag on lane 1',
+    'rx2powerHWarn': 'Rx power high warning flag on lane 2',
+    'rx3powerHWarn': 'Rx power high warning flag on lane 3',
+    'rx4powerHWarn': 'Rx power high warning flag on lane 4',
+    'rx5powerHWarn': 'Rx power high warning flag on lane 5',
+    'rx6powerHWarn': 'Rx power high warning flag on lane 6',
+    'rx7powerHWarn': 'Rx power high warning flag on lane 7',
+    'rx8powerHWarn': 'Rx power high warning flag on lane 8',
+    'rx1powerLWarn': 'Rx power low warning flag on lane 1',
+    'rx2powerLWarn': 'Rx power low warning flag on lane 2',
+    'rx3powerLWarn': 'Rx power low warning flag on lane 3',
+    'rx4powerLWarn': 'Rx power low warning flag on lane 4',
+    'rx5powerLWarn': 'Rx power low warning flag on lane 5',
+    'rx6powerLWarn': 'Rx power low warning flag on lane 6',
+    'rx7powerLWarn': 'Rx power low warning flag on lane 7',
+    'rx8powerLWarn': 'Rx power low warning flag on lane 8',
+    'rx1powerLAlarm': 'Rx power low alarm flag on lane 1',
+    'rx2powerLAlarm': 'Rx power low alarm flag on lane 2',
+    'rx3powerLAlarm': 'Rx power low alarm flag on lane 3',
+    'rx4powerLAlarm': 'Rx power low alarm flag on lane 4',
+    'rx5powerLAlarm': 'Rx power low alarm flag on lane 5',
+    'rx6powerLAlarm': 'Rx power low alarm flag on lane 6',
+    'rx7powerLAlarm': 'Rx power low alarm flag on lane 7',
+    'rx8powerLAlarm': 'Rx power low alarm flag on lane 8',
+    'tx1biasHAlarm': 'Tx bias high alarm flag on lane 1',
+    'tx2biasHAlarm': 'Tx bias high alarm flag on lane 2',
+    'tx3biasHAlarm': 'Tx bias high alarm flag on lane 3',
+    'tx4biasHAlarm': 'Tx bias high alarm flag on lane 4',
+    'tx5biasHAlarm': 'Tx bias high alarm flag on lane 5',
+    'tx6biasHAlarm': 'Tx bias high alarm flag on lane 6',
+    'tx7biasHAlarm': 'Tx bias high alarm flag on lane 7',
+    'tx8biasHAlarm': 'Tx bias high alarm flag on lane 8',
+    'tx1biasHWarn': 'Tx bias high warning flag on lane 1',
+    'tx2biasHWarn': 'Tx bias high warning flag on lane 2',
+    'tx3biasHWarn': 'Tx bias high warning flag on lane 3',
+    'tx4biasHWarn': 'Tx bias high warning flag on lane 4',
+    'tx5biasHWarn': 'Tx bias high warning flag on lane 5',
+    'tx6biasHWarn': 'Tx bias high warning flag on lane 6',
+    'tx7biasHWarn': 'Tx bias high warning flag on lane 7',
+    'tx8biasHWarn': 'Tx bias high warning flag on lane 8',
+    'tx1biasLWarn': 'Tx bias low warning flag on lane 1',
+    'tx2biasLWarn': 'Tx bias low warning flag on lane 2',
+    'tx3biasLWarn': 'Tx bias low warning flag on lane 3',
+    'tx4biasLWarn': 'Tx bias low warning flag on lane 4',
+    'tx5biasLWarn': 'Tx bias low warning flag on lane 5',
+    'tx6biasLWarn': 'Tx bias low warning flag on lane 6',
+    'tx7biasLWarn': 'Tx bias low warning flag on lane 7',
+    'tx8biasLWarn': 'Tx bias low warning flag on lane 8',
+    'tx1biasLAlarm': 'Tx bias low alarm flag on lane 1',
+    'tx2biasLAlarm': 'Tx bias low alarm flag on lane 2',
+    'tx3biasLAlarm': 'Tx bias low alarm flag on lane 3',
+    'tx4biasLAlarm': 'Tx bias low alarm flag on lane 4',
+    'tx5biasLAlarm': 'Tx bias low alarm flag on lane 5',
+    'tx6biasLAlarm': 'Tx bias low alarm flag on lane 6',
+    'tx7biasLAlarm': 'Tx bias low alarm flag on lane 7',
+    'tx8biasLAlarm': 'Tx bias low alarm flag on lane 8',
+    'lasertempHAlarm': 'Laser temperature high alarm flag',
+    'lasertempHWarn': 'Laser temperature high warning flag',
+    'lasertempLWarn': 'Laser temperature low warning flag',
+    'lasertempLAlarm': 'Laser temperature low alarm flag',
+    'prefecberhighalarm_flag': 'Prefec ber high alarm flag',
+    'prefecberhighwarning_flag': 'Prefec ber high warning flag',
+    'prefecberlowwarning_flag': 'Prefec ber low warning flag',
+    'prefecberlowalarm_flag': 'Prefec ber low alarm flag',
+    'postfecberhighalarm_flag': 'Postfec ber high alarm flag',
+    'postfecberhighwarning_flag': 'Postfec ber high warning flag',
+    'postfecberlowwarning_flag': 'Postfec ber low warning flag',
+    'postfecberlowalarm_flag': 'Postfec ber low alarm flag'
+}
+
+CMIS_VDM_TO_LEGACY_STATUS_MAP = {
+    'prefec_ber_avg_media_input1': 'prefecber',
+    'errored_frames_avg_media_input1': 'postfecber',
+}
+
+# C-CMIS specific fields:
+CCMIS_STATUS_MAP = {
+    'tuning_in_progress': 'Tuning in progress status',
+    'wavelength_unlock_status': 'Laser unlocked status',
+    'target_output_power_oor': 'Target output power out of range flag',
+    'fine_tuning_oor': 'Fine tuning out of range flag',
+    'tuning_not_accepted': 'Tuning not accepted flag',
+    'invalid_channel_num': 'Invalid channel number flag',
+    'tuning_complete': 'Tuning complete flag',
+    'biasxihighalarm_flag': 'Bias xi high alarm flag',
+    'biasxihighwarning_flag': 'Bias xi high warning flag',
+    'biasxilowwarning_flag': 'Bias xi low warning flag',
+    'biasxilowalarm_flag': 'Bias xi low alarm flag',
+    'biasxqhighalarm_flag': 'Bias xq high alarm flag',
+    'biasxqhighwarning_flag': 'Bias xq high warning flag',
+    'biasxqlowwarning_flag': 'Bias xq low warning flag',
+    'biasxqlowalarm_flag': 'Bias xq low alarm flag',
+    'biasxphighalarm_flag': 'Bias xp high alarm flag',
+    'biasxphighwarning_flag': 'Bias xp high warning flag',
+    'biasxplowwarning_flag': 'Bias xp low warning flag',
+    'biasxplowalarm_flag': 'Bias xp low alarm flag',
+    'biasyihighalarm_flag': 'Bias yi high alarm flag',
+    'biasyihighwarning_flag': 'Bias yi high warning flag',
+    'biasyilowwarning_flag': 'Bias yi low warning flag',
+    'biasyilowalarm_flag': 'Bias yi low alarm flag',
+    'biasyqhighalarm_flag': 'Bias yq high alarm flag',
+    'biasyqhighwarning_flag': 'Bias yq high warning flag',
+    'biasyqlowwarning_flag': 'Bias yq low warning flag',
+    'biasyqlowalarm_flag': 'Bias yq low alarm flag',
+    'biasyphighalarm_flag': 'Bias yp high alarm flag',
+    'biasyphighwarning_flag': 'Bias yp high warning flag',
+    'biasyplowwarning_flag': 'Bias yp low warning flag',
+    'biasyplowalarm_flag': 'Bias yp low alarm flag',
+    'cdshorthighalarm_flag': 'CD short high alarm flag',
+    'cdshorthighwarning_flag': 'CD short high warning flag',
+    'cdshortlowwarning_flag': 'CD short low warning flag',
+    'cdshortlowalarm_flag': 'CD short low alarm flag',
+    'cdlonghighalarm_flag': 'CD long high alarm flag',
+    'cdlonghighwarning_flag': 'CD long high warning flag',
+    'cdlonglowwarning_flag': 'CD long low warning flag',
+    'cdlonglowalarm_flag': 'CD long low alarm flag',
+    'dgdhighalarm_flag': 'DGD high alarm flag',
+    'dgdhighwarning_flag': 'DGD high warning flag',
+    'dgdlowwarning_flag': 'DGD low warning flag',
+    'dgdlowalarm_flag': 'DGD low alarm flag',
+    'sopmdhighalarm_flag': 'SOPMD high alarm flag',
+    'sopmdhighwarning_flag': 'SOPMD high warning flag',
+    'sopmdlowwarning_flag': 'SOPMD low warning flag',
+    'sopmdlowalarm_flag': 'SOPMD low alarm flag',
+    'pdlhighalarm_flag': 'PDL high alarm flag',
+    'pdlhighwarning_flag': 'PDL high warning flag',
+    'pdllowwarning_flag': 'PDL low warning flag',
+    'pdllowalarm_flag': 'PDL low alarm flag',
+    'osnrhighalarm_flag': 'OSNR high alarm flag',
+    'osnrhighwarning_flag': 'OSNR high warning flag',
+    'osnrlowwarning_flag': 'OSNR low warning flag',
+    'osnrlowalarm_flag': 'OSNR low alarm flag',
+    'esnrhighalarm_flag': 'ESNR high alarm flag',
+    'esnrhighwarning_flag': 'ESNR high warning flag',
+    'esnrlowwarning_flag': 'ESNR low warning flag',
+    'esnrlowalarm_flag': 'ESNR low alarm flag',
+    'cfohighalarm_flag': 'CFO high alarm flag',
+    'cfohighwarning_flag': 'CFO high warning flag',
+    'cfolowwarning_flag': 'CFO low warning flag',
+    'cfolowalarm_flag': 'CFO low alarm flag',
+    'txcurrpowerhighalarm_flag': 'Txcurrpower high alarm flag',
+    'txcurrpowerhighwarning_flag': 'Txcurrpower high warning flag',
+    'txcurrpowerlowwarning_flag': 'Txcurrpower low warning flag',
+    'txcurrpowerlowalarm_flag': 'Txcurrpower low alarm flag',
+    'rxtotpowerhighalarm_flag': 'Rxtotpower high alarm flag',
+    'rxtotpowerhighwarning_flag': 'Rxtotpower high warning flag',
+    'rxtotpowerlowwarning_flag': 'Rxtotpower low warning flag',
+    'rxtotpowerlowalarm_flag': 'Rxtotpower low alarm flag',
+    'rxsigpowerhighalarm_flag': 'Rxsigpower high alarm flag',
+    'rxsigpowerhighwarning_flag': 'Rxsigpower high warning flag',
+    'rxsigpowerlowwarning_flag': 'Rxsigpower low warning flag',
+    'rxsigpowerlowalarm_flag': 'Rxsigpower low alarm flag'
+}
+
+CCMIS_VDM_TO_LEGACY_STATUS_MAP = {
+    'biasxi1': 'biasxi',
+    'biasxq1': 'biasxq',
+    'biasxp1': 'biasxp',
+    'biasyi1': 'biasyi',
+    'biasyq1': 'biasyq',
+    'biasyp1': 'biasyp',
+    'cdshort1': 'cdshort',
+    'cdlong1': 'cdlong',
+    'dgd1': 'dgd',
+    'sopmd1': 'sopmd',
+    'pdl1': 'pdl',
+    'osnr1': 'osnr',
+    'esnr1': 'esnr',
+    'cfo1': 'cfo',
+    'txcurrpower1': 'txcurrpower',
+    'rxtotpower1': 'rxtotpower',
+    'rxsigpower1': 'rxsigpower'
+}
+
+CCMIS_VDM_THRESHOLD_TO_LEGACY_DOM_THRESHOLD_MAP = {
+    'rxtotpower1': 'rxtotpower',
+    'rxsigpower1': 'rxsigpower',
+    'cdshort1': 'cdshort',
+    'pdl1': 'pdl',
+    'osnr1': 'osnr',
+    'esnr1': 'esnr',
+    'cfo1': 'cfo',
+    'dgd1': 'dgd',
+    'sopmd1': 'sopmd',
+    'soproc1': 'soproc',
+    'prefec_ber_avg_media_input1': 'prefecber',
+    'errored_frames_avg_media_input1': 'postfecber',
+    'evm1': 'evm'
+}
+
+def covert_application_advertisement_to_output_string(indent, sfp_info_dict):
+    key = 'application_advertisement'
+    field_name = '{}{}: '.format(indent, QSFP_DATA_MAP[key])
+    output = field_name
+    try:
+        app_adv_str = sfp_info_dict[key]
+        app_adv_dict = ast.literal_eval(app_adv_str)
+        if not app_adv_dict:
+            output += 'N/A\n'
+        else:
+            lines = []
+            for item in app_adv_dict.values():
+                host_interface_id = item.get('host_electrical_interface_id')
+                if not host_interface_id:
+                    continue
+                elements = []
+                elements.append(host_interface_id)
+                host_assign_options = item.get('host_lane_assignment_options')
+                host_assign_options = hex(host_assign_options) if host_assign_options else 'Unknown'
+                elements.append(f'Host Assign ({host_assign_options})')
+                elements.append(item.get('module_media_interface_id', 'Unknown'))
+                media_assign_options = item.get('media_lane_assignment_options')
+                media_assign_options = hex(media_assign_options) if media_assign_options else 'Unknown'
+                elements.append(f'Media Assign ({media_assign_options})')
+                lines.append(' - '.join(elements))
+            sep = '\n' + ' ' * len(field_name)
+            output += sep.join(lines)
+            output += '\n'
+    except Exception:
+        output += '{}\n'.format(app_adv_str)
+    return output
+
+
+def is_transceiver_cmis(sfp_info_dict):
+    """
+    Check if the transceiver is CMIS compliant.
+    If the sfp_info_dict is None, return False.
+    If 'cmis_rev' is present in the dictionary, return True.
+    Otherwise, return False.
+    """
+    if sfp_info_dict is None:
+        return False
+    return 'cmis_rev' in sfp_info_dict
+
+
+def is_transceiver_c_cmis(sfp_info_dict):
+    """
+    Check if the transceiver is C-CMIS compliant.
+    If the sfp_info_dict is None, return False.
+    If 'supported_max_tx_power' is present in the dictionary, return True.
+    Otherwise, return False.
+    """
+    if sfp_info_dict is None:
+        return False
+    return 'supported_max_tx_power' in sfp_info_dict
+
+
+def get_data_map_sort_key(sfp_info_dict, data_map=None):
+    """
+    Create a sorting key function for SFP info keys based on the transceiver type.
+
+    This function returns a key function that can be used with sorted() to order
+    SFP info dictionary keys. Known keys (those present in the appropriate data map)
+    are given priority 0 and sorted by their display name, while unknown keys are
+    given priority 1 and sorted alphabetically by their original key name.
+
+    Args:
+        sfp_info_dict (dict): The SFP info dictionary to determine transceiver type
+        data_map (dict, optional): Custom data map to use. If not provided, will determine
+                                   automatically based on transceiver type.
+
+    Returns:
+        function: A key function that can be used with sorted()
+
+    Example:
+        sorted_keys = sorted(sfp_info_dict.keys(), key=get_data_map_sort_key(sfp_info_dict))
+        # Or with custom data map:
+        sorted_keys = sorted(sfp_info_dict.keys(), key=get_data_map_sort_key(sfp_info_dict, CUSTOM_DATA_MAP))
+    """
+    if data_map is None:
+        data_map = get_transceiver_data_map(sfp_info_dict)
+
+    def get_sort_key(key):
+        """
+        Sort key function that prioritizes known fields over unknown ones.
+        Known fields are sorted by their display names, unknown fields by their key names.
+        """
+        if key in data_map:
+            return (0, data_map[key])  # Priority 0 for known keys, use data_map value
+        else:
+            return (1, key)  # Priority 1 for unknown keys, use key name
+
+    return get_sort_key
+
+
+def get_transceiver_data_map(sfp_info_dict):
+    """
+    Get the appropriate data map based on the transceiver type.
+
+    Args:
+        sfp_info_dict (dict): The SFP info dictionary to determine transceiver type
+
+    Returns:
+        dict: The appropriate data map (C_CMIS_DATA_MAP, CMIS_DATA_MAP, or QSFP_DATA_MAP)
+              Returns QSFP_DATA_MAP as default if sfp_info_dict is None or invalid
+    """
+    if sfp_info_dict is None or not isinstance(sfp_info_dict, dict):
+        return QSFP_DATA_MAP  # Default fallback
+
+    is_sfp_cmis = is_transceiver_cmis(sfp_info_dict)
+    is_sfp_c_cmis = is_transceiver_c_cmis(sfp_info_dict)
+
+    if is_sfp_c_cmis:
+        return C_CMIS_DATA_MAP
+    elif is_sfp_cmis:
+        return CMIS_DATA_MAP
+    else:
+        return QSFP_DATA_MAP

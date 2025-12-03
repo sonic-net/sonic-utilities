@@ -1,0 +1,58 @@
+{
+    "INTF_TABLE:Ethernet16":{
+        "NULL": "NULL",
+        "mac_addr": "00:00:00:00:00:00"
+    },
+    "INTF_TABLE:Ethernet16:3.3.3.1/24": {
+        "family": "IPv4",
+        "scope": "global"
+    },
+    "INTF_TABLE:PortChannel1111": {
+        "NULL": "NULL",
+        "mac_addr": "00:00:00:00:00:00"
+    },
+    "INTF_TABLE:PortChannel1111:1.1.1.1/24": {
+        "family": "IPv4",
+        "scope": "global"
+    },
+    "INTF_TABLE:Vlan10": {
+        "NULL": "NULL",
+        "mac_addr": "00:00:00:00:00:00"
+    },
+    "INTF_TABLE:Vlan10:2.2.2.1/24": {
+        "family": "IPv4",
+        "scope": "global"
+    },
+    "INTF_TABLE:Eth0.1": {
+        "admin_status": "up",
+        "mac_addr": "00:00:00:00:00:00",
+        "mtu": "9100",
+        "vlan": "10"
+    },
+    "INTF_TABLE:Eth0.1:9.9.9.9/24": {
+        "family": "IPv4",
+        "scope": "global"
+    },
+    "INTF_TABLE:PortChannel1234": {   
+        "NULL": "NULL",
+        "mac_addr": "00:00:00:00:00:00"
+    },
+    "INTF_TABLE:PortChannel1234:7.7.7.1/24": {
+        "family": "IPv4",
+        "scope": "global"
+    },
+    "INTF_TABLE:Loopback0": {
+        "NULL": "NULL",
+        "mac_addr": "00:00:00:00:00:00"
+    },
+    "INTF_TABLE:Loopback0:10.1.0.1/32": {
+        "family": "IPv4",
+        "scope": "global"
+    },
+    "INTF_TABLE:Eth4.1": {
+        "admin_status": "up",
+        "mac_addr": "00:00:00:00:00:00",
+        "mtu": "9100",
+        "vlan": "100"
+    }
+}

@@ -1,0 +1,47 @@
+{
+    "INTERFACE|Ethernet16": {
+        "NULL": "NULL"
+    },
+    "INTERFACE|Ethernet16|192.168.10.1/24": {
+        "NULL": "NULL"
+    },
+    "INTERFACE|Ethernet2": {
+        "NULL": "NULL"
+    },
+    "INTERFACE|Ethernet2|192.168.0.1/24": {
+        "NULL": "NULL"
+    },
+    "INTERFACE|Ethernet4": {
+        "NULL": "NULL"
+    },
+    "INTERFACE|Ethernet4|192.168.4.1/24": {
+        "NULL": "NULL"
+    },
+    "INTERFACE|Ethernet4|192.168.100.1/24": {
+        "NULL": "NULL"
+    },
+    "INTERFACE|Ethernet8": {
+        "NULL": "NULL"
+    },
+    "INTERFACE|Ethernet8|192.168.3.1/24": {
+        "NULL": "NULL"
+    },
+    "PORTCHANNEL_INTERFACE|PortChannel2": {
+        "NULL": "NULL"
+    },
+    "PORTCHANNEL_INTERFACE|PortChannel2|10.0.0.56/31": {
+        "NULL": "NULL"
+    },
+    "VLAN_INTERFACE|Vlan2": {
+        "proxy_arp": "enabled"
+    },
+    "VLAN_INTERFACE|Vlan2|192.168.1.1/21": {
+        "NULL": "NULL"
+    },
+    "VLAN_SUB_INTERFACE|Ethernet16.16": {
+        "admin_status": "up"
+    },
+    "VLAN_SUB_INTERFACE|Ethernet16.16|16.1.1.1/16": {
+        "NULL": "NULL"
+    }
+}

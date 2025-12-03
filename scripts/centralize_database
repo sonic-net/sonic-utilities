@@ -1,0 +1,62 @@
+#!/usr/bin/python
+from __future__ import print_function
+import sys
+from swsscommon.swsscommon import SonicDBConfig
+import redis
+import argparse
+
+def centralize_to_target_db(target_dbname):
+    target_dbport = SonicDBConfig.getDbPort(target_dbname)
+    target_dbhost = SonicDBConfig.getDbHostname(target_dbname)
+
+    dblists = SonicDBConfig.getDbList()
+    for dbname in dblists:
+        dbport = SonicDBConfig.getDbPort(dbname)
+        dbhost = SonicDBConfig.getDbHostname(dbname)
+        # if the db is on the same instance, no need to move
+        if dbport == target_dbport and dbhost == target_dbhost:
+            continue
+
+        dbsocket = SonicDBConfig.getDbSock(dbname)
+        dbid = SonicDBConfig.getDbId(dbname)
+
+        r = redis.Redis(host=dbhost, unix_socket_path=dbsocket, db=dbid)
+
+        script = """
+            local cursor = 0;
+            repeat
+                local  dat = redis.call('SCAN', cursor, 'COUNT', 7000);
+                     cursor = dat[1];
+                redis.call('MIGRATE', KEYS[1], KEYS[2], '', KEYS[3], 5000, 'COPY', 'REPLACE', 'KEYS', unpack(dat[2]));
+            until cursor == '0';
+        """
+        r.eval(script, 3, target_dbhost, target_dbport, dbid)
+
+    #SAVE rdb file
+    r = redis.Redis(host=target_dbhost, port=target_dbport)
+    r.save()
+
+def main():
+    parser = argparse.ArgumentParser(description='centralize all db data into one db instances',
+                                     formatter_class=argparse.RawTextHelpFormatter,
+                                     epilog=
+"""
+Example : centralize_database APPL_DB
+""")
+    parser.add_argument('target_db', type=str, help='move all db data into the instance where target db locates')
+    args = parser.parse_args()
+
+    if args.target_db:
+        try:
+            centralize_to_target_db(args.target_db)
+            print(SonicDBConfig.getDbInst(args.target_db))
+        except Exception as ex:
+            template = "An exception of type {0} occurred. Arguments:\n{1!r}"
+            message = template.format(type(ex).__name__, ex.args)
+            print(message, file=sys.stderr)
+            sys.exit(1)
+    else:
+        parser.print_help()
+
+if __name__ == "__main__":
+    main()

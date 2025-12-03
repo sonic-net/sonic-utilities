@@ -1,0 +1,9 @@
+{
+    "STATIC_ROUTE|20.0.0.0/24":{
+        "blackhole":"false",
+        "distance":"0",
+        "ifname":",",
+        "nexthop":"1.1.1.2",
+        "nexthop-vrf":","
+    }
+}

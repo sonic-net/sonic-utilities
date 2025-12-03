@@ -1,0 +1,17 @@
+{
+    "ACL_RULE": {
+        "SSH_ONLY|RULE1": {
+            "L4_SRC_PORT":"65174-6530"
+        }
+    },
+    "ACL_TABLE": {
+        "SSH_ONLY": {
+            "policy_desc": "SSH_ONLY",
+            "type": "CTRLPLANE",
+            "stage": "ingress",
+            "services": [
+                "SSH"
+            ]
+        }
+    }
+}

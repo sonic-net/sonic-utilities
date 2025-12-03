@@ -1,0 +1,16 @@
+{
+    "DEVICE_METADATA": {
+        "localhost": {
+            "default_bgp_status": "up",
+            "default_pfcwd_status": "disable",
+            "bgp_asn": "65100",
+            "deployment_id": "1",
+            "docker_routing_config_mode": "separated",
+            "hostname": "vlab-01",
+            "hwsku": "Force10-S6000",
+            "type": "ToRRouter",
+            "platform": "x86_64-kvm_x86_64-r0",
+            "mac": "52:54:00:99:7e:85"
+        }
+    }
+}

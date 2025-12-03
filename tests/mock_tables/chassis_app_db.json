@@ -1,0 +1,54 @@
+{
+    "SYSTEM_LAG_MEMBER_TABLE|Linecard2|Asic1|PortChannel0002:Linecard2|Asic1|Ethernet16": {
+        "NULL": "NULL"
+    }, 
+    "SYSTEM_LAG_MEMBER_TABLE|Linecard2|Asic1|PortChannel0002:Linecard2|Asic1|Ethernet17": {
+        "NULL": "NULL"
+    }, 
+    "SYSTEM_LAG_MEMBER_TABLE|Linecard4|Asic2|PortChannel0001:Linecard4|Asic2|Ethernet29": {
+        "NULL": "NULL"
+    }, 
+    "SYSTEM_LAG_MEMBER_TABLE|Linecard4|Asic2|PortChannel0001:Linecard4|Asic2|Ethernet30": {
+        "NULL": "NULL"
+    }, 
+    "SYSTEM_LAG_TABLE|Linecard2|Asic1|PortChannel0002": {
+        "lag_id": "1", 
+        "switch_id": "8"
+    }, 
+    "SYSTEM_LAG_TABLE|Linecard4|Asic2|PortChannel0001": {
+        "lag_id": "2", 
+        "switch_id": "22"
+    },
+    "SYSTEM_NEIGH|Linecard2|Asic0|Ethernet-IB0|3.3.3.4": {
+        "encap_index": "1074790404", 
+        "neigh": "24:21:24:05:81:f7"
+    }, 
+    "SYSTEM_NEIGH|Linecard2|Asic0|Ethernet-IB0|3333::3:4": {
+        "encap_index": "1074790405", 
+        "neigh": "24:21:24:05:81:f7"
+    }, 
+    "SYSTEM_NEIGH|Linecard2|Asic0|Ethernet4|10.0.0.5": {
+        "encap_index": "1074790406", 
+        "neigh": "b6:8c:4f:18:67:ff"
+    }, 
+    "SYSTEM_NEIGH|Linecard2|Asic0|Ethernet4|fc00::a": {
+        "encap_index": "1074790407", 
+        "neigh": "b6:8c:4f:18:67:ff"
+    },
+    "SYSTEM_NEIGH|Linecard2|Asic1|PortChannel0002|10.0.0.1": {
+        "encap_index": "1074790406", 
+        "neigh": "26:8b:37:fa:8e:67"
+    }, 
+    "SYSTEM_NEIGH|Linecard2|Asic1|PortChannel0002|fc00::2": {
+        "encap_index": "1074790407", 
+        "neigh": "26:8b:37:fa:8e:67"
+    }, 
+    "SYSTEM_NEIGH|Linecard4|Asic0|Ethernet5|10.0.0.11": {
+        "encap_index": "1074790406", 
+        "neigh": "46:c3:71:8c:dd:2d"
+    }, 
+    "SYSTEM_NEIGH|Linecard4|Asic0|Ethernet5|fc00::16": {
+        "encap_index": "1074790407", 
+        "neigh": "46:c3:71:8c:dd:2d"
+    }
+}

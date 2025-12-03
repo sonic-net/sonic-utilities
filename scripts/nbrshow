@@ -1,0 +1,273 @@
+#!/usr/bin/env python3
+
+"""
+    Script to show Ipv4/Ipv6 neighbor entries
+
+    usage: nbrshow [-h] [-ip IPADDR] [-if IFACE] v
+    optional arguments:
+        -ip IPADDR, --ipaddr IPADDR
+                        Neigbhor for a specific address
+        -if IFACE, --iface IFACE
+                        Neigbhors learned on specific L3 interface
+
+    Example of the output:
+    admin@str~$nbrshow -4
+    Address       MacAddress         Iface            Vlan
+    ------------  -----------------  ---------------  ------
+    10.0.0.57     52:54:00:87:8f:2c  PortChannel0001  -
+    10.64.246.1   00:00:5e:00:01:f6  eth0             -
+    192.168.0.2   24:8a:07:4c:f5:0a  Ethernet20       1000
+    ..
+    Total number of entries 10
+    admin@str:~$ nbrshow -6 -ip fc00::72
+    Address    MacAddress         Iface            Vlan    Status
+    ---------  -----------------  ---------------  ------  ---------
+    fc00::72   52:54:00:87:8f:2c  PortChannel0001  -       REACHABLE
+    Total number of entries 1
+
+"""
+import argparse
+import json
+import sys
+import subprocess
+import re
+
+from natsort import natsorted
+from sonic_py_common import port_util
+from swsscommon.swsscommon import SonicV2Connector
+from tabulate import tabulate
+
+
+"""
+   Base class for v4 and v6 neighbor.
+"""
+
+
+class NbrBase(object):
+
+    HEADER = []
+    NBR_COUNT = 0
+
+    def __init__(self, cmd):
+        super(NbrBase, self).__init__()
+        self.db = SonicV2Connector(host="127.0.0.1")
+        self.if_name_map, self.if_oid_map = port_util.get_interface_oid_map(self.db)
+        self.if_br_oid_map = port_util.get_bridge_port_map(self.db)
+        self.fetch_fdb_data()
+        self.cmd = cmd
+        self.err = None
+        self.nbrdata = []
+        return
+
+    def fetch_fdb_data(self):
+        """
+            Fetch FDB entries from ASIC DB.
+            @Todo, this code can be reused
+        """
+        self.db.connect(self.db.ASIC_DB)
+        self.bridge_mac_list = []
+
+        fdb_str = self.db.keys('ASIC_DB', "ASIC_STATE:SAI_OBJECT_TYPE_FDB_ENTRY:*")
+        if not fdb_str:
+            return
+
+        if self.if_br_oid_map is None:
+            return
+
+        oid_pfx = len("oid:0x")
+        for s in fdb_str:
+            fdb_entry = s
+            fdb = json.loads(fdb_entry .split(":", 2)[-1])
+            if not fdb:
+                continue
+
+            ent = self.db.get_all('ASIC_DB', s, blocking=True)
+            br_port_id = ent["SAI_FDB_ENTRY_ATTR_BRIDGE_PORT_ID"][oid_pfx:]
+            if br_port_id not in self.if_br_oid_map:
+                continue
+            port_id = self.if_br_oid_map[br_port_id]
+            if port_id in self.if_oid_map:
+                if_name = self.if_oid_map[port_id]
+            else:
+                if_name = port_id
+            if 'vlan' in fdb:
+                vlan_id = fdb["vlan"]
+            elif 'bvid' in fdb:
+                try:
+                    vlan_id = port_util.get_vlan_id_from_bvid(self.db, fdb["bvid"])
+                    if vlan_id is None:
+                        # the case could be happened if the FDB entry has created with linking to
+                        # default VLAN 1, which is not present in the system
+                        continue
+                except Exception:
+                    vlan_id = fdb["bvid"]
+                    print("Failed to get Vlan id for bvid {}\n".format(fdb["bvid"]))
+            self.bridge_mac_list.append((int(vlan_id),) + (fdb["mac"],) + (if_name,))
+
+        return
+
+    def fetch_nbr_data(self):
+        """
+            Fetch Neighbor data (ARP/IPv6 Neigh) from kernel.
+        """
+        p = subprocess.Popen(self.cmd, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        (output, err) = p.communicate()
+        rc = p.wait()
+
+        if rc == 0:
+            rawdata = output
+        else:
+            self.err = err
+            rawdata = None
+
+        return rawdata
+
+    def display(self, vpos=3):
+        """
+            Display formatted Neighbor entries (ARP/IPv6 Neigh).
+        """
+
+        output = []
+
+        for ent in self.nbrdata:
+
+            self.NBR_COUNT += 1
+            vlan = '-'
+            if 'Vlan' in ent[2]:
+                vlanid = int(re.search(r'\d+', ent[2]).group())
+                mac = ent[1].upper()
+                fdb_ent = next((fdb for fdb in self.bridge_mac_list[:]
+                               if fdb[0] == vlanid and fdb[1] == mac), None)
+                vlan = vlanid
+                if fdb_ent is not None:
+                    ent[2] = fdb_ent[2]
+                else:
+                    ent[2] = '-'
+            ent.insert(vpos, vlan)
+            output.append(ent)
+
+        self.nbrdata = natsorted(output, key=lambda x: x[0])
+
+        print(tabulate(self.nbrdata, self.HEADER))
+        print("Total number of entries {0} ".format(self.NBR_COUNT))
+
+    def display_err(self):
+        print("Error fetching Neighbors: {} ".format(self.err))
+
+
+class ArpShow(NbrBase):
+
+    HEADER = ['Address', 'MacAddress', 'Iface', 'Vlan']
+    CMD = "/usr/sbin/arp -n "
+
+    def __init__(self, ipaddr, iface):
+
+        if ipaddr is not None:
+            self.CMD += ipaddr
+
+        if iface is not None:
+            self.CMD += ' -i ' + iface
+
+        NbrBase.__init__(self, self.CMD)
+        return
+
+    def display(self):
+        """
+            Format "arp -n" output from kernel
+            Address        HWtype  HWaddress           Flags Mask    Iface
+            10.64.246.2    ether   f4:b5:2f:79:b3:f0   C             eth0
+            10.0.0.63      ether   52:54:00:ae:11:49   C             PortChannel0004
+        """
+        self.arpraw = self.fetch_nbr_data()
+
+        if self.arpraw is None:
+            self.display_err()
+            return
+
+        for line in self.arpraw.splitlines()[1:]:
+            if 'ether' not in line.split():
+                continue
+
+            ent = line.split()[::2]
+            self.nbrdata.append(ent)
+
+        super(ArpShow, self).display()
+
+
+class NeighShow(NbrBase):
+
+    HEADER = ['Address', 'MacAddress', 'Iface', 'Vlan', 'Status']
+    CMD = "/bin/ip -6 neigh show "
+
+    def __init__(self, ipaddr, iface):
+
+        if ipaddr is not None:
+            self.CMD += ipaddr
+
+        if iface is not None:
+            self.CMD += ' dev ' + iface
+
+        self.iface = iface
+        NbrBase.__init__(self, self.CMD)
+        return
+
+    def display(self):
+        """
+            Format "ip -6 neigh show " output from kernel
+            "fc00::76 dev PortChannel0002 lladdr 52:54:00:33:90:d0 router REACHABLE"
+            Format "ip -6 neigh show dev PortChannel0003"
+            "fc00::7a lladdr 52:54:00:6b:1d:0a router STALE"
+        """
+        self.arpraw = self.fetch_nbr_data()
+
+        if self.arpraw is None:
+            self.display_err()
+            return
+
+        for line in self.arpraw.splitlines()[:]:
+            split = line.split()
+            if 'lladdr' not in split:
+                continue
+
+            ent = split[::2]
+
+            if 'router' not in split:
+                ent.append(split[-1])
+
+            if self.iface is not None:
+                ent.insert(2, self.iface)
+            else:
+                ent[1], ent[2] = ent[2], ent[1]
+
+            self.nbrdata.append(ent)
+
+        super(NeighShow, self).display()
+
+
+def main():
+
+    parser = argparse.ArgumentParser(description='Show Neigbhor entries',
+                                     formatter_class=argparse.RawTextHelpFormatter)
+    parser.add_argument('-ip', '--ipaddr', type=str,
+                        help='Neigbhor for a specific address', default=None)
+    parser.add_argument('-if', '--iface', type=str,
+                        help='Neigbhors learned on specific L3 interface', default=None)
+    parser.add_argument('v', help='IP Version -4 or -6')
+
+    args = parser.parse_args()
+
+    try:
+        if (args.v == '-6'):
+            neigh = NeighShow(args.ipaddr, args.iface)
+            neigh.display()
+        else:
+            arp = ArpShow(args.ipaddr, args.iface)
+            arp.display()
+
+    except Exception as e:
+        print(str(e))
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

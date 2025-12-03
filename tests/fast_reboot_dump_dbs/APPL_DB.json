@@ -1,0 +1,10 @@
+{
+  "LAG_MEMBER_TABLE:PortChannel0001:Ethernet128": {
+    "expireat": 1613562033.6011732, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "status": "enabled"
+    }
+  }
+}

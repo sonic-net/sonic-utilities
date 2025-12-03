@@ -1,0 +1,62 @@
+{
+  "ASIC_STATE:SAI_OBJECT_TYPE_BRIDGE_PORT:oid:0x3a000000001724": {
+    "expireat": 1613562026.636173, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "SAI_BRIDGE_PORT_ATTR_ADMIN_STATE": "true", 
+      "SAI_BRIDGE_PORT_ATTR_FDB_LEARNING_MODE": "SAI_BRIDGE_PORT_FDB_LEARNING_MODE_HW", 
+      "SAI_BRIDGE_PORT_ATTR_PORT_ID": "oid:0x20000000016ea", 
+      "SAI_BRIDGE_PORT_ATTR_TYPE": "SAI_BRIDGE_PORT_TYPE_PORT"
+    }
+  }, 
+  "ASIC_STATE:SAI_OBJECT_TYPE_HOSTIF:oid:0xd000000000eea": {
+    "expireat": 1613562026.59113, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "SAI_HOSTIF_ATTR_NAME": "Ethernet128", 
+      "SAI_HOSTIF_ATTR_OBJ_ID": "oid:0x1000000000ec1", 
+      "SAI_HOSTIF_ATTR_OPER_STATUS": "true", 
+      "SAI_HOSTIF_ATTR_TYPE": "SAI_HOSTIF_TYPE_NETDEV", 
+      "SAI_HOSTIF_ATTR_VLAN_TAG": "SAI_HOSTIF_VLAN_TAG_KEEP"
+    }
+  }, 
+  "ASIC_STATE:SAI_OBJECT_TYPE_LAG_MEMBER:oid:0x1b0000000016ee": {
+    "expireat": 1613562026.634684, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "SAI_LAG_MEMBER_ATTR_EGRESS_DISABLE": "false", 
+      "SAI_LAG_MEMBER_ATTR_INGRESS_DISABLE": "false", 
+      "SAI_LAG_MEMBER_ATTR_LAG_ID": "oid:0x20000000016ea", 
+      "SAI_LAG_MEMBER_ATTR_PORT_ID": "oid:0x1000000000ec1"
+    }
+  }, 
+  "ASIC_STATE:SAI_OBJECT_TYPE_FDB_ENTRY:{\"bvid\":\"oid:0x260000000016f3\",\"mac\":\"52:54:00:5D:FC:B7\",\"switch_id\":\"oid:0x21000000000000\"}": {
+    "expireat": 1613562026.593537, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "SAI_FDB_ENTRY_ATTR_BRIDGE_PORT_ID": "oid:0x3a000000001724", 
+      "SAI_FDB_ENTRY_ATTR_PACKET_ACTION": "SAI_PACKET_ACTION_FORWARD", 
+      "SAI_FDB_ENTRY_ATTR_TYPE": "SAI_FDB_ENTRY_TYPE_DYNAMIC"
+    }
+  }, 
+  "ASIC_STATE:SAI_OBJECT_TYPE_VLAN:oid:0x26000000000013": {
+    "expireat": 1613562026.598609, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "NULL": "NULL"
+    }
+  }, 
+  "ASIC_STATE:SAI_OBJECT_TYPE_VLAN:oid:0x260000000016f3": {
+    "expireat": 1613562026.589369, 
+    "ttl": -0.001, 
+    "type": "hash", 
+    "value": {
+      "SAI_VLAN_ATTR_VLAN_ID": "2"
+    }
+  }
+}

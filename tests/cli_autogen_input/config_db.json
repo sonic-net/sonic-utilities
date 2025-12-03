@@ -1,0 +1,65 @@
+{
+    "DEVICE_METADATA|localhost": {
+        "buffer_model": "traditional",
+        "default_bgp_status": "up",
+        "default_pfcwd_status": "disable",
+        "hostname": "r-sonic-01",
+        "hwsku": "ACS-MSN2100",
+        "mac": "ff:ff:ff:ff:ff:00",
+        "platform": "x86_64-mlnx_msn2100-r0",
+        "type": "ToRRouter"
+    },
+    "PORT|Ethernet0": {
+        "alias": "etp1",
+        "description": "etp1",
+        "index": "0",
+        "lanes": "0, 1, 2, 3",
+        "mtu": "9100",
+        "pfc_asym": "off",
+        "speed": "100000"
+    },
+    "PORT|Ethernet4": {
+        "admin_status": "up",
+        "alias": "etp2",
+        "description": "Servers0:eth0",
+        "index": "1",
+        "lanes": "4, 5, 6, 7",
+        "mtu": "9100",
+        "pfc_asym": "off",
+        "speed": "100000"
+    },
+    "PORT|Ethernet8": {
+        "admin_status": "up",
+        "alias": "etp3",
+        "description": "Servers0:eth2",
+        "index": "2",
+        "lanes": "8, 9, 10, 11",
+        "mtu": "9100",
+        "pfc_asym": "off",
+        "speed": "100000"
+    },
+    "PORT|Ethernet12": {
+        "admin_status": "up",
+        "alias": "etp4",
+        "description": "Servers0:eth4",
+        "index": "3",
+        "lanes": "12, 13, 14, 15",
+        "mtu": "9100",
+        "pfc_asym": "off",
+        "speed": "100000"
+    },
+    "DEVICE_NEIGHBOR|Ethernet0": {
+        "name": "Servers",
+        "port": "eth0",
+        "mgmt_addr": "10.217.0.1",
+        "local_port": "Ethernet0",
+        "type": "type"
+    },
+    "DEVICE_NEIGHBOR|Ethernet4": {
+        "name": "Servers0",
+        "port": "eth1",
+        "mgmt_addr": "10.217.0.2",
+        "local_port": "Ethernet4",
+        "type": "type"
+    }
+}

@@ -1,0 +1,97 @@
+[
+    {
+        "op": "add",
+        "path": "/sonic-vlan:sonic-vlan/sonic-vlan:VLAN_MEMBER/VLAN_MEMBER_LIST/3",
+        "value": {
+            "name": "Vlan100",
+            "port": "Ethernet2",
+            "tagging_mode": "untagged"
+        }
+    },
+    {
+        "op": "add",
+        "path": "/sonic-vlan:sonic-vlan/sonic-vlan:VLAN_MEMBER/VLAN_MEMBER_LIST/4",
+        "value": {
+            "name": "Vlan100",
+            "port": "Ethernet3",
+            "tagging_mode": "untagged"
+        }
+    },
+    {
+        "op": "add",
+        "path": "/sonic-vlan:sonic-vlan/sonic-vlan:VLAN_MEMBER/VLAN_MEMBER_LIST/5",
+        "value": {
+            "name": "Vlan100",
+            "port": "Ethernet1",
+            "tagging_mode": "untagged"
+        }
+    },
+    {
+        "op": "replace",
+        "path": "/sonic-port:sonic-port/sonic-port:PORT/PORT_LIST/0/lanes",
+        "value": "65"
+    },
+    {
+        "op": "replace",
+        "path": "/sonic-port:sonic-port/sonic-port:PORT/PORT_LIST/0/alias",
+        "value": "Eth1/1"
+    },
+    {
+        "op": "replace",
+        "path": "/sonic-port:sonic-port/sonic-port:PORT/PORT_LIST/0/speed",
+        "value": 10000
+    },
+    {
+        "op": "replace",
+        "path": "/sonic-port:sonic-port/sonic-port:PORT/PORT_LIST/0/description",
+        "value": ""
+    },
+    {
+        "op": "add",
+        "path": "/sonic-port:sonic-port/sonic-port:PORT/PORT_LIST/3",
+        "value": {
+            "name": "Ethernet3",
+            "alias": "Eth1/4",
+            "lanes": "68",
+            "description": "",
+            "speed": 10000
+        }
+    },
+    {
+        "op": "add",
+        "path": "/sonic-port:sonic-port/sonic-port:PORT/PORT_LIST/4",
+        "value": {
+            "name": "Ethernet1",
+            "alias": "Eth1/2",
+            "lanes": "66",
+            "description": "",
+            "speed": 10000
+        }
+    },
+    {
+        "op": "add",
+        "path": "/sonic-port:sonic-port/sonic-port:PORT/PORT_LIST/5",
+        "value": {
+            "name": "Ethernet2",
+            "alias": "Eth1/3",
+            "lanes": "67",
+            "description": "",
+            "speed": 10000
+        }
+    },
+    {
+        "op": "add",
+        "path": "/sonic-acl:sonic-acl/sonic-acl:ACL_TABLE/ACL_TABLE_LIST/0/ports/1",
+        "value": "Ethernet1"
+    },
+    {
+        "op": "add",
+        "path": "/sonic-acl:sonic-acl/sonic-acl:ACL_TABLE/ACL_TABLE_LIST/0/ports/2",
+        "value": "Ethernet2"
+    },
+    {
+        "op": "add",
+        "path": "/sonic-acl:sonic-acl/sonic-acl:ACL_TABLE/ACL_TABLE_LIST/0/ports/3",
+        "value": "Ethernet3"
+    }
+]

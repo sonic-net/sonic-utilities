@@ -1,0 +1,29 @@
+{
+    "PORTCHANNEL|PortChannel0": {
+        "admin_status": "up",
+        "min_links": "2",
+        "mtu": "9100"
+    },
+    "PORTCHANNEL|PortChannel1": {
+        "admin_status": "up",
+        "min_links": "2",
+        "mtu": "9100"
+    },
+    "PORTCHANNEL|PortChannel0123": {
+        "admin_status": "up",
+        "min_links": "1",
+        "mtu": "9100"
+    },
+    "PORTCHANNEL|PortChannel0011": {
+        "admin_status": "up",
+        "min_links": "2",
+        "mtu": "9100"
+    },
+    "PORTCHANNEL|PortChannel9999": {
+        "admin_status": "up",
+        "mtu": "9100"
+    },
+    "VERSIONS|DATABASE": {
+        "VERSION": "version_3_0_1"
+    }
+} 

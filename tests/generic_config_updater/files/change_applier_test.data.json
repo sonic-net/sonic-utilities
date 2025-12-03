@@ -1,0 +1,336 @@
+{
+    "running_data": {
+        "ACL_TABLE": {
+            "DATAACL": {
+                "policy_desc": "DATAACL",
+                "ports": [
+                    "PortChannel0001",
+                    "PortChannel0002",
+                    "PortChannel0003",
+                    "PortChannel0007"
+                ],
+                "stage": "ingress",
+                "type": "L3"
+            },
+            "EVERFLOW": {
+                "policy_desc": "EVERFLOW",
+                "ports": [
+                    "PortChannel0001",
+                    "PortChannel0002",
+                    "PortChannel0003",
+                    "PortChannel0004",
+                    "Ethernet96"
+                ],
+                "stage": "ingress",
+                "type": "MIRROR"
+            },
+            "EVERFLOWV6": {
+                "policy_desc": "EVERFLOWV6",
+                "ports": [
+                    "PortChannel0001",
+                    "PortChannel0002",
+                    "PortChannel0003",
+                    "PortChannel0004",
+                    "Ethernet96"
+                ],
+                "stage": "ingress",
+                "type": "MIRRORV6"
+            }
+        },
+        "BGP_NEIGHBOR": {
+            "10.0.0.57": {
+                "asn": "64600",
+                "holdtime": "10",
+                "keepalive": "3",
+                "local_addr": "10.0.0.56",
+                "name": "ARISTA01T1",
+                "nhopself": "0",
+                "rrclient": "0"
+            },
+            "10.0.0.59": {
+                "asn": "64600",
+                "holdtime": "10",
+                "keepalive": "3",
+                "local_addr": "10.0.0.58",
+                "name": "ARISTA02T1",
+                "nhopself": "0",
+                "rrclient": "0"
+            }
+        },
+        "BGP_PEER_RANGE": {
+            "BGPSLBPassive": {
+                "ip_range": [
+                    "10.255.0.0/25"
+                ],
+                "name": "BGPSLBPassive",
+                "src_address": "10.1.0.32"
+            },
+            "BGPVac": {
+                "ip_range": [
+                    "192.168.0.0/21"
+                ],
+                "name": "BGPVac",
+                "src_address": "10.1.0.32"
+            }
+        },
+        "BGP_SENTINELS": {
+            "BGPSentinelV6": {
+                "ip_range": [
+                    "2603:10a0:321:82f9::/64",
+                    "2603:10a1:30a:8000::/59"
+                ],
+                "name": "BGPSentinelV6",
+                "src_address": "fc00:1::32"
+            },
+            "BGPSentinel": {
+                "ip_range": [
+                    "10.1.0.0/24"
+                ],
+                "name": "BGPSentinel",
+                "src_address": "10.1.0.32"
+            }
+        },
+        "BUFFER_PG": {
+            "Ethernet0|3-4": {
+                "profile": "[BUFFER_PROFILE|pg_lossless_40000_300m_profile]"
+            },
+            "Ethernet100|3-4": {
+                "profile": "[BUFFER_PROFILE|pg_lossless_40000_300m_profile]"
+            },
+            "Ethernet104|3-4": {
+                "profile": "[BUFFER_PROFILE|pg_lossless_40000_300m_profile]"
+            },
+            "Ethernet108|3-4": {
+                "profile": "[BUFFER_PROFILE|pg_lossless_40000_300m_profile]"
+            },
+            "Ethernet112|0": {
+                "profile": "[BUFFER_PROFILE|ingress_lossy_profile]"
+            },
+            "Ethernet112|3-4": {
+                "profile": "[BUFFER_PROFILE|pg_lossless_40000_300m_profile]"
+            }
+        },
+        "DEVICE_METADATA": {
+            "localhost": {
+                "bgp_asn": "65100",
+                "buffer_model": "traditional",
+                "cloudtype": "None",
+                "default_bgp_status": "down",
+                "default_pfcwd_status": "enable",
+                "deployment_id": "1",
+                "docker_routing_config_mode": "separated",
+                "type": "ToRRouter"
+            }
+        },
+        "DEVICE_NEIGHBOR_METADATA": {
+            "ARISTA01T1": {
+                "hwsku": "Arista-VM",
+                "lo_addr": "None",
+                "mgmt_addr": "10.64.246.220",
+                "type": "LeafRouter"
+            },
+            "ARISTA02T1": {
+                "hwsku": "Arista-VM",
+                "lo_addr": "None",
+                "mgmt_addr": "10.64.246.221",
+                "type": "LeafRouter"
+            }
+        },
+        "PORT": {
+            "Ethernet0": {
+                "alias": "fortyGigE0/0",
+                "description": "fortyGigE0/0",
+                "index": "0",
+                "lanes": "29,30,31,32",
+                "mtu": "9100",
+                "pfc_asym": "off",
+                "speed": "40000"
+            },
+            "Ethernet100": {
+                "alias": "fortyGigE0/100",
+                "description": "fortyGigE0/100",
+                "index": "25",
+                "lanes": "125,126,127,128",
+                "mtu": "9100",
+                "pfc_asym": "off",
+                "speed": "40000"
+            },
+            "Ethernet104": {
+                "alias": "fortyGigE0/104",
+                "description": "fortyGigE0/104",
+                "index": "26",
+                "lanes": "85,86,87,88",
+                "mtu": "9100",
+                "pfc_asym": "off",
+                "speed": "40000"
+            },
+            "Ethernet108": {
+                "alias": "fortyGigE0/108",
+                "description": "fortyGigE0/108",
+                "index": "27",
+                "lanes": "81,82,83,84",
+                "mtu": "9100",
+                "pfc_asym": "off",
+                "speed": "40000"
+            }
+        },
+        "PORTCHANNEL": {
+            "PortChannel0001": {
+                "admin_status": "up",
+                "members": [
+                    "Ethernet112"
+                ],
+                "min_links": "1",
+                "mtu": "9100"
+            },
+            "PortChannel0002": {
+                "admin_status": "up",
+                "members": [
+                    "Ethernet116"
+                ],
+                "min_links": "1",
+                "mtu": "9100"
+            }
+        },
+        "PORTCHANNEL_INTERFACE": {
+            "PortChannel0001": {},
+            "PortChannel0002": {},
+            "PortChannel0001|10.0.0.56/31": {},
+            "PortChannel0001|FC00::71/126": {},
+            "PortChannel0002|10.0.0.58/31": {},
+            "PortChannel0002|FC00::75/126": {}
+        },
+        "PORTCHANNEL_MEMBER": {
+            "PortChannel0001|Ethernet112": {},
+            "PortChannel0002|Ethernet116": {},
+            "PortChannel0003|Ethernet120": {},
+            "PortChannel0004|Ethernet124": {}
+        },
+        "QUEUE": {
+            "Ethernet112|0": {
+                "scheduler": "[SCHEDULER|scheduler.0]"
+            },
+            "Ethernet112|1": {
+                "scheduler": "[SCHEDULER|scheduler.0]"
+            }
+        },
+        "VLAN": {
+            "Vlan1000": {
+                "dhcp_servers": [
+                    "192.0.0.1",
+                    "192.0.0.2",
+                    "192.0.0.48"
+                ],
+                "members": [
+                    "Ethernet4",
+                    "Ethernet8",
+                    "Ethernet96"
+                ],
+                "vlanid": "1000"
+            }
+        },
+        "VLAN_INTERFACE": {
+            "Vlan1000": {},
+            "Vlan1000|192.168.0.1/21": {},
+            "Vlan1000|2603:10b0:b13:c70::1/64": {}
+        },
+        "VLAN_MEMBER": {
+            "Vlan1000|Ethernet12": {
+                "tagging_mode": "untagged"
+            },
+            "Vlan1000|Ethernet16": {
+                "tagging_mode": "untagged"
+            },
+            "Vlan1000|Ethernet28": {
+            }
+        },
+        "WRED_PROFILE": {
+            "AZURE_LOSSLESS": {
+                "ecn": "ecn_all",
+                "green_drop_probability": "5",
+                "yellow_drop_probability": "5",
+                "yellow_max_threshold": "2097152",
+                "yellow_min_threshold": "1048576"
+            }
+        }
+    },
+    "json_changes": [
+        {
+            "name": "change_0",
+            "update": {},
+            "remove": {},
+            "services_validated": ["system_health"]
+        },
+        {
+            "name": "change_1",
+            "update": {
+                "VLAN_INTERFACE": { "Vlan2000": {}, "Vlan2000|192.168.0.2/21": {} },
+                "WRED_PROFILE": { "AZURE_LOSSLESS": { "green_drop_probability": "99", "ecn": "88" }},
+                "ACL_TABLE": {"DATAACL": {"type": "test_data" }}
+            },
+            "remove": {
+                "BGP_NEIGHBOR": { "10.0.0.57": {} },
+                "BGP_PEER_RANGE": { "BGPSLBPassive": {} },
+                "BGP_SENTINELS": { "BGPSentinelV6": {} }
+            },
+            "services_validated": [ "vlan_validate", "acl_validate" ]
+        },
+        {
+            "name": "change_2",
+            "update": {
+                "BGP_NEIGHBOR": { "10.0.0.57": {
+                    "asn": "64600",
+                    "holdtime": "10",
+                    "keepalive": "3",
+                    "local_addr": "10.0.0.56",
+                    "name": "ARISTA01T1",
+                    "nhopself": "0",
+                    "rrclient": "0" }},
+                "WRED_PROFILE": { "AZURE_LOSSLESS": { "ecn": "ecn_all" } },
+                "ACL_TABLE": {"DATAACL": {"type": "test_data11" }},
+                "TEST_ONLY" : { "TEST_SUB" : {"foo": "88" } }
+            },
+            "remove": {
+                "VLAN_INTERFACE": { "Vlan2000": {} }
+            }
+        },
+        {
+            "name": "change_3",
+            "update": {
+                "WRED_PROFILE": { "AZURE_LOSSLESS": { "green_drop_probability": "5" } },
+                "ACL_TABLE": {"DATAACL": {
+                    "policy_desc": "DATAACL",
+                    "ports": [
+                    "PortChannel0001",
+                    "PortChannel0002",
+                    "PortChannel0003",
+                    "PortChannel0007"
+                    ],
+                    "stage": "ingress",
+                    "type": "L3" }
+                },
+                "BGP_PEER_RANGE": {
+                    "BGPSLBPassive": {
+                        "ip_range": ["10.255.0.0/25"], 
+                        "name": "BGPSLBPassive",
+                        "src_address": "10.1.0.32"
+                    }
+                },
+                "BGP_SENTINELS": {
+                    "BGPSentinelV6": {
+                        "ip_range": [
+                            "2603:10a0:321:82f9::/64",
+                            "2603:10a1:30a:8000::/59"
+                        ],
+                        "name": "BGPSentinelV6",
+                        "src_address": "fc00:1::32"
+                    }
+                }
+            },
+            "remove": {
+                "VLAN_INTERFACE": { "Vlan2000|192.168.0.2/21": {} },
+               "TEST_ONLY": { "TEST_SUB": {} } 
+            }
+        }
+    ]
+}

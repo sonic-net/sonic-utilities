@@ -1,0 +1,30 @@
+{
+"vrfId": 0,
+"vrfName": "default",
+"tableVersion": 8972,
+"routerId": "10.1.0.32",
+"defaultLocPrf": 100,
+"localAS": 65100,
+"routes": { "10.1.0.32/32": [
+    {
+    "valid":true,
+    "bestpath":true,
+    "pathFrom":"external",
+    "prefix":"10.1.0.32",
+    "prefixLen":32,
+    "network":"10.1.0.32\/32",
+    "metric":0,
+    "weight":32768,
+    "peerId":"(unspec)",
+    "path":"",
+    "origin":"IGP",
+    "nexthops":[
+        {
+        "ip":"0.0.0.0",
+        "hostname":"STR-8102-C19-U24",
+        "afi":"ipv4",
+        "used":true
+        }
+    ]
+    }
+] }  }

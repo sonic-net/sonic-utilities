@@ -1,0 +1,28 @@
+{
+	"FEATURE": {
+		"swss": {
+			"auto_restart": "enabled",
+			"has_global_scope": "False",
+			"has_per_asic_scope": "True",
+			"delayed": "False",
+			"high_mem_alert": "disabled",
+			"state": "enabled"
+		},
+		"syncd": {
+			"auto_restart": "enabled",
+			"has_global_scope": "False",
+			"has_per_asic_scope": "True",
+			"delayed": "False",
+			"high_mem_alert": "disabled",
+			"state": "enabled"
+		},
+		"telemetry": {
+			"auto_restart": "disabled",
+			"has_global_scope": "False",
+			"has_per_asic_scope": "True",
+			"delayed": "False",
+			"high_mem_alert": "disabled",
+			"state": "disabled"
+		}
+	}
+}

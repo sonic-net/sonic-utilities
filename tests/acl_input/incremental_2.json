@@ -1,0 +1,32 @@
+{
+    "acl": {
+        "acl-sets": {
+            "acl-set": {
+                "ntp-acl": {
+                    "acl-entries": {
+                        "acl-entry": {
+                            "1": {
+                                "ip": {
+                                    "config": {
+                                        "source-ip-address": "20.0.0.12/32"
+                                    }
+                                }, 
+                                "config": {
+                                    "sequence-id": 1
+                                }, 
+                                "actions": {
+                                    "config": {
+                                        "forwarding-action": "DROP"
+                                    }
+                                }
+                            }
+                        }
+                    }, 
+                    "config": {
+                        "name": "ntp-acl"
+                    }
+                }
+            }
+        }
+    }
+}

@@ -1,0 +1,25 @@
+module sonic-grouping-2 {
+
+    yang-version 1.1;
+
+    namespace "http://github.com/Azure/s-grouping-2";
+    prefix s-grouping-2;
+
+    grouping GR_3 {
+        leaf GR_3_LEAF_1 {
+            type string;
+        }
+        leaf GR_3_LEAF_2 {
+            type string;
+        }
+    }
+
+    grouping GR_4 {
+        leaf GR_4_LEAF_1 {
+            type string;
+        }
+        leaf GR_4_LEAF_2 {
+            type string;
+        }
+    }
+}

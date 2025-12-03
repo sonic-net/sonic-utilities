@@ -1,0 +1,114 @@
+{
+    "sonic-vlan:sonic-vlan": {
+        "sonic-vlan::VLAN_MEMBER": {
+            "VLAN_MEMBER_LIST": [
+                {
+                    "name": "Vlan1000",
+                    "port": "Ethernet0",
+                    "tagging_mode": "untagged"
+                },
+                {
+                    "name": "Vlan1000",
+                    "port": "Ethernet4",
+                    "tagging_mode": "untagged"
+                },
+                {
+                    "name": "Vlan1000",
+                    "port": "Ethernet8",
+                    "tagging_mode": "untagged"
+                }
+            ]
+        },
+        "sonic-vlan::VLAN": {
+            "VLAN_LIST": [
+                {
+                    "name": "Vlan1000",
+                    "vlanid": 1000,
+                    "dhcp_servers": [
+                        "192.0.0.1",
+                        "192.0.0.2",
+                        "192.0.0.3",
+                        "192.0.0.4"
+                    ]
+                }
+            ]
+        }
+    },
+    "sonic-acl:sonic-acl": {
+        "sonic-vlan::ACL_TABLE": {
+            "ACL_TABLE_LIST": [
+                {
+                    "ACL_TABLE_NAME": "NO-NSW-PACL-V4",
+                    "type": "L3",
+                    "policy_desc": "NO-NSW-PACL-V4",
+                    "ports": [
+                        "Ethernet0"
+                    ]
+                },
+                {
+                    "ACL_TABLE_NAME": "DATAACL",
+                    "policy_desc": "DATAACL",
+                    "ports": [
+                        "Ethernet4"
+                    ],
+                    "stage": "ingress",
+                    "type": "L3"
+                },
+                {
+                    "ACL_TABLE_NAME": "EVERFLOW",
+                    "policy_desc": "EVERFLOW",
+                    "ports": [
+                        "Ethernet8"
+                    ],
+                    "stage": "ingress",
+                    "type": "MIRROR"
+                },
+                {
+                    "ACL_TABLE_NAME": "EVERFLOWV6",
+                    "policy_desc": "EVERFLOWV6",
+                    "ports": [
+                        "Ethernet4",
+                        "Ethernet8"
+                    ],
+                    "stage": "ingress",
+                    "type": "MIRRORV6"
+                }
+            ]
+        }
+    },
+    "sonic-port:sonic-port": {
+        "sonic-vlan::PORT": {
+            "PORT_LIST": [
+                {
+                    "name": "Ethernet0",
+                    "alias": "Eth1",
+                    "lanes": "65, 66, 67, 68",
+                    "description": "Ethernet0 100G link",
+                    "speed": 100000
+                },
+                {
+                    "name": "Ethernet4",
+                    "admin_status": "up",
+                    "alias": "fortyGigE0/4",
+                    "description": "Servers0:eth0",
+                    "index": 1,
+                    "lanes": "29,30,31,32",
+                    "mtu": 9100,
+                    "pfc_asym": "off",
+                    "speed": 40000
+                },
+                {
+                    "name": "Ethernet8",
+                    "admin_status": "up",
+                    "alias": "fortyGigE0/8",
+                    "description": "Servers1:eth0",
+                    "index": 2,
+                    "lanes": "33,34,35,36",
+                    "mtu": 9100,
+                    "pfc_asym": "off",
+                    "speed": 40000
+                }
+            ]
+        }
+    }
+}

@@ -1,0 +1,35 @@
+steps:
+- checkout: self
+  clean: true
+  displayName: 'checkout sonic-utilities repo'
+
+- script: |
+    set -x
+    sudo pip install pre-commit
+    pre-commit install-hooks
+  displayName: 'Prepare pre-commit check'
+
+- script: |
+    # Run pre-commit check and capture the output
+    out=`pre-commit run --color never --from-ref HEAD^ --to-ref HEAD 2>&1`
+    RC=$?
+    if [[ $RC -ne 0 ]]; then
+      echo -e "The [pre-commit](http://pre-commit.com/) check detected issues in the files touched by this pull request.\n\
+    The pre-commit check is a mandatory check, please fix detected issues.\n\
+    \n\
+    To run the pre-commit checks locally, you can follow below steps:\n\
+      1. Ensure that default python is python3.\n\
+      2. Ensure that the 'pre-commit' package is installed:\n\
+         sudo pip install pre-commit\n\
+      3. Go to repository root folder\n\
+      4. Install the pre-commit hooks:\n\
+         pre-commit install\n\
+      5. Use pre-commit to check staged file:\n\
+         pre-commit\n\
+      6. Alternatively, you can check committed files using:\n\
+         pre-commit run --from-ref <commit_id> --to-ref <commit_id>\n"
+    fi
+    echo "Pre-commit check results:"
+    echo "$out"
+    exit $RC
+  displayName: 'Run pre-commit check'

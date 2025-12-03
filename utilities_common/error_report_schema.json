@@ -1,0 +1,149 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://schemas.sonic-net.org/error-report.json",
+  "title": "SONiC Error Report",
+  "description": "Standard schema for SONiC operation error reports",
+  "type": "object",
+  "required": ["sonic_upgrade_summary", "sonic_upgrade_actions", "sonic_upgrade_report"],
+  "properties": {
+    "sonic_upgrade_summary": {
+      "type": "object",
+      "description": "High-level summary of the operation and its outcome",
+      "required": ["script_name", "fault_code", "fault_reason", "guid"],
+      "properties": {
+        "script_name": {
+          "type": "string",
+          "description": "Name of the operation being performed",
+          "examples": ["update_firmware", "fast-reboot", "warm-reboot"]
+        },
+        "sonic_upgrade_package_version": {
+          "type": "string",
+          "description": "Version of the error reporting package",
+          "default": "1.0.0"
+        },
+        "fault_code": {
+          "type": "string",
+          "description": "Numeric fault code (0=success, >0=error)",
+          "default": "124"
+        },
+        "fault_reason": {
+          "type": "string",
+          "description": "Human-readable description of the outcome",
+          "default": "Operation timeout - system became unresponsive"
+        },
+        "guid": {
+          "type": "string",
+          "description": "Unique identifier for this operation instance",
+          "pattern": "^[a-zA-Z0-9._-]+$"
+        }
+      },
+      "additionalProperties": false
+    },
+    "sonic_upgrade_actions": {
+      "type": "object",
+      "description": "Actions that should be taken based on this report",
+      "required": ["reputation_impact", "retriable", "isolate_on_failure", "auto_triage"],
+      "properties": {
+        "reputation_impact": {
+          "type": "boolean",
+          "description": "Whether this failure should impact device reputation scoring",
+          "default": false
+        },
+        "retriable": {
+          "type": "boolean",
+          "description": "Whether this operation can be safely retried",
+          "default": true
+        },
+        "isolate_on_failure": {
+          "type": "boolean",
+          "description": "Whether device should be isolated on this failure",
+          "default": false
+        },
+        "auto_triage": {
+          "type": "object",
+          "description": "Automated triage and workflow settings",
+          "required": ["status", "triage_queue", "triage_action"],
+          "properties": {
+            "status": {
+              "type": "boolean",
+              "description": "Whether automated triage is enabled",
+              "default": false
+            },
+            "triage_queue": {
+              "type": "string",
+              "description": "Queue or team to route this error to",
+              "default": ""
+            },
+            "triage_action": {
+              "type": "string",
+              "description": "Specific action/workflow to trigger",
+              "default": ""
+            }
+          },
+          "additionalProperties": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "sonic_upgrade_report": {
+      "type": "object",
+      "description": "Detailed technical information about the operation",
+      "required": ["duration", "stages", "health_checks", "errors"],
+      "properties": {
+        "duration": {
+          "type": "string",
+          "description": "Operation duration in seconds",
+          "default": "0"
+        },
+        "stages": {
+          "type": "array",
+          "description": "List of operation stages completed",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "health_checks": {
+          "type": "array",
+          "description": "Results of health checks performed",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {"type": "string"},
+              "status": {"type": "string", "enum": ["pass", "fail", "skip"]},
+              "message": {"type": "string"}
+            },
+            "required": ["name", "status"]
+          },
+          "default": []
+        },
+        "errors": {
+          "type": "array",
+          "description": "List of errors encountered during operation",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Error category or type"
+              },
+              "message": {
+                "type": "string",
+                "description": "Detailed error message"
+              }
+            },
+            "required": ["name", "message"]
+          },
+          "default": [
+            {
+              "name": "TIMEOUT",
+              "message": "Operation timed out or system crashed"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "additionalProperties": false
+}

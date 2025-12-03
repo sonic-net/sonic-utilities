@@ -1,0 +1,26 @@
+{
+    "PBH_CAPABILITIES|table": {
+        "interface_list": "UPDATE",
+        "description": "UPDATE"
+    },
+    "PBH_CAPABILITIES|rule": {
+        "priority": "UPDATE",
+        "ether_type": "ADD,UPDATE,REMOVE",
+        "ip_protocol": "ADD,UPDATE,REMOVE",
+        "ipv6_next_header": "ADD,UPDATE,REMOVE",
+        "l4_dst_port": "ADD,UPDATE,REMOVE",
+        "gre_key": "ADD,UPDATE,REMOVE",
+        "inner_ether_type": "ADD,UPDATE,REMOVE",
+        "hash": "UPDATE",
+        "packet_action": "ADD,UPDATE,REMOVE",
+        "flow_counter": "ADD,UPDATE,REMOVE"
+    },
+    "PBH_CAPABILITIES|hash": {
+        "hash_field_list": "UPDATE"
+    },
+    "PBH_CAPABILITIES|hash-field": {
+        "hash_field": "",
+        "ip_mask": "",
+        "sequence_id": ""
+    }
+}

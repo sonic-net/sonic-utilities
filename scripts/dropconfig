@@ -1,0 +1,629 @@
+#!/usr/bin/env python3
+
+#####################################################################
+#
+# dropconfig is a tool for configuring drop counters.
+#
+#####################################################################
+
+# FUTURE IMPROVEMENTS
+# - Add more filters to the show commands (e.g. filter by name, alias, etc.)
+# - Add the ability to change readonly attributes like group, description, etc.
+
+import argparse
+import os
+import sys
+from datetime import datetime
+from utilities_common import constants
+from sonic_py_common import multi_asic
+from utilities_common import multi_asic as multi_asic_util
+
+from tabulate import tabulate
+
+# mock the redis for unit test purposes #
+try:
+    if os.getenv("UTILITIES_UNIT_TESTING") == "1":
+        modules_path = os.path.join(os.path.dirname(__file__), "..")
+        test_path = os.path.join(modules_path, "tests")
+        sys.path.insert(0, modules_path)
+        sys.path.insert(0, test_path)
+        import mock_tables.dbconnector
+        if os.getenv("UTILITIES_UNIT_TESTING_TOPOLOGY") == "multi_asic":
+            import tests.mock_tables.mock_multi_asic
+            mock_tables.dbconnector.load_namespace_config()
+
+except KeyError:
+    pass
+
+from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
+
+
+# CONFIG_DB Tables
+DEBUG_COUNTER_CONFIG_TABLE = 'DEBUG_COUNTER'
+DROP_REASON_CONFIG_TABLE = 'DEBUG_COUNTER_DROP_REASON'
+DEBUG_DROP_MONITOR_TABLE = 'DEBUG_DROP_MONITOR'
+PERSISTENT_DROP_ALERTS_TABLE = 'PERSISTENT_DROP_ALERTS'
+
+# STATE_DB Tables
+DEBUG_COUNTER_CAPABILITY_TABLE = 'DEBUG_COUNTER_CAPABILITIES'
+
+# Drop Counter Configuration Headers
+drop_counter_config_header = ['Counter',
+                              'Alias',
+                              'Group',
+                              'Type',
+                              'Reasons',
+                              'Description',
+                              'Drop Monitor',
+                              'Window',
+                              'Drop Count Threshold',
+                              'Incident Count Threshold']
+drop_counter_capability_header = ['Counter Type', 'Total']
+
+class InvalidArgumentError(RuntimeError):
+    def __init__(self, msg):
+        self.message = msg
+
+class DropConfig(object):
+    def __init__(self, namespace, db, config_db):
+        self.db = db
+        self.config_db = config_db
+        self.namespace = namespace
+
+    # -c show_config
+    def print_counter_config(self, group):
+        """
+            Prints out the configuration for all counters that are currently
+            set up
+        """
+
+        table = []
+        for counter in self.get_config(group):
+            table.append((counter.get('name', ''),
+                          counter.get('alias', ''),
+                          counter.get('group', ''),
+                          counter.get('type', ''),
+                          counter.get('reason', ''),
+                          counter.get('description', ''),
+                          counter.get('drop_monitor_status', ''),
+                          counter.get('window', ''),
+                          counter.get('drop_count_threshold', ''),
+                          counter.get('incident_count_threshold', '')))
+
+        if multi_asic.is_multi_asic():
+            print("For namespace:", self.namespace)
+
+        print(tabulate(table,
+                       drop_counter_config_header,
+                       tablefmt='simple',
+                       stralign='left'))
+
+    def print_device_capabilities(self):
+        """
+            Prints out the capabilities that this device has
+        """
+
+        device_caps = self.get_device_capabilities()
+
+        if not device_caps:
+            print('Current device does not support drop counters')
+            return
+
+        table = []
+        for counter, capabilities in device_caps.items():
+            table.append((counter, capabilities.get('count', 'N/A')))
+
+        if multi_asic.is_multi_asic():
+            print("For namespace:", self.namespace)
+
+        print(tabulate(table,
+                       drop_counter_capability_header,
+                       tablefmt='simple',
+                       stralign='left'))
+
+        for counter, capabilities in device_caps.items():
+            supported_reasons = deserialize_reason_list(capabilities.get('reasons', ''))
+            if supported_reasons and int(capabilities.get('count', 0)) > 0:
+                print('\n{}'.format(counter))
+                for reason in supported_reasons:
+                    print('        {}'.format(reason))
+
+    def print_drop_monitor_persistent_drops(self, counter_name):
+        """
+           Prints out the persistent drops recorded for drop counters
+        """
+        if not counter_name:
+            raise InvalidArgumentError('Counter name not provided')
+        if not self.counter_name_in_use(counter_name):
+            raise InvalidArgumentError('Counter \'{}\' not found'.format(counter_name))
+
+        data = self.db.get_all(self.db.COUNTERS_DB, PERSISTENT_DROP_ALERTS_TABLE)
+        if data is None:
+            print("No persistent drop alerts have been recorded")
+            return
+
+        print(f"The persistent drops recorded on {counter_name} are:")
+        for key, message in data.items():
+            counter, timestamp = key.split('|')
+            if (counter == counter_name):
+                timestamp = datetime.utcfromtimestamp(int(timestamp)).strftime('%Y-%m-%d %H:%M:%S')
+                print(f"{timestamp}: {message}")
+
+    def start_global_drop_monitor(self):
+        self.config_db.set_entry(DEBUG_DROP_MONITOR_TABLE,
+                                 'CONFIG',
+                                 {'status': 'enabled'})
+
+    def stop_global_drop_monitor(self):
+        self.config_db.set_entry(DEBUG_DROP_MONITOR_TABLE,
+                                 'CONFIG',
+                                 {'status': 'disabled'})
+
+    def enable_drop_monitor(self, counter_name, window, ict, dct):
+        """
+            The function to enable and configure Debug Drop Monitor feature.
+            If no counter name is provided, we toggle the global feature status.
+        """
+        if not counter_name:
+            self.start_global_drop_monitor()
+            print("Drop counter monitor is globally enabled.")
+            return
+        if not self.counter_name_in_use(counter_name):
+            raise InvalidArgumentError('Counter \'{}\' not found'.format(counter_name))
+
+        # Check if drop monitor is globally enabled
+        global_drop_monitor_status = self.config_db.get_entry(DEBUG_DROP_MONITOR_TABLE, 'CONFIG')['status']
+        if global_drop_monitor_status == 'disabled':
+            print(f"Warning: Cannot enable monitoring for {counter_name}. The Global Persistent Drop Counter Monitor is currently disabled. Please enable global monitoring first.")
+            return
+
+        drop_monitor_config = self.config_db.get_entry(DEBUG_COUNTER_CONFIG_TABLE,
+                                                      counter_name)
+
+        if not window and 'window' not in drop_monitor_config.keys():
+            raise InvalidArgumentError('Window is not provided, neither is it pre-configured')
+        if not ict and 'incident_count_threshold' not in drop_monitor_config.keys():
+            raise InvalidArgumentError('Incident count threshold is not provided, neither is it pre-configured')
+        if not dct and 'drop_count_threshold' not in drop_monitor_config.keys():
+            raise InvalidArgumentError('Drop count threshold is not provided, neither is it pre-configured')
+
+        if window:
+            if window <= 0:
+                raise InvalidArgumentError('Invalid window size. Window size should be positive, received: {}'.format(window))
+            drop_monitor_config['window'] = str(window)
+        if ict:
+            if ict < 0:
+                raise InvalidArgumentError('Invalid incident count threshold. Incident count threshold should be non-negative, received: {}'.format(ict))
+            drop_monitor_config['incident_count_threshold'] = str(ict)
+        if dct:
+            if dct < 0:
+                raise InvalidArgumentError('Invalid drop count threshold. Drop count threshold should be non-negative, received: {}'.format(dct))
+            drop_monitor_config['drop_count_threshold'] = str(dct)
+
+        drop_monitor_config['drop_monitor_status'] = 'enabled'
+        self.config_db.set_entry(DEBUG_COUNTER_CONFIG_TABLE,
+                                 counter_name,
+                                 drop_monitor_config)
+        print("Drop counter monitor is enabled for counter {}. The monitor is configured with:".format(counter_name))
+        print("window: {}".format(window))
+        print("drop_count_threshold: {}".format(dct))
+        print("incident_count_threshold: {}".format(ict))
+
+    def disable_drop_monitor(self, counter_name):
+        """
+            The function to disable Debug Drop Monitor feature.
+            If no counter name is provided, we disable the global monitor control status.
+            If the Global Monitor Control is set to disabled, the monitoring status of each individual drop counter will also be set to disabled.
+        """
+        if not counter_name:
+            # Disable global drop monitor feature
+            self.stop_global_drop_monitor()
+            print("Drop counter monitor is globally disabled.")
+
+            # Disable drop monitor on all configured drop counters
+            drop_counter_list = self.config_db.get_keys(DEBUG_COUNTER_CONFIG_TABLE)
+            for counter_name in drop_counter_list:
+                self.disable_drop_monitor(counter_name)
+
+            return
+        if not self.counter_name_in_use(counter_name):
+            raise InvalidArgumentError('Counter \'{}\' not found'.format(counter_name))
+
+        drop_counter_entry = self.config_db.get_entry(DEBUG_COUNTER_CONFIG_TABLE,
+                                                      counter_name)
+
+        if drop_counter_entry.get('drop_monitor_status', '') == 'disabled':
+            print(f'Drop monitor is already disabled for {counter_name}')
+            return
+
+        drop_counter_entry['drop_monitor_status'] = 'disabled'
+        self.config_db.set_entry(DEBUG_COUNTER_CONFIG_TABLE,
+                                 counter_name,
+                                 drop_counter_entry)
+        print("Drop counter monitor is disabled for counter {}".format(counter_name))
+
+    def create_counter(self, counter_name, alias, group, counter_type,
+                       description, reasons, window, ict, dct):
+        """
+            Creates a new counter configuration
+        """
+
+        if not counter_name:
+            raise InvalidArgumentError('Counter name not provided')
+
+        if not counter_type:
+            raise InvalidArgumentError('Counter type not provided')
+
+        if not reasons:
+            raise InvalidArgumentError('No drop reasons provided')
+
+        install_drop_monitor = False
+        if None in [window, dct, ict]:
+            if any(param is not None for param in [window, dct, ict]):
+                message = ("If a drop monitor is to be installed, "
+                           "all three arguments (window, drop_count_threshold and "
+                           "incident_count threshold) must be provided")
+                raise InvalidArgumentError(message)
+        else:
+            install_drop_monitor = True
+
+        if self.counter_name_in_use(counter_name):
+            raise InvalidArgumentError('Counter name \'{}\' already in use'.format(counter_name))
+
+        available_counters = self.get_available_counters(counter_type)
+        if available_counters is None:
+            raise InvalidArgumentError('Counter type not supported on this device')
+        elif int(available_counters) <= len(self.config_db.get_keys(DEBUG_COUNTER_CONFIG_TABLE)):
+            raise InvalidArgumentError('All counters of this type are currently in use')
+
+        supported_reasons = self.get_supported_reasons(counter_type)
+        if supported_reasons is None:
+            raise InvalidArgumentError('No drop reasons found for this device')
+        elif not all(r in supported_reasons for r in reasons):
+            raise InvalidArgumentError('One or more provided drop reason not supported on this device')
+
+        for reason in reasons:
+            self.config_db.set_entry(DROP_REASON_CONFIG_TABLE, (counter_name, reason), {})
+
+        drop_counter_entry = {'type': counter_type}
+        drop_counter_entry['drop_monitor_status'] = 'disabled'
+
+        if alias:
+            drop_counter_entry['alias'] = alias
+        if group:
+            drop_counter_entry['group'] = group
+        if description or description == '':
+            drop_counter_entry['desc'] = description
+        if install_drop_monitor:
+            drop_counter_entry['window'] = str(window)
+            drop_counter_entry['incident_count_threshold'] = str(ict)
+            drop_counter_entry['drop_count_threshold'] = str(dct)
+
+        self.config_db.set_entry(DEBUG_COUNTER_CONFIG_TABLE,
+                                 counter_name,
+                                 drop_counter_entry)
+
+    def delete_counter(self, counter_name):
+        """
+            Deletes a given counter configuration
+        """
+
+        if not counter_name:
+            raise InvalidArgumentError('No counter name provided')
+
+        if not self.counter_name_in_use(counter_name):
+            raise InvalidArgumentError('Counter \'{}\' not found'.format(counter_name))
+
+        self.config_db.set_entry(DEBUG_COUNTER_CONFIG_TABLE,
+                                 counter_name,
+                                 None)
+
+        # We can't use `delete_table` here because table names are normalized to uppercase.
+        # Counter names can be lowercase (e.g. "test_counter|ACL_ANY"), so we have to go
+        # through and treat each drop reason as an entry to get the correct behavior.
+        for reason in self.get_counter_drop_reasons(counter_name):
+            self.config_db.set_entry(DROP_REASON_CONFIG_TABLE, reason, None)
+
+    def add_reasons(self, counter_name, reasons):
+        """
+            Add a drop reason to a given counter's configuration
+        """
+
+        if not counter_name:
+            raise InvalidArgumentError('No counter name provided')
+
+        if not reasons:
+            raise InvalidArgumentError('No drop reasons provided')
+
+        if not self.counter_name_in_use(counter_name):
+            raise InvalidArgumentError('Counter \'{}\' not found'.format(counter_name))
+
+        supported_reasons = self.get_supported_reasons(self.get_counter_type(counter_name))
+        if supported_reasons is None:
+            raise InvalidArgumentError('No drop reasons found for this device')
+        elif not all(r in supported_reasons for r in reasons):
+            raise InvalidArgumentError('One or more provided drop reason not supported on this device')
+
+        for reason in reasons:
+            self.config_db.set_entry(DROP_REASON_CONFIG_TABLE, (counter_name, reason), {})
+
+    def remove_reasons(self, counter_name, reasons):
+        """
+            Remove a drop reason from a given counter's configuration
+        """
+
+        if not counter_name:
+            raise InvalidArgumentError('No counter name provided')
+
+        if not reasons:
+            raise InvalidArgumentError('No drop reasons provided')
+
+        if not self.counter_name_in_use(counter_name):
+            raise InvalidArgumentError('Counter \'{}\' not found'.format(counter_name))
+
+        for reason in reasons:
+            self.config_db.set_entry(DROP_REASON_CONFIG_TABLE, (counter_name, reason), None)
+
+    def get_config(self, group):
+        """
+            Get the current counter configuration from CONFIG_DB
+        """
+
+        def get_counter_config(counter_name, counter_attributes):
+            """
+                Gets the configuration for a specific counter.
+            """
+
+            counter_metadata = {
+                'name':        counter_name,
+                'alias':       counter_attributes.get('alias', counter_name),
+                'group':       counter_attributes.get('group', 'N/A'),
+                'type':        counter_attributes.get('type', 'N/A'),
+                'description': counter_attributes.get('desc', 'N/A'),
+                'drop_monitor_status': counter_attributes.get('drop_monitor_status', 'N/A'),
+                'window': counter_attributes.get('window', 'N/A'),
+                'drop_count_threshold': counter_attributes.get('drop_count_threshold', 'N/A'),
+                'incident_count_threshold': counter_attributes.get('incident_count_threshold', 'N/A'),
+            }
+
+            # Get the drop reasons for this counter
+            drop_reason_keys = sorted(self.get_counter_drop_reasons(counter_name), key=lambda x: x[1])
+
+            # Fill in the first drop reason
+            num_reasons = len(drop_reason_keys)
+            if num_reasons == 0:
+                counter_metadata['reason'] = 'None'
+            else:
+                counter_metadata['reason'] = drop_reason_keys[0][1]
+
+            if num_reasons <= 1:
+                return [counter_metadata]
+
+            # Add additional rows for remaining drop reasons
+            counter_config = [counter_metadata]
+            for drop_reason in drop_reason_keys[1:]:
+                counter_config.append({'reason': drop_reason[1]})
+
+            return counter_config
+
+        config_table = self.config_db.get_table(DEBUG_COUNTER_CONFIG_TABLE)
+        config = []
+        for counter_name, counter_attributes in sorted(config_table.items()):
+            if group and counter_attributes.get('group', '') != group:
+                continue
+
+            config += get_counter_config(counter_name, counter_attributes)
+        return config
+
+    def get_device_capabilities(self):
+        """
+            Get the device capabilities from STATE_DB
+        """
+
+        capability_query = self.db.keys(self.db.STATE_DB, '{}|*'.format(DEBUG_COUNTER_CAPABILITY_TABLE))
+
+        if not capability_query:
+            return None
+
+        counter_caps = {}
+        for counter_type in capability_query:
+            # Because keys returns the whole key, we trim off the DEBUG_COUNTER_CAPABILITY prefix here
+            counter_caps[counter_type[len(DEBUG_COUNTER_CAPABILITY_TABLE) + 1:]] = self.db.get_all(self.db.STATE_DB, counter_type)
+        return counter_caps
+
+    def counter_name_in_use(self, counter_name):
+        return self.config_db.get_entry(DEBUG_COUNTER_CONFIG_TABLE, counter_name) != {}
+
+    def get_counter_type(self, counter_name):
+        return self.config_db.get_entry(DEBUG_COUNTER_CONFIG_TABLE, counter_name).get('type', None)
+
+    def get_available_counters(self, counter_type):
+        if counter_type is None:
+            return None
+
+        cap_query = self.db.get_all(self.db.STATE_DB, '{}|{}'.format(DEBUG_COUNTER_CAPABILITY_TABLE, counter_type))
+
+        if not cap_query:
+            return None
+
+        return cap_query.get('count', 0)
+
+    def get_supported_reasons(self, counter_type):
+        if counter_type is None:
+            return None
+
+        cap_query = self.db.get_all(self.db.STATE_DB, '{}|{}'.format(DEBUG_COUNTER_CAPABILITY_TABLE, counter_type))
+
+        if not cap_query:
+            return None
+
+        return deserialize_reason_list(cap_query.get('reasons', ''))
+
+    def get_counter_drop_reasons(self, counter_name):
+        # get_keys won't filter on counter_name for us because the counter name is case sensitive and
+        # get_keys will normalize the table name to uppercase.
+        return [key for key in self.config_db.get_keys(DROP_REASON_CONFIG_TABLE) if key[0] == counter_name]
+
+class DropConfigWrapper(object):
+    """A wrapper to execute dropconfig cmd over the correct namespaces"""
+    def __init__(self, namespace):
+        self.namespace = namespace
+        if namespace is not None and namespace not in multi_asic.get_namespace_list():
+            print('Encountered error, namespace not recognized: {}. Valid namespaces {}'.format(namespace,
+                                                                                                multi_asic.get_namespace_list()))
+            sys.exit(1)
+
+        # Initialize the multi-asic namespace
+        self.multi_asic = multi_asic_util.MultiAsic(constants.DISPLAY_ALL, namespace_option=namespace)
+        self.db = None
+        self.config_db = None
+
+    @multi_asic_util.run_on_multi_asic
+    def run(self,
+            command,
+            name,
+            alias,
+            group,
+            counter_type,
+            description,
+            reasons,
+            window,
+            incident_count_threshold,
+            drop_count_threshold):
+
+        dconfig = DropConfig(self.multi_asic.current_namespace, self.db, self.config_db)
+
+        if command == 'install':
+            try:
+                dconfig.create_counter(name,
+                                       alias,
+                                       group,
+                                       counter_type,
+                                       description,
+                                       reasons,
+                                       window,
+                                       incident_count_threshold,
+                                       drop_count_threshold)
+            except InvalidArgumentError as err:
+                print('Encountered error trying to install counter: {}'.format(err.message))
+                sys.exit(1)
+        elif command == 'uninstall':
+            try:
+                dconfig.delete_counter(name)
+            except InvalidArgumentError as err:
+                print('Encountered error trying to uninstall counter: {}'.format(err.message))
+                sys.exit(1)
+        elif command == 'add':
+            try:
+                dconfig.add_reasons(name, reasons)
+            except InvalidArgumentError as err:
+                print('Encountered error trying to add reasons: {}'.format(err.message))
+                sys.exit(1)
+        elif command == 'remove':
+            try:
+                dconfig.remove_reasons(name, reasons)
+            except InvalidArgumentError as err:
+                print('Encountered error trying to remove reasons: {}'.format(err.message))
+                sys.exit(1)
+        elif command == 'enable_drop_monitor':
+            try:
+                dconfig.enable_drop_monitor(name,
+                                        window,
+                                        incident_count_threshold,
+                                        drop_count_threshold)
+            except InvalidArgumentError as err:
+                print('Encountered error trying to enable drop monitor: {}'.format(err.message))
+                sys.exit(1)
+        elif command == 'disable_drop_monitor':
+            try:
+                dconfig.disable_drop_monitor(name)
+            except InvalidArgumentError as err:
+                print('Encountered error trying to disable drop monitor: {}'.format(err.message))
+                sys.exit(1)
+        elif command == 'show_drop_monitor_persistent_drops':
+            dconfig.print_drop_monitor_persistent_drops(name)
+        elif command == 'show_config':
+            dconfig.print_counter_config(group)
+        elif command == 'show_capabilities':
+            dconfig.print_device_capabilities()
+        else:
+            print("Command not recognized")
+
+def deserialize_reason_list(list_str):
+    if list_str is None:
+        return None
+
+    if '|' in list_str or ':' in list_str:
+        raise InvalidArgumentError('Malformed drop reason provided')
+
+    list_str = list_str.replace(' ', '')
+    list_str = list_str.strip('[')
+    list_str = list_str.strip(']')
+
+    if len(list_str) == 0:
+        return []
+    else:
+        return list_str.split(',')
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Manage drop counters',
+                                     formatter_class=argparse.RawTextHelpFormatter,
+                                     epilog="""
+Examples:
+  dropconfig
+  dropconfig -ns asic0
+""")
+
+    # Version
+    parser.add_argument('-v', '--version', action='version', version='%(prog)s 1.0')
+
+    # Actions
+    parser.add_argument('-c', '--command', type=str, help='Desired action to perform')
+
+    # Variables
+    parser.add_argument('-n', '--name',    type=str, help='The name of the target drop counter',                   default=None)
+    parser.add_argument('-a', '--alias',   type=str, help='The alias of the target drop counter',                  default=None)
+    parser.add_argument('-g', '--group',   type=str, help='The group of the target drop counter',                  default=None)
+    parser.add_argument('-t', '--type',    type=str, help='The type of the target drop counter',                   default=None)
+    parser.add_argument('-d', '--desc',    type=str, help='The description for the target drop counter',           default=None)
+    parser.add_argument('-r', '--reasons', type=str, help='The list of drop reasons for the target drop counter',  default=None)
+    parser.add_argument('-w', '--window', type=int, help='The window for drop counter monitor in seconds',  default=None)
+    parser.add_argument('-dct', '--drop-count-threshold', type=int, help='The minimum drops needed to classify a drop as an incident by the drop count monitor',  default=None)
+    parser.add_argument('-ict', '--incident-count-threshold', type=int, help='The minimum number of incidents needed to trigger a persistent drop alert',  default=None)
+    parser.add_argument('-ns', '--namespace', type=str, help='Perform operation on a specific namespace or skip for all',  default=None)
+
+    args = parser.parse_args()
+
+    command = args.command
+
+    name = args.name
+    alias = args.alias
+    group = args.group
+    counter_type = args.type
+    description = args.desc
+    drop_reasons = args.reasons
+    namespace = args.namespace
+
+    # These arguments are used to control the Drop Counter Monitor feature
+    # This is an optional feature and more details on its usage can be found at: https://github.com/sonic-net/SONiC/blob/master/doc/drop_counters/drop_counters_HLD.md
+    window = args.window
+    drop_count_threshold = args.drop_count_threshold
+    incident_count_threshold = args.incident_count_threshold
+
+    reasons = deserialize_reason_list(drop_reasons)
+
+    dropconfig_wrapper = DropConfigWrapper(namespace)
+    dropconfig_wrapper.run(command,
+                           name,
+                           alias,
+                           group,
+                           counter_type,
+                           description,
+                           reasons,
+                           window,
+                           incident_count_threshold,
+                           drop_count_threshold)
+
+if __name__ == '__main__':
+    main()

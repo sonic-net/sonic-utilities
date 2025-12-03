@@ -1,0 +1,64 @@
+#!/usr/bin/env python3
+
+#####################################################################
+#
+# watermarkcfg is a tool for watermark configs.
+#
+#####################################################################
+
+import argparse
+import sys
+from swsscommon.swsscommon import ConfigDBConnector
+
+
+class Watermarkcfg(object):
+
+    def __init__(self):
+        pass
+
+    def set_interval(self, interval):
+        configdb = ConfigDBConnector()
+        configdb.connect()
+
+        configdb.mod_entry('WATERMARK_TABLE', 'TELEMETRY_INTERVAL', {'interval': interval})
+
+    def show_interval(self):
+        configdb = ConfigDBConnector()
+        configdb.connect()
+
+        wm_info = configdb.get_entry('WATERMARK_TABLE', 'TELEMETRY_INTERVAL')
+        if wm_info:
+            print('\nTelemetry interval: ' + wm_info['interval'] + ' second(s)\n')
+        else:
+            print('\nTelemetry interval 120 second(s)\n')
+
+
+def main():
+
+    parser = argparse.ArgumentParser(description='Display the watermark counters',
+                                      formatter_class=argparse.RawTextHelpFormatter,
+                                      epilog="""
+Examples:
+  watermarkcfg -c 30
+  watermarkcfg -s
+""")
+
+
+    parser.add_argument('-s', '--show-interval', action='store_true', help='Show currently configured telemetry interval')
+    parser.add_argument('-c', '--config-interval', action='store', type=int, help='Set telemetry interval')
+    parser.add_argument('-v', '--version', action='version', version='%(prog)s 1.0')
+
+    args = parser.parse_args()
+    watermarkcfg = Watermarkcfg()
+
+    if args.show_interval:
+        watermarkcfg.show_interval()
+        sys.exit(0)
+
+    if args.config_interval:
+        watermarkcfg.set_interval(args.config_interval)
+        sys.exit(0)
+
+
+if __name__ == "__main__":
+    main()

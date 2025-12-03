@@ -1,0 +1,34 @@
+{
+  "ROUTE_TABLE:192.168.104.0/25": {
+    "nexthop": "10.0.0.57,10.0.0.59,10.0.0.61,10.0.0.63",
+    "ifname" : "PortChannel101,PortChannel102,PortChannel103,PortChannel104"
+  },
+  "ROUTE_TABLE:192.168.104.128/25": {
+    "nexthop": "",
+    "ifname" : "PortChannel101,PortChannel102,PortChannel103,PortChannel104"
+  },
+  "ROUTE_TABLE:192.168.112.0/25": {
+    "nexthop": "10.0.0.57,10.0.0.59,10.0.0.61,10.0.0.63",
+    "ifname" : ""
+  },
+  "ROUTE_TABLE:VRF-Red:192.168.112.128/25": {
+    "nexthop": "10.0.0.57,10.0.0.59,10.0.0.61,10.0.0.63",
+    "ifname" : "PortChannel101,PortChannel102,PortChannel103,PortChannel104"
+  },
+  "ROUTE_TABLE:192.168.120.0/25": {
+    "nexthop": "10.0.0.57,10.0.0.59,10.0.0.61,10.0.0.63",
+    "ifname" : "PortChannel101,PortChannel102,PortChannel103,PortChannel104"
+  },
+  "ROUTE_TABLE:20c0:fe28:0:80::/64": {
+    "nexthop": "fc00::72,fc00::76,fc00::7a,fc00::7e",
+    "ifname" : "PortChannel101,PortChannel102,PortChannel103,PortChannel104"
+  },
+  "ROUTE_TABLE:20c0:fe28::/64": {
+    "nexthop": "fc00::72,fc00::76,fc00::7a,fc00::7e",
+    "ifname" : "PortChannel101,PortChannel102,PortChannel103,PortChannel104"
+  },
+  "ROUTE_TABLE:20c0:fe30:0:80::/64": {
+    "nexthop": "",
+    "ifname" : "PortChannel101,PortChannel102,PortChannel103,PortChannel104"
+  }
+}

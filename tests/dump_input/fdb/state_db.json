@@ -1,0 +1,30 @@
+{
+        "FDB_TABLE|Vlan50:04:3f:72:e3:70:08":{
+                "port" : "Ethernet0",
+                "type" : "dynamic"
+        },
+        "FDB_TABLE|Vlan10:04:3f:72:ce:80:8b":{
+                "port" : "Ethernet252",
+                "type" : "static"
+        },
+        "FDB_TABLE|Vlan10:04:3f:72:ce:80:8c":{
+                "port" : "Ethernet252",
+                "type" : "dynamic"
+        },
+        "FDB_TABLE|Vlan10:04:3f:72:ce:80:8d":{
+                "port" : "Ethernet252",
+                "type" : "dynamic"
+        },
+        "FDB_TABLE|Vlan690:04:3f:72:ce:80:8b":{
+                "port" : "Ethernet248",
+                "type" : "dynamic"
+        },
+        "FDB_TABLE|Vlan40:04:3f:72:e3:70:09":{
+                "port" : "PortChannel0002",
+                "type" : "dynamic"
+        },
+        "FDB_TABLE|Vlan691:04:3f:72:ce:80:8b":{
+                "port" : "Ethernet248",
+                "type" : "dynamic"
+        }
+}

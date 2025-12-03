@@ -1,0 +1,37 @@
+{
+	"acl": {
+		"acl-sets": {
+			"acl-set": {
+                "DATAACL": {
+					"acl-entries": {
+						"acl-entry": {
+							"1": {
+								"config": {
+									"sequence-id": 1
+								},
+								"actions": {
+									"config": {
+										"forwarding-action": "ACCEPT"
+									}
+								},
+								"ip": {
+									"config": {
+										"protocol": "IP_ICMP",
+										"source-ip-address": "20.0.0.2/32",
+										"destination-ip-address": "30.0.0.3/32"
+									}
+								},
+								"icmp": {
+									"config": {
+										"type": "3",
+										"code": "-1"
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+}

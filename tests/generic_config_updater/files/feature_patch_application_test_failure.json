@@ -1,0 +1,35 @@
+{
+    "RDMA_SHARED_POOL_SIZE_CHANGE__FAILURE": {
+        "desc": "For RDMA shared pool size tuning- adjust both shared pool and headroom pool",
+        "current_config": {
+            "BUFFER_POOL": {
+                "ingress_lossless_pool": {
+                    "xoff": "4194112",
+                    "type": "ingress",
+                    "mode": "dynamic",
+                    "size": "10875072"
+                },
+                "egress_lossless_pool": {
+                    "type": "egress",
+                    "mode": "static",
+                    "size": "15982720"
+                },
+                "egress_lossy_pool": {
+                    "type": "egress",
+                    "mode": "dynamic",
+                    "size": "9243812"
+                }
+            }
+        },
+        "patch": [
+            {
+                "op": "replace",
+                "path": "/BUFFER_POOL/ingress_lossless_pool/xoff",
+                "value": "invalid_xoff"
+            }
+        ],
+        "expected_error_substrings": [
+            "Given patch will produce invalid config"
+        ]
+    }
+}

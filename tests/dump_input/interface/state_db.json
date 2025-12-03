@@ -1,0 +1,38 @@
+{
+    "INTERFACE_TABLE|Ethernet16": {
+        "vrf": ""
+    },
+    "INTERFACE_TABLE|Ethernet16|3.3.3.1/24": {
+        "state": "ok"
+    },
+    "INTERFACE_TABLE|PortChannel1111": {
+        "vrf": ""
+    },
+    "INTERFACE_TABLE|PortChannel1111|1.1.1.1/24": {
+        "state": "ok"
+    },
+    "INTERFACE_TABLE|Vlan10": {
+        "vrf": ""
+    },
+    "INTERFACE_TABLE|Vlan10|2.2.2.1/24": {
+        "state": "ok"
+    },
+    "INTERFACE_TABLE|Eth0.1": {
+        "vrf": ""
+    },
+    "INTERFACE_TABLE|Eth0.1|9.9.9.9/24": {
+        "state": "ok"
+    },
+    "INTERFACE_TABLE|PortChannel1234": {
+        "vrf": ""
+    },
+    "INTERFACE_TABLE|PortChannel1234|7.7.7.1/24": {
+        "state": "ok"
+    },
+    "INTERFACE_TABLE|Loopback0": {
+        "vrf": ""
+    },
+    "INTERFACE_TABLE|Loopback0|10.1.0.1/32": {
+        "state": "ok"
+    }
+}

@@ -1,0 +1,12 @@
+{
+    "DEVICE_METADATA": {
+        "localhost": {
+            "hwsku": "Mellanox-SN2700-C28D8", 
+            "hostname": "sonic", 
+            "platform": "x86_64-mlnx_2700-r0", 
+            "mac": "7c:fe:90:f8:06:80", 
+            "bgp_asn": "65100", 
+            "type": "LeafRouter"
+        }
+    }
+}

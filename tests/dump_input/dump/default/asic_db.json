@@ -1,0 +1,50 @@
+{
+        "ASIC_STATE:SAI_OBJECT_TYPE_HOSTIF:oid:0xd000000000a4d":{
+                "SAI_HOSTIF_ATTR_TYPE" : "SAI_HOSTIF_TYPE_NETDEV",
+                "SAI_HOSTIF_ATTR_OBJ_ID": "oid:0x100000000036a",
+                "SAI_HOSTIF_ATTR_NAME" : "Ethernet176",
+                "SAI_HOSTIF_ATTR_OPER_STATUS" : "true"
+        },
+        "ASIC_STATE:SAI_OBJECT_TYPE_PORT:oid:0x100000000036a": { 
+                "SAI_PORT_ATTR_ADMIN_STATE" : "true",
+                "SAI_PORT_ATTR_SPEED" : "25000",
+                "SAI_PORT_ATTR_MTU"   : "9122"
+        },
+        "ASIC_STATE:SAI_OBJECT_TYPE_HOSTIF:oid:0xd000000000a49":{
+                "SAI_HOSTIF_ATTR_TYPE" : "SAI_HOSTIF_TYPE_NETDEV",
+                "SAI_HOSTIF_ATTR_OBJ_ID": "oid:0x10000000002e6",
+                "SAI_HOSTIF_ATTR_NAME" : "Ethernet160",
+                "SAI_HOSTIF_ATTR_OPER_STATUS" : "true"
+        },
+        "ASIC_STATE:SAI_OBJECT_TYPE_HOSTIF:oid:0xd000000000a4a":{
+                "SAI_HOSTIF_ATTR_TYPE" : "SAI_HOSTIF_TYPE_NETDEV",
+                "SAI_HOSTIF_ATTR_OBJ_ID": "oid:0x1000000000307",
+                "SAI_HOSTIF_ATTR_OPER_STATUS" : "true"
+        },
+        "ASIC_STATE:SAI_OBJECT_TYPE_PORT:oid:0x1000000000307": {
+                "SAI_PORT_ATTR_ADMIN_STATE" : "true",
+                "SAI_PORT_ATTR_SPEED" : "25000",
+                "SAI_PORT_ATTR_MTU"   : "9122"
+        },
+        "ASIC_STATE:SAI_OBJECT_TYPE_SWITCH:oid:0x21000000000000": {
+                "SAI_SWITCH_ATTR_INIT_SWITCH": "true",
+                "SAI_SWITCH_ATTR_SRC_MAC_ADDRESS": "DE:AD:BE:EF:CA:FE"
+        },
+        "ASIC_STATE:SAI_OBJECT_TYPE_HOSTIF:oid:0xd00000000056d": {
+                        "SAI_HOSTIF_ATTR_NAME": "Ethernet0",
+                        "SAI_HOSTIF_ATTR_OBJ_ID": "oid:0x10000000004a4",
+                        "SAI_HOSTIF_ATTR_OPER_STATUS": "true",
+                        "SAI_HOSTIF_ATTR_TYPE": "SAI_HOSTIF_TYPE_NETDEV",
+                        "SAI_HOSTIF_ATTR_VLAN_TAG": "SAI_HOSTIF_VLAN_TAG_STRIP"
+        },
+        "ASIC_STATE:SAI_OBJECT_TYPE_PORT:oid:0x10000000004a4": {
+                        "NULL": "NULL",
+                        "SAI_PORT_ATTR_ADMIN_STATE": "true",
+                        "SAI_PORT_ATTR_MTU": "9122",
+                        "SAI_PORT_ATTR_SPEED": "100000"
+        },
+        "VIDTORID":{
+                        "oid:0xd00000000056d": "oid:0xd",
+                "oid:0x10000000004a4": "oid:0x1690000000001"
+        }
+}
