@@ -239,7 +239,8 @@ def test_check_no_voq_chassis(monkeypatch, mock_run_redis_dump, mock_device_info
     monkeypatch.setattr(sys, "argv", ["chassis_db_consistency_checker.py"])
     rc = chassis_db_consistency_checker.main()
     assert rc == 0
-    assert caplog.text.strip() == "INFO     root:chassis_db_consistency_checker.py:146 Not a voq chassis device. Exiting....."
+    expected_msg = "INFO     root:chassis_db_consistency_checker.py:146 Not a voq chassis device. Exiting....."
+    assert caplog.text.strip() == expected_msg
 
 
 def test_check_no_supervisor(monkeypatch, mock_run_redis_dump, mock_device_info_supervisor, caplog):
@@ -247,7 +248,8 @@ def test_check_no_supervisor(monkeypatch, mock_run_redis_dump, mock_device_info_
     monkeypatch.setattr(sys, "argv", ["chassis_db_consistency_checker.py"])
     rc = chassis_db_consistency_checker.main()
     assert rc == 0
-    assert caplog.text.strip() == "INFO     root:chassis_db_consistency_checker.py:150 Not supported on supervisor. Exiting...."
+    expected_msg = "INFO     root:chassis_db_consistency_checker.py:150 Not supported on supervisor. Exiting...."
+    assert caplog.text.strip() == expected_msg
 
 
 def test_no_mismatch(monkeypatch, mock_run_redis_dump, mock_multi_asic, mock_device_info):
