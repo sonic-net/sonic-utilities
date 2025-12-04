@@ -196,7 +196,7 @@ setup(
         'scripts/sysreadyshow',
         'scripts/wredstat',
         'scripts/sonic-error-report',
-        'scripts/chassis_lag_id_checker.py'
+        'scripts/chassis_db_consistency_checker.py'
     ],
     entry_points={
         'console_scripts': [

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 
 """
-chassis_lag_id_checker
+chassis_db_consistency_checker
 
 This script checks for synchronization of LAG (Link Aggregation Group) IDs
 between the chassis_db and asic_db on VOQ chassis Linecard.
@@ -19,7 +19,7 @@ It performs the following steps:
 Intended to be run on line cards (not on the supervisor) of a VOQ chassis
 device.
 Usage:
-    python3 chassis_lag_id_checker [--log-level LEVEL]
+    python3 chassis_db_consistency_checker [--log-level LEVEL]
 
 Arguments:
     --log-level LEVEL   Set the logging level (DEBUG, INFO, WARNING, ERROR,
