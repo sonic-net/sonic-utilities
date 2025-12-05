@@ -10472,7 +10472,7 @@ def mld_snooping_optimised_multicast_flood(ctx, vid, link_local_groups_suppressi
     vlan = db.get_entry('VLAN', vlan_name)
     if len(vlan) == 0:
         ctx.fail("{} doesn't exist".format(vlan_name))
-    l2mc_enable = db.get_entry('L2MC', vlan_name)
+    l2mc_enable = db.get_entry('MLD_L2MC', vlan_name)
     if len(l2mc_enable) < 1:
         ctx.fail("{} doesn't enable IGMP Snooping".format(vlan_name))
     l2mc_suppress = db.get_entry('L2MC_SUPPRESS', vlan_name)
@@ -10497,7 +10497,7 @@ def mld_snooping_optimised_multicast_flood(ctx, vid, optimised_multicast_flood):
     vlan = db.get_entry('VLAN', vlan_name)
     if len(vlan) == 0:
         ctx.fail("{} doesn't exist".format(vlan_name))
-    l2mc_enable = db.get_entry('L2MC', vlan_name)
+    l2mc_enable = db.get_entry('MLD_L2MC', vlan_name)
     if len(l2mc_enable) < 1:
         ctx.fail("{} doesn't enable IGMP Snooping".format(vlan_name))
     
