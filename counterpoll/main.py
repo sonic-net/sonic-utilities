@@ -10,6 +10,7 @@ from swsscommon.swsscommon import CFG_FLEX_COUNTER_TABLE_NAME as CFG_FLEX_COUNTE
 
 BUFFER_POOL_WATERMARK = "BUFFER_POOL_WATERMARK"
 PORT_BUFFER_DROP = "PORT_BUFFER_DROP"
+PORT_ATTR = "PORT_ATTR"
 PG_DROP = "PG_DROP"
 ACL = "ACL"
 ENI = "ENI"
@@ -141,6 +142,38 @@ def disable():
     port_info['FLEX_COUNTER_STATUS'] = DISABLE
     configdb.mod_entry("FLEX_COUNTER_TABLE", PORT_BUFFER_DROP, port_info)
 
+# PHY counter commands
+@cli.group()
+def phy():
+    """ PHY counter commands """
+
+@phy.command()
+@click.argument('poll_interval', type=click.IntRange(100, 30000))
+def interval(poll_interval):
+    """ Set PHY counter query interval """
+    configdb = ConfigDBConnector()
+    configdb.connect()
+    port_info = {}
+    port_info['POLL_INTERVAL'] = poll_interval
+    configdb.mod_entry("FLEX_COUNTER_TABLE", PORT_ATTR, port_info)
+
+@phy.command()
+def enable():
+    """ Enable PHY counter query """
+    configdb = ConfigDBConnector()
+    configdb.connect()
+    port_info = {}
+    port_info['FLEX_COUNTER_STATUS'] = ENABLE
+    configdb.mod_entry("FLEX_COUNTER_TABLE", PORT_ATTR, port_info)
+
+@phy.command()
+def disable():
+    """ Disable PHY counter query """
+    configdb = ConfigDBConnector()
+    configdb.connect()
+    port_info = {}
+    port_info['FLEX_COUNTER_STATUS'] = DISABLE
+    configdb.mod_entry("FLEX_COUNTER_TABLE", PORT_ATTR, port_info)
 
 # Ingress PG drop packet stat
 @cli.group()
@@ -601,6 +634,7 @@ def show():
     queue_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'QUEUE')
     port_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'PORT')
     port_drop_info = configdb.get_entry('FLEX_COUNTER_TABLE', PORT_BUFFER_DROP)
+    port_attr_info = configdb.get_entry('FLEX_COUNTER_TABLE', PORT_ATTR)
     rif_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'RIF')
     queue_wm_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'QUEUE_WATERMARK')
     pg_wm_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'PG_WATERMARK')
@@ -624,6 +658,8 @@ def show():
         data.append(["PORT_STAT", port_info.get("POLL_INTERVAL", DEFLT_1_SEC), port_info.get("FLEX_COUNTER_STATUS", DISABLE)])
     if port_drop_info:
         data.append([PORT_BUFFER_DROP, port_drop_info.get("POLL_INTERVAL", DEFLT_60_SEC), port_drop_info.get("FLEX_COUNTER_STATUS", DISABLE)])
+    if port_attr_info:
+        data.append(["PHY", port_attr_info.get("POLL_INTERVAL", DEFLT_10_SEC), port_attr_info.get("FLEX_COUNTER_STATUS", DISABLE)])
     if rif_info:
         data.append(["RIF_STAT", rif_info.get("POLL_INTERVAL", DEFLT_1_SEC), rif_info.get("FLEX_COUNTER_STATUS", DISABLE)])
     if queue_wm_info:
