@@ -81,12 +81,12 @@ Ethernet8        N/A      N/A      N/A      N/A      N/A      N/A      N/A      
 
 intf_fec_counters_period = """\
 The rates are calculated within 3 seconds period
-    IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR
----------  -------  ----------  ------------  ----------------
-Ethernet0        D           0             0                 0
-Ethernet4      N/A           0             0                 0
-Ethernet8      N/A           0             0                 0
-"""
+    IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER    FEC_PRE_BER_MAX    FLR(O)    FLR(P) (Accuracy)
+---------  -------  ----------  ------------  ----------------  -------------  --------------  -----------------  --------  -------------------
+Ethernet0        D           0             0                 0            N/A             N/A                N/A         0                    0
+Ethernet4      N/A           0             0                 0            N/A             N/A                N/A  4.21e-10       7.81e-10 (89%)
+Ethernet8      N/A           0             0                 0            N/A             N/A                N/A       N/A                  N/A
+"""  # noqa: E501
 
 intf_counters_period = """\
 The rates are calculated within 3 seconds period
@@ -453,8 +453,6 @@ class TestPortStat(object):
         print("result = {}".format(result))
         assert return_code == 0
         assert result == intf_fec_counters_period
-
-
 
     def test_show_intf_counters_period(self):
         runner = CliRunner()
