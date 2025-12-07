@@ -5,7 +5,6 @@ from jsonpointer import JsonPointer
 import sonic_yang
 import sonic_yang_ext
 import subprocess
-import yang as ly
 import copy
 import re
 import os
@@ -539,10 +538,8 @@ class PathAddressing:
         # Iterate across all paths fetching references
         for path in paths:
             xpath = self.convert_path_to_xpath(path, config, sy)
-
-            leaf_xpaths = self._get_inner_leaf_xpaths(xpath, sy)
-            for xpath in leaf_xpaths:
-                ref_xpaths.extend(sy.find_data_dependencies(xpath))
+            # NOTE: This will recursively find dependencies for all decendents
+            ref_xpaths.extend(sy.find_data_dependencies(xpath))
 
         # For each xpath, convert to configdb path
         for ref_xpath in ref_xpaths:
@@ -553,22 +550,6 @@ class PathAddressing:
 
         ref_paths.sort()
         return ref_paths
-
-    def _get_inner_leaf_xpaths(self, xpath, sy):
-        if xpath == "/": # Point to Root element which contains all xpaths
-            nodes = sy.root.tree_for()
-        else: # Otherwise get all nodes that match xpath
-            nodes = sy.root.find_path(xpath).data()
-
-        for node in nodes:
-            for inner_node in node.tree_dfs():
-                # TODO: leaflist also can be used as the 'path' argument in 'leafref' so add support to leaflist
-                if self._is_leaf_node(inner_node):
-                    yield inner_node.path()
-
-    def _is_leaf_node(self, node):
-        schema = node.schema()
-        return ly.LYS_LEAF == schema.nodetype()
 
     def convert_path_to_xpath(self, path, config=None, sy=None):
         """
