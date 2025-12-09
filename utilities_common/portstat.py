@@ -760,12 +760,22 @@ class Portstat(object):
                     table.append((key, self.get_port_state(key),
                                   ns_diff(cntr['fec_corr'], old_cntr['fec_corr']),
                                   ns_diff(cntr['fec_uncorr'], old_cntr['fec_uncorr']),
-                                  ns_diff(cntr['fec_symbol_err'], old_cntr['fec_symbol_err'])))
+                                  ns_diff(cntr['fec_symbol_err'], old_cntr['fec_symbol_err']),
+                                  format_fec_ber(rates.fec_pre_ber),
+                                  format_fec_ber(rates.fec_post_ber),
+                                  format_fec_ber(rates.fec_pre_ber_max),
+                                  format_fec_flr(rates.fec_flr),
+                                  format_fec_flr_predicted(rates.fec_flr_predicted, rates.fec_flr_r_squared)))
                 else:
                     table.append((key, self.get_port_state(key),
                                   format_number_with_comma(cntr['fec_corr']),
                                   format_number_with_comma(cntr['fec_uncorr']),
-                                  format_number_with_comma(cntr['fec_symbol_err'])))
+                                  format_number_with_comma(cntr['fec_symbol_err']),
+                                  format_fec_ber(rates.fec_pre_ber),
+                                  format_fec_ber(rates.fec_post_ber),
+                                  format_fec_ber(rates.fec_pre_ber_max),
+                                  format_fec_flr(rates.fec_flr),
+                                  format_fec_flr_predicted(rates.fec_flr_predicted, rates.fec_flr_r_squared)))
             elif fec_hist_only:
                 header = header_fec_hist_only
 
