@@ -33,6 +33,7 @@ except KeyError:
     pass
 
 # Default configuration
+MAX_POLL_INTERVAL_TIME = 1000
 DEFAULT_DETECTION_TIME = 200
 DEFAULT_RESTORATION_TIME = 200
 DEFAULT_POLL_INTERVAL = 200
@@ -344,7 +345,7 @@ class PfcwdCli(object):
         pfcwd_info = {}
         if poll_interval is not None:
             pfcwd_table = self.config_db.get_table(CONFIG_DB_PFC_WD_TABLE_NAME)
-            entry_min = 3000
+            entry_min = MAX_POLL_INTERVAL_TIME
             for entry in pfcwd_table:
                 if("Ethernet" not in entry):
                     continue
@@ -418,6 +419,11 @@ class PfcwdCli(object):
 
         # Paramter values positively correlate to the number of ports.
         multiply = max(1, (port_num-1)//DEFAULT_PORT_NUM+1)
+
+        pfc_wd_poll_interval_time = DEFAULT_POLL_INTERVAL * multiply
+        if pfc_wd_poll_interval_time > MAX_POLL_INTERVAL_TIME:
+            pfc_wd_poll_interval_time = MAX_POLL_INTERVAL_TIME
+        
         pfcwd_info = {
             'detection_time': DEFAULT_DETECTION_TIME * multiply,
             'restoration_time': DEFAULT_RESTORATION_TIME * multiply,
@@ -429,7 +435,7 @@ class PfcwdCli(object):
             self.verify_pfc_enable_status_per_port(port, pfcwd_info, overwrite=True)
 
         pfcwd_info = {}
-        pfcwd_info['POLL_INTERVAL'] = DEFAULT_POLL_INTERVAL * multiply
+        pfcwd_info['POLL_INTERVAL'] = pfc_wd_poll_interval_time
         self.config_db.mod_entry(
             CONFIG_DB_PFC_WD_TABLE_NAME, "GLOBAL", pfcwd_info
         )
@@ -521,7 +527,7 @@ class Start(object):
 # Set WD poll interval
 class Interval(object):
     @cli.command()
-    @click.argument('poll_interval', type=click.IntRange(100, 3000))
+    @click.argument('poll_interval', type=click.IntRange(100, MAX_POLL_INTERVAL_TIME))
     @clicommon.pass_db
     def interval(db, poll_interval):
         """ Set PFC watchdog counter polling interval """
