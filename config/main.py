@@ -10474,7 +10474,7 @@ def mld_snooping_optimised_multicast_flood(ctx, vid, link_local_groups_suppressi
         ctx.fail("{} doesn't exist".format(vlan_name))
     l2mc_enable = db.get_entry('MLD_L2MC', vlan_name)
     if len(l2mc_enable) < 1:
-        ctx.fail("{} doesn't enable IGMP Snooping".format(vlan_name))
+        ctx.fail("{} is not MLD Snooping enable".format(vlan_name))
     l2mc_suppress = db.get_entry('L2MC_SUPPRESS', vlan_name)
     if "ipv4-link-local-groups-suppression" in l2mc_suppress and l2mc_suppress["ipv4-link-local-groups-suppression"] == "enable":
         ctx.fail("{} link-local group suppression cannot be used simultaneously with IGMP Snooping and MLD Snooping.please disable IGMP Snooping link_local_groups_suppression first ".format(vlan_name))
@@ -10499,7 +10499,7 @@ def mld_snooping_optimised_multicast_flood(ctx, vid, optimised_multicast_flood):
         ctx.fail("{} doesn't exist".format(vlan_name))
     l2mc_enable = db.get_entry('MLD_L2MC', vlan_name)
     if len(l2mc_enable) < 1:
-        ctx.fail("{} doesn't enable IGMP Snooping".format(vlan_name))
+        ctx.fail("{} is not MLD Snooping enable".format(vlan_name))
     
     db.mod_entry('L2MC_SUPPRESS', vlan_name, {'ipv6-optimised-multicast-flood': optimised_multicast_flood})
 
