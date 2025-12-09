@@ -38,16 +38,16 @@ header_std = ['IFACE', 'STATE', 'RX_OK', 'RX_BPS', 'RX_UTIL', 'RX_ERR', 'RX_DRP'
               'TX_OK', 'TX_BPS', 'TX_UTIL', 'TX_ERR', 'TX_DRP', 'TX_OVR']
 header_errors_only = ['IFACE', 'STATE', 'RX_ERR', 'RX_DRP', 'RX_OVR', 'TX_ERR', 'TX_DRP', 'TX_OVR']
 header_fec_only = ['IFACE', 'STATE', 'FEC_CORR', 'FEC_UNCORR', 'FEC_SYMBOL_ERR', 'FEC_PRE_BER',
-                   'FEC_POST_BER', 'FEC_PRE_BER_MAX', 'FLR(O)', 'FLR(P) (Accuracy)']
+                   'FEC_POST_BER', 'FEC_PRE_BER_MAX', 'FLR(O)', 'FLR(P) (Accuracy)', 'FEC_MAX_T']
 header_fec_hist_only = ['IFACE', 'BIN0', 'BIN1', 'BIN2', 'BIN3', 'BIN4', 'BIN5', 'BIN6', 'BIN7',
                         'BIN8', 'BIN9', 'BIN10', 'BIN11', 'BIN12', 'BIN13', 'BIN14', 'BIN15']
 header_rates_only = ['IFACE', 'STATE', 'RX_OK', 'RX_BPS', 'RX_PPS', 'RX_UTIL', 'TX_OK', 'TX_BPS', 'TX_PPS', 'TX_UTIL']
 header_trim_only = ['IFACE', 'STATE', 'TRIM_PKTS', 'TRIM_TX_PKTS', 'TRIM_DRP_PKTS']
 
 rates_key_list = ['RX_BPS', 'RX_PPS', 'RX_UTIL', 'TX_BPS', 'TX_PPS', 'TX_UTIL', 'FEC_PRE_BER',
-                  'FEC_POST_BER', 'FEC_PRE_BER_MAX', 'FEC_FLR', 'FEC_FLR_PREDICTED', 'FEC_FLR_R_SQUARED']
+                  'FEC_POST_BER', 'FEC_PRE_BER_MAX', 'FEC_FLR', 'FEC_FLR_PREDICTED', 'FEC_FLR_R_SQUARED', 'FEC_MAX_T']
 ratestat_fields = ("rx_bps",  "rx_pps", "rx_util", "tx_bps", "tx_pps", "tx_util", "fec_pre_ber", "fec_post_ber",
-                   "fec_pre_ber_max", "fec_flr", "fec_flr_predicted", "fec_flr_r_squared")
+                   "fec_pre_ber_max", "fec_flr", "fec_flr_predicted", "fec_flr_r_squared", "fec_max_t")
 RateStats = namedtuple("RateStats", ratestat_fields)
 
 """
@@ -271,12 +271,13 @@ class Portstat(object):
             fec_flr = self.db.get(self.db.CHASSIS_STATE_DB, key, "fec_flr")
             fec_flr_predicted = self.db.get(self.db.CHASSIS_STATE_DB, key, "fec_flr_predicted")
             fec_flr_r_squared = self.db.get(self.db.CHASSIS_STATE_DB, key, "fec_flr_r_squared")
+            fec_max_t = self.db.get(self.db.CHASSIS_STATE_DB, key, "fec_max_t")
             port_alias = key.split("|")[-1]
             cnstat_dict[port_alias] = NStats._make([rx_ok, rx_err, rx_drop, rx_ovr, tx_ok, tx_err, tx_drop, tx_ovr] +
                                                    [STATUS_NA] * (len(NStats._fields) - 8))._asdict()
             ratestat_dict[port_alias] = RateStats._make([rx_bps, rx_pps, rx_util, tx_bps,
                                                         tx_pps, tx_util, fec_pre_ber, fec_post_ber, fec_pre_ber_max,
-                                                        fec_flr, fec_flr_predicted, fec_flr_r_squared])
+                                                        fec_flr, fec_flr_predicted, fec_flr_r_squared, fec_max_t])
         self.cnstat_dict.update(cnstat_dict)
         self.ratestat_dict.update(ratestat_dict)
 
@@ -357,7 +358,7 @@ class Portstat(object):
             """
                 Get the rates from specific table.
             """
-            fields = ["0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0"]
+            fields = ["0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0"]
             for pos, name in enumerate(rates_key_list):
                 full_table_id = RATES_TABLE_PREFIX + table_id
                 counter_data = self.db.get(self.db.COUNTERS_DB, full_table_id, name)
@@ -663,7 +664,9 @@ class Portstat(object):
                                   format_fec_ber(rates.fec_post_ber),
                                   format_fec_ber(rates.fec_pre_ber_max),
                                   format_fec_flr(rates.fec_flr),
-                                  format_fec_flr_predicted(rates.fec_flr_predicted, rates.fec_flr_r_squared)))
+                                  format_fec_flr_predicted(rates.fec_flr_predicted,
+                                                           rates.fec_flr_r_squared),
+                                  rates.fec_max_t))
             elif fec_hist_only:
                 header = header_fec_hist_only
 
