@@ -59,6 +59,7 @@ from . import kdump
 from . import kube
 from . import muxcable
 from . import nat
+from . import sed
 from . import vlan
 from . import vxlan
 from . import plugins
@@ -1738,6 +1739,9 @@ config.add_command(mclag.mclag_unique_ip)
 
 # syslog module
 config.add_command(syslog.syslog)
+
+# SED module
+config.add_command(sed.sed)
 
 # DNS module
 config.add_command(dns.dns)
