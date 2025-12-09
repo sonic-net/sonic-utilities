@@ -33,6 +33,7 @@ except KeyError:
     pass
 
 # Default configuration
+MAX_DETECTION_TIME = 1000
 DEFAULT_DETECTION_TIME = 200
 DEFAULT_RESTORATION_TIME = 200
 DEFAULT_POLL_INTERVAL = 200
@@ -416,10 +417,14 @@ class PfcwdCli(object):
 
         port_num = len(list(self.config_db.get_table('PORT').keys()))
 
+        pfc_wd_detected_time = DEFAULT_DETECTION_TIME * multiply
+        if pfc_wd_detected_time > MAX_DETECTION_TIME:
+            pfc_wd_detected_time = MAX_DETECTION_TIME
+        
         # Paramter values positively correlate to the number of ports.
         multiply = max(1, (port_num-1)//DEFAULT_PORT_NUM+1)
         pfcwd_info = {
-            'detection_time': DEFAULT_DETECTION_TIME * multiply,
+            'detection_time': pfc_wd_detected_time,
             'restoration_time': DEFAULT_RESTORATION_TIME * multiply,
             'action': DEFAULT_ACTION,
             'pfc_stat_history': DEFAULT_PFC_HISTORY_STATUS
