@@ -9936,6 +9936,28 @@ def igmp_snooping_disable(ctx, vid):
     for key in static_grp_keys:
         if vlan_name == key[0] :
             db.set_entry('L2MC_STATIC_GROUP', key, None)
+    suppress_table = db.get_table("L2MC_SUPPRESS")
+    for key in list(suppress_table.keys()):
+        if key != vlan_name:
+            continue
+
+        # Check L2MC enabled status
+        l2mc_cfg = db.get_entry("MLD_L2MC", vlan_name) or {}
+        enabled = l2mc_cfg.get("enabled")
+
+        if enabled != "true":
+            # When L2MC is disabled → delete entry
+            db.set_entry("L2MC_SUPPRESS", key, None)
+        else:
+            # Modify fields
+            db.mod_entry(
+                "L2MC_SUPPRESS",
+                vlan_name,
+                {
+                    "ipv4-optimised-multicast-flood": "disable",
+                    "ipv4-link-local-groups-suppression": "disable",
+                },
+            )
     db.set_entry('L2MC', vlan_name, None)
 
 @igmp_snooping.command('last-member-query-interval')
@@ -10382,6 +10404,29 @@ def mld_snooping_disable(ctx, vid):
     for key in static_grp_keys:
         if vlan_name == key[0]:
             db.set_entry('MLD_L2MC_STATIC_GROUP', key, None)
+    
+    suppress_table = db.get_table("L2MC_SUPPRESS")
+    for key in list(suppress_table.keys()):
+        if key != vlan_name:
+            continue
+
+        # Check L2MC enabled status
+        l2mc_cfg = db.get_entry("L2MC", vlan_name) or {}
+        enabled = l2mc_cfg.get("enabled")
+
+        if enabled != "true":
+            # When L2MC is disabled → delete entry
+            db.set_entry("L2MC_SUPPRESS", key, None)
+        else:
+            # Modify fields
+            db.mod_entry(
+                "L2MC_SUPPRESS",
+                vlan_name,
+                {
+                    "ipv6-optimised-multicast-flood": "disable",
+                    "ipv6-link-local-groups-suppression": "disable",
+                },
+            )
     db.set_entry('MLD_L2MC', vlan_name, None)
 
 @mld_snooping.command('last-member-query-interval')
