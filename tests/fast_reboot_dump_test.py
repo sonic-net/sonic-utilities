@@ -25,7 +25,6 @@ class TestFastRebootDump(object):
         cls.asic_db = asic_db
         cls.app_db = app_db
 
-
     #Test fast-reboot-dump script to generate all required objects when there is a VLAN interface with a PortChannel member.
     def test_generate_fdb_entries_vlan_portchannel_member(self):
         vlan_ifaces = ['Vlan2']
@@ -40,7 +39,6 @@ class TestFastRebootDump(object):
 
         expectd_map_mac_ip_per_vlan = {'Vlan2': {'52:54:00:5d:fc:b7': 'PortChannel0001'}}
         assert not DeepDiff(map_mac_ip_per_vlan, expectd_map_mac_ip_per_vlan, ignore_order=True)
-
 
     @mock.patch.object(fast_reboot_dump.syslog, "syslog", return_value=None)
     @mock.patch.object(fast_reboot_dump, "SonicV2Connector")
@@ -78,7 +76,6 @@ class TestFastRebootDump(object):
         assert obj[key_included]['neigh'] == '52:54:00:5D:FC:B7'
         assert obj['OP'] == 'SET'
 
-
     @mock.patch.object(fast_reboot_dump, "SonicV2Connector")
     def test_generate_default_route_entries(self, mock_sonicv2):
         conn = dbconnector.SonicV2Connector()
@@ -100,13 +97,13 @@ class TestFastRebootDump(object):
         ipv4_obj = next(item for item in data if 'ROUTE_TABLE:0.0.0.0/0' in item)
         assert ipv4_obj['ROUTE_TABLE:0.0.0.0/0']['nexthop'] == '10.0.0.1'
         assert ipv4_obj['ROUTE_TABLE:0.0.0.0/0']['ifname'] == 'Ethernet0'
+        assert ipv4_obj['OP'] == 'SET'
 
         ipv6_candidates = [item for item in data if 'ROUTE_TABLE::/0' in item]
         if ipv6_candidates:
             ipv6_obj = ipv6_candidates[0]
             assert ipv6_obj['ROUTE_TABLE::/0']['nexthop'] == '2001:db8::1'
             assert ipv6_obj['ROUTE_TABLE::/0']['ifname'] == 'Ethernet0'
-
 
     @mock.patch.object(fast_reboot_dump, "SonicV2Connector")
     def test_generate_media_config(self, mock_sonicv2):
@@ -137,7 +134,8 @@ class TestFastRebootDump(object):
 
         file_entry = next(item for item in file_data if key in item)
         assert file_entry[key] == attrs
-
+        assert entry['OP'] == 'SET'
+        assert file_entry['OP'] == 'SET'
 
     @mock.patch.object(fast_reboot_dump, "get_vlan_ifaces", return_value=[])
     @mock.patch.object(fast_reboot_dump, "SonicV2Connector")
