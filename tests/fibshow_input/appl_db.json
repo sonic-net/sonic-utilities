@@ -7,6 +7,10 @@
     "nexthop": "",
     "ifname" : "PortChannel101,PortChannel102,PortChannel103,PortChannel104"
   },
+  "ROUTE_TABLE:192.168.110.0/24": {
+    "blackhole": "true",
+    "protocol": "0xc4"
+  },
   "ROUTE_TABLE:192.168.112.0/25": {
     "nexthop": "10.0.0.57,10.0.0.59,10.0.0.61,10.0.0.63",
     "ifname" : ""
@@ -30,5 +34,9 @@
   "ROUTE_TABLE:20c0:fe30:0:80::/64": {
     "nexthop": "",
     "ifname" : "PortChannel101,PortChannel102,PortChannel103,PortChannel104"
+  },
+  "ROUTE_TABLE:9001:db8:100::/64": {
+    "blackhole": "true",
+    "protocol": "0xc4"
   }
 }

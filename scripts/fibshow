@@ -14,6 +14,7 @@
     -----  -------  ------------------  ---------------------------------------  -----------------------------------------------------------
     1      Red      192.181.8.0/25      10.0.0.57,10.0.0.59,10.0.0.61,10.0.0.63  PortChannel101,PortChannel102,PortChannel103,PortChannel104
     2               192.184.56.0/25     10.0.0.57,10.0.0.59,10.0.0.61,10.0.0.63  PortChannel101,PortChannel102,PortChannel103,PortChannel104
+    3               192.200.0.0/16      blackhole                                blackhole
     ...
     Total number of entries 19
 
@@ -84,7 +85,16 @@ class FibBase(object):
             if not ent:
                 continue
 
-            self.fib_entry_list.append((fib,) + (ent["nexthop"],) + (ent["ifname"],) )
+            # Handle blackhole routes (routes without nexthop/ifname)
+            if "blackhole" in ent and ent["blackhole"] == "true":
+                self.fib_entry_list.append((fib,) + ("blackhole",) + ("blackhole",) )
+            elif "nexthop" in ent and "ifname" in ent:
+                # Normal routes with nexthop and ifname
+                self.fib_entry_list.append((fib,) + (ent["nexthop"],) + (ent["ifname"],) )
+            else:
+                # Skip malformed entries
+                continue
+
         self.fib_entry_list.sort(key=lambda x: x[0])
         return
 
