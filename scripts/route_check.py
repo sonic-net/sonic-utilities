@@ -55,6 +55,7 @@ from sonic_py_common import multi_asic, device_info
 from utilities_common.general import load_db_config
 
 APPL_DB_NAME = 'APPL_DB'
+COUNTERS_DB_NAME = 'COUNTERS_DB'
 ASIC_DB_NAME = 'ASIC_DB'
 ASIC_TABLE_NAME = 'ASIC_STATE'
 ASIC_KEY_PREFIX = 'SAI_OBJECT_TYPE_ROUTE_ENTRY:'
@@ -80,6 +81,9 @@ FRR_CHECK_RETRIES = 3
 FRR_WAIT_TIME = 15
 
 REDIS_TIMEOUT_MSECS = 0
+
+NEXT_HOP_THRESHOLD = 80
+
 
 class Level(Enum):
     ERR = 'ERR'
@@ -814,6 +818,45 @@ def filter_out_vlan_neigh_route_miss(namespace, rt_appl_miss, rt_asic_miss):
     return rt_appl_miss, rt_asic_miss
 
 
+def get_crm_nexthop_group_usage(namespace):
+    """Get CRM nexthop group usage percentage."""
+
+    db = swsscommon.DBConnector(COUNTERS_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    print_message(syslog.LOG_DEBUG, "COUNTERS DB {} connected".format(namespace))
+    crm_resources = swsscommon.Table(db, 'CRM')
+    stats_result = crm_resources.get('STATS')
+    stats_found = stats_result[0] if stats_result and len(stats_result) > 0 else False
+    crm_stats_values = stats_result[1] if stats_result and len(stats_result) > 1 else []
+
+    nh_group_used = None
+    nh_group_available = None
+
+    if stats_found:
+        if isinstance(crm_stats_values, dict):
+            items = crm_stats_values.items()
+        else:
+            items = crm_stats_values
+
+        for field, value in items:
+            print_message(syslog.LOG_DEBUG, f"CRM field: {field}, value: {value}")
+            if field == "crm_stats_nexthop_group_used":
+                nh_group_used = int(value)
+            elif field == "crm_stats_nexthop_group_available":
+                nh_group_available = int(value)
+
+    if nh_group_used is None and nh_group_available is None:
+        # NOTE: CRM STATS may not ready in counters DB when device just boots up.
+        print_message(syslog.LOG_DEBUG, "Cannot get CRM stats, skipping nexthop group usage check")
+        return None
+
+    total_nexthop_groups = nh_group_used + nh_group_available
+    if total_nexthop_groups == 0:
+        print_message(syslog.LOG_DEBUG, "No nexthop groups configured")
+        return None
+    nh_group_usage = nh_group_used / total_nexthop_groups * 100
+    return nh_group_usage
+
+
 def check_routes_for_namespace(namespace):
     """
     Process a Single Namespace:
@@ -903,6 +946,11 @@ def check_routes_for_namespace(namespace):
 
     if rt_frr_failed:
         results["failed_FRR_routes"] = rt_frr_failed
+
+    nh_group_usage = get_crm_nexthop_group_usage(namespace)
+
+    if nh_group_usage is not None and nh_group_usage > NEXT_HOP_THRESHOLD:
+        results["exceed_nexthop_group_threshold"] = nh_group_usage
 
     if results:
         if rt_frr_miss and not rt_appl_miss and not rt_asic_miss:

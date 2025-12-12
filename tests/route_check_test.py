@@ -8,7 +8,7 @@ import time
 from sonic_py_common import device_info
 from unittest.mock import MagicMock, patch
 from tests.route_check_test_data import (
-    APPL_DB, MULTI_ASIC, NAMESPACE, DEFAULTNS, ARGS, ASIC_DB, CONFIG_DB,
+    APPL_DB, MULTI_ASIC, NAMESPACE, DEFAULTNS, ARGS, ASIC_DB, CONFIG_DB, COUNTERS_DB,
     DEFAULT_CONFIG_DB, APPL_STATE_DB, DESCR, OP_DEL, OP_SET, PRE, RESULT, RET, TEST_DATA,
     UPD, FRR_ROUTES
 )
@@ -82,6 +82,7 @@ def init_db_conns(namespaces):
     for ns in namespaces:
         db_conns[ns] = {
             "APPL_DB": {"namespace": ns, "name": APPL_DB},
+            "COUNTERS_DB": {"namespace": ns, "name": COUNTERS_DB},
             "ASIC_DB": {"namespace": ns, "name": ASIC_DB},
             "APPL_STATE_DB": {"namespace": ns, "name": APPL_STATE_DB},
             "CONFIG_DB": ConfigDB(ns)
