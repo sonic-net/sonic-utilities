@@ -48,9 +48,12 @@ class TestFastRebootDump(object):
 
         conn.connect(conn.APPL_DB)
 
+        # Included: (Vlan2, mac) is present in all_available_macs
         key_included = 'NEIGH_TABLE:Vlan2:192.168.0.2'
         conn.set(conn.APPL_DB, key_included, 'neigh', '52:54:00:5D:FC:B7')
 
+        # Excluded: exists in DB, but (Vlan3, mac) is NOT present in all_available_macs
+        # so generate_neighbor_entries() skip it
         key_excluded = 'NEIGH_TABLE:Vlan3:192.168.0.3'
         conn.set(conn.APPL_DB, key_excluded, 'neigh', 'aa:bb:cc:dd:ee:ff')
 
@@ -75,6 +78,7 @@ class TestFastRebootDump(object):
         assert key_included in obj
         assert obj[key_included]['neigh'] == '52:54:00:5D:FC:B7'
         assert obj['OP'] == 'SET'
+        assert not any(key_excluded in item for item in data)
 
     @mock.patch.object(fast_reboot_dump, "SonicV2Connector")
     def test_generate_default_route_entries(self, mock_sonicv2):
