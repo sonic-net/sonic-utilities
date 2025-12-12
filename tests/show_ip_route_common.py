@@ -665,7 +665,7 @@ B>*192.168.0.241/32 [20/0] via 10.0.0.5, PortChannel0005, 2d22h00m
   *                        via 10.0.0.16, PortChannel1016, 2d22h00m
 """
 
-show_ipv6_route_multi_asic_all_namesapce_output = """\
+show_ipv6_route_multi_asic_all_namespace_output = """\
 Codes: K - kernel route, C - connected, S - static, R - RIP,
        O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
        T - Table, v - VNC, V - VNC-Direct, A - Babel, D - SHARP,
@@ -711,7 +711,7 @@ C *fe80::/64 is directly connected, PortChannel1016, 2d22h02m
 C *fe80::/64 is directly connected, Ethernet24, 2d22h02m
 """
 
-show_ipv6_route_multi_asic_all_namesapce_alias_output = """\
+show_ipv6_route_multi_asic_all_namespace_alias_output = """\
 Codes: K - kernel route, C - connected, S - static, R - RIP,
        O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
        T - Table, v - VNC, V - VNC-Direct, A - Babel, D - SHARP,
@@ -757,7 +757,7 @@ C *fe80::/64 is directly connected, PortChannel1016, 2d22h02m
 C *fe80::/64 is directly connected, Ethernet1/7, 2d22h02m
 """
 
-show_ipv6_route_multi_asic_single_namesapce_output = """\
+show_ipv6_route_multi_asic_single_namespace_output = """\
 Codes: K - kernel route, C - connected, S - static, R - RIP,
        O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
        T - Table, v - VNC, V - VNC-Direct, A - Babel, D - SHARP,
@@ -788,7 +788,7 @@ C *fe80::/64 is directly connected, Ethernet20, 2d22h02m
 C *fe80::/64 is directly connected, PortChannel1016, 2d22h02m
 """
 
-show_ip_route_multi_asic_invalid_namesapce_err_output = """\
+show_ip_route_multi_asic_invalid_namespace_err_output = """\
 namespace 'asic7' is not valid. valid name spaces are:
 ['asic0', 'asic1', 'asic2']
 """
