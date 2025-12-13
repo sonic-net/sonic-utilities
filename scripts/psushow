@@ -10,8 +10,6 @@ from tabulate import tabulate
 
 VERSION = '1.0'
 
-
-
 def get_psu_status_list():
     psu_status_list = []
 
@@ -23,7 +21,6 @@ def get_psu_status_list():
     chassis_name = "chassis {}".format(chassis_num)
     num_psus = db.get(db.STATE_DB, 'CHASSIS_INFO|{}'.format(chassis_name), 'psu_num')
     if not num_psus:
-        print('Error: Failed to get the number of PSUs')
         return None
 
     for psu_idx, psu_key in enumerate(natsorted(db.keys(db.STATE_DB, "PSU_INFO|*")), start = 1):
@@ -67,7 +64,6 @@ def psu_status_show_table(index):
     psu_status_list = get_psu_status_list()
 
     if not psu_status_list:
-        print('Error: Failed to get PSU status')
         return None
 
     header = ['PSU',  'Model', 'Serial', 'HW Rev', 'Voltage (V)', 'Current (A)', 'Power (W)', 'Status', 'LED']
@@ -102,7 +98,6 @@ def psu_status_show_json(index):
     psu_status_list = get_psu_status_list()
 
     if not psu_status_list:
-        print('Error: Failed to get PSU status')
         return None
 
     if index > 0:
@@ -144,7 +139,7 @@ Examples:
             ret = psu_status_show_table(psu_index)
 
         if ret != 0:
-            print("Error: failed to get PSU status from state DB")
+            print("PSU not detected")
             return 1
 
     return 0
