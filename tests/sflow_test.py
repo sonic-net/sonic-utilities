@@ -17,14 +17,15 @@ config.asic_type = mock.MagicMock(return_value = "broadcom")
 # Expected output for 'show sflow'
 show_sflow_output = """
 sFlow Global Information:
-  sFlow Admin State:          up
-  sFlow Sample Direction:     both
-  sFlow Polling Interval:     0
-  sFlow AgentID:              default
+  sFlow Admin State:               up
+  sFlow Sample Direction:          both
+  sFlow Polling Interval:          0
+  sFlow Drop Notification Limit:   0
+  sFlow AgentID:                   default
 
   2 Collectors configured:
-    Name: prod                IP addr: fe80::6e82:6aff:fe1e:cd8e UDP port: 6343   VRF: mgmt
-    Name: ser5                IP addr: 172.21.35.15    UDP port: 6343   VRF: default
+    Name: prod                     IP addr: fe80::6e82:6aff:fe1e:cd8e UDP port: 6343   VRF: mgmt
+    Name: ser5                     IP addr: 172.21.35.15    UDP port: 6343   VRF: default
 """
 
 # Expected output for 'show sflow interface'
@@ -63,7 +64,7 @@ class TestShowSflow(object):
         assert result.exit_code == 0
         assert result.output == show_sflow_intf_output
 
-    @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
+    @patch("config.validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_mod_entry", mock.Mock(side_effect=ValueError))
     def test_config_sflow_disable_enable_yang_validation(self):
         db = Db()
@@ -92,8 +93,8 @@ class TestShowSflow(object):
         # change the output
         global show_sflow_output
         show_sflow_output_local = show_sflow_output.replace(
-            'Admin State:          up',
-            'Admin State:          down')
+            'Admin State:               up',
+            'Admin State:               down')
 
         # run show and check
         result = runner.invoke(show.cli.commands["sflow"], [], obj=db)
@@ -133,8 +134,8 @@ class TestShowSflow(object):
         # change the output
         global show_sflow_output
         show_sflow_output_local = show_sflow_output.replace(
-                'sFlow AgentID:              default',
-                'sFlow AgentID:              Ethernet0')
+                'sFlow AgentID:                   default',
+                'sFlow AgentID:                   Ethernet0')
 
         # run show and check
         result = runner.invoke(show.cli.commands["sflow"], [], obj=db)
@@ -171,10 +172,10 @@ class TestShowSflow(object):
         global show_sflow_output
         show_sflow_output_local = show_sflow_output.replace(
     "2 Collectors configured:\n\
-    Name: prod                IP addr: fe80::6e82:6aff:fe1e:cd8e UDP port: 6343   VRF: mgmt\n\
-    Name: ser5                IP addr: 172.21.35.15    UDP port: 6343   VRF: default",
+    Name: prod                     IP addr: fe80::6e82:6aff:fe1e:cd8e UDP port: 6343   VRF: mgmt\n\
+    Name: ser5                     IP addr: 172.21.35.15    UDP port: 6343   VRF: default",
     "1 Collectors configured:\n\
-    Name: ser5                IP addr: 172.21.35.15    UDP port: 6343   VRF: default")
+    Name: ser5                     IP addr: 172.21.35.15    UDP port: 6343   VRF: default")
 
         # run show and check
         result = runner.invoke(show.cli.commands["sflow"], [], obj=db)
@@ -196,7 +197,7 @@ class TestShowSflow(object):
 
         return
 
-    @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
+    @patch("config.validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_mod_entry", mock.Mock(side_effect=ValueError))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_set_entry", mock.Mock(side_effect=JsonPatchConflict))
     def test_config_sflow_collector_invalid_yang_validation(self):
@@ -214,8 +215,8 @@ class TestShowSflow(object):
             commands["collector"].commands["add"],
             ["prod", "fe80::6e82:6aff:fe1e:cd8e", "--vrf", "mgmt"], obj=obj)
         assert "Invalid ConfigDB. Error" in result.output
-    
-    @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
+
+    @patch("config.validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_mod_entry", mock.Mock(side_effect=ValueError))
     def test_config_sflow_polling_interval_yang_validation(self):
         db = Db()
@@ -250,8 +251,8 @@ class TestShowSflow(object):
         # change the expected output
         global show_sflow_output
         show_sflow_output_local = show_sflow_output.replace(
-            'sFlow Polling Interval:     0',
-            'sFlow Polling Interval:     20')
+            'sFlow Polling Interval:          0',
+            'sFlow Polling Interval:          20')
 
         # run show and check
         result = runner.invoke(show.cli.commands["sflow"], [], obj=db)
@@ -268,7 +269,7 @@ class TestShowSflow(object):
         return
 
     @patch("config.main.ConfigDBConnector.get_table", mock.Mock(return_value={'Ethernet1': {'admin_state': 'sample_state'}}))
-    @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
+    @patch("config.validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_mod_entry", mock.Mock(side_effect=ValueError))
     def test_config_sflow_existing_intf_enable_yang_validation(self):
         db = Db()
@@ -280,15 +281,15 @@ class TestShowSflow(object):
             commands["interface"].commands["enable"], ["Ethernet1"], obj=obj)
         print(result.exit_code, result.output)
         assert "Invalid ConfigDB. Error" in result.output
-    
+
     @patch("config.main.ConfigDBConnector.get_table", mock.Mock(return_value=None))
-    @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
+    @patch("config.validated_config_db_connector.device_info.is_yang_config_validation_enabled", mock.Mock(return_value=True))
     @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_mod_entry", mock.Mock(side_effect=ValueError))
     def test_config_sflow_nonexistent_intf_enable_yang_validation(self):
         db = Db()
         runner = CliRunner()
         obj = {'db':db.cfgdb}
- 
+
         result = runner.invoke(config.config.commands["sflow"].
             commands["interface"].commands["enable"], ["Ethernet1"], obj=obj)
         print(result.exit_code, result.output)
@@ -383,7 +384,7 @@ class TestShowSflow(object):
                                commands["enable"], ["all"], obj=obj)
         print(result.exit_code, result.output)
         assert result.exit_code == 0
-        
+
         # verify in configDb
         sflowSession = db.cfgdb.get_table('SFLOW_SESSION')
         assert sflowSession["all"]["admin_state"] == "up"
@@ -399,7 +400,7 @@ class TestShowSflow(object):
         result_out1 = runner.invoke(show.cli.commands["sflow"].commands["interface"], [], obj=Db())
         print(result_out1.exit_code, result_out1.output)
         assert result_out1.exit_code == 0
-        
+
         # set sample-rate to 2500
         result = runner.invoke(config.config.commands["sflow"].
             commands["interface"].commands["sample-rate"],
@@ -446,12 +447,12 @@ class TestShowSflow(object):
         # change the output
         global show_sflow_output
         show_sflow_output_tx = show_sflow_output.replace(
-            'Sample Direction:     both',
-            'Sample Direction:     tx')
+            'Sample Direction:          both',
+            'Sample Direction:          tx')
 
         show_sflow_output_rx = show_sflow_output.replace(
-            'Sample Direction:     both',
-            'Sample Direction:     rx')
+            'Sample Direction:          both',
+            'Sample Direction:          rx')
 
         # run show and check
         result = runner.invoke(show.cli.commands["sflow"], [], obj=db)
@@ -470,6 +471,51 @@ class TestShowSflow(object):
         print(result.exit_code, result.output)
         assert result.exit_code == 0
         assert result.output == show_sflow_output_rx
+
+        return
+
+    def test_config_sflow_drop_monitor_limit(self):
+        # config sflow drop-monitor-limit <limit>
+        db = Db()
+        runner = CliRunner()
+        obj = {'db':db.cfgdb}
+
+        # drop-monitor-limit : Invalid
+        result = runner.invoke(config.config.commands["sflow"].commands["drop-monitor-limit"], ["NA"], obj=obj)
+        print(result.output)
+        expected = "Error: Invalid value for \"<packet_per_second>\": NA is not a valid integer"
+        assert expected in result.output
+
+        #disable
+        result = runner.invoke(config.config.commands["sflow"].commands["drop-monitor-limit"], ["0"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        # change the output
+        global show_sflow_output
+        
+        show_sflow_output_drop_monitor_disable = show_sflow_output
+
+        # run show and check
+        result = runner.invoke(show.cli.commands["sflow"], [], obj=db)
+        print(result.exit_code, result.output, show_sflow_output_drop_monitor_disable)
+        assert result.exit_code == 0
+        assert result.output == show_sflow_output_drop_monitor_disable
+
+        # enable drop-monitor-limit
+        result = runner.invoke(config.config.commands["sflow"].commands["drop-monitor-limit"], ["100"], obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        show_sflow_output_drop_monitor_enable = show_sflow_output.replace(
+            'sFlow Drop Notification Limit:   0',
+            'sFlow Drop Notification Limit:   100')
+
+        # run show and check
+        result = runner.invoke(show.cli.commands["sflow"], [], obj=db)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert result.output == show_sflow_output_drop_monitor_enable
 
         return
 
