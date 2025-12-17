@@ -1,9 +1,29 @@
 _sonic_clear_completion() {
-    COMPREPLY=( $( env COMP_WORDS="${COMP_WORDS[*]}" \
-                   COMP_CWORD=$COMP_CWORD \
-                   _SONIC_CLEAR_COMPLETE=complete sonic-clear ) )
+    local IFS=$'\n'
+    local response
+
+    response=$(env COMP_WORDS="${COMP_WORDS[*]}" COMP_CWORD=$COMP_CWORD _SONIC_CLEAR_COMPLETE=bash_complete $1)
+
+    for completion in $response; do
+        IFS=',' read type value <<< "$completion"
+
+        if [[ $type == 'dir' ]]; then
+            COMPREPLY=()
+            compopt -o dirnames
+        elif [[ $type == 'file' ]]; then
+            COMPREPLY=()
+            compopt -o default
+        elif [[ $type == 'plain' ]]; then
+            COMPREPLY+=($value)
+        fi
+    done
+
     return 0
 }
 
-complete -F _sonic_clear_completion -o default sonic-clear;
-complete -F _sonic_clear_completion clear;
+_sonic_clear_completion_setup() {
+    complete -o nosort -F _sonic_clear_completion sonic-clear
+}
+
+_sonic_clear_completion_setup;
+
