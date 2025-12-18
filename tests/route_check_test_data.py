@@ -1027,7 +1027,7 @@ TEST_DATA = {
                     {
                         "prefix": "10.2.1.0/24",
                         "vrfName": "default",
-                        "protocol": "bgp", 
+                        "protocol": "bgp",
                         "selected": True,
                         "offloaded": True,
                         "failed": True,
@@ -1036,7 +1036,7 @@ TEST_DATA = {
                         "prefix": "10.3.1.0/24",
                         "vrfName": "default",
                         "protocol": "bgp",
-                        "selected": True, 
+                        "selected": True,
                         "offloaded": False,
                         "failed": True,
                     },
