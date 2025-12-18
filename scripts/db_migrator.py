@@ -956,11 +956,11 @@ class DBMigrator():
                 v['ecn_mode'] = 'copy_from_outer'
                 self.appDB.set_entry(table_name, k, v)
 
-        state_db_keys = self.stateDB.keys(self.stateDB.STATE_DB, f"{table_name}:*")
+        state_db_keys = self.stateDB.keys(self.stateDB.STATE_DB, f"{table_name}|*")
         if not state_db_keys:
             return
         for key in keys_to_migrate:
-            state_db_key = f"{table_name}:{key}"
+            state_db_key = f"{table_name}|{key}"
             if state_db_key in state_db_keys:
                 ecn_mode = self.stateDB.get(self.stateDB.STATE_DB, state_db_key, 'ecn_mode')
                 log.log_info(f"Migrating STATE_DB {state_db_key}, ecn mode: {ecn_mode} -> copy_from_outer")
