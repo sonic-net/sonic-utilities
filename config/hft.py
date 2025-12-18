@@ -59,7 +59,10 @@ def hft_add():
 def hft_add_profile(ctx, profile_name, stream_state, poll_interval):
     """Create a profile entry for HFT."""
     if _has_existing_profile(ctx):
-        click.echo("A profile already exists; this version supports only one profile. Delete the existing profile before adding another.")
+        click.echo(
+            "A profile already exists; this version supports only one profile. "
+            "Delete the existing profile before adding another."
+        )
         ctx.exit(1)
 
     profile_payload = _build_profile_patch(
