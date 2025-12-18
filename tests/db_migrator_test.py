@@ -853,6 +853,13 @@ class TestGoldenConfig(object):
         # hostname is from golden_config_db.json
         assert hostname == 'SONiC-Golden-Config'
 
+    def test_golden_config_ns(self):
+        # golden_config_db.json.test has no namespace
+        import db_migrator
+        dbmgtr = db_migrator.DBMigrator("asic0")
+        result = json.dumps(dbmgtr.config_src_data)
+        assert 'SONiC-Golden-Config' not in result
+
 class TestGoldenConfigInvalid(object):
     @classmethod
     def setup_class(cls):
@@ -1010,3 +1017,37 @@ class TestAAAMigrator(object):
 
         diff = DeepDiff(resulting_table, expected_table, ignore_order=True)
         assert not diff
+
+
+class TestIPinIPTunnelMigrator(object):
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "2"
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+        dbconnector.dedicated_dbs['APPL_DB'] = None
+        dbconnector.dedicated_dbs['CONFIG_DB'] = None
+
+    def test_tunnel_migrator(self):
+        dbconnector.dedicated_dbs['APPL_DB'] = os.path.join(mock_db_path, 'appl_db', 'tunnel_table_input')
+        dbconnector.dedicated_dbs['CONFIG_DB'] = os.path.join(mock_db_path, 'config_db', 'tunnel_table_input')
+
+        import db_migrator
+        dbmgtr = db_migrator.DBMigrator(None)
+        dbmgtr.migrate()
+
+        dbconnector.dedicated_dbs['APPL_DB'] = os.path.join(mock_db_path, 'appl_db', 'tunnel_table_expected')
+        expected_appl_db = SonicV2Connector(host='127.0.0.1')
+        expected_appl_db.connect(expected_appl_db.APPL_DB)
+        expected_keys = expected_appl_db.keys(expected_appl_db.APPL_DB, "*")
+        resulting_keys = dbmgtr.appDB.keys(dbmgtr.appDB.APPL_DB, "*")
+        expected_keys.sort()
+        resulting_keys.sort()
+        assert expected_keys == resulting_keys
+        for key in expected_keys:
+            resulting_keys = dbmgtr.appDB.get_all(dbmgtr.appDB.APPL_DB, key)
+            expected_keys = expected_appl_db.get_all(expected_appl_db.APPL_DB, key)
+            diff = DeepDiff(resulting_keys, expected_keys, ignore_order=True)
+            assert not diff

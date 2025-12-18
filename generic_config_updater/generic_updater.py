@@ -17,9 +17,11 @@ CHECKPOINT_EXT = ".cp.json"
 
 def extract_scope(path):
     if not path:
-        raise Exception("Wrong patch with empty path.")
+        raise GenericConfigUpdaterError("Wrong patch with empty path.")
     pointer = jsonpointer.JsonPointer(path)
-    parts = pointer.parts
+
+    # Re-escapes
+    parts = [jsonpointer.escape(part) for part in pointer.parts]
     if not parts:
         raise GenericConfigUpdaterError("Wrong patch with empty path.")
     if parts[0].startswith("asic"):

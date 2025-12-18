@@ -1,5 +1,6 @@
 import click
 import utilities_common.cli as clicommon
+import utilities_common.multi_asic as multi_asic_util
 
 
 #
@@ -41,7 +42,8 @@ def capabilities(verbose):
 @click.option('-g', '--group', required=False)
 @click.option('-t', '--counter_type', required=False)
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def counts(group, counter_type, verbose):
+@multi_asic_util.multi_asic_click_option_namespace
+def counts(group, counter_type, verbose, namespace):
     """Show drop counts"""
     cmd = ['dropstat', '-c', 'show']
 
@@ -50,5 +52,8 @@ def counts(group, counter_type, verbose):
 
     if counter_type:
         cmd += ['-t', str(counter_type)]
+
+    if namespace:
+        cmd += ['-n', str(namespace)]
 
     clicommon.run_command(cmd, display_cmd=verbose)

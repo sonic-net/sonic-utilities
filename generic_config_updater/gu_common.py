@@ -53,6 +53,28 @@ class JsonChange:
             return self.patch == other.patch
         return False
 
+
+def get_config_db_as_json(scope=None):
+    text = get_config_db_as_text(scope=scope)
+    config_db_json = json.loads(text)
+    config_db_json.pop("bgpraw", None)
+    return config_db_json
+
+
+def get_config_db_as_text(scope=None):
+    if scope is not None and scope != multi_asic.DEFAULT_NAMESPACE:
+        cmd = ['sonic-cfggen', '-d', '--print-data', '-n', scope]
+    else:
+        cmd = ['sonic-cfggen', '-d', '--print-data']
+    result = subprocess.Popen(cmd, shell=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    text, err = result.communicate()
+    return_code = result.returncode
+    if return_code:
+        raise GenericConfigUpdaterError(f"Failed to get running config for namespace: {scope},"
+                                        f" Return code: {return_code}, Error: {err}")
+    return text
+
+
 class ConfigWrapper:
     def __init__(self, yang_dir=YANG_DIR, scope=multi_asic.DEFAULT_NAMESPACE):
         self.scope = scope
@@ -60,24 +82,10 @@ class ConfigWrapper:
         self.sonic_yang_with_loaded_models = None
 
     def get_config_db_as_json(self):
-        text = self._get_config_db_as_text()
-        config_db_json = json.loads(text)
-        config_db_json.pop("bgpraw", None)
-        return config_db_json
+        return get_config_db_as_json(self.scope)
 
     def _get_config_db_as_text(self):
-        if self.scope is not None and self.scope != multi_asic.DEFAULT_NAMESPACE:
-            cmd = ['sonic-cfggen', '-d', '--print-data', '-n', self.scope]
-        else:
-            cmd = ['sonic-cfggen', '-d', '--print-data']
-
-        result = subprocess.Popen(cmd, shell=False, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-        text, err = result.communicate()
-        return_code = result.returncode
-        if return_code: # non-zero means failure
-            raise GenericConfigUpdaterError(f"Failed to get running config for namespace: {self.scope},"
-                                            f" Return code: {return_code}, Error: {err}")
-        return text
+        return get_config_db_as_text(self.scope)
 
     def get_sonic_yang_as_json(self):
         config_db_json = self.get_config_db_as_json()

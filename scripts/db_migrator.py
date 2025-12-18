@@ -58,7 +58,7 @@ class DBMigrator():
                      none-zero values.
               build: sequentially increase within a minor version domain.
         """
-        self.CURRENT_VERSION = 'version_202405_01'
+        self.CURRENT_VERSION = 'version_202405_02'
 
         self.TABLE_NAME      = 'VERSIONS'
         self.TABLE_KEY       = 'DATABASE'
@@ -127,7 +127,7 @@ class DBMigrator():
                             config_namespace = "localhost"
                         else:
                             config_namespace = ns
-                        golden_config_data = golden_data[config_namespace]
+                        golden_config_data = golden_data.get(config_namespace, None)
         except Exception as e:
             log.log_error('Caught exception while trying to load golden config: ' + str(e))
             pass
@@ -662,6 +662,26 @@ class DBMigrator():
         if 'synchronous_mode' not in metadata:
             metadata['synchronous_mode'] = device_metadata_data.get("synchronous_mode")
             self.configDB.set_entry('DEVICE_METADATA', 'localhost', metadata)
+
+    def migrate_ipinip_tunnel(self):
+        """Migrate TUNNEL_DECAP_TABLE to add decap terms with TUNNEL_DECAP_TERM_TABLE."""
+        tunnel_decap_table = self.appDB.get_table('TUNNEL_DECAP_TABLE')
+        app_db_separator = self.appDB.get_db_separator(self.appDB.APPL_DB)
+        for key, attrs in tunnel_decap_table.items():
+            dst_ip = attrs.pop("dst_ip", None)
+            src_ip = attrs.pop("src_ip", None)
+            if dst_ip:
+                dst_ips = dst_ip.split(",")
+                for dip in dst_ips:
+                    decap_term_table_key = app_db_separator.join(["TUNNEL_DECAP_TERM_TABLE", key, dip])
+                    if src_ip:
+                        self.appDB.set(self.appDB.APPL_DB, decap_term_table_key, "src_ip", src_ip)
+                        self.appDB.set(self.appDB.APPL_DB, decap_term_table_key, "term_type", "P2P")
+                    else:
+                        self.appDB.set(self.appDB.APPL_DB, decap_term_table_key, "term_type", "P2MP")
+
+            if dst_ip or src_ip:
+                self.appDB.set_entry("TUNNEL_DECAP_TABLE", key, attrs)
 
     def migrate_port_qos_map_global(self):
         """
@@ -1228,10 +1248,18 @@ class DBMigrator():
 
     def version_202405_01(self):
         """
-        Version 202405_01, this version should be the final version for
-        master branch until 202405 branch is created.
+        Version 202405_01.
         """
         log.log_info('Handling version_202405_01')
+        self.set_version('version_202405_02')
+        return 'version_202405_02'
+
+    def version_202405_02(self):
+        """
+        Version 202405_02.
+        """
+        log.log_info('Handling version_202405_02')
+        self.migrate_ipinip_tunnel()
         return None
 
     def get_version(self):

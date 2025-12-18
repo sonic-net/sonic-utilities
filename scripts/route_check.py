@@ -46,6 +46,7 @@ import time
 import signal
 import traceback
 import subprocess
+import concurrent.futures
 
 from ipaddress import ip_network
 from swsscommon import swsscommon
@@ -330,12 +331,9 @@ def get_asicdb_routes(namespace):
 
 def is_bgp_suppress_fib_pending_enabled(namespace):
     """
-    Retruns True if FIB suppression is enabled in BGP config, False otherwise
+    On 202405 image this feature is not supported so always return False
     """
-    show_run_cmd = ['show', 'runningconfiguration', 'bgp', '-n', namespace]
-
-    output = subprocess.check_output(show_run_cmd, text=True)
-    return 'bgp suppress-fib-pending' in output
+    return False
 
 
 def is_suppress_fib_pending_enabled(namespace):
@@ -348,12 +346,20 @@ def is_suppress_fib_pending_enabled(namespace):
     return state == 'enabled'
 
 
-def get_frr_routes(namespace, prefix=None):
+def fetch_routes(cmd):
     """
-    Read routes from zebra through CLI command
+    Fetch routes using the given command.
+    """
+    output = subprocess.check_output(cmd, text=True)
+    return json.loads(output)
+
+
+def get_frr_routes_parallel(namespace, prefix=None):
+    """
+    Read routes from zebra through CLI command for IPv4 and IPv6 in parallel
     :param namespace: namespace to query routes from
     :param prefix: optional prefix to filter routes (e.g., '10.0.0.0/8')
-    :return frr routes dictionary
+    :return combined IPv4 and IPv6 routes dictionary.
     """
     if namespace == multi_asic.DEFAULT_NAMESPACE:
         v4_route_cmd = ['show', 'ip', 'route', 'json']
@@ -382,11 +388,14 @@ def get_frr_routes(namespace, prefix=None):
             print_message(syslog.LOG_ERR, f"Invalid prefix format: {prefix}")
             return {}
     else:
-        # No prefix - run both commands
-        output = subprocess.check_output(v4_route_cmd, text=True)
-        routes = json.loads(output)
-        output = subprocess.check_output(v6_route_cmd, text=True)
-        routes.update(json.loads(output))
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future_v4 = executor.submit(fetch_routes, v4_route_cmd)
+            future_v6 = executor.submit(fetch_routes, v6_route_cmd)
+
+            routes = future_v4.result()
+            v6_routes = future_v6.result()
+
+        routes.update(v6_routes)
 
     print_message(syslog.LOG_DEBUG, "FRR Routes: namespace={}, prefix={}, routes={}".format(namespace, prefix, routes))
     return routes
@@ -590,7 +599,7 @@ def check_frr_pending_routes(namespace, prefix=None):
     for i in range(retries):
         missed_rt = []
         failed_rt = []
-        frr_routes = get_frr_routes(namespace, prefix)
+        frr_routes = get_frr_routes_parallel(namespace, prefix)
 
         for route_prefix, entries in frr_routes.items():
             # If checking specific prefix, filter to only that prefix
@@ -731,8 +740,9 @@ def filter_out_vlan_neigh_route_miss(namespace, rt_appl_miss, rt_asic_miss):
     return rt_appl_miss, rt_asic_miss
 
 
-def check_routes(namespace):
+def check_routes_for_namespace(namespace):
     """
+    Process a Single Namespace:
     The heart of this script which runs the checks.
     Read APPL-DB & ASIC-DB, the relevant tables for route checking.
     Checkout routes in ASIC-DB to match APPL-DB, discounting local &
@@ -740,15 +750,104 @@ def check_routes(namespace):
     it might be due to update latency between APPL & ASIC DBs. So collect
     ASIC-DB subscribe updates for a second, and checkout if you see SET
     command for missing ones & DEL command for unexpectes ones in ASIC.
-
     If there are still some unjustifiable diffs, between APPL & ASIC DB,
     related to routes report failure, else all good.
-
     If there are FRR routes that aren't marked offloaded but all APPL & ASIC DB
     routes are in sync report failure and perform a mitigation action.
-
     :return (0, None) on sucess, else (-1, results) where results holds
     the unjustifiable entries.
+    """
+    results = {}
+    adds = []
+    deletes = []
+    intf_appl_miss = []
+    rt_appl_miss = []
+    rt_asic_miss = []
+    rt_frr_miss = []
+    rt_frr_failed = []
+
+    selector, subs, rt_asic = get_asicdb_routes(namespace)
+
+    rt_appl = get_appdb_routes(namespace)
+    intf_appl = get_interfaces(namespace)
+
+    # Diff APPL-DB routes & ASIC-DB routes
+    rt_appl_miss, rt_asic_miss = diff_sorted_lists(rt_appl, rt_asic)
+
+    # Check missed ASIC routes against APPL-DB INTF_TABLE
+    _, rt_asic_miss = diff_sorted_lists(intf_appl, rt_asic_miss)
+    rt_asic_miss = filter_out_default_routes(rt_asic_miss)
+    rt_asic_miss = filter_out_vnet_routes(namespace, rt_asic_miss)
+    rt_asic_miss = filter_out_standalone_tunnel_routes(namespace, rt_asic_miss)
+    rt_asic_miss = filter_out_soc_ip_routes(namespace, rt_asic_miss)
+
+    # Check APPL-DB INTF_TABLE with ASIC table route entries
+    intf_appl_miss, _ = diff_sorted_lists(intf_appl, rt_asic)
+
+    if rt_appl_miss:
+        rt_appl_miss = filter_out_local_interfaces(namespace, rt_appl_miss)
+
+    if rt_appl_miss:
+        rt_appl_miss = filter_out_voq_neigh_routes(namespace, rt_appl_miss)
+
+    # NOTE: On dualtor environment, ignore any route miss for the
+    # neighbors learned from the vlan subnet.
+    if rt_appl_miss or rt_asic_miss:
+        rt_appl_miss, rt_asic_miss = filter_out_vlan_neigh_route_miss(namespace, rt_appl_miss, rt_asic_miss)
+
+    if rt_appl_miss or rt_asic_miss:
+        # Look for subscribe updates for a second
+        adds, deletes = get_subscribe_updates(selector, subs)
+
+    # Drop all those for which SET received
+    rt_appl_miss, _ = diff_sorted_lists(rt_appl_miss, adds)
+
+    # Drop all those for which DEL received
+    rt_asic_miss, _ = diff_sorted_lists(rt_asic_miss, deletes)
+
+    if rt_appl_miss:
+        results["missed_ROUTE_TABLE_routes"] = rt_appl_miss
+
+    if intf_appl_miss:
+        results["missed_INTF_TABLE_entries"] = intf_appl_miss
+
+    if rt_asic_miss:
+        results["Unaccounted_ROUTE_ENTRY_TABLE_entries"] = rt_asic_miss
+
+    if is_bgp_suppress_fib_pending_enabled(namespace):
+        rt_frr_miss, rt_frr_failed = check_frr_pending_routes(namespace)
+    else:
+        # Check if default route failed/rejected for both IPv4 and IPv6 when suppress-fib-pending is not enabled
+        try:
+            _, rt_frr_failed_v4 = check_frr_pending_routes(namespace, prefix="0.0.0.0/0")
+            rt_frr_failed.extend(rt_frr_failed_v4)
+        except Exception as e:
+            print_message(syslog.LOG_WARNING, f"Failed to check IPv4 default routes: {e}")
+        try:
+            _, rt_frr_failed_v6 = check_frr_pending_routes(namespace, prefix="::/0")
+            rt_frr_failed.extend(rt_frr_failed_v6)
+        except Exception as e:
+            print_message(syslog.LOG_WARNING, f"Failed to check IPv6 default routes: {e}")
+
+    if rt_frr_miss:
+        results["missed_FRR_routes"] = rt_frr_miss
+
+    if rt_frr_failed:
+        results["failed_FRR_routes"] = rt_frr_failed
+
+    if results:
+        if rt_frr_miss and not rt_appl_miss and not rt_asic_miss:
+            print_message(syslog.LOG_ERR, "Some routes are not set offloaded in FRR{} but all "
+                            "routes in APPL_DB and ASIC_DB are in sync".format(namespace))
+            if is_suppress_fib_pending_enabled(namespace):
+                mitigate_installed_not_offloaded_frr_routes(namespace, rt_frr_miss, rt_appl)
+
+    return results, adds, deletes
+
+
+def check_routes(namespace):
+    """
+    Main function to parallelize route checks across all namespaces.
     """
     namespace_list = []
     if namespace is not multi_asic.DEFAULT_NAMESPACE and namespace in multi_asic.get_namespace_list():
@@ -758,114 +857,37 @@ def check_routes(namespace):
         print_message(syslog.LOG_INFO, "Checking routes for namespaces: ", namespace_list)
 
     results = {}
-    adds = {}
-    deletes = {}
-    for namespace in namespace_list:
-        intf_appl_miss = []
-        rt_appl_miss = []
-        rt_asic_miss = []
-        rt_frr_miss = []
-        rt_frr_failed = []
-        adds[namespace] = []
-        deletes[namespace] = []
+    all_adds = {}
+    all_deletes = {}
 
-        selector, subs, rt_asic = get_asicdb_routes(namespace)
+    # Use ThreadPoolExecutor to parallelize the check for each namespace
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = {executor.submit(check_routes_for_namespace, ns): ns for ns in namespace_list}
 
-        rt_appl = get_appdb_routes(namespace)
-        intf_appl = get_interfaces(namespace)
-
-        # Diff APPL-DB routes & ASIC-DB routes
-        rt_appl_miss, rt_asic_miss = diff_sorted_lists(rt_appl, rt_asic)
-
-        # Check missed ASIC routes against APPL-DB INTF_TABLE
-        _, rt_asic_miss = diff_sorted_lists(intf_appl, rt_asic_miss)
-        rt_asic_miss = filter_out_default_routes(rt_asic_miss)
-        rt_asic_miss = filter_out_vnet_routes(namespace, rt_asic_miss)
-        rt_asic_miss = filter_out_standalone_tunnel_routes(namespace, rt_asic_miss)
-        rt_asic_miss = filter_out_soc_ip_routes(namespace, rt_asic_miss)
-
-
-        # Check APPL-DB INTF_TABLE with ASIC table route entries
-        intf_appl_miss, _ = diff_sorted_lists(intf_appl, rt_asic)
-
-        if rt_appl_miss:
-            rt_appl_miss = filter_out_local_interfaces(namespace, rt_appl_miss)
-
-        if rt_appl_miss:
-            rt_appl_miss = filter_out_voq_neigh_routes(namespace, rt_appl_miss)
-
-        # NOTE: On dualtor environment, ignore any route miss for the
-        # neighbors learned from the vlan subnet.
-        if rt_appl_miss or rt_asic_miss:
-            rt_appl_miss, rt_asic_miss = filter_out_vlan_neigh_route_miss(namespace, rt_appl_miss, rt_asic_miss)
-
-        if rt_appl_miss or rt_asic_miss:
-            # Look for subscribe updates for a second
-            adds[namespace], deletes[namespace] = get_subscribe_updates(selector, subs)
-
-        # Drop all those for which SET received
-        rt_appl_miss, _ = diff_sorted_lists(rt_appl_miss, adds[namespace])
-
-        # Drop all those for which DEL received
-        rt_asic_miss, _ = diff_sorted_lists(rt_asic_miss, deletes[namespace])
-
-        if rt_appl_miss:
-            if namespace not in results:
-                results[namespace] = {}
-            results[namespace]["missed_ROUTE_TABLE_routes"] = rt_appl_miss
-
-        if intf_appl_miss:
-            if namespace not in results:
-                results[namespace] = {}
-            results[namespace]["missed_INTF_TABLE_entries"] = intf_appl_miss
-
-        if rt_asic_miss:
-            if namespace not in results:
-                results[namespace] = {}
-            results[namespace]["Unaccounted_ROUTE_ENTRY_TABLE_entries"] = rt_asic_miss
-
-        if is_bgp_suppress_fib_pending_enabled(namespace):
-            rt_frr_miss, rt_frr_failed = check_frr_pending_routes(namespace)
-        else:
-            # Check if default route failed/rejected for both IPv4 and IPv6 when suppress-fib-pending is not enabled
-            rt_frr_miss, rt_frr_failed = [], []
+        for future in concurrent.futures.as_completed(futures):
+            ns = futures[future]
+            all_adds[ns] = []
+            all_deletes[ns] = []
             try:
-                _, rt_frr_failed_v4 = check_frr_pending_routes(namespace, prefix="0.0.0.0/0")
-                rt_frr_failed.extend(rt_frr_failed_v4)
+                result, adds, deletes = future.result()
+                if result:
+                    results[ns] = result
+                    all_adds[ns] = adds
+                    all_deletes[ns] = deletes
             except Exception as e:
-                print_message(syslog.LOG_WARNING, f"Failed to check IPv4 default routes: {e}")
-            try:
-                _, rt_frr_failed_v6 = check_frr_pending_routes(namespace, prefix="::/0")
-                rt_frr_failed.extend(rt_frr_failed_v6)
-            except Exception as e:
-                print_message(syslog.LOG_WARNING, f"Failed to check IPv6 default routes: {e}")
-
-        if rt_frr_miss:
-            if namespace not in results:
-                results[namespace] = {}
-            results[namespace]["missed_FRR_routes"] = rt_frr_miss
-
-        if rt_frr_failed:
-            if namespace not in results:
-                results[namespace] = {}
-            results[namespace]["failed_FRR_routes"] = rt_frr_failed
+                print_message(syslog.LOG_ERR, "Error processing namespace {}: {}".format(ns, e))
+                return -1, results
 
         if results:
-            if rt_frr_miss and not rt_appl_miss and not rt_asic_miss:
-                print_message(syslog.LOG_ERR, "Some routes are not set offloaded in FRR{} but all "
-                                "routes in APPL_DB and ASIC_DB are in sync".format(namespace))
-                if is_suppress_fib_pending_enabled(namespace):
-                    mitigate_installed_not_offloaded_frr_routes(namespace, rt_frr_miss, rt_appl)
+            print_message(syslog.LOG_WARNING, "Failure results: {",  json.dumps(results, indent=4), "}")
+            print_message(syslog.LOG_WARNING, "Failed. Look at reported mismatches above")
+            print_message(syslog.LOG_WARNING, "add: ", json.dumps(all_adds, indent=4))
+            print_message(syslog.LOG_WARNING, "del: ", json.dumps(all_deletes, indent=4))
+            return -1, results
+        else:
+            print_message(syslog.LOG_INFO, "All good!")
+            return 0, None
 
-    if results:
-        print_message(syslog.LOG_WARNING, "Failure results: {",  json.dumps(results, indent=4), "}")
-        print_message(syslog.LOG_WARNING, "Failed. Look at reported mismatches above")
-        print_message(syslog.LOG_WARNING, "add: ", json.dumps(adds, indent=4))
-        print_message(syslog.LOG_WARNING, "del: ", json.dumps(deletes, indent=4))
-        return -1, results
-    else:
-        print_message(syslog.LOG_INFO, "All good!")
-        return 0, None
 
 def main():
     """
