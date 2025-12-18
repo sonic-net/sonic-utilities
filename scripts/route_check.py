@@ -584,6 +584,7 @@ def is_feature_bgp_enabled(namespace):
             bgp_enabled = True
     return bgp_enabled
 
+
 def check_frr_pending_routes(namespace, prefix=None):
     """
     Check FRR routes for offload flag presence by executing "show ip route json"
@@ -838,7 +839,7 @@ def check_routes_for_namespace(namespace):
     if results:
         if rt_frr_miss and not rt_appl_miss and not rt_asic_miss:
             print_message(syslog.LOG_ERR, "Some routes are not set offloaded in FRR{} but all "
-                            "routes in APPL_DB and ASIC_DB are in sync".format(namespace))
+                          "routes in APPL_DB and ASIC_DB are in sync".format(namespace))
             if is_suppress_fib_pending_enabled(namespace):
                 mitigate_installed_not_offloaded_frr_routes(namespace, rt_frr_miss, rt_appl)
 
