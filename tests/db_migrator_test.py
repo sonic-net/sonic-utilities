@@ -1059,3 +1059,45 @@ class TestIPinIPTunnelMigrator(object):
             expected_keys = expected_appl_db.get_all(expected_appl_db.APPL_DB, key)
             diff = DeepDiff(resulting_keys, expected_keys, ignore_order=True)
             assert not diff
+
+
+class TestIPinIPTunnelEcnModeMigrator(object):
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "2"
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+        dbconnector.dedicated_dbs['APPL_DB'] = None
+        dbconnector.dedicated_dbs['STATE_DB'] = None
+
+    def compare_keys(self, expected_db, resulting_db, db_name):
+        expected_values = sorted(expected_db.keys(db_name, "*"))
+        resulting_values = sorted(resulting_db.keys(db_name, "*"))
+        assert expected_values == resulting_values
+        for key in expected_values:
+            expected_values = expected_db.get_all(db_name, key)
+            resulting_values = resulting_db.get_all(db_name, key)
+            diff = DeepDiff(resulting_values, expected_values, ignore_order=True)
+            assert not diff
+
+    def test_ipinip_tunnel_ecn_mode_migrator(self):
+        dbconnector.dedicated_dbs['APPL_DB'] = os.path.join(mock_db_path, 'appl_db', 'tunnel_table_ecn_mode_input')
+        dbconnector.dedicated_dbs['STATE_DB'] = os.path.join(mock_db_path, 'state_db', 'tunnel_table_ecn_mode_input')
+
+        device_info.get_sonic_version_info = get_sonic_version_info_mlnx
+        import db_migrator
+        dbmgtr = db_migrator.DBMigrator(None)
+        dbmgtr.migrate_ipinip_tunnel_ecn_mode_mellanox()
+
+        dbconnector.dedicated_dbs['APPL_DB'] = os.path.join(mock_db_path, 'appl_db', 'tunnel_table_ecn_mode_expected')
+        dbconnector.dedicated_dbs['STATE_DB'] = os.path.join(mock_db_path, 'state_db', 'tunnel_table_ecn_mode_expected')
+
+        expected_appl_db = SonicV2Connector(host='127.0.0.1')
+        expected_appl_db.connect(expected_appl_db.APPL_DB)
+        self.compare_keys(expected_appl_db, dbmgtr.appDB, 'APPL_DB')
+
+        expected_state_db = SonicV2Connector(host='127.0.0.1')
+        expected_state_db.connect(expected_state_db.STATE_DB)
+        self.compare_keys(expected_state_db, dbmgtr.stateDB, 'STATE_DB')
