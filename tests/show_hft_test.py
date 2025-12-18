@@ -90,3 +90,34 @@ def test_execute_streaming_command_exits_on_unhandled_return_code(monkeypatch):
         show_hft._execute_streaming_command(['docker'])
 
     mock_exit.assert_called_once_with(5)
+
+
+def test_display_hft_outputs_table(capsys):
+    class MockCfgDb:
+        def get_table(self, name):
+            if name == show_hft.PROFILE_TABLE:
+                return {
+                    'p1': {'stream_state': 'enabled', 'poll_interval': '1000'}
+                }
+            if name == show_hft.GROUP_TABLE:
+                return {
+                    'p1|PORT': {
+                        'object_names': ['Ethernet0'],
+                        'object_counters': ['BYTES']
+                    }
+                }
+            return {}
+
+    class MockDb:
+        cfgdb = MockCfgDb()
+
+    show_hft._display_hft(MockDb())
+    output = capsys.readouterr().out
+    assert 'p1' in output
+    assert 'Ethernet0' in output
+    assert 'BYTES' in output
+
+
+def test_format_list_parses_json_array():
+    parsed = show_hft._format_list('["a", " ", "b"]')
+    assert parsed == 'a\nb'

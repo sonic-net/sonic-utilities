@@ -1,3 +1,6 @@
+import json
+import os
+
 from click.testing import CliRunner
 from unittest.mock import patch
 
@@ -98,3 +101,39 @@ class TestConfigHftCli:
             'path': '/HIGH_FREQUENCY_TELEMETRY_PROFILE'
         }]
         assert payload == expected_payload
+
+
+def test_is_last_entry_true_and_false():
+    class MockCfgDb:
+        def __init__(self, tables):
+            self.tables = tables
+
+        def get_table(self, name):
+            return self.tables.get(name, {})
+
+    class MockCtx:
+        def __init__(self, tables):
+            self.obj = type('Obj', (), {'cfgdb': MockCfgDb(tables)})
+
+        def find_root(self):
+            return self
+
+    tables = {'HIGH_FREQUENCY_TELEMETRY_PROFILE': {'p1': {}}, 'OTHER': {}}
+    assert config_hft._is_last_entry(MockCtx(tables), 'HIGH_FREQUENCY_TELEMETRY_PROFILE') is True
+
+    tables = {'HIGH_FREQUENCY_TELEMETRY_PROFILE': {'p1': {}, 'p2': {}}}
+    assert config_hft._is_last_entry(MockCtx(tables), 'HIGH_FREQUENCY_TELEMETRY_PROFILE') is False
+
+
+def test_materialize_payload_creates_file():
+    payload = [{'op': 'add', 'path': '/X', 'value': {'k': 'v'}}]
+    path = config_hft._materialize_payload(payload)
+
+    try:
+        assert path
+        with open(path, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        assert data == payload
+    finally:
+        if path:
+            os.remove(path)
