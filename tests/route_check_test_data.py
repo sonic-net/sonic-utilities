@@ -1108,4 +1108,240 @@ TEST_DATA = {
             },
         },
     },
+    "24": {
+        DESCR: "FRR route check with failed routes detection",
+        MULTI_ASIC: False,
+        NAMESPACE: [''],
+        ARGS: "route_check -m INFO -i 1000",
+        RET: -1,
+        PRE: {
+            DEFAULTNS: {
+                APPL_DB: {
+                    ROUTE_TABLE: {
+                        "10.2.1.0/24" : { "ifname": "portchannel0" },
+                        "10.3.1.0/24" : { "ifname": "portchannel0" },
+                    },
+                    INTF_TABLE: {
+                        "PortChannel1013:10.10.196.24/31": {},
+                    }
+                },
+                ASIC_DB: {
+                    RT_ENTRY_TABLE: {
+                        RT_ENTRY_KEY_PREFIX + "10.2.1.0/24" + RT_ENTRY_KEY_SUFFIX: {},
+                        RT_ENTRY_KEY_PREFIX + "10.3.1.0/24" + RT_ENTRY_KEY_SUFFIX: {},
+                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
+                    }
+                },
+            },
+        },
+        FRR_ROUTES: {
+            DEFAULTNS: {
+                "10.2.1.0/24": [
+                    {
+                        "prefix": "10.2.1.0/24",
+                        "vrfName": "default",
+                        "protocol": "bgp",
+                        "selected": True,
+                        "offloaded": True,
+                        "failed": True,
+                    },
+                ],
+                "10.3.1.0/24": [
+                    {
+                        "prefix": "10.3.1.0/24",
+                        "vrfName": "default",
+                        "protocol": "bgp",
+                        "selected": True,
+                        "offloaded": False,
+                        "failed": True,
+                    },
+                ],
+            },
+        },
+        RESULT: {
+            DEFAULTNS: {
+                "failed_FRR_routes": [
+                    {
+                        "prefix": "10.2.1.0/24",
+                        "vrfName": "default",
+                        "protocol": "bgp", 
+                        "selected": True,
+                        "offloaded": True,
+                        "failed": True,
+                    },
+                    {
+                        "prefix": "10.3.1.0/24",
+                        "vrfName": "default",
+                        "protocol": "bgp",
+                        "selected": True, 
+                        "offloaded": False,
+                        "failed": True,
+                    },
+                ],
+            },
+        },
+    },
+    "25": {
+        DESCR: "FRR route check with suppress-fib-pending disabled - tests prefix filtering",
+        MULTI_ASIC: False,
+        NAMESPACE: [''],
+        ARGS: "route_check -m INFO -i 1000",
+        RET: -1,
+        PRE: {
+            DEFAULTNS: {
+                CONFIG_DB: {
+                    DEVICE_METADATA: {
+                        LOCALHOST: {
+                            "suppress-fib-pending": "disabled"
+                        }
+                    },
+                    FEATURE_TABLE: {
+                        "bgp": {
+                            "state": "enabled"
+                        }
+                    }
+                },
+                APPL_DB: {
+                    ROUTE_TABLE: {
+                        "0.0.0.0/0" : { "ifname": "portchannel0" },
+                        "10.1.1.0/24" : { "ifname": "portchannel0" },
+                    },
+                    INTF_TABLE: {
+                        "PortChannel1013:10.10.196.24/31": {},
+                    }
+                },
+                ASIC_DB: {
+                    RT_ENTRY_TABLE: {
+                        RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + RT_ENTRY_KEY_SUFFIX: {},
+                        RT_ENTRY_KEY_PREFIX + "10.1.1.0/24" + RT_ENTRY_KEY_SUFFIX: {},
+                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
+                    }
+                },
+            },
+        },
+        # This will trigger check_frr_pending_routes() with prefix="0.0.0.0/0" and prefix="::/0"
+        # internally testing the IPv4 and IPv6 prefix filtering functionality
+        FRR_ROUTES: {
+            DEFAULTNS: {
+                "0.0.0.0/0": [
+                    {
+                        "prefix": "0.0.0.0/0",
+                        "vrfName": "default",
+                        "protocol": "bgp",
+                        "selected": True,
+                        "offloaded": False,
+                        "failed": True,
+                    },
+                ],
+                "::/0": [
+                    {
+                        "prefix": "::/0",
+                        "vrfName": "default",
+                        "protocol": "bgp",
+                        "selected": True,
+                        "offloaded": True,
+                        "failed": False,
+                    },
+                ],
+            },
+        },
+        RESULT: {
+            DEFAULTNS: {
+                "missed_FRR_routes": [
+                    {
+                        "prefix": "0.0.0.0/0",
+                        "vrfName": "default",
+                        "protocol": "bgp",
+                        "selected": True,
+                        "offloaded": False,
+                        "failed": True,
+                    },
+                ],
+                "failed_FRR_routes": [
+                    {
+                        "prefix": "0.0.0.0/0",
+                        "vrfName": "default",
+                        "protocol": "bgp",
+                        "selected": True,
+                        "offloaded": False,
+                        "failed": True,
+                    },
+                ],
+            },
+        },
+    },
+    "26": {
+        DESCR: "Multi-ASIC FRR route check with failed routes detection",
+        MULTI_ASIC: True,
+        NAMESPACE: ['asic0', 'asic1'],
+        ARGS: "route_check -n asic0 -m INFO -i 1000",
+        RET: -1,
+        PRE: {
+            ASIC0: {
+                APPL_DB: {
+                    ROUTE_TABLE: {
+                        "203.0.113.0/24" : { "ifname": "portchannel0" },
+                        "198.51.100.0/24" : { "ifname": "portchannel0" },
+                    },
+                    INTF_TABLE: {
+                        "PortChannel1013:10.10.196.24/31": {},
+                    }
+                },
+                ASIC_DB: {
+                    RT_ENTRY_TABLE: {
+                        RT_ENTRY_KEY_PREFIX + "203.0.113.0/24" + RT_ENTRY_KEY_SUFFIX: {},
+                        RT_ENTRY_KEY_PREFIX + "198.51.100.0/24" + RT_ENTRY_KEY_SUFFIX: {},
+                        RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + RT_ENTRY_KEY_SUFFIX: {},
+                    }
+                },
+            },
+        },
+        FRR_ROUTES: {
+            ASIC0: {
+                "203.0.113.0/24": [
+                    {
+                        "prefix": "203.0.113.0/24",
+                        "vrfName": "default",
+                        "protocol": "bgp",
+                        "selected": True,
+                        "offloaded": True,
+                        "failed": True,
+                    },
+                ],
+                "198.51.100.0/24": [
+                    {
+                        "prefix": "198.51.100.0/24",
+                        "vrfName": "default",
+                        "protocol": "bgp",
+                        "selected": True,
+                        "offloaded": False,
+                        "failed": True,
+                    },
+                ],
+            },
+        },
+        RESULT: {
+            ASIC0: {
+                "failed_FRR_routes": [
+                    {
+                        "prefix": "203.0.113.0/24",
+                        "vrfName": "default",
+                        "protocol": "bgp",
+                        "selected": True,
+                        "offloaded": True,
+                        "failed": True,
+                    },
+                    {
+                        "prefix": "198.51.100.0/24",
+                        "vrfName": "default",
+                        "protocol": "bgp",
+                        "selected": True,
+                        "offloaded": False,
+                        "failed": True,
+                    },
+                ],
+            },
+        },
+    },
+
 }
