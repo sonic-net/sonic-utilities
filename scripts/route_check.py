@@ -354,9 +354,11 @@ def fetch_routes(cmd):
     return json.loads(output)
 
 
-def get_frr_routes_parallel(namespace):
+def get_frr_routes_parallel(namespace, prefix=None):
     """
     Read routes from zebra through CLI command for IPv4 and IPv6 in parallel
+    :param namespace: namespace to query routes from
+    :param prefix: optional prefix to filter routes (e.g., '10.0.0.0/8')
     :return combined IPv4 and IPv6 routes dictionary.
     """
     if namespace == multi_asic.DEFAULT_NAMESPACE:
@@ -366,17 +368,37 @@ def get_frr_routes_parallel(namespace):
         v4_route_cmd = ['show', 'ip', 'route', '-n', namespace, 'json']
         v6_route_cmd = ['show', 'ipv6', 'route', '-n', namespace, 'json']
 
-    with concurrent.futures.ThreadPoolExecutor() as executor:
-        future_v4 = executor.submit(fetch_routes, v4_route_cmd)
-        future_v6 = executor.submit(fetch_routes, v6_route_cmd)
+    routes = {}
 
-        v4_routes = future_v4.result()
-        v6_routes = future_v6.result()
+    if prefix:
+        # Determine if prefix is IPv4 or IPv6
+        try:
+            ip_obj = ipaddress.ip_network(prefix, strict=False)
+            if ip_obj.version == 4:
+                # IPv4 prefix - only run IPv4 command
+                v4_route_cmd.insert(-1, prefix)
+                output = subprocess.check_output(v4_route_cmd, text=True)
+                routes = json.loads(output)
+            else:
+                # IPv6 prefix - only run IPv6 command
+                v6_route_cmd.insert(-1, prefix)
+                output = subprocess.check_output(v6_route_cmd, text=True)
+                routes = json.loads(output)
+        except ValueError:
+            print_message(syslog.LOG_ERR, f"Invalid prefix format: {prefix}")
+            return {}
+    else:
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            future_v4 = executor.submit(fetch_routes, v4_route_cmd)
+            future_v6 = executor.submit(fetch_routes, v6_route_cmd)
 
-    v4_routes.update(v6_routes)
-    print_message(syslog.LOG_DEBUG, "FRR Routes: namespace={}, routes={}".format(namespace, v4_routes))
-    return v4_routes
+            routes = future_v4.result()
+            v6_routes = future_v6.result()
 
+        routes.update(v6_routes)
+
+    print_message(syslog.LOG_DEBUG, "FRR Routes: namespace={}, prefix={}, routes={}".format(namespace, prefix, routes))
+    return routes
 
 def get_interfaces(namespace):
     """
@@ -401,7 +423,6 @@ def get_interfaces(namespace):
 
     print_message(syslog.LOG_DEBUG, json.dumps({"APPL_DB_INTF": sorted(intf)}, indent=4))
     return sorted(intf)
-
 
 def filter_out_local_interfaces(namespace, keys):
     """
@@ -434,7 +455,6 @@ def filter_out_local_interfaces(namespace, keys):
         rt.append(k)
 
     return rt
-
 
 def filter_out_voq_neigh_routes(namespace, keys):
     """
@@ -480,7 +500,6 @@ def filter_out_default_routes(lst):
 
     return upd
 
-
 def filter_out_vnet_routes(namespace, routes):
     """
     Helper to filter out VNET routes
@@ -515,7 +534,6 @@ def is_dualtor(config_db):
     device_metadata = config_db.get_table('DEVICE_METADATA')
     subtype = device_metadata['localhost'].get('subtype', '')
     return subtype.lower() == 'dualtor'
-
 
 def filter_out_standalone_tunnel_routes(namespace, routes):
 
@@ -566,19 +584,29 @@ def is_feature_bgp_enabled(namespace):
             bgp_enabled = True
     return bgp_enabled
 
-def check_frr_pending_routes(namespace):
+
+def check_frr_pending_routes(namespace, prefix=None):
     """
     Check FRR routes for offload flag presence by executing "show ip route json"
-    Returns a list of routes that have no offload flag.
+    Returns a tuple of (missed_routes, failed_routes) that have no offload flag or are marked as failed.
+    :param namespace: namespace to check routes for
+    :param prefix: optional prefix to filter routes (e.g., '10.0.0.0/8')
+    :return: tuple of (missed_rt, failed_rt)
     """
 
     missed_rt = []
+    failed_rt = []
     retries = FRR_CHECK_RETRIES
     for i in range(retries):
         missed_rt = []
-        frr_routes = get_frr_routes_parallel(namespace)
+        failed_rt = []
+        frr_routes = get_frr_routes_parallel(namespace, prefix)
 
-        for _, entries in frr_routes.items():
+        for route_prefix, entries in frr_routes.items():
+            # If checking specific prefix, filter to only that prefix
+            if prefix and route_prefix != prefix:
+                continue
+
             for entry in entries:
                 if entry['protocol'] in ('connected', 'kernel'):
                     continue
@@ -595,12 +623,16 @@ def check_frr_pending_routes(namespace):
                 if not entry.get('offloaded', False):
                     missed_rt.append(entry)
 
-        if not missed_rt:
+                if entry.get('failed', False):
+                    failed_rt.append(entry)
+
+        if not missed_rt and not failed_rt:
             break
 
         time.sleep(FRR_WAIT_TIME)
-    print_message(syslog.LOG_DEBUG, "FRR missed routes: {}".format(missed_rt, indent=4))
-    return missed_rt
+    print_message(syslog.LOG_DEBUG, "FRR missed routes: {}".format(json.dumps(missed_rt, indent=4)))
+    print_message(syslog.LOG_DEBUG, "FRR failed routes: {}".format(json.dumps(failed_rt, indent=4)))
+    return missed_rt, failed_rt
 
 
 def mitigate_installed_not_offloaded_frr_routes(namespace, missed_frr_rt, rt_appl):
@@ -733,6 +765,7 @@ def check_routes_for_namespace(namespace):
     rt_appl_miss = []
     rt_asic_miss = []
     rt_frr_miss = []
+    rt_frr_failed = []
 
     selector, subs, rt_asic = get_asicdb_routes(namespace)
 
@@ -783,17 +816,32 @@ def check_routes_for_namespace(namespace):
         results["Unaccounted_ROUTE_ENTRY_TABLE_entries"] = rt_asic_miss
 
     if is_bgp_suppress_fib_pending_enabled(namespace):
-        rt_frr_miss = check_frr_pending_routes(namespace)
+        rt_frr_miss, rt_frr_failed = check_frr_pending_routes(namespace)
+    else:
+        # Check if default route failed/rejected for both IPv4 and IPv6 when suppress-fib-pending is not enabled
+        try:
+            _, rt_frr_failed_v4 = check_frr_pending_routes(namespace, prefix="0.0.0.0/0")
+            rt_frr_failed.extend(rt_frr_failed_v4)
+        except Exception as e:
+            print_message(syslog.LOG_WARNING, f"Failed to check IPv4 default routes: {e}")
+        try:
+            _, rt_frr_failed_v6 = check_frr_pending_routes(namespace, prefix="::/0")
+            rt_frr_failed.extend(rt_frr_failed_v6)
+        except Exception as e:
+            print_message(syslog.LOG_WARNING, f"Failed to check IPv6 default routes: {e}")
 
-        if rt_frr_miss:
-            results["missed_FRR_routes"] = rt_frr_miss
+    if rt_frr_miss:
+        results["missed_FRR_routes"] = rt_frr_miss
 
-        if results:
-            if rt_frr_miss and not rt_appl_miss and not rt_asic_miss:
-                print_message(syslog.LOG_ERR, "Some routes are not set offloaded in FRR{} but all "
-                              "routes in APPL_DB and ASIC_DB are in sync".format(namespace))
-                if is_suppress_fib_pending_enabled(namespace):
-                    mitigate_installed_not_offloaded_frr_routes(namespace, rt_frr_miss, rt_appl)
+    if rt_frr_failed:
+        results["failed_FRR_routes"] = rt_frr_failed
+
+    if results:
+        if rt_frr_miss and not rt_appl_miss and not rt_asic_miss:
+            print_message(syslog.LOG_ERR, "Some routes are not set offloaded in FRR{} but all "
+                          "routes in APPL_DB and ASIC_DB are in sync".format(namespace))
+            if is_suppress_fib_pending_enabled(namespace):
+                mitigate_installed_not_offloaded_frr_routes(namespace, rt_frr_miss, rt_appl)
 
     return results, adds, deletes
 
