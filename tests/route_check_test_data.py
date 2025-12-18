@@ -700,10 +700,10 @@ TEST_DATA = {
             ASIC1: {
                APPL_DB: {
                    ROUTE_TABLE: {
-                       "0.0.0.0/0" : { "ifname": "portchannel0" },
-                       "10.10.196.12/31" : { "ifname": "portchannel0" },
-                       "10.10.196.20/31" : { "ifname": "portchannel0" },
-                       "10.10.196.30/31" : { "ifname": "lo" }
+                       "0.0.0.0/0": {"ifname": "portchannel0"},
+                       "10.10.196.12/31": {"ifname": "portchannel0"},
+                       "10.10.196.20/31": {"ifname": "portchannel0"},
+                       "10.10.196.30/31": {"ifname": "lo"}
                    },
                    INTF_TABLE: {
                        "PortChannel1013:10.10.196.24/31": {},
@@ -794,9 +794,9 @@ TEST_DATA = {
             ASIC1: {
                APPL_DB: {
                    ROUTE_TABLE: {
-                       "0.0.0.0/0" : { "ifname": "portchannel0" },
-                       "10.10.196.20/31" : { "ifname": "portchannel0" },
-                       "10.10.196.30/31" : { "ifname": "lo" }
+                       "0.0.0.0/0": {"ifname": "portchannel0"},
+                       "10.10.196.20/31": {"ifname": "portchannel0"},
+                       "10.10.196.30/31": {"ifname": "lo"}
                    },
                    INTF_TABLE: {
                        "PortChannel1013:10.10.196.24/31": {},
@@ -981,8 +981,8 @@ TEST_DATA = {
             DEFAULTNS: {
                 APPL_DB: {
                     ROUTE_TABLE: {
-                        "10.2.1.0/24" : { "ifname": "portchannel0" },
-                        "10.3.1.0/24" : { "ifname": "portchannel0" },
+                        "10.2.1.0/24": {"ifname": "portchannel0"},
+                        "10.3.1.0/24": {"ifname": "portchannel0"},
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -1066,8 +1066,8 @@ TEST_DATA = {
                 },
                 APPL_DB: {
                     ROUTE_TABLE: {
-                        "0.0.0.0/0" : { "ifname": "portchannel0" },
-                        "10.1.1.0/24" : { "ifname": "portchannel0" },
+                        "0.0.0.0/0": {"ifname": "portchannel0"},
+                        "10.1.1.0/24": {"ifname": "portchannel0"},
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
@@ -1143,8 +1143,8 @@ TEST_DATA = {
             ASIC0: {
                 APPL_DB: {
                     ROUTE_TABLE: {
-                        "203.0.113.0/24" : { "ifname": "portchannel0" },
-                        "198.51.100.0/24" : { "ifname": "portchannel0" },
+                        "203.0.113.0/24": {"ifname": "portchannel0"},
+                        "198.51.100.0/24": {"ifname": "portchannel0"},
                     },
                     INTF_TABLE: {
                         "PortChannel1013:10.10.196.24/31": {},
