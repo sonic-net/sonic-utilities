@@ -2,11 +2,6 @@ import sys
 import os
 from click.testing import CliRunner
 from datetime import datetime, timedelta, timezone
-from config.chassis_modules import (
-    set_state_transition_in_progress,
-    is_transition_timed_out,
-    TRANSITION_TIMEOUT
-)
 
 import show.main as show
 import config.main as config
@@ -448,9 +443,10 @@ class TestChassisModules(object):
         assert return_code == 0
         assert result == show_chassis_system_lags_output_lc4
 
-    def test_shutdown_triggers_transition_tracking(self):
+    def test_shutdown_smartswitch_module(self):
         with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
-             mock.patch("config.chassis_modules.get_config_module_state", return_value='up'):
+             mock.patch("config.chassis_modules.get_config_module_state", return_value='up'), \
+             mock.patch("config.chassis_modules.ModuleHelper.get_module_state_transition", return_value=False):
 
             runner = CliRunner()
             db = Db()
@@ -462,6 +458,7 @@ class TestChassisModules(object):
             print(result.exit_code)
             print(result.output)
             assert result.exit_code == 0
+            assert "Shutting down chassis module DPU0" in result.output
 
             # Check CONFIG_DB for admin_status
             cfg_fvs = db.cfgdb.get_entry("CHASSIS_MODULE", "DPU0")
@@ -469,31 +466,13 @@ class TestChassisModules(object):
             print(f"admin_status: {admin_status}")
             assert admin_status == "down"
 
-            # Check STATE_DB for transition flags
-            state_fvs = db.db.get_all("STATE_DB", "CHASSIS_MODULE_TABLE|DPU0")
-            transition_flag = state_fvs.get("state_transition_in_progress")
-            transition_time = state_fvs.get("transition_start_time")
-
-            print(f"state_transition_in_progress: {transition_flag}")
-            print(f"transition_start_time: {transition_time}")
-
-            assert transition_flag == "True"
-            assert transition_time is not None
-
-    def test_shutdown_triggers_transition_in_progress(self):
+    def test_shutdown_smartswitch_transition_in_progress(self):
         with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
-             mock.patch("config.chassis_modules.get_config_module_state", return_value='up'):
+             mock.patch("config.chassis_modules.get_config_module_state", return_value='up'), \
+             mock.patch("config.chassis_modules.ModuleHelper.get_module_state_transition", return_value=True):
 
             runner = CliRunner()
             db = Db()
-
-            fvs = {
-                'admin_status': 'up',
-                'state_transition_in_progress': 'True',
-                'transition_start_time': datetime.now(timezone.utc).isoformat()
-            }
-            db.cfgdb.set_entry('CHASSIS_MODULE', "DPU0", fvs)
-
             result = runner.invoke(
                 config.config.commands["chassis"].commands["modules"].commands["shutdown"],
                 ["DPU0"],
@@ -502,41 +481,32 @@ class TestChassisModules(object):
             print(result.exit_code)
             print(result.output)
             assert result.exit_code == 0
+            assert "Module DPU0 state transition is already in progress" in result.output
 
-            fvs = db.db.get_all("STATE_DB", "CHASSIS_MODULE_TABLE|DPU0")
-            print(f"state_transition_in_progress:{fvs['state_transition_in_progress']}")
-            print(f"transition_start_time:{fvs['transition_start_time']}")
+            # Verify no config change was made
+            cfg_fvs = db.cfgdb.get_entry("CHASSIS_MODULE", "DPU0")
+            assert cfg_fvs == {}
 
-    def test_shutdown_triggers_transition_timeout(self):
-        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
-             mock.patch("config.chassis_modules.get_config_module_state", return_value='up'):
-
-            runner = CliRunner()
-            db = Db()
-
-            fvs = {
-                'admin_status': 'up',
-                'state_transition_in_progress': 'True',
-                'transition_start_time': (datetime.now(timezone.utc) - timedelta(minutes=30)).isoformat()
-            }
-            db.cfgdb.set_entry('CHASSIS_MODULE', "DPU0", fvs)
-
-            result = runner.invoke(
-                config.config.commands["chassis"].commands["modules"].commands["shutdown"],
-                ["DPU0"],
-                obj=db
-            )
-            print(result.exit_code)
-            print(result.output)
-            assert result.exit_code == 0
-
-            fvs = db.db.get_all("STATE_DB", "CHASSIS_MODULE_TABLE|DPU0")
-            print(f"state_transition_in_progress:{fvs['state_transition_in_progress']}")
-            print(f"transition_start_time:{fvs['transition_start_time']}")
-
-    def test_startup_triggers_transition_tracking(self):
+    def test_shutdown_module_already_down(self):
         with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
              mock.patch("config.chassis_modules.get_config_module_state", return_value='down'):
+
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["shutdown"],
+                ["DPU0"],
+                obj=db
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            assert "Module DPU0 is already in down state" in result.output
+
+    def test_startup_smartswitch_module(self):
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value='down'), \
+             mock.patch("config.chassis_modules.ModuleHelper.get_module_state_transition", return_value=False):
 
             runner = CliRunner()
             db = Db()
@@ -548,79 +518,50 @@ class TestChassisModules(object):
             print(result.exit_code)
             print(result.output)
             assert result.exit_code == 0
+            assert "Starting up chassis module DPU0" in result.output
 
-            fvs = db.db.get_all("STATE_DB", "CHASSIS_MODULE_TABLE|DPU0")
-            print(f"state_transition_in_progress:{fvs['state_transition_in_progress']}")
-            print(f"transition_start_time:{fvs['transition_start_time']}")
+            # Check CONFIG_DB for admin_status
+            cfg_fvs = db.cfgdb.get_entry("CHASSIS_MODULE", "DPU0")
+            admin_status = cfg_fvs.get("admin_status")
+            print(f"admin_status: {admin_status}")
+            assert admin_status == "up"
 
-    def test_set_state_transition_in_progress_sets_and_removes_timestamp(self):
-        db = mock.MagicMock()
-        db.statedb = mock.MagicMock()
+    def test_startup_smartswitch_transition_in_progress(self):
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value='down'), \
+             mock.patch("config.chassis_modules.ModuleHelper.get_module_state_transition", return_value=True):
 
-        # Case 1: Set to 'True' adds timestamp
-        db.statedb.get_entry.return_value = {}
-        set_state_transition_in_progress(db, "DPU0", "True")
-        args = db.statedb.set_entry.call_args[0]
-        updated_entry = args[2]
-        assert updated_entry["state_transition_in_progress"] == "True"
-        assert "transition_start_time" in updated_entry
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["startup"],
+                ["DPU0"],
+                obj=db
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            assert "Module DPU0 state transition is already in progress" in result.output
 
-        # Case 2: Set to 'False' removes timestamp
-        db.statedb.get_entry.return_value = {
-            "state_transition_in_progress": "True",
-            "transition_start_time": "2025-05-01T01:00:00"
-        }
-        set_state_transition_in_progress(db, "DPU0", "False")
-        args = db.statedb.set_entry.call_args[0]
-        updated_entry = args[2]
-        assert updated_entry["state_transition_in_progress"] == "False"
-        assert "transition_start_time" not in updated_entry
+            # Verify no config change was made
+            cfg_fvs = db.cfgdb.get_entry("CHASSIS_MODULE", "DPU0")
+            assert cfg_fvs == {}
 
-    def test_is_transition_timed_out_all_paths(self):
-        db = mock.MagicMock()
-        db.statedb = mock.MagicMock()
+    def test_startup_module_already_up(self):
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value='up'):
 
-        # Case 1: No entry
-        db.statedb.get_entry.return_value = None
-        assert is_transition_timed_out(db, "DPU0") is False
-
-        # Case 2: No transition_start_time
-        db.statedb.get_entry.return_value = {"state_transition_in_progress": "True"}
-        assert is_transition_timed_out(db, "DPU0") is False
-
-        # Case 3: Invalid format
-        db.statedb.get_entry.return_value = {"transition_start_time": "not-a-date"}
-        assert is_transition_timed_out(db, "DPU0") is False
-
-        # Case 4: Timed out
-        old_time = (datetime.now(timezone.utc) - TRANSITION_TIMEOUT - timedelta(seconds=1)).isoformat()
-        db.statedb.get_entry.return_value = {"transition_start_time": old_time}
-        assert is_transition_timed_out(db, "DPU0") is True
-
-        # Case 5: Not timed out yet
-        now = datetime.now(timezone.utc).isoformat()
-        db.statedb.get_entry.return_value = {"transition_start_time": now}
-        assert is_transition_timed_out(db, "DPU0") is False
-
-    def test_delete_field(self):
-        """Single test to cover missing delete_field and timezone handling lines"""
-        from config.chassis_modules import StateDBHelper
-        from datetime import timezone
-
-        # Test delete_field method (covers lines 32-34)
-        mock_sonic_db = mock.MagicMock()
-        mock_redis_client = mock.MagicMock()
-        mock_sonic_db.get_redis_client.return_value = mock_redis_client
-        helper = StateDBHelper(mock_sonic_db)
-        helper.delete_field('TEST_TABLE', 'test_key', 'test_field')
-        mock_redis_client.hdel.assert_called_once_with("TEST_TABLE|test_key", "test_field")
-
-        # Test timezone-aware datetime handling (covers line 109)
-        db = mock.MagicMock()
-        db.statedb = mock.MagicMock()
-        tz_time = (datetime.now(timezone.utc) - TRANSITION_TIMEOUT - timedelta(seconds=1)).isoformat()
-        db.statedb.get_entry.return_value = {"transition_start_time": tz_time}
-        assert is_transition_timed_out(db, "DPU0") is True
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["startup"],
+                ["DPU0"],
+                obj=db
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            assert "Module DPU0 is already set to up state" in result.output
 
     @classmethod
     def teardown_class(cls):
