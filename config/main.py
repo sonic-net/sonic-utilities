@@ -6225,7 +6225,10 @@ def enable_use_link_local_only(ctx, interface_name):
         if interface_name is None:
             ctx.fail("'interface_name' is None!")
 
-    if interface_name.startswith("Ethernet"):
+    interface_type = ""
+    if VLAN_SUB_INTERFACE_SEPARATOR in interface_name:
+        interface_type = "VLAN_SUB_INTERFACE"
+    elif interface_name.startswith("Ethernet"):
         interface_type = "INTERFACE"
     elif interface_name.startswith("PortChannel"):
         interface_type = "PORTCHANNEL_INTERFACE"
@@ -6234,7 +6237,7 @@ def enable_use_link_local_only(ctx, interface_name):
     else:
         ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
 
-    if (interface_type == "INTERFACE" ) or (interface_type == "PORTCHANNEL_INTERFACE"):
+    if (interface_type == "INTERFACE" ) or (interface_type == "PORTCHANNEL_INTERFACE") or (interface_type == "VLAN_SUB_INTERFACE"):
         if interface_name_is_valid(db, interface_name) is False:
             ctx.fail("Interface name %s is invalid. Please enter a valid interface name!!" %(interface_name))
 
@@ -6278,7 +6281,9 @@ def disable_use_link_local_only(ctx, interface_name):
             ctx.fail("'interface_name' is None!")
 
     interface_type = ""
-    if interface_name.startswith("Ethernet"):
+    if VLAN_SUB_INTERFACE_SEPARATOR in interface_name:
+        interface_type = "VLAN_SUB_INTERFACE"
+    elif interface_name.startswith("Ethernet"):
         interface_type = "INTERFACE"
     elif interface_name.startswith("PortChannel"):
         interface_type = "PORTCHANNEL_INTERFACE"
@@ -6287,7 +6292,7 @@ def disable_use_link_local_only(ctx, interface_name):
     else:
         ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan]")
 
-    if (interface_type == "INTERFACE" ) or (interface_type == "PORTCHANNEL_INTERFACE"):
+    if (interface_type == "INTERFACE" ) or (interface_type == "PORTCHANNEL_INTERFACE") or (interface_type == "VLAN_SUB_INTERFACE"):
         if interface_name_is_valid(db, interface_name) is False:
             ctx.fail("Interface name %s is invalid. Please enter a valid interface name!!" %(interface_name))
 
@@ -8852,6 +8857,7 @@ def set_ipv6_link_local_only_on_interface(config_db, interface_dict, interface_t
 
     # If we are disabling the ipv6 link local on an interface, and if no other interface
     # attributes/ip addresses are configured on the interface, delete the interface from the interface table
+    # vlan subinterfaces: Avoid deleting single-key entries when disabling port IPv6 link-local
     exists = False
     for key in interface_dict.keys():
         if not isinstance(key, tuple):
@@ -8861,6 +8867,8 @@ def set_ipv6_link_local_only_on_interface(config_db, interface_dict, interface_t
                     if len(interface_dict[key]['vrf_name']) > 0:
                         exists = True
                         break
+            if (interface_type == "VLAN_SUB_INTERFACE") :
+                exists = True
             continue
         if interface_name in key:
             exists = True
@@ -8920,6 +8928,12 @@ def enable_link_local(ctx):
             continue
         set_ipv6_link_local_only_on_interface(config_db, port_dict, 'INTERFACE', key, mode)
 
+    # Enable ipv6 link local on vlan_sub_interfaces
+    vlan_sub_intf_name_dict = config_db.get_table('VLAN_SUB_INTERFACE')
+    for key in vlan_sub_intf_name_dict.keys():
+        if not isinstance(key, tuple):
+            set_ipv6_link_local_only_on_interface(config_db, vlan_sub_intf_name_dict, 'VLAN_SUB_INTERFACE', key, mode)
+
 #
 # 'disable' command ('config ipv6 disable ...')
 #
@@ -8940,7 +8954,7 @@ def disable_link_local(ctx):
 
     mode = "disable"
 
-    tables = ['INTERFACE', 'VLAN_INTERFACE', 'PORTCHANNEL_INTERFACE']
+    tables = ['INTERFACE', 'VLAN_INTERFACE', 'PORTCHANNEL_INTERFACE', 'VLAN_SUB_INTERFACE']
 
     for table_type in tables:
         table_dict = config_db.get_table(table_type)
