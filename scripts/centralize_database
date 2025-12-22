@@ -49,7 +49,7 @@ def main():
 Example : centralize_database APPL_DB
 """)
     parser.add_argument('target_db', type=str, help='move all db data into the instance where target db locates')
-    parser.add_argument('-n', '--namespace', default="", type=str, help='namespace to use')
+    parser.add_argument('-n', '--namespace', default=multi_asic.DEFAULT_NAMESPACE, type=str, help='namespace to use')
     args = parser.parse_args()
 
     if args.target_db:
