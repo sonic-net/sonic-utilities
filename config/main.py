@@ -10183,7 +10183,7 @@ def igmp_snooping_mrouter_add(ctx, vid, interface_name):
     mrouter_mem_key = vlan_name+'|'+interface_name
     l2mc_name = db.get_entry('L2MC_MROUTER', mrouter_mem_key)
     if len(l2mc_name) != 0:
-        ctx.fail("{} is already a member of {}".format(interface_name,vlan_name))
+        ctx.fail("{} is already a mrouter of {}".format(interface_name,vlan_name))
     db.set_entry('L2MC_MROUTER', mrouter_mem_key, {'mrouter_port':interface_name})
 
 @igmp_snooping_mrouter.command('del')
@@ -10208,7 +10208,7 @@ def igmp_snooping_mrouter_del(ctx, vid, interface_name):
     mrouter_mem_key = vlan_name+'|'+interface_name
     l2mc_name = db.get_entry('L2MC_MROUTER', mrouter_mem_key)
     if len(l2mc_name) == 0:
-        ctx.fail("{} is not a member of {}".format(interface_name,vlan_name))
+        ctx.fail("{} is not a mrouter of {}".format(interface_name,vlan_name))
     db.set_entry('L2MC_MROUTER', mrouter_mem_key, None)
 
 #
@@ -10679,7 +10679,7 @@ def mld_snooping_mrouter_add(ctx, vid, interface_name):
     mrouter_mem_key = vlan_name+'|'+interface_name
     l2mc_name = db.get_entry('MLD_L2MC_MROUTER', mrouter_mem_key)
     if len(l2mc_name) != 0:
-        ctx.fail("{} is already a member of {}".format(interface_name,vlan_name))
+        ctx.fail("{} is already a mrouter of {}".format(interface_name,vlan_name))
     db.set_entry('MLD_L2MC_MROUTER', mrouter_mem_key, {'mrouter_port':interface_name})
 
 @mld_snooping_mrouter.command('del')
@@ -10704,7 +10704,7 @@ def mld_snooping_mrouter_del(ctx, vid, interface_name):
     mrouter_mem_key = vlan_name+'|'+interface_name
     l2mc_name = db.get_entry('MLD_L2MC_MROUTER', mrouter_mem_key)
     if len(l2mc_name) == 0:
-        ctx.fail("{} is not a member of {}".format(interface_name,vlan_name))
+        ctx.fail("{} is not a mrouter of {}".format(interface_name,vlan_name))
     db.set_entry('MLD_L2MC_MROUTER', mrouter_mem_key, None)
 
 if __name__ == '__main__':
