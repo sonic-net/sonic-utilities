@@ -86,15 +86,19 @@ class TestShowMlnx(object):
     def test_is_issue_status_enabled_multi_asic(self, mock_runcmd, mock_get_numasics, status):
         def mock_return(*args, **kwargs):
             cmd = ' '.join(args[0])
-            if cmd == f"docker exec {show.CONTAINER_NAME}0 cat /{show.HWSKU_PATH}/sai.profile" or \
-               cmd == f"docker exec {show.CONTAINER_NAME}1 cat /{show.HWSKU_PATH}/sai.profile" or \
-               cmd == f"docker exec {show.CONTAINER_NAME}2 cat /{show.HWSKU_PATH}/sai.profile" or \
-               cmd == f"docker exec {show.CONTAINER_NAME}3 cat /{show.HWSKU_PATH}/sai.profile":
+            if (
+                cmd == f"docker exec {show.CONTAINER_NAME}0 cat /{show.HWSKU_PATH}/sai.profile" or
+                cmd == f"docker exec {show.CONTAINER_NAME}1 cat /{show.HWSKU_PATH}/sai.profile" or
+                cmd == f"docker exec {show.CONTAINER_NAME}2 cat /{show.HWSKU_PATH}/sai.profile" or
+                cmd == f"docker exec {show.CONTAINER_NAME}3 cat /{show.HWSKU_PATH}/sai.profile"
+            ):
                 return ('SAI_INIT_CONFIG_FILE=/usr/share/sonic/hwsku/sai.xml\n', '')
-            elif cmd == f"docker exec {show.CONTAINER_NAME}0 cat {show.HWSKU_PATH}sai.xml" or \
-                 cmd == f"docker exec {show.CONTAINER_NAME}1 cat {show.HWSKU_PATH}sai.xml" or \
-                 cmd == f"docker exec {show.CONTAINER_NAME}2 cat {show.HWSKU_PATH}sai.xml" or \
-                 cmd == f"docker exec {show.CONTAINER_NAME}3 cat {show.HWSKU_PATH}sai.xml":
+            elif (
+                cmd == f"docker exec {show.CONTAINER_NAME}0 cat {show.HWSKU_PATH}sai.xml" or
+                cmd == f"docker exec {show.CONTAINER_NAME}1 cat {show.HWSKU_PATH}sai.xml" or
+                cmd == f"docker exec {show.CONTAINER_NAME}2 cat {show.HWSKU_PATH}sai.xml" or
+                cmd == f"docker exec {show.CONTAINER_NAME}3 cat {show.HWSKU_PATH}sai.xml"
+            ):
                 return (f"""<?xml version="1.0"?>
                 <root>
                     <platform_info>
