@@ -248,9 +248,14 @@
             "AZURE_LOSSLESS": {
                 "ecn": "ecn_all",
                 "green_drop_probability": "5",
+                "green_min_threshold": "4194304",
+                "green_max_threshold": "8388608",
                 "yellow_drop_probability": "5",
                 "yellow_max_threshold": "2097152",
-                "yellow_min_threshold": "1048576"
+                "yellow_min_threshold": "1048576",
+                "red_drop_probability": "10",
+                "red_min_threshold": "524288",
+                "red_max_threshold": "1048576"
             }
         }
     },
@@ -265,7 +270,12 @@
             "name": "change_1",
             "update": {
                 "VLAN_INTERFACE": { "Vlan2000": {}, "Vlan2000|192.168.0.2/21": {} },
-                "WRED_PROFILE": { "AZURE_LOSSLESS": { "green_drop_probability": "99", "ecn": "88" }},
+                "WRED_PROFILE": { "AZURE_LOSSLESS": {
+                    "green_drop_probability": "99",
+                    "ecn": "88",
+                    "yellow_min_threshold": "2097152",
+                    "red_max_threshold": "2097152"
+                }},
                 "ACL_TABLE": {"DATAACL": {"type": "test_data" }}
             },
             "remove": {
@@ -297,7 +307,15 @@
         {
             "name": "change_3",
             "update": {
-                "WRED_PROFILE": { "AZURE_LOSSLESS": { "green_drop_probability": "5" } },
+                "WRED_PROFILE": { "AZURE_LOSSLESS": {
+                    "green_drop_probability": "5",
+                    "green_min_threshold": "4194304",
+                    "green_max_threshold": "8388608",
+                    "yellow_min_threshold": "1048576",
+                    "yellow_max_threshold": "2097152",
+                    "red_min_threshold": "524288",
+                    "red_max_threshold": "1048576"
+                } },
                 "ACL_TABLE": {"DATAACL": {
                     "policy_desc": "DATAACL",
                     "ports": [
@@ -311,7 +329,7 @@
                 },
                 "BGP_PEER_RANGE": {
                     "BGPSLBPassive": {
-                        "ip_range": ["10.255.0.0/25"], 
+                        "ip_range": ["10.255.0.0/25"],
                         "name": "BGPSLBPassive",
                         "src_address": "10.1.0.32"
                     }
@@ -329,7 +347,7 @@
             },
             "remove": {
                 "VLAN_INTERFACE": { "Vlan2000|192.168.0.2/21": {} },
-               "TEST_ONLY": { "TEST_SUB": {} } 
+                "TEST_ONLY": { "TEST_SUB": {} }
             }
         }
     ]
