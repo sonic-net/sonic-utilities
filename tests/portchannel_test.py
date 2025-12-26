@@ -384,7 +384,7 @@ class TestPortChannel(object):
     def test_get_portchannel_retry_count_disabled(self, subprocessMock):
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb, 'teamdctl_command':['teamdctl']}
+        obj = {'db': db.cfgdb, 'teamdctl_command': ['teamdctl']}
 
         subprocessMock.retryCountEnabled = False
 
@@ -399,7 +399,7 @@ class TestPortChannel(object):
     def test_set_portchannel_retry_count_disabled(self, subprocessMock):
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb, 'teamdctl_command':['teamdctl']}
+        obj = {'db': db.cfgdb, 'teamdctl_command': ['teamdctl']}
 
         subprocessMock.retryCountEnabled = False
 
@@ -414,7 +414,7 @@ class TestPortChannel(object):
     def test_get_portchannel_retry_count_timeout(self, subprocessMock):
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb, 'teamdctl_command':['teamdctl']}
+        obj = {'db': db.cfgdb, 'teamdctl_command': ['teamdctl']}
 
         subprocessMock.retryCountEnabled = True
         subprocessMock.timeout = True
@@ -431,7 +431,7 @@ class TestPortChannel(object):
     def test_set_portchannel_retry_count_timeout(self, subprocessMock):
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb, 'teamdctl_command':['teamdctl']}
+        obj = {'db': db.cfgdb, 'teamdctl_command': ['teamdctl']}
 
         subprocessMock.retryCountEnabled = True
         subprocessMock.timeout = True
@@ -448,7 +448,7 @@ class TestPortChannel(object):
     def test_get_portchannel_retry_count(self, subprocessMock):
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb, 'teamdctl_command':['teamdctl']}
+        obj = {'db': db.cfgdb, 'teamdctl_command': ['teamdctl']}
 
         subprocessMock.retryCountEnabled = True
 
@@ -464,7 +464,7 @@ class TestPortChannel(object):
     def test_set_portchannel_retry_count(self, subprocessMock):
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb, 'teamdctl_command':['teamdctl']}
+        obj = {'db': db.cfgdb, 'teamdctl_command': ['teamdctl']}
 
         subprocessMock.retryCountEnabled = True
 
@@ -482,12 +482,14 @@ class TestPortChannel(object):
         runner = CliRunner()
         db = Db()
         # Don't pass teamdctl_command - let the group function set it up
-        obj = {'db':db.cfgdb, 'namespace': ''}
+        obj = {'db': db.cfgdb, 'namespace': ''}
 
         subprocessMock.retryCountEnabled = True
 
         # Invoke through retry-count group command to trigger the group callback
-        result = runner.invoke(config.config.commands["portchannel"].commands["retry-count"], ["get", "PortChannel1001"], obj=obj)
+        result = runner.invoke(
+            config.config.commands["portchannel"].commands["retry-count"],
+            ["get", "PortChannel1001"], obj=obj)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
@@ -500,12 +502,14 @@ class TestPortChannel(object):
         db = Db()
         # Don't pass teamdctl_command - let the group function set it up
         # Use a non-default namespace to cover the multi-asic code path
-        obj = {'db':db.cfgdb, 'namespace': 'asic0'}
+        obj = {'db': db.cfgdb, 'namespace': 'asic0'}
 
         subprocessMock.retryCountEnabled = True
 
         # Invoke through retry-count group command to trigger the group callback
-        result = runner.invoke(config.config.commands["portchannel"].commands["retry-count"], ["get", "PortChannel1001"], obj=obj)
+        result = runner.invoke(
+            config.config.commands["portchannel"].commands["retry-count"],
+            ["get", "PortChannel1001"], obj=obj)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
