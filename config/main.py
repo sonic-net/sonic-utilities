@@ -10081,7 +10081,7 @@ def igmp_snooping_optimised_multicast_flood(ctx, vid, link_local_groups_suppress
 
 @igmp_snooping.command('version')
 @click.argument('vid', metavar='<vlan>', required=True, type=int)
-@click.argument('version', metavar='<(1,3)ver>', required=True, type=click.IntRange(1,3))
+@click.argument('version', metavar='<(1-3)ver>', required=True, type=click.IntRange(1,3))
 @click.pass_context
 def igmp_snooping_version(ctx, vid, version):
     """IGMP Version"""
