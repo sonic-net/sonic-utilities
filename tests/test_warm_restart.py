@@ -148,7 +148,8 @@ def test_config_warm_restart_neighsyncd_timer(configdbconnector_mock, sonicv2con
         "swss"]["neighsyncd_timer"] == "180"
 
 
-def test_config_warm_restart_neighsyncd_timer_multi_asic(configdbconnector_mock, sonicv2connector_mock, multi_asic):
+def test_config_warm_restart_neighsyncd_timer_multi_asic(
+        configdbconnector_mock, sonicv2connector_mock, multi_asic):
     runner = CliRunner()
     result = runner.invoke(
         config_cli.commands["warm_restart"], ["neighsyncd_timer", "180"],
@@ -160,7 +161,8 @@ def test_config_warm_restart_neighsyncd_timer_multi_asic(configdbconnector_mock,
             "swss"]["neighsyncd_timer"] == "180"
 
 
-def test_config_warm_restart_neighsyncd_timer_multi_asic_one_asic(configdbconnector_mock, sonicv2connector_mock, multi_asic):
+def test_config_warm_restart_neighsyncd_timer_multi_asic_one_asic(
+        configdbconnector_mock, sonicv2connector_mock, multi_asic):
     runner = CliRunner()
     result = runner.invoke(
         config_cli.commands["warm_restart"], ["neighsyncd_timer", "180"],
@@ -238,7 +240,8 @@ def test_config_warm_restart_disable_bgp_eoiu_multi_asic(configdbconnector_mock,
         assert cfg_db.get_table("WARM_RESTART")["bgp"]["bgp_eoiu"] == "true"
 
 
-def test_config_warm_restart_disable_bgp_eoiu_multi_asic_one_asic(configdbconnector_mock, sonicv2connector_mock, multi_asic):
+def test_config_warm_restart_disable_bgp_eoiu_multi_asic_one_asic(
+        configdbconnector_mock, sonicv2connector_mock, multi_asic):
     runner = CliRunner()
     result = runner.invoke(
         config_cli.commands["warm_restart"], ["bgp_eoiu", "true"],
@@ -369,12 +372,12 @@ def test_show_warm_restart_state_invalid_namespace(setup_state_db_multi_asic):
     )
     expected_output = textwrap.dedent("""\
         Usage: warm_restart state [OPTIONS]
+        Try 'warm_restart state --help' for help.
 
         Error: Invalid namespace: asicX
     """)
     assert result.exit_code == 2
     assert result.output == expected_output
-
 
 
 def test_show_warm_restart_state_unix_sock_usage(setup_state_db):
@@ -474,6 +477,7 @@ def test_show_warm_restart_config_invalid_namespace(setup_state_db_multi_asic):
     )
     expected_output = textwrap.dedent("""\
         Usage: warm_restart config [OPTIONS]
+        Try 'warm_restart config --help' for help.
 
         Error: Invalid namespace: asicX
     """)
@@ -489,6 +493,7 @@ def test_show_warm_restart_config_unix_sock_usage_and_namespace(setup_state_db_m
     )
     expected_output = textwrap.dedent("""\
         Usage: warm_restart config [OPTIONS]
+        Try 'warm_restart config --help' for help.
 
         Error: Cannot specify both namespace and redis unix socket path
     """)

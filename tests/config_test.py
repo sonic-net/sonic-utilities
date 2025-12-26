@@ -3015,7 +3015,7 @@ class TestConfigWarmRestart(object):
         config.ADHOC_VALIDATION = False
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'config_db': {'': db.cfgdb}, 'asic_namespaces': ['']}
 
         result = runner.invoke(config.config.commands["warm_restart"].commands["neighsyncd_timer"], ["2000"], obj=obj)
         print(result.exit_code)
@@ -3027,7 +3027,7 @@ class TestConfigWarmRestart(object):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'config_db': {'': db.cfgdb}, 'asic_namespaces': ['']}
 
         result = runner.invoke(config.config.commands["warm_restart"].commands["neighsyncd_timer"], ["0"], obj=obj)
         print(result.exit_code)
@@ -3041,7 +3041,7 @@ class TestConfigWarmRestart(object):
         config.ADHOC_VALIDATION = False
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'config_db': {'': db.cfgdb}, 'asic_namespaces': ['']}
 
         result = runner.invoke(config.config.commands["warm_restart"].commands["bgp_timer"], ["2000"], obj=obj)
         print(result.exit_code)
@@ -3053,7 +3053,7 @@ class TestConfigWarmRestart(object):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'config_db': {'': db.cfgdb}, 'asic_namespaces': ['']}
 
         result = runner.invoke(config.config.commands["warm_restart"].commands["bgp_timer"], ["0"], obj=obj)
         print(result.exit_code)
@@ -3067,7 +3067,7 @@ class TestConfigWarmRestart(object):
         config.ADHOC_VALIDATION = False
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'config_db': {'': db.cfgdb}, 'asic_namespaces': ['']}
 
         result = runner.invoke(config.config.commands["warm_restart"].commands["teamsyncd_timer"], ["2000"], obj=obj)
         print(result.exit_code)
@@ -3079,7 +3079,7 @@ class TestConfigWarmRestart(object):
         config.ADHOC_VALIDATION = True
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'config_db': {'': db.cfgdb}, 'asic_namespaces': ['']}
 
         result = runner.invoke(config.config.commands["warm_restart"].commands["teamsyncd_timer"], ["0"], obj=obj)
         print(result.exit_code)
@@ -3093,7 +3093,7 @@ class TestConfigWarmRestart(object):
         config.ADHOC_VALIDATION = False
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'config_db': {'': db.cfgdb}, 'asic_namespaces': ['']}
 
         result = runner.invoke(config.config.commands["warm_restart"].commands["bgp_eoiu"], ["true"], obj=obj)
         print(result.exit_code)

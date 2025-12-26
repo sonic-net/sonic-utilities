@@ -3825,9 +3825,9 @@ def warm_restart(ctx, redis_unix_socket_path):
     ctx.obj["state_db"] = {}
     ctx.obj["config_db"] = {}
     for namespace in all_namespaces:
-        config_db = ConfigDBConnector(namespace=namespace, use_unix_socket_path=use_unix_socket_path);
+        config_db = ConfigDBConnector(namespace=namespace, use_unix_socket_path=use_unix_socket_path)
         config_db.connect(wait_for_init=False)
-        state_db = SonicV2Connector(namespace=namespace, use_unix_socket_path=use_unix_socket_path);
+        state_db = SonicV2Connector(namespace=namespace, use_unix_socket_path=use_unix_socket_path)
         state_db.connect(state_db.STATE_DB, False)
         ctx.obj["state_db"][namespace] = state_db
         ctx.obj["config_db"][namespace] = config_db
@@ -3935,7 +3935,7 @@ def warm_restart_teamsyncd_timer(ctx, namespace, seconds):
 
     if ADHOC_VALIDATION:
         if seconds not in range(1, 3600):
-            ctx.fail("bgp warm restart timer must be in range 1-3600")
+            ctx.fail("teamsyncd warm restart timer must be in range 1-3600")
 
     for namespace in namespaces:
         db = ValidatedConfigDBConnector(ctx.obj["config_db"][namespace])

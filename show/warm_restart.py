@@ -106,6 +106,7 @@ def config(namespace, redis_unix_socket_path):
 
         show_warm_restart_config_for_namespace(namespace, **kwargs)
 
+
 def show_warm_restart_config_for_namespace(namespace, **kwargs):
     config_db = ConfigDBConnector(namespace=namespace, **kwargs)
     config_db.connect(wait_for_init=False)
