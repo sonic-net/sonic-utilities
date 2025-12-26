@@ -369,6 +369,7 @@ def test_show_warm_restart_state_invalid_namespace(setup_state_db_multi_asic):
     )
     expected_output = textwrap.dedent("""\
         Usage: warm_restart state [OPTIONS]
+        Try 'warm_restart state --help' for help.
 
         Error: Invalid namespace: asicX
     """)
@@ -474,6 +475,7 @@ def test_show_warm_restart_config_invalid_namespace(setup_state_db_multi_asic):
     )
     expected_output = textwrap.dedent("""\
         Usage: warm_restart config [OPTIONS]
+        Try 'warm_restart config --help' for help.
 
         Error: Invalid namespace: asicX
     """)
@@ -489,6 +491,7 @@ def test_show_warm_restart_config_unix_sock_usage_and_namespace(setup_state_db_m
     )
     expected_output = textwrap.dedent("""\
         Usage: warm_restart config [OPTIONS]
+        Try 'warm_restart config --help' for help.
 
         Error: Cannot specify both namespace and redis unix socket path
     """)
