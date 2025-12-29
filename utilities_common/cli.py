@@ -445,9 +445,13 @@ def is_port_router_interface(config_db, port):
     """Check if port is a router interface"""
 
     interface_table = config_db.get_table('INTERFACE')
-    for intf in interface_table:
-        if port == intf:
+    for intf in interface_table.keys():
+        if is_ip_prefix_in_key(intf) and port == intf[0]:
             return True
+
+    entry = config_db.get_entry('INTERFACE', port)
+    if entry.get('ipv6_use_link_local_only') == 'enable':
+        return True
 
     return False
 
@@ -456,9 +460,13 @@ def is_pc_router_interface(config_db, pc):
     """Check if portchannel is a router interface"""
 
     pc_interface_table = config_db.get_table('PORTCHANNEL_INTERFACE')
-    for intf in pc_interface_table:
-        if pc == intf:
+    for intf in pc_interface_table.keys():
+        if is_ip_prefix_in_key(intf) and pc == intf[0]:
             return True
+
+    entry = config_db.get_entry('PORTCHANNEL_INTERFACE', pc)
+    if entry.get('ipv6_use_link_local_only') == 'enable':
+        return True
 
     return False
 
