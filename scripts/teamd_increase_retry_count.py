@@ -23,7 +23,7 @@ from scapy.sendrecv import sendp, sniff  # noqa: E402
 from scapy.packet import Packet, split_layers, bind_layers  # noqa: E402
 import scapy.contrib.lacp  # noqa: E402
 
-log = None 
+log = None
 revertTeamdRetryCountChanges = False
 DEFAULT_RETRY_COUNT = 3
 EXTENDED_RETRY_COUNT = 5
