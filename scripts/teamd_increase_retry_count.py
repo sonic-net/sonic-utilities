@@ -23,7 +23,7 @@ from scapy.sendrecv import sendp, sniff  # noqa: E402
 from scapy.packet import Packet, split_layers, bind_layers  # noqa: E402
 import scapy.contrib.lacp  # noqa: E402
 
-log = None 
+log = None
 revertTeamdRetryCountChanges = False
 DEFAULT_RETRY_COUNT = 3
 EXTENDED_RETRY_COUNT = 5
@@ -185,7 +185,7 @@ def craftLacpPacket(portChannelConfig, portName, isResetPacket=False, newVersion
     actorConfig = portConfig["runner"]["actor_lacpdu_info"]
     partnerConfig = portConfig["runner"]["partner_lacpdu_info"]
     l2 = Ether(dst=SLOW_PROTOCOL_MAC_ADDRESS, src=portConfig["ifinfo"]["dev_addr"], type=LACP_ETHERTYPE)
-    l3 = scapy.contrib.lacp.SlowProtocol(subtype=0x01) 
+    l3 = scapy.contrib.lacp.SlowProtocol(subtype=0x01)
     l4 = LACPRetryCount()
     if newVersion:
         l4.version = 0xf1
