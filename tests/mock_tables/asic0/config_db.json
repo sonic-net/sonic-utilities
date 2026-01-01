@@ -229,7 +229,31 @@
     "VLAN|Vlan1000": {
         "vlanid": "1000"
     },
+    "VLAN|Vlan2000": {
+        "vlanid": "2000"
+    },
+    "VLAN_INTERFACE|Vlan1000": {
+        "NULL": "NULL"
+    },
+    "VLAN_INTERFACE|Vlan2000": {
+        "proxy_arp": "enabled"
+    },
+    "VLAN_INTERFACE|Vlan1000|192.168.0.1/21": {
+        "NULL": "NULL"
+    },
+    "VLAN_INTERFACE|Vlan2000|192.168.0.10/21": {
+        "NULL": "NULL"
+    },
+    "VLAN_MEMBER|Vlan1000|Ethernet4": {
+        "tagging_mode": "untagged"
+    },
+    "VLAN_MEMBER|Vlan1000|Ethernet16": {
+        "tagging_mode": "untagged"
+    },
     "VLAN_MEMBER|Vlan1000|PortChannel1002": {
+        "tagging_mode": "tagged"
+    },
+    "VLAN_MEMBER|Vlan2000|Ethernet0": {
         "tagging_mode": "tagged"
     },
     "BGP_NEIGHBOR|default|10.0.0.1": {
