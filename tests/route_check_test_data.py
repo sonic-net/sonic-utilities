@@ -1704,4 +1704,59 @@ TEST_DATA = {
         },
         RET: -1,
     },
+    "33": {
+        DESCR: "Good test case, only IPv4 routes",
+        MULTI_ASIC: False,
+        NAMESPACE: [''],
+        ARGS: "route_check -m INFO -i 1000",
+        DEFAULTNS: {
+            APPL_DB: {
+                ROUTE_TABLE: {
+                    "0.0.0.0/0": {"ifname": "portchannel0"},
+                    "10.10.196.12/31": {"ifname": "portchannel0"},
+                    "10.10.196.20/31": {"ifname": "portchannel0"},
+                    "10.10.196.30/31": {"ifname": "lo"}
+                },
+                INTF_TABLE: {
+                    "PortChannel1013:10.10.196.24/31": {},
+                    "PortChannel1024": {}
+                }
+            },
+            ASIC_DB: {
+                RT_ENTRY_TABLE: {
+                    ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                    ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                    ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                    ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
+                }
+            }
+        }
+    },
+    "34": {
+        DESCR: "Good test case, only IPv6 routes",
+        MULTI_ASIC: False,
+        NAMESPACE: [''],
+        ARGS: "route_check -m INFO -i 1000",
+        DEFAULTNS: {
+            APPL_DB: {
+                ROUTE_TABLE: {
+                    "::/0": {"ifname": "portchannel0"},
+                    "2603:10b0:503:df4::6d/126": {"ifname": "portchannel0"},
+                    "2603:10b0:503:df4::7d/126": {"ifname": "portchannel0"},
+                },
+                INTF_TABLE: {
+                    "PortChannel1023:2603:10b0:503:df4::5d/126": {},
+                    "PortChannel1024": {}
+                }
+            },
+            ASIC_DB: {
+                RT_ENTRY_TABLE: {
+                    ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                    ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::6d/126" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                    ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::7d/126" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                    ASIC_RT_ENTRY_KEY_PREFIX + "::/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
+                }
+            }
+        }
+    },
 }
