@@ -10497,7 +10497,7 @@ def mld_snooping_q_interval(ctx, vid, q_time):
         qmr_time = 10
     qmr_time = int(qmr_time)
     if q_time <= qmr_time:
-        ctx.fail(f"query-interval {q_time} must be >= query-max-response-time {qmr_time}.")
+        ctx.fail(f"query-interval {q_time} must be > query-max-response-time {qmr_time}.")
     q_time_name = format(q_time)
     db.mod_entry('MLD_L2MC', vlan_name, {'query-interval': q_time_name})
 
