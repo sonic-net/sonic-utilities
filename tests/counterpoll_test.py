@@ -86,7 +86,7 @@ class TestCounterpoll(object):
         runner = CliRunner()
         result = runner.invoke(counterpoll.cli.commands["port-buffer-drop"].commands["interval"], ["1000"])
         print(result.output)
-        expected = "Invalid value for \"POLL_INTERVAL\": 1000 is not in the valid range of 30000 to 300000."
+        expected = "Invalid value for 'POLL_INTERVAL': 1000 is not in the range 30000<=x<=300000."
         assert result.exit_code == 2
         assert expected in result.output
 
@@ -94,7 +94,7 @@ class TestCounterpoll(object):
         runner = CliRunner()
         result = runner.invoke(counterpoll.cli.commands["pg-drop"].commands["interval"], ["50000"])
         print(result.output)
-        expected = "Invalid value for \"POLL_INTERVAL\": 50000 is not in the valid range of 1000 to 30000."
+        expected = "Invalid value for 'POLL_INTERVAL': 50000 is not in the range 1000<=x<=30000."
         assert result.exit_code == 2
         assert expected in result.output
 
@@ -103,7 +103,7 @@ class TestCounterpoll(object):
         runner = CliRunner()
         result = runner.invoke(counterpoll.cli.commands["acl"].commands["interval"], [str(interval)])
         print(result.output)
-        expected = "Invalid value for \"POLL_INTERVAL\": {} is not in the valid range of 1000 to 30000.".format(interval)
+        expected = "Invalid value for 'POLL_INTERVAL': {} is not in the range 1000<=x<=30000.".format(interval)
         assert result.exit_code == 2
         assert expected in result.output
 
@@ -203,13 +203,13 @@ class TestCounterpoll(object):
 
         test_interval = "500"
         result = runner.invoke(counterpoll.cli.commands["flowcnt-trap"].commands["interval"], [test_interval], obj=db.cfgdb)
-        expected = "Invalid value for \"POLL_INTERVAL\": 500 is not in the valid range of 1000 to 30000."
+        expected = "Invalid value for 'POLL_INTERVAL': 500 is not in the range 1000<=x<=30000."
         assert result.exit_code == 2
         assert expected in result.output
 
         test_interval = "40000"
         result = runner.invoke(counterpoll.cli.commands["flowcnt-trap"].commands["interval"], [test_interval], obj=db.cfgdb)
-        expected = "Invalid value for \"POLL_INTERVAL\": 40000 is not in the valid range of 1000 to 30000."
+        expected = "Invalid value for 'POLL_INTERVAL': 40000 is not in the range 1000<=x<=30000."
         assert result.exit_code == 2
         assert expected in result.output
 
@@ -229,7 +229,7 @@ class TestCounterpoll(object):
         test_interval = "500"
         result = runner.invoke(counterpoll.cli.commands["flowcnt-route"].commands["interval"], [test_interval],
                                obj=db.cfgdb)
-        expected = "Invalid value for \"POLL_INTERVAL\": 500 is not in the valid range of 1000 to 30000."
+        expected = "Invalid value for 'POLL_INTERVAL': 500 is not in the range 1000<=x<=30000."
         assert result.exit_code == 2
         assert expected in result.output
 
@@ -237,7 +237,7 @@ class TestCounterpoll(object):
         result = runner.invoke(counterpoll.cli.commands["flowcnt-route"].commands["interval"], [test_interval],
                                obj=db.cfgdb)
 
-        expected = "Invalid value for \"POLL_INTERVAL\": 40000 is not in the valid range of 1000 to 30000."
+        expected = "Invalid value for 'POLL_INTERVAL': 40000 is not in the range 1000<=x<=30000."
         assert result.exit_code == 2
         assert expected in result.output
 
@@ -245,7 +245,7 @@ class TestCounterpoll(object):
     def test_update_eni_status(self, status):
         runner = CliRunner()
         result = runner.invoke(counterpoll.cli, ["eni", status])
-        assert 'No such command "eni"' in result.output
+        assert 'No such command \'eni\'' in result.output
         assert result.exit_code == 2
 
     @pytest.mark.parametrize("status", ["disable", "enable"])

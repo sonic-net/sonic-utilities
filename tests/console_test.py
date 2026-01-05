@@ -88,7 +88,7 @@ class TestConfigConsoleCommands(object):
         print(result.exit_code)
         print(sys.stderr, result.output)
         assert result.exit_code != 0
-        assert "Missing option \"--baud\"" in result.output
+        assert "Missing option '--baud'" in result.output
 
     def test_console_add_name_conflict(self):
         runner = CliRunner()

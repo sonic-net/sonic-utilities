@@ -296,9 +296,8 @@ testData = {
              'mmu_cfg_alpha_invalid': {'cmd': ['config'],
                                        'args': ['-p', 'alpha_profile', '-a', '12'],
                                        'rc': 2,
-                                       'rc_msg': ('Usage: mmu [OPTIONS]\nTry "mmu --help" for help.\n'
-                                                  '\nError: Invalid value for "-a": 12 is not in the '
-                                                  'valid range of -8 to 8.\n')
+                                       'rc_msg': ('Invalid value for \'-a\': 12 is not in the '
+                                                  'range -8<=x<=8.')
                                        },
              'mmu_cfg_trim': {
                               'cmd': ['config'],
@@ -312,9 +311,8 @@ testData = {
                                       'cmd': ['config'],
                                       'args': ['-p', 'q_lossy_profile', '-t', 'INVALID_VALUE'],
                                       'rc': 2,
-                                      'rc_msg': ('Usage: mmu [OPTIONS]\nTry "mmu --help" for help.\n'
-                                                 '\nError: Invalid value for "-t": invalid choice: INVALID_VALUE. '
-                                                 '(choose from on, off)\n')
+                                      'rc_msg': ('Invalid value for \'-t\': \'INVALID_VALUE\' '
+                                                 'is not one of \'on\', \'off\'.')
                                      },
              'mmu_cfg_list_one_masic': {'cmd': ['show'],
                                         'args': ['-n', 'asic0'],
@@ -374,17 +372,13 @@ testData = {
              'mmu_cfg_alpha_invalid_masic': {'cmd': ['config'],
                                              'args': ['-p', 'alpha_profile', '-a', '12'],
                                              'rc': 2,
-                                             'rc_msg': ('Usage: mmu [OPTIONS]\n'
-                                                        'Try "mmu --help" for help.\n\n'
-                                                        'Error: Invalid value for "-a": 12 '
-                                                        'is not in the valid range of -8 to 8.\n')
+                                             'rc_msg': ('Error: Invalid value for \'-a\': 12 '
+                                                        'is not in the range -8<=x<=8.\n')
                                              },
              'mmu_cfg_static_th_invalid_masic': {'cmd': ['config'],
                                                  'args': ['-p', 'ingress_lossless_profile_hbm', '-s', '-1'],
                                                  'rc': 2,
-                                                 'rc_msg': ('Usage: mmu [OPTIONS]\n'
-                                                            'Try "mmu --help" for help.\n\n'
-                                                            'Error: Invalid value for "-s": '
-                                                            '-1 is smaller than the minimum valid value 0.\n')
+                                                 'rc_msg': ('Error: Invalid value for \'-s\': '
+                                                            '-1 is not in the range x>=0.\n')
                                                  }
            }
