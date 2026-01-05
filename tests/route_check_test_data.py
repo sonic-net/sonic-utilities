@@ -1744,8 +1744,8 @@ TEST_DATA = {
                 APPL_DB: {
                     ROUTE_TABLE: {
                         "::/0": {"ifname": "portchannel0"},
-                        "2603:10b0:503:df4::6d/126": {"ifname": "portchannel0"},
-                        "2603:10b0:503:df4::7d/126": {"ifname": "portchannel0"},
+                        "2603:10b0:503:df4::6c/126": {"ifname": "portchannel0"},
+                        "2603:10b0:503:df4::7c/126": {"ifname": "portchannel0"},
                     },
                     INTF_TABLE: {
                         "PortChannel1023:2603:10b0:503:df4::5d/126": {},
@@ -1755,8 +1755,8 @@ TEST_DATA = {
                 ASIC_DB: {
                     RT_ENTRY_TABLE: {
                         ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
-                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::6d/126" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
-                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::7d/126" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::6c/126" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::7c/126" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
                         ASIC_RT_ENTRY_KEY_PREFIX + "::/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
                     }
                 }
