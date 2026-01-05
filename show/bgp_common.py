@@ -415,9 +415,6 @@ def show_routes(args, namespace, display, verbose, ipver):
         else:
             combined_route = route_info
 
-    if not combined_route:
-        return
-
     if not found_json:
         #print out the header if this is not a json request
         if not filter_by_ip:
