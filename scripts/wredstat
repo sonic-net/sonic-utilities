@@ -260,7 +260,62 @@ class Wredstat(object):
             print(tabulate(table, hdr, tablefmt='simple', stralign='right'))
             print()
 
-    def get_print_all_stat(self, json_opt):
+    def _to_int(self, val):
+        if val is None:
+            return 0
+        s = str(val).strip()
+        if s == "" or s.upper() == "N/A":
+            return 0
+        try:
+            return int(s)
+        except (TypeError, ValueError):
+            return 0
+
+
+    def aggregate_from_json_output(self, json_output):
+        """
+        json_output: { port: { ... queue_key: {queueindex, ... counters ...}, ... }, ... }
+
+        Returns:
+        { queueindex: {queueindex, queuetype, wredDrppacket, wredDrpbytes, ecnpacket, ecnbytes}, ... }
+        """
+        agg = {}
+
+        for port, port_blob in (json_output or {}).items():
+            if not isinstance(port_blob, dict):
+                continue
+
+            # Some implementations nest under a key like "cnstat" or similar.
+            # We'll aggregate from:
+            #   - port_blob directly
+            #   - and if present, one level of nested dicts
+            candidate_dicts = [port_blob]
+            for _, maybe_nested in port_blob.items():
+                if isinstance(maybe_nested, dict):
+                    candidate_dicts.append(maybe_nested)
+
+            for d in candidate_dicts:
+                for key, data in d.items():
+                    if not isinstance(data, dict):
+                        continue
+                    if key == 'time':
+                        continue
+
+                    agg.setdefault(key, {
+                        "wredDrppacket": 0,
+                        "wredDrpbytes": 0,
+                        "ecnpacket": 0,
+                        "ecnbytes": 0,
+                    })
+
+                    agg[key]["wredDrppacket"] += self._to_int(data.get("wreddroppacket"))
+                    agg[key]["wredDrpbytes"]  += self._to_int(data.get("wreddropbytes"))
+                    agg[key]["ecnpacket"]     += self._to_int(data.get("ecnmarkedpacket"))
+                    agg[key]["ecnbytes"]      += self._to_int(data.get("ecnmarkedbytes"))
+
+        return agg
+
+    def get_print_all_stat(self, json_opt, summary):
         """
         Get stat for each port
         If JSON option is True, collect data for each port and
@@ -275,22 +330,38 @@ class Wredstat(object):
             if os.path.isfile(cnstat_fqn_file_name):
                 try:
                     cnstat_cached_dict = json.load(open(cnstat_fqn_file_name, 'r'))
-                    if json_opt:
+                    if json_opt or summary:
                         json_output[port].update({"cached_time":cnstat_cached_dict.get('time')})
-                        json_output.update(self.cnstat_diff_print(port, cnstat_dict, cnstat_cached_dict, json_opt))
+                        json_output.update(self.cnstat_diff_print(port, cnstat_dict, cnstat_cached_dict, True))
                     else:
                         print(port + " Last cached time was " + str(cnstat_cached_dict.get('time')))
                         self.cnstat_diff_print(port, cnstat_dict, cnstat_cached_dict, json_opt)
                 except IOError as e:
                     print(e.errno, e)
             else:
-                if json_opt:
-                    json_output.update(self.cnstat_print(port, cnstat_dict, json_opt))
+                if json_opt or summary:
+                    json_output.update(self.cnstat_print(port, cnstat_dict, True))
                 else:
                     self.cnstat_print(port, cnstat_dict, json_opt)
 
-        if json_opt:
+        if json_opt and not summary:
             print(json_dump(json_output))
+
+        if summary:
+            agg = self.aggregate_from_json_output(json_output)
+            if json_opt:
+                print(json_dump(agg))
+            else:
+                table = []
+                for key, data in agg.items():
+                    table.append((key,
+                                  data['wredDrppacket'],
+                                  data['wredDrpbytes'],
+                                  data['ecnpacket'],
+                                  data['ecnbytes']))
+                hdr = voq_header[1:] if self.voq else header[1:]
+                print(tabulate(table, hdr, tablefmt='simple', stralign='right'))
+                print()
 
     def get_print_port_stat(self, port, json_opt):
         """
@@ -359,6 +430,7 @@ Examples:
     parser.add_argument('-j', '--json_opt', action='store_true', help='Print in JSON format')
     parser.add_argument('-V', '--voq', action='store_true', help='display voq stats')
     parser.add_argument('-n', '--namespace', default=None, help='Display queue counters for specific namespace')
+    parser.add_argument('-s', '--summary', action='store_true', help='Print summary in JSON format')
     args = parser.parse_args()
 
     save_fresh_stats = args.clear
@@ -366,6 +438,7 @@ Examples:
     voq = args.voq
     json_opt = args.json_opt
     namespace = args.namespace
+    summary = args.summary
 
     port_to_show_stats = args.port
 
@@ -387,7 +460,7 @@ Examples:
     if port_to_show_stats!=None:
         wredstat.get_print_port_stat(port_to_show_stats, json_opt)
     else:
-        wredstat.get_print_all_stat(json_opt)
+        wredstat.get_print_all_stat(json_opt, summary)
 
     sys.exit(0)
 

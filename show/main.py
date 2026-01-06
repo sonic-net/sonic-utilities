@@ -801,7 +801,8 @@ def counters(interfacename, namespace, display, all, trim, voq, nonzero, json, v
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 @click.option('--json', is_flag=True, help="JSON output")
 @click.option('--voq', is_flag=True, help="VOQ counters")
-def wredcounters(interfacename, namespace, display, verbose, json, voq):
+@click.option('--summary', is_flag=True, help="Summary counters")
+def wredcounters(interfacename, namespace, display, verbose, json, voq, summary):
     """Show queue wredcounters"""
 
     cmd = ["wredstat"]
@@ -821,6 +822,9 @@ def wredcounters(interfacename, namespace, display, verbose, json, voq):
 
     if voq:
         cmd += ["-V"]
+
+    if summary:
+        cmd += ["-s"]
 
     run_command(cmd, display_cmd=verbose)
 
