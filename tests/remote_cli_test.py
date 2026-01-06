@@ -26,9 +26,9 @@ REXEC_HELP = '''Usage: cli [OPTIONS] LINECARD_NAMES...
   Executes a command on one or many linecards
 
   :param linecard_names: A list of linecard names to execute the command on,
-  use `all` to execute on all linecards. :param command: The command to
-  execute on the linecard(s) :param username: The username to use to login to
-  the linecard(s)
+  use `all` to execute on all linecards. :param command: The command to execute
+  on the linecard(s) :param username: The username to use to login to the
+  linecard(s)
 
 Options:
   -c, --command TEXT   [required]
@@ -234,6 +234,8 @@ class TestRemoteExec(object):
     @mock.patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=True))
     @mock.patch("os.getlogin", mock.MagicMock(return_value="admin"))
     def test_rexec_without_password_input(self):
+        # TODO(trixie): figure out why SIGTTOU is being sent during
+        # getpass.getpass, and if it needs to be ignored.
         runner = CliRunner()
         getpass.getpass = TestRemoteExec.__getpass
         LINECARD_NAME = "all"

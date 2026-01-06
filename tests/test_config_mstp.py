@@ -954,7 +954,7 @@ class TestMstpInterfaceEdgePort:
 
             assert result.exit_code != 0
             assert "Invalid value" in result.output
-            assert "choose from enable, disable" in result.output
+            assert "is not one of 'enable', 'disable'" in result.output
             mock_db.cfgdb.mod_entry.assert_not_called()
 
 

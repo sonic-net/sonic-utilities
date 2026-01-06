@@ -393,7 +393,7 @@ class TestVlan(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code != 0
-        assert "Error: No such command \"etp33\"" in result.output
+        assert "Error: No such command 'etp33'" in result.output
 
     def test_show_switchport_status_in_alias_mode(self):
         runner = CliRunner()
@@ -403,7 +403,7 @@ class TestVlan(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code != 0
-        assert "Error: No such command \"etp33\"" in result.output
+        assert "Error: No such command 'etp33'" in result.output
 
     def test_config_vlan_add_vlan_with_invalid_vlanid(self):
         runner = CliRunner()
