@@ -307,10 +307,18 @@ class ConfigWrapper:
             # TODO: convert string to IpAddress object for better handling of IPs
             # TODO: validate range intersection
             ip_range = peer_group["ip_range"]
+
+            # Use "default" if vrf_name is missing or empty
+            if "vrf_name" not in peer_group:
+                vrf_name = "default"
+            else:
+                vrf_name = peer_group["vrf_name"]
+
             for ip in ip_range:
-                if ip in visited:
-                    return False, f"{ip} is duplicated in BGP_PEER_RANGE: {set([peer_group_name, visited[ip]])}"
-                visited[ip] = peer_group_name
+                key = (ip, vrf_name)
+                if key in visited:
+                    return False, f"{ip} with vrf {vrf_name} is duplicated in BGP_PEER_RANGE: {set([peer_group_name, visited[key]])}"
+                visited[key] = peer_group_name
 
         return True, None
 
