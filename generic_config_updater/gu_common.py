@@ -317,7 +317,8 @@ class ConfigWrapper:
             for ip in ip_range:
                 key = (ip, vrf_name)
                 if key in visited:
-                    return False, f"{ip} with vrf {vrf_name} is duplicated in BGP_PEER_RANGE: {set([peer_group_name, visited[key]])}"
+                    return False, (f"{ip} with vrf {vrf_name} is duplicated in BGP_PEER_RANGE: "
+                                   f"{set([peer_group_name, visited[key]])}")
                 visited[key] = peer_group_name
 
         return True, None
