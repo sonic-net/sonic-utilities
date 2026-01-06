@@ -308,11 +308,8 @@ class ConfigWrapper:
             # TODO: validate range intersection
             ip_range = peer_group["ip_range"]
 
-            # Use "default" if vrf_name is missing or empty
-            if "vrf_name" not in peer_group:
-                vrf_name = "default"
-            else:
-                vrf_name = peer_group["vrf_name"]
+            # Use "default" if vrf_name is missing or falsy (e.g., empty string)
+            vrf_name = peer_group.get("vrf_name") or "default"
 
             for ip in ip_range:
                 key = (ip, vrf_name)
