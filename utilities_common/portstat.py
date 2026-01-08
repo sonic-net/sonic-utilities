@@ -166,7 +166,7 @@ class Portstat(object):
         if device_info.is_supervisor():
             self.db = SonicV2Connector(use_unix_socket_path=False)
             self.db.connect(self.db.CHASSIS_STATE_DB, False)
-
+        self.db_clients = {}
         self.sorted = natsorted
 
     def get_cnstat_dict(self):
@@ -370,7 +370,7 @@ class Portstat(object):
         state_db_table_id = PORT_STATE_TABLE_PREFIX + port_name
         app_db_table_id = PORT_STATUS_TABLE_PREFIX + port_name
         for ns in self.multi_asic.get_ns_list_based_on_options():
-            self.db = multi_asic.connect_to_all_dbs_for_ns(ns)
+            self.db = self.get_db_client(ns)
             speed = self.db.get(self.db.STATE_DB, state_db_table_id, PORT_SPEED_FIELD)
             oper_status = self.db.get(self.db.APPL_DB, app_db_table_id, PORT_OPER_STATUS_FIELD)
             if speed is None or speed == STATUS_NA or oper_status != "up":
@@ -378,6 +378,11 @@ class Portstat(object):
             if speed is not None:
                 return int(speed)
         return STATUS_NA
+
+    def get_db_client(self, ns):
+        if not self.db_clients.get(ns):
+            self.db_clients[ns] = multi_asic.connect_to_all_dbs_for_ns(ns)
+        return self.db_clients[ns]
 
     def get_port_state(self, port_name):
         """
@@ -392,7 +397,7 @@ class Portstat(object):
 
         full_table_id = PORT_STATUS_TABLE_PREFIX + port_name
         for ns in self.multi_asic.get_ns_list_based_on_options():
-            self.db = multi_asic.connect_to_all_dbs_for_ns(ns)
+            self.db = self.get_db_client(ns)
             admin_state = self.db.get(self.db.APPL_DB, full_table_id, PORT_ADMIN_STATUS_FIELD)
             oper_state = self.db.get(self.db.APPL_DB, full_table_id, PORT_OPER_STATUS_FIELD)
 
