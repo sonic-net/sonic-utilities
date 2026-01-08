@@ -308,14 +308,14 @@ class ConfigWrapper:
             # TODO: validate range intersection
             ip_range = peer_group["ip_range"]
 
-            # Use "default" vnet name if not specified
+            # Use "default" vrf name if not specified
             name_split = peer_group_name.split('|')
-            vnet_name = name_split[0] if len(name_split) > 1 else "default"
+            vrf_name = name_split[0] if len(name_split) > 1 else "default"
 
             for ip in ip_range:
-                key = (ip, vnet_name)
+                key = (ip, vrf_name)
                 if key in visited:
-                    return False, (f"{ip} with vnet {vnet_name} is duplicated in BGP_PEER_RANGE: "
+                    return False, (f"{ip} with vrf {vrf_name} is duplicated in BGP_PEER_RANGE: "
                                    f"{set([peer_group_name, visited[key]])}")
                 visited[key] = peer_group_name
 

@@ -243,7 +243,7 @@ class TestConfigWrapper(unittest.TestCase):
         self.assertTrue(actual)
         self.assertIsNone(error)
 
-    def test_validate_bgp_peer_group__valid_intersecting_ip_ranges_in_different_vnets__returns_true(self):
+    def test_validate_bgp_peer_group__valid_intersecting_ip_ranges_in_different_vrfs__returns_true(self):
         # Arrange
         config_wrapper = gu_common.ConfigWrapper()
         config = {
@@ -296,19 +296,19 @@ class TestConfigWrapper(unittest.TestCase):
             duplicated_ip="fc00:1::32/16")
 
     def check_validate_bgp_peer_group(self, ip_range, other_ip_range=[], duplicated_ip=None):
-        # Check both same vnet and different vnet scenarios
-        self._check_validate_bgp_peer_group(ip_range, other_ip_range, duplicated_ip, same_vnet=False)
-        self._check_validate_bgp_peer_group(ip_range, other_ip_range, duplicated_ip, same_vnet=True)
+        # Check both default vrf and same vrf name in non-default vrf
+        self._check_validate_bgp_peer_group(ip_range, other_ip_range, duplicated_ip, is_default_vrf=False)
+        self._check_validate_bgp_peer_group(ip_range, other_ip_range, duplicated_ip, is_default_vrf=True)
 
-    def _check_validate_bgp_peer_group(self, ip_range, other_ip_range=[], duplicated_ip=None, same_vnet=False):
+    def _check_validate_bgp_peer_group(self, ip_range, other_ip_range=[], duplicated_ip=None, is_default_vrf=False):
         # Arrange
         config_wrapper = gu_common.ConfigWrapper()
-        if same_vnet:
-            peer_group_name_1 = "VnetA|WLPARTNER_PASSIVE_V4"
-            peer_group_name_2 = "VnetA|WLPARTNER_PASSIVE_V4_2"
-        else:
+        if is_default_vrf:
             peer_group_name_1 = "BGPSLBPassive"
             peer_group_name_2 = "BgpVac"
+        else:
+            peer_group_name_1 = "VnetA|WLPARTNER_PASSIVE_V4"
+            peer_group_name_2 = "VnetA|WLPARTNER_PASSIVE_V4_2"
         config = {
             "BGP_PEER_RANGE":
             {
