@@ -243,6 +243,28 @@ class TestConfigWrapper(unittest.TestCase):
         self.assertTrue(actual)
         self.assertIsNone(error)
 
+    def test_validate_bgp_peer_group_valid_intersecting_ip_ranges_in_different_vnets__returns_true(self):
+        # Arrange
+        config_wrapper = gu_common.ConfigWrapper()
+        config = {
+            "BGP_PEER_RANGE":
+            {
+                "VnetA|WLPARTNER_PASSIVE_V4": {
+                    "ip_range": ["1.1.1.1/31", "10.10.10.10/16", "100.100.100.100/24"]
+                },
+                "VnetB|WLPARTNER_PASSIVE_V4": {
+                    "ip_range": ["1.1.1.1/31", "10.10.10.10/16", "100.100.100.100/24"]
+                }
+            }
+        }
+
+        # Act
+        actual, error = config_wrapper.validate_bgp_peer_group(config)
+
+        # Assert
+        self.assertTrue(actual)
+        self.assertIsNone(error)
+
     def test_validate_bgp_peer_group__same_ip_prefix__return_false(self):
         # duplicate v4 within same ip_range
         self.check_validate_bgp_peer_group(
@@ -274,15 +296,26 @@ class TestConfigWrapper(unittest.TestCase):
             duplicated_ip="fc00:1::32/16")
 
     def check_validate_bgp_peer_group(self, ip_range, other_ip_range=[], duplicated_ip=None):
+        # Check both same vnet and different vnet scenarios
+        self._check_validate_bgp_peer_group(ip_range, other_ip_range, duplicated_ip, same_vnet=False)
+        self._check_validate_bgp_peer_group(ip_range, other_ip_range, duplicated_ip, same_vnet=True)
+
+    def _check_validate_bgp_peer_group(self, ip_range, other_ip_range=[], duplicated_ip=None, same_vnet=False):
         # Arrange
         config_wrapper = gu_common.ConfigWrapper()
+        if same_vnet:
+            peer_group_name_1 = "VnetA|WLPARTNER_PASSIVE_V4"
+            peer_group_name_2 = "VnetA|WLPARTNER_PASSIVE_V4"
+        else:
+            peer_group_name_1 = "BGPSLBPassive"
+            peer_group_name_2 = "BgpVac"
         config = {
             "BGP_PEER_RANGE":
             {
-                "BGPSLBPassive": {
+                peer_group_name_1: {
                     "ip_range": ip_range
                 },
-                "BgpVac": {
+                peer_group_name_2: {
                     "ip_range": other_ip_range
                 },
             }
