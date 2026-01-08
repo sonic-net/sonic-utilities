@@ -933,14 +933,54 @@ class TestShow(object):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["arp"], ['0.0.0.0', '-if', 'Ethernet0', '--verbose'])
         assert result.exit_code == 0
-        mock_run_command.assert_called_with(['nbrshow', '-4', '-ip', '0.0.0.0', '-if', 'Ethernet0'], display_cmd=True)
+        mock_run_command.assert_called_with(
+            ['nbrshow', '-4', '-ip', '0.0.0.0', '-if', 'Ethernet0', '-d', 'all'], display_cmd=True)
 
     @patch('show.main.run_command')
     def test_show_ndp(self, mock_run_command):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["ndp"], ['0.0.0.0', '-if', 'Ethernet0', '--verbose'])
         assert result.exit_code == 0
-        mock_run_command.assert_called_with(['nbrshow', '-6', '-ip', '0.0.0.0', '-if', 'Ethernet0'], display_cmd=True)
+        mock_run_command.assert_called_with(
+            ['nbrshow', '-6', '-ip', '0.0.0.0', '-if', 'Ethernet0', '-d', 'all'], display_cmd=True)
+
+    @patch('show.main.run_command')
+    def test_show_arp_with_display_all(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["arp"], ['-d', 'all', '--verbose'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['nbrshow', '-4', '-d', 'all'], display_cmd=True)
+
+    @patch('show.main.run_command')
+    def test_show_ndp_with_display_all(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["ndp"], ['-d', 'all', '--verbose'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['nbrshow', '-6', '-d', 'all'], display_cmd=True)
+
+    @patch('show.main.run_command')
+    def test_show_arp_with_namespace(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["arp"], ['10.0.0.1', '-n', '', '--verbose'], catch_exceptions=False)
+        assert result.exit_code == 0
+        call_args = mock_run_command.call_args[0][0]
+        assert 'nbrshow' in call_args
+        assert '-4' in call_args
+        assert '-ip' in call_args
+        assert '10.0.0.1' in call_args
+        assert '-n' in call_args or '-d' in call_args
+
+    @patch('show.main.run_command')
+    def test_show_ndp_with_namespace(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands["ndp"], ['fc00::1', '-n', '', '--verbose'], catch_exceptions=False)
+        assert result.exit_code == 0
+        call_args = mock_run_command.call_args[0][0]
+        assert 'nbrshow' in call_args
+        assert '-6' in call_args
+        assert '-ip' in call_args
+        assert 'fc00::1' in call_args
+        assert '-n' in call_args or '-d' in call_args
 
     @patch('show.main.run_command')
     @patch('show.main.is_mgmt_vrf_enabled', MagicMock(return_value=True))

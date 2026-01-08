@@ -3,12 +3,16 @@
 """
     Script to show Ipv4/Ipv6 neighbor entries
 
-    usage: nbrshow [-h] [-ip IPADDR] [-if IFACE] v
+    usage: nbrshow [-h] [-ip IPADDR] [-if IFACE] [-d DISPLAY] [-n NAMESPACE] v
     optional arguments:
         -ip IPADDR, --ipaddr IPADDR
                         Neigbhor for a specific address
         -if IFACE, --iface IFACE
                         Neigbhors learned on specific L3 interface
+        -d DISPLAY, --display DISPLAY
+                        Display all interfaces or only external interfaces
+        -n NAMESPACE, --namespace NAMESPACE
+                        Display interfaces for specific namespace
 
     Example of the output:
     admin@str~$nbrshow -4
@@ -33,9 +37,11 @@ import subprocess
 import re
 
 from natsort import natsorted
-from sonic_py_common import port_util
-from swsscommon.swsscommon import SonicV2Connector
+from sonic_py_common import port_util, multi_asic
+from swsscommon.swsscommon import SonicV2Connector, SonicDBConfig
 from tabulate import tabulate
+from utilities_common import multi_asic as multi_asic_util
+from utilities_common import constants
 
 
 """
@@ -48,9 +54,22 @@ class NbrBase(object):
     HEADER = []
     NBR_COUNT = 0
 
-    def __init__(self, cmd):
+    def __init__(self, cmd, namespace=None):
         super(NbrBase, self).__init__()
-        self.db = SonicV2Connector(host="127.0.0.1")
+        self.namespace = namespace
+
+        if namespace is not None:
+            if not multi_asic.is_multi_asic():
+                print("Error: Namespace is not supported in single asic")
+                sys.exit(1)
+
+            if not SonicDBConfig.isGlobalInit():
+                SonicDBConfig.load_sonic_global_db_config()
+
+            self.db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
+        else:
+            self.db = SonicV2Connector(host="127.0.0.1")
+
         self.if_name_map, self.if_oid_map = port_util.get_interface_oid_map(self.db)
         self.if_br_oid_map = port_util.get_bridge_port_map(self.db)
         self.fetch_fdb_data()
@@ -110,7 +129,11 @@ class NbrBase(object):
         """
             Fetch Neighbor data (ARP/IPv6 Neigh) from kernel.
         """
-        p = subprocess.Popen(self.cmd, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        cmd = self.cmd
+        if self.namespace is not None and self.namespace != constants.DEFAULT_NAMESPACE:
+            cmd = "ip netns exec {} {}".format(self.namespace, self.cmd)
+
+        p = subprocess.Popen(cmd, shell=True, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         (output, err) = p.communicate()
         rc = p.wait()
 
@@ -148,6 +171,9 @@ class NbrBase(object):
 
         self.nbrdata = natsorted(output, key=lambda x: x[0])
 
+        if multi_asic.is_multi_asic() and self.namespace is not None:
+            print("Namespace: {}".format(self.namespace))
+
         print(tabulate(self.nbrdata, self.HEADER))
         print("Total number of entries {0} ".format(self.NBR_COUNT))
 
@@ -160,7 +186,7 @@ class ArpShow(NbrBase):
     HEADER = ['Address', 'MacAddress', 'Iface', 'Vlan']
     CMD = "/usr/sbin/arp -n "
 
-    def __init__(self, ipaddr, iface):
+    def __init__(self, ipaddr, iface, namespace=None):
 
         if ipaddr is not None:
             self.CMD += ipaddr
@@ -168,7 +194,7 @@ class ArpShow(NbrBase):
         if iface is not None:
             self.CMD += ' -i ' + iface
 
-        NbrBase.__init__(self, self.CMD)
+        NbrBase.__init__(self, self.CMD, namespace)
         return
 
     def display(self):
@@ -199,7 +225,7 @@ class NeighShow(NbrBase):
     HEADER = ['Address', 'MacAddress', 'Iface', 'Vlan', 'Status']
     CMD = "/bin/ip -6 neigh show "
 
-    def __init__(self, ipaddr, iface):
+    def __init__(self, ipaddr, iface, namespace=None):
 
         if ipaddr is not None:
             self.CMD += ipaddr
@@ -208,7 +234,7 @@ class NeighShow(NbrBase):
             self.CMD += ' dev ' + iface
 
         self.iface = iface
-        NbrBase.__init__(self, self.CMD)
+        NbrBase.__init__(self, self.CMD, namespace)
         return
 
     def display(self):
@@ -253,16 +279,32 @@ def main():
     parser.add_argument('-if', '--iface', type=str,
                         help='Neigbhors learned on specific L3 interface', default=None)
     parser.add_argument('v', help='IP Version -4 or -6')
+    parser = multi_asic_util.multi_asic_args(parser)
 
     args = parser.parse_args()
 
     try:
-        if (args.v == '-6'):
-            neigh = NeighShow(args.ipaddr, args.iface)
-            neigh.display()
-        else:
-            arp = ArpShow(args.ipaddr, args.iface)
-            arp.display()
+        # Get the list of namespaces to operate on
+        multi_asic_obj = multi_asic_util.MultiAsic(
+            display_option=args.display,
+            namespace_option=args.namespace
+        )
+        ns_list = multi_asic_obj.get_ns_list_based_on_options()
+
+        for ns in ns_list:
+            # For multi-ASIC platforms, set namespace to None for default namespace
+            namespace = ns if ns != constants.DEFAULT_NAMESPACE else None
+
+            if (args.v == '-6'):
+                neigh = NeighShow(args.ipaddr, args.iface, namespace)
+                neigh.display()
+            else:
+                arp = ArpShow(args.ipaddr, args.iface, namespace)
+                arp.display()
+
+            # Add a newline between namespaces for readability
+            if len(ns_list) > 1:
+                print()
 
     except Exception as e:
         print(str(e))
