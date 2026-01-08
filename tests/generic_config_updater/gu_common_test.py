@@ -243,7 +243,7 @@ class TestConfigWrapper(unittest.TestCase):
         self.assertTrue(actual)
         self.assertIsNone(error)
 
-    def test_validate_bgp_peer_group_valid_intersecting_ip_ranges_in_different_vnets__returns_true(self):
+    def test_validate_bgp_peer_group__valid_intersecting_ip_ranges_in_different_vnets__returns_true(self):
         # Arrange
         config_wrapper = gu_common.ConfigWrapper()
         config = {
