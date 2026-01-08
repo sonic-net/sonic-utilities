@@ -10189,10 +10189,6 @@ def igmp_snooping_static_add(ctx, vid, interface_name, ip_addr):
     vlan = db.get_entry('VLAN', vlan_name)
     if len(vlan) == 0:
         ctx.fail("{} doesn't exist".format(vlan_name))
-    # check vlan l2mc enable
-    # l2mc_enable = db.get_entry('L2MC', vlan_name)
-    # if len(l2mc_enable) == 0:
-    #     ctx.fail("{} is not L2MC enable".format(vlan_name))
 
     if clicommon.get_interface_naming_mode() == "alias":
         interface_name = interface_alias_to_name(interface_name)
@@ -10217,11 +10213,6 @@ def igmp_snooping_static_add(ctx, vid, interface_name, ip_addr):
     if ip_address < ipaddress.IPv4Address("224.0.0.0") or ip_address <= ipaddress.IPv4Address("224.0.0.255"):
         ctx.fail("IP address {} is reserved multicast".format(str(ip_address)))
     
-    #check interface is a vlan member
-    # key = vlan_name +"|"+ interface_name
-    # vlanmember = db.get_entry('VLAN_MEMBER', key)
-    # if len(vlanmember) == 0:
-    #     ctx.fail("{} is not a member of {}".format(interface_name,vlan_name))
     
     static_group_key = vlan_name+'|'+ip_addr
     l2mc_name = db.get_entry('L2MC_STATIC_GROUP', static_group_key)
@@ -10659,10 +10650,6 @@ def mld_snooping_static_add(ctx, vid, interface_name, ip_addr):
     vlan = db.get_entry('VLAN', vlan_name)
     if len(vlan) == 0:
         ctx.fail("{} doesn't exist".format(vlan_name))
-    # check vlan l2mc enable
-    mld_l2mc_enable = db.get_entry('MLD_L2MC', vlan_name)
-    if len(mld_l2mc_enable) == 0:
-        ctx.fail("{} is not MLD Snooping enable".format(vlan_name))
 
     if clicommon.get_interface_naming_mode() == "alias":
         interface_name = interface_alias_to_name(interface_name)
@@ -10713,12 +10700,6 @@ def mld_snooping_static_add(ctx, vid, interface_name, ip_addr):
         if ip_address in solicited_prefix:
             ctx.fail("Solicited-node multicast {} is forbidden".format(ip_address))
     
-    #check interface is a vlan member
-    key = vlan_name +"|"+ interface_name
-    vlanmember = db.get_entry('VLAN_MEMBER', key)
-    if len(vlanmember) == 0:
-        ctx.fail("{} is not a member of {}".format(interface_name,vlan_name))
-    
     static_group_key = vlan_name+'|'+ip_addr
     l2mc_name = db.get_entry('MLD_L2MC_STATIC_GROUP', static_group_key)
     members = l2mc_name.get('static-members', [])
@@ -10753,7 +10734,7 @@ def mld_snooping_static_del(ctx, vid, interface_name, ip_addr):
     l2mc_name = db.get_entry('MLD_L2MC_STATIC_GROUP', static_group_key)
     members = l2mc_name.get('static-members', [])
     if interface_name not in members:
-        ctx.fail("{} is not a member of {}".format(interface_name, members))
+        ctx.fail("{} is not a member of {}".format(interface_name, vlan_name))
     members.remove(interface_name)
     if len(members) == 0:
         del l2mc_name['static-members']
