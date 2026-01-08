@@ -305,7 +305,7 @@ class TestConfigWrapper(unittest.TestCase):
         config_wrapper = gu_common.ConfigWrapper()
         if same_vnet:
             peer_group_name_1 = "VnetA|WLPARTNER_PASSIVE_V4"
-            peer_group_name_2 = "VnetA|WLPARTNER_PASSIVE_V4"
+            peer_group_name_2 = "VnetA|WLPARTNER_PASSIVE_V4_2"
         else:
             peer_group_name_1 = "BGPSLBPassive"
             peer_group_name_2 = "BgpVac"
