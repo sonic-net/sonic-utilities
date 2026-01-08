@@ -269,10 +269,10 @@ def breakout_warnUser_extraTables(cm, final_delPorts, confirm=True):
     return
 
 def breakout_Ports(cm, delPorts=list(), portJson=dict(), force=False, \
-    loadDefConfig=False, verbose=False):
+    loadDefConfig=False, verbose=False, addPorts=list()):
 
     deps, ret = cm.breakOutPort(delPorts=delPorts,  portJson=portJson, \
-                    force=force, loadDefConfig=loadDefConfig)
+                    force=force, loadDefConfig=loadDefConfig, addPorts=addPorts)
     # check if DPB failed
     if ret == False:
         if not force and deps:
@@ -5272,7 +5272,7 @@ def breakout(ctx, interface_name, mode, verbose, force_remove_dependencies, load
 
         # breakout_Ports will abort operation on failure, So no need to check return
         breakout_Ports(cm, delPorts=final_delPorts, portJson=portJson, force=force_remove_dependencies,
-                       loadDefConfig=load_predefined_config, verbose=verbose)
+                       loadDefConfig=load_predefined_config, verbose=verbose, addPorts=add_ports)
 
         # Set Current Breakout mode in config DB
         brkout_cfg_keys = config_db.get_keys('BREAKOUT_CFG')
