@@ -308,7 +308,7 @@ class ConfigWrapper:
             # TODO: validate range intersection
             ip_range = peer_group["ip_range"]
 
-            # Use "default" if vnet_name is missing or falsy (e.g., empty string)
+            # Use "default" vnet name if not specified
             name_split = peer_group_name.split('|')
             vnet_name = name_split[0] if len(name_split) > 1 else "default"
 
