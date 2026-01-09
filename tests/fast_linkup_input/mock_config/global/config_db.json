@@ -1,0 +1,9 @@
+{
+  "SWITCH_FAST_LINKUP|GLOBAL": {
+    "polling_time": "60",
+    "guard_time": "10",
+    "ber_threshold": "12"
+  }
+}
+
+
