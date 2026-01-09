@@ -12,6 +12,18 @@ import show.main as show
 from utilities_common.db import Db
 import config.validated_config_db_connector as validated_config_db_connector
 
+show_storm_interface_output="""\
++------------------+-------------------+---------------+
+| Interface Name   | Storm Type        |   Rate (kbps) |
++==================+===================+===============+
+| Ethernet0        | broadcast         |        100000 |
++------------------+-------------------+---------------+
+| Ethernet0        | unknown-unicast   |        200000 |
++------------------+-------------------+---------------+
+| Ethernet0        | unknown-multicast |        300000 |
++------------------+-------------------+---------------+
+"""
+
 class TestStormControl(object):
     @classmethod
     def setup_class(cls):
@@ -122,6 +134,14 @@ class TestStormControl(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
+
+    def test_show_storm_interface(self):
+        runner = CliRunner()
+        result = runner.invoke(show.cli, ["storm-control", "interface", "Ethernet0"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == show_storm_interface_output
 
     @classmethod
     def teardown_class(cls):
