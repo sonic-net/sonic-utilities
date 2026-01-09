@@ -168,7 +168,7 @@ testData = {
              'ecn_cfg_rdrop_invalid': {'cmd': ['config'],
                                        'args': ['-profile', 'AZURE_LOSSLESS', '-rdrop', '105'],
                                        'rc': 1,
-                                       'rc_msg': 'Invalid value for "-rdrop": 105 is not in the valid range of 0 to 100'
+                                       'rc_msg': 'Invalid value for \'-rdrop\': 105 is not in the range 0<=x<=100'
                                        },
              'ecn_q_get': {'cmd': ['q_cmd'],
                            'args': ['-q', '3'],
@@ -369,5 +369,9 @@ testData = {
                                                                  'asic1,wred_profile,AZURE_LOSSLESS'],
                                                     'cmp_q_args': ['0'],
                                                     'other_q': ['1']
-                                                    }
+                                                    },
+             'ecn_cfg_q_voq': {'cmd': ['q_cmd'],
+                               'args': ['-q', '3', 'off'],
+                               'rc': 0,
+                               }
            }

@@ -51,7 +51,7 @@ import concurrent.futures
 from ipaddress import ip_network
 from swsscommon import swsscommon
 from utilities_common import chassis
-from sonic_py_common import multi_asic
+from sonic_py_common import multi_asic, device_info
 from utilities_common.general import load_db_config
 
 APPL_DB_NAME = 'APPL_DB'
@@ -61,8 +61,8 @@ ASIC_KEY_PREFIX = 'SAI_OBJECT_TYPE_ROUTE_ENTRY:'
 
 SUBSCRIBE_WAIT_SECS = 1
 
-# Max of 2 minutes
-TIMEOUT_SECONDS = 120
+# Max of 2 minutes on normal devices and 5 minutes on virtual chassis
+TIMEOUT_SECONDS = 120 if not device_info.is_virtual_chassis() else 360
 
 UNIT_TESTING = 0
 
@@ -240,7 +240,7 @@ def checkout_rt_entry(k):
     :return (True, ip) or (False, None)
     """
     if k.startswith(ASIC_KEY_PREFIX):
-        e = k.lower().split("\"", -1)[3]
+        e = k.lower()[len(ASIC_KEY_PREFIX) + len('{"dest":"'):].split("\"", 1)[0]
         if not is_local(e):
             return True, e
     return False, None
@@ -329,6 +329,52 @@ def get_asicdb_routes(namespace):
     return (selector, subs, sorted(rt))
 
 
+def get_appdb_sids(namespace):
+    """
+    helper to read SIDs table from APPL-DB.
+    :return list of sorted SIDs with prefix ensured
+    """
+    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    print_message(syslog.LOG_DEBUG, "APPL DB connected for sids")
+    tbl = swsscommon.Table(db, 'SRV6_MY_SID_TABLE')
+    keys = tbl.getKeys()
+
+    sids = sorted(keys)
+    print_message(syslog.LOG_DEBUG, json.dumps({"APPL_MY_SID_TABLE": sids}, indent=4))
+    return sids
+
+
+def get_asicdb_sids(namespace):
+    """
+    helper to read SIDs table from APPL-DB.
+    :return list of sorted SIDs with prefix ensured
+    """
+    db = swsscommon.DBConnector(ASIC_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    print_message(syslog.LOG_DEBUG, "ASIC DB connected for sids")
+    tbl = swsscommon.Table(db, ASIC_TABLE_NAME)
+    keys = tbl.getKeys()
+
+    sids = []
+    for k in keys:
+        content = k.split(":", 1)
+        if content[0] != 'SAI_OBJECT_TYPE_MY_SID_ENTRY':
+            continue
+        sid_info = json.loads(content[1])
+        sid_entry = ":".join([
+            sid_info.get("locator_block_len", "0"),
+            sid_info.get("locator_node_len", "0"),
+            sid_info.get("function_len", "0"),
+            sid_info.get("args_len", "0"),
+            sid_info.get("sid")
+        ])
+
+        sids.append(sid_entry)
+
+    sids = sorted(sids)
+    print_message(syslog.LOG_DEBUG, json.dumps({"ASIC_MY_SID_TABLE": sids}, indent=4))
+    return sids
+
+
 def is_suppress_fib_pending_enabled(namespace):
     """
     Returns True if FIB suppression is enabled, False otherwise
@@ -396,6 +442,65 @@ def get_interfaces(namespace):
 
     print_message(syslog.LOG_DEBUG, json.dumps({"APPL_DB_INTF": sorted(intf)}, indent=4))
     return sorted(intf)
+
+
+def is_point_to_point_prefix(prefix):
+    """
+    check if a given prefix is a p2p /31 ipv4 prefix or a /126 ipv6 prefix
+    :return sorted list of local p2p IP prefixes
+    """
+    try:
+        network = ipaddress.ip_network(prefix, strict=False)
+        if isinstance(network, ipaddress.IPv4Network) and network.prefixlen == 31:
+            return True
+        if isinstance(network, ipaddress.IPv6Network) and network.prefixlen == 126:
+            return True
+        return False
+    except ValueError:
+        return False
+
+
+def get_local_p2p_ips(namespace):
+    """
+    helper to read p2p local IPs from interface table in APPL-DB.
+    :return sorted list of local p2p IP addresses
+    """
+    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    print_message(syslog.LOG_DEBUG, "APPL DB connected for interfaces")
+    tbl = swsscommon.Table(db, 'INTF_TABLE')
+    keys = tbl.getKeys()
+
+    intf = []
+    for k in keys:
+        lst = re.split(':', k.lower(), maxsplit=1)
+        if len(lst) == 1:
+            # No IP address in key; ignore
+            continue
+
+        ip = lst[1]
+
+        if is_point_to_point_prefix(ip):
+            intf.append(ip)
+
+    print_message(syslog.LOG_DEBUG, json.dumps({"APPL_DB_INTF": sorted(intf)}, indent=4))
+    return sorted(intf)
+
+
+def filter_out_local_p2p_ips(namespace, keys):
+    """
+    helper to filter out local p2p IPs
+    :param keys: APPL-DB:ROUTE_TABLE Routes to check.
+    :return keys filtered out of local
+    """
+    rt = []
+    if_tbl_ips = set(get_local_p2p_ips(namespace))
+
+    for k in keys:
+        if k in if_tbl_ips:
+            continue
+        rt.append(k)
+
+    return rt
 
 
 def filter_out_local_interfaces(namespace, keys):
@@ -571,11 +676,12 @@ def check_frr_pending_routes(namespace):
     retries = FRR_CHECK_RETRIES
     for i in range(retries):
         missed_rt = []
+        failed_rt = []
         frr_routes = get_frr_routes_parallel(namespace)
 
-        for _, entries in frr_routes.items():
+        for route_prefix, entries in frr_routes.items():
             for entry in entries:
-                if entry['protocol'] in ('connected', 'kernel'):
+                if entry['protocol'] in ('connected', 'kernel', 'static'):
                     continue
 
                 # TODO: Also handle VRF routes. Currently this script does not check for VRF routes so it would be incorrect for us
@@ -590,12 +696,16 @@ def check_frr_pending_routes(namespace):
                 if not entry.get('offloaded', False):
                     missed_rt.append(entry)
 
-        if not missed_rt:
+                if entry.get('failed', False):
+                    failed_rt.append(route_prefix)
+
+        if not missed_rt and not failed_rt:
             break
 
         time.sleep(FRR_WAIT_TIME)
-    print_message(syslog.LOG_DEBUG, "FRR missed routes: {}".format(missed_rt, indent=4))
-    return missed_rt
+    print_message(syslog.LOG_DEBUG, "FRR missed routes: {}".format(json.dumps(missed_rt, indent=4)))
+    print_message(syslog.LOG_DEBUG, "FRR failed routes: {}".format(json.dumps(failed_rt, indent=4)))
+    return missed_rt, failed_rt
 
 
 def mitigate_installed_not_offloaded_frr_routes(namespace, missed_frr_rt, rt_appl):
@@ -732,6 +842,7 @@ def check_routes_for_namespace(namespace):
     rt_appl_miss = []
     rt_asic_miss = []
     rt_frr_miss = []
+    rt_frr_failed = []
 
     selector, subs, rt_asic = get_asicdb_routes(namespace)
 
@@ -772,6 +883,10 @@ def check_routes_for_namespace(namespace):
     # Drop all those for which DEL received
     rt_asic_miss, _ = diff_sorted_lists(rt_asic_miss, deletes)
 
+    # Filter local p2p IPs if any that are reported as missing in APPL_DB
+    if rt_appl_miss:
+        rt_appl_miss = filter_out_local_p2p_ips(namespace, rt_appl_miss)
+
     if rt_appl_miss:
         results["missed_ROUTE_TABLE_routes"] = rt_appl_miss
 
@@ -781,10 +896,13 @@ def check_routes_for_namespace(namespace):
     if rt_asic_miss:
         results["Unaccounted_ROUTE_ENTRY_TABLE_entries"] = rt_asic_miss
 
-    rt_frr_miss = check_frr_pending_routes(namespace)
+    rt_frr_miss, rt_frr_failed = check_frr_pending_routes(namespace)
 
     if rt_frr_miss:
         results["missed_FRR_routes"] = rt_frr_miss
+
+    if rt_frr_failed:
+        results["failed_FRR_routes"] = rt_frr_failed
 
     if results:
         if rt_frr_miss and not rt_appl_miss and not rt_asic_miss:
@@ -792,6 +910,9 @@ def check_routes_for_namespace(namespace):
                           but all routes in APPL_DB and ASIC_DB are in sync".format(namespace))
             if is_suppress_fib_pending_enabled(namespace):
                 mitigate_installed_not_offloaded_frr_routes(namespace, rt_frr_miss, rt_appl)
+        if rt_frr_failed:
+            print_message(syslog.LOG_ERR, "Some routes have failed state in FRR {} \
+                          : {}".format(namespace, rt_frr_failed))
 
     return results, adds, deletes
 
@@ -839,6 +960,74 @@ def check_routes(namespace):
         print_message(syslog.LOG_INFO, "All good!")
         return 0, None
 
+
+def check_sids_for_namespace(namespace):
+    """
+    Process a Single Namespace for SIDs consistency check:
+    Read APPL-DB & ASIC-DB, the relevant tables for SID checking.
+    Checkout SIDs in ASIC-DB to match APPL-DB. Compared to check_routes,
+    this function does not wait for subscriber updates, as SIDs are not
+    expected to change frequently.
+
+    :return (0, None) on sucess, else (-1, results) where results holds
+    the unjustifiable entries.
+    """
+
+    results = {}
+    sid_appl_miss = []
+    sid_asic_miss = []
+
+    sids_asic = get_asicdb_sids(namespace)
+
+    sids_appl = get_appdb_sids(namespace)
+
+    # Diff APPL-DB SIDs & ASIC-DB SIDs
+    sid_appl_miss, sid_asic_miss = diff_sorted_lists(sids_appl, sids_asic)
+
+    if sid_appl_miss:
+        results["missed_APPL_MY_SID_TABLE_entries"] = sid_appl_miss
+
+    if sid_asic_miss:
+        results["missed_ASIC_MY_SID_TABLE_entries"] = sid_asic_miss
+
+    return results
+
+
+def check_sids(namespace):
+    """
+    Main function to parallelize SID checks across all namespaces.
+    """
+    namespace_list = []
+    if namespace is not multi_asic.DEFAULT_NAMESPACE and namespace in multi_asic.get_namespace_list():
+        namespace_list.append(namespace)
+    else:
+        namespace_list = multi_asic.get_namespace_list()
+        print_message(syslog.LOG_INFO, "Checking SIDs for namespaces: ", namespace_list)
+
+    results = {}
+
+    # Use ThreadPoolExecutor to parallelize the check for each namespace
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        futures = {executor.submit(check_sids_for_namespace, ns): ns for ns in namespace_list}
+
+        for future in concurrent.futures.as_completed(futures):
+            ns = futures[future]
+            try:
+                result = future.result()
+                if result:
+                    results[ns] = result
+            except Exception as e:
+                print_message(syslog.LOG_ERR, "Error processing namespace {}: {}".format(ns, e))
+                return -1, results
+
+    if results:
+        print_message(syslog.LOG_WARNING, "SIDs Check Failure results: {",  json.dumps(results, indent=4), "}")
+        return -1, results
+    else:
+        print_message(syslog.LOG_INFO, "All good!")
+        return 0, None
+
+
 def main():
     """
     main entry point, which mainly parses the args and call check_routes
@@ -884,9 +1073,22 @@ def main():
 
     while True:
         signal.alarm(TIMEOUT_SECONDS)
-        ret, res= check_routes(namespace)
-        print_message(syslog.LOG_DEBUG, "ret={}, res={}".format(ret, res))
+        ret1, res1 = check_routes(namespace)
+        print_message(syslog.LOG_DEBUG, "check_routes: ret={}, res={}".format(ret1, res1))
+        ret2, res2 = check_sids(namespace)
+        print_message(syslog.LOG_DEBUG, "check_sids: ret={}, res={}".format(ret2, res2))
         signal.alarm(0)
+        if ret1 < 0 or ret2 < 0:
+            ret = -1
+        else:
+            ret = 0
+
+        if res1 is not None or res2 is not None:
+            res = dict()
+            res.update(res1 if res1 else {})
+            res.update(res2 if res2 else {})
+        else:
+            res = None
 
         if interval:
             time.sleep(interval)

@@ -3,6 +3,9 @@
 """
     Script to show fan status.
 """
+import argparse
+import json
+
 from tabulate import tabulate
 from swsscommon.swsscommon import SonicV2Connector
 from natsort import natsorted
@@ -25,13 +28,14 @@ class TemperShow(object):
         self.db = SonicV2Connector(host="127.0.0.1")
         self.db.connect(self.db.STATE_DB)
 
-    def show(self):
+    def show(self, output_json):
         keys = self.db.keys(self.db.STATE_DB, TEMPER_TABLE_NAME + '*')
         if not keys:
             print('Thermal Not detected\n')
             return
 
         table = []
+        json_output = []
         for key in natsorted(keys):
             key_list = key.split('|')
             if len(key_list) != 2: # error data in DB, log it and ignore
@@ -40,22 +44,47 @@ class TemperShow(object):
 
             name = key_list[1]
             data_dict = self.db.get_all(self.db.STATE_DB, key)
-            table.append((name, 
-                          data_dict[TEMPER_FIELD_NAME], 
-                          data_dict[HIGH_THRESH_FIELD_NAME],
-                          data_dict[LOW_THRESH_FIELD_NAME],
-                          data_dict[CRIT_HIGH_THRESH_FIELD_NAME],
-                          data_dict[CRIT_LOW_THRESH_FIELD_NAME],
-                          data_dict[WARNING_STATUS_FIELD_NAME],
-                          data_dict[TIMESTAMP_FIELD_NAME]
-                          ))
+            if output_json:
+                json_output.append({
+                    "Sensor": name,
+                    "Temperature": data_dict[TEMPER_FIELD_NAME],
+                    "High_TH": data_dict[HIGH_THRESH_FIELD_NAME],
+                    "Low_TH": data_dict[LOW_THRESH_FIELD_NAME],
+                    "Crit_High_TH": data_dict[CRIT_HIGH_THRESH_FIELD_NAME],
+                    "Crit_Low_TH": data_dict[CRIT_LOW_THRESH_FIELD_NAME],
+                    "Warning": data_dict[WARNING_STATUS_FIELD_NAME],
+                    "Timestamp": data_dict[TIMESTAMP_FIELD_NAME]
+                })
+
+            else:
+                table.append((name, 
+                              data_dict[TEMPER_FIELD_NAME], 
+                              data_dict[HIGH_THRESH_FIELD_NAME],
+                              data_dict[LOW_THRESH_FIELD_NAME],
+                              data_dict[CRIT_HIGH_THRESH_FIELD_NAME],
+                              data_dict[CRIT_LOW_THRESH_FIELD_NAME],
+                              data_dict[WARNING_STATUS_FIELD_NAME],
+                              data_dict[TIMESTAMP_FIELD_NAME]
+                              ))
         
-        if table:
+        if output_json:
+            print(json.dumps(json_output, indent=2))
+        elif table:
             print(tabulate(table, header, tablefmt='simple', stralign='right'))
         else:
-            print('No tempeature data available\n')
+            print('No temperature data available\n')
 
-
+            
 if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description='Display the temperature Sensor information',
+                                     formatter_class=argparse.RawTextHelpFormatter,
+                                     epilog="""
+Examples:
+  tempershow -j
+""")
+
+    parser.add_argument('-j', '--json', action='store_true', help='Display output in JSON format')
+    args = parser.parse_args()
+    output_json = args.json
     temperShow = TemperShow()
-    temperShow.show()
+    temperShow.show(output_json)

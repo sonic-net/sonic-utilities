@@ -78,7 +78,7 @@ Error: interface Ethernet8 doesn`t exist
  
 invalid_interface_show_output = """\
 Usage: mpls [OPTIONS] [INTERFACENAME]
-Try "mpls --help" for help.
+Try 'mpls --help' for help.
 
 Error: interface Ethernet100 doesn`t exist
 """

@@ -56,6 +56,9 @@
   * [DHCP Relay show commands](#dhcp-relay-show-commands)
   * [DHCP Relay clear commands](#dhcp-relay-clear-commands)
   * [DHCP Relay config commands](#dhcp-relay-config-commands)
+* [DHCP Server](#dhcp-server)
+  * [DHCP Server show commands](#dhcp-server-show-commands)
+  * [DHCP Server config commands](#dhcp-server-config-commands)
 * [Drop Counters](#drop-counters)
   * [Drop Counter show commands](#drop-counters-show-commands)
   * [Drop Counter config commands](#drop-counters-config-commands)
@@ -129,6 +132,9 @@
 * [Muxcable](#muxcable)
   * [Muxcable Show commands](#muxcable-show-commands)
   * [Muxcable Config commands](#muxcable-config-commands)
+* [MMU](#mmu)
+  * [MMU Show commands](#mmu-show-commands)
+  * [NAT Config commands](#mmu-config-commands)
 * [NAT](#nat)
   * [NAT Show commands](#nat-show-commands)
   * [NAT Config commands](#nat-config-commands)
@@ -154,6 +160,9 @@
 * [PortChannels](#portchannels)
   * [PortChannel Show commands](#portchannel-show-commands)
   * [PortChannel Config commands](#portchannel-config-commands)
+* [Packet Trimming](#packet-trimming)
+  * [Packet Trimming Show commands](#packet-trimming-show-commands)
+  * [Packet Trimming Config commands](#packet-trimming-config-commands)
 * [QoS](#qos)
   * [QoS Show commands](#qos-show-commands)
     * [PFC](#pfc)
@@ -163,6 +172,9 @@
 * [Radius](#radius)
   * [Radius show commands](#show-radius-commands)
   * [Radius config commands](#Radius-config-commands)
+* [Switch](#switch)
+  * [Switch Show commands](#switch-show-commands)
+  * [Switch Clear commands](#switch-clear-commands)
 * [sFlow](#sflow)
   * [sFlow Show commands](#sflow-show-commands)
   * [sFlow Config commands](#sflow-config-commands)
@@ -196,6 +208,7 @@
     * [VxLAN show commands](#vxlan-show-commands)
   * [Vnet](#vnet)
     * [Vnet show commands](#vnet-show-commands)
+    * [Vnet config commands](#vnet-config-commands)
 * [Warm Reboot](#warm-reboot)
 * [Warm Restart](#warm-restart)
   * [Warm Restart show commands](#warm-restart-show-commands)
@@ -243,6 +256,9 @@
     * [Historical Memory Statistics for Last 3 Hours](#historical-memory-statistics-for-last-3-hours)
     * [Historical Memory Statistics for Specific Metric (Used Memory)](#historical-memory-statistics-for-specific-metric-used-memory)
     * [View Memory Statistics Configuration](#view-memory-statistics-configuration)
+* [CoPP Commands](#copp-commands)
+  * [Overview](#overview)
+  * [CoPP show commands](#copp-show-commands)
 ## Document History
 
 | Version | Modification Date | Details |
@@ -2330,7 +2346,7 @@ This command displays the state and key parameters of all BFD sessions.
 
 - Usage:
   ```
-  show bfd summary
+  show bfd summary [-n <namespace>]
   ```
 - Example:
   ```
@@ -2349,7 +2365,7 @@ This command displays the state and key parameters of all BFD sessions that matc
 
 - Usage:
   ```
-  show bfd peer <peer-ip>
+  show bfd peer <peer-ip> [-n <namespace>]
   ```
 - Example:
   ```
@@ -2542,8 +2558,7 @@ Optionally, you can specify an IP address in order to display only that particul
 
   Click [here](#Quagga-BGP-Show-Commands) to see the example for "show ip bgp neighbors" for Quagga.
 
-
-**show ip bgp network [[<ipv4-address>|<ipv4-prefix>] [(bestpath | multipath | longer-prefixes | json)]]
+**show ip bgp network [[<ipv4-address>|<ipv4-prefix>] [(bestpath | multipath | longer-prefixes | json)]]**
 
 This command displays all the details of IPv4 Border Gateway Protocol (BGP) prefixes.
 
@@ -3413,12 +3428,15 @@ This command is used to show ipv4 dhcp_relay helper.
 - Example:
   ```
   admin@sonic:~$ show dhcp_relay ipv4 helper
-  --------  ---------
-  Vlan1000  192.0.0.1
-            192.0.0.2
-  --------  ---------
-  ```
-
+  +-------------+----------------------+
+  |   Interface |   DHCP Relay Address |
+  +=============+======================+
+  |   Vlan1000  |        192.0.0.1     |
+  |             |        192.0.0.2     |
+  |             |        192.0.0.3     |
+  |             |        192.0.0.4     |
+  +-------------+----------------------+
+  ```  
 **show dhcp_relay ipv6 destination**
 
 This command is used to show ipv6 dhcp_relay destination.
@@ -3431,12 +3449,14 @@ This command is used to show ipv6 dhcp_relay destination.
 - Example:
   ```
   admin@sonic:~$ show dhcp_relay ipv6 destination
-  --------  ------------
-  Vlan1000  fc02:2000::1
-            fc02:2000::2
-            fc02:2000::3
-            fc02:2000::4
-  --------  ------------
+  +-------------+---------------------+
+  |  Interface  |  DHCP Relay Address |
+  +=============+=====================+
+  |  Vlan1000   |       fc02:2000::1  |
+  |             |       fc02:2000::2  |
+  |             |       fc02:2000::3  |
+  |             |       fc02:2000::4  |
+  +-------------+---------------------+
   ```
 
 **show dhcp_relay ipv6 counters**
@@ -3470,22 +3490,89 @@ This command is used to show ipv6 dhcp_relay counters.
             Malformed           0
   ```
 
+**show dhcp_relay ipv4 counters**
+
+This command is used to show ipv4 dhcp_relay counters
+
+- Usage:
+```
+show dhcp_relay ipv4 counters [--dir (TX|RX)] [--type <type>] [<vlan_interface>]
+Options:
+  --dir [TX|RX]
+  --type [Unknown|Discover|Offer|Request|Decline|Ack|Nak|Release|Inform|Bootp]
+```
+
+- Example:
+```
+admin@sonic:~$ show dhcp_relay ipv4 counters Vlan1000 --type Discover
++---------------------+-----------+----+----+
+| Vlan1000 (Discover) | Intf Type | TX | RX |
++---------------------+-----------+----+----+
+| Vlan1000            | VLAN      | 0  | 0  |
+| eth0                | MGMT      | 0  | 0  |
+| Ethernet0           | Downlink  | 0  | 0  |
+| Ethernet1           | Downlink  | 0  | 0  |
+| Ethernet2           | Downlink  | 0  | 0  |
+| Ethernet3           | Downlink  | 0  | 0  |
+| Ethernet4           | Downlink  | 0  | 0  |
+| PortChannel101      | Uplink    | 0  | 0  |
+| PortChannel103      | Uplink    | 0  | 0  |
+| PortChannel105      | Uplink    | 0  | 0  |
+| PortChannel106      | Uplink    | 0  | 0  |
++---------------------+-----------+----+----+
+
+
+admin@sonic:~$ show dhcp_relay ipv4 counters Vlan1000 --dir RX
++----------------+-----------+---------+----------+-------+---------+---------+-----+-----+---------+--------+-------+
+| Vlan1000 (RX)  | Intf Type | Unknown | Discover | Offer | Request | Decline | Ack | Nak | Release | Inform | Bootp |
++----------------+-----------+---------+----------+-------+---------+---------+-----+-----+---------+--------+-------+
+| Vlan1000       | VLAN      | 0       | 0        | 0     | 0       | 0       | 0   | 0   | 0       | 0      | 0     |
+| eth0           | MGMT      | 0       | 0        | 0     | 0       | 0       | 0   | 0   | 0       | 0      | 0     |
+| Ethernet0      | Downlink  | 0       | 0        | 0     | 0       | 0       | 0   | 0   | 0       | 0      | 0     |
+| Ethernet1      | Downlink  | 0       | 0        | 0     | 0       | 0       | 0   | 0   | 0       | 0      | 0     |
+| Ethernet2      | Downlink  | 0       | 0        | 0     | 0       | 0       | 0   | 0   | 0       | 0      | 0     |
+| PortChannel101 | Uplink    | 0       | 0        | 0     | 0       | 0       | 0   | 0   | 0       | 0      | 0     |
+| PortChannel103 | Uplink    | 0       | 0        | 0     | 0       | 0       | 0   | 0   | 0       | 0      | 0     |
+| PortChannel105 | Uplink    | 0       | 0        | 0     | 0       | 0       | 0   | 0   | 0       | 0      | 0     |
+| PortChannel106 | Uplink    | 0       | 0        | 0     | 0       | 0       | 0   | 0   | 0       | 0      | 0     |
++----------------+-----------+---------+----------+-------+---------+---------+-----+-----+---------+--------+-------+
+```
+
 ### DHCP Relay clear commands
 
 This sub-section of commands is used to clear the DHCP Relay counters.
 
-**sonic-clear dhcp_relay ipv6 counter**
+**sonic-clear dhcp_relay ipv6 counters**
 
 This command is used to clear ipv6 dhcp_relay counters.
 
 - Usage:
   ```
-  sonic-clear dhcp_relay ipv6 counter [-i <interface>]
+  sonic-clear dhcp_relay ipv6 counters [-i <interface>]
   ```
 
 - Example:
   ```
   admin@sonic:~$ sudo sonic-clear dhcp_relay ipv6 counters
+  ```
+
+**sonic-clear dhcp_relay ipv4 counters**
+
+This command is used to clear ipv4 dhcp_relay counters.
+
+- Usage:
+  ```
+  sonic-clear dhcp_relay ipv4s counter [-i <interface>] [--dir (TX|RX)] [--type <type>]
+  Options:
+    -i, --interface TEXT
+    --dir [TX|RX]
+    --type [Unknown|Discover|Offer|Request|Decline|Ack|Nak|Release|Inform|Bootp]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo sonic-clear dhcp_relay ipv4 counters
+  Clear DHCPv4 relay counter done
   ```
 
 ### DHCP Relay config commands
@@ -3604,6 +3691,310 @@ This command is used to add or del IPv6 DHCP Relay destination addresses to a VL
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#dhcp-relay)
 
+## DHCP Server
+### DHCP Server show commands
+This sub-section of commands is used to show the DHCP Server configuratoin and status
+**show dhcp_server info**
+
+This command is used to show dhcp_server config.
+- Usage
+  ```
+  show dhcp_server ipv4 info [--with_customize_option] [<dhcp_interface>]
+  ```
+
+- Example
+  ```
+  show dhcp_server ipv4 info Vlan1000
+  +-------------+--------+-------------+---------------+-----------------+---------+
+  | Interface   | Mode   | Gateway     | Netmask       |   Lease Time(s) | State   |
+  +=============+========+=============+===============+=================+=========+
+  | Vlan1000    | PORT   | 192.168.0.1 | 255.255.255.0 |             900 | enabled |
+  +-------------+--------+-------------+---------------+-----------------+---------+
+
+  show dhcp_server ipv4 info --with_customized_options Vlan1000
+  +-------------+--------+-------------+---------------+-----------------+---------+----------------------+
+  | Interface   | Mode   | Gateway     | Netmask       |   Lease Time(s) | State   | Customized Options   |
+  +=============+========+=============+===============+=================+=========+======================+
+  | Vlan1000    | PORT   | 192.168.0.1 | 255.255.255.0 |             900 | enabled | option_1             |
+  +-------------+--------+-------------+---------------+-----------------+---------+----------------------+
+
+  show dhcp_server ipv4 info
+  +-------------+--------+-------------+---------------+-----------------+----------+
+  | Interface   | Mode   | Gateway     | Netmask       |   Lease Time(s) | State    |
+  +=============+========+=============+===============+=================+==========+
+  | Vlan1000    | PORT   | 192.168.0.1 | 255.255.255.0 |             900 | enabled  |
+  +-------------+--------+-------------+---------------+-----------------+----------+
+  | Vlan2000    | PORT   | 192.168.0.1 | 255.255.255.0 |             300 | disabled |
+  +-------------+--------+-------------+---------------+-----------------+----------+
+  ```
+
+**show dhcp_server range**
+
+This command is used to show dhcp_server ip range.
+- Usage
+  ```
+  show dhcp_server ipv4 range [<range_name>]
+  ```
+
+- Example
+  ```
+  show dhcp_server ipv4 range range_1
+  +---------+-------------+--------------+------------+
+  | Range   | IP Start    | IP End       |   IP Count |
+  +=========+=============+==============+============+
+  | range_1 | 192.168.0.5 | 192.168.0.10 |          6 |
+  +---------+-------------+--------------+------------+
+
+  show dhcp_server ipv4 range 
+  +---------+-------------+--------------+------------+
+  | Range   | IP Start    | IP End       |   IP Count |
+  +=========+=============+==============+============+
+  | range_2 | 192.168.0.2 | 192.168.0.25 |         24 |
+  +---------+-------------+--------------+------------+
+  | range_1 | 192.168.0.2 | 192.168.0.2  |          1 |
+  +---------+-------------+--------------+------------+
+  | range1  | 192.168.1.2 | 192.168.1.2  |          1 |
+  +---------+-------------+--------------+------------+
+  ```
+
+**show dhcp_server option**
+
+This command is used to show dhcp_server customized option.
+
+- Usage
+  ```
+  show dhcp_server ipv4 option [<option_name>]
+  ```
+
+- Example
+  ```
+  show dhcp_server ipv4 option option_1
+  +---------------+-------------+---------+--------+
+  | Option Name   |   Option ID | Value   | Type   |
+  +===============+=============+=========+========+
+  | option_1      |         223 | host_1  | string |
+  +---------------+-------------+---------+--------+
+
+  show dhcp_server ipv4 option
+  +---------------+-------------+---------+--------+
+  | Option Name   |   Option ID | Value   | Type   |
+  +===============+=============+=========+========+
+  | option_1      |         223 | host_1  | string |
+  +---------------+-------------+---------+--------+
+  | option2       |         222 | 123     | string |
+  +---------------+-------------+---------+--------+
+  ```
+
+**show dhcp_server lease**
+
+This command is used to show dhcp_server lease.
+- Usage
+  ```
+  show dhcp_server ipv4 lease [<dhcp_interface>]
+  ```
+
+- Example
+  ```
+  show dhcp_server ipv4 lease
+  +--------------------+-------------------+-------------+---------------------+---------------------+
+  | Interface          | MAC Address       | IP          | Lease Start         | Lease End           |
+  +====================+===================+=============+=====================+=====================+
+  | Vlan1000|Ethernet5 | 10:70:fd:b6:10:05 | 192.168.0.8 | 2025-08-19 04:11:39 | 2025-08-19 04:26:39 |
+  +--------------------+-------------------+-------------+---------------------+---------------------+
+
+  show dhcp_server ipv4 lease Vlan1000
+  +--------------------+-------------------+-------------+---------------------+---------------------+
+  | Interface          | MAC Address       | IP          | Lease Start         | Lease End           |
+  +====================+===================+=============+=====================+=====================+
+  | Vlan1000|Ethernet5 | 10:70:fd:b6:10:05 | 192.168.0.8 | 2025-08-19 04:11:39 | 2025-08-19 04:26:39 |
+  +--------------------+-------------------+-------------+---------------------+---------------------+
+  ```
+
+**show dhcp_server port**
+
+This command is used to show dhcp_server port binding.
+- Usage
+  ```
+  show dhcp_server ipv4 port [<dhcp_interface>]
+  ```
+
+- Example
+  ```
+  show dhcp_server ipv4 port Vlan1000
+  +---------------------+--------------+
+  | Interface           | Bind         |
+  +=====================+==============+
+  | Vlan1000|Ethernet25 | 192.168.0.28 |
+  +---------------------+--------------+
+  | Vlan1000|Ethernet38 | 192.168.0.41 |
+  +---------------------+--------------+
+  | Vlan1000|Ethernet7  | 192.168.0.10 |
+  +---------------------+--------------+
+  | Vlan1000|Ethernet10 | 192.168.0.13 |
+  +---------------------+--------------+
+  | Vlan1000|Ethernet27 | 192.168.0.30 |
+  +---------------------+--------------+
+  ```
+
+### DHCP Server config commands
+
+This sub-section of commands is used to add or remove the DHCP Server related configuration
+
+**config dhcp_server add**
+
+This command is used to add dhcp_server for DHCP interface.
+
+- Usage
+  ```
+  config dhcp_server ipv4 add --mode <mode> [--dup_gw_nm] [--lease_time <lease_time>] [--gateway <gateway>] [--netmask <netmask>] <dhcp_interface>
+
+  Options:
+     mode: Specify mode of assign IP, currently only support 'PORT'. [required]
+     lease_time: Time that the client can lease IP once. [not required, default value is 900(s)]
+     dup_gw_nm: Indicate whether to use gateway and netmask of server interface. [not required if gateway and netmask is given]
+     gateway: Gateway of DHCP server. [ignored if dup_gw_nm is given]
+     netmask: Netmask of DHCP server. [ignored if dup_gw_nm is given]
+  ```
+
+- Example
+  ```
+  config dhcp_server ipv4 add --mode PORT --dup_gw_nm --lease_time 300 Vlan1000
+  config dhcp_server ipv4 add --mode PORT --lease_time 300 --gateway 192.168.0.1 --netmask 255.255.255.0 Vlan1000
+  ```
+
+**config dhcp_server del**
+
+This command is used to delete all dhcp_server config for DHCP interface, to be clarify that delete a `enable` dhcp_server is not allowed.
+- Usage
+  ```
+  config dhcp_server ipv4 del <dhcp_interface>
+  ```
+
+- Example
+  ```
+  config dhcp_server ipv4 del Vlan1000
+  ```
+
+**config dhcp_server enable/disable**
+
+This command is used to enable or disable dhcp_server for DHCP interface, this state is set to `disable` by default while adding a new dhcp_server.
+- Usage
+  ```
+  config dhcp_server ipv4 (enable | disable) <dhcp_interface>
+  ```
+
+- Example
+  ```
+  config dhcp_server ipv4 enable Vlan1000
+  ```
+
+
+**config dhcp_server update**
+
+This command is used to update dhcp_server config.
+- Usage
+  ```
+  config dhcp_server ipv4 update --mode <mode> [--dup_gw_nm] [--lease_time <lease_time>] [--gateway <gateway>] [--netmask <netmask>] <dhcp_interface>
+  ```
+
+- Example
+  ```
+  config dhcp_server ipv4 update --mode PORT --dup_gw_nm --lease_time 300 Vlan1000
+  ```
+
+**config dhcp_server range add/del/update**
+
+This command is used to config ip range.
+- Usage
+  ```
+  # <ip_end> is not required, if not given, means ip_end is equal to ip_start
+  config dhcp_server ipv4 range add <range_name> <ip_start> [<ip_end>]
+  config dhcp_server ipv4 range update <range_name> <ip_start> [<ip_end>]
+  config dhcp_server ipv4 range del <range_name>
+  ```
+
+- Example
+  ```
+  config dhcp_server ipv4 range add range1 192.168.0.1
+
+  config dhcp_server ipv4 range update range1 192.168.0.2
+
+  config dhcp_server ipv4 range del range1
+  ```
+
+**config dhcp_server bind/unbind**
+
+This command is used to config dhcp ip per interface.
+- Usage
+  ```
+  config dhcp_server ipv4 bind <vlan_interface> <interface> (--range <ip_range_list> | <ip_list>)
+  config dhcp_server ipv4 unbind <vlan_interface> <interface> (--range <ip_range_list> | <ip_list> | all)
+  ```
+
+- Example
+  ```
+  config dhcp_server ipv4 bind Vlan1000 Ethernet1 --range range1
+  config dhcp_server ipv4 bind Vlan2000 Ethernet0 192.168.1.5,192.168.1.6
+  config dhcp_server ipv4 unbind Vlan2000 Ethernet1 --range range1
+  config dhcp_server ipv4 unbind Vlan2000 Ethernet0 192.168.1.5,192.168.1.6
+  ```
+
+**config dhcp_server option add**
+
+This command is used to add dhcp option.
+Type field can refer to [Customize DHCP Packet Options](#customize-dhcp-packet-options).
+
+- Usage
+  ```
+  config dhcp_server ipv4 option add <option_name> <option_id> [<type>] <value>
+  ```
+
+- Example
+  ```
+  config dhcp_server ipv4 option add option_1 223 string host_1
+  ```
+
+**config dhcp_server option del**
+
+This command is used to del dhcp option.
+
+- Usage
+  ```
+  config dhcp_server ipv4 option del <option_name>
+  ```
+
+- Example
+  ```
+  config dhcp_server ipv4 option del option_1
+  ```
+
+**config dhcp_server option bind**
+
+This command is used to bind dhcp option per dhcp interface.
+- Usage
+  ```
+  config dhcp_server ipv4 option bind <dhcp_interface> <option_list>
+  ```
+
+- Example
+  ```
+  config dhcp_server ipv4 option bind Vlan1000 option_1
+  ```
+
+**config dhcp_server option unbind**
+
+This command is used to unbind dhcp option.
+- Usage
+  ```
+  config dhcp_server ipv4 option unbind <dhcp_interface> (--all | <option_name>)
+  ```
+
+- Exampe
+  ```
+  config dhcp_server ipv4 option unbind Vlan1000 --all
+
+  config dhcp_server ipv4 option unbind Vlan1000 option_1
+  ```
 
 ## Drop Counters
 
@@ -5051,6 +5442,7 @@ Optional argument "-p" specify a period (in seconds) with which to gather counte
   show interfaces counters fec-histogram [-i <interface_name>]
   show interfaces counters fec-stats
   show interfaces counters detailed <interface_name>
+  show interfaces counters trim [interface_name] [-p|--period <sec>] [-j|--json]
   ```
 
 - Example:
@@ -5203,6 +5595,10 @@ The "detailed" subcommand is used to display more detailed interface counters. A
     WRED Red Dropped Packets....................... 0
     WRED Total Dropped Packets..................... 0
 
+    Trimmed Packets................................ 0
+    Trimmed Sent Packets........................... 0
+    Trimmed Dropped Packets........................ 0
+
     Time Since Counters Last Cleared............... None
   ```
 
@@ -5251,13 +5647,54 @@ The "fec-stats" subcommand is used to disply the interface fec related statistic
 - Example:
   ```
   admin@ctd615:~$ show interfaces counters fec-stats
-        IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER
-  -----------  -------  ----------  ------------  ----------------  -------------  --------------
-   Ethernet0        U           0             0                 0    1.48e-20       0.00e+00
-   Ethernet8        U           0             0                 0    1.98e-19       0.00e+00
-  Ethernet16        U           0             0                 0    1.77e-20       0.00e+00
+        IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER    FEC_PRE_BER_MAX    FLR(O)    FLR(P) (Accuracy)    FEC_MAX_T
+  -----------  -------  ----------  ------------  ----------------  -------------  --------------    ---------------  --------  -------------------  -----------
+   Ethernet0        U           0             0                 0        1.48e-20        0.00e+00           1.78e-16  4.31e-10       7.81e-10 (89%)      2.34e-05
+   Ethernet8        U           0             0                 0        1.98e-19        0.00e+00           1.67e-14         0       4.81e-10 (84%)      1.87e-05
+  Ethernet16        U           0             0                 0        1.77e-20        0.00e+00           1.37e-13  1.24e-10       6.03e-09 (79%)      3.12e-05
   ```
 
+  FEC_MAX_T - Is the maximum NON-ZERO FEC histogram BIN (starting from Bin0). -1 indicates the value is invalid (For eg during link down)
+
+For debugging link related issues where you need to clear the FEC histogram and monitor the link again, use the following command
+
+- Example (for all ports):
+  ```
+  root@sonic:~# portstat -fh 
+  Last cached time was 2025-10-02T16:43:57.934081
+        IFACE           BIN0        BIN1       BIN2    BIN3    BIN4    BIN5    BIN6    BIN7    BIN8    BIN9    BIN10    BIN11    BIN12    BIN13    BIN14    BIN15
+  -----------  -------------  ----------  ---------  ------  ------  ------  ------  ------  ------  ------  -------  -------  -------  -------  -------  -------
+    Ethernet0  4,374,661,575         340          1       0       0       0       0       0       0       0        0        0        0        0        0        0
+    Ethernet8  4,374,590,263       8,069          9       0       0       0       0       0       0       0        0        0        0        0        0        0
+   Ethernet16  4,374,660,911       3,187          4       0       0       0       0       0       0       0        0        0        0        0        0        0
+   Ethernet24  4,374,594,305      57,484        502       0       0       0       0       0       0       0        0        0        0        0        0        0
+   Ethernet32  4,374,649,615         116          0       0       0       0       0       0       0       0        0        0        0        0        0        0
+   Ethernet40  4,374,650,913       1,212          1       0       0       0       0       0       0       0        0        0        0        0        0        0
+  ```
+
+ - Example (for a particular port):
+  ```
+  root@sonic:~# portstat -fh -i Ethernet504
+  Last cached time was 2025-10-02T16:43:57.934081
+        IFACE         BIN0    BIN1    BIN2    BIN3    BIN4    BIN5    BIN6    BIN7    BIN8    BIN9    BIN10    BIN11    BIN12    BIN13    BIN14    BIN15
+  -----------  -----------  ------  ------  ------  ------  ------  ------  ------  ------  ------  -------  -------  -------  -------  -------  -------
+  Ethernet504  624,891,017  13,331     172       0       0       0       0       0       0       0        0        0        0        0        0        0
+  root@str-7060x6-c09-u25:~#
+  ``` 
+
+  To clear the FEC histogram use `portstat -c`. NOTE: This will clear all counters. 
+
+The "trim" subcommand is used to display the interface packet trimming related statistic.
+
+- Example:
+  ```
+  admin@sonic:~$ show interfaces counters trim
+       IFACE    STATE    TRIM_PKTS    TRIM_TX_PKTS    TRIM_DRP_PKTS
+  ----------  -------  -----------  --------------  ---------------
+   Ethernet0        U            0               0                0
+   Ethernet8        U          100             100                0
+  Ethernet16        U          200             100              100
+  ```
 
 **show interfaces description**
 
@@ -6329,8 +6766,8 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#interf
 
 **config interface vrf bind**
 
-This command is used to bind a interface to a vrf.
-By default, all L3 interfaces will be in default vrf. Above vrf bind command will let users bind interface to a vrf.
+This command is used to bind a interface to a vrf as well as vnet.
+By default, all L3 interfaces will be in default vrf. Above vrf bind command will let users bind interface to a vrf/vnet.
 
 - Usage:
   ```
@@ -6339,8 +6776,8 @@ By default, all L3 interfaces will be in default vrf. Above vrf bind command wil
 
 **config interface vrf unbind**
 
-This command is used to ubind a interface from a vrf.
-This will move the interface to default vrf.
+This command is used to ubind a interface from a vrf/vnet.
+This will move the interface to default vrf/vnet.
 
 - Usage:
   ```
@@ -8088,6 +8525,140 @@ While adding a new SPAN session, users need to configure the following fields th
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#mirroring)
 
+## MMU
+
+### MMU Show commands
+
+This subsection explains how to display switch Memory Management Unit (MMU) configuration.
+
+**show mmu**
+
+This command displays MMU configuration.
+
+- Usage:
+  ```bash
+  show mmu [OPTIONS]
+  ```
+
+- Options:
+  - _-n,--namespace_: namespace name or all
+  - _-vv,--verbose_: enable verbose output
+
+- Example:
+  ```bash
+  admin@sonic:~$ show mmu
+  Pool: ingress_lossless_pool
+  ----  --------
+  xoff  4194112
+  type  ingress
+  mode  dynamic
+  size  10875072
+  ----  --------
+
+  Pool: egress_lossless_pool
+  ----  --------
+  type  egress
+  mode  static
+  size  15982720
+  ----  --------
+
+  Pool: egress_lossy_pool
+  ----  -------
+  type  egress
+  mode  dynamic
+  size  9243812
+  ----  -------
+
+  Profile: egress_lossy_profile
+  ----------  -------------------------------
+  dynamic_th  3
+  pool        [BUFFER_POOL|egress_lossy_pool]
+  size        1518
+  ----------  -------------------------------
+
+  Profile: pg_lossless_100000_300m_profile
+  ----------  -----------------------------------
+  xon_offset  2288
+  dynamic_th  -3
+  xon         2288
+  xoff        268736
+  pool        [BUFFER_POOL|ingress_lossless_pool]
+  size        1248
+  ----------  -----------------------------------
+
+  Profile: egress_lossless_profile
+  ---------  ----------------------------------
+  static_th  3995680
+  pool       [BUFFER_POOL|egress_lossless_pool]
+  size       1518
+  ---------  ----------------------------------
+
+  Profile: pg_lossless_100000_40m_profile
+  ----------  -----------------------------------
+  xon_offset  2288
+  dynamic_th  -3
+  xon         2288
+  xoff        177632
+  pool        [BUFFER_POOL|ingress_lossless_pool]
+  size        1248
+  ----------  -----------------------------------
+
+  Profile: ingress_lossy_profile
+  ----------  -----------------------------------
+  dynamic_th  3
+  pool        [BUFFER_POOL|ingress_lossless_pool]
+  size        0
+  ----------  -----------------------------------
+
+  Profile: pg_lossless_40000_40m_profile
+  ----------  -----------------------------------
+  xon_offset  2288
+  dynamic_th  -3
+  xon         2288
+  xoff        71552
+  pool        [BUFFER_POOL|ingress_lossless_pool]
+  size        1248
+  ----------  -----------------------------------
+
+  Profile: q_lossy_profile
+  ---------------------  -----------------
+  packet_discard_action  drop
+  dynamic_th             0
+  pool                   egress_lossy_pool
+  size                   0
+  ---------------------  -----------------
+  ```
+
+### MMU Config commands
+
+This subsection explains how to configure switch Memory Management Unit (MMU).
+
+**config mmu**
+
+This command is used to manage switch MMU configuration.
+
+- Usage:
+  ```bash
+  config mmu [OPTIONS]
+  ```
+
+- Options:
+  - _-p_: profile name
+  - _-a_: set alpha for profile type dynamic
+  - _-s_: set staticth for profile type static
+  - _-t_: set packet trimming eligibility
+  - _-n,--namespace_: namespace name or all
+  - _-vv,--verbose_: enable verbose output
+
+- Examples:
+  ```bash
+  config mmu -p alpha_profile -a 2
+  config mmu -p ingress_lossless_profile -s 12121215
+  config mmu -p q_lossy_profile -t on
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#mmu)
+
 ## NAT
 
 ### NAT Show commands
@@ -8508,6 +9079,7 @@ This command starts PFC Watchdog
   ```
   config pfcwd start --action drop all 400 --restoration-time 400
   config pfcwd start --action forward Ethernet0 Ethernet8 400
+  config pfcwd start --action drop all 400 --restoration-time 400 --pfc-stat-history
   ```
 
 **config pfcwd stop**
@@ -8546,6 +9118,18 @@ This command enables or disables PFCWD's "BIG RED SWITCH"(BRS). After enabling B
   config pfcwd big_red_switch enable
   ```
 
+**config pfcwd pfc_stat_history \<enable/disable\> \<ports>**
+
+This command enables or disables PFCWD's PFC Historical Statistics estimation. After enabling, PFC Watchdog will be configured to estimate pause transitions, total pause time, and the pause time and timstamp of the most recent pause activity on those ports.
+
+NOTE: The estimation will only be performed on ports the PFCWD has been started on, alternatively use the --pfc-stat-history flag with the `start` command to simultaneously enable history on those ports.
+
+- Usage:
+  ```
+  config pfcwd pfc_stat_history enable all
+  config pfcwd pfc_stat_history disable Ethernet0 Ethernet8
+  ```
+
 **config pfcwd start_default**
 
 This command starts PFC Watchdog with the default settings.
@@ -8561,6 +9145,7 @@ Default values are the following:
    - restoration time - 200ms
    - polling interval - 200ms
    - action - 'drop'
+   - pfc stat history - disable
 
 Additionally if number of ports in the system exceeds 32, all times will be multiplied by roughly <num_ports\>/32.
 
@@ -8986,6 +9571,84 @@ This command adds or deletes a member port to/from the already created portchann
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#portchannels)
+
+# Packet Trimming
+
+This section explains the various show commands and configuration commands available for users.
+
+### Packet Trimming Show commands
+
+This subsection explains how to display switch trimming configuration.
+
+**show switch-trimming global**
+
+This command displays switch trimming global configuration.
+
+- Usage:
+  ```bash
+  show switch-trimming global [OPTIONS]
+  ```
+
+- Options:
+  - _-j,--json_: display in JSON format
+
+- Example:
+  ```bash
+  admin@sonic:~$ show switch-trimming global
+  +-----------------------------+---------+
+  | Configuration               | Value   |
+  +=============================+=========+
+  | Packet trimming size        | 200     |
+  +-----------------------------+---------+
+  | Packet trimming DSCP value  | 20      |
+  +-----------------------------+---------+
+  | Packet trimming TC value    | N/A     |
+  +-----------------------------+---------+
+  | Packet trimming queue index | 2       |
+  +-----------------------------+---------+
+
+  admin@sonic:~$ show switch-trimming global --json
+  {
+      "size": "200",
+      "dscp_value": "20",
+      "tc_value": "N/A",
+      "queue_index": "2"
+  }
+  ```
+
+### Packet Trimming Config commands
+
+This subsection explains how to configure switch trimming.
+
+**config switch-trimming global**
+
+This command is used to manage switch trimming global configuration.
+
+- Usage:
+  ```bash
+  config switch-trimming global [OPTIONS]
+  ```
+
+- Options:
+  - _-s,--size_: size (in bytes) to trim eligible packet
+  - _-d,--dscp_: dscp value assigned to a packet after trimming
+  - _-t,--tc_: tc value assigned to a packet after trimming
+  - _-q,--queue_: queue index to use for transmission of a packet after trimming
+
+- Examples:
+  ```bash
+  admin@sonic:~$ config switch-trimming global --size '128' --dscp '48' --queue '6'
+  admin@sonic:~$ config switch-trimming global --size '128' --dscp '48' --queue 'dynamic'
+  admin@sonic:~$ config switch-trimming global --size '128' --dscp 'from-tc' --tc '6' --queue '6'
+  admin@sonic:~$ config switch-trimming global --size '128' --dscp 'from-tc' --tc '6' --queue 'dynamic'
+  ```
+
+- Note:
+  - At least one option must be provided
+  - When `--dscp` value is set to `from-tc`, the `--tc` value is used for mapping to DSCP
+  - When `--queue` value is set to `dynamic`, the `--dscp` value is used for mapping to the queue
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#packet-trimming)
 
 ## NVGRE
 
@@ -9469,8 +10132,38 @@ This command displays the details of Rx & Tx priority-flow-control (pfc) for all
    ...
    ```
 
+The history flag can be used to view historical statistics:
 
-- NOTE: PFC counters can be cleared by the user with the following command:
+* Usage: see [PFC Watchdog Commands](#pfc-watchdog-commands) on enabling history estimation
+  ```
+  show pfc counters --history
+  ```
+
+* Example:
+  ```
+       Port    Priority    RX Pause Transitions    Total RX Pause Time US    Recent RX Pause Time US    Recent RX Pause Timestamp
+  ---------  ----------  ----------------------  ------------------------  -------------------------  ---------------------------
+  Ethernet0        PFC0                      12                    12,000                      1,200         01/10/2008, 21:20:00
+  Ethernet0        PFC1                      21                    20,001                      2,001         05/18/2033, 03:33:20
+  Ethernet0        PFC2                      22                    20,002                      2,002         05/18/2033, 03:33:20
+  Ethernet0        PFC3                      23                    20,003                      2,003         05/18/2033, 03:33:20
+  Ethernet0        PFC4                      24                    20,004                      2,004         05/18/2033, 03:33:20
+  Ethernet0        PFC5                      25                    20,005                      2,005         05/18/2033, 03:33:20
+  Ethernet0        PFC6                      26                    20,006                      2,006         05/18/2033, 03:33:20
+  Ethernet0        PFC7                      27                    20,007                      2,007         05/18/2033, 03:33:20
+
+  Ethernet4        PFC0                      14                    14,000                      1,400         05/13/2014, 16:53:20
+  Ethernet4        PFC1                      41                    40,001                      4,001         10/02/2096, 07:06:40
+  Ethernet4        PFC2                      42                    40,002                      4,002         10/02/2096, 07:06:40
+  Ethernet4        PFC3                      43                    40,003                      4,003         10/02/2096, 07:06:40
+  Ethernet4        PFC4                      44                    40,004                      4,004         10/02/2096, 07:06:40
+  Ethernet4        PFC5                      45                    40,005                      4,005         10/02/2096, 07:06:40
+  Ethernet4        PFC6                      46                    40,006                      4,006         10/02/2096, 07:06:40
+  Ethernet4        PFC7                      47                    40,007                      4,007         10/02/2096, 07:06:40
+  ```
+
+
+- NOTE: PFC counters (including historical stats) can be cleared by the user with the following command:
   ```
   admin@sonic:~$ sonic-clear pfccounters
   ```
@@ -9551,8 +10244,18 @@ This command can be used to clear the counters for all queues of all ports. Note
 
 - Usage:
   ```
-  show queue counters [<interface_name>]
+  show queue counters [OPTIONS] [interface_name]
   ```
+
+- Parameters:
+  - _interface_name_: display counters for interface name only
+
+- Options:
+  - _-a,--all_: display all counters
+  - _-T,--trim_: display trimming counters only
+  - _-V,--voq_: display VOQ counters only
+  - _-nz,--nonzero_: display non zero counters
+  - _-j,--json_: display counters in JSON format
 
 - Example:
   ```
@@ -9604,6 +10307,30 @@ This command can be used to clear the counters for all queues of all ports. Note
   Ethernet4    MC9               0                0            0             0
 
   ...
+
+  admin@sonic:~$ show queue counters --trim
+       Port    TxQ    Trim/pkts    TrimSent/pkts    TrimDrop/pkts
+  ---------  -----  -----------  ---------------  ---------------
+  Ethernet0    UC0            0                0                0
+  Ethernet0    UC1          100              100                0
+  Ethernet0    UC2          200              100              100
+  Ethernet0    UC3          300              300                0
+  Ethernet0    UC4          400              200              200
+  Ethernet0    UC5          500              500                0
+  Ethernet0    UC6          600              300              300
+  Ethernet0    UC7          700              700                0
+  Ethernet0    UC8          800              400              400
+  Ethernet0    UC9          900              900                0
+  Ethernet0    MC0          N/A              N/A              N/A
+  Ethernet0    MC1          N/A              N/A              N/A
+  Ethernet0    MC2          N/A              N/A              N/A
+  Ethernet0    MC3          N/A              N/A              N/A
+  Ethernet0    MC4          N/A              N/A              N/A
+  Ethernet0    MC5          N/A              N/A              N/A
+  Ethernet0    MC6          N/A              N/A              N/A
+  Ethernet0    MC7          N/A              N/A              N/A
+  Ethernet0    MC8          N/A              N/A              N/A
+  Ethernet0    MC9          N/A              N/A              N/A
   ```
 
 Optionally, you can specify an interface name in order to display only that particular interface
@@ -10017,6 +10744,83 @@ This command is to config the radius server for various parameter listed.
   timeout     Specify RADIUS server global timeout <1 - 60>
 
   ```
+
+# Switch
+
+This section explains the various show, configuration and clear commands available for users.
+
+### Switch Show commands
+
+This subsection explains how to display switch configuration or stats.
+
+**show switch counters**
+
+This command displays switch stats.
+
+- Usage:
+  ```bash
+  show switch counters [OPTIONS]
+  show switch counters all [OPTIONS]
+  show switch counters trim [OPTIONS]
+  show switch counters detailed [OPTIONS]
+  ```
+
+- Options:
+  - _-p,--period_: display stats over a specified period (in seconds)
+  - _-d,--display_: show internal interfaces
+  - _-n,--namespace_: namespace name or all
+  - _-j,--json_: display in JSON format
+  - _-v,--verbose_: enable verbose output
+
+- Example:
+  ```bash
+  admin@sonic:~$ show switch counters
+    TrimSent/pkts    TrimDrop/pkts
+  ---------------  ---------------
+              100              100
+
+  admin@sonic:~$ show switch counters all
+    TrimSent/pkts    TrimDrop/pkts
+  ---------------  ---------------
+              100              100
+
+  admin@sonic:~$ show switch counters trim
+    TrimSent/pkts    TrimDrop/pkts
+  ---------------  ---------------
+              100              100
+
+  admin@sonic:~$ show switch counters detailed
+  Trimmed Sent Packets........................... 100
+  Trimmed Dropped Packets........................ 100
+
+  admin@sonic:~$ show switch counters --json
+  {
+      "trim_drop": "100",
+      "trim_sent": "100"
+  }
+  ```
+
+### Switch Clear commands
+
+This subsection explains how to clear switch stats.
+
+**sonic-clear switchcounters**
+
+This command is used to clear switch counters.
+
+- Usage:
+  ```bash
+  sonic-clear switchcounters
+  ```
+
+- Examples:
+  ```bash
+  admin@sonic:~$ sonic-clear switchcounters
+  Cleared switch counters
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#switch)
+
 ## sFlow
 
 ### sFlow Show commands
@@ -10600,6 +11404,7 @@ This sub-section explains the show commands for displaying the running configura
 6) acl
 7) ports
 8) syslog
+9) copp
 
 **show runningconfiguration all**
 
@@ -10724,6 +11529,20 @@ This command displays the running configuration of the snmp module.
 
   ```
   admin@sonic:~$ show runningconfiguration ports Ethernet0
+  ```
+
+ **show runningconfiguration copp**
+
+ This command displays the running configuration of copp
+
+- Usage:
+  ```
+  show runningconfiguration copp
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show runningconfiguration copp
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#Startup--Running-Configuration)
@@ -11362,92 +12181,6 @@ This command displays the system-wide memory utilization information – just a 
   Swap:           0B         0B         0B
   ```
 
-**show mmu**
-
-This command displays virtual address to the physical address translation status of the Memory Management Unit (MMU).
-
-- Usage:
-  ```
-  show mmu
-  ```
-
-- Example:
-  ```
-  admin@sonic:~$ show mmu
-  Pool: ingress_lossless_pool
-  ----  --------
-  xoff  4194112
-  type  ingress
-  mode  dynamic
-  size  10875072
-  ----  --------
-
-  Pool: egress_lossless_pool
-  ----  --------
-  type  egress
-  mode  static
-  size  15982720
-  ----  --------
-
-  Pool: egress_lossy_pool
-  ----  -------
-  type  egress
-  mode  dynamic
-  size  9243812
-  ----  -------
-
-  Profile: egress_lossy_profile
-  ----------  -------------------------------
-  dynamic_th  3
-  pool        [BUFFER_POOL|egress_lossy_pool]
-  size        1518
-  ----------  -------------------------------
-
-  Profile: pg_lossless_100000_300m_profile
-  ----------  -----------------------------------
-  xon_offset  2288
-  dynamic_th  -3
-  xon         2288
-  xoff        268736
-  pool        [BUFFER_POOL|ingress_lossless_pool]
-  size        1248
-  ----------  -----------------------------------
-
-  Profile: egress_lossless_profile
-  ---------  ----------------------------------
-  static_th  3995680
-  pool       [BUFFER_POOL|egress_lossless_pool]
-  size       1518
-  ---------  ----------------------------------
-
-  Profile: pg_lossless_100000_40m_profile
-  ----------  -----------------------------------
-  xon_offset  2288
-  dynamic_th  -3
-  xon         2288
-  xoff        177632
-  pool        [BUFFER_POOL|ingress_lossless_pool]
-  size        1248
-  ----------  -----------------------------------
-
-  Profile: ingress_lossy_profile
-  ----------  -----------------------------------
-  dynamic_th  3
-  pool        [BUFFER_POOL|ingress_lossless_pool]
-  size        0
-  ----------  -----------------------------------
-
-  Profile: pg_lossless_40000_40m_profile
-  ----------  -----------------------------------
-  xon_offset  2288
-  dynamic_th  -3
-  xon         2288
-  xoff        71552
-  pool        [BUFFER_POOL|ingress_lossless_pool]
-  size        1248
-  ----------  -----------------------------------
-  ```
-
 Go Back To [Beginning of the document](#) or [Beginning of this section](#System-State)
 
 ### System-Health
@@ -11827,12 +12560,13 @@ This command displays the MAC (FDB) entries either in full or partial as given b
 4) show mac -a <mac-address> - display the MACs that match a specific mac-address
 5) show mac -t <type> - display the MACs that match a specific type (static/dynamic)
 6) show mac -c - display the count of MAC addresses
+7) show mac -n <namespace> - display the MACs that belong to a specific namespace
 
 To show the default MAC address aging time on the switch.
 
 - Usage:
   ```
-  show mac [-v <vlan_id>] [-p <port_name>] [-a <mac_address>] [-t <type>] [-c]
+  show mac [-v <vlan_id>] [-p <port_name>] [-a <mac_address>] [-t <type>] [-c] [-n <namespace>]
   ```
 
 - Example:
@@ -11930,6 +12664,14 @@ Optionally, you can specify a VLAN ID or interface name or type or mac-address i
   ```
   admin@sonic:~$ show mac -c
   Total number of entries 18
+  ```
+  ```
+  admin@sonic:~$ show mac -n asic0
+  No.    Vlan  MacAddress         Port           Type
+  -----  ------  -----------------  -----------  -------
+    2    1000  50:96:23:AD:F1:65  Ethernet192    Static
+    2    1000  C6:C9:5E:AE:24:42  Ethernet192    Static
+  Total number of entries 2
   ```
 
 **show mac aging-time**
@@ -12102,6 +12844,9 @@ This command displays vnet interfaces information about all the vnets configured
   -----------  ------------
   Vnet_2000    Ethernet1
   Vnet_3000    Vlan2000
+  Vnet_1000    PortChannel0002
+  Vnet_5000    Po0002.101
+  Vnet_4000    Loopback0
   ```
 
 **show vnet neighbors**
@@ -12122,10 +12867,13 @@ This command displays vnet neighbor information about all the vnets configured i
   -----------  -----------  -------------  ------------
                11.11.11.11                 Ethernet1
                11.11.11.12                 Ethernet1
+               11.11.11.13                 PortChannel0002
+               11.11.11.14                 Po0002.101
 
   Vnet_3000    neighbor     mac_address        interfaces
   -----------  -----------  -----------------  ------------
                20.20.20.20  aa:bb:cc:dd:ee:ff  Vlan2000
+               30.30.30.30  11:22:33:44:55:66  Ethernet0.1002
   ```
 
 **show vnet routes all**
@@ -12174,6 +12922,51 @@ This command displays tunnel routes information about all the vnets configured i
   Vnet_3000    100.100.2.1/32  10.10.10.2  00:00:00:00:03:04
   ```
 
+#### Vnet config commands
+
+**config vnet add**
+
+This command creates vnet in SONiC system with provided vnet-name.
+
+- Usage:
+  ```
+  config vnet add <vnet-name> <vni> <vxlan-tunnel> [<peer_list>] [<guid>] [<scope>] [<advertise_prefix>] [<overlay_dmac>] [<src_mac>]
+  ```
+
+Note: vnet-name should always start with keyword "Vnet_"
+Mandatory Parameters: vnet_name, vni, vxlan_tunnel
+Optional Parameters: peer_list, guid, scope, advertised_prefix, overlay_dmac, src_mac
+
+**config vnet del**
+
+This command deletes vnet with vnet-name and its associated binded interfaces and routes.
+
+- Usage:
+  ```
+  config vnet del <vnet-name>
+  ```
+
+**config vnet add route**
+
+This command creates vnet route in SONiC system with provided vnet-name and prefix.
+
+- Usage:
+  ```
+  config vnet add-route <vnet-name> <prefix> <endpoint> [<vni>] [<endpoint_monitor>] [<mac_address>] [<profile>] [<primary>] [<monitoring>] [<adv_prefix>]
+  ```
+
+Note: vnet-name should always start with keyword "Vnet_"
+Mandatory Parameters: vnet_name, prefix, endpoint
+Optional Parameters: vni, endpoint_monitor, mac_address, profile, primary, monitoring, adv_prefix
+
+**config vnet del-route <vnet-name>**
+
+This command deletes a vnet route with vnet-name and prefix. It deletes all routes for the provided vnet if prefix isnt specified.
+
+- Usage:
+  ```
+  config vnet del-route <vnet-name> [<prefix>]
+  ```
 Go Back To [Beginning of the document](#) or [Beginning of this section](#vxlan--vnet)
 
 ## Warm Reboot
@@ -14573,4 +15366,107 @@ Memory Statistics Configuration:
 Enabled:            false
 Sampling Interval:  5
 Retention Period:   15
+```
+---
+# CoPP Commands
+
+## Overview
+This sub-section explains the list of commands available for CoPP (Control Plane Policing) feature.
+
+---
+
+## CoPP Show Commands
+
+These commands are used to display the current CoPP configuration and their status.
+
+### Usage
+```bash
+show copp configuration <detailed> [--trapid <trap_id>] [--group <trap_group>]
+```
+
+**Example**:
+
+```bash
+show copp configuration
+show copp configuration detailed --group queue1_group3
+show copp configuration detailed --trapid neighbor_miss
+```
+
+### Show CoPP Configuration
+
+Command to display the current CoPP configurations and hardware status of the traps.
+
+```bash
+admin@sonic:~$ show copp configuration
+```
+
+**Sample Output**:
+
+```bash
+admin@sonic:~$ show copp configuration
+TrapId           Trap Group     Action      CBS    CIR  Meter Type    Mode    HW Status
+---------------  -------------  --------  -----  -----  ------------  ------  -------------
+arp_req          queue4_group2  copy        600    600  packets       sr_tcm  installed
+arp_resp         queue4_group2  copy        600    600  packets       sr_tcm  installed
+bgp              queue4_group1  trap       6000   6000  packets       sr_tcm  not-installed
+bgpv6            queue4_group1  trap       6000   6000  packets       sr_tcm  not-installed
+dest_nat_miss    queue1_group2  trap        600    600  packets       sr_tcm  installed
+dhcp             queue4_group3  trap        100    100  packets       sr_tcm  installed
+dhcpv6           queue4_group3  trap        100    100  packets       sr_tcm  installed
+eapol            queue4_group1  trap       6000   6000  packets       sr_tcm  installed
+ip2me            queue1_group1  trap       6000   6000  packets       sr_tcm  installed
+lacp             queue4_group1  trap       6000   6000  packets       sr_tcm  installed
+lldp             queue4_group3  trap        100    100  packets       sr_tcm  installed
+neigh_discovery  queue4_group2  copy        600    600  packets       sr_tcm  installed
+neighbor_miss    queue1_group3  trap        200    200  packets       sr_tcm  installed
+sample_packet    queue2_group1  trap       1000   1000  packets       sr_tcm  not-installed
+src_nat_miss     queue1_group2  trap        600    600  packets       sr_tcm  installed
+udld             queue4_group3  trap        100    100  packets       sr_tcm  installed
+```
+
+### Show CoPP Configuration Detailed
+
+Command to display the detailed CoPP configuration of a specific trap ID.
+
+```bash
+admin@sonic:~$ show copp configuration detailed --trapid neighbor_miss
+```
+
+**Sample Output**:
+
+```bash
+Trap Group.................. queue1_group3
+queue....................... 1
+Trap Priority............... 1
+Trap Action................. trap
+Meter Type.................. packets
+Mode........................ sr_tcm
+CBS......................... 200
+CIR......................... 200
+Green Action................ forward
+Yellow Action............... forward
+Red Action.................. drop
+HW Status................... installed
+```
+
+Command to display the detailed CoPP configuration of a specific CoPP group.
+
+```bash
+admin@sonic:~$ show copp configuration detailed --group queue1_group3
+```
+
+**Sample Output**:
+
+```bash
+Trap Id(s).................. neighbor_miss
+Queue....................... 1
+Trap Priority............... 1
+Trap Action................. trap
+Meter Type.................. packets
+Mode........................ sr_tcm
+CBS......................... 200
+CIR......................... 200
+Yellow Action............... forward
+Green Action................ forward
+Red Action.................. drop
 ```

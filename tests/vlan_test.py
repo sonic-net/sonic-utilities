@@ -13,6 +13,10 @@ from utilities_common.db import Db
 from importlib import reload
 import utilities_common.bgp_util as bgp_util
 
+root_path = os.path.dirname(os.path.abspath(__file__))
+modules_path = os.path.dirname(root_path)
+scripts_path = os.path.join(modules_path, "scripts")
+
 IP_VERSION_PARAMS_MAP = {
     "ipv4": {
         "table": "VLAN"
@@ -296,12 +300,24 @@ test_config_add_del_with_switchport_modes_changes_output = """\
 """
 
 
+def get_intf_switchport_status(self, output: str, interface: str) -> str:
+    for line in output.splitlines():
+        line = line.strip()
+        if not line or line.startswith("Interface") or line.startswith("----"):
+            continue
+        parts = line.split()
+        if parts[0] == interface and len(parts) >= 2:
+            return parts[1]
+    return "interface not found"
+
+
 class TestVlan(object):
     _old_run_bgp_command = None
 
     @classmethod
     def setup_class(cls):
-        os.environ['UTILITIES_UNIT_TESTING'] = "1"
+        os.environ["PATH"] += os.pathsep + scripts_path
+        os.environ['UTILITIES_UNIT_TESTING'] = "2"
         # ensure that we are working with single asic config
         cls._old_run_bgp_command = bgp_util.run_bgp_command
         bgp_util.run_bgp_command = mock.MagicMock(
@@ -377,7 +393,7 @@ class TestVlan(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code != 0
-        assert "Error: No such command \"etp33\"" in result.output
+        assert "Error: No such command 'etp33'" in result.output
 
     def test_show_switchport_status_in_alias_mode(self):
         runner = CliRunner()
@@ -387,7 +403,7 @@ class TestVlan(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code != 0
-        assert "Error: No such command \"etp33\"" in result.output
+        assert "Error: No such command 'etp33'" in result.output
 
     def test_config_vlan_add_vlan_with_invalid_vlanid(self):
         runner = CliRunner()
@@ -718,6 +734,9 @@ class TestVlan(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
+        result = runner.invoke(show.cli.commands["interfaces"].commands["switchport"].commands["status"], obj=db)
+        switchport_status = get_intf_switchport_status(self, result.output, "PortChannel0001")
+        assert "routed" in switchport_status
 
         # Configure PortChannel0001 to routed mode again; should give error as it is already in routed mode
         result = runner.invoke(config.config.commands["switchport"].commands["mode"],
@@ -748,6 +767,10 @@ class TestVlan(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
+        result = runner.invoke(show.cli.commands["interfaces"].commands["switchport"].commands["status"], obj=db)
+        print(result.output)
+        switchport_status = get_intf_switchport_status(self, result.output, "PortChannel1001")
+        assert "access" in switchport_status
 
         # Configure PortChannel1001 back to routed mode
         result = runner.invoke(config.config.commands["switchport"].commands["mode"],
@@ -755,6 +778,9 @@ class TestVlan(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
+        result = runner.invoke(show.cli.commands["interfaces"].commands["switchport"].commands["status"], obj=db)
+        switchport_status = get_intf_switchport_status(self, result.output, "PortChannel1001")
+        assert "routed" in switchport_status
 
         # Configure PortChannel1001 to trunk mode
         result = runner.invoke(config.config.commands["switchport"].commands["mode"],
@@ -762,6 +788,9 @@ class TestVlan(object):
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
+        result = runner.invoke(show.cli.commands["interfaces"].commands["switchport"].commands["status"], obj=db)
+        switchport_status = get_intf_switchport_status(self, result.output, "PortChannel1001")
+        assert "trunk" in switchport_status
 
         # Add back PortChannel1001 tagged member to Vlan4000
         result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"],
@@ -1176,6 +1205,10 @@ class TestVlan(object):
         print(result.output)
         assert result.exit_code == 0
         assert "Ethernet20 switched to access mode" in result.output
+        result = runner.invoke(show.cli.commands["interfaces"].commands["switchport"].commands["status"], obj=db)
+        print(result.output)
+        switchport_status = get_intf_switchport_status(self, result.output, "Ethernet20")
+        assert "access" in switchport_status
 
         # configure Ethernet20 to access mode again; should give error as it is already in access mode
         result = runner.invoke(config.config.commands["switchport"].commands["mode"], ["access", "Ethernet20"], obj=db)
@@ -1215,6 +1248,10 @@ class TestVlan(object):
         print(result.output)
         traceback.print_tb(result.exc_info[2])
         assert result.exit_code == 0
+        result = runner.invoke(show.cli.commands["interfaces"].commands["switchport"].commands["status"], obj=db)
+        print(result.output)
+        switchport_status = get_intf_switchport_status(self, result.output, "Ethernet20")
+        assert "trunk" in switchport_status
 
         # show output
         result = runner.invoke(show.cli.commands["vlan"].commands["brief"], [], obj=db)
@@ -1256,6 +1293,11 @@ class TestVlan(object):
         assert result.exit_code == 0
         assert "Ethernet20 switched to routed mode" in result.output
 
+        result = runner.invoke(show.cli.commands["interfaces"].commands["switchport"].commands["status"], obj=db)
+        print(result.output)
+        switchport_status = get_intf_switchport_status(self, result.output, "Ethernet20")
+        assert "routed" in switchport_status
+
         # del 1001
         result = runner.invoke(config.config.commands["vlan"].commands["del"], ["1001"], obj=db)
         print(result.exit_code)
@@ -1287,6 +1329,11 @@ class TestVlan(object):
         assert result.exit_code == 0
         assert "Ethernet20 switched to trunk mode" in result.output
 
+        result = runner.invoke(show.cli.commands["interfaces"].commands["switchport"].commands["status"], obj=db)
+        print(result.output)
+        switchport_status = get_intf_switchport_status(self, result.output, "Ethernet20")
+        assert "trunk" in switchport_status
+
         # add Ethernet64 to vlan 1001 but Ethernet64 is in routed mode will give error
         result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"],
                                ["1001", "Ethernet64"], obj=db)
@@ -1302,6 +1349,10 @@ class TestVlan(object):
         print(result.output)
         assert result.exit_code == 0
         assert "Ethernet64 switched to trunk mode" in result.output
+        result = runner.invoke(show.cli.commands["interfaces"].commands["switchport"].commands["status"], obj=db)
+        print(result.output)
+        switchport_status = get_intf_switchport_status(self, result.output, "Ethernet20")
+        assert "trunk" in switchport_status
 
         # add Ethernet64 to vlan 1001
         result = runner.invoke(config.config.commands["vlan"].commands["member"].commands["add"],
@@ -1331,6 +1382,11 @@ class TestVlan(object):
         print(result.output)
         assert result.exit_code == 0
         assert "Ethernet64 switched to access mode" in result.output
+
+        result = runner.invoke(show.cli.commands["interfaces"].commands["switchport"].commands["status"], obj=db)
+        print(result.output)
+        switchport_status = get_intf_switchport_status(self, result.output, "Ethernet64")
+        assert "access" in switchport_status
 
         # show output
         result = runner.invoke(show.cli.commands["vlan"].commands["brief"], [], obj=db)
@@ -1434,7 +1490,6 @@ class TestVlan(object):
         result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["add"],
                                ["Ethernet4", "10.10.10.1/24"], obj=obj)
         print(result.exit_code, result.output)
-        assert result.exit_code == 0
         assert 'Interface Ethernet4 is a member of vlan\nAborting!\n' in result.output
 
     def test_config_vlan_add_member_of_portchannel(self):
@@ -1495,6 +1550,42 @@ class TestVlan(object):
             assert "Vlan1001" not in db.cfgdb.get_keys(IP_VERSION_PARAMS_MAP[ip_version]["table"])
             mock_handle_restart.assert_called_once()
             assert "Restart service dhcp_relay failed with error" not in result.output
+
+    def test_config_add_del_vlan_dhcpv4_relay_with_non_empty_entry(self, mock_restart_dhcp_relay_service):
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(config.config.commands["vlan"].commands["add"], ["999"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert db.cfgdb.get_entry("VLAN", "Vlan999") == {"vlanid": "999"}
+
+        # Add a DHCPV4_RELAY entry for Vlan999
+        db.cfgdb.set_entry("DHCPV4_RELAY", "Vlan999", {
+            "dhcpv4_servers": ["192.0.2.1"],
+            "source_interface": "Ethernet4"
+        })
+
+        # Deleting Vlan999 which is being used in DHCPv4 Relay Configuration
+        with mock.patch("utilities_common.dhcp_relay_util.handle_restart_dhcp_relay_service"):
+            result = runner.invoke(config.config.commands["vlan"].commands["del"], ["999"], obj=db)
+            print(result.exit_code)
+            print(result.output)
+
+            assert result.exit_code != 0
+            assert "Vlan999 cannot be removed as it is being used in DHCPV4_RELAY table." in result.output
+
+        # Remove DHCPV4_RELAY entry and try deletion again
+        db.cfgdb.set_entry("DHCPV4_RELAY", "Vlan999", None)
+
+        with mock.patch("utilities_common.dhcp_relay_util.handle_restart_dhcp_relay_service"):
+            result = runner.invoke(config.config.commands["vlan"].commands["del"], ["999"], obj=db)
+            print(result.exit_code)
+            print(result.output)
+
+            assert result.exit_code == 0
+            assert "Vlan999" not in db.cfgdb.get_keys("VLAN")
 
     @pytest.mark.parametrize("ip_version", ["ipv4", "ipv6"])
     def test_config_add_del_vlan_with_dhcp_relay_not_running(self, ip_version):

@@ -28,6 +28,7 @@ import subprocess
 from swsscommon.swsscommon import ConfigDBConnector
 from sonic_installer.bootloader import get_bootloader
 from sonic_installer.common import IMAGE_PREFIX
+from sonic_py_common.general import getstatusoutput_noshell_pipe
 
 aboot_cfg_template ="/host/image-%s/kernel-cmdline"
 grub_cfg = "/host/grub/grub.cfg"
@@ -167,6 +168,22 @@ def cmd_dump_db():
                 print(config_data)
             else:
                 print("empty")
+
+def get_kdump_remote():
+    """Get the value of the remote feature from the KDUMP configuration."""
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
+    if config_db is not None:
+        config_db.connect()
+        table_data = config_db.get_table('KDUMP')
+        if table_data is not None:
+            config_data = table_data.get('config')
+            if config_data is not None:
+                remote_value = config_data.get('remote')
+                if remote_value is not None:
+                    # Return True if the remote value is 'true', otherwise False
+                    return remote_value.lower() == 'true'  # Explicitly return boolean
+
+    return False  # Default return value if no remote setting is found
 
 def cmd_dump_config_json():
     kdump_enabled = get_kdump_administrative_mode()
@@ -320,22 +337,6 @@ def get_kdump_num_dumps():
                     num_dumps = num
     return num_dumps
 
-def get_kdump_remote():
-    """Get the value of the remote feature from the KDUMP configuration."""
-    config_db = ConfigDBConnector(use_unix_socket_path=True)
-    if config_db is not None:
-        config_db.connect()
-        table_data = config_db.get_table('KDUMP')
-        if table_data is not None:
-            config_data = table_data.get('config')
-            if config_data is not None:
-                remote_value = config_data.get('remote')
-                if remote_value is not None:
-                    # Return True if the remote value is 'true', otherwise False
-                    return remote_value.lower() == 'true'  # Explicitly return boolean
-
-    return False  # Default return value if no remote setting is found
-
 def get_kdump_ssh_string():
     """Get the SSH string from the KDUMP configuration."""
     config_db = ConfigDBConnector(use_unix_socket_path=True)
@@ -371,8 +372,12 @@ def get_kdump_ssh_path():
 #
 #  @return The integer value X from USE_KDUMP=X in /etc/default/kdump-tools
 def read_use_kdump():
-    (rc, lines, err_str) = run_command("grep 'USE_KDUMP=.*' %s | cut -d = -f 2" % kdump_cfg, use_shell=False);
-    if rc == 0 and type(lines) == list and len(lines) >= 1:
+    cmd0 = ['grep', 'USE_KDUMP=.*', kdump_cfg]
+    cmd1 = ['cut', '-d', '=', '-f', '2' ]
+
+    exitcodes, output = getstatusoutput_noshell_pipe(cmd0, cmd1)
+    lines = output.splitlines()
+    if all(code == 0 for code in exitcodes) and type(lines) == list and len(lines) >= 1:
         try:
             return int(lines[0])
         except Exception as e:
@@ -405,8 +410,12 @@ def write_use_kdump(use_kdump):
 #
 #  @return The integer value X from KDUMP_NUM_DUMPS=X in /etc/default/kdump-tools
 def read_num_dumps():
-    (rc, lines, err_str) = run_command("grep '#*KDUMP_NUM_DUMPS=.*' %s | cut -d = -f 2" % kdump_cfg, use_shell=False);
-    if rc == 0 and type(lines) == list and len(lines) >= 1:
+    cmd0 = ['grep', '#*KDUMP_NUM_DUMPS=.*', kdump_cfg]
+    cmd1 = ['cut', '-d', '=', '-f', '2' ]
+
+    exitcodes, output = getstatusoutput_noshell_pipe(cmd0, cmd1)
+    lines = output.splitlines()
+    if all(code == 0 for code in exitcodes) and type(lines) == list and len(lines) >= 1:
         try:
             return int(lines[0])
         except Exception as e:
@@ -433,23 +442,26 @@ def write_num_dumps(num_dumps):
 def write_kdump_remote():
     # Assuming there's a function that retrieves the remote value from the config database
     remote = get_kdump_remote()  # This function needs to be implemented
-    
+
     kdump_cfg = '/etc/default/kdump-tools'
 
     if remote:
         # Uncomment SSH and SSH_KEY in the /etc/default/kdump-tools file
-        run_command("/bin/sed -i 's/#SSH/SSH/' %s" % kdump_cfg, use_shell=False)
-        run_command("/bin/sed -i 's/#SSH_KEY/SSH_KEY/' %s" % kdump_cfg, use_shell=False)
+        run_command("/bin/sed -i 's/^#SSH/SSH/' %s" % kdump_cfg, use_shell=False)
         print("SSH and SSH_KEY uncommented for remote configuration.")
     else:
         # Comment out SSH and SSH_KEY in the /etc/default/kdump-tools file
-        run_command("/bin/sed -i 's/SSH/#SSH/' %s" % kdump_cfg, use_shell=False)
-        run_command("/bin/sed -i 's/SSH_KEY/#SSH_KEY/' %s" % kdump_cfg, use_shell=False)
+        run_command("/bin/sed -i 's/^SSH/#SSH/' %s" % kdump_cfg, use_shell=False)
         print("SSH and SSH_KEY commented out for local configuration.")
 
 def read_ssh_string():
-    (rc, lines, err_str) = run_command("grep '#*SSH=.*' %s | cut -d '=' -f 2 | tr -d '\"'" % kdump_cfg, use_shell=False)
-    if rc == 0 and type(lines) == list and len(lines) >= 1:
+    cmd0 = ['grep', '#*SSH=.*', kdump_cfg]
+    cmd1 = ['cut', '-d', '=', '-f', '2' ]
+    cmd2 = ['tr', '-d', '\"']
+
+    exitcodes, output = getstatusoutput_noshell_pipe(cmd0, cmd1, cmd2)
+    lines = output.splitlines()
+    if all(code == 0 for code in exitcodes) and type(lines) == list and len(lines) >= 1:
         try:
             return lines[0].strip()  # Return the SSH string (e.g., user@ip_address)
         except Exception as e:
@@ -479,8 +491,13 @@ def write_ssh_string(ssh_string):
         sys.exit(1)
 
 def read_ssh_path():
-    (rc, lines, err_str) = run_command("grep '#*SSH_KEY=.*' %s | cut -d '=' -f 2 | tr -d '\"'" % kdump_cfg, use_shell=False)
-    if rc == 0 and type(lines) == list and len(lines) >= 1:
+    cmd0 = ['grep', '#*SSH_KEY=.*', kdump_cfg]
+    cmd1 = ['cut', '-d', '=', '-f', '2' ]
+    cmd2 = ['tr', '-d', '\"']
+
+    exitcodes, output = getstatusoutput_noshell_pipe(cmd0, cmd1, cmd2)
+    lines = output.splitlines()
+    if all(code == 0 for code in exitcodes) and type(lines) == list and len(lines) >= 1:
         try:
             ssh_path = lines[0].strip()
             if not ssh_path.startswith('/'):  # Validate that the path starts with a slash
@@ -494,7 +511,7 @@ def read_ssh_path():
         sys.exit(1)
 
 def write_ssh_path(ssh_path):
-    cmd = "/bin/sed -i -e 's/#*SSH_KEY=.*/SSH_KEY=\"%s\"/' %s" % (ssh_path, kdump_cfg)
+    cmd = "/bin/sed -i -e 's|#*SSH_KEY=.*|SSH_KEY=\"%s\"|' %s" % (ssh_path, kdump_cfg)
 
     (rc, lines, err_str) = run_command(cmd, use_shell=False)  # Make sure to set use_shell=True
     if rc == 0 and type(lines) == list and len(lines) == 0:
@@ -641,7 +658,7 @@ def cmd_kdump_config_next(verbose):
 
 
 def kdump_disable(verbose, image, booter_config_file_path):
-    """Unloads Kdump kernel and remove parameter `crashkernel=*` from configuration file of 
+    """Unloads Kdump kernel and remove parameter `crashkernel=*` from configuration file of
     kernel boot loader.
 
     Args:
@@ -753,14 +770,12 @@ def cmd_kdump_remote(verbose):
 
     if remote:
         # Uncomment SSH and SSH_KEY in the /etc/default/kdump-tools file
-        run_command("/bin/sed -i 's/#SSH/SSH/' /etc/default/kdump-tools", use_shell=False)
-        run_command("/bin/sed -i 's/#SSH_KEY/SSH_KEY/' /etc/default/kdump-tools", use_shell=False)
+        run_command("/bin/sed -i 's/^#SSH/SSH/' /etc/default/kdump-tools", use_shell=False)
         if verbose:
             print("SSH and SSH_KEY uncommented for remote configuration.")
     else:
         # Comment out SSH and SSH_KEY in the /etc/default/kdump-tools file
-        run_command("/bin/sed -i 's/SSH/#SSH/' /etc/default/kdump-tools", use_shell=False)
-        run_command("/bin/sed -i 's/SSH_KEY/#SSH_KEY/' /etc/default/kdump-tools", use_shell=False)
+        run_command("/bin/sed -i 's/^SSH/#SSH/' /etc/default/kdump-tools", use_shell=False)
         if verbose:
             print("SSH and SSH_KEY commented out for local configuration.")
 
@@ -779,10 +794,8 @@ def cmd_kdump_ssh_path(verbose, ssh_path):
         (rc, lines, err_str) = run_command("show kdump ssh_path", use_shell=False)
         print('\n'.join(lines))
     else:
-        current_ssh_path = read_ssh_path()
-        if current_ssh_path != ssh_path:
-            write_ssh_path(ssh_path)
-            print("SSH path updated. Changes will take effect after reboot.")
+        write_ssh_path(ssh_path)
+        print("SSH path updated. Changes will take effect after reboot.")
 
 def main():
 
@@ -826,11 +839,15 @@ def main():
     parser.add_argument('--num_dumps', nargs='?', type=int, action='store', default=False,
         help='Maximum number of kernel dump files stored')
 
+    parser.add_argument('--remote', action='store_true', default=False,
+                help='Update remote kdump via SSH based on CONFIG_DB')
+    
     parser.add_argument('--ssh_string', nargs='?', type=str, action='store', default=False,
             help='ssh_string for remote kdump')
 
     parser.add_argument('--ssh_path', nargs='?', type=str, action='store',default=False,
             help='ssh_path for remote kdump')
+    
     # Memory allocated for capture kernel on Current Image
     parser.add_argument('--memory', nargs='?', type=str, action='store', default=False,
         help='Amount of memory reserved for the capture kernel')
@@ -869,7 +886,7 @@ def main():
         elif options.ssh_string:
             cmd_kdump_ssh_string(options.verbose, options.ssh_string)
         elif options.ssh_path:
-            cmd_kdump_ssh_path(options.verbos, options.ssh_path)
+            cmd_kdump_ssh_path(options.verbose, options.ssh_path)
         elif options.num_dumps != False:
             cmd_kdump_num_dumps(options.verbose, options.num_dumps)
         elif options.dump_db:

@@ -6,9 +6,33 @@ import re
 import subprocess
 import utilities_common.cli as clicommon
 from utilities_common.chassis import is_smartswitch, get_all_dpus
+from utilities_common.module import ModuleHelper
+from datetime import datetime, timedelta, timezone
 
 TIMEOUT_SECS = 10
+TRANSITION_TIMEOUT = timedelta(seconds=240)  # 4 minutes
 
+
+class StateDBHelper:
+    def __init__(self, sonic_db):
+        self.db = sonic_db
+
+    def get_entry(self, table, key):
+        """Fetch all fields from table|key."""
+        redis_key = f"{table}|{key}"
+        return self.db.get_all("STATE_DB", redis_key) or {}
+
+    def set_entry(self, table, key, entry):
+        """Set multiple fields to table|key."""
+        redis_key = f"{table}|{key}"
+        for field, value in entry.items():
+            self.db.set("STATE_DB", redis_key, field, value)
+
+    def delete_field(self, table, key, field):
+        """Delete a specific field from table|key."""
+        redis_key = f"{table}|{key}"
+        client = self.db.get_redis_client("STATE_DB")
+        return client.hdel(redis_key, field)
 
 #
 # 'chassis_modules' group ('config chassis_modules ...')
@@ -24,6 +48,12 @@ def modules():
     pass
 
 
+def ensure_statedb_connected(db):
+    if not hasattr(db, 'statedb'):
+        chassisdb = db.db
+        chassisdb.connect("STATE_DB")
+        db.statedb = StateDBHelper(chassisdb)
+
 def get_config_module_state(db, chassis_module_name):
     config_db = db.cfgdb
     fvs = config_db.get_entry('CHASSIS_MODULE', chassis_module_name)
@@ -34,7 +64,6 @@ def get_config_module_state(db, chassis_module_name):
             return 'up'
     else:
         return fvs['admin_status']
-
 
 #
 # Name: check_config_module_state_with_timeout
@@ -116,20 +145,28 @@ def shutdown_chassis_module(db, chassis_module_name):
     config_db = db.cfgdb
     ctx = click.get_current_context()
 
-    if not chassis_module_name.startswith("SUPERVISOR") and \
-       not chassis_module_name.startswith("LINE-CARD") and \
-       not chassis_module_name.startswith("FABRIC-CARD") and \
-       not chassis_module_name.startswith("DPU"):
-        ctx.fail("'module_name' has to begin with 'SUPERVISOR', 'LINE-CARD', 'FABRIC-CARD', 'DPU'")
+    if not chassis_module_name.startswith(("SUPERVISOR", "LINE-CARD", "FABRIC-CARD", "DPU")):
+        ctx.fail("'module_name' has to begin with 'SUPERVISOR', 'LINE-CARD', 'FABRIC-CARD', or 'DPU'")
 
-    # To avoid duplicate operation
     if get_config_module_state(db, chassis_module_name) == 'down':
-        click.echo("Module {} is already in down state".format(chassis_module_name))
+        click.echo(f"Module {chassis_module_name} is already in down state")
         return
 
-    click.echo("Shutting down chassis module {}".format(chassis_module_name))
-    fvs = {'admin_status': 'down'}
-    config_db.set_entry('CHASSIS_MODULE', chassis_module_name, fvs)
+    if is_smartswitch():
+        module_helper = ModuleHelper()
+        if module_helper.get_module_state_transition(chassis_module_name):
+            click.echo(f"Module {chassis_module_name} state transition is already in progress")
+            return
+
+        click.echo(f"Shutting down chassis module {chassis_module_name}")
+        fvs = {
+            'admin_status': 'down',
+        }
+        config_db.set_entry('CHASSIS_MODULE', chassis_module_name, fvs)
+    else:
+        click.echo(f"Shutting down chassis module {chassis_module_name}")
+        config_db.set_entry('CHASSIS_MODULE', chassis_module_name, {'admin_status': 'down'})
+
     if chassis_module_name.startswith("FABRIC-CARD"):
         if not check_config_module_state_with_timeout(ctx, db, chassis_module_name, 'down'):
             fabric_module_set_admin_status(db, chassis_module_name, 'down')
@@ -149,16 +186,27 @@ def startup_chassis_module(db, chassis_module_name):
     config_db = db.cfgdb
     ctx = click.get_current_context()
 
-    # To avoid duplicate operation
-    if get_config_module_state(db, chassis_module_name) == 'up':
-        click.echo("Module {} is already set to up state".format(chassis_module_name))
+    if not chassis_module_name.startswith(("SUPERVISOR", "LINE-CARD", "FABRIC-CARD", "DPU")):
+        ctx.fail("'module_name' has to begin with 'SUPERVISOR', 'LINE-CARD', 'FABRIC-CARD', or 'DPU'")
         return
 
-    click.echo("Starting up chassis module {}".format(chassis_module_name))
+    if get_config_module_state(db, chassis_module_name) == 'up':
+        click.echo(f"Module {chassis_module_name} is already set to up state")
+        return
+
     if is_smartswitch():
-        fvs = {'admin_status': 'up'}
+        module_helper = ModuleHelper()
+        if module_helper.get_module_state_transition(chassis_module_name):
+            click.echo(f"Module {chassis_module_name} state transition is already in progress")
+            return
+
+        click.echo(f"Starting up chassis module {chassis_module_name}")
+        fvs = {
+            'admin_status': 'up',
+        }
         config_db.set_entry('CHASSIS_MODULE', chassis_module_name, fvs)
     else:
+        click.echo(f"Starting up chassis module {chassis_module_name}")
         config_db.set_entry('CHASSIS_MODULE', chassis_module_name, None)
 
     if chassis_module_name.startswith("FABRIC-CARD"):

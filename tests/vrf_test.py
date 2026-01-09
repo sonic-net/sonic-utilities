@@ -11,6 +11,7 @@ import threading
 DEFAULT_NAMESPACE = ''
 test_path = os.path.dirname(os.path.abspath(__file__))
 mock_db_path = os.path.join(test_path, "vrf_input")
+mock_db_path_vnet = os.path.join(test_path, "vnet_input")
 
 class TestShowVrf(object):
     @classmethod
@@ -218,6 +219,35 @@ Vrf103  Ethernet4
         assert ('Vrf100') in db.cfgdb.get_table('VRF')
         assert result.exit_code == 0
 
+        # Add dummy VLAN and DHCP relay config using the VRF
+        vlan = "Vlan100"
+        server_ip = "192.0.2.1"
+        db.cfgdb.mod_entry("VLAN", vlan, {})
+
+        # Enable has_sonic_dhcpv4_relay flag
+        db.cfgdb.set_entry("DEVICE_METADATA", "localhost", {"has_sonic_dhcpv4_relay": "True"})
+
+        db.cfgdb.set_entry("DHCPV4_RELAY", vlan, {
+            "dhcpv4_servers": [server_ip],
+            "server_vrf": "Vrf100",
+            "link_selection": "enable",
+            "vrf_selection": "enable",
+            "server_id_override": "enable"
+        })
+
+        assert result.exit_code == 0
+
+        # Attempt to delete the VRF in use by DHCPv4_RELAY ὀ~T should failfa
+        result = runner.invoke(config.config.commands["vrf"].commands["del"], ["Vrf100"], obj=vrf_obj)
+        assert result.exit_code != 0
+        assert "VRF 'Vrf100' is in use for dhcp_relay configurations for Vlan100" in result.output
+
+        # Clean up the DHCP config to allow VRF deletion
+        db.cfgdb.set_entry("DHCPV4_RELAY", vlan, None)
+        result = runner.invoke(config.config.commands["vrf"].commands["del"], ["Vrf100"], obj=vrf_obj)
+        assert result.exit_code == 0
+        assert "Vrf100" not in db.cfgdb.get_table("VRF")
+
         result = runner.invoke(config.config.commands["vrf"].commands["add"], ["Vrf1"], obj=vrf_obj)
         assert "VRF Vrf1 already exists!" in result.output
         assert ('Vrf1') in db.cfgdb.get_table('VRF')
@@ -275,3 +305,66 @@ Error: 'vrf_name' length should not exceed 15 characters
         assert result.exit_code != 0
         assert ('VrfNameTooLong!!!') not in db.cfgdb.get_table('VRF')
         assert expected_output in result.output
+
+
+class TestVnet(object):
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "1"
+        print("SETUP")
+
+    def test_show_vnet_brief(self):
+        from .mock_tables import dbconnector
+        jsonfile_config = os.path.join(mock_db_path_vnet, "config_db")
+        dbconnector.dedicated_dbs['CONFIG_DB'] = jsonfile_config
+        runner = CliRunner()
+
+        result = runner.invoke(show.cli.commands["vnet"].commands["brief"], [])
+        print(result.output)
+        dbconnector.dedicated_dbs = {}
+        assert result.exit_code == 0
+        assert "Vnet_2000" in result.output
+        assert "1234-56-7890-1234" in result.output
+        assert "tunnel1" in result.output
+
+    def test_show_vnet_name(self):
+        from .mock_tables import dbconnector
+        jsonfile_config = os.path.join(mock_db_path_vnet, "config_db")
+        dbconnector.dedicated_dbs['CONFIG_DB'] = jsonfile_config
+        runner = CliRunner()
+
+        result = runner.invoke(show.cli.commands["vnet"].commands["name"], ["Vnet_2000"])
+        print(result.output)
+        dbconnector.dedicated_dbs = {}
+        assert result.exit_code == 0
+        assert "Vnet_2000" in result.output
+        assert "1234-56-7890-1234" in result.output
+        assert "Ethernet4" in result.output
+        assert "Ethernet0.100" in result.output
+        assert "Vlan40" in result.output
+        assert "PortChannel0002" in result.output
+        assert "Loopback0" in result.output
+
+    def test_show_vnet_guid(self):
+        from .mock_tables import dbconnector
+        jsonfile_config = os.path.join(mock_db_path_vnet, "config_db")
+        dbconnector.dedicated_dbs['CONFIG_DB'] = jsonfile_config
+        runner = CliRunner()
+
+        result = runner.invoke(show.cli.commands["vnet"].commands["guid"], ["1234-56-7890-1234"])
+        print(result.output)
+        dbconnector.dedicated_dbs = {}
+        assert result.exit_code == 0
+        assert "Vnet_2000" in result.output
+        assert "1234-56-7890-1234" in result.output
+        assert "tunnel1" in result.output
+        assert "Ethernet4" in result.output
+        assert "Ethernet0.100" in result.output
+        assert "Vlan40" in result.output
+        assert "PortChannel0002" in result.output
+        assert "Loopback0" in result.output
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+        print("TEARDOWN")

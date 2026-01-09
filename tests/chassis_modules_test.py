@@ -1,6 +1,7 @@
 import sys
 import os
 from click.testing import CliRunner
+from datetime import datetime, timedelta, timezone
 
 import show.main as show
 import config.main as config
@@ -40,11 +41,12 @@ FABRIC-CARD1      fabric-card               18        Offline              up  F
 """
 
 show_chassis_midplane_output="""\
-      Name     IP-Address    Reachability
-----------  -------------  --------------
-LINE-CARD0  192.168.1.100            True
-LINE-CARD1    192.168.1.2           False
-LINE-CARD2    192.168.1.1            True
+      Name    IP-Address    Reachability
+----------  ------------  --------------
+LINE-CARD0   192.168.3.1            True
+LINE-CARD1   192.168.4.1           False
+LINE-CARD2   192.168.5.1            True
+LINE-CARD3   192.168.6.1            True
 """
 
 show_chassis_system_ports_output_asic0="""\
@@ -340,7 +342,7 @@ class TestChassisModules(object):
         result = runner.invoke(show.cli.commands["chassis"].commands["modules"].commands["midplane-status"], [])
         print(result.output)
         result_lines = result.output.strip('\n').split('\n')
-        modules = ["LINE-CARD0", "LINE-CARD1", "LINE-CARD2"]
+        modules = ["LINE-CARD0", "LINE-CARD1", "LINE-CARD2", "LINE-CARD3"]
         for i, module in enumerate(modules):
             assert module in result_lines[i + warning_lines + header_lines]
         assert len(result_lines) == warning_lines + header_lines + len(modules)
@@ -440,6 +442,126 @@ class TestChassisModules(object):
         print("result = {}".format(result))
         assert return_code == 0
         assert result == show_chassis_system_lags_output_lc4
+
+    def test_shutdown_smartswitch_module(self):
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value='up'), \
+             mock.patch("config.chassis_modules.ModuleHelper.get_module_state_transition", return_value=False):
+
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["shutdown"],
+                ["DPU0"],
+                obj=db
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            assert "Shutting down chassis module DPU0" in result.output
+
+            # Check CONFIG_DB for admin_status
+            cfg_fvs = db.cfgdb.get_entry("CHASSIS_MODULE", "DPU0")
+            admin_status = cfg_fvs.get("admin_status")
+            print(f"admin_status: {admin_status}")
+            assert admin_status == "down"
+
+    def test_shutdown_smartswitch_transition_in_progress(self):
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value='up'), \
+             mock.patch("config.chassis_modules.ModuleHelper.get_module_state_transition", return_value=True):
+
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["shutdown"],
+                ["DPU0"],
+                obj=db
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            assert "Module DPU0 state transition is already in progress" in result.output
+
+            # Verify no config change was made
+            cfg_fvs = db.cfgdb.get_entry("CHASSIS_MODULE", "DPU0")
+            assert cfg_fvs == {}
+
+    def test_shutdown_module_already_down(self):
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value='down'):
+
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["shutdown"],
+                ["DPU0"],
+                obj=db
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            assert "Module DPU0 is already in down state" in result.output
+
+    def test_startup_smartswitch_module(self):
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value='down'), \
+             mock.patch("config.chassis_modules.ModuleHelper.get_module_state_transition", return_value=False):
+
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["startup"],
+                ["DPU0"],
+                obj=db
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            assert "Starting up chassis module DPU0" in result.output
+
+            # Check CONFIG_DB for admin_status
+            cfg_fvs = db.cfgdb.get_entry("CHASSIS_MODULE", "DPU0")
+            admin_status = cfg_fvs.get("admin_status")
+            print(f"admin_status: {admin_status}")
+            assert admin_status == "up"
+
+    def test_startup_smartswitch_transition_in_progress(self):
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value='down'), \
+             mock.patch("config.chassis_modules.ModuleHelper.get_module_state_transition", return_value=True):
+
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["startup"],
+                ["DPU0"],
+                obj=db
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            assert "Module DPU0 state transition is already in progress" in result.output
+
+            # Verify no config change was made
+            cfg_fvs = db.cfgdb.get_entry("CHASSIS_MODULE", "DPU0")
+            assert cfg_fvs == {}
+
+    def test_startup_module_already_up(self):
+        with mock.patch("config.chassis_modules.is_smartswitch", return_value=True), \
+             mock.patch("config.chassis_modules.get_config_module_state", return_value='up'):
+
+            runner = CliRunner()
+            db = Db()
+            result = runner.invoke(
+                config.config.commands["chassis"].commands["modules"].commands["startup"],
+                ["DPU0"],
+                obj=db
+            )
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            assert "Module DPU0 is already set to up state" in result.output
 
     @classmethod
     def teardown_class(cls):

@@ -27,6 +27,7 @@ from tabulate import tabulate
 from utilities_common import constants
 from utilities_common import multi_asic as multi_asic_util
 from utilities_common.intf_filter import parse_interface_in_filter
+from utilities_common.netstat import table_as_json
 from utilities_common.platform_sfputil_helper import is_rj45_port, RJ45_PORT_TYPE
 from sonic_py_common.interface import get_intf_longname
 from sonic_py_common import multi_asic
@@ -63,6 +64,14 @@ VLAN_SUB_INTERFACE_TYPE = "802.1q-encapsulation"
 
 SUB_PORT = "subport"
 
+def display_table(table, header_desc, use_json=False):
+    sorted_table = natsorted(table)
+    if use_json:
+        print(table_as_json(sorted_table, header_desc))
+    else:
+        print(tabulate(sorted_table, header_desc, tablefmt="simple", stralign='right'))
+
+        
 def get_frontpanel_port_list(config_db):
     ports_dict = config_db.get_table('PORT')
     front_panel_ports_list = []
@@ -80,33 +89,40 @@ def get_sub_port_intf_list(config_db):
     return sub_intf_list
 
 
-def get_interface_vlan_dict(config_db):
+def get_interface_sw_mode_dict(config_db, front_panel_ports_list):
     """
-    Get info from REDIS ConfigDB and create interface to vlan mapping
+    Get info from REDIS ConfigDB and create interface to swithport mode mapping
     """
-    get_int_vlan_configdb_info = config_db.get_table('VLAN_MEMBER')
-    int_list = []
-    vlan_list = []
-    for line in get_int_vlan_configdb_info:
-        vlan_number = line[0]
-        interface = line[1]
-        int_list.append(interface)
-        vlan_list.append(vlan_number)
-    int_to_vlan_dict = dict(zip(int_list, vlan_list))
-    return int_to_vlan_dict
+    vlan_member_table = config_db.get_table('VLAN_MEMBER')
+
+    vlan_member_keys = []
+    for _, key in vlan_member_table:
+        vlan_member_keys.append(key)
+
+    intf_to_sw_mode_dict = {}
+    for intf_name in front_panel_ports_list:
+        port = config_db.get_entry('PORT', intf_name)
+        if "mode" in port:
+            mode = port['mode']
+        elif intf_name in vlan_member_keys:
+            mode = 'trunk'
+        else:
+            mode = 'routed'
+        intf_to_sw_mode_dict[intf_name] = mode
+
+    return intf_to_sw_mode_dict
 
 
-def config_db_vlan_port_keys_get(int_to_vlan_dict, front_panel_ports_list, intf_name):
+def config_db_vlan_port_keys_get(intf_to_sw_mode_dict, intf_to_po_dict, intf_name):
     """
     Get interface vlan value and return it.
     """
-    vlan = "routed"
-    if intf_name in front_panel_ports_list:
-        if intf_name in int_to_vlan_dict.keys():
-            vlan = int_to_vlan_dict[intf_name]
-            if "Vlan" in vlan:
-                vlan = "trunk"
-    return vlan
+    mode = "routed"
+    if intf_name in intf_to_po_dict.keys():
+        mode = intf_to_po_dict[intf_name]
+    elif intf_name in intf_to_sw_mode_dict.keys():
+        mode = intf_to_sw_mode_dict[intf_name]
+    return mode
 
 
 def appl_db_keys_get(appl_db, front_panel_ports_list, intf_name):
@@ -307,6 +323,31 @@ def create_po_int_dict(po_int_tuple_list):
     po_int_dict = tuple_to_dict(po_int_tuple_list, temp_dict)
     return po_int_dict
 
+def create_po_to_sw_mode_dict(config_db, po_int_tuple_list):
+    """
+    This function takes the portchannel to interface tuple
+    and converts that into an interface to portchannel dictionary
+    with the portchannels as the key and the mode as the values.
+    """
+    vlan_member_table = config_db.get_table('VLAN_MEMBER')
+
+    vlan_member_keys = []
+    for _, key in vlan_member_table:
+        vlan_member_keys.append(key)
+
+    po_to_sw_mode_dict = {}
+    for po, intf in po_int_tuple_list:
+        portchannel = config_db.get_entry('PORTCHANNEL', po)
+        if "mode" in portchannel:
+            mode = portchannel['mode']
+        elif po in vlan_member_keys:
+            mode = 'trunk'
+        else:
+            mode = 'routed'
+
+        po_to_sw_mode_dict[po] = mode
+    return po_to_sw_mode_dict
+
 def create_int_to_portchannel_dict(po_int_tuple_list):
     """
     This function takes the portchannel to interface tuple
@@ -354,7 +395,7 @@ def po_speed_dict(po_int_dict, appl_db):
         po_speed_dict = {}
         return po_speed_dict
 
-def appl_db_portchannel_status_get(appl_db, config_db, po_name, status_type, portchannel_speed_dict, combined_int_to_vlan_po_dict=None):
+def appl_db_portchannel_status_get(appl_db, config_db, po_name, status_type, portchannel_speed_dict, po_to_sw_mode_dict=None):
     """
     Get the port status
     """
@@ -367,8 +408,8 @@ def appl_db_portchannel_status_get(appl_db, config_db, po_name, status_type, por
             return "N/A"
         return status
     if status_type == "vlan":
-        if combined_int_to_vlan_po_dict and po_name in combined_int_to_vlan_po_dict.keys():
-            status = "trunk"
+        if po_to_sw_mode_dict and po_name in po_to_sw_mode_dict.keys():
+            status = po_to_sw_mode_dict[po_name]
         else:
             status = "routed"
         return status
@@ -422,7 +463,7 @@ header_stat_sub_intf = ['Sub port interface', 'Speed', 'MTU', 'Vlan', 'Admin', '
 
 class IntfStatus(object):
 
-    def __init__(self, intf_name, namespace_option, display_option):
+    def __init__(self, intf_name, namespace_option, display_option, use_json=False):
         """
         Class constructor method
         :param self:
@@ -434,6 +475,7 @@ class IntfStatus(object):
         self.sub_intf_only = False
         self.intf_name = intf_name
         self.sub_intf_name = intf_name
+        self.use_json = use_json
         self.table = []
         self.multi_asic = multi_asic_util.MultiAsic(
             display_option, namespace_option)
@@ -450,11 +492,8 @@ class IntfStatus(object):
 
     def display_intf_status(self):
         self.get_intf_status()
-        sorted_table = natsorted(self.table)
-        print(tabulate(sorted_table,
-                       header_stat if not self.sub_intf_only else header_stat_sub_intf,
-                       tablefmt="simple",
-                       stralign='right'))
+        header_status = header_stat if not self.sub_intf_only else header_stat_sub_intf
+        display_table(self.table, header_status, self.use_json)
 
     def generate_intf_status(self):
         """
@@ -484,7 +523,7 @@ class IntfStatus(object):
                                 appl_db_port_status_get(self.db, key, PORT_MTU_STATUS),
                                 appl_db_port_status_get(self.db, key, PORT_FEC),
                                 appl_db_port_status_get(self.db, key, PORT_ALIAS),
-                                config_db_vlan_port_keys_get(self.combined_int_to_vlan_po_dict, self.front_panel_ports_list, key),
+                                config_db_vlan_port_keys_get(self.intf_to_sw_mode_dict, self.int_po_dict, key),
                                 appl_db_port_status_get(self.db, key, PORT_OPER_STATUS),
                                 appl_db_port_status_get(self.db, key, PORT_ADMIN_STATUS),
                                 port_optics_get(self.db, key, PORT_OPTICS_TYPE),
@@ -501,7 +540,7 @@ class IntfStatus(object):
                                 appl_db_portchannel_status_get(self.db, self.config_db, po, PORT_MTU_STATUS, self.portchannel_speed_dict),
                                 appl_db_portchannel_status_get(self.db, self.config_db, po, PORT_FEC, self.portchannel_speed_dict),
                                 appl_db_portchannel_status_get(self.db, self.config_db, po, PORT_ALIAS, self.portchannel_speed_dict),
-                                appl_db_portchannel_status_get(self.db, self.config_db, po, "vlan", self.portchannel_speed_dict, self.combined_int_to_vlan_po_dict),
+                                appl_db_portchannel_status_get(self.db, self.config_db, po, "vlan", self.portchannel_speed_dict, self.po_to_sw_mode_dict),
                                 appl_db_portchannel_status_get(self.db, self.config_db, po, PORT_OPER_STATUS, self.portchannel_speed_dict),
                                 appl_db_portchannel_status_get(self.db, self.config_db, po, PORT_ADMIN_STATUS, self.portchannel_speed_dict),
                                 appl_db_portchannel_status_get(self.db, self.config_db, po, PORT_OPTICS_TYPE, self.portchannel_speed_dict),
@@ -523,13 +562,13 @@ class IntfStatus(object):
     def get_intf_status(self):
         self.front_panel_ports_list = get_frontpanel_port_list(self.config_db)
         self.appl_db_keys = appl_db_keys_get(self.db, self.front_panel_ports_list, None)
-        self.int_to_vlan_dict = get_interface_vlan_dict(self.config_db)
+        self.intf_to_sw_mode_dict = get_interface_sw_mode_dict(self.config_db, self.front_panel_ports_list)
         self.get_raw_po_int_configdb_info = get_raw_portchannel_info(self.config_db)
         self.portchannel_list = get_portchannel_list(self.get_raw_po_int_configdb_info)
         self.po_int_tuple_list = create_po_int_tuple_list(self.get_raw_po_int_configdb_info)
         self.po_int_dict = create_po_int_dict(self.po_int_tuple_list)
         self.int_po_dict = create_int_to_portchannel_dict(self.po_int_tuple_list)
-        self.combined_int_to_vlan_po_dict = merge_dicts(self.int_to_vlan_dict, self.int_po_dict)
+        self.po_to_sw_mode_dict = create_po_to_sw_mode_dict(self.config_db, self.po_int_tuple_list)
         self.portchannel_speed_dict = po_speed_dict(self.po_int_dict, self.db)
         self.portchannel_keys = self.portchannel_speed_dict.keys()
 
@@ -546,10 +585,11 @@ header_desc = ['Interface', 'Oper', 'Admin', 'Alias', 'Description']
 
 class IntfDescription(object):
 
-    def __init__(self, intf_name, namespace_option, display_option):
+    def __init__(self, intf_name, namespace_option, display_option, use_json=False):
         self.db = None
         self.config_db = None
         self.table = []
+        self.use_json = use_json
         self.multi_asic = multi_asic_util.MultiAsic(
             display_option, namespace_option)
 
@@ -561,10 +601,7 @@ class IntfDescription(object):
     def display_intf_description(self):
 
         self.get_intf_description()
-
-        # Sorting and tabulating the result table.
-        sorted_table = natsorted(self.table)
-        print(tabulate(sorted_table, header_desc, tablefmt="simple", stralign='right'))
+        display_table(self.table, header_desc, self.use_json)
 
     def generate_intf_description(self):
         """
@@ -605,10 +642,11 @@ header_autoneg = ['Interface', 'Auto-Neg Mode', 'Speed', 'Adv Speeds', 'Rmt Adv 
 
 class IntfAutoNegStatus(object):
 
-    def __init__(self, intf_name, namespace_option, display_option):
+    def __init__(self, intf_name, namespace_option, display_option, use_json=False):
         self.db = None
         self.config_db = None
         self.table = []
+        self.use_json = use_json
         self.multi_asic = multi_asic_util.MultiAsic(
             display_option, namespace_option)
 
@@ -620,10 +658,7 @@ class IntfAutoNegStatus(object):
     def display_autoneg_status(self):
 
         self.get_intf_autoneg_status()
-
-        # Sorting and tabulating the result table.
-        sorted_table = natsorted(self.table)
-        print(tabulate(sorted_table, header_autoneg, tablefmt="simple", stralign='right'))
+        display_table(self.table, header_autoneg, self.use_json)
 
     def generate_autoneg_status(self):
         """
@@ -672,7 +707,7 @@ header_tpid = ['Interface', 'Alias', 'Oper', 'Admin', 'TPID']
 
 class IntfTpid(object):
 
-    def __init__(self, intf_name, namespace_option, display_option):
+    def __init__(self, intf_name, namespace_option, display_option, use_json=False):
         """
         Class constructor method
         :param self:
@@ -683,6 +718,7 @@ class IntfTpid(object):
         self.config_db = None
         self.intf_name = intf_name
         self.table = []
+        self.use_json = use_json
         self.multi_asic = multi_asic_util.MultiAsic(
             display_option, namespace_option)
 
@@ -691,10 +727,7 @@ class IntfTpid(object):
 
     def display_intf_tpid(self):
         self.get_intf_tpid()
-
-        # Sorting and tabulating the result table.
-        sorted_table = natsorted(self.table)
-        print(tabulate(sorted_table, header_tpid, tablefmt="simple", stralign='right'))
+        display_table(self.table, header_tpid, self.use_json)
 
     def generate_intf_tpid(self):
         """
@@ -756,10 +789,11 @@ header_link_training = ['Interface', 'LT Oper', 'LT Admin', 'Oper', 'Admin']
 
 class IntfLinkTrainingStatus(object):
 
-    def __init__(self, intf_name, namespace_option, display_option):
+    def __init__(self, intf_name, namespace_option, display_option, use_json=False):
         self.db = None
         self.config_db = None
         self.table = []
+        self.use_json = use_json
         self.multi_asic = multi_asic_util.MultiAsic(
             display_option, namespace_option)
 
@@ -770,9 +804,7 @@ class IntfLinkTrainingStatus(object):
 
     def display_link_training_status(self):
         self.get_intf_link_training_status()
-        # Sorting and tabulating the result table.
-        sorted_table = natsorted(self.table)
-        print(tabulate(sorted_table, header_link_training, tablefmt="simple", stralign='right'))
+        display_table(self.table, header_link_training, self.use_json)
 
     @multi_asic_util.run_on_multi_asic
     def get_intf_link_training_status(self):
@@ -815,10 +847,11 @@ header_fec = ['Interface', 'FEC Oper', 'FEC Admin']
 
 class IntfFecStatus(object):
 
-    def __init__(self, intf_name, namespace_option, display_option):
+    def __init__(self, intf_name, namespace_option, display_option, use_json=False):
         self.db = None
         self.config_db = None
         self.table = []
+        self.use_json = use_json
         self.multi_asic = multi_asic_util.MultiAsic(
             display_option, namespace_option)
 
@@ -829,9 +862,7 @@ class IntfFecStatus(object):
 
     def display_fec_status(self):
         self.get_intf_fec_status()
-        # Sorting and tabulating the result table.
-        sorted_table = natsorted(self.table)
-        print(tabulate(sorted_table, header_fec, tablefmt="simple", stralign='right'))
+        display_table(self.table, header_fec, self.use_json)
 
     @multi_asic_util.run_on_multi_asic
     def get_intf_fec_status(self):
@@ -872,26 +903,26 @@ def main():
                                      formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-c', '--command', type=str, help='get interface status or description or auto negotiation status or tpid', default=None)
     parser.add_argument('-i', '--interface', type=str, help='interface information for specific port: Ethernet0', default=None)
+    parser.add_argument('-j', '--json', action='store_true', help='Display in JSON format')
     parser = multi_asic_util.multi_asic_args(parser)
     args = parser.parse_args()
-
     if args.command == "status":
-        interface_stat = IntfStatus(args.interface, args.namespace, args.display)
+        interface_stat = IntfStatus(args.interface, args.namespace, args.display, args.json)
         interface_stat.display_intf_status()
     elif args.command == "description":
-        interface_desc = IntfDescription(args.interface, args.namespace, args.display)
+        interface_desc = IntfDescription(args.interface, args.namespace, args.display, args.json)
         interface_desc.display_intf_description()
     elif args.command == "autoneg":
-        interface_autoneg_status = IntfAutoNegStatus(args.interface, args.namespace, args.display)
+        interface_autoneg_status = IntfAutoNegStatus(args.interface, args.namespace, args.display, args.json)
         interface_autoneg_status.display_autoneg_status()
     elif args.command == "tpid":
-        interface_tpid = IntfTpid(args.interface, args.namespace, args.display)
+        interface_tpid = IntfTpid(args.interface, args.namespace, args.display, args.json)
         interface_tpid.display_intf_tpid()
     elif args.command == "link_training":
-        interface_lt_status = IntfLinkTrainingStatus(args.interface, args.namespace, args.display)
+        interface_lt_status = IntfLinkTrainingStatus(args.interface, args.namespace, args.display, args.json)
         interface_lt_status.display_link_training_status()
     elif args.command == "fec":
-        interface_fec_status = IntfFecStatus(args.interface, args.namespace, args.display)
+        interface_fec_status = IntfFecStatus(args.interface, args.namespace, args.display, args.json)
         interface_fec_status.display_fec_status()
 
     sys.exit(0)

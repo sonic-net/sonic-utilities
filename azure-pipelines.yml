@@ -40,7 +40,7 @@ stages:
       DIFF_COVER_CHECK_THRESHOLD: 80
       DIFF_COVER_ENABLE: 'true'
     pool:
-      vmImage: ubuntu-20.04
+      vmImage: ubuntu-24.04
 
     container:
       image: sonicdev-microsoft.azurecr.io:443/sonic-slave-bookworm:$(BUILD_BRANCH)
@@ -175,3 +175,13 @@ stages:
     - publish: '$(System.DefaultWorkingDirectory)/dist/'
       artifact: wheels
       displayName: "Publish Python wheels"
+
+    - script: |
+        set -e
+        pushd gcu
+        python3 -m build -n
+      displayName: 'Build Python 3 wheel for GCU'
+
+    - publish: '$(System.DefaultWorkingDirectory)/gcu/dist/'
+      artifact: gcu_wheels
+      displayName: "Publish Python wheels for GCU"

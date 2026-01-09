@@ -1,4 +1,5 @@
 import os
+import json
 import sys
 import textwrap
 from unittest import mock
@@ -51,6 +52,59 @@ class TestShowPlatform(object):
                 assert result.output == textwrap.dedent(expected_output)
 
 
+class TestShowPlatformTemperature(object):
+    """
+        Note: `show platform temperature` simply calls the `tempershow` utility and
+        passes a variety of options. Here we test that the utility is called
+        with the appropriate option(s). The functionality of the underlying
+        `tempershow` utility is expected to be tested by a separate suite of unit tests
+    """
+    rc_output = """\
+    [
+        {
+            "Sensor": "CB_temp(0x4B)",
+            "Temperature": "29.5",
+            "High_TH": "80.0",
+            "Low_TH": "N/A",
+            "Crit_High_TH": "N/A",
+            "Crit_Low_TH": "N/A",
+            "Warning": "False",
+            "Timestamp": "20240923 00:32:07"
+        },
+        {
+            "Sensor": "CPU_Core_0_temp",
+            "Temperature": "46.0",
+            "High_TH": "82.0",
+            "Low_TH": "N/A",
+            "Crit_High_TH": "104.0",
+            "Crit_Low_TH": "N/A",
+            "Warning": "False",
+            "Timestamp": "20240923 00:32:07"
+        }
+    ]
+    """
+
+    def test_temperature(self):
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], [])
+        assert mock_run_command.call_count == 1
+        mock_run_command.assert_called_with(['tempershow'])
+
+    def test_temperature_json(self):
+        with mock.patch('utilities_common.cli.run_command', return_value=(self.rc_output, 0)) as mock_run_command:
+            result = CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['--json'])
+            assert json.loads(result.output) == json.loads(self.rc_output)
+        assert mock_run_command.call_count == 1
+        mock_run_command.assert_called_with(['tempershow', '-j'], return_cmd=True)
+
+    def test_temperature_short_json(self):
+        with mock.patch('utilities_common.cli.run_command', return_value=(self.rc_output, 0)) as mock_run_command:
+            result = CliRunner().invoke(show.cli.commands['platform'].commands['temperature'], ['-j'])
+            assert json.loads(result.output) == json.loads(self.rc_output)
+        assert mock_run_command.call_count == 1
+        mock_run_command.assert_called_with(['tempershow', '-j'], return_cmd=True)
+
+
 class TestShowPlatformPsu(object):
     """
         Note: `show platform psustatus` simply calls the `psushow` utility and
@@ -98,21 +152,17 @@ class TestShowPlatformSsdhealth(object):
         assert mock_run_command.call_count == 1
         mock_run_command.assert_called_with(['sudo', 'ssdutil', '-d', '/dev/nvme0n1', '-v'], display_cmd=True)
 
-    @mock.patch('os.popen')
     @mock.patch('utilities_common.cli.run_command')
     @mock.patch('sonic_py_common.device_info.get_platform_json_data')
-    def test_ssdhealth_default_device(self, mock_plat_json, mock_run_command, mock_open):
+    def test_ssdhealth_default_device(self, mock_plat_json, mock_run_command):
         mock_plat_json.return_value = {
             "chassis": {
                  "name": "mock_platform"
             }
         }
-        mock_fd = mock.MagicMock()
-        mock_fd.readline.return_value = "/dev/nvme0n1     disk\n"
-        mock_open.return_value = mock_fd
+
         CliRunner().invoke(show.cli.commands['platform'].commands['ssdhealth'], ['--verbose'])
-        mock_open.assert_called_with("lsblk -o NAME,TYPE -p | grep disk")
-        mock_run_command.assert_called_with(['sudo', 'ssdutil', '-d', '/dev/nvme0n1', '-v'], display_cmd=True)
+        mock_run_command.assert_called_with(['sudo', 'ssdutil', '-v'], display_cmd=True)
 
         mock_plat_json.return_value = {
             "chassis": {
@@ -125,3 +175,264 @@ class TestShowPlatformSsdhealth(object):
         CliRunner().invoke(show.cli.commands['platform'].commands['ssdhealth'], ['--verbose'])
         mock_plat_json.assert_called_with()
         mock_run_command.assert_called_with(['sudo', 'ssdutil', '-d', '/dev/nvme0n1', '-v'], display_cmd=True)
+
+
+class TestShowPlatformBmc(object):
+    """
+    Test class for BMC-related commands:
+    - show platform bmc summary
+    - show platform bmc eeprom
+    """
+
+    TEST_BMC_EEPROM_INFO = {
+        'Manufacturer': 'NVIDIA',
+        'Model': 'P3809',
+        'PartNumber': '692-13809-3404-000',
+        'PowerState': 'On',
+        'SerialNumber': '1320725102601'
+    }
+
+    TEST_BMC_VERSION = '88.0002.1252'
+
+    def test_bmc_summary_regular_output(self):
+        """Test 'show platform bmc summary' with regular output"""
+        expected_output = """\
+            Manufacturer: {}
+            Model: {}
+            PartNumber: {}
+            SerialNumber: {}
+            PowerState: {}
+            FirmwareVersion: {}
+            """.format(
+                self.TEST_BMC_EEPROM_INFO['Manufacturer'],
+                self.TEST_BMC_EEPROM_INFO['Model'],
+                self.TEST_BMC_EEPROM_INFO['PartNumber'],
+                self.TEST_BMC_EEPROM_INFO['SerialNumber'],
+                self.TEST_BMC_EEPROM_INFO['PowerState'],
+                self.TEST_BMC_VERSION
+            )
+
+        mock_sonic_platform = mock.MagicMock()
+        mock_platform = mock.MagicMock()
+        mock_chassis = mock.MagicMock()
+        mock_bmc = mock.MagicMock()
+
+        mock_platform.get_chassis.return_value = mock_chassis
+        mock_chassis.get_bmc.return_value = mock_bmc
+        mock_bmc.get_eeprom.return_value = self.TEST_BMC_EEPROM_INFO
+        mock_bmc.get_version.return_value = self.TEST_BMC_VERSION
+        mock_sonic_platform.platform.Platform.return_value = mock_platform
+
+        with mock.patch.dict('sys.modules', {
+            'sonic_platform': mock_sonic_platform,
+            'sonic_platform.platform': mock_sonic_platform.platform
+        }):
+            result = CliRunner().invoke(show.cli.commands['platform'].commands['bmc'].commands['summary'], [])
+            assert result.exit_code == 0, result.output
+            assert result.output == textwrap.dedent(expected_output)
+
+    def test_bmc_summary_json_output(self):
+        """Test 'show platform bmc summary' with JSON output"""
+        expected_json = {
+            'Manufacturer': self.TEST_BMC_EEPROM_INFO['Manufacturer'],
+            'Model': self.TEST_BMC_EEPROM_INFO['Model'],
+            'PartNumber': self.TEST_BMC_EEPROM_INFO['PartNumber'],
+            'SerialNumber': self.TEST_BMC_EEPROM_INFO['SerialNumber'],
+            'PowerState': self.TEST_BMC_EEPROM_INFO['PowerState'],
+            'FirmwareVersion': self.TEST_BMC_VERSION
+        }
+
+        mock_sonic_platform = mock.MagicMock()
+        mock_platform = mock.MagicMock()
+        mock_chassis = mock.MagicMock()
+        mock_bmc = mock.MagicMock()
+
+        mock_platform.get_chassis.return_value = mock_chassis
+        mock_chassis.get_bmc.return_value = mock_bmc
+        mock_bmc.get_eeprom.return_value = self.TEST_BMC_EEPROM_INFO
+        mock_bmc.get_version.return_value = self.TEST_BMC_VERSION
+        mock_sonic_platform.platform.Platform.return_value = mock_platform
+
+        with mock.patch.dict('sys.modules', {
+            'sonic_platform': mock_sonic_platform,
+            'sonic_platform.platform': mock_sonic_platform.platform
+        }):
+            result = CliRunner().invoke(show.cli.commands['platform'].commands['bmc'].commands['summary'], ['--json'])
+            assert result.exit_code == 0, result.output
+            output_json = json.loads(result.output)
+            assert output_json == expected_json
+
+    def test_bmc_eeprom_regular_output(self):
+        """Test 'show platform bmc eeprom' with regular output"""
+        expected_output = """\
+            Manufacturer: {}
+            Model: {}
+            PartNumber: {}
+            PowerState: {}
+            SerialNumber: {}
+            """.format(
+                self.TEST_BMC_EEPROM_INFO['Manufacturer'],
+                self.TEST_BMC_EEPROM_INFO['Model'],
+                self.TEST_BMC_EEPROM_INFO['PartNumber'],
+                self.TEST_BMC_EEPROM_INFO['PowerState'],
+                self.TEST_BMC_EEPROM_INFO['SerialNumber']
+            )
+
+        mock_sonic_platform = mock.MagicMock()
+        mock_platform = mock.MagicMock()
+        mock_chassis = mock.MagicMock()
+        mock_bmc = mock.MagicMock()
+
+        mock_platform.get_chassis.return_value = mock_chassis
+        mock_chassis.get_bmc.return_value = mock_bmc
+        mock_bmc.get_eeprom.return_value = self.TEST_BMC_EEPROM_INFO
+        mock_sonic_platform.platform.Platform.return_value = mock_platform
+
+        with mock.patch.dict('sys.modules', {
+            'sonic_platform': mock_sonic_platform,
+            'sonic_platform.platform': mock_sonic_platform.platform
+        }):
+            result = CliRunner().invoke(show.cli.commands['platform'].commands['bmc'].commands['eeprom'], [])
+            assert result.exit_code == 0, result.output
+            assert result.output == textwrap.dedent(expected_output)
+
+    def test_bmc_eeprom_json_output(self):
+        """Test 'show platform bmc eeprom' with JSON output"""
+        expected_json = {
+            'Manufacturer': self.TEST_BMC_EEPROM_INFO['Manufacturer'],
+            'Model': self.TEST_BMC_EEPROM_INFO['Model'],
+            'PartNumber': self.TEST_BMC_EEPROM_INFO['PartNumber'],
+            'PowerState': self.TEST_BMC_EEPROM_INFO['PowerState'],
+            'SerialNumber': self.TEST_BMC_EEPROM_INFO['SerialNumber']
+        }
+
+        mock_sonic_platform = mock.MagicMock()
+        mock_platform = mock.MagicMock()
+        mock_chassis = mock.MagicMock()
+        mock_bmc = mock.MagicMock()
+
+        mock_platform.get_chassis.return_value = mock_chassis
+        mock_chassis.get_bmc.return_value = mock_bmc
+        mock_bmc.get_eeprom.return_value = self.TEST_BMC_EEPROM_INFO
+        mock_sonic_platform.platform.Platform.return_value = mock_platform
+
+        with mock.patch.dict('sys.modules', {
+            'sonic_platform': mock_sonic_platform,
+            'sonic_platform.platform': mock_sonic_platform.platform
+        }):
+            result = CliRunner().invoke(show.cli.commands['platform'].commands['bmc'].commands['eeprom'], ['--json'])
+            assert result.exit_code == 0, result.output
+            output_json = json.loads(result.output)
+            assert output_json == expected_json
+
+    def test_bmc_summary_bmc_not_available(self):
+        """Test 'show platform bmc summary' when BMC is not available"""
+        mock_sonic_platform = mock.MagicMock()
+        mock_platform = mock.MagicMock()
+        mock_chassis = mock.MagicMock()
+
+        mock_platform.get_chassis.return_value = mock_chassis
+        mock_chassis.get_bmc.return_value = None
+        mock_sonic_platform.platform.Platform.return_value = mock_platform
+
+        with mock.patch.dict('sys.modules', {
+            'sonic_platform': mock_sonic_platform,
+            'sonic_platform.platform': mock_sonic_platform.platform
+        }):
+            result = CliRunner().invoke(show.cli.commands['platform'].commands['bmc'].commands['summary'], [])
+            assert result.exit_code == 0, result.output
+            assert "BMC is not available on this platform" in result.output
+
+    def test_bmc_summary_eeprom_info_empty(self):
+        """Test 'show platform bmc summary' when EEPROM info is empty"""
+        mock_sonic_platform = mock.MagicMock()
+        mock_platform = mock.MagicMock()
+        mock_chassis = mock.MagicMock()
+        mock_bmc = mock.MagicMock()
+
+        mock_platform.get_chassis.return_value = mock_chassis
+        mock_chassis.get_bmc.return_value = mock_bmc
+        mock_bmc.get_eeprom.return_value = None
+        mock_sonic_platform.platform.Platform.return_value = mock_platform
+
+        with mock.patch.dict('sys.modules', {
+            'sonic_platform': mock_sonic_platform,
+            'sonic_platform.platform': mock_sonic_platform.platform
+        }):
+            result = CliRunner().invoke(show.cli.commands['platform'].commands['bmc'].commands['summary'], [])
+            assert result.exit_code == 0, result.output
+            assert "Failed to retrieve BMC EEPROM information" in result.output
+
+    def test_bmc_summary_exception(self):
+        """Test 'show platform bmc summary' when an exception occurs"""
+        mock_sonic_platform = mock.MagicMock()
+        mock_platform = mock.MagicMock()
+        mock_chassis = mock.MagicMock()
+
+        mock_platform.get_chassis.return_value = mock_chassis
+        mock_chassis.get_bmc.side_effect = Exception("Test exception")
+        mock_sonic_platform.platform.Platform.return_value = mock_platform
+
+        with mock.patch.dict('sys.modules', {
+            'sonic_platform': mock_sonic_platform,
+            'sonic_platform.platform': mock_sonic_platform.platform
+        }):
+            result = CliRunner().invoke(show.cli.commands['platform'].commands['bmc'].commands['summary'], [])
+            assert result.exit_code == 0, result.output
+            assert "Error retrieving BMC information: Test exception" in result.output
+
+    def test_bmc_eeprom_bmc_not_available(self):
+        """Test 'show platform bmc eeprom' when BMC is not available"""
+        mock_sonic_platform = mock.MagicMock()
+        mock_platform = mock.MagicMock()
+        mock_chassis = mock.MagicMock()
+
+        mock_platform.get_chassis.return_value = mock_chassis
+        mock_chassis.get_bmc.return_value = None
+        mock_sonic_platform.platform.Platform.return_value = mock_platform
+
+        with mock.patch.dict('sys.modules', {
+            'sonic_platform': mock_sonic_platform,
+            'sonic_platform.platform': mock_sonic_platform.platform
+        }):
+            result = CliRunner().invoke(show.cli.commands['platform'].commands['bmc'].commands['eeprom'], [])
+            assert result.exit_code == 0, result.output
+            assert "BMC is not available on this platform" in result.output
+
+    def test_bmc_eeprom_info_empty(self):
+        """Test 'show platform bmc eeprom' when EEPROM info is empty"""
+        mock_sonic_platform = mock.MagicMock()
+        mock_platform = mock.MagicMock()
+        mock_chassis = mock.MagicMock()
+        mock_bmc = mock.MagicMock()
+
+        mock_platform.get_chassis.return_value = mock_chassis
+        mock_chassis.get_bmc.return_value = mock_bmc
+        mock_bmc.get_eeprom.return_value = None
+        mock_sonic_platform.platform.Platform.return_value = mock_platform
+
+        with mock.patch.dict('sys.modules', {
+            'sonic_platform': mock_sonic_platform,
+            'sonic_platform.platform': mock_sonic_platform.platform
+        }):
+            result = CliRunner().invoke(show.cli.commands['platform'].commands['bmc'].commands['eeprom'], [])
+            assert result.exit_code == 0, result.output
+            assert "Failed to retrieve BMC EEPROM information" in result.output
+
+    def test_bmc_eeprom_exception(self):
+        """Test 'show platform bmc eeprom' when an exception occurs"""
+        mock_sonic_platform = mock.MagicMock()
+        mock_platform = mock.MagicMock()
+        mock_chassis = mock.MagicMock()
+
+        mock_platform.get_chassis.return_value = mock_chassis
+        mock_chassis.get_bmc.side_effect = Exception("Test exception")
+        mock_sonic_platform.platform.Platform.return_value = mock_platform
+
+        with mock.patch.dict('sys.modules', {
+            'sonic_platform': mock_sonic_platform,
+            'sonic_platform.platform': mock_sonic_platform.platform
+        }):
+            result = CliRunner().invoke(show.cli.commands['platform'].commands['bmc'].commands['eeprom'], [])
+            assert result.exit_code == 0, result.output
+            assert "Error retrieving BMC EEPROM information: Test exception" in result.output

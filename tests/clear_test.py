@@ -101,6 +101,20 @@ class TestClear(object):
         assert result.exit_code == 0
         run_command.assert_called_with(['fdbclear'])
 
+    @patch('clear.main.run_command')
+    def test_clear_srv6counters(self, run_command):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['srv6counters'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['srv6stat', '-c'])
+
+    @patch('clear.main.run_command')
+    def test_clear_switchcounters(self, run_command):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['switchcounters'])
+        assert result.exit_code == 0
+        run_command.assert_called_with(['switchstat', '-c'])
+
     def teardown(self):
         print('TEAR DOWN')
 

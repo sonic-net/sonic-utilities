@@ -40,8 +40,10 @@ function get_dpu_ip()
 # Function to retrieve GNMI port from CONFIG_DB
 function get_gnmi_port()
 {
-    local DPU_NAME=$1
-    sonic-db-cli CONFIG_DB HGET "DPU_PORT|$DPU_NAME" "gnmi_port"
+    local DPU_NAME=${1:-dpu0}
+    for k in $(sonic-db-cli CONFIG_DB keys "DPU|*$DPU_NAME"); do
+        sonic-db-cli CONFIG_DB hget "$k" 'gnmi_port'
+    done
 }
 
 # Function to get reboot status from DPU
@@ -49,39 +51,73 @@ function get_reboot_status()
 {
     local dpu_ip=$1
     local port=$2
-    $(docker exec gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -notls -module System -rpc RebootStatus &>/dev/null)
+    local reboot_output_file="reboot_status.txt"
+
+    $(docker exec gnmi gnoi_client -target "${dpu_ip}:${port}" -logtostderr -notls -module System -rpc RebootStatus | tee "$reboot_output_file" &>/dev/null)
     if [ $? -ne 0 ]; then
+        rm -f "$reboot_output_file"
         return ${EXIT_ERROR}
     fi
     local is_reboot_active
-    is_reboot_active=$(echo "$reboot_status" | grep "active" | awk '{print $2}')
-    if [ "$is_reboot_active" == "false" ]; then
+    is_reboot_active=$(cat "$reboot_output_file" | awk '/^{.*}$/' | jq -r '.active')
+    rm -f "$reboot_output_file"
+    if [ "$is_reboot_active" != "true" ]; then
         return ${EXIT_SUCCESS}
     fi
     return ${EXIT_ERROR}
 }
 
 # Function to detach PCI module
-function pci_detach_module()
+function module_pre_shutdown()
 {
     local DPU_NAME=$1
-    local DPU_BUS_INFO=$2
-    python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.pci_detach_module('${DPU_NAME}')"
+    python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.module_pre_shutdown('${DPU_NAME}')"
     if [ $? -ne 0 ]; then
-        log_message "ERROR: PCI detach vendor API is not available"
-        echo 1 > /sys/bus/pci/devices/${DPU_BUS_INFO}/remove
+        log_message "ERROR: Module pre-shutdown vendor API failed"
     fi
 }
 
 # Function to rescan PCI module
-function pci_reattach_module()
+function module_post_startup()
 {
     local DPU_NAME=$1
-    local DPU_BUS_INFO=$2
-    python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.pci_reattach_module('${DPU_NAME}')"
+    python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.module_post_startup('${DPU_NAME}')"
     if [ $? -ne 0 ]; then
-        log_message "ERROR: PCI reattach vendor API is not available"
-        echo 1 > /sys/bus/pci/devices/${DPU_BUS_INFO}/rescan
+        log_message "ERROR: Module post-startup vendor API failed"
+    fi
+}
+
+# Function to set state_transition_in_progress flag
+function set_module_state_transition_flag()
+{
+    local DPU_NAME=$1
+    local FLAG_VALUE=$2
+    python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.set_module_state_transition('${DPU_NAME}', ${FLAG_VALUE})"
+    if [ $? -ne 0 ]; then
+        log_message "ERROR: Setting module state transition flag failed"
+    fi
+}
+
+# Function to clear state_transition_in_progress flag
+function clear_module_state_transition_flag()
+{
+    local DPU_NAME=$1
+    python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); helper.clear_module_state_transition('${DPU_NAME}')"
+    if [ $? -ne 0 ]; then
+        log_message "ERROR: Clearing module state transition flag failed"
+    fi
+}
+
+# Function to get state_transition_in_progress flag
+function get_module_state_transition_flag()
+{
+    local DPU_NAME=$1
+    local result
+    result=$(python3 -c "from utilities_common.module import ModuleHelper; helper = ModuleHelper(); print(helper.get_module_state_transition('${DPU_NAME}'))")
+    if [ "$result" == "True" ]; then
+        return 0  # True in bash (success)
+    else
+        return 1  # False in bash (failure)
     fi
 }
 
@@ -115,6 +151,8 @@ function wait_for_dpu_reboot_status()
     local poll_interval=5
     local waited_time=0
     while true; do
+        sleep "$poll_interval"
+
         local reboot_status
         get_reboot_status "${dpu_ip}" "${port}"
         reboot_status=$?
@@ -123,7 +161,6 @@ function wait_for_dpu_reboot_status()
             break
         fi
 
-        sleep "$poll_interval"
         waited_time=$((waited_time + poll_interval))
         if [ $waited_time -ge $dpu_halt_services_timeout ]; then
             log_message "ERROR: Timeout waiting for ${DPU_NAME} to finish halting the services"
@@ -136,6 +173,8 @@ function wait_for_dpu_reboot_status()
 # Function to send reboot command to DPU
 function gnmi_reboot_dpu()
 {
+    local DPU_NAME=$1
+
     # Retrieve DPU IP and GNMI port
     dpu_ip=$(get_dpu_ip "${DPU_NAME}")
     port=$(get_gnmi_port "${DPU_NAME}")
@@ -165,7 +204,7 @@ function reboot_dpu()
     local REBOOT_TYPE=$2
     local DPU_INDEX=${DPU_NAME//[!0-9]/}
 
-    debug "User requested rebooting device ${DPU_NAME} ..."
+    log_message "User requested rebooting device ${DPU_NAME} ..."
 
     # Check if the DPU operation status is online before rebooting
     local oper_status
@@ -181,6 +220,16 @@ function reboot_dpu()
         fi
     fi
 
+    if [[ "$REBOOT_TYPE" != $MODULE_REBOOT_SMARTSWITCH ]]; then
+        # get and set the state_transition_in_progress flag before reboot
+        if ! get_module_state_transition_flag "${DPU_NAME}"; then
+            set_module_state_transition_flag "${DPU_NAME}" True
+        else
+            log_message "ERROR: state_transition_in_progress flag is already set for ${DPU_NAME}"
+            return ${EXIT_ERROR}
+        fi
+    fi
+
     # Send reboot command to DPU
     gnmi_reboot_dpu "${DPU_NAME}"
     if [ $? -ne 0 ]; then
@@ -193,20 +242,32 @@ function reboot_dpu()
         return ${EXIT_ERROR}
     fi
 
-    pci_detach_module ${DPU_NAME} ${DPU_BUS_INFO}
+    module_pre_shutdown "${DPU_NAME}"
     if [ $? -ne 0 ]; then
-        log_message "ERROR: Failed to detach PCI module for ${DPU_NAME}"
+        log_message "ERROR: Failed to pre-shutdown the module for ${DPU_NAME}"
+        if [[ "$REBOOT_TYPE" != $MODULE_REBOOT_SMARTSWITCH ]]; then
+            clear_module_state_transition_flag "${DPU_NAME}"
+        fi
         return ${EXIT_ERROR}
     fi
 
-    reboot_dpu_platform ${DPU_NAME} ${REBOOT_TYPE}
+    reboot_dpu_platform "${DPU_NAME}" "${REBOOT_TYPE}"
     if [ $? -ne 0 ]; then
-        log_message "ERROR: Failed to send platform command to reboot ${DPU_NAME}"
+        log_message "ERROR: Failed to reboot the module for ${DPU_NAME}"
+        if [[ "$REBOOT_TYPE" != $MODULE_REBOOT_SMARTSWITCH ]]; then
+            clear_module_state_transition_flag "${DPU_NAME}"
+        fi
         return ${EXIT_ERROR}
     fi
 
     if [[ "$REBOOT_TYPE" != $MODULE_REBOOT_SMARTSWITCH ]]; then
-        pci_reattach_module ${DPU_NAME} ${DPU_BUS_INFO}
+        module_post_startup "${DPU_NAME}"
+        if [ $? -ne 0 ]; then
+            log_message "ERROR: Failed to startup the module for ${DPU_NAME}"
+            clear_module_state_transition_flag "${DPU_NAME}"
+            return ${EXIT_ERROR}
+        fi
+        clear_module_state_transition_flag "${DPU_NAME}"
     fi
 }
 

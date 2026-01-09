@@ -7,6 +7,7 @@ from click.testing import CliRunner
 import clear.main as clear
 import show.main as show
 from utilities_common.cli import json_dump
+from utilities_common.cli import UserCache
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
@@ -1148,11 +1149,18 @@ show_queue_port_voq_counters_json = """\
 }"""
 
 
+def remove_tmp_cnstat_file():
+    # remove the tmp wredstat
+    cache = UserCache("wredstat")
+    cache.remove_all()
+
+
 class TestWredQueue(object):
     @classmethod
     def setup_class(cls):
         os.environ["PATH"] += os.pathsep + scripts_path
         os.environ['UTILITIES_UNIT_TESTING'] = "2"
+        remove_tmp_cnstat_file()
         print("SETUP")
 
     def test_queue_counters(self):

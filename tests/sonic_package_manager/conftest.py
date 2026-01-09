@@ -26,16 +26,21 @@ def mock_docker_api():
     @dataclass
     class Image:
         id: str
+        image_tags: list[str]
 
         @property
         def attrs(self):
             return {'RepoTags': [self.id]}
 
+        @property
+        def tags(self):
+            return self.image_tags
+
     def pull(repo, ref):
-        return Image(f'{repo}:{ref}')
+        return Image(f'{repo}:{ref}', [ref])
 
     def load(filename):
-        return Image(filename)
+        return Image(filename, ["latest"])
 
     docker.pull = MagicMock(side_effect=pull)
     docker.load = MagicMock(side_effect=load)

@@ -144,6 +144,7 @@ setup(
         'scripts/intfstat',
         'scripts/ipintutil',
         'scripts/lag_keepalive.py',
+        'scripts/leakageshow',
         'scripts/lldpshow',
         'scripts/log_ssd_health',
         'scripts/mellanox_buffer_migrator.py',
@@ -170,6 +171,8 @@ setup(
         'scripts/soft-reboot',
         'scripts/storyteller',
         'scripts/syseeprom-to-json',
+        'scripts/srv6stat',
+        'scripts/switchstat',
         'scripts/teamd_increase_retry_count.py',
         'scripts/tempershow',
         'scripts/tunnelstat',
@@ -187,12 +190,15 @@ setup(
         'scripts/memory_threshold_check.py',
         'scripts/memory_threshold_check_handler.py',
         'scripts/techsupport_cleanup.py',
+        'scripts/bmc_techsupport.py',
         'scripts/storm_control.py',
         'scripts/verify_image_sign.sh',
         'scripts/verify_image_sign_common.sh',
         'scripts/check_db_integrity.py',
         'scripts/sysreadyshow',
-        'scripts/wredstat'
+        'scripts/wredstat',
+        'scripts/sonic-error-report',
+        'scripts/chassis_db_consistency_checker.py'
     ],
     entry_points={
         'console_scripts': [
@@ -230,8 +236,10 @@ setup(
         ]
     },
     install_requires=[
-        'bcrypt==3.2.2',
-        'click==7.0',
+        'bcrypt>=3.2.2',
+        'click>=8.0, <8.2',  # Click 8.3 has some bug with mutual exclusions,
+                             # and 8.2 changes the exit code from 0 to 2 when
+                             # no args are provided
         'cryptography>=3.3.2',
         'urllib3>=2',
         'click-log>=0.3.2',
@@ -246,21 +254,21 @@ setup(
         'jsonpatch>=1.32.0',
         'jsonpointer>=1.9',
         'm2crypto>=0.31.0',
-        'natsort>=6.2.1',  # 6.2.1 is the last version which supports Python 2. Can update once we no longer support Python 2
+        'natsort>=8.0',
         'netaddr>=0.8.0',
         'netifaces>=0.10.7',
-        'paramiko==2.11.0',
+        'paramiko>=3.0',
         'pexpect>=4.8.0',
         'semantic-version>=2.8.5',
         'prettyprinter>=0.18.0',
-        'pyroute2==0.7.12',
-        'requests>=2.25.0, <=2.31.0',
+        'pyroute2>=0.7.7',
+        'requests>=2.25.0',
         'tabulate==0.9.0',
         'toposort==1.6',
         'www-authenticate==0.9.2',
         'xmltodict==0.12.0',
         'lazy-object-proxy',
-        'six==1.16.0',
+        'six>=1.16.0',
         'scp==0.14.5',
     ] + sonic_dependencies,
     setup_requires= [
@@ -272,7 +280,7 @@ setup(
         'responses',
         'pytest',
         'mockredispy>=2.9.3',
-        'deepdiff==6.2.2'
+        'deepdiff>=6.2.2'
     ],
     extras_require = {
         'testing': [
@@ -280,7 +288,7 @@ setup(
             'responses',
             'pytest',
             'mockredispy>=2.9.3',
-            'deepdiff==6.2.2'
+            'deepdiff>=6.2.2'
         ],
     },
     classifiers=[

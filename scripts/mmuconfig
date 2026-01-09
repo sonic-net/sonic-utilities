@@ -35,10 +35,9 @@ DYNAMIC_THRESHOLD_MIN = -8
 DYNAMIC_THRESHOLD_MAX = 8
 STATIC_THRESHOLD = "static_th"
 STATIC_THRESHOLD_MIN = 0
-BUFFER_PROFILE_FIELDS = {
-    "alpha": DYNAMIC_THRESHOLD,
-    "staticth" : STATIC_THRESHOLD
-}
+PACKET_TRIMMING = "packet_discard_action"
+PACKET_TRIMMING_ENABLED = "on"
+PACKET_TRIMMING_DISABLED = "off"
 
 # mock the redis for unit test purposes #
 try:
@@ -129,12 +128,11 @@ class MmuConfig(object):
             print(f"No buffer profile information available{namespace_str}")
 
     @multi_asic_util.run_on_multi_asic
-    def set(self, profile, field_alias, value):
+    def set(self, profile, field, value):
         namespace_str = f" for namespace {self.multi_asic.current_namespace}" if multi_asic.is_multi_asic() else ''
         if os.geteuid() != 0 and os.environ.get("UTILITIES_UNIT_TESTING", "0") != "2":
             sys.exit("Root privileges required for this operation")
 
-        field = BUFFER_PROFILE_FIELDS[field_alias]
         buf_profs = self.config_db.get_table(BUFFER_PROFILE_TABLE_NAME)
         if field == DYNAMIC_THRESHOLD:
             if profile in buf_profs and DYNAMIC_THRESHOLD not in buf_profs[profile]:
@@ -142,6 +140,9 @@ class MmuConfig(object):
         elif field == STATIC_THRESHOLD:
             if profile in buf_profs and STATIC_THRESHOLD not in buf_profs[profile]:
                 sys.exit("%s not using static threshold" % (profile))
+        elif field == PACKET_TRIMMING:
+            # Packet trimming eligibility configuration works for both dynamic/static buffer model
+            pass
         else:
             sys.exit("Set field %s not supported" % (field))
 
@@ -153,15 +154,30 @@ class MmuConfig(object):
             with open(self.filename, "w") as fd:
                 json.dump(self.updated_profile_table, fd)
 
+
+class TrimTypeValidator(click.ParamType):
+    """ Trim option validator """
+    name = "text"
+
+    def get_metavar(self, param):
+        return "[on|off]"
+
+    def convert(self, value, param, ctx):
+        click.Choice([PACKET_TRIMMING_ENABLED, PACKET_TRIMMING_DISABLED]).convert(value, param, ctx)
+
+        return "trim" if value == PACKET_TRIMMING_ENABLED else "drop"
+
+
 @click.command(help='Show and change: mmu configuration')
 @click.option('-l', '--list', 'show_config', is_flag=True, help='show mmu configuration')
 @click.option('-p', '--profile', type=str, help='specify buffer profile name', default=None)
 @click.option('-a', '--alpha', type=click.IntRange(DYNAMIC_THRESHOLD_MIN, DYNAMIC_THRESHOLD_MAX), help='set n for dyanmic threshold alpha 2^(n)', default=None)
 @click.option('-s', '--staticth', type=click.IntRange(min=STATIC_THRESHOLD_MIN), help='set static threshold', default=None)
+@click.option('-t', '--trim', 'trim', type=TrimTypeValidator(), help='Configures packet trimming eligibility')
 @click.option('-n', '--namespace', type=click.Choice(multi_asic.get_namespace_list()), help='Namespace name or skip for all', default=None)
 @click.option('-vv', '--verbose', is_flag=True, help='verbose output', default=False)
 @click.version_option(version='1.0')
-def main(show_config, profile, alpha, staticth, namespace, verbose):
+def main(show_config, profile, alpha, staticth, trim, namespace, verbose):
     # A test file created for unit test purposes
     filename=None
     if os.environ.get("UTILITIES_UNIT_TESTING", "0") == "2":
@@ -180,10 +196,12 @@ def main(show_config, profile, alpha, staticth, namespace, verbose):
             mmu_cfg.list()
         # Buffershow cannot modify profiles
         elif config and profile:
-            if alpha:
-                mmu_cfg.set(profile, "alpha", alpha)
-            elif staticth:
-                mmu_cfg.set(profile, "staticth", staticth)
+            if alpha is not None:
+                mmu_cfg.set(profile, DYNAMIC_THRESHOLD, alpha)
+            elif staticth is not None:
+                mmu_cfg.set(profile, STATIC_THRESHOLD, staticth)
+            elif trim:
+                mmu_cfg.set(profile, PACKET_TRIMMING, trim)
         else:
             ctx = click.get_current_context()
             click.echo(ctx.get_help())

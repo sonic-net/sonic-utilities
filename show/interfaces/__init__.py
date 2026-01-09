@@ -119,6 +119,8 @@ def description(interfacename, namespace, display, verbose):
         interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
 
         cmd += ['-i', str(interfacename)]
+        if multi_asic.is_multi_asic():
+            cmd += ['-d', str(display)]
     else:
         cmd += ['-d', str(display)]
 
@@ -153,6 +155,8 @@ def status(interfacename, namespace, display, verbose):
         interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
 
         cmd += ['-i', str(interfacename)]
+        if multi_asic.is_multi_asic():
+            cmd += ['-d', str(display)]
 
     else:
         cmd += ['-d', str(display)]
@@ -178,6 +182,8 @@ def tpid(interfacename, namespace, display, verbose):
         interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
 
         cmd += ['-i', str(interfacename)]
+        if multi_asic.is_multi_asic():
+            cmd += ['-d', str(display)]
     else:
         cmd += ['-d', str(display)]
 
@@ -531,22 +537,22 @@ def errors(ctx, interfacename):
 
     port_operr_table = get_all_port_errors(interfacename)
 
-    # Define a list of all potential errors
+    # Define a list of all potential errors's DB entries
     ALL_PORT_ERRORS = [
-        "oper_error_status",
-        "mac_local_fault",
-        "mac_remote_fault",
-        "fec_sync_loss",
-        "fec_alignment_loss",
-        "high_ser_error",
-        "high_ber_error",
-        "data_unit_crc_error",
-        "data_unit_misalignment_error",
-        "signal_local_error",
-        "crc_rate",
-        "data_unit_size",
-        "code_group_error",
-        "no_rx_reachability"
+        ("oper_error_status", "oper_error_status_time"),
+        ("mac_local_fault_count", "mac_local_fault_time"),
+        ("mac_remote_fault_count", "mac_remote_fault_time"),
+        ("fec_sync_loss_count", "fec_sync_loss_time"),
+        ("fec_alignment_loss_count", "fec_alignment_loss_time"),
+        ("high_ser_error_count", "high_ser_error_time"),
+        ("high_ber_error_count", "high_ber_error_time"),
+        ("data_unit_crc_error_count", "data_unit_crc_error_time"),
+        ("data_unit_misalignment_error_count", "data_unit_misalignment_error_time"),
+        ("signal_local_error_count", "signal_local_error_time"),
+        ("crc_rate_count", "crc_rate_time"),
+        ("data_unit_size_count", "data_unit_size_time"),
+        ("code_group_error_count", "code_group_error_time"),
+        ("no_rx_reachability_count", "no_rx_reachability_time")
     ]
 
     # Prepare the table headers and body
@@ -554,10 +560,7 @@ def errors(ctx, interfacename):
     body = []
 
     # Populate the table body with all errors, defaulting missing ones to 0 and Never
-    for error in ALL_PORT_ERRORS:
-        count_key = f"{error}_count"
-        time_key = f"{error}_time"
-
+    for count_key, time_key in ALL_PORT_ERRORS:
         if port_operr_table is not None:
             count = port_operr_table.get(count_key, "0")  # Default count to '0'
             timestamp = port_operr_table.get(time_key, "Never")  # Default timestamp to 'Never'
@@ -566,7 +569,7 @@ def errors(ctx, interfacename):
             timestamp = "Never"
 
         # Add to table
-        body.append([error.replace('_', ' '), count, timestamp])
+        body.append([count_key.replace('_', ' ').replace('count', ''), count, timestamp])
 
     # Sort the body for consistent display
     body.sort(key=lambda x: x[0])
@@ -753,14 +756,17 @@ def error_status(db, interfacename, fetch_from_hardware, namespace, verbose):
 #
 # counters group ("show interfaces counters ...")
 #
+
 @interfaces.group(invoke_without_command=True)
-@click.option('-a', '--printall', is_flag=True)
-@click.option('-p', '--period')
-@click.option('-i', '--interface')
 @multi_asic_util.multi_asic_click_options
+@click.option('-i', '--interface', help="Filter by interface name")
+@click.option('-a', '--printall', is_flag=True, help="Show all counters")
+@click.option('-p', '--period', type=click.INT, help="Display statistics over a specified period (in seconds)")
+@click.option('-j', '--json', 'json_fmt', is_flag=True, help="Print in JSON format")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
+@click.option('--nonzero', is_flag=True, help="Only display non zero counters")
 @click.pass_context
-def counters(ctx, verbose, period, interface, printall, namespace, display):
+def counters(ctx, namespace, display, interface, printall, period, json_fmt, verbose, nonzero):
     """Show interface counters"""
 
     if ctx.invoked_subcommand is None:
@@ -773,46 +779,68 @@ def counters(ctx, verbose, period, interface, printall, namespace, display):
         if interface is not None:
             interface = try_convert_interfacename_from_alias(ctx, interface)
             cmd += ['-i', str(interface)]
+            if multi_asic.is_multi_asic():
+                cmd += ['-s', str(display)]
         else:
             cmd += ['-s', str(display)]
         if namespace is not None:
             cmd += ['-n', str(namespace)]
+        if json_fmt:
+            cmd += ['-j']
+        if nonzero:
+            cmd += ['-nz']
 
         clicommon.run_command(cmd, display_cmd=verbose)
 
 
 # 'errors' subcommand ("show interfaces counters errors")
 @counters.command()
-@click.option('-p', '--period')
 @multi_asic_util.multi_asic_click_options
+@click.option('-p', '--period', type=click.INT, help="Display statistics over a specified period (in seconds)")
+@click.option('-j', '--json', 'json_fmt', is_flag=True, help="Print in JSON format")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def errors(verbose, period, namespace, display):
+def errors(namespace, display, period, json_fmt, verbose):  # noqa: F811
     """Show interface counters errors"""
+
     cmd = ['portstat', '-e']
+
     if period is not None:
         cmd += ['-p', str(period)]
 
     cmd += ['-s', str(display)]
     if namespace is not None:
         cmd += ['-n', str(namespace)]
+
+    if json_fmt:
+        cmd += ['-j']
 
     clicommon.run_command(cmd, display_cmd=verbose)
 
 
 # 'fec-stats' subcommand ("show interfaces counters errors")
 @counters.command('fec-stats')
-@click.option('-p', '--period')
 @multi_asic_util.multi_asic_click_options
+@click.option('-p', '--period', type=click.INT, help="Display statistics over a specified period (in seconds)")
+@click.option('-j', '--json', 'json_fmt', is_flag=True, help="Print in JSON format")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def fec_stats(verbose, period, namespace, display):
+@click.option('--nonzero', is_flag=True, help="Only display non zero counters")
+def fec_stats(namespace, display, period, json_fmt, verbose, nonzero):
     """Show interface counters fec-stats"""
+
     cmd = ['portstat', '-f']
+
     if period is not None:
         cmd += ['-p', str(period)]
 
     cmd += ['-s', str(display)]
     if namespace is not None:
         cmd += ['-n', str(namespace)]
+
+    if json_fmt:
+        cmd += ['-j']
+
+    if nonzero:
+        cmd += ['-nz']
 
     clicommon.run_command(cmd, display_cmd=verbose)
 
@@ -874,49 +902,83 @@ def fec_histogram(db, interfacename, namespace, display):
 
 # 'rates' subcommand ("show interfaces counters rates")
 @counters.command()
-@click.option('-p', '--period')
 @multi_asic_util.multi_asic_click_options
+@click.option('-p', '--period', type=click.INT, help="Display statistics over a specified period (in seconds)")
+@click.option('-j', '--json', 'json_fmt', is_flag=True, help="Print in JSON format")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def rates(verbose, period, namespace, display):
+def rates(namespace, display, period, json_fmt, verbose):
     """Show interface counters rates"""
+
     cmd = ['portstat', '-R']
+
     if period is not None:
         cmd += ['-p', str(period)]
     cmd += ['-s', str(display)]
     if namespace is not None:
         cmd += ['-n', str(namespace)]
+    if json_fmt:
+        cmd += ['-j']
+
     clicommon.run_command(cmd, display_cmd=verbose)
 
 
 # 'counters' subcommand ("show interfaces counters rif")
 @counters.command()
-@click.argument('interface', metavar='<interface_name>', required=False, type=str)
-@click.option('-p', '--period')
+@click.argument('interface', metavar='[INTERFACE_NAME]', required=False, type=str)
+@click.option('-p', '--period', type=click.INT, help="Display statistics over a specified period (in seconds)")
+@click.option('-j', '--json', 'json_fmt', is_flag=True, help="Print in JSON format")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def rif(interface, period, verbose):
-    """Show interface counters"""
+@click.pass_context
+def rif(ctx, interface, period, json_fmt, verbose):
+    """Show interface counters rif"""
 
-    ctx = click.get_current_context()
-    cmd = ["intfstat"]
+    cmd = ['intfstat']
+
     if period is not None:
         cmd += ['-p', str(period)]
     if interface is not None:
         interface = try_convert_interfacename_from_alias(ctx, interface)
         cmd += ['-i', str(interface)]
+    if json_fmt:
+        cmd += ['-j']
+
+    clicommon.run_command(cmd, display_cmd=verbose)
+
+
+# 'counters' subcommand ("show interfaces counters trim")
+@counters.command()
+@click.argument('interface', metavar='[INTERFACE_NAME]', required=False, type=str)
+@click.option('-p', '--period', type=click.INT, help="Display statistics over a specified period (in seconds)")
+@click.option('-j', '--json', 'json_fmt', is_flag=True, help="Print in JSON format")
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+@click.pass_context
+def trim(ctx, interface, period, json_fmt, verbose):
+    """Show interface counters trim"""
+
+    cmd = ['portstat', '-T']
+
+    if interface is not None:
+        interface = try_convert_interfacename_from_alias(ctx, interface)
+        cmd += ['-i', str(interface)]
+    if period is not None:
+        cmd += ['-p', str(period)]
+    if json_fmt:
+        cmd += ['-j']
 
     clicommon.run_command(cmd, display_cmd=verbose)
 
 
 # 'counters' subcommand ("show interfaces counters detailed")
 @counters.command()
-@click.argument('interface', metavar='<interface_name>', required=True, type=str)
-@click.option('-p', '--period', help="Display statistics over a specified period (in seconds)")
+@click.argument('interface', metavar='<INTERFACE_NAME>', required=True, type=str)
+@click.option('-p', '--period', type=click.INT, help="Display statistics over a specified period (in seconds)")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def detailed(interface, period, verbose):
+@click.pass_context
+def detailed(ctx, interface, period, verbose):
     """Show interface counters detailed"""
 
-    ctx = click.get_current_context()
     cmd = ['portstat', '-l']
+
     if period is not None:
         cmd += ['-p', str(period)]
     if interface is not None:
@@ -952,6 +1014,8 @@ def autoneg_status(interfacename, namespace, display, verbose):
         interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
 
         cmd += ['-i', str(interfacename)]
+        if multi_asic.is_multi_asic():
+            cmd += ['-d', str(display)]
     else:
         cmd += ['-d', str(display)]
 
@@ -989,6 +1053,8 @@ def link_training_status(interfacename, namespace, display, verbose):
         interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
 
         cmd += ['-i', str(interfacename)]
+        if multi_asic.is_multi_asic():
+            cmd += ['-d', str(display)]
     else:
         cmd += ['-d', str(display)]
 
@@ -1025,6 +1091,8 @@ def fec_status(interfacename, namespace, display, verbose):
         interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
 
         cmd += ['-i', str(interfacename)]
+        if multi_asic.is_multi_asic():
+            cmd += ['-d', str(display)]
     else:
         cmd += ['-d', str(display)]
 

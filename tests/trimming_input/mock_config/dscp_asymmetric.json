@@ -1,0 +1,8 @@
+{
+    "SWITCH_TRIMMING|GLOBAL": {
+        "size": "200",
+        "dscp_value": "from-tc",
+        "tc_value": "2",
+        "queue_index": "2"
+    }
+}

@@ -142,9 +142,10 @@ class PatchApplier:
         # Apply changes in order
         self.logger.log_notice(f"{scope}: applying {changes_len} change{'s' if changes_len != 1 else ''} " \
                                f"in order{':' if changes_len > 0 else '.'}")
+        current_config = old_config
         for change in changes:
             self.logger.log_notice(f"  * {change}")
-            self.changeapplier.apply(change)
+            current_config = self.changeapplier.apply(current_config, change)
 
         # Validate config updated successfully
         self.logger.log_notice(f"{scope}: verifying patch updates are reflected on ConfigDB.")
@@ -181,6 +182,8 @@ class ConfigReplacer:
 
         self.logger.log_notice("Verifying config replacement is reflected on ConfigDB.")
         new_config = self.config_wrapper.get_config_db_as_json()
+        self.patch_applier.changeapplier.remove_backend_tables_from_config(target_config)
+        self.patch_applier.changeapplier.remove_backend_tables_from_config(new_config)
         if not (self.patch_wrapper.verify_same_json(target_config, new_config)):
             raise GenericConfigUpdaterError(f"After replacing config, there is still some parts not updated")
 

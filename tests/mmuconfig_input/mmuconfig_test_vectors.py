@@ -81,6 +81,14 @@ pool        egress_lossy_pool
 size        0
 ----------  -----------------
 
+Profile: q_lossy_profile
+---------------------  -----------------
+packet_discard_action  drop
+dynamic_th             0
+pool                   egress_lossy_pool
+size                   0
+---------------------  -----------------
+
 """
 
 show_mmu_config_asic0 = """\
@@ -261,20 +269,51 @@ testData = {
                                    'cmp_args': [',ingress_lossless_profile_hbm,static_th,12121213'],
                                    'rc_msg': ''
                                    },
-             'mmu_cfg_alpha' :    {'cmd' : ['config'],
-                                   'args' : ['-p', 'alpha_profile', '-a', '2'],
-                                   'rc' : 0,
-                                   'db_table' : 'BUFFER_PROFILE',
-                                   'cmp_args': [',alpha_profile,dynamic_th,2'],
-                                   'rc_msg' : ''
-                                  },
+             'mmu_cfg_static_th_zero': {
+                'cmd': ['config'],
+                'args': ['-p', 'ingress_lossless_profile_hbm', '-s', '0'],
+                'rc': 0,
+                'db_table': 'BUFFER_PROFILE',
+                'cmp_args': [',ingress_lossless_profile_hbm,static_th,0'],
+                'rc_msg': ''
+             },
+             'mmu_cfg_alpha': {
+               'cmd': ['config'],
+               'args': ['-p', 'alpha_profile', '-a', '2'],
+               'rc': 0,
+               'db_table': 'BUFFER_PROFILE',
+               'cmp_args': [',alpha_profile,dynamic_th,2'],
+               'rc_msg': ''
+             },
+             'mmu_cfg_alpha_zero': {
+                'cmd': ['config'],
+                'args': ['-p', 'alpha_profile', '-a', '0'],
+                'rc': 0,
+                'db_table': 'BUFFER_PROFILE',
+                'cmp_args': [',alpha_profile,dynamic_th,0'],
+                'rc_msg': ''
+             },
              'mmu_cfg_alpha_invalid': {'cmd': ['config'],
                                        'args': ['-p', 'alpha_profile', '-a', '12'],
                                        'rc': 2,
-                                       'rc_msg': ('Usage: mmu [OPTIONS]\nTry "mmu --help" for help.\n'
-                                                  '\nError: Invalid value for "-a": 12 is not in the '
-                                                  'valid range of -8 to 8.\n')
+                                       'rc_msg': ('Invalid value for \'-a\': 12 is not in the '
+                                                  'range -8<=x<=8.')
                                        },
+             'mmu_cfg_trim': {
+                              'cmd': ['config'],
+                              'args': ['-p', 'q_lossy_profile', '-t', 'on'],
+                              'rc': 0,
+                              'db_table': 'BUFFER_PROFILE',
+                              'cmp_args': [',q_lossy_profile,packet_discard_action,trim'],
+                              'rc_msg': ''
+                             },
+             'mmu_cfg_trim_invalid': {
+                                      'cmd': ['config'],
+                                      'args': ['-p', 'q_lossy_profile', '-t', 'INVALID_VALUE'],
+                                      'rc': 2,
+                                      'rc_msg': ('Invalid value for \'-t\': \'INVALID_VALUE\' '
+                                                 'is not one of \'on\', \'off\'.')
+                                     },
              'mmu_cfg_list_one_masic': {'cmd': ['show'],
                                         'args': ['-n', 'asic0'],
                                         'rc': 0,
@@ -333,17 +372,13 @@ testData = {
              'mmu_cfg_alpha_invalid_masic': {'cmd': ['config'],
                                              'args': ['-p', 'alpha_profile', '-a', '12'],
                                              'rc': 2,
-                                             'rc_msg': ('Usage: mmu [OPTIONS]\n'
-                                                        'Try "mmu --help" for help.\n\n'
-                                                        'Error: Invalid value for "-a": 12 '
-                                                        'is not in the valid range of -8 to 8.\n')
+                                             'rc_msg': ('Error: Invalid value for \'-a\': 12 '
+                                                        'is not in the range -8<=x<=8.\n')
                                              },
              'mmu_cfg_static_th_invalid_masic': {'cmd': ['config'],
                                                  'args': ['-p', 'ingress_lossless_profile_hbm', '-s', '-1'],
                                                  'rc': 2,
-                                                 'rc_msg': ('Usage: mmu [OPTIONS]\n'
-                                                            'Try "mmu --help" for help.\n\n'
-                                                            'Error: Invalid value for "-s": '
-                                                            '-1 is smaller than the minimum valid value 0.\n')
+                                                 'rc_msg': ('Error: Invalid value for \'-s\': '
+                                                            '-1 is not in the range x>=0.\n')
                                                  }
            }

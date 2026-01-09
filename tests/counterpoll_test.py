@@ -33,6 +33,8 @@ FLOW_CNT_TRAP_STAT    10000               enable
 FLOW_CNT_ROUTE_STAT   10000               enable
 WRED_ECN_QUEUE_STAT   10000               enable
 WRED_ECN_PORT_STAT    1000                enable
+SRV6_STAT             10000               enable
+SWITCH_STAT           60000               enable
 """
 
 expected_counterpoll_show_dpu = """Type                  Interval (in ms)    Status
@@ -49,6 +51,8 @@ FLOW_CNT_TRAP_STAT    10000               enable
 FLOW_CNT_ROUTE_STAT   10000               enable
 WRED_ECN_QUEUE_STAT   10000               enable
 WRED_ECN_PORT_STAT    1000                enable
+SRV6_STAT             10000               enable
+SWITCH_STAT           60000               enable
 ENI_STAT              1000                enable
 """
 
@@ -82,7 +86,7 @@ class TestCounterpoll(object):
         runner = CliRunner()
         result = runner.invoke(counterpoll.cli.commands["port-buffer-drop"].commands["interval"], ["1000"])
         print(result.output)
-        expected = "Invalid value for \"POLL_INTERVAL\": 1000 is not in the valid range of 30000 to 300000."
+        expected = "Invalid value for 'POLL_INTERVAL': 1000 is not in the range 30000<=x<=300000."
         assert result.exit_code == 2
         assert expected in result.output
 
@@ -90,7 +94,7 @@ class TestCounterpoll(object):
         runner = CliRunner()
         result = runner.invoke(counterpoll.cli.commands["pg-drop"].commands["interval"], ["50000"])
         print(result.output)
-        expected = "Invalid value for \"POLL_INTERVAL\": 50000 is not in the valid range of 1000 to 30000."
+        expected = "Invalid value for 'POLL_INTERVAL': 50000 is not in the range 1000<=x<=30000."
         assert result.exit_code == 2
         assert expected in result.output
 
@@ -99,7 +103,7 @@ class TestCounterpoll(object):
         runner = CliRunner()
         result = runner.invoke(counterpoll.cli.commands["acl"].commands["interval"], [str(interval)])
         print(result.output)
-        expected = "Invalid value for \"POLL_INTERVAL\": {} is not in the valid range of 1000 to 30000.".format(interval)
+        expected = "Invalid value for 'POLL_INTERVAL': {} is not in the range 1000<=x<=30000.".format(interval)
         assert result.exit_code == 2
         assert expected in result.output
 
@@ -199,13 +203,13 @@ class TestCounterpoll(object):
 
         test_interval = "500"
         result = runner.invoke(counterpoll.cli.commands["flowcnt-trap"].commands["interval"], [test_interval], obj=db.cfgdb)
-        expected = "Invalid value for \"POLL_INTERVAL\": 500 is not in the valid range of 1000 to 30000."
+        expected = "Invalid value for 'POLL_INTERVAL': 500 is not in the range 1000<=x<=30000."
         assert result.exit_code == 2
         assert expected in result.output
 
         test_interval = "40000"
         result = runner.invoke(counterpoll.cli.commands["flowcnt-trap"].commands["interval"], [test_interval], obj=db.cfgdb)
-        expected = "Invalid value for \"POLL_INTERVAL\": 40000 is not in the valid range of 1000 to 30000."
+        expected = "Invalid value for 'POLL_INTERVAL': 40000 is not in the range 1000<=x<=30000."
         assert result.exit_code == 2
         assert expected in result.output
 
@@ -225,7 +229,7 @@ class TestCounterpoll(object):
         test_interval = "500"
         result = runner.invoke(counterpoll.cli.commands["flowcnt-route"].commands["interval"], [test_interval],
                                obj=db.cfgdb)
-        expected = "Invalid value for \"POLL_INTERVAL\": 500 is not in the valid range of 1000 to 30000."
+        expected = "Invalid value for 'POLL_INTERVAL': 500 is not in the range 1000<=x<=30000."
         assert result.exit_code == 2
         assert expected in result.output
 
@@ -233,7 +237,7 @@ class TestCounterpoll(object):
         result = runner.invoke(counterpoll.cli.commands["flowcnt-route"].commands["interval"], [test_interval],
                                obj=db.cfgdb)
 
-        expected = "Invalid value for \"POLL_INTERVAL\": 40000 is not in the valid range of 1000 to 30000."
+        expected = "Invalid value for 'POLL_INTERVAL': 40000 is not in the range 1000<=x<=30000."
         assert result.exit_code == 2
         assert expected in result.output
 
@@ -241,7 +245,7 @@ class TestCounterpoll(object):
     def test_update_eni_status(self, status):
         runner = CliRunner()
         result = runner.invoke(counterpoll.cli, ["eni", status])
-        assert 'No such command "eni"' in result.output
+        assert 'No such command \'eni\'' in result.output
         assert result.exit_code == 2
 
     @pytest.mark.parametrize("status", ["disable", "enable"])
@@ -334,6 +338,54 @@ class TestCounterpoll(object):
         table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
         print(table)
         assert test_interval == table["WRED_ECN_QUEUE"]["POLL_INTERVAL"]
+
+    @pytest.mark.parametrize("status", ["disable", "enable"])
+    def test_update_srv6_status(self, status):
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(counterpoll.cli.commands["srv6"].commands[status], [], obj=db.cfgdb)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
+        assert status == table["SRV6"]["FLEX_COUNTER_STATUS"]
+
+    def test_update_srv6_interval(self):
+        runner = CliRunner()
+        db = Db()
+        test_interval = "20000"
+
+        result = runner.invoke(counterpoll.cli.commands["srv6"].commands["interval"], [test_interval], obj=db.cfgdb)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
+        assert test_interval == table["SRV6"]["POLL_INTERVAL"]
+
+    @pytest.mark.parametrize("status", ["disable", "enable"])
+    def test_update_switch_status(self, status):
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(counterpoll.cli.commands["switch"].commands[status], [], obj=db)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
+        assert status == table["SWITCH"]["FLEX_COUNTER_STATUS"]
+
+    def test_update_switch_interval(self):
+        runner = CliRunner()
+        db = Db()
+        test_interval = "20000"
+
+        result = runner.invoke(counterpoll.cli.commands["switch"].commands["interval"], [test_interval], obj=db)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
+        assert test_interval == table["SWITCH"]["POLL_INTERVAL"]
 
     @classmethod
     def teardown_class(cls):

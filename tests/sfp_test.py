@@ -7,7 +7,7 @@ from unittest.mock import patch, MagicMock
 from utilities_common.platform_sfputil_helper import (
     load_platform_sfputil, logical_port_to_physical_port_index,
     logical_port_name_to_physical_port_list, is_sfp_present,
-    get_subport, get_sfp_object, get_value_from_db_by_field
+    get_first_subport, get_subport, get_sfp_object, get_value_from_db_by_field
 )
 
 test_path = os.path.dirname(os.path.abspath(__file__))
@@ -74,15 +74,33 @@ Ethernet0: SFP EEPROM detected
 
 test_qsfp_dd_eeprom_with_dom_output = """\
 Ethernet8: SFP EEPROM detected
-        Application Advertisement: 400GAUI-8 C2M (Annex 120E) - Active Cable assembly with BER < 2.6x10^-4
-				   IB EDR (Arch.Spec.Vol.2) - Active Cable assembly with BER < 5x10^-5
-				   IB QDR (Arch.Spec.Vol.2) - Active Cable assembly with BER < 10^-12
+        Active Firmware: 2.1.1
+        Active application selected code assigned to host lane 1: 1
+        Active application selected code assigned to host lane 2: 1
+        Active application selected code assigned to host lane 3: 1
+        Active application selected code assigned to host lane 4: 1
+        Active application selected code assigned to host lane 5: 1
+        Active application selected code assigned to host lane 6: 1
+        Active application selected code assigned to host lane 7: 1
+        Active application selected code assigned to host lane 8: 1
+        Application Advertisement: 400GAUI-8 C2M (Annex 120E) - Host Assign (0x1) - 400ZR, DWDM, amplified - \
+Media Assign (0x1)
+                                   400GAUI-8 C2M (Annex 120E) - Host Assign (0x1) - 400ZR, Single Wavelength, \
+Unamplified - Media Assign (0x1)
+                                   100GAUI-2 C2M (Annex 135G) - Host Assign (0x55) - 400ZR, DWDM, amplified - \
+Media Assign (0x1)
+        CMIS Rev: 5.0
         Connector: No separable connector
         Encoding: Not supported for CMIS cables
         Extended Identifier: Power Class 1(10.0W Max)
         Extended RateSelect Compliance: Not supported for CMIS cables
+        Host Lane Count: 8
         Identifier: QSFP-DD Double Density 8X Pluggable Transceiver
+        Inactive Firmware: 1.2.3
         Length Cable Assembly(m): 10
+        Media Interface Technology: 1550 nm DFB
+        Media Lane Count: 1
+        Module Hardware Rev: X.X
         Nominal Bit Rate(100Mbs): Not supported for CMIS cables
         Specification compliance: Not supported for CMIS cables
         Vendor Date Code(YYYY-MM-DD Lot): 2020-05-22
@@ -180,6 +198,8 @@ Ethernet72: SFP EEPROM detected
         Vendor PN: some-model    
         Vendor Rev: A3
         Vendor SN: serial1   
+        dom_capability: N/A
+        is_replaceable: True
         ChannelMonitorValues:
                 RX1Power: 0.5dBm
                 RX2Power: 0.3dBm
@@ -234,15 +254,33 @@ Ethernet0: SFP EEPROM detected
 
 test_qsfp_dd_eeprom_output = """\
 Ethernet8: SFP EEPROM detected
-        Application Advertisement: 400GAUI-8 C2M (Annex 120E) - Active Cable assembly with BER < 2.6x10^-4
-				   IB EDR (Arch.Spec.Vol.2) - Active Cable assembly with BER < 5x10^-5
-				   IB QDR (Arch.Spec.Vol.2) - Active Cable assembly with BER < 10^-12
+        Active Firmware: 2.1.1
+        Active application selected code assigned to host lane 1: 1
+        Active application selected code assigned to host lane 2: 1
+        Active application selected code assigned to host lane 3: 1
+        Active application selected code assigned to host lane 4: 1
+        Active application selected code assigned to host lane 5: 1
+        Active application selected code assigned to host lane 6: 1
+        Active application selected code assigned to host lane 7: 1
+        Active application selected code assigned to host lane 8: 1
+        Application Advertisement: 400GAUI-8 C2M (Annex 120E) - Host Assign (0x1) - 400ZR, DWDM, amplified - \
+Media Assign (0x1)
+                                   400GAUI-8 C2M (Annex 120E) - Host Assign (0x1) - 400ZR, Single Wavelength, \
+Unamplified - Media Assign (0x1)
+                                   100GAUI-2 C2M (Annex 135G) - Host Assign (0x55) - 400ZR, DWDM, amplified - \
+Media Assign (0x1)
+        CMIS Rev: 5.0
         Connector: No separable connector
         Encoding: Not supported for CMIS cables
         Extended Identifier: Power Class 1(10.0W Max)
         Extended RateSelect Compliance: Not supported for CMIS cables
+        Host Lane Count: 8
         Identifier: QSFP-DD Double Density 8X Pluggable Transceiver
+        Inactive Firmware: 1.2.3
         Length Cable Assembly(m): 10
+        Media Interface Technology: 1550 nm DFB
+        Media Lane Count: 1
+        Module Hardware Rev: X.X
         Nominal Bit Rate(100Mbs): Not supported for CMIS cables
         Specification compliance: Not supported for CMIS cables
         Vendor Date Code(YYYY-MM-DD Lot): 2020-05-22
@@ -290,7 +328,8 @@ Ethernet44:
     DGD              ps      5.37      5.56      5.81      7.0          7.0          False         0.0          0.0          False
     SOPMD            ps^2    0.0       0.0       0.0       655.35       655.35       False         0.0          0.0          False
     SOP ROC          krad/s  1.0       1.0       2.0       N/A          N/A          N/A           N/A          N/A          N/A
-    Pre-FEC BER      N/A     4.58E-04  4.66E-04  5.76E-04  1.25E-02     1.10E-02     0.0           0.0          0.0          0.0
+    Pre-FEC BER      N/A     4.58E-04  4.66E-04  5.76E-04  1.25E-02     1.10E-02     False         0.0          0.0\
+          False
     Post-FEC BER     N/A     0.0       0.0       0.0       1000.0       1.0          False         0.0          0.0          False
     EVM              %       100.0     100.0     100.0     N/A          N/A          N/A           N/A          N/A          N/A
 """
@@ -946,7 +985,7 @@ Ethernet36  Present
         result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["eeprom"], ["Ethernet8", "-d"])
         assert result.exit_code == 0
         assert result.output == test_qsfp_dd_eeprom_with_dom_output
-        
+
     def test_osfp_eeprom_with_dom(self):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["interfaces"].commands["transceiver"].commands["eeprom"], ["Ethernet72", "-d"])
@@ -1290,6 +1329,25 @@ class TestMultiAsicSFP(object):
             assert False, "Expected SystemExit but it did not occur"
         except SystemExit as e:
             assert e.code == EXIT_FAIL
+
+    @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
+           MagicMock(get_physical_to_logical=MagicMock(return_value=["Ethernet0", "Ethernet4"])))
+    @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
+           MagicMock(get_logical_to_physical=MagicMock(return_value=[1])))
+    def test_get_first_subport(self):
+        assert get_first_subport("Ethernet0") == "Ethernet0"
+
+    @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
+           MagicMock(get_logical_to_physical=MagicMock(return_value=None)))
+    def test_get_first_subport_invalid_physical_port(self):
+        assert get_first_subport("Ethernet0") is None
+
+    @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
+           MagicMock(get_physical_to_logical=MagicMock(side_effect=KeyError)))
+    @patch('utilities_common.platform_sfputil_helper.platform_sfputil',
+           MagicMock(get_logical_to_physical=MagicMock(return_value=[1])))
+    def test_get_first_subport_keyerror(self):
+        assert get_first_subport("Ethernet0") is None
 
     @patch('utilities_common.platform_sfputil_helper.get_value_from_db_by_field')
     def test_get_subport(self, mock_get_value_from_db_by_field):
