@@ -1504,10 +1504,6 @@ class TestWredQueue(object):
         assert result.exit_code == 0
         print(result.output)
         json_output = json.loads(result.output)
-
-        # remove "time" from the output
-        for _, v in json_output.items():
-            del v["time"]
         assert json_dump(json_output) == show_queue_counters_summary_json
 
     def test_clear_wredstats(self):
