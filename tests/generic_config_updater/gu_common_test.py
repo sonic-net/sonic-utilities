@@ -254,6 +254,9 @@ class TestConfigWrapper(unittest.TestCase):
                 },
                 "VnetB|WLPARTNER_PASSIVE_V4": {
                     "ip_range": ["1.1.1.1/31", "10.10.10.10/16", "100.100.100.100/24"]
+                },
+                "WLPARTNER_PASSIVE_V4": {
+                    "ip_range": ["1.1.1.1/31", "10.10.10.10/16", "100.100.100.100/24"]
                 }
             }
         }
