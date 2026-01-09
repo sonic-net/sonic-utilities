@@ -44,6 +44,8 @@ class TestConfigXcvr(object):
         assert "Setting target Tx output power" in result.output
         result = self.basic_check("tx_power", ["Ethernet0", "11.34"], ctx, op=operator.ne)
         assert "Error: tx power must be with single decimal place" in result.output
+        result = self.basic_check("tx_power", ["Ethernet0", "0"], ctx)
+        assert "Setting target Tx output power" in result.output
         # Setting tx power on a port channel is not supported
         result = self.basic_check("tx_power", ["PortChannel0001", "11.3"], ctx, operator.ne)
         assert 'Invalid port PortChannel0001' in result.output

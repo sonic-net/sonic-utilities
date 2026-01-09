@@ -363,7 +363,7 @@ def main():
             port.list_params(args.port)
         elif args.speed or args.fec or args.mtu or args.link_training or args.autoneg or args.adv_speeds or \
             args.interface_type or args.adv_interface_types or args.tpid or \
-            args.tx_power or args.laser_freq:
+            args.tx_power is not None or args.laser_freq:
             if args.speed:
                 port.set_speed(args.port, args.speed)
             if args.fec:
@@ -382,7 +382,7 @@ def main():
                 port.set_adv_interface_types(args.port, args.adv_interface_types)
             if args.tpid:
                 port.set_tpid(args.port, args.tpid)
-            if args.tx_power:
+            if args.tx_power is not None:
                 d = decimal.Decimal(str(args.tx_power))
                 if d.as_tuple().exponent < -1:
                     print("Error: tx power must be with single decimal place")
