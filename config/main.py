@@ -10218,7 +10218,7 @@ def igmp_snooping_static_add(ctx, vid, interface_name, ip_addr):
     l2mc_name = db.get_entry('L2MC_STATIC_GROUP', static_group_key)
     members = l2mc_name.get('static-members', [])
     if interface_name in members:
-        ctx.fail("{} is already a member of {}".format(interface_name,members))
+        ctx.fail("{} is already a member of {}".format(interface_name, vlan_name))
     members.append(interface_name)
     l2mc_name['static-members'] = members
     db.set_entry('L2MC_STATIC_GROUP', static_group_key, l2mc_name)
@@ -10248,7 +10248,7 @@ def igmp_snooping_static_del(ctx, vid, interface_name, ip_addr):
     l2mc_name = db.get_entry('L2MC_STATIC_GROUP', static_group_key)
     members = l2mc_name.get('static-members', [])
     if interface_name not in members:
-        ctx.fail("{} is not a member of {}".format(interface_name, members))
+        ctx.fail("{} is not a member of {}".format(interface_name, vlan_name))
     members.remove(interface_name)
     if len(members) == 0:
         del l2mc_name['static-members']
@@ -10704,7 +10704,7 @@ def mld_snooping_static_add(ctx, vid, interface_name, ip_addr):
     l2mc_name = db.get_entry('MLD_L2MC_STATIC_GROUP', static_group_key)
     members = l2mc_name.get('static-members', [])
     if interface_name in members:
-        ctx.fail("{} is already a member of {}".format(interface_name,members))
+        ctx.fail("{} is already a member of {}".format(interface_name, vlan_name))
     members.append(interface_name)
     l2mc_name['static-members'] = members
     db.set_entry('MLD_L2MC_STATIC_GROUP', static_group_key, l2mc_name)
