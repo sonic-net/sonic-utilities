@@ -7617,13 +7617,24 @@ def del_vrf_vni_map(ctx, vrfname):
 #
 
 @config.group(cls=clicommon.AbbreviationGroup)
+@click.option('-n', '--namespace', help='Namespace name',
+             required=True if multi_asic.is_multi_asic() else False, type=click.Choice(multi_asic.get_namespace_list()))
 @click.pass_context
-def route(ctx):
+@clicommon.pass_db
+def route(db, ctx, namespace):
     """route-related configuration tasks"""
-    config_db = ConfigDBConnector()
-    config_db.connect()
-    ctx.obj = {}
+    if namespace is None:
+        namespace = DEFAULT_NAMESPACE
+    if db.cfgdb_clients:
+        config_db = db.cfgdb_clients[namespace]
+    else:
+        config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=str(namespace))
+        config_db.connect()
+    # Preserve ctx.obj if it's already set (e.g., in tests or when called from other commands)
+    if not isinstance(ctx.obj, dict):
+        ctx.obj = {}
     ctx.obj['config_db'] = config_db
+    ctx.obj['namespace'] = str(namespace)
 
 
 @route.command('add', context_settings={"ignore_unknown_options": True})

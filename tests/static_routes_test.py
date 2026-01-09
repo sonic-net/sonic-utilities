@@ -1,5 +1,7 @@
 import os
+import sys
 import traceback
+import importlib
 
 from click.testing import CliRunner
 
@@ -680,5 +682,84 @@ class TestStaticRoutes(object):
     @classmethod
     def teardown_class(cls):
         os.environ['UTILITIES_UNIT_TESTING'] = "0"
+        print("TEARDOWN")
+
+
+class TestStaticRoutesMultiAsic(object):
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "2"
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
+        print("SETUP")
+        from .mock_tables import mock_multi_asic
+        importlib.reload(mock_multi_asic)
+        from .mock_tables import dbconnector
+        dbconnector.load_namespace_config()
+
+        import utilities_common.multi_asic
+        importlib.reload(utilities_common.multi_asic)
+        # Reload config.main to pick up the reloaded multi_asic module
+        importlib.reload(config)
+
+    def test_static_route_with_namespace(self):
+        import config.main as config
+        runner = CliRunner()
+        db = Db()
+        cfgdb0 = db.cfgdb_clients['asic0']
+
+        result = runner.invoke(config.config.commands["route"],
+                               ["-n", "asic0", "add", "prefix", "1.2.3.4/32", "nexthop", "30.0.0.5"], obj=db)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert ('default', '1.2.3.4/32') in cfgdb0.get_table('STATIC_ROUTE')
+
+        result = runner.invoke(config.config.commands["route"],
+                               ["-n", "asic0", "del", "prefix", "1.2.3.4/32", "nexthop", "30.0.0.5"], obj=db)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        assert ('default', '1.2.3.4/32') not in cfgdb0.get_table('STATIC_ROUTE')
+
+    def test_namespace_isolation(self):
+        import config.main as config
+        runner = CliRunner()
+        db = Db()
+        cfgdb0 = db.cfgdb_clients['asic0']
+        cfgdb1 = db.cfgdb_clients['asic1']
+
+        result = runner.invoke(config.config.commands["route"],
+                               ["-n", "asic0", "add", "prefix", "10.1.1.0/24", "nexthop", "192.168.1.1"], obj=db)
+        assert result.exit_code == 0
+
+        result = runner.invoke(config.config.commands["route"],
+                               ["-n", "asic1", "add", "prefix", "10.2.2.0/24", "nexthop", "192.168.2.1"], obj=db)
+        assert result.exit_code == 0
+
+        assert ('default', '10.1.1.0/24') in cfgdb0.get_table('STATIC_ROUTE')
+        assert ('default', '10.2.2.0/24') not in cfgdb0.get_table('STATIC_ROUTE')
+        assert ('default', '10.2.2.0/24') in cfgdb1.get_table('STATIC_ROUTE')
+        assert ('default', '10.1.1.0/24') not in cfgdb1.get_table('STATIC_ROUTE')
+
+        result = runner.invoke(config.config.commands["route"],
+                               ["-n", "asic0", "del", "prefix", "10.1.1.0/24", "nexthop", "192.168.1.1"], obj=db)
+        assert result.exit_code == 0
+        result = runner.invoke(config.config.commands["route"],
+                               ["-n", "asic1", "del", "prefix", "10.2.2.0/24", "nexthop", "192.168.2.1"], obj=db)
+        assert result.exit_code == 0
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
+
+        from .mock_tables import mock_single_asic
+        importlib.reload(mock_single_asic)
+        from .mock_tables import dbconnector
+        dbconnector.load_database_config()
+
+        import utilities_common.multi_asic
+        importlib.reload(utilities_common.multi_asic)
+        # Reload config.main to pick up the reloaded multi_asic module  
+        importlib.reload(config)
+
         print("TEARDOWN")
 
