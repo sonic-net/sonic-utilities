@@ -378,4 +378,3 @@ class TestMultiAsicInit:
         mock_multi_asic.is_multi_asic.assert_called()
         mock_sonic_db_config.isGlobalInit.assert_not_called()
         mock_sonic_db_config.initializeGlobalConfig.assert_not_called()
-
