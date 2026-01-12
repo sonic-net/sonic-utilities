@@ -13,27 +13,36 @@ from unittest.mock import patch
 
 from sonic_py_common import device_info
 
-show_ip_fib_v4 = """\
-  No.  Vrf    Route               Nexthop                                  Ifname
------  -----  ------------------  ---------------------------------------  -----------------------------------------------------------
-    1         192.168.104.0/25    10.0.0.57,10.0.0.59,10.0.0.61,10.0.0.63  PortChannel101,PortChannel102,PortChannel103,PortChannel104
-    2         192.168.104.128/25                                           PortChannel101,PortChannel102,PortChannel103,PortChannel104
-    3         192.168.110.0/24    blackhole                                blackhole
-    4         192.168.112.0/25    10.0.0.57,10.0.0.59,10.0.0.61,10.0.0.63
-    5         192.168.120.0/25    10.0.0.57,10.0.0.59,10.0.0.61,10.0.0.63  PortChannel101,PortChannel102,PortChannel103,PortChannel104
-    6  Red    192.168.112.128/25  10.0.0.57,10.0.0.59,10.0.0.61,10.0.0.63  PortChannel101,PortChannel102,PortChannel103,PortChannel104
-Total number of entries 6
-"""
+show_ip_fib_v4 = (
+    "  No.  Vrf    Route               Nexthop                                  Ifname\n"
+    "-----  -----  ------------------  ---------------------------------------  "
+    "-----------------------------------------------------------\n"
+    "    1         192.168.104.0/25    10.0.0.57,10.0.0.59,10.0.0.61,10.0.0.63  "
+    "PortChannel101,PortChannel102,PortChannel103,PortChannel104\n"
+    "    2         192.168.104.128/25                                           "
+    "PortChannel101,PortChannel102,PortChannel103,PortChannel104\n"
+    "    3         192.168.110.0/24    blackhole                                blackhole\n"
+    "    4         192.168.112.0/25    10.0.0.57,10.0.0.59,10.0.0.61,10.0.0.63\n"
+    "    5         192.168.120.0/25    10.0.0.57,10.0.0.59,10.0.0.61,10.0.0.63  "
+    "PortChannel101,PortChannel102,PortChannel103,PortChannel104\n"
+    "    6  Red    192.168.112.128/25  10.0.0.57,10.0.0.59,10.0.0.61,10.0.0.63  "
+    "PortChannel101,PortChannel102,PortChannel103,PortChannel104\n"
+    "Total number of entries 6\n"
+)
 
-show_ip_fib_v6 = """\
-  No.  Vrf    Route                Nexthop                              Ifname
------  -----  -------------------  -----------------------------------  -----------------------------------------------------------
-    1         20c0:fe28:0:80::/64  fc00::72,fc00::76,fc00::7a,fc00::7e  PortChannel101,PortChannel102,PortChannel103,PortChannel104
-    2         20c0:fe28::/64       fc00::72,fc00::76,fc00::7a,fc00::7e  PortChannel101,PortChannel102,PortChannel103,PortChannel104
-    3         20c0:fe30:0:80::/64                                       PortChannel101,PortChannel102,PortChannel103,PortChannel104
-    4         9001:db8:100::/64    blackhole                            blackhole
-Total number of entries 4
-"""
+show_ip_fib_v6 = (
+    "  No.  Vrf    Route                Nexthop                              Ifname\n"
+    "-----  -----  -------------------  -----------------------------------  "
+    "-----------------------------------------------------------\n"
+    "    1         20c0:fe28:0:80::/64  fc00::72,fc00::76,fc00::7a,fc00::7e  "
+    "PortChannel101,PortChannel102,PortChannel103,PortChannel104\n"
+    "    2         20c0:fe28::/64       fc00::72,fc00::76,fc00::7a,fc00::7e  "
+    "PortChannel101,PortChannel102,PortChannel103,PortChannel104\n"
+    "    3         20c0:fe30:0:80::/64                                       "
+    "PortChannel101,PortChannel102,PortChannel103,PortChannel104\n"
+    "    4         9001:db8:100::/64    blackhole                            blackhole\n"
+    "Total number of entries 4\n"
+)
 
 root_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(root_path)
