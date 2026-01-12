@@ -914,7 +914,7 @@ save_sys() {
     chmod ugo+rw -R $DUMPDIR/$BASE/sys
 }
 
-save_sysfs() {
+save_sdk_sysfs() {
     trap 'handle_error $? $LINENO' ERR
     local src="$1"
     local dest="$2"
@@ -932,39 +932,55 @@ save_sysfs() {
         return 1
     }
 
+    copy_file_content() {
+        local f="$1"
+        local target="$2"
+        if $NOOP; then
+            echo "cat $f > $target 2>/dev/null"
+        else
+            cat "$f" > "$target" 2>/dev/null
+        fi
+    }
+
     # Copy files directly under src
     for f in "$src"/*; do
-        if [ -f "$f" ]; then
+        if [[ -f "$f" ]]; then
             local base="$(basename "$f")"
             should_skip "$base" && continue
-            local target="$dest/$base"
-
-            if $NOOP; then
-                echo "cat $f > $target 2>/dev/null"
-            else
-                cat "$f" > "$target" 2>/dev/null
-            fi
+            copy_file_content "$f" "$dest/$base"
         fi
     done
 
     # Copy sub folders
     for d in "$src"/*; do
-        if [ -d "$d" ]; then
+        if [[ -d "$d" ]]; then
             local subdir_dest="$dest/$(basename "$d")"
             $MKDIR $V -p "$subdir_dest"
 
+            local present=0 hw_present="" frequency_support=0 only_copy_presence_files=false
+            [[ -f "$d/present" ]] && present=$(<"$d/present")
+            [[ -f "$d/hw_present" ]] && hw_present=$(<"$d/hw_present")
+            [[ -f "$d/frequency_support" ]] && frequency_support=$(<"$d/frequency_support")
+
+            # if the module is unplugged, skip the rest of the files
+            if [[ -n "$hw_present" ]]; then
+                if [[ "$present" == "0" && "$hw_present" == "0" ]]; then
+                    only_copy_presence_files=true
+                fi
+            else
+                [[ "$present" == "0" ]] && only_copy_presence_files=true
+            fi
+
             # copy only files inside sub folder, not sub-sub folders
             for f in "$d"/*; do
-                if [ -f "$f" ]; then
+                if [[ -f "$f" ]]; then
                     local base="$(basename "$f")"
                     should_skip "$base" && continue
-                    local target="$subdir_dest/$base"
 
-                    if $NOOP; then
-                        echo "cat $f > $target 2>/dev/null"
-                    else
-                        cat "$f" > "$target" 2>/dev/null
-                    fi
+                    [[ "$only_copy_presence_files" == true && "$base" != "present" && "$base" != "hw_present" ]] && continue
+                    [[ "$frequency_support" == "0" && "$base" == "frequency" ]] && continue
+
+                    copy_file_content "$f" "$subdir_dest/$base"
                 fi
             done
         fi
@@ -1473,7 +1489,7 @@ collect_mellanox() {
     local sdk_sysfs_dest_path="$TARDIR/sdk_sysfs/sx_core/asic0"
     local excludes_sysfs_files=(rx_los tx_disable module_info module_latched_flag_info power_mode power_mode_policy reinsert reset)
 
-    save_sysfs "$sdk_sysfs_src_path" "$sdk_sysfs_dest_path" "${excludes_sysfs_files[@]}" &
+    save_sdk_sysfs "$sdk_sysfs_src_path" "$sdk_sysfs_dest_path" "${excludes_sysfs_files[@]}" &
 
     # Save CMIS-host-management related files
     local cmis_host_mgmt_path="cmis-host-mgmt"
