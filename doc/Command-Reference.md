@@ -13896,7 +13896,7 @@ In SONiC, there usually exists a set of tables related/relevant to a particular 
 ### Event Driven Techsupport Invocation
 
 This feature/capability makes the techsupport invocation event-driven based on system events like core dump generation or low RAM availability.
-This feature is only applicable for the processes running in the containers. More detailed explanation can be found in the HLD [https://github.com/sonic-net/SONiC/blob/master/doc/auto_techsupport_and_coredump_mgmt.md](https://github.com/sonic-net/SONiC/blob/master/doc/auto-techsupport/auto_techsupport_and_coredump_mgmt.md)
+This feature is only applicable for the processes running in the containers. More detailed explanation can be found in the HLD [HLD](https://github.com/sonic-net/SONiC/blob/master/doc/auto-techsupport/auto_techsupport_and_coredump_mgmt.md)
 
 #### config auto-techsupport global commands
 
