@@ -3316,7 +3316,6 @@ def igmp_snooping_groups_vlan(vlan_id):
     
     count = 0
     for v,s,g in natsorted(member_table_dict):
-        print("v {}, s {}, g {}".format(v,s,g))
         count += 1
         s_entry = s
         if s == "0.0.0.0":
