@@ -25,28 +25,60 @@ sonic_kdump_config = load_module_from_source("sonic_kdump_config", sonic_kdump_c
 
 class TestRemoteFlag(unittest.TestCase):
     def setUp(self):
+        # Helper function to convert string to boolean
+        def str_to_bool(value):
+            """Convert string to boolean for --remote argument"""
+            if isinstance(value, bool):
+                return value
+            if value.lower() in ['true', '1', 'yes', 'enable']:
+                return True
+            elif value.lower() in ['false', '0', 'no', 'disable']:
+                return False
+            else:
+                raise argparse.ArgumentTypeError(f'Boolean value expected (true/false), got: {value}')
+
         # Create a new ArgumentParser for each test
         self.parser = argparse.ArgumentParser(description="kdump configuration and status tool")
-        self.parser.add_argument('--remote', action='store_true', default=False,
-                                 help='Enable the Kdump remote SSH mechanism')
+        self.parser.add_argument('--remote', type=str_to_bool, default=None,
+                                 help='Enable or disable the Kdump remote SSH mechanism (true/false)')
 
-    def test_remote_flag_provided(self):
-        """Test that the --remote flag sets the remote attribute to True."""
-        with patch.object(sys, 'argv', ['script.py', '--remote']):
+    def test_remote_flag_with_true(self):
+        """Test that --remote true sets the remote attribute to True."""
+        with patch.object(sys, 'argv', ['script.py', '--remote', 'true']):
             args = self.parser.parse_args()
             self.assertTrue(args.remote)
 
-    def test_remote_flag_not_provided(self):
-        """Test that the --remote flag defaults to False when not provided."""
-        with patch.object(sys, 'argv', ['script.py']):
+    def test_remote_flag_with_false(self):
+        """Test that --remote false sets the remote attribute to False."""
+        with patch.object(sys, 'argv', ['script.py', '--remote', 'false']):
             args = self.parser.parse_args()
             self.assertFalse(args.remote)
 
-    def test_remote_flag_with_value(self):
-        """Test that providing a value to the --remote flag raises an error."""
-        with patch.object(sys, 'argv', ['script.py', '--remote', 'some_value']):
+    def test_remote_flag_not_provided(self):
+        """Test that the --remote flag defaults to None when not provided."""
+        with patch.object(sys, 'argv', ['script.py']):
+            args = self.parser.parse_args()
+            self.assertIsNone(args.remote)
+
+    def test_remote_flag_with_invalid_value(self):
+        """Test that providing an invalid value to the --remote flag raises an error."""
+        with patch.object(sys, 'argv', ['script.py', '--remote', 'invalid_value']):
             with self.assertRaises(SystemExit):
                 self.parser.parse_args()
+
+    def test_remote_flag_with_alternative_true_values(self):
+        """Test that --remote accepts alternative true values (1, yes, enable)."""
+        for true_value in ['1', 'yes', 'enable', 'True', 'TRUE']:
+            with patch.object(sys, 'argv', ['script.py', '--remote', true_value]):
+                args = self.parser.parse_args()
+                self.assertTrue(args.remote, f"Failed for value: {true_value}")
+
+    def test_remote_flag_with_alternative_false_values(self):
+        """Test that --remote accepts alternative false values (0, no, disable)."""
+        for false_value in ['0', 'no', 'disable', 'False', 'FALSE']:
+            with patch.object(sys, 'argv', ['script.py', '--remote', false_value]):
+                args = self.parser.parse_args()
+                self.assertFalse(args.remote, f"Failed for value: {false_value}")
 
 
 class TestSonicKdumpConfig(unittest.TestCase):
