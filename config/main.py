@@ -1134,6 +1134,32 @@ def interface_has_mirror_config(ctx, mirror_table, dst_port, src_port, direction
 
     return False
 
+
+def is_port_mirror_capability_supported(direction, namespace=None):
+    """ Check if port mirror capability is supported for the given direction """
+    state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
+    state_db.connect(state_db.STATE_DB, False)
+    entry_name = "SWITCH_CAPABILITY|switch"
+
+    # If no direction is specified, check both ingress and egress capabilities
+    if not direction:
+        ingress_supported = state_db.get(state_db.STATE_DB, entry_name, "PORT_INGRESS_MIRROR_CAPABLE")
+        egress_supported = state_db.get(state_db.STATE_DB, entry_name, "PORT_EGRESS_MIRROR_CAPABLE")
+        return ingress_supported == "true" and egress_supported == "true"
+
+    if direction in ['rx', 'both']:
+        ingress_supported = state_db.get(state_db.STATE_DB, entry_name, "PORT_INGRESS_MIRROR_CAPABLE")
+        if ingress_supported != "true":
+            return False
+
+    if direction in ['tx', 'both']:
+        egress_supported = state_db.get(state_db.STATE_DB, entry_name, "PORT_EGRESS_MIRROR_CAPABLE")
+        if egress_supported != "true":
+            return False
+
+    return True
+
+
 def validate_mirror_session_config(config_db, session_name, dst_port, src_port, direction):
     """ Check if SPAN mirror-session config is valid """
     ctx = click.get_current_context()
@@ -1155,7 +1181,6 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
         if interface_is_in_vlan(vlan_member_table, dst_port):
             ctx.fail("Error: Destination Interface {} has vlan config".format(dst_port))
 
-
         if interface_is_in_portchannel(portchannel_member_table, dst_port):
             ctx.fail("Error: Destination Interface {} has portchannel config".format(dst_port))
 
@@ -1175,6 +1200,12 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
     if direction:
         if direction not in ['rx', 'tx', 'both']:
             ctx.fail("Error: Direction {} is invalid".format(direction))
+
+    # Check port mirror capability before allowing configuration
+    # If direction is provided, check the specific direction
+    if not is_port_mirror_capability_supported(direction):
+        ctx.fail("Error: Port mirror direction '{}' is not supported by the ASIC".format(
+            direction if direction else 'both'))
 
     return True
 
