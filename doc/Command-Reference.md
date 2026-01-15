@@ -165,6 +165,7 @@
   * [Packet Trimming Config commands](#packet-trimming-config-commands)
 * [QoS](#qos)
   * [QoS Show commands](#qos-show-commands)
+    * [CoPP](#copp)
     * [PFC](#pfc)
     * [Queue And Priority-Group](#queue-and-priority-group)
     * [Buffer Pool](#buffer-pool)
@@ -477,6 +478,7 @@ This command displays the full list of show commands available in the software; 
     ndp                   Show IPv6 Neighbour table
     ntp                   Show NTP information
     pfc                   Show details of the priority-flow-control...
+    copp                  Show CoPP config details
     platform              Show platform-specific hardware info
     priority-group        Show details of the PGs
     processes             Show process information
@@ -10100,6 +10102,35 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#pbh)
 ## QoS
 
 ### QoS Show commands
+
+#### CoPP
+
+**show copp status**
+
+This command displays the active copp entries in the system
+
+- Usage:
+  ```
+  show copp status
+  ```
+
+- Example:
+   ```
+   admin@sonic:~$ show copp status 
+   {
+      "COPP_TABLE:default": {
+        "value": {
+          "cbs": "600", 
+          "cir": "600", 
+          "meter_type": "packets", 
+          "mode": "sr_tcm", 
+          "queue": "0", 
+          "red_action": "drop"
+        }
+      }
+   }
+   ...
+   ```
 
 #### PFC
 
