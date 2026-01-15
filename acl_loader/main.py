@@ -5,6 +5,7 @@ import ipaddress
 import json
 import syslog
 import operator
+import time
 
 import openconfig_acl
 import tabulate
@@ -320,6 +321,34 @@ class AclLoader(object):
                 status[key]['status'] = state_db_info.get("status", "N/A") if state_db_info else "N/A"
 
         return status
+
+    def _check_if_state_db_items_are_empty(self, db, pattern):
+        try:
+            return not db.keys(db.STATE_DB, pattern)
+        except Exception:
+            return True
+
+    def _wait_until_state_acl_rules_empty(self, table_name=None):
+        """
+        Wait until STATE_DB entries for ACL rules are gone.
+        This checks `self.statedb` and any `self.per_npu_statedb` connectors.
+        Raises AclLoaderException on timeout.
+        """
+
+        pattern = f"{self.STATE_ACL_RULE}|{table_name}|*" if table_name else f"{self.STATE_ACL_RULE}|*"
+
+        for i in range(60):
+            if self._check_if_state_db_items_are_empty(self.statedb, pattern):
+                # Check per-npu statedb connectors
+                if all(
+                    self._check_if_state_db_items_are_empty(ns_statedb, pattern)
+                    for _, ns_statedb in self.per_npu_statedb.items()
+                ):
+                    return
+            time.sleep(1)
+
+        raise AclLoaderException(
+            f"Timed out waiting for STATE_DB to be empty (pattern={pattern})")
 
     def get_sessions_db_info(self):
         return self.sessions_db_info
@@ -841,6 +870,13 @@ class AclLoader(object):
                 for namespace_configdb in self.per_npu_configdb.values():
                     namespace_configdb.mod_entry(self.ACL_RULE, key, None)
 
+        # After removing entries from Config DB, wait for orchestration to
+        # process and clear corresponding STATE_DB entries before inserting
+        # new rules into Config DB.
+        try:
+            self._wait_until_state_acl_rules_empty(self.current_table)
+        except AclLoaderException as e:
+            warning(str(e))
 
         self.configdb.mod_config({self.ACL_RULE: self.rules_info})
         # Program for per front asic namespace also if present
@@ -888,6 +924,13 @@ class AclLoader(object):
             for namespace_configdb in self.per_npu_configdb.values():
                 namespace_configdb.mod_entry(self.ACL_RULE, key, None)
 
+        # After removing entries from Config DB, wait for orchestration to
+        # process and clear corresponding STATE_DB entries before inserting
+        # new rules into Config DB.
+        try:
+            self._wait_until_state_acl_rules_empty(self.current_table)
+        except AclLoaderException as e:
+            warning(str(e))
 
         # Add all new dataplane rules
         for key in new_dataplane_rules:
