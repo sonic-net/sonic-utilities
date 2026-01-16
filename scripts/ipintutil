@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
 import os
-import subprocess
 import sys
+import subprocess
+import json
 
-import netaddr
 import netifaces
 from natsort import natsorted
 from tabulate import tabulate
@@ -15,12 +15,9 @@ from utilities_common import constants
 from utilities_common.general import load_db_config
 from utilities_common import multi_asic as multi_asic_util
 
-# Minimal UT compatibility flag (keeps fast path in production)
-TEST_MODE = os.environ.get("UTILITIES_UNIT_TESTING") == "2"
 
 try:
     if os.environ["UTILITIES_UNIT_TESTING"] == "2":
-
         modules_path = os.path.join(os.path.dirname(__file__), "..")
         tests_path = os.path.join(modules_path, "tests")
         sys.path.insert(0, modules_path)
@@ -31,32 +28,30 @@ try:
             mock_tables.dbconnector.load_namespace_config()
         else:
             import mock_tables.mock_single_asic
-            mock_tables.mock_single_asic.add_unknown_intf=True
+            mock_tables.mock_single_asic.add_unknown_intf = True
 except KeyError:
     pass
 
 
 def get_bgp_peer():
     """
-    collects local and bgp neighbor ip along with device name in below format
+    Collect local->(neighbor_name, neighbor_ip) mapping from CONFIG_DB BGP_NEIGHBOR:
     {
-        'local_addr1':['neighbor_device1_name', 'neighbor_device1_ip'],
-        'local_addr2':['neighbor_device2_name', 'neighbor_device2_ip']
+        'local_addr1': ['neighbor_device1_name', 'neighbor_device1_ip'],
+        'local_addr2': ['neighbor_device2_name', 'neighbor_device2_ip']
     }
     """
     bgp_peer = {}
     config_db = swsscommon.ConfigDBConnector()
     config_db.connect()
-    data = config_db.get_table('BGP_NEIGHBOR')
-
-    for neighbor_ip in data.keys():
-        # The data collected here will only work for manually defined neighbors
-        # so we need to ignore errors when using BGP Unnumbered.
+    data = config_db.get_table('BGP_NEIGHBOR') or {}
+    for neighbor_ip, attrs in data.items():
         try:
-            local_addr = data[neighbor_ip]['local_addr']
-            neighbor_name = data[neighbor_ip]['name']
-            bgp_peer.setdefault(local_addr, [neighbor_name, neighbor_ip])
-        except KeyError:
+            local_addr = attrs.get('local_addr')
+            neighbor_name = attrs.get('name', 'N/A')
+            if local_addr:
+                bgp_peer.setdefault(local_addr, [neighbor_name, neighbor_ip])
+        except Exception:
             pass
     return bgp_peer
 
@@ -77,112 +72,81 @@ def skip_ip_intf_display(interface, display_option):
 
 
 def get_if_admin_state(iface, namespace):
-    """
-    Given an interface name, return its admin state reported by the kernel
-    """
-    cmd = ["cat", "/sys/class/net/{0}/flags".format(iface)]
+    """Return admin state (up/down) from /sys/class/net/<iface>/flags."""
+    cmd = ["cat", f"/sys/class/net/{iface}/flags"]
     if namespace != constants.DEFAULT_NAMESPACE:
         cmd = ["sudo", "ip", "netns", "exec", namespace] + cmd
     try:
-        proc = subprocess.Popen(
-            cmd,
-            stderr=subprocess.STDOUT,
-            stdout=subprocess.PIPE,
-            text=True)
-        state_file = proc.communicate()[0]
-        proc.wait()
-
-    except OSError:
-        print("Error: unable to get admin state for {}".format(iface))
+        out = subprocess.check_output(cmd, text=True, stderr=subprocess.STDOUT).strip()
+        flags = int(out, 16)
+        return "up" if (flags & 0x1) else "down"
+    except Exception:
         return "error"
-
-    try:
-        content = state_file.rstrip()
-        flags = int(content, 16)
-    except ValueError:
-        return "error"
-
-    if flags & 0x1:
-        return "up"
-    else:
-        return "down"
 
 
 def get_if_oper_state(iface, namespace):
-    """
-    Given an interface name, return its oper state reported by the kernel.
-    """
-    cmd = ["cat", "/sys/class/net/{0}/carrier".format(iface)]
+    """Return oper state (up/down) from /sys/class/net/<iface>/carrier."""
+    cmd = ["cat", f"/sys/class/net/{iface}/carrier"]
     if namespace != constants.DEFAULT_NAMESPACE:
         cmd = ["sudo", "ip", "netns", "exec", namespace] + cmd
     try:
-        proc = subprocess.Popen(
-            cmd,
-            stderr=subprocess.STDOUT,
-            stdout=subprocess.PIPE,
-            text=True)
-        state_file = proc.communicate()[0]
-        proc.wait()
-
-    except OSError:
-        print("Error: unable to get oper state for {}".format(iface))
+        out = subprocess.check_output(cmd, text=True, stderr=subprocess.STDOUT).strip()
+        return "up" if out == "1" else "down"
+    except Exception:
         return "error"
-
-    oper_state = state_file.rstrip()
-    if oper_state == "1":
-        return "up"
-    else:
-        return "down"
 
 
 def get_if_master(iface):
-    """
-    Given an interface name, return its master reported by the kernel.
-    """
-    oper_file = "/sys/class/net/{0}/master"
-    if os.path.exists(oper_file.format(iface)):
-        real_path = os.path.realpath(oper_file.format(iface))
-        return os.path.basename(real_path)
-    else:
-        return ""
+    """Return master device name if enslaved, else empty string."""
+    oper_file = f"/sys/class/net/{iface}/master"
+    if os.path.exists(oper_file):
+        try:
+            real_path = os.path.realpath(oper_file)
+            return os.path.basename(real_path)
+        except Exception:
+            return ""
+    return ""
+
+
+def _ns_cmd(namespace, args):
+    """Wrap a command with 'ip netns exec <ns>' if not default namespace."""
+    if namespace == constants.DEFAULT_NAMESPACE:
+        return args
+    return ["sudo", "ip", "netns", "exec", namespace] + args
 
 
 def _addr_show(namespace, af, display):
     """
-    FAST address collector using `ip -o addr show`.
+    FAST address collector using `ip -j -f inet/inet6 addr show`.
     Returns: dict { ifname: [ ["", "CIDR"], ... ] }
     """
     fam_opt = ["-f", "inet"] if af == netifaces.AF_INET else ["-f", "inet6"]
-    base_cmd = ["ip", "-o"] + fam_opt + ["addr", "show"]
-    cmd = base_cmd if namespace == constants.DEFAULT_NAMESPACE else ["sudo", "ip", "netns", "exec", namespace] + base_cmd
-
+    cmd = _ns_cmd(namespace, ["ip", "-j"] + fam_opt + ["addr", "show"])
     try:
-        out = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL)
-    except subprocess.CalledProcessError:
-        out = ""
+        jout = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL)
+        parsed = json.loads(jout)
+    except Exception:
+        parsed = []
 
     addrs = {}
-    for line in out.splitlines():
-        # Example: "12: Po101.1645@PortChannel101    inet 30.2.135.1/24 scope global Po101.1645"
-        colon = line.find(":")
-        if colon < 0:
+    for item in parsed:
+        ifname = item.get("ifname")
+        if not ifname:
             continue
-        ifname = line[colon + 1:].lstrip().split()[0]
 
+        # Preserve legacy behavior: apply display filters only for non-default ns
         if namespace != constants.DEFAULT_NAMESPACE and skip_ip_intf_display(ifname, display):
             continue
 
-        toks = line.split()
-        cidr = None
-        for i, t in enumerate(toks):
-            if t == "inet" or t == "inet6":
-                if i + 1 < len(toks):
-                    cidr = toks[i + 1]
-                break
-        if not cidr:
-            continue
-
-        addrs.setdefault(ifname, []).append(["", cidr])
+        for ai in item.get("addr_info", []):
+            fam = ai.get("family")
+            if (af == netifaces.AF_INET and fam != "inet") or (af == netifaces.AF_INET6 and fam != "inet6"):
+                continue
+            local = ai.get("local")
+            plen = ai.get("prefixlen")
+            if local is None or plen is None:
+                continue
+            addrs.setdefault(ifname, []).append(["", f"{local}/{plen}"])
 
     return addrs
 
@@ -190,64 +154,11 @@ def _addr_show(namespace, af, display):
 def get_ip_intfs_in_namespace(af, namespace, display):
     """
     Get all the IP interfaces from the kernel for the given namespace.
-
-    Behavior:
-      - Production (default): FAST path (enumerate only interfaces that actually have addresses) via `ip -o addr`.
-      - Unit tests (UTILITIES_UNIT_TESTING=2): legacy mock-friendly path for existing fixtures.
-      - Override: if UTILITIES_FORCE_PROD_ENUM is truthy, use the FAST path even when UTILITIES_UNIT_TESTING=2.
-
-    This keeps current tests working without changes, while enabling optional coverage of the prod path.
+    Production path only: enumerate interfaces that actually have addresses (via `ip -j addr`).
     """
     ip_intfs = {}
     bgp_peer = get_bgp_peer()
 
-    # Allow forcing prod enumerator in UT runs without changing tests by default.
-    force_prod = str(os.environ.get("UTILITIES_FORCE_PROD_ENUM", "")).strip().lower() in ("1", "true", "yes", "on")
-
-    # --- Legacy mock-friendly path (UT) ---
-    if TEST_MODE and not force_prod:
-        interfaces = multi_asic_util.multi_asic_get_ip_intf_from_ns(namespace)
-        for iface in interfaces:
-            if namespace != constants.DEFAULT_NAMESPACE and skip_ip_intf_display(iface, display):
-                continue
-            try:
-                ipaddresses = multi_asic_util.multi_asic_get_ip_intf_addr_from_ns(namespace, iface)
-            except ValueError:
-                continue
-            if af not in ipaddresses:
-                continue
-
-            ifaddresses = []
-            bgp_neighs = {}
-            for ipaddr in ipaddresses[af]:
-                local_ip = str(ipaddr['addr'])
-                if af == netifaces.AF_INET:
-                    netmask = netaddr.IPAddress(ipaddr['netmask']).netmask_bits()
-                else:
-                    netmask = ipaddr['netmask'].split('/', 1)[-1]
-                cidr = f"{local_ip}/{netmask}"
-                ifaddresses.append(["", cidr])
-                neigh = bgp_peer.get(local_ip, ['N/A', 'N/A'])
-                bgp_neighs[cidr] = [neigh[0], neigh[1]]
-
-            if not ifaddresses:
-                continue
-
-            admin = get_if_admin_state(iface, namespace)
-            oper = get_if_oper_state(iface, namespace)
-            master = get_if_master(iface)
-
-            ip_intfs[iface] = {
-                "vrf": master,
-                "ipaddr": natsorted(ifaddresses),
-                "admin": admin,
-                "oper": oper,
-                "bgp_neighs": bgp_neighs,
-                "ns": namespace
-            }
-        return ip_intfs
-
-    # --- FAST production path (only devices that actually have IPs) ---
     addr_map = _addr_show(namespace, af, display)
 
     for iface, ifaddresses in addr_map.items():
@@ -276,7 +187,7 @@ def get_ip_intfs_in_namespace(af, namespace, display):
     return ip_intfs
 
 
-def display_ip_intfs(ip_intfs,address_family):
+def display_ip_intfs(ip_intfs, address_family):
     header = ['Interface', 'Master', 'IPv4 address/mask',
               'Admin/Oper', 'BGP Neighbor', 'Neighbor IP']
 
@@ -295,11 +206,9 @@ def display_ip_intfs(ip_intfs,address_family):
 
 
 def get_ip_intfs(af, namespace, display):
-    '''
-    Get all the ip interface present on the device.
-    This include ip interfaces on the host as well as ip
-    interfaces in each network namespace
-    '''
+    """
+    Get all the ip interfaces present on the device (host + namespaces).
+    """
     device = multi_asic_util.MultiAsic(namespace_option=namespace,
                                        display_option=display)
     namespace_list = device.get_ns_list_based_on_options()
@@ -311,8 +220,8 @@ def get_ip_intfs(af, namespace, display):
         namespace_list.append(constants.DEFAULT_NAMESPACE)
 
     ip_intfs = {}
-    for namespace in namespace_list:
-        ip_intfs_in_ns = get_ip_intfs_in_namespace(af, namespace, display)
+    for ns in namespace_list:
+        ip_intfs_in_ns = get_ip_intfs_in_namespace(af, ns, display)
         # multi asic device can have same ip interface in different namespace
         # so remove the duplicates
         if device.is_multi_asic:
@@ -332,7 +241,7 @@ def get_ip_intfs(af, namespace, display):
 def main():
     # This script gets the ip interfaces from different linux
     # network namespaces. This can be only done from root user.
-    if os.geteuid() != 0 and os.environ.get("UTILITIES_UNIT_TESTING", "0") not in ["1", "2"]:
+    if os.geteuid() != 0 and os.environ.get("UTILITIES_UNIT_TESTING", "0") != "2":
         sys.exit("Root privileges required for this operation")
 
     parser = multi_asic_util.multi_asic_args()
@@ -350,7 +259,7 @@ def main():
 
     load_db_config()
     ip_intfs = get_ip_intfs(af, namespace, display)
-    display_ip_intfs(ip_intfs,args.address_family)
+    display_ip_intfs(ip_intfs, args.address_family)
 
     sys.exit(0)
 
