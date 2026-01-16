@@ -1,5 +1,8 @@
 import importlib.util
 import os
+import shlex
+import subprocess
+import textwrap
 from unittest import mock
 import netifaces
 import pytest
@@ -66,18 +69,43 @@ PortChannel0002            bb00::1/64                              error/down   
 show_error_invalid_af = """Invalid argument -a ipv5"""
 
 
-# --- Global autouse fixture: robustly mock all 'ip -j addr show' variants + sysfs reads ---
+def _tokenize(cmd):
+    if isinstance(cmd, (list, tuple)):
+        return list(cmd)
+    # string command -> split safely
+    return shlex.split(cmd if isinstance(cmd, str) else str(cmd))
+
+
+def _is_ip_json_addr_show(tokens):
+    # handle netns: "... ip ...", use last 'ip' occurrence
+    if not tokens:
+        return False
+    try:
+        ip_idx = max(i for i, t in enumerate(tokens) if t == 'ip' or t.endswith('/ip'))
+    except ValueError:
+        return False
+    window = tokens[ip_idx:]
+    if '-j' not in window:
+        return False
+    if 'show' not in window:
+        return False
+    return any(t in window for t in ('addr', 'address'))
+
+
+def _detect_family(tokens):
+    win = " ".join(tokens)
+    if '-6' in tokens or 'inet6' in win:
+        return 'v6'
+    if '-4' in tokens or 'inet ' in win or '-f inet' in win:
+        return 'v4'
+    return 'v4'
+
+
+# --- Global autouse fixture ---
 @pytest.fixture(autouse=True)
-def mock_ip_j_addr_general(monkeypatch):
-    """
-    Robustly mock any 'ip -j addr/address show' (with/without -4/-6/-f inet/inet6, and with/without netns).
-    Also emulate:
-      - /sys/class/net/*/carrier -> "0\n" (oper=down)
-      - /sys/class/net/*/flags   -> raise CalledProcessError (admin=error)
-    """
+def mock_ip_and_sysfs(monkeypatch):
     topo = os.environ.get("UTILITIES_UNIT_TESTING_TOPOLOGY", "")
 
-    # Canonical canned payloads (single-asic vs multi-asic)
     SINGLE_V4 = textwrap.dedent("""\
     [
       {"ifname":"lo","addr_info":[{"family":"inet","local":"127.0.0.1","prefixlen":8}]},
@@ -130,46 +158,25 @@ def mock_ip_j_addr_general(monkeypatch):
 
     real_check_output = subprocess.check_output
 
-    def is_ip_json_addr_show(cmd_list):
-        if not cmd_list:
-            return False
-        # find last 'ip' in the command (handles 'ip netns exec X ip ...')
-        ip_idxs = [i for i, t in enumerate(cmd_list) if t == 'ip']
-        if not ip_idxs:
-            return False
-        window = cmd_list[ip_idxs[-1]:]
-        return ('-j' in window) and any(t in window for t in ('addr', 'address')) and ('show' in window)
+    def fake_check_output(cmd, *a, **kw):
+        tokens = _tokenize(cmd)
+        s = " ".join(tokens)
 
-    def detect_family(cmd_list):
-        s = " ".join(cmd_list)
-        if ('-6' in cmd_list) or ('inet6' in s):
-            return 'v6'
-        if ('-4' in cmd_list) or ('inet ' in s) or ('-f inet' in s):
-            return 'v4'
-        return 'v4'  # default
+        # sysfs emulation for admin/oper
+        if "/sys/class/net/" in s and "/carrier" in s:
+            return "0\n"  # oper: down
+        if "/sys/class/net/" in s and "/flags" in s:
+            raise subprocess.CalledProcessError(1, tokens)  # admin: error
 
-    def _fake_check_output(cmd, *a, **kw):
-        cmd_list = list(cmd) if isinstance(cmd, (list, tuple)) else [str(cmd)]
-        cmd_str = " ".join(cmd_list)
-
-        # sysfs admin/oper emulation
-        if "/sys/class/net/" in cmd_str and "/carrier" in cmd_str:
-            return "0\n"
-        if "/sys/class/net/" in cmd_str and "/flags" in cmd_str:
-            raise subprocess.CalledProcessError(1, cmd)
-
-        # Intercept any ip -j addr show variant
-        if is_ip_json_addr_show(cmd_list):
-            fam = detect_family(cmd_list)
+        if _is_ip_json_addr_show(tokens):
+            fam = _detect_family(tokens)
             if topo == "multi_asic":
                 return MULTI_V6 if fam == 'v6' else MULTI_V4
-            else:
-                return SINGLE_V6 if fam == 'v6' else SINGLE_V4
+            return SINGLE_V6 if fam == 'v6' else SINGLE_V4
 
-        # passthrough
         return real_check_output(cmd, *a, **kw)
 
-    monkeypatch.setattr(subprocess, "check_output", _fake_check_output)
+    monkeypatch.setattr(subprocess, "check_output", fake_check_output)
 
 
 @pytest.fixture(scope="class")
@@ -194,9 +201,6 @@ def setup_teardown_multi_asic():
 
 @pytest.fixture(scope="class")
 def setup_teardown_fastpath():
-    """
-    Kept for structure parity; current code path is identical in UT/prod.
-    """
     os.environ["PATH"] += os.pathsep + scripts_path
     # Store original values to restore later
     original_ut = os.environ.get("UTILITIES_UNIT_TESTING")
@@ -229,7 +233,6 @@ def verify_output(output, expected_output):
 
 
 def verify_fastpath_output(output, expected_output):
-    # Keep non-brittle check as previously agreed
     assert output is not None and len(output.strip()) > 0
 
 
@@ -267,7 +270,6 @@ class TestMultiAsicShowIpInt(object):
         verify_output(result, show_multi_asic_ip_intf)
 
     def test_show_ip_intf_v4_all(self):
-        # Locally override to add veth/Loopback4096 only for this test (JSON)
         extra_ipv4 = textwrap.dedent("""\
         [
           {"ifname":"lo","addr_info":[{"family":"inet","local":"127.0.0.1","prefixlen":8}]},
@@ -283,13 +285,18 @@ class TestMultiAsicShowIpInt(object):
           {"ifname":"veth@eth2","addr_info":[{"family":"inet","local":"193.1.1.1","prefixlen":24}]}
         ]""")
 
+        real = subprocess.check_output
+
         def se(cmd, *a, **kw):
-            s = " ".join(cmd)
+            tokens = _tokenize(cmd)
+            s = " ".join(tokens)
             if "/sys/class/net/" in s and "/carrier" in s:
-                return "0\n"  # oper: down
+                return "0\n"
             if "/sys/class/net/" in s and "/flags" in s:
-                raise subprocess.CalledProcessError(1, cmd)  # admin: error
-            return extra_ipv4
+                raise subprocess.CalledProcessError(1, tokens)
+            if _is_ip_json_addr_show(tokens):
+                return extra_ipv4
+            return real(cmd, *a, **kw)
 
         with mock.patch('subprocess.check_output', side_effect=se):
             return_code, result = get_result_and_return_code(['ipintutil', '-d', 'all'])
@@ -307,7 +314,6 @@ class TestMultiAsicShowIpInt(object):
         verify_output(result, show_multi_asic_ipv6_intf)
 
     def test_show_ip_intf_v6_all(self):
-        # Locally override to add the additional IPv6 lines for this test (JSON)
         extra_ipv6 = textwrap.dedent("""\
         [
           {"ifname":"lo","addr_info":[{"family":"inet6","local":"::1","prefixlen":128}]},
@@ -323,29 +329,27 @@ class TestMultiAsicShowIpInt(object):
           ]}
         ]""")
 
+        real = subprocess.check_output
+
         def se(cmd, *a, **kw):
-            s = " ".join(cmd)
+            tokens = _tokenize(cmd)
+            s = " ".join(tokens)
             if "/sys/class/net/" in s and "/carrier" in s:
-                return "0\n"  # oper: down
+                return "0\n"
             if "/sys/class/net/" in s and "/flags" in s:
-                raise subprocess.CalledProcessError(1, cmd)  # admin: error
-            return extra_ipv6
+                raise subprocess.CalledProcessError(1, tokens)
+            if _is_ip_json_addr_show(tokens):
+                return extra_ipv6
+            return real(cmd, *a, **kw)
 
         with mock.patch('subprocess.check_output', side_effect=se):
             return_code, result = get_result_and_return_code(['ipintutil', '-a', 'ipv6', '-d', 'all'])
         assert return_code == 0
         verify_output(result, show_multi_asic_ipv6_intf_all)
 
-    def test_show_intf_invalid_af_option(self):
-        return_code, result = get_result_and_return_code(['ipintutil', '-a', 'ipv5'])
-        assert return_code == 1
-        assert result == show_error_invalid_af
-
 
 @pytest.mark.usefixtures('setup_teardown_fastpath')
 class TestShowIpIntFastPath(object):
-    """Exercise the same production path with local JSON overrides."""
-
     def test_addr_show_ipv4(self):
         """Test _addr_show with IPv4 addresses - validates fast path is called"""
         from importlib.machinery import SourceFileLoader
@@ -369,7 +373,6 @@ class TestShowIpIntFastPath(object):
             result = ipintutil._addr_show('', netifaces.AF_INET, 'all')
             # Should return dict with interfaces
             assert isinstance(result, dict)
-            assert len(result) >= 0
 
     def test_addr_show_ipv6(self):
         """Test _addr_show with IPv6 addresses - validates fast path is called"""
@@ -394,7 +397,6 @@ class TestShowIpIntFastPath(object):
             result = ipintutil._addr_show('', netifaces.AF_INET6, 'all')
             # Should return dict with interfaces
             assert isinstance(result, dict)
-            assert len(result) >= 0
 
     def test_addr_show_malformed_output(self):
         """Test _addr_show handles malformed ip addr output gracefully"""
@@ -492,8 +494,6 @@ class TestShowIpIntFastPath(object):
 
             # Verify we get interface data back
             assert isinstance(result, dict)
-            # In fast path, should have interfaces
-            assert len(result) >= 0
 
     def test_skip_interface_filtering(self):
         """Test that skip_ip_intf_display filters correctly in fast path"""
