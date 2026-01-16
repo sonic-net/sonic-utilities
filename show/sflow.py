@@ -70,17 +70,22 @@ def show_sflow_global(config_db):
         if ('sample_direction' in sflow_info['global']):
             global_sample_dir = sflow_info['global']['sample_direction']
 
-    click.echo("\nsFlow Global Information:")
-    click.echo("  sFlow Admin State:".ljust(30) + "{}".format(global_admin_state))
-    click.echo("  sFlow Sample Direction:".ljust(30) + "{}".format(global_sample_dir))
+    ljust_len = 35
 
-    click.echo("  sFlow Polling Interval:".ljust(30), nl=False)
+    click.echo("\nsFlow Global Information:")
+    click.echo("  sFlow Admin State:".ljust(ljust_len) + "{}".format(global_admin_state))
+    click.echo("  sFlow Sample Direction:".ljust(ljust_len) + "{}".format(global_sample_dir))
+
+    click.echo("  sFlow Polling Interval:".ljust(ljust_len), nl=False)
     if (sflow_info and 'polling_interval' in sflow_info['global']):
         click.echo("{}".format(sflow_info['global']['polling_interval']))
     else:
         click.echo("default")
 
-    click.echo("  sFlow AgentID:".ljust(30), nl=False)
+    drop_monitor_limit = sflow_info.get('global', {}).get('drop_monitor_limit', 0) if sflow_info else 0
+    click.echo("  sFlow Drop Notification Limit:".ljust(ljust_len) + "{}".format(drop_monitor_limit))
+
+    click.echo("  sFlow AgentID:".ljust(ljust_len), nl=False)
     if (sflow_info and 'agent_id' in sflow_info['global']):
         click.echo("{}".format(sflow_info['global']['agent_id']))
     else:
@@ -91,7 +96,7 @@ def show_sflow_global(config_db):
     for collector_name in sorted(list(sflow_info.keys())):
         vrf_name = (sflow_info[collector_name]['collector_vrf']
                     if 'collector_vrf' in sflow_info[collector_name] else 'default')
-        click.echo("    Name: {}".format(collector_name).ljust(30) +
+        click.echo("    Name: {}".format(collector_name).ljust(ljust_len) +
                    "IP addr: {} ".format(sflow_info[collector_name]['collector_ip']).ljust(25) +
                    "UDP port: {}".format(sflow_info[collector_name]['collector_port']).ljust(17) +
                    "VRF: {}".format(vrf_name))
