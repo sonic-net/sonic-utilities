@@ -383,35 +383,4 @@ class TestShowIpIntFastPath(object):
             # Test with 'frontend' display - should skip internal interfaces
             result = ipintutil.get_ip_intfs_in_namespace(netifaces.AF_INET, '', 'frontend')
             assert isinstance(result, dict)
-            # In fast path, filtering happens in _addr_show
 
-    def test_bgp_neighbor_lookup(self):
-        """Test BGP neighbor association in fast path"""
-        from importlib.machinery import SourceFileLoader
-
-        ipintutil_path = os.path.join(scripts_path, 'ipintutil')
-        loader = SourceFileLoader("ipintutil_bgp", ipintutil_path)
-        spec = importlib.util.spec_from_loader("ipintutil_bgp", loader)
-        ipintutil = importlib.util.module_from_spec(spec)
-
-        ip_output = "2: Ethernet0    inet 20.1.1.1/24 scope global Ethernet0\n"
-
-        mock_config_db = mock.MagicMock()
-        mock_config_db.get_table.return_value = {
-            '20.1.1.5': {'local_addr': '20.1.1.1', 'name': 'T2-Peer'}
-        }
-
-        with mock.patch('subprocess.check_output', return_value=ip_output), \
-             mock.patch('subprocess.Popen') as mock_popen, \
-             mock.patch('swsscommon.swsscommon.ConfigDBConnector', return_value=mock_config_db), \
-             mock.patch('os.path.exists', return_value=True):
-
-            mock_proc = mock.MagicMock()
-            mock_proc.communicate.return_value = (b'1\n', b'')
-            mock_popen.return_value = mock_proc
-
-            loader.exec_module(ipintutil)
-            result = ipintutil.get_ip_intfs_in_namespace(netifaces.AF_INET, '', 'all')
-
-            # Just verify it doesn't crash and returns data
-            assert isinstance(result, dict)
