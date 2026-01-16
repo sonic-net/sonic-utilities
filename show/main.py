@@ -15,6 +15,7 @@ from sonic_py_common import device_info
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from tabulate import tabulate
 from utilities_common import util_base
+from utilities_common import hft as hft_common
 from utilities_common.db import Db
 from datetime import datetime
 import utilities_common.constants as constants
@@ -33,7 +34,6 @@ try:
     if os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] == "multi_asic":
         import mock_tables.mock_multi_asic
         reload(mock_tables.mock_multi_asic)
-        reload(mock_tables.dbconnector)
         mock_tables.dbconnector.load_namespace_config()
 
 except KeyError:
@@ -47,6 +47,7 @@ from . import fabric
 from . import feature
 from . import fgnhg
 from . import flow_counters
+from . import hft
 from . import gearbox
 from . import interfaces
 from . import kdump
@@ -69,6 +70,7 @@ from . import dns
 from . import bgp_cli
 from . import stp
 from . import srv6
+from . import switch
 from . import icmp
 from . import copp
 
@@ -88,8 +90,8 @@ COMMAND_TIMEOUT = 300
 # location (configdb?), so that we prevent the continous execution of this
 # bash oneliner. To be revisited once routing-stack info is tracked somewhere.
 def get_routing_stack():
-    result = None
-    command = "sudo docker ps | grep bgp | grep -E 'quagga|frr' | awk '{print$2}' | cut -d'-' -f3 | cut -d':' -f1 | head -n 1"
+    result = 'frr'
+    command = "sudo docker ps --format '{{.Image}}\t{{.Names}}' | awk '$2 ~ /^bgp([0-9]+)?$/' | cut -d'-' -f3 | cut -d':' -f1 | head -n 1"  # noqa: E501
 
     try:
         stdout = subprocess.check_output(command, shell=True, text=True, timeout=COMMAND_TIMEOUT)
@@ -305,6 +307,8 @@ cli.add_command(feature.feature)
 cli.add_command(fgnhg.fgnhg)
 cli.add_command(flow_counters.flowcnt_route)
 cli.add_command(flow_counters.flowcnt_trap)
+if hft_common.is_supported_platform():
+    cli.add_command(hft.hft)
 cli.add_command(kdump.kdump)
 cli.add_command(interfaces.interfaces)
 cli.add_command(kdump.kdump)
@@ -324,6 +328,7 @@ cli.add_command(warm_restart.warm_restart)
 cli.add_command(dns.dns)
 cli.add_command(stp.spanning_tree)
 cli.add_command(srv6.srv6)
+cli.add_command(switch.switch)
 cli.add_command(icmp.icmp)
 cli.add_command(copp.copp)
 
@@ -644,13 +649,16 @@ def pfc():
 # 'counters' subcommand ("show interfaces pfccounters")
 @pfc.command()
 @multi_asic_util.multi_asic_click_options
+@click.option('--history', is_flag=True, help="Display historical PFC statistics")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def counters(namespace, display, verbose):
+def counters(namespace, history, display, verbose):
     """Show pfc counters"""
 
     cmd = ['pfcstat', '-s', str(display)]
     if namespace is not None:
         cmd += ['-n', str(namespace)]
+    if history:
+        cmd += ['--history']
 
     run_command(cmd, display_cmd=verbose)
 
@@ -839,11 +847,14 @@ def watermark():
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def wm_q_uni(namespace):
+@click.option('--json', '-j', 'json_output', is_flag=True, default=False, show_default=True, help="Display JSON output")
+def wm_q_uni(namespace, json_output):
     """Show user WM for unicast queues"""
     command = ['watermarkstat', '-t', 'q_shared_uni']
     if namespace is not None:
         command += ['-n', str(namespace)]
+    if json_output:
+        command += ["-j"]
     run_command(command)
 
 # 'multicast' subcommand ("show queue watermarks multicast")
@@ -856,11 +867,14 @@ def wm_q_uni(namespace):
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def wm_q_multi(namespace):
+@click.option('--json', '-j', 'json_output', is_flag=True, default=False, show_default=True, help="Display JSON output")
+def wm_q_multi(namespace, json_output):
     """Show user WM for multicast queues"""
     command = ['watermarkstat', '-t', 'q_shared_multi']
     if namespace is not None:
         command += ['-n', str(namespace)]
+    if json_output:
+        command += ["-j"]
     run_command(command)
 
 # 'all' subcommand ("show queue watermarks all")
@@ -873,11 +887,14 @@ def wm_q_multi(namespace):
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def wm_q_all(namespace):
+@click.option('--json', '-j', 'json_output', is_flag=True, default=False, show_default=True, help="Display JSON output")
+def wm_q_all(namespace, json_output):
     """Show user WM for all queues"""
     command = ['watermarkstat', '-t', 'q_shared_all']
     if namespace is not None:
         command += ['-n', str(namespace)]
+    if json_output:
+        command += ["-j"]
     run_command(command)
 
 #
@@ -899,11 +916,14 @@ def persistent_watermark():
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def pwm_q_uni(namespace):
+@click.option('--json', '-j', 'json_output', is_flag=True, default=False, show_default=True, help="Display JSON output")
+def pwm_q_uni(namespace, json_output):
     """Show persistent WM for unicast queues"""
     command = ['watermarkstat', '-p', '-t', 'q_shared_uni']
     if namespace is not None:
         command += ['-n', str(namespace)]
+    if json_output:
+        command += ["-j"]
     run_command(command)
 
 # 'multicast' subcommand ("show queue persistent-watermarks multicast")
@@ -916,11 +936,14 @@ def pwm_q_uni(namespace):
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def pwm_q_multi(namespace):
+@click.option('--json', '-j', 'json_output', is_flag=True, default=False, show_default=True, help="Display JSON output")
+def pwm_q_multi(namespace, json_output):
     """Show persistent WM for multicast queues"""
     command = ['watermarkstat', '-p', '-t', 'q_shared_multi']
     if namespace is not None:
         command += ['-n', str(namespace)]
+    if json_output:
+        command += ["-j"]
     run_command(command)
 
 # 'all' subcommand ("show queue persistent-watermarks all")
@@ -933,11 +956,14 @@ def pwm_q_multi(namespace):
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def pwm_q_all(namespace):
+@click.option('--json', '-j', 'json_output', is_flag=True, default=False, show_default=True, help="Display JSON output")
+def pwm_q_all(namespace, json_output):
     """Show persistent WM for all queues"""
     command = ['watermarkstat', '-p', '-t', 'q_shared_all']
     if namespace is not None:
         command += ['-n', str(namespace)]
+    if json_output:
+        command += ["-j"]
     run_command(command)
 
 #
@@ -962,11 +988,14 @@ def watermark():
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def wm_pg_headroom(namespace):
+@click.option('--json', '-j', 'json_output', is_flag=True, default=False, show_default=True, help="Display JSON output")
+def wm_pg_headroom(namespace, json_output):
     """Show user headroom WM for pg"""
     command = ['watermarkstat', '-t', 'pg_headroom']
     if namespace is not None:
         command += ['-n', str(namespace)]
+    if json_output:
+        command += ["-j"]
     run_command(command)
 
 @watermark.command('shared')
@@ -978,11 +1007,14 @@ def wm_pg_headroom(namespace):
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def wm_pg_shared(namespace):
+@click.option('--json', '-j', 'json_output', is_flag=True, default=False, show_default=True, help="Display JSON output")
+def wm_pg_shared(namespace, json_output):
     """Show user shared WM for pg"""
     command = ['watermarkstat', '-t', 'pg_shared']
     if namespace is not None:
         command += ['-n', str(namespace)]
+    if json_output:
+        command += ["-j"]
     run_command(command)
 
 @priority_group.group()
@@ -1013,11 +1045,14 @@ def persistent_watermark():
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def pwm_pg_headroom(namespace):
+@click.option('--json', '-j', 'json_output', is_flag=True, default=False, show_default=True, help="Display JSON output")
+def pwm_pg_headroom(namespace, json_output):
     """Show persistent headroom WM for pg"""
     command = ['watermarkstat', '-p', '-t', 'pg_headroom']
     if namespace is not None:
         command += ['-n', str(namespace)]
+    if json_output:
+        command += ["-j"]
     run_command(command)
 
 
@@ -1030,11 +1065,14 @@ def pwm_pg_headroom(namespace):
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def pwm_pg_shared(namespace):
+@click.option('--json', '-j', 'json_output', is_flag=True, default=False, show_default=True, help="Display JSON output")
+def pwm_pg_shared(namespace, json_output):
     """Show persistent shared WM for pg"""
     command = ['watermarkstat', '-p', '-t', 'pg_shared']
     if namespace is not None:
         command += ['-n', str(namespace)]
+    if json_output:
+        command += ["-j"]
     run_command(command)
 
 
@@ -2662,9 +2700,22 @@ def peer(db, peer_ip, namespace):
 def suppress_pending_fib(db):
     """ Show the status of suppress pending FIB feature """
 
-    field_values = db.cfgdb.get_entry('DEVICE_METADATA', 'localhost')
-    state = field_values.get('suppress-fib-pending', 'disabled').title()
-    click.echo(state)
+    if multi_asic.get_num_asics() > 1:
+        namespace_list = multi_asic.get_namespaces_from_linux()
+        masic = True
+    else:
+        namespace_list = [multi_asic.DEFAULT_NAMESPACE]
+        masic = False
+
+    for ns in namespace_list:
+        config_db = db.cfgdb_clients[ns]
+        field_values = config_db.get_entry('DEVICE_METADATA', 'localhost')
+        state = field_values.get('suppress-fib-pending', 'enabled').title()
+
+        if masic:
+            click.echo("{}: {}".format(ns, state))
+        else:
+            click.echo("{}".format(state))
 
 
 # asic-sdk-health-event subcommand ("show asic-sdk-health-event")

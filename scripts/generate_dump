@@ -794,6 +794,7 @@ save_frr_info() {
     save_vtysh "show ipv6 route vrf all nexthop-group" "frr.ip6_route.nhg"
     save_vtysh "show zebra fpm stats" "frr.fpm.stats"
     save_vtysh "show zebra dplane detailed" "frr.dplane"
+    save_vtysh "show zebra dplane providers" "frr.dplane.providers"
     save_vtysh "show interface vrf all" "frr.interfaces"
     save_vtysh "show zebra" "frr.zebra"
     save_vtysh "show zebra client" "frr.zebra.client"
@@ -807,8 +808,8 @@ save_frr_info() {
     save_vtysh "show mpls fec" "frr.mpls.fec"
     save_vtysh "show nexthop-group rib" "frr.nhg.rib"
     save_vtysh "show route-map" "frr.route_map"
-    save_vtysh "show thread cpu" "frr.thread_cpu"
-    save_vtysh "show thread poll" "frr.thread_poll"
+    save_vtysh "show event cpu" "frr.event_cpu"
+    save_vtysh "show event poll" "frr.event_poll"
     save_vtysh "show debugging hashtable" "frr.debugging_hashtable"
     save_vtysh "show work-queues" "frr.work_queues"
     save_vtysh "show memory" "frr.memory"
@@ -911,6 +912,89 @@ save_sys() {
     done
 
     chmod ugo+rw -R $DUMPDIR/$BASE/sys
+}
+
+save_sdk_sysfs() {
+    trap 'handle_error $? $LINENO' ERR
+    local src="$1"
+    local dest="$2"
+    shift 2
+    # sys files we do not want to include in dump
+    local excludes=("$@")
+    # there are module's sysfs which we cannot access while the module is in fw control
+    local fw_control_skip_list=(frequency_support frequency hw_present hw_reset low_power_mode power_good power_limit)
+    $MKDIR $V -p "$dest"
+
+    should_skip() {
+        local base="$1"
+        shift
+        local skip_list=("$@")
+
+        for skip in "${skip_list[@]}"; do
+            [[ "$base" == "$skip" ]] && return 0
+        done
+
+        return 1
+    }
+
+    copy_file_content() {
+        local f="$1"
+        local target="$2"
+        if $NOOP; then
+            echo "cat $f > $target 2>/dev/null"
+        else
+            cat "$f" > "$target" 2>/dev/null
+        fi
+    }
+
+    # Copy files directly under src
+    for f in "$src"/*; do
+        if [[ -f "$f" ]]; then
+            local base="$(basename "$f")"
+            should_skip "$base" "${excludes[@]}" && continue
+            copy_file_content "$f" "$dest/$base"
+        fi
+    done
+
+    # Copy sub folders
+    for d in "$src"/*; do
+        if [[ -d "$d" ]]; then
+            local subdir_dest="$dest/$(basename "$d")"
+            $MKDIR $V -p "$subdir_dest"
+
+            local present=0 hw_present="" control="" frequency_support=0 only_copy_presence_files=false
+            [[ -f "$d/control" ]] && control=$(<"$d/control")
+            [[ -f "$d/present" ]] && present=$(<"$d/present")
+            [[ -f "$d/hw_present" ]] && hw_present=$(<"$d/hw_present")
+            # frequency_support is supported only for SW control modules
+            [[ "$control" == "1" && -f "$d/frequency_support" ]] && frequency_support=$(<"$d/frequency_support")
+
+            # if the module is unplugged, skip the rest of the files
+            if [[ -n "$hw_present" ]]; then
+                if [[ "$present" == "0" && "$hw_present" == "0" ]]; then
+                    only_copy_presence_files=true
+                fi
+            else
+                [[ "$present" == "0" ]] && only_copy_presence_files=true
+            fi
+
+            # copy only files inside sub folder, not sub-sub folders
+            for f in "$d"/*; do
+                if [[ -f "$f" ]]; then
+                    local base="$(basename "$f")"
+                    should_skip "$base" "${excludes[@]}" && continue
+                    [[ "$control" == "0" ]] && should_skip "$base" "${fw_control_skip_list[@]}" && continue
+
+                    [[ "$only_copy_presence_files" == true && "$base" != "present" && "$base" != "hw_present" ]] && continue
+                    [[ "$frequency_support" == "0" && "$base" == "frequency" ]] && continue
+
+                    copy_file_content "$f" "$subdir_dest/$base"
+                fi
+            done
+        fi
+    done
+
+    chmod ugo+rw -R "$dest"
 }
 
 ###############################################################################
@@ -1161,6 +1245,24 @@ save_platform_info() {
 }
 
 ###############################################################################
+# Save chassis modules related info
+# Globals:
+#  None
+# Arguments:
+#  None
+# Returns:
+#  None
+###############################################################################
+save_chassis_modules_info() {
+    trap 'handle_error $? $LINENO' ERR
+    if ! $IS_SUPERVISOR; then
+        return
+    fi
+    save_cmd "show chassis modules status" "chassis_modules.status"
+    save_cmd "show chassis modules midplane-status" "chassis_modules.midplane_status"
+}
+
+###############################################################################
 # Runs a comamnd and saves its output to the incrementally built tar.
 # Globals:
 #  LOGDIR
@@ -1343,6 +1445,7 @@ collect_mellanox() {
     local platform=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_platform())")
     local platform_folder="/usr/share/sonic/device/${platform}"
     local hwsku=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_hwsku())")
+    local is_smartswitch=$(python3 -c "from sonic_py_common import device_info; print(device_info.is_smartswitch())")
     local sku_folder="/usr/share/sonic/device/${platform}/${hwsku}"
     local cmis_host_mgmt_files=(
         "/tmp/nv-syncd-shared/sai.profile"
@@ -1404,6 +1507,15 @@ collect_mellanox() {
     fi
 
     save_cmd "get_component_versions.py" "component_versions"
+    if [[ $is_smartswitch == "True" ]]; then
+        save_cmd "dpuctl dpu-status" "dpu_status"
+    fi
+
+    local sdk_sysfs_src_path="/sys/module/sx_core/asic0"
+    local sdk_sysfs_dest_path="$TARDIR/sdk_sysfs/sx_core/asic0"
+    local excludes_sysfs_files=(rx_los tx_disable module_info module_latched_flag_info power_mode power_mode_policy reinsert reset)
+
+    save_sdk_sysfs "$sdk_sysfs_src_path" "$sdk_sysfs_dest_path" "${excludes_sysfs_files[@]}" &
 
     # Save CMIS-host-management related files
     local cmis_host_mgmt_path="cmis-host-mgmt"
@@ -1419,6 +1531,8 @@ collect_mellanox() {
     fi
 
     save_cmd "show interfaces autoneg status" "autoneg.status"
+
+    wait
 }
 
 ###############################################################################
@@ -1946,6 +2060,77 @@ save_log_files() {
 }
 
 ###############################################################################
+# Check BMC presence
+# Arguments:
+#  None
+# Returns:
+#  0 if BMC is supported, 1 otherwise
+###############################################################################
+is_bmc_supported() {
+    local platform=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_platform())")
+    # Check if the required file exists
+    if [ ! -f /usr/share/sonic/device/$platform/bmc.json ]; then
+        return 1
+    else
+        return 0
+    fi
+}
+
+###############################################################################
+# Trigger BMC debug log dump task
+# Arguments:
+#  None
+# Returns:
+#  None
+###############################################################################
+trigger_bmc_debug_log_dump() {
+    trap 'handle_error $? $LINENO' ERR
+    if ! is_bmc_supported; then
+        echo "INFO: BMC is not found on this platform. Skipping..."
+        return
+    fi
+    # Trigger BMC redfish API to start BMC debug log dump task
+    local task_id=$(python3 /usr/local/bin/bmc_techsupport.py -m trigger)
+    echo "$task_id"
+}
+
+###############################################################################
+# Save BMC debug log dump files
+# Globals:
+#  MKDIR, CP, TARDIR, TECHSUPPORT_TIME_INFO
+# Arguments:
+#  $1 - BMC debug log dump task ID
+# Returns:
+#  None
+###############################################################################
+collect_bmc_files() {
+    $MKDIR $V -p $TARDIR/bmc
+    trap 'handle_error $? $LINENO' ERR
+    start_t=$(date +%s%3N)
+    if ! is_bmc_supported; then
+        return
+    fi
+
+    local bmc_debug_log_dump_task_id=$1
+    local TARBALL_XZ="/tmp/bmc_debug_log_dump.tar.xz"
+    # Remove existing tarball files if they exist
+    [ -f "$TARBALL_XZ" ] && rm -f "$TARBALL_XZ"
+
+    # Invoke BMC redfish API to extract BMC debug log dump to "/tmp/bmc_debug_log_dump.tar.xz"
+    python3 /usr/local/bin/bmc_techsupport.py -m collect -p "$TARBALL_XZ" -t "$bmc_debug_log_dump_task_id"
+    if [ -f "$TARBALL_XZ" ]; then
+        $CP $V -rf "$TARBALL_XZ" $TARDIR/bmc
+    else
+        echo "ERROR: File $TARBALL_XZ does not exist."
+    fi
+
+    # Cleanup
+    [ -f "$TARBALL_XZ" ] && rm -f "$TARBALL_XZ"
+    end_t=$(date +%s%3N)
+    echo "[ collect_bmc_files ] : $(($end_t-$start_t)) msec" >> $TECHSUPPORT_TIME_INFO
+}
+
+###############################################################################
 # Save warmboot files
 # Globals:
 #  TARDIR, TARFILE, TAR, DUMPDIR, TECHSUPPORT_TIME_INFO, NOOP
@@ -2171,6 +2356,12 @@ main() {
     echo $BASE > $TECHSUPPORT_TIME_INFO
     start_t=$(date +%s%3N)
 
+    # Trigger BMC debug log dump task - Must be the first task to run
+    bmc_debug_log_dump_task_id=$(trigger_bmc_debug_log_dump)
+    if [ "$bmc_debug_log_dump_task_id" == "-1" ]; then
+        echo "INFO: Fail to trigger BMC debug log dump. Skipping..."
+    fi
+
     # Capture /proc state early
     save_proc /proc/buddyinfo /proc/cmdline /proc/consoles \
         /proc/cpuinfo /proc/devices /proc/diskstats /proc/dma \
@@ -2219,6 +2410,9 @@ main() {
     save_cmd "systemd-analyze plot" "systemd.analyze.plot.svg" &
     wait
 
+    save_chassis_modules_info &
+    wait
+    
     save_platform_info &
     save_cmd "show vlan brief" "vlan.summary" &
     save_cmd "show version" "version" &
@@ -2384,6 +2578,11 @@ main() {
     save_log_files &
     save_crash_files &
     save_warmboot_files &
+
+    if [ "$bmc_debug_log_dump_task_id" != "-1" ]; then
+        collect_bmc_files $bmc_debug_log_dump_task_id &
+    fi
+
     wait
 
     save_to_tar

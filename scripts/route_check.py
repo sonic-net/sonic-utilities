@@ -444,6 +444,65 @@ def get_interfaces(namespace):
     return sorted(intf)
 
 
+def is_point_to_point_prefix(prefix):
+    """
+    check if a given prefix is a p2p /31 ipv4 prefix or a /126 ipv6 prefix
+    :return sorted list of local p2p IP prefixes
+    """
+    try:
+        network = ipaddress.ip_network(prefix, strict=False)
+        if isinstance(network, ipaddress.IPv4Network) and network.prefixlen == 31:
+            return True
+        if isinstance(network, ipaddress.IPv6Network) and network.prefixlen == 126:
+            return True
+        return False
+    except ValueError:
+        return False
+
+
+def get_local_p2p_ips(namespace):
+    """
+    helper to read p2p local IPs from interface table in APPL-DB.
+    :return sorted list of local p2p IP addresses
+    """
+    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    print_message(syslog.LOG_DEBUG, "APPL DB connected for interfaces")
+    tbl = swsscommon.Table(db, 'INTF_TABLE')
+    keys = tbl.getKeys()
+
+    intf = []
+    for k in keys:
+        lst = re.split(':', k.lower(), maxsplit=1)
+        if len(lst) == 1:
+            # No IP address in key; ignore
+            continue
+
+        ip = lst[1]
+
+        if is_point_to_point_prefix(ip):
+            intf.append(ip)
+
+    print_message(syslog.LOG_DEBUG, json.dumps({"APPL_DB_INTF": sorted(intf)}, indent=4))
+    return sorted(intf)
+
+
+def filter_out_local_p2p_ips(namespace, keys):
+    """
+    helper to filter out local p2p IPs
+    :param keys: APPL-DB:ROUTE_TABLE Routes to check.
+    :return keys filtered out of local
+    """
+    rt = []
+    if_tbl_ips = set(get_local_p2p_ips(namespace))
+
+    for k in keys:
+        if k in if_tbl_ips:
+            continue
+        rt.append(k)
+
+    return rt
+
+
 def filter_out_local_interfaces(namespace, keys):
     """
     helper to filter out local interfaces
@@ -617,9 +676,10 @@ def check_frr_pending_routes(namespace):
     retries = FRR_CHECK_RETRIES
     for i in range(retries):
         missed_rt = []
+        failed_rt = []
         frr_routes = get_frr_routes_parallel(namespace)
 
-        for _, entries in frr_routes.items():
+        for route_prefix, entries in frr_routes.items():
             for entry in entries:
                 if entry['protocol'] in ('connected', 'kernel', 'static'):
                     continue
@@ -636,12 +696,16 @@ def check_frr_pending_routes(namespace):
                 if not entry.get('offloaded', False):
                     missed_rt.append(entry)
 
-        if not missed_rt:
+                if entry.get('failed', False):
+                    failed_rt.append(route_prefix)
+
+        if not missed_rt and not failed_rt:
             break
 
         time.sleep(FRR_WAIT_TIME)
-    print_message(syslog.LOG_DEBUG, "FRR missed routes: {}".format(missed_rt, indent=4))
-    return missed_rt
+    print_message(syslog.LOG_DEBUG, "FRR missed routes: {}".format(json.dumps(missed_rt, indent=4)))
+    print_message(syslog.LOG_DEBUG, "FRR failed routes: {}".format(json.dumps(failed_rt, indent=4)))
+    return missed_rt, failed_rt
 
 
 def mitigate_installed_not_offloaded_frr_routes(namespace, missed_frr_rt, rt_appl):
@@ -778,6 +842,7 @@ def check_routes_for_namespace(namespace):
     rt_appl_miss = []
     rt_asic_miss = []
     rt_frr_miss = []
+    rt_frr_failed = []
 
     selector, subs, rt_asic = get_asicdb_routes(namespace)
 
@@ -818,6 +883,10 @@ def check_routes_for_namespace(namespace):
     # Drop all those for which DEL received
     rt_asic_miss, _ = diff_sorted_lists(rt_asic_miss, deletes)
 
+    # Filter local p2p IPs if any that are reported as missing in APPL_DB
+    if rt_appl_miss:
+        rt_appl_miss = filter_out_local_p2p_ips(namespace, rt_appl_miss)
+
     if rt_appl_miss:
         results["missed_ROUTE_TABLE_routes"] = rt_appl_miss
 
@@ -827,10 +896,13 @@ def check_routes_for_namespace(namespace):
     if rt_asic_miss:
         results["Unaccounted_ROUTE_ENTRY_TABLE_entries"] = rt_asic_miss
 
-    rt_frr_miss = check_frr_pending_routes(namespace)
+    rt_frr_miss, rt_frr_failed = check_frr_pending_routes(namespace)
 
     if rt_frr_miss:
         results["missed_FRR_routes"] = rt_frr_miss
+
+    if rt_frr_failed:
+        results["failed_FRR_routes"] = rt_frr_failed
 
     if results:
         if rt_frr_miss and not rt_appl_miss and not rt_asic_miss:
@@ -838,6 +910,9 @@ def check_routes_for_namespace(namespace):
                           but all routes in APPL_DB and ASIC_DB are in sync".format(namespace))
             if is_suppress_fib_pending_enabled(namespace):
                 mitigate_installed_not_offloaded_frr_routes(namespace, rt_frr_miss, rt_appl)
+        if rt_frr_failed:
+            print_message(syslog.LOG_ERR, "Some routes have failed state in FRR {} \
+                          : {}".format(namespace, rt_frr_failed))
 
     return results, adds, deletes
 

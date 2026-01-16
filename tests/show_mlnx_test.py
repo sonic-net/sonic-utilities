@@ -58,6 +58,61 @@ class TestShowMlnx(object):
         assert e.value.code == 1
         mock_runcmd.assert_called_with(expected_calls, print_to_console=False)
 
+    @pytest.mark.parametrize("status", [True, False])
+    @patch('show.plugins.mlnx.run_command')
+    def test_is_issue_status_enabled(self, mock_runcmd, status):
+        def mock_return(*args, **kwargs):
+            cmd = ' '.join(args[0])
+            if cmd == f"docker exec {show.CONTAINER_NAME} cat /{show.HWSKU_PATH}/sai.profile":
+                return ('SAI_INIT_CONFIG_FILE=/usr/share/sonic/hwsku/sai.xml\n', '')
+            elif cmd == f"docker exec {show.CONTAINER_NAME} cat {show.HWSKU_PATH}sai.xml":
+                return (f"""<?xml version="1.0"?>
+                <root>
+                    <platform_info>
+                        <issu-enabled>{int(status)}</issu-enabled>
+                    </platform_info>
+                </root>
+                """, '')
+            else:
+                return ('', '')
+
+        mock_runcmd.side_effect = mock_return
+        result = show.is_issu_status_enabled()
+        assert result is status
+
+    @pytest.mark.parametrize("status", [True, False])
+    @patch('show.plugins.mlnx.multi_asic.get_num_asics', return_value=4)
+    @patch('show.plugins.mlnx.run_command')
+    def test_is_issue_status_enabled_multi_asic(self, mock_runcmd, mock_get_numasics, status):
+        def mock_return(*args, **kwargs):
+            cmd = ' '.join(args[0])
+            if (
+                cmd == f"docker exec {show.CONTAINER_NAME}0 cat /{show.HWSKU_PATH}/sai.profile" or
+                cmd == f"docker exec {show.CONTAINER_NAME}1 cat /{show.HWSKU_PATH}/sai.profile" or
+                cmd == f"docker exec {show.CONTAINER_NAME}2 cat /{show.HWSKU_PATH}/sai.profile" or
+                cmd == f"docker exec {show.CONTAINER_NAME}3 cat /{show.HWSKU_PATH}/sai.profile"
+            ):
+                return ('SAI_INIT_CONFIG_FILE=/usr/share/sonic/hwsku/sai.xml\n', '')
+            elif (
+                cmd == f"docker exec {show.CONTAINER_NAME}0 cat {show.HWSKU_PATH}sai.xml" or
+                cmd == f"docker exec {show.CONTAINER_NAME}1 cat {show.HWSKU_PATH}sai.xml" or
+                cmd == f"docker exec {show.CONTAINER_NAME}2 cat {show.HWSKU_PATH}sai.xml" or
+                cmd == f"docker exec {show.CONTAINER_NAME}3 cat {show.HWSKU_PATH}sai.xml"
+            ):
+                return (f"""<?xml version="1.0"?>
+                <root>
+                    <platform_info>
+                        <issu-enabled>{int(status)}</issu-enabled>
+                    </platform_info>
+                </root>
+                """, '')
+            else:
+                return ('', '')
+
+        mock_runcmd.side_effect = mock_return
+        result = show.is_issu_status_enabled()
+        assert result is status
+
     def teardown(self):
         print('TEARDOWN')
 

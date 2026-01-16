@@ -5,11 +5,12 @@ import jsondiff
 import importlib
 import os
 import tempfile
+import time
 from collections import defaultdict
 from swsscommon.swsscommon import ConfigDBConnector
 from sonic_py_common import multi_asic
 from .gu_common import GenericConfigUpdaterError, genericUpdaterLogging
-from .gu_common import get_config_db_as_json
+from .gu_common import JsonChange
 
 SCRIPT_DIR = os.path.dirname(os.path.realpath(__file__))
 UPDATER_CONF_FILE = f"{SCRIPT_DIR}/gcu_services_validator.conf.json"
@@ -64,8 +65,8 @@ class DryRunChangeApplier:
     def __init__(self, config_wrapper):
         self.config_wrapper = config_wrapper
 
-    def apply(self, change):
-        self.config_wrapper.apply_change_to_config_db(change)
+    def apply(self, current_configdb: dict, change: JsonChange) -> dict:
+        return self.config_wrapper.apply_change_to_config_db(current_configdb, change)
 
     def remove_backend_tables_from_config(self, data):
         return data
@@ -137,25 +138,45 @@ class ChangeApplier:
         log_error("run_data vs expected_data: {}".format(
             str(jsondiff.diff(run_data, upd_data))[0:40]))
 
-    def apply(self, change):
-        run_data = get_config_db_as_json(self.scope)
-        upd_data = prune_empty_table(change.apply(copy.deepcopy(run_data)))
+    def apply(self, current_configdb: dict, change: JsonChange) -> dict:
+        run_data = current_configdb
+        upd_data = prune_empty_table(change.apply(run_data, in_place=False))
         upd_keys = defaultdict(dict)
 
         for tbl in sorted(set(run_data.keys()).union(set(upd_data.keys()))):
             self._upd_data(tbl, run_data.get(tbl, {}), upd_data.get(tbl, {}), upd_keys)
 
         ret = self._services_validate(run_data, upd_data, upd_keys)
-        if not ret:
-            run_data = get_config_db_as_json(self.scope)
-            self.remove_backend_tables_from_config(upd_data)
-            self.remove_backend_tables_from_config(run_data)
-            if upd_data != run_data:
-                self._report_mismatch(run_data, upd_data)
-                ret = -1
-        if ret:
+        # The above function returns 0 on success as it uses shell return codes
+        if ret != 0:
             log_error("Failed to apply Json change")
-        return ret
+
+        # There was a sanity check in this position originally that appeared
+        # to be development-time code to ensure things were operating correctly.
+        # It would retrieve the configdb from Redis and perform transformation
+        # and comparison.  Its not possible for the configuration to not be what
+        # we expect since we have a known state we are mutating with a lock.
+        # That said we are leaving in the final configuration comparison in
+        # PatchApplier "just in case".
+        #
+        # However, this code did hide a pretty nasty race condition since there
+        # is no feedback loop for when config_db changes are actually consumed.
+        # This check would consume high CPU and would take a good amount of
+        # time (0.5s - 1s).
+        #
+        # The below sleep is functionally equivalent in terms of preventing the
+        # race condition (without the high CPU that might cause other control
+        # plane issues), but is of course not the proper fix.
+        #
+        # An upstream SONiC issue will be opened for the race condition, and
+        # until resolved leaving this comment in place for future reference.
+        time.sleep(1)
+
+        # Interestingly this function returns the updated data and doesn't
+        # propagate an error.  Maybe it should?  Or are exceptions thrown
+        # from _upd_data on failure?  We seem to intentionally only log on
+        # _services_validate()
+        return upd_data
 
     def remove_backend_tables_from_config(self, data):
         for key in self.backend_tables:

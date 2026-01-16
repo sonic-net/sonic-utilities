@@ -327,7 +327,7 @@ high ser error                      0  Never
 mac local fault                    26  2025-01-17 18:40:56
 mac remote fault                14483  2025-01-17 19:51:12
 no rx reachability                  0  Never
-oper error status                   0  Never
+oper error status                   2  2025-01-17 19:51:12
 signal local error                  0  Never
 """
 

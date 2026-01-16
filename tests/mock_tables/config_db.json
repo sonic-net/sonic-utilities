@@ -826,8 +826,15 @@
     "INTERFACE|Ethernet40": {
         "ipv6_use_link_local_only": "enable"
     },
+    "DEBUG_DROP_MONITOR|CONFIG": {
+        "status": "enabled"
+    },
     "DEBUG_COUNTER|DEBUG_0": {
-        "type": "PORT_INGRESS_DROPS"
+        "type": "PORT_INGRESS_DROPS",
+        "drop_monitor_status": "enabled",
+        "window": "300",
+        "drop_count_threshold": "5",
+        "incident_count_threshold": "2"
     },
     "DEBUG_COUNTER|DEBUG_1": {
         "type": "SWITCH_EGRESS_DROPS",
@@ -1832,20 +1839,27 @@
         "POLL_INTERVAL": "10000",
         "FLEX_COUNTER_STATUS": "enable"
     },
+    "FLEX_COUNTER_TABLE|SWITCH": {
+        "POLL_INTERVAL": "60000",
+        "FLEX_COUNTER_STATUS": "enable"
+    },
     "PFC_WD|Ethernet0": {
         "action": "drop",
         "detection_time": "600",
-        "restoration_time": "600"
+        "restoration_time": "600",
+        "pfc_stat_history": "disable"
     },
     "PFC_WD|Ethernet4": {
         "action": "drop",
         "detection_time": "600",
-        "restoration_time": "600"
+        "restoration_time": "600",
+        "pfc_stat_history": "disable"
     },
     "PFC_WD|Ethernet8": {
         "action": "drop",
         "detection_time": "600",
-        "restoration_time": "600"
+        "restoration_time": "600",
+        "pfc_stat_history": "disable"
     },
     "PFC_WD|GLOBAL": {
         "POLL_INTERVAL": "600"

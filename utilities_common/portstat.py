@@ -12,7 +12,7 @@ from utilities_common import constants
 import utilities_common.multi_asic as multi_asic_util
 from utilities_common.netstat import ns_diff, table_as_json, format_brate, format_prate, \
                                      format_util, format_number_with_comma, format_util_directly, \
-                                     format_fec_ber
+                                     format_fec_ber, format_fec_flr, format_fec_flr_predicted
 
 """
 The order and count of statistics mentioned below needs to be in sync with the values in portstat script
@@ -29,26 +29,31 @@ NStats = namedtuple("NStats", "rx_ok, rx_err, rx_drop, rx_ovr, tx_ok,\
                     rx_jbr, rx_frag, rx_usize, rx_ovrrun,\
                     fec_corr, fec_uncorr, fec_symbol_err,\
                     wred_grn_drp_pkt, wred_ylw_drp_pkt, wred_red_drp_pkt, wred_tot_drp_pkt,\
-                    trim")
+                    trim, trim_sent, trim_drop, fec_bin0, fec_bin1, fec_bin2, fec_bin3,\
+                    fec_bin4, fec_bin5, fec_bin6, fec_bin7, fec_bin8, fec_bin9, fec_bin10,\
+                    fec_bin11, fec_bin12, fec_bin13, fec_bin14, fec_bin15")
 header_all = ['IFACE', 'STATE', 'RX_OK', 'RX_BPS', 'RX_PPS', 'RX_UTIL', 'RX_ERR', 'RX_DRP', 'RX_OVR',
-              'TX_OK', 'TX_BPS', 'TX_PPS', 'TX_UTIL', 'TX_ERR', 'TX_DRP', 'TX_OVR', 'TRIM']
+              'TX_OK', 'TX_BPS', 'TX_PPS', 'TX_UTIL', 'TX_ERR', 'TX_DRP', 'TX_OVR', 'TRIM', 'TRIM_TX', 'TRIM_DRP']
 header_std = ['IFACE', 'STATE', 'RX_OK', 'RX_BPS', 'RX_UTIL', 'RX_ERR', 'RX_DRP', 'RX_OVR',
               'TX_OK', 'TX_BPS', 'TX_UTIL', 'TX_ERR', 'TX_DRP', 'TX_OVR']
 header_errors_only = ['IFACE', 'STATE', 'RX_ERR', 'RX_DRP', 'RX_OVR', 'TX_ERR', 'TX_DRP', 'TX_OVR']
-header_fec_only = ['IFACE', 'STATE', 'FEC_CORR', 'FEC_UNCORR', 'FEC_SYMBOL_ERR', 'FEC_PRE_BER', 'FEC_POST_BER']
+header_fec_only = ['IFACE', 'STATE', 'FEC_CORR', 'FEC_UNCORR', 'FEC_SYMBOL_ERR', 'FEC_PRE_BER',
+                   'FEC_POST_BER', 'FEC_PRE_BER_MAX', 'FLR(O)', 'FLR(P) (Accuracy)', 'FEC_MAX_T']
+header_fec_hist_only = ['IFACE', 'BIN0', 'BIN1', 'BIN2', 'BIN3', 'BIN4', 'BIN5', 'BIN6', 'BIN7',
+                        'BIN8', 'BIN9', 'BIN10', 'BIN11', 'BIN12', 'BIN13', 'BIN14', 'BIN15']
 header_rates_only = ['IFACE', 'STATE', 'RX_OK', 'RX_BPS', 'RX_PPS', 'RX_UTIL', 'TX_OK', 'TX_BPS', 'TX_PPS', 'TX_UTIL']
-header_trim_only = ['IFACE', 'STATE', 'TRIM_PKTS']
+header_trim_only = ['IFACE', 'STATE', 'TRIM_PKTS', 'TRIM_TX_PKTS', 'TRIM_DRP_PKTS']
 
-rates_key_list = ['RX_BPS', 'RX_PPS', 'RX_UTIL', 'TX_BPS', 'TX_PPS', 'TX_UTIL', 'FEC_PRE_BER', 'FEC_POST_BER']
-ratestat_fields = ("rx_bps",  "rx_pps", "rx_util", "tx_bps", "tx_pps", "tx_util", "fec_pre_ber", "fec_post_ber")
+rates_key_list = ['RX_BPS', 'RX_PPS', 'RX_UTIL', 'TX_BPS', 'TX_PPS', 'TX_UTIL', 'FEC_PRE_BER',
+                  'FEC_POST_BER', 'FEC_PRE_BER_MAX', 'FEC_FLR', 'FEC_FLR_PREDICTED', 'FEC_FLR_R_SQUARED', 'FEC_MAX_T']
+ratestat_fields = ("rx_bps",  "rx_pps", "rx_util", "tx_bps", "tx_pps", "tx_util", "fec_pre_ber", "fec_post_ber",
+                   "fec_pre_ber_max", "fec_flr", "fec_flr_predicted", "fec_flr_r_squared", "fec_max_t")
 RateStats = namedtuple("RateStats", ratestat_fields)
 
 """
 The order and count of statistics mentioned below needs to be in sync with the values in portstat script
 So, any fields added/deleted in here should be reflected in portstat script also
 """
-BUCKET_NUM = 50
-
 wred_green_pkt_stat_capable = "false"
 wred_yellow_pkt_stat_capable = "false"
 wred_red_pkt_stat_capable = "false"
@@ -109,6 +114,24 @@ counter_bucket_dict = {
         47: ['SAI_PORT_STAT_RED_WRED_DROPPED_PACKETS'],
         48: ['SAI_PORT_STAT_WRED_DROPPED_PACKETS'],
         49: ['SAI_PORT_STAT_TRIM_PACKETS'],
+        50: ['SAI_PORT_STAT_TX_TRIM_PACKETS'],
+        51: ['SAI_PORT_STAT_DROPPED_TRIM_PACKETS'],
+        52: ['SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S0'],
+        53: ['SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S1'],
+        54: ['SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S2'],
+        55: ['SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S3'],
+        56: ['SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S4'],
+        57: ['SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S5'],
+        58: ['SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S6'],
+        59: ['SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S7'],
+        60: ['SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S8'],
+        61: ['SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S9'],
+        62: ['SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S10'],
+        63: ['SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S11'],
+        64: ['SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S12'],
+        65: ['SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S13'],
+        66: ['SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S14'],
+        67: ['SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S15'],
 }
 
 STATUS_NA = 'N/A'
@@ -244,11 +267,17 @@ class Portstat(object):
             tx_ovr = self.db.get(self.db.CHASSIS_STATE_DB, key, "tx_ovr")
             fec_pre_ber = self.db.get(self.db.CHASSIS_STATE_DB, key, "fec_pre_ber")
             fec_post_ber = self.db.get(self.db.CHASSIS_STATE_DB, key, "fec_post_ber")
+            fec_pre_ber_max = self.db.get(self.db.CHASSIS_STATE_DB, key, "fec_pre_ber_max")
+            fec_flr = self.db.get(self.db.CHASSIS_STATE_DB, key, "fec_flr")
+            fec_flr_predicted = self.db.get(self.db.CHASSIS_STATE_DB, key, "fec_flr_predicted")
+            fec_flr_r_squared = self.db.get(self.db.CHASSIS_STATE_DB, key, "fec_flr_r_squared")
+            fec_max_t = self.db.get(self.db.CHASSIS_STATE_DB, key, "fec_max_t")
             port_alias = key.split("|")[-1]
             cnstat_dict[port_alias] = NStats._make([rx_ok, rx_err, rx_drop, rx_ovr, tx_ok, tx_err, tx_drop, tx_ovr] +
                                                    [STATUS_NA] * (len(NStats._fields) - 8))._asdict()
             ratestat_dict[port_alias] = RateStats._make([rx_bps, rx_pps, rx_util, tx_bps,
-                                                        tx_pps, tx_util, fec_pre_ber, fec_post_ber])
+                                                        tx_pps, tx_util, fec_pre_ber, fec_post_ber, fec_pre_ber_max,
+                                                        fec_flr, fec_flr_predicted, fec_flr_r_squared, fec_max_t])
         self.cnstat_dict.update(cnstat_dict)
         self.ratestat_dict.update(ratestat_dict)
 
@@ -259,7 +288,6 @@ class Portstat(object):
         device and store in a dict
         """
 
-        global BUCKET_NUM
         global wred_green_pkt_stat_capable
         global wred_yellow_pkt_stat_capable
         global wred_red_pkt_stat_capable
@@ -287,22 +315,18 @@ class Portstat(object):
         if (is_wred_stats_reqd is False) or (wred_green_pkt_stat_capable != "true"):
             if ('SAI_PORT_STAT_GREEN_WRED_DROPPED_PACKETS' in counter_bucket_dict.keys()):
                 del counter_bucket_dict['SAI_PORT_STAT_GREEN_WRED_DROPPED_PACKETS']
-                BUCKET_NUM = (BUCKET_NUM - 1)
 
         if (is_wred_stats_reqd is False) or (wred_yellow_pkt_stat_capable != "true"):
             if ('SAI_PORT_STAT_YELLOW_WRED_DROPPED_PACKETS' in counter_bucket_dict.keys()):
                 del counter_bucket_dict['SAI_PORT_STAT_YELLOW_WRED_DROPPED_PACKETS']
-                BUCKET_NUM = (BUCKET_NUM - 1)
 
         if (is_wred_stats_reqd is False) or (wred_red_pkt_stat_capable != "true"):
             if ('SAI_PORT_STAT_RED_WRED_DROPPED_PACKETS' in counter_bucket_dict.keys()):
                 del counter_bucket_dict['SAI_PORT_STAT_RED_WRED_DROPPED_PACKETS']
-                BUCKET_NUM = (BUCKET_NUM - 1)
 
         if (is_wred_stats_reqd is False) or (wred_total_pkt_stat_capable != "true"):
             if ('SAI_PORT_STAT_WRED_DROPPED_PACKETS' in counter_bucket_dict.keys()):
                 del counter_bucket_dict['SAI_PORT_STAT_WRED_DROPPED_PACKETS']
-                BUCKET_NUM = (BUCKET_NUM - 1)
 
         cnstat_dict, ratestat_dict = self.get_cnstat()
         self.cnstat_dict.update(cnstat_dict)
@@ -316,7 +340,7 @@ class Portstat(object):
             """
                 Get the counters from specific table.
             """
-            fields = ["0"]*BUCKET_NUM
+            fields = ["0"] * len(counter_bucket_dict)
 
             _, fvs = counter_table.get(PortCounter(), port)
             fvs = dict(fvs)
@@ -334,7 +358,7 @@ class Portstat(object):
             """
                 Get the rates from specific table.
             """
-            fields = ["0", "0", "0", "0", "0", "0", "0", "0"]
+            fields = ["0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0", "0"]
             for pos, name in enumerate(rates_key_list):
                 full_table_id = RATES_TABLE_PREFIX + table_id
                 counter_data = self.db.get(self.db.COUNTERS_DB, full_table_id, name)
@@ -421,7 +445,7 @@ class Portstat(object):
             if key in cnstat_old_dict:
                 old_cntr = cnstat_old_dict.get(key)
             else:
-                old_cntr = NStats._make([0] * BUCKET_NUM)._asdict()
+                old_cntr = NStats._make([0] * len(counter_bucket_dict))._asdict()
 
             if intf_list and key not in intf_list:
                 continue
@@ -535,15 +559,23 @@ class Portstat(object):
                     )
                 print("")
 
-            print("Packets Trimmed................................ {}".format(ns_diff(cntr['trim'],
-                                                                                      old_cntr['trim'])))
+            print("Trimmed Packets................................ {}".format(
+                ns_diff(cntr['trim'], old_cntr['trim'])
+            ))
+            print("Trimmed Sent Packets........................... {}".format(
+                ns_diff(cntr['trim_sent'], old_cntr['trim_sent'])
+            ))
+            print("Trimmed Dropped Packets........................ {}".format(
+                ns_diff(cntr['trim_drop'], old_cntr['trim_drop'], raw=True)
+            ))
+            print("")
 
             print("Time Since Counters Last Cleared............... " + str(cnstat_old_dict.get('time')))
 
     def cnstat_diff_print(self, cnstat_new_dict, cnstat_old_dict,
                           ratestat_dict, intf_list, use_json,
                           print_all, errors_only, fec_stats_only,
-                          rates_only, trim_stats_only, detail=False, nonzero=False):
+                          rates_only, trim_stats_only, fec_hist_only, detail=False, nonzero=False):
         """
             Print the difference between two cnstat results.
         """
@@ -563,7 +595,7 @@ class Portstat(object):
             if key in cnstat_old_dict:
                 old_cntr = cnstat_old_dict.get(key)
             else:
-                old_cntr = NStats._make([0] * BUCKET_NUM)._asdict()
+                old_cntr = NStats._make([0] * len(counter_bucket_dict))._asdict()
 
             rates = ratestat_dict.get(key, RateStats._make([STATUS_NA] * len(ratestat_fields)))
 
@@ -599,7 +631,9 @@ class Portstat(object):
                                   ns_diff(cntr["tx_err"], old_cntr["tx_err"]),
                                   ns_diff(cntr["tx_drop"], old_cntr["tx_drop"]),
                                   ns_diff(cntr["tx_ovr"], old_cntr["tx_ovr"]),
-                                  ns_diff(cntr["trim"], old_cntr["trim"])))
+                                  ns_diff(cntr["trim"], old_cntr["trim"]),
+                                  ns_diff(cntr["trim_sent"], old_cntr["trim_sent"]),
+                                  ns_diff(cntr["trim_drop"], old_cntr["trim_drop"], raw=True)))
             elif errors_only:
                 header = header_errors_only
 
@@ -627,7 +661,32 @@ class Portstat(object):
                                   ns_diff(cntr['fec_uncorr'], old_cntr['fec_uncorr']),
                                   ns_diff(cntr['fec_symbol_err'], old_cntr['fec_symbol_err']),
                                   format_fec_ber(rates.fec_pre_ber),
-                                  format_fec_ber(rates.fec_post_ber)))
+                                  format_fec_ber(rates.fec_post_ber),
+                                  format_fec_ber(rates.fec_pre_ber_max),
+                                  format_fec_flr(rates.fec_flr),
+                                  format_fec_flr_predicted(rates.fec_flr_predicted,
+                                                           rates.fec_flr_r_squared),
+                                  rates.fec_max_t))
+            elif fec_hist_only:
+                header = header_fec_hist_only
+
+                table.append((key, ns_diff(cntr['fec_bin0'], old_cntr['fec_bin0']),
+                              ns_diff(cntr['fec_bin1'], old_cntr['fec_bin1']),
+                              ns_diff(cntr['fec_bin2'], old_cntr['fec_bin2']),
+                              ns_diff(cntr['fec_bin3'], old_cntr['fec_bin3']),
+                              ns_diff(cntr['fec_bin4'], old_cntr['fec_bin4']),
+                              ns_diff(cntr['fec_bin5'], old_cntr['fec_bin5']),
+                              ns_diff(cntr['fec_bin6'], old_cntr['fec_bin6']),
+                              ns_diff(cntr['fec_bin7'], old_cntr['fec_bin7']),
+                              ns_diff(cntr['fec_bin8'], old_cntr['fec_bin8']),
+                              ns_diff(cntr['fec_bin9'], old_cntr['fec_bin9']),
+                              ns_diff(cntr['fec_bin10'], old_cntr['fec_bin10']),
+                              ns_diff(cntr['fec_bin11'], old_cntr['fec_bin11']),
+                              ns_diff(cntr['fec_bin12'], old_cntr['fec_bin12']),
+                              ns_diff(cntr['fec_bin13'], old_cntr['fec_bin13']),
+                              ns_diff(cntr['fec_bin14'], old_cntr['fec_bin14']),
+                              ns_diff(cntr['fec_bin15'], old_cntr['fec_bin15'])))
+
             elif rates_only:
                 header = header_rates_only
 
@@ -650,7 +709,9 @@ class Portstat(object):
 
                 if not nonzero or is_non_zero(ns_diff(cntr['trim'], old_cntr['trim'])):
                     table.append((key, self.get_port_state(key),
-                                  ns_diff(cntr['trim'], old_cntr['trim'])))
+                                  ns_diff(cntr["trim"], old_cntr["trim"]),
+                                  ns_diff(cntr["trim_sent"], old_cntr["trim_sent"]),
+                                  ns_diff(cntr["trim_drop"], old_cntr["trim_drop"], raw=True)))
             else:
                 header = header_std
 

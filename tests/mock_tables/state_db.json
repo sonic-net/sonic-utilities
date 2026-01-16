@@ -71,6 +71,7 @@
     },
     "TRANSCEIVER_INFO|Ethernet8": {
         "type": "QSFP-DD Double Density 8X Pluggable Transceiver",
+        "cmis_rev": "5.0",
         "vendor_rev": "2A",
         "serial": "INKAO2900002A",
         "manufacturer": "INNOLIGHT",
@@ -85,7 +86,23 @@
         "cable_length": "10",
         "specification_compliance": "Not supported for CMIS cables",
         "nominal_bit_rate": "Not supported for CMIS cables",
-        "application_advertisement": "400GAUI-8 C2M (Annex 120E) - Active Cable assembly with BER < 2.6x10^-4\n\t\t\t\t   IB EDR (Arch.Spec.Vol.2) - Active Cable assembly with BER < 5x10^-5\n\t\t\t\t   IB QDR (Arch.Spec.Vol.2) - Active Cable assembly with BER < 10^-12"
+        "application_advertisement" : "{1: {'host_electrical_interface_id': '400GAUI-8 C2M (Annex 120E)', 'module_media_interface_id': '400ZR, DWDM, amplified', 'media_lane_count': 1, 'host_lane_count': 8, 'host_lane_assignment_options': 1, 'media_lane_assignment_options': 1}, 2: {'host_electrical_interface_id': '400GAUI-8 C2M (Annex 120E)', 'module_media_interface_id': '400ZR, Single Wavelength, Unamplified', 'media_lane_count': 1, 'host_lane_count': 8, 'host_lane_assignment_options': 1, 'media_lane_assignment_options': 1}, 3: {'host_electrical_interface_id': '100GAUI-2 C2M (Annex 135G)', 'module_media_interface_id': '400ZR, DWDM, amplified', 'media_lane_count': 1, 'host_lane_count': 2, 'host_lane_assignment_options': 85, 'media_lane_assignment_options': 1}}",
+        "host_lane_count" : "8",
+        "media_lane_count" : "1",
+        "active_apsel_hostlane1" : "1",
+        "active_apsel_hostlane2" : "1",
+        "active_apsel_hostlane3" : "1",
+        "active_apsel_hostlane4" : "1",
+        "active_apsel_hostlane5" : "1",
+        "active_apsel_hostlane6" : "1",
+        "active_apsel_hostlane7" : "1",
+        "active_apsel_hostlane8" : "1",
+        "hardware_rev" : "X.X",
+        "media_interface_technology" : "1550 nm DFB"
+    },
+    "TRANSCEIVER_FIRMWARE_INFO|Ethernet8": {
+        "active_firmware": "2.1.1",
+        "inactive_firmware": "1.2.3"
     },
     "TRANSCEIVER_DOM_SENSOR|Ethernet8": {
         "temperature": "44.9883",
@@ -701,11 +718,9 @@
         "active_apsel_hostlane4": "N/A",
         "is_replaceable": "True",
         "application_advertisement": "{1: {'host_electrical_interface_id': 'IB NDR', 'module_media_interface_id': 'Copper cable', 'media_lane_count': 4, 'host_lane_count': 4, 'host_lane_assignment_options': 17}, 2: {'host_electrical_interface_id': 'IB SDR (Arch.Spec.Vol.2)', 'module_media_interface_id': 'Copper cable', 'media_lane_count': 4, 'host_lane_count': 4, 'host_lane_assignment_options': 17}}",
-        "host_electrical_interface": "N/A",
         "active_apsel_hostlane2": "N/A",
         "supported_min_tx_power": "N/A",
         "supported_max_tx_power": "N/A",
-        "host_lane_assignment_option": "17",
         "specification_compliance": "passive_copper_media_interface",
         "ext_identifier": "Power Class 1 (0.25W Max)",
         "active_apsel_hostlane8": "N/A",
@@ -719,7 +734,6 @@
         "type": "OSFP 8X Pluggable Transceiver",
         "cable_length": "1.0",
         "active_apsel_hostlane5": "N/A",
-        "media_lane_assignment_option": "N/A",
         "vendor_rev": "A3",
         "active_apsel_hostlane6": "N/A",
         "encoding": "N/A",
@@ -732,7 +746,6 @@
         "vendor_oui": "some-oui",
         "connector": "No separable connector",
         "supported_max_laser_freq": "N/A",
-        "media_interface_code": "Copper cable",
         "active_apsel_hostlane3": "N/A",
         "ext_rateselect_compliance": "N/A",
         "model": "some-model    ",
@@ -1061,7 +1074,7 @@
     },
     "DEBUG_COUNTER_CAPABILITIES|PORT_INGRESS_DROPS": {
         "reasons": "[IP_HEADER_ERROR,NO_L3_HEADER]",
-        "count": "4"
+        "count": "5"
     },
     "DEBUG_COUNTER_CAPABILITIES|SWITCH_EGRESS_DROPS": {
         "reasons": "[ACL_ANY,L2_ANY,L3_ANY]",
@@ -1236,6 +1249,15 @@
         "14": "200:200:200:200::5@Vlan1000",
         "15": "200:200:200:200::5@Vlan1000"
     },
+    "LIQUID_COOLING_INFO|leakage1": {
+        "leak_status": "No"
+    },
+    "LIQUID_COOLING_INFO|leakage2": {
+        "leak_status": "No"
+    },
+    "LIQUID_COOLING_INFO|leakage3": {
+        "leak_status": "Yes"
+    },
     "FG_ROUTE_TABLE|100.50.25.12/32": {
         "0": "200.200.200.4@Vlan1000",
         "1": "200.200.200.4@Vlan1000",
@@ -1393,16 +1415,20 @@
         "max_priority_groups": "8"
     },
     "CHASSIS_MIDPLANE_TABLE|LINE-CARD0": {
-        "ip_address": "192.168.1.100",
+        "ip_address": "192.168.3.1",
         "access": "True"
     },
     "CHASSIS_MIDPLANE_TABLE|LINE-CARD2": {
-        "ip_address": "192.168.1.1",
+        "ip_address": "192.168.5.1",
         "access": "True"
     },
     "CHASSIS_MIDPLANE_TABLE|LINE-CARD1": {
-        "ip_address": "192.168.1.2",
+        "ip_address": "192.168.4.1",
         "access": "False"
+    },
+    "CHASSIS_MIDPLANE_TABLE|LINE-CARD3": {
+        "ip_address": "192.168.6.1",
+        "access": "True"
     },
     "PORT_TABLE|Ethernet0": {
         "rmt_adv_speeds" : "10,100,1000",
@@ -1755,6 +1781,7 @@
     },
     "PORT_OPERR_TABLE|Ethernet64": {
         "oper_error_status": "2",
+        "oper_error_status_time": "2025-01-17 19:51:12",
         "mac_remote_fault_count": "14483",
         "mac_remote_fault_time": "2025-01-17 19:51:12",
         "mac_local_fault_count": "26",

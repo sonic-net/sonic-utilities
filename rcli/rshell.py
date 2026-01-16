@@ -9,7 +9,7 @@ from rcli import utils as rcli_utils
 
 
 @click.command()
-@click.argument('linecard_name', type=str, autocompletion=rcli_utils.get_all_linecards)
+@click.argument('linecard_name', type=str, shell_complete=rcli_utils.get_all_linecards)
 @click.option('-u', '--username', type=str, default=None, help="Username for login")
 def cli(linecard_name, username):
     """

@@ -1,12 +1,15 @@
 import importlib
 import os
+import pytest
 import shutil
+import struct
 import sys
 
 from click.testing import CliRunner
 
 import show.main as show
 import clear.main as clear
+from .pfcstat_input import assert_show_output
 from .utils import get_result_and_return_code
 from utilities_common.cli import UserCache
 
@@ -96,6 +99,7 @@ Ethernet-BP256       0       0       0       0       0       0       0       0
 Ethernet-BP260       0       0       0       0       0       0       0       0
 """]
 
+
 show_pfc_counters_all_asic = """\
      Port Rx    PFC0    PFC1    PFC2    PFC3    PFC4    PFC5    PFC6    PFC7
 ------------  ------  ------  ------  ------  ------  ------  ------  ------
@@ -111,6 +115,7 @@ Ethernet-BP4   1,800     801     802     803     804     805     806     807
 Ethernet-BP0   1,610     611     612     613     614     615     616     617
 Ethernet-BP4   1,810     811     812     813     814     815     816     817
 """
+
 show_pfc_counters_all = """\
        Port Rx    PFC0    PFC1    PFC2    PFC3    PFC4    PFC5    PFC6    PFC7
 --------------  ------  ------  ------  ------  ------  ------  ------  ------
@@ -169,7 +174,7 @@ def del_cached_stats():
     cache.remove_all()
 
 
-def pfc_clear(expected_output):
+def pfc_clear(expected_output, pfc_stat_show_args=[]):
     counters_file_list = ['0tx', '0rx']
     del_cached_stats()
 
@@ -178,7 +183,7 @@ def pfc_clear(expected_output):
     )
 
     return_code, result = get_result_and_return_code(
-        ['pfcstat', '-s', 'all']
+        ['pfcstat', '-s', 'all'] + pfc_stat_show_args
     )
     result_stat = [s for s in result.split("\n") if "Last cached" not in s]
     expected = expected_output.split("\n")
@@ -223,6 +228,36 @@ class TestPfcstat(object):
 
     def test_pfc_clear(self):
         pfc_clear(show_pfc_counters_output_diff)
+
+    @pytest.mark.xfail(struct.calcsize("P") == 4, reason="Affected by Y2038 limits on 32-bit platforms")
+    def test_pfc_counters_history(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["pfc"].commands["counters"],
+            ["--history"]
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == assert_show_output.show_pfc_counters_history_output
+
+    @pytest.mark.xfail(struct.calcsize("P") == 4, reason="Affected by Y2038 limits on 32-bit platforms")
+    def test_pfc_counters_history_with_clear(self):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['pfccounters'], [])
+        assert result.exit_code == 0
+        result = runner.invoke(
+            show.cli.commands["pfc"].commands["counters"],
+            ["--history"]
+        )
+        print(result.output)
+        show.run_command(['pfcstat', '-d'])
+        assert result.exit_code == 0
+        assert "Last cached time was" in result.output
+        assert assert_show_output.show_pfc_counters_history_output_with_clear in result.output
+
+    @pytest.mark.xfail(struct.calcsize("P") == 4, reason="Affected by Y2038 limits on 32-bit platforms")
+    def test_pfc_history_clear(self):
+        pfc_clear(assert_show_output.show_pfc_counters_history_output_with_clear, ["--history"])
 
     @classmethod
     def teardown_class(cls):
@@ -291,6 +326,60 @@ class TestMultiAsicPfcstat(object):
 
     def test_masic_pfc_clear(self):
         pfc_clear(show_pfc_counters_msaic_output_diff)
+
+    @pytest.mark.xfail(struct.calcsize("P") == 4, reason="Affected by Y2038 limits on 32-bit platforms")
+    def test_pfc_counters_history_all(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["pfc"].commands["counters"],
+            ["--history"]
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == assert_show_output.show_pfc_counters_history_all
+
+    @pytest.mark.xfail(struct.calcsize("P") == 4, reason="Affected by Y2038 limits on 32-bit platforms")
+    def test_pfc_counters_history_all_with_clear(self):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['pfccounters'], [])
+        assert result.exit_code == 0
+        result = runner.invoke(
+            show.cli.commands["pfc"].commands["counters"],
+            ["--history"]
+        )
+        print(result.output)
+        show.run_command(['pfcstat', '-d'])
+        assert result.exit_code == 0
+        assert "Last cached time was" in result.output
+        assert assert_show_output.show_pfc_counters_history_all_with_clear in result.output
+
+    @pytest.mark.xfail(struct.calcsize("P") == 4, reason="Affected by Y2038 limits on 32-bit platforms")
+    def test_pfc_counters_history_frontend(self):
+        return_code, result = get_result_and_return_code(
+            ['pfcstat', '-s', 'frontend', '--history']
+        )
+        assert return_code == 0
+        assert result == assert_show_output.show_pfc_counters_history_asic0_frontend
+
+    @pytest.mark.xfail(struct.calcsize("P") == 4, reason="Affected by Y2038 limits on 32-bit platforms")
+    def test_pfc_counters_history_asic(self):
+        return_code, result = get_result_and_return_code(
+            ['pfcstat', '-n', 'asic0', '--history']
+        )
+        assert return_code == 0
+        assert result == assert_show_output.show_pfc_counters_history_asic0_frontend
+
+    @pytest.mark.xfail(struct.calcsize("P") == 4, reason="Affected by Y2038 limits on 32-bit platforms")
+    def test_pfc_counters_history_asic_all(self):
+        return_code, result = get_result_and_return_code(
+            ['pfcstat', '-n', 'asic0', '-s', 'all', '--history']
+        )
+        assert return_code == 0
+        assert result == assert_show_output.show_pfc_counters_history_all_asic
+
+    @pytest.mark.xfail(struct.calcsize("P") == 4, reason="Affected by Y2038 limits on 32-bit platforms")
+    def test_masic_pfc_history_clear(self):
+        pfc_clear(assert_show_output.show_pfc_counters_history_all_with_clear, ["--history"])
 
     @classmethod
     def teardown_class(cls):

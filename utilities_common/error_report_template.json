@@ -1,0 +1,30 @@
+{
+  "sonic_upgrade_summary": {
+    "script_name": "",
+    "sonic_upgrade_package_version": "1.0.0",
+    "fault_code": "124",
+    "fault_reason": "Operation timeout - system became unresponsive",
+    "guid": ""
+  },
+  "sonic_upgrade_actions": {
+    "reputation_impact": false,
+    "retriable": true,
+    "isolate_on_failure": false,
+    "auto_triage": {
+      "status": false,
+      "triage_queue": "",
+      "triage_action": ""
+    }
+  },
+  "sonic_upgrade_report": {
+    "duration": "0",
+    "stages": [],
+    "health_checks": [],
+    "errors": [
+      {
+        "name": "TIMEOUT",
+        "message": "Operation timed out or system crashed"
+      }
+    ]
+  }
+}

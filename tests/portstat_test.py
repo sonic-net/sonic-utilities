@@ -1,16 +1,15 @@
 import pytest
 import logging
-
 import os
-import shutil
-
-from click.testing import CliRunner
 
 import clear.main as clear
 import show.main as show
+
+from click.testing import CliRunner
+from utilities_common.cli import UserCache
+
 from .utils import get_result_and_return_code
 from .portstat_input import assert_show_output
-from utilities_common.cli import UserCache
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
@@ -37,30 +36,30 @@ Ethernet4      N/A        4  204.80 KB/s        N/A         0     1,000       N/
 """
 
 intf_counters_all = """\
-    IFACE    STATE    RX_OK        RX_BPS       RX_PPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK        TX_BPS       TX_PPS    TX_UTIL    TX_ERR    TX_DRP    TX_OVR    TRIM
----------  -------  -------  ------------  -----------  ---------  --------  --------  --------  -------  ------------  -----------  ---------  --------  --------  --------  ------
-Ethernet0        D        8  2000.00 MB/s  247000.00/s     64.00%        10       100       N/A       10  1500.00 MB/s  183000.00/s     48.00%       N/A       N/A       N/A       0
-Ethernet4      N/A        4   204.80 KB/s     200.00/s        N/A         0     1,000       N/A       40   204.85 KB/s     201.00/s        N/A       N/A       N/A       N/A     100
-Ethernet8      N/A        6  1350.00 KB/s    9000.00/s        N/A       100        10       N/A       60    13.37 MB/s    9000.00/s        N/A       N/A       N/A       N/A     N/A
-Ethernet9      N/A        0      0.00 B/s       0.00/s        N/A         0         0       N/A        0      0.00 B/s       0.00/s        N/A       N/A       N/A       N/A     N/A
+    IFACE    STATE    RX_OK        RX_BPS       RX_PPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK        TX_BPS       TX_PPS    TX_UTIL    TX_ERR    TX_DRP    TX_OVR    TRIM    TRIM_TX    TRIM_DRP
+---------  -------  -------  ------------  -----------  ---------  --------  --------  --------  -------  ------------  -----------  ---------  --------  --------  --------  ------  ---------  ----------
+Ethernet0        D        8  2000.00 MB/s  247000.00/s     64.00%        10       100       N/A       10  1500.00 MB/s  183000.00/s     48.00%       N/A       N/A       N/A       0          0           0
+Ethernet4      N/A        4   204.80 KB/s     200.00/s        N/A         0     1,000       N/A       40   204.85 KB/s     201.00/s        N/A       N/A       N/A       N/A     100         50          50
+Ethernet8      N/A        6  1350.00 KB/s    9000.00/s        N/A       100        10       N/A       60    13.37 MB/s    9000.00/s        N/A       N/A       N/A       N/A  20,000     10,000      10,000
+Ethernet9      N/A        0      0.00 B/s       0.00/s        N/A         0         0       N/A        0      0.00 B/s       0.00/s        N/A       N/A       N/A       N/A     N/A        N/A         N/A
 """  # noqa: E501
 
 intf_fec_counters = """\
-    IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER
----------  -------  ----------  ------------  ----------------  -------------  --------------
-Ethernet0        D     130,402             3                 4            N/A             N/A
-Ethernet4      N/A     110,412             1                 0            N/A             N/A
-Ethernet8      N/A     100,317             0                 0            N/A             N/A
-Ethernet9      N/A           0             0                 0            N/A             N/A
-"""
+    IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER    FEC_PRE_BER_MAX    FLR(O)    FLR(P) (Accuracy)    FEC_MAX_T
+---------  -------  ----------  ------------  ----------------  -------------  --------------  -----------------  --------  -------------------  -----------
+Ethernet0        D     130,402             3                 4            N/A             N/A                N/A  4.21e-10       7.81e-10 (89%)         -1.0
+Ethernet4      N/A     110,412             1                 0            N/A             N/A                N/A         0                    0          0.0
+Ethernet8      N/A     100,317             0                 0            N/A             N/A                N/A         0       4.81e-10 (89%)          3.0
+Ethernet9      N/A           0             0                 0            N/A             N/A                N/A       N/A                  N/A          N/A
+"""  # noqa: E501
 
 intf_fec_counters_nonzero = """\
-    IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER
----------  -------  ----------  ------------  ----------------  -------------  --------------
-Ethernet0        D     130,402             3                 4            N/A             N/A
-Ethernet4      N/A     110,412             1                 0            N/A             N/A
-Ethernet8      N/A     100,317             0                 0            N/A             N/A
-"""
+    IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER    FEC_PRE_BER_MAX    FLR(O)    FLR(P) (Accuracy)    FEC_MAX_T
+---------  -------  ----------  ------------  ----------------  -------------  --------------  -----------------  --------  -------------------  -----------
+Ethernet0        D     130,402             3                 4            N/A             N/A                N/A  4.21e-10       7.81e-10 (89%)           -1
+Ethernet4      N/A     110,412             1                 0            N/A             N/A                N/A  0                           0            0
+Ethernet8      N/A     100,317             0                 0            N/A             N/A                N/A  0              4.81e-10 (89%)            3
+"""  # noqa: E501
 
 intf_fec_counters_fec_hist = """\
 Symbol Errors Per Codeword      Codewords
@@ -85,13 +84,13 @@ BIN15                                   0
 
 intf_fec_counters_period = """\
 The rates are calculated within 3 seconds period
-    IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER
----------  -------  ----------  ------------  ----------------  -------------  --------------
-Ethernet0        D           0             0                 0            N/A             N/A
-Ethernet4      N/A           0             0                 0            N/A             N/A
-Ethernet8      N/A           0             0                 0            N/A             N/A
-Ethernet9      N/A           0             0                 0            N/A             N/A
-"""
+    IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER    FEC_PRE_BER_MAX    FLR(O)    FLR(P) (Accuracy)    FEC_MAX_T
+---------  -------  ----------  ------------  ----------------  -------------  --------------  -----------------  --------  -------------------  -----------
+Ethernet0        D           0             0                 0            N/A             N/A                N/A  4.21e-10       7.81e-10 (89%)         -1.0
+Ethernet4      N/A           0             0                 0            N/A             N/A                N/A         0                    0          0.0
+Ethernet8      N/A           0             0                 0            N/A             N/A                N/A         0       4.81e-10 (89%)          3.0
+Ethernet9      N/A           0             0                 0            N/A             N/A                N/A       N/A                  N/A          N/A
+"""  # noqa: E501
 
 intf_counters_period = """\
 The rates are calculated within 3 seconds period
@@ -153,45 +152,45 @@ Reminder: Please execute 'show interface counters -d all' to include internal li
 """
 
 multi_asic_external_intf_counters_printall = """\
-    IFACE    STATE    RX_OK    RX_BPS    RX_PPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK    TX_BPS    TX_PPS    TX_UTIL    TX_ERR    TX_DRP    TX_OVR    TRIM
----------  -------  -------  --------  --------  ---------  --------  --------  --------  -------  --------  --------  ---------  --------  --------  --------  ------
-Ethernet0        U        8  0.00 B/s    0.00/s      0.00%        10       100       N/A       10  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A       0
-Ethernet4        U        4  0.00 B/s    0.00/s      0.00%         0     1,000       N/A       40  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A     100
+    IFACE    STATE    RX_OK    RX_BPS    RX_PPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK    TX_BPS    TX_PPS    TX_UTIL    TX_ERR    TX_DRP    TX_OVR    TRIM    TRIM_TX    TRIM_DRP
+---------  -------  -------  --------  --------  ---------  --------  --------  --------  -------  --------  --------  ---------  --------  --------  --------  ------  ---------  ----------
+Ethernet0        U        8  0.00 B/s    0.00/s      0.00%        10       100       N/A       10  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A       0          0           0
+Ethernet4        U        4  0.00 B/s    0.00/s      0.00%         0     1,000       N/A       40  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A     100         50          50
 
 Reminder: Please execute 'show interface counters -d all' to include internal links
 
 """  # noqa: E501
 
 multi_asic_intf_counters_printall = """\
-         IFACE    STATE    RX_OK    RX_BPS    RX_PPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK    TX_BPS    TX_PPS    TX_UTIL    TX_ERR    TX_DRP    TX_OVR    TRIM
---------------  -------  -------  --------  --------  ---------  --------  --------  --------  -------  --------  --------  ---------  --------  --------  --------  ------
-     Ethernet0        U        8  0.00 B/s    0.00/s      0.00%        10       100       N/A       10  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A       0
-     Ethernet4        U        4  0.00 B/s    0.00/s      0.00%         0     1,000       N/A       40  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A     100
-  Ethernet-BP0        U        6  0.00 B/s    0.00/s      0.00%         0     1,000       N/A       60  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A     N/A
-  Ethernet-BP4        U        8  0.00 B/s    0.00/s      0.00%         0     1,000       N/A       80  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A     N/A
-Ethernet-BP256        U        8  0.00 B/s    0.00/s      0.00%        10       100       N/A       10  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A     N/A
-Ethernet-BP260        U        4  0.00 B/s    0.00/s      0.00%         0     1,000       N/A       40  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A     N/A
+         IFACE    STATE    RX_OK    RX_BPS    RX_PPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK    TX_BPS    TX_PPS    TX_UTIL    TX_ERR    TX_DRP    TX_OVR    TRIM    TRIM_TX    TRIM_DRP
+--------------  -------  -------  --------  --------  ---------  --------  --------  --------  -------  --------  --------  ---------  --------  --------  --------  ------  ---------  ----------
+     Ethernet0        U        8  0.00 B/s    0.00/s      0.00%        10       100       N/A       10  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A       0          0           0
+     Ethernet4        U        4  0.00 B/s    0.00/s      0.00%         0     1,000       N/A       40  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A     100         50          50
+  Ethernet-BP0        U        6  0.00 B/s    0.00/s      0.00%         0     1,000       N/A       60  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A     N/A        N/A         N/A
+  Ethernet-BP4        U        8  0.00 B/s    0.00/s      0.00%         0     1,000       N/A       80  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A     N/A        N/A         N/A
+Ethernet-BP256        U        8  0.00 B/s    0.00/s      0.00%        10       100       N/A       10  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A     N/A        N/A         N/A
+Ethernet-BP260        U        4  0.00 B/s    0.00/s      0.00%         0     1,000       N/A       40  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A     N/A        N/A         N/A
 
 Reminder: Please execute 'show interface counters -d all' to include internal links
 
 """  # noqa: E501
 
 multi_asic_intf_counters_asic0_printall = """\
-       IFACE    STATE    RX_OK    RX_BPS    RX_PPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK    TX_BPS    TX_PPS    TX_UTIL    TX_ERR    TX_DRP    TX_OVR    TRIM
-------------  -------  -------  --------  --------  ---------  --------  --------  --------  -------  --------  --------  ---------  --------  --------  --------  ------
-   Ethernet0        U        8  0.00 B/s    0.00/s      0.00%        10       100       N/A       10  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A       0
-   Ethernet4        U        4  0.00 B/s    0.00/s      0.00%         0     1,000       N/A       40  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A     100
-Ethernet-BP0        U        6  0.00 B/s    0.00/s      0.00%         0     1,000       N/A       60  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A     N/A
-Ethernet-BP4        U        8  0.00 B/s    0.00/s      0.00%         0     1,000       N/A       80  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A     N/A
+       IFACE    STATE    RX_OK    RX_BPS    RX_PPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK    TX_BPS    TX_PPS    TX_UTIL    TX_ERR    TX_DRP    TX_OVR    TRIM    TRIM_TX    TRIM_DRP
+------------  -------  -------  --------  --------  ---------  --------  --------  --------  -------  --------  --------  ---------  --------  --------  --------  ------  ---------  ----------
+   Ethernet0        U        8  0.00 B/s    0.00/s      0.00%        10       100       N/A       10  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A       0          0           0
+   Ethernet4        U        4  0.00 B/s    0.00/s      0.00%         0     1,000       N/A       40  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A     100         50          50
+Ethernet-BP0        U        6  0.00 B/s    0.00/s      0.00%         0     1,000       N/A       60  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A     N/A        N/A         N/A
+Ethernet-BP4        U        8  0.00 B/s    0.00/s      0.00%         0     1,000       N/A       80  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A     N/A        N/A         N/A
 
 Reminder: Please execute 'show interface counters -d all' to include internal links
 
 """  # noqa: E501
 
 multi_asic_intf_counters_bp0 = """\
-       IFACE    STATE    RX_OK    RX_BPS    RX_PPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK    TX_BPS    TX_PPS    TX_UTIL    TX_ERR    TX_DRP    TX_OVR    TRIM
-------------  -------  -------  --------  --------  ---------  --------  --------  --------  -------  --------  --------  ---------  --------  --------  --------  ------
-Ethernet-BP0        U        6  0.00 B/s    0.00/s      0.00%         0     1,000       N/A       60  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A     N/A
+       IFACE    STATE    RX_OK    RX_BPS    RX_PPS    RX_UTIL    RX_ERR    RX_DRP    RX_OVR    TX_OK    TX_BPS    TX_PPS    TX_UTIL    TX_ERR    TX_DRP    TX_OVR    TRIM    TRIM_TX    TRIM_DRP
+------------  -------  -------  --------  --------  ---------  --------  --------  --------  -------  --------  --------  ---------  --------  --------  --------  ------  ---------  ----------
+Ethernet-BP0        U        6  0.00 B/s    0.00/s      0.00%         0     1,000       N/A       60  0.00 B/s    0.00/s      0.00%       N/A       N/A       N/A     N/A        N/A         N/A
 
 Reminder: Please execute 'show interface counters -d all' to include internal links
 
@@ -294,7 +293,10 @@ WRED Yellow Dropped Packets.................... 33
 WRED Red Dropped Packets....................... 51
 WRED Total Dropped Packets..................... 101
 
-Packets Trimmed................................ 100
+Trimmed Packets................................ 100
+Trimmed Sent Packets........................... 50
+Trimmed Dropped Packets........................ 50
+
 Time Since Counters Last Cleared............... None
 """
 
@@ -308,6 +310,8 @@ intf_counters_on_sup = """\
  Ethernet2/1        U      100  10.00 B/s      0.00%         0         0         0      100  10.00 B/s      0.00%\
          0         0         0
 Ethernet11/1        U      100  10.00 B/s      0.00%         0         0         0      100  10.00 B/s      0.00%\
+         0         0         0
+Ethernet12/1        U      100  10.00 B/s      0.00%         0         0         0      100  10.00 B/s      0.00%\
          0         0         0
 """
 
@@ -325,6 +329,8 @@ intf_counters_on_sup_na = """\
  Ethernet2/1        U      100  10.00 B/s      0.00%         0         0         0      100  10.00 B/s      0.00%\
          0         0         0
 Ethernet11/1      N/A      N/A        N/A        N/A       N/A       N/A       N/A      N/A        N/A        N/A\
+       N/A       N/A       N/A
+Ethernet12/1      N/A      N/A        N/A        N/A       N/A       N/A       N/A      N/A        N/A        N/A\
        N/A       N/A       N/A
 """
 

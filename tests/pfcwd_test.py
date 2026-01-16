@@ -7,7 +7,7 @@ from click.testing import CliRunner
 
 from utilities_common.db import Db
 
-from .pfcwd_input.pfcwd_test_vectors import *
+from .pfcwd_input import pfcwd_test_vectors as test_vectors
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
@@ -24,28 +24,28 @@ class TestPfcwd(object):
         print("SETUP")
 
     def test_pfcwd_show_config(self):
-        self.executor(testData['pfcwd_show_config'])
+        self.executor(test_vectors.testData['pfcwd_show_config'])
 
     def test_pfcwd_show_config_single_port(self):
-        self.executor(testData['pfcwd_show_config_single_port'])
+        self.executor(test_vectors.testData['pfcwd_show_config_single_port'])
 
     def test_pfcwd_show_config_multi_port(self):
-        self.executor(testData['pfcwd_show_config_multi_port'])
+        self.executor(test_vectors.testData['pfcwd_show_config_multi_port'])
 
     def test_pfcwd_show_config_invalid_port(self):
-        self.executor(testData['pfcwd_show_config_invalid_port'])
+        self.executor(test_vectors.testData['pfcwd_show_config_invalid_port'])
 
     def test_pfcwd_show_stats(self):
-        self.executor(testData['pfcwd_show_stats'])
+        self.executor(test_vectors.testData['pfcwd_show_stats'])
 
     def test_pfcwd_show_stats_single_queue(self):
-        self.executor(testData['pfcwd_show_stats_single_queue'])
+        self.executor(test_vectors.testData['pfcwd_show_stats_single_queue'])
 
     def test_pfcwd_show_stats_multi_queue(self):
-        self.executor(testData['pfcwd_show_stats_multi_queue'])
+        self.executor(test_vectors.testData['pfcwd_show_stats_multi_queue'])
 
     def test_pfcwd_show_stats_invalid_queue(self):
-        self.executor(testData['pfcwd_show_stats_invalid_queue'])
+        self.executor(test_vectors.testData['pfcwd_show_stats_invalid_queue'])
 
     def executor(self, testcase):
         import pfcwd.main as pfcwd
@@ -93,7 +93,7 @@ class TestPfcwd(object):
             obj=db
         )
         print(result.output)
-        assert result.output == pfcwd_show_config_output
+        assert result.output == test_vectors.pfcwd_show_config_output
 
         mock_os.geteuid.return_value = 0
         result = runner.invoke(
@@ -114,7 +114,43 @@ class TestPfcwd(object):
         )
         print(result.output)
         assert result.exit_code == 0
-        assert result.output == pfcwd_show_start_config_output_pass
+        assert result.output == test_vectors.pfcwd_show_start_config_output_pass
+
+    @patch('pfcwd.main.os')
+    def test_pfcwd_enable_history_ports_valid(self, mock_os):
+        # pfcwd pfc_stat_history enable Ethernet0
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        # initially history is disabled
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["config"],
+            obj=db
+        )
+        print(result.output)
+        assert result.output == test_vectors.pfcwd_show_config_output
+
+        mock_os.geteuid.return_value = 0
+        result = runner.invoke(
+            pfcwd.cli.commands["pfc_stat_history"],
+            [
+                "enable",
+                "Ethernet0"
+            ],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+
+        # now valid port is enabled
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["config"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == test_vectors.pfcwd_show_enable_history_config_output_pass
 
     @patch('pfcwd.main.os')
     def test_pfcwd_start_actions(self, mock_os):
@@ -129,7 +165,7 @@ class TestPfcwd(object):
             obj=db
         )
         print(result.output)
-        assert result.output == pfcwd_show_config_output
+        assert result.output == test_vectors.pfcwd_show_config_output
 
         # always skip Ethernet8 because 'pfc_enable' not configured for this port
         mock_os.geteuid.return_value = 0
@@ -151,7 +187,7 @@ class TestPfcwd(object):
         )
         print(result.output)
         assert result.exit_code == 0
-        assert result.output == pfcwd_show_start_action_forward_output
+        assert result.output == test_vectors.pfcwd_show_start_action_forward_output
 
         result = runner.invoke(
             pfcwd.cli.commands["start"],
@@ -171,7 +207,7 @@ class TestPfcwd(object):
         )
         print(result.output)
         assert result.exit_code == 0
-        assert result.output == pfcwd_show_start_action_alert_output
+        assert result.output == test_vectors.pfcwd_show_start_action_alert_output
 
         result = runner.invoke(
             pfcwd.cli.commands["start"],
@@ -191,7 +227,7 @@ class TestPfcwd(object):
         )
         print(result.output)
         assert result.exit_code == 0
-        assert result.output == pfcwd_show_start_action_drop_output
+        assert result.output == test_vectors.pfcwd_show_start_action_drop_output
 
         result = runner.invoke(
         pfcwd.cli.commands["start_default"],
@@ -208,8 +244,44 @@ class TestPfcwd(object):
 
         print(result.output)
         assert result.exit_code == 0
-        assert result.output == pfcwd_show_start_default
+        assert result.output == test_vectors.pfcwd_show_start_default
 
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_history(self, mock_os):
+        # pfcwd start all 600 --restoration-time 601 --pfc-stat-history
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        # initially history disabled on all ports
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["config"],
+            obj=db
+        )
+        print(result.output)
+        assert result.output == test_vectors.pfcwd_show_config_output
+
+        mock_os.geteuid.return_value = 0
+        # start wd with history flag
+        result = runner.invoke(
+            pfcwd.cli.commands["start"],
+            [
+                "all", "600", "--restoration-time", "601",
+                "--pfc-stat-history"
+            ],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+
+        # get config after the change
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["config"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == test_vectors.pfcwd_show_start_history_output
 
     @patch('pfcwd.main.os')
     def test_pfcwd_pfc_not_enabled(self, mock_os):
@@ -223,22 +295,61 @@ class TestPfcwd(object):
             obj=db
         )
         print(result.output)
-        assert result.output == pfcwd_show_config_output
+        assert result.output == test_vectors.pfcwd_show_config_output
 
         mock_os.geteuid.return_value = 0
 
         result = runner.invoke(
         pfcwd.cli.commands["start"],
             [
-                "--action", "drop", "--restoration-time", "601",
+                "--action", "drop", "--restoration-time", "601", "--pfc-stat-history",
                 "Ethernet8", "602"
             ],
             obj=db
         )
         print(result.output)
         assert result.exit_code == 0
-        assert pfc_is_not_enabled == result.output
+        assert test_vectors.pfc_is_not_enabled == result.output
 
+    @patch('pfcwd.main.os')
+    def test_pfcwd_enable_history_pfc_not_enabled(self, mock_os):
+        # pfcwd pfc_stat_history enable Ethernet8
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        # get initial config
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["config"],
+            obj=db
+        )
+        print(result.output)
+        assert result.output == test_vectors.pfcwd_show_config_output
+
+        # attempt to enable history on Ethernet without pfc
+        mock_os.geteuid.return_value = 0
+        result = runner.invoke(
+            pfcwd.cli.commands["pfc_stat_history"],
+            [
+                "enable",
+                "Ethernet8"
+            ],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert test_vectors.pfc_is_not_enabled == result.output
+
+        # verify no change
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["config"],
+            obj=db
+        )
+
+        print(result.output)
+        assert result.exit_code == 0
+        # same as original config
+        assert result.output == test_vectors.pfcwd_show_config_output
 
     def test_pfcwd_start_ports_invalid(self):
         # pfcwd start --action drop --restoration-time 200 Ethernet0 200
@@ -249,14 +360,159 @@ class TestPfcwd(object):
         result = runner.invoke(
             pfcwd.cli.commands["start"],
             [
-                "--action", "forward", "--restoration-time", "101",
+                "--action", "forward", "--restoration-time", "101", "--pfc-stat-history",
                 "Ethernet1000", "102"
             ],
             obj=db
         )
         print(result.output)
         assert result.exit_code == 1
-        assert result.output == pfcwd_show_start_config_output_fail
+        assert result.output == test_vectors.show_pfc_config_invalid_options_fail
+
+    def test_pfcwd_enable_history_ports_invalid(self):
+        # pfcwd pfc_stat_history enable Ethernet1000
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        # get initial config
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["config"],
+            obj=db
+        )
+        print(result.output)
+        assert result.output == test_vectors.pfcwd_show_config_output
+
+        # attempt to enable history on invalid port
+        result = runner.invoke(
+            pfcwd.cli.commands["pfc_stat_history"],
+            [
+                "enable",
+                "Ethernet1000"
+            ],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 1
+        assert result.output == test_vectors.show_pfc_config_invalid_options_fail
+
+        # config unchanged
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["config"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        # same as original config
+        assert result.output == test_vectors.pfcwd_show_config_output
+
+    def test_pfcwd_show_stats_check_storm_no_storms(self):
+        """ Test --check-storm flag when no storms are present """
+        import pfcwd.main as pfcwd
+        from unittest.mock import patch
+        runner = CliRunner()
+        db = Db()
+
+        # Mock the collect_stats method to simulate no storms
+        def mock_collect_stats_no_storm(self, empty, queues, storm_only=False):
+            # Create fake table data with only operational queues
+            self.table = [
+                ['Ethernet0:3', 'operational', '2/2', '100/100', '100/100', '0/0', '0/0'],
+                ['Ethernet4:3', 'operational', '3/3', '150/150', '150/150', '0/0', '0/0'],
+                ['Ethernet8:4', 'operational', '1/1', '50/50', '50/50', '0/0', '0/0']
+            ]
+
+        with patch.object(pfcwd.PfcwdCli, 'collect_stats', mock_collect_stats_no_storm):
+            # Test with no storms - should exit 0
+            result = runner.invoke(
+                pfcwd.cli.commands["show"].commands["stats"],
+                ["--check-storm"],
+                obj=db
+            )
+            print("No storms test - exit code:", result.exit_code)
+            print("No storms test - output:", result.output)
+            assert result.exit_code == 0
+            assert result.output == ""  # Should be silent when checking storms
+
+    def test_pfcwd_show_stats_check_storm_with_storms(self):
+        """ Test --check-storm flag when storms are present """
+        import pfcwd.main as pfcwd
+        from unittest.mock import patch
+        runner = CliRunner()
+        db = Db()
+
+        # Mock the collect_stats method to simulate storm detection
+        def mock_collect_stats_with_storm(self, empty, queues, storm_only=False):
+            # Create fake table data with a stormed queue
+            self.table = [
+                ['Ethernet0:3', 'stormed', '1/0', '100/300', '100/300', '0/200', '0/200']
+            ]
+
+        with patch.object(pfcwd.PfcwdCli, 'collect_stats', mock_collect_stats_with_storm):
+            result = runner.invoke(
+                pfcwd.cli.commands["show"].commands["stats"],
+                ["--check-storm"],
+                obj=db
+            )
+            print("With storms test - exit code:", result.exit_code)
+            print("With storms test - output:", result.output)
+            assert result.exit_code == 1
+            assert result.output == ""  # Should be silent when checking storms
+
+    def test_pfcwd_show_stats_check_storm_mixed_status(self):
+        """ Test --check-storm flag with mixed operational and stormed queues """
+        import pfcwd.main as pfcwd
+        from unittest.mock import patch
+        runner = CliRunner()
+        db = Db()
+
+        # Mock the collect_stats method to simulate mixed queue states
+        def mock_collect_stats_mixed(self, empty, queues, storm_only=False):
+            # Create fake table data with mixed states - should still exit 1 if ANY storm detected
+            self.table = [
+                ['Ethernet0:3', 'operational', '2/2', '100/100', '100/100', '0/0', '0/0'],
+                ['Ethernet4:3', 'stormed', '1/0', '100/300', '100/300', '0/200', '0/200'],
+                ['Ethernet8:4', 'operational', '0/0', '50/50', '50/50', '0/0', '0/0']
+            ]
+
+        with patch.object(pfcwd.PfcwdCli, 'collect_stats', mock_collect_stats_mixed):
+            result = runner.invoke(
+                pfcwd.cli.commands["show"].commands["stats"],
+                ["--check-storm"],
+                obj=db
+            )
+            print("Mixed states test - exit code:", result.exit_code)
+            print("Mixed states test - output:", result.output)
+            assert result.exit_code == 1  # Should exit 1 if ANY storms detected
+            assert result.output == ""
+
+    def test_pfcwd_show_stats_normal_output_unchanged(self):
+        """ Test that normal stats output is unchanged when not using --check-storm """
+        import pfcwd.main as pfcwd
+        from unittest.mock import patch
+        runner = CliRunner()
+        db = Db()
+
+        # Mock the collect_stats method to ensure consistent test output
+        def mock_collect_stats_normal(self, empty, queues, storm_only=False):
+            # Create fake table data with mixed states (like normal operation)
+            self.table = [
+                ['Ethernet0:3', 'operational', '2/2', '100/100', '100/100', '0/0', '0/0'],
+                ['Ethernet4:3', 'operational', '3/3', '150/150', '150/150', '0/0', '0/0']
+            ]
+
+        with patch.object(pfcwd.PfcwdCli, 'collect_stats', mock_collect_stats_normal):
+            # Test normal stats command (without --check-storm) - should work as before
+            result = runner.invoke(
+                pfcwd.cli.commands["show"].commands["stats"],
+                obj=db
+            )
+            print("Normal output test - exit code:", result.exit_code)
+            print("Normal output test - output length:", len(result.output))
+            assert result.exit_code == 0
+            # Should have normal tabulated output (not empty)
+            assert len(result.output) > 0
+            assert "QUEUE" in result.output  # Should contain table headers
 
     @classmethod
     def teardown_class(cls):
@@ -334,6 +590,17 @@ class TestMultiAsicPfcwdShow(object):
         assert result.exit_code == 1
         assert result.output == 'Root privileges are required for this operation\n'
 
+    @patch('pfcwd.main.os.geteuid', MagicMock(return_value=8))
+    def test_pfcwd_pfc_stat_history_nonroot(self):
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        result = runner.invoke(
+            pfcwd.cli.commands['pfc_stat_history'], ['enable', 'all'],
+        )
+        print(result.output)
+        assert result.exit_code == 1
+        assert result.output == 'Root privileges are required for this operation\n'
+
     def test_pfcwd_stats_all(self):
         import pfcwd.main as pfcwd
         print(pfcwd.__file__)
@@ -343,7 +610,7 @@ class TestMultiAsicPfcwdShow(object):
         )
         print(result.output)
         assert result.exit_code == 0
-        assert result.output == show_pfcwd_stats_all
+        assert result.output == test_vectors.show_pfcwd_stats_all
 
     def test_pfcwd_stats_with_queues(self):
         import pfcwd.main as pfcwd
@@ -357,7 +624,7 @@ class TestMultiAsicPfcwdShow(object):
         )
         print(result.output)
         assert result.exit_code == 0
-        assert result.output == show_pfcwd_stats_with_queues
+        assert result.output == test_vectors.show_pfcwd_stats_with_queues
 
     def test_pfcwd_config_all(self):
         import pfcwd.main as pfcwd
@@ -367,7 +634,7 @@ class TestMultiAsicPfcwdShow(object):
         )
         print(result.output)
         assert result.exit_code == 0
-        assert result.output == show_pfc_config_all
+        assert result.output == test_vectors.show_pfc_config_all
 
     def test_pfcwd_config_with_ports(self):
         import pfcwd.main as pfcwd
@@ -378,7 +645,7 @@ class TestMultiAsicPfcwdShow(object):
         )
         print(result.output)
         assert result.exit_code == 0
-        assert result.output == show_pfcwd_config_with_ports
+        assert result.output == test_vectors.show_pfcwd_config_with_ports
 
     @patch('pfcwd.main.os')
     def test_pfcwd_start_ports_masic_valid(self, mock_os):
@@ -392,7 +659,7 @@ class TestMultiAsicPfcwdShow(object):
             obj=db
         )
         print(result.output)
-        assert result.output == show_pfc_config_all
+        assert result.output == test_vectors.show_pfc_config_all
 
         mock_os.geteuid.return_value = 0
         result = runner.invoke(
@@ -413,7 +680,42 @@ class TestMultiAsicPfcwdShow(object):
         )
         print(result.output)
         assert result.exit_code == 0
-        assert result.output == show_pfc_config_start_pass
+        assert result.output == test_vectors.show_pfc_config_start_pass
+
+    @patch('pfcwd.main.os')
+    def test_pfcwd_enable_history_ports_masic_valid(self, mock_os):
+        # pfcwd pfc_stat_history enable Ethernet0, Ethernet-BP4
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+        # get initial config
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["config"],
+            obj=db
+        )
+        print(result.output)
+        assert result.output == test_vectors.show_pfc_config_all
+
+        mock_os.geteuid.return_value = 0
+        result = runner.invoke(
+            pfcwd.cli.commands["pfc_stat_history"],
+            [
+                "enable",
+                "Ethernet0", "Ethernet-BP4"
+            ],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+
+        # get config after the change
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["config"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == test_vectors.show_pfc_config_enable_history_pass
 
     @patch('pfcwd.main.os')
     def test_pfcwd_start_actions_masic(self, mock_os):
@@ -427,7 +729,7 @@ class TestMultiAsicPfcwdShow(object):
             obj=db
         )
         print(result.output)
-        assert result.output == show_pfc_config_all
+        assert result.output == test_vectors.show_pfc_config_all
 
         # always skip Ethernet-BP260 because 'pfc_enable' not configured for this port
         mock_os.geteuid.return_value = 0
@@ -449,7 +751,7 @@ class TestMultiAsicPfcwdShow(object):
         )
         print(result.output)
         assert result.exit_code == 0
-        assert result.output == show_pfc_config_start_action_drop_masic
+        assert result.output == test_vectors.show_pfc_config_start_action_drop_masic
 
         result = runner.invoke(
             pfcwd.cli.commands["start"],
@@ -469,7 +771,7 @@ class TestMultiAsicPfcwdShow(object):
         )
         print(result.output)
         assert result.exit_code == 0
-        assert result.output == show_pfc_config_start_action_alert_masic
+        assert result.output == test_vectors.show_pfc_config_start_action_alert_masic
 
         result = runner.invoke(
             pfcwd.cli.commands["start"],
@@ -489,7 +791,44 @@ class TestMultiAsicPfcwdShow(object):
         )
         print(result.output)
         assert result.exit_code == 0
-        assert result.output == show_pfc_config_start_action_forward_masic
+        assert result.output == test_vectors.show_pfc_config_start_action_forward_masic
+
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_history_masic(self, mock_os):
+        # pfcwd start all 600 --restoration-time 601 --pfc-stat-history
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        # initially history disabled on all ports
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["config"],
+            obj=db
+        )
+        print(result.output)
+        assert result.output == test_vectors.show_pfc_config_all
+
+        mock_os.geteuid.return_value = 0
+        # start wd with history flag
+        result = runner.invoke(
+            pfcwd.cli.commands["start"],
+            [
+                "all", "600", "--restoration-time", "601",
+                "--pfc-stat-history"
+            ],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+
+        # get config after the change
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["config"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == test_vectors.pfcwd_show_start_history_output_masic
 
     def test_pfcwd_start_ports_masic_invalid(self):
         # --action drop --restoration-time 200 Ethernet0 Ethernet500 200
@@ -500,14 +839,14 @@ class TestMultiAsicPfcwdShow(object):
         result = runner.invoke(
             pfcwd.cli.commands["start"],
             [
-                "--action", "forward", "--restoration-time", "101",
+                "--action", "forward", "--restoration-time", "101", "--pfc-stat-history",
                 "Ethernet0", "Ethernet-500", "102"
             ],
             obj=db
         )
         print(result.output)
         assert result.exit_code == 1
-        assert result.output == show_pfc_config_start_fail
+        assert result.output == test_vectors.show_pfc_config_invalid_options_fail_masic
 
         # get config after the command, config shouldn't change
         result = runner.invoke(
@@ -517,7 +856,35 @@ class TestMultiAsicPfcwdShow(object):
         print(result.output)
         assert result.exit_code == 0
         # same as original config
-        assert result.output == show_pfc_config_all
+        assert result.output == test_vectors.show_pfc_config_all
+
+    def test_pfcwd_enable_history_ports_masic_invalid(self):
+        # pfcwd pfc_stat_history enable Ethernet0 Ethernet-500
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(
+            pfcwd.cli.commands["pfc_stat_history"],
+            [
+                "enable",
+                "Ethernet0", "Ethernet-500",
+            ],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 1
+        assert result.output == test_vectors.show_pfc_config_invalid_options_fail_masic
+
+        # get config after the command, config shouldn't change
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["config"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        # same as original config
+        assert result.output == test_vectors.show_pfc_config_all
 
     @patch('pfcwd.main.os')
     def test_pfcwd_pfc_not_enabled_masic(self, mock_os):
@@ -529,14 +896,14 @@ class TestMultiAsicPfcwdShow(object):
         result = runner.invoke(
         pfcwd.cli.commands["start"],
             [
-                "--action", "drop", "--restoration-time", "601",
+                "--action", "drop", "--restoration-time", "601", "--pfc-stat-history",
                 "Ethernet-BP260", "602"
             ],
             obj=db
         )
 
         assert result.exit_code == 0
-        assert pfc_is_not_enabled_masic == result.output
+        assert test_vectors.pfc_is_not_enabled_masic == result.output
 
         result = runner.invoke(
             pfcwd.cli.commands["show"].commands["config"],
@@ -546,7 +913,47 @@ class TestMultiAsicPfcwdShow(object):
         print(result.output)
         assert result.exit_code == 0
         # same as original config
-        assert result.output == show_pfc_config_all
+        assert result.output == test_vectors.show_pfc_config_all
+
+    @patch('pfcwd.main.os')
+    def test_pfcwd_enable_history_pfc_not_enabled_masic(self, mock_os):
+        # pfcwd pfc_stat_history enable Ethernet-BP260
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        # get initial config
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["config"],
+            obj=db
+        )
+        print(result.output)
+        assert result.output == test_vectors.show_pfc_config_all
+
+        # attempt to enable history on Ethernet without pfc
+        mock_os.geteuid.return_value = 0
+        result = runner.invoke(
+            pfcwd.cli.commands["pfc_stat_history"],
+            [
+                "enable",
+                "Ethernet-BP260"
+            ],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert test_vectors.pfc_is_not_enabled_masic == result.output
+
+        # verify no change
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["config"],
+            obj=db
+        )
+
+        print(result.output)
+        assert result.exit_code == 0
+        # same as original config
+        assert result.output == test_vectors.show_pfc_config_all
 
     @classmethod
     def teardown_class(cls):

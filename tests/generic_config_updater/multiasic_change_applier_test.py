@@ -1,5 +1,6 @@
 import jsonpointer
 import unittest
+import copy
 from importlib import reload
 from unittest.mock import patch, MagicMock
 from generic_config_updater.generic_updater import extract_scope
@@ -177,7 +178,7 @@ class TestMultiAsicChangeApplier(unittest.TestCase):
             except jsonpointer.JsonPointerException:
                 assert(not result)
 
-    @patch('generic_config_updater.change_applier.get_config_db_as_json', autospec=True)
+    @patch('generic_config_updater.gu_common.get_config_db_as_json', autospec=True)
     @patch('generic_config_updater.change_applier.ConfigDBConnector', autospec=True)
     def test_apply_change_default_scope(self, mock_ConfigDBConnector, mock_get_running_config):
         # Setup mock for ConfigDBConnector
@@ -194,12 +195,13 @@ class TestMultiAsicChangeApplier(unittest.TestCase):
         change = MagicMock()
 
         # Call the apply method with the change object
-        applier.apply(change)
+        current_config = copy.deepcopy(generic_config_updater.gu_common.get_config_db_as_json(scope=self))
+        current_config = applier.apply(current_config, change)
 
         # Assert ConfigDBConnector called with the correct namespace
         mock_ConfigDBConnector.assert_called_once_with(use_unix_socket_path=True, namespace="")
 
-    @patch('generic_config_updater.change_applier.get_config_db_as_json', autospec=True)
+    @patch('generic_config_updater.gu_common.get_config_db_as_json', autospec=True)
     @patch('generic_config_updater.change_applier.ConfigDBConnector', autospec=True)
     def test_apply_change_given_scope(self, mock_ConfigDBConnector, mock_get_running_config):
         # Setup mock for ConfigDBConnector
@@ -214,12 +216,13 @@ class TestMultiAsicChangeApplier(unittest.TestCase):
         change = MagicMock()
 
         # Call the apply method with the change object
-        applier.apply(change)
+        current_config = copy.deepcopy(generic_config_updater.gu_common.get_config_db_as_json(scope="asic0"))
+        current_config = applier.apply(current_config, change)
 
         # Assert ConfigDBConnector called with the correct scope
         mock_ConfigDBConnector.assert_called_once_with(use_unix_socket_path=True, namespace="asic0")
 
-    @patch('generic_config_updater.change_applier.get_config_db_as_json', autospec=True)
+    @patch('generic_config_updater.gu_common.get_config_db_as_json', autospec=True)
     @patch('generic_config_updater.change_applier.ConfigDBConnector', autospec=True)
     def test_apply_change_failure(self, mock_ConfigDBConnector, mock_get_running_config):
         # Setup mock for ConfigDBConnector
@@ -237,11 +240,12 @@ class TestMultiAsicChangeApplier(unittest.TestCase):
 
         # Test the behavior when os.system fails
         with self.assertRaises(Exception) as context:
-            applier.apply(change)
+            current_config = copy.deepcopy(generic_config_updater.gu_common.get_config_db_as_json())
+            current_config = applier.apply(current_config, change)
 
         self.assertTrue('Failed to get running config' in str(context.exception))
 
-    @patch('generic_config_updater.change_applier.get_config_db_as_json', autospec=True)
+    @patch('generic_config_updater.gu_common.get_config_db_as_json', autospec=True)
     @patch('generic_config_updater.change_applier.ConfigDBConnector', autospec=True)
     def test_apply_patch_with_empty_tables_failure(self, mock_ConfigDBConnector, mock_get_running_config):
         # Setup mock for ConfigDBConnector
@@ -267,8 +271,10 @@ class TestMultiAsicChangeApplier(unittest.TestCase):
         # Prepare a change object or data that applier.apply would use, simulating a patch that requires non-empty tables
         change = MagicMock()
 
+        current_config = copy.deepcopy(generic_config_updater.gu_common.get_config_db_as_json())
+
         # Apply the patch
         try:
-            assert(applier.apply(change) != 0)
+            assert(applier.apply(current_config, change) is not None)
         except Exception:
             pass
