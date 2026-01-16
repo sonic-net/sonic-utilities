@@ -9,7 +9,7 @@ from sonic_py_common import device_info
 from unittest.mock import MagicMock, patch
 from tests.route_check_test_data import (
     APPL_DB, MULTI_ASIC, NAMESPACE, DEFAULTNS, ARGS, ASIC_DB, CONFIG_DB,
-    DEFAULT_CONFIG_DB, APPL_STATE_DB, DESCR, OP_DEL, OP_SET, PRE, RESULT, RET, TEST_DATA,
+    DEFAULT_CONFIG_DB, APPL_STATE_DB, OP_DEL, OP_SET, PRE, RESULT, RET, TEST_DATA,
     UPD, FRR_ROUTES
 )
 
@@ -18,18 +18,20 @@ import pytest
 logger = logging.getLogger(__name__)
 
 sys.path.append("scripts")
-import route_check
+import route_check  # noqa: E402
 
 current_test_data = None
 selector_returned = None
 subscribers_returned = {}
 db_conns = {}
 
+
 def set_test_case_data(ctdata):
     global current_test_data, db_conns, selector_returned, subscribers_returned
     current_test_data = ctdata
     selector_returned = None
     subscribers_returned = {}
+
 
 def recursive_update(d, t):
     assert type(t) is dict
@@ -41,6 +43,7 @@ def recursive_update(d, t):
             d[k] = {}
         recursive_update(d[k], t[k])
 
+
 class Table:
     def __init__(self, db, tbl):
         self.db = db
@@ -49,9 +52,13 @@ class Table:
 
     def update(self):
         t = copy.deepcopy(self.get_val(current_test_data.get(UPD, {}),
-            [self.db["namespace"], self.db["name"], self.tbl, OP_SET]))
+                          [self.db["namespace"],
+                          self.db["name"],
+                          self.tbl, OP_SET]))
         drop = copy.deepcopy(self.get_val(current_test_data.get(UPD, {}),
-                        [self.db["namespace"], self.db["name"], self.tbl, OP_DEL]))
+                             [self.db["namespace"],
+                             self.db["name"],
+                             self.tbl, OP_DEL]))
         if t:
             recursive_update(self.data, t)
 
@@ -75,8 +82,10 @@ class Table:
         ret = copy.deepcopy(self.data.get(key, {}).get(field, {}))
         return True, ret
 
+
 def conn_side_effect(arg, _1, _2, namespace):
     return db_conns[namespace][arg]
+
 
 def init_db_conns(namespaces):
     for ns in namespaces:
@@ -87,8 +96,9 @@ def init_db_conns(namespaces):
             "CONFIG_DB": ConfigDB(ns)
             }
 
+
 def table_side_effect(db, tbl):
-    if not tbl in db.keys():
+    if tbl not in db.keys():
         db[tbl] = Table(db, tbl)
     return db[tbl]
 
@@ -155,12 +165,14 @@ class MockSubscriber:
 
         return (k, op, v)
 
+
 def subscriber_side_effect(db, tbl):
     global subscribers_returned
     key = "db_{}_{}_tbl_{}".format(db["namespace"], db["name"], tbl)
-    if not key in subscribers_returned:
+    if key not in subscribers_returned:
         subscribers_returned[key] = MockSubscriber(db, tbl)
     return subscribers_returned[key]
+
 
 def select_side_effect():
     global selector_returned
@@ -169,8 +181,10 @@ def select_side_effect():
         selector_returned = MockSelector()
     return selector_returned
 
+
 def config_db_side_effect(namespace):
     return db_conns[namespace]["CONFIG_DB"]
+
 
 class ConfigDB:
     def __init__(self, namespace):
@@ -184,12 +198,14 @@ class ConfigDB:
     def get_entry(self, table, key):
         return self.get_table(table).get(key, {})
 
+
 def set_mock(mock_table, mock_conn, mock_sel, mock_subs, mock_config_db):
     mock_conn.side_effect = conn_side_effect
     mock_table.side_effect = table_side_effect
     mock_sel.side_effect = select_side_effect
     mock_subs.side_effect = subscriber_side_effect
     mock_config_db.side_effect = config_db_side_effect
+
 
 class TestRouteCheck(object):
     @staticmethod
@@ -234,18 +250,22 @@ class TestRouteCheck(object):
     def test_route_check(self, mock_dbs, test_num):
         logger.debug("test_route_check: test_num={}".format(test_num))
         self.init()
-        ret = 0
         ct_data = TEST_DATA[test_num]
         set_test_case_data(ct_data)
         self.run_test(ct_data)
 
     def run_test(self, ct_data):
         with patch('sys.argv', ct_data[ARGS].split()), \
-            patch('sonic_py_common.multi_asic.get_namespace_list', return_value= ct_data[NAMESPACE]), \
-            patch('sonic_py_common.multi_asic.is_multi_asic', return_value= ct_data[MULTI_ASIC]), \
+            patch('sonic_py_common.multi_asic.get_namespace_list', return_value=ct_data[NAMESPACE]), \
+            patch('sonic_py_common.multi_asic.is_multi_asic', return_value=ct_data[MULTI_ASIC]), \
             patch('route_check.subprocess.check_output', side_effect=lambda *args, **kwargs: self.mock_check_output(ct_data, *args, **kwargs)), \
-            patch('route_check.mitigate_installed_not_offloaded_frr_routes', side_effect=lambda *args, **kwargs: None), \
-            patch('route_check.load_db_config', side_effect=lambda: init_db_conns(ct_data[NAMESPACE])):
+            patch('route_check.check_frr_pending_routes',
+                  side_effect=lambda *args, **kwargs:
+                  self.mock_fetch_routes(ct_data, *args, **kwargs)), \
+            patch('route_check.mitigate_installed_not_offloaded_frr_routes',
+                  side_effect=lambda *args, **kwargs: None), \
+            patch('route_check.load_db_config',
+                  side_effect=lambda: init_db_conns(ct_data[NAMESPACE])):
 
             ret, res = route_check.main()
             self.assert_results(ct_data, ret, res)
@@ -254,6 +274,24 @@ class TestRouteCheck(object):
         ns = self.extract_namespace_from_args(args[0])
         routes = ct_data.get(FRR_ROUTES, {}).get(ns, {})
         return json.dumps(routes)
+
+    def mock_fetch_routes(self, ct_data, *args, **kwargs):
+        ns = args[0]
+        routes = ct_data.get(FRR_ROUTES, {}).get(ns, {})
+        if not routes:
+            return []
+        route_list = []
+        for r, v in routes.items():
+            for e in v:
+                if e.get('protocol') in ('connected', 'kernel', 'static'):
+                    continue
+                if e.get('vrfName') != 'default':
+                    continue
+                if not e.get('selected', False):
+                    continue
+                if not e.get('offloaded', False):
+                    route_list.append(r)
+        return route_list
 
     def assert_results(self, ct_data, ret, res):
         expect_ret = ct_data.get(RET, 0)
@@ -275,7 +313,8 @@ class TestRouteCheck(object):
         set_test_case_data(ct_data)
         try:
             with patch('sys.argv', [route_check.__file__.split('/')[-1]]), \
-                patch('route_check.load_db_config', side_effect=lambda: init_db_conns(ct_data[NAMESPACE])):
+                 patch('route_check.load_db_config',
+                       side_effect=lambda: init_db_conns(ct_data[NAMESPACE])):
 
                 ret, res = route_check.main()
 
@@ -300,8 +339,8 @@ class TestRouteCheck(object):
 
     def test_mitigate_routes(self, mock_dbs):
         namespace = DEFAULTNS
-        missed_frr_rt = [ { 'prefix': '192.168.0.1', 'protocol': 'bgp' } ]
-        rt_appl = [ '192.168.0.1' ]
+        missed_frr_rt = [{'prefix': '192.168.0.1', 'protocol': 'bgp'}]
+        rt_appl = ['192.168.0.1']
         init_db_conns([namespace])
         with patch('sys.stdout', new_callable=StringIO) as mock_stdout:
             route_check.mitigate_installed_not_offloaded_frr_routes(namespace, missed_frr_rt, rt_appl)
