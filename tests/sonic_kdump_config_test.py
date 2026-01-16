@@ -666,6 +666,35 @@ class TestSonicKdumpConfig(unittest.TestCase):
         # Verify that the correct message is printed
         mock_print.assert_called_once_with("SSH path updated. Changes will take effect after reboot.")
 
+    def create_mock_script(self, name):
+        py_content = 'print("linuxargs=crashkernel=8192")'
+        if not os.path.exists(name):
+            try:
+                with open(name, 'w') as f:
+                    f.write('#!/usr/bin/env python3\n')
+                    f.write(py_content)
+                os.chmod(name, 0o777)
+            except IOError as e:
+                print(f"Error creating file {e}")
+
+    def create_mock_script_empty(self, name):
+        if not os.path.exists(name):
+            try:
+                with open(name, 'w') as f:
+                    f.write('#!/usr/bin/env python3\n')
+                os.chmod(name, 0o777)
+            except IOError as e:
+                print(f"Error creating file {e}")
+
+    def create_mock_file(self, name):
+        py_content = 'print("linuxargs=crashkernel=8192")'
+        if not os.path.exists(name):
+            try:
+                with open(name, 'w') as f:
+                    f.write(py_content)
+            except IOError as e:
+                print(f"Error creating file {e}")
+
     @patch("sonic_kdump_config.write_use_kdump")
     @patch("os.path.exists")
     def test_kdump_disable(self, mock_path_exist, mock_write_kdump):
@@ -702,6 +731,58 @@ class TestSonicKdumpConfig(unittest.TestCase):
         with patch("sonic_kdump_config.open", mock_open_func):
             return_result = sonic_kdump_config.kdump_disable(True, "20201230.63", "/host/grub/grub.cfg")
             assert return_result == False
+
+        sys.path.append('./')
+        os.environ["PATH"] += ":./"
+        sonic_kdump_config.get_uboot_env()
+        sonic_kdump_config.dump_uboot_env("mock-uboot-env.txt")
+        self.create_mock_file("fw_printenv")
+        os.chmod("fw_printenv", 0o777)
+        sonic_kdump_config.dump_uboot_env("mock-uboot-env.txt")
+        os.remove("fw_printenv")
+        sonic_kdump_config.set_uboot_env("mock_key", "mock_value")
+        sonic_kdump_config.modify_crashkernel_param_uboot_env("0")
+        sonic_kdump_config.modify_crashkernel_param_uboot_env("8192")
+        self.create_mock_script_empty("fw_printenv")
+        sonic_kdump_config.modify_crashkernel_param_uboot_env("0")
+        sonic_kdump_config.modify_crashkernel_param_uboot_env("8192")
+        os.remove("fw_printenv")
+        self.create_mock_script("fw_printenv")
+        self.create_mock_script("fw_setenv")
+        self.create_mock_file("uboot-env.txt")
+        sonic_kdump_config.get_uboot_env()
+        sonic_kdump_config.modify_crashkernel_param_uboot_env("0")
+        sonic_kdump_config.modify_crashkernel_param_uboot_env("8192")
+
+        mock_open_func = mock_open(read_data=KERNEL_BOOTING_CFG_KDUMP_ENABLED)
+        with patch("sonic_kdump_config.open", mock_open_func):
+            try:
+                sonic_kdump_config.cmd_kdump_config_next(False)
+            except Exception as e:
+                print(f"Error {e}")
+            return_result = sonic_kdump_config.kdump_disable(True, "20201230.63", "uboot-env.txt")
+            handle = mock_open_func()
+            handle.writelines.assert_called_once()
+
+        mock_open_func = mock_open(read_data=KERNEL_BOOTING_CFG_KDUMP_DISABLED)
+        with patch("sonic_kdump_config.open", mock_open_func):
+            return_result = sonic_kdump_config.kdump_disable(True, "20201230.63", "uboot-env.txt")
+            try:
+                sonic_kdump_config.cmd_kdump_disable(False)
+            except Exception as e:
+                print(f"Error {e}")
+
+        mock_path_exist.return_value = False
+        mock_open_func = mock_open(read_data=KERNEL_BOOTING_CFG_KDUMP_ENABLED)
+        with patch("sonic_kdump_config.open", mock_open_func):
+            return_result = sonic_kdump_config.kdump_disable(True, "20201230.63", "uboot-env.txt")
+            handle = mock_open_func()
+            handle.writelines.assert_called_once()
+
+        mock_path_exist.return_value = False
+        mock_open_func = mock_open(read_data=KERNEL_BOOTING_CFG_KDUMP_DISABLED)
+        with patch("sonic_kdump_config.open", mock_open_func):
+            return_result = sonic_kdump_config.kdump_disable(True, "20201230.63", "uboot-env.txt")
 
     @classmethod
     def teardown_class(cls):
