@@ -67,85 +67,109 @@ PortChannel0002            bb00::1/64                              error/down   
 show_error_invalid_af = """Invalid argument -a ipv5"""
 
 
-# --- Global autouse fixture: mock `ip -j -f inet/inet6 addr show` and sysfs reads ---
+# Global autouse fixture: selective mock (ip -j + sysfs), pass-through everything else
 @pytest.fixture(autouse=True)
-def mock_ip_j_addr_general(monkeypatch):
+def mock_ip_and_sysfs(monkeypatch):
     """
-    Provide canned JSON for `ip -j -f inet/inet6 addr show` that matches expected goldens.
+    Mock only:
+      * `ip -j -f inet/inet6 addr show` (with/without netns)
+      * /sys/class/net/*/carrier  -> "0\n" (oper down)
+      * /sys/class/net/*/flags    -> raise CalledProcessError (admin error)
 
-    Also emulate:
-      - /sys/class/net/*/carrier -> "0\n" (oper=down)
-      - /sys/class/net/*/flags   -> raise CalledProcessError (admin=error)
+    Pass-through:
+      * Any other subprocess.check_output call (e.g., test harness running `ipintutil`).
     """
     topo = os.environ.get("UTILITIES_UNIT_TESTING_TOPOLOGY", "")
+    real_check_output = subprocess.check_output
 
-    def _fake_check_output(cmd, text=False, stderr=None):
-        cmd_str = " ".join(cmd)
-
-        # Emulate sysfs reads
-        if "/sys/class/net/" in cmd_str and "/carrier" in cmd_str:
-            return "0\n"  # oper: down
-        if "/sys/class/net/" in cmd_str and "/flags" in cmd_str:
-            raise subprocess.CalledProcessError(1, cmd)  # admin: error
-
-        # We only care about ip -j address queries here
-        is_v6 = "-f inet6" in cmd_str
-
-        if topo == "multi_asic":
-            if is_v6:
-                return textwrap.dedent("""\
-                [
-                  {"ifname":"lo","addr_info":[{"family":"inet6","local":"::1","prefixlen":128}]},
-                  {"ifname":"eth0","addr_info":[{"family":"inet6","local":"fe80::80fd:d1ff:fe5b:452f","prefixlen":64}]},
-                  {"ifname":"Loopback0","addr_info":[{"family":"inet6","local":"fe80::60a5:9dff:fef4:1696%Loopback0","prefixlen":64}]},
-                  {"ifname":"PortChannel0001","addr_info":[
-                      {"family":"inet6","local":"aa00::1","prefixlen":64},
-                      {"family":"inet6","local":"fe80::80fd:d1ff:fe5b:452f","prefixlen":64}
-                  ]}
-                ]""")
-            else:
-                return textwrap.dedent("""\
-                [
-                  {"ifname":"lo","addr_info":[{"family":"inet","local":"127.0.0.1","prefixlen":8}]},
-                  {"ifname":"eth0","addr_info":[{"family":"inet","local":"172.18.0.2","prefixlen":16}]},
-                  {"ifname":"Loopback0","addr_info":[{"family":"inet","local":"40.1.1.1","prefixlen":32}]},
-                  {"ifname":"PortChannel0001","addr_info":[{"family":"inet","local":"20.1.1.1","prefixlen":24}]}
-                ]""")
+    def json_single(is_v6: bool) -> str:
+        if is_v6:
+            return textwrap.dedent("""\
+            [
+              {"ifname":"lo","addr_info":[{"family":"inet6","local":"::1","prefixlen":128}]},
+              {"ifname":"eth0","addr_info":[{"family":"inet6","local":"fe80::64be:a1ff:fe85:c6c4","prefixlen":64}]},
+              {"ifname":"Ethernet0","addr_info":[
+                {"family":"inet6","local":"2100::1","prefixlen":64},
+                {"family":"inet6","local":"aa00::1","prefixlen":64},
+                {"family":"inet6","local":"fe80::64be:a1ff:fe85:c6c4%Ethernet0","prefixlen":64}
+              ]},
+              {"ifname":"PortChannel0001","addr_info":[
+                {"family":"inet6","local":"ab00::1","prefixlen":64},
+                {"family":"inet6","local":"fe80::cc8d:60ff:fe08:139f%PortChannel0001","prefixlen":64}
+              ]},
+              {"ifname":"Vlan100","addr_info":[
+                {"family":"inet6","local":"cc00::1","prefixlen":64},
+                {"family":"inet6","local":"fe80::c029:3fff:fe41:cf56%Vlan100","prefixlen":64}
+              ]}
+            ]""")
         else:
-            # single-asic
-            if is_v6:
-                return textwrap.dedent("""\
-                [
-                  {"ifname":"lo","addr_info":[{"family":"inet6","local":"::1","prefixlen":128}]},
-                  {"ifname":"eth0","addr_info":[{"family":"inet6","local":"fe80::64be:a1ff:fe85:c6c4","prefixlen":64}]},
-                  {"ifname":"Ethernet0","addr_info":[
-                      {"family":"inet6","local":"2100::1","prefixlen":64},
-                      {"family":"inet6","local":"aa00::1","prefixlen":64},
-                      {"family":"inet6","local":"fe80::64be:a1ff:fe85:c6c4%Ethernet0","prefixlen":64}
-                  ]},
-                  {"ifname":"PortChannel0001","addr_info":[
-                      {"family":"inet6","local":"ab00::1","prefixlen":64},
-                      {"family":"inet6","local":"fe80::cc8d:60ff:fe08:139f%PortChannel0001","prefixlen":64}
-                  ]},
-                  {"ifname":"Vlan100","addr_info":[
-                      {"family":"inet6","local":"cc00::1","prefixlen":64},
-                      {"family":"inet6","local":"fe80::c029:3fff:fe41:cf56%Vlan100","prefixlen":64}
-                  ]}
-                ]""")
-            else:
-                return textwrap.dedent("""\
-                [
-                  {"ifname":"lo","addr_info":[{"family":"inet","local":"127.0.0.1","prefixlen":8}]},
-                  {"ifname":"eth0","addr_info":[{"family":"inet","local":"172.18.0.2","prefixlen":16}]},
-                  {"ifname":"Ethernet0","addr_info":[
-                      {"family":"inet","local":"20.1.1.1","prefixlen":24},
-                      {"family":"inet","local":"21.1.1.1","prefixlen":24}
-                  ]},
-                  {"ifname":"PortChannel0001","addr_info":[{"family":"inet","local":"30.1.1.1","prefixlen":24}]},
-                  {"ifname":"Vlan100","addr_info":[{"family":"inet","local":"40.1.1.1","prefixlen":24}]}
-                ]""")
+            return textwrap.dedent("""\
+            [
+              {"ifname":"lo","addr_info":[{"family":"inet","local":"127.0.0.1","prefixlen":8}]},
+              {"ifname":"eth0","addr_info":[{"family":"inet","local":"172.18.0.2","prefixlen":16}]},
+              {"ifname":"Ethernet0","addr_info":[
+                {"family":"inet","local":"20.1.1.1","prefixlen":24},
+                {"family":"inet","local":"21.1.1.1","prefixlen":24}
+              ]},
+              {"ifname":"PortChannel0001","addr_info":[{"family":"inet","local":"30.1.1.1","prefixlen":24}]},
+              {"ifname":"Vlan100","addr_info":[{"family":"inet","local":"40.1.1.1","prefixlen":24}]}
+            ]""")
 
-    monkeypatch.setattr(subprocess, "check_output", _fake_check_output)
+    def json_multi(is_v6: bool) -> str:
+        if is_v6:
+            return textwrap.dedent("""\
+            [
+              {"ifname":"lo","addr_info":[{"family":"inet6","local":"::1","prefixlen":128}]},
+              {"ifname":"eth0","addr_info":[{"family":"inet6","local":"fe80::80fd:d1ff:fe5b:452f","prefixlen":64}]},
+              {"ifname":"Loopback0","addr_info":[{"family":"inet6","local":"fe80::60a5:9dff:fef4:1696%Loopback0","prefixlen":64}]},
+              {"ifname":"PortChannel0001","addr_info":[
+                {"family":"inet6","local":"aa00::1","prefixlen":64},
+                {"family":"inet6","local":"fe80::80fd:d1ff:fe5b:452f","prefixlen":64}
+              ]}
+            ]""")
+        else:
+            return textwrap.dedent("""\
+            [
+              {"ifname":"lo","addr_info":[{"family":"inet","local":"127.0.0.1","prefixlen":8}]},
+              {"ifname":"eth0","addr_info":[{"family":"inet","local":"172.18.0.2","prefixlen":16}]},
+              {"ifname":"Loopback0","addr_info":[{"family":"inet","local":"40.1.1.1","prefixlen":32}]},
+              {"ifname":"PortChannel0001","addr_info":[{"family":"inet","local":"20.1.1.1","prefixlen":24}]}
+            ]""")
+
+    def is_ip_json_query(cmd_list: list) -> bool:
+        # accept: ["ip", "-j", "-f", "inet", "addr", "show"] or with sudo/netns prefixes
+        try:
+            s = " ".join(str(c) for c in cmd_list)
+        except Exception:
+            return False
+        if " addr show" not in s or " -j" not in s:
+            return False
+        # must be ip invocations
+        return (" ip " in f" {s} ") or (len(cmd_list) > 0 and cmd_list[0] in ("ip", "sudo"))
+
+    def se(cmd, *args, **kwargs):
+        # Normalize command list
+        cmd_list = cmd if isinstance(cmd, (list, tuple)) else [cmd]
+        cmd_str = " ".join(str(c) for c in cmd_list)
+
+        # sysfs emulation
+        if "cat" in cmd_list and "/sys/class/net/" in cmd_str:
+            if "/carrier" in cmd_str:
+                return "0\n"  # oper down
+            if "/flags" in cmd_str:
+                raise subprocess.CalledProcessError(1, cmd_list)  # admin error
+            # unknown sysfs -> fall through to real
+
+        # ip -j mocks
+        if is_ip_json_query(cmd_list):
+            is_v6 = ("-f inet6" in cmd_str)
+            payload = json_multi(is_v6) if topo == "multi_asic" else json_single(is_v6)
+            return payload
+
+        # PASS THROUGH any other command (e.g., test harness running `ipintutil`)
+        return real_check_output(cmd, *args, **kwargs)
+
+    monkeypatch.setattr(subprocess, "check_output", se)
 
 
 @pytest.fixture(scope="class")
@@ -169,9 +193,7 @@ def setup_teardown_multi_asic():
 
 @pytest.fixture(scope="class")
 def setup_teardown_fastpath():
-    """
-    Kept for structure parity; current code path is identical in UT/prod.
-    """
+    # Kept for parity; environment toggles if needed later
     os.environ["PATH"] += os.pathsep + scripts_path
     original_ut = os.environ.get("UTILITIES_UNIT_TESTING")
     original_topo = os.environ.get("UTILITIES_UNIT_TESTING_TOPOLOGY")
@@ -195,7 +217,6 @@ def verify_output(output, expected_output):
 
 
 def verify_fastpath_output(output, expected_output):
-    # Keep non-brittle check as previously agreed
     assert output is not None and len(output.strip()) > 0
 
 
@@ -230,7 +251,7 @@ class TestMultiAsicShowIpInt(object):
         verify_output(result, show_multi_asic_ip_intf)
 
     def test_show_ip_intf_v4_all(self):
-        # Locally override to add veth/Loopback4096 only for this test (JSON)
+        # Local override to add veth/Loopback4096
         extra_ipv4 = textwrap.dedent("""\
         [
           {"ifname":"lo","addr_info":[{"family":"inet","local":"127.0.0.1","prefixlen":8}]},
@@ -249,9 +270,9 @@ class TestMultiAsicShowIpInt(object):
         def se(cmd, *a, **kw):
             s = " ".join(cmd)
             if "/sys/class/net/" in s and "/carrier" in s:
-                return "0\n"  # oper: down
+                return "0\n"
             if "/sys/class/net/" in s and "/flags" in s:
-                raise subprocess.CalledProcessError(1, cmd)  # admin: error
+                raise subprocess.CalledProcessError(1, cmd)
             return extra_ipv4
 
         with mock.patch('subprocess.check_output', side_effect=se):
@@ -270,7 +291,6 @@ class TestMultiAsicShowIpInt(object):
         verify_output(result, show_multi_asic_ipv6_intf)
 
     def test_show_ip_intf_v6_all(self):
-        # Locally override to add the additional IPv6 lines for this test (JSON)
         extra_ipv6 = textwrap.dedent("""\
         [
           {"ifname":"lo","addr_info":[{"family":"inet6","local":"::1","prefixlen":128}]},
@@ -289,9 +309,9 @@ class TestMultiAsicShowIpInt(object):
         def se(cmd, *a, **kw):
             s = " ".join(cmd)
             if "/sys/class/net/" in s and "/carrier" in s:
-                return "0\n"  # oper: down
+                return "0\n"
             if "/sys/class/net/" in s and "/flags" in s:
-                raise subprocess.CalledProcessError(1, cmd)  # admin: error
+                raise subprocess.CalledProcessError(1, cmd)
             return extra_ipv6
 
         with mock.patch('subprocess.check_output', side_effect=se):
@@ -307,7 +327,7 @@ class TestMultiAsicShowIpInt(object):
 
 @pytest.mark.usefixtures('setup_teardown_fastpath')
 class TestShowIpIntFastPath(object):
-    """Exercise the same production path with local JSON overrides."""
+    """Keep simple coverage of _addr_show behavior with controlled JSON."""
 
     def test_addr_show_ipv4(self):
         from importlib.machinery import SourceFileLoader
@@ -394,12 +414,10 @@ class TestShowIpIntFastPath(object):
         ip_output = """[
           {"ifname":"Ethernet0","addr_info":[{"family":"inet","local":"10.0.0.1","prefixlen":24}]}
         ]"""
-
         mock_config_db = mock.MagicMock()
         mock_config_db.get_table.return_value = {}
 
         def mock_check_output(cmd, *args, **kwargs):
-            # Return the same canned JSON regardless of netns exec presence
             return ip_output
 
         with mock.patch('subprocess.check_output', side_effect=mock_check_output), \
@@ -425,8 +443,6 @@ class TestShowIpIntFastPath(object):
         with mock.patch('subprocess.check_output', return_value=ip_output), \
              mock.patch('swsscommon.swsscommon.ConfigDBConnector', return_value=mock_config_db), \
              mock.patch('os.path.exists', return_value=True):
-
-            # emulate oper=down (carrier "0") and admin=error (flags error)
             loader.exec_module(ipintutil)
             result = ipintutil.get_ip_intfs_in_namespace(netifaces.AF_INET, '', 'all')
             assert isinstance(result, dict)
@@ -451,8 +467,6 @@ class TestShowIpIntFastPath(object):
         with mock.patch('subprocess.check_output', return_value=ip_output), \
              mock.patch('swsscommon.swsscommon.ConfigDBConnector', return_value=mock_config_db), \
              mock.patch('os.path.exists', return_value=True):
-
             loader.exec_module(ipintutil)
             result = ipintutil.get_ip_intfs_in_namespace(netifaces.AF_INET, '', 'frontend')
             assert isinstance(result, dict)
-
