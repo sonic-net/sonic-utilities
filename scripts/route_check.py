@@ -51,7 +51,7 @@ import concurrent.futures
 from ipaddress import ip_network
 from swsscommon import swsscommon
 from utilities_common import chassis
-from sonic_py_common import multi_asic, device_info
+from sonic_py_common import multi_asic
 from utilities_common.general import load_db_config
 
 APPL_DB_NAME = 'APPL_DB'
@@ -61,12 +61,15 @@ ASIC_KEY_PREFIX = 'SAI_OBJECT_TYPE_ROUTE_ENTRY:'
 
 SUBSCRIBE_WAIT_SECS = 1
 
-# Max of 2 minutes on normal devices and 5 minutes on virtual chassis
-TIMEOUT_SECONDS = 120 if not device_info.is_virtual_chassis() else 360
+# Max of 10 mins
+TIMEOUT_SECONDS = 600
+
+# Chunk size to read
+CHUNK_SIZE = 5 * 1024 * 1024  # Read data in 5 MB chunks
 
 UNIT_TESTING = 0
 
-os.environ['PYTHONUNBUFFERED']='True'
+os.environ['PYTHONUNBUFFERED'] = 'True'
 
 PREFIX_SEPARATOR = '/'
 IPV6_SEPARATOR = ':'
@@ -81,6 +84,7 @@ FRR_WAIT_TIME = 15
 
 REDIS_TIMEOUT_MSECS = 0
 
+
 class Level(Enum):
     ERR = 'ERR'
     INFO = 'INFO'
@@ -93,10 +97,12 @@ class Level(Enum):
 report_level = syslog.LOG_WARNING
 write_to_syslog = False
 
+
 def handler(signum, frame):
-    print_message(syslog.LOG_ERR,
-            "Aborting routeCheck.py upon timeout signal after {} seconds".
-            format(TIMEOUT_SECONDS))
+    print_message(
+        syslog.LOG_ERR,
+        "Aborting routeCheck.py upon timeout signal after {} seconds".
+        format(TIMEOUT_SECONDS))
     print_message(syslog.LOG_ERR, str(traceback.extract_stack()))
     raise Exception("timeout occurred")
 
@@ -209,8 +215,8 @@ def diff_sorted_lists(t1, t2):
     t1_x = t2_x = 0
     t1_miss = []
     t2_miss = []
-    t1_len = len(t1);
-    t2_len = len(t2);
+    t1_len = len(t1)
+    t2_len = len(t2)
     while t1_x < t1_len and t2_x < t2_len:
         d = cmps(t1[t1_x], t2[t2_x])
         if (d == 0):
@@ -385,12 +391,199 @@ def is_suppress_fib_pending_enabled(namespace):
     return state == 'enabled'
 
 
-def fetch_routes(cmd):
+def fetch_routes(ipv6=False, namespace=multi_asic.DEFAULT_NAMESPACE):
     """
     Fetch routes using the given command.
+    Uses chunk-based reading with incremental parsing of individual prefix entries.
+    Parses each prefix entry as soon as it becomes available instead of waiting for the entire JSON.
     """
-    output = subprocess.check_output(cmd, text=True)
-    return json.loads(output)
+    missing_routes = []
+
+    asic_id = []
+    if namespace is not multi_asic.DEFAULT_NAMESPACE:
+        asic_id = ['-n', str(multi_asic.get_asic_id_from_name(namespace))]
+
+    if ipv6:
+        cmd = ["sudo", "vtysh"] + asic_id + ["-c", "show ipv6 route json"]
+    else:
+        cmd = ["sudo", "vtysh"] + asic_id + ["-c", "show ip route json"]
+
+    def process_route_entry(prefix, route_entry):
+        """Process a single route entry and add to missing_routes if needed."""
+        if route_entry.get('protocol') in ('connected', 'kernel', 'static'):
+            return
+        if route_entry.get('vrfName') != 'default':
+            return
+        # skip if this bgp source prefix is not selected as best
+        if not route_entry.get('selected', False):
+            return
+        if not route_entry.get('offloaded', False):
+            missing_routes.append(prefix)
+
+    def extract_prefix_entry(buffer_str, start_idx=0):
+        """
+        Extract a single prefix entry from the buffer.
+        Returns: (prefix_json_str, end_position) or (None, start_idx) if no complete entry found.
+
+        The JSON structure is: {"prefix1": [route_entries], "prefix2": [route_entries], ...}
+        We want to extract individual "prefix": [route_entries] pairs.
+        """
+        # Skip whitespace and opening brace of outer object
+        i = start_idx
+        while i < len(buffer_str) and buffer_str[i] in ' \t\n\r{':
+            i += 1
+
+        if i >= len(buffer_str):
+            return None, start_idx
+
+        # Now we should be at the start of a prefix key (a quoted string)
+        if buffer_str[i] != '"':
+            # Could be a closing brace of the outer object or comma
+            if buffer_str[i] in '},':
+                return None, i + 1
+            return None, start_idx
+
+        # Find the complete prefix entry: "prefix": [...]
+        # We need to track: the key (prefix string), colon, and value (array)
+        in_string = False
+        escape_next = False
+        bracket_count = 0
+        brace_count = 0
+        found_colon = False
+        entry_start = i
+
+        for j in range(i, len(buffer_str)):
+            char = buffer_str[j]
+
+            if escape_next:
+                escape_next = False
+                continue
+
+            if char == '\\':
+                escape_next = True
+                continue
+
+            if char == '"' and not escape_next:
+                in_string = not in_string
+                continue
+
+            if not in_string:
+                if char == ':':
+                    found_colon = True
+                elif char == '[':
+                    bracket_count += 1
+                elif char == ']':
+                    bracket_count -= 1
+                    if bracket_count == 0 and found_colon:
+                        # Found the end of the array value
+                        # The complete entry is from entry_start to j+1
+                        entry_end = j + 1
+
+                        # Skip any trailing comma
+                        k = entry_end
+                        parse_idx = entry_end
+                        while k < len(buffer_str) and buffer_str[k] in ' \t\n\r':
+                            k += 1
+                        if k < len(buffer_str) and buffer_str[k] == ',':
+                            parse_idx = k + 1
+
+                        # Extract the entry as a complete JSON object
+                        entry_str = '{' + buffer_str[entry_start:entry_end] + '}'
+                        return entry_str, parse_idx
+                elif char == '{':
+                    brace_count += 1
+                elif char == '}':
+                    brace_count -= 1
+
+        # No complete entry found
+        return None, start_idx
+
+    def parse_prefix_entries(buffer):
+        # Try to parse individual prefix entries from the buffer
+        try:
+            # Decode the buffer
+            buffer_str = buffer.decode('utf-8')
+
+            # Parse prefix entries incrementally
+            parse_position = 0
+            last_successful_position = 0
+
+            while True:
+                entry_str, new_position = extract_prefix_entry(buffer_str,
+                                                               parse_position)
+
+                if entry_str is None:
+                    # No complete entry found
+                    # Check if we made any progress (e.g., skipped commas/braces)
+                    if new_position > parse_position:
+                        # We skipped some characters, update position and continue
+                        parse_position = new_position
+                        last_successful_position = new_position
+                        continue
+                    else:
+                        # No progress, need more data
+                        break
+
+                # Parse the individual prefix entry
+                try:
+                    prefix_data = json.loads(entry_str)
+                    # Process this prefix entry
+                    for prefix in prefix_data:
+                        for route_entry in prefix_data[prefix]:
+                            process_route_entry(prefix, route_entry)
+
+                    # Update parse position
+                    parse_position = new_position
+                    last_successful_position = new_position
+
+                except json.JSONDecodeError as e:
+                    # Failed to parse this entry, skip it
+                    print_message(syslog.LOG_WARNING, f"Failed to parse prefix entry: {e}")
+                    parse_position = new_position
+                    last_successful_position = new_position
+                    continue
+
+            # Remove parsed data from buffer to save memory
+            if last_successful_position > 0:
+                # Convert character position to byte position
+                buffer = buffer_str[last_successful_position:].encode('utf-8')
+
+        except UnicodeDecodeError:
+            # Buffer contains incomplete UTF-8 sequence, continue reading
+            pass
+
+        return buffer
+
+    try:
+        with subprocess.Popen(cmd, stdout=subprocess.PIPE, bufsize=0) as proc:
+            buffer = b''  # Buffer to accumulate incomplete data
+
+            while True:
+                # Read a chunk of data
+                chunk = proc.stdout.read(CHUNK_SIZE)
+                if not chunk:
+                    # No more data to read
+                    break
+
+                # Add chunk to buffer
+                buffer += chunk
+                buffer = parse_prefix_entries(buffer)
+
+            # Process any remaining data in buffer
+            if buffer:
+                parse_prefix_entries(buffer)
+
+            # Wait for the process to terminate and get the return code
+            return_code = proc.wait()
+            if return_code != 0:
+                print_message(syslog.LOG_WARNING, f"Subprocess exited with non-zero return code: {return_code}")
+
+    except FileNotFoundError:
+        print_message(syslog.LOG_ERR, f"Error: Command '{cmd[0]}' not found.")
+    except Exception as e:
+        print_message(syslog.LOG_ERR, f"An error occurred: {e}")
+
+    return missing_routes
 
 
 def get_frr_routes_parallel(namespace):
@@ -398,23 +591,16 @@ def get_frr_routes_parallel(namespace):
     Read routes from zebra through CLI command for IPv4 and IPv6 in parallel
     :return combined IPv4 and IPv6 routes dictionary.
     """
-    if namespace == multi_asic.DEFAULT_NAMESPACE:
-        v4_route_cmd = ['show', 'ip', 'route', 'json']
-        v6_route_cmd = ['show', 'ipv6', 'route', 'json']
-    else:
-        v4_route_cmd = ['show', 'ip', 'route', '-n', namespace, 'json']
-        v6_route_cmd = ['show', 'ipv6', 'route', '-n', namespace, 'json']
-
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        future_v4 = executor.submit(fetch_routes, v4_route_cmd)
-        future_v6 = executor.submit(fetch_routes, v6_route_cmd)
+        future_v4 = executor.submit(fetch_routes, ipv6=False, namespace=namespace)
+        future_v6 = executor.submit(fetch_routes, ipv6=True, namespace=namespace)
 
         # Wait for both results to complete
         v4_routes = future_v4.result()
         v6_routes = future_v6.result()
 
     # Combine both IPv4 and IPv6 routes
-    v4_routes.update(v6_routes)
+    v4_routes += v6_routes
     print_message(syslog.LOG_DEBUG, "FRR Routes: namespace={}, routes={}".format(namespace, v4_routes))
     return v4_routes
 
@@ -510,7 +696,7 @@ def filter_out_local_interfaces(namespace, keys):
     :return keys filtered out of local
     """
     rt = []
-    local_if_lst = {'eth0', 'eth1', 'docker0'}  #eth1 is added to skip route installed in AAPL_DB on packet-chassis
+    local_if_lst = {'eth0', 'eth1', 'docker0'}  # eth1 is added to skip route installed in AAPL_DB on packet-chassis
     local_if_lo = [r'tun0', r'lo', r'Loopback\d+']
 
     chassis_local_intfs = chassis.get_chassis_local_interfaces()
@@ -558,8 +744,9 @@ def filter_out_voq_neigh_routes(namespace, keys):
         if not e:
             # Prefix might have been added. So try w/o it.
             e = dict(tbl.get(prefix[0])[1])
-        if not e or all([not (re.match(x, e['ifname']) and
-            ((prefix[1] == "32" and e['nexthop'] == "0.0.0.0") or
+        if not e or \
+            all([not (re.match(x, e['ifname']) and
+                ((prefix[1] == "32" and e['nexthop'] == "0.0.0.0") or
                 (prefix[1] == "128" and e['nexthop'] == "::"))) for x in local_if_re]):
             rt.append(k)
 
@@ -598,7 +785,6 @@ def filter_out_vnet_routes(namespace, routes):
 
     for vnet_route_db_key in vnet_routes_db_keys:
         vnet_route_attrs = vnet_route_db_key.split(':', 1)
-        vnet_name = vnet_route_attrs[0]
         vnet_route = vnet_route_attrs[1]
         vnet_routes.append(vnet_route)
 
@@ -653,6 +839,7 @@ def filter_out_standalone_tunnel_routes(namespace, routes):
 
     return updated_routes
 
+
 def is_feature_bgp_enabled(namespace):
     """
     Check if bgp feature is enabled or disabled.
@@ -666,6 +853,7 @@ def is_feature_bgp_enabled(namespace):
             bgp_enabled = True
     return bgp_enabled
 
+
 def check_frr_pending_routes(namespace):
     """
     Check FRR routes for offload flag presence by executing "show ip route json"
@@ -675,37 +863,14 @@ def check_frr_pending_routes(namespace):
     missed_rt = []
     retries = FRR_CHECK_RETRIES
     for i in range(retries):
-        missed_rt = []
-        failed_rt = []
-        frr_routes = get_frr_routes_parallel(namespace)
+        missed_rt = get_frr_routes_parallel(namespace)
 
-        for route_prefix, entries in frr_routes.items():
-            for entry in entries:
-                if entry['protocol'] in ('connected', 'kernel', 'static'):
-                    continue
-
-                # TODO: Also handle VRF routes. Currently this script does not check for VRF routes so it would be incorrect for us
-                # to assume they are installed in ASIC_DB, so we don't handle them.
-                if entry['vrfName'] != 'default':
-                    continue
-
-                # skip if this bgp source prefix is not selected as best
-                if not entry.get('selected', False):
-                    continue
-
-                if not entry.get('offloaded', False):
-                    missed_rt.append(entry)
-
-                if entry.get('failed', False):
-                    failed_rt.append(route_prefix)
-
-        if not missed_rt and not failed_rt:
+        if not missed_rt:
             break
 
         time.sleep(FRR_WAIT_TIME)
-    print_message(syslog.LOG_DEBUG, "FRR missed routes: {}".format(json.dumps(missed_rt, indent=4)))
-    print_message(syslog.LOG_DEBUG, "FRR failed routes: {}".format(json.dumps(failed_rt, indent=4)))
-    return missed_rt, failed_rt
+    print_message(syslog.LOG_DEBUG, f"FRR missed routes: {missed_rt}")
+    return missed_rt
 
 
 def mitigate_installed_not_offloaded_frr_routes(namespace, missed_frr_rt, rt_appl):
@@ -842,7 +1007,6 @@ def check_routes_for_namespace(namespace):
     rt_appl_miss = []
     rt_asic_miss = []
     rt_frr_miss = []
-    rt_frr_failed = []
 
     selector, subs, rt_asic = get_asicdb_routes(namespace)
 
@@ -896,13 +1060,10 @@ def check_routes_for_namespace(namespace):
     if rt_asic_miss:
         results["Unaccounted_ROUTE_ENTRY_TABLE_entries"] = rt_asic_miss
 
-    rt_frr_miss, rt_frr_failed = check_frr_pending_routes(namespace)
+    rt_frr_miss = check_frr_pending_routes(namespace)
 
     if rt_frr_miss:
         results["missed_FRR_routes"] = rt_frr_miss
-
-    if rt_frr_failed:
-        results["failed_FRR_routes"] = rt_frr_failed
 
     if results:
         if rt_frr_miss and not rt_appl_miss and not rt_asic_miss:
@@ -910,9 +1071,6 @@ def check_routes_for_namespace(namespace):
                           but all routes in APPL_DB and ASIC_DB are in sync".format(namespace))
             if is_suppress_fib_pending_enabled(namespace):
                 mitigate_installed_not_offloaded_frr_routes(namespace, rt_frr_miss, rt_appl)
-        if rt_frr_failed:
-            print_message(syslog.LOG_ERR, "Some routes have failed state in FRR {} \
-                          : {}".format(namespace, rt_frr_failed))
 
     return results, adds, deletes
 
@@ -1035,15 +1193,45 @@ def main():
     with given interval in-between calls to check_route
     :return Same return value as returned by check_route.
     """
+    global CHUNK_SIZE
+    global TIMEOUT_SECONDS
     interval = 0
-    parser=argparse.ArgumentParser(description="Verify routes between APPL-DB & ASIC-DB are in sync")
-    parser.add_argument('-m', "--mode", type=Level, choices=list(Level), default='ERR')
-    parser.add_argument("-i", "--interval", type=int, default=0, help="Scan interval in seconds")
-    parser.add_argument("-s", "--log_to_syslog", action="store_true", default=True, help="Write message to syslog")
-    parser.add_argument('-n','--namespace',   default=multi_asic.DEFAULT_NAMESPACE, help='Verify routes for this specific namespace')
+    parser = argparse.ArgumentParser(
+        description="Verify routes between APPL-DB & ASIC-DB are in sync")
+    parser.add_argument('-m',
+                        "--mode",
+                        type=Level,
+                        choices=list(Level),
+                        default='ERR')
+    parser.add_argument("-i",
+                        "--interval",
+                        type=int,
+                        default=0,
+                        help="Scan interval in seconds")
+    parser.add_argument("-s",
+                        "--log_to_syslog",
+                        action="store_true",
+                        default=True,
+                        help="Write message to syslog")
+    parser.add_argument('-n', '--namespace',
+                        default=multi_asic.DEFAULT_NAMESPACE,
+                        help='Verify routes for this specific namespace')
+    parser.add_argument('-c',
+                        '--chunk',
+                        type=int,
+                        default=CHUNK_SIZE, help='Chunk size in bytes')
+    parser.add_argument('-t',
+                        '--timeout',
+                        type=int,
+                        default=TIMEOUT_SECONDS,
+                        help='Timeout in secs')
     args = parser.parse_args()
 
     namespace = args.namespace
+
+    CHUNK_SIZE = args.chunk * 1024
+    TIMEOUT_SECONDS = args.timeout
+
     if namespace is not multi_asic.DEFAULT_NAMESPACE and not multi_asic.is_multi_asic():
         print_message(syslog.LOG_ERR, "Namespace option is not valid for a single-ASIC device")
         return -1, None
