@@ -697,8 +697,8 @@ class TestFetchRoutes:
             result = route_check.fetch_routes(['show', 'ip', 'route', 'json'])
 
         assert set(result[0]) == {"192.168.1.0/24",
-                               "192.168.2.0/24",
-                               "192.168.3.0/24"}
+                                  "192.168.2.0/24",
+                                  "192.168.3.0/24"}
 
     def test_incremental_parsing_prefix_split_across_chunks(self):
         """Test that a prefix entry split across chunks is parsed correctly"""
