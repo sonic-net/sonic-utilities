@@ -455,3 +455,4 @@ class TestShowIpIntFastPath(object):
             loader.exec_module(ipintutil)
             result = ipintutil.get_ip_intfs_in_namespace(netifaces.AF_INET, '', 'frontend')
             assert isinstance(result, dict)
+
