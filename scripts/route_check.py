@@ -398,6 +398,7 @@ def fetch_routes(ipv6=False, namespace=multi_asic.DEFAULT_NAMESPACE):
     Parses each prefix entry as soon as it becomes available instead of waiting for the entire JSON.
     """
     missing_routes = []
+    failing_routes = []
 
     asic_id = []
     if namespace is not multi_asic.DEFAULT_NAMESPACE:
@@ -419,6 +420,8 @@ def fetch_routes(ipv6=False, namespace=multi_asic.DEFAULT_NAMESPACE):
             return
         if not route_entry.get('offloaded', False):
             missing_routes.append(prefix)
+        if route_entry.get('failed', False):
+            failing_routes.append(prefix)
 
     def extract_prefix_entry(buffer_str, start_idx=0):
         """
@@ -583,7 +586,7 @@ def fetch_routes(ipv6=False, namespace=multi_asic.DEFAULT_NAMESPACE):
     except Exception as e:
         print_message(syslog.LOG_ERR, f"An error occurred: {e}")
 
-    return missing_routes
+    return missing_routes, failing_routes
 
 
 def get_frr_routes_parallel(namespace):
@@ -600,9 +603,13 @@ def get_frr_routes_parallel(namespace):
         v6_routes = future_v6.result()
 
     # Combine both IPv4 and IPv6 routes
-    v4_routes += v6_routes
-    print_message(syslog.LOG_DEBUG, "FRR Routes: namespace={}, routes={}".format(namespace, v4_routes))
-    return v4_routes
+    v4_miss_rt, v4_fail_rt = v4_routes
+    v6_miss_rt, v6_fail_rt = v6_routes
+    v4_miss_rt += v6_miss_rt
+    v4_fail_rt += v6_fail_rt
+    print_message(syslog.LOG_DEBUG, "FRR Missing Routes: namespace={}, routes={}".format(namespace, v4_miss_rt))
+    print_message(syslog.LOG_DEBUG, "FRR Failed Routes: namespace={}, routes={}".format(namespace, v4_fail_rt))
+    return v4_miss_rt, v4_fail_rt
 
 
 def get_interfaces(namespace):
@@ -861,16 +868,18 @@ def check_frr_pending_routes(namespace):
     """
 
     missed_rt = []
+    failed_rt = []
     retries = FRR_CHECK_RETRIES
     for i in range(retries):
-        missed_rt = get_frr_routes_parallel(namespace)
+        missed_rt, failed_rt = get_frr_routes_parallel(namespace)
 
-        if not missed_rt:
+        if not missed_rt and not failed_rt:
             break
 
         time.sleep(FRR_WAIT_TIME)
     print_message(syslog.LOG_DEBUG, f"FRR missed routes: {missed_rt}")
-    return missed_rt
+    print_message(syslog.LOG_DEBUG, f"FRR failed routes: {failed_rt}")
+    return missed_rt, failed_rt
 
 
 def mitigate_installed_not_offloaded_frr_routes(namespace, missed_frr_rt, rt_appl):
@@ -1007,6 +1016,7 @@ def check_routes_for_namespace(namespace):
     rt_appl_miss = []
     rt_asic_miss = []
     rt_frr_miss = []
+    rt_frr_failed = []
 
     selector, subs, rt_asic = get_asicdb_routes(namespace)
 
@@ -1060,10 +1070,13 @@ def check_routes_for_namespace(namespace):
     if rt_asic_miss:
         results["Unaccounted_ROUTE_ENTRY_TABLE_entries"] = rt_asic_miss
 
-    rt_frr_miss = check_frr_pending_routes(namespace)
+    rt_frr_miss, rt_frr_failed = check_frr_pending_routes(namespace)
 
     if rt_frr_miss:
         results["missed_FRR_routes"] = rt_frr_miss
+
+    if rt_frr_failed:
+        results["failed_FRR_routes"] = rt_frr_failed
 
     if results:
         if rt_frr_miss and not rt_appl_miss and not rt_asic_miss:
@@ -1071,6 +1084,9 @@ def check_routes_for_namespace(namespace):
                           but all routes in APPL_DB and ASIC_DB are in sync".format(namespace))
             if is_suppress_fib_pending_enabled(namespace):
                 mitigate_installed_not_offloaded_frr_routes(namespace, rt_frr_miss, rt_appl)
+        if rt_frr_failed:
+            print_message(syslog.LOG_ERR, "Some routes have failed state in FRR {} \
+                          : {}".format(namespace, rt_frr_failed))
 
     return results, adds, deletes
 

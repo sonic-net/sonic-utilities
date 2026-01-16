@@ -279,8 +279,9 @@ class TestRouteCheck(object):
         ns = args[0]
         routes = ct_data.get(FRR_ROUTES, {}).get(ns, {})
         if not routes:
-            return []
-        route_list = []
+            return [], []  # Return tuple of (missed_routes, failed_routes)
+        missed_route_list = []
+        failed_route_list = []
         for r, v in routes.items():
             for e in v:
                 if e.get('protocol') in ('connected', 'kernel', 'static'):
@@ -290,8 +291,10 @@ class TestRouteCheck(object):
                 if not e.get('selected', False):
                     continue
                 if not e.get('offloaded', False):
-                    route_list.append(r)
-        return route_list
+                    missed_route_list.append(r)
+                if e.get('failed', False):
+                    failed_route_list.append(r)
+        return missed_route_list, failed_route_list  # Return tuple of (missed_routes, failed_routes)
 
     def assert_results(self, ct_data, ret, res):
         expect_ret = ct_data.get(RET, 0)
