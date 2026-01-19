@@ -41,16 +41,24 @@ def show(db, brief):
     ports.sort(key=lambda p: int(p.line_num))
 
     # set table header style
-    header = ["Line", "Baud", "Flow Control", "PID", "Start Time", "Device"]
+    header = ["Line", "Baud", "Flow Control", "PID", "Start Time", "Device", "Oper State", "State Duration"]
     body = []
     for port in ports:
         # runtime information
         busy = "*" if port.busy else " "
         pid = port.session_pid if port.session_pid else "-"
         date = port.session_start_date if port.session_start_date else "-"
-        baud = port.baud
+        baud = port.baud if port.baud else "-"
         flow_control = "Enabled" if port.flow_control else "Disabled"
-        body.append([busy+port.line_num, baud if baud else "-", flow_control, pid if pid else "-", date if date else "-", port.remote_device])
+        remote_device = port.remote_device if port.remote_device else "-"
+        oper_state = port.oper_state if port.oper_state else "-"
+        state_duration = port.state_duration if port.state_duration else "-"
+        
+        body.append([
+            busy+port.line_num, baud, flow_control,
+            pid, date, remote_device,
+            oper_state, state_duration])
+
     click.echo(tabulate(body, header, stralign='right'))
 
 # 'clear' subcommand
