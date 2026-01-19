@@ -66,7 +66,60 @@ class TestConfigConsoleCommands(object):
         print(result.exit_code)
         print(sys.stderr, result.output)
         assert "Invalid ConfigDB. Error" in result.output
-    
+
+    def test_console_heartbeat_enable(self):
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(config.config.commands["console"].commands["heartbeat"], ["enable"], obj=db)
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code == 0
+
+    def test_console_heartbeat_disable(self):
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(config.config.commands["console"].commands["heartbeat"], ["disable"], obj=db)
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code == 0
+
+    def test_console_heartbeat_invalid_mode(self):
+        runner = CliRunner()
+        db = Db()
+
+        # test with invalid mode argument
+        result = runner.invoke(config.config.commands["console"].commands["heartbeat"], ["invalid"], obj=db)
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code != 0
+        assert "Invalid value for '<mode>'" in result.output
+
+    def test_console_heartbeat_missing_mode(self):
+        runner = CliRunner()
+        db = Db()
+
+        # test without mode argument
+        result = runner.invoke(config.config.commands["console"].commands["heartbeat"], [], obj=db)
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert result.exit_code != 0
+        assert "Missing argument '<mode>'" in result.output
+
+    @patch("validated_config_db_connector.device_info.is_yang_config_validation_enabled",
+           mock.Mock(return_value=True))
+    @patch("config.validated_config_db_connector.ValidatedConfigDBConnector.validated_mod_entry",
+           mock.Mock(side_effect=ValueError))
+    def test_console_heartbeat_yang_validation(self):
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(config.config.commands["console"].commands["heartbeat"], ["enable"], obj=db)
+        print(result.exit_code)
+        print(sys.stderr, result.output)
+        assert "Invalid ConfigDB. Error" in result.output
+
     def test_console_add_exists(self):
         runner = CliRunner()
         db = Db()
@@ -635,11 +688,11 @@ class TestConsutilShow(object):
         print("SETUP")
 
     expect_show_output = ''+ \
-        """  Line    Baud    Flow Control    PID                Start Time    Device
-------  ------  --------------  -----  ------------------------  --------
-     1    9600        Disabled      -                         -   switch1
-    *2    9600        Disabled    223  Wed Mar  6 08:31:35 2019   switch2
-     3    9600         Enabled      -                         -
+        """  Line    Baud    Flow Control    PID                Start Time    Device    Oper State    State Duration
+------  ------  --------------  -----  ------------------------  --------  ------------  ----------------
+     1    9600        Disabled      -                         -   switch1             -                 -
+    *2    9600        Disabled    223  Wed Mar  6 08:31:35 2019   switch2             -                 -
+     3    9600         Enabled      -                         -         -             -                 -
 """
     @mock.patch('consutil.lib.SysInfoProvider.init_device_prefix', mock.MagicMock(return_value=None))
     @mock.patch('consutil.lib.SysInfoProvider.list_active_console_processes', mock.MagicMock(return_value={ "2" : ("223", "Wed Mar  6 08:31:35 2019")}))
@@ -844,3 +897,155 @@ class TestConsutilClear(object):
         print(sys.stderr, result.output)
         assert result.exit_code == 0
         assert "Cleared line" in result.output
+
+
+class TestConsolePortInfoStateDuration(object):
+    """Unit tests for ConsolePortInfo.state_duration property"""
+
+    @classmethod
+    def setup_class(cls):
+        print("SETUP")
+
+    def _create_port_info(self, last_state_change=None):
+        """Helper to create a ConsolePortInfo with specified last_state_change"""
+        info = {
+            "LINE": "1",
+            "baud_rate": "9600",
+            "CUR_STATE": {}
+        }
+        if last_state_change is not None:
+            info["CUR_STATE"]["last_state_change"] = last_state_change
+        return ConsolePortInfo(None, info)
+
+    @mock.patch('time.time')
+    def test_state_duration_zero_seconds(self, mock_time):
+        """Test duration of exactly 0 seconds"""
+        mock_time.return_value = 1000
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "0s"
+
+    @mock.patch('time.time')
+    def test_state_duration_only_seconds(self, mock_time):
+        """Test duration with only seconds (less than a minute)"""
+        mock_time.return_value = 1045
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "45s"
+
+    @mock.patch('time.time')
+    def test_state_duration_minutes_and_seconds(self, mock_time):
+        """Test duration with minutes and seconds"""
+        mock_time.return_value = 1000 + 5 * 60 + 30  # 5 minutes 30 seconds
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "5m30s"
+
+    @mock.patch('time.time')
+    def test_state_duration_hours_minutes_seconds(self, mock_time):
+        """Test duration with hours, minutes, and seconds"""
+        mock_time.return_value = 1000 + 2 * 3600 + 15 * 60 + 45  # 2h15m45s
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "2h15m45s"
+
+    @mock.patch('time.time')
+    def test_state_duration_days_hours_minutes_seconds(self, mock_time):
+        """Test duration with days, hours, minutes, and seconds"""
+        mock_time.return_value = 1000 + 3 * 86400 + 5 * 3600 + 30 * 60 + 15  # 3d5h30m15s
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "3d5h30m15s"
+
+    @mock.patch('time.time')
+    def test_state_duration_very_long(self, mock_time):
+        """Test very long duration (e.g., 365 days)"""
+        mock_time.return_value = 1000 + 365 * 86400 + 12 * 3600 + 30 * 60 + 45
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "365d12h30m45s"
+
+    @mock.patch('time.time')
+    def test_state_duration_only_days(self, mock_time):
+        """Test duration with only days (no hours/minutes/seconds)"""
+        mock_time.return_value = 1000 + 7 * 86400  # exactly 7 days
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "7d0s"  # Shows 0s when no other non-zero parts
+
+    @mock.patch('time.time')
+    def test_state_duration_only_hours(self, mock_time):
+        """Test duration with only hours"""
+        mock_time.return_value = 1000 + 5 * 3600  # exactly 5 hours
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "5h0s"
+
+    @mock.patch('time.time')
+    def test_state_duration_only_minutes(self, mock_time):
+        """Test duration with only minutes"""
+        mock_time.return_value = 1000 + 10 * 60  # exactly 10 minutes
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "10m0s"
+
+    @mock.patch('time.time')
+    def test_state_duration_negative_time_difference(self, mock_time):
+        """Test handling of negative time difference (future timestamp)"""
+        mock_time.return_value = 500
+        port_info = self._create_port_info("1000")  # timestamp in the future
+        assert port_info.state_duration is None
+
+    def test_state_duration_no_last_state_change(self):
+        """Test when last_state_change is not set"""
+        port_info = self._create_port_info(None)
+        assert port_info.state_duration is None
+
+    def test_state_duration_empty_last_state_change(self):
+        """Test when last_state_change is empty string"""
+        info = {
+            "LINE": "1",
+            "CUR_STATE": {"last_state_change": ""}
+        }
+        port_info = ConsolePortInfo(None, info)
+        assert port_info.state_duration is None
+
+    def test_state_duration_invalid_timestamp_string(self):
+        """Test with invalid (non-numeric) timestamp"""
+        port_info = self._create_port_info("invalid_timestamp")
+        assert port_info.state_duration is None
+
+    def test_state_duration_float_timestamp(self):
+        """Test with float timestamp string (should handle conversion)"""
+        port_info = self._create_port_info("1000.5")
+        # Should truncate to int and work
+        with mock.patch('time.time', return_value=1060.0):
+            # 1060 - 1000 = 60 seconds = 1 minute
+            assert port_info.state_duration == "1m0s"
+
+    @mock.patch('time.time')
+    def test_state_duration_skips_zero_middle_components(self, mock_time):
+        """Test that zero components in the middle are skipped"""
+        # 1 day, 0 hours, 0 minutes, 30 seconds
+        mock_time.return_value = 1000 + 1 * 86400 + 30
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "1d30s"
+
+    @mock.patch('time.time')
+    def test_state_duration_one_second(self, mock_time):
+        """Test duration of exactly 1 second"""
+        mock_time.return_value = 1001
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "1s"
+
+    @mock.patch('time.time')
+    def test_state_duration_exactly_one_minute(self, mock_time):
+        """Test duration of exactly 1 minute"""
+        mock_time.return_value = 1060
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "1m0s"
+
+    @mock.patch('time.time')
+    def test_state_duration_exactly_one_hour(self, mock_time):
+        """Test duration of exactly 1 hour"""
+        mock_time.return_value = 1000 + 3600
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "1h0s"
+
+    @mock.patch('time.time')
+    def test_state_duration_exactly_one_day(self, mock_time):
+        """Test duration of exactly 1 day"""
+        mock_time.return_value = 1000 + 86400
+        port_info = self._create_port_info("1000")
+        assert port_info.state_duration == "1d0s"

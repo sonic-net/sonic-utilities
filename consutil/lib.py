@@ -363,8 +363,8 @@ class SysInfoProvider(object):
         regex_date = r"([A-Z][a-z]{2} [A-Z][a-z]{2} [\d ]\d \d{2}:\d{2}:\d{2} \d{4})"
         # matches any characters ending in minicom or picocom,
         # then a space and any chars followed by /dev/ttyUSB<any digits>,
-        # then a space and any chars
-        regex_cmd = r".*(?:(?:mini)|(?:pico))com .*" + SysInfoProvider.DEVICE_PREFIX + r"(\d+)(?: .*)?"
+        # then any chars
+        regex_cmd = r".*(?:(?:mini)|(?:pico))com .*" + SysInfoProvider.DEVICE_PREFIX + r"(\d+).*"
         regex_process = re.compile(r"^" + regex_pid + r" " + regex_date + r" " + regex_cmd + r"$")
 
         console_processes = {}

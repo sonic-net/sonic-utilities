@@ -53,7 +53,6 @@ def show(db, brief):
         remote_device = port.remote_device if port.remote_device else "-"
         oper_state = port.oper_state if port.oper_state else "-"
         state_duration = port.state_duration if port.state_duration else "-"
-        
         body.append([
             busy+port.line_num, baud, flow_control,
             pid, date, remote_device,
