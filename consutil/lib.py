@@ -179,16 +179,16 @@ class ConsolePortInfo(object):
             hours, remainder = divmod(remainder, 3600)
             minutes, seconds = divmod(remainder, 60)
 
-            # Build formatted string, only include non-zero parts
+            # Build formatted string, only include non-zero parts for d/h/m, always show seconds
             parts = []
             if days > 0:
                 parts.append(f"{days}d")
-            if hours > 0:
+            if hours > 0 or days > 0:
                 parts.append(f"{hours}h")
-            if minutes > 0:
+            if minutes > 0 or hours > 0 or days > 0:
                 parts.append(f"{minutes}m")
-            if seconds > 0 or not parts:  # Always show seconds if nothing else
-                parts.append(f"{seconds}s")
+
+            parts.append(f"{seconds}s")  # Always show seconds
 
             return "".join(parts)
         except (ValueError, OSError):

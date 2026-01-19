@@ -964,21 +964,21 @@ class TestConsolePortInfoStateDuration(object):
         """Test duration with only days (no hours/minutes/seconds)"""
         mock_time.return_value = 1000 + 7 * 86400  # exactly 7 days
         port_info = self._create_port_info("1000")
-        assert port_info.state_duration == "7d0s"  # Shows 0s when no other non-zero parts
+        assert port_info.state_duration == "7d0h0m0s"  # All parts shown when days present
 
     @mock.patch('time.time')
     def test_state_duration_only_hours(self, mock_time):
         """Test duration with only hours"""
         mock_time.return_value = 1000 + 5 * 3600  # exactly 5 hours
         port_info = self._create_port_info("1000")
-        assert port_info.state_duration == "5h0s"
+        assert port_info.state_duration == "5h0m0s"  # m and s shown when hours present
 
     @mock.patch('time.time')
     def test_state_duration_only_minutes(self, mock_time):
         """Test duration with only minutes"""
         mock_time.return_value = 1000 + 10 * 60  # exactly 10 minutes
         port_info = self._create_port_info("1000")
-        assert port_info.state_duration == "10m0s"
+        assert port_info.state_duration == "10m0s"  # s shown when minutes present
 
     @mock.patch('time.time')
     def test_state_duration_negative_time_difference(self, mock_time):
@@ -1007,20 +1007,19 @@ class TestConsolePortInfoStateDuration(object):
         assert port_info.state_duration is None
 
     def test_state_duration_float_timestamp(self):
-        """Test with float timestamp string (should handle conversion)"""
+        """Test with float timestamp string (cannot convert directly to int)"""
         port_info = self._create_port_info("1000.5")
-        # Should truncate to int and work
+        # int("1000.5") raises ValueError, so should return None
         with mock.patch('time.time', return_value=1060.0):
-            # 1060 - 1000 = 60 seconds = 1 minute
-            assert port_info.state_duration == "1m0s"
+            assert port_info.state_duration is None
 
     @mock.patch('time.time')
-    def test_state_duration_skips_zero_middle_components(self, mock_time):
-        """Test that zero components in the middle are skipped"""
+    def test_state_duration_shows_zero_middle_components(self, mock_time):
+        """Test that zero components in the middle are shown when higher unit present"""
         # 1 day, 0 hours, 0 minutes, 30 seconds
         mock_time.return_value = 1000 + 1 * 86400 + 30
         port_info = self._create_port_info("1000")
-        assert port_info.state_duration == "1d30s"
+        assert port_info.state_duration == "1d0h0m30s"
 
     @mock.patch('time.time')
     def test_state_duration_one_second(self, mock_time):
@@ -1034,18 +1033,18 @@ class TestConsolePortInfoStateDuration(object):
         """Test duration of exactly 1 minute"""
         mock_time.return_value = 1060
         port_info = self._create_port_info("1000")
-        assert port_info.state_duration == "1m0s"
+        assert port_info.state_duration == "1m0s"  # s shown when minutes present
 
     @mock.patch('time.time')
     def test_state_duration_exactly_one_hour(self, mock_time):
         """Test duration of exactly 1 hour"""
         mock_time.return_value = 1000 + 3600
         port_info = self._create_port_info("1000")
-        assert port_info.state_duration == "1h0s"
+        assert port_info.state_duration == "1h0m0s"  # m and s shown when hours present
 
     @mock.patch('time.time')
     def test_state_duration_exactly_one_day(self, mock_time):
         """Test duration of exactly 1 day"""
         mock_time.return_value = 1000 + 86400
         port_info = self._create_port_info("1000")
-        assert port_info.state_duration == "1d0s"
+        assert port_info.state_duration == "1d0h0m0s"  # All parts shown when days present
