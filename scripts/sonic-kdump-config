@@ -51,7 +51,9 @@ def validate_remote_action(value):
     elif value.lower() == 'disable':
         return False
     else:
-        raise argparse.ArgumentTypeError(f"Invalid action. Use 'enable' or 'disable'.")
+        raise argparse.ArgumentTypeError(
+            "Invalid action. Use 'enable' or 'disable'."
+        )
 
 
 ## Run an external command, either from the shell or not
