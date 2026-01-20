@@ -440,33 +440,35 @@ class TestSonicKdumpConfig(unittest.TestCase):
         mock_run_command.assert_any_call("/bin/sed -i 's/^SSH/#SSH/' /etc/default/kdump-tools", use_shell=False)
         self.assertEqual(mock_run_command.call_count, 1)
 
-    @patch("sonic_kdump_config.get_kdump_remote")
-    @patch("sonic_kdump_config.run_command")
-    def test_cmd_kdump_remote(self, mock_run_command, mock_read_remote):
+    @patch("sonic_kdump_config.ConfigDBConnector")
+    @patch("builtins.print")
+    def test_cmd_kdump_remote(self, mock_print, mock_config_db_class):
         """Tests the function `cmd_kdump_remote(...)` in script `sonic-kdump-config`."""
 
-        # Test case: Remote is True
-        mock_read_remote.return_value = True
-        sonic_kdump_config.cmd_kdump_remote(verbose=True)
+        # Create a mock ConfigDBConnector instance
+        mock_config_db = Mock()
+        mock_config_db_class.return_value = mock_config_db
 
-        # Ensure the correct commands are being run
-        mock_run_command.assert_any_call("/bin/sed -i 's/^#SSH/SSH/' /etc/default/kdump-tools", use_shell=False)
+        # Test case: Remote is True (enable)
+        sonic_kdump_config.cmd_kdump_remote(verbose=True, remote=True)
 
-        # Test case: Remote is False
-        mock_read_remote.return_value = False
-        sonic_kdump_config.cmd_kdump_remote(verbose=True)
+        # Verify CONFIG_DB was updated with "true"
+        mock_config_db.connect.assert_called_once()
+        mock_config_db.mod_entry.assert_called_with("KDUMP", "config", {"remote": "true"})
+        mock_print.assert_called_with("Remote kdump feature enabled.")
 
-        # Ensure the correct commands are being run
-        mock_run_command.assert_any_call("/bin/sed -i 's/^SSH/#SSH/' /etc/default/kdump-tools", use_shell=False)
+        # Reset mocks for next test
+        mock_config_db.reset_mock()
+        mock_print.reset_mock()
+        mock_config_db_class.return_value = mock_config_db
 
-        # Test case: Checking output messages
-        with patch("builtins.print") as mock_print:
-            sonic_kdump_config.cmd_kdump_remote(verbose=True)
-            mock_print.assert_called_with("SSH and SSH_KEY commented out for local configuration.")
+        # Test case: Remote is False (disable)
+        sonic_kdump_config.cmd_kdump_remote(verbose=True, remote=False)
 
-            mock_read_remote.return_value = False
-            sonic_kdump_config.cmd_kdump_remote(verbose=True)
-            mock_print.assert_called_with("SSH and SSH_KEY commented out for local configuration.")
+        # Verify CONFIG_DB was updated with "false"
+        mock_config_db.connect.assert_called_once()
+        mock_config_db.mod_entry.assert_called_with("KDUMP", "config", {"remote": "false"})
+        mock_print.assert_called_with("Remote kdump feature disabled.")
 
     @patch('sonic_kdump_config.getstatusoutput_noshell_pipe')
     def test_read_ssh_string(self, mock_run_cmd):
