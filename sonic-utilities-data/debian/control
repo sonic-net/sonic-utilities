@@ -7,5 +7,6 @@ Build-Depends: debhelper (>=9)
 
 Package: sonic-utilities-data
 Architecture: all
-Depends: ${misc:Depends} bash-completion
+Depends: ${misc:Depends}
+Suggests: bash-completion
 Description: Data files required for SONiC command line utilities
