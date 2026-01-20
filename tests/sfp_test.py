@@ -148,6 +148,8 @@ Media Assign (0x1)
                 TxPowerLowAlarm   : -10.5012dBm
                 TxPowerLowWarning : -7.5007dBm
         ModuleMonitorValues:
+                Tx Frequency: 193100GHz
+                Requested Laser Frequency: 193100.0GHz
                 Temperature: 44.9883C
                 Vcc: 3.2999Volts
         ModuleThresholdValues:
