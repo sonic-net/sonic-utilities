@@ -35,12 +35,22 @@ class TestRemoteFlag(unittest.TestCase):
             elif value.lower() == 'disable':
                 return False
             else:
-                raise argparse.ArgumentTypeError(f"Invalid action. Use 'enable' or 'disable'.")
+                raise argparse.ArgumentTypeError(
+                    "Invalid action. Use 'enable' or 'disable'."
+                )
 
         # Create a new ArgumentParser for each test
-        self.parser = argparse.ArgumentParser(description="kdump configuration and status tool")
-        self.parser.add_argument('--remote', type=validate_remote_action, nargs='?', const=True, default=None,
-                                help='Enable or disable remote kdump via SSH. Use: enable or disable')
+        self.parser = argparse.ArgumentParser(
+            description="kdump configuration and status tool"
+        )
+        self.parser.add_argument(
+            '--remote',
+            type=validate_remote_action,
+            nargs='?',
+            const=True,
+            default=None,
+            help='Enable or disable remote kdump via SSH. Use: enable or disable'
+        )
 
     def test_remote_flag_with_enable(self):
         """Test that --remote enable sets the remote attribute to True."""
