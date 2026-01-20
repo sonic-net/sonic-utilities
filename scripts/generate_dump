@@ -1241,6 +1241,7 @@ save_platform_info() {
         save_cmd "show platform ssdhealth --vendor" "ssdhealth"
         save_cmd "show platform temperature" "temperature"
         save_cmd "show platform fan" "fan"
+        save_cmd "fwutil show status" "fwutil.show.status"
     fi
 }
 
