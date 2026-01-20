@@ -15,12 +15,15 @@ def generate_completions(output_dir):
         path = entry_point.value
         module_path, _, function_name = path.rpartition(":")
         try:
-            module = import_module(module_path)
+            # The below line is to import each of the CLI modules from the
+            # sonic_utilities package. This is happening only in a build-time
+            # environment with the intention of generating bash completions.
+            module = import_module(module_path) # nosem
             function = vars(module).get(function_name)
             if isinstance(function, BaseCommand):
                 comp_cls = get_completion_class("bash")
                 content = (
-                        comp_cls(  # type: ignore
+                        comp_cls(
                                  function, {}, prog, f"_{prog.upper()}_COMPLETE"
                                  )
                         .source()
