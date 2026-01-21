@@ -149,7 +149,7 @@ Examples:
         if os.path.isfile(cnstat_fqn_file):
             try:
                 cnstat_cached_dict = json.load(open(cnstat_fqn_file, 'r'))
-                if not detail:
+                if not use_json and not detail:
                     print("Last cached time was " + str(cnstat_cached_dict.get('time')))
                 portstat.cnstat_diff_print(cnstat_dict, cnstat_cached_dict, ratestat_dict,
                                            intf_list, use_json, print_all, errors_only,
@@ -169,7 +169,8 @@ Examples:
     else:
         #wait for the specified time and then gather the new stats and output the difference.
         time.sleep(wait_time_in_seconds)
-        print("The rates are calculated within %s seconds period" % wait_time_in_seconds)
+        if not use_json:
+            print("The rates are calculated within %s seconds period" % wait_time_in_seconds)
         cnstat_new_dict, ratestat_new_dict = portstat.get_cnstat_dict()
         portstat.cnstat_diff_print(cnstat_new_dict, cnstat_dict, ratestat_new_dict,
                                    intf_list, use_json, print_all, errors_only,
