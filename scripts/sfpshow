@@ -142,8 +142,8 @@ CMIS_DOM_CHANNEL_MONITOR_MAP = {
 DOM_MODULE_MONITOR_MAP = {
     'temperature': 'Temperature',
     'voltage': 'Vcc',
-    'laser_curr_freq': 'Requested Laser Frequency',
-    'laser_config_freq': 'Tx Frequency'
+    'laser_curr_freq': 'Tx Frequency',
+    'laser_config_freq': 'Requested Laser Frequency'
 }
 
 DOM_CHANNEL_THRESHOLD_UNIT_MAP = {
