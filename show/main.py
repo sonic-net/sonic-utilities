@@ -559,9 +559,16 @@ def address ():
 
     # Fetching data from config_db for MGMT_INTERFACE
     mgmt_ip_data = config_db.get_table('MGMT_INTERFACE')
-    for key in natsorted(list(mgmt_ip_data.keys())):
-        click.echo("Management IP address = {0}".format(key[1]))
-        click.echo("Management Network Default Gateway = {0}".format(mgmt_ip_data[key]['gwaddr']))
+    if len(mgmt_ip_data) != 0:
+        for key in natsorted(list(mgmt_ip_data.keys())):
+            click.echo("Management IP address = {0}".format(key[1]))
+            if 'gwaddr' in mgmt_ip_data[key]:
+                click.echo("Management Network Default Gateway = {0}".format(mgmt_ip_data[key]['gwaddr']))
+    else:
+        cmd = "sudo ipintutil -a ipv4 | grep eth0 | grep -oP '(\d+(\.\d+){3}\/\d+)'"
+        mgmt_ip = clicommon.run_command(cmd,return_cmd=True)
+        if len(mgmt_ip) > 0:
+            click.echo("Management IP address = {0}".format(mgmt_ip.strip()))
 
 #
 # 'snmpagentaddress' group ("show snmpagentaddress ...")
