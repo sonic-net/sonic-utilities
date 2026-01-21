@@ -59,6 +59,7 @@ from . import flow_counters
 from . import hft
 from . import kdump
 from . import kube
+from . import macsec
 from . import muxcable
 from . import nat
 from . import vlan
@@ -1734,6 +1735,7 @@ if hft_common.is_supported_platform():
     config.add_command(hft.hft)
 config.add_command(kdump.kdump)
 config.add_command(kube.kubernetes)
+config.add_command(macsec.macsec)
 config.add_command(muxcable.muxcable)
 config.add_command(nat.nat)
 config.add_command(vlan.vlan)

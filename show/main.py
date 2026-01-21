@@ -52,6 +52,7 @@ from . import gearbox
 from . import interfaces
 from . import kdump
 from . import kube
+from . import macsec
 from . import muxcable
 from . import nat
 from . import platform
@@ -313,6 +314,7 @@ cli.add_command(kdump.kdump)
 cli.add_command(interfaces.interfaces)
 cli.add_command(kdump.kdump)
 cli.add_command(kube.kubernetes)
+cli.add_command(macsec.macsec)
 cli.add_command(muxcable.muxcable)
 cli.add_command(nat.nat)
 cli.add_command(platform.platform)
