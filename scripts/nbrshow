@@ -81,10 +81,18 @@ class NbrBase(object):
             if not fdb:
                 continue
 
-            ent = self.db.get_all('ASIC_DB', s, blocking=True)
+            try:
+                ent = self.db.get_all('ASIC_DB', s, blocking=False)
+            except:
+                continue
+
+            if "SAI_FDB_ENTRY_ATTR_BRIDGE_PORT_ID" not in ent:
+                continue
+
             br_port_id = ent["SAI_FDB_ENTRY_ATTR_BRIDGE_PORT_ID"][oid_pfx:]
             if br_port_id not in self.if_br_oid_map:
                 continue
+
             port_id = self.if_br_oid_map[br_port_id]
             if port_id in self.if_oid_map:
                 if_name = self.if_oid_map[port_id]
