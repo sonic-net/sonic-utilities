@@ -142,38 +142,46 @@ def disable():
     port_info['FLEX_COUNTER_STATUS'] = DISABLE
     configdb.mod_entry("FLEX_COUNTER_TABLE", PORT_BUFFER_DROP, port_info)
 
+
 # PHY counter commands
 @cli.group()
-def phy():
+@click.pass_context
+def phy(ctx):
     """ PHY counter commands """
+    ctx.obj = ConfigDBConnector()
+    ctx.obj.connect()
+
 
 @phy.command()
 @click.argument('poll_interval', type=click.IntRange(100, 30000))
-def interval(poll_interval):
+@click.pass_context
+def interval(ctx, poll_interval):  # noqa: F811
     """ Set PHY counter query interval """
-    configdb = ConfigDBConnector()
-    configdb.connect()
+    configdb = ctx.obj
     port_info = {}
     port_info['POLL_INTERVAL'] = poll_interval
     configdb.mod_entry("FLEX_COUNTER_TABLE", PORT_PHY_ATTR, port_info)
 
+
 @phy.command()
-def enable():
+@click.pass_context
+def enable(ctx):  # noqa: F811
     """ Enable PHY counter query """
-    configdb = ConfigDBConnector()
-    configdb.connect()
+    configdb = ctx.obj
     port_info = {}
     port_info['FLEX_COUNTER_STATUS'] = ENABLE
     configdb.mod_entry("FLEX_COUNTER_TABLE", PORT_PHY_ATTR, port_info)
 
+
 @phy.command()
-def disable():
+@click.pass_context
+def disable(ctx):  # noqa: F811
     """ Disable PHY counter query """
-    configdb = ConfigDBConnector()
-    configdb.connect()
+    configdb = ctx.obj
     port_info = {}
     port_info['FLEX_COUNTER_STATUS'] = DISABLE
     configdb.mod_entry("FLEX_COUNTER_TABLE", PORT_PHY_ATTR, port_info)
+
 
 # Ingress PG drop packet stat
 @cli.group()
@@ -659,7 +667,8 @@ def show():
     if port_drop_info:
         data.append([PORT_BUFFER_DROP, port_drop_info.get("POLL_INTERVAL", DEFLT_60_SEC), port_drop_info.get("FLEX_COUNTER_STATUS", DISABLE)])
     if port_phy_attr_info:
-        data.append(["PHY", port_phy_attr_info.get("POLL_INTERVAL", DEFLT_10_SEC), port_phy_attr_info.get("FLEX_COUNTER_STATUS", DISABLE)])
+        data.append(["PHY", port_phy_attr_info.get("POLL_INTERVAL", DEFLT_10_SEC),
+                     port_phy_attr_info.get("FLEX_COUNTER_STATUS", DISABLE)])
     if rif_info:
         data.append(["RIF_STAT", rif_info.get("POLL_INTERVAL", DEFLT_1_SEC), rif_info.get("FLEX_COUNTER_STATUS", DISABLE)])
     if queue_wm_info:
