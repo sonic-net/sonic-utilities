@@ -48,6 +48,15 @@ class Crm:
 
     def get_resources_list(self):
         return list(self.resources)
+    
+    def get_crm_config(self):
+        configdb = self.cfgdb
+        if configdb is None:
+            namespaces = multi_asic.get_namespace_list()
+            configdb = ConfigDBConnector(namespace=namespaces[0])
+            configdb.connect()
+        
+        return configdb.get_entry('CRM', 'Config')
 
     @multi_asic_util.run_on_multi_asic
     def config(self, attr, val):
@@ -63,15 +72,7 @@ class Crm:
         CRM Handler to display general information.
         """
 
-        configdb = self.cfgdb
-        if configdb is None:
-            # Get the namespace list
-            namespaces = multi_asic.get_namespace_list()
-
-            configdb = ConfigDBConnector(namespace=namespaces[0])
-            configdb.connect()
-
-        crm_info = configdb.get_entry('CRM', 'Config')
+        crm_info = self.get_crm_config()
 
         if crm_info:
             try:
@@ -86,15 +87,8 @@ class Crm:
         """
         CRM Handler to display thresholds information.
         """
-        configdb = self.cfgdb
-        if configdb is None:
-            # Get the namespace list
-            namespaces = multi_asic.get_namespace_list()
 
-            configdb = ConfigDBConnector(namespace=namespaces[0])
-            configdb.connect()
-
-        crm_info = configdb.get_entry('CRM', 'Config')
+        crm_info = self.get_crm_config()
 
         header = ("Resource Name", "Threshold Type", "Low Threshold", "High Threshold")
         data = []
@@ -418,13 +412,35 @@ def type(ctx, value):
 @click.pass_context
 def low(ctx, value):
     """CRM low threshold configuration"""
-    attr = ''
 
+    type_attr = ''
+    if ctx.obj["crm"].addr_family != None:
+        type_attr += ctx.obj["crm"].addr_family + '_'
+    type_attr += ctx.obj["crm"].res_type + '_' + 'threshold_type'
+
+    high_attr = ''
+    if ctx.obj["crm"].addr_family != None:
+        high_attr += ctx.obj["crm"].addr_family + '_'
+    high_attr += ctx.obj["crm"].res_type + '_' + 'high_threshold'
+
+    crm_info = ctx.obj["crm"].get_crm_config()
+    threshold_type = crm_info.get(type_attr, 'percentage')
+    if threshold_type == 'percentage':
+        if value < 0 or value > 100:
+            raise click.ClickException(
+                'Low threshold value must be between 0 and 100 for '
+                'percentage type.')
+
+        high_value = crm_info.get(high_attr, None)
+        if high_value is not None and value >= int(high_value):
+            raise click.ClickException(
+                'Low threshold value must be less than high threshold '
+                f'value: {high_value} for percentage type.')
+
+    attr = ''
     if ctx.obj["crm"].addr_family != None:
         attr += ctx.obj["crm"].addr_family + '_'
-
     attr += ctx.obj["crm"].res_type + '_' + 'low_threshold'
-
     ctx.obj["crm"].config(attr, value)
 
 @click.command()
@@ -432,13 +448,35 @@ def low(ctx, value):
 @click.pass_context
 def high(ctx, value):
     """CRM high threshold configuration"""
-    attr = ''
 
+    type_attr = ''
+    if ctx.obj["crm"].addr_family != None:
+        type_attr += ctx.obj["crm"].addr_family + '_'
+    type_attr += ctx.obj["crm"].res_type + '_' + 'threshold_type'
+
+    low_attr = ''
+    if ctx.obj["crm"].addr_family != None:
+        low_attr += ctx.obj["crm"].addr_family + '_'
+    low_attr += ctx.obj["crm"].res_type + '_' + 'low_threshold'
+
+    crm_info = ctx.obj["crm"].get_crm_config()
+    threshold_type = crm_info.get(type_attr, 'percentage')
+    if threshold_type == 'percentage':
+        if value < 0 or value > 100:
+            raise click.ClickException(
+                'High threshold value must be between 0 and 100 for '
+                'percentage type.')
+
+        low_value = crm_info.get(low_attr, None)
+        if low_value is not None and value <= int(low_value):
+            raise click.ClickException(
+                'High threshold value must be greater than low threshold '
+                f'value: {low_value} for percentage type.')
+
+    attr = ''
     if ctx.obj["crm"].addr_family != None:
         attr += ctx.obj["crm"].addr_family + '_'
-
     attr += ctx.obj["crm"].res_type + '_' + 'high_threshold'
-
     ctx.obj["crm"].config(attr, value)
 
 route.add_command(type)
