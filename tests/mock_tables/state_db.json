@@ -1118,7 +1118,16 @@
         "runner.aggregator.selected": "false",
         "runner.aggregator.id": "0",
         "link.up": "false",
-        "ifinfo.ifindex": "98"
+        "ifinfo.ifindex": "98",
+        "runner.statistics.lacpdu_illegal_pkts": "0",
+        "runner.statistics.lacpdu_rx_stats": "0",
+        "runner.actor_lacpdu_info.key": "11",
+        "runner.statistics.lacpdu_tx_stats": "1103",
+        "runner.actor_lacpdu_info.state": "69",
+        "runner.partner_lacpdu_info.key": "0",
+        "runner.partner_lacpdu_info.state": "2",
+        "runner.statistics.last_lacpdu_tx_time": "2025-06-26T07:54:23.926776098Z",
+        "runner.statistics.last_lacpdu_rx_time": "N/A"
     },
     "LAG_MEMBER_TABLE|PortChannel0002|Ethernet116": {
         "runner.actor_lacpdu_info.state": "61",
@@ -1134,7 +1143,16 @@
         "runner.aggregator.selected": "true",
         "runner.aggregator.id": "97",
         "link.up": "true",
-        "ifinfo.ifindex": "97"
+        "ifinfo.ifindex": "97",
+        "runner.statistics.lacpdu_illegal_pkts": "0",
+        "runner.statistics.lacpdu_rx_stats": "1003",
+        "runner.actor_lacpdu_info.key": "12",
+        "runner.statistics.lacpdu_tx_stats": "1103",
+        "runner.actor_lacpdu_info.state": "61",
+        "runner.partner_lacpdu_info.key": "13",
+        "runner.partner_lacpdu_info.state": "61",
+        "runner.statistics.last_lacpdu_tx_time": "2025-06-26T07:54:23.926776098Z",
+        "runner.statistics.last_lacpdu_rx_time": "2025-06-26T07:54:23.926776098Z"
     },
     "LAG_MEMBER_TABLE|PortChannel0003|Ethernet120": {
         "runner.actor_lacpdu_info.state": "61",
@@ -1150,7 +1168,16 @@
         "runner.aggregator.selected": "true",
         "runner.aggregator.id": "100",
         "link.up": "true",
-        "ifinfo.ifindex": "100"
+        "ifinfo.ifindex": "100",
+        "runner.statistics.lacpdu_illegal_pkts": "0",
+        "runner.statistics.lacpdu_rx_stats": "1003",
+        "runner.actor_lacpdu_info.key": "13",
+        "runner.statistics.lacpdu_tx_stats": "1103",
+        "runner.actor_lacpdu_info.state": "61",
+        "runner.partner_lacpdu_info.key": "12",
+        "runner.partner_lacpdu_info.state": "61",
+        "runner.statistics.last_lacpdu_tx_time": "2025-06-26T07:54:23.926776098Z",
+        "runner.statistics.last_lacpdu_rx_time": "2025-06-26T07:54:23.926776098Z"
     },
     "LAG_TABLE|PortChannel0001": {
         "runner.fallback": "false",
@@ -1160,7 +1187,12 @@
         "state": "ok",
         "runner.fast_rate": "false",
         "setup.kernel_team_mode_name": "loadbalance",
-        "runner.active": "true"
+        "runner.active": "true",
+        "runner.retry_count": "3",
+        "runner.min_ports": "1",
+        "runner.enable_retry_count_feature": "true",
+        "mtu": "9100",
+        "runner.sys_prio": "65535"
     },
     "LAG_TABLE|PortChannel0002": {
         "runner.fallback": "false",
@@ -1170,7 +1202,12 @@
         "state": "ok",
         "runner.fast_rate": "false",
         "setup.kernel_team_mode_name": "loadbalance",
-        "runner.active": "true"
+        "runner.active": "true",
+        "runner.retry_count": "3",
+        "runner.min_ports": "1",
+        "runner.enable_retry_count_feature": "true",
+        "mtu": "9100",
+        "runner.sys_prio": "65535"
     },
     "LAG_TABLE|PortChannel0003": {
         "runner.fallback": "false",
@@ -1180,7 +1217,12 @@
         "state": "ok",
         "runner.fast_rate": "false",
         "setup.kernel_team_mode_name": "loadbalance",
-        "runner.active": "true"
+        "runner.active": "true",
+        "runner.retry_count": "3",
+        "runner.min_ports": "1",
+        "runner.enable_retry_count_feature": "true",
+        "mtu": "9100",
+        "runner.sys_prio": "65535"
     },
     "LAG_TABLE|PortChannel0004": {
         "runner.fallback": "false",
@@ -1190,7 +1232,12 @@
         "state": "ok",
         "runner.fast_rate": "false",
         "setup.kernel_team_mode_name": "loadbalance",
-        "runner.active": "true"
+        "runner.active": "true",
+        "runner.retry_count": "3",
+        "runner.min_ports": "1",
+        "runner.enable_retry_count_feature": "true",
+        "mtu": "9100",
+        "runner.sys_prio": "65535"
     },
     "FAN_INFO|fan1": {
         "drawer_name": "drawer1",
