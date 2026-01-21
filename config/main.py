@@ -5220,9 +5220,14 @@ def breakout(ctx, interface_name, mode, verbose, force_remove_dependencies, load
     if not _validate_interface_mode(ctx, breakout_cfg_file, interface_name, mode, cur_brkout_mode):
         raise click.Abort()
 
+    # Get hwsku dict from hwsku.json file
+    _, hwsku_path = device_info.get_paths_to_platform_and_hwsku_dirs()
+    hwsku_filepath = os.path.join(hwsku_path, "hwsku.json")
+    hwsku_dict = readJsonFile(hwsku_filepath)
+
     """ Interface Deletion Logic """
     # Get list of interfaces to be deleted
-    del_ports = get_child_ports(interface_name, cur_brkout_mode, breakout_cfg_file)
+    del_ports = get_child_ports(interface_name, cur_brkout_mode, breakout_cfg_file, hwsku_dict)
     del_intf_dict = {intf: del_ports[intf]["speed"] for intf in del_ports}
 
     if del_intf_dict:
@@ -5233,7 +5238,7 @@ def breakout(ctx, interface_name, mode, verbose, force_remove_dependencies, load
 
     """ Interface Addition Logic """
     # Get list of interfaces to be added
-    add_ports = get_child_ports(interface_name, target_brkout_mode, breakout_cfg_file)
+    add_ports = get_child_ports(interface_name, target_brkout_mode, breakout_cfg_file, hwsku_dict)
     add_intf_dict = {intf: add_ports[intf]["speed"] for intf in add_ports}
 
     if add_intf_dict:
