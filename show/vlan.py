@@ -164,7 +164,7 @@ def config(db):
         table = []
 
         for k in natsorted(keys):
-            members = set([(vlan, member) for vlan, member in member_data if vlan == k] + [(k, member) for member in set(data[k].get('members', []))])
+            members = set([(vlan, member) for vlan, member in member_data if vlan == k])
             # vlan with no members
             if not members:
                 members = [(k, '')]
