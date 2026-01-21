@@ -152,6 +152,23 @@ stages:
         pytest
       displayName: 'Test Python 3'
 
+    - script: |
+        set -ex
+        sudo pip3 install diff-cover
+        target_branch=$(System.PullRequest.TargetBranch)
+        compare_branch=origin/${target_branch#refs/heads/}
+        diff_result=$(diff-cover coverage.xml --compare-branch=$compare_branch)
+        echo $diff_result
+        echo "##vso[task.setvariable variable=diff_result]$diff_result"
+      condition: eq(variables['Build.Reason'], 'PullRequest')
+      displayName: "Diff coverage"
+    - task: GitHubComment@0
+      inputs:
+        gitHubConnection: 'build'
+        repositoryName: $(Build.Repository.Name)
+        id: $(System.PullRequest.PullRequestNumber)
+        comment: $(diff_result)
+
     - task: PublishTestResults@2
       inputs:
         testResultsFiles: '$(System.DefaultWorkingDirectory)/test-results.xml'
