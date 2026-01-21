@@ -5960,6 +5960,149 @@ This command is to display the link-training status of the selected interfaces. 
     Ethernet8      trained          on      up       up
   ```
 
+**show interfaces phy**
+
+This command displays Layer 1 physical layer (PHY) diagnostics for interfaces.
+
+The command has two subcommands:
+- `phy-signal` - Displays boolean link/signal status indicators (quick health check)
+- `phy-serdes` - Displays analog/digital signal quality metrics (deeper diagnostics)
+
+At least one option must be specified for each subcommand.
+
+**Status Options:**
+
+| Option | SAI Attribute | Description |
+|--------|---------------|-------------|
+| `rxsig` | `SAI_PORT_ATTR_RX_SIGNAL_DETECT` | RX signal detect per lane |
+| `feclock` | `SAI_PORT_ATTR_FEC_ALIGNMENT_LOCK` | FEC alignment lock per lane |
+| `rxpcs` | `SAI_PORT_ATTR_PCS_RX_LINK_STATUS` | PCS RX link status |
+| `rxlock` | `SAI_PORT_ATTR_RX_LOCK_STATUS` | RX lock status per lane |
+
+**Serdes Options:**
+
+| Option | SAI Attribute | Description |
+|--------|---------------|-------------|
+| `snr` | `SAI_PORT_ATTR_RX_SNR` | RX Signal-to-Noise Ratio (dB) per lane |
+| `tx-fir` | `SAI_PORT_SERDES_ATTR_TX_FIR_TAPS_LIST` | TX FIR tap values per lane |
+| `rx-ffe` | `SAI_PORT_SERDES_ATTR_RX_FFE_TAPS_LIST` | RX FFE tap values per lane |
+| `rx-dfe` | `SAI_PORT_SERDES_ATTR_RX_DFE_TAPS_LIST` | RX DFE tap values per lane |
+| `rx-vga` | `SAI_PORT_SERDES_ATTR_RX_VGA` | RX VGA values per lane |
+
+**Status Output Legend:**
+- `T` = True (signal detected / locked)
+- `F` = False (no signal / not locked)
+- `*` suffix = Value changed since last poll (e.g., `T*` means it became True recently)
+
+- Usage:
+  ```
+  show interfaces phy-sig <interface_name> [rxsig] [feclock] [rxpcs] [rxlock]
+  show interfaces phy-serdes <interface_name> [snr] [tx-fir] [rx-ffe] [rx-dfe] [rx-vga]
+  ```
+
+- Example (status with RX signal detect and FEC alignment lock):
+  ```
+  admin@sonic:~$ show interfaces phy-sig Ethernet0 rxsig
+  Interface: Ethernet0
+  ================================================================================
+    RX Signal Detect:   Current State     Changes        Last Changes (UTC)
+    ------------------------------------------------------------------------------
+    Lane0:              T*                2              2026-05-01 11:07:01
+    Lane1:              T                 0              Never
+    Lane2:              T                 0              Never
+    Lane3:              T                 0              Never
+    Lane4:              F                 1              2026-05-01 00:10:11
+    Lane5:              T                 0              Never
+    Lane6:              T                 0              Never
+    Lane7:              F                 0              Never
+  ```
+
+  ```
+  admin@sonic:~$ show interfaces phy-sig Ethernet0 feclock
+  Interface: Ethernet0
+  ================================================================================
+    FEC Alignment Lock:   Current State     Changes      Last Changes (UTC)
+    ------------------------------------------------------------------------------
+    Lane0:                T                 2            2026-05-01 11:07:01
+    Lane1:                T                 0            Never
+    Lane2:                T                 0            Never
+    Lane3:                T                 0            Never
+    Lane4:                F*                1            2026-05-01 00:10:11
+    Lane5:                T                 0            Never
+    Lane6:                T                 0            Never
+    Lane7:                F                 0            Never
+  ``` 
+
+- Example (PHY serdes SNR):
+  ```
+  admin@sonic:~$ show interfaces phy-serdes Ethernet0 snr
+  Interface: Ethernet0
+  ================================================================================
+    RX SNR (dB):
+    ------------------------------------------------------------------------------
+    Lane:       0      1      2      3     4     5     6      7
+    SNR:        15.2   14.8   15.1   14.9  12.1  5.5  6.7     22.0
+  ```
+
+- Example (PHY serdes TX FIR and RX VGA):
+  ```
+  admin@sonic:~$ show interfaces phy-serdes Ethernet0 txfir
+  Interface: Ethernet0
+  ================================================================================
+    TX FIR Taps:
+    ------------------------------------------------------------------------------
+    Lane   Tap0   Tap1   Tap2   Tap3   Tap4   Tap5   Tap6
+    ----   ----   ----   ----   ----   -----  -----  -----
+    0      -3     8      -22    95     -9     -10    1
+    1      -1     5      -28    102    -13    -14    0
+    2      -4     7      -24    98     -10    -11    2
+    3      -2     9      -30    105    -12    -15    -1
+    4      -5     6      -20    92     -8     -9     3
+    5      -1     4      -25    99     -14    -13    0
+    6      -3     10     -27    103    -11    -16    1
+    7      -2     5      -23    97     -10    -12    -2
+  ```
+
+  ```
+  admin@sonic:~$ show interfaces phy-serdes Ethernet0 vga
+  Interface: Ethernet0
+  ================================================================================
+    RX VGA:
+    ------------------------------------------------------------------------------
+    Lane:       0      1      2      3     4     5     6      7
+    VGA:        27     28     40     38    31    33    34     29
+  ```
+
+- Example (serdes with RX FFE and RX DFE taps):
+
+  > **Note:** The number of taps will vary from serdes to serdes.
+
+  ```
+  admin@sonic:~$ show interfaces phy-serdes Ethernet0 serdes rx-ffe
+  Interface: Ethernet0
+  ================================================================================
+    RX FFE Taps:
+    ------------------------------------------------------------------------------
+    Lane   Tap0   Tap1   Tap2   Tap3   Tap4   Tap5
+    ----   ----   ----   ----   ----   ----   ----
+    0      5      -12    8      -3     1      0
+    1      5      -11    8      -3     1      0
+    2      5      -12    8      -3     1      0
+    3      5      -11    8      -3     1      0
+
+
+  admin@sonic:~$ show interfaces phy-serdes Ethernet0 serdes rx-dfe
+  Interface: Ethernet0
+    RX DFE Taps:
+    ------------------------------------------------------------------------------
+    Lane   Tap0   Tap1   Tap2   Tap3   Tap4
+    ----   ----   ----   ----   ----   ----
+    0      15     -8     4      -2     1
+    1      14     -7     4      -2     1
+    2      15     -8     4      -2     1
+    3      14     -8     4      -2     1
+  ```
+
 **show interfaces flap**
 
 The show interfaces flap command provides detailed insights into interface events, including the timestamp of the last link down event and the total flap count (number of times the link has gone up and down). This helps in diagnosing stability and connectivity issues.
