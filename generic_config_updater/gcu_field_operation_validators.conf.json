@@ -201,7 +201,13 @@
                         "fields": [
                             "green_min_threshold",
                             "green_max_threshold",
-                            "green_drop_probability"
+                            "green_drop_probability",
+                            "yellow_min_threshold",
+                            "yellow_max_threshold",
+                            "yellow_drop_probability",
+                            "red_min_threshold",
+                            "red_max_threshold",
+                            "red_drop_probability"
                         ],
                         "operations": ["replace"],
                         "platforms": {
