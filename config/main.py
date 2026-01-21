@@ -4753,6 +4753,37 @@ config.commands['bgp'].add_command(bgp_cli.DEVICE_GLOBAL)
 def shutdown():
     """Shut down BGP session(s)"""
     pass
+@bgp.group('error-handling')
+def error_handling():
+    """Handle BGP route install errors"""
+    pass
+@error_handling.group(invoke_without_command=True)
+@click.pass_context
+def disable(ctx):
+    """Administratively Disable BGP error-handling"""
+    config_db = ConfigDBConnector(host="127.0.0.1")
+    config_db.connect()
+    curr_mode = config_db.get_entry('BGP_ERROR_CFG_TABLE', "config").get('enable')
+    if (curr_mode == "true"):
+        cmd = 'sudo vtysh -c "configure terminal" -c "no bgp error-handling enable"'
+        run_command(cmd)
+        config_db.set_entry("BGP_ERROR_CFG_TABLE", "config", {"enable":  "false"})
+    pass
+    pass
+@error_handling.group(invoke_without_command=True)
+@click.pass_context
+def enable(ctx):
+    """Administratively Enable BGP error handling"""
+    if ctx.invoked_subcommand is None:
+        config_db = ConfigDBConnector(host="127.0.0.1")
+        config_db.connect()
+        curr_mode = config_db.get_entry('BGP_ERROR_CFG_TABLE', "config").get('enable')
+        if (curr_mode != "true"):
+            cmd = 'sudo vtysh -c "configure terminal" -c "bgp error-handling enable"'
+            run_command(cmd)
+            config_db.set_entry("BGP_ERROR_CFG_TABLE", "config", {"enable":  "true"})
+        pass
+    pass
 
 # 'all' subcommand
 @shutdown.command()
