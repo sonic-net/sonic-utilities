@@ -1,0 +1,265 @@
+#!/usr/bin/env python3
+
+import argparse
+import json
+import os
+import sys
+
+from natsort import natsorted
+from tabulate import tabulate
+
+# mock the redis for unit test purposes #
+try:
+    if os.environ["UTILITIES_UNIT_TESTING"] == "2":
+        modules_path = os.path.join(os.path.dirname(__file__), "..")
+        tests_path = os.path.join(modules_path, "tests")
+        sys.path.insert(0, modules_path)
+        sys.path.insert(0, tests_path)
+        import mock_tables.dbconnector
+    if os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] == "multi_asic":
+        import mock_tables.mock_multi_asic
+        mock_tables.dbconnector.load_namespace_config()
+
+except KeyError:
+    pass
+
+import utilities_common.multi_asic as multi_asic_util
+from utilities_common.cli import UserCache
+
+STATUS_NA = 'N/A'
+
+
+def counter_diff(newstr, oldstr):
+    """
+    Calculate the diff between two counter values without comma formatting.
+    """
+    if newstr == STATUS_NA:
+        return STATUS_NA
+
+    if oldstr == STATUS_NA:
+        oldstr = '0'
+
+    new, old = int(newstr), int(oldstr)
+    return str(max(0, new - old))
+
+# Diff all counter columns (Total, Green, Yellow, Red - both Pkts and Bytes)
+diff_column_positions = set([0, 1, 2, 3, 4, 5, 6, 7])
+
+
+class CoppStats(object):
+    """Class to handle COPP policer statistics"""
+
+    HEADERS = [
+        "Trap Group",
+        "Total Pkts", "Total Bytes",
+        "Green Pkts", "Green Bytes",
+        "Yellow Pkts", "Yellow Bytes",
+        "Red Pkts", "Red Bytes"
+    ]
+
+    POLICER_NAME_MAP = "COUNTERS_POLICER_NAME_MAP"
+
+    def __init__(self, args):
+        self.db = None
+        self.multi_asic = multi_asic_util.MultiAsic(namespace_option=args.namespace)
+        self.args = args
+        self.cache = UserCache()
+        self.data_file = os.path.join(self.cache.get_directory(), "copp-stats")
+        if self.args.delete:
+            self.cache.remove()
+        self.data = {}
+
+    def show(self):
+        """Show COPP policer statistics"""
+        self._collect_and_diff()
+        headers, table = self._prepare_show_data()
+        self._print_data(headers, table)
+
+    def _collect_and_diff(self):
+        """Collect statistic from db and diff from old data if any"""
+        self._collect()
+        old_data = self._load()
+        need_update_cache = self._diff(old_data, self.data)
+        if need_update_cache:
+            self._save(old_data)
+    
+    @multi_asic_util.run_on_multi_asic
+    def _collect(self):
+        """Collect COPP statistics from DB. This function is called on a multi ASIC context."""
+        self.data.update(self._get_stats_from_db())
+    
+    def _get_stats_from_db(self):
+        """Get COPP policer statistics from DB.
+        
+        Returns:
+            dict: A dictionary. E.g: {<namespace>: {<trap_group>: [total_pkts, total_bytes, green_pkts, ...]}}
+        """
+        ns = self.multi_asic.current_namespace
+        policer_name_map = self.db.get_all(self.db.COUNTERS_DB, self.POLICER_NAME_MAP)
+        data = {ns: {}}
+        
+        if not policer_name_map:
+            return data
+        
+        for trap_group_name, policer_oid in policer_name_map.items():
+            counter_key = "COUNTERS:" + policer_oid
+            counter_data = self.db.get_all(self.db.COUNTERS_DB, counter_key)
+            
+            if counter_data:
+                total_pkts = counter_data.get("SAI_POLICER_STAT_PACKETS", "0")
+                total_bytes = counter_data.get("SAI_POLICER_STAT_ATTR_BYTES", "0")
+                green_pkts = counter_data.get("SAI_POLICER_STAT_GREEN_PACKETS", "0")
+                green_bytes = counter_data.get("SAI_POLICER_STAT_GREEN_BYTES", "0")
+                yellow_pkts = counter_data.get("SAI_POLICER_STAT_YELLOW_PACKETS", "0")
+                yellow_bytes = counter_data.get("SAI_POLICER_STAT_YELLOW_BYTES", "0")
+                red_pkts = counter_data.get("SAI_POLICER_STAT_RED_PACKETS", "0")
+                red_bytes = counter_data.get("SAI_POLICER_STAT_RED_BYTES", "0")
+            else:
+                total_pkts = total_bytes = "N/A"
+                green_pkts = green_bytes = "N/A"
+                yellow_pkts = yellow_bytes = "N/A"
+                red_pkts = red_bytes = "N/A"
+            
+            data[ns][trap_group_name] = [
+                total_pkts, total_bytes,
+                green_pkts, green_bytes,
+                yellow_pkts, yellow_bytes,
+                red_pkts, red_bytes
+            ]
+        
+        return data
+    
+    def _adjust_headers(self, headers):
+        """Adjust table headers based on platforms
+        
+        Args:
+            headers (list): Original headers
+            
+        Returns:
+            headers (list): Headers with 'ASIC ID' column if it is a multi ASIC platform
+        """
+        return ['ASIC ID'] + headers if self.multi_asic.is_multi_asic else headers
+    
+    def _prepare_show_data(self):
+        """Prepare headers and table data for output
+        
+        Returns:
+            headers (list): Table headers
+            table (list): Table data
+        """
+        table = []
+        headers = self._adjust_headers(self.HEADERS)
+        
+        for ns, stats in natsorted(self.data.items()):
+            if self.args.namespace is not None and self.args.namespace != ns:
+                continue
+            for trap_group_name, values in natsorted(stats.items()):
+                if self.multi_asic.is_multi_asic:
+                    row = [ns]
+                else:
+                    row = []
+                row.append(trap_group_name)
+                row.extend(values)
+                table.append(row)
+        
+        return headers, table
+    
+    def _print_data(self, headers, table):
+        """Print statistic data
+
+        Args:
+            headers (list): Table headers
+            table (list): Table data
+        """
+        if not table:
+            print("No COPP policer counters available")
+        else:
+            print(tabulate(table, headers, tablefmt='simple'))
+
+    def clear(self):
+        """Clear COPP policer statistic. This function does not clear data from ASIC. Instead, it saves COPP policer statistic to a file. When user
+           issue show command after clear, it does a diff between new data and saved data.
+        """
+        self._collect()
+        self._save(self.data)
+        print('COPP policer counters were successfully cleared')
+
+    def _save(self, data):
+        """Save COPP policer statistic to a file"""
+        try:
+            with open(self.data_file, 'w') as f:
+                json.dump(data, f)
+        except IOError as e:
+            print('Failed to save statistic - {}'.format(repr(e)))
+
+    def _load(self):
+        """Load COPP policer statistic from a file
+
+        Returns:
+            dict: A dictionary. E.g: {<namespace>: {<trap_group>: [total_pkts, total_bytes, green_pkts, ...]}}
+        """
+        if not os.path.exists(self.data_file):
+            return None
+
+        try:
+            with open(self.data_file, 'r') as f:
+                data = json.load(f)
+        except IOError as e:
+            print('Failed to load statistic - {}'.format(repr(e)))
+            return None
+
+        return data
+
+    def _diff(self, old_data, new_data):
+        """Do a diff between new data and old data.
+
+        Args:
+            old_data (dict): E.g: {<namespace>: {<trap_group>: [total_pkts, total_bytes, green_pkts, ...]}}
+            new_data (dict): E.g: {<namespace>: {<trap_group>: [total_pkts, total_bytes, green_pkts, ...]}}
+
+        Returns:
+            bool: True if cache needs to be updated
+        """
+        if not old_data:
+            return False
+
+        for ns, stats in new_data.items():
+            if ns not in old_data:
+                continue
+            for trap_group, values in stats.items():
+                if trap_group not in old_data[ns]:
+                    continue
+                old_values = old_data[ns][trap_group]
+
+                for i in diff_column_positions:
+                    new_data[ns][trap_group][i] = counter_diff(values[i], old_values[i])
+
+        return True
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Display COPP policer statistics',
+                                     formatter_class=argparse.RawTextHelpFormatter,
+                                     epilog="""
+Examples:
+  coppstat -c
+  coppstat
+  coppstat -d
+""")
+    parser.add_argument('-c', '--clear', action='store_true', help='Clear stats')
+    parser.add_argument('-d', '--delete', action='store_true', help='Delete saved stats')
+    parser.add_argument('-n', '--namespace', default=None, help='Display COPP stats for specific namespace')
+
+    args = parser.parse_args()
+
+    stats = CoppStats(args)
+
+    if args.clear:
+        stats.clear()
+    else:
+        stats.show()
+
+
+if __name__ == '__main__':
+    main()
+
