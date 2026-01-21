@@ -7755,7 +7755,7 @@ def expand_vlan_ports(port_name):
     return members
 
 
-def parse_acl_table_info(table_name, table_type, description, ports, stage):
+def parse_acl_table_info(table_name, table_type, description, ports, stage, services=None):
     table_info = {"type": table_type}
 
     if description:
@@ -7783,11 +7783,26 @@ def parse_acl_table_info(table_name, table_type, description, ports, stage):
 
     table_info["stage"] = stage
 
+    if services:
+        table_info["services@"] = ",".join(services)
+
     return table_info
 
 #
 # 'table' subcommand ('config acl add table ...')
 #
+
+def validate_services(ctx, param, value):
+    if value is None:
+        return None
+
+    service_list = value.split(',')
+
+    for s in service_list:
+        if s not in ['SSH', 'SNMP', 'NTP']:
+            raise click.BadParameter('{} is not a valid service.'.format(value))
+
+    return service_list
 
 @add.command()
 @click.argument("table_name", metavar="<table_name>")
@@ -7795,8 +7810,9 @@ def parse_acl_table_info(table_name, table_type, description, ports, stage):
 @click.option("-d", "--description")
 @click.option("-p", "--ports")
 @click.option("-s", "--stage", type=click.Choice(["ingress", "egress"]), default="ingress")
+@click.option("-S", "--services", callback=validate_services)
 @click.pass_context
-def table(ctx, table_name, table_type, description, ports, stage):
+def table(ctx, table_name, table_type, description, ports, stage, services):
     """
     Add ACL table
     """
@@ -7804,7 +7820,7 @@ def table(ctx, table_name, table_type, description, ports, stage):
     config_db.connect()
 
     try:
-        table_info = parse_acl_table_info(table_name, table_type, description, ports, stage)
+        table_info = parse_acl_table_info(table_name, table_type, description, ports, stage, services)
     except ValueError as e:
         ctx.fail("Failed to parse ACL table config: exception={}".format(e))
 
