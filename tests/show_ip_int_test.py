@@ -1,10 +1,7 @@
 import importlib.util
 import os
-import re
 import shlex
-import stat
 import subprocess
-import tempfile
 import textwrap
 from unittest import mock
 import netifaces
@@ -16,7 +13,7 @@ root_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(root_path)
 scripts_path = os.path.join(modules_path, "scripts")
 
-# ---------------- expected goldens (unchanged) ----------------
+# ----- Golden outputs (no f-strings!) -----
 show_ipv4_intf_with_multple_ips = """\
 Interface        Master    IPv4 address/mask    Admin/Oper    BGP Neighbor    Neighbor IP
 ---------------  --------  -------------------  ------------  --------------  -------------
@@ -71,19 +68,8 @@ PortChannel0002            bb00::1/64                              error/down   
 
 show_error_invalid_af = "Invalid argument -a ipv5"
 
-# ---------------- helpers ----------------
-def _normalize(s: str) -> str:
-    """Tolerate spacing and underline length differences."""
-    lines = s.splitlines()
-    out = []
-    for ln in lines:
-        ln2 = re.sub(r" {2,}", " ", ln.strip())
-        if set(ln2.replace(" ", "")) == {"-"} and len(ln2) >= 5:
-            ln2 = "---"
-        out.append(ln2)
-    return "\n".join(out)
 
-
+# ----- Helpers -----
 def _tokenize(cmd):
     if isinstance(cmd, (list, tuple)):
         return list(cmd)
@@ -93,383 +79,432 @@ def _tokenize(cmd):
 def _is_ip_json_addr_show(tokens):
     if not tokens:
         return False
-    # find last 'ip'
-    ip_idx = None
-    for i, t in enumerate(tokens):
-        if t == "ip" or t.endswith("/ip"):
-            ip_idx = i
-    if ip_idx is None:
+    try:
+        ip_idx = max(i for i, t in enumerate(tokens) if t == 'ip' or t.endswith('/ip'))
+    except ValueError:
         return False
-    win = tokens[ip_idx:]
-    if "show" not in win:
+    window = tokens[ip_idx:]
+    if '-j' not in window:
         return False
-    if not any(j in win for j in ("-j", "--json")):
+    if 'show' not in window:
         return False
-    return any(t in win for t in ("addr", "address"))
+    return any(t in window for t in ('addr', 'address'))
 
-# ---------------- PATH shims ----------------
-def _write_exec(path, content):
-    with open(path, "w") as f:
-        f.write(content)
-    os.chmod(path, os.stat(path).st_mode | stat.S_IXUSR | stat.S_IXGRP | stat.S_IXOTH)
 
-def _ip_shim_payload(topo, fam, mode="base"):
-    if topo == "multi_asic":
-        if fam == "v6":
-            if mode == "all":
-                return textwrap.dedent("""\
-                [
-                  {"ifname":"lo","addr_info":[{"family":"inet6","local":"::1","prefixlen":128}]},
-                  {"ifname":"eth0","addr_info":[{"family":"inet6","local":"fe80::80fd:d1ff:fe5b:452f","prefixlen":64}]},
-                  {"ifname":"Loopback0","addr_info":[{"family":"inet6","local":"fe80::60a5:9dff:fef4:1696%Loopback0","prefixlen":64}]},
-                  {"ifname":"PortChannel0001","addr_info":[
-                      {"family":"inet6","local":"aa00::1","prefixlen":64},
-                      {"family":"inet6","local":"fe80::80fd:d1ff:fe5b:452f","prefixlen":64}]},
-                  {"ifname":"PortChannel0002","addr_info":[
-                      {"family":"inet6","local":"bb00::1","prefixlen":64},
-                      {"family":"inet6","local":"fe80::80fd:abff:fe5b:452f","prefixlen":64}]}
-                ]""")
-            return textwrap.dedent("""\
-            [
-              {"ifname":"lo","addr_info":[{"family":"inet6","local":"::1","prefixlen":128}]},
-              {"ifname":"eth0","addr_info":[{"family":"inet6","local":"fe80::80fd:d1ff:fe5b:452f","prefixlen":64}]},
-              {"ifname":"Loopback0","addr_info":[{"family":"inet6","local":"fe80::60a5:9dff:fef4:1696%Loopback0","prefixlen":64}]},
-              {"ifname":"PortChannel0001","addr_info":[
-                  {"family":"inet6","local":"aa00::1","prefixlen":64},
-                  {"family":"inet6","local":"fe80::80fd:d1ff:fe5b:452f","prefixlen":64}]}
-            ]""")
-        # v4
-        if mode == "all":
-            return textwrap.dedent("""\
-            [
-              {"ifname":"lo","addr_info":[{"family":"inet","local":"127.0.0.1","prefixlen":8}]},
-              {"ifname":"eth0","addr_info":[{"family":"inet","local":"172.18.0.2","prefixlen":16}]},
-              {"ifname":"Loopback0","addr_info":[{"family":"inet","local":"40.1.1.1","prefixlen":32}]},
-              {"ifname":"Loopback4096","addr_info":[
-                  {"family":"inet","local":"1.1.1.1","prefixlen":24},
-                  {"family":"inet","local":"2.1.1.1","prefixlen":24}]},
-              {"ifname":"PortChannel0001","addr_info":[{"family":"inet","local":"20.1.1.1","prefixlen":24}]},
-              {"ifname":"PortChannel0002","addr_info":[{"family":"inet","local":"30.1.1.1","prefixlen":24}]},
-              {"ifname":"veth@eth1","addr_info":[{"family":"inet","local":"192.1.1.1","prefixlen":24}]},
-              {"ifname":"veth@eth2","addr_info":[{"family":"inet","local":"193.1.1.1","prefixlen":24}]}
-            ]""")
-        return textwrap.dedent("""\
-        [
-          {"ifname":"lo","addr_info":[{"family":"inet","local":"127.0.0.1","prefixlen":8}]},
-          {"ifname":"eth0","addr_info":[{"family":"inet","local":"172.18.0.2","prefixlen":16}]},
-          {"ifname":"Loopback0","addr_info":[{"family":"inet","local":"40.1.1.1","prefixlen":32}]},
-          {"ifname":"PortChannel0001","addr_info":[{"family":"inet","local":"20.1.1.1","prefixlen":24}]}
-        ]""")
-    # single-asic
-    if fam == "v6":
-        return textwrap.dedent("""\
-        [
-          {"ifname":"lo","addr_info":[{"family":"inet6","local":"::1","prefixlen":128}]},
-          {"ifname":"eth0","addr_info":[{"family":"inet6","local":"fe80::64be:a1ff:fe85:c6c4","prefixlen":64}]},
-          {"ifname":"Ethernet0","addr_info":[
-              {"family":"inet6","local":"2100::1","prefixlen":64},
-              {"family":"inet6","local":"aa00::1","prefixlen":64},
-              {"family":"inet6","local":"fe80::64be:a1ff:fe85:c6c4%Ethernet0","prefixlen":64}]},
-          {"ifname":"PortChannel0001","addr_info":[
-              {"family":"inet6","local":"ab00::1","prefixlen":64},
-              {"family":"inet6","local":"fe80::cc8d:60ff:fe08:139f%PortChannel0001","prefixlen":64}]},
-          {"ifname":"Vlan100","addr_info":[
-              {"family":"inet6","local":"cc00::1","prefixlen":64},
-              {"family":"inet6","local":"fe80::c029:3fff:fe41:cf56%Vlan100","prefixlen":64}]}
-        ]""")
-    return textwrap.dedent("""\
+def _detect_family(tokens):
+    win = " ".join(tokens)
+    if '-6' in tokens or 'inet6' in win:
+        return 'v6'
+    if '-4' in tokens or 'inet ' in win or '-f inet' in win:
+        return 'v4'
+    return 'v4'
+
+
+def _iface_name_from_table_line(line):
+    """Return the interface name for a rendered table line (or None for header/underline/blank)."""
+    if not line.strip():
+        return None
+    if line.startswith("Interface"):
+        return None
+    if set(line.strip()) == {"-"}:
+        return None
+    # Interface column is the first token
+    parts = line.split()
+    return parts[0] if parts else None
+
+
+# --- Global autouse fixture ---
+@pytest.fixture(autouse=True)
+def mock_ip_and_sysfs(monkeypatch):
+    topo = os.environ.get("UTILITIES_UNIT_TESTING_TOPOLOGY", "")
+
+    SINGLE_V4 = textwrap.dedent("""\
     [
       {"ifname":"lo","addr_info":[{"family":"inet","local":"127.0.0.1","prefixlen":8}]},
       {"ifname":"eth0","addr_info":[{"family":"inet","local":"172.18.0.2","prefixlen":16}]},
       {"ifname":"Ethernet0","addr_info":[
           {"family":"inet","local":"20.1.1.1","prefixlen":24},
-          {"family":"inet","local":"21.1.1.1","prefixlen":24}]},
+          {"family":"inet","local":"21.1.1.1","prefixlen":24}
+      ]},
       {"ifname":"PortChannel0001","addr_info":[{"family":"inet","local":"30.1.1.1","prefixlen":24}]},
       {"ifname":"Vlan100","addr_info":[{"family":"inet","local":"40.1.1.1","prefixlen":24}]}
     ]""")
 
-def _make_ip_shim(dirpath, topo, mode="base"):
-    script = os.path.join(dirpath, "ip")
-    content = f"""#!/usr/bin/env python3
-import json,sys
-args=sys.argv[1:]
-win=" ".join(args)
-fam="v4"
-if "-6" in args or "inet6" in args: fam="v6"
-payload = {repr(_ip_shim_payload(topo="''", fam="v4")).replace("''","SINGLE")}
-if "{topo}"=="multi_asic":
-    pass
-# choose mode by presence of marker
-mode="all" if "--__ALL__" in args else "base"
-def choose(topo,fam,mode):
-    import textwrap
-    def P(t,f,m):
-        return {{"multi_asic": {{"v4": {{"base": {repr(_ip_shim_payload('multi_asic','v4','base'))},
-                                              "all": {repr(_ip_shim_payload('multi_asic','v4','all'))}}},
-                                 "v6": {{"base": {repr(_ip_shim_payload('multi_asic','v6','base'))},
-                                              "all": {repr(_ip_shim_payload('multi_asic','v6','all'))}}}}},
-                 "single":    {{"v4": {{"base": {repr(_ip_shim_payload('single','v4','base'))}}},
-                                 "v6": {{"base": {repr(_ip_shim_payload('single','v6','base'))}}}}}}[t][fam][m]
-    t = "multi_asic" if "{topo}"=="multi_asic" else "single"
-    return P(t,fam,mode)
-sys.stdout.write(choose("{topo}", fam, mode))
-"""
-    _write_exec(script, content)
+    SINGLE_V6 = textwrap.dedent("""\
+    [
+      {"ifname":"lo","addr_info":[{"family":"inet6","local":"::1","prefixlen":128}]},
+      {"ifname":"eth0","addr_info":[{"family":"inet6","local":"fe80::64be:a1ff:fe85:c6c4","prefixlen":64}]},
+      {"ifname":"Ethernet0","addr_info":[
+          {"family":"inet6","local":"2100::1","prefixlen":64},
+          {"family":"inet6","local":"aa00::1","prefixlen":64},
+          {"family":"inet6","local":"fe80::64be:a1ff:fe85:c6c4%Ethernet0","prefixlen":64}
+      ]},
+      {"ifname":"PortChannel0001","addr_info":[
+          {"family":"inet6","local":"ab00::1","prefixlen":64},
+          {"family":"inet6","local":"fe80::cc8d:60ff:fe08:139f%PortChannel0001","prefixlen":64}
+      ]},
+      {"ifname":"Vlan100","addr_info":[
+          {"family":"inet6","local":"cc00::1","prefixlen":64},
+          {"family":"inet6","local":"fe80::c029:3fff:fe41:cf56%Vlan100","prefixlen":64}
+      ]}
+    ]""")
 
-def _make_cat_shim(dirpath):
-    script = os.path.join(dirpath, "cat")
-    content = """#!/usr/bin/env python3
-import sys,os
-p = sys.argv[1] if len(sys.argv)>1 else ""
-# emulate /sys/class/net/* reads:
-if p.endswith("/carrier"):
-    sys.stdout.write("0\\n")  # oper down
-    sys.exit(0)
-if p.endswith("/flags"):
-    # admin state error (non-zero exit)
-    sys.exit(1)
-# fallback to real cat
-with open(p,"r") as f:
-    sys.stdout.write(f.read())
-"""
-    _write_exec(script, content)
+    MULTI_V4 = textwrap.dedent("""\
+    [
+      {"ifname":"lo","addr_info":[{"family":"inet","local":"127.0.0.1","prefixlen":8}]},
+      {"ifname":"eth0","addr_info":[{"family":"inet","local":"172.18.0.2","prefixlen":16}]},
+      {"ifname":"Loopback0","addr_info":[{"family":"inet","local":"40.1.1.1","prefixlen":32}]},
+      {"ifname":"PortChannel0001","addr_info":[{"family":"inet","local":"20.1.1.1","prefixlen":24}]}
+    ]""")
 
-# --------------- autouse: create PATH shims + fake ConfigDB ---------------
-@pytest.fixture(autouse=True)
-def _env_and_shims(tmp_path, monkeypatch):
-    # Ensure ipintutil uses test path
-    monkeypatch.setenv("PATH", f"{scripts_path}{os.pathsep}{os.environ.get('PATH','')}")
-    # Build a shim dir and prepend to PATH (wins over system ip/cat)
-    shimdir = tmp_path / "shim"
-    shimdir.mkdir()
-    _make_ip_shim(str(shimdir), topo=os.environ.get("UTILITIES_UNIT_TESTING_TOPOLOGY",""))
-    _make_cat_shim(str(shimdir))
-    monkeypatch.setenv("PATH", f"{shimdir}{os.pathsep}{os.environ['PATH']}")
+    MULTI_V6 = textwrap.dedent("""\
+    [
+      {"ifname":"lo","addr_info":[{"family":"inet6","local":"::1","prefixlen":128}]},
+      {"ifname":"eth0","addr_info":[{"family":"inet6","local":"fe80::80fd:d1ff:fe5b:452f","prefixlen":64}]},
+      {"ifname":"Loopback0","addr_info":[{"family":"inet6","local":"fe80::60a5:9dff:fef4:1696%Loopback0","prefixlen":64}]},
+      {"ifname":"PortChannel0001","addr_info":[
+          {"family":"inet6","local":"aa00::1","prefixlen":64},
+          {"family":"inet6","local":"fe80::80fd:d1ff:fe5b:452f","prefixlen":64}
+      ]}
+    ]""")
 
-    # Fake ConfigDB in-process import path for child process: use env that ipintutil checks
-    monkeypatch.setenv("UTILITIES_UNIT_TESTING", "2")
+    real_check_output = subprocess.check_output
 
-    # Provide minimal swsscommon.ConfigDBConnector replacement so neighbor names exist
-    class FakeCfg:
-        def connect(self): return True
-        def get_table(self, name):
-            if name == "BGP_NEIGHBOR":
-                return {"20.1.1.5": {"name": "T2-Peer", "local_addr": "20.1.1.1"},
-                        "30.1.1.5": {"name": "T0-Peer", "local_addr": "30.1.1.1"}}
-            return {}
-    def fake_cfg_factory(*_a, **_k): return FakeCfg()
-    try:
-        import swsscommon.swsscommon as _sc
-        monkeypatch.setattr(_sc, "ConfigDBConnector", fake_cfg_factory)
-    except Exception:
-        try:
-            import swsscommon as _sc2
-            monkeypatch.setattr(_sc2, "ConfigDBConnector", fake_cfg_factory)
-        except Exception:
-            pass
+    def fake_check_output(cmd, *a, **kw):
+        tokens = _tokenize(cmd)
+        s = " ".join(tokens)
 
-# ---------------- setup fixtures ----------------
+        # sysfs emulation for admin/oper
+        if "/sys/class/net/" in s and "/carrier" in s:
+            return "0\n"  # oper: down
+        if "/sys/class/net/" in s and "/flags" in s:
+            raise subprocess.CalledProcessError(1, tokens)  # admin: error
+
+        if _is_ip_json_addr_show(tokens):
+            fam = _detect_family(tokens)
+            if topo == "multi_asic":
+                return MULTI_V6 if fam == 'v6' else MULTI_V4
+            return SINGLE_V6 if fam == 'v6' else SINGLE_V4
+
+        return real_check_output(cmd, *a, **kw)
+
+    monkeypatch.setattr(subprocess, "check_output", fake_check_output)
+
+
 @pytest.fixture(scope="class")
 def setup_teardown_single_asic():
+    os.environ["PATH"] += os.pathsep + scripts_path
+    os.environ["UTILITIES_UNIT_TESTING"] = "2"
     os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
     yield
-    os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
+    os.environ["UTILITIES_UNIT_TESTING"] = "0"
+
 
 @pytest.fixture(scope="class")
 def setup_teardown_multi_asic():
+    os.environ["PATH"] += os.pathsep + scripts_path
+    os.environ["UTILITIES_UNIT_TESTING"] = "2"
     os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
     yield
+    os.environ["UTILITIES_UNIT_TESTING"] = "0"
     os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
+
 
 @pytest.fixture(scope="class")
 def setup_teardown_fastpath():
-    # Run without UT env; still exercise addr_show by importing the module
+    os.environ["PATH"] += os.pathsep + scripts_path
     original_ut = os.environ.get("UTILITIES_UNIT_TESTING")
+    original_topo = os.environ.get("UTILITIES_UNIT_TESTING_TOPOLOGY")
     os.environ.pop("UTILITIES_UNIT_TESTING", None)
+    os.environ.pop("UTILITIES_UNIT_TESTING_TOPOLOGY", None)
     yield
 
     # Restore original environment
     if original_ut is not None:
         os.environ["UTILITIES_UNIT_TESTING"] = original_ut
+    if original_topo is not None:
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = original_topo
 
-# ---------------- verification ----------------
+
 def verify_output(output, expected_output):
     lines = output.splitlines()
-    # tolerate 0 or 1 occurrences of lo/eth0 in CI containers
-    ignored = ("eth0", "lo")
-    body = "\n".join(ln for ln in lines if not any(ln.startswith(x) for x in ignored))
-    assert _normalize(body) == _normalize(expected_output)
 
-def verify_fastpath_output(output, _expected):
-    assert output is not None and output.strip()
+    # 1) ensure eth0/lo present exactly once (as table rows)
+    for needle in ('eth0', 'lo'):
+        hits = [ln for ln in lines if _iface_name_from_table_line(ln) == needle]
+        assert len(hits) == 1
 
-# ---------------- tests ----------------
-@pytest.mark.usefixtures("setup_teardown_single_asic")
-class TestShowIpInt:
+    # 2) drop only those rows whose FIRST COLUMN is eth0 or lo
+    filtered = []
+    for ln in lines:
+        name = _iface_name_from_table_line(ln)
+        if name in ('eth0', 'lo'):
+            continue
+        filtered.append(ln)
+
+    new_output = "\n".join(filtered).strip()
+    # print to aid debugging if needed
+    print(new_output)
+    assert new_output == expected_output
+
+
+def verify_fastpath_output(output, expected_output):
+    assert output is not None and len(output.strip()) > 0
+
+
+@pytest.mark.usefixtures('setup_teardown_single_asic')
+class TestShowIpInt(object):
     def test_show_ip_intf_v4(self):
-        rc, out = get_result_and_return_code(["ipintutil"])
-        assert rc == 0
-        verify_output(out, show_ipv4_intf_with_multple_ips)
+        return_code, result = get_result_and_return_code(["ipintutil"])
+        assert return_code == 0
+        verify_output(result, show_ipv4_intf_with_multple_ips)
 
     def test_show_ip_intf_v6(self):
-        rc, out = get_result_and_return_code(["ipintutil", "-a", "ipv6"])
-        assert rc == 0
-        verify_output(out, show_ipv6_intf_with_multiple_ips)
+        return_code, result = get_result_and_return_code(['ipintutil', '-a', 'ipv6'])
+        assert return_code == 0
+        verify_output(result, show_ipv6_intf_with_multiple_ips)
 
     def test_show_intf_invalid_af_option(self):
-        rc, out = get_result_and_return_code(["ipintutil", "-a", "ipv5"])
-        assert rc == 1
-        assert out == show_error_invalid_af
+        return_code, result = get_result_and_return_code(['ipintutil', '-a', 'ipv5'])
+        assert return_code == 1
+        assert result == show_error_invalid_af
 
-@pytest.mark.usefixtures("setup_teardown_multi_asic")
-class TestMultiAsicShowIpInt:
+
+@pytest.mark.usefixtures('setup_teardown_multi_asic')
+class TestMultiAsicShowIpInt(object):
     def test_show_ip_intf_v4(self):
-        rc, out = get_result_and_return_code(["ipintutil"])
-        assert rc == 0
-        verify_output(out, show_multi_asic_ip_intf)
+        return_code, result = get_result_and_return_code(["ipintutil"])
+        assert return_code == 0
+        verify_output(result, show_multi_asic_ip_intf)
 
     def test_show_ip_intf_v4_asic0(self):
-        rc, out = get_result_and_return_code(["ipintutil", "-n", "asic0"])
-        assert rc == 0
-        verify_output(out, show_multi_asic_ip_intf)
+        return_code, result = get_result_and_return_code(['ipintutil', '-n', 'asic0'])
+        assert return_code == 0
+        verify_output(result, show_multi_asic_ip_intf)
 
-    def test_show_ip_intf_v4_all(self, monkeypatch, tmp_path):
-        # Switch ip shim into "all" mode by adding a second ip shim that emits ALL payloads.
-        shimdir = tmp_path / "shim_all"
-        shimdir.mkdir()
-        _make_ip_shim(str(shimdir), topo="multi_asic", mode="all")
-        monkeypatch.setenv("PATH", f"{shimdir}{os.pathsep}{os.environ['PATH']}")
-        rc, out = get_result_and_return_code(["ipintutil", "-d", "all"])
-        assert rc == 0
-        verify_output(out, show_multi_asic_ip_intf_all)
+    def test_show_ip_intf_v4_all(self):
+        extra_ipv4 = textwrap.dedent("""\
+        [
+          {"ifname":"lo","addr_info":[{"family":"inet","local":"127.0.0.1","prefixlen":8}]},
+          {"ifname":"eth0","addr_info":[{"family":"inet","local":"172.18.0.2","prefixlen":16}]},
+          {"ifname":"Loopback0","addr_info":[{"family":"inet","local":"40.1.1.1","prefixlen":32}]},
+          {"ifname":"Loopback4096","addr_info":[
+              {"family":"inet","local":"1.1.1.1","prefixlen":24},
+              {"family":"inet","local":"2.1.1.1","prefixlen":24}
+          ]},
+          {"ifname":"PortChannel0001","addr_info":[{"family":"inet","local":"20.1.1.1","prefixlen":24}]},
+          {"ifname":"PortChannel0002","addr_info":[{"family":"inet","local":"30.1.1.1","prefixlen":24}]},
+          {"ifname":"veth@eth1","addr_info":[{"family":"inet","local":"192.1.1.1","prefixlen":24}]},
+          {"ifname":"veth@eth2","addr_info":[{"family":"inet","local":"193.1.1.1","prefixlen":24}]}
+        ]""")
+
+        real = subprocess.check_output
+
+        def se(cmd, *a, **kw):
+            tokens = _tokenize(cmd)
+            s = " ".join(tokens)
+            if "/sys/class/net/" in s and "/carrier" in s:
+                return "0\n"
+            if "/sys/class/net/" in s and "/flags" in s:
+                raise subprocess.CalledProcessError(1, tokens)
+            if _is_ip_json_addr_show(tokens):
+                return extra_ipv4
+            return real(cmd, *a, **kw)
+
+        with mock.patch('subprocess.check_output', side_effect=se):
+            return_code, result = get_result_and_return_code(['ipintutil', '-d', 'all'])
+        assert return_code == 0
+        verify_output(result, show_multi_asic_ip_intf_all)
 
     def test_show_ip_intf_v6(self):
-        rc, out = get_result_and_return_code(["ipintutil", "-a", "ipv6"])
-        assert rc == 0
-        verify_output(out, show_multi_asic_ipv6_intf)
+        return_code, result = get_result_and_return_code(['ipintutil', '-a', 'ipv6'])
+        assert return_code == 0
+        verify_output(result, show_multi_asic_ipv6_intf)
 
     def test_show_ip_intf_v6_asic0(self):
-        rc, out = get_result_and_return_code(["ipintutil", "-a", "ipv6", "-n", "asic0"])
-        assert rc == 0
-        verify_output(out, show_multi_asic_ipv6_intf)
+        return_code, result = get_result_and_return_code(['ipintutil', '-a', 'ipv6', '-n', 'asic0'])
+        assert return_code == 0
+        verify_output(result, show_multi_asic_ipv6_intf)
 
-    def test_show_ip_intf_v6_all(self, monkeypatch, tmp_path):
-        shimdir = tmp_path / "shim_all_v6"
-        shimdir.mkdir()
-        _make_ip_shim(str(shimdir), topo="multi_asic", mode="all")
-        monkeypatch.setenv("PATH", f"{shimdir}{os.pathsep}{os.environ['PATH']}")
-        rc, out = get_result_and_return_code(["ipintutil", "-a", "ipv6", "-d", "all"])
-        assert rc == 0
-        verify_output(out, show_multi_asic_ipv6_intf_all)
+    def test_show_ip_intf_v6_all(self):
+        extra_ipv6 = textwrap.dedent("""\
+        [
+          {"ifname":"lo","addr_info":[{"family":"inet6","local":"::1","prefixlen":128}]},
+          {"ifname":"eth0","addr_info":[{"family":"inet6","local":"fe80::80fd:d1ff:fe5b:452f","prefixlen":64}]},
+          {"ifname":"Loopback0","addr_info":[{"family":"inet6","local":"fe80::60a5:9dff:fef4:1696%Loopback0","prefixlen":64}]},
+          {"ifname":"PortChannel0001","addr_info":[
+              {"family":"inet6","local":"aa00::1","prefixlen":64},
+              {"family":"inet6","local":"fe80::80fd:d1ff:fe5b:452f","prefixlen":64}
+          ]},
+          {"ifname":"PortChannel0002","addr_info":[
+              {"family":"inet6","local":"bb00::1","prefixlen":64},
+              {"family":"inet6","local":"fe80::80fd:abff:fe5b:452f","prefixlen":64}
+          ]}
+        ]""")
 
-@pytest.mark.usefixtures("setup_teardown_fastpath")
-class TestShowIpIntFastPath:
+        real = subprocess.check_output
+
+        def se(cmd, *a, **kw):
+            tokens = _tokenize(cmd)
+            s = " ".join(tokens)
+            if "/sys/class/net/" in s and "/carrier" in s:
+                return "0\n"
+            if "/sys/class/net/" in s and "/flags" in s:
+                raise subprocess.CalledProcessError(1, tokens)
+            if _is_ip_json_addr_show(tokens):
+                return extra_ipv6
+            return real(cmd, *a, **kw)
+
+        with mock.patch('subprocess.check_output', side_effect=se):
+            return_code, result = get_result_and_return_code(['ipintutil', '-a', 'ipv6', '-d', 'all'])
+        assert return_code == 0
+        verify_output(result, show_multi_asic_ipv6_intf_all)
+
+
+@pytest.mark.usefixtures('setup_teardown_fastpath')
+class TestShowIpIntFastPath(object):
     def test_addr_show_ipv4(self):
         """Test _addr_show with IPv4 addresses - validates fast path is called"""
         from importlib.machinery import SourceFileLoader
-        p = os.path.join(scripts_path, "ipintutil")
-        loader = SourceFileLoader("ipintutil_v4", p)
+        ipintutil_path = os.path.join(scripts_path, 'ipintutil')
+        loader = SourceFileLoader("ipintutil_v4", ipintutil_path)
         spec = importlib.util.spec_from_loader("ipintutil_v4", loader)
         ipintutil = importlib.util.module_from_spec(spec)
+
         ip_output = """[
           {"ifname":"Ethernet0","addr_info":[{"family":"inet","local":"20.1.1.1","prefixlen":24}]},
           {"ifname":"PortChannel0001","addr_info":[{"family":"inet","local":"30.1.1.1","prefixlen":24}]}
         ]"""
-        mock_cfg = mock.MagicMock()
-        mock_cfg.get_table.return_value = {}
-        with mock.patch("subprocess.check_output", return_value=ip_output), \
-             mock.patch("swsscommon.swsscommon.ConfigDBConnector", return_value=mock_cfg):
+        mock_config_db = mock.MagicMock()
+        mock_config_db.get_table.return_value = {}
+
+        with mock.patch('subprocess.check_output', return_value=ip_output), \
+             mock.patch('swsscommon.swsscommon.ConfigDBConnector', return_value=mock_config_db):
             loader.exec_module(ipintutil)
-            result = ipintutil._addr_show("", netifaces.AF_INET, "all")
+            result = ipintutil._addr_show('', netifaces.AF_INET, 'all')
             assert isinstance(result, dict)
 
     def test_addr_show_ipv6(self):
         """Test _addr_show with IPv6 addresses - validates fast path is called"""
         from importlib.machinery import SourceFileLoader
-        p = os.path.join(scripts_path, "ipintutil")
-        loader = SourceFileLoader("ipintutil_v6", p)
+        ipintutil_path = os.path.join(scripts_path, 'ipintutil')
+        loader = SourceFileLoader("ipintutil_v6", ipintutil_path)
         spec = importlib.util.spec_from_loader("ipintutil_v6", loader)
         ipintutil = importlib.util.module_from_spec(spec)
+
         ip_output = """[
           {"ifname":"Ethernet0","addr_info":[{"family":"inet6","local":"2100::1","prefixlen":64}]},
           {"ifname":"PortChannel0001","addr_info":[{"family":"inet6","local":"ab00::1","prefixlen":64}]}
         ]"""
-        mock_cfg = mock.MagicMock()
-        mock_cfg.get_table.return_value = {}
-        with mock.patch("subprocess.check_output", return_value=ip_output), \
-             mock.patch("swsscommon.swsscommon.ConfigDBConnector", return_value=mock_cfg):
+        mock_config_db = mock.MagicMock()
+        mock_config_db.get_table.return_value = {}
+
+        with mock.patch('subprocess.check_output', return_value=ip_output), \
+             mock.patch('swsscommon.swsscommon.ConfigDBConnector', return_value=mock_config_db):
             loader.exec_module(ipintutil)
-            result = ipintutil._addr_show("", netifaces.AF_INET6, "all")
+            result = ipintutil._addr_show('', netifaces.AF_INET6, 'all')
             assert isinstance(result, dict)
 
     def test_addr_show_malformed_output(self):
         """Test _addr_show handles malformed ip addr output gracefully"""
         from importlib.machinery import SourceFileLoader
-        p = os.path.join(scripts_path, "ipintutil")
-        loader = SourceFileLoader("ipintutil_bad", p)
-        spec = importlib.util.spec_from_loader("ipintutil_bad", loader)
+        ipintutil_path = os.path.join(scripts_path, 'ipintutil')
+        loader = SourceFileLoader("ipintutil_malformed", ipintutil_path)
+        spec = importlib.util.spec_from_loader("ipintutil_malformed", loader)
         ipintutil = importlib.util.module_from_spec(spec)
-        mock_cfg = mock.MagicMock()
-        mock_cfg.get_table.return_value = {}
-        with mock.patch("subprocess.check_output", return_value="not a json\n"), \
-             mock.patch("swsscommon.swsscommon.ConfigDBConnector", return_value=mock_cfg):
+
+        malformed_output = "not a json\n"
+        mock_config_db = mock.MagicMock()
+        mock_config_db.get_table.return_value = {}
+
+        with mock.patch('subprocess.check_output', return_value=malformed_output), \
+             mock.patch('swsscommon.swsscommon.ConfigDBConnector', return_value=mock_config_db):
             loader.exec_module(ipintutil)
-            result = ipintutil._addr_show("", netifaces.AF_INET, "all")
+            result = ipintutil._addr_show('', netifaces.AF_INET, 'all')
             assert isinstance(result, dict)
 
     def test_addr_show_subprocess_error(self):
         """Test _addr_show handles subprocess errors gracefully"""
         from importlib.machinery import SourceFileLoader
-        p = os.path.join(scripts_path, "ipintutil")
-        loader = SourceFileLoader("ipintutil_err", p)
-        spec = importlib.util.spec_from_loader("ipintutil_err", loader)
+        ipintutil_path = os.path.join(scripts_path, 'ipintutil')
+        loader = SourceFileLoader("ipintutil_error", ipintutil_path)
+        spec = importlib.util.spec_from_loader("ipintutil_error", loader)
         ipintutil = importlib.util.module_from_spec(spec)
-        mock_cfg = mock.MagicMock()
-        mock_cfg.get_table.return_value = {}
-        with mock.patch("subprocess.check_output", side_effect=subprocess.CalledProcessError(1, "cmd")), \
-             mock.patch("swsscommon.swsscommon.ConfigDBConnector", return_value=mock_cfg):
+
+        mock_config_db = mock.MagicMock()
+        mock_config_db.get_table.return_value = {}
+
+        with mock.patch('subprocess.check_output', side_effect=subprocess.CalledProcessError(1, 'cmd')), \
+             mock.patch('swsscommon.swsscommon.ConfigDBConnector', return_value=mock_config_db):
             loader.exec_module(ipintutil)
-            result = ipintutil._addr_show("", netifaces.AF_INET, "all")
+            result = ipintutil._addr_show('', netifaces.AF_INET, 'all')
             assert result == {}
+
+    def test_addr_show_with_namespace(self):
+        from importlib.machinery import SourceFileLoader
+        ipintutil_path = os.path.join(scripts_path, 'ipintutil')
+        loader = SourceFileLoader("ipintutil_ns", ipintutil_path)
+        spec = importlib.util.spec_from_loader("ipintutil_ns", loader)
+        ipintutil = importlib.util.module_from_spec(spec)
+
+        ip_output = """[
+          {"ifname":"Ethernet0","addr_info":[{"family":"inet","local":"10.0.0.1","prefixlen":24}]}
+        ]"""
+
+        mock_config_db = mock.MagicMock()
+        mock_config_db.get_table.return_value = {}
+
+        def mock_check_output(cmd, *args, **kwargs):
+            return ip_output
+
+        with mock.patch('subprocess.check_output', side_effect=mock_check_output), \
+             mock.patch('swsscommon.swsscommon.ConfigDBConnector', return_value=mock_config_db):
+            loader.exec_module(ipintutil)
+            result = ipintutil._addr_show('asic0', netifaces.AF_INET, 'all')
+            assert isinstance(result, dict)
 
     def test_get_ip_intfs_in_namespace_fast_path(self):
         """Test get_ip_intfs_in_namespace uses _addr_show in fast path"""
         from importlib.machinery import SourceFileLoader
-        p = os.path.join(scripts_path, "ipintutil")
-        loader = SourceFileLoader("ipintutil_fast", p)
+        ipintutil_path = os.path.join(scripts_path, 'ipintutil')
+        loader = SourceFileLoader("ipintutil_fast", ipintutil_path)
         spec = importlib.util.spec_from_loader("ipintutil_fast", loader)
         ipintutil = importlib.util.module_from_spec(spec)
+
         ip_output = """[
           {"ifname":"Ethernet0","addr_info":[{"family":"inet","local":"20.1.1.1","prefixlen":24}]},
           {"ifname":"PortChannel0001","addr_info":[{"family":"inet","local":"30.1.1.1","prefixlen":24}]}
         ]"""
-        mock_cfg = mock.MagicMock()
-        mock_cfg.get_table.return_value = {}
-        with mock.patch("subprocess.check_output", return_value=ip_output), \
-             mock.patch("swsscommon.swsscommon.ConfigDBConnector", return_value=mock_cfg), \
-             mock.patch("os.path.exists", return_value=True):
+        mock_config_db = mock.MagicMock()
+        mock_config_db.get_table.return_value = {}
+
+        with mock.patch('subprocess.check_output', return_value=ip_output), \
+             mock.patch('swsscommon.swsscommon.ConfigDBConnector', return_value=mock_config_db), \
+             mock.patch('os.path.exists', return_value=True):
             loader.exec_module(ipintutil)
-            result = ipintutil.get_ip_intfs_in_namespace(netifaces.AF_INET, "", "all")
+            result = ipintutil.get_ip_intfs_in_namespace(netifaces.AF_INET, '', 'all')
             assert isinstance(result, dict)
 
     def test_skip_interface_filtering(self):
         """Test that skip_ip_intf_display filters correctly in fast path"""
         from importlib.machinery import SourceFileLoader
-        p = os.path.join(scripts_path, "ipintutil")
-        loader = SourceFileLoader("ipintutil_filter", p)
+        ipintutil_path = os.path.join(scripts_path, 'ipintutil')
+        loader = SourceFileLoader("ipintutil_filter", ipintutil_path)
         spec = importlib.util.spec_from_loader("ipintutil_filter", loader)
         ipintutil = importlib.util.module_from_spec(spec)
+
         ip_output = """[
           {"ifname":"eth0","addr_info":[{"family":"inet","local":"192.168.1.1","prefixlen":24}]},
           {"ifname":"Loopback4096","addr_info":[{"family":"inet","local":"1.1.1.1","prefixlen":32}]},
           {"ifname":"veth123","addr_info":[{"family":"inet","local":"10.0.0.1","prefixlen":24}]},
           {"ifname":"Ethernet0","addr_info":[{"family":"inet","local":"20.1.1.1","prefixlen":24}]}
         ]"""
-        mock_cfg = mock.MagicMock()
-        mock_cfg.get_table.return_value = {}
-        with mock.patch("subprocess.check_output", return_value=ip_output), \
-             mock.patch("swsscommon.swsscommon.ConfigDBConnector", return_value=mock_cfg), \
-             mock.patch("os.path.exists", return_value=True):
+        mock_config_db = mock.MagicMock()
+        mock_config_db.get_table.return_value = {}
+
+        with mock.patch('subprocess.check_output', return_value=ip_output), \
+             mock.patch('swsscommon.swsscommon.ConfigDBConnector', return_value=mock_config_db), \
+             mock.patch('os.path.exists', return_value=True):
             loader.exec_module(ipintutil)
-            result = ipintutil.get_ip_intfs_in_namespace(netifaces.AF_INET, "", "frontend")
+            result = ipintutil.get_ip_intfs_in_namespace(netifaces.AF_INET, '', 'frontend')
             assert isinstance(result, dict)
