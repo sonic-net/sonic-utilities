@@ -44,10 +44,8 @@ def try_convert_interfacename_from_alias(ctx, interfacename):
 
     if clicommon.get_interface_naming_mode() == "alias":
         alias = interfacename
-        interfacename = clicommon.InterfaceAliasConverter().alias_to_name(alias)
-        # TODO: ideally alias_to_name should return None when it cannot find
-        # the port name for the alias
-        if interfacename == alias:
+        interfacename = clicommon.InterfaceAliasConverter().iface_naming_mode_alias_to_name(alias)
+        if interfacename == None:
             ctx.fail("cannot find interface name for alias {}".format(alias))
 
     return interfacename
