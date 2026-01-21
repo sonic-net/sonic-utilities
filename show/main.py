@@ -2268,7 +2268,8 @@ def tacacs():
         'global': {
             'auth_type': 'pap (default)',
             'timeout': '5 (default)',
-            'passkey': '<EMPTY_STRING> (default)'
+            'passkey': '<EMPTY_STRING> (default)',
+            'src_ip': '<None> (default)'
         }
     }
     if 'global' in data:
