@@ -25,27 +25,13 @@ sonic_kdump_config = load_module_from_source("sonic_kdump_config", sonic_kdump_c
 
 class TestRemoteFlag(unittest.TestCase):
     def setUp(self):
-        # Helper function to validate remote action
-        def validate_remote_action(value):
-            """Validate remote argument - only accepts 'enable' or 'disable'"""
-            if isinstance(value, bool):
-                return value
-            if value.lower() == 'enable':
-                return True
-            elif value.lower() == 'disable':
-                return False
-            else:
-                raise argparse.ArgumentTypeError(
-                    "Invalid action. Use 'enable' or 'disable'."
-                )
-
         # Create a new ArgumentParser for each test
         self.parser = argparse.ArgumentParser(
             description="kdump configuration and status tool"
         )
         self.parser.add_argument(
             '--remote',
-            type=validate_remote_action,
+            type=sonic_kdump_config.validate_remote_action,
             nargs='?',
             const=True,
             default=None,
