@@ -2484,6 +2484,11 @@ main() {
     save_cmd "show interface status -d all" "interface.status" &
     save_cmd "show interface transceiver presence" "interface.xcvrs.presence" &
     save_cmd "show interface transceiver eeprom --dom" "interface.xcvrs.eeprom" &
+    save_cmd "show interface transceiver status" "interface.xcvrs.status" &
+    save_cmd "show interface transceiver info" "interface.xcvrs.info" &
+    save_cmd "show interface transceiver lpmode" "interface.xcvrs.lpmode" &
+    save_cmd "show interface transceiver pm" "interface.xcvrs.pm" &
+    save_cmd "show interface transceiver error-status" "interface.xcvrs.error-status" &
     save_cmd "show ip interface -d all" "ip.interface" &
     save_cmd "sfputil show eeprom-hexdump" "interface.xcvrs.eeprom.raw" &
     wait
