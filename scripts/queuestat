@@ -363,7 +363,7 @@ class Queuestat(object):
             for counter_name, pos in counter_dict.items():
                 full_table_id = COUNTER_TABLE_PREFIX + table_id
                 counter_data =  self.db.get(self.db.COUNTERS_DB, full_table_id, counter_name)
-                if counter_data is None:
+                if counter_data is None or counter_data == '':
                     fields[pos] = STATUS_NA
                 elif fields[pos] != STATUS_NA:
                     fields[pos] = str(int(counter_data))
