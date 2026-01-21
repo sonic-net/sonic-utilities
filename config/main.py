@@ -9951,5 +9951,43 @@ def del_vnet_route(ctx, vnet_name, prefix):
         click.echo("All routes deleted for the VNET {}.".format(vnet_name))
 
 
+@config.group(cls=AbbreviationGroup)
+@click.pass_context
+def switch(ctx):
+    """switch related config"""
+    pass
+
+@switch.command('sdk_shell')
+@click.pass_context
+@click.argument('en', metavar='<en>', required=True, type=click.Choice(['enable', 'disable']))
+def set_sdk_diag_shell(ctx, en):
+    tmp_file = "/tmp/swss.json"
+    json_file = "/etc/swss/config.d/switch.json"
+
+    try:
+        os.remove(tmp_file)
+    except:
+        pass
+
+    command = " docker cp   swss:" + json_file + " " + tmp_file
+    print(command)
+    subprocess.Popen(command, shell=True)
+    time.sleep(2)
+
+    with open (tmp_file, "r") as f:
+        cfg = json.load(f)
+
+    cfg[0]["SWITCH_TABLE:switch"]["sdk_diag_shell"] = 1 if en == 'enable' else 0
+
+    with open (tmp_file, "w") as f:
+        json.dump(cfg,f,indent=4, ensure_ascii=False)
+
+    command = " docker cp  " + tmp_file +" "+ "swss:"+json_file
+    subprocess.Popen(command, shell=True)
+    time.sleep(2)
+
+    command = "docker exec swss swssconfig " + json_file
+    subprocess.Popen(command, shell=True)
+
 if __name__ == '__main__':
     config()
