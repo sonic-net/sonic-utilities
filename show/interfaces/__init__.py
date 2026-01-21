@@ -1117,28 +1117,54 @@ def switchport():
 def switchport_mode_config(db):
     """Show interface switchport config information"""
 
-    port_data = list(db.cfgdb.get_table('PORT').keys())
+    port_data = db.cfgdb.get_table('PORT')
+    port_keys = list(port_data.keys())
     portchannel_data = list(db.cfgdb.get_table('PORTCHANNEL').keys())
 
     portchannel_member_table = db.cfgdb.get_table('PORTCHANNEL_MEMBER')
-
-    for interface in port_data:
-        if clicommon.interface_is_in_portchannel(portchannel_member_table, interface):
-            port_data.remove(interface)
-
-    keys = port_data + portchannel_data
-
+    filter_port_data = [
+        interface
+        for interface in port_keys
+        if not clicommon.interface_is_in_portchannel(portchannel_member_table, interface)
+        ]
+    keys = filter_port_data + portchannel_data
     def tablelize(keys):
-        table = []
+        interface_naming_mode = clicommon.get_interface_naming_mode()
+        natsorted_keys = natsorted(keys)
+        if interface_naming_mode != "alias":
+            interface = natsorted_keys
+        else:
+            interface = [clicommon.get_interface_name_for_display(db, key) for key in natsorted_keys]
 
-        for key in natsorted(keys):
-            r = [clicommon.get_interface_name_for_display(db, key),
-                 clicommon.get_interface_switchport_mode(db, key),
-                 clicommon.get_interface_untagged_vlan_members(db, key),
-                 clicommon.get_interface_tagged_vlan_members(db, key)]
-            table.append(r)
+        vlan_member = db.cfgdb.get_table('VLAN_MEMBER')
+        vlan_member_keys = [key for _, key in vlan_member]
+        vlan_member = {
+                    iface: {
+                        'vlan_id': int(vlan.lstrip('Vlan')),
+                        'tagging_mode': data.get('tagging_mode')
+                    }
+                    for (vlan, iface), data in vlan_member.items()
+                }
+        sw_mode = [
+            clicommon.get_interface_switchport_mode(db, key, vlan_member_keys, port_data)
+            for key in natsorted_keys
+            ]
 
-        return table
+        untag_vlan_memb = [
+            vlan_member[intf]['vlan_id']
+            if intf in vlan_member and vlan_member[intf].get('tagging_mode') == 'untagged'
+            else ''
+            for intf in interface
+            ]
+
+        tag_vlan_meb = [
+            vlan_member[intf]['vlan_id']
+            if intf in vlan_member and vlan_member[intf].get('tagging_mode') == 'tagged'
+            else ''
+            for intf in interface
+            ]
+        tabel = list(zip(interface, sw_mode, untag_vlan_memb, tag_vlan_meb))
+        return tabel
 
     header = ['Interface', 'Mode', 'Untagged', 'Tagged']
     click.echo(tabulate(tablelize(keys), header, tablefmt="simple", stralign='left'))
@@ -1148,69 +1174,40 @@ def switchport_mode_config(db):
 @clicommon.pass_db
 def switchport_mode_status(db):
     """Show interface switchport status information"""
-
-    port_data = list(db.cfgdb.get_table('PORT').keys())
+    port_data = db.cfgdb.get_table('PORT')
+    port_keys = list(port_data.keys())
     portchannel_data = list(db.cfgdb.get_table('PORTCHANNEL').keys())
 
     portchannel_member_table = db.cfgdb.get_table('PORTCHANNEL_MEMBER')
-
-    for interface in port_data:
-        if clicommon.interface_is_in_portchannel(portchannel_member_table, interface):
-            port_data.remove(interface)
-
-    keys = port_data + portchannel_data
-
-    def tablelize(keys):
-        table = []
-
-        for key in natsorted(keys):
-            r = [clicommon.get_interface_name_for_display(db, key),
-                 clicommon.get_interface_switchport_mode(db, key)]
-            table.append(r)
-
-        return table
-
-    header = ['Interface', 'Mode']
-    click.echo(tabulate(tablelize(keys), header, tablefmt="simple", stralign='left'))
-
-#
-#  dhcp-mitigation-rate group (show interfaces dhcp-mitigation-rate ...)
-#
-
-
-@interfaces.command(name='dhcp-mitigation-rate')
-@click.argument('interfacename', required=False)
-@clicommon.pass_db
-def dhcp_mitigation_rate(db, interfacename):
-    """Show interface dhcp-mitigation-rate information"""
-
-    ctx = click.get_current_context()
-
-    keys = []
-
-    if interfacename is None:
-        port_data = list(db.cfgdb.get_table('PORT').keys())
-        keys = port_data
-
+    vlan_member_table = db.cfgdb.get_table('VLAN_MEMBER')
+    vlan_member_keys = [key for _, key in vlan_member_table]
+    if portchannel_member_table:
+        filter_port_data = [
+            interface for interface in port_keys
+            if not clicommon.interface_is_in_portchannel(
+                portchannel_member_table, interface
+                )
+            ]
     else:
-        if clicommon.is_valid_port(db.cfgdb, interfacename):
-            pass
-        elif clicommon.is_valid_portchannel(db.cfgdb, interfacename):
-            ctx.fail("{} is a PortChannel!".format(interfacename))
-        else:
-            ctx.fail("{} does not exist".format(interfacename))
+        filter_port_data = port_keys[:]
 
-        keys.append(interfacename)
+    keys = filter_port_data + portchannel_data
 
     def tablelize(keys):
-        table = []
-        for key in natsorted(keys):
-            r = [
-                clicommon.get_interface_name_for_display(db, key),
-                clicommon.get_interface_dhcp_mitigation_rate(db.cfgdb, key)
-                ]
-            table.append(r)
-        return table
+        interface_naming_mode = clicommon.get_interface_naming_mode()
+        natsorted_keys = natsorted(keys)
+        if interface_naming_mode != "alias":
+            interface = natsorted_keys
+        else:
+            interface = clicommon.get_interface_name_for_display(db, natsorted_keys)
+        modes = [
+                clicommon.get_interface_switchport_mode(
+                    db, key, vlan_member_keys, port_data
+                )
+                for key in natsorted_keys
+            ]
+        tabel = list(zip(interface, modes))
+        return tabel
 
     header = ['Interface', 'DHCP Mitigation Rate']
     click.echo(tabulate(tablelize(keys), header, tablefmt="simple", stralign='left'))

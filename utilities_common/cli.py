@@ -506,23 +506,21 @@ def get_interface_tagged_vlan_members(db, interface):
     return "\n".join(formatted_tagged_vlans)
 
 
-def get_interface_switchport_mode(db, interface):
-    port = db.cfgdb.get_entry('PORT', interface)
-    portchannel = db.cfgdb.get_entry('PORTCHANNEL', interface)
-    vlan_member_table = db.cfgdb.get_table('VLAN_MEMBER')
-
-    vlan_member_keys = []
-    for _, key in vlan_member_table:
-        vlan_member_keys.append(key)
-
-    switchport_mode = 'routed'
-    if "mode" in port:
-        switchport_mode = port['mode']
-    elif "mode" in portchannel:
-        switchport_mode = portchannel['mode']
-    elif interface in vlan_member_keys:
-        switchport_mode = 'trunk'
-    return switchport_mode
+def get_interface_switchport_mode(db, interface, vlan_member_keys=None, port=None):
+    if port is None:
+        port = db.cfgdb.get_table('PORT')
+    if "mode" in port[interface]:
+        return port[interface]['mode']
+    elif vlan_member_keys is None:
+        vlan_member_table = db.cfgdb.get_table('VLAN_MEMBER')
+        vlan_member_keys = [key for _, key in vlan_member_table]
+        if interface in vlan_member_keys:
+            return 'trunk'
+    else:
+        portchannel = db.cfgdb.get_entry('PORTCHANNEL', interface)
+        if "mode" in portchannel:
+            return portchannel['mode']
+    return 'routed'
 
 
 def is_port_mirror_dst_port(config_db, port):
