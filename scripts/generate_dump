@@ -349,6 +349,13 @@ copy_from_docker() {
     local dstpath=$3
     local timeout_cmd="timeout --foreground ${TIMEOUT_MIN}m"
 
+    docker ps | grep ${docker}
+    if [ $? != 0 ]
+    then
+        echo "Error: Docker ${docker} not running.  Skipping..."
+        return
+    fi
+
     local touch_cmd="sudo docker exec ${docker} touch ${filename}"
     local cp_cmd="sudo docker cp ${docker}:${filename} ${dstpath}"
 
