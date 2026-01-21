@@ -637,6 +637,20 @@ def status(subinterfacename, verbose):
         cmd += ['-i', 'subport']
     run_command(cmd, display_cmd=verbose)
 
+@cli.group('copp')
+def copp():
+    """ Show COPP"""
+    pass
+
+@copp.command('status')
+def copp_status():
+    """ Shows active COPP entries in the system"""
+
+    cmd = "sonic-db-dump -n 'APPL_DB' -k \"COPP_TABLE:*\" -y | grep -v hash | grep -v expireat | grep -v ttl"
+    proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, shell=True)
+    click.echo(proc.stdout.read())
+    return
+
 #
 # 'pfc' group ("show pfc ...")
 #
