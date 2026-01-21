@@ -1247,11 +1247,3 @@ def delete(ctx, table, rule):
 
     acl_loader.delete(table, rule)
 
-
-if __name__ == "__main__":
-    try:
-        cli()
-    except AclLoaderException as e:
-        error(e)
-    except Exception as e:
-        error("Unknown error: %s" % repr(e))
