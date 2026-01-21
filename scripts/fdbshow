@@ -2,12 +2,12 @@
 
 """
     Script to show MAC/FDB entries learnt in Hardware
-    
+
     usage: fdbshow [-p PORT] [-v VLAN]
     optional arguments:
       -p,  --port              FDB learned on specific port: Ethernet0
       -v,  --vlan              FDB learned on specific Vlan: 1000
-  
+
     Example of the output:
     admin@str~$ fdbshow
       No.    Vlan  MacAddress         Port        Type
@@ -100,9 +100,6 @@ class FdbShow(object):
         self.db.connect(self.db.ASIC_DB)
         self.bridge_mac_list = []
 
-        if not self.if_br_oid_map:
-            return
-        
         fdb_str = self.db.keys(self.db.ASIC_DB, "ASIC_STATE:SAI_OBJECT_TYPE_FDB_ENTRY:*")
         if not fdb_str:
             return
@@ -122,13 +119,16 @@ class FdbShow(object):
             br_port_id = ent["SAI_FDB_ENTRY_ATTR_BRIDGE_PORT_ID"][oid_pfx:]
             ent_type = ent["SAI_FDB_ENTRY_ATTR_TYPE"]
             fdb_type = ['Dynamic','Static'][ent_type == "SAI_FDB_ENTRY_TYPE_STATIC"]
-            if br_port_id not in self.if_br_oid_map:
+            if br_port_id not in self.if_br_oid_map and b"SAI_FDB_ENTRY_ATTR_ENDPOINT_IP" not in ent:
                 continue
-            port_id = self.if_br_oid_map[br_port_id]
-            if port_id in self.if_oid_map:
-                if_name = self.if_oid_map[port_id]
+            if b"SAI_FDB_ENTRY_ATTR_ENDPOINT_IP" in ent and ent[b"SAI_FDB_ENTRY_ATTR_ENDPOINT_IP"]!='0.0.0.0':
+                if_name = "VxLAN DIP: %s" %(ent[b"SAI_FDB_ENTRY_ATTR_ENDPOINT_IP"])
             else:
-                if_name = port_id
+                port_id = self.if_br_oid_map[br_port_id]
+                if port_id in self.if_oid_map:
+                    if_name = self.if_oid_map[port_id]
+                else:
+                    if_name = port_id
             if 'vlan' in fdb:
                 vlan_id = fdb["vlan"]
             else:
