@@ -38,7 +38,9 @@ def nat_interface_name_is_valid(interface_name):
     config_db = ConfigDBConnector()
     config_db.connect()
 
-    if interface_name.startswith("Ethernet"):
+    if interface_name.startswith("Ethernet") and '.' in interface_name:
+        interface_dict = config_db.get_table('VLAN_SUB_INTERFACE')
+    elif interface_name.startswith("Ethernet"):
         interface_dict = config_db.get_table('PORT')
     elif interface_name.startswith("PortChannel"):
         interface_dict = config_db.get_table('PORTCHANNEL')
@@ -972,7 +974,9 @@ def add_interface(ctx, interface_name, nat_zone):
     if nat_interface_name_is_valid(interface_name) is False:
         ctx.fail("Interface name is invalid. Please enter a  valid interface name!!")
 
-    if interface_name.startswith("Ethernet"):
+    if interface_name.startswith("Ethernet") and '.' in interface_name:
+        interface_table_type = "VLAN_SUB_INTERFACE"
+    elif interface_name.startswith("Ethernet"):
         interface_table_type = "INTERFACE"
     elif interface_name.startswith("PortChannel"):
         interface_table_type = "PORTCHANNEL_INTERFACE"
@@ -1005,7 +1009,9 @@ def remove_interface(ctx, interface_name):
     if nat_interface_name_is_valid(interface_name) is False:
         ctx.fail("Interface name is invalid. Please enter a  valid interface name!!")
 
-    if interface_name.startswith("Ethernet"):
+    if interface_name.startswith("Ethernet") and '.' in interface_name:
+        interface_table_type = "VLAN_SUB_INTERFACE"
+    elif interface_name.startswith("Ethernet"):
         interface_table_type = "INTERFACE"
     elif interface_name.startswith("PortChannel"):
         interface_table_type = "PORTCHANNEL_INTERFACE"
@@ -1034,7 +1040,7 @@ def remove_interfaces(ctx):
     config_db = ValidatedConfigDBConnector(ConfigDBConnector())
     config_db.connect()
 
-    tables = ['INTERFACE', 'PORTCHANNEL_INTERFACE', 'VLAN_INTERFACE', 'LOOPBACK_INTERFACE']
+    tables = ['INTERFACE', 'VLAN_SUB_INTERFACE', 'PORTCHANNEL_INTERFACE', 'VLAN_INTERFACE', 'LOOPBACK_INTERFACE']
     nat_config = {"nat_zone": "0"}
 
     for table_name in tables:
