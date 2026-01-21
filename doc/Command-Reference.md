@@ -1192,6 +1192,102 @@ This command displays information for all the interfaces for the transceiver req
                   Vcc : 0.0000Volts
   ```
 
+- Example (Decode and display information stored on the EEPROM of 400ZR QSFP+ transceiver connected to Ethernet0):
+```
+admin@sonic:~$ show interfaces transceiver eeprom --dom Ethernet0
+Ethernet0: SFP EEPROM detected
+        Active Firmware: 3.3.36
+        Active application selected code assigned to host lane 1: 1
+        Active application selected code assigned to host lane 2: 1
+        Active application selected code assigned to host lane 3: 1
+        Active application selected code assigned to host lane 4: 1
+        Active application selected code assigned to host lane 5: 1
+        Active application selected code assigned to host lane 6: 1
+        Active application selected code assigned to host lane 7: 1
+        Active application selected code assigned to host lane 8: 1
+        Application Advertisement: 400GAUI-8 C2M (Annex 120E) - Host Assign (0x1) - 400ZR, DWDM, amplified - Media Assign (0x1)
+                                   100GAUI-2 C2M (Annex 135G) - Host Assign (0x55) - 400ZR, DWDM, amplified - Media Assign (0x1)
+        CMIS Rev: 5.0
+        Connector: LC
+        Encoding: N/A
+        Extended Identifier: Power Class 8 (18.0W Max)
+        Extended RateSelect Compliance: N/A
+        Host Lane Count: 8
+        Identifier: QSFP-DD Double Density 8X Pluggable Transceiver
+        Inactive Firmware: 3.3.36
+        Length Cable Assembly(m): 0.0
+        Media Interface Technology: C-band tunable laser
+        Media Lane Count: 1
+        Module Hardware Rev: 0.0
+        Nominal Bit Rate(100Mbs): N/A
+        Specification compliance: sm_media_interface
+        Supported Max Laser Frequency: 196100
+        Supported Max TX Power: -8.5
+        Supported Min Laser Frequency: 191300
+        Supported Min TX Power: -14.0
+        Vendor Date Code(YYYY-MM-DD Lot): 2024-01-20 
+        Vendor Name: INPHI CORP
+        Vendor OUI: 00-21-b8
+        Vendor PN: IN-Q3JZ1-TC-M1
+        Vendor Rev: 01
+        Vendor SN: L2403D0925C
+        is_replaceable: True
+        type_abbrv_name: QSFP-DD
+        vdm_supported: True
+        ChannelMonitorValues:
+                RX1Power: -8.729dBm
+                RX2Power: -infdBm
+                RX3Power: -infdBm
+                RX4Power: -infdBm
+                RX5Power: -infdBm
+                RX6Power: -infdBm
+                RX7Power: -infdBm
+                RX8Power: -infdBm
+                TX1Bias: 208.0mA
+                TX1Power: -8.492dBm
+                TX2Bias: 0.0mA
+                TX2Power: -infdBm
+                TX3Bias: 0.0mA
+                TX3Power: -infdBm
+                TX4Bias: 0.0mA
+                TX4Power: -infdBm
+                TX5Bias: 0.0mA
+                TX5Power: -infdBm
+                TX6Bias: 0.0mA
+                TX6Power: -infdBm
+                TX7Bias: 0.0mA
+                TX7Power: -infdBm
+                TX8Bias: 0.0mA
+                TX8Power: -infdBm
+        ChannelThresholdValues:
+                RxPowerHighAlarm  : 2.0dBm
+                RxPowerHighWarning: 0.0dBm
+                RxPowerLowAlarm   : -21.024dBm
+                RxPowerLowWarning : -18.013dBm
+                TxBiasHighAlarm   : 450.0mA
+                TxBiasHighWarning : 420.0mA
+                TxBiasLowAlarm    : 100.0mA
+                TxBiasLowWarning  : 110.0mA
+                TxPowerHighAlarm  : -5.0dBm
+                TxPowerHighWarning: -6.0dBm
+                TxPowerLowAlarm   : -16.99dBm
+                TxPowerLowWarning : -16.003dBm
+        ModuleMonitorValues:
+                Requested Laser Frequency: 193100GHz
+                Tx Frequency: 193100.0GHz
+                Temperature: 51.055C
+                Vcc: 3.331Volts
+        ModuleThresholdValues:
+                TempHighAlarm  : 80.0C
+                TempHighWarning: 75.0C
+                TempLowAlarm   : -5.0C
+                TempLowWarning : 0.0C
+                VccHighAlarm   : 3.465Volts
+                VccHighWarning : 3.4Volts
+                VccLowAlarm    : 3.1Volts
+                VccLowWarning  : 3.15Volts
+```
+
 - Example (Decode and display information stored on the EEPROM of SFP transceiver connected to Ethernet16):
   ```
   admin@sonic:~$ show interfaces transceiver info Ethernet16
