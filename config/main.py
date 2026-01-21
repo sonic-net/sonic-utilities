@@ -7831,6 +7831,12 @@ def table(table_name):
     """
     Remove ACL table
     """
+    log.log_info("'config acl remove table {}' executing...".format(table_name))
+    command = "acl-loader delete {}".format(table_name)
+    clicommon.run_command(command)
+    command = "aclshow -cc -t {}".format(table_name)
+    clicommon.run_command(command)
+
     config_db = ConfigDBConnector()
     config_db.connect()
     config_db.set_entry("ACL_TABLE", table_name, None)

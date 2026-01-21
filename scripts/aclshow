@@ -15,6 +15,8 @@ optional arguments:
   -a,  --all                  show all ACL counters
   -r RULES,  --rules RULES    action by specific rules list: Rule_1,Rule_2
   -t TABLES, --tables TABLES  action by specific tables list: Table_1,Table_2
+  -cc, --clearcache           clears ACL counters cache for given rule or rule,table.
+                              Always use with -t or -r
 """
 
 import argparse
@@ -211,11 +213,54 @@ class AclStat(object):
         with open(COUNTERS_CACHE, 'w') as fp:
             json.dump(remap_keys(self.acl_counters), fp)
 
+    def clear_cache_counters(self, table, rule):
+        """
+        clear counters cache -- remove saved counters matching to given table or rule in counter cache file
+        on removing a rule or a table. This command will be invoked from config/main.py on removing
+        a rule or a table. If this is not called during deletion then if a new table is created
+        with same name then the old values in the file will create inconsistency in the output.
+        """
+        def remap_keys_load(list):
+            res = {}
+            for e in list:
+                res[e['key'][0], e['key'][1]] = e['value']
+            return res
+
+        def remap_keys_dump(dict):
+            return [{'key': k, 'value': v} for k, v in dict.items()]
+
+        if os.path.isfile(COUNTERS_CACHE):
+            try:
+                counters_dump = {}
+                new_counters_dump = {}
+                with open(COUNTERS_CACHE) as fp:
+                    counters_dump = remap_keys_load(json.load(fp))
+
+                if rule is not None:
+                    del counters_dump[table,rule]
+                    with open(COUNTERS_CACHE, 'w') as fp:
+                        json.dump(remap_keys_dump(counters_dump), fp)
+
+                else :
+                    new_counters_dump = {k:v for k,v in counters_dump.items() if k[0] != table}
+                    with open(COUNTERS_CACHE, 'w') as fp:
+                        json.dump(remap_keys_dump(new_counters_dump), fp)
+
+            except:
+                pass
+
+    def validate_params(self, table, rule):
+        if table is None:
+            print("Error: Table cannot be NULL")
+            return False
+        return True
+
 def main():
     parser = argparse.ArgumentParser(description='Display SONiC switch Acl Rules and Counters',
                                      formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-a', '--all', action='store_true', help='Show all ACL counters')
     parser.add_argument('-c', '--clear', action='store_true', help='Clear ACL counters statistics')
+    parser.add_argument('-cc', '--clearcache', action='store_true', help='Clear ACL counters from cache eg: aclshow -cc -r RULE -t TABLE, aclshow -cc -t TABLE')
     parser.add_argument('-r', '--rules', type=str, help='action by specific rules list: Rule1_Name,Rule2_Name', default=None)
     parser.add_argument('-t', '--tables', type=str, help='action by specific tables list: Table1_Name,Table2_Name', default=None)
     parser.add_argument('-v', '--version', action='version', version='%(prog)s 1.0')
@@ -225,6 +270,11 @@ def main():
     try:
         acls = AclStat(args.rules, args.tables)
         acls.redis_acl_read(args.verbose)
+        if args.clearcache:
+            if not acls.validate_params(args.tables, args.rules):
+                sys.exit(1)
+            acls.clear_cache_counters(args.tables, args.rules)
+            return
         if args.clear:
             acls.clear_counters()
             return
