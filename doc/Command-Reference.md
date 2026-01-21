@@ -1196,7 +1196,7 @@ This command displays information for all the interfaces for the transceiver req
 ```
 admin@sonic:~$ show interfaces transceiver eeprom --dom Ethernet0
 Ethernet0: SFP EEPROM detected
-        Active Firmware: 3.3.36
+        Active Firmware: X.X
         Active application selected code assigned to host lane 1: 1
         Active application selected code assigned to host lane 2: 1
         Active application selected code assigned to host lane 3: 1
@@ -1214,7 +1214,7 @@ Ethernet0: SFP EEPROM detected
         Extended RateSelect Compliance: N/A
         Host Lane Count: 8
         Identifier: QSFP-DD Double Density 8X Pluggable Transceiver
-        Inactive Firmware: 3.3.36
+        Inactive Firmware: X.X
         Length Cable Assembly(m): 0.0
         Media Interface Technology: C-band tunable laser
         Media Lane Count: 1
@@ -1226,11 +1226,11 @@ Ethernet0: SFP EEPROM detected
         Supported Min Laser Frequency: 191300
         Supported Min TX Power: -14.0
         Vendor Date Code(YYYY-MM-DD Lot): 2024-01-20 
-        Vendor Name: INPHI CORP
-        Vendor OUI: 00-21-b8
-        Vendor PN: IN-Q3JZ1-TC-M1
-        Vendor Rev: 01
-        Vendor SN: L2403D0925C
+        Vendor Name: XXXX
+        Vendor OUI: XXXX
+        Vendor PN: XXXX
+        Vendor Rev: XX
+        Vendor SN: XXXX
         is_replaceable: True
         type_abbrv_name: QSFP-DD
         vdm_supported: True
