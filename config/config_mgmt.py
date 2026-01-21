@@ -915,7 +915,7 @@ class ConfigMgmtDPB(ConfigMgmt):
                     changed = True
                 else:
                     # insert in config by default, remove later if not needed
-                    if isinstance(diff, dict):
+                    if isinstance(config, dict):
                         # config should match type of outp
                         config[key] = type(outp[key])()
                         if _recurCreateConfig(diff[key], inp[key], outp[key], \
@@ -923,7 +923,7 @@ class ConfigMgmtDPB(ConfigMgmt):
                             del config[key]
                         else:
                             changed = True
-                    elif isinstance(diff, list):
+                    elif isinstance(config, list):
                         config.append(key)
                         if _recurCreateConfig(diff[idx], inp[idx], outp[idx], \
                             config[-1]) == False:
