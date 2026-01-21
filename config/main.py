@@ -124,6 +124,18 @@ DOM_CONFIG_SUPPORTED_SUBPORTS = ['0', '1']
 VNET_NAME_MAX_LEN = 15
 GUID_MAX_LEN = 255
 
+ALLOWED_PORT_SPEED_LIST = [1000,  # 1G
+                           2500,  # 2.5G
+                           5000,  # 5G
+                           10000,  # 10G
+                           25000,  # 25G
+                           40000,  # 40G
+                           50000,  # 50G
+                           100000,  # 100G
+                           200000,  # 200G
+                           400000]  # 400G
+
+
 asic_type = None
 
 DSCP_RANGE = click.IntRange(min=0, max=63)
@@ -5006,12 +5018,15 @@ def shutdown(ctx, interface_name):
 @interface.command()
 @click.pass_context
 @click.argument('interface_name', metavar='<interface_name>', required=True)
-@click.argument('interface_speed', metavar='<interface_speed>', required=True)
+@click.argument('interface_speed', metavar='<interface_speed>', required=True, type=click.IntRange(1000, 400000))
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
 def speed(ctx, interface_name, interface_speed, verbose):
     """Set interface speed"""
     # Get the config_db connector
     config_db = ctx.obj['config_db']
+
+    if interface_speed not in ALLOWED_PORT_SPEED_LIST:
+        ctx.fail(f"The speed {interface_speed} is not allowed. Allowed values: {ALLOWED_PORT_SPEED_LIST}")
 
     if clicommon.get_interface_naming_mode() == "alias":
         interface_name = interface_alias_to_name(config_db, interface_name)
