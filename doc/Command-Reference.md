@@ -5777,6 +5777,160 @@ This command is to display the link-training status of the selected interfaces. 
     Ethernet8      trained          on      up       up
   ```
 
+**show interfaces phy**
+
+This command displays Layer 1 physical layer (PHY) diagnostics for interfaces.
+
+The command has two subcommands:
+- `status` - Displays boolean link/signal status indicators (quick health check)
+- `serdes` - Displays analog/digital signal quality metrics (deeper diagnostics)
+
+At least one option must be specified for each subcommand.
+
+**Status Options:**
+
+| Option | SAI Attribute | Description |
+|--------|---------------|-------------|
+| `--rxsig` | `SAI_PORT_ATTR_RX_SIGNAL_DETECT` | RX signal detect per lane |
+| `--fec` | `SAI_PORT_ATTR_FEC_ALIGNMENT_LOCK` | FEC alignment lock per lane |
+| `--pcs` | `SAI_PORT_ATTR_PCS_RX_LINK_STATUS` | PCS RX link status |
+| `--rxlock` | `SAI_PORT_ATTR_RX_LOCK_STATUS` | RX lock status per lane |
+
+**Serdes Options:**
+
+| Option | SAI Attribute | Description |
+|--------|---------------|-------------|
+| `--snr` | `SAI_PORT_ATTR_RX_SNR` | RX Signal-to-Noise Ratio (dB) per lane |
+| `--tx-fir` | `SAI_PORT_SERDES_ATTR_TX_FIR_TAPS_LIST` | TX FIR tap values per lane |
+| `--rx-ffe` | `SAI_PORT_SERDES_ATTR_RX_FFE_TAPS_LIST` | RX FFE tap values per lane |
+| `--rx-dfe` | `SAI_PORT_SERDES_ATTR_RX_DFE_TAPS_LIST` | RX DFE tap values per lane |
+| `--rx-vga` | `SAI_PORT_SERDES_ATTR_RX_VGA` | RX VGA values per lane |
+
+**Status Output Legend:**
+- `T` = True (signal detected / locked)
+- `F` = False (no signal / not locked)
+- `*` suffix = Value changed since last poll (e.g., `T*` means it became True recently)
+
+- Usage:
+  ```
+  show interfaces phy <interface_name> status [--rxsig] [--fec] [--pcs] [--rxlock]
+  show interfaces phy <interface_name> serdes [--snr] [--tx-fir] [--rx-ffe] [--rx-dfe] [--rx-vga]
+  ```
+
+- Example (status with RX signal detect and FEC alignment lock):
+  ```
+  admin@sonic:~$ show interfaces phy Ethernet0 status --rxsig --fec
+  Interface: Ethernet0
+  ================================================================================
+    RX Signal Detect:
+    -------------------------------------------------------------------------
+    Lane:       0      1      2      3
+    Status:     T      T      T*     F
+
+    FEC Alignment Lock:
+    -------------------------------------------------------------------------
+    Lane:       0      1      2      3
+    Status:     T      T      T      T
+  ```
+
+- Example (status with FEC, PCS and lock):
+  ```
+  admin@sonic:~$ show interfaces phy Ethernet0 status --fec --pcs --rxlock
+  Interface: Ethernet0
+  ================================================================================
+    FEC Lane Alignment Lock:
+    -------------------------------------------------------------------------
+    Lane:       0      1      2      3
+    Status:     T      T      T      T
+
+    PCS RX Link Status: T
+
+    RX Lock Status:
+    -------------------------------------------------------------------------
+    Lane:       0      1      2      3
+    Status:     T      T      T*     T
+  ```
+
+- Example (serdes with SNR):
+  ```
+  admin@sonic:~$ show interfaces phy Ethernet0 serdes --snr
+  Interface: Ethernet0
+  ================================================================================
+    RX SNR (dB):
+    -------------------------------------------------------------------------
+    Lane:       0      1      2      3
+    SNR:        15.2   14.8   15.1   14.9
+  ```
+
+- Example (serdes with SNR, TX FIR and RX VGA):
+  ```
+  admin@sonic:~$ show interfaces phy Ethernet0 serdes --snr --tx-fir --rx-vga
+  Interface: Ethernet0
+  ================================================================================
+    RX SNR (dB):
+    -------------------------------------------------------------------------
+    Lane:       0      1      2      3
+    SNR:        15.2   14.8   15.1   14.9
+
+    TX FIR Taps:
+    -------------------------------------------------------------------------
+    Lane   Tap0   Tap1   Tap2   Tap3   Tap4  Tap5  Tap6
+    ----   ----   ----   ----   ----   -----  -----  -----
+    0      -2     6      -26    100    -11    -12    0
+    1      -2     6      -26    100    -11    -12    0
+    2      -2     6      -26    100    -11    -12    0
+    3      -2     6      -26    100    -11    -12    0
+
+    RX VGA:
+    -------------------------------------------------------------------------
+    Lane:       0      1      2      3
+    VGA:        8      8      7      8
+  ```
+
+- Example (serdes with RX FFE and RX DFE taps):
+  ```
+  admin@sonic:~$ show interfaces phy Ethernet0 serdes --rx-ffe --rx-dfe
+  Interface: Ethernet0
+  ================================================================================
+    RX FFE Taps:
+    -------------------------------------------------------------------------
+    Lane   Tap0   Tap1   Tap2   Tap3   Tap4   Tap5
+    ----   ----   ----   ----   ----   ----   ----
+    0      5      -12    8      -3     1      0
+    1      5      -11    8      -3     1      0
+    2      5      -12    8      -3     1      0
+    3      5      -11    8      -3     1      0
+
+    RX DFE Taps:
+    -------------------------------------------------------------------------
+    Lane   Tap0   Tap1   Tap2   Tap3   Tap4
+    ----   ----   ----   ----   ----   ----
+    0      15     -8     4      -2     1
+    1      14     -7     4      -2     1
+    2      15     -8     4      -2     1
+    3      14     -8     4      -2     1
+  ```
+
+- Example (8-lane 400G port):
+  ```
+  admin@sonic:~$ show interfaces phy Ethernet0 status --rx
+  Interface: Ethernet0
+  ================================================================================
+    RX Signal Detect:
+    -------------------------------------------------------------------------
+    Lane:       0      1      2      3      4      5      6      7
+    Status:     T      T      T      T      T      T*     T      F
+  ```
+
+- Example (error when no option specified):
+  ```
+  admin@sonic:~$ show interfaces phy Ethernet0 status
+  Error: At least one option must be specified (--rx, --fec, --pcs, --lock)
+
+  admin@sonic:~$ show interfaces phy Ethernet0 serdes
+  Error: At least one option must be specified (--snr, --tx-fir, --rx-ffe, --rx-dfe, --rx-vga)
+  ```
+
 **show interfaces flap**
 
 The show interfaces flap command provides detailed insights into interface events, including the timestamp of the last link down event and the total flap count (number of times the link has gone up and down). This helps in diagnosing stability and connectivity issues.
