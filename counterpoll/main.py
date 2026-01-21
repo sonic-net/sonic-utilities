@@ -793,6 +793,7 @@ def show(namespace):
     tunnel_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'TUNNEL')
     trap_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'FLOW_CNT_TRAP')
     route_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'FLOW_CNT_ROUTE')
+    copp_stats_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'COPP_STATS')
     eni_info = configdb.get_entry('FLEX_COUNTER_TABLE', ENI)
     ha_set_info = configdb.get_entry('FLEX_COUNTER_TABLE', HA_SET)
     wred_queue_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'WRED_ECN_QUEUE')
@@ -830,6 +831,9 @@ def show(namespace):
     if route_info:
         data.append(["FLOW_CNT_ROUTE_STAT", route_info.get("POLL_INTERVAL", DEFLT_10_SEC),
                      route_info.get("FLEX_COUNTER_STATUS", DISABLE)])
+    if copp_stats_info:
+        data.append(["COPP_STAT", copp_stats_info.get("POLL_INTERVAL", DEFLT_10_SEC),
+                     copp_stats_info.get("FLEX_COUNTER_STATUS", DISABLE)])
     if wred_queue_info:
         data.append(["WRED_ECN_QUEUE_STAT", wred_queue_info.get("POLL_INTERVAL", DEFLT_10_SEC),
                     wred_queue_info.get("FLEX_COUNTER_STATUS", DISABLE)])
