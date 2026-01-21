@@ -7833,6 +7833,12 @@ def table(table_name):
     """
     config_db = ConfigDBConnector()
     config_db.connect()
+
+    rule_keys = config_db.get_keys("ACL_RULE")
+    for key in rule_keys:
+        if key[0] == table_name:
+            config_db.set_entry("ACL_RULE", key, None)
+
     config_db.set_entry("ACL_TABLE", table_name, None)
 
 
