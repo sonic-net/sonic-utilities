@@ -905,6 +905,108 @@ class TestSNMPConfigCommands(object):
         assert ('10.1.0.32', '', '') in db.cfgdb.get_keys('SNMP_AGENT_ADDRESS_CONFIG')
         assert db.cfgdb.get_entry("SNMP_AGENT_ADDRESS_CONFIG", "10.1.0.32||") == {}
 
+    @patch('netifaces.interfaces', mock.Mock(return_value=['eth0']))
+    @patch('netifaces.ifaddresses', mock.Mock(return_value={2:
+                                              [{'addr': '10.1.0.32', 'netmask': '255.255.255.0',
+                                                'broadcast': '10.1.0.255'}],
+                                                10: [{'addr': 'fe80::1', 'netmask': 'ffff:ffff:ffff:ffff::/64'}]}))
+    @patch('os.system', mock.Mock(return_value=0))
+    def test_config_snmpagentaddress_del_ipv4_port_vrf(self):
+        """
+        Test deleting an existing IPv4 SNMP agent address with port and VRF.
+        Ensures the entry is removed from SNMP_AGENT_ADDRESS_CONFIG.
+        """
+        # Initialize an in-memory DB and add a sample entry with IP, port, and VRF
+        db = Db()
+        db.cfgdb.set_entry('SNMP_AGENT_ADDRESS_CONFIG', '10.1.0.32|161|mgmt', {})
+
+        # Build the context object expected by Click
+        obj = {'db': db.cfgdb}
+
+        runner = CliRunner()
+        # Invoke the "del" subcommand on "snmpagentaddress" with IP, --port, and --vrf
+        result = runner.invoke(
+            config.config.commands["snmpagentaddress"].commands["del"],
+            ["10.1.0.32", "--port", "161", "--vrf", "mgmt"],
+            obj=obj
+        )
+
+        # Check CLI exit code (0 means success)
+        assert result.exit_code == 0, f"Unexpected exit code: {result.exit_code}"
+
+        # Verify the DB entry was removed
+        entry = db.cfgdb.get_entry('SNMP_AGENT_ADDRESS_CONFIG', '10.1.0.32|161|mgmt')
+        assert not entry, f"Expected entry to be removed, but found: {entry}"
+
+    @patch('netifaces.interfaces', mock.Mock(return_value=['eth0']))
+    @patch('netifaces.ifaddresses', mock.Mock(return_value={2:
+                                              [{'addr': '10.1.0.32', 'netmask': '255.255.255.0',
+                                                'broadcast': '10.1.0.255'}],
+                                                10: [{'addr': 'fe80::1', 'netmask': 'ffff:ffff:ffff:ffff::/64'}]}))
+    @patch('os.system', mock.Mock(return_value=0))
+    def test_modify_snmptrap_server_v2(self):
+        """
+        Test modifying an SNMP trap server for SNMP version 2.
+        Ensures the correct fields are added or updated in SNMP_TRAP_CONFIG.
+        """
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        runner = CliRunner()
+        # Provide arguments for version=2, server IP, port, VRF, and community
+        result = runner.invoke(
+            config.config.commands["snmptrap"].commands["modify"],
+            ["2", "192.168.100.50", "--port", "4000", "--vrf", "DataVrf", "--comm", "myCommunity"],
+            obj=obj
+        )
+
+        assert result.exit_code == 0, f"Unexpected exit code: {result.exit_code}"
+
+        # Verify the DB entry for v2TrapDest
+        trap_config = db.cfgdb.get_entry('SNMP_TRAP_CONFIG', 'v2TrapDest')
+        expected_config = {
+            "DestIp": "192.168.100.50",
+            "DestPort": "4000",
+            "vrf": "DataVrf",
+            "Community": "myCommunity"
+        }
+        assert trap_config == expected_config, f"Trap config mismatch. Found {trap_config}"
+
+    @patch('netifaces.interfaces', mock.Mock(return_value=['eth0']))
+    @patch('netifaces.ifaddresses', mock.Mock(return_value={2:
+                                              [{'addr': '10.1.0.32', 'netmask': '255.255.255.0',
+                                                'broadcast': '10.1.0.255'}],
+                                                10: [{'addr': 'fe80::1', 'netmask': 'ffff:ffff:ffff:ffff::/64'}]}))
+    @patch('os.system', mock.Mock(return_value=0))
+    def test_delete_snmptrap_server_v3(self):
+        """
+        Test deleting the SNMP trap server configuration for SNMP version 3.
+        Ensures the v3TrapDest entry is removed from SNMP_TRAP_CONFIG.
+        """
+        db = Db()
+        # Seed the DB with a dummy v3TrapDest entry
+        db.cfgdb.mod_entry('SNMP_TRAP_CONFIG', 'v3TrapDest', {
+            "DestIp": "2001:db8::1",
+            "DestPort": "162",
+            "vrf": "mgmt",
+            "Community": "secretCommunity"
+        })
+
+        obj = {'db': db.cfgdb}
+        runner = CliRunner()
+        # Invoke the "del" subcommand on "snmptrap" for version 3
+        result = runner.invoke(
+            config.config.commands["snmptrap"].commands["del"],
+            ["3"],
+            obj=obj
+        )
+
+        assert result.exit_code == 0, f"Unexpected exit code: {result.exit_code}"
+
+        # Verify the DB entry for v3TrapDest has been removed
+        trap_config = db.cfgdb.get_entry('SNMP_TRAP_CONFIG', 'v3TrapDest')
+        assert not trap_config, f"Expected v3TrapDest to be removed, but found: {trap_config}"
+
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
