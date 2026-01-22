@@ -295,7 +295,7 @@ stages:
       displayName: "Download pre-stage built sonic-utilities"
 
     - script: |
-        sudo pip3 install sonic_utilities-1.0-py3-none-any.whl
+        sudo pip3 install sonic_utilities-1.2-py3-none-any.whl
       workingDirectory: $(Build.ArtifactStagingDirectory)/download
       displayName: 'Install sonic-utilities wheel'
 
