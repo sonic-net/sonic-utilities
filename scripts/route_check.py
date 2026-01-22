@@ -877,6 +877,11 @@ def check_routes_for_namespace(namespace):
         # Look for subscribe updates for a second
         adds, deletes = get_subscribe_updates(selector, subs)
 
+    # Release the subscriber. If we keep the subscriber open then route updates will accumulate in the subscriber queue
+    # causing high client memory usage in redis.
+    del subs
+    del selector
+
     # Drop all those for which SET received
     rt_appl_miss, _ = diff_sorted_lists(rt_appl_miss, adds)
 
