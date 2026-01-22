@@ -143,7 +143,8 @@ DOM_MODULE_MONITOR_MAP = {
     'temperature': 'Temperature',
     'voltage': 'Vcc',
     'laser_curr_freq': 'Tx Frequency',
-    'laser_config_freq': 'Requested Laser Frequency'
+    'laser_config_freq': 'Requested Laser Frequency',
+    'tx_config_power': 'Requested Tx Power'
 }
 
 DOM_CHANNEL_THRESHOLD_UNIT_MAP = {
@@ -188,7 +189,8 @@ DOM_VALUE_UNIT_MAP = {
     'temperature': 'C',
     'voltage': 'Volts',
     'laser_curr_freq': 'GHz',
-    'laser_config_freq': 'GHz'
+    'laser_config_freq': 'GHz',
+    'tx_config_power': 'dBm'
 }
 
 QSFP_DD_DOM_VALUE_UNIT_MAP = {
