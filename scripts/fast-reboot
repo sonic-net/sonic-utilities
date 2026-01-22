@@ -51,6 +51,7 @@ EXIT_SONIC_INSTALLER_VERIFY_REBOOT=21
 EXIT_PLATFORM_FW_AU_FAILURE=22
 EXIT_TEAMD_RETRY_COUNT_FAILURE=23
 EXIT_NO_MIRROR_SESSION_ACLS=24
+EXIT_PFC_STORM_DETECTED=25
 EXIT_LEFTOVER_CPA_TUNNEL=30
 
 function error()
@@ -514,6 +515,18 @@ function check_docker_exec()
     done
 }
 
+function check_pfc_storm_active()
+{
+    debug "Checking for active PFC storms..."
+    
+    if pfcwd show stats --check-storm >/dev/null 2>&1; then
+        debug "No active PFC storms detected. Safe to proceed with warm-reboot..."
+    else
+        error "PFC storm detected. Aborting warm-reboot to prevent failure in recovery path..."
+        exit ${EXIT_PFC_STORM_DETECTED}
+    fi
+}
+
 function check_db_integrity()
 {
     if [[ "$REBOOT_TYPE" = "warm-reboot" || "$REBOOT_TYPE" = "fastfast-reboot" || "$REBOOT_TYPE" = "express-reboot" || "$REBOOT_TYPE" = "fast-reboot" ]]; then
@@ -533,6 +546,7 @@ function check_db_integrity()
 
 function reboot_pre_check()
 {
+    check_pfc_storm_active
     check_docker_exec
     # Make sure that the file system is normal: read-write able
     filename="/host/test-$(date +%Y%m%d-%H%M%S)"
@@ -743,7 +757,7 @@ if [[ "$sonic_asic_type" == "mellanox" ]]; then
     MLNX_EXIT_FW_ERROR=100
     MLNX_EXIT_FFB_FAILURE=101
 
-    MLNX_FW_UPGRADE_SCRIPT="/usr/bin/mlnx-fw-upgrade.sh"
+    MLNX_FW_UPGRADE_SCRIPT="/usr/local/bin/mlnx-fw-manager"
 
 
     if [[ "$REBOOT_TYPE" = "fastfast-reboot" ]]; then
@@ -851,7 +865,7 @@ if [ -x ${LOG_SSD_HEALTH} ]; then
 fi
 
 # Stop any timers to prevent any containers starting in the middle of the process.
-TIMERS=$(systemctl list-dependencies --plain sonic-delayed.target | sed 1d)
+TIMERS=$(systemctl list-dependencies --plain sonic.target | sed 1d | grep '.timer$')
 for timer in ${TIMERS}; do
     debug "Stopping ${timer} ..."
     systemctl stop ${timer}
@@ -926,6 +940,11 @@ if [[ "$sonic_asic_type" = 'broadcom' ]];
 then
   service_name=$(systemctl list-units --plain --no-pager --no-legend --type=service | grep opennsl | cut -f 1 -d' ')
   systemctl stop "$service_name"
+fi
+
+if [[ "$sonic_asic_type" = 'clounix' ]];
+then
+  systemctl stop clx-modules.service || debug "Ignore stopping clounix service error $?"
 fi
 
 # Update the reboot cause file to reflect that user issued this script

@@ -11,6 +11,7 @@ import re
 import os
 from sonic_py_common import logger, multi_asic
 from enum import Enum
+from functools import cmp_to_key
 
 YANG_DIR = "/usr/local/yang-models"
 SYSLOG_IDENTIFIER = "GenericConfigUpdater"
@@ -38,8 +39,8 @@ class JsonChange:
     def __init__(self, patch):
         self.patch = patch
 
-    def apply(self, config):
-        return self.patch.apply(config)
+    def apply(self, config, in_place: bool = False):
+        return self.patch.apply(config, in_place)
 
     def __repr__(self):
         return str(self)
@@ -130,9 +131,8 @@ class ConfigWrapper:
         sy = self.create_sonic_yang_with_loaded_models()
 
         try:
+            # Loading data automatically does full validation
             sy.loadData(config_db_as_json)
-
-            sy.validate_data_tree()
             return True, None
         except sonic_yang.SonicYangException as ex:
             return False, ex
@@ -145,12 +145,8 @@ class ConfigWrapper:
                                         self.validate_lanes]
 
         try:
-            tmp_config_db_as_json = copy.deepcopy(config_db_as_json)
-
-            sy.loadData(tmp_config_db_as_json)
-
-            sy.validate_data_tree()
-
+            # Loading data automatically does full validation
+            sy.loadData(config_db_as_json)
             for supplemental_yang_validator in supplemental_yang_validators:
                 success, error = supplemental_yang_validator(config_db_as_json)
                 if not success:
@@ -311,20 +307,27 @@ class ConfigWrapper:
             # TODO: convert string to IpAddress object for better handling of IPs
             # TODO: validate range intersection
             ip_range = peer_group["ip_range"]
+
+            # Use "default" vrf name if not specified
+            name_split = peer_group_name.split('|')
+            vrf_name = name_split[0] if len(name_split) > 1 else "default"
+
             for ip in ip_range:
-                if ip in visited:
-                    return False, f"{ip} is duplicated in BGP_PEER_RANGE: {set([peer_group_name, visited[ip]])}"
-                visited[ip] = peer_group_name
+                key = (ip, vrf_name)
+                if key in visited:
+                    return False, (f"{ip} with vrf {vrf_name} is duplicated in BGP_PEER_RANGE: "
+                                   f"{set([peer_group_name, visited[key]])}")
+                visited[key] = peer_group_name
 
         return True, None
 
     def crop_tables_without_yang(self, config_db_as_json):
         sy = self.create_sonic_yang_with_loaded_models()
 
-        sy.jIn = copy.deepcopy(config_db_as_json)
-
+        # Current sonic-yang-mgmt guarantees _cropConfigDB() will deep copy if
+        # it needs to modify.
+        sy.jIn = config_db_as_json
         sy.tablesWithOutYang = dict()
-
         sy._cropConfigDB()
 
         return sy.jIn
@@ -352,7 +355,7 @@ class ConfigWrapper:
             loaded_models_sy.loadYangModel() # This call takes a long time (100s of ms) because it reads files from disk
             self.sonic_yang_with_loaded_models = loaded_models_sy
 
-        return copy.copy(self.sonic_yang_with_loaded_models)
+        return self.sonic_yang_with_loaded_models
 
 class DryRunConfigWrapper(ConfigWrapper):
     # This class will simulate all read/write operations to ConfigDB on a virtual storage unit.
@@ -361,10 +364,11 @@ class DryRunConfigWrapper(ConfigWrapper):
         self.logger = genericUpdaterLogging.get_logger(title="** DryRun", print_all_to_console=True)
         self.imitated_config_db = copy.deepcopy(initial_imitated_config_db)
 
-    def apply_change_to_config_db(self, change):
+    def apply_change_to_config_db(self, current_config_db: dict, change):
         self._init_imitated_config_db_if_none()
         self.logger.log_notice(f"Would apply {change}")
-        self.imitated_config_db = change.apply(self.imitated_config_db)
+        self.imitated_config_db = change.apply(current_config_db, in_place=True)
+        return self.imitated_config_db
 
     def get_config_db_as_json(self):
         self._init_imitated_config_db_if_none()
@@ -464,11 +468,17 @@ class PathAddressing:
     def __init__(self, config_wrapper=None):
         self.config_wrapper = config_wrapper
 
-    def get_path_tokens(self, path):
-        return JsonPointer(path).parts
+    @staticmethod
+    def get_path_tokens(path):
+        return sonic_yang.SonicYang.configdb_path_split(path)
 
-    def create_path(self, tokens):
-        return JsonPointer.from_parts(tokens).path
+    @staticmethod
+    def create_path(tokens):
+        return sonic_yang.SonicYang.configdb_path_join(tokens)
+
+    @staticmethod
+    def get_xpath_tokens(xpath):
+        return sonic_yang.SonicYang.xpath_split(xpath)
 
     def has_path(self, doc, path):
         return self.get_from_path(doc, path) is not None
@@ -479,95 +489,10 @@ class PathAddressing:
     def is_config_different(self, path, current, target):
         return self.get_from_path(current, path) != self.get_from_path(target, path)
 
-    def get_xpath_tokens(self, xpath):
-        """
-        Splits the given xpath into tokens by '/'.
-
-        Example:
-          xpath: /sonic-vlan:sonic-vlan/VLAN_MEMBER/VLAN_MEMBER_LIST[name='Vlan1000'][port='Ethernet8']/tagging_mode
-          tokens: sonic-vlan:sonic-vlan, VLAN_MEMBER, VLAN_MEMBER_LIST[name='Vlan1000'][port='Ethernet8'], tagging_mode
-        """
-        if xpath == "":
-            raise ValueError("xpath cannot be empty")
-
-        if xpath == "/":
-            return []
-
-        idx = 0
-        tokens = []
-        while idx < len(xpath):
-            end = self._get_xpath_token_end(idx+1, xpath)
-            token = xpath[idx+1:end]
-            tokens.append(token)
-            idx = end
-
-        return tokens
-
-    def _get_xpath_token_end(self, start, xpath):
-        idx = start
-        while idx < len(xpath):
-            if xpath[idx] == PathAddressing.XPATH_SEPARATOR:
-                break
-            elif xpath[idx] == "[":
-                idx = self._get_xpath_predicate_end(idx, xpath)
-            idx = idx+1
-
-        return idx
-
-    def _get_xpath_predicate_end(self, start, xpath):
-        idx = start
-        while idx < len(xpath):
-            if xpath[idx] == "]":
-                break
-            elif xpath[idx] == "'":
-                idx = self._get_xpath_single_quote_str_end(idx, xpath)
-            elif xpath[idx] == '"':
-                idx = self._get_xpath_double_quote_str_end(idx, xpath)
-
-            idx = idx+1
-
-        return idx
-
-    def _get_xpath_single_quote_str_end(self, start, xpath):
-        idx = start+1 # skip first single quote
-        while idx < len(xpath):
-            if xpath[idx] == "'":
-                break
-            # libyang implements XPATH 1.0 which does not escape single quotes
-            # libyang src: https://netopeer.liberouter.org/doc/libyang/master/html/howtoxpath.html
-            # XPATH 1.0 src: https://www.w3.org/TR/1999/REC-xpath-19991116/#NT-Literal
-            idx = idx+1
-
-        return idx
-
-    def _get_xpath_double_quote_str_end(self, start, xpath):
-        idx = start+1 # skip first single quote
-        while idx < len(xpath):
-            if xpath[idx] == '"':
-                break
-            # libyang implements XPATH 1.0 which does not escape double quotes
-            # libyang src: https://netopeer.liberouter.org/doc/libyang/master/html/howtoxpath.html
-            # XPATH 1.0 src: https://www.w3.org/TR/1999/REC-xpath-19991116/#NT-Literal
-            idx = idx+1
-
-        return idx
-
-    def create_xpath(self, tokens):
-        """
-        Creates an xpath by combining the given tokens using '/'
-        Example:
-          tokens: module, container, list[key='value'], leaf
-          xpath: /module/container/list[key='value']/leaf
-        """
-        if len(tokens) == 0:
-            return "/"
-
-        return f"{PathAddressing.XPATH_SEPARATOR}{PathAddressing.XPATH_SEPARATOR.join(str(t) for t in tokens)}"
-
     def _create_sonic_yang_with_loaded_models(self):
         return self.config_wrapper.create_sonic_yang_with_loaded_models()
 
-    def find_ref_paths(self, path, config):
+    def find_ref_paths(self, paths, config, reload_config: bool = True):
         """
         Finds the paths referencing any line under the given 'path' within the given 'config'.
         Example:
@@ -605,25 +530,28 @@ class PathAddressing:
             /ACL_TABLE/EVERFLOW6/ports/1
         """
         # TODO: Also fetch references by must statement (check similar statements)
-        return self._find_leafref_paths(path, config)
-
-    def _find_leafref_paths(self, path, config):
         sy = self._create_sonic_yang_with_loaded_models()
 
-        tmp_config = copy.deepcopy(config)
+        if reload_config:
+            sy.loadData(config)
 
-        sy.loadData(tmp_config)
-
-        xpath = self.convert_path_to_xpath(path, config, sy)
-
-        leaf_xpaths = self._get_inner_leaf_xpaths(xpath, sy)
-
-        ref_xpaths = []
-        for xpath in leaf_xpaths:
-            ref_xpaths.extend(sy.find_data_dependencies(xpath))
+        # Force to be a list
+        if not isinstance(paths, list):
+            paths = [paths]
 
         ref_paths = []
         ref_paths_set = set()
+        ref_xpaths = []
+
+        # Iterate across all paths fetching references
+        for path in paths:
+            xpath = self.convert_path_to_xpath(path, config, sy)
+
+            leaf_xpaths = self._get_inner_leaf_xpaths(xpath, sy)
+            for xpath in leaf_xpaths:
+                ref_xpaths.extend(sy.find_data_dependencies(xpath))
+
+        # For each xpath, convert to configdb path
         for ref_xpath in ref_xpaths:
             ref_path = self.convert_xpath_to_path(ref_xpath, config, sy)
             if ref_path not in ref_paths_set:
@@ -649,457 +577,107 @@ class PathAddressing:
         schema = node.schema()
         return ly.LYS_LEAF == schema.nodetype()
 
-    def convert_path_to_xpath(self, path, config, sy):
+    def convert_path_to_xpath(self, path, config=None, sy=None):
         """
         Converts the given JsonPatch path (i.e. JsonPointer) to XPATH.
         Example:
           path: /VLAN_MEMBER/Vlan1000|Ethernet8/tagging_mode
           xpath: /sonic-vlan:sonic-vlan/VLAN_MEMBER/VLAN_MEMBER_LIST[name='Vlan1000'][port='Ethernet8']/tagging_mode
         """
-        self.convert_xpath_to_path
-        tokens = self.get_path_tokens(path)
-        if len(tokens) == 0:
-            return self.create_xpath(tokens)
+        if sy is None:
+            sy = self._create_sonic_yang_with_loaded_models()
+        return sy.configdb_path_to_xpath(path, configdb=config)
 
-        xpath_tokens = []
-        table = tokens[0]
-
-        cmap = sy.confDbYangMap[table]
-
-        # getting the top level element <module>:<topLevelContainer>
-        xpath_tokens.append(cmap['module']+":"+cmap['topLevelContainer'])
-
-        xpath_tokens.extend(self._get_xpath_tokens_from_container(cmap['container'], 0, tokens, config))
-
-        return self.create_xpath(xpath_tokens)
-
-    def _get_xpath_tokens_from_container(self, model, token_index, path_tokens, config):
-        token = path_tokens[token_index]
-        xpath_tokens = [token]
-
-        if len(path_tokens)-1 == token_index:
-            return xpath_tokens
-
-        # check if the configdb token is referring to a list
-        list_model = self._get_list_model(model, token_index, path_tokens)
-        if list_model:
-            new_xpath_tokens = self._get_xpath_tokens_from_list(list_model, token_index+1, path_tokens, config[path_tokens[token_index]])
-            xpath_tokens.extend(new_xpath_tokens)
-            return xpath_tokens
-
-        # check if it is targetting a child container
-        child_container_model = self._get_model(model.get('container'), path_tokens[token_index+1])
-        if child_container_model:
-            new_xpath_tokens = self._get_xpath_tokens_from_container(child_container_model, token_index+1, path_tokens, config[path_tokens[token_index]])
-            xpath_tokens.extend(new_xpath_tokens)
-            return xpath_tokens
-
-        new_xpath_tokens = self._get_xpath_tokens_from_leaf(model, token_index+1, path_tokens, config[path_tokens[token_index]])
-        xpath_tokens.extend(new_xpath_tokens)
-
-        return xpath_tokens
-
-    def _get_xpath_tokens_from_list(self, model, token_index, path_tokens, config):
-        list_name = model['@name']
-
-        tableKey = path_tokens[token_index]
-        listKeys = model['key']['@value']
-        keyDict = self._extractKey(tableKey, listKeys)
-        keyTokens = [f"[{key}='{keyDict[key]}']" for key in keyDict]
-        item_token = f"{list_name}{''.join(keyTokens)}"
-
-        xpath_tokens = [item_token]
-
-        # if whole list-item is needed i.e. if in the path is not referencing child leaf items
-        # Example:
-        #   path: /VLAN/Vlan1000
-        #   xpath: /sonic-vlan:sonic-vlan/VLAN/VLAN_LIST[name='Vlan1000']
-        if len(path_tokens)-1 == token_index:
-            return xpath_tokens
-
-        type_1_list_model = self._get_type_1_list_model(model)
-        if type_1_list_model:
-            new_xpath_tokens = self._get_xpath_tokens_from_type_1_list(type_1_list_model, token_index+1, path_tokens, config[path_tokens[token_index]])
-            xpath_tokens.extend(new_xpath_tokens)
-            return xpath_tokens
-
-        new_xpath_tokens = self._get_xpath_tokens_from_leaf(model, token_index+1, path_tokens,config[path_tokens[token_index]])
-        xpath_tokens.extend(new_xpath_tokens)
-        return xpath_tokens
-
-    def _get_xpath_tokens_from_type_1_list(self, model, token_index, path_tokens, config):
-        type_1_list_name = model['@name']
-        keyName = model['key']['@value']
-        value = path_tokens[token_index]
-        keyToken = f"[{keyName}='{value}']"
-        itemToken = f"{type_1_list_name}{keyToken}"
-
-        return [itemToken]
-
-    def _get_xpath_tokens_from_leaf(self, model, token_index, path_tokens, config):
-        token = path_tokens[token_index]
-
-        # checking all leaves
-        leaf_model = self._get_model(model.get('leaf'), token)
-        if leaf_model:
-            return [token]
-
-        # checking choice
-        choices = model.get('choice')
-        if choices:
-            for choice in choices:
-                cases = choice['case']
-                for case in cases:
-                    leaf_model = self._get_model(case.get('leaf'), token)
-                    if leaf_model:
-                        return [token]
-
-        # checking leaf-list (i.e. arrays of string, number or bool)
-        leaf_list_model = self._get_model(model.get('leaf-list'), token)
-        if leaf_list_model:
-            # if whole-list is to be returned, just return the token without checking the list items
-            # Example:
-            #   path: /VLAN/Vlan1000/dhcp_servers
-            #   xpath: /sonic-vlan:sonic-vlan/VLAN/VLAN_LIST[name='Vlan1000']/dhcp_servers
-            if len(path_tokens)-1 == token_index:
-                return [token]
-            list_config = config[token]
-            value = list_config[int(path_tokens[token_index+1])]
-            # To get a leaf-list instance with the value 'val'
-            #   /module-name:container/leaf-list[.='val']
-            # Source: Check examples in https://netopeer.liberouter.org/doc/libyang/master/html/howto_x_path.html
-            return [f"{token}[.='{value}']"]
-
-        # checking 'uses' statement
-        if not isinstance(config[token], list): # leaf-list under uses is not supported yet in sonic_yang
-            table = path_tokens[0]
-            uses_leaf_model = self._get_uses_leaf_model(model, table, token)
-            if uses_leaf_model:
-                return [token]
-
-        raise ValueError(f"Path token not found.\n  model: {model}\n  token_index: {token_index}\n  " + \
-                         f"path_tokens: {path_tokens}\n  config: {config}")
-
-    def _extractKey(self, tableKey, keys):
-        keyList = keys.split()
-        # get the value groups
-        value = tableKey.split("|")
-        # match lens
-        if len(keyList) != len(value):
-            raise ValueError("Value not found for {} in {}".format(keys, tableKey))
-        # create the keyDict
-        keyDict = dict()
-        for i in range(len(keyList)):
-            keyDict[keyList[i]] = value[i].strip()
-
-        return keyDict
-
-    def _get_list_model(self, model, token_index, path_tokens):
-        parent_container_name = path_tokens[token_index]
-        clist = model.get('list')
-        # Container contains a single list, just return it
-        # TODO: check if matching also by name is necessary
-        if isinstance(clist, dict):
-            return clist
-
-        if isinstance(clist, list):
-            configdb_values_str = path_tokens[token_index+1]
-            # Format: "value1|value2|value|..."
-            configdb_values = configdb_values_str.split("|")
-            for list_model in clist:
-                yang_keys_str = list_model['key']['@value']
-                # Format: "key1 key2 key3 ..."
-                yang_keys = yang_keys_str.split()
-                # if same number of values and keys, this is the intended list-model
-                # TODO: Match also on types and not only the length of the keys/values
-                if len(yang_keys) == len(configdb_values):
-                    return list_model
-            raise GenericConfigUpdaterError(f"Container {parent_container_name} has multiple lists, "
-                                            f"but none of them match the config_db value {configdb_values_str}")
-
-        return None
-
-    def _get_type_1_list_model(self, model):
-        list_name = model['@name']
-        if list_name not in sonic_yang_ext.Type_1_list_maps_model:
-            return None
-
-        # Type 1 list is expected to have a single inner list model.
-        # No need to check if it is a dictionary of list models.
-        return model.get('list')
-
-    def convert_xpath_to_path(self, xpath, config, sy):
+    def convert_xpath_to_path(self, xpath, config=None, sy=None):
         """
         Converts the given XPATH to JsonPatch path (i.e. JsonPointer).
         Example:
           xpath: /sonic-vlan:sonic-vlan/VLAN_MEMBER/VLAN_MEMBER_LIST[name='Vlan1000'][port='Ethernet8']/tagging_mode
           path: /VLAN_MEMBER/Vlan1000|Ethernet8/tagging_mode
         """
-        tokens = self.get_xpath_tokens(xpath)
-        if len(tokens) == 0:
-            return self.create_path([])
+        if sy is None:
+            sy = self._create_sonic_yang_with_loaded_models()
+        return sy.xpath_to_configdb_path(xpath, config)
 
-        if len(tokens) == 1:
-            raise GenericConfigUpdaterError("xpath cannot be just the module-name, there is no mapping to path")
+    def configdb_sort_cmp(self, a, b):
+        # Order first by number of backlinks
+        cmp = a["backlinks"] - b["backlinks"]
+        if cmp != 0:
+            return cmp
 
-        table = tokens[1]
-        cmap = sy.confDbYangMap[table]
+        # Then order (in reverse!) by musts
+        cmp = b["musts"] - a["musts"]
+        if cmp != 0:
+            return cmp
 
-        path_tokens = self._get_path_tokens_from_container(cmap['container'], 1, tokens, config)
-        return self.create_path(path_tokens)
+        # Finally, if we differ by number of separators, a lot of times the
+        # one with fewer separators wins.  Hopefully the 'musts' will catch
+        # this anyhow.
+        cmp = a["nsep"] - b["nsep"]
+        return cmp
 
-    def _get_path_tokens_from_container(self, model, token_index, xpath_tokens, config):
-        token = xpath_tokens[token_index]
-        path_tokens = [token]
-
-        if len(xpath_tokens)-1 == token_index:
-            return path_tokens
-
-        # check child list
-        list_name = xpath_tokens[token_index+1].split("[")[0]
-        list_model = self._get_model(model.get('list'), list_name)
-        if list_model:
-            new_path_tokens = self._get_path_tokens_from_list(list_model, token_index+1, xpath_tokens, config[token])
-            path_tokens.extend(new_path_tokens)
-            return path_tokens
-
-        container_name = xpath_tokens[token_index+1]
-        container_model = self._get_model(model.get('container'), container_name)
-        if container_model:
-            new_path_tokens = self._get_path_tokens_from_container(container_model, token_index+1, xpath_tokens, config[token])
-            path_tokens.extend(new_path_tokens)
-            return path_tokens
-
-        new_path_tokens = self._get_path_tokens_from_leaf(model, token_index+1, xpath_tokens, config[token])
-        path_tokens.extend(new_path_tokens)
-
-        return path_tokens
-
-    def _get_path_tokens_from_list(self, model, token_index, xpath_tokens, config):
-        token = xpath_tokens[token_index]
-        key_dict = self._extract_key_dict(token)
-
-        # If no keys specified return empty tokens, as we are already inside the correct table.
-        # Also note that the list name in SonicYang has no correspondence in ConfigDb and is ignored.
-        # Example where VLAN_MEMBER_LIST has no specific key/value:
-        #   xpath: /sonic-vlan:sonic-vlan/VLAN_MEMBER/VLAN_MEMBER_LIST
-        #   path: /VLAN_MEMBER
-        if not(key_dict):
-            return []
-
-        listKeys = model['key']['@value']
-        key_list = listKeys.split()
-
-        if len(key_list) != len(key_dict):
-            raise GenericConfigUpdaterError(f"Keys in configDb not matching keys in SonicYang. ConfigDb keys: {key_dict.keys()}. SonicYang keys: {key_list}")
-
-        values = [key_dict[k] for k in key_list]
-        path_token = '|'.join(values)
-        path_tokens = [path_token]
-
-        if len(xpath_tokens)-1 == token_index:
-            return path_tokens
-
-        next_token = xpath_tokens[token_index+1]
-        # if the target node is a key, then it does not have a correspondene to path.
-        # Just return the current 'key1|key2|..' token as it already refers to the keys
-        # Example where the target node is 'name' which is a key in VLAN_MEMBER_LIST:
-        #   xpath: /sonic-vlan:sonic-vlan/VLAN_MEMBER/VLAN_MEMBER_LIST[name='Vlan1000'][port='Ethernet8']/name
-        #   path: /VLAN_MEMBER/Vlan1000|Ethernet8
-        if next_token in key_dict:
-            return path_tokens
-
-        type_1_list_model = self._get_type_1_list_model(model)
-        if type_1_list_model:
-            new_path_tokens = self._get_path_tokens_from_type_1_list(type_1_list_model, token_index+1, xpath_tokens, config[path_token])
-            path_tokens.extend(new_path_tokens)
-            return path_tokens
-
-        new_path_tokens = self._get_path_tokens_from_leaf(model, token_index+1, xpath_tokens, config[path_token])
-        path_tokens.extend(new_path_tokens)
-        return path_tokens
-
-    def _get_path_tokens_from_type_1_list(self, model, token_index, xpath_tokens, config):
-        type_1_inner_list_name = model['@name']
-
-        token = xpath_tokens[token_index]
-        list_tokens = token.split("[", 1) # split once on the first '[', first element will be the inner list name
-        inner_list_name = list_tokens[0]
-
-        if type_1_inner_list_name != inner_list_name:
-            raise GenericConfigUpdaterError(f"Type 1 inner list name '{type_1_inner_list_name}' does match xpath inner list name '{inner_list_name}'.")
-
-        key_dict = self._extract_key_dict(token)
-
-        # If no keys specified return empty tokens, as we are already inside the correct table.
-        # Also note that the type 1 inner list name in SonicYang has no correspondence in ConfigDb and is ignored.
-        # Example where VLAN_MEMBER_LIST has no specific key/value:
-        #   xpath: /sonic-dot1p-tc-map:sonic-dot1p-tc-map/DOT1P_TO_TC_MAP/DOT1P_TO_TC_MAP_LIST[name='Dot1p_to_tc_map1']/DOT1P_TO_TC_MAP
-        #   path: /DOT1P_TO_TC_MAP/Dot1p_to_tc_map1
-        if not(key_dict):
-            return []
-
-        if len(key_dict) > 1:
-            raise GenericConfigUpdaterError(f"Type 1 inner list should have only 1 key in xpath, {len(key_dict)} specified. Key dictionary: {key_dict}")
-
-        keyName = next(iter(key_dict.keys()))
-        value = key_dict[keyName]
-
-        path_tokens = [value]
-
-        # If this is the last xpath token, return the path tokens we have built so far, no need for futher checks
-        # Example:
-        #   xpath: /sonic-dot1p-tc-map:sonic-dot1p-tc-map/DOT1P_TO_TC_MAP/DOT1P_TO_TC_MAP_LIST[name='Dot1p_to_tc_map1']/DOT1P_TO_TC_MAP[dot1p='2']
-        #   path: /DOT1P_TO_TC_MAP/Dot1p_to_tc_map1/2
-        if token_index+1 >= len(xpath_tokens):
-            return path_tokens
-
-        # Checking if the next_token is actually a child leaf of the inner type 1 list, for which case
-        # just ignore the token, and return the already created ConfigDb path pointing to the whole object
-        # Example where the leaf specified is the key:
-        #   xpath: /sonic-dot1p-tc-map:sonic-dot1p-tc-map/DOT1P_TO_TC_MAP/DOT1P_TO_TC_MAP_LIST[name='Dot1p_to_tc_map1']/DOT1P_TO_TC_MAP[dot1p='2']/dot1p
-        #   path: /DOT1P_TO_TC_MAP/Dot1p_to_tc_map1/2
-        # Example where the leaf specified is not the key:
-        #   xpath: /sonic-dot1p-tc-map:sonic-dot1p-tc-map/DOT1P_TO_TC_MAP/DOT1P_TO_TC_MAP_LIST[name='Dot1p_to_tc_map1']/DOT1P_TO_TC_MAP[dot1p='2']/tc
-        #   path: /DOT1P_TO_TC_MAP/Dot1p_to_tc_map1/2
-        next_token = xpath_tokens[token_index+1]
-        leaf_model = self._get_model(model.get('leaf'), next_token)
-        if leaf_model:
-            return path_tokens
-
-        raise GenericConfigUpdaterError(f"Type 1 inner list '{type_1_inner_list_name}' does not have a child leaf named '{next_token}'")
-
-    def _get_path_tokens_from_leaf(self, model, token_index, xpath_tokens, config):
-        token = xpath_tokens[token_index]
-
-        # checking all leaves
-        leaf_model = self._get_model(model.get('leaf'), token)
-        if leaf_model:
-            return [token]
-
-        # checking choices
-        choices = model.get('choice')
-        if choices:
-            for choice in choices:
-                cases = choice['case']
-                for case in cases:
-                    leaf_model = self._get_model(case.get('leaf'), token)
-                    if leaf_model:
-                        return [token]
-
-        # checking leaf-list
-        leaf_list_tokens = token.split("[", 1) # split once on the first '[', a regex is used later to fetch keys/values
-        leaf_list_name = leaf_list_tokens[0]
-        leaf_list_model = self._get_model(model.get('leaf-list'), leaf_list_name)
-        if leaf_list_model:
-            # if whole-list is to be returned, just return the list-name without checking the list items
-            # Example:
-            #   xpath: /sonic-vlan:sonic-vlan/VLAN/VLAN_LIST[name='Vlan1000']/dhcp_servers
-            #   path: /VLAN/Vlan1000/dhcp_servers
-            if len(leaf_list_tokens) == 1:
-                return [leaf_list_name]
-            leaf_list_pattern = "^[^\[]+(?:\[\.='([^']*)'\])?$"
-            leaf_list_regex = re.compile(leaf_list_pattern)
-            match = leaf_list_regex.match(token)
-            # leaf_list_name = match.group(1)
-            leaf_list_value = match.group(1)
-            list_config = config[leaf_list_name]
-            # Workaround for those fields who is defined as leaf-list in YANG model but have string value in config DB
-            # No need to lookup the item index in ConfigDb since the list is represented as a string, return path to string immediately
-            # Example:
-            #   xpath: /sonic-buffer-port-egress-profile-list:sonic-buffer-port-egress-profile-list/BUFFER_PORT_EGRESS_PROFILE_LIST/BUFFER_PORT_EGRESS_PROFILE_LIST_LIST[port='Ethernet9']/profile_list[.='egress_lossy_profile']
-            #   path: /BUFFER_PORT_EGRESS_PROFILE_LIST/Ethernet9/profile_list
-            if isinstance(list_config, str):
-                return [leaf_list_name]
-
-            if not isinstance(list_config, list):
-                raise ValueError(f"list_config is expected to be of type list or string. Found {type(list_config)}.\n  " + \
-                                 f"model: {model}\n  token_index: {token_index}\n  " + \
-                                 f"xpath_tokens: {xpath_tokens}\n  config: {config}")
-
-            list_idx = list_config.index(leaf_list_value)
-            return [leaf_list_name, list_idx]
-
-        # checking 'uses' statement
-        if not isinstance(config[leaf_list_name], list):  # leaf-list under uses is not supported yet in sonic_yang
-            table = xpath_tokens[1]
-            uses_leaf_model = self._get_uses_leaf_model(model, table, token)
-            if uses_leaf_model:
-                return [token]
-
-        raise ValueError(f"Xpath token not found.\n  model: {model}\n  token_index: {token_index}\n  " + \
-                         f"xpath_tokens: {xpath_tokens}\n  config: {config}")
-
-    def _extract_key_dict(self, list_token):
-        # Example: VLAN_MEMBER_LIST[name='Vlan1000'][port='Ethernet8']
-        # the groups would be ('VLAN_MEMBER'), ("[name='Vlan1000'][port='Ethernet8']")
-        table_keys_pattern = "^([^\[]+)(.*)$"
-        text = list_token
-        table_keys_regex = re.compile(table_keys_pattern)
-        match = table_keys_regex.match(text)
-        # list_name = match.group(1)
-        all_key_value = match.group(2)
-
-        # Example: [name='Vlan1000'][port='Ethernet8']
-        # the findall groups would be ('name', 'Vlan1000'), ('port', 'Ethernet8')
-        key_value_pattern = "\[([^=]+)='([^']*)'\]"
-        matches = re.findall(key_value_pattern, all_key_value)
-        key_dict = {}
-        for item in matches:
-            key = item[0]
-            value = item[1]
-            key_dict[key] = value
-
-        return key_dict
-
-    def _get_model(self, model, name):
-        if isinstance(model, dict) and model['@name'] == name:
-            return model
-        if isinstance(model, list):
-            for submodel in model:
-                if submodel['@name'] == name:
-                    return submodel
-
-        return None
-
-    def _get_uses_leaf_model(self, model, table, token):
+    def configdb_sorted_keys_by_backlinks(self, configdb_path: str, configdb: dict, reverse: bool = False,
+                                          configdb_relative: bool = False, sy=None):
         """
-          Getting leaf model in uses model matching the given token.
+        Given a path and a config, iterates across all keys at the path location
+        to look up the number of backlinks per key, then returns the keys sorted
+        by backlinks in acending order by default (set reverse=True to use descending order)
+
+        The configdb is only used to look up the keys at the given path, it is not
+        loaded into the context.  The sort is not performed by actual references
+        to the key in data, but rather the "potential" number of references based
+        on the schema alone.
+
+        If configdb_relative=True then we will use the provided configdb ptr
+        directly instead of using the configdb_path parameter to find the proper
+        position.
         """
-        uses_s = model.get('uses')
-        if not uses_s:
-            return None
 
-        # a model can be a single dict or a list of dictionaries, unify to a list of dictionaries
-        if not isinstance(uses_s, list):
-            uses_s = [uses_s]
+        if sy is None and self.config_wrapper is not None:
+            sy = self._create_sonic_yang_with_loaded_models()
 
-        sy = self._create_sonic_yang_with_loaded_models()
-        # find yang module for current table
-        table_module = sy.confDbYangMap[table]['yangModule']
-        # uses Example: "@name": "bgpcmn:sonic-bgp-cmn"
-        for uses in uses_s:
-            if not isinstance(uses, dict):
-                raise GenericConfigUpdaterError(f"'uses' is expected to be a dictionary found '{type(uses)}'.\n" \
-                                                f"  uses: {uses}\n  model: {model}\n  table: {table}\n  token: {token}")
+        # Traverse configdb to find the right pointer
+        ptr = configdb
+        tokens = self.get_path_tokens(configdb_path)
+        if not configdb_relative:
+            for token in tokens:
+                ptr = ptr[token]
 
-            # Assume ':'  means reference to another module
-            if ':' in uses['@name']:
-                name_parts = uses['@name'].split(':')
-                prefix = name_parts[0].strip()
-                uses_module_name = sy._findYangModuleFromPrefix(prefix, table_module)
-                grouping = name_parts[-1].strip()
+        # Test cases expect non-sorted and config_wrapper isn't set.
+        if self.config_wrapper is None:
+            return [key for key in ptr]
+
+        keys = []
+        # Enumerate all keys and retrieve backlinks, store in a list of dictionaries for sorting
+        for key in ptr:
+            tokens.append(key)
+            path = self.create_path(tokens)
+            try:
+                xpath = sy.configdb_path_to_xpath(path, schema_xpath=True)
+            except KeyError:
+                # Test cases use invalid tables, so we have to handle that even
+                # though it shouldn't be possible in live code as tables without
+                # yang are trimmed
+                keys.append({
+                            "key": key,
+                            "backlinks": 0,
+                            "musts": 0,
+                            "nsep": 0
+                            })
             else:
-                uses_module_name = table_module['@name']
-                grouping = uses['@name']
+                keys.append({
+                            "key": key,
+                            "backlinks": len(sy.find_schema_dependencies(xpath, match_ancestors=True)),
+                            "musts": sy.find_schema_must_count(xpath, match_ancestors=True),
+                            "nsep": str(key).count("|")
+                            })
+            tokens.pop()
 
-            leafs = sy.preProcessedYang['grouping'][uses_module_name][grouping]
+        # Sort list of keys by count
+        keys = sorted(keys, key=cmp_to_key(self.configdb_sort_cmp), reverse=reverse)
 
-            leaf_model = self._get_model(leafs, token)
-            if leaf_model:
-                return leaf_model
-
-        return None
+        # Caller doesn't care about the count, just that the list of keys is ordered
+        return [d['key'] for d in keys]
 
 class TitledLogger(logger.Logger):
     def __init__(self, syslog_identifier, title, verbose, print_all_to_console):

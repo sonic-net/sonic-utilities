@@ -9,7 +9,7 @@ from utilities_common.db import Db
 
 SUB_INTF_ON_LAG_MEMBER_ERR="""\
 Usage: add [OPTIONS] <subinterface_name> <vid>
-Try "add --help" for help.
+Try 'add --help' for help.
 
 Error: Ethernet32 is configured as a member of portchannel. Cannot configure subinterface
 """

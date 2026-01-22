@@ -3428,12 +3428,15 @@ This command is used to show ipv4 dhcp_relay helper.
 - Example:
   ```
   admin@sonic:~$ show dhcp_relay ipv4 helper
-  --------  ---------
-  Vlan1000  192.0.0.1
-            192.0.0.2
-  --------  ---------
-  ```
-
+  +-------------+----------------------+
+  |   Interface |   DHCP Relay Address |
+  +=============+======================+
+  |   Vlan1000  |        192.0.0.1     |
+  |             |        192.0.0.2     |
+  |             |        192.0.0.3     |
+  |             |        192.0.0.4     |
+  +-------------+----------------------+
+  ```  
 **show dhcp_relay ipv6 destination**
 
 This command is used to show ipv6 dhcp_relay destination.
@@ -3446,12 +3449,14 @@ This command is used to show ipv6 dhcp_relay destination.
 - Example:
   ```
   admin@sonic:~$ show dhcp_relay ipv6 destination
-  --------  ------------
-  Vlan1000  fc02:2000::1
-            fc02:2000::2
-            fc02:2000::3
-            fc02:2000::4
-  --------  ------------
+  +-------------+---------------------+
+  |  Interface  |  DHCP Relay Address |
+  +=============+=====================+
+  |  Vlan1000   |       fc02:2000::1  |
+  |             |       fc02:2000::2  |
+  |             |       fc02:2000::3  |
+  |             |       fc02:2000::4  |
+  +-------------+---------------------+
   ```
 
 **show dhcp_relay ipv6 counters**
@@ -3734,18 +3739,11 @@ This command is used to show dhcp_server ip range.
 - Example
   ```
   show dhcp_server ipv4 range range_1
-  +-------------+-------------+-------------+---------+
-  |IP Range Name |IP Start     |IP End       |IP count |
-  |--------------+-------------+-------------+---------+
-  |range_1        |192.168.0.5  |192.168.0.10 |6        |
-  +--------------+-------------+-------------+---------+
-
-  admin@bjw-can-720dt-2:~$ show dhcp_server ipv4 range range_1
-  +---------+-------------+-------------+------------+
-  | Range   | IP Start    | IP End      |   IP Count |
-  +=========+=============+=============+============+
-  | range_1 | 192.168.0.2 | 192.168.0.2 |          1 |
-  +---------+-------------+-------------+------------+
+  +---------+-------------+--------------+------------+
+  | Range   | IP Start    | IP End       |   IP Count |
+  +=========+=============+==============+============+
+  | range_1 | 192.168.0.5 | 192.168.0.10 |          6 |
+  +---------+-------------+--------------+------------+
 
   show dhcp_server ipv4 range 
   +---------+-------------+--------------+------------+
@@ -5649,12 +5647,42 @@ The "fec-stats" subcommand is used to disply the interface fec related statistic
 - Example:
   ```
   admin@ctd615:~$ show interfaces counters fec-stats
-        IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER    FEC_PRE_BER_MAX
-  -----------  -------  ----------  ------------  ----------------  -------------  --------------    ---------------
-   Ethernet0        U           0             0                 0        1.48e-20        0.00e+00           1.78e-16
-   Ethernet8        U           0             0                 0        1.98e-19        0.00e+00           1.67e-14
-  Ethernet16        U           0             0                 0        1.77e-20        0.00e+00           1.37e-13
+        IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER    FEC_PRE_BER_MAX    FLR(O)    FLR(P) (Accuracy)    FEC_MAX_T
+  -----------  -------  ----------  ------------  ----------------  -------------  --------------    ---------------  --------  -------------------  -----------
+   Ethernet0        U           0             0                 0        1.48e-20        0.00e+00           1.78e-16  4.31e-10       7.81e-10 (89%)      2.34e-05
+   Ethernet8        U           0             0                 0        1.98e-19        0.00e+00           1.67e-14         0       4.81e-10 (84%)      1.87e-05
+  Ethernet16        U           0             0                 0        1.77e-20        0.00e+00           1.37e-13  1.24e-10       6.03e-09 (79%)      3.12e-05
   ```
+
+  FEC_MAX_T - Is the maximum NON-ZERO FEC histogram BIN (starting from Bin0). -1 indicates the value is invalid (For eg during link down)
+
+For debugging link related issues where you need to clear the FEC histogram and monitor the link again, use the following command
+
+- Example (for all ports):
+  ```
+  root@sonic:~# portstat -fh 
+  Last cached time was 2025-10-02T16:43:57.934081
+        IFACE           BIN0        BIN1       BIN2    BIN3    BIN4    BIN5    BIN6    BIN7    BIN8    BIN9    BIN10    BIN11    BIN12    BIN13    BIN14    BIN15
+  -----------  -------------  ----------  ---------  ------  ------  ------  ------  ------  ------  ------  -------  -------  -------  -------  -------  -------
+    Ethernet0  4,374,661,575         340          1       0       0       0       0       0       0       0        0        0        0        0        0        0
+    Ethernet8  4,374,590,263       8,069          9       0       0       0       0       0       0       0        0        0        0        0        0        0
+   Ethernet16  4,374,660,911       3,187          4       0       0       0       0       0       0       0        0        0        0        0        0        0
+   Ethernet24  4,374,594,305      57,484        502       0       0       0       0       0       0       0        0        0        0        0        0        0
+   Ethernet32  4,374,649,615         116          0       0       0       0       0       0       0       0        0        0        0        0        0        0
+   Ethernet40  4,374,650,913       1,212          1       0       0       0       0       0       0       0        0        0        0        0        0        0
+  ```
+
+ - Example (for a particular port):
+  ```
+  root@sonic:~# portstat -fh -i Ethernet504
+  Last cached time was 2025-10-02T16:43:57.934081
+        IFACE         BIN0    BIN1    BIN2    BIN3    BIN4    BIN5    BIN6    BIN7    BIN8    BIN9    BIN10    BIN11    BIN12    BIN13    BIN14    BIN15
+  -----------  -----------  ------  ------  ------  ------  ------  ------  ------  ------  ------  -------  -------  -------  -------  -------  -------
+  Ethernet504  624,891,017  13,331     172       0       0       0       0       0       0       0        0        0        0        0        0        0
+  root@str-7060x6-c09-u25:~#
+  ``` 
+
+  To clear the FEC histogram use `portstat -c`. NOTE: This will clear all counters. 
 
 The "trim" subcommand is used to display the interface packet trimming related statistic.
 

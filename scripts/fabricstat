@@ -381,11 +381,11 @@ class FabricIsolation(FabricStat):
                 port_dict.update({port_number: port_data})
         # Create ordered table of fabric ports.
         header = ["Local Link", "Auto Isolated", "Manual Isolated", "Isolated"]
-        auto_isolated = 0
-        manual_isolated = 0
-        isolated = 0
         body = []
         for port_number in sorted(port_dict.keys()):
+            auto_isolated = 0
+            manual_isolated = 0
+            isolated = 0
             port_data = port_dict[port_number]
             if "AUTO_ISOLATED" in port_data:
                 auto_isolated = port_data["AUTO_ISOLATED"]

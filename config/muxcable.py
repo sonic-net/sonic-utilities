@@ -277,14 +277,52 @@ def lookup_statedb_and_update_configdb(db, per_npu_statedb, config_db, port, sta
             port_status_dict[port_name] = 'OK'
 
 def update_configdb_pck_loss_data(config_db, port, val):
+    fvs = {}
     configdb_state = get_value_for_key_in_config_tbl(config_db, port, "state", "MUX_CABLE")
+    fvs["state"] = configdb_state
     ipv4_value = get_value_for_key_in_config_tbl(config_db, port, "server_ipv4", "MUX_CABLE")
+    fvs["server_ipv4"] = ipv4_value
     ipv6_value = get_value_for_key_in_config_tbl(config_db, port, "server_ipv6", "MUX_CABLE")
+    fvs["server_ipv6"] = ipv6_value
+    soc_ipv4_value = get_optional_value_for_key_in_config_tbl(config_db, port, "soc_ipv4", "MUX_CABLE")
+    if soc_ipv4_value is not None:
+        fvs["soc_ipv4"] = soc_ipv4_value
+    cable_type = get_optional_value_for_key_in_config_tbl(config_db, port, "cable_type", "MUX_CABLE")
+    if cable_type is not None:
+        fvs["cable_type"] = cable_type
+    prober_type_val = get_optional_value_for_key_in_config_tbl(config_db, port, "prober_type", "MUX_CABLE")
+    if prober_type_val is not None:
+        fvs["prober_type"] = prober_type_val
 
+    fvs["pck_loss_data_reset"] = val
     try:
-        config_db.set_entry("MUX_CABLE", port, {"state": configdb_state,
-                                                "server_ipv4": ipv4_value, "server_ipv6": ipv6_value, 
-                                                "pck_loss_data_reset": val})
+        config_db.set_entry("MUX_CABLE", port, fvs)
+    except ValueError as e:
+        ctx = click.get_current_context()
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+
+def update_configdb_prober_type(config_db, port, val):
+    fvs = {}
+    configdb_state = get_value_for_key_in_config_tbl(config_db, port, "state", "MUX_CABLE")
+    fvs["state"] = configdb_state
+    ipv4_value = get_value_for_key_in_config_tbl(config_db, port, "server_ipv4", "MUX_CABLE")
+    fvs["server_ipv4"] = ipv4_value
+    ipv6_value = get_value_for_key_in_config_tbl(config_db, port, "server_ipv6", "MUX_CABLE")
+    fvs["server_ipv6"] = ipv6_value
+    soc_ipv4_value = get_optional_value_for_key_in_config_tbl(config_db, port, "soc_ipv4", "MUX_CABLE")
+    if soc_ipv4_value is not None:
+        fvs["soc_ipv4"] = soc_ipv4_value
+    cable_type = get_optional_value_for_key_in_config_tbl(config_db, port, "cable_type", "MUX_CABLE")
+    if cable_type is not None:
+        fvs["cable_type"] = cable_type
+    pck_loss_data = get_optional_value_for_key_in_config_tbl(config_db, port, "pck_loss_data_reset", "MUX_CABLE")
+    if pck_loss_data is not None:
+        fvs["pck_loss_data_reset"] = pck_loss_data
+
+    fvs["prober_type"] = val
+    try:
+        config_db.set_entry("MUX_CABLE", port, fvs)
     except ValueError as e:
         ctx = click.get_current_context()
         ctx.fail("Invalid ConfigDB. Error: {}".format(e))
@@ -381,6 +419,73 @@ def mode(db, state, port, json_output):
         sys.exit(CONFIG_SUCCESSFUL)
 
 
+# 'muxcable' command ("config muxcable probertype hardware/software <port|all>")
+@muxcable.command()
+@click.argument('probertype', metavar='<operation_status>', required=True, type=click.Choice(["hardware", "software"]))
+@click.argument('port', metavar='<port_name>', required=True, default=None)
+@clicommon.pass_db
+def probertype(db, probertype, port):
+    """Config muxcable probertype"""
+
+    port = platform_sfputil_helper.get_interface_name(port, db)
+
+    port_table_keys = {}
+    y_cable_asic_table_keys = {}
+    per_npu_configdb = {}
+    per_npu_statedb = {}
+
+    # Getting all front asic namespace and correspding config and state DB connector
+
+    namespaces = multi_asic.get_front_end_namespaces()
+    for namespace in namespaces:
+        asic_id = multi_asic.get_asic_index_from_namespace(namespace)
+        # replace these with correct macros
+        per_npu_configdb[asic_id] = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
+        per_npu_configdb[asic_id].connect()
+        per_npu_statedb[asic_id] = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
+        per_npu_statedb[asic_id].connect(per_npu_statedb[asic_id].STATE_DB)
+
+        port_table_keys[asic_id] = per_npu_statedb[asic_id].keys(
+            per_npu_statedb[asic_id].STATE_DB, 'MUX_CABLE_TABLE|*')
+
+    if port is not None and port != "all":
+
+        asic_index = None
+        if platform_sfputil is not None:
+            asic_index = platform_sfputil.get_asic_id_for_logical_port(port)
+        if asic_index is None:
+            # TODO this import is only for unit test purposes, and should be removed once sonic_platform_base
+            # is fully mocked
+            import sonic_platform_base.sonic_sfp.sfputilhelper
+            asic_index = sonic_platform_base.sonic_sfp.sfputilhelper.SfpUtilHelper().get_asic_id_for_logical_port(port)
+            if asic_index is None:
+                click.echo("Got invalid asic index for port {}, cant retreive mux status".format(port))
+                sys.exit(CONFIG_FAIL)
+
+        if per_npu_statedb[asic_index] is not None:
+            y_cable_asic_table_keys = port_table_keys[asic_index]
+            logical_key = "MUX_CABLE_TABLE|{}".format(port)
+            if logical_key in y_cable_asic_table_keys:
+                update_configdb_prober_type(per_npu_configdb[asic_index], port, probertype)
+                sys.exit(CONFIG_SUCCESSFUL)
+            else:
+                click.echo("this is not a valid port {} present on mux_cable".format(port))
+                sys.exit(CONFIG_FAIL)
+        else:
+            click.echo("there is not a valid asic asic-{} table for this asic_index".format(asic_index))
+            sys.exit(CONFIG_FAIL)
+
+    elif port == "all" and port is not None:
+
+        for namespace in namespaces:
+            asic_id = multi_asic.get_asic_index_from_namespace(namespace)
+            for key in port_table_keys[asic_id]:
+                logical_port = key.split("|")[1]
+                update_configdb_prober_type(per_npu_configdb[asic_id], logical_port, probertype)
+
+        sys.exit(CONFIG_SUCCESSFUL)
+
+
 # 'muxcable' command ("config muxcable kill-radv <enable|disable> ")
 @muxcable.command(short_help="Kill radv service when it is meant to be stopped, so no good-bye packet is sent for ceasing To Be an Advertising Interface")
 @click.argument('knob', metavar='<feature_knob>', required=True, type=click.Choice(["enable", "disable"]))
@@ -396,8 +501,7 @@ def kill_radv(db, knob):
         mux_lmgrd_cfg_tbl = config_db.get_table("MUX_LINKMGR")
         config_db.mod_entry("MUX_LINKMGR", "SERVICE_MGMT", {"kill_radv": "True" if knob == "enable" else "False"})
 
-
- #'muxcable' command ("config muxcable packetloss reset <port|all>")
+# 'muxcable' command ("config muxcable packetloss reset <port|all>")
 @muxcable.command()
 @click.argument('action', metavar='<action_name>', required=True, type=click.Choice(["reset"]))
 @click.argument('port', metavar='<port_name>', required=True, default=None)

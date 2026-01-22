@@ -163,7 +163,7 @@ class Lldpshow(object):
         def alphanum_key(key):
             key = key.split("#")[0]
             return [re.findall('[A-Za-z]+', key) + [int(port_num)
-                                                    for port_num in re.findall('\d+', key)]]
+                                                    for port_num in re.findall(r'\d+', key)]]
         return sorted(summary, key=alphanum_key)
 
     def get_summary_output(self, lldp_detail_info):

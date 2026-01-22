@@ -6,7 +6,8 @@ import re
 import subprocess
 import utilities_common.cli as clicommon
 from utilities_common.chassis import is_smartswitch, get_all_dpus
-from datetime import datetime, timedelta
+from utilities_common.module import ModuleHelper
+from datetime import datetime, timedelta, timezone
 
 TIMEOUT_SECS = 10
 TRANSITION_TIMEOUT = timedelta(seconds=240)  # 4 minutes
@@ -26,6 +27,12 @@ class StateDBHelper:
         redis_key = f"{table}|{key}"
         for field, value in entry.items():
             self.db.set("STATE_DB", redis_key, field, value)
+
+    def delete_field(self, table, key, field):
+        """Delete a specific field from table|key."""
+        redis_key = f"{table}|{key}"
+        client = self.db.get_redis_client("STATE_DB")
+        return client.hdel(redis_key, field)
 
 #
 # 'chassis_modules' group ('config chassis_modules ...')
@@ -57,42 +64,6 @@ def get_config_module_state(db, chassis_module_name):
             return 'up'
     else:
         return fvs['admin_status']
-
-
-def get_state_transition_in_progress(db, chassis_module_name):
-    ensure_statedb_connected(db)
-    fvs = db.statedb.get_entry('CHASSIS_MODULE_TABLE', chassis_module_name)
-    value = fvs.get('state_transition_in_progress', 'False') if fvs else 'False'
-    return value
-
-
-def set_state_transition_in_progress(db, chassis_module_name, value):
-    ensure_statedb_connected(db)
-    state_db = db.statedb
-    entry = state_db.get_entry('CHASSIS_MODULE_TABLE', chassis_module_name) or {}
-    entry['state_transition_in_progress'] = value
-    if value == 'True':
-        entry['transition_start_time'] = datetime.utcnow().isoformat()
-    else:
-        entry.pop('transition_start_time', None)
-        state_db.delete_field('CHASSIS_MODULE_TABLE', chassis_module_name, 'transition_start_time')
-    state_db.set_entry('CHASSIS_MODULE_TABLE', chassis_module_name, entry)
-
-
-def is_transition_timed_out(db, chassis_module_name):
-    ensure_statedb_connected(db)
-    state_db = db.statedb
-    fvs = state_db.get_entry('CHASSIS_MODULE_TABLE', chassis_module_name)
-    if not fvs:
-        return False
-    start_time_str = fvs.get('transition_start_time')
-    if not start_time_str:
-        return False
-    try:
-        start_time = datetime.fromisoformat(start_time_str)
-    except ValueError:
-        return False
-    return datetime.utcnow() - start_time > TRANSITION_TIMEOUT
 
 #
 # Name: check_config_module_state_with_timeout
@@ -182,15 +153,10 @@ def shutdown_chassis_module(db, chassis_module_name):
         return
 
     if is_smartswitch():
-        if get_state_transition_in_progress(db, chassis_module_name) == 'True':
-            if is_transition_timed_out(db, chassis_module_name):
-                set_state_transition_in_progress(db, chassis_module_name, 'False')
-                click.echo(f"Previous transition for module {chassis_module_name} timed out. Proceeding with shutdown.")
-            else:
-                click.echo(f"Module {chassis_module_name} state transition is already in progress")
-                return
-        else:
-            set_state_transition_in_progress(db, chassis_module_name, 'True')
+        module_helper = ModuleHelper()
+        if module_helper.get_module_state_transition(chassis_module_name):
+            click.echo(f"Module {chassis_module_name} state transition is already in progress")
+            return
 
         click.echo(f"Shutting down chassis module {chassis_module_name}")
         fvs = {
@@ -229,15 +195,10 @@ def startup_chassis_module(db, chassis_module_name):
         return
 
     if is_smartswitch():
-        if get_state_transition_in_progress(db, chassis_module_name) == 'True':
-            if is_transition_timed_out(db, chassis_module_name):
-                set_state_transition_in_progress(db, chassis_module_name, 'False')
-                click.echo(f"Previous transition for module {chassis_module_name} timed out. Proceeding with startup.")
-            else:
-                click.echo(f"Module {chassis_module_name} state transition is already in progress")
-                return
-        else:
-            set_state_transition_in_progress(db, chassis_module_name, 'True')
+        module_helper = ModuleHelper()
+        if module_helper.get_module_state_transition(chassis_module_name):
+            click.echo(f"Module {chassis_module_name} state transition is already in progress")
+            return
 
         click.echo(f"Starting up chassis module {chassis_module_name}")
         fvs = {

@@ -58,7 +58,7 @@ class DBMigrator():
                      none-zero values.
               build: sequentially increase within a minor version domain.
         """
-        self.CURRENT_VERSION = 'version_202505_01'
+        self.CURRENT_VERSION = 'version_202605_01'
 
         self.TABLE_NAME      = 'VERSIONS'
         self.TABLE_KEY       = 'DATABASE'
@@ -902,6 +902,70 @@ class DBMigrator():
             if keys:
                 self.configDB.delete(self.configDB.CONFIG_DB, authorization_key)
 
+    def migrate_dhcp_servers_to_dhcpv4_relay(self):
+        try:
+            vlan_table = self.configDB.get_table("VLAN")
+        except Exception as e:
+            log.log_error(f"Failed to read VLAN table: {str(e)}")
+            return
+
+        for vlan_key, vlan_data in vlan_table.items():
+            if "dhcp_servers" not in vlan_data:
+                continue
+            try:
+                dhcp_servers = vlan_data.get("dhcp_servers")
+                relay_data = self.configDB.get_entry("DHCPV4_RELAY", vlan_key) or {}
+                if "dhcpv4_servers" not in relay_data:
+                    relay_data["dhcpv4_servers"] = dhcp_servers
+                    self.configDB.set_entry("DHCPV4_RELAY", vlan_key, relay_data)
+                    migrated_entry = self.configDB.get_entry("DHCPV4_RELAY", vlan_key)
+                    if migrated_entry.get("dhcpv4_servers") == dhcp_servers:
+                        log.log_notice(f"Migrated DHCP servers for {vlan_key} to DHCPV4_RELAY table")
+                    else:
+                        log.log_error(f"Verification failed for {vlan_key}: Migration did not persist correctly")
+                        continue
+                else:
+                    log.log_notice(f"Skipping migration for {vlan_key}: dhcpv4_servers already present in DHCPV4_RELAY")
+                updated_vlan_data = vlan_data.copy()
+                del updated_vlan_data["dhcp_servers"]
+                self.configDB.set_entry("VLAN", vlan_key, updated_vlan_data)
+
+                log.log_notice(f"Migrated DHCP servers for {vlan_key} to DHCPV4_RELAY table")
+
+            except Exception as e:
+                log.log_error(f"Failed to migrate DHCP servers for {vlan_key}: {str(e)}")
+
+    def migrate_ipinip_tunnel_ecn_mode_mellanox(self):
+        """
+        Migrate IPINIP_TUNNEL ecn mode to copy_from_outer.
+
+        Prior to 202511, on Mellanox platform, the ecn mode of IPINIP tunnel was set to standard.
+        """
+
+        table_name = 'TUNNEL_DECAP_TABLE'
+        keys_to_migrate = [
+            'IPINIP_SUBNET',
+            'IPINIP_TUNNEL',
+            'IPINIP_SUBNET_V6',
+            'IPINIP_V6_TUNNEL'
+        ]
+
+        for k, v in self.appDB.get_table(table_name).items():
+            if k in keys_to_migrate:
+                log.log_info(f"Migrating APPL_DB {k}, ecn mode: {v.get('ecn_mode')} -> copy_from_outer")
+                v['ecn_mode'] = 'copy_from_outer'
+                self.appDB.set_entry(table_name, k, v)
+
+        state_db_keys = self.stateDB.keys(self.stateDB.STATE_DB, f"{table_name}|*")
+        if not state_db_keys:
+            return
+        for key in keys_to_migrate:
+            state_db_key = f"{table_name}|{key}"
+            if state_db_key in state_db_keys:
+                ecn_mode = self.stateDB.get(self.stateDB.STATE_DB, state_db_key, 'ecn_mode')
+                log.log_info(f"Migrating STATE_DB {state_db_key}, ecn mode: {ecn_mode} -> copy_from_outer")
+                self.stateDB.set(self.stateDB.STATE_DB, state_db_key, 'ecn_mode', 'copy_from_outer')
+
     def version_unknown(self):
         """
         version_unknown tracks all SONiC versions that doesn't have a version
@@ -1231,12 +1295,23 @@ class DBMigrator():
         self.set_version('version_202305_01')
         return 'version_202305_01'
 
+    def check_has_sonic_dhcpv4_relay_flag(self):
+        device_metadata_table = self.configDB.get_table("DEVICE_METADATA")
+        dhcp_relay_feature = device_metadata_table.get("localhost", {})
+        if dhcp_relay_feature.get("has_sonic_dhcpv4_relay") == "True":
+            return True
+        return False
+
     def version_202305_01(self):
         """
         Version 202305_01.
         This is current last erversion for 202305 branch
         """
         log.log_info('Handling version_202305_01')
+        if self.check_has_sonic_dhcpv4_relay_flag():
+            log.log_info("Triggering migrate_dhcp_servers_to_dhcpv4_relay()")
+            self.migrate_dhcp_servers_to_dhcpv4_relay()
+
         self.set_version('version_202311_01')
         return 'version_202311_01'
 
@@ -1250,6 +1325,10 @@ class DBMigrator():
         self.migrate_dns_nameserver()
 
         self.migrate_sflow_table()
+        if self.check_has_sonic_dhcpv4_relay_flag():
+            log.log_info("Triggering migrate_dhcp_servers_to_dhcpv4_relay()")
+            self.migrate_dhcp_servers_to_dhcpv4_relay()
+
         self.set_version('version_202311_02')
         return 'version_202311_02'
 
@@ -1260,6 +1339,9 @@ class DBMigrator():
         log.log_info('Handling version_202311_02')
         # Update GNMI table
         self.migrate_gnmi()
+        if self.check_has_sonic_dhcpv4_relay_flag():
+            log.log_info("Triggering migrate_dhcp_servers_to_dhcpv4_relay()")
+            self.migrate_dhcp_servers_to_dhcpv4_relay()
 
         self.set_version('version_202311_03')
         return 'version_202311_03'
@@ -1270,6 +1352,10 @@ class DBMigrator():
         This is current last erversion for 202311 branch
         """
         log.log_info('Handling version_202311_03')
+        if self.check_has_sonic_dhcpv4_relay_flag():
+            log.log_info("Triggering migrate_dhcp_servers_to_dhcpv4_relay()")
+            self.migrate_dhcp_servers_to_dhcpv4_relay()
+
         self.set_version('version_202405_01')
         return 'version_202405_01'
 
@@ -1278,6 +1364,10 @@ class DBMigrator():
         Version 202405_01.
         """
         log.log_info('Handling version_202405_01')
+        if self.check_has_sonic_dhcpv4_relay_flag():
+            log.log_info("Triggering migrate_dhcp_servers_to_dhcpv4_relay()")
+            self.migrate_dhcp_servers_to_dhcpv4_relay()
+
         self.set_version('version_202405_02')
         return 'version_202405_02'
 
@@ -1286,6 +1376,10 @@ class DBMigrator():
         Version 202405_02.
         """
         log.log_info('Handling version_202405_02')
+        if self.check_has_sonic_dhcpv4_relay_flag():
+            log.log_info("Triggering migrate_dhcp_servers_to_dhcpv4_relay()")
+            self.migrate_dhcp_servers_to_dhcpv4_relay()
+
         self.migrate_ipinip_tunnel()
         self.set_version('version_202411_01')
         return 'version_202411_01'
@@ -1295,6 +1389,10 @@ class DBMigrator():
         Version 202411_01.
         """
         log.log_info('Handling version_202411_01')
+        if self.check_has_sonic_dhcpv4_relay_flag():
+            log.log_info("Triggering migrate_dhcp_servers_to_dhcpv4_relay()")
+            self.migrate_dhcp_servers_to_dhcpv4_relay()
+
         self.set_version('version_202411_02')
         return 'version_202411_02'
 
@@ -1303,16 +1401,41 @@ class DBMigrator():
         Version 202411_02.
         """
         log.log_info('Handling version_202411_02')
+        if self.check_has_sonic_dhcpv4_relay_flag():
+            log.log_info("Triggering migrate_dhcp_servers_to_dhcpv4_relay()")
+            self.migrate_dhcp_servers_to_dhcpv4_relay()
+
         self.set_version('version_202505_01')
         return 'version_202505_01'
 
     def version_202505_01(self):
         """
-        Version 202505_01, this version should be the final version for
-        master branch until 202505 branch is created.
+        Version 202505_01
         """
         log.log_info('Handling version_202505_01')
+        if self.check_has_sonic_dhcpv4_relay_flag():
+            log.log_info("Triggering migrate_dhcp_servers_to_dhcpv4_relay()")
+            self.migrate_dhcp_servers_to_dhcpv4_relay()
+
         self.migrate_flex_counter_delay_status_removal()
+        self.set_version('version_202511_01')
+        return 'version_202511_01'
+
+    def version_202511_01(self):
+        """
+        Version 202511_01
+        """
+        log.log_info('Handling version_202511_01')
+        if self.asic_type == "mellanox":
+            self.migrate_ipinip_tunnel_ecn_mode_mellanox()
+        self.set_version('version_202605_01')
+        return 'version_202605_01'
+
+    def version_202605_01(self):
+        """
+        Version 202605_01
+        """
+        log.log_info('Handling version_202605_01')
         return None
 
     def get_version(self):

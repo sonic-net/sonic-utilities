@@ -18,6 +18,7 @@ import itertools
 import copy
 import tempfile
 import sonic_yang
+import jsonpointer
 
 from jsonpatch import JsonPatchConflict
 from jsonpointer import JsonPointerException
@@ -45,6 +46,7 @@ from utilities_common.general import load_db_config, load_module_from_source
 from .validated_config_db_connector import ValidatedConfigDBConnector
 import utilities_common.multi_asic as multi_asic_util
 from utilities_common.flock import try_lock
+from utilities_common import hft as hft_common
 
 from .utils import log
 
@@ -54,6 +56,7 @@ from . import console
 from . import feature
 from . import fabric
 from . import flow_counters
+from . import hft
 from . import kdump
 from . import kube
 from . import muxcable
@@ -142,6 +145,20 @@ sonic_cfggen = load_module_from_source('sonic_cfggen', '/usr/local/bin/sonic-cfg
 # Helper functions
 #
 
+
+# Get all running configuration in JSON format
+def get_all_running_config():
+    command = ["show", "runningconfiguration", "all"]
+    proc = subprocess.Popen(command, text=True, stdout=subprocess.PIPE)
+
+    all_running_config, stderr_output = proc.communicate()
+    returncode = proc.returncode
+
+    if returncode:
+        raise GenericConfigUpdaterError(f"Fetch all runningconfiguration failed as {returncode}")
+    return all_running_config
+
+
 # Sort nested dict
 def sort_dict(data):
     """ Sort of 1st level and 2nd level dict of data naturally by its key
@@ -172,10 +189,11 @@ def write_json_file(json_input, fileName):
     except Exception as e:
         raise Exception(str(e))
 
-def _get_breakout_options(ctx, args, incomplete):
+
+def _get_breakout_options(ctx, param, incomplete):
     """ Provides dynamic mode option as per user argument i.e. interface name """
     all_mode_options = []
-    interface_name = args[-1]
+    interface_name = ctx.params["interface_name"]
 
     breakout_cfg_file = device_info.get_path_to_port_config_file()
 
@@ -977,6 +995,12 @@ def _stop_services():
     except subprocess.CalledProcessError as err:
         pass
 
+    # Get the list of dependencies for sonic.target to fetch timer units
+    for service in _get_sonic_services():
+        if service.endswith('.timer'):
+            # Stop the timer unit
+            clicommon.run_command(['sudo', 'systemctl', 'stop', service], display_cmd=True)
+
     click.echo("Stopping SONiC target ...")
     clicommon.run_command(['sudo', 'systemctl', 'stop', 'sonic.target', '--job-mode', 'replace-irreversibly'])
 
@@ -1118,6 +1142,32 @@ def interface_has_mirror_config(ctx, mirror_table, dst_port, src_port, direction
 
     return False
 
+
+def is_port_mirror_capability_supported(direction, namespace=None):
+    """ Check if port mirror capability is supported for the given direction """
+    state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
+    state_db.connect(state_db.STATE_DB, False)
+    entry_name = "SWITCH_CAPABILITY|switch"
+
+    # If no direction is specified, check both ingress and egress capabilities
+    if not direction:
+        ingress_supported = state_db.get(state_db.STATE_DB, entry_name, "PORT_INGRESS_MIRROR_CAPABLE")
+        egress_supported = state_db.get(state_db.STATE_DB, entry_name, "PORT_EGRESS_MIRROR_CAPABLE")
+        return ingress_supported == "true" and egress_supported == "true"
+
+    if direction in ['rx', 'both']:
+        ingress_supported = state_db.get(state_db.STATE_DB, entry_name, "PORT_INGRESS_MIRROR_CAPABLE")
+        if ingress_supported != "true":
+            return False
+
+    if direction in ['tx', 'both']:
+        egress_supported = state_db.get(state_db.STATE_DB, entry_name, "PORT_EGRESS_MIRROR_CAPABLE")
+        if egress_supported != "true":
+            return False
+
+    return True
+
+
 def validate_mirror_session_config(config_db, session_name, dst_port, src_port, direction):
     """ Check if SPAN mirror-session config is valid """
     ctx = click.get_current_context()
@@ -1139,7 +1189,6 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
         if interface_is_in_vlan(vlan_member_table, dst_port):
             ctx.fail("Error: Destination Interface {} has vlan config".format(dst_port))
 
-
         if interface_is_in_portchannel(portchannel_member_table, dst_port):
             ctx.fail("Error: Destination Interface {} has portchannel config".format(dst_port))
 
@@ -1159,6 +1208,12 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
     if direction:
         if direction not in ['rx', 'tx', 'both']:
             ctx.fail("Error: Direction {} is invalid".format(direction))
+
+    # Check port mirror capability before allowing configuration
+    # If direction is provided, check the specific direction
+    if not is_port_mirror_capability_supported(direction):
+        ctx.fail("Error: Port mirror direction '{}' is not supported by the ASIC".format(
+            direction if direction else 'both'))
 
     return True
 
@@ -1248,7 +1303,7 @@ def cli_sroute_to_config(ctx, command_str, strict_nh = True):
     else:
         key = ip_prefix
 
-    return key, config_entry
+    return key, config_entry, vrf_name
 
 def update_sonic_environment():
     """Prepare sonic environment variable using SONiC environment template file.
@@ -1352,17 +1407,107 @@ def apply_patch_for_scope(scope_changes, results, config_format, verbose, dry_ru
         log.log_error(f"'apply-patch' executed failed for {scope_for_log} by {changes} due to {str(e)}")
 
 
-def validate_patch(patch):
-    try:
-        command = ["show", "runningconfiguration", "all"]
-        proc = subprocess.Popen(command, text=True, stdout=subprocess.PIPE)
-        all_running_config, returncode = proc.communicate()
-        if returncode:
-            log.log_notice(f"Fetch all runningconfiguration failed as output:{all_running_config}")
-            return False
+def filter_duplicate_patch_operations(patch_ops, all_running_config):
+    # Return early if no patch operation targets a leaf-list append (path endswith "/-")
+    if not any(op.get("path", "").endswith("/-") for op in patch_ops):
+        return patch_ops
+    config = json.loads(all_running_config) if isinstance(all_running_config, str) else all_running_config
 
+    patch_copy = jsonpatch.JsonPatch([copy.deepcopy(op) for op in patch_ops])
+    all_target_config = patch_copy.apply(config)
+
+    def find_duplicate_entries_in_config(config):
+        duplicates = {}
+
+        def _check(obj, path=""):
+            if isinstance(obj, dict):
+                for k, v in obj.items():
+                    _check(v, f"{path}/{k}" if path else f"/{k}")
+            elif isinstance(obj, list):
+                seen = set()
+                dups = set()
+                for item in obj:
+                    if item in seen:
+                        dups.add(item)
+                    else:
+                        seen.add(item)
+                if dups:
+                    duplicates[path] = list(dups)
+                for idx, item in enumerate(obj):
+                    _check(item, f"{path}[{idx}]")
+        _check(config)
+        return duplicates
+
+    dups = find_duplicate_entries_in_config(all_target_config)
+
+    if not dups:
+        return patch_ops
+
+    ops_to_remove = set()
+    for path, dup_values in dups.items():
+        list_path = path
+        for op_idx, op in enumerate(patch_ops):
+            if op.get("op") == "add" and op.get("path", "").endswith("/-"):
+                if (
+                    op.get("path").startswith(list_path)
+                    and op.get("value") in dup_values
+                ):
+                    ops_to_remove.add(op_idx)
+
+    # Remove the duplicate-causing ops from patch
+    return [op for idx, op in enumerate(patch_ops) if idx not in ops_to_remove]
+
+
+def append_emptytables_if_required(patch_ops, all_running_config):
+    config = json.loads(all_running_config) if isinstance(all_running_config, str) else all_running_config
+    missing_tables = set()
+
+    patch_ops_copy = [copy.deepcopy(op) for op in patch_ops]
+
+    for operation in patch_ops_copy:
+        if 'path' in operation:
+            path_parts = operation['path'].strip('/').split('/')
+            if not path_parts:
+                continue
+
+            if path_parts[0].startswith('asic') or path_parts[0] == HOST_NAMESPACE:
+                if len(path_parts) < 2:
+                    continue
+                table_path = f"/{path_parts[0]}/{path_parts[1]}"
+            else:
+                table_path = f"/{path_parts[0]}"
+
+            try:
+                jsonpointer.resolve_pointer(config, table_path)
+            except jsonpointer.JsonPointerException as ex:
+                log.log_info(f"Table {table_path} is missing in running config: {ex}")
+                missing_tables.add(table_path)
+
+    if not missing_tables:
+        return patch_ops_copy
+
+    for table in missing_tables:
+        insert_idx = None
+        for idx, op in enumerate(patch_ops_copy):
+            if 'path' in op and op['path'].startswith(table):
+                insert_idx = idx
+                break
+        empty_table_patch = {"op": "add", "path": table, "value": {}}
+        if insert_idx is not None:
+            patch_ops_copy.insert(insert_idx, empty_table_patch)
+        else:
+            patch_ops_copy.append(empty_table_patch)
+
+    return patch_ops_copy
+
+
+def validate_patch(patch_ops, all_running_config):
+    try:
         # Structure validation and simulate apply patch.
-        all_target_config = patch.apply(json.loads(all_running_config))
+        config = json.loads(all_running_config) if isinstance(all_running_config, str) else all_running_config
+        # Create a temporary JsonPatch object to apply without modifying the original
+        patch_copy = jsonpatch.JsonPatch([copy.deepcopy(op) for op in patch_ops])
+        all_target_config = patch_copy.apply(config)
 
         # Verify target config by YANG models
         target_config = all_target_config.pop(HOST_NAMESPACE) if multi_asic.is_multi_asic() else all_target_config
@@ -1379,7 +1524,7 @@ def validate_patch(patch):
 
         return True
     except Exception as e:
-        raise GenericConfigUpdaterError(f"Validate json patch: {patch} failed due to:{e}")
+        raise GenericConfigUpdaterError(f"Validate json patch: {patch_ops} failed due to:{e}")
 
 
 def multiasic_validate_single_file(filename):
@@ -1430,6 +1575,13 @@ def delete_transceiver_tables():
     state_db.connect(state_db.STATE_DB, False)
     for table in tables:
         state_db.delete_all_by_pattern(state_db.STATE_DB, table + state_db_del_pattern)
+
+
+def delete_bgp_peer_table():
+    # Delete all entries in BGP_PEER_CONFIGURED_TABLE in state db.
+    state_db = SonicV2Connector(use_unix_socket_path=True)
+    state_db.connect(state_db.STATE_DB, False)
+    state_db.delete_all_by_pattern(state_db.STATE_DB, "BGP_PEER_CONFIGURED_TABLE|*")
 
 
 def migrate_db_to_lastest(namespace=DEFAULT_NAMESPACE):
@@ -1514,6 +1666,28 @@ def config_file_yang_validation(filename):
     return True
 
 
+def check_dhcpv4_relay_dependencies(db, object_name, object_type):
+    """Checks if to be deleted interface/VRF is used in DHCPV4_RELAY table."""
+    # Check if has_sonic_dhcpv4_relay flag is enabled
+    feature_table = db.get_table("DEVICE_METADATA")
+    dhcp_relay_feature = feature_table.get("localhost", {})
+    if dhcp_relay_feature.get("has_sonic_dhcpv4_relay") != "True":
+        return
+
+    for relay_vlan, data in db.get_table('DHCPV4_RELAY').items():
+        if object_type == 'interface':
+            source_intf = data.get('source_interface')
+            if source_intf == object_name:
+                raise ValueError(f"Interface '{object_name}' is in use by {relay_vlan}")
+
+        elif object_type == 'vrf':
+            server_vrf = data.get('server_vrf')
+            if server_vrf == object_name:
+                raise ValueError(f"VRF '{object_name}' is in use for dhcp_relay configurations for {relay_vlan}")
+        else:
+            raise ValueError("Unsupported object_type: {}".format(object_type))
+
+
 # This is our main entrypoint - the main 'config' command
 @click.group(cls=clicommon.AbbreviationGroup, context_settings=CONTEXT_SETTINGS)
 @click.pass_context
@@ -1556,6 +1730,8 @@ config.add_command(console.console)
 config.add_command(fabric.fabric)
 config.add_command(feature.feature)
 config.add_command(flow_counters.flowcnt_route)
+if hft_common.is_supported_platform():
+    config.add_command(hft.hft)
 config.add_command(kdump.kdump)
 config.add_command(kube.kubernetes)
 config.add_command(muxcable.muxcable)
@@ -1730,10 +1906,21 @@ def apply_patch(ctx, patch_file_path, format, dry_run, parallel, ignore_non_yang
         with open(patch_file_path, 'r') as fh:
             text = fh.read()
             patch_as_json = json.loads(text)
-            patch = jsonpatch.JsonPatch(patch_as_json)
+            patch_ops = patch_as_json
 
-        if not validate_patch(patch):
-            raise GenericConfigUpdaterError(f"Failed validating patch:{patch}")
+        all_running_config = get_all_running_config()
+
+        # Pre-process patch to append empty tables if required.
+        patch_ops = append_emptytables_if_required(patch_ops, all_running_config)
+
+        # Pre-process patch to filter duplicate leaf-list appends.
+        patch_ops = filter_duplicate_patch_operations(patch_ops, all_running_config)
+
+        if not validate_patch(patch_ops, all_running_config):
+            raise GenericConfigUpdaterError(f"Failed validating patch:{patch_ops}")
+
+        # Convert patch_ops to JsonPatch object for further processing
+        patch = jsonpatch.JsonPatch(patch_ops)
 
         results = {}
         config_format = ConfigFormat[format.upper()]
@@ -2034,6 +2221,7 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
 
             client, config_db = flush_configdb(namespace)
             delete_transceiver_tables()
+            delete_bgp_peer_table()
 
             if load_sysinfo:
                 if namespace is DEFAULT_NAMESPACE:
@@ -2171,6 +2359,7 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
     if not no_service_restart:
         log.log_notice("'load_minigraph' stopping services...")
         delete_transceiver_tables()
+        delete_bgp_peer_table()
         _stop_services()
 
     # For Single Asic platform the namespace list has the empty string
@@ -2572,8 +2761,15 @@ def suppress_pending_fib(db, state):
     ''' Enable or disable pending FIB suppression. Once enabled,
         BGP will not advertise routes that are not yet installed in the hardware '''
 
-    config_db = db.cfgdb
-    config_db.mod_entry('DEVICE_METADATA', 'localhost', {"suppress-fib-pending": state})
+    namespace_list = [multi_asic.DEFAULT_NAMESPACE]
+
+    # For multi-asic system apply configuration to all asics
+    if multi_asic.get_num_asics() > 1:
+        namespace_list = multi_asic.get_namespaces_from_linux()
+
+    for ns in namespace_list:
+        config_db = db.cfgdb_clients[ns]
+        config_db.mod_entry('DEVICE_METADATA', 'localhost', {"suppress-fib-pending": state})
 
 #
 # 'yang_config_validation' command ('config yang_config_validation ...')
@@ -2673,6 +2869,12 @@ def remove_portchannel(ctx, portchannel_name):
 
         if len([(k, v) for k, v in db.get_table('PORTCHANNEL_MEMBER') if k == portchannel_name]) != 0: # TODO: MISSING CONSTRAINT IN YANG MODEL
             ctx.fail("Error: Portchannel {} contains members. Remove members before deleting Portchannel!".format(portchannel_name))
+
+        # Dont proceed if the port channel is used in dhcpv4_relay
+        try:
+            check_dhcpv4_relay_dependencies(db, portchannel_name, 'interface')
+        except ValueError as e:
+            ctx.fail(str(e))
 
     try:
         db.set_entry('PORTCHANNEL', portchannel_name, None)
@@ -4983,7 +5185,7 @@ def advertised_types(ctx, interface_name, interface_type_list, verbose):
 
 @interface.command()
 @click.argument('interface_name', metavar='<interface_name>', required=True)
-@click.argument('mode', required=True, type=click.STRING, autocompletion=_get_breakout_options)
+@click.argument('mode', required=True, type=click.STRING, shell_complete=_get_breakout_options)
 @click.option('-f', '--force-remove-dependencies', is_flag=True,  help='Clear all dependencies internally first.')
 @click.option('-l', '--load-predefined-config', is_flag=True,  help='load predefied user configuration (alias, lanes, speed etc) first.')
 @click.option('-y', '--yes', is_flag=True, callback=_abort_if_false, expose_value=False, prompt='Do you want to Breakout the port, continue?')
@@ -5215,47 +5417,7 @@ def add_interface_ip(ctx, interface_name, ip_addr, gw, secondary):
         interface_name = interface_alias_to_name(config_db, interface_name)
         if interface_name is None:
             ctx.fail("'interface_name' is None!")
-        # Add a validation to check this interface is not a member in vlan before
-        # changing it to a router port mode
-    vlan_member_table = config_db.get_table('VLAN_MEMBER')
 
-    if (interface_is_in_vlan(vlan_member_table, interface_name)):
-        click.echo("Interface {} is a member of vlan\nAborting!".format(interface_name))
-        return
-
-
-    portchannel_member_table = config_db.get_table('PORTCHANNEL_MEMBER')
-
-    if interface_is_in_portchannel(portchannel_member_table, interface_name):
-        ctx.fail("{} is configured as a member of portchannel."
-                .format(interface_name))
-
-    # Add a validation to check this interface is in routed mode before
-    # assigning an IP address to it
-
-    sub_intf = False
-
-    if clicommon.is_valid_port(config_db, interface_name):
-        is_port = True
-    elif clicommon.is_valid_portchannel(config_db, interface_name):
-        is_port = False
-    else:
-        sub_intf = True
-
-    if not sub_intf:
-        interface_mode = None
-        if is_port:
-            interface_data = config_db.get_entry('PORT', interface_name)
-        else:
-            interface_data = config_db.get_entry('PORTCHANNEL', interface_name)
-
-        if "mode" in interface_data:
-            interface_mode = interface_data["mode"]
-
-        if interface_mode == "trunk" or interface_mode == "access":
-            click.echo("Interface {} is in {} mode and needs to be in routed mode!".format(
-                interface_name, interface_mode))
-            return
     try:
         ip_address = ipaddress.ip_interface(ip_addr)
     except ValueError as err:
@@ -5286,7 +5448,65 @@ def add_interface_ip(ctx, interface_name, ip_addr, gw, secondary):
 
     table_name = get_interface_table_name(interface_name)
     if table_name == "":
-        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan/Loopback]")
+        ctx.fail(f"{interface_name} is not valid. Valid names [Ethernet/PortChannel/Vlan/Loopback]")
+
+    # Add a validation to check this interface is in routed mode before
+    # assigning an IP address to it. For sub-interfaces, check that the base
+    # interface is in the right mode
+
+    base_interface_name = interface_name
+
+    # Handle short name
+    match = re.search(r'\d', interface_name)
+    if match:
+        index = match.start()
+        intf_type = interface_name[:index]
+        intf_val = interface_name[index:]
+        if intf_type == "Eth":
+            intf_type = "Ethernet"
+        elif intf_type == "Po":
+            intf_type = "PortChannel"
+        base_interface_name = intf_type + intf_val
+
+    base_table_name = table_name
+    if table_name == "VLAN_SUB_INTERFACE":
+        interface_name_parts = base_interface_name.split(".")
+        base_interface_name = interface_name_parts[0] if len(interface_name_parts) >= 2 else interface_name
+        base_table_name = get_interface_table_name(base_interface_name)
+        if base_table_name == "":
+            ctx.fail(f"{interface_name} is not valid. Valid names [Ethernet/PortChannel/Vlan/Loopback]")
+
+    portchannel_member_table = config_db.get_table('PORTCHANNEL_MEMBER')
+    if interface_is_in_portchannel(portchannel_member_table, base_interface_name):
+        ctx.fail(f"{base_interface_name} is configured as a member of portchannel.")
+
+    # Add a validation to check this interface is not a member in vlan before
+    vlan_member_table = config_db.get_table('VLAN_MEMBER')
+    if (interface_is_in_vlan(vlan_member_table, base_interface_name)):
+        ctx.fail("Interface {} is a member of vlan\nAborting!".format(base_interface_name))
+        return
+
+    if base_table_name == "INTERFACE" or base_table_name == "PORTCHANNEL_INTERFACE":
+        if clicommon.is_valid_port(config_db, base_interface_name):
+            is_port = True
+        elif clicommon.is_valid_portchannel(config_db, base_interface_name):
+            is_port = False
+        else:
+            ctx.fail("Interface {} does not exist".format(interface_name))
+
+        interface_mode = None
+        if is_port:
+            interface_data = config_db.get_entry('PORT', base_interface_name)
+        else:
+            interface_data = config_db.get_entry('PORTCHANNEL', base_interface_name)
+
+        if "mode" in interface_data:
+            interface_mode = interface_data["mode"]
+
+        if interface_mode == "trunk" or interface_mode == "access":
+            click.echo("Interface {} is in {} mode and needs to be in routed mode!".format(
+                interface_name, interface_mode))
+            return
 
     if table_name == "VLAN_INTERFACE":
         if not validate_vlan_exists(config_db, interface_name):
@@ -7224,6 +7444,12 @@ def del_vrf(ctx, vrf_name):
         syslog_vrf = syslog_data.get("vrf")
         if syslog_vrf == syslog_vrf_dev:
             ctx.fail("Failed to remove VRF device: {} is in use by SYSLOG_SERVER|{}".format(syslog_vrf, syslog_entry))
+    # Dont proceed if the vrf is used in dhcpv4_relay
+    try:
+        check_dhcpv4_relay_dependencies(config_db, vrf_name, 'vrf')
+    except ValueError as e:
+        ctx.fail(str(e))
+
     if not is_vrf_exists(config_db, vrf_name):
         ctx.fail("VRF {} does not exist!".format(vrf_name))
     elif (vrf_name == 'mgmt' or vrf_name == 'management'):
@@ -7307,7 +7533,7 @@ def route(ctx):
 def add_route(ctx, command_str):
     """Add route command"""
     config_db = ctx.obj['config_db']
-    key, route = cli_sroute_to_config(ctx, command_str)
+    key, route, vrf = cli_sroute_to_config(ctx, command_str)
 
     entry_counter = 1
     if 'nexthop' in route:
@@ -7323,7 +7549,7 @@ def add_route(ctx, command_str):
                 vrf = route['nexthop-vrf'].split(',')[0]
                 route['nexthop-vrf'] += ',' + vrf
         else:
-            route['nexthop-vrf'] = ''
+            route['nexthop-vrf'] = vrf
 
         # Set nexthop to empty string if not defined
         if 'nexthop' in route:
@@ -7386,7 +7612,7 @@ def add_route(ctx, command_str):
 def del_route(ctx, command_str):
     """Del route command"""
     config_db = ctx.obj['config_db']
-    key, route = cli_sroute_to_config(ctx, command_str, strict_nh=False)
+    key, route, vrf = cli_sroute_to_config(ctx, command_str, strict_nh=False)
     keys = config_db.get_keys('STATIC_ROUTE')
 
     if not tuple(key.split("|")) in keys:
@@ -7429,6 +7655,8 @@ def del_route(ctx, command_str):
                 if ',' in route[item]:
                     ctx.fail('Only one nexthop can be deleted at a time')
                 cli_tuple += (route[item],)
+            elif item == 'nexthop-vrf':
+                cli_tuple += (vrf,)
             else:
                 cli_tuple += ('',)
 
@@ -7664,6 +7892,11 @@ def dropcounters():
 @click.option("-a", "--alias", type=str, help="Alias for this counter")
 @click.option("-g", "--group", type=str, help="Group for this counter")
 @click.option("-d", "--desc",  type=str, help="Description for this counter")
+@click.option("-w", "--window", type=int, help="Window size in seconds")
+@click.option("-dct", "--drop-count-threshold",  type=int,
+              help="Minimum threshold for drop counts to be classified as an incident")
+@click.option('-ict', '--incident-count-threshold', type=int,
+              help="Minimum number of incidents to trigger a persistent drop alert")
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
 @click.option('--namespace',
               '-n',
@@ -7673,7 +7906,8 @@ def dropcounters():
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def install(counter_name, alias, group, counter_type, desc, reasons, verbose, namespace):
+def install(counter_name, alias, group, counter_type, desc, reasons, window,
+            incident_count_threshold, drop_count_threshold, verbose, namespace):
     """Install a new drop counter"""
     command = ['dropconfig', '-c', 'install', '-n', str(counter_name), '-t', str(counter_type), '-r', str(reasons)]
     if alias:
@@ -7684,7 +7918,73 @@ def install(counter_name, alias, group, counter_type, desc, reasons, verbose, na
         command += ['-d', str(desc)]
     if namespace:
         command += ['-ns', str(namespace)]
+    if window:
+        command += ['-w', str(window)]
+    if drop_count_threshold:
+        command += ['-dct', str(drop_count_threshold)]
+    if incident_count_threshold:
+        command += ['-ict', str(incident_count_threshold)]
 
+    clicommon.run_command(command, display_cmd=verbose)
+
+
+#
+# 'enable drop monitor' subcommand  ('config dropcounters enable_monitor')
+#
+@dropcounters.command()
+@click.option("-c", "--counter-name", type=str, help="Name of the counter", default=None)
+@click.option("-w", "--window", type=int, help="Window size in seconds")
+@click.option("-dct", "--drop-count-threshold",  type=int,
+              help="Minimum threshold for drop counts to be classified as an incident")
+@click.option('-ict', '--incident-count-threshold', type=int,
+              help="Minimum number of incidents to trigger a persistent drop alert")
+@click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def enable_monitor(counter_name, window, incident_count_threshold, drop_count_threshold, verbose, namespace):
+    """Enable drop monitor feature. If no counter is provided, global feature status is set to enabled."""
+    command = ['dropconfig', '-c', 'enable_drop_monitor']
+    if counter_name:
+        command += ['-n', str(counter_name)]
+    if window:
+        command += ['-w', str(window)]
+    if drop_count_threshold:
+        command += ['-dct', str(drop_count_threshold)]
+    if incident_count_threshold:
+        command += ['-ict', str(incident_count_threshold)]
+    if namespace:
+        command += ['-ns', str(namespace)]
+
+    clicommon.run_command(command, display_cmd=verbose)
+
+
+#
+# 'disable drop monitor' subcommand  ('config dropcounters disable_monitor')
+#
+@dropcounters.command()
+@click.option("-c", "--counter-name", type=str, help="Name of the counter", default=None)
+@click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def disable_monitor(counter_name, verbose, namespace):
+    """Disable drop monitor feature. If no counter is provided, global feature status is set to disabled."""
+    command = ['dropconfig', '-c', 'disable_drop_monitor']
+    if counter_name:
+        command += ['-n', str(counter_name)]
+    if namespace:
+        command += ['-ns', str(namespace)]
     clicommon.run_command(command, display_cmd=verbose)
 
 
@@ -8327,6 +8627,12 @@ def del_loopback(ctx, loopback_name):
         lo_intfs = [k for k, v in lo_config_db.items() if type(k) != tuple]
         if loopback_name not in lo_intfs:
             ctx.fail("{} does not exist".format(loopback_name))
+
+    # Dont proceed if the loopback is used in dhcpv4_relay
+    try:
+        check_dhcpv4_relay_dependencies(config_db, loopback_name, 'interface')
+    except ValueError as e:
+        ctx.fail(str(e))
 
     ips = [ k[1] for k in lo_config_db if type(k) == tuple and k[0] == loopback_name ]
     for ip in ips:
@@ -9157,7 +9463,7 @@ def clock():
     pass
 
 
-def get_tzs(ctx, args, incomplete):
+def get_tzs(ctx, param, incomplete):
     ret = clicommon.run_command(['timedatectl', 'list-timezones'],
                                 display_cmd=False, ignore_error=False,
                                 return_cmd=True)
@@ -9170,7 +9476,7 @@ def get_tzs(ctx, args, incomplete):
 
 @clock.command()
 @click.argument('timezone', metavar='<timezone_name>', required=True,
-                autocompletion=get_tzs)
+                shell_complete=get_tzs)
 def timezone(timezone):
     """Set system timezone"""
 

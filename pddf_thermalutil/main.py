@@ -80,39 +80,53 @@ def gettemp(index):
 
     header = []
     temp_table = []
+    has_label = False
 
     for idx, thermal in enumerate(thermal_list, default_index):
         thermal_name = helper.try_get(thermal.get_name, "TEMP{}".format(idx+1))
         # TODO: Provide a wrapper API implementation for the below function
         try:
             temp = thermal.get_temperature()
-            if temp:
+            if temp is not None:
                 value = "temp1\t %+.1f C (" % temp
-            high = thermal.get_high_threshold()
-            if high:
-                value += "high = %+.1f C" % high
-            crit = thermal.get_high_critical_threshold()
-            if high and crit:
-                value += ", "
-            if crit:
-                value += "crit = %+.1f C" % crit
+            else:
+                value = "N/A ("
 
-            label = thermal.get_temp_label()
+            high = thermal.get_high_threshold()
+            if high is not None:
+                value += "high = %+.1f C" % high
+            else:
+                value += "high = N/A"
+
+            crit = thermal.get_high_critical_threshold()
+            if crit is not None:
+                value += ", crit = %+.1f C" % crit
+            else:
+                value += ", crit = N/A"
+
             value += ")"
 
-        except NotImplementedError:
-            pass
+            label = thermal.get_temp_label()
 
-        if label is None:
-            temp_table.append([thermal_name, value])
-        else:
-            temp_table.append([thermal_name, label, value])
+        except NotImplementedError:
+            value = "N/A"
+            label = None
+
+        if label is not None:
+            has_label = True
+
+        # Always store as 3-column row [name, label, value]
+        # label will be None for sensors without labels
+        temp_table.append([thermal_name, label, value])
 
     if temp_table:
-        if label is None:
-            header = ['Temp Sensor', 'Value']
-        else:
+        if has_label:
+            # Use 3-column header - sensors without labels will show empty in label column
             header = ['Temp Sensor', 'Label', 'Value']
+        else:
+            # Use 2-column header and remove label column from all rows
+            header = ['Temp Sensor', 'Value']
+            temp_table = [[row[0], row[2]] for row in temp_table]
         click.echo(tabulate(temp_table, header, tablefmt="simple"))
 
 

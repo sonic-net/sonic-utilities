@@ -1074,7 +1074,7 @@
     },
     "DEBUG_COUNTER_CAPABILITIES|PORT_INGRESS_DROPS": {
         "reasons": "[IP_HEADER_ERROR,NO_L3_HEADER]",
-        "count": "4"
+        "count": "5"
     },
     "DEBUG_COUNTER_CAPABILITIES|SWITCH_EGRESS_DROPS": {
         "reasons": "[ACL_ANY,L2_ANY,L3_ANY]",
@@ -1248,6 +1248,15 @@
         "13": "200:200:200:200::5@Vlan1000",
         "14": "200:200:200:200::5@Vlan1000",
         "15": "200:200:200:200::5@Vlan1000"
+    },
+    "LIQUID_COOLING_INFO|leakage1": {
+        "leak_status": "No"
+    },
+    "LIQUID_COOLING_INFO|leakage2": {
+        "leak_status": "No"
+    },
+    "LIQUID_COOLING_INFO|leakage3": {
+        "leak_status": "Yes"
     },
     "FG_ROUTE_TABLE|100.50.25.12/32": {
         "0": "200.200.200.4@Vlan1000",
