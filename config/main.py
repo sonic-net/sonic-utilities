@@ -9890,9 +9890,6 @@ def igmp_snooping_enable(ctx, vid):
     vlan = db.get_entry('VLAN', vlan_name)
     if len(vlan) == 0:
         ctx.fail("{} doesn't exist".format(vlan_name))
-    l2mc_cfg = db.get_entry('MLD_L2MC', vlan_name)
-    if l2mc_cfg  and l2mc_cfg['enabled'] == 'true':
-        ctx.fail(f"{vlan_name} does not enable IGMP Snooping.please first disable MLD Snooping")
     l2mc_enable = db.get_entry('L2MC', vlan_name)
     if len(l2mc_enable) < 1:
         igmp_snooping_fvs = {
@@ -10348,10 +10345,6 @@ def mld_snooping_enable(ctx, vid):
     vlan = db.get_entry('VLAN', vlan_name)
     if len(vlan) == 0:
         ctx.fail("{} doesn't exist".format(vlan_name))
-    l2mc_cfg = db.get_entry('L2MC', vlan_name)
-    if l2mc_cfg  and l2mc_cfg['enabled'] == 'true':
-        ctx.fail(f"{vlan_name} does not enable MLD Snooping.please first disable IGMP Snooping")
-    
     l2mc_enable = db.get_entry('MLD_L2MC', vlan_name)
     if len(l2mc_enable) < 1:
         igmp_snooping_fvs = {
