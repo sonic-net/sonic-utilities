@@ -11,6 +11,7 @@ ADHOC_VALIDATION = True
 RADIUS_MAXSERVERS = 8
 RADIUS_PASSKEY_MAX_LEN = 65
 VALID_CHARS_MSG = "Valid chars are ASCII printable except SPACE, '#', and ','"
+TACACS_MAXSERVERS = 8 #Maximum of 8 Tacacs server hosts can be added
 
 def is_secret(secret):
     return bool(re.match('^' + '[^ #,]*' + '$', secret))
@@ -277,8 +278,11 @@ def add(db, address, timeout, key, auth_type, port, pri, use_mgmt_vrf):
     config_db = ValidatedConfigDBConnector(db.cfgdb)
     config_db.connect()
     old_data = config_db.get_entry('TACPLUS_SERVER', address)
+    number_of_servers = len(config_db.get_table('TACPLUS_SERVER'))
     if old_data != {}:
         click.echo('server %s already exists' % address)
+    elif number_of_servers == TACACS_MAXSERVERS:
+        click.echo('Maximum of %d can be configured' % TACACS_MAXSERVERS)
     else:
         data = {
             'tcp_port': str(port),
