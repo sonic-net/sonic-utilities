@@ -51,7 +51,7 @@ import concurrent.futures
 from ipaddress import ip_network
 from swsscommon import swsscommon
 from utilities_common import chassis
-from sonic_py_common import multi_asic
+from sonic_py_common import multi_asic, device_info
 from utilities_common.general import load_db_config
 
 APPL_DB_NAME = 'APPL_DB'
@@ -61,8 +61,8 @@ ASIC_KEY_PREFIX = 'SAI_OBJECT_TYPE_ROUTE_ENTRY:'
 
 SUBSCRIBE_WAIT_SECS = 1
 
-# Max of 10 mins
-TIMEOUT_SECONDS = 600
+# Max of 2 minutes on normal devices and 5 minutes on virtual chassis
+TIMEOUT_SECONDS = 120 if not device_info.is_virtual_chassis() else 360
 
 # Chunk size to read
 CHUNK_SIZE = 5 * 1024 * 1024  # Read data in 5 MB chunks
