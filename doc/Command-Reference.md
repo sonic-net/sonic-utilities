@@ -4209,8 +4209,8 @@ In case both of the above parameters have been configured, the `size` will take 
 - Example:
 
   ```
-  admin@sonic:~$ sudo config shared-headroom-pool over-subscribe-ratio 2
-  admin@sonic:~$ sudo config shared-headroom-pool size 1024000
+  admin@sonic:~$ sudo config buffer shared-headroom-pool over-subscribe-ratio 2
+  admin@sonic:~$ sudo config buffer shared-headroom-pool size 1024000
   ```
 
 **configure a lossless buffer profile**
