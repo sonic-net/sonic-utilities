@@ -6,6 +6,7 @@ from dump.helper import verbose_print
 from swsscommon.swsscommon import SonicV2Connector, SonicDBConfig
 from sonic_py_common import multi_asic
 from utilities_common.constants import DEFAULT_NAMESPACE
+from utilities_common.general import load_db_config
 import redis
 
 
@@ -290,12 +291,7 @@ class ConnectionPool:
         self.cache = dict()  # Pool of SonicV2Connector objects
 
     def initialize_connector(self, ns):
-        if multi_asic.is_multi_asic():
-            if not SonicDBConfig.isGlobalInit():
-                SonicDBConfig.load_sonic_global_db_config()
-        else:
-            if not SonicDBConfig.isInit():
-                SonicDBConfig.load_sonic_db_config()
+        load_db_config()
         return SonicV2Connector(namespace=ns, use_unix_socket_path=True)
 
     def initialize_redis_conn(self, ns):
