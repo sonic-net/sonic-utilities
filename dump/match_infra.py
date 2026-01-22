@@ -290,10 +290,11 @@ class ConnectionPool:
         self.cache = dict()  # Pool of SonicV2Connector objects
 
     def initialize_connector(self, ns):
-        if not SonicDBConfig.isInit():
-            if multi_asic.is_multi_asic():
+        if multi_asic.is_multi_asic():
+            if not SonicDBConfig.isGlobalInit():
                 SonicDBConfig.load_sonic_global_db_config()
-            else:
+        else:
+            if not SonicDBConfig.isInit():
                 SonicDBConfig.load_sonic_db_config()
         return SonicV2Connector(namespace=ns, use_unix_socket_path=True)
 
