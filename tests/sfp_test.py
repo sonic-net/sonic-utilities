@@ -103,12 +103,12 @@ Media Assign (0x1)
         Module Hardware Rev: X.X
         Nominal Bit Rate(100Mbs): Not supported for CMIS cables
         Specification compliance: Not supported for CMIS cables
-        Vendor Date Code(YYYY-MM-DD Lot): 2022-05-28   
-        Vendor Name: vendor1          
+        Vendor Date Code(YYYY-MM-DD Lot): 2022-05-28
+        Vendor Name: vendor1
         Vendor OUI: some-oui
-        Vendor PN: some-model    
+        Vendor PN: some-model
         Vendor Rev: A3
-        Vendor SN: serial1   
+        Vendor SN: serial1
         ChannelMonitorValues:
                 RX1Power: -3.8595dBm
                 RX2Power: 8.1478dBm
