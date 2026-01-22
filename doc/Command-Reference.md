@@ -1276,6 +1276,7 @@ Ethernet0: SFP EEPROM detected
                 Requested Laser Frequency: 193100GHz
                 Tx Frequency: 193100.0GHz
                 Temperature: 51.055C
+                Requested Tx Power: -8.5dBm
                 Vcc: 3.331Volts
         ModuleThresholdValues:
                 TempHighAlarm  : 80.0C
