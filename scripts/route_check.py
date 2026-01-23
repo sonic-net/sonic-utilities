@@ -65,9 +65,6 @@ SUBSCRIBE_WAIT_SECS = 1
 # Max of 2 minutes on normal devices and 5 minutes on virtual chassis
 TIMEOUT_SECONDS = 120 if not device_info.is_virtual_chassis() else 360
 
-# Chunk size to read
-CHUNK_SIZE = 5 * 1024 * 1024  # Read data in 5 MB chunks
-
 UNIT_TESTING = 0
 
 os.environ['PYTHONUNBUFFERED'] = 'True'
@@ -1082,7 +1079,6 @@ def main():
     with given interval in-between calls to check_route
     :return Same return value as returned by check_route.
     """
-    global CHUNK_SIZE
     global TIMEOUT_SECONDS
     interval = 0
     parser = argparse.ArgumentParser(
@@ -1105,10 +1101,6 @@ def main():
     parser.add_argument('-n', '--namespace',
                         default=multi_asic.DEFAULT_NAMESPACE,
                         help='Verify routes for this specific namespace')
-    parser.add_argument('-c',
-                        '--chunk',
-                        type=int,
-                        default=CHUNK_SIZE, help='Chunk size in bytes')
     parser.add_argument('-t',
                         '--timeout',
                         type=int,
@@ -1118,7 +1110,6 @@ def main():
 
     namespace = args.namespace
 
-    CHUNK_SIZE = args.chunk * 1024
     TIMEOUT_SECONDS = args.timeout
 
     if namespace is not multi_asic.DEFAULT_NAMESPACE and not multi_asic.is_multi_asic():
