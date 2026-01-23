@@ -18,7 +18,7 @@ def generate_completions(output_dir):
             # The below line is to import each of the CLI modules from the
             # sonic_utilities package. This is happening only in a build-time
             # environment with the intention of generating bash completions.
-            module = import_module(module_path) # nosem
+            module = import_module(module_path)  # nosem
             function = vars(module).get(function_name)
             if isinstance(function, BaseCommand):
                 comp_cls = get_completion_class("bash")
