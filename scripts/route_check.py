@@ -37,6 +37,7 @@ To verify:
 import argparse
 from enum import Enum
 import ipaddress
+import ijson
 import json
 import os
 import re
@@ -394,7 +395,7 @@ def is_suppress_fib_pending_enabled(namespace):
 def fetch_routes(ipv6=False, namespace=multi_asic.DEFAULT_NAMESPACE):
     """
     Fetch routes using the given command.
-    Uses chunk-based reading with incremental parsing of individual prefix entries.
+    Uses ijson for streaming JSON parsing to handle large route tables efficiently.
     Parses each prefix entry as soon as it becomes available instead of waiting for the entire JSON.
     """
     missing_routes = []
@@ -423,158 +424,30 @@ def fetch_routes(ipv6=False, namespace=multi_asic.DEFAULT_NAMESPACE):
         if route_entry.get('failed', False):
             failing_routes.append(prefix)
 
-    def extract_prefix_entry(buffer_str, start_idx=0):
-        """
-        Extract a single prefix entry from the buffer.
-        Returns: (prefix_json_str, end_position) or (None, start_idx) if no complete entry found.
-
-        The JSON structure is: {"prefix1": [route_entries], "prefix2": [route_entries], ...}
-        We want to extract individual "prefix": [route_entries] pairs.
-        """
-        # Skip whitespace and opening brace of outer object
-        i = start_idx
-        while i < len(buffer_str) and buffer_str[i] in ' \t\n\r{':
-            i += 1
-
-        if i >= len(buffer_str):
-            return None, start_idx
-
-        # Now we should be at the start of a prefix key (a quoted string)
-        if buffer_str[i] != '"':
-            # Could be a closing brace of the outer object or comma
-            if buffer_str[i] in '},':
-                return None, i + 1
-            return None, start_idx
-
-        # Find the complete prefix entry: "prefix": [...]
-        # We need to track: the key (prefix string), colon, and value (array)
-        in_string = False
-        escape_next = False
-        bracket_count = 0
-        brace_count = 0
-        found_colon = False
-        entry_start = i
-
-        for j in range(i, len(buffer_str)):
-            char = buffer_str[j]
-
-            if escape_next:
-                escape_next = False
-                continue
-
-            if char == '\\':
-                escape_next = True
-                continue
-
-            if char == '"' and not escape_next:
-                in_string = not in_string
-                continue
-
-            if not in_string:
-                if char == ':':
-                    found_colon = True
-                elif char == '[':
-                    bracket_count += 1
-                elif char == ']':
-                    bracket_count -= 1
-                    if bracket_count == 0 and found_colon:
-                        # Found the end of the array value
-                        # The complete entry is from entry_start to j+1
-                        entry_end = j + 1
-
-                        # Skip any trailing comma
-                        k = entry_end
-                        parse_idx = entry_end
-                        while k < len(buffer_str) and buffer_str[k] in ' \t\n\r':
-                            k += 1
-                        if k < len(buffer_str) and buffer_str[k] == ',':
-                            parse_idx = k + 1
-
-                        # Extract the entry as a complete JSON object
-                        entry_str = '{' + buffer_str[entry_start:entry_end] + '}'
-                        return entry_str, parse_idx
-                elif char == '{':
-                    brace_count += 1
-                elif char == '}':
-                    brace_count -= 1
-
-        # No complete entry found
-        return None, start_idx
-
-    def parse_prefix_entries(buffer):
-        # Try to parse individual prefix entries from the buffer
-        try:
-            # Decode the buffer
-            buffer_str = buffer.decode('utf-8')
-
-            # Parse prefix entries incrementally
-            parse_position = 0
-            last_successful_position = 0
-
-            while True:
-                entry_str, new_position = extract_prefix_entry(buffer_str,
-                                                               parse_position)
-
-                if entry_str is None:
-                    # No complete entry found
-                    # Check if we made any progress (e.g., skipped commas/braces)
-                    if new_position > parse_position:
-                        # We skipped some characters, update position and continue
-                        parse_position = new_position
-                        last_successful_position = new_position
-                        continue
-                    else:
-                        # No progress, need more data
-                        break
-
-                # Parse the individual prefix entry
-                try:
-                    prefix_data = json.loads(entry_str)
-                    # Process this prefix entry
-                    for prefix in prefix_data:
-                        for route_entry in prefix_data[prefix]:
-                            process_route_entry(prefix, route_entry)
-
-                    # Update parse position
-                    parse_position = new_position
-                    last_successful_position = new_position
-
-                except json.JSONDecodeError as e:
-                    # Failed to parse this entry, skip it
-                    print_message(syslog.LOG_WARNING, f"Failed to parse prefix entry: {e}")
-                    parse_position = new_position
-                    last_successful_position = new_position
-                    continue
-
-            # Remove parsed data from buffer to save memory
-            if last_successful_position > 0:
-                # Convert character position to byte position
-                buffer = buffer_str[last_successful_position:].encode('utf-8')
-
-        except UnicodeDecodeError:
-            # Buffer contains incomplete UTF-8 sequence, continue reading
-            pass
-
-        return buffer
-
     try:
         with subprocess.Popen(cmd, stdout=subprocess.PIPE, bufsize=0) as proc:
-            buffer = b''  # Buffer to accumulate incomplete data
+            try:
+                # Use ijson to parse the JSON stream incrementally
+                # kvitems('') iterates over key-value pairs at the root level
+                # This gives us each prefix and its route entries as they become available
+                for prefix, route_entries in ijson.kvitems(proc.stdout, ''):
+                    # Process each route entry for this prefix
+                    if isinstance(route_entries, list):
+                        for route_entry in route_entries:
+                            process_route_entry(prefix, route_entry)
+                    else:
+                        # Handle case where route_entries is not a list (shouldn't happen with valid FRR output)
+                        print_message(syslog.LOG_WARNING, f"Unexpected route entry format for prefix {prefix}")
 
-            while True:
-                # Read a chunk of data
-                chunk = proc.stdout.read(CHUNK_SIZE)
-                if not chunk:
-                    # No more data to read
-                    break
-
-                # Add chunk to buffer
-                buffer += chunk
-                buffer = parse_prefix_entries(buffer)
-
-            # Process any remaining data in buffer
-            if buffer:
-                parse_prefix_entries(buffer)
+            except ijson.JSONError as e:
+                # Handle JSON parsing errors
+                print_message(syslog.LOG_WARNING, f"Failed to parse JSON stream: {e}")
+            except UnicodeDecodeError as e:
+                # Handle UTF-8 decoding errors
+                print_message(syslog.LOG_WARNING, f"UTF-8 decoding error: {e}")
+            except Exception as e:
+                # Handle any other unexpected errors during parsing
+                print_message(syslog.LOG_WARNING, f"Error during JSON parsing: {e}")
 
             # Wait for the process to terminate and get the return code
             return_code = proc.wait()
