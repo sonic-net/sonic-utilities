@@ -74,7 +74,7 @@ Ethernet0: SFP EEPROM detected
 
 test_qsfp_dd_eeprom_with_dom_output = """\
 Ethernet8: SFP EEPROM detected
-        Active Firmware: 0.0
+        Active Firmware: 2.1.1
         Active application selected code assigned to host lane 1: 1
         Active application selected code assigned to host lane 2: 1
         Active application selected code assigned to host lane 3: 1
@@ -103,12 +103,12 @@ Media Assign (0x1)
         Module Hardware Rev: X.X
         Nominal Bit Rate(100Mbs): Not supported for CMIS cables
         Specification compliance: Not supported for CMIS cables
-        Vendor Date Code(YYYY-MM-DD Lot): 2022-05-28
-        Vendor Name: vendor1
-        Vendor OUI: some-oui
-        Vendor PN: some-model
-        Vendor Rev: A3
-        Vendor SN: serial1
+        Vendor Date Code(YYYY-MM-DD Lot): 2020-05-22
+        Vendor Name: INNOLIGHT
+        Vendor OUI: 44-7c-7f
+        Vendor PN: C-DQ8FNM010-N00
+        Vendor Rev: 2A
+        Vendor SN: INKAO2900002A
         ChannelMonitorValues:
                 RX1Power: -3.8595dBm
                 RX2Power: 8.1478dBm
