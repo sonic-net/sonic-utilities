@@ -19,6 +19,22 @@ sys.path.append("scripts")
 import route_check  # noqa: E402
 
 
+class ChunkedBytesIO:
+    def __init__(self, chunks):
+        self.chunks = chunks
+        self.index = 0
+
+    def read(self, size):
+        if not size:
+            return b''
+
+        if self.index >= len(self.chunks):
+            return b''
+        chunk = self.chunks[self.index]
+        self.index += 1
+        return chunk
+
+
 class TestFetchRoutes:
     """Test suite for chunk-based reading in fetch_routes()"""
 
@@ -61,7 +77,7 @@ class TestFetchRoutes:
         mock_proc = self.create_mock_process(json_bytes)
 
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
-            result = route_check.fetch_routes(['show', 'ip', 'route', 'json'])
+            result = route_check.fetch_routes()
 
         assert result == (["192.168.1.0/24"], [])
 
@@ -91,18 +107,6 @@ class TestFetchRoutes:
         chunk2 = json_str[split_point:].encode('utf-8')
 
         # Create a custom BytesIO that returns data in specific chunk sizes
-        class ChunkedBytesIO:
-            def __init__(self, chunks):
-                self.chunks = chunks
-                self.index = 0
-
-            def read(self, size):
-                if self.index >= len(self.chunks):
-                    return b''
-                chunk = self.chunks[self.index]
-                self.index += 1
-                return chunk
-
         mock_proc = Mock()
         mock_proc.stdout = ChunkedBytesIO([chunk1, chunk2])
         mock_proc.wait = Mock(return_value=0)
@@ -110,7 +114,7 @@ class TestFetchRoutes:
         mock_proc.__exit__ = Mock(return_value=False)
 
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
-            result = route_check.fetch_routes(['show', 'ip', 'route', 'json'])
+            result = route_check.fetch_routes()
 
         assert set(result[0]) == {"10.0.0.0/8", "172.16.0.0/12"}
 
@@ -138,7 +142,7 @@ class TestFetchRoutes:
         mock_proc = self.create_mock_process(json_bytes)
 
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
-            result = route_check.fetch_routes(['show', 'ip', 'route', 'json'])
+            result = route_check.fetch_routes()
 
         assert result == (["192.168.2.0/24"], [])
 
@@ -179,7 +183,7 @@ class TestFetchRoutes:
         mock_proc = self.create_mock_process(json_bytes)
 
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
-            result = route_check.fetch_routes(['show', 'ip', 'route', 'json'])
+            result = route_check.fetch_routes()
 
         # Only BGP route should be in the result
         assert result == (["192.168.4.0/24"], [])
@@ -214,7 +218,7 @@ class TestFetchRoutes:
         mock_proc = self.create_mock_process(json_bytes)
 
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
-            result = route_check.fetch_routes(['show', 'ip', 'route', 'json'])
+            result = route_check.fetch_routes()
 
         # Only default VRF route should be in the result
         assert result == (["192.168.2.0/24"], [])
@@ -242,7 +246,7 @@ class TestFetchRoutes:
         mock_proc = self.create_mock_process(json_bytes)
 
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
-            result = route_check.fetch_routes(['show', 'ip', 'route', 'json'])
+            result = route_check.fetch_routes()
 
         # Only selected route should be in the result
         assert result == (["192.168.2.0/24"], [])
@@ -255,7 +259,7 @@ class TestFetchRoutes:
         mock_proc = self.create_mock_process(json_bytes)
 
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
-            result = route_check.fetch_routes(['show', 'ip', 'route', 'json'])
+            result = route_check.fetch_routes()
 
         assert result == ([], [])
 
@@ -284,18 +288,6 @@ class TestFetchRoutes:
             chunk1 = json_bytes[:split_point]
             chunk2 = json_bytes[split_point:]
 
-            class ChunkedBytesIO:
-                def __init__(self, chunks):
-                    self.chunks = chunks
-                    self.index = 0
-
-                def read(self, size):
-                    if self.index >= len(self.chunks):
-                        return b''
-                    chunk = self.chunks[self.index]
-                    self.index += 1
-                    return chunk
-
             mock_proc = Mock()
             mock_proc.stdout = ChunkedBytesIO([chunk1, chunk2])
             mock_proc.wait = Mock(return_value=0)
@@ -303,8 +295,7 @@ class TestFetchRoutes:
             mock_proc.__exit__ = Mock(return_value=False)
 
             with patch('route_check.subprocess.Popen', return_value=mock_proc):
-                result = route_check.fetch_routes(['show', 'ip', 'route',
-                                                   'json'])
+                result = route_check.fetch_routes()
 
             assert result == (["192.168.1.0/24"], [])
 
@@ -324,18 +315,6 @@ class TestFetchRoutes:
         # Create chunks of 10 bytes each
         chunks = [json_bytes[i:i+10] for i in range(0, len(json_bytes), 10)]
 
-        class ChunkedBytesIO:
-            def __init__(self, chunks):
-                self.chunks = chunks
-                self.index = 0
-
-            def read(self, size):
-                if self.index >= len(self.chunks):
-                    return b''
-                chunk = self.chunks[self.index]
-                self.index += 1
-                return chunk
-
         mock_proc = Mock()
         mock_proc.stdout = ChunkedBytesIO(chunks)
         mock_proc.wait = Mock(return_value=0)
@@ -343,7 +322,7 @@ class TestFetchRoutes:
         mock_proc.__exit__ = Mock(return_value=False)
 
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
-            result = route_check.fetch_routes(['show', 'ip', 'route', 'json'])
+            result = route_check.fetch_routes()
 
         assert result == (["10.0.0.0/8"], [])
 
@@ -369,7 +348,7 @@ class TestFetchRoutes:
         mock_proc = self.create_mock_process(json_bytes)
 
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
-            result = route_check.fetch_routes(['show', 'ip', 'route', 'json'])
+            result = route_check.fetch_routes()
 
         assert set(result[0]) == set(expected_missing)
         assert len(result[0]) == 100
@@ -391,8 +370,7 @@ class TestFetchRoutes:
 
         with patch('route_check.subprocess.Popen', return_value=mock_proc) \
                 as mock_popen:
-            result = route_check.fetch_routes(['show', 'ipv6',
-                                               'route', 'json'])
+            result = route_check.fetch_routes(ipv6=True)
 
             # Verify the correct command was called
             mock_popen.assert_called_once()
@@ -421,7 +399,7 @@ class TestFetchRoutes:
         mock_proc.__exit__ = Mock(return_value=False)
 
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
-            result = route_check.fetch_routes(['show', 'ip', 'route', 'json'])
+            result = route_check.fetch_routes()
 
         # Should still return the parsed routes
         assert result == (["192.168.1.0/24"], [])
@@ -430,7 +408,7 @@ class TestFetchRoutes:
         """Test handling of FileNotFoundError when vtysh is not found"""
         with patch('route_check.subprocess.Popen',
                    side_effect=FileNotFoundError("vtysh not found")):
-            result = route_check.fetch_routes(['show', 'ip', 'route', 'json'])
+            result = route_check.fetch_routes()
 
         # Should return empty list on error
         assert result == ([], [])
@@ -460,7 +438,7 @@ class TestFetchRoutes:
         mock_proc = self.create_mock_process(json_bytes)
 
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
-            result = route_check.fetch_routes(['show', 'ip', 'route', 'json'])
+            result = route_check.fetch_routes()
 
         # First entry is offloaded, second is not selected, so no missing
         # routes
@@ -489,7 +467,7 @@ class TestFetchRoutes:
         mock_proc = self.create_mock_process(json_bytes)
 
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
-            result = route_check.fetch_routes(['show', 'ip', 'route', 'json'])
+            result = route_check.fetch_routes()
 
         assert result == (["192.168.1.0/24"], [])
 
@@ -507,18 +485,6 @@ class TestFetchRoutes:
         json_str = json.dumps(json_data)
         json_bytes = json_str.encode('utf-8')
 
-        class ChunkedBytesIO:
-            def __init__(self, chunks):
-                self.chunks = chunks
-                self.index = 0
-
-            def read(self, size):
-                if self.index >= len(self.chunks):
-                    return b''
-                chunk = self.chunks[self.index]
-                self.index += 1
-                return chunk
-
         json_len = len(json_str)
         for chunk_boundary in range(1, json_len):
             # Find the position of the first closing brace
@@ -532,8 +498,7 @@ class TestFetchRoutes:
             mock_proc.__exit__ = Mock(return_value=False)
 
             with patch('route_check.subprocess.Popen', return_value=mock_proc):
-                result = route_check.fetch_routes(['show', 'ip', 'route',
-                                                   'json'])
+                result = route_check.fetch_routes()
 
             assert result == (["192.168.1.0/24"], [])
 
@@ -558,18 +523,6 @@ class TestFetchRoutes:
         chunk1 = json_bytes[:split_point]
         chunk2 = json_bytes[split_point:]
 
-        class ChunkedBytesIO:
-            def __init__(self, chunks):
-                self.chunks = chunks
-                self.index = 0
-
-            def read(self, size):
-                if self.index >= len(self.chunks):
-                    return b''
-                chunk = self.chunks[self.index]
-                self.index += 1
-                return chunk
-
         mock_proc = Mock()
         mock_proc.stdout = ChunkedBytesIO([chunk1, chunk2])
         mock_proc.wait = Mock(return_value=0)
@@ -577,7 +530,7 @@ class TestFetchRoutes:
         mock_proc.__exit__ = Mock(return_value=False)
 
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
-            result = route_check.fetch_routes(['show', 'ip', 'route', 'json'])
+            result = route_check.fetch_routes()
 
         assert result == (["192.168.1.0/24"], [])
 
@@ -598,7 +551,7 @@ class TestFetchRoutes:
         mock_proc = self.create_mock_process(json_bytes)
 
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
-            result = route_check.fetch_routes(['show', 'ip', 'route', 'json'])
+            result = route_check.fetch_routes()
 
         assert result == (["192.168.1.0/24"], [])
 
@@ -621,7 +574,7 @@ class TestFetchRoutes:
         mock_proc = self.create_mock_process(json_bytes)
 
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
-            result = route_check.fetch_routes(['show', 'ip', 'route', 'json'])
+            result = route_check.fetch_routes()
 
         assert result == (["192.168.1.0/24"], [])
 
@@ -648,7 +601,7 @@ class TestFetchRoutes:
         mock_proc = self.create_mock_process(json_bytes)
 
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
-            result = route_check.fetch_routes(['show', 'ip', 'route', 'json'])
+            result = route_check.fetch_routes()
 
         assert set(result[0]) == {"192.168.1.0/24", "2001:db8::/32"}
 
@@ -659,7 +612,7 @@ class TestFetchRoutes:
         mock_proc = self.create_mock_process(malformed_json)
 
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
-            result = route_check.fetch_routes(['show', 'ip', 'route', 'json'])
+            result = route_check.fetch_routes()
 
         # Should return empty list for malformed JSON
         assert result == ([], [])
@@ -694,7 +647,7 @@ class TestFetchRoutes:
         mock_proc = self.create_mock_process(json_bytes)
 
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
-            result = route_check.fetch_routes(['show', 'ip', 'route', 'json'])
+            result = route_check.fetch_routes()
 
         assert set(result[0]) == {"192.168.1.0/24",
                                   "192.168.2.0/24",
@@ -731,18 +684,6 @@ class TestFetchRoutes:
         chunk1 = json_bytes[:split_point]
         chunk2 = json_bytes[split_point:]
 
-        class ChunkedBytesIO:
-            def __init__(self, chunks):
-                self.chunks = chunks
-                self.index = 0
-
-            def read(self, size):
-                if self.index >= len(self.chunks):
-                    return b''
-                chunk = self.chunks[self.index]
-                self.index += 1
-                return chunk
-
         mock_proc = Mock()
         mock_proc.stdout = ChunkedBytesIO([chunk1, chunk2])
         mock_proc.wait = Mock(return_value=0)
@@ -750,7 +691,7 @@ class TestFetchRoutes:
         mock_proc.__exit__ = Mock(return_value=False)
 
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
-            result = route_check.fetch_routes(['show', 'ip', 'route', 'json'])
+            result = route_check.fetch_routes()
 
         assert set(result[0]) == {"192.168.1.0/24", "192.168.2.0/24"}
 
@@ -777,18 +718,6 @@ class TestFetchRoutes:
         chunk_size = 500
         chunks = [json_bytes[i:i+chunk_size] for i in range(0, len(json_bytes), chunk_size)]
 
-        class ChunkedBytesIO:
-            def __init__(self, chunks):
-                self.chunks = chunks
-                self.index = 0
-
-            def read(self, size):
-                if self.index >= len(self.chunks):
-                    return b''
-                chunk = self.chunks[self.index]
-                self.index += 1
-                return chunk
-
         mock_proc = Mock()
         mock_proc.stdout = ChunkedBytesIO(chunks)
         mock_proc.wait = Mock(return_value=0)
@@ -796,7 +725,7 @@ class TestFetchRoutes:
         mock_proc.__exit__ = Mock(return_value=False)
 
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
-            result = route_check.fetch_routes(['show', 'ip', 'route', 'json'])
+            result = route_check.fetch_routes()
 
         assert set(result[0]) == set(expected_missing)
         assert len(result[0]) == 50
@@ -828,18 +757,6 @@ class TestFetchRoutes:
         chunk1 = json_bytes[:comma_pos]
         chunk2 = json_bytes[comma_pos:]
 
-        class ChunkedBytesIO:
-            def __init__(self, chunks):
-                self.chunks = chunks
-                self.index = 0
-
-            def read(self, size):
-                if self.index >= len(self.chunks):
-                    return b''
-                chunk = self.chunks[self.index]
-                self.index += 1
-                return chunk
-
         mock_proc = Mock()
         mock_proc.stdout = ChunkedBytesIO([chunk1, chunk2])
         mock_proc.wait = Mock(return_value=0)
@@ -847,7 +764,7 @@ class TestFetchRoutes:
         mock_proc.__exit__ = Mock(return_value=False)
 
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
-            result = route_check.fetch_routes(['show', 'ip', 'route', 'json'])
+            result = route_check.fetch_routes()
 
         assert set(result[0]) == {"192.168.1.0/24", "192.168.2.0/24"}
 
@@ -888,7 +805,7 @@ class TestFetchRoutes:
         mock_proc = self.create_mock_process(json_bytes)
 
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
-            result = route_check.fetch_routes(['show', 'ip', 'route', 'json'])
+            result = route_check.fetch_routes()
 
         # Only the non-offloaded routes should be in the result
         assert set(result[0]) == {"192.168.2.0/24", "192.168.4.0/24"}
@@ -921,7 +838,7 @@ class TestFetchRoutes:
         mock_proc = self.create_mock_process(json_bytes)
 
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
-            result = route_check.fetch_routes(['show', 'ip', 'route', 'json'])
+            result = route_check.fetch_routes()
 
         assert set(result[0]) == {"192.168.1.0/24", "192.168.2.0/24"}
 
@@ -950,6 +867,6 @@ class TestFetchRoutes:
         mock_proc = self.create_mock_process(json_bytes)
 
         with patch('route_check.subprocess.Popen', return_value=mock_proc):
-            result = route_check.fetch_routes(['show', 'ip', 'route', 'json'])
+            result = route_check.fetch_routes()
 
         assert set(result[0]) == {"192.168.1.0/24", "192.168.2.0/24"}
