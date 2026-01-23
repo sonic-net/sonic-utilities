@@ -3222,7 +3222,8 @@ def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer
             per_npu_configdb[front_asic_namespaces] = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespaces))
             per_npu_configdb[front_asic_namespaces].connect()
             if ADHOC_VALIDATION:
-                if validate_mirror_session_config(per_npu_configdb[front_asic_namespaces], session_name, None, src_port, direction, front_asic_namespaces) is False:
+                if validate_mirror_session_config(per_npu_configdb[front_asic_namespaces], session_name, None, src_port,
+                                                  direction, front_asic_namespaces) is False:
                     return
             try:
                 per_npu_configdb[front_asic_namespaces].set_entry("MIRROR_SESSION", session_name, session_info)
@@ -3281,7 +3282,8 @@ def add_span(session_name, dst_port, src_port, direction, queue, policer):
             per_npu_configdb[front_asic_namespaces] = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespaces))
             per_npu_configdb[front_asic_namespaces].connect()
             if ADHOC_VALIDATION:
-                if validate_mirror_session_config(per_npu_configdb[front_asic_namespaces], session_name, dst_port, src_port, direction, front_asic_namespaces) is False:
+                if validate_mirror_session_config(per_npu_configdb[front_asic_namespaces], session_name, dst_port, src_port,
+                                                  direction, front_asic_namespaces) is False:
                     return
             try:
                 per_npu_configdb[front_asic_namespaces].set_entry("MIRROR_SESSION", session_name, session_info)
