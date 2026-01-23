@@ -1168,7 +1168,7 @@ def is_port_mirror_capability_supported(direction, namespace=None):
     return True
 
 
-def validate_mirror_session_config(config_db, session_name, dst_port, src_port, direction):
+def validate_mirror_session_config(config_db, session_name, dst_port, src_port, direction, namespace=None):
     """ Check if SPAN mirror-session config is valid """
     ctx = click.get_current_context()
     if len(config_db.get_entry('MIRROR_SESSION', session_name)) != 0:
@@ -1211,7 +1211,7 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
 
     # Check port mirror capability before allowing configuration
     # If direction is provided, check the specific direction
-    if not is_port_mirror_capability_supported(direction):
+    if not is_port_mirror_capability_supported(direction, namespace):
         ctx.fail("Error: Port mirror direction '{}' is not supported by the ASIC".format(
             direction if direction else 'both'))
 
@@ -3222,7 +3222,7 @@ def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer
             per_npu_configdb[front_asic_namespaces] = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespaces))
             per_npu_configdb[front_asic_namespaces].connect()
             if ADHOC_VALIDATION:
-                if validate_mirror_session_config(per_npu_configdb[front_asic_namespaces], session_name, None, src_port, direction) is False:
+                if validate_mirror_session_config(per_npu_configdb[front_asic_namespaces], session_name, None, src_port, direction, front_asic_namespaces) is False:
                     return
             try:
                 per_npu_configdb[front_asic_namespaces].set_entry("MIRROR_SESSION", session_name, session_info)
@@ -3281,7 +3281,7 @@ def add_span(session_name, dst_port, src_port, direction, queue, policer):
             per_npu_configdb[front_asic_namespaces] = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespaces))
             per_npu_configdb[front_asic_namespaces].connect()
             if ADHOC_VALIDATION:
-                if validate_mirror_session_config(per_npu_configdb[front_asic_namespaces], session_name, dst_port, src_port, direction) is False:
+                if validate_mirror_session_config(per_npu_configdb[front_asic_namespaces], session_name, dst_port, src_port, direction, front_asic_namespaces) is False:
                     return
             try:
                 per_npu_configdb[front_asic_namespaces].set_entry("MIRROR_SESSION", session_name, session_info)
