@@ -151,52 +151,57 @@ def get_ip_intfs_in_namespace(af, namespace, display):
     """
     ip_intfs = {}
     interfaces = multi_asic_util.multi_asic_get_ip_intf_from_ns(namespace)
+    if af == 2:
+        afstr = "inet"
+    elif af == 10:
+        afstr = "inet6"
+    if_db = multi_asic_util.multi_asic_get_addr_info_from_ns(namespace)
     bgp_peer = get_bgp_peer()
     for iface in interfaces:
         ip_intf_attr = []
         if namespace != constants.DEFAULT_NAMESPACE and skip_ip_intf_display(iface, display):
             continue
-        try:
-            ipaddresses = multi_asic_util.multi_asic_get_ip_intf_addr_from_ns(namespace, iface)
-        except ValueError:
+        ipaddresses = if_db.get(iface, {}).get("addr_info", [])
+        ifaddresses = []
+        bgp_neighs = {}
+        ip_intf_attr = []
+        for addr in ipaddresses:
+            if addr["family"] != afstr:
+                continue
+            neighbor_name = 'N/A'
+            neighbor_ip = 'N/A'
+            local_ip = str(addr['local'])
+            netmask = str(addr["prefixlen"])
+            scopestr = ""
+            if ("scope" in addr) and (addr["scope"] == "link"):
+                scopestr="%{}".format(iface)
+            local_ip_with_mask = "{}{}/{}".format(local_ip, scopestr, str(netmask))
+            ifaddresses.append(["", local_ip_with_mask])
+            try:
+                neighbor_name = bgp_peer[local_ip][0]
+                neighbor_ip = bgp_peer[local_ip][1]
+            except KeyError:
+                pass
+
+            bgp_neighs.update({local_ip_with_mask: [neighbor_name, neighbor_ip]})
+
+        if len(ifaddresses) > 0:
+            admin =  "up" if "UP" in if_db[iface]["flags"] else "down"
+            oper = "down" if if_db[iface]["operstate"] == "DOWN" else "up"
+            master = get_if_master(iface)
+        else:
             continue
-        if af in ipaddresses:
-            ifaddresses = []
-            bgp_neighs = {}
-            ip_intf_attr = []
-            for ipaddr in ipaddresses[af]:
-                neighbor_name = 'N/A'
-                neighbor_ip = 'N/A'
-                local_ip = str(ipaddr['addr'])
-                if af == netifaces.AF_INET:
-                    netmask = netaddr.IPAddress(ipaddr['netmask']).netmask_bits()
-                else:
-                    netmask = ipaddr['netmask'].split('/', 1)[-1]
-                local_ip_with_mask = "{}/{}".format(local_ip, str(netmask))
-                ifaddresses.append(["", local_ip_with_mask])
-                try:
-                    neighbor_name = bgp_peer[local_ip][0]
-                    neighbor_ip = bgp_peer[local_ip][1]
-                except KeyError:
-                    pass
 
-                bgp_neighs.update({local_ip_with_mask: [neighbor_name, neighbor_ip]})
+        ip_intf_attr = {
+            "vrf": master,
+            "ipaddr": natsorted(ifaddresses),
+            "admin": admin,
+            "oper": oper,
+            "bgp_neighs": bgp_neighs,
+            "ns": namespace
+        }
 
-            if len(ifaddresses) > 0:
-                admin = get_if_admin_state(iface, namespace)
-                oper = get_if_oper_state(iface, namespace)
-                master = get_if_master(iface)
-
-            ip_intf_attr = {
-                "vrf": master,
-                "ipaddr": natsorted(ifaddresses),
-                "admin": admin,
-                "oper": oper,
-                "bgp_neighs": bgp_neighs,
-                "ns": namespace
-            }
-
-            ip_intfs[iface] = ip_intf_attr
+        ip_intfs[iface] = ip_intf_attr
     return ip_intfs
 
 
