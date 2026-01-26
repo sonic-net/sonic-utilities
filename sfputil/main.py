@@ -1907,7 +1907,7 @@ def write_eeprom(port, page, offset, data, wire_addr, verify):
         success = sfp.write_eeprom(overall_offset, len(bytes), bytes)
         if not success:
             click.echo("Error: Failed to write EEPROM!")
-            sys.exit(ERROR_NOT_IMPLEMENTED)
+            sys.exit(EXIT_FAIL)
         if verify:
             read_data = sfp.read_eeprom(overall_offset, len(bytes))
             if read_data != bytes:

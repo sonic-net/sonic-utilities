@@ -1510,7 +1510,7 @@ EEPROM hexdump for port Ethernet4
         result = runner.invoke(sfputil.cli.commands['write-eeprom'],
                                ['-p', "Ethernet0", '-n', '0', '-o', '0', '-d', '10'])
         print(result.output)
-        assert result.exit_code == ERROR_NOT_IMPLEMENTED
+        assert result.exit_code == EXIT_FAIL
 
         # write success
         mock_sfp.write_eeprom.return_value = True
