@@ -54,90 +54,65 @@ class TestSonicKdumpConfig(unittest.TestCase):
     def setup_class(cls):
         print("SETUP")
 
-    @patch("sonic_kdump_config.run_command")
+    @patch('sonic_kdump_config.getstatusoutput_noshell_pipe')
     def test_read_num_kdumps(self, mock_run_cmd):
         """Tests the function `read_num_kdumps(...)` in script `sonic-kdump-config`.
         """
-        mock_run_cmd.return_value = (0, ["0"], None)
+        mock_run_cmd.return_value = ([0, 0], "0")
         num_dumps = sonic_kdump_config.read_num_dumps()
         assert num_dumps == 0
         logger.info("Value of 'num_dumps' is: '{}'.".format(num_dumps))
         logger.info("Expected value of 'num_dumps' is: '0'.")
 
-        mock_run_cmd.return_value = (0, ["NotInteger"], None)
+        mock_run_cmd.return_value = ([0, 0], "NotInteger")
         with self.assertRaises(SystemExit) as sys_exit:
             num_dumps = sonic_kdump_config.read_num_dumps()
         self.assertEqual(sys_exit.exception.code, 1)
 
-        mock_run_cmd.return_value = (0, (), None)
+        mock_run_cmd.return_value = ([0, 0], "")
         with self.assertRaises(SystemExit) as sys_exit:
             num_dumps = sonic_kdump_config.read_num_dumps()
         self.assertEqual(sys_exit.exception.code, 1)
 
-        mock_run_cmd.return_value = (0, [], None)
+        mock_run_cmd.return_value = ([1, 0], "3")
         with self.assertRaises(SystemExit) as sys_exit:
             num_dumps = sonic_kdump_config.read_num_dumps()
         self.assertEqual(sys_exit.exception.code, 1)
 
-        mock_run_cmd.return_value = (1, [], None)
+        mock_run_cmd.return_value = ([0, 1], "3")
         with self.assertRaises(SystemExit) as sys_exit:
             num_dumps = sonic_kdump_config.read_num_dumps()
         self.assertEqual(sys_exit.exception.code, 1)
 
-        mock_run_cmd.return_value = (1, ["3"], None)
+        mock_run_cmd.return_value = ([0, 1], "NotInteger")
         with self.assertRaises(SystemExit) as sys_exit:
             num_dumps = sonic_kdump_config.read_num_dumps()
         self.assertEqual(sys_exit.exception.code, 1)
 
-        mock_run_cmd.return_value = (1, (), None)
-        with self.assertRaises(SystemExit) as sys_exit:
-            num_dumps = sonic_kdump_config.read_num_dumps()
-        self.assertEqual(sys_exit.exception.code, 1)
-
-        mock_run_cmd.return_value = (1, ["NotInteger"], None)
-        with self.assertRaises(SystemExit) as sys_exit:
-            num_dumps = sonic_kdump_config.read_num_dumps()
-        self.assertEqual(sys_exit.exception.code, 1)
-
-    @patch("sonic_kdump_config.run_command")
+    @patch('sonic_kdump_config.getstatusoutput_noshell_pipe')
     def test_read_use_kdump(self, mock_run_cmd):
         """Tests the function `read_use_kdump(...)` in script `sonic-kdump-config`.
         """
-        mock_run_cmd.return_value = (0, ["0"], None)
+        mock_run_cmd.return_value = ([0, 0], "0")
         is_kdump_enabled = sonic_kdump_config.read_use_kdump()
         assert is_kdump_enabled == 0
 
-        mock_run_cmd.return_value = (0, (), None)
+        mock_run_cmd.return_value = ([0, 0], "NotInteger")
         with self.assertRaises(SystemExit) as sys_exit:
             is_kdump_enabled = sonic_kdump_config.read_use_kdump()
         self.assertEqual(sys_exit.exception.code, 1)
 
-        mock_run_cmd.return_value = (0, [], None)
+        mock_run_cmd.return_value = ([0, 0], "")
         with self.assertRaises(SystemExit) as sys_exit:
             is_kdump_enabled = sonic_kdump_config.read_use_kdump()
         self.assertEqual(sys_exit.exception.code, 1)
 
-        mock_run_cmd.return_value = (0, ["NotInteger"], None)
+        mock_run_cmd.return_value = ([1, 0], "3")
         with self.assertRaises(SystemExit) as sys_exit:
             is_kdump_enabled = sonic_kdump_config.read_use_kdump()
         self.assertEqual(sys_exit.exception.code, 1)
 
-        mock_run_cmd.return_value = (1, ["0"], None)
-        with self.assertRaises(SystemExit) as sys_exit:
-            is_kdump_enabled = sonic_kdump_config.read_use_kdump()
-        self.assertEqual(sys_exit.exception.code, 1)
-
-        mock_run_cmd.return_value = (1, ["NotInteger"], None)
-        with self.assertRaises(SystemExit) as sys_exit:
-            is_kdump_enabled = sonic_kdump_config.read_use_kdump()
-        self.assertEqual(sys_exit.exception.code, 1)
-
-        mock_run_cmd.return_value = (1, (), None)
-        with self.assertRaises(SystemExit) as sys_exit:
-            is_kdump_enabled = sonic_kdump_config.read_use_kdump()
-        self.assertEqual(sys_exit.exception.code, 1)
-
-        mock_run_cmd.return_value = (1, [], None)
+        mock_run_cmd.return_value = ([0, 1], "3")
         with self.assertRaises(SystemExit) as sys_exit:
             is_kdump_enabled = sonic_kdump_config.read_use_kdump()
         self.assertEqual(sys_exit.exception.code, 1)
@@ -463,28 +438,28 @@ class TestSonicKdumpConfig(unittest.TestCase):
             sonic_kdump_config.cmd_kdump_remote(verbose=True)
             mock_print.assert_called_with("SSH and SSH_KEY commented out for local configuration.")
 
-    @patch("sonic_kdump_config.run_command")
+    @patch('sonic_kdump_config.getstatusoutput_noshell_pipe')
     def test_read_ssh_string(self, mock_run_cmd):
         """Tests the function `read_ssh_string(...)` in script `sonic-kdump-config`."""
 
         # Test case for successful read
-        mock_run_cmd.return_value = (0, ['user@ip_address'], None)  # Simulate successful command execution
+        mock_run_cmd.return_value = ([0, 0, 0], 'user@ip_address')  # Simulate successful command execution
         ssh_string = sonic_kdump_config.read_ssh_string()
         self.assertEqual(ssh_string, 'user@ip_address')
 
         # Test case for non-integer output
-        mock_run_cmd.return_value = (0, ['NotAString'], None)  # Simulate command execution returning a non-string
+        mock_run_cmd.return_value = ([0, 0, 0], 'NotAString')  # Simulate command execution returning a non-string
         ssh_string = sonic_kdump_config.read_ssh_string()
         self.assertEqual(ssh_string, 'NotAString')
 
         # Test case for empty output
-        mock_run_cmd.return_value = (0, [], None)  # Simulate command execution with empty output
+        mock_run_cmd.return_value = ([0, 0, 0], '')  # Simulate command execution with empty output
         with self.assertRaises(SystemExit) as sys_exit:
             sonic_kdump_config.read_ssh_string()
         self.assertEqual(sys_exit.exception.code, 1)
 
         # Test case for command failure
-        mock_run_cmd.return_value = (1, [], None)  # Simulate command failure
+        mock_run_cmd.return_value = ([0, 0, 1], '')  # Simulate command failure
         with self.assertRaises(SystemExit) as sys_exit:
             sonic_kdump_config.read_ssh_string()
         self.assertEqual(sys_exit.exception.code, 1)
@@ -526,23 +501,23 @@ class TestSonicKdumpConfig(unittest.TestCase):
             sonic_kdump_config.write_ssh_string('user@ip_address')
         self.assertEqual(sys_exit.exception.code, 1)
 
-    @patch("sonic_kdump_config.run_command")
+    @patch('sonic_kdump_config.getstatusoutput_noshell_pipe')
     def test_read_ssh_path(self, mock_run_cmd):
         """Tests the function `read_ssh_path(...)` in script `sonic-kdump-config`."""
 
         # Test successful case with valid SSH path
-        mock_run_cmd.return_value = (0, ['/path/to/keys'], None)
+        mock_run_cmd.return_value = ([0, 0, 0], '/path/to/keys')
         ssh_path = sonic_kdump_config.read_ssh_path()
         self.assertEqual(ssh_path, '/path/to/keys')
 
         # Test case where SSH path is invalid
-        mock_run_cmd.return_value = (0, ['NotAPath'], None)
+        mock_run_cmd.return_value = ([0, 0, 0], 'NotAPath')
         with self.assertRaises(SystemExit) as sys_exit:
             ssh_path = sonic_kdump_config.read_ssh_path()
         self.assertEqual(sys_exit.exception.code, 1)
 
         # Test case where grep fails (no SSH path found)
-        mock_run_cmd.return_value = (1, [], None)
+        mock_run_cmd.return_value = ([0, 0, 1], '')
         with self.assertRaises(SystemExit) as sys_exit:
             ssh_path = sonic_kdump_config.read_ssh_path()
         self.assertEqual(sys_exit.exception.code, 1)
