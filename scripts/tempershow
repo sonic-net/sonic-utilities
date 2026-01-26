@@ -14,6 +14,8 @@ from natsort import natsorted
 header = ['Sensor', 'Temperature', 'High TH', 'Low TH', 'Crit High TH', 'Crit Low TH', 'Warning', 'Timestamp']
 
 TEMPER_TABLE_NAME = 'TEMPERATURE_INFO'
+TRANSCEIVER_DOM_TEMPERATURE_TABLE_NAME = 'TRANSCEIVER_DOM_TEMPERATURE'
+TRANSCEIVER_DOM_SENSOR_TABLE_NAME = 'TRANSCEIVER_DOM_SENSOR'
 TEMPER_FIELD_NAME = 'temperature'
 TIMESTAMP_FIELD_NAME = 'timestamp'
 HIGH_THRESH_FIELD_NAME = 'high_threshold'
@@ -28,53 +30,106 @@ class TemperShow(object):
         self.db = SonicV2Connector(host="127.0.0.1")
         self.db.connect(self.db.STATE_DB)
 
-    def show(self, output_json):
-        keys = self.db.keys(self.db.STATE_DB, TEMPER_TABLE_NAME + '*')
-        if not keys:
-            print('Thermal Not detected\n')
-            return
+    def _get_transceiver_temperature_data(self, port_name):
+        """
+        Get temperature data for a transceiver/SFP module with fallback logic.
+        Try TRANSCEIVER_DOM_TEMPERATURE first, fall back to TRANSCEIVER_DOM_SENSOR.
+        :param: port_name: port name (e.g., 'Ethernet0')
+        :return: temperature value or None if not available
+        """
+        # Try new TRANSCEIVER_DOM_TEMPERATURE table first
+        temp_entry_key = TRANSCEIVER_DOM_TEMPERATURE_TABLE_NAME + '|' + port_name
+        temp_data = self.db.get_all(self.db.STATE_DB, temp_entry_key)
+        if temp_data and TEMPER_FIELD_NAME in temp_data:
+            return temp_data[TEMPER_FIELD_NAME]
 
+        # Fall back to TRANSCEIVER_DOM_SENSOR table
+        sensor_entry_key = TRANSCEIVER_DOM_SENSOR_TABLE_NAME + '|' + port_name
+        sensor_data = self.db.get_all(self.db.STATE_DB, sensor_entry_key)
+        if sensor_data and TEMPER_FIELD_NAME in sensor_data:
+            return sensor_data[TEMPER_FIELD_NAME]
+
+        return None
+
+    def _add_sensor_to_output(self, sensor_name, temperature, thresholds, json_output, table):
+        """
+        Helper method to add sensor data to output in both JSON and table format.
+        :param: sensor_name: name of the sensor
+        :param: temperature: temperature value
+        :param: thresholds: dict with threshold fields or None for transceiver data
+        :param: json_output: list to append JSON output to
+        :param: table: list to append table rows to
+        """
+        if thresholds:
+            # Thermal sensor data with thresholds
+            json_output.append({
+                "Sensor": sensor_name,
+                "Temperature": temperature,
+                "High_TH": thresholds[HIGH_THRESH_FIELD_NAME],
+                "Low_TH": thresholds[LOW_THRESH_FIELD_NAME],
+                "Crit_High_TH": thresholds[CRIT_HIGH_THRESH_FIELD_NAME],
+                "Crit_Low_TH": thresholds[CRIT_LOW_THRESH_FIELD_NAME],
+                "Warning": thresholds[WARNING_STATUS_FIELD_NAME],
+                "Timestamp": thresholds[TIMESTAMP_FIELD_NAME]
+            })
+            table.append((sensor_name, temperature, thresholds[HIGH_THRESH_FIELD_NAME],
+                         thresholds[LOW_THRESH_FIELD_NAME], thresholds[CRIT_HIGH_THRESH_FIELD_NAME],
+                         thresholds[CRIT_LOW_THRESH_FIELD_NAME], thresholds[WARNING_STATUS_FIELD_NAME],
+                         thresholds[TIMESTAMP_FIELD_NAME]))
+        else:
+            # Transceiver sensor data without thresholds
+            json_output.append({
+                "Sensor": sensor_name,
+                "Temperature": temperature,
+                "High_TH": "N/A",
+                "Low_TH": "N/A",
+                "Crit_High_TH": "N/A",
+                "Crit_Low_TH": "N/A",
+                "Warning": "N/A",
+                "Timestamp": "N/A"
+            })
+            table.append((sensor_name, temperature, "N/A", "N/A", "N/A", "N/A", "N/A", "N/A"))
+
+    def show(self, output_json):
         table = []
         json_output = []
-        for key in natsorted(keys):
+
+        # Collect thermal sensor data from TEMPERATURE_INFO table
+        thermal_keys = self.db.keys(self.db.STATE_DB, TEMPER_TABLE_NAME + '*')
+        for key in natsorted(thermal_keys or []):
             key_list = key.split('|')
-            if len(key_list) != 2: # error data in DB, log it and ignore
+            if len(key_list) != 2:
                 print('Warn: Invalid key in table {}: {}'.format(TEMPER_TABLE_NAME, key))
                 continue
 
             name = key_list[1]
             data_dict = self.db.get_all(self.db.STATE_DB, key)
-            if output_json:
-                json_output.append({
-                    "Sensor": name,
-                    "Temperature": data_dict[TEMPER_FIELD_NAME],
-                    "High_TH": data_dict[HIGH_THRESH_FIELD_NAME],
-                    "Low_TH": data_dict[LOW_THRESH_FIELD_NAME],
-                    "Crit_High_TH": data_dict[CRIT_HIGH_THRESH_FIELD_NAME],
-                    "Crit_Low_TH": data_dict[CRIT_LOW_THRESH_FIELD_NAME],
-                    "Warning": data_dict[WARNING_STATUS_FIELD_NAME],
-                    "Timestamp": data_dict[TIMESTAMP_FIELD_NAME]
-                })
+            self._add_sensor_to_output(name, data_dict[TEMPER_FIELD_NAME], data_dict, json_output, table)
 
-            else:
-                table.append((name, 
-                              data_dict[TEMPER_FIELD_NAME], 
-                              data_dict[HIGH_THRESH_FIELD_NAME],
-                              data_dict[LOW_THRESH_FIELD_NAME],
-                              data_dict[CRIT_HIGH_THRESH_FIELD_NAME],
-                              data_dict[CRIT_LOW_THRESH_FIELD_NAME],
-                              data_dict[WARNING_STATUS_FIELD_NAME],
-                              data_dict[TIMESTAMP_FIELD_NAME]
-                              ))
-        
-        if output_json:
-            print(json.dumps(json_output, indent=2))
-        elif table:
-            print(tabulate(table, header, tablefmt='simple', stralign='right'))
-        else:
+        # Collect transceiver temperature data for SFP modules
+        transceiver_keys = self.db.keys(self.db.STATE_DB, TRANSCEIVER_DOM_TEMPERATURE_TABLE_NAME + '*')
+        if not transceiver_keys:
+            transceiver_keys = self.db.keys(self.db.STATE_DB, TRANSCEIVER_DOM_SENSOR_TABLE_NAME + '*')
+
+        for key in natsorted(transceiver_keys or []):
+            key_list = key.split('|')
+            if len(key_list) != 2:
+                continue
+
+            port_name = key_list[1]
+            temp_value = self._get_transceiver_temperature_data(port_name)
+            if temp_value:
+                self._add_sensor_to_output(port_name, temp_value, None, json_output, table)
+
+        # Output results
+        if not json_output:
             print('No temperature data available\n')
+        elif output_json:
+            print(json.dumps(json_output, indent=2))
+        else:
+            print(tabulate(table, header, tablefmt='simple', stralign='right'))
 
-            
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Display the temperature Sensor information',
                                      formatter_class=argparse.RawTextHelpFormatter,
