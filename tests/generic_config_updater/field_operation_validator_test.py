@@ -703,6 +703,24 @@ class TestValidateFieldOperation:
         config_wrapper = gu_common.ConfigWrapper()
         config_wrapper.validate_field_operation(old_config, target_config)
 
+    def test_validate_field_operation_port_qos_map_dscp_to_tc_replace(self):
+        old_config = {"PORT_QOS_MAP": {"Ethernet0": {"dscp_to_tc_map": "DEFAULT"}}}
+        target_config = {"PORT_QOS_MAP": {"Ethernet0": {"dscp_to_tc_map": "AZURE"}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_port_qos_map_tc_to_pg_replace(self):
+        old_config = {"PORT_QOS_MAP": {"Ethernet0": {"tc_to_pg_map": "DEFAULT"}}}
+        target_config = {"PORT_QOS_MAP": {"Ethernet0": {"tc_to_pg_map": "AZURE"}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_port_qos_map_tc_to_queue_replace(self):
+        old_config = {"PORT_QOS_MAP": {"Ethernet0": {"tc_to_queue_map": "DEFAULT"}}}
+        target_config = {"PORT_QOS_MAP": {"Ethernet0": {"tc_to_queue_map": "AZURE"}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
     def test_validate_field_operation_scheduler_weight_replace(self):
         old_config = {"SCHEDULER": {"scheduler.0": {"weight": "10", "type": "DWRR"}}}
         target_config = {"SCHEDULER": {"scheduler.0": {"weight": "20", "type": "DWRR"}}}
