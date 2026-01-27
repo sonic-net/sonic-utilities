@@ -377,3 +377,15 @@ class TestFastLinkupCLI:
         runner = CliRunner()
         res = runner.invoke(show.cli, ["interfaces", "fast-linkup", "--help"])
         assert res.exit_code == SUCCESS
+
+    def test_config_global_missing_ranges(self):
+        # STATE_DB indicates supported but missing range fields
+        dbconnector.dedicated_dbs["STATE_DB"] = os.path.join(mock_state_path, "missing_ranges", "state_db")
+        db = Db()
+        runner = CliRunner()
+        result = runner.invoke(
+            config.config.commands["switch-fast-linkup"].commands["global"],
+            ["--polling-time", "60"], obj=db
+        )
+        assert result.exit_code != SUCCESS
+        assert "capability ranges are not defined" in result.output.lower()
