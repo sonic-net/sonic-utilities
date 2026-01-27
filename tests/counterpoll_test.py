@@ -413,7 +413,6 @@ class TestCounterpoll(object):
         table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
         assert test_interval == table["PORT_PHY_ATTR"]["POLL_INTERVAL"]
 
-
     @pytest.mark.parametrize("status", ["disable", "enable"])
     def test_queue_status(self, status):
         runner = CliRunner()
