@@ -1179,6 +1179,10 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
     mirror_table = config_db.get_table('MIRROR_SESSION')
     portchannel_member_table = config_db.get_table('PORTCHANNEL_MEMBER')
 
+    # Determine namespaces to validate: always include None (single-ASIC/back-compat),
+    # and for multi-ASIC include namespaces for dst/src ports if present.
+    namespace_set = set()
+
     if dst_port:
         if not interface_name_is_valid(config_db, dst_port):
             ctx.fail("Error: Destination Interface {} is invalid".format(dst_port))
@@ -1195,12 +1199,16 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
         if clicommon.is_port_router_interface(config_db, dst_port):
             ctx.fail("Error: Destination Interface {} is a L3 interface".format(dst_port))
 
+        namespace_set.add(get_port_namespace(dst_port))
+
     if src_port:
         for port in src_port.split(","):
             if not interface_name_is_valid(config_db, port):
                 ctx.fail("Error: Source Interface {} is invalid".format(port))
             if dst_port and dst_port == port:
                 ctx.fail("Error: Destination Interface cant be same as Source Interface")
+
+            namespace_set.add(get_port_namespace(port))
 
     if interface_has_mirror_config(ctx, mirror_table, dst_port, src_port, direction):
         return False
@@ -1211,9 +1219,11 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
 
     # Check port mirror capability before allowing configuration
     # If direction is provided, check the specific direction
-    if not is_port_mirror_capability_supported(direction):
-        ctx.fail("Error: Port mirror direction '{}' is not supported by the ASIC".format(
-            direction if direction else 'both'))
+
+    for ns in namespace_set:
+        if not is_port_mirror_capability_supported(direction, namespace=ns):
+            ctx.fail("Error: Port mirror direction '{}' is not supported by the ASIC".format(
+                direction if direction else 'both'))
 
     return True
 
