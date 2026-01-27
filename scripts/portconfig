@@ -334,11 +334,10 @@ class portconfig(object):
         if self.verbose:
             print("Setting fast-linkup %s on port %s" % (mode, port))
 
-        # Normalize accepted modes
         normalized = str(mode).strip().lower()
-        if normalized in ['enabled', 'on', 'true']:
+        if normalized == 'enabled':
             value = 'true'
-        elif normalized in ['disabled', 'off', 'false']:
+        elif normalized == 'disabled':
             value = 'false'
         else:
             print('Invalid fast-linkup mode specified: {}'.format(mode))

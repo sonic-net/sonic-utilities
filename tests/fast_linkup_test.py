@@ -137,7 +137,7 @@ class TestFastLinkupCLI:
         result = runner.invoke(
             config.config.commands["interface"].commands["fast-linkup"],
             ["Ethernet0", "enabled"],
-            obj={'config_db': db.cfgdb}
+            obj={'config_db': db.cfgdb, 'namespace': config.DEFAULT_NAMESPACE}
         )
         assert result.exit_code == SUCCESS
 
@@ -180,7 +180,7 @@ class TestFastLinkupCLI:
         result = runner.invoke(
             config.config.commands["interface"].commands["fast-linkup"],
             ["Ethernet0", "disabled"],
-            obj={'config_db': db.cfgdb}
+            obj={'config_db': db.cfgdb, 'namespace': config.DEFAULT_NAMESPACE}
         )
         assert result.exit_code == SUCCESS
 
@@ -220,7 +220,7 @@ class TestFastLinkupCLI:
         result = runner.invoke(
             config.config.commands["interface"].commands["fast-linkup"],
             ["Ethernet0", "enabled"],
-            obj={'config_db': db.cfgdb}
+            obj={'config_db': db.cfgdb, 'namespace': config.DEFAULT_NAMESPACE}
         )
         assert result.exit_code != SUCCESS
 
@@ -302,7 +302,7 @@ class TestFastLinkupCLI:
         result = runner.invoke(
             config.config.commands["interface"].commands["fast-linkup"],
             ["EthAlias0", "enabled"],
-            obj={'config_db': db.cfgdb}
+            obj={'config_db': db.cfgdb, 'namespace': config.DEFAULT_NAMESPACE}
         )
         assert result.exit_code != SUCCESS
         assert "interface_name" in result.output
@@ -319,10 +319,40 @@ class TestFastLinkupCLI:
         result = runner.invoke(
             config.config.commands["interface"].commands["fast-linkup"],
             ["Ethernet999", "enabled"],
-            obj={'config_db': db.cfgdb}
+            obj={'config_db': db.cfgdb, 'namespace': config.DEFAULT_NAMESPACE}
         )
         assert result.exit_code != SUCCESS
         assert "invalid" in result.output.lower()
+
+    def test_config_interface_namespace_portconfig(self, monkeypatch):
+        # Ensure namespace is passed to portconfig in multi-ASIC mode
+        dbconnector.dedicated_dbs["STATE_DB"] = os.path.join(mock_state_path, "supported", "state_db")
+        dbconnector.dedicated_dbs["CONFIG_DB"] = os.path.join(mock_config_path, "ports", "config_db")
+        db = Db()
+        runner = CliRunner()
+
+        import utilities_common.cli as clicommon
+
+        def fake_run_command(
+            cmd,
+            display_cmd=False,
+            ignore_error=False,
+            return_cmd=False,
+            interactive_mode=False,
+            shell=False,
+        ):
+            assert '-n' in cmd
+            ns_index = cmd.index('-n') + 1
+            assert cmd[ns_index] == 'asic0'
+            return
+
+        monkeypatch.setattr(clicommon, 'run_command', fake_run_command)
+        result = runner.invoke(
+            config.config.commands["interface"].commands["fast-linkup"],
+            ["Ethernet0", "enabled"],
+            obj={'config_db': db.cfgdb, 'namespace': 'asic0'}
+        )
+        assert result.exit_code == SUCCESS
 
     def test_show_switch_fast_linkup_group_help(self):
         # Enter group to cover the 'pass' in group callback

@@ -2891,7 +2891,6 @@ def switch_fast_linkup_group(ctx):
 def show_fast_linkup_global(db, json_output):
     data = db.cfgdb.get_entry('SWITCH_FAST_LINKUP', 'GLOBAL') or {}
     if json_output:
-        import json
         click.echo(json.dumps(data, indent=2))
         return
     rows = [[k, v] for k, v in data.items()]
