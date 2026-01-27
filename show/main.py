@@ -3,7 +3,7 @@ import os
 import subprocess
 import sys
 import re
-
+from collections import Counter
 import click
 import lazy_object_proxy
 import utilities_common.cli as clicommon
@@ -1641,32 +1641,115 @@ def table(verbose):
 #
 
 @cli.command()
-@click.argument('process', required=False)
-@click.option('-l', '--lines', type=int)
-@click.option('-f', '--follow', is_flag=True)
+@click.argument("processes", nargs=-1, required=False)
+@click.option("-p", "--process", multiple=True,
+              help="Process names to filter (multi allowed)")
+@click.option("-l", "--lines", type=int, help="last N lines of logs")
+@click.option("-f", "--follow", is_flag=True, help="Follow log output")
+@click.option("--file", "user_file", help="External log file")
+@click.option("--summary", is_flag=True, help="Show summary only")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def logging(process, lines, follow, verbose):
+@click.pass_context
+def logging(ctx, processes, process, lines, follow, user_file, summary, verbose):
     """Show system log"""
-    if os.path.exists("/var/log.tmpfs"):
-        log_path = "/var/log.tmpfs"
-    else:
-        log_path = "/var/log"
+
+    # Disable summary for custom files
+    if summary and user_file:
+        click.echo("Summary mode is not supported with custom files (--file).", err=True)
+        ctx.exit(1)
+
+    # Combine multi-process grep filters
+    proc_filters = list(processes) + list(process)
+    proc_pattern = "|".join(map(re.escape, proc_filters)) if proc_filters else None
+
+    # Determine internal log path
+    log_path = "/var/log.tmpfs" if os.path.exists("/var/log.tmpfs") else "/var/log"
+
+    # FOLLOW MODE -------------
     if follow:
-        cmd = ['sudo', 'tail', '-F', '{}/syslog'.format(log_path)]
-        run_command(cmd, display_cmd=verbose)
-    else:
-        if os.path.isfile("{}/syslog.1".format(log_path)):
-            cmd = "sudo cat {}/syslog.1 {}/syslog".format(log_path, log_path)
+        if user_file:
+            if not os.path.isfile(user_file):
+                click.echo(f"File not found: {user_file}", err=True)
+                ctx.exit(1)
+
+            if proc_pattern:
+                # pipeline → requires shell=True
+                cmd = f"sudo tail -F '{user_file}' | grep -E '{proc_pattern}'"
+                run_command(cmd, display_cmd=verbose, shell=True)
+            else:
+                # simple command → no shell
+                cmd = ["sudo", "tail", "-F", user_file]
+                run_command(cmd, display_cmd=verbose, shell=False)
+
         else:
-            cmd = "sudo cat {}/syslog".format(log_path)
+            syslog_file = f"{log_path}/syslog"
 
-        if process is not None:
-            cmd += " | grep '{}'".format(process)
+            if proc_pattern:
+                # pipeline → requires shell=True
+                cmd = f"sudo tail -F '{syslog_file}' | grep -E '{proc_pattern}'"
+                run_command(cmd, display_cmd=verbose, shell=True)
+            else:
+                # simple command → no shell
+                cmd = ["sudo", "tail", "-F", syslog_file]
+                run_command(cmd, display_cmd=verbose, shell=False)
+        return
 
-        if lines is not None:
-            cmd += " | tail -{}".format(lines)
+    # If user provided custom file, use that instead of syslog
+    if user_file:
+        if not os.path.isfile(user_file):
+            click.echo(f"File not found: {user_file}", err=True)
+            ctx.exit(1)
+        cmd = f"cat {user_file}"
+    else:
+        if os.path.isfile(f"{log_path}/syslog.1"):
+            cmd = f"sudo cat {log_path}/syslog.1 {log_path}/syslog"
+        else:
+            cmd = f"sudo cat {log_path}/syslog"
 
-        run_command(cmd, display_cmd=verbose, shell=True)
+    # Multi-process grep
+    if proc_pattern:
+        cmd += f" | grep -E '{proc_pattern}'"
+
+    # Apply tail
+    if lines is not None:
+        cmd += f" | tail -{lines}"
+
+    # Execute and capture logs
+    output = run_command(cmd, display_cmd=verbose, shell=True, return_cmd=True)
+    log_lines = output.split("\n")
+
+    # SUMMARY MODE
+    if summary:
+        level_counter = Counter()
+        proc_counter = Counter()
+        level_pattern = re.compile(r"\b(EMERG|ALERT|CRIT|ERR|WARNING|NOTICE|INFO|DEBUG)\b", re.I)
+        proc_pattern_str = re.compile(r"\b([\w\-]+)\[\d+\]:")  # process names like systemctl
+
+        for line_ in log_lines:
+            # Count log level
+            match_level = level_pattern.search(line_)
+            if match_level:
+                level_counter[match_level.group(1).upper()] += 1
+            # Count process
+            match_proc = proc_pattern_str.search(line_)
+            if match_proc:
+                proc_counter[match_proc.group(1)] += 1
+
+        click.echo("\nLog Summary")
+        click.echo("-" * 50)
+        click.echo(f"Total lines: {len(log_lines)}")
+        syslog_levels = ["EMERG", "ALERT", "CRIT", "ERR", "WARNING", "NOTICE", "INFO", "DEBUG"]
+        for lvl in syslog_levels:
+            click.echo(f"{lvl}: {level_counter.get(lvl, 0)}")
+        click.echo("\nTop Processes:")
+        for name, count in proc_counter.most_common(10):
+            click.echo(f"  {name}: {count}")
+        return
+
+    # NORMAL LOG OUTPUT
+    for line_ in log_lines:
+        click.echo(line_)
+
 
 #
 # 'version' command ("show version")
