@@ -1,3 +1,0 @@
-bash_completion.d/                  /etc/
-templates/*.j2                      /usr/share/sonic/templates/
-templates/sonic-cli-gen/*.j2        /usr/share/sonic/templates/sonic-cli-gen/

@@ -4,3 +4,14 @@ build:
 
 %:
 	dh $@
+
+override_dh_auto_clean:
+	rm -rf build
+	dh_auto_clean
+
+override_dh_auto_build:
+	mkdir build
+	./generate_completions.py -o build
+
+override_dh_auto_install:
+	dh_install build/* /etc/bash_completion.d/
