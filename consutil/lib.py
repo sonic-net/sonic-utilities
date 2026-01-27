@@ -330,7 +330,7 @@ class SysInfoProvider(object):
         cmd = ["bash", "-c", "ls " + SysInfoProvider.DEVICE_PREFIX + "*"]
         output, _ = SysInfoProvider.run_command(cmd, abort=False)
         ttys = output.split('\n')
-        ttys = list([dev for dev in ttys if re.match(SysInfoProvider.DEVICE_PREFIX + r"\d+", dev) != None])
+        ttys = list([dev for dev in ttys if re.match(SysInfoProvider.DEVICE_PREFIX + r"\d+$", dev)])
         return ttys
 
     @staticmethod
