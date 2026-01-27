@@ -586,14 +586,19 @@ class TestValidateFieldOperation:
 
     @pytest.mark.parametrize(
         "field,old_value,new_value,op", [
-            ("green_min_threshold", "1000", "1200", "replace"),
-            ("yellow_max_threshold", "2000", "2400", "replace"),
-            ("red_min_threshold", "3000", "3200", "replace"),
-            ("green_drop_probability", "5", "10", "replace"),
-            ("wred_green_enable", "true", "false", "replace"),
-            ("wred_yellow_enable", "false", "true", "replace"),
+            ("ecn", "ecn_all", "ecn_green", "replace"),
+            ("green_drop_probability", "5", "6", "replace"),
+            ("green_max_threshold", "136200192", "136200193", "replace"),
+            ("green_min_threshold", "136200192", "136200193", "replace"),
+            ("red_drop_probability", "5", "6", "replace"),
+            ("red_max_threshold", "282624", "282625", "replace"),
+            ("red_min_threshold", "166912", "166913", "replace"),
+            ("wred_green_enable", "false", "true", "replace"),
             ("wred_red_enable", "false", "true", "replace"),
-            ("ecn", "ecn_all", "ecn_mark", "replace")
+            ("wred_yellow_enable", "false", "true", "replace"),
+            ("yellow_drop_probability", "5", "6", "replace"),
+            ("yellow_max_threshold", "282624", "282625", "replace"),
+            ("yellow_min_threshold", "166912", "166913", "replace")
         ]
     )
     def test_validate_field_operation_wred_profile_replace(self, field, old_value, new_value, op):
