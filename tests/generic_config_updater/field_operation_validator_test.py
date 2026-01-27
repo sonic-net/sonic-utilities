@@ -604,6 +604,159 @@ class TestValidateFieldOperation:
             target_config
         )
 
+    def test_validate_field_operation_buffer_queue_replace_profile(self):
+        old_config = {
+            "BUFFER_QUEUE": {
+                "Ethernet0|3": {"profile": "ingress_lossless_profile"}
+            }
+        }
+        target_config = {
+            "BUFFER_QUEUE": {
+                "Ethernet0|3": {"profile": "ingress_lossless_profile_new"}
+            }
+        }
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_buffer_queue_add_profile(self):
+        old_config = {"BUFFER_QUEUE": {}}
+        target_config = {
+            "BUFFER_QUEUE": {
+                "Ethernet0|4": {"profile": "ingress_lossless_profile"}
+            }
+        }
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_buffer_queue_remove_entry(self):
+        old_config = {
+            "BUFFER_QUEUE": {
+                "Ethernet0|5": {"profile": "ingress_lossless_profile"}
+            }
+        }
+        target_config = {"BUFFER_QUEUE": {}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_buffer_pg_replace_profile(self):
+        old_config = {
+            "BUFFER_PG": {
+                "Ethernet0|3-4": {"profile": "pg_lossless_40000_5m_profile"}
+            }
+        }
+        target_config = {
+            "BUFFER_PG": {
+                "Ethernet0|3-4": {"profile": "pg_lossless_40000_10m_profile"}
+            }
+        }
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_buffer_pg_add_profile(self):
+        old_config = {"BUFFER_PG": {}}
+        target_config = {
+            "BUFFER_PG": {
+                "Ethernet0|5-6": {"profile": "pg_lossless_40000_5m_profile"}
+            }
+        }
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_buffer_pg_remove_entry(self):
+        old_config = {
+            "BUFFER_PG": {
+                "Ethernet0|7": {"profile": "pg_lossless_40000_5m_profile"}
+            }
+        }
+        target_config = {"BUFFER_PG": {}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    @pytest.mark.parametrize(
+        "table", [
+            "BUFFER_PORT_EGRESS_PROFILE_LIST",
+            "BUFFER_PORT_INGRESS_PROFILE_LIST"
+        ]
+    )
+    def test_validate_field_operation_buffer_port_profile_list_add(self, table):
+        old_config = {table: {"Ethernet0": {}}}
+        target_config = {table: {"Ethernet0": {"profile_list": "AZURE_PROFILE"}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    @pytest.mark.parametrize(
+        "table", [
+            "BUFFER_PORT_EGRESS_PROFILE_LIST",
+            "BUFFER_PORT_INGRESS_PROFILE_LIST"
+        ]
+    )
+    def test_validate_field_operation_buffer_port_profile_list_replace(self, table):
+        old_config = {table: {"Ethernet0": {"profile_list": "AZURE_PROFILE"}}}
+        target_config = {table: {"Ethernet0": {"profile_list": "NEW_PROFILE"}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    @pytest.mark.parametrize(
+        "table", [
+            "BUFFER_PORT_EGRESS_PROFILE_LIST",
+            "BUFFER_PORT_INGRESS_PROFILE_LIST"
+        ]
+    )
+    def test_validate_field_operation_buffer_port_profile_list_remove(self, table):
+        old_config = {table: {"Ethernet0": {"profile_list": "AZURE_PROFILE"}}}
+        target_config = {table: {"Ethernet0": {}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_queue_scheduler_replace(self):
+        old_config = {"QUEUE": {"Ethernet0|0": {"scheduler": "sched0"}}}
+        target_config = {"QUEUE": {"Ethernet0|0": {"scheduler": "sched1"}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_queue_wred_profile_add(self):
+        old_config = {"QUEUE": {"Ethernet0|1": {}}}
+        target_config = {"QUEUE": {"Ethernet0|1": {"wred_profile": "WRED_PROFILE"}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_queue_wred_profile_replace(self):
+        old_config = {"QUEUE": {"Ethernet0|1": {"wred_profile": "WRED_PROFILE"}}}
+        target_config = {"QUEUE": {"Ethernet0|1": {"wred_profile": "WRED_PROFILE_NEW"}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    @pytest.mark.parametrize(
+        "field,new_value", [
+            ("dscp_to_tc_map", "AZURE"),
+            ("tc_to_pg_map", "AZURE"),
+            ("tc_to_queue_map", "AZURE")
+        ]
+    )
+    def test_validate_field_operation_port_qos_map_replace(self, field, new_value):
+        old_config = {"PORT_QOS_MAP": {"Ethernet0": {field: "DEFAULT"}}}
+        target_config = {"PORT_QOS_MAP": {"Ethernet0": {field: new_value}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_port_qos_map_tc_to_dscp_add(self):
+        old_config = {"PORT_QOS_MAP": {"Ethernet0": {}}}
+        target_config = {"PORT_QOS_MAP": {"Ethernet0": {"tc_to_dscp_map": "AZURE"}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_port_qos_map_tc_to_dscp_replace(self):
+        old_config = {"PORT_QOS_MAP": {"Ethernet0": {"tc_to_dscp_map": "DEFAULT"}}}
+        target_config = {"PORT_QOS_MAP": {"Ethernet0": {"tc_to_dscp_map": "AZURE"}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_scheduler_weight_replace(self):
+        old_config = {"SCHEDULER": {"scheduler.0": {"weight": "10", "type": "DWRR"}}}
+        target_config = {"SCHEDULER": {"scheduler.0": {"weight": "20", "type": "DWRR"}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
 class TestGetAsicName(unittest.TestCase):
 
     @patch('sonic_py_common.device_info.get_sonic_version_info')
