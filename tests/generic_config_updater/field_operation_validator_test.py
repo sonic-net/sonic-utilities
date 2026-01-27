@@ -442,11 +442,20 @@ class TestValidateFieldOperation:
     @patch("generic_config_updater.field_operation_validators.get_asic_name",
            mock.Mock(return_value="spc1"))
     @patch("os.path.exists", mock.Mock(return_value=True))
-    @patch("builtins.open", mock_open(read_data='''{"tables": {"BUFFER_POOL": {
-        "field_operation_validators": ["generic_config_updater.field_operation_validators.rdma_config_update_validator"],
-        "validator_data": {"rdma_config_update_validator": {"Blocked ops": {"fields": [
-            "ingress_lossless_pool/xoff", "ingress_lossless_pool/size", "egress_lossy_pool/size"
-        ], "operations": [], "platforms": {"spc1": "20181100"}}}}}}}'''))
+    @patch(
+        "builtins.open",
+        mock_open(
+            read_data=(
+                '{"tables": {"BUFFER_POOL": {'
+                '"field_operation_validators": ['
+                '"generic_config_updater.field_operation_validators.rdma_config_update_validator"'
+                '], "validator_data": {"rdma_config_update_validator": {"Blocked ops": '
+                '{"fields": ["ingress_lossless_pool/xoff", '
+                '"ingress_lossless_pool/size", "egress_lossy_pool/size"], '
+                '"operations": [], "platforms": {"spc1": "20181100"}}}}}}}'
+            )
+        )
+    )
     def test_validate_field_operation_illegal__buffer_pool(self):
         old_config = {
             "BUFFER_POOL": {
