@@ -131,7 +131,7 @@ class TestShowRunAllCommandsMasic(object):
         "cli_arguments0,expected0",
         [
             ([], 'cat /var/log/syslog'),
-            (['xcvrd'], "cat /var/log/syslog | grep 'xcvrd'"),
+            (['xcvrd'], "cat /var/log/syslog | grep -E 'xcvrd'"),
             (['-l', '10'], 'cat /var/log/syslog | tail -10'),
         ]
 )
@@ -144,7 +144,7 @@ class TestShowRunAllCommandsMasic(object):
 def test_show_logging_default(run_command, cli_arguments0, expected0, cli_arguments1, expected1):
     runner = CliRunner()
     runner.invoke(show.cli.commands["logging"], cli_arguments0)
-    run_command.assert_called_with(EXPECTED_BASE_COMMAND + expected0, display_cmd=False, shell=True)
+    run_command.assert_called_with(EXPECTED_BASE_COMMAND + expected0, display_cmd=False, shell=True, return_cmd=True)
     runner.invoke(show.cli.commands["logging"], cli_arguments1)
     run_command.assert_called_with(EXPECTED_BASE_COMMAND_LIST + expected1, display_cmd=False)
 
@@ -154,7 +154,7 @@ def test_show_logging_default(run_command, cli_arguments0, expected0, cli_argume
         "cli_arguments0,expected0",
         [
             ([], 'cat /var/log/syslog.1 /var/log/syslog'),
-            (['xcvrd'], "cat /var/log/syslog.1 /var/log/syslog | grep 'xcvrd'"),
+            (['xcvrd'], "cat /var/log/syslog.1 /var/log/syslog | grep -E 'xcvrd'"),
             (['-l', '10'], 'cat /var/log/syslog.1 /var/log/syslog | tail -10'),
         ]
 )
@@ -177,7 +177,7 @@ def test_show_logging_syslog_1(run_command, cli_arguments0, expected0, cli_argum
         "cli_arguments0,expected0",
         [
             ([], 'cat /var/log.tmpfs/syslog'),
-            (['xcvrd'], "cat /var/log.tmpfs/syslog | grep 'xcvrd'"),
+            (['xcvrd'], "cat /var/log.tmpfs/syslog | grep -E 'xcvrd'"),
             (['-l', '10'], 'cat /var/log.tmpfs/syslog | tail -10'),
         ]
 )
@@ -190,7 +190,7 @@ def test_show_logging_syslog_1(run_command, cli_arguments0, expected0, cli_argum
 def test_show_logging_tmpfs(run_command, cli_arguments0, expected0, cli_arguments1, expected1):
     runner = CliRunner()
     runner.invoke(show.cli.commands["logging"], cli_arguments0)
-    run_command.assert_called_with(EXPECTED_BASE_COMMAND + expected0, display_cmd=False, shell=True)
+    run_command.assert_called_with(EXPECTED_BASE_COMMAND + expected0, display_cmd=False, shell=True, return_cmd=True)
     runner.invoke(show.cli.commands["logging"], cli_arguments1)
     run_command.assert_called_with(EXPECTED_BASE_COMMAND_LIST + expected1, display_cmd=False)
 
@@ -201,7 +201,7 @@ def test_show_logging_tmpfs(run_command, cli_arguments0, expected0, cli_argument
         "cli_arguments0,expected0",
         [
             ([], 'cat /var/log.tmpfs/syslog.1 /var/log.tmpfs/syslog'),
-            (['xcvrd'], "cat /var/log.tmpfs/syslog.1 /var/log.tmpfs/syslog | grep 'xcvrd'"),
+            (['xcvrd'], "cat /var/log.tmpfs/syslog.1 /var/log.tmpfs/syslog | grep -E 'xcvrd'"),
             (['-l', '10'], 'cat /var/log.tmpfs/syslog.1 /var/log.tmpfs/syslog | tail -10'),
         ]
 )
@@ -214,7 +214,7 @@ def test_show_logging_tmpfs(run_command, cli_arguments0, expected0, cli_argument
 def test_show_logging_tmpfs_syslog_1(run_command, cli_arguments0, expected0, cli_arguments1, expected1):
     runner = CliRunner()
     runner.invoke(show.cli.commands["logging"], cli_arguments0)
-    run_command.assert_called_with(EXPECTED_BASE_COMMAND + expected0, display_cmd=False, shell=True)
+    run_command.assert_called_with(EXPECTED_BASE_COMMAND + expected0, display_cmd=False, shell=True, return_cmd=True)
     runner.invoke(show.cli.commands["logging"], cli_arguments1)
     run_command.assert_called_with(EXPECTED_BASE_COMMAND_LIST + expected1, display_cmd=False)
 
