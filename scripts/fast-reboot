@@ -35,10 +35,6 @@ LOG_PATH="/var/log/${REBOOT_TYPE}.txt"
 UIMAGE_HDR_SIZE=64
 REQUIRE_TEAMD_RETRY_COUNT=no
 
-# Require 100M available on the hard drive for warm reboot temp files,
-# Size is in 1K blocks:
-MIN_HD_SPACE_NEEDED=100000
-
 EXIT_SUCCESS=0
 EXIT_FAILURE=1
 EXIT_NOT_SUPPORTED=2
@@ -57,6 +53,11 @@ EXIT_LEFTOVER_CPA_TUNNEL=30
 
 [ -f /usr/share/sonic/device/$PLATFORM/asic.conf ] && . /usr/share/sonic/device/$PLATFORM/asic.conf
 NUM_ASIC=${NUM_ASIC:-1}
+
+# Require 100M available on the hard drive for warm reboot temp files,
+# Size is in 1K blocks:
+MIN_HD_SPACE_NEEDED=$((100000 * $NUM_ASIC)) # 100M * NUM_ASIC
+
 # List of ASICs that perform the reboot
 ASIC_LIST=($(seq 0 $(( NUM_ASIC - 1))))
 
