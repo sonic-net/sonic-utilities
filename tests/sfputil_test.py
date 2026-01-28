@@ -1783,6 +1783,7 @@ EEPROM hexdump for port Ethernet4
         mock_state_db = MagicMock()
         mock_state_db.get.return_value = 1
         mock_sonic_v2_connector.return_value = mock_state_db
+        mock_api.get_diag_page_support.return_value = True
         result = runner.invoke(sfputil.cli.commands['debug'].commands['loopback'],
                                ["Ethernet0", "host-side-input", "enable"])
         assert result.output == 'Ethernet0: enable host-side-input loopback\n'
@@ -1794,6 +1795,13 @@ EEPROM hexdump for port Ethernet4
         assert result.output == 'Ethernet0: enable media-side-input loopback\n'
         assert result.exit_code != ERROR_NOT_IMPLEMENTED
 
+        mock_api.get_diag_page_support.return_value = False
+        result = runner.invoke(sfputil.cli.commands['debug'].commands['loopback'],
+                               ["Ethernet0", "media-side-output", "enable"])
+        assert result.output == 'Ethernet0: The module does not support diagnostic pages required for loopback configuration\nEthernet0: enable media-side-output loopback failed\n'
+        assert result.exit_code == EXIT_FAIL
+
+        mock_api.get_diag_page_support.return_value = True
         mock_api.set_loopback_mode.return_value = False
         result = runner.invoke(sfputil.cli.commands['debug'].commands['loopback'],
                                ["Ethernet0", "media-side-output", "enable"])
