@@ -877,6 +877,31 @@ def wm_q_multi(namespace, json_output):
         command += ["-j"]
     run_command(command)
 
+
+@cli.command('monit-tx-status')
+@clicommon.pass_db
+def monit_tx_status(db):
+    """Show TX error monitoring status for interfaces"""
+    
+    table = "MONIT_TX_STATUS_TABLE"
+    header = ['Interface', 'TX Status']
+    body = []
+
+    keys = db.db.keys(db.db.STATE_DB, "{}|*".format(table))
+
+    if not keys:
+        click.echo("No TX monitoring status available")
+        return
+
+    for key in natsorted(keys):
+        interface = key.split('|')[-1]
+        entry = db.db.get_all(db.db.STATE_DB, key)
+        status = entry.get('tx_status', 'N/A')
+        body.append([interface, status])
+    
+    click.echo(tabulate(body, header, tablefmt="simple"))
+
+
 # 'all' subcommand ("show queue watermarks all")
 @watermark.command('all')
 @click.option('--namespace',

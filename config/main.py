@@ -2089,6 +2089,30 @@ def list_checkpoints(ctx, time, verbose):
         click.secho("Failed to list config checkpoints", fg="red", underline=True, err=True)
         ctx.fail(ex)
 
+@config.group(cls=clicommon.AbbreviationGroup, name='monit-tx-errors')
+def monit_tx_errors():
+    """Configure TX error monitoring parameters"""
+    pass
+
+@monit_tx_errors.command('threshold')
+@click.argument('value', metavar='<value>', required=True, type=click.IntRange(min=1))
+@clicommon.pass_db
+def monit_tx_threshold(db, value):
+    """Set TX error threshold for monitoring"""
+    config_db = db.cfgdb
+    config_db.mod_entry("MONIT_TX_CONFIG", "error_threshold", {"value": str(value)})
+    click.echo("TX error threshold set to {}".format(value))
+
+@monit_tx_errors.command('interval')
+@click.argument('value', metavar='<seconds>', required=True, type=click.IntRange(min=1))
+@clicommon.pass_db
+def monit_tx_interval(db, value):
+    """Set TX error monitoring poll interval in seconds"""
+    config_db = db.cfgdb
+    config_db.mod_entry("MONIT_TX_CONFIG", "time_interval", {"value": str(value)})
+    click.echo("TX error monitoring interval set to {} seconds".format(value))
+
+
 @config.command()
 @click.option('-y', '--yes', is_flag=True)
 @click.option('-l', '--load-sysinfo', is_flag=True, help='load system default information (mac, portmap etc) first.')
