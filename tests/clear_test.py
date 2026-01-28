@@ -337,6 +337,7 @@ class TestClearFlowcnt(object):
 @patch("clear.main.run_command")
 @patch("click.confirm", MagicMock(return_value=True))
 @patch("os.path.exists", MagicMock(return_value=True))
+@patch("os.path.isfile", MagicMock(side_effect=lambda p: p.endswith("syslog")))
 @patch("glob.glob", MagicMock(return_value=[
     "/var/log/syslog",
     "/var/log/syslog.1"
@@ -361,7 +362,7 @@ class TestClearFlowcnt(object):
         ),
         # force: same behavior, but no confirm
         (
-            ["--force"],
+            ["force"],
             [
                 ["sudo", "truncate", "-s", "0", "/var/log/syslog"],
             ]
@@ -389,7 +390,7 @@ def test_clear_logging_syslog_modes(run_command, cli_args, expected_calls):
     "cli_args, expect_confirm",
     [
         (["--file", "/tmp/test.log"], True),
-        (["--file", "/tmp/test.log", "--force"], False),
+        (["--file", "/tmp/test.log", "force"], False),
     ]
 )
 def test_clear_logging_file_success(run_command, cli_args, expect_confirm):
