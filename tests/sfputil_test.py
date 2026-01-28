@@ -1800,7 +1800,7 @@ EEPROM hexdump for port Ethernet4
                                ["Ethernet0", "media-side-output", "enable"])
         assert result.output == (
             'Ethernet0: The module does not support diagnostic pages required for loopback configuration\n'
-            'Ethernet0: sfputil.enable media-side-output loopback failed\n')
+            'Ethernet0: enable media-side-output loopback failed\n')
         assert result.exit_code == EXIT_FAIL
 
         mock_api.get_diag_page_support.return_value = True
