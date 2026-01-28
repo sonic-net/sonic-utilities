@@ -85,28 +85,9 @@
                 "rdma_config_update_validator": {
                     "Shared/headroom pool size changes": {
                         "fields": [
-                            "ingress_lossless_pool/xoff",
-                            "ingress_lossless_pool/size",
-                            "egress_lossy_pool/size"
                         ],
-                        "operations": ["replace"],
+                        "operations": [],
                         "platforms": {
-                            "spc1": "20191100",
-                            "spc2": "20191100",
-                            "spc3": "20220500",
-                            "spc4": "20221100",
-                            "spc5": "20241200",
-                            "td2": "",
-                            "th": "20221100",
-                            "th2": "20221100",
-                            "th3": "20240500",
-                            "th4": "20240500",
-                            "th5": "20240500",
-                            "td3": "20221100",
-                            "td4": "20241100",
-                            "q2c+": "20241100",
-                            "j2c+": "20220500",
-                            "cisco-8000": "20201200"
                         }
                     }
                 }
@@ -183,39 +164,6 @@
                             "spc4": "20241200",
                             "spc5": "20241200",
                             "th5": "20241200"
-                        }
-                    }
-                }
-            }
-        },
-        "WRED_PROFILE": {
-            "field_operation_validators": [ "generic_config_updater.field_operation_validators.wred_profile_config_update_validator" ],
-            "validator_data": {
-                "rdma_config_update_validator": {
-                    "ECN tuning": {
-                        "fields": [
-                            "green_min_threshold",
-                            "green_max_threshold",
-                            "green_drop_probability"
-                        ],
-                        "operations": ["replace"],
-                        "platforms": {
-                            "spc1": "20181100",
-                            "spc2": "20191100",
-                            "spc3": "20220500",
-                            "spc4": "20221100",
-                            "spc5": "20241200",
-                            "td2": "20181100",
-                            "th": "20181100",
-                            "th2": "20181100",
-                            "th3": "20240500",
-                            "th4": "20240500",
-                            "th5": "20240500",
-                            "td3": "20201200",
-                            "td4": "20241100",
-                            "q2c+": "20241100",
-                            "j2c+": "20220500",
-                            "cisco-8000": "20201200"
                         }
                     }
                 }
