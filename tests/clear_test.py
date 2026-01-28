@@ -333,6 +333,7 @@ class TestClearFlowcnt(object):
     def teardown(self):
         print('TEAR DOWN')
 
+
 @patch("clear.main.run_command")
 @patch("click.confirm", MagicMock(return_value=True))
 @patch("os.path.exists", MagicMock(return_value=True))
@@ -435,4 +436,3 @@ def test_clear_logging_file_errors(exists, is_dir, access, expected_error):
 
         assert result.exit_code != 0
         assert expected_error in result.output
-
