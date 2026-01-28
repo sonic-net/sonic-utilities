@@ -167,7 +167,7 @@ def test_show_logging_default(run_command, cli_arguments0, expected0, cli_argume
 def test_show_logging_syslog_1(run_command, cli_arguments0, expected0, cli_arguments1, expected1):
     runner = CliRunner()
     runner.invoke(show.cli.commands["logging"], cli_arguments0)
-    run_command.assert_called_with(EXPECTED_BASE_COMMAND + expected0, display_cmd=False, shell=True)
+    run_command.assert_called_with(EXPECTED_BASE_COMMAND + expected0, display_cmd=False, shell=True, return_cmd=True)
     runner.invoke(show.cli.commands["logging"], cli_arguments1)
     run_command.assert_called_with(EXPECTED_BASE_COMMAND_LIST + expected1, display_cmd=False, shell=False)
 
