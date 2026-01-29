@@ -1,31 +1,41 @@
 """
 Unit tests for tempershow script
+
 Tests the TemperShow class and its ability to display temperature information
-from both thermal sensors and transceiver/SFP modules with TRANSCEIVER_DOM_TEMPERATURE fallback
+from both thermal sensors and transceiver/SFP modules with TRANSCEIVER_DOM_TEMPERATURE fallback.
 """
 import os
 import sys
 from unittest import TestCase, mock
+from utilities_common.general import load_module_from_source
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
-sys.path.insert(0, os.path.join(modules_path, 'scripts'))
+scripts_path = os.path.join(modules_path, 'scripts')
+sys.path.insert(0, modules_path)
 
-from tempershow import TemperShow, TEMPER_TABLE_NAME, TRANSCEIVER_DOM_TEMPERATURE_TABLE_NAME, \
-    TRANSCEIVER_DOM_SENSOR_TABLE_NAME, TEMPER_FIELD_NAME, HIGH_THRESH_FIELD_NAME, \
-    LOW_THRESH_FIELD_NAME, CRIT_HIGH_THRESH_FIELD_NAME, CRIT_LOW_THRESH_FIELD_NAME, \
-    WARNING_STATUS_FIELD_NAME, TIMESTAMP_FIELD_NAME
+# Load the tempershow script as a module
+tempershow_path = os.path.join(scripts_path, 'tempershow')
+tempershow = load_module_from_source('tempershow', tempershow_path)
+
+# Import the required classes and constants from the loaded module
+TemperShow = tempershow.TemperShow
+TEMPER_FIELD_NAME = tempershow.TEMPER_FIELD_NAME
+HIGH_THRESH_FIELD_NAME = tempershow.HIGH_THRESH_FIELD_NAME
+LOW_THRESH_FIELD_NAME = tempershow.LOW_THRESH_FIELD_NAME
+CRIT_HIGH_THRESH_FIELD_NAME = tempershow.CRIT_HIGH_THRESH_FIELD_NAME
+CRIT_LOW_THRESH_FIELD_NAME = tempershow.CRIT_LOW_THRESH_FIELD_NAME
+WARNING_STATUS_FIELD_NAME = tempershow.WARNING_STATUS_FIELD_NAME
+TIMESTAMP_FIELD_NAME = tempershow.TIMESTAMP_FIELD_NAME
 
 
 class TestTemperShowClass(TestCase):
     """Test cases for TemperShow class"""
 
     def setUp(self):
-        """Set up test fixtures"""
         self.temp_show = None
 
     def tearDown(self):
-        """Clean up after tests"""
         if self.temp_show:
             self.temp_show.db = None
 
@@ -33,8 +43,14 @@ class TestTemperShowClass(TestCase):
     def test_init(self, mock_connector):
         """Test TemperShow initialization"""
         temp_show = TemperShow()
+
         mock_connector.assert_called_once_with(host="127.0.0.1")
-        assert temp_show.db is not None
+        # Ensure connect() is called to STATE_DB
+        mock_connector.return_value.connect.assert_called_once_with(
+            mock_connector.return_value.STATE_DB
+        )
+        # Ensure db is the connector instance
+        assert temp_show.db is mock_connector.return_value
 
     @mock.patch('tempershow.SonicV2Connector')
     def test_get_transceiver_temperature_data_from_new_table(self, mock_connector):
@@ -48,18 +64,17 @@ class TestTemperShowClass(TestCase):
         mock_connector.return_value = mock_db
 
         temp_show = TemperShow()
-        temp_show.db = mock_db
 
         # Mock get_all to return data for TRANSCEIVER_DOM_TEMPERATURE
-        mock_db.get_all.return_value = {
-            TEMPER_FIELD_NAME: '35.5'
-        }
+        mock_db.get_all.return_value = {TEMPER_FIELD_NAME: '35.5'}
 
         result = temp_show._get_transceiver_temperature_data('Ethernet0')
 
         assert result == '35.5'
-        # Verify that get_all was called with TRANSCEIVER_DOM_TEMPERATURE table
-        mock_db.get_all.assert_called_with(mock_db.STATE_DB, 'TRANSCEIVER_DOM_TEMPERATURE|Ethernet0')
+        mock_db.get_all.assert_called_with(
+            temp_show.db.STATE_DB,
+            'TRANSCEIVER_DOM_TEMPERATURE|Ethernet0'
+        )
 
     @mock.patch('tempershow.SonicV2Connector')
     def test_get_transceiver_temperature_data_fallback_to_legacy(self, mock_connector):
@@ -73,9 +88,7 @@ class TestTemperShowClass(TestCase):
         mock_connector.return_value = mock_db
 
         temp_show = TemperShow()
-        temp_show.db = mock_db
 
-        # Mock get_all to return empty for first call, then data for second call
         mock_db.get_all.side_effect = [
             {},  # Empty response for TRANSCEIVER_DOM_TEMPERATURE
             {TEMPER_FIELD_NAME: '36.2'}  # Data for TRANSCEIVER_DOM_SENSOR
@@ -84,8 +97,11 @@ class TestTemperShowClass(TestCase):
         result = temp_show._get_transceiver_temperature_data('Ethernet1')
 
         assert result == '36.2'
-        # Verify that get_all was called twice
         assert mock_db.get_all.call_count == 2
+
+        # Verify legacy key was attempted
+        calls = [c.args for c in mock_db.get_all.call_args_list]
+        assert any('TRANSCEIVER_DOM_SENSOR|Ethernet1' in str(args) for args in calls)
 
     @mock.patch('tempershow.SonicV2Connector')
     def test_get_transceiver_temperature_data_no_data(self, mock_connector):
@@ -99,9 +115,8 @@ class TestTemperShowClass(TestCase):
         mock_connector.return_value = mock_db
 
         temp_show = TemperShow()
-        temp_show.db = mock_db
 
-        # Mock get_all to return empty for both tables
+        # Both calls return empty
         mock_db.get_all.return_value = {}
 
         result = temp_show._get_transceiver_temperature_data('Ethernet2')
@@ -120,9 +135,7 @@ class TestTemperShowClass(TestCase):
         mock_connector.return_value = mock_db
 
         temp_show = TemperShow()
-        temp_show.db = mock_db
 
-        # Mock get_all to return data without temperature field
         mock_db.get_all.side_effect = [
             {'other_field': 'value'},  # No temperature in TRANSCEIVER_DOM_TEMPERATURE
             {}  # Empty TRANSCEIVER_DOM_SENSOR
@@ -144,7 +157,6 @@ class TestTemperShowClass(TestCase):
         mock_connector.return_value = mock_db
 
         temp_show = TemperShow()
-        temp_show.db = mock_db
 
         json_output = []
         table = []
@@ -179,7 +191,6 @@ class TestTemperShowClass(TestCase):
         mock_connector.return_value = mock_db
 
         temp_show = TemperShow()
-        temp_show.db = mock_db
 
         json_output = []
         table = []
@@ -192,8 +203,8 @@ class TestTemperShowClass(TestCase):
         assert json_output[0]['Temperature'] == '36.5'
         assert json_output[0]['High_TH'] == 'N/A'
         assert json_output[0]['Low_TH'] == 'N/A'
-        assert table[0][2] == 'N/A'  # High_TH position in table
-        assert table[0][3] == 'N/A'  # Low_TH position in table
+        assert table[0][2] == 'N/A'  # High_TH
+        assert table[0][3] == 'N/A'  # Low_TH
 
     @mock.patch('tempershow.tabulate')
     @mock.patch('tempershow.SonicV2Connector')
@@ -208,15 +219,17 @@ class TestTemperShowClass(TestCase):
         mock_connector.return_value = mock_db
 
         temp_show = TemperShow()
-        temp_show.db = mock_db
 
-        # Mock keys to return thermal sensor key only
+        # show() calls keys() for:
+        # 1) TEMPERATURE_INFO*
+        # 2) TRANSCEIVER_DOM_TEMPERATURE*
+        # 3) (if #2 empty) TRANSCEIVER_DOM_SENSOR*
         mock_db.keys.side_effect = [
             ['TEMPERATURE_INFO|Sensor1'],  # Thermal sensors
-            []  # No transceiver data
+            [],                            # No TRANSCEIVER_DOM_TEMPERATURE
+            []                             # No TRANSCEIVER_DOM_SENSOR
         ]
 
-        # Mock get_all for thermal sensor data
         thermal_data = {
             TEMPER_FIELD_NAME: '35.0',
             HIGH_THRESH_FIELD_NAME: '50.0',
@@ -228,10 +241,13 @@ class TestTemperShowClass(TestCase):
         }
         mock_db.get_all.return_value = thermal_data
 
-        with mock.patch('builtins.print') as mock_print:
+        with mock.patch('builtins.print'):
             temp_show.show(output_json=False)
-            # Verify that tabulate was called (table output)
             mock_tabulate.assert_called_once()
+
+            args, _kwargs = mock_tabulate.call_args
+            table_passed = args[0]
+            assert ('Sensor1', '35.0', '50.0', '10.0', '60.0', '0.0', 'False', '20240101 12:00:00') in table_passed
 
     @mock.patch('tempershow.tabulate')
     @mock.patch('tempershow.SonicV2Connector')
@@ -246,12 +262,11 @@ class TestTemperShowClass(TestCase):
         mock_connector.return_value = mock_db
 
         temp_show = TemperShow()
-        temp_show.db = mock_db
 
-        # Mock keys to return both thermal and transceiver keys
+        # Thermal keys + transceiver keys from new table
         mock_db.keys.side_effect = [
-            ['TEMPERATURE_INFO|Sensor1'],  # Thermal sensors
-            ['TRANSCEIVER_DOM_TEMPERATURE|Ethernet0']  # Transceiver with new table
+            ['TEMPERATURE_INFO|Sensor1'],
+            ['TRANSCEIVER_DOM_TEMPERATURE|Ethernet0']
         ]
 
         thermal_data = {
@@ -267,16 +282,20 @@ class TestTemperShowClass(TestCase):
         def get_all_side_effect(db, key):
             if 'TEMPERATURE_INFO' in key:
                 return thermal_data
-            elif 'TRANSCEIVER_DOM_TEMPERATURE' in key:
+            if 'TRANSCEIVER_DOM_TEMPERATURE' in key:
                 return {TEMPER_FIELD_NAME: '37.5'}
             return {}
 
         mock_db.get_all.side_effect = get_all_side_effect
 
-        with mock.patch('builtins.print') as mock_print:
+        with mock.patch('builtins.print'):
             temp_show.show(output_json=False)
-            # Verify that tabulate was called
             mock_tabulate.assert_called_once()
+
+            args, _kwargs = mock_tabulate.call_args
+            table_passed = args[0]
+            assert ('Sensor1', '35.0', '50.0', '10.0', '60.0', '0.0', 'False', '20240101 12:00:00') in table_passed
+            assert ('Ethernet0', '37.5', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A') in table_passed
 
     @mock.patch('tempershow.json.dumps')
     @mock.patch('tempershow.SonicV2Connector')
@@ -291,12 +310,11 @@ class TestTemperShowClass(TestCase):
         mock_connector.return_value = mock_db
 
         temp_show = TemperShow()
-        temp_show.db = mock_db
 
-        # Mock keys to return data
         mock_db.keys.side_effect = [
-            ['TEMPERATURE_INFO|Sensor1'],
-            []
+            ['TEMPERATURE_INFO|Sensor1'],  # thermal
+            [],                            # transceiver new
+            []                             # transceiver legacy
         ]
 
         thermal_data = {
@@ -311,16 +329,17 @@ class TestTemperShowClass(TestCase):
         mock_db.get_all.return_value = thermal_data
         mock_json_dumps.return_value = '[]'
 
-        with mock.patch('builtins.print') as mock_print:
+        with mock.patch('builtins.print') as _mock_print:
             temp_show.show(output_json=True)
-            # Verify that json.dumps was called
+            # Note: show() uses json.dumps from stdlib json, not tempershow.json.dumps,
+            # but we patched tempershow.json.dumps so this verifies that code path.
             mock_json_dumps.assert_called_once()
 
     @mock.patch('tempershow.SonicV2Connector')
     def test_show_no_temperature_data(self, mock_connector):
         """
         Test show() with no temperature data available
-        Given: No TEMPERATURE_INFO or TRANSCEIVER_DOM_TEMPERATURE data
+        Given: No TEMPERATURE_INFO or TRANSCEIVER tables have data
         When: show() is called
         Then: Should print 'No temperature data available'
         """
@@ -328,14 +347,12 @@ class TestTemperShowClass(TestCase):
         mock_connector.return_value = mock_db
 
         temp_show = TemperShow()
-        temp_show.db = mock_db
 
-        # Mock keys to return no data
+        # Return None for keys() to simulate no data
         mock_db.keys.return_value = None
 
         with mock.patch('builtins.print') as mock_print:
             temp_show.show(output_json=False)
-            # Check that print was called with no temperature data message
             calls = [call[0][0] for call in mock_print.call_args_list]
             assert any('No temperature data available' in str(call) for call in calls)
 
@@ -343,7 +360,7 @@ class TestTemperShowClass(TestCase):
     def test_show_with_transceiver_fallback_to_legacy(self, mock_connector):
         """
         Test show() when TRANSCEIVER_DOM_TEMPERATURE is not available, falls back to legacy table
-        Given: TRANSCEIVER_DOM_TEMPERATURE returns empty, but TRANSCEIVER_DOM_SENSOR has data
+        Given: TRANSCEIVER_DOM_TEMPERATURE returns empty, but TRANSCEIVER_DOM_SENSOR has keys/data
         When: show() is called
         Then: Should use TRANSCEIVER_DOM_SENSOR data as fallback
         """
@@ -351,13 +368,11 @@ class TestTemperShowClass(TestCase):
         mock_connector.return_value = mock_db
 
         temp_show = TemperShow()
-        temp_show.db = mock_db
 
-        # Mock keys to return TRANSCEIVER_DOM_SENSOR key when TRANSCEIVER_DOM_TEMPERATURE is empty
         mock_db.keys.side_effect = [
-            ['TEMPERATURE_INFO|Sensor1'],  # Thermal sensors
-            [],  # Empty TRANSCEIVER_DOM_TEMPERATURE
-            ['TRANSCEIVER_DOM_SENSOR|Ethernet0']  # Fallback to TRANSCEIVER_DOM_SENSOR
+            ['TEMPERATURE_INFO|Sensor1'],         # Thermal sensors
+            [],                                   # Empty TRANSCEIVER_DOM_TEMPERATURE*
+            ['TRANSCEIVER_DOM_SENSOR|Ethernet0']  # Fallback keys from legacy
         ]
 
         thermal_data = {
@@ -373,17 +388,22 @@ class TestTemperShowClass(TestCase):
         def get_all_side_effect(db, key):
             if 'TEMPERATURE_INFO' in key:
                 return thermal_data
-            elif 'TRANSCEIVER_DOM_TEMPERATURE' in key:
-                return {}  # Empty new table
-            elif 'TRANSCEIVER_DOM_SENSOR' in key:
-                return {TEMPER_FIELD_NAME: '38.0'}  # Legacy table data
+            if 'TRANSCEIVER_DOM_TEMPERATURE' in key:
+                return {}  # empty new table
+            if 'TRANSCEIVER_DOM_SENSOR' in key:
+                return {TEMPER_FIELD_NAME: '38.0'}  # legacy data
             return {}
 
         mock_db.get_all.side_effect = get_all_side_effect
 
-        with (mock.patch('builtins.print'),
-              mock.patch('tempershow.tabulate')):
+        with mock.patch('builtins.print'), mock.patch('tempershow.tabulate') as mock_tabulate:
             temp_show.show(output_json=False)
-            # Verify that keys was called with TRANSCEIVER_DOM_SENSOR pattern
-            calls = [str(call) for call in mock_db.keys.call_args_list]
-            assert any('TRANSCEIVER_DOM_SENSOR' in str(call) for call in calls)
+
+            # Verify fallback keys() call for legacy table happened
+            calls = [str(c) for c in mock_db.keys.call_args_list]
+            assert any('TRANSCEIVER_DOM_SENSOR' in c for c in calls)
+
+            # Also verify Ethernet0 row made it to output table
+            args, _kwargs = mock_tabulate.call_args
+            table_passed = args[0]
+            assert ('Ethernet0', '38.0', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A', 'N/A') in table_passed
