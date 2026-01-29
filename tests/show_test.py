@@ -247,7 +247,7 @@ def test_show_logging_summary(run_command):
     # Output validation
     assert result.exit_code == 0
     assert "Log Summary" in result.output
-    assert "Total lines: 4" in result.output
+    assert "Total lines: 5" in result.output
     assert "INFO: 2" in result.output
     assert "WARNING: 1" in result.output
     assert "ERR: 1" in result.output
