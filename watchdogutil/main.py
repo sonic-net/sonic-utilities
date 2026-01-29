@@ -10,7 +10,6 @@ try:
     import sys
 
     import click
-    import sonic_platform
     from sonic_py_common import logger
 except ImportError as e:
     raise ImportError("%s - required module not found" % str(e))
@@ -34,6 +33,11 @@ log = logger.Logger(SYSLOG_IDENTIFIER)
 # Loads platform specific watchdog module from source
 def load_platform_watchdog():
     global platform_watchdog
+
+    try:
+        import sonic_platform
+    except ImportError as e:
+        raise ImportError("%s - required module not found" % str(e))
 
     platform = sonic_platform.platform.Platform()
 
