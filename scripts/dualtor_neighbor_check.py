@@ -205,8 +205,10 @@ return redis.status_reply(cjson.encode(result))
 
 DB_READ_SCRIPT_CONFIG_DB_KEY = "_DUALTOR_NEIGHBOR_CHECK_SCRIPT_SHA1"
 ZERO_MAC = "00:00:00:00:00:00"
-NEIGHBOR_ATTRIBUTES_HOST_ROUTE = ["NEIGHBOR", "MAC", "PORT", "MUX_STATE", "IN_MUX_TOGGLE", "NEIGHBOR_IN_ASIC", "TUNNEL_IN_ASIC", "HWSTATUS"]
-NEIGHBOR_ATTRIBUTES_PREFIX_ROUTE = ["NEIGHBOR", "MAC", "PORT", "MUX_STATE", "IN_MUX_TOGGLE", "NEIGHBOR_IN_ASIC", "PREFIX_ROUTE", "NEXTHOP_TYPE", "HWSTATUS"]
+NEIGHBOR_ATTRIBUTES_HOST_ROUTE = ["NEIGHBOR", "MAC", "PORT", "MUX_STATE", "IN_MUX_TOGGLE", "NEIGHBOR_IN_ASIC",
+                                  "TUNNEL_IN_ASIC", "HWSTATUS"]
+NEIGHBOR_ATTRIBUTES_PREFIX_ROUTE = ["NEIGHBOR", "MAC", "PORT", "MUX_STATE", "IN_MUX_TOGGLE", "NEIGHBOR_IN_ASIC",
+                                    "PREFIX_ROUTE", "NEXTHOP_TYPE", "HWSTATUS"]
 NOT_AVAILABLE = "N/A"
 
 
@@ -391,7 +393,8 @@ def read_tables_from_db(appl_db):
     WRITE_LOG_DEBUG("ASIC route table: %s", json.dumps(asic_route_table, indent=4))
     WRITE_LOG_DEBUG("ASIC neigh table: %s", json.dumps(asic_neigh_table, indent=4))
     WRITE_LOG_DEBUG("ASIC nexthop table: %s", json.dumps(asic_nexthop_table, indent=4))
-    return neighbors, mux_states, hw_mux_states, port_neighbor_modes, asic_fdb, asic_route_table, asic_neigh_table, asic_nexthop_table
+    return neighbors, mux_states, hw_mux_states, port_neighbor_modes, asic_fdb, asic_route_table, \
+        asic_neigh_table, asic_nexthop_table
 
 
 def get_if_br_oid_to_port_name_map():
@@ -454,7 +457,10 @@ def check_neighbor_consistency(neighbors, mux_states, hw_mux_states, mac_to_port
     asic_route_destinations = set()
 
     for route_info in asic_route_table:
-        route_details = json.loads(route_info["route_details"])
+        try:
+            route_details = json.loads(route_info["route_details"])
+        except TypeError:
+            continue
         route_dest = route_details["dest"].split("/")[0]
         asic_route_destinations.add(route_dest)
 
@@ -494,31 +500,40 @@ def check_neighbor_consistency(neighbors, mux_states, hw_mux_states, mac_to_port
             neighbor_mode = port_neighbor_modes.get(port_name, None)
 
             # Skip this neighbor if neighbor_mode is not set for the port
-            if neighbor_mode is None or neighbor_mode == False:
+            if not neighbor_mode:
                 WRITE_LOG_WARN("neighbor %s on port %s: neighbor_mode not configured in STATE_DB MUX_CABLE_TABLE",
-                              neighbor_ip, port_name)
+                               neighbor_ip, port_name)
                 continue
 
+        if mac not in mac_to_port_name_map and not is_zero_mac:
+            # for neighbors withou port default to host route mode
+            neighbor_mode = "host-route"
+            neighbor_attrs = NEIGHBOR_ATTRIBUTES_HOST_ROUTE
+            check_result = {attr: NOT_AVAILABLE for attr in neighbor_attrs}
+            check_result["NEIGHBOR"] = neighbor_ip
+            check_result["MAC"] = mac
+            check_result["_NEIGHBOR_MODE"] = neighbor_mode  # Internal field for grouping
+            check_results.append(check_result)
+            WRITE_LOG_WARN("neighbor %s port not found: neighbor_mode default to %s", neighbor_ip, neighbor_mode)
+            continue
 
         # Determine which attributes to use based on neighbor_mode
         if neighbor_mode == "prefix-route":
             neighbor_attrs = NEIGHBOR_ATTRIBUTES_PREFIX_ROUTE
         elif neighbor_mode == "host-route":
             neighbor_attrs = NEIGHBOR_ATTRIBUTES_HOST_ROUTE
+        elif is_zero_mac:
+            neighbor_attrs = NEIGHBOR_ATTRIBUTES_HOST_ROUTE
+            neighbor_mode = "host-route"
         else:
-            # For zero-mac neighbors or neighbors without port, skip them
             WRITE_LOG_DEBUG("Skipping neighbor %s: unable to determine neighbor_mode (mac=%s, port=%s, mode=%s)",
-                           neighbor_ip, mac, port_name if port_name else "N/A", neighbor_mode)
+                            neighbor_ip, mac, port_name if port_name else "N/A", neighbor_mode)
             continue
 
         check_result = {attr: NOT_AVAILABLE for attr in neighbor_attrs}
         check_result["NEIGHBOR"] = neighbor_ip
         check_result["MAC"] = mac
         check_result["_NEIGHBOR_MODE"] = neighbor_mode  # Internal field for grouping
-
-        if mac not in mac_to_port_name_map and not is_zero_mac:
-            check_results.append(check_result)
-            continue
 
         check_result["NEIGHBOR_IN_ASIC"] = neighbor_ip in asic_neighs
 
@@ -561,9 +576,11 @@ def check_neighbor_consistency(neighbors, mux_states, hw_mux_states, mac_to_port
                         continue
                 else:
                     if mux_state == "active":
-                        check_result["HWSTATUS"] = (check_result["NEIGHBOR_IN_ASIC"] and (not check_result["TUNNEL_IN_ASIC"]))
+                        check_result["HWSTATUS"] = (check_result["NEIGHBOR_IN_ASIC"] and
+                                                    (not check_result["TUNNEL_IN_ASIC"]))
                     elif mux_state == "standby":
-                        check_result["HWSTATUS"] = ((not check_result["NEIGHBOR_IN_ASIC"]) and check_result["TUNNEL_IN_ASIC"])
+                        check_result["HWSTATUS"] = ((not check_result["NEIGHBOR_IN_ASIC"]) and
+                                                    check_result["TUNNEL_IN_ASIC"])
                     else:
                         # skip as unknown mux state
                         continue
@@ -589,6 +606,7 @@ def parse_check_results(check_results):
         neighbor_mode = check_result.get("_NEIGHBOR_MODE", "host-route")
 
         if port == NOT_AVAILABLE and not is_zero_mac:
+            host_route_results.append(check_result)
             continue
 
         in_toggle = check_result["IN_MUX_TOGGLE"]
