@@ -1683,7 +1683,6 @@ def logging(ctx, processes, process, lines, follow, user_file, summary, verbose)
 
         else:
             syslog_file = f"{log_path}/syslog"
-
             if proc_pattern:
                 # pipeline → requires shell=True
                 cmd = f"sudo tail -F '{syslog_file}' | grep -E '{proc_pattern}'"
@@ -1721,19 +1720,13 @@ def logging(ctx, processes, process, lines, follow, user_file, summary, verbose)
     # SUMMARY MODE
     if summary:
         level_counter = Counter()
-        proc_counter = Counter()
         level_pattern = re.compile(r"\b(EMERG|ALERT|CRIT|ERR|WARNING|NOTICE|INFO|DEBUG)\b", re.I)
-        proc_pattern_str = re.compile(r"\b([\w\-]+)\[\d+\]:")  # process names like systemctl
 
         for line_ in log_lines:
             # Count log level
             match_level = level_pattern.search(line_)
             if match_level:
                 level_counter[match_level.group(1).upper()] += 1
-            # Count process
-            match_proc = proc_pattern_str.search(line_)
-            if match_proc:
-                proc_counter[match_proc.group(1)] += 1
 
         click.echo("\nLog Summary")
         click.echo("-" * 50)
@@ -1741,9 +1734,6 @@ def logging(ctx, processes, process, lines, follow, user_file, summary, verbose)
         syslog_levels = ["EMERG", "ALERT", "CRIT", "ERR", "WARNING", "NOTICE", "INFO", "DEBUG"]
         for lvl in syslog_levels:
             click.echo(f"{lvl}: {level_counter.get(lvl, 0)}")
-        click.echo("\nTop Processes:")
-        for name, count in proc_counter.most_common(10):
-            click.echo(f"  {name}: {count}")
         return
 
     # NORMAL LOG OUTPUT

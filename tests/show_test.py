@@ -218,6 +218,41 @@ def test_show_logging_tmpfs_syslog_1(run_command, cli_arguments0, expected0, cli
     runner.invoke(show.cli.commands["logging"], cli_arguments1)
     run_command.assert_called_with(EXPECTED_BASE_COMMAND_LIST + expected1, display_cmd=False, shell=False)
 
+
+@patch("show.main.run_command")
+def test_show_logging_summary(run_command):
+    """
+    Test the 'show logging --summary' command to ensure it correctly summarizes log levels.
+    """
+    fake_logs = (
+        "INFO system started\n"
+        "WARNING disk low\n"
+        "ERR failed to start\n"
+        "INFO ready\n"
+    )
+
+    run_command.return_value = fake_logs
+
+    runner = CliRunner()
+    result = runner.invoke(show.cli.commands["logging"], ["--summary"])
+
+    # Command execution
+    run_command.assert_called_once_with(
+        EXPECTED_BASE_COMMAND + "cat /var/log/syslog",
+        display_cmd=False,
+        shell=True,
+        return_cmd=True,
+    )
+
+    # Output validation
+    assert result.exit_code == 0
+    assert "Log Summary" in result.output
+    assert "Total lines: 4" in result.output
+    assert "INFO: 2" in result.output
+    assert "WARNING: 1" in result.output
+    assert "ERR: 1" in result.output
+
+
 def side_effect_subprocess_popen(*args, **kwargs):
     mock = MagicMock()
     if ' '.join(args[0]) == "uptime":
