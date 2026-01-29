@@ -329,7 +329,7 @@ class TestTemperShowClass(TestCase):
         mock_db.get_all.return_value = thermal_data
         mock_json_dumps.return_value = '[]'
 
-        with mock.patch('builtins.print') as _mock_print:
+        with mock.patch('builtins.print'):
             temp_show.show(output_json=True)
             # Note: show() uses json.dumps from stdlib json, not tempershow.json.dumps,
             # but we patched tempershow.json.dumps so this verifies that code path.
