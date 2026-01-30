@@ -27,6 +27,7 @@ CRIT_HIGH_THRESH_FIELD_NAME = tempershow.CRIT_HIGH_THRESH_FIELD_NAME
 CRIT_LOW_THRESH_FIELD_NAME = tempershow.CRIT_LOW_THRESH_FIELD_NAME
 WARNING_STATUS_FIELD_NAME = tempershow.WARNING_STATUS_FIELD_NAME
 TIMESTAMP_FIELD_NAME = tempershow.TIMESTAMP_FIELD_NAME
+LAST_UPDATE_TIME_FIELD_NAME = tempershow.LAST_UPDATE_TIME_FIELD_NAME
 
 
 class TestTemperShowClass(TestCase):
@@ -213,6 +214,59 @@ class TestTemperShowClass(TestCase):
         assert json_output[0]['Low_TH'] == 'N/A'
         assert table[0][2] == 'N/A'  # High_TH
         assert table[0][3] == 'N/A'  # Low_TH
+
+    @mock.patch('tempershow.SonicV2Connector')
+    def test_add_sensor_to_output_with_last_update_time(self, mock_connector):
+        """
+        Test _add_sensor_to_output uses last_update_time when timestamp is not present
+        Given: A sensor with last_update_time instead of timestamp
+        When: _add_sensor_to_output is called
+        Then: Should use last_update_time value for Timestamp field
+        """
+        mock_db = mock.MagicMock()
+        mock_connector.return_value = mock_db
+
+        temp_show = TemperShow()
+
+        json_output = []
+        table = []
+        data_dict = {
+            TEMPER_FIELD_NAME: '37.0',
+            LAST_UPDATE_TIME_FIELD_NAME: '20240115 14:30:00'
+        }
+
+        temp_show._add_sensor_to_output('Ethernet4', data_dict, json_output, table)
+
+        assert len(json_output) == 1
+        assert json_output[0]['Timestamp'] == '20240115 14:30:00'
+        assert table[0][7] == '20240115 14:30:00'  # Timestamp column
+
+    @mock.patch('tempershow.SonicV2Connector')
+    def test_add_sensor_to_output_timestamp_priority_over_last_update_time(self, mock_connector):
+        """
+        Test _add_sensor_to_output prefers timestamp over last_update_time
+        Given: A sensor with both timestamp and last_update_time fields
+        When: _add_sensor_to_output is called
+        Then: Should use timestamp value (not last_update_time)
+        """
+        mock_db = mock.MagicMock()
+        mock_connector.return_value = mock_db
+
+        temp_show = TemperShow()
+
+        json_output = []
+        table = []
+        data_dict = {
+            TEMPER_FIELD_NAME: '38.0',
+            TIMESTAMP_FIELD_NAME: '20240120 10:00:00',
+            LAST_UPDATE_TIME_FIELD_NAME: '20240115 14:30:00'
+        }
+
+        temp_show._add_sensor_to_output('Ethernet8', data_dict, json_output, table)
+
+        assert len(json_output) == 1
+        assert json_output[0]['Timestamp'] == '20240120 10:00:00'
+        assert table[0][7] == '20240120 10:00:00'  # Timestamp column
 
     @mock.patch('tempershow.tabulate')
     @mock.patch('tempershow.SonicV2Connector')
