@@ -24,6 +24,7 @@ expected_counterpoll_show = """Type                  Interval (in ms)    Status
 QUEUE_STAT            10000               enable
 PORT_STAT             1000                enable
 PORT_BUFFER_DROP      60000               enable
+PHY                   10000               enable
 QUEUE_WATERMARK_STAT  default (60000)     enable
 PG_WATERMARK_STAT     default (60000)     enable
 PG_DROP_STAT          10000               enable
@@ -41,6 +42,7 @@ expected_counterpoll_show_dpu = """Type                  Interval (in ms)    Sta
 QUEUE_STAT            10000               enable
 PORT_STAT             1000                enable
 PORT_BUFFER_DROP      60000               enable
+PHY                   10000               enable
 QUEUE_WATERMARK_STAT  default (60000)     enable
 PG_WATERMARK_STAT     default (60000)     enable
 PG_DROP_STAT          10000               enable
@@ -360,6 +362,31 @@ class TestCounterpoll(object):
 
         table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
         assert test_interval == table["SRV6"]["POLL_INTERVAL"]
+
+
+    @pytest.mark.parametrize("status", ["disable", "enable"])
+    def test_update_phy_status(self, status):
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(counterpoll.cli.commands["phy"].commands[status], [], obj=db.cfgdb)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
+        assert status == table["PORT_PHY_ATTR"]["FLEX_COUNTER_STATUS"]
+
+    def test_update_phy_interval(self):
+        runner = CliRunner()
+        db = Db()
+        test_interval = "20000"
+
+        result = runner.invoke(counterpoll.cli.commands["phy"].commands["interval"], [test_interval], obj=db.cfgdb)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
+        assert test_interval == table["PORT_PHY_ATTR"]["POLL_INTERVAL"]
 
 
     @classmethod
