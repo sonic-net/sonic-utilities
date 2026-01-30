@@ -20,6 +20,7 @@ ASSISTANT_IP_LIST=""
 ASSISTANT_SCRIPT="/usr/local/bin/neighbor_advertiser"
 LAG_KEEPALIVE_SCRIPT="/usr/local/bin/lag_keepalive.py"
 WATCHDOG_UTIL="/usr/local/bin/watchdogutil"
+SKIP_ASIC_LIST=""
 DEVPATH="/usr/share/sonic/device"
 PLATFORM=$(sonic-cfggen -H -v DEVICE_METADATA.localhost.platform)
 PLATFORM_PLUGIN="${REBOOT_TYPE}_plugin"
@@ -33,10 +34,6 @@ DETACH=no
 LOG_PATH="/var/log/${REBOOT_TYPE}.txt"
 UIMAGE_HDR_SIZE=64
 REQUIRE_TEAMD_RETRY_COUNT=no
-
-# Require 100M available on the hard drive for warm reboot temp files,
-# Size is in 1K blocks:
-MIN_HD_SPACE_NEEDED=100000
 
 EXIT_SUCCESS=0
 EXIT_FAILURE=1
@@ -54,18 +51,168 @@ EXIT_NO_MIRROR_SESSION_ACLS=24
 EXIT_PFC_STORM_DETECTED=25
 EXIT_LEFTOVER_CPA_TUNNEL=30
 
+[ -f /usr/share/sonic/device/$PLATFORM/asic.conf ] && . /usr/share/sonic/device/$PLATFORM/asic.conf
+NUM_ASIC=${NUM_ASIC:-1}
+
+# Require 100M available on the hard drive for warm reboot temp files,
+# Size is in 1K blocks:
+MIN_HD_SPACE_NEEDED=$((100000 * $NUM_ASIC)) # 100M * NUM_ASIC
+
+# List of ASICs that perform the reboot
+ASIC_LIST=($(seq 0 $(( NUM_ASIC - 1))))
+
 function error()
 {
-    echo $@ >&2
-    logger -p user.err "Error seen during warm-reboot shutdown process: $@"
+    local message="$@"
+    if [[ -n $DEV ]]; then
+        message="asic$DEV: $message"
+    fi
+    echo "$message" >&2
+    logger -p user.err "Error seen during warm-reboot shutdown process: $message"
 }
 
 function debug()
 {
-    if [[ x"${VERBOSE}" == x"yes" ]]; then
-        echo $(date) $@
+    local message="$@"
+    if [[ -n $DEV ]]; then
+        message="asic$DEV: $message"
     fi
-    logger "$@"
+    if [[ x"${VERBOSE}" == x"yes" ]]; then
+        echo $(date) "$message"
+    fi
+    logger "$message"
+}
+
+# Executes a given command in parallel for multiple ASICs, or globally depending on scope.
+# Exports the NETNS and DEV environment variables to the command.
+#
+# Arguments:
+#   $1  scope: Set to "all" to run both once globally and per ASIC; otherwise, runs only per ASIC.
+#   $@  cmd:  The command (with arguments) to execute.
+#
+# Behavior:
+#   - If NUM_ASIC > 1:
+#       - For each ASIC, runs the command in its namespace in the background and tracks the PIDs.
+#       - If scope is "all", also runs the command once globally.
+#       - Waits for all spawned processes, exiting any one fails.
+#   - Otherwise, runs the command as is.
+function execute_in_namespaces()
+{
+    local -r scope="$1"
+    shift
+    local -r cmd="$@"
+    if [[ $NUM_ASIC -gt 1 ]]; then
+        local -A pid_map
+
+        # Spawn a background process for each ASIC
+        for dev in ${ASIC_LIST[@]}; do
+            ( NETNS=asic$dev DEV=$dev $cmd ) &
+            pid=$!
+            pid_map[$pid]=$dev
+        done
+
+        # If scope is "all" spawn a background process for the global namespace as well
+        if [[ $scope == "all" ]]; then
+            ( $cmd ) &
+            pid=$!
+            wait "$pid" && rc=0 || rc=$?
+            if [[ $rc -ne 0 ]]; then
+                error "Command $cmd failed returned $rc"
+                exit $rc
+            fi
+        fi
+
+        # Wait for all background processes to complete and collect the return code
+        pid_list=${!pid_map[@]}
+        for pid in $pid_list; do
+            dev=${pid_map[$pid]}
+            wait "$pid" && rc=0 || rc=$?
+            # If the command failed, remove the ASIC from the list
+            if [[ $rc -ne 0 ]]; then
+                error "Command $cmd failed for $dev returned $rc"
+                exit $rc
+            fi
+        done
+    else
+        ( $cmd )
+    fi
+}
+
+# Determines if a given service has per-ASIC scope.
+function is_asic_service()
+{
+    local -r service=$1
+    local -r has_per_asic_scope=$(sonic-db-cli CONFIG_DB hget "FEATURE|$service" has_per_asic_scope)
+    [[ x"${has_per_asic_scope,,}" == x"true" ]] && echo 1 || echo 0
+}
+
+# Determines if a given service has global scope.
+function is_global_service()
+{
+    local -r service=$1
+    local -r has_global_scope=$(sonic-db-cli CONFIG_DB hget "FEATURE|$service" has_global_scope)
+    [[ x"${has_global_scope,,}" == x"true" ]] && echo 1 || echo 0
+}
+
+# Stop systemd service
+function stop_systemd_service()
+{
+    local -r service=$1
+    if [[ -z $DEV ]]; then
+        local -r service_name="${service}"
+    else
+        local -r service_name="${service}@$DEV"
+    fi
+
+    state=$(systemctl is-enabled ${service_name})
+    if [[ $state == "masked" ]]; then
+        return
+    fi
+
+    debug "Stopping $service_name ..."
+
+    # TODO: These exceptions for nat, sflow, lldp
+    # have to be coded in corresponding service scripts
+
+    if [[ "${service}" = "nat" ]]; then
+        /usr/local/bin/dump_nat_entries.py
+    fi
+
+    if [[ "${service}" = "nat" || "${service}" = "sflow" || "${service}" = "lldp" ]]; then
+        container kill "${service}$DEV"  &> /dev/null || debug "Docker ${service}$DEV is not running ($?) ..."
+    fi
+
+    systemctl stop ${service_name}
+    debug "Stopped $service_name"
+}
+
+# Stops a service or multiple services within the network
+# namespaces of multiple ASICs, or globally depending on scope.
+function stop_service()
+{
+    local -r service=$1
+    local -r is_asic_service=$(is_asic_service $service)
+    local -r is_global_service=$(is_global_service $service)
+
+    if (( $is_asic_service && $is_global_service )); then
+        execute_in_namespaces all stop_systemd_service $service
+    elif (( $is_asic_service )); then
+        execute_in_namespaces asic stop_systemd_service $service
+    elif (( $is_global_service )); then
+        stop_systemd_service $service
+    fi
+}
+
+# Start the lag_keepalive script to send LACPDUs to keep the LAGs refreshed
+function start_lag_keepalive()
+{
+    # start sending LACPDUs to keep the LAGs refreshed
+    # the process will die in 30s
+    debug "Starting lag_keepalive to send LACPDUs ..."
+    timeout --foreground 30 python3 ${LAG_KEEPALIVE_SCRIPT} --fork-into-background --namespace "$NETNS"
+
+    # give the lag_keepalive script a chance to send some LACPDUs
+    sleep 5
 }
 
 function showHelpAndExit()
@@ -87,13 +234,14 @@ function showHelpAndExit()
     echo "    -u    : include ssd-upgrader-part in boot options"
     echo "    -n    : don't require peer devices to be running SONiC with retry count feature [default]"
     echo "    -N    : require peer devices to be running SONiC with retry count feature"
+    echo "    -m    : comma-separated list of ASIC numbers to skip during reboot (multi-ASIC only)"
 
     exit "${EXIT_SUCCESS}"
 }
 
 function parseOptions()
 {
-    while getopts "vfidh?rkxc:sDunN" opt; do #TODO "t" is missing
+    while getopts "vfidh?rkxc:sDunNm:" opt; do #TODO "t" is missing
         case ${opt} in
             h|\? )
                 showHelpAndExit
@@ -140,8 +288,41 @@ function parseOptions()
             N )
                 REQUIRE_TEAMD_RETRY_COUNT=yes
                 ;;
+            m )
+                SKIP_ASIC_LIST=${OPTARG}
+                ;;
         esac
     done
+}
+
+function filter_asic_list()
+{
+    # Only apply ASIC filtering on multi-ASIC devices
+    if [[ -n "${SKIP_ASIC_LIST}" && $NUM_ASIC -gt 1 ]]; then
+        # Convert comma-separated list to array
+        IFS=',' read -ra SKIP_ASICS <<< "${SKIP_ASIC_LIST}"
+
+        # Build new ASIC list excluding the skipped ones
+        local NEW_ASIC_LIST=()
+        for asic in "${ASIC_LIST[@]}"; do
+            local skip=0
+            for skip_asic in "${SKIP_ASICS[@]}"; do
+                if [[ $asic -eq $skip_asic ]]; then
+                    skip=1
+                    break
+                fi
+            done
+            if [[ $skip -eq 0 ]]; then
+                NEW_ASIC_LIST+=($asic)
+            fi
+        done
+
+        # Update ASIC_LIST
+        ASIC_LIST=("${NEW_ASIC_LIST[@]}")
+
+        # Log the skipped ASICs
+        debug "Skipping warm-reboot on ASICs: ${SKIP_ASIC_LIST}"
+    fi
 }
 
 function clear_boot()
@@ -151,16 +332,23 @@ function clear_boot()
 
     /sbin/kexec -u -a || /bin/true
 
-    teardown_control_plane_assistant
+    if [[ $NUM_ASIC -eq 1 ]]; then
+        teardown_control_plane_assistant
+    else
+        debug "Tearing down control plane assistant on multi-ASIC devices is not supported"
+    fi
 
     #clear_warm_boot
     result=$(timeout 10s config warm_restart disable; res=$?; if [[ $res == 124 ]]; then echo timeout; else echo "code ($res)"; fi) || /bin/true
     debug "Cancel warm-reboot: ${result}"
 
     TIMESTAMP=$(date +%Y%m%d-%H%M%S)
-    if [[ -f ${WARM_DIR}/${REDIS_FILE} ]]; then
-        mv -f ${WARM_DIR}/${REDIS_FILE} ${WARM_DIR}/${REDIS_FILE}.${TIMESTAMP} || /bin/true
-    fi
+
+    for dir in ${WARM_DIR}*; do
+        if [[ -f ${dir}/${REDIS_FILE} ]]; then
+            mv -f ${dir}/${REDIS_FILE} ${dir}/${REDIS_FILE}.${TIMESTAMP} || /bin/true
+        fi
+    done
 
     #clear_fast_boot
     if [[ "$REBOOT_TYPE" = "fast-reboot" ]]; then
@@ -174,11 +362,12 @@ function init_warm_reboot_states()
     # the current DB contents will likely mark warm reboot is done.
     # Clear these states so that the next boot up image won't get confused.
     if [[ "$REBOOT_TYPE" = "warm-reboot" || "$REBOOT_TYPE" = "fastfast-reboot" || "$REBOOT_TYPE" = "express-reboot" || "$REBOOT_TYPE" = "fast-reboot" ]]; then
-        sonic-db-cli STATE_DB eval "
+        sonic-db-cli -n "$NETNS" STATE_DB eval "
             for _, key in ipairs(redis.call('keys', 'WARM_RESTART_TABLE|*')) do
                 redis.call('hdel', key, 'state')
             end
         " 0 >/dev/null
+        debug "Cleared reboot states"
     fi
 }
 
@@ -186,11 +375,11 @@ function initialize_pre_shutdown()
 {
     debug "Initialize pre-shutdown ..."
     TABLE="WARM_RESTART_TABLE|warm-shutdown"
-    RESTORE_COUNT=$(sonic-db-cli STATE_DB hget "${TABLE}" restore_count)
+    RESTORE_COUNT=$(sonic-db-cli -n "$NETNS" STATE_DB hget "${TABLE}" restore_count)
     if [[ -z "$RESTORE_COUNT" ]]; then
-        sonic-db-cli STATE_DB hset "${TABLE}" "restore_count" "0" > /dev/null
+        sonic-db-cli -n "$NETNS" STATE_DB hset "${TABLE}" "restore_count" "0" > /dev/null
     fi
-    sonic-db-cli STATE_DB hset "${TABLE}" "state" "requesting" > /dev/null
+    sonic-db-cli -n "$NETNS" STATE_DB hset "${TABLE}" "state" "requesting" > /dev/null
 }
 
 function request_pre_shutdown()
@@ -204,7 +393,7 @@ function request_pre_shutdown()
         STATE=$(timeout 5s docker exec syncd /usr/bin/syncd_request_shutdown --pxe &> /dev/null; if [[ $? == 124 ]]; then echo "timed out"; fi)
     else
         debug "Requesting pre-shutdown ..."
-        STATE=$(timeout 5s docker exec syncd /usr/bin/syncd_request_shutdown --pre &> /dev/null; if [[ $? == 124 ]]; then echo "timed out"; fi)
+        STATE=$(timeout 5s docker exec syncd$DEV /usr/bin/syncd_request_shutdown --pre &> /dev/null; if [[ $? == 124 ]]; then echo "timed out"; fi)
     fi
     if [[ x"${STATE}" == x"timed out" ]]; then
         error "Failed to request pre-shutdown"
@@ -225,8 +414,7 @@ function wait_for_pre_shutdown_complete_or_fail()
     while [[ ${elapsed_time} -lt 60 ]]; do
         # timeout doesn't work with -i option of "docker exec". Therefore we have
         # to invoke docker exec directly below.
-        STATE=$(timeout 5s sonic-db-cli STATE_DB hget "${TABLE}" state; if [[ $? == 124 ]]; then echo "timed out"; fi)
-
+        STATE=$(sonic-db-cli -n "$NETNS" STATE_DB hget "${TABLE}" state; if [[ $? == 124 ]]; then echo "timed out"; fi)
         if [[ x"${STATE}" == x"timed out" ]]; then
             retrycount+=1
             debug "Timed out getting pre-shutdown state, retry count ${retrycount} ..."
@@ -254,20 +442,21 @@ function backup_database()
 
     if [[ "$REBOOT_TYPE" = "fastfast-reboot" || "$REBOOT_TYPE" = "express-reboot" || "$REBOOT_TYPE" = "fast-reboot" ]]; then
         # Advanced reboot: dump state to host disk
-        sonic-db-cli ASIC_DB FLUSHDB > /dev/null
-        sonic-db-cli COUNTERS_DB FLUSHDB > /dev/null
-        sonic-db-cli FLEX_COUNTER_DB FLUSHDB > /dev/null
+        sonic-db-cli -n "$NETNS" ASIC_DB FLUSHDB > /dev/null
+        sonic-db-cli -n "$NETNS" COUNTERS_DB FLUSHDB > /dev/null
+        sonic-db-cli -n "$NETNS" FLEX_COUNTER_DB FLUSHDB > /dev/null
     fi
 
     if [[ "$REBOOT_TYPE" = "fast-reboot" ]]; then
         # Flush RESTAP_DB in fast-reboot to avoid stale status
-        sonic-db-cli RESTAPI_DB FLUSHDB > /dev/null
+        sonic-db-cli -n "$NETNS" RESTAPI_DB FLUSHDB > /dev/null
     fi
 
     # Dump redis content to a file 'dump.rdb' in warmboot directory
-    mkdir -p $WARM_DIR
+    local -r warm_dir="$WARM_DIR$DEV"
+    mkdir -p $warm_dir
     # Delete keys in stateDB except FDB_TABLE|*, MIRROR_SESSION_TABLE|*, WARM_RESTART_ENABLE_TABLE|*, FG_ROUTE_TABLE|*
-    sonic-db-cli STATE_DB eval "
+    sonic-db-cli -n "$NETNS" STATE_DB eval "
         for _, k in ipairs(redis.call('keys', '*')) do
             if string.match(k, 'PORT_TABLE|Ethernet') then
                 for i, f in ipairs(redis.call('hgetall', k)) do
@@ -293,12 +482,11 @@ function backup_database()
         end
     " 0 > /dev/null
 
-    # move all db data into the instance where APPL_DB locates
-    target_db_inst=`centralize_database APPL_DB`
+    target_db_inst=`centralize_database APPL_DB --namespace "$NETNS"`
 
     # Dump redis content to a file 'dump.rdb' in warmboot directory
-    docker cp database:/var/lib/$target_db_inst/$REDIS_FILE $WARM_DIR
-    STATE=$(timeout 5s docker exec database rm /var/lib/$target_db_inst/$REDIS_FILE; if [[ $? == 124 ]]; then echo "timed out"; fi)
+    docker cp database$DEV:/var/lib/$target_db_inst/$REDIS_FILE $warm_dir
+    STATE=$(timeout 5s docker exec database$DEV rm /var/lib/$target_db_inst/$REDIS_FILE; if [[ $? == 124 ]]; then echo "timed out"; fi)
     if [[ x"${STATE}" == x"timed out" ]]; then
         error "Timed out during attempting to remove Redis dump file from database container"
     fi
@@ -507,19 +695,37 @@ function check_docker_exec()
 {
     containers="radv bgp lldp swss database teamd syncd"
     for container in $containers; do
-        STATE=$(timeout 1s docker exec $container echo "success"; if [[ $? == 124 ]]; then echo "timed out"; fi)
-        if [[ x"${STATE}" == x"timed out" ]]; then
-            error "Docker exec on $container timedout"
-            exit "${EXIT_FAILURE}"
+        local is_global_service=$(is_global_service $container)
+        local is_asic_service=$(is_asic_service $container)
+
+        if (( $is_global_service && $is_asic_service )); then
+            execute_in_namespaces all check_docker_container_exec $container
+        elif (( $is_asic_service )); then
+            execute_in_namespaces asic check_docker_container_exec $container
+        elif (( $is_global_service )); then
+            check_docker_container_exec $container
         fi
     done
+}
+
+function check_docker_container_exec()
+{
+    local -r container=$1
+    STATE=$(timeout 1s docker exec ${container}$DEV echo "success"; if [[ $? == 124 ]]; then echo "timed out"; fi)
+    if [[ x"${STATE}" == x"timed out" ]]; then
+        error "Docker exec on ${container}$DEV timedout"
+        exit "${EXIT_FAILURE}"
+    fi
 }
 
 function check_pfc_storm_active()
 {
     debug "Checking for active PFC storms..."
-    
-    if pfcwd show stats --check-storm >/dev/null 2>&1; then
+    if [[ -n $NETNS ]]; then
+        options+="-n $NETNS"
+    fi
+
+    if pfcwd show stats $options --check-storm >/dev/null 2>&1; then
         debug "No active PFC storms detected. Safe to proceed with warm-reboot..."
     else
         error "PFC storm detected. Aborting warm-reboot to prevent failure in recovery path..."
@@ -546,7 +752,7 @@ function check_db_integrity()
 
 function reboot_pre_check()
 {
-    check_pfc_storm_active
+    execute_in_namespaces asic check_pfc_storm_active
     check_docker_exec
     # Make sure that the file system is normal: read-write able
     filename="/host/test-$(date +%Y%m%d-%H%M%S)"
@@ -555,7 +761,7 @@ function reboot_pre_check()
     fi
     rm ${filename}
 
-    check_db_integrity
+    execute_in_namespaces asic check_db_integrity
 
     # Make sure /host has enough space for warm reboot temp files
     avail=$(df -k /host | tail -1 | awk '{ print $4 }')
@@ -636,8 +842,8 @@ function save_counters_folder() {
 }
 
 function check_warm_restart_in_progress() {
-    sonic-db-cli STATE_DB keys "WARM_RESTART_ENABLE_TABLE|*" | while read key ; do
-        if [ -n "$key" ] && [[ x"$(sonic-db-cli STATE_DB hget $key enable)" == x"true" ]]; then
+    sonic-db-cli -n "$NETNS" STATE_DB keys "WARM_RESTART_ENABLE_TABLE|*" | while read key ; do
+        if [ -n "$key" ] && [[ x"$(sonic-db-cli -n "$NETNS" STATE_DB hget $key enable)" == x"true" ]]; then
             if [[ x"${FORCE}" == x"yes" ]]; then
                 debug "Ignoring warm restart flag for ${key#*|}"
             else
@@ -646,6 +852,10 @@ function check_warm_restart_in_progress() {
             fi
         fi
     done
+}
+
+function enable_warm_restart() {
+    config warm_restart enable -n "$NETNS" system
 }
 
 function check_conflict_boot_in_fw_update() {
@@ -673,11 +883,28 @@ function check_conflict_boot_in_fw_update() {
 # main starts here
 parseOptions $@
 
+# Filter ASIC list based on -m option
+filter_asic_list
+
 # Check root privileges
 if [[ "$EUID" -ne 0 ]]
 then
     echo "This command must be run as root" >&2
     exit "${EXIT_FAILURE}"
+fi
+
+if [[ $NUM_ASIC -gt 1 ]]; then
+    BACK_END_ASIC_COUNT=$(python3 <<EOF
+from swsscommon.swsscommon import SonicDBConfig
+from sonic_py_common.multi_asic import *
+SonicDBConfig.initializeGlobalConfig()
+print(len(get_all_namespaces()['back_ns']))
+EOF
+)
+    [[ $BACK_END_ASIC_COUNT -ne 0 ]] && {
+        debug "$REBOOT_TYPE: Supported only on Mutli-ASIC devices with all front-end ASICs"
+        exit "${EXIT_FAILURE}"
+    }
 fi
 
 debug "Starting $REBOOT_TYPE"
@@ -710,7 +937,7 @@ case "$REBOOT_TYPE" in
         config warm_restart enable system
         ;;
     "warm-reboot")
-        check_warm_restart_in_progress
+        execute_in_namespaces all check_warm_restart_in_progress
         if [[ "$sonic_asic_type" == "mellanox" ]]; then
             REBOOT_TYPE="fastfast-reboot"
             BOOT_TYPE_ARG="fastfast"
@@ -721,7 +948,7 @@ case "$REBOOT_TYPE" in
             BOOT_TYPE_ARG="warm"
         fi
         trap clear_boot EXIT HUP INT QUIT TERM KILL ABRT ALRM
-        config warm_restart enable system
+        execute_in_namespaces all enable_warm_restart
         ;;
     "express-reboot")
         check_warm_restart_in_progress
@@ -759,7 +986,6 @@ if [[ "$sonic_asic_type" == "mellanox" ]]; then
 
     MLNX_FW_UPGRADE_SCRIPT="/usr/local/bin/mlnx-fw-manager"
 
-
     if [[ "$REBOOT_TYPE" = "fastfast-reboot" ]]; then
         check_ffb || {
             error "Warm reboot is not supported"
@@ -792,40 +1018,69 @@ else
     fi
 fi
 
-init_warm_reboot_states
+execute_in_namespaces all init_warm_reboot_states
 
-# start sending LACPDUs to keep the LAGs refreshed
-# the process will die in 30s
-debug "Starting lag_keepalive to send LACPDUs ..."
-timeout --foreground 30 python3 ${LAG_KEEPALIVE_SCRIPT} --fork-into-background
-# give the lag_keepalive script a chance to send some LACPDUs
-sleep 5
+execute_in_namespaces asic start_lag_keepalive
 
-setup_control_plane_assistant
+if [[ $NUM_ASIC -eq 1 ]]; then
+    setup_control_plane_assistant
+else
+    debug "Setting up control plane assistant on multi-ASIC devices is not supported"
+fi
 
-TEAMD_INCREASE_RETRY_COUNT=0
-if [[ "${REBOOT_TYPE}" = "warm-reboot" || "${REBOOT_TYPE}" = "fastfast-reboot" || "$REBOOT_TYPE" = "express-reboot" ]]; then
+function probe_teamd_retry_count()
+{
     TEAMD_RETRY_COUNT_PROBE_RC=0
-    /usr/local/bin/teamd_increase_retry_count.py --probe-only || TEAMD_RETRY_COUNT_PROBE_RC=$?
+    /usr/local/bin/teamd_increase_retry_count.py --probe-only --namespace "$NETNS" || TEAMD_RETRY_COUNT_PROBE_RC=$?
     if [[ ${TEAMD_RETRY_COUNT_PROBE_RC} -ne 0 ]]; then
-        if [[ "${REQUIRE_TEAMD_RETRY_COUNT}" = "yes" ]]; then
-            error "Could not confirm that all neighbor devices are running SONiC with the retry count feature"
-            exit "${EXIT_TEAMD_RETRY_COUNT_FAILURE}"
-        else
-            debug "Warning: Retry count feature support unknown for one or more neighbor devices; assuming that it's not available"
-        fi
+        debug "Could not confirm that all neighbor devices are running SONiC with the retry count feature"
+        rm -rf /tmp/teamd_retry_count_probe_success$DEV
     else
-        TEAMD_INCREASE_RETRY_COUNT=1
+        # Leave a file to indicate that the probe was successful
+        touch /tmp/teamd_retry_count_probe_success$DEV
+    fi
+}
+
+function check_teamd_retry_count_probe_success()
+{
+    if [[ $NUM_ASIC -gt 1 ]]; then
+        for dev in ${ASIC_LIST[@]}; do
+            if [[ ! -f /tmp/teamd_retry_count_probe_success$dev ]]; then
+                return "${EXIT_TEAMD_RETRY_COUNT_FAILURE}"
+            fi
+        done
+    else
+        if [[ ! -f /tmp/teamd_retry_count_probe_success ]]; then
+            return "${EXIT_TEAMD_RETRY_COUNT_FAILURE}"
+        fi
+    fi
+}
+
+function increase_teamd_retry_count()
+{
+    if [[ -f /tmp/teamd_retry_count_probe_success$DEV ]]; then
+        /usr/local/bin/teamd_increase_retry_count.py --namespace "$NETNS"
+    fi
+}
+
+if [[ "${REBOOT_TYPE}" = "warm-reboot" || "${REBOOT_TYPE}" = "fastfast-reboot" || "$REBOOT_TYPE" = "express-reboot" ]]; then
+    execute_in_namespaces asic probe_teamd_retry_count
+
+    # Check if all ASICs passed retry count probe if required
+    if [[ "${REQUIRE_TEAMD_RETRY_COUNT}" = "yes" ]]; then
+        check_teamd_retry_count_probe_success || error "Could not confirm that all neighbor devices are running SONiC with the retry count feature"
+        exit "${EXIT_TEAMD_RETRY_COUNT_FAILURE}"
     fi
 fi
 
-if [[ "$REBOOT_TYPE" = "warm-reboot" || "$REBOOT_TYPE" = "fastfast-reboot" || "$REBOOT_TYPE" = "express-reboot" || "$REBOOT_TYPE" = "fast-reboot" ]]; then
+function pause_orchagent()
+{
     # Freeze orchagent for warm restart
     # Ask orchagent_restart_check to try freeze 5 times with interval of 2 seconds,
     # it is possible that the orchagent is in transient state and no opportunity to freeze
     # Note: assume that 2*5 seconds is enough for orchagent to process the request and response to freeze or not
     debug "Pausing orchagent ..."
-    docker exec -i swss /usr/bin/orchagent_restart_check -w 2000 -r 5 > /dev/null || RESTARTCHECK_RC=$?
+    docker exec -i swss$DEV /usr/bin/orchagent_restart_check -w 2000 -r 5 > /dev/null || RESTARTCHECK_RC=$?
     if [[ RESTARTCHECK_RC -ne 0 ]]; then
         error "RESTARTCHECK failed"
         if [[ x"${FORCE}" == x"yes" ]]; then
@@ -834,11 +1089,22 @@ if [[ "$REBOOT_TYPE" = "warm-reboot" || "$REBOOT_TYPE" = "fastfast-reboot" || "$
             exit "${EXIT_ORCHAGENT_SHUTDOWN}"
         fi
     fi
+    debug "Orchagent paused successfully"
+}
+
+# After orchagent pause, there's no rollback if anything goes wrong on Multi-ASIC devices, force execution
+if [[ $NUM_ASIC -gt 1 ]]; then
+    FORCE=yes
 fi
 
-if [[ ( "${REBOOT_TYPE}" = "warm-reboot" || "${REBOOT_TYPE}" = "fastfast-reboot" || "${REBOOT_TYPE}" = "express-reboot" ) && "${TEAMD_INCREASE_RETRY_COUNT}" -eq 1 ]]; then
-    /usr/local/bin/teamd_increase_retry_count.py
+if [[ "$REBOOT_TYPE" = "warm-reboot" || "$REBOOT_TYPE" = "fastfast-reboot" || "$REBOOT_TYPE" = "express-reboot" || "$REBOOT_TYPE" = "fast-reboot" ]]; then
+    execute_in_namespaces asic pause_orchagent
 fi
+
+if [[ "${REBOOT_TYPE}" = "warm-reboot" || "${REBOOT_TYPE}" = "fastfast-reboot" || "${REBOOT_TYPE}" = "express-reboot" ]]; then
+    execute_in_namespaces asic increase_teamd_retry_count
+fi
+
 
 # We are fully committed to reboot from this point on because critical
 # service will go down and we cannot recover from it.
@@ -884,47 +1150,19 @@ else
 fi
 
 for service in ${SERVICES_TO_STOP}; do
-    # Skip the masked services
-    state=$(systemctl is-enabled ${service})
-    if [[ $state == "masked" ]]; then
-        continue
-    fi
-
-    debug "Stopping ${service} ..."
-
-    # TODO: These exceptions for nat, sflow, lldp
-    # have to be coded in corresponding service scripts
-
-    if [[ "${service}" = "nat" ]]; then
-        /usr/local/bin/dump_nat_entries.py
-    fi
-
-    if [[ "${service}" = "nat" || "${service}" = "sflow" || "${service}" = "lldp" ]]; then
-        container kill "${service}"  &> /dev/null || debug "Docker ${service} is not running ($?) ..."
-    fi
-
-    if [[ "${service}" = "syncd" ]]; then
-        systemctl stop ${service} || debug "Ignore stopping ${service} service error $?"
-    else
-        systemctl stop ${service}
-    fi
-
-    debug "Stopped ${service}"
+    stop_service $service
 
     if [[ "${service}" = "swss" ]]; then
         if [[ "$REBOOT_TYPE" = "warm-reboot" || "$REBOOT_TYPE" = "fastfast-reboot" || "$REBOOT_TYPE" = "express-reboot" ]]; then
             # Pre-shutdown syncd
-            initialize_pre_shutdown
-
-            request_pre_shutdown
-
-            wait_for_pre_shutdown_complete_or_fail
+            execute_in_namespaces asic initialize_pre_shutdown
+            execute_in_namespaces asic request_pre_shutdown
+            execute_in_namespaces asic wait_for_pre_shutdown_complete_or_fail
         fi
-
     fi
 done
 
-backup_database
+execute_in_namespaces all backup_database
 
 # Stop the docker container engine. Otherwise we will have a broken docker storage
 systemctl stop docker.service || debug "Ignore stopping docker service error $?"
