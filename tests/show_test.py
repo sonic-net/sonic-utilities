@@ -131,7 +131,7 @@ class TestShowRunAllCommandsMasic(object):
         "cli_arguments0,expected0",
         [
             ([], 'cat /var/log/syslog'),
-            (['xcvrd'], "cat /var/log/syslog | grep 'xcvrd'"),
+            (['xcvrd'], "cat /var/log/syslog | grep -E 'xcvrd'"),
             (['-l', '10'], 'cat /var/log/syslog | tail -10'),
         ]
 )
@@ -144,9 +144,9 @@ class TestShowRunAllCommandsMasic(object):
 def test_show_logging_default(run_command, cli_arguments0, expected0, cli_arguments1, expected1):
     runner = CliRunner()
     runner.invoke(show.cli.commands["logging"], cli_arguments0)
-    run_command.assert_called_with(EXPECTED_BASE_COMMAND + expected0, display_cmd=False, shell=True)
+    run_command.assert_called_with(EXPECTED_BASE_COMMAND + expected0, display_cmd=False, shell=True, return_cmd=True)
     runner.invoke(show.cli.commands["logging"], cli_arguments1)
-    run_command.assert_called_with(EXPECTED_BASE_COMMAND_LIST + expected1, display_cmd=False)
+    run_command.assert_called_with(EXPECTED_BASE_COMMAND_LIST + expected1, display_cmd=False, shell=False)
 
 @patch('show.main.run_command')
 @patch('os.path.isfile', MagicMock(return_value=True))
@@ -154,7 +154,7 @@ def test_show_logging_default(run_command, cli_arguments0, expected0, cli_argume
         "cli_arguments0,expected0",
         [
             ([], 'cat /var/log/syslog.1 /var/log/syslog'),
-            (['xcvrd'], "cat /var/log/syslog.1 /var/log/syslog | grep 'xcvrd'"),
+            (['xcvrd'], "cat /var/log/syslog.1 /var/log/syslog | grep -E 'xcvrd'"),
             (['-l', '10'], 'cat /var/log/syslog.1 /var/log/syslog | tail -10'),
         ]
 )
@@ -167,9 +167,9 @@ def test_show_logging_default(run_command, cli_arguments0, expected0, cli_argume
 def test_show_logging_syslog_1(run_command, cli_arguments0, expected0, cli_arguments1, expected1):
     runner = CliRunner()
     runner.invoke(show.cli.commands["logging"], cli_arguments0)
-    run_command.assert_called_with(EXPECTED_BASE_COMMAND + expected0, display_cmd=False, shell=True)
+    run_command.assert_called_with(EXPECTED_BASE_COMMAND + expected0, display_cmd=False, shell=True, return_cmd=True)
     runner.invoke(show.cli.commands["logging"], cli_arguments1)
-    run_command.assert_called_with(EXPECTED_BASE_COMMAND_LIST + expected1, display_cmd=False)
+    run_command.assert_called_with(EXPECTED_BASE_COMMAND_LIST + expected1, display_cmd=False, shell=False)
 
 @patch('show.main.run_command')
 @patch('os.path.exists', MagicMock(return_value=True))
@@ -177,7 +177,7 @@ def test_show_logging_syslog_1(run_command, cli_arguments0, expected0, cli_argum
         "cli_arguments0,expected0",
         [
             ([], 'cat /var/log.tmpfs/syslog'),
-            (['xcvrd'], "cat /var/log.tmpfs/syslog | grep 'xcvrd'"),
+            (['xcvrd'], "cat /var/log.tmpfs/syslog | grep -E 'xcvrd'"),
             (['-l', '10'], 'cat /var/log.tmpfs/syslog | tail -10'),
         ]
 )
@@ -190,9 +190,9 @@ def test_show_logging_syslog_1(run_command, cli_arguments0, expected0, cli_argum
 def test_show_logging_tmpfs(run_command, cli_arguments0, expected0, cli_arguments1, expected1):
     runner = CliRunner()
     runner.invoke(show.cli.commands["logging"], cli_arguments0)
-    run_command.assert_called_with(EXPECTED_BASE_COMMAND + expected0, display_cmd=False, shell=True)
+    run_command.assert_called_with(EXPECTED_BASE_COMMAND + expected0, display_cmd=False, shell=True, return_cmd=True)
     runner.invoke(show.cli.commands["logging"], cli_arguments1)
-    run_command.assert_called_with(EXPECTED_BASE_COMMAND_LIST + expected1, display_cmd=False)
+    run_command.assert_called_with(EXPECTED_BASE_COMMAND_LIST + expected1, display_cmd=False, shell=False)
 
 @patch('show.main.run_command')
 @patch('os.path.isfile', MagicMock(return_value=True))
@@ -201,7 +201,7 @@ def test_show_logging_tmpfs(run_command, cli_arguments0, expected0, cli_argument
         "cli_arguments0,expected0",
         [
             ([], 'cat /var/log.tmpfs/syslog.1 /var/log.tmpfs/syslog'),
-            (['xcvrd'], "cat /var/log.tmpfs/syslog.1 /var/log.tmpfs/syslog | grep 'xcvrd'"),
+            (['xcvrd'], "cat /var/log.tmpfs/syslog.1 /var/log.tmpfs/syslog | grep -E 'xcvrd'"),
             (['-l', '10'], 'cat /var/log.tmpfs/syslog.1 /var/log.tmpfs/syslog | tail -10'),
         ]
 )
@@ -214,9 +214,44 @@ def test_show_logging_tmpfs(run_command, cli_arguments0, expected0, cli_argument
 def test_show_logging_tmpfs_syslog_1(run_command, cli_arguments0, expected0, cli_arguments1, expected1):
     runner = CliRunner()
     runner.invoke(show.cli.commands["logging"], cli_arguments0)
-    run_command.assert_called_with(EXPECTED_BASE_COMMAND + expected0, display_cmd=False, shell=True)
+    run_command.assert_called_with(EXPECTED_BASE_COMMAND + expected0, display_cmd=False, shell=True, return_cmd=True)
     runner.invoke(show.cli.commands["logging"], cli_arguments1)
-    run_command.assert_called_with(EXPECTED_BASE_COMMAND_LIST + expected1, display_cmd=False)
+    run_command.assert_called_with(EXPECTED_BASE_COMMAND_LIST + expected1, display_cmd=False, shell=False)
+
+
+@patch("show.main.run_command")
+def test_show_logging_summary(run_command):
+    """
+    Test the 'show logging --summary' command to ensure it correctly summarizes log levels.
+    """
+    fake_logs = (
+        "INFO system started\n"
+        "WARNING disk low\n"
+        "ERR failed to start\n"
+        "INFO ready\n"
+    )
+
+    run_command.return_value = fake_logs
+
+    runner = CliRunner()
+    result = runner.invoke(show.cli.commands["logging"], ["--summary"])
+
+    # Command execution
+    run_command.assert_called_once_with(
+        EXPECTED_BASE_COMMAND + "cat /var/log/syslog",
+        display_cmd=False,
+        shell=True,
+        return_cmd=True,
+    )
+
+    # Output validation
+    assert result.exit_code == 0
+    assert "Log Summary" in result.output
+    assert "Total lines: 5" in result.output
+    assert "INFO: 2" in result.output
+    assert "WARNING: 1" in result.output
+    assert "ERR: 1" in result.output
+
 
 def side_effect_subprocess_popen(*args, **kwargs):
     mock = MagicMock()
