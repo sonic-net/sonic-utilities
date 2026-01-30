@@ -247,6 +247,7 @@ setup(
         'docker-image-py>=0.1.10',
         'filelock>=3.0.12',
         'enlighten>=1.8.0',
+        'ijson>=3.2.3',
         'ipaddress>=1.0.23',
         'protobuf',
         'jinja2>=2.11.3',
