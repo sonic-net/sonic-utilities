@@ -8,6 +8,7 @@ import click
 import lazy_object_proxy
 import utilities_common.cli as clicommon
 from sonic_py_common import multi_asic
+from utilities_common import bfd_util
 import utilities_common.multi_asic as multi_asic_util
 from importlib import reload
 from natsort import natsorted
@@ -2639,24 +2640,58 @@ def bfd():
 def summary(db, namespace):
     """Show bfd session information"""
     bfd_headers = ["Peer Addr", "Interface", "Vrf", "State", "Type", "Local Addr",
-                "TX Interval", "RX Interval", "Multiplier", "Multihop", "Local Discriminator"]
+                   "TX Interval", "RX Interval", "Multiplier", "Multihop", "Local Discriminator"]
 
     if namespace is None:
         namespace = constants.DEFAULT_NAMESPACE
 
-    bfd_keys = db.db_clients[namespace].keys(db.db.STATE_DB, "BFD_SESSION_TABLE|*")
+    # Check if software BFD is enabled
+    # Connect to config_db once and reuse the connection
+    config_db = multi_asic.connect_config_db_for_ns(namespace)
+    if bfd_util.is_software_bfd_enabled(namespace, config_db):
+        # Use vtysh to get BFD sessions from FRR
+        configured_peers = bfd_util.get_bfd_peers_from_config(namespace, config_db)
+        frr_sessions = bfd_util.get_bfd_sessions_from_frr(namespace)
+        filtered_sessions = bfd_util.filter_bfd_sessions_by_config(frr_sessions, configured_peers)
 
-    click.echo("Total number of BFD sessions: {}".format(0 if bfd_keys is None else len(bfd_keys)))
+        click.echo("Total number of BFD sessions: {}".format(len(filtered_sessions)))
 
-    bfd_body = []
-    if bfd_keys is not None:
-        for key in bfd_keys:
-            key_values = key.split('|')
-            values = db.db_clients[namespace].get_all(db.db.STATE_DB, key)
-            if "local_discriminator" not in values.keys():
-                values["local_discriminator"] = "NA"
-            bfd_body.append([key_values[3], key_values[2], key_values[1], values["state"], values["type"], values["local_addr"],
-                                values["tx_interval"], values["rx_interval"], values["multiplier"], values["multihop"], values["local_discriminator"]])
+        bfd_body = []
+        for session in filtered_sessions:
+            peer = session.get("peer", "")
+            interface = session.get("interface", "")
+            vrf = session.get("vrf", "default")
+            status = session.get("status", "")
+            session_type = session.get("type", "")
+            local_addr = session.get("local", "")
+            tx_interval = session.get("transmit-interval", "")
+            rx_interval = session.get("receive-interval", "")
+            multiplier = session.get("detect-multiplier", "")
+            multihop = "yes" if session.get("multihop") else "no"
+            local_disc = session.get("id", "NA")
+
+            bfd_body.append([peer, interface, vrf, status, session_type,
+                             local_addr, tx_interval, rx_interval, multiplier,
+                             multihop, local_disc])
+    else:
+        # Use STATE_DB for hardware BFD
+        bfd_keys = db.db_clients[namespace].keys(db.db.STATE_DB, "BFD_SESSION_TABLE|*")
+
+        click.echo("Total number of BFD sessions: {}".format(0 if bfd_keys is None else len(bfd_keys)))
+
+        bfd_body = []
+        if bfd_keys is not None:
+            for key in bfd_keys:
+                key_values = key.split('|')
+                values = db.db_clients[namespace].get_all(db.db.STATE_DB, key)
+                if "local_discriminator" not in values.keys():
+                    values["local_discriminator"] = "NA"
+                bfd_body.append([key_values[3], key_values[2], key_values[1],
+                                 values["state"], values["type"],
+                                 values["local_addr"], values["tx_interval"],
+                                 values["rx_interval"], values["multiplier"],
+                                 values["multihop"],
+                                 values["local_discriminator"]])
 
     click.echo(tabulate(bfd_body, bfd_headers))
 
@@ -2670,29 +2705,79 @@ def summary(db, namespace):
 def peer(db, peer_ip, namespace):
     """Show bfd session information for BFD peer"""
     bfd_headers = ["Peer Addr", "Interface", "Vrf", "State", "Type", "Local Addr",
-                "TX Interval", "RX Interval", "Multiplier", "Multihop", "Local Discriminator"]
+                   "TX Interval", "RX Interval", "Multiplier", "Multihop", "Local Discriminator"]
 
     if namespace is None:
         namespace = constants.DEFAULT_NAMESPACE
 
-    bfd_keys = db.db_clients[namespace].keys(db.db.STATE_DB, "BFD_SESSION_TABLE|*|{}".format(peer_ip))
-    delimiter = db.db_clients[namespace].get_db_separator(db.db.STATE_DB)
+    # Check if software BFD is enabled
+    # Connect to config_db once and reuse the connection
+    config_db = multi_asic.connect_config_db_for_ns(namespace)
+    if bfd_util.is_software_bfd_enabled(namespace, config_db):
+        # Use vtysh to get BFD sessions from FRR
+        configured_peers = bfd_util.get_bfd_peers_from_config(namespace, config_db)
 
-    if bfd_keys is None or len(bfd_keys) == 0:
-        click.echo("No BFD sessions found for peer IP {}".format(peer_ip))
-        return
+        # Check if the peer is configured
+        if peer_ip not in configured_peers:
+            click.echo("No BFD sessions found for peer IP {}".format(peer_ip))
+            return
 
-    click.echo("Total number of BFD sessions for peer IP {}: {}".format(peer_ip, len(bfd_keys)))
+        frr_sessions = bfd_util.get_bfd_sessions_from_frr(namespace)
 
-    bfd_body = []
-    if bfd_keys is not None:
-        for key in bfd_keys:
-            key_values = key.split(delimiter)
-            values = db.db_clients[namespace].get_all(db.db.STATE_DB, key)
-            if "local_discriminator" not in values.keys():
-                values["local_discriminator"] = "NA"
-            bfd_body.append([key_values[3], key_values[2], key_values[1], values.get("state"), values.get("type"), values.get("local_addr"),
-                                values.get("tx_interval"), values.get("rx_interval"), values.get("multiplier"), values.get("multihop"), values.get("local_discriminator")])
+        # Filter for the specific peer
+        peer_sessions = []
+        if peer_ip in frr_sessions:
+            peer_sessions.append(frr_sessions[peer_ip])
+
+        if not peer_sessions:
+            click.echo("No BFD sessions found for peer IP {}".format(peer_ip))
+            return
+
+        click.echo("Total number of BFD sessions for peer IP {}: {}".format(peer_ip, len(peer_sessions)))
+
+        bfd_body = []
+        for session in peer_sessions:
+            peer = session.get("peer", "")
+            interface = session.get("interface", "")
+            vrf = session.get("vrf", "default")
+            status = session.get("status", "")
+            session_type = session.get("type", "")
+            local_addr = session.get("local", "")
+            tx_interval = session.get("transmit-interval", "")
+            rx_interval = session.get("receive-interval", "")
+            multiplier = session.get("detect-multiplier", "")
+            multihop = "yes" if session.get("multihop") else "no"
+            local_disc = session.get("id", "NA")
+
+            bfd_body.append([peer, interface, vrf, status, session_type,
+                             local_addr, tx_interval, rx_interval, multiplier,
+                             multihop, local_disc])
+    else:
+        # Use STATE_DB for hardware BFD
+        bfd_keys = db.db_clients[namespace].keys(db.db.STATE_DB, "BFD_SESSION_TABLE|*|{}".format(peer_ip))
+        delimiter = db.db_clients[namespace].get_db_separator(db.db.STATE_DB)
+
+        if bfd_keys is None or len(bfd_keys) == 0:
+            click.echo("No BFD sessions found for peer IP {}".format(peer_ip))
+            return
+
+        click.echo("Total number of BFD sessions for peer IP {}: {}".format(peer_ip, len(bfd_keys)))
+
+        bfd_body = []
+        if bfd_keys is not None:
+            for key in bfd_keys:
+                key_values = key.split(delimiter)
+                values = db.db_clients[namespace].get_all(db.db.STATE_DB, key)
+                if "local_discriminator" not in values.keys():
+                    values["local_discriminator"] = "NA"
+                bfd_body.append([key_values[3], key_values[2], key_values[1],
+                                 values.get("state"), values.get("type"),
+                                 values.get("local_addr"),
+                                 values.get("tx_interval"),
+                                 values.get("rx_interval"),
+                                 values.get("multiplier"),
+                                 values.get("multihop"),
+                                 values.get("local_discriminator")])
 
     click.echo(tabulate(bfd_body, bfd_headers))
 
