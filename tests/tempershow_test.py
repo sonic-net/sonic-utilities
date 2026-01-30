@@ -58,7 +58,7 @@ class TestTemperShowClass(TestCase):
         Test _get_transceiver_temperature_data with new TRANSCEIVER_DOM_TEMPERATURE table
         Given: TRANSCEIVER_DOM_TEMPERATURE table has temperature data
         When: _get_transceiver_temperature_data is called
-        Then: Should return temperature from new table
+        Then: Should return full data dict from new table
         """
         mock_db = mock.MagicMock()
         mock_connector.return_value = mock_db
@@ -66,11 +66,16 @@ class TestTemperShowClass(TestCase):
         temp_show = TemperShow()
 
         # Mock get_all to return data for TRANSCEIVER_DOM_TEMPERATURE
-        mock_db.get_all.return_value = {TEMPER_FIELD_NAME: '35.5'}
+        expected_data = {
+            TEMPER_FIELD_NAME: '35.5',
+            HIGH_THRESH_FIELD_NAME: '70.0',
+            CRIT_HIGH_THRESH_FIELD_NAME: '80.0'
+        }
+        mock_db.get_all.return_value = expected_data
 
         result = temp_show._get_transceiver_temperature_data('Ethernet0')
 
-        assert result == '35.5'
+        assert result == expected_data
         mock_db.get_all.assert_called_with(
             temp_show.db.STATE_DB,
             'TRANSCEIVER_DOM_TEMPERATURE|Ethernet0'
@@ -82,21 +87,22 @@ class TestTemperShowClass(TestCase):
         Test _get_transceiver_temperature_data fallback to TRANSCEIVER_DOM_SENSOR
         Given: TRANSCEIVER_DOM_TEMPERATURE table is empty but TRANSCEIVER_DOM_SENSOR has data
         When: _get_transceiver_temperature_data is called
-        Then: Should fallback to TRANSCEIVER_DOM_SENSOR and return temperature
+        Then: Should fallback to TRANSCEIVER_DOM_SENSOR and return full data dict
         """
         mock_db = mock.MagicMock()
         mock_connector.return_value = mock_db
 
         temp_show = TemperShow()
 
+        expected_data = {TEMPER_FIELD_NAME: '36.2'}
         mock_db.get_all.side_effect = [
             {},  # Empty response for TRANSCEIVER_DOM_TEMPERATURE
-            {TEMPER_FIELD_NAME: '36.2'}  # Data for TRANSCEIVER_DOM_SENSOR
+            expected_data  # Data for TRANSCEIVER_DOM_SENSOR
         ]
 
         result = temp_show._get_transceiver_temperature_data('Ethernet1')
 
-        assert result == '36.2'
+        assert result == expected_data
         assert mock_db.get_all.call_count == 2
 
         # Verify legacy key was attempted
@@ -150,7 +156,7 @@ class TestTemperShowClass(TestCase):
         """
         Test _add_sensor_to_output for thermal sensor with thresholds
         Given: A thermal sensor with temperature and threshold data
-        When: _add_sensor_to_output is called with thresholds
+        When: _add_sensor_to_output is called with data_dict containing thresholds
         Then: Should add sensor to both JSON and table output
         """
         mock_db = mock.MagicMock()
@@ -160,7 +166,8 @@ class TestTemperShowClass(TestCase):
 
         json_output = []
         table = []
-        thresholds = {
+        data_dict = {
+            TEMPER_FIELD_NAME: '35.0',
             HIGH_THRESH_FIELD_NAME: '50.0',
             LOW_THRESH_FIELD_NAME: '10.0',
             CRIT_HIGH_THRESH_FIELD_NAME: '60.0',
@@ -169,7 +176,7 @@ class TestTemperShowClass(TestCase):
             TIMESTAMP_FIELD_NAME: '20240101 12:00:00'
         }
 
-        temp_show._add_sensor_to_output('Sensor1', '35.0', thresholds, json_output, table)
+        temp_show._add_sensor_to_output('Sensor1', data_dict, json_output, table)
 
         assert len(json_output) == 1
         assert len(table) == 1
@@ -184,7 +191,7 @@ class TestTemperShowClass(TestCase):
         """
         Test _add_sensor_to_output for transceiver sensor without thresholds
         Given: A transceiver sensor with temperature but no thresholds
-        When: _add_sensor_to_output is called with thresholds=None
+        When: _add_sensor_to_output is called with data_dict containing only temperature
         Then: Should add sensor with N/A for threshold fields
         """
         mock_db = mock.MagicMock()
@@ -194,8 +201,9 @@ class TestTemperShowClass(TestCase):
 
         json_output = []
         table = []
+        data_dict = {TEMPER_FIELD_NAME: '36.5'}
 
-        temp_show._add_sensor_to_output('Ethernet0', '36.5', None, json_output, table)
+        temp_show._add_sensor_to_output('Ethernet0', data_dict, json_output, table)
 
         assert len(json_output) == 1
         assert len(table) == 1
