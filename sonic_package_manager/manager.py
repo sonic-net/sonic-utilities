@@ -1077,6 +1077,10 @@ class PackageManager:
         for command in SONIC_CLI_COMMANDS:
             self._install_cli_plugin(package, command)
 
+        # Ensure all plugin files are synced to disk after installation
+        # This prevents incomplete/corrupted files after power cycle
+        os.sync()
+
     def _uninstall_cli_plugins(self, package: Package):
         for command in SONIC_CLI_COMMANDS:
             self._uninstall_cli_plugin(package, command)
