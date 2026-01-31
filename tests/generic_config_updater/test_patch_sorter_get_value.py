@@ -49,4 +49,3 @@ class TestJsonMoveGetValue(unittest.TestCase):
         tokens = ["table1", "key1", "field", "extra"]
         with self.assertRaises(TypeError):
             JsonMove._get_value(self.config, tokens)
-
