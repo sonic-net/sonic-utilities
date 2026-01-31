@@ -5341,6 +5341,29 @@ def mtu(ctx, interface_name, interface_mtu, verbose):
         command += ["-vv"]
     clicommon.run_command(command, display_cmd=verbose)
 
+
+#
+# 'description' subcommand
+#
+
+@interface.command()
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('interface_description', metavar='<interface_description>', required=True)
+def description(ctx, interface_name, interface_description):
+    """Set interface description"""
+    # Get the config_db connector
+    config_db = ctx.obj['config_db']
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    if interface_name_is_valid(config_db, interface_name) is False:
+        ctx.fail("Interface name is invalid. Please enter a valid interface name!!")
+
+    config_db.mod_entry("PORT", interface_name, {"description": interface_description})
+
 #
 # 'tpid' subcommand
 #
