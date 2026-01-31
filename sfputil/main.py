@@ -336,6 +336,10 @@ def format_dict_value_to_string(sorted_key_table,
 def convert_sfp_info_to_output_string(sfp_info_dict):
     indent = ' ' * 8
     output = ''
+    # Gracefully handle missing/invalid info dicts
+    if sfp_info_dict is None or not isinstance(sfp_info_dict, dict):
+        output += '{}EEPROM info: N/A\n'.format(indent)
+        return output
     is_sfp_cmis = is_transceiver_cmis(sfp_info_dict)
     if is_sfp_cmis:
         # Use the utility function with the local QSFP_DD_DATA_MAP for CMIS transceivers
