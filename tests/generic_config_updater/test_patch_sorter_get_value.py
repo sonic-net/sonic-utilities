@@ -1,5 +1,6 @@
 import unittest
-from generic_config_updater.patch_sorter import JsonMove, GenericConfigUpdaterError
+from generic_config_updater.patch_sorter import JsonMove
+
 
 class TestJsonMoveGetValue(unittest.TestCase):
     def setUp(self):
@@ -49,5 +50,3 @@ class TestJsonMoveGetValue(unittest.TestCase):
         with self.assertRaises(TypeError):
             JsonMove._get_value(self.config, tokens)
 
-if __name__ == "__main__":
-    unittest.main()
