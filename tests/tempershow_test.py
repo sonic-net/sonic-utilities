@@ -54,19 +54,18 @@ class TestTemperShowClass(TestCase):
         assert temp_show.db is mock_connector.return_value
 
     @mock.patch('tempershow.SonicV2Connector')
-    def test_get_transceiver_temperature_data_from_new_table(self, mock_connector):
+    def test_process_keys_with_valid_keys(self, mock_connector):
         """
-        Test _get_transceiver_temperature_data with new TRANSCEIVER_DOM_TEMPERATURE table
-        Given: TRANSCEIVER_DOM_TEMPERATURE table has temperature data
-        When: _get_transceiver_temperature_data is called
-        Then: Should return full data dict from new table
+        Test _process_keys processes valid keys correctly
+        Given: Valid keys from TEMPERATURE_INFO or TRANSCEIVER tables
+        When: _process_keys is called
+        Then: Should add sensor data to json_output and table
         """
         mock_db = mock.MagicMock()
         mock_connector.return_value = mock_db
 
         temp_show = TemperShow()
 
-        # Mock get_all to return data for TRANSCEIVER_DOM_TEMPERATURE
         expected_data = {
             TEMPER_FIELD_NAME: '35.5',
             HIGH_THRESH_FIELD_NAME: '70.0',
@@ -74,21 +73,24 @@ class TestTemperShowClass(TestCase):
         }
         mock_db.get_all.return_value = expected_data
 
-        result = temp_show._get_transceiver_temperature_data('Ethernet0')
+        json_output = []
+        table = []
+        keys = ['TEMPERATURE_INFO|Sensor1', 'TRANSCEIVER_DOM_TEMPERATURE|Ethernet0']
 
-        assert result == expected_data
-        mock_db.get_all.assert_called_with(
-            temp_show.db.STATE_DB,
-            'TRANSCEIVER_DOM_TEMPERATURE|Ethernet0'
-        )
+        temp_show._process_keys(keys, json_output, table)
+
+        assert len(json_output) == 2
+        assert len(table) == 2
+        assert json_output[0]['Sensor'] == 'Sensor1'
+        assert json_output[1]['Sensor'] == 'Ethernet0'
 
     @mock.patch('tempershow.SonicV2Connector')
-    def test_get_transceiver_temperature_data_fallback_to_legacy(self, mock_connector):
+    def test_process_keys_with_invalid_key(self, mock_connector):
         """
-        Test _get_transceiver_temperature_data fallback to TRANSCEIVER_DOM_SENSOR
-        Given: TRANSCEIVER_DOM_TEMPERATURE table is empty but TRANSCEIVER_DOM_SENSOR has data
-        When: _get_transceiver_temperature_data is called
-        Then: Should fallback to TRANSCEIVER_DOM_SENSOR and return full data dict
+        Test _process_keys handles invalid keys gracefully
+        Given: Keys with invalid format (not containing pipe separator)
+        When: _process_keys is called
+        Then: Should skip invalid keys and print warning
         """
         mock_db = mock.MagicMock()
         mock_connector.return_value = mock_db
@@ -96,61 +98,70 @@ class TestTemperShowClass(TestCase):
         temp_show = TemperShow()
 
         expected_data = {TEMPER_FIELD_NAME: '36.2'}
-        mock_db.get_all.side_effect = [
-            {},  # Empty response for TRANSCEIVER_DOM_TEMPERATURE
-            expected_data  # Data for TRANSCEIVER_DOM_SENSOR
-        ]
+        mock_db.get_all.return_value = expected_data
 
-        result = temp_show._get_transceiver_temperature_data('Ethernet1')
+        json_output = []
+        table = []
+        keys = ['INVALID_KEY_NO_PIPE', 'TEMPERATURE_INFO|Sensor1']
 
-        assert result == expected_data
-        assert mock_db.get_all.call_count == 2
+        with mock.patch('builtins.print') as mock_print:
+            temp_show._process_keys(keys, json_output, table)
 
-        # Verify legacy key was attempted
-        calls = [c.args for c in mock_db.get_all.call_args_list]
-        assert any('TRANSCEIVER_DOM_SENSOR|Ethernet1' in str(args) for args in calls)
+            # Should only process the valid key
+            assert len(json_output) == 1
+            assert json_output[0]['Sensor'] == 'Sensor1'
+
+            # Should print warning for invalid key
+            mock_print.assert_called()
+            warning_printed = any('Warn' in str(call) for call in mock_print.call_args_list)
+            assert warning_printed
 
     @mock.patch('tempershow.SonicV2Connector')
-    def test_get_transceiver_temperature_data_no_data(self, mock_connector):
+    def test_process_keys_with_empty_data(self, mock_connector):
         """
-        Test _get_transceiver_temperature_data when both tables are empty
-        Given: Neither TRANSCEIVER_DOM_TEMPERATURE nor TRANSCEIVER_DOM_SENSOR tables have data
-        When: _get_transceiver_temperature_data is called
-        Then: Should return None
+        Test _process_keys handles keys with no data
+        Given: Valid keys but get_all returns empty dict
+        When: _process_keys is called
+        Then: Should skip keys with no data
         """
         mock_db = mock.MagicMock()
         mock_connector.return_value = mock_db
 
         temp_show = TemperShow()
 
-        # Both calls return empty
+        # Return empty dict for all keys
         mock_db.get_all.return_value = {}
 
-        result = temp_show._get_transceiver_temperature_data('Ethernet2')
+        json_output = []
+        table = []
+        keys = ['TEMPERATURE_INFO|Sensor1', 'TEMPERATURE_INFO|Sensor2']
 
-        assert result is None
+        temp_show._process_keys(keys, json_output, table)
+
+        assert len(json_output) == 0
+        assert len(table) == 0
 
     @mock.patch('tempershow.SonicV2Connector')
-    def test_get_transceiver_temperature_data_no_temperature_field(self, mock_connector):
+    def test_process_keys_with_empty_list(self, mock_connector):
         """
-        Test _get_transceiver_temperature_data when table exists but has no temperature field
-        Given: Tables exist but do not contain temperature field
-        When: _get_transceiver_temperature_data is called
-        Then: Should return None
+        Test _process_keys handles empty key list
+        Given: Empty list of keys
+        When: _process_keys is called
+        Then: Should not add any data to outputs
         """
         mock_db = mock.MagicMock()
         mock_connector.return_value = mock_db
 
         temp_show = TemperShow()
 
-        mock_db.get_all.side_effect = [
-            {'other_field': 'value'},  # No temperature in TRANSCEIVER_DOM_TEMPERATURE
-            {}  # Empty TRANSCEIVER_DOM_SENSOR
-        ]
+        json_output = []
+        table = []
 
-        result = temp_show._get_transceiver_temperature_data('Ethernet3')
+        temp_show._process_keys([], json_output, table)
 
-        assert result is None
+        assert len(json_output) == 0
+        assert len(table) == 0
+        mock_db.get_all.assert_not_called()
 
     @mock.patch('tempershow.SonicV2Connector')
     def test_add_sensor_to_output_with_thresholds(self, mock_connector):

@@ -31,34 +31,13 @@ class TemperShow(object):
         self.db = SonicV2Connector(host="127.0.0.1")
         self.db.connect(self.db.STATE_DB)
 
-    def _get_transceiver_temperature_data(self, port_name):
-        """
-        Get temperature data for a transceiver/SFP module with fallback logic.
-        Try TRANSCEIVER_DOM_TEMPERATURE first, fall back to TRANSCEIVER_DOM_SENSOR.
-        :param: port_name: port name (e.g., 'Ethernet0')
-        :return: dict with temperature and threshold fields, or None if not available
-        """
-        # Try new TRANSCEIVER_DOM_TEMPERATURE table first
-        temp_entry_key = TRANSCEIVER_DOM_TEMPERATURE_TABLE_NAME + '|' + port_name
-        temp_data = self.db.get_all(self.db.STATE_DB, temp_entry_key)
-        if temp_data and TEMPER_FIELD_NAME in temp_data:
-            return temp_data
-
-        # Fall back to TRANSCEIVER_DOM_SENSOR table
-        sensor_entry_key = TRANSCEIVER_DOM_SENSOR_TABLE_NAME + '|' + port_name
-        sensor_data = self.db.get_all(self.db.STATE_DB, sensor_entry_key)
-        if sensor_data and TEMPER_FIELD_NAME in sensor_data:
-            return sensor_data
-
-        return None
-
     def _add_sensor_to_output(self, sensor_name, data_dict, json_output, table):
         """
         Helper method to add sensor data to output in both JSON and table format.
-        :param: sensor_name: name of the sensor
-        :param: data_dict: dict with temperature and optional threshold fields
-        :param: json_output: list to append JSON output to
-        :param: table: list to append table rows to
+        :param sensor_name: name of the sensor
+        :param data_dict: dict with temperature and optional threshold fields
+        :param json_output: list to append JSON output to
+        :param table: list to append table rows to
         """
         temperature = data_dict.get(TEMPER_FIELD_NAME, 'N/A')
         high_th = data_dict.get(HIGH_THRESH_FIELD_NAME, 'N/A')
@@ -82,13 +61,9 @@ class TemperShow(object):
         table.append((sensor_name, temperature, high_th, low_th, crit_high_th,
                      crit_low_th, warning, timestamp))
 
-    def show(self, output_json):
-        table = []
-        json_output = []
-
-        # Collect thermal sensor data from TEMPERATURE_INFO table
-        thermal_keys = self.db.keys(self.db.STATE_DB, TEMPER_TABLE_NAME + '*')
-        for key in natsorted(thermal_keys or []):
+    def _process_keys(self, keys, json_output, table):
+        """Process keys and add sensor data to output."""
+        for key in keys:
             key_list = key.split('|')
             if len(key_list) != 2:
                 print('Warn: Invalid key in table {}: {}'.format(TEMPER_TABLE_NAME, key))
@@ -96,22 +71,23 @@ class TemperShow(object):
 
             name = key_list[1]
             data_dict = self.db.get_all(self.db.STATE_DB, key)
-            self._add_sensor_to_output(name, data_dict, json_output, table)
+            if data_dict:
+                self._add_sensor_to_output(name, data_dict, json_output, table)
+
+    def show(self, output_json):
+        table = []
+        json_output = []
+
+        # Collect thermal sensor data from TEMPERATURE_INFO table
+        thermal_keys = self.db.keys(self.db.STATE_DB, TEMPER_TABLE_NAME + '*')
+        self._process_keys(natsorted(thermal_keys or []), json_output, table)
 
         # Collect transceiver temperature data for SFP modules
         transceiver_keys = self.db.keys(self.db.STATE_DB, TRANSCEIVER_DOM_TEMPERATURE_TABLE_NAME + '*')
         if not transceiver_keys:
             transceiver_keys = self.db.keys(self.db.STATE_DB, TRANSCEIVER_DOM_SENSOR_TABLE_NAME + '*')
 
-        for key in natsorted(transceiver_keys or []):
-            key_list = key.split('|')
-            if len(key_list) != 2:
-                continue
-
-            port_name = key_list[1]
-            temp_data = self._get_transceiver_temperature_data(port_name)
-            if temp_data:
-                self._add_sensor_to_output(port_name, temp_data, json_output, table)
+        self._process_keys(natsorted(transceiver_keys or []), json_output, table)
 
         # Output results
         if not json_output:
