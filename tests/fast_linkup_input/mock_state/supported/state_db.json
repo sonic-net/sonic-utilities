@@ -1,0 +1,9 @@
+{
+  "SWITCH_CAPABILITY|switch": {
+    "FAST_LINKUP_CAPABLE": "true",
+    "FAST_LINKUP_POLLING_TIMER_RANGE": "5,120",
+    "FAST_LINKUP_GUARD_TIMER_RANGE": "1,20"
+  }
+}
+
+
