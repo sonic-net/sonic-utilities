@@ -28,10 +28,9 @@ class TestJsonMoveGetValue(unittest.TestCase):
         self.assertEqual(JsonMove._get_value(self.config, tokens), "value2")
 
     def test_get_value_list(self):
+        # Should allow both int and string index for list
         tokens = ["table2", 1, "name"]
-        with self.assertRaises(TypeError):
-            JsonMove._get_value(self.config, tokens)
-        # Should use string index for list
+        self.assertEqual(JsonMove._get_value(self.config, tokens), "item1")
         tokens = ["table2", "1", "name"]
         self.assertEqual(JsonMove._get_value(self.config, tokens), "item1")
 

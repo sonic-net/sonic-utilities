@@ -98,8 +98,9 @@ class JsonMove:
     @staticmethod
     def _get_value(config, tokens):
         for token in tokens:
+            if isinstance(config, list):
+                token = int(token)
             config = config[token]
-
         return copy.deepcopy(config)
 
     @staticmethod
