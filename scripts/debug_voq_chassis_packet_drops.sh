@@ -34,7 +34,7 @@ print_pqp_reasons() {
     if [ $(($disc_reasons & 64)) -ne 0 ] ; then echo "6- Per queue disable bit">> $log ; fi
     if [ $(($disc_reasons & 128)) -ne 0 ] ; then echo "7- Undefined">> $log ; fi
     if [ $(($disc_reasons & 256)) -ne 0 ] ; then echo "8- Total PDs MC pool size threshold">> $log ; fi
-    if [ $(($disc_reasons & 512)) -ne 0 ] ; then echo "9- Per interface PDs threhold">> $log; fi
+    if [ $(($disc_reasons & 512)) -ne 0 ] ; then echo "9- Per interface PDs threshold">> $log; fi
     if [ $(($disc_reasons & 1024)) -ne 0 ] ; then echo "10- MC SP threshold">> $log ; fi
     if [ $(($disc_reasons & 2048)) -ne 0 ] ; then echo "11- per MC-TC threshold">> $log ; fi
     if [ $(($disc_reasons & 4096)) -ne 0 ] ; then echo "12- MC PDs per port threshold">> $log ; fi

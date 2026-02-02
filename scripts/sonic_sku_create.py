@@ -589,7 +589,7 @@ class SkuCreate(object):
             lanes = [_.strip() for _ in self.default_lanes_per_port[fp - 1].split(",")]
             lanes_count = len(lanes)
             if lanes_count % splt != 0:
-                print("Lanes(%s) could not be evenly splitted by %d." % (self.default_lanes_per_port[fp - 1], splt))
+                print("Lanes(%s) could not be evenly split by %d." % (self.default_lanes_per_port[fp - 1], splt))
                 sys.exit(1)
 
             # split the lanes

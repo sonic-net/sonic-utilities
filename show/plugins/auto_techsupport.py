@@ -80,11 +80,11 @@ def AUTO_TECHSUPPORT_GLOBAL(db):
         ),
         format_attr_value(
             entry,
-            {'name': 'max_techsupport_limit', 'description': 'Max Limit in percentage for the cummulative size of ts dumps. No cleanup is performed if the value isn\'t configured or is 0.0', 'is-leaf-list': False, 'is-mandatory': False, 'group': ''}
+            {'name': 'max_techsupport_limit', 'description': 'Max Limit in percentage for the cumulative size of ts dumps. No cleanup is performed if the value isn\'t configured or is 0.0', 'is-leaf-list': False, 'is-mandatory': False, 'group': ''}
         ),
         format_attr_value(
             entry,
-            {'name': 'max_core_limit', 'description': 'Max Limit in percentage for the cummulative size of core dumps. No cleanup is performed if the value isn\'t congiured or is 0.0', 'is-leaf-list': False, 'is-mandatory': False, 'group': ''}
+            {'name': 'max_core_limit', 'description': 'Max Limit in percentage for the cumulative size of core dumps. No cleanup is performed if the value isn\'t congiured or is 0.0', 'is-leaf-list': False, 'is-mandatory': False, 'group': ''}
         ),
         format_attr_value(
             entry,

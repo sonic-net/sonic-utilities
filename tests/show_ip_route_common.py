@@ -794,7 +794,7 @@ namespace 'asic7' is not valid. valid name spaces are:
 """
 
 show_ip_route_multi_asic_invalid_display_err_output = """\
-dislay option 'everything' is not a valid option.
+display option 'everything' is not a valid option.
 """
 
 show_ip_route_multi_asic_specific_route_output = """\

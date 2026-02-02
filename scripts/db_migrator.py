@@ -402,7 +402,7 @@ class DBMigrator():
                     abandon_method()
                     return True
             except Exception:
-                log.log_notice("Exception occured during parsing the profiles")
+                log.log_notice("Exception occurred during parsing the profiles")
                 abandon_method()
                 return True
 
@@ -1219,7 +1219,7 @@ class DBMigrator():
                             self.configDB.set(self.configDB.CONFIG_DB, '{}|{}'.format(table_name, component), loglevel_field, loglevel)
                             self.configDB.set(self.configDB.CONFIG_DB, '{}|{}'.format(table_name, component), logoutput_field, logoutput)
                     except Exception as err:
-                        log.log_warning('Error occured during LOGLEVEL_DB migration for {}. Ignoring key {}'.format(err, key))
+                        log.log_warning('Error occurred during LOGLEVEL_DB migration for {}. Ignoring key {}'.format(err, key))
                     finally:
                         self.loglevelDB.delete(self.loglevelDB.LOGLEVEL_DB, key)
         self.set_version('version_3_0_6')

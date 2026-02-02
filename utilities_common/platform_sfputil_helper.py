@@ -181,7 +181,7 @@ def get_sfp_object(port_name):
         sys.exit(EXIT_FAIL)
 
     if sfp is None:
-        click.echo(f"{port_name}: SFP object is not retreived")
+        click.echo(f"{port_name}: SFP object is not retrieved")
         sys.exit(EXIT_FAIL)
 
     return sfp
@@ -192,7 +192,7 @@ def get_host_lane_count(port_name):
     lane_count = get_value_from_db_by_field("STATE_DB", "TRANSCEIVER_INFO", "host_lane_count", port_name)
 
     if lane_count == 0 or lane_count is None or lane_count == '':
-        click.echo(f"{port_name}: unable to retreive correct host lane count")
+        click.echo(f"{port_name}: unable to retrieve correct host lane count")
         sys.exit(EXIT_FAIL)
 
     return lane_count
@@ -203,7 +203,7 @@ def get_media_lane_count(port_name):
     lane_count = get_value_from_db_by_field("STATE_DB", "TRANSCEIVER_INFO", "media_lane_count", port_name)
 
     if lane_count == 0 or lane_count is None or lane_count == '':
-        click.echo(f"{port_name}: unable to retreive correct media lane count")
+        click.echo(f"{port_name}: unable to retrieve correct media lane count")
         sys.exit(EXIT_FAIL)
 
     return lane_count

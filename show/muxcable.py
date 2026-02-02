@@ -52,7 +52,7 @@ def get_asic_index_for_port(port):
             asic_index = sonic_platform_base.sonic_sfp.sfputilhelper.SfpUtilHelper().get_asic_id_for_logical_port(port)
             if asic_index is None:
                 port_name = platform_sfputil_helper.get_interface_alias(port, db)
-                click.echo("Got invalid asic index for port {}, cant retreive mux status".format(port_name))
+                click.echo("Got invalid asic index for port {}, can't retrieve mux status".format(port_name))
                 return 0
     return asic_index
 
@@ -110,7 +110,7 @@ def check_port_in_mux_cable_table(port):
         import sonic_platform_base.sonic_sfp.sfputilhelper
         asic_index = sonic_platform_base.sonic_sfp.sfputilhelper.SfpUtilHelper().get_asic_id_for_logical_port(port)
         if asic_index is None:
-            click.echo("Got invalid asic index for port {}, cant retrieve mux cable table entries".format(port))
+            click.echo("Got invalid asic index for port {}, can't retrieve mux cable table entries".format(port))
             return False
 
     if port in port_mux_tbl_keys[asic_index]:
@@ -142,7 +142,7 @@ def get_per_port_firmware(port):
         import sonic_platform_base.sonic_sfp.sfputilhelper
         asic_index = sonic_platform_base.sonic_sfp.sfputilhelper.SfpUtilHelper().get_asic_id_for_logical_port(port)
         if asic_index is None:
-            click.echo("Got invalid asic index for port {}, cant retrieve mux cable table entries".format(port))
+            click.echo("Got invalid asic index for port {}, can't retrieve mux cable table entries".format(port))
             return False
 
 
@@ -189,7 +189,7 @@ def get_response_for_version(port, mux_info_dict):
         import sonic_platform_base.sonic_sfp.sfputilhelper
         asic_index = sonic_platform_base.sonic_sfp.sfputilhelper.SfpUtilHelper().get_asic_id_for_logical_port(port)
         if asic_index is None:
-            click.echo("Got invalid asic index for port {}, cant retreive mux status".format(port))
+            click.echo("Got invalid asic index for port {}, can't retrieve mux status".format(port))
             rc = CONFIG_FAIL
             res_dict[1] = rc
             return mux_info_dict
@@ -234,7 +234,7 @@ def get_event_logs(port, res_dict, mux_info_dict):
         import sonic_platform_base.sonic_sfp.sfputilhelper
         asic_index = sonic_platform_base.sonic_sfp.sfputilhelper.SfpUtilHelper().get_asic_id_for_logical_port(port)
         if asic_index is None:
-            click.echo("Got invalid asic index for port {}, cant retreive mux status".format(port))
+            click.echo("Got invalid asic index for port {}, can't retrieve mux status".format(port))
             rc = CONFIG_FAIL
             res_dict[1] = rc
             return mux_info_dict
@@ -273,7 +273,7 @@ def get_result(port, res_dict, cmd ,result, table_name):
         import sonic_platform_base.sonic_sfp.sfputilhelper
         asic_index = sonic_platform_base.sonic_sfp.sfputilhelper.SfpUtilHelper().get_asic_id_for_logical_port(port)
         if asic_index is None:
-            click.echo("Got invalid asic index for port {}, cant retreive mux status".format(port))
+            click.echo("Got invalid asic index for port {}, can't retrieve mux status".format(port))
             rc = CONFIG_FAIL
             res_dict[1] = rc
             return result
@@ -335,7 +335,7 @@ def update_and_get_response_for_xcvr_cmd(cmd_name, rsp_name, exp_rsp, cmd_table_
         import sonic_platform_base.sonic_sfp.sfputilhelper
         asic_index = sonic_platform_base.sonic_sfp.sfputilhelper.SfpUtilHelper().get_asic_id_for_logical_port(port)
         if asic_index is None:
-            click.echo("Got invalid asic index for port {}, cant perform firmware cmd".format(port))
+            click.echo("Got invalid asic index for port {}, can't perform firmware cmd".format(port))
             res_dict[0] = rc
             return res_dict
 
@@ -482,7 +482,7 @@ def get_switch_name(config_db):
     if switch_name is not None:
         return switch_name
     else:
-        click.echo("could not retreive switch name")
+        click.echo("could not retrieve switch name")
         sys.exit(STATUS_FAIL)
 
 
@@ -728,7 +728,7 @@ def status(db, port, json_output):
             asic_index = sonic_platform_base.sonic_sfp.sfputilhelper.SfpUtilHelper().get_asic_id_for_logical_port(port)
             if asic_index is None:
                 port_name = platform_sfputil_helper.get_interface_alias(port, db)
-                click.echo("Got invalid asic index for port {}, cant retreive mux status".format(port_name))
+                click.echo("Got invalid asic index for port {}, can't retrieve mux status".format(port_name))
                 sys.exit(STATUS_FAIL)
 
         muxcable_info_dict[asic_index] = per_npu_appl_db[asic_index].get_all(
@@ -867,7 +867,7 @@ def config(db, port, json_output):
             asic_index = sonic_platform_base.sonic_sfp.sfputilhelper.SfpUtilHelper().get_asic_id_for_logical_port(port)
             if asic_index is None:
                 port_name = platform_sfputil_helper.get_interface_alias(port, db)
-                click.echo("Got invalid asic index for port {}, cant retreive mux status".format(port_name))
+                click.echo("Got invalid asic index for port {}, can't retrieve mux status".format(port_name))
                 sys.exit(CONFIG_FAIL)
 
         port_status_dict = {}
@@ -1384,7 +1384,7 @@ def hwmode():
 @click.option('--json', 'json_output', required=False, is_flag=True, type=click.BOOL, help="display the output in json format")
 @clicommon.pass_db
 def muxdirection(db, port, json_output):
-    """Shows the current direction of the muxcable {active/standy}"""
+    """Shows the current direction of the muxcable {active/standby}"""
 
     port = platform_sfputil_helper.get_interface_name(port, db)
 
@@ -1641,7 +1641,7 @@ def get_single_port_firmware_version(port, res_dict, mux_info_dict):
         import sonic_platform_base.sonic_sfp.sfputilhelper
         asic_index = sonic_platform_base.sonic_sfp.sfputilhelper.SfpUtilHelper().get_asic_id_for_logical_port(port)
         if asic_index is None:
-            click.echo("Got invalid asic index for port {}, cant retreive mux status".format(port))
+            click.echo("Got invalid asic index for port {}, can't retrieve mux status".format(port))
             rc = CONFIG_FAIL
             res_dict[1] = rc
             return
@@ -1888,7 +1888,7 @@ def metrics(db, port, json_output):
                 asic_index = sonic_platform_base.sonic_sfp.sfputilhelper.SfpUtilHelper().get_asic_id_for_logical_port(port)
                 if asic_index is None:
                     port_name = platform_sfputil_helper.get_interface_alias(port, db)
-                    click.echo("Got invalid asic index for port {}, cant retreive mux status".format(port_name))
+                    click.echo("Got invalid asic index for port {}, can't retrieve mux status".format(port_name))
 
         metrics_dict[asic_index] = per_npu_statedb[asic_index].get_all(
             per_npu_statedb[asic_index].STATE_DB, 'MUX_METRICS_TABLE|{}'.format(port))
@@ -1917,7 +1917,7 @@ def metrics(db, port, json_output):
 def event_log(db, port, json_output):
     """Show muxcable event log <port>"""
 
-    click.confirm(('Muxcable at port {} will retreive cable logs from MCU, Caution: approx wait time could be ~2 minutes Continue?'.format(port)), abort=True)
+    click.confirm(('Muxcable at port {} will retrieve cable logs from MCU, Caution: approx wait time could be ~2 minutes Continue?'.format(port)), abort=True)
     port = platform_sfputil_helper.get_interface_name(port, db)
     delete_all_keys_in_db_table("APPL_DB", "XCVRD_EVENT_LOG_CMD")
     delete_all_keys_in_db_table("STATE_DB", "XCVRD_EVENT_LOG_RSP")
@@ -2038,7 +2038,7 @@ def packetloss(db, port, json_output):
                 asic_index = sonic_platform_base.sonic_sfp.sfputilhelper.SfpUtilHelper().get_asic_id_for_logical_port(port)
                 if asic_index is None:
                     port_name = platform_sfputil_helper.get_interface_alias(port, db)
-                    click.echo("Got invalid asic index for port {}, cant retreive pck loss info".format(port_name))
+                    click.echo("Got invalid asic index for port {}, can't retrieve pck loss info".format(port_name))
 
         pckloss_dict[asic_index] = per_npu_statedb[asic_index].get_all(
             per_npu_statedb[asic_index].STATE_DB, 'LINK_PROBE_STATS|{}'.format(port))
@@ -2115,7 +2115,7 @@ def tunnel_route(db, port, json_output):
             asic_index = sonic_platform_base.sonic_sfp.sfputilhelper.SfpUtilHelper().get_asic_id_for_logical_port(port)
             if asic_index is None:
                 port_name = platform_sfputil_helper.get_interface_alias(port, db)
-                click.echo("Got invalid asic index for port {}, cant retreive tunnel route info".format(port_name))
+                click.echo("Got invalid asic index for port {}, can't retrieve tunnel route info".format(port_name))
                 sys.exit(STATUS_FAIL)
         
         if mux_tbl_keys[asic_index] is not None and "MUX_CABLE|{}".format(port) in mux_tbl_keys[asic_index]:
@@ -2194,7 +2194,7 @@ def get_grpc_cached_version_mux_direction_per_port(db, port):
         import sonic_platform_base.sonic_sfp.sfputilhelper
         asic_index = sonic_platform_base.sonic_sfp.sfputilhelper.SfpUtilHelper().get_asic_id_for_logical_port(port)
         if asic_index is None:
-            click.echo("Got invalid asic index for port {}, cant retrieve mux cable table entries".format(port))
+            click.echo("Got invalid asic index for port {}, can't retrieve mux cable table entries".format(port))
             return mux_info_dict
 
 
@@ -2232,7 +2232,7 @@ def grpc():
 @click.option('--json', 'json_output', required=False, is_flag=True, type=click.BOOL, help="display the output in json format")
 @clicommon.pass_db
 def muxdirection(db, port, json_output):
-    """Shows the current direction of the FPGA facing port on Tx Side {active/standy}"""
+    """Shows the current direction of the FPGA facing port on Tx Side {active/standby}"""
 
     port = platform_sfputil_helper.get_interface_name(port, db)
 

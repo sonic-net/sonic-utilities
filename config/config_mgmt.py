@@ -492,7 +492,7 @@ class ConfigMgmtDPB(ConfigMgmt):
             # Get all dependecies for ports
             for port in ports:
                 xPathPort = self.sy.findXpathPortLeaf(port)
-                self.sysLog(doPrint=True, msg='Find dependecies for port {}'.\
+                self.sysLog(doPrint=True, msg='Find dependencies for port {}'.\
                     format(port))
                 dep = self.sy.find_data_dependencies(str(xPathPort))
                 if dep:

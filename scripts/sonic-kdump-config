@@ -469,7 +469,7 @@ def read_use_kdump():
         try:
             return int(lines[0])
         except Exception as e:
-            print('Error! Exception[%s] occured while reading from %s' %(str(e), kdump_cfg))
+            print('Error! Exception[%s] occurred while reading from %s' %(str(e), kdump_cfg))
             sys.exit(1)
     else:
         print_err("Unable to read USE_KDUMP from %s" % kdump_cfg)
@@ -507,7 +507,7 @@ def read_num_dumps():
         try:
             return int(lines[0])
         except Exception as e:
-            print_err('Error! Exception[%s] occured while reading from %s' %(str(e), kdump_cfg))
+            print_err('Error! Exception[%s] occurred while reading from %s' %(str(e), kdump_cfg))
             sys.exit(1)
     else:
         print_err("Unable to read KDUMP_NUM_DUMPS from %s" % kdump_cfg)
@@ -1007,7 +1007,7 @@ def main():
             parser.print_help()
             sys.exit(1)
     except Exception as e:
-        print_err('Error! Exception[%s] occured while processing the command sonic-kdump-config %s.' %(str(e), sys.argv[1]))
+        print_err('Error! Exception[%s] occurred while processing the command sonic-kdump-config %s.' %(str(e), sys.argv[1]))
         sys.exit(1)
 
     if changed:

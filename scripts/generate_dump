@@ -2851,7 +2851,7 @@ if $MKDIR "${LOCKDIR}" &>/dev/null; then
     # Trap configured on EXIT will be triggered by the exit from handle_signal function
     trap 'handle_sigterm' SIGHUP SIGQUIT SIGTERM
     trap 'handle_sigint' SIGINT
-    echo "Lock succesfully accquired and installed signal handlers"
+    echo "Lock successfully acquired and installed signal handlers"
     # Proceed with the actual code
     if [[ ! -z "${V}" ]]; then
         set -v
@@ -2868,7 +2868,7 @@ else
 
     if ! kill -0 $PID_PROG &>/dev/null; then
         # Lock is stale
-        echo "Removing stale lock of nonexistant PID ${PID_PROG}"
+        echo "Removing stale lock of nonexistent PID ${PID_PROG}"
         rm_lock_and_exit
     else
         # Lock is valid and the other instance is active. Exit Now

@@ -641,7 +641,7 @@ class Queuestat(object):
 
 
 @click.command()
-@click.option('-p', '--port', type=str, help='Show the queue conters for just one port', default=None)
+@click.option('-p', '--port', type=str, help='Show the queue counters for just one port', default=None)
 @click.option('-c', '--clear', is_flag=True, default=False, help='Clear previous stats and save new ones')
 @click.option('-d', '--delete', is_flag=True, default=False, help='Delete saved stats')
 @click.option('-j', '--json_opt',  is_flag=True, default=False, help='Print in JSON format')

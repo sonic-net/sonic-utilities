@@ -246,7 +246,7 @@ class NeighShow(NbrBase):
 
 def main():
 
-    parser = argparse.ArgumentParser(description='Show Neigbhor entries',
+    parser = argparse.ArgumentParser(description='Show Neighbor entries',
                                      formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-ip', '--ipaddr', type=str,
                         help='Neigbhor for a specific address', default=None)
