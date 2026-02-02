@@ -831,7 +831,7 @@ def check_routes_for_namespace(namespace):
     If there are FRR routes that aren't marked offloaded but all APPL & ASIC DB
     routes are in sync report failure and perform a mitigation action.
 
-    :return (0, None) on sucess, else (-1, results) where results holds
+    :return (0, None) on success, else (-1, results) where results holds
     the unjustifiable entries.
     """
 
@@ -969,7 +969,7 @@ def check_sids_for_namespace(namespace):
     this function does not wait for subscriber updates, as SIDs are not
     expected to change frequently.
 
-    :return (0, None) on sucess, else (-1, results) where results holds
+    :return (0, None) on success, else (-1, results) where results holds
     the unjustifiable entries.
     """
 

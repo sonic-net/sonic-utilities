@@ -17,7 +17,7 @@ def format_attr_value(entry, attr):
         attr (Dict): Attribute metadata.
 
     Returns:
-        str: fomatted attribute value.
+        str: formatted attribute value.
     """
 
     if attr["is-leaf-list"]:
@@ -33,7 +33,7 @@ def format_group_value(entry, attrs):
         attrs (List[Dict]): Attributes metadata that belongs to the same group.
 
     Returns:
-        str: fomatted group attributes.
+        str: formatted group attributes.
     """
 
     data = []

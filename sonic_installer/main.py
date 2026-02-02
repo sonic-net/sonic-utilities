@@ -186,7 +186,7 @@ def get_container_image_name(container_name):
 
 
 def get_container_image_id(image_tag):
-    # TODO: extract commond docker info fetching functions
+    # TODO: extract command docker info fetching functions
     # this is image_id for image with tag, like 'docker-teamd:latest'
     cmd = ["docker", "images", "--format", '{{.ID}}', image_tag]
     proc = subprocess.Popen(cmd, stdout=subprocess.PIPE, text=True)
@@ -419,7 +419,7 @@ class SWAPAllocator(object):
             - disk has enough space(> DISK_MEM_THRESHOLD)
             - either system total memory < total_mem_threshold or system available memory < available_mem_threshold
 
-        @param allocate: True to allocate SWAP memory if necessarry
+        @param allocate: True to allocate SWAP memory if necessary
         @param swap_mem_size: the size of SWAP memory to allocate(in MiB)
         @param total_mem_threshold: the system totla memory threshold(in MiB)
         @param available_mem_threshold: the system available memory threshold(in MiB)
@@ -851,7 +851,7 @@ def upgrade_docker(container_name, url, cleanup_image, skip_check, tag, warm):
             if proc.returncode != 0:
                 if not skip_check:
                     echo_and_log("Orchagent is not in clean state, RESTARTCHECK failed", LOG_ERR)
-                    # Restore orignal config before exit
+                    # Restore original config before exit
                     if warm_configured is False and warm:
                         run_command(["config", "warm_restart", "disable", "%s" % container_name])
                     # Clean the image loaded earlier
@@ -884,7 +884,7 @@ def upgrade_docker(container_name, url, cleanup_image, skip_check, tag, warm):
             warm_app_names = ["teamsyncd"]
             echo_and_log("Stopped  teamd ...")
 
-        # clean app reconcilation state from last warm start if exists
+        # clean app reconciliation state from last warm start if exists
         for warm_app_name in warm_app_names:
             hdel_warm_restart_table("STATE_DB", "WARM_RESTART_TABLE", warm_app_name, "state")
 

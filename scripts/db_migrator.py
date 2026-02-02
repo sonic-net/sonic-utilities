@@ -554,7 +554,7 @@ class DBMigrator():
 
     def migrate_qos_fieldval_reference_format(self):
         '''
-        This is to change for first time to remove field refernces of ABNF format
+        This is to change for first time to remove field references of ABNF format
         in APPL DB for warm boot.
         i.e "[Tabale_name:name]" to string in APPL_DB. Reasons for doing this
          - To consistent with all other SoNIC CONFIG_DB/APPL_DB tables and fields

@@ -556,7 +556,7 @@ class SkuCreate(object):
         self.num_of_fpp = len(list(self.fpp_split.keys()))
 
     def get_default_lanes(self):
-        #Internal function to get lanes of the ports accroding to the base default SKU 
+        #Internal function to get lanes of the ports according to the base default SKU
         try:
             with open(self.base_file_path,"r") as f:
                 line_header = next(f).split() # get the file header split into columns

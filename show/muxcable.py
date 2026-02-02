@@ -2362,7 +2362,7 @@ def health(db, port, json_output):
     """Show muxcable health information as Ok or Not Ok"""
 
     """
-    in order to detemine whether the health of the cable is Ok
+    in order to determine whether the health of the cable is Ok
     the following are checked
      - the vendor name is correct able to be read
      - the FW is correctly loaded for SerDes by reading the appropriate register val

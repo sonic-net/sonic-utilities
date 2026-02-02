@@ -389,7 +389,7 @@ class DropStat(object):
             return configured_counters
 
         #Switch level standard drop counters are added by default and added to DEBUG_COUNTER_SWITCH_STAT_MAP table,
-        #so remove it from configrued counters
+        #so remove it from configured counters
         if object_stat_map == DEBUG_COUNTER_SWITCH_STAT_MAP:
            if std_switch_cntr:
               new_cntrs = {k:counters[k] for k in counters if SWITCH_LEVEL_COUNTER_PREFIX in k}

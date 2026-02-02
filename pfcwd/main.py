@@ -281,7 +281,7 @@ class PfcwdCli(object):
             return
 
         if overwrite:
-            # don't clear existing pfc history setting unless set explicitely
+            # don't clear existing pfc history setting unless set explicitly
             cur_pfc_history = self.config_db.get_entry(
                 CONFIG_DB_PFC_WD_TABLE_NAME, port
             ).get("pfc_stat_history", DEFAULT_PFC_HISTORY_STATUS)
@@ -416,7 +416,7 @@ class PfcwdCli(object):
 
         port_num = len(list(self.config_db.get_table('PORT').keys()))
 
-        # Paramter values positively correlate to the number of ports.
+        # Parameter values positively correlate to the number of ports.
         multiply = max(1, (port_num-1)//DEFAULT_PORT_NUM+1)
         pfcwd_info = {
             'detection_time': DEFAULT_DETECTION_TIME * multiply,

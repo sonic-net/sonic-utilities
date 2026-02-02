@@ -114,7 +114,7 @@ class portconfig(object):
             raise Exception("Invalid port %s" % (port))
 
     def list_params(self, port):
-        # chack whether table for this port exists
+        # check whether table for this port exists
         port_tables = self.db.get_table(PORT_TABLE_NAME)
         if port in port_tables:
             print(port_tables[port])

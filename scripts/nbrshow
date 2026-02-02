@@ -6,9 +6,9 @@
     usage: nbrshow [-h] [-ip IPADDR] [-if IFACE] v
     optional arguments:
         -ip IPADDR, --ipaddr IPADDR
-                        Neigbhor for a specific address
+                        Neighbor for a specific address
         -if IFACE, --iface IFACE
-                        Neigbhors learned on specific L3 interface
+                        Neighbors learned on specific L3 interface
 
     Example of the output:
     admin@str~$nbrshow -4

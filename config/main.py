@@ -258,7 +258,7 @@ def breakout_warnUser_extraTables(cm, final_delPorts, confirm=True):
         # check if any extra tables exist
         eTables = cm.tablesWithOutYang()
         if len(eTables):
-            # find relavent tables in extra tables, i.e. one which can have deleted
+            # find relevant tables in extra tables, i.e. one which can have deleted
             # ports
             tables = cm.configWithKeys(configIn=eTables, keys=final_delPorts)
             click.secho("Below Config can not be verified, It may cause harm "\
@@ -2389,7 +2389,7 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
         clicommon.run_command(command, display_cmd=True)
         client.set(config_db.INIT_INDICATOR, 1)
 
-    # Update SONiC environmnet file
+    # Update SONiC environment file
     update_sonic_environment()
 
     if os.path.isfile('/etc/sonic/acl.json'):
@@ -2505,7 +2505,7 @@ def override_config_by(golden_config_path):
     return
 
 
-# This funtion is to generate sysinfo if that is missing in config_input.
+# This function is to generate sysinfo if that is missing in config_input.
 # It will keep the same with sysinfo in cur_config if sysinfo exists.
 # Otherwise it will modify config_input with generated sysinfo.
 def generate_sysinfo(cur_config, config_input, ns=None):
@@ -2614,7 +2614,7 @@ def override_config_table(db, input_config_db, dry_run):
         # Use deepcopy by default to avoid modifying input config
         updated_config = update_config(current_config, ns_config_input)
 
-        # Enable YANG hard dependecy check to exit early if not satisfied
+        # Enable YANG hard dependency check to exit early if not satisfied
         table_hard_dependency_check(updated_config)
 
         yang_enabled = device_info.is_yang_config_validation_enabled(config_db)
@@ -2641,7 +2641,7 @@ def override_config_table(db, input_config_db, dry_run):
             except Exception as ex:
                 log.log_warning("Failed to validate running config. Alerting: {}".format(ex))
 
-            # YANG validate config of minigraph generated overriden by golden config
+            # YANG validate config of minigraph generated overridden by golden config
             if cm:
                 validate_config_by_cm_alerting(cm, updated_config, "updated_config")
 
@@ -3774,7 +3774,7 @@ def _qos_update_ports(ctx, ports, dry_run, json_data):
                         cable_length_from_template[port] = cable_len
                 # Reaching this point,
                 # - cable_length_from_template contains cable length rendered from the template, eg Ethernet0 and Ethernet4 in the above example
-                # - cable_length_from_db contains cable length existing in the CONFIG_DB, eg Ethernet8, Ethernet12, and Ethernet16 in the above exmaple
+                # - cable_length_from_db contains cable length existing in the CONFIG_DB, eg Ethernet8, Ethernet12, and Ethernet16 in the above example
 
                 if not items_to_apply.get(table_name):
                     items_to_apply[table_name] = {}
@@ -4769,7 +4769,7 @@ def all(verbose):
         namespaces = ns_list['front_ns']
 
     # Connect to CONFIG_DB in linux host (in case of single ASIC) or CONFIG_DB in all the
-    # namespaces (in case of multi ASIC) and do the sepcified "action" on the BGP neighbor(s)
+    # namespaces (in case of multi ASIC) and do the specified "action" on the BGP neighbor(s)
     for namespace in namespaces:
         config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
         config_db.connect()
@@ -4794,7 +4794,7 @@ def neighbor(ipaddr_or_hostname, verbose):
         namespaces = ns_list['front_ns'] + ns_list['back_ns']
 
     # Connect to CONFIG_DB in linux host (in case of single ASIC) or CONFIG_DB in all the
-    # namespaces (in case of multi ASIC) and do the sepcified "action" on the BGP neighbor(s)
+    # namespaces (in case of multi ASIC) and do the specified "action" on the BGP neighbor(s)
     for namespace in namespaces:
         config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
         config_db.connect()
@@ -4824,7 +4824,7 @@ def all(verbose):
         namespaces = ns_list['front_ns']
 
     # Connect to CONFIG_DB in linux host (in case of single ASIC) or CONFIG_DB in all the
-    # namespaces (in case of multi ASIC) and do the sepcified "action" on the BGP neighbor(s)
+    # namespaces (in case of multi ASIC) and do the specified "action" on the BGP neighbor(s)
     for namespace in namespaces:
         config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
         config_db.connect()
@@ -4849,7 +4849,7 @@ def neighbor(ipaddr_or_hostname, verbose):
         namespaces = ns_list['front_ns'] + ns_list['back_ns']
 
     # Connect to CONFIG_DB in linux host (in case of single ASIC) or CONFIG_DB in all the
-    # namespaces (in case of multi ASIC) and do the sepcified "action" on the BGP neighbor(s)
+    # namespaces (in case of multi ASIC) and do the specified "action" on the BGP neighbor(s)
     for namespace in namespaces:
         config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
         config_db.connect()
@@ -4882,7 +4882,7 @@ def remove_neighbor(neighbor_ip_or_hostname):
         namespaces = ns_list['front_ns'] + ns_list['back_ns']
 
     # Connect to CONFIG_DB in linux host (in case of single ASIC) or CONFIG_DB in all the
-    # namespaces (in case of multi ASIC) and do the sepcified "action" on the BGP neighbor(s)
+    # namespaces (in case of multi ASIC) and do the specified "action" on the BGP neighbor(s)
     for namespace in namespaces:
         config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
         config_db.connect()
@@ -5850,7 +5850,7 @@ def remove_buffer_object_on_port(db, interface_name, buffer_object_map, is_pg=Tr
     if not ports:
         ctx.fail("Port {} doesn't exist".format(interface_name))
 
-    # Remvoe all dynamic lossless PGs on the port
+    # Remove all dynamic lossless PGs on the port
     buffer_table = "BUFFER_PG" if is_pg else "BUFFER_QUEUE"
     existing_buffer_objects = config_db.get_table(buffer_table)
     removed = False

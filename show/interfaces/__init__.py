@@ -229,7 +229,7 @@ def breakout(ctx):
                 continue
             cur_brkout_mode = cur_brkout_tbl[port_name]["brkout_mode"]
 
-            # Update deafult breakout mode and current breakout mode to platform_dict
+            # Update default breakout mode and current breakout mode to platform_dict
             platform_dict[port_name].update(hwsku_dict[port_name])
             platform_dict[port_name]["Current Breakout Mode"] = cur_brkout_mode
 
