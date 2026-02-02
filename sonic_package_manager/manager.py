@@ -456,6 +456,10 @@ class PackageManager:
         self.database.update_package(package.entry)
         self.database.commit()
 
+        # Ensure all files (plugins, services, database) are synced to disk
+        # This prevents data loss or corruption after power cycle
+        os.sync()
+
     @under_lock
     def update(self,
                name: str,
@@ -546,6 +550,10 @@ class PackageManager:
         package.entry.version = None
         self.database.update_package(package.entry)
         self.database.commit()
+
+        # Ensure database update is synced to disk
+        os.sync()
+
         manifest_path = os.path.join(MANIFESTS_LOCATION, name)
         edit_path = os.path.join(MANIFESTS_LOCATION, name + ".edit")
         if os.path.exists(manifest_path):
@@ -692,6 +700,10 @@ class PackageManager:
         new_package_entry.version = new_version
         self.database.update_package(new_package_entry)
         self.database.commit()
+
+        # Ensure all files are synced to disk after upgrade
+        os.sync()
+
         if update_only:
             manifest_path = os.path.join(MANIFESTS_LOCATION, name)
             edit_path = os.path.join(MANIFESTS_LOCATION, name + ".edit")
@@ -1076,10 +1088,6 @@ class PackageManager:
     def _install_cli_plugins(self, package: Package):
         for command in SONIC_CLI_COMMANDS:
             self._install_cli_plugin(package, command)
-
-        # Ensure all plugin files are synced to disk after installation
-        # This prevents incomplete/corrupted files after power cycle
-        os.sync()
 
     def _uninstall_cli_plugins(self, package: Package):
         for command in SONIC_CLI_COMMANDS:
