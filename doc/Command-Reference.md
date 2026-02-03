@@ -240,6 +240,9 @@
   * [Static DNS show command](#static-dns-show-command)
 * [Wake-on-LAN Commands](#wake-on-lan-commands)
   * [Send Wake-on-LAN Magic Packet command](#send-wake-on-lan-magic-packet-command)
+* [Local Users' Passwords Reset Commands](#local-users-passwords-reset-commands)
+   * [Local Users' Passwords Config Command](#local-users-passwords-reset-config-command)
+   * [Reset Local Users' Passwords Show command](#local-users-passwords-reset-show-command)
 * [Banner Commands](#banner-commands)
   * [Banner config commands](#banner-config-commands)
   * [Banner show command](#banner-show-command)
@@ -15175,6 +15178,42 @@ Sending 3 magic packet to 11:33:55:77:99:bb via interface Vlan1000
 
 For the 4th example, it specifise 2 target MAC addresses and `count` is 3. So it'll send 6 magic packets in total.
 
+# Local Users Passwords Reset Commands
+
+This sub-section explains the list of the configuration options available for Local Users' Passwords Reset feature.
+
+Please note, The commands will not have any effect if the feature is disabled in `rules/config`.
+
+## Local Users Passwords Reset Config Command
+
+- Set Local Users' Passwords Reset feature state
+
+```
+ admin@sonic:~$ config local-users-passwords-reset <enabled|disabled>
+ Usage: config config local-users-passwords-reset <enabled|disabled>
+   Set local-users-passwords-reset feature state
+ Options:
+   -?, -h, --help  Show this message and exit.
+ ```
+
+ ## Local Users Passwords Reset Show Command
+
+- show local-users-passwords-reset
+
+```
+ admin@sonic:~$ show local-users-passwords-reset
+ Usage: show local-users-passwords-reset
+   Show local-users-passwords-reset
+ Options:
+   -h, -?, --help  Show this message and exit.
+ ```
+ ```
+ admin@sonic:~$ show local-users-passwords-reset
+ state  
+ -------
+ enabled
+ ```
+ 
 # Banner Commands
 
 This sub-section explains the list of the configuration options available for Banner feature.
