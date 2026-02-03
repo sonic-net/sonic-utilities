@@ -46,6 +46,7 @@ from utilities_common.general import load_db_config, load_module_from_source
 from .validated_config_db_connector import ValidatedConfigDBConnector
 import utilities_common.multi_asic as multi_asic_util
 from utilities_common.flock import try_lock
+from utilities_common import hft as hft_common
 
 from .utils import log
 
@@ -55,6 +56,7 @@ from . import console
 from . import feature
 from . import fabric
 from . import flow_counters
+from . import hft
 from . import kdump
 from . import kube
 from . import muxcable
@@ -1662,6 +1664,8 @@ config.add_command(console.console)
 config.add_command(fabric.fabric)
 config.add_command(feature.feature)
 config.add_command(flow_counters.flowcnt_route)
+if hft_common.is_supported_platform():
+    config.add_command(hft.hft)
 config.add_command(kdump.kdump)
 config.add_command(kube.kubernetes)
 config.add_command(muxcable.muxcable)
