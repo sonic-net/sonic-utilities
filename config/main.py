@@ -7496,6 +7496,97 @@ def remove_vrrp_v6(ctx, interface_name, vrrp_id):
 
 
 #
+# 'damping' subgroup ('config interface damping ...')
+#
+
+@interface.group(cls=clicommon.AbbreviationGroup)
+@click.pass_context
+def damping(ctx):
+    """Set interface damping configurations"""
+    pass
+
+#
+# 'algo' subcommand ('config interface damping algo ...')
+#
+
+@damping.command()
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('algo_type', metavar='<algo_type>', required=True, type=click.Choice(["aied", "disabled"]))
+def algo(ctx, interface_name, algo_type):
+    """Set link event damping algorithm"""
+    # Get the config_db connector
+    config_db = ctx.obj['config_db']
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    port_dict = config_db.get_table('PORT')
+    if interface_name not in port_dict:
+        ctx.fail("Invalid port {}".format(interface_name))
+
+    log.log_info("Executing: interface link_event_damping_algorithm {} {}".format(interface_name, algo_type))
+
+    config_db.mod_entry("PORT", interface_name, {"link_event_damping_algorithm": algo_type})
+
+#
+# 'aied-param' subcommand ('config interface damping aied-param ...')
+#
+
+@damping.command()
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.option('--max-suppress-time', required=False, type=int, help="Set max suppress time in ms")
+@click.option('--decay-half-life', required=False, type=int, help="Set decay half life in ms")
+@click.option('--suppress-threshold', required=False, type=int, help="Set suppress threshold")
+@click.option('--reuse-threshold', required=False, type=int, help="Set reuse threshold")
+@click.option('--flap-penalty', required=False, type=int, help="Set flap penalty")
+def aied_param(ctx, interface_name, max_suppress_time, decay_half_life, suppress_threshold, reuse_threshold, flap_penalty):
+    """Set AIED link event damping configuration"""
+    # Get the config_db connector
+    config_db = ctx.obj['config_db']
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    port_dict = config_db.get_table('PORT')
+    if interface_name not in port_dict:
+        ctx.fail("Invalid port {}".format(interface_name))
+
+    config_set = {}
+
+    if max_suppress_time is not None:
+        if max_suppress_time < 0:
+            ctx.fail("Invalid max_suppress_time value {}. It should be >= 0".format(max_suppress_time))
+        config_set['max_suppress_time'] = max_suppress_time
+    if decay_half_life is not None:
+        if decay_half_life < 0:
+            ctx.fail("Invalid decay_half_life value {}. It should be >= 0".format(decay_half_life))
+        config_set['decay_half_life'] = decay_half_life
+    if suppress_threshold is not None:
+        if suppress_threshold < 0:
+            ctx.fail("Invalid suppress_threshold value {}. It should be >= 0".format(suppress_threshold))
+        config_set['suppress_threshold'] = suppress_threshold
+    if reuse_threshold is not None:
+        if reuse_threshold < 0:
+            ctx.fail("Invalid reuse_threshold value {}. It should be >= 0".format(reuse_threshold))
+        config_set['reuse_threshold'] = reuse_threshold
+    if flap_penalty is not None:
+        if flap_penalty < 0:
+            ctx.fail("Invalid flap_penalty value {}. It should be >= 0".format(flap_penalty))
+        config_set['flap_penalty'] = flap_penalty
+
+    if len(config_set) == 0:
+        ctx.fail("Expected at least one valid AIED config parameter")
+
+    log.log_info("Executing: interface aied_config {}".format(interface_name))
+    config_db.mod_entry("PORT", interface_name, config_set)
+
+#
 # 'vrf' group ('config vrf ...')
 #
 
