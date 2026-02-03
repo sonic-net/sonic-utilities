@@ -15,6 +15,7 @@ from sonic_py_common import device_info
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from tabulate import tabulate
 from utilities_common import util_base
+from utilities_common import hft as hft_common
 from utilities_common.db import Db
 from datetime import datetime
 import utilities_common.constants as constants
@@ -46,6 +47,7 @@ from . import fabric
 from . import feature
 from . import fgnhg
 from . import flow_counters
+from . import hft
 from . import gearbox
 from . import interfaces
 from . import kdump
@@ -308,6 +310,8 @@ cli.add_command(feature.feature)
 cli.add_command(fgnhg.fgnhg)
 cli.add_command(flow_counters.flowcnt_route)
 cli.add_command(flow_counters.flowcnt_trap)
+if hft_common.is_supported_platform():
+    cli.add_command(hft.hft)
 cli.add_command(kdump.kdump)
 cli.add_command(interfaces.interfaces)
 cli.add_command(kdump.kdump)
