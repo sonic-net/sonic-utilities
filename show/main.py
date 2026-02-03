@@ -2642,22 +2642,29 @@ def summary(db, namespace):
                 "TX Interval", "RX Interval", "Multiplier", "Multihop", "Local Discriminator"]
 
     if namespace is None:
-        namespace = constants.DEFAULT_NAMESPACE
+        if multi_asic.is_multi_asic():
+            namespace_list = multi_asic.get_namespace_list()
+        else:
+            namespace_list = [constants.DEFAULT_NAMESPACE]
+    else:
+        namespace_list = [namespace]
 
-    bfd_keys = db.db_clients[namespace].keys(db.db.STATE_DB, "BFD_SESSION_TABLE|*")
-
-    click.echo("Total number of BFD sessions: {}".format(0 if bfd_keys is None else len(bfd_keys)))
-
+    total_bfd_sessions = 0
     bfd_body = []
-    if bfd_keys is not None:
+    for ns in namespace_list:
+        bfd_keys = db.db_clients[ns].keys(db.db.STATE_DB, "BFD_SESSION_TABLE|*")
+        if bfd_keys is None:
+            continue
+        total_bfd_sessions += len(bfd_keys)
         for key in bfd_keys:
             key_values = key.split('|')
-            values = db.db_clients[namespace].get_all(db.db.STATE_DB, key)
+            values = db.db_clients[ns].get_all(db.db.STATE_DB, key)
             if "local_discriminator" not in values.keys():
                 values["local_discriminator"] = "NA"
             bfd_body.append([key_values[3], key_values[2], key_values[1], values["state"], values["type"], values["local_addr"],
                                 values["tx_interval"], values["rx_interval"], values["multiplier"], values["multihop"], values["local_discriminator"]])
 
+    click.echo("Total number of BFD sessions: {}".format(total_bfd_sessions))
     click.echo(tabulate(bfd_body, bfd_headers))
 
 
