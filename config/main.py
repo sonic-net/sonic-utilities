@@ -2819,6 +2819,34 @@ def portchannel(db, ctx, namespace):
     config_db.connect()
     ctx.obj = {'db': config_db, 'namespace': str(namespace), 'db_wrap': db}
 
+
+@portchannel.group()
+@click.pass_context
+def mode(ctx):
+    """PortChannel mode configuration"""
+    pass
+
+@mode.command('set')
+@click.argument('mode_type', metavar='<multi-process|unified-process>', type=click.Choice(['multi-process', 'unified-process'], case_sensitive=False))
+@click.pass_context
+def mode_set(ctx, mode_type):
+    """set mode for legacy
+
+    <multi-process|unified-process>: multi or unified mode
+    """
+    db = ValidatedConfigDBConnector(ctx.obj['db'])
+    
+    try:
+        fvs = {
+             'mode': mode_type,
+             }
+        db.set_entry('TEAMD', "GLOBAL", fvs)
+        click.secho(f"[WARNING] mode = {mode_type} is configured. "
+                            "Please restart the teamd docker to take effect.")
+    except (ValueError, AttributeError) as e:
+        # Improved error message with the actual error
+        ctx.fail(f"Failed to set mode: {str(e)}")
+
 @portchannel.command('add')
 @click.argument('portchannel_name', metavar='<portchannel_name>', required=True)
 @click.option('--min-links', default=1, type=click.IntRange(1,1024))
