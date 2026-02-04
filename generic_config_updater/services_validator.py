@@ -94,6 +94,17 @@ def rsyslog_validator(old_config, upd_config, keys):
     return True
 
 
+def port_speed_change_validator(old_config, upd_config, keys):
+    old_ports = old_config.get("PORT", {})
+    upd_ports = upd_config.get("PORT", {})
+    for key in set(old_ports.keys()).union(set(upd_ports.keys())):
+        old_speed = old_ports.get(key, {}).get("speed", "")
+        upd_speed = upd_ports.get(key, {}).get("speed", "")
+        if old_speed != upd_speed:
+            return _service_restart("telemetry")
+    return True
+
+
 def dhcp_validator(old_config, upd_config, keys):
     return _service_restart("dhcp_relay")
 

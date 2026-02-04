@@ -58,7 +58,7 @@
             "validate_commands": [ ]
         },
         "port_service": {
-            "validate_commands": [ ]
+            "validate_commands": [ "generic_config_updater.services_validator.port_speed_change_validator" ]
         },
         "rsyslog": {
             "validate_commands": [ "generic_config_updater.services_validator.rsyslog_validator" ]

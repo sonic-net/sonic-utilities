@@ -6,7 +6,7 @@ import unittest
 from collections import defaultdict
 from unittest.mock import patch
 
-from generic_config_updater.services_validator import vlan_validator, rsyslog_validator, caclmgrd_validator, vlanintf_validator
+from generic_config_updater.services_validator import vlan_validator, rsyslog_validator, caclmgrd_validator, vlanintf_validator, port_speed_change_validator
 import generic_config_updater.gu_common
 from generic_config_updater.services_validator import ntp_validator
 
@@ -333,6 +333,53 @@ class TestServiceValidator(unittest.TestCase):
                     subprocess_calls.append({"cmd": c, "rc": 0})
 
             ntp_validator(entry["old"], entry["upd"], None)
+
+    @patch("generic_config_updater.services_validator.subprocess.run")
+    def test_port_speed_change_validator(self, mock_subprocess):
+        """Test port_speed_change_validator for port speed changes and no changes"""
+        global subprocess_calls, subprocess_call_index
+
+        # Case 1: No speed change, should not call systemctl
+        old_config = {"PORT": {"Ethernet0": {"speed": "10000"}}}
+        upd_config = {"PORT": {"Ethernet0": {"speed": "10000"}}}
+        subprocess_calls = []
+        subprocess_call_index = 0
+        result = port_speed_change_validator(old_config, upd_config, None)
+        self.assertTrue(result)
+
+        # Case 2: Speed changed, should call systemctl restart telemetry
+        old_config = {"PORT": {"Ethernet0": {"speed": "10000"}}}
+        upd_config = {"PORT": {"Ethernet0": {"speed": "25000"}}}
+        subprocess_calls = [{"cmd": "systemctl restart telemetry", "rc": 0}]
+        subprocess_call_index = 0
+        result = port_speed_change_validator(old_config, upd_config, None)
+        self.assertTrue(result)
+        self.assertEqual(subprocess_call_index, 1)
+
+        # Case 3: Port added with speed, should not restart (no old speed to compare)
+        old_config = {"PORT": {}}
+        upd_config = {"PORT": {"Ethernet1": {"speed": "10000"}}}
+        subprocess_calls = []
+        subprocess_call_index = 0
+        result = port_speed_change_validator(old_config, upd_config, None)
+        self.assertTrue(result)
+
+        # Case 4: Port removed, should not restart
+        old_config = {"PORT": {"Ethernet2": {"speed": "10000"}}}
+        upd_config = {"PORT": {}}
+        subprocess_calls = []
+        subprocess_call_index = 0
+        result = port_speed_change_validator(old_config, upd_config, None)
+        self.assertTrue(result)
+
+        # Case 5: Multiple ports, one speed changed
+        old_config = {"PORT": {"Ethernet0": {"speed": "10000"}, "Ethernet1": {"speed": "25000"}}}
+        upd_config = {"PORT": {"Ethernet0": {"speed": "40000"}, "Ethernet1": {"speed": "25000"}}}
+        subprocess_calls = [{"cmd": "systemctl restart telemetry", "rc": 0}]
+        subprocess_call_index = 0
+        result = port_speed_change_validator(old_config, upd_config, None)
+        self.assertTrue(result)
+        self.assertEqual(subprocess_call_index, 1)
 
     @patch("generic_config_updater.services_validator.time.sleep")
     def test_change_apply_time_sleep(self, mock_time_sleep):
