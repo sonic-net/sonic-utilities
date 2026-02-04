@@ -48,3 +48,8 @@ class TestJsonMoveGetValue(unittest.TestCase):
         tokens = ["table1", "key1", "field", "extra"]
         with self.assertRaises(TypeError):
             JsonMove._get_value(self.config, tokens)
+
+    def test_get_value_dict_numeric_keys(self):
+        self.config["7"] = {"8": "30"}
+        tokens = ["7", "8"]
+        self.assertEqual(JsonMove._get_value(self.config, tokens), "30")
