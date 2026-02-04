@@ -10051,5 +10051,106 @@ def del_vnet_route(ctx, vnet_name, prefix):
         click.echo("All routes deleted for the VNET {}.".format(vnet_name))
 
 
+#
+# 'vlan-stacking' group ('config vlan-stacking ...')
+#
+@config.group(cls=clicommon.AbbreviationGroup)
+@click.pass_context
+def vlan_stacking(ctx):
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    ctx.obj = {'db': config_db}
+
+@vlan_stacking.command('add')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('s_vlanid', metavar='<s_vlanid>', required=True, type=click.IntRange(1, 4094))
+@click.argument('c_vlanids', metavar='<c_vlanids>', required=True)
+@click.argument('s_vlan_priority', metavar='<s_vlan_priority>', required=True, type=click.IntRange(0, 7))
+@click.pass_context
+def add_vlan_stacking(ctx, interface_name, s_vlanid, c_vlanids , s_vlan_priority):
+    """
+    Add vlan stacking rule, examples:\n
+    - config vlan-stacking add Ethernet0 100 200 0\n
+    """
+
+    db = ctx.obj['db']
+    if not interface_name_is_valid(db, interface_name):
+        ctx.fail("Interface name: {} is invalid. Please enter a valid interface name!!".format(interface_name))
+
+    key = '{}|{}'.format(interface_name, s_vlanid)
+    db.set_entry('VLAN_STACKING', key, {'c_vlanids': c_vlanids, "s_vlan_priority": s_vlan_priority})
+
+@vlan_stacking.command('del')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('s_vlanid', metavar='<s_vlanid>', required=True, type=click.IntRange(1, 4094))
+@click.pass_context
+def del_vlan_stacking(ctx, interface_name, s_vlanid):
+    """
+    Delete vlan stacking rule, examples:\n
+    - config vlan-stacking del Ethernet0 100\n
+    """
+
+    db = ctx.obj['db']
+    if not interface_name_is_valid(db, interface_name):
+        ctx.fail("Interface name: {} is invalid. Please enter a valid interface name!!".format(interface_name))
+
+    key = '{}|{}'.format(interface_name, s_vlanid)
+    entry = db.get_entry('VLAN_STACKING', key)
+
+    if len(entry) == 0:
+        ctx.fail("Can not find the corresponding vlan-stacking rule for delete operation.")
+    else:
+        db.set_entry('VLAN_STACKING', key, None)
+
+#
+# 'vlan-translation' group ('config vlan-translation ...')
+#
+@config.group(cls=clicommon.AbbreviationGroup)
+@click.pass_context
+def vlan_translation(ctx):
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    ctx.obj = {'db': config_db}
+
+@vlan_translation.command('add')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('s_vlanid', metavar='<s_vlanid>', required=True, type=click.IntRange(1, 4094))
+@click.argument('c_vlanid', metavar='<c_vlanid>', required=True, type=click.IntRange(1, 4094))
+@click.pass_context
+def add_vlan_translation(ctx, interface_name, s_vlanid, c_vlanid):
+    """
+    Add vlan translation rule, examples:\n
+    - config vlan-translation add Ethernet0 100 200\n
+    """
+
+    db = ctx.obj['db']
+    if not interface_name_is_valid(db, interface_name):
+        ctx.fail("Interface name: {} is invalid. Please enter a valid interface name!!".format(interface_name))
+
+    key = '{}|{}'.format(interface_name, s_vlanid)
+    db.set_entry('VLAN_TRANSLATION', key, {'c_vlanid': c_vlanid})
+
+@vlan_translation.command('del')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('s_vlanid', metavar='<s_vlanid>', required=True, type=click.IntRange(1, 4094))
+@click.pass_context
+def del_vlan_translation(ctx, interface_name, s_vlanid):
+    """
+    Delete vlan translation rule, examples:\n
+    - config vlan-translation del Ethernet0 100\n
+    """
+
+    db = ctx.obj['db']
+    if not interface_name_is_valid(db, interface_name):
+        ctx.fail("Interface name: {} is invalid. Please enter a valid interface name!!".format(interface_name))
+
+    key = '{}|{}'.format(interface_name, s_vlanid)
+    entry = db.get_entry('VLAN_TRANSLATION', key)
+
+    if len(entry) == 0:
+        ctx.fail("Can not find the corresponding vlan-translation rule for delete operation.")
+    else:
+        db.set_entry('VLAN_TRANSLATION', key, None)
+
 if __name__ == '__main__':
     config()
