@@ -1,13 +1,13 @@
-import copy
-import json
-import jsondiff
-import os
 import unittest
-from collections import defaultdict
 from unittest.mock import patch
 
-from generic_config_updater.services_validator import vlan_validator, rsyslog_validator, caclmgrd_validator, vlanintf_validator, port_speed_change_validator
-import generic_config_updater.gu_common
+from generic_config_updater.services_validator import (
+    vlan_validator,
+    rsyslog_validator,
+    caclmgrd_validator,
+    vlanintf_validator,
+    port_speed_change_validator,
+)
 from generic_config_updater.services_validator import ntp_validator
 
 # Mimics subprocess.run call
