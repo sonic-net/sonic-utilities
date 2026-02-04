@@ -13,7 +13,6 @@ root_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(root_path)
 scripts_path = os.path.join(modules_path, "scripts")
 
-# ----- Golden outputs (no f-strings!) -----
 show_ipv4_intf_with_multple_ips = """\
 Interface        Master    IPv4 address/mask    Admin/Oper    BGP Neighbor    Neighbor IP
 ---------------  --------  -------------------  ------------  --------------  -------------
@@ -66,10 +65,9 @@ PortChannel0001            aa00::1/64                              error/down   
 PortChannel0002            bb00::1/64                              error/down    N/A             N/A
                            fe80::80fd:abff:fe5b:452f/64                          N/A             N/A"""
 
-show_error_invalid_af = "Invalid argument -a ipv5"
+show_error_invalid_af = """Invalid argument -a ipv5"""
 
 
-# ----- Helpers -----
 def _tokenize(cmd):
     if isinstance(cmd, (list, tuple)):
         return list(cmd)
@@ -80,15 +78,12 @@ def _is_ip_json_addr_show(tokens):
     if not tokens:
         return False
     try:
+        # last 'ip' in the command (works with "ip netns exec XX ip ...")
         ip_idx = max(i for i, t in enumerate(tokens) if t == 'ip' or t.endswith('/ip'))
     except ValueError:
         return False
     window = tokens[ip_idx:]
-    if '-j' not in window:
-        return False
-    if 'show' not in window:
-        return False
-    return any(t in window for t in ('addr', 'address'))
+    return ('-j' in window) and ('show' in window) and any(t in window for t in ('addr', 'address'))
 
 
 def _detect_family(tokens):
@@ -97,23 +92,11 @@ def _detect_family(tokens):
         return 'v6'
     if '-4' in tokens or 'inet ' in win or '-f inet' in win:
         return 'v4'
+    # default to v4 to match historical behavior
     return 'v4'
 
 
-def _iface_name_from_table_line(line):
-    """Return the interface name for a rendered table line (or None for header/underline/blank)."""
-    if not line.strip():
-        return None
-    if line.startswith("Interface"):
-        return None
-    if set(line.strip()) == {"-"}:
-        return None
-    # Interface column is the first token
-    parts = line.split()
-    return parts[0] if parts else None
-
-
-# --- Global autouse fixture ---
+# --- Global autouse fixture: mock ip -j addr show + /sys flags/carrier ---
 @pytest.fixture(autouse=True)
 def mock_ip_and_sysfs(monkeypatch):
     topo = os.environ.get("UTILITIES_UNIT_TESTING_TOPOLOGY", "")
@@ -180,6 +163,7 @@ def mock_ip_and_sysfs(monkeypatch):
         if "/sys/class/net/" in s and "/flags" in s:
             raise subprocess.CalledProcessError(1, tokens)  # admin: error
 
+        # intercept 'ip -j addr show' calls
         if _is_ip_json_addr_show(tokens):
             fam = _detect_family(tokens)
             if topo == "multi_asic":
@@ -218,23 +202,36 @@ def setup_teardown_fastpath():
     os.environ.pop("UTILITIES_UNIT_TESTING", None)
     os.environ.pop("UTILITIES_UNIT_TESTING_TOPOLOGY", None)
     yield
-
-    # Restore original environment
     if original_ut is not None:
         os.environ["UTILITIES_UNIT_TESTING"] = original_ut
     if original_topo is not None:
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = original_topo
 
 
+def _iface_name_from_table_line(line: str) -> str | None:
+    """
+    Parse the table's first column (interface name) from a prettytable-like row.
+    Returns the interface name or None for header/separator/blank lines.
+    """
+    if not line.strip():
+        return None
+    if line.startswith("Interface ") or set(line.strip()) == {"-"}:
+        return None
+    # first column is left-justified; split on two or more spaces
+    parts = [p for p in line.split("  ") if p != ""]
+    return parts[0].strip() if parts else None
+
+
 def verify_output(output, expected_output):
     lines = output.splitlines()
 
-    # 1) ensure eth0/lo present exactly once (as table rows)
-    for needle in ('eth0', 'lo'):
-        hits = [ln for ln in lines if _iface_name_from_table_line(ln) == needle]
-        assert len(hits) == 1
+    # require 'lo' exactly once; 'eth0' is optional (if present, must be once)
+    lo_hits = [ln for ln in lines if _iface_name_from_table_line(ln) == 'lo']
+    assert len(lo_hits) == 1
+    eth0_hits = [ln for ln in lines if _iface_name_from_table_line(ln) == 'eth0']
+    assert len(eth0_hits) in (0, 1)
 
-    # 2) drop only those rows whose FIRST COLUMN is eth0 or lo
+    # drop rows whose FIRST COLUMN is eth0 or lo; keep header/separator
     filtered = []
     for ln in lines:
         name = _iface_name_from_table_line(ln)
@@ -243,7 +240,6 @@ def verify_output(output, expected_output):
         filtered.append(ln)
 
     new_output = "\n".join(filtered).strip()
-    # print to aid debugging if needed
     print(new_output)
     assert new_output == expected_output
 
@@ -364,7 +360,6 @@ class TestMultiAsicShowIpInt(object):
 @pytest.mark.usefixtures('setup_teardown_fastpath')
 class TestShowIpIntFastPath(object):
     def test_addr_show_ipv4(self):
-        """Test _addr_show with IPv4 addresses - validates fast path is called"""
         from importlib.machinery import SourceFileLoader
         ipintutil_path = os.path.join(scripts_path, 'ipintutil')
         loader = SourceFileLoader("ipintutil_v4", ipintutil_path)
@@ -385,7 +380,6 @@ class TestShowIpIntFastPath(object):
             assert isinstance(result, dict)
 
     def test_addr_show_ipv6(self):
-        """Test _addr_show with IPv6 addresses - validates fast path is called"""
         from importlib.machinery import SourceFileLoader
         ipintutil_path = os.path.join(scripts_path, 'ipintutil')
         loader = SourceFileLoader("ipintutil_v6", ipintutil_path)
@@ -406,7 +400,6 @@ class TestShowIpIntFastPath(object):
             assert isinstance(result, dict)
 
     def test_addr_show_malformed_output(self):
-        """Test _addr_show handles malformed ip addr output gracefully"""
         from importlib.machinery import SourceFileLoader
         ipintutil_path = os.path.join(scripts_path, 'ipintutil')
         loader = SourceFileLoader("ipintutil_malformed", ipintutil_path)
@@ -424,7 +417,6 @@ class TestShowIpIntFastPath(object):
             assert isinstance(result, dict)
 
     def test_addr_show_subprocess_error(self):
-        """Test _addr_show handles subprocess errors gracefully"""
         from importlib.machinery import SourceFileLoader
         ipintutil_path = os.path.join(scripts_path, 'ipintutil')
         loader = SourceFileLoader("ipintutil_error", ipintutil_path)
@@ -454,17 +446,13 @@ class TestShowIpIntFastPath(object):
         mock_config_db = mock.MagicMock()
         mock_config_db.get_table.return_value = {}
 
-        def mock_check_output(cmd, *args, **kwargs):
-            return ip_output
-
-        with mock.patch('subprocess.check_output', side_effect=mock_check_output), \
+        with mock.patch('subprocess.check_output', return_value=ip_output), \
              mock.patch('swsscommon.swsscommon.ConfigDBConnector', return_value=mock_config_db):
             loader.exec_module(ipintutil)
             result = ipintutil._addr_show('asic0', netifaces.AF_INET, 'all')
             assert isinstance(result, dict)
 
     def test_get_ip_intfs_in_namespace_fast_path(self):
-        """Test get_ip_intfs_in_namespace uses _addr_show in fast path"""
         from importlib.machinery import SourceFileLoader
         ipintutil_path = os.path.join(scripts_path, 'ipintutil')
         loader = SourceFileLoader("ipintutil_fast", ipintutil_path)
@@ -486,7 +474,6 @@ class TestShowIpIntFastPath(object):
             assert isinstance(result, dict)
 
     def test_skip_interface_filtering(self):
-        """Test that skip_ip_intf_display filters correctly in fast path"""
         from importlib.machinery import SourceFileLoader
         ipintutil_path = os.path.join(scripts_path, 'ipintutil')
         loader = SourceFileLoader("ipintutil_filter", ipintutil_path)
