@@ -340,16 +340,16 @@ class TestServiceValidator(unittest.TestCase):
         global subprocess_calls, subprocess_call_index
 
         # Case 1: No speed change, should not call systemctl
-        old_config = {"PORT": {"Ethernet0": {"speed": "10000"}}}
-        upd_config = {"PORT": {"Ethernet0": {"speed": "10000"}}}
+        old_config = {"PORT": {"Ethernet0": {"speed": "100000"}}}
+        upd_config = {"PORT": {"Ethernet0": {"speed": "100000"}}}
         subprocess_calls = []
         subprocess_call_index = 0
         result = port_speed_change_validator(old_config, upd_config, None)
         self.assertTrue(result)
 
-        # Case 2: Speed changed, should call systemctl restart telemetry (with nsenter)
-        old_config = {"PORT": {"Ethernet0": {"speed": "10000"}}}
-        upd_config = {"PORT": {"Ethernet0": {"speed": "25000"}}}
+        # Case 2: Speed changed, successful restart
+        old_config = {"PORT": {"Ethernet0": {"speed": "100000"}}}
+        upd_config = {"PORT": {"Ethernet0": {"speed": "400000"}}}
         subprocess_calls = [{
             "cmd": "nsenter --target 1 --pid --mount --uts --ipc --net systemctl restart telemetry",
             "rc": 0
@@ -359,16 +359,29 @@ class TestServiceValidator(unittest.TestCase):
         self.assertTrue(result)
         self.assertEqual(subprocess_call_index, 1)
 
+        # Case 2b: Speed changed, restart fails then succeeds after reset-failed
+        old_config = {"PORT": {"Ethernet0": {"speed": "100000"}}}
+        upd_config = {"PORT": {"Ethernet0": {"speed": "400000"}}}
+        subprocess_calls = [
+            {"cmd": "nsenter --target 1 --pid --mount --uts --ipc --net systemctl restart telemetry", "rc": 1},
+            {"cmd": "nsenter --target 1 --pid --mount --uts --ipc --net systemctl reset-failed telemetry", "rc": 0},
+            {"cmd": "nsenter --target 1 --pid --mount --uts --ipc --net systemctl restart telemetry", "rc": 0}
+        ]
+        subprocess_call_index = 0
+        result = port_speed_change_validator(old_config, upd_config, None)
+        self.assertTrue(result)
+        self.assertEqual(subprocess_call_index, 3)
+
         # Case 3: Port added with speed, should not restart (no old speed to compare)
         old_config = {"PORT": {}}
-        upd_config = {"PORT": {"Ethernet1": {"speed": "10000"}}}
+        upd_config = {"PORT": {"Ethernet1": {"speed": "100000"}}}
         subprocess_calls = []
         subprocess_call_index = 0
         result = port_speed_change_validator(old_config, upd_config, None)
         self.assertTrue(result)
 
         # Case 4: Port removed, should not restart
-        old_config = {"PORT": {"Ethernet2": {"speed": "10000"}}}
+        old_config = {"PORT": {"Ethernet2": {"speed": "100000"}}}
         upd_config = {"PORT": {}}
         subprocess_calls = []
         subprocess_call_index = 0
@@ -376,8 +389,8 @@ class TestServiceValidator(unittest.TestCase):
         self.assertTrue(result)
 
         # Case 5: Multiple ports, one speed changed (with nsenter)
-        old_config = {"PORT": {"Ethernet0": {"speed": "10000"}, "Ethernet1": {"speed": "25000"}}}
-        upd_config = {"PORT": {"Ethernet0": {"speed": "40000"}, "Ethernet1": {"speed": "25000"}}}
+        old_config = {"PORT": {"Ethernet0": {"speed": "100000"}, "Ethernet1": {"speed": "400000"}}}
+        upd_config = {"PORT": {"Ethernet0": {"speed": "400000"}, "Ethernet1": {"speed": "400000"}}}
         subprocess_calls = [{
             "cmd": "nsenter --target 1 --pid --mount --uts --ipc --net systemctl restart telemetry",
             "rc": 0
