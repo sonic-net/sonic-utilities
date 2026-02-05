@@ -303,6 +303,7 @@ stages:
         set -xe
         cd sonic-utilities-data
         dpkg-buildpackage -b
+        cd ..
         mkdir dist
         mv sonic-utilities-data_*.deb dist/
       displayName: 'Build sonic-utilities-data package'
