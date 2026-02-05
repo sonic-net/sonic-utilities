@@ -339,6 +339,8 @@ class TestServiceValidator(unittest.TestCase):
         """Test port_speed_change_validator for port speed changes and no changes"""
         global subprocess_calls, subprocess_call_index
 
+        mock_subprocess.side_effect = mock_subprocess_run
+
         # Case 1: No speed change, should not call systemctl
         old_config = {"PORT": {"Ethernet0": {"speed": "100000"}}}
         upd_config = {"PORT": {"Ethernet0": {"speed": "100000"}}}
