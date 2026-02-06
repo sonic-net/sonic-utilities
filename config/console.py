@@ -50,6 +50,28 @@ def disable_console_switch(db):
         ctx = click.get_current_context()
         ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
+
+#
+# 'console heartbeat' group ('config console heartbeat ...')
+#
+@console.command('heartbeat')
+@clicommon.pass_db
+@click.argument('mode', metavar='<mode>', required=True, type=click.Choice(["enable", "disable"]))
+def update_console_heartbeat(db, mode):
+    """Enable/Disable console heartbeat on controlled device (DTE side)"""
+    config_db = ValidatedConfigDBConnector(db.cfgdb)
+
+    table = "CONSOLE_SWITCH"
+    dataKey1 = 'controlled_device'
+    dataKey2 = 'enabled'
+
+    data = {dataKey2: "yes" if mode == "enable" else "no"}
+    try:
+        config_db.mod_entry(table, dataKey1, data)
+    except ValueError as e:
+        ctx = click.get_current_context()
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
 #
 # 'console add' group ('config console add ...')
 #
