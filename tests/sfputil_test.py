@@ -1980,3 +1980,8 @@ EEPROM hexdump for port Ethernet4
     ])
     def test_get_subport_lane_mask(self, subport, lane_count, expected_mask):
         assert sfputil_debug.get_subport_lane_mask(subport, lane_count) == expected_mask
+
+    def test_convert_sfp_info_to_output_string_none(self):
+        import sfputil.main as sfputil
+        output = sfputil.convert_sfp_info_to_output_string(None)
+        assert output == "        EEPROM info: N/A\n"
