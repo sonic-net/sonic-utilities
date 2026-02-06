@@ -326,10 +326,80 @@ class TestVlan(object):
         from .mock_tables import mock_single_asic
         reload(mock_single_asic)
         dbconnector.load_namespace_config()
+
+        cls._test_db = None
+
+        from sonic_py_common import multi_asic
+        cls._original_connect_config_db_for_ns = multi_asic.connect_config_db_for_ns
+        cls._original_connect_to_all_dbs_for_ns = multi_asic.connect_to_all_dbs_for_ns
+
+        def patched_connect_config_db_for_ns(namespace=None, **kwargs):
+            if cls._test_db is not None:
+                return cls._test_db.cfgdb
+            return cls._original_connect_config_db_for_ns(namespace, **kwargs)
+
+        def patched_connect_to_all_dbs_for_ns(namespace=None, **kwargs):
+            if cls._test_db is not None:
+                return cls._test_db.db
+            return cls._original_connect_to_all_dbs_for_ns(namespace, **kwargs)
+
+        multi_asic.connect_config_db_for_ns = patched_connect_config_db_for_ns
+        multi_asic.connect_to_all_dbs_for_ns = patched_connect_to_all_dbs_for_ns
+
+        import config.vlan as vlan_module
+        cls._original_get_db_with_namespace = vlan_module.get_db_with_namespace
+
+        def patched_get_db_with_namespace(ctx):
+            if cls._test_db is not None:
+                return cls._test_db
+            return cls._original_get_db_with_namespace(ctx)
+
+        vlan_module.get_db_with_namespace = patched_get_db_with_namespace
+
+        cls._original_invoke = CliRunner.invoke
+
+        def patched_invoke(self, cli, args=None, **kwargs):
+            if 'obj' in kwargs:
+                obj = kwargs['obj']
+                if hasattr(obj, 'cfgdb') and hasattr(obj, 'db') and not isinstance(obj, dict):
+                    cls._test_db = obj
+
+            return cls._original_invoke(self, cli, args, **kwargs)
+
+        CliRunner.invoke = patched_invoke
         print("SETUP")
+
+    @classmethod
+    def teardown_class(cls):
+        # Restore original functions
+        if hasattr(cls, '_original_invoke'):
+            CliRunner.invoke = cls._original_invoke
+        if hasattr(cls, '_original_connect_config_db_for_ns'):
+            from sonic_py_common import multi_asic
+            multi_asic.connect_config_db_for_ns = cls._original_connect_config_db_for_ns
+            multi_asic.connect_to_all_dbs_for_ns = cls._original_connect_to_all_dbs_for_ns
+        if hasattr(cls, '_original_get_db_with_namespace'):
+            import config.vlan as vlan_module
+            vlan_module.get_db_with_namespace = cls._original_get_db_with_namespace
+        if cls._old_run_bgp_command:
+            bgp_util.run_bgp_command = cls._old_run_bgp_command
+        cls._test_db = None
+        print("TEARDOWN")
+
+    def setup_method(self):
+        """Reset test db before each test for isolation"""
+        # Each test will capture its own Db instance on first use
+        self.__class__._test_db = None
 
     def mock_run_bgp_command():
         return ""
+
+    def get_vlan_obj(self, db=None):
+        """Helper to create proper context object for vlan commands"""
+        if db is None:
+            return {'namespace': ''}
+        else:
+            return {'db': db, 'namespace': ''}
 
     def test_show_vlan(self):
         runner = CliRunner()
@@ -1561,13 +1631,11 @@ class TestVlan(object):
         assert result.exit_code == 0
         assert db.cfgdb.get_entry("VLAN", "Vlan999") == {"vlanid": "999"}
 
-        # Add a DHCPV4_RELAY entry for Vlan999
         db.cfgdb.set_entry("DHCPV4_RELAY", "Vlan999", {
             "dhcpv4_servers": ["192.0.2.1"],
             "source_interface": "Ethernet4"
         })
 
-        # Deleting Vlan999 which is being used in DHCPv4 Relay Configuration
         with mock.patch("utilities_common.dhcp_relay_util.handle_restart_dhcp_relay_service"):
             result = runner.invoke(config.config.commands["vlan"].commands["del"], ["999"], obj=db)
             print(result.exit_code)
@@ -1576,7 +1644,6 @@ class TestVlan(object):
             assert result.exit_code != 0
             assert "Vlan999 cannot be removed as it is being used in DHCPV4_RELAY table." in result.output
 
-        # Remove DHCPV4_RELAY entry and try deletion again
         db.cfgdb.set_entry("DHCPV4_RELAY", "Vlan999", None)
 
         with mock.patch("utilities_common.dhcp_relay_util.handle_restart_dhcp_relay_service"):
