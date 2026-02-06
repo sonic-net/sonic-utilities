@@ -42,7 +42,7 @@ Currently, this list of dependencies is as follows:
 - python-swsscommon_1.0.0_amd64.deb
 
 
-A convenient alternative is to let the SONiC build system configure a build enviroment for you. This can be done by cloning the [sonic-buildimage](https://github.com/sonic-net/sonic-buildimage) repo, building the sonic-utilities package inside the Debian Buster slave container, and staying inside the container once the build finishes. During the build process, the SONiC build system will build and install all the necessary dependencies inside the container. After following the instructions to clone and initialize the sonic-buildimage repo, this can be done as follows:
+A convenient alternative is to let the SONiC build system configure a build environment for you. This can be done by cloning the [sonic-buildimage](https://github.com/sonic-net/sonic-buildimage) repo, building the sonic-utilities package inside the Debian Buster slave container, and staying inside the container once the build finishes. During the build process, the SONiC build system will build and install all the necessary dependencies inside the container. After following the instructions to clone and initialize the sonic-buildimage repo, this can be done as follows:
 
 1. Configure the build environment for an ASIC type (any type will do, here we use `generic`)
     ```

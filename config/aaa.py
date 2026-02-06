@@ -560,7 +560,7 @@ def add(db, address, retransmit, timeout, key, auth_type, auth_port, pri, use_mg
                     source_interface == "eth0"):
                     data['src_intf'] = source_interface
                 else:
-                    click.echo('Not supported interface name (valid interface name: Etherent<id>/PortChannel<id>/Vlan<id>/Loopback<id>/eth0)')
+                    click.echo('Not supported interface name (valid interface name: Ethernet<id>/PortChannel<id>/Vlan<id>/Loopback<id>/eth0)')
         else:
             if source_interface:
                 data['src_intf'] = source_interface

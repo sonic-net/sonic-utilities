@@ -531,7 +531,7 @@ def get_all_port_errors(interfacename):
 @click.argument('interfacename', required=True)
 @click.pass_context
 def errors(ctx, interfacename):
-    """Show Interface Erorrs <interfacename>"""
+    """Show Interface Errors <interfacename>"""
     # Try to convert interface name from alias
     interfacename = try_convert_interfacename_from_alias(click.get_current_context(), interfacename)
 

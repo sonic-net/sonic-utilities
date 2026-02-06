@@ -981,7 +981,7 @@ def _get_disabled_services_list(config_db):
             if state == "disabled":
                 disabled_services_list.append(feature_name)
     else:
-        log.log_warning("Unable to retreive FEATURE table")
+        log.log_warning("Unable to retrieve FEATURE table")
 
     return disabled_services_list
 
@@ -1200,7 +1200,7 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
             if not interface_name_is_valid(config_db, port):
                 ctx.fail("Error: Source Interface {} is invalid".format(port))
             if dst_port and dst_port == port:
-                ctx.fail("Error: Destination Interface cant be same as Source Interface")
+                ctx.fail("Error: Destination Interface can't be same as Source Interface")
 
     if interface_has_mirror_config(ctx, mirror_table, dst_port, src_port, direction):
         return False
@@ -5850,7 +5850,7 @@ def remove_buffer_object_on_port(db, interface_name, buffer_object_map, is_pg=Tr
     if not ports:
         ctx.fail("Port {} doesn't exist".format(interface_name))
 
-    # Remvoe all dynamic lossless PGs on the port
+    # Remove all dynamic lossless PGs on the port
     buffer_table = "BUFFER_PG" if is_pg else "BUFFER_QUEUE"
     existing_buffer_objects = config_db.get_table(buffer_table)
     removed = False
