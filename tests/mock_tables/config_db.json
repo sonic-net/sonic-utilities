@@ -578,13 +578,13 @@
     },
     "ACL_TABLE|BMC_ACL_NORTHBOUND": {
         "policy_desc": "BMC_ACL_NORTHBOUND",
-        "ports@": "Ethernet8,Ethernet0,Ethernet17,Ethernet16,Ethernet37,Ethernet4,Ethernet13,Ethernet45,Ethernet19,Ethernet24,Ethernet31,Ethernet30,Ethernet39,Ethernet40,Ethernet27,Ethernet43,Ethernet7,Ethernet3,Ethernet20,Ethernet6,Ethernet12,Ethernet34,Ethernet26,Ethernet11,Ethernet42,Ethernet5,Ethernet32,Ethernet36,Ethernet15,Ethernet33,Ethernet35,Ethernet9,Ethernet29,Ethernet21,Ethernet18,Ethernet38,Ethernet23,Ethernet41,Ethernet14,Ethernet2,Ethernet28,Ethernet22,Ethernet10,Ethernet25,Ethernet44,Ethernet1",
+        "ports@": "Ethernet8,Ethernet0,Ethernet17,Ethernet16,Ethernet37,Ethernet4,Ethernet13,Ethernet45,Ethernet19,Ethernet24,Ethernet31,Ethernet30,Ethernet39,Ethernet40,Ethernet27,Ethernet43,Ethernet7,Ethernet3,Ethernet20,Ethernet6,Ethernet12,Ethernet34,Ethernet26,Ethernet11,Ethernet42,Ethernet5,Ethernet36,Ethernet15,Ethernet33,Ethernet35,Ethernet9,Ethernet29,Ethernet21,Ethernet18,Ethernet38,Ethernet23,Ethernet41,Ethernet14,Ethernet2,Ethernet28,Ethernet22,Ethernet10,Ethernet25,Ethernet44,Ethernet1",
         "stage": "ingress",
         "type": "BMCDATA"
     },
     "ACL_TABLE|BMC_ACL_NORTHBOUND_V6": {
         "policy_desc": "BMC_ACL_NORTHBOUND_V6",
-        "ports@": "Ethernet13,Ethernet3,Ethernet32,Ethernet33,Ethernet34,Ethernet8,Ethernet6,Ethernet44,Ethernet39,Ethernet18,Ethernet15,Ethernet1,Ethernet19,Ethernet7,Ethernet14,Ethernet43,Ethernet40,Ethernet27,Ethernet4,Ethernet36,Ethernet41,Ethernet10,Ethernet31,Ethernet5,Ethernet9,Ethernet12,Ethernet16,Ethernet25,Ethernet24,Ethernet17,Ethernet35,Ethernet11,Ethernet38,Ethernet42,Ethernet29,Ethernet20,Ethernet45,Ethernet26,Ethernet21,Ethernet37,Ethernet0,Ethernet28,Ethernet23,Ethernet22,Ethernet2,Ethernet30",
+        "ports@": "Ethernet13,Ethernet3,Ethernet33,Ethernet34,Ethernet8,Ethernet6,Ethernet44,Ethernet39,Ethernet18,Ethernet15,Ethernet1,Ethernet19,Ethernet7,Ethernet14,Ethernet43,Ethernet40,Ethernet27,Ethernet4,Ethernet36,Ethernet41,Ethernet10,Ethernet31,Ethernet5,Ethernet9,Ethernet12,Ethernet16,Ethernet25,Ethernet24,Ethernet17,Ethernet35,Ethernet11,Ethernet38,Ethernet42,Ethernet29,Ethernet20,Ethernet45,Ethernet26,Ethernet21,Ethernet37,Ethernet0,Ethernet28,Ethernet23,Ethernet22,Ethernet2,Ethernet30",
         "stage": "ingress",
         "type": "BMCDATAV6"
     },
@@ -639,7 +639,7 @@
     },
     "ACL_TABLE|EVERFLOWV6": {
         "policy_desc": "EVERFLOWV6",
-        "ports@": "Ethernet0,Ethernet1,Ethernet2,Ethernet3,Ethernet4,Ethernet5,Ethernet6,Ethernet7,Ethernet8,Ethernet9,Ethernet10,Ethernet11,Ethernet12,Ethernet13,Ethernet14,Ethernet15,Ethernet16,Ethernet17,Ethernet18,Ethernet19,Ethernet20,Ethernet21,Ethernet22,Ethernet23,Ethernet24,Ethernet25,Ethernet26,Ethernet27,Ethernet28,Ethernet29,Ethernet30,Ethernet31,Ethernet32,Ethernet33,Ethernet34,Ethernet35,Ethernet36,Ethernet37,Ethernet38,Ethernet39,Ethernet40,Ethernet41,Ethernet42,Ethernet43,Ethernet44,Ethernet45,Ethernet46,Ethernet47",
+        "ports@": "Ethernet0,Ethernet1,Ethernet2,Ethernet3,Ethernet4,Ethernet5,Ethernet6,Ethernet7,Ethernet8,Ethernet9,Ethernet10,Ethernet11,Ethernet12,Ethernet13,Ethernet14,Ethernet15,Ethernet16,Ethernet17,Ethernet18,Ethernet19,Ethernet20,Ethernet21,Ethernet22,Ethernet23,Ethernet24,Ethernet25,Ethernet26,Ethernet27,Ethernet28,Ethernet29,Ethernet30,Ethernet31,Ethernet33,Ethernet34,Ethernet35,Ethernet36,Ethernet37,Ethernet38,Ethernet39,Ethernet40,Ethernet41,Ethernet42,Ethernet43,Ethernet44,Ethernet45,Ethernet46,Ethernet47",
         "type": "MIRRORV6",
         "stage": "ingress"
     },
