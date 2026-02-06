@@ -99,5 +99,26 @@
     },
     "INTF_TABLE:Ethernet-BP260": {
 	"mpls":"enable"
+    },
+    "VXLAN_REMOTE_VNI_TABLE:Vlan100:192.168.1.102": {
+        "vni": "1000"
+    },
+    "VXLAN_FDB_TABLE:Vlan100:00:11:22:33:44:77": {
+        "remote_vtep": "192.168.1.102",
+        "type": "dynamic",
+        "vni": "1000"
+    },
+    "VNET_ROUTE_TABLE:Vnet_4000:40.0.0.0/24": {
+        "nexthop": "10.10.10.200",
+        "ifname": "Ethernet64"
+    },
+    "VNET_ROUTE_TUNNEL_TABLE:Vnet_4000:50.0.0.0/24": {
+        "endpoint": "192.168.2.200",
+        "mac_address": "00:aa:bb:cc:dd:02",
+        "vni": "4000"
+    },
+    "NEIGH_TABLE:Ethernet64:10.0.2.1": {
+        "neigh": "00:11:22:33:44:cc",
+        "family": "IPv4"
     }
 }

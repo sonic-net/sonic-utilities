@@ -242,7 +242,7 @@ class TestSubinterface(object):
         db.cfgdb.set_entry("VXLAN_TUNNEL", "tunnel1", {"src_ip": "10.1.0.1", "dst_port": "4789"})
 
         # Add Vnet_1000
-        result = runner.invoke(config.config.commands["vnet"].commands["add"], ["Vnet_1000", "222", "tunnel1"], obj=obj)
+        result = runner.invoke(config.config.commands["vnet"].commands["add"], ["Vnet_1000", "222", "tunnel1"], obj=db)
         assert ('Vnet_1000') in db.cfgdb.get_table('VNET')
         assert result.exit_code == 0
 

@@ -545,12 +545,12 @@ def vni_id_is_valid(vni):
     return True
 
 
-def is_vni_vrf_mapped(db, vni):
+def is_vni_vrf_mapped(cfgdb, vni):
     """Check if the vni is mapped to vrf
     """
 
     found = 0
-    vrf_table = db.cfgdb.get_table('VRF')
+    vrf_table = cfgdb.get_table('VRF')
     vrf_keys = vrf_table.keys()
     if vrf_keys is not None:
         for vrf_key in vrf_keys:

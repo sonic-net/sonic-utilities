@@ -9931,13 +9931,10 @@ def motd(message):
 #
 
 @config.group(cls=clicommon.AbbreviationGroup, name='vnet')
-@click.pass_context
-def vnet(ctx):
+@multi_asic_util.multi_asic_click_option_namespace(required=True)
+def vnet(namespace):
     """VNET-related configuration tasks"""
-    config_db = ConfigDBConnector()
-    config_db.connect()
-    ctx.obj = {}
-    ctx.obj['config_db'] = config_db
+    pass
 
 
 @vnet.command('add')
@@ -9950,16 +9947,23 @@ def vnet(ctx):
 @click.argument('advertise_prefix', metavar='<advertise_prefix>', type=bool, required=False)
 @click.argument('overlay_dmac', metavar='<overlay_dmac>', required=False)
 @click.argument('src_mac', metavar='<src_mac>', required=False)
-@click.pass_context
-def add_vnet(ctx, vnet_name, vni, vxlan_tunnel, peer_list, guid, scope, advertise_prefix, overlay_dmac, src_mac):
+@clicommon.pass_db
+def add_vnet(db, vnet_name, vni, vxlan_tunnel, peer_list, guid, scope, advertise_prefix, overlay_dmac, src_mac):
     """Add Vnet"""
-    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+    ctx = click.get_current_context()
+
+    namespace = multi_asic_util.get_namespace_from_ctx()
+    if namespace is None:
+        namespace = DEFAULT_NAMESPACE
+
+    cfg_db = db.cfgdb_clients[namespace]
+    config_db = ValidatedConfigDBConnector(cfg_db)
 
     vnet_name_is_valid(ctx, vnet_name)
 
     if not vni.isdigit() or clicommon.vni_id_is_valid(int(vni)) is False:
         ctx.fail("Invalid VNI {}. Valid range [1 to 16777215].".format(vni))
-    if not clicommon.is_vxlan_tunnel_exists(config_db, vxlan_tunnel):
+    if not clicommon.is_vxlan_tunnel_exists(cfg_db, vxlan_tunnel):
         ctx.fail("Vxlan tunnel {} does not exist!".format(vxlan_tunnel))
 
     subvnet_dict = {}
@@ -10004,18 +10008,25 @@ def add_vnet(ctx, vnet_name, vni, vxlan_tunnel, peer_list, guid, scope, advertis
 
 @vnet.command('del')
 @click.argument('vnet_name', metavar='<vnet_name>', required=True)
-@click.pass_context
-def del_vnet(ctx, vnet_name):
+@clicommon.pass_db
+def del_vnet(db, vnet_name):
     """Del Vnet"""
-    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+    ctx = click.get_current_context()
+
+    namespace = multi_asic_util.get_namespace_from_ctx()
+    if namespace is None:
+        namespace = DEFAULT_NAMESPACE
+
+    cfg_db = db.cfgdb_clients[namespace]
+    config_db = ValidatedConfigDBConnector(cfg_db)
 
     vnet_name_is_valid(ctx, vnet_name)
 
-    if not is_vnet_exists(config_db, vnet_name):
+    if not is_vnet_exists(cfg_db, vnet_name):
         ctx.fail("VNET {} does not exist!".format(vnet_name))
     else:
-        del_interface_bind_to_vnet(config_db, vnet_name)
-        del_route_bind_to_vnet(config_db, vnet_name)
+        del_interface_bind_to_vnet(cfg_db, vnet_name)
+        del_route_bind_to_vnet(cfg_db, vnet_name)
 
         try:
             config_db.set_entry('VNET', vnet_name, None)
@@ -10035,16 +10046,23 @@ def del_vnet(ctx, vnet_name):
 @click.argument('primary', metavar='<primary>', required=False)
 @click.argument('monitoring', metavar='<monitoring>', type=str, required=False)
 @click.argument('adv_prefix', metavar='<adv_prefix>', required=False)
-@click.pass_context
-def add_vnet_route(ctx, vnet_name, prefix, endpoint, vni, mac_address, endpoint_monitor,
+@clicommon.pass_db
+def add_vnet_route(db, vnet_name, prefix, endpoint, vni, mac_address, endpoint_monitor,
                    profile, primary, monitoring, adv_prefix):
     """Add/Update VNET Route"""
-    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+    ctx = click.get_current_context()
+
+    namespace = multi_asic_util.get_namespace_from_ctx()
+    if namespace is None:
+        namespace = DEFAULT_NAMESPACE
+
+    cfg_db = db.cfgdb_clients[namespace]
+    config_db = ValidatedConfigDBConnector(cfg_db)
 
     vnet_name_is_valid(ctx, vnet_name)
 
-    if not is_vnet_exists(config_db, vnet_name):
-        ctx.fail("VNET {} doesnot exist, cannot add a route!".format(vnet_name))
+    if not is_vnet_exists(cfg_db, vnet_name):
+        ctx.fail("VNET {} does not exist, cannot add the route!".format(vnet_name))
     if not clicommon.is_ipprefix(prefix):
         ctx.fail("Invalid prefix {}".format(prefix))
     else:
@@ -10095,24 +10113,31 @@ def add_vnet_route(ctx, vnet_name, prefix, endpoint, vni, mac_address, endpoint_
 @vnet.command('del-route')
 @click.argument('vnet_name', metavar='<vnet_name>', type=str, required=True)
 @click.argument('prefix', metavar='<prefix>', required=False)
-@click.pass_context
-def del_vnet_route(ctx, vnet_name, prefix):
+@clicommon.pass_db
+def del_vnet_route(db, vnet_name, prefix):
     """Del a specific VNET route or all VNET routes"""
-    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+    ctx = click.get_current_context()
+
+    namespace = multi_asic_util.get_namespace_from_ctx()
+    if namespace is None:
+        namespace = DEFAULT_NAMESPACE
+
+    cfg_db = db.cfgdb_clients[namespace]
+    config_db = ValidatedConfigDBConnector(cfg_db)
 
     vnet_name_is_valid(ctx, vnet_name)
 
-    if not is_vnet_exists(config_db, vnet_name):
-        ctx.fail("VNET {} doesnot exist, cannot delete the route!".format(vnet_name))
-    if not is_vnet_route_exists(config_db, vnet_name):
-        ctx.fail("Routes dont exist for the VNET {}, cant delete it!".format(vnet_name))
+    if not is_vnet_exists(cfg_db, vnet_name):
+        ctx.fail("VNET {} does not exist, cannot delete the route!".format(vnet_name))
+    if not is_vnet_route_exists(cfg_db, vnet_name):
+        ctx.fail("Routes do not exist for the VNET {}, cannot delete it!".format(vnet_name))
     if prefix:
         if not clicommon.is_ipprefix(prefix):
             ctx.fail("Invalid prefix {}".format(prefix))
-        if not is_specific_vnet_route_exists(config_db, vnet_name, prefix):
-            ctx.fail("Route does not exist for the VNET {}, cant delete it!".format(vnet_name))
+        if not is_specific_vnet_route_exists(cfg_db, vnet_name, prefix):
+            ctx.fail("Route does not exist for the VNET {}, cannot delete it!".format(vnet_name))
         else:
-            for key in config_db.get_table('VNET_ROUTE_TUNNEL'):
+            for key in cfg_db.get_table('VNET_ROUTE_TUNNEL'):
                 if key[0] == vnet_name and key[1] == prefix:
                     try:
                         config_db.set_entry('VNET_ROUTE_TUNNEL', (vnet_name, prefix), None)
@@ -10120,7 +10145,7 @@ def del_vnet_route(ctx, vnet_name, prefix):
                         ctx.fail("Invalid ConfigDB. Error: {}".format(e))
                     click.echo("Specific route deleted for the VNET {}.".format(vnet_name))
     else:
-        del_route_bind_to_vnet(config_db, vnet_name)
+        del_route_bind_to_vnet(cfg_db, vnet_name)
         click.echo("All routes deleted for the VNET {}.".format(vnet_name))
 
 

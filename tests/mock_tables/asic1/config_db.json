@@ -299,5 +299,43 @@
         "dynamic_th": "0",
         "pool": "egress_lossy_pool",
         "size": "0"
+    },
+    "VXLAN_TUNNEL|vtep1": {
+        "src_ip": "10.10.10.2"
+    },
+    "VXLAN_EVPN_NVO|nvo1": {
+        "source_vtep": "vtep1"
+    },
+    "VXLAN_TUNNEL_MAP|vtep1|map_1000_Vlan100": {
+        "vni": "1000",
+        "vlan": "Vlan100"
+    },
+    "VXLAN_TUNNEL_MAP|vtep1|map_2000_Vlan200": {
+        "vni": "2000",
+        "vlan": "Vlan200"
+    },
+    "VRF|Vrf1": {
+        "fallback": "false",
+        "vni": "3000"
+    },
+    "VLAN|Vlan100": {
+        "vlanid": "100"
+    },
+    "VLAN|Vlan200": {
+        "vlanid": "200"
+    },
+    "LOOPBACK_INTERFACE|Loopback0": {
+        "NULL": "NULL"
+    },
+    "LOOPBACK_INTERFACE|Loopback0|10.10.10.2/32": {
+        "NULL": "NULL"
+    },
+    "VNET|Vnet_4000": {
+        "vni": "4000",
+        "vxlan_tunnel": "vtep1",
+        "guid": "guid-4000-asic1"
+    },
+    "INTERFACE|Ethernet64": {
+        "vnet_name": "Vnet_4000"
     }
 }
