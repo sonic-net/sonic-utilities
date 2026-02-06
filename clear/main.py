@@ -291,9 +291,6 @@ def drop():
 @drop.command('counters')
 def clear_pg_counters():
     """Clear priority-group dropped packets counter """
-
-    if os.geteuid() != 0 and os.environ.get("UTILITIES_UNIT_TESTING", "0") != "2":
-        sys.exit("Root privileges are required for this operation")
     command = ['pg-drop', '-c', 'clear']
     run_command(command)
 
