@@ -11,7 +11,7 @@ optional arguments:
   -vv    --verbose         verbose output
   -l     --list            show mmu configuration
   -p     --profile         specify buffer profile name
-  -a     --alpha           set n for dyanmic threshold alpha 2^(n)
+  -a     --alpha           set n for dynamic threshold alpha 2^(n)
   -s     --staticth        set static threshold
 
 """
@@ -171,7 +171,7 @@ class TrimTypeValidator(click.ParamType):
 @click.command(help='Show and change: mmu configuration')
 @click.option('-l', '--list', 'show_config', is_flag=True, help='show mmu configuration')
 @click.option('-p', '--profile', type=str, help='specify buffer profile name', default=None)
-@click.option('-a', '--alpha', type=click.IntRange(DYNAMIC_THRESHOLD_MIN, DYNAMIC_THRESHOLD_MAX), help='set n for dyanmic threshold alpha 2^(n)', default=None)
+@click.option('-a', '--alpha', type=click.IntRange(DYNAMIC_THRESHOLD_MIN, DYNAMIC_THRESHOLD_MAX), help='set n for dynamic threshold alpha 2^(n)', default=None)
 @click.option('-s', '--staticth', type=click.IntRange(min=STATIC_THRESHOLD_MIN), help='set static threshold', default=None)
 @click.option('-t', '--trim', 'trim', type=TrimTypeValidator(), help='Configures packet trimming eligibility')
 @click.option('-n', '--namespace', type=click.Choice(multi_asic.get_namespace_list()), help='Namespace name or skip for all', default=None)

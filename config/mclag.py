@@ -301,7 +301,7 @@ def add_mclag_member(ctx, domain_id, portchannel_names):
 def del_mclag_member(ctx, domain_id, portchannel_names):
     """Delete member MCLAG interfaces from MCLAG Domain"""
     db = ValidatedConfigDBConnector(ctx.obj['db'])
-    #split comma seperated portchannel names
+    #split comma separated portchannel names
     portchannel_list = portchannel_names.split(",")
     for portchannel_name in portchannel_list:
         if ADHOC_VALIDATION:
@@ -329,7 +329,7 @@ def add_mclag_unique_ip(ctx, interface_names):
     if len(mclag_domain_keys) == 0:
         ctx.fail("MCLAG not configured. MCLAG should be configured.")
 
-    #split comma seperated interface names
+    #split comma separated interface names
     interface_list = interface_names.split(",")
     for interface_name in interface_list:
         if not interface_name.startswith("Vlan"):
@@ -356,7 +356,7 @@ def add_mclag_unique_ip(ctx, interface_names):
 def del_mclag_unique_ip(ctx, interface_names):
     """Delete Unique IP from MCLAG Vlan interface"""
     db = ValidatedConfigDBConnector(ctx.obj['db'])
-    #split comma seperated interface names
+    #split comma separated interface names
     interface_list = interface_names.split(",")
     for interface_name in interface_list:
         if not interface_name.startswith("Vlan"):

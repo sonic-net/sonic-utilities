@@ -48,7 +48,7 @@ class CriticalProcCoreDumpHandle():
             syslog.syslog(syslog.LOG_NOTICE, "auto_invoke_ts is disabled. No cleanup is performed: core {}".format(self.core_name))
             return
 
-        # Config made for the defaul instance applies to all the masic instances
+        # Config made for the default instance applies to all the masic instances
         self.container = trim_masic_suffix(self.container)
 
         FEATURE_KEY = FEATURE.format(self.container)

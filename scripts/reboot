@@ -267,7 +267,7 @@ function parse_config_file
                     [ "${value}" = "true" ] && SHOW_TIMER="yes"
                     ;;
                 *)
-                    debug "WARNING: Unknown config ${key}=${value} finded in config file ${REBOOT_CONFIG_FILE}" 
+                    debug "WARNING: Unknown config ${key}=${value} found in config file ${REBOOT_CONFIG_FILE}"
                     ;;
             esac
         done < "$REBOOT_CONFIG_FILE"
@@ -403,7 +403,7 @@ else
             CURRENT_TIME=$(date +%s)
             ELAPSED=$((CURRENT_TIME - REBOOT_START_TIME))
             if (( ELAPSED >= BLOCKING_MODE_TIMEOUT_IN_SECOND )); then
-                echo "[REBOOT FAILED] The reboot used $(ELAPSED)seconds while the timeout is configed as $(BLOCKING_MODE_TIMEOUT_IN_SECOND)seconds"
+                echo "[REBOOT FAILED] The reboot used $(ELAPSED)seconds while the timeout is configured as $(BLOCKING_MODE_TIMEOUT_IN_SECOND)seconds"
                 exit ${EXIT_TIMEOUT}
             fi
 

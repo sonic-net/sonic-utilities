@@ -87,7 +87,7 @@ GEARBOX_TABLE_PHY_PATTERN = r"_GEARBOX_TABLE:phy:*"
 COMMAND_TIMEOUT = 300
 
 # To be enhanced. Routing-stack information should be collected from a global
-# location (configdb?), so that we prevent the continous execution of this
+# location (configdb?), so that we prevent the continuous execution of this
 # bash oneliner. To be revisited once routing-stack info is tracked somewhere.
 def get_routing_stack():
     result = 'frr'

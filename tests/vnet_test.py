@@ -285,7 +285,7 @@ Error: 'vnet_name' must begin with 'Vnet'.
         # Test vnet add route when vnet doesnt exist
         args = ["Vnet_6", "10.10.10.10/32", "10.10.10.1"]
         result = runner.invoke(config.config.commands["vnet"].commands["add-route"], args, obj=vnet_obj)
-        assert "VNET Vnet_6 doesnot exist, cannot add a route!" in result.output
+        assert "VNET Vnet_6 does not exist, cannot add a route!" in result.output
         assert result.exit_code != 0
 
         # Test vnet add route using length of vnet name
@@ -348,13 +348,13 @@ Error: 'vnet_name' must begin with 'Vnet'.
         result = runner.invoke(config.config.commands["vnet"].commands["del-route"], args, obj=vnet_obj)
         assert result.exit_code != 0
         assert ('Vnet_100') not in db.cfgdb.get_table('VNET')
-        assert "VNET Vnet_100 doesnot exist, cannot delete the route!" in result.output
+        assert "VNET Vnet_100 does not exist, cannot delete the route!" in result.output
 
         # Test vnet del route with non existent route
         args = ["Vnet3", "10.10.10.10/32"]
         result = runner.invoke(config.config.commands["vnet"].commands["del-route"], args, obj=vnet_obj)
         assert result.exit_code != 0
-        assert "Routes dont exist for the VNET Vnet3, cant delete it!" in result.output
+        assert "Routes dont exist for the VNET Vnet3, can't delete it!" in result.output
 
     def test_vnet_add_del_2(self):
         runner = CliRunner()

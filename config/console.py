@@ -127,7 +127,7 @@ def upate_console_remote_device_name(db, linenum, devicename):
     data = config_db.get_entry(table, linenum)
     if data:
         if dataKey in data and devicename == data[dataKey]:
-            # do nothing if the device name is same with existing configurtion
+            # do nothing if the device name is same with existing configuration
             return
         elif not devicename:
             # remove configuration key from console setting if user not give a remote device name
@@ -166,7 +166,7 @@ def update_console_baud(db, linenum, baud):
     if data:
         baud = str(baud)
         if dataKey in data and baud == data[dataKey]:
-            # do nothing if the baud is same with existing configurtion
+            # do nothing if the baud is same with existing configuration
             return
         else:
             data[dataKey] = baud
@@ -197,7 +197,7 @@ def update_console_flow_control(db, mode, linenum):
     data = config_db.get_entry(table, linenum)
     if data:
         if dataKey in data and innerMode == data[dataKey]:
-            # do nothing if the flow control setting is same with existing configurtion
+            # do nothing if the flow control setting is same with existing configuration
             return
         else:
             data[dataKey] = innerMode

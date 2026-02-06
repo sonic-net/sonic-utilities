@@ -95,7 +95,7 @@ def _update_route_flow_counter_config(db, vrf, max_allowed_match, prefix_pattern
 
 def _try_find_existing_pattern_by_ip_type(cfgdb, input_net, input_key, yes):
     """Try to find the same IP type pattern from CONFIG DB. 
-        1. If found a pattern with the same IP type, but the patter does not equal, ask user if need to replace the old with new one
+        1. If found a pattern with the same IP type, but the pattern does not equal, ask user if need to replace the old with new one
             a. If user types "yes", remove the old one, return False
             b. If user types "no", exit
         2. If found a pattern with the same IP type and the pattern equal, return True
