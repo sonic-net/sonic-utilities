@@ -87,6 +87,22 @@ def is_ipv6_address(ip_address):
         return False
 
 
+def normalize_ip_address(ip_address):
+    """
+    Normalize an IP address to its canonical form.
+    For IPv6, this converts addresses like '2000::0' to '2000::'.
+    For IPv4, the address is returned in standard form.
+    For non-IP strings (e.g., interface names), returns the original string.
+    :param ip_address: str IP address or other identifier
+    :return: str normalized IP address or original string
+    """
+    try:
+        return str(ipaddress.ip_address(ip_address))
+    except ValueError:
+        # Not a valid IP address (e.g., interface name for unnumbered BGP)
+        return ip_address
+
+
 def get_dynamic_neighbor_subnet(db):
     """
     Returns dict of description and subnet info from bgp_peer_range table
@@ -149,6 +165,9 @@ def get_bgp_neighbor_ip_to_name(ip, static_neighbors, dynamic_neighbors):
     :param dynamic_neighbors: subnet of dynamically defined neighbors dict
     :return: name of neighbor
     """
+    # Normalize the IP address to canonical form for consistent lookup
+    ip = normalize_ip_address(ip)
+
     # Direct IP match
     if ip in static_neighbors:
         return static_neighbors[ip]
@@ -214,7 +233,16 @@ def get_neighbor_dict_from_table(db, table_name):
     neighbor_data = db.get_table(table_name)
     try:
         for entry in neighbor_data:
-            neighbor_dict[entry] = neighbor_data[entry].get(
+            # Normalize the key to ensure IP addresses are in canonical form
+            if isinstance(entry, tuple) and len(entry) == 2:
+                # Handle tuple keys (VRF mode): (vrf_name, ip_address)
+                vrf_name, ip_addr = entry
+                normalized_key = (vrf_name, normalize_ip_address(ip_addr))
+            else:
+                # Handle simple string keys (IP addresses or interface names)
+                normalized_key = normalize_ip_address(entry)
+
+            neighbor_dict[normalized_key] = neighbor_data[entry].get(
                 'name') if 'name' in neighbor_data[entry] else 'NotAvailable'
         return neighbor_dict
     except Exception:
