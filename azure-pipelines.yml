@@ -300,6 +300,14 @@ stages:
       displayName: 'Install sonic-utilities wheel'
 
     - script: |
+        set -xe
         cd sonic-utilities-data
         dpkg-buildpackage -b
+        cd ..
+        mkdir -p dist
+        mv sonic-utilities-data_*.deb dist/
       displayName: 'Build sonic-utilities-data package'
+
+    - publish: '$(System.DefaultWorkingDirectory)/dist/'
+      artifact: sonic_utilities_data
+      displayName: "Publish sonic-utilities-data package"
