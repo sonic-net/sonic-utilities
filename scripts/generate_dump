@@ -1429,6 +1429,43 @@ save_symlink() {
 }
 
 ###############################################################################
+# Collect Mellanox SAI SDK dump
+# Globals:
+#  CMD_PREFIX
+# Arguments:
+#  None
+# Returns:
+#  None
+###############################################################################
+collect_mellanox_sai_sdk_dump() {
+    local namespace=$1
+    local asic_id=$2
+    local container_name=$3
+
+    local sai_dump_folder="/tmp/saisdkdump$asic_id"
+    local sai_dump_filename="${sai_dump_folder}/sai_sdk_dump${asic_id}_$(date +"%m_%d_%Y_%I_%M_%p")"
+
+    if [[ "$( docker container inspect -f '{{.State.Running}}' $container_name )" == "true" ]]; then
+        if [[ x"$(sonic-db-cli $namespace APPL_DB EXISTS PORT_TABLE:PortInitDone)" == x"1" ]]; then
+            ${CMD_PREFIX}docker exec $container_name mkdir -p $sai_dump_folder
+            ${CMD_PREFIX}docker exec $container_name saisdkdump -f $sai_dump_filename
+
+            if [ $? != 0 ]; then
+                echo "Failed to collect saisdkdump."
+            fi
+
+            copy_from_docker $container_name $sai_dump_folder $sai_dump_folder
+            for file in `ls $sai_dump_folder`; do
+                save_file ${sai_dump_folder}/${file} sai_sdk_dump true
+            done
+
+            ${CMD_PREFIX}rm -rf $sai_dump_folder
+            ${CMD_PREFIX}docker exec $container_name rm -rf $sai_dump_folder
+        fi
+    fi
+}
+
+###############################################################################
 # Collect Mellanox specific information
 # Globals:
 #  CMD_PREFIX
@@ -1440,40 +1477,57 @@ save_symlink() {
 collect_mellanox() {
     trap 'handle_error $? $LINENO' ERR
     local timeout_cmd="timeout --foreground ${TIMEOUT_MIN}m"
-    local sai_dump_folder="/tmp/saisdkdump"
-    local sai_dump_filename="${sai_dump_folder}/sai_sdk_dump_$(date +"%m_%d_%Y_%I_%M_%p")"
+
     local platform=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_platform())")
     local platform_folder="/usr/share/sonic/device/${platform}"
     local hwsku=$(python3 -c "from sonic_py_common import device_info; print(device_info.get_hwsku())")
     local is_smartswitch=$(python3 -c "from sonic_py_common import device_info; print(device_info.is_smartswitch())")
     local sku_folder="/usr/share/sonic/device/${platform}/${hwsku}"
     local cmis_host_mgmt_files=(
-        "/tmp/nv-syncd-shared/sai.profile"
-        "${sku_folder}/pmon_daemon_control.json"
-        "${sku_folder}/media_settings.json"
-        "${sku_folder}/optics_si_settings.json"
+        "pmon_daemon_control.json"
+        "media_settings.json"
+        "optics_si_settings.json"
     )
 
-    if [[ "$( docker container inspect -f '{{.State.Running}}' syncd )" == "true" ]]; then
-        if [[ x"$(sonic-db-cli APPL_DB EXISTS PORT_TABLE:PortInitDone)" == x"1" ]]; then
-            # Run saisdkdump only after the create_switch is known to be successful
-            ${CMD_PREFIX}docker exec syncd mkdir -p $sai_dump_folder
-            ${CMD_PREFIX}docker exec syncd saisdkdump -f $sai_dump_filename
+    local pids=()
+    for ((i=0; i<NUM_ASICS; i++)); do
+        local namespace=""
+        local asic_id=
+        local container_name="syncd"
 
-            if [ $? != 0 ]; then
-                echo "Failed to collect saisdkdump."
-            fi
+        local cmis_host_mgmt_path="cmis-host-mgmt"
+        local sku_folder_path="${sku_folder}"
 
-            copy_from_docker syncd $sai_dump_folder $sai_dump_folder
-            echo "$sai_dump_folder"
-            for file in `ls $sai_dump_folder`; do
-                save_file ${sai_dump_folder}/${file} sai_sdk_dump true
-            done
+        if [[ "$NUM_ASICS" > 1 ]]; then
+            namespace="-n asic$i"
+            asic_id="_asic${i}"
+            container_name="syncd$i"
 
-            ${CMD_PREFIX}rm -rf $sai_dump_folder
-            ${CMD_PREFIX}docker exec syncd rm -rf $sai_dump_folder
+            cmis_host_mgmt_path="cmis-host-mgmt/asic${i}"
+            sku_folder_path="${sku_folder}/$i"
         fi
-    fi
+
+        ${CMD_PREFIX}save_file "/tmp/nv-syncd-shared/sai.profile" "$cmis_host_mgmt_path" false true
+
+        if [[ ! -f "${sku_folder_path}/pmon_daemon_control.json" && -f "${platform_folder}/pmon_daemon_control.json" ]]; then
+            ${CMD_PREFIX}save_file "${platform_folder}/pmon_daemon_control.json" "$cmis_host_mgmt_path" false true
+        fi
+
+        for file in "${cmis_host_mgmt_files[@]}"; do
+            if [[ -f "${sku_folder_path}/${file}" ]]; then
+                ${CMD_PREFIX}save_file "${sku_folder_path}/${file}" "$cmis_host_mgmt_path" false true
+            fi
+        done
+
+        collect_mellanox_sai_sdk_dump "$namespace" "$asic_id" "$container_name" &
+        pids+=($!)
+
+    done
+
+    # Wait for all background processes to complete
+    for pid in "${pids[@]}"; do
+        wait $pid
+    done
 
     # collect the sdk dump
     local sdk_dbg_folder="/var/log/sdk_dbg"
@@ -1516,19 +1570,6 @@ collect_mellanox() {
     local excludes_sysfs_files=(rx_los tx_disable module_info module_latched_flag_info power_mode power_mode_policy reinsert reset)
 
     save_sdk_sysfs "$sdk_sysfs_src_path" "$sdk_sysfs_dest_path" "${excludes_sysfs_files[@]}" &
-
-    # Save CMIS-host-management related files
-    local cmis_host_mgmt_path="cmis-host-mgmt"
-
-    for file in "${cmis_host_mgmt_files[@]}"; do
-        if [[ -f "${file}" ]]; then
-            ${CMD_PREFIX}save_file "${file}" "$cmis_host_mgmt_path" false true
-        fi
-    done
-
-    if [[ ! -f "${sku_folder}/pmon_daemon_control.json" && -f "${platform_folder}/pmon_daemon_control.json" ]]; then
-        ${CMD_PREFIX}save_file "${platform_folder}/pmon_daemon_control.json" "$cmis_host_mgmt_path" false true
-    fi
 
     save_cmd "show interfaces autoneg status" "autoneg.status"
 
@@ -2265,6 +2306,7 @@ save_counter_snapshot() {
 
     save_cmd "echo $counter_t" "date.counter_$idx"
     save_cmd "show interface counters" "interface.counters_$idx"
+    save_cmd "show interface counters fec-stats" "interface.counters.fec-stats_$idx"
     if ! $IS_SUPERVISOR; then
        save_cmd "show queue counters" "queue.counters_$idx"
     fi

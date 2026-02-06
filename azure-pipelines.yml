@@ -185,3 +185,129 @@ stages:
     - publish: '$(System.DefaultWorkingDirectory)/gcu/dist/'
       artifact: gcu_wheels
       displayName: "Publish Python wheels for GCU"
+
+- stage: BuildData
+
+  jobs:
+  - job:
+    displayName: "Build sonic-utilities-data"
+    pool:
+      vmImage: ubuntu-24.04
+
+    container:
+      image: sonicdev-microsoft.azurecr.io:443/sonic-slave-bookworm:$(BUILD_BRANCH)
+
+    steps:
+    - script: |
+        set -ex
+        sudo apt-get update
+        sudo apt-get install -y python3-pip
+        sudo apt-get install -y python3-protobuf
+      displayName: "Install dependencies"
+
+    - script: |
+        sourceBranch=$(Build.SourceBranchName)
+        if [[ "$(Build.Reason)" == "PullRequest" ]];then
+          sourceBranch=$(System.PullRequest.TargetBranch)
+        fi
+        echo "Download artifact branch: $sourceBranch"
+        echo "##vso[task.setvariable variable=sourceBranch]$sourceBranch"
+      displayName: "Get correct artifact downloading branch"
+
+    - task: DownloadPipelineArtifact@2
+      inputs:
+        source: specific
+        project: build
+        pipeline: 142
+        artifact: sonic-buildimage.vs
+        runVersion: 'latestFromBranch'
+        runBranch: 'refs/heads/$(sourceBranch)'
+        patterns: |
+          **/*.deb
+          **/*.whl
+      displayName: "Download artifacts from latest sonic-buildimage build"
+
+    - script: |
+        set -xe
+        sudo apt-get -y purge libnl-3-dev libnl-route-3-dev || true
+        sudo dpkg -i libnl-3-200_*.deb
+        sudo dpkg -i libnl-genl-3-200_*.deb
+        sudo dpkg -i libnl-route-3-200_*.deb
+        sudo dpkg -i libnl-nf-3-200_*.deb
+        sudo dpkg -i libyang_1.0.73_amd64.deb
+        sudo dpkg -i libyang-cpp_1.0.73_amd64.deb
+        sudo dpkg -i python3-yang_1.0.73_amd64.deb
+      workingDirectory: $(Pipeline.Workspace)/target/debs/bookworm/
+      displayName: 'Install Debian dependencies'
+
+    - task: DownloadPipelineArtifact@2
+      inputs:
+        source: specific
+        project: build
+        pipeline: 9
+        artifact: sonic-swss-common-bookworm
+        runVersion: 'latestFromBranch'
+        runBranch: 'refs/heads/$(sourceBranch)'
+      displayName: "Download sonic swss common deb packages"
+
+    - script: |
+        set -xe
+        sudo dpkg -i libswsscommon_1.0.0_amd64.deb
+        sudo dpkg -i python3-swsscommon_1.0.0_amd64.deb
+      workingDirectory: $(Pipeline.Workspace)/
+      displayName: 'Install swss-common dependencies'
+
+    - task: DownloadPipelineArtifact@2
+      inputs:
+        source: specific
+        project: build
+        pipeline: sonic-net.sonic-dash-api
+        artifact: sonic-dash-api
+        runVersion: 'latestFromBranch'
+        runBranch: 'refs/heads/$(BUILD_BRANCH)'
+        path: $(Build.ArtifactStagingDirectory)/download
+        patterns: |
+          libdashapi*.deb
+      displayName: "Download dash api"
+
+    - script: |
+        set -xe
+        sudo apt-get update
+        sudo dpkg -i $(Build.ArtifactStagingDirectory)/download/libdashapi_*.deb
+      workingDirectory: $(Pipeline.Workspace)/
+      displayName: 'Install libdashapi libraries'
+
+    - script: |
+        set -xe
+        sudo pip3 install swsssdk-2.0.1-py3-none-any.whl
+        sudo pip3 install sonic_py_common-1.0-py3-none-any.whl
+        sudo pip3 install sonic_yang_mgmt-1.0-py3-none-any.whl
+        sudo pip3 install sonic_yang_models-1.0-py3-none-any.whl
+        sudo pip3 install sonic_config_engine-1.0-py3-none-any.whl
+        sudo pip3 install sonic_platform_common-1.0-py3-none-any.whl
+      workingDirectory: $(Pipeline.Workspace)/target/python-wheels/bookworm/
+      displayName: 'Install Python dependencies'
+
+    - task: DownloadPipelineArtifact@2
+      inputs:
+        artifact: wheels
+        path: $(Build.ArtifactStagingDirectory)/download
+      displayName: "Download pre-stage built sonic-utilities"
+
+    - script: |
+        sudo pip3 install sonic_utilities-1.2-py3-none-any.whl
+      workingDirectory: $(Build.ArtifactStagingDirectory)/download
+      displayName: 'Install sonic-utilities wheel'
+
+    - script: |
+        set -xe
+        cd sonic-utilities-data
+        dpkg-buildpackage -b
+        cd ..
+        mkdir -p dist
+        mv sonic-utilities-data_*.deb dist/
+      displayName: 'Build sonic-utilities-data package'
+
+    - publish: '$(System.DefaultWorkingDirectory)/dist/'
+      artifact: sonic_utilities_data
+      displayName: "Publish sonic-utilities-data package"

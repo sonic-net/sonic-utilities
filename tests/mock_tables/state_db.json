@@ -130,7 +130,11 @@
         "tx5power": "1.175",
         "tx6power": "1.175",
         "tx7power": "1.175",
-        "tx8power": "1.175"
+        "tx8power": "1.175",
+        "laser_temperature": "47.7265625",
+        "laser_config_freq": "193100",
+        "laser_curr_freq": "193100.0",
+        "tx_config_power": "-8.5"
     },
     "TRANSCEIVER_DOM_THRESHOLD|Ethernet8": {
         "rxpowerhighalarm": "6.9999",
