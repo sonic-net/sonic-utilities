@@ -17,7 +17,7 @@ optional arguments:
   -f     --fec                 port fec mode
   -m     --mtu                 port mtu in bytes
   -tp    --tpid                interface tpid (0x8100, 9100, 9200, 88A8)
-  -n     --namesapce           Namespace name
+  -n     --namespace           Namespace name
   -an    --autoneg             port auto negotiation mode
   -S     --adv-speeds          port advertised speeds
   -t     --interface-type      port interface type
@@ -261,7 +261,7 @@ class portconfig(object):
         if not self.namespace:
             state_db = SonicV2Connector(host="127.0.0.1")
         else:
-            state_db = SonicV2Connector(host="127.0.0.1", namesapce=self.namespace, use_unix_socket_path=True)
+            state_db = SonicV2Connector(host="127.0.0.1", namespace=self.namespace, use_unix_socket_path=True)
         state_db.connect(state_db.STATE_DB)
         return state_db.get(state_db.STATE_DB, '{}|{}'.format(PORT_STATE_TABLE_NAME, port), PORT_STATE_SUPPORTED_SPEEDS)
 
