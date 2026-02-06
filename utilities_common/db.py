@@ -1,5 +1,5 @@
 from sonic_py_common import multi_asic, device_info
-from swsscommon.swsscommon import ConfigDBConnector, ConfigDBPipeConnector, SonicV2Connector
+from swsscommon.swsscommon import ConfigDBConnector, ConfigDBPipeConnector, SonicV2Connector, SonicDBConfig
 from utilities_common import constants
 from utilities_common.multi_asic import multi_asic_ns_choices
 
@@ -30,6 +30,8 @@ class Db(object):
         self.db_clients[constants.DEFAULT_NAMESPACE] = self.db
 
         if multi_asic.is_multi_asic():
+            if not SonicDBConfig.isGlobalInit():
+                SonicDBConfig.initializeGlobalConfig()
             self.ns_list = multi_asic_ns_choices()
             for ns in self.ns_list:
                 self.cfgdb_clients[ns] = (
