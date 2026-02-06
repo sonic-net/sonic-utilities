@@ -1148,6 +1148,226 @@ show_queue_port_voq_counters_json = """\
   }
 }"""
 
+show_wred_queue_counters_summary = """\
+  TxQ    WredDrp/pkts    WredDrp/bytes    EcnMarked/pkts    EcnMarked/bytes
+-----  --------------  ---------------  ----------------  -----------------
+  UC0              41               96                70                 98
+  UC1             116              109               170                128
+  UC2             197              162               121                 87
+  UC3             123              256               130                189
+  UC4              73              232               156                250
+  UC5             132              161               140                191
+  UC6             182              184               151                244
+  UC7              62               99               181                242
+  UC8              53              242               201                109
+  UC9             177               73               270                170
+ MC10             214              160               207                164
+ MC11             111              175               174                156
+ MC12              81              122               170                134
+ MC13             208              110               218                184
+ MC14              58              150               166                143
+ MC15             129              131               182                148
+ MC16             144               36               137                151
+ MC17             139              154               154                173
+ MC18             170              143                89                190
+ MC19             134               50               114                141
+ALL20               0                0                 0                  0
+ALL21               0                0                 0                  0
+ALL22               0                0                 0                  0
+ALL23               0                0                 0                  0
+ALL24               0                0                 0                  0
+ALL25               0                0                 0                  0
+ALL26               0                0                 0                  0
+ALL27               0                0                 0                  0
+ALL28               0                0                 0                  0
+ALL29               0                0                 0                  0
+
+"""
+
+show_queue_counters_summary_json = """\
+{
+  "ALL20": {
+    "ecnbytes": 0,
+    "ecnpacket": 0,
+    "wredDrpbytes": 0,
+    "wredDrppacket": 0
+  },
+  "ALL21": {
+    "ecnbytes": 0,
+    "ecnpacket": 0,
+    "wredDrpbytes": 0,
+    "wredDrppacket": 0
+  },
+  "ALL22": {
+    "ecnbytes": 0,
+    "ecnpacket": 0,
+    "wredDrpbytes": 0,
+    "wredDrppacket": 0
+  },
+  "ALL23": {
+    "ecnbytes": 0,
+    "ecnpacket": 0,
+    "wredDrpbytes": 0,
+    "wredDrppacket": 0
+  },
+  "ALL24": {
+    "ecnbytes": 0,
+    "ecnpacket": 0,
+    "wredDrpbytes": 0,
+    "wredDrppacket": 0
+  },
+  "ALL25": {
+    "ecnbytes": 0,
+    "ecnpacket": 0,
+    "wredDrpbytes": 0,
+    "wredDrppacket": 0
+  },
+  "ALL26": {
+    "ecnbytes": 0,
+    "ecnpacket": 0,
+    "wredDrpbytes": 0,
+    "wredDrppacket": 0
+  },
+  "ALL27": {
+    "ecnbytes": 0,
+    "ecnpacket": 0,
+    "wredDrpbytes": 0,
+    "wredDrppacket": 0
+  },
+  "ALL28": {
+    "ecnbytes": 0,
+    "ecnpacket": 0,
+    "wredDrpbytes": 0,
+    "wredDrppacket": 0
+  },
+  "ALL29": {
+    "ecnbytes": 0,
+    "ecnpacket": 0,
+    "wredDrpbytes": 0,
+    "wredDrppacket": 0
+  },
+  "MC10": {
+    "ecnbytes": 164,
+    "ecnpacket": 207,
+    "wredDrpbytes": 160,
+    "wredDrppacket": 214
+  },
+  "MC11": {
+    "ecnbytes": 156,
+    "ecnpacket": 174,
+    "wredDrpbytes": 175,
+    "wredDrppacket": 111
+  },
+  "MC12": {
+    "ecnbytes": 134,
+    "ecnpacket": 170,
+    "wredDrpbytes": 122,
+    "wredDrppacket": 81
+  },
+  "MC13": {
+    "ecnbytes": 184,
+    "ecnpacket": 218,
+    "wredDrpbytes": 110,
+    "wredDrppacket": 208
+  },
+  "MC14": {
+    "ecnbytes": 143,
+    "ecnpacket": 166,
+    "wredDrpbytes": 150,
+    "wredDrppacket": 58
+  },
+  "MC15": {
+    "ecnbytes": 148,
+    "ecnpacket": 182,
+    "wredDrpbytes": 131,
+    "wredDrppacket": 129
+  },
+  "MC16": {
+    "ecnbytes": 151,
+    "ecnpacket": 137,
+    "wredDrpbytes": 36,
+    "wredDrppacket": 144
+  },
+  "MC17": {
+    "ecnbytes": 173,
+    "ecnpacket": 154,
+    "wredDrpbytes": 154,
+    "wredDrppacket": 139
+  },
+  "MC18": {
+    "ecnbytes": 190,
+    "ecnpacket": 89,
+    "wredDrpbytes": 143,
+    "wredDrppacket": 170
+  },
+  "MC19": {
+    "ecnbytes": 141,
+    "ecnpacket": 114,
+    "wredDrpbytes": 50,
+    "wredDrppacket": 134
+  },
+  "UC0": {
+    "ecnbytes": 98,
+    "ecnpacket": 70,
+    "wredDrpbytes": 96,
+    "wredDrppacket": 41
+  },
+  "UC1": {
+    "ecnbytes": 128,
+    "ecnpacket": 170,
+    "wredDrpbytes": 109,
+    "wredDrppacket": 116
+  },
+  "UC2": {
+    "ecnbytes": 87,
+    "ecnpacket": 121,
+    "wredDrpbytes": 162,
+    "wredDrppacket": 197
+  },
+  "UC3": {
+    "ecnbytes": 189,
+    "ecnpacket": 130,
+    "wredDrpbytes": 256,
+    "wredDrppacket": 123
+  },
+  "UC4": {
+    "ecnbytes": 250,
+    "ecnpacket": 156,
+    "wredDrpbytes": 232,
+    "wredDrppacket": 73
+  },
+  "UC5": {
+    "ecnbytes": 191,
+    "ecnpacket": 140,
+    "wredDrpbytes": 161,
+    "wredDrppacket": 132
+  },
+  "UC6": {
+    "ecnbytes": 244,
+    "ecnpacket": 151,
+    "wredDrpbytes": 184,
+    "wredDrppacket": 182
+  },
+  "UC7": {
+    "ecnbytes": 242,
+    "ecnpacket": 181,
+    "wredDrpbytes": 99,
+    "wredDrppacket": 62
+  },
+  "UC8": {
+    "ecnbytes": 109,
+    "ecnpacket": 201,
+    "wredDrpbytes": 242,
+    "wredDrppacket": 53
+  },
+  "UC9": {
+    "ecnbytes": 170,
+    "ecnpacket": 270,
+    "wredDrpbytes": 73,
+    "wredDrppacket": 177
+  }
+}"""
+
 
 def remove_tmp_cnstat_file():
     # remove the tmp wredstat
@@ -1264,6 +1484,27 @@ class TestWredQueue(object):
         for _, v in json_output.items():
             del v["time"]
         assert json_dump(json_output) == show_queue_port_voq_counters_json
+
+    def test_queue_counters_summary(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["queue"].commands["wredcounters"],
+            ["--summary"]
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == show_wred_queue_counters_summary
+
+    def test_queue_counters_summary_json(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["queue"].commands["wredcounters"],
+            ["--summary", "--json"]
+        )
+        assert result.exit_code == 0
+        print(result.output)
+        json_output = json.loads(result.output)
+        assert json_dump(json_output) == show_queue_counters_summary_json
 
     def test_clear_wredstats(self):
         wredstat_clear_str = "Clear and update saved counters"
