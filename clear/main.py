@@ -3,6 +3,7 @@ import os
 import subprocess
 import sys
 import click
+import glob
 import utilities_common.cli as clicommon
 import utilities_common.multi_asic as multi_asic_util
 from sonic_py_common import multi_asic, device_info
@@ -163,6 +164,106 @@ elif routing_stack == "frr":
     ip.add_command(bgp)
     from .bgp_frr_v6 import bgp
     ipv6.add_command(bgp)
+
+
+@cli.command()
+@click.argument(
+    "actions",
+    required=False,
+    nargs=-1,
+    type=click.Choice(["all", "force"], case_sensitive=False),
+    metavar="[all] [force]"
+)
+@click.option(
+    "--file",
+    "file_path",
+    help="Specify an external file to truncate instead of clearing syslog files."
+)
+@click.pass_context
+def logging(ctx, actions, file_path):
+    """
+    Clear system log files OR truncate a specific file.
+
+    Usage:
+      sonic-clear logging [all] [force]
+      sonic-clear logging --file /path/to/file [--force]
+    """
+
+    # Normalize arguments
+    actions = [a.lower() for a in actions]
+
+    clear_all = "all" in actions
+    force = "force" in actions  # works for both modes
+
+    # CASE 1: --file mode
+    if file_path:
+        if not os.path.exists(file_path):
+            click.echo(f"Error: File does not exist: {file_path}", err=True)
+            ctx.exit(1)
+
+        if os.path.isdir(file_path):
+            click.echo(f"Error: Path is a directory, not a file: {file_path}", err=True)
+            ctx.exit(1)
+
+        if not os.access(file_path, os.W_OK):
+            click.echo(f"Error: No write permission for file: {file_path}", err=True)
+            ctx.exit(1)
+
+        # Normal confirmation unless --force
+        if not force:
+            click.confirm(
+                f"Do you want to truncate the file '{file_path}'?",
+                abort=True
+            )
+
+        run_command(["sudo", "truncate", "-s", "0", file_path])
+        click.echo(f"File '{file_path}' truncated successfully.")
+        return
+
+    # CASE 2: Syslog clearing mode
+    # Detect log paths
+    log_paths = [p for p in ("/var/log", "/var/log.tmpfs") if os.path.exists(p)]
+
+    # Confirmation
+    if not force:
+        msg = (
+            "Do you want to delete ALL syslog files? Continue?"
+            if clear_all else
+            "Do you want to delete current syslog? Continue?"
+        )
+        click.confirm(msg, abort=True)
+
+    # Build list of files to process
+    files_to_delete = []
+    for path in log_paths:
+
+        if clear_all:
+            # Remove everything syslog*
+            files_to_delete.extend(glob.glob(f"{path}/syslog*"))
+
+        else:
+            # Remove only syslog + syslog.1
+            s0 = f"{path}/syslog"
+            s1 = f"{path}/syslog.1"
+
+            if os.path.isfile(s0):
+                files_to_delete.append(s0)
+            if os.path.isfile(s1):
+                files_to_delete.append(s1)
+
+    # Apply actions to each file
+    for f in files_to_delete:
+        if os.path.basename(f) == "syslog":
+            # syslog MUST be truncated, not removed
+            run_command(["sudo", "truncate", "-s", "0", f])
+        else:
+            run_command(["sudo", "rm", "-f", f])
+
+    if clear_all:
+        click.echo("All syslog files cleared successfully.")
+    else:
+        click.echo("Syslog has been cleared successfully.")
+
 
 @cli.command()
 def counters():

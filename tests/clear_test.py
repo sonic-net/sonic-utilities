@@ -333,3 +333,107 @@ class TestClearFlowcnt(object):
     def teardown(self):
         print('TEAR DOWN')
 
+
+@patch("clear.main.run_command")
+@patch("click.confirm", MagicMock(return_value=True))
+@patch("os.path.exists", MagicMock(return_value=True))
+@patch("os.path.isfile", MagicMock(side_effect=lambda p: p.endswith("syslog")))
+@patch("glob.glob", MagicMock(return_value=[
+    "/var/log/syslog",
+    "/var/log/syslog.1"
+]))
+@pytest.mark.parametrize(
+    "cli_args, expected_calls",
+    [
+        # default: truncate syslog only
+        (
+            [],
+            [
+                ["sudo", "truncate", "-s", "0", "/var/log/syslog"],
+            ]
+        ),
+        # all: truncate syslog + remove rotated logs
+        (
+            ["all"],
+            [
+                ["sudo", "truncate", "-s", "0", "/var/log/syslog"],
+                ["sudo", "rm", "-f", "/var/log/syslog.1"],
+            ]
+        ),
+        # force: same behavior, but no confirm
+        (
+            ["force"],
+            [
+                ["sudo", "truncate", "-s", "0", "/var/log/syslog"],
+            ]
+        ),
+    ]
+)
+def test_clear_logging_syslog_modes(run_command, cli_args, expected_calls):
+    """
+    Test clearing logging for syslog with different modes: default, all, force.
+    """
+    runner = CliRunner()
+    result = runner.invoke(clear.cli.commands["logging"], cli_args)
+
+    assert result.exit_code == 0
+
+    for call in expected_calls:
+        run_command.assert_any_call(call)
+
+
+@patch("clear.main.run_command")
+@patch("os.path.exists", MagicMock(return_value=True))
+@patch("os.path.isdir", MagicMock(return_value=False))
+@patch("os.access", MagicMock(return_value=True))
+@pytest.mark.parametrize(
+    "cli_args, expect_confirm",
+    [
+        (["--file", "/tmp/test.log"], True),
+        (["--file", "/tmp/test.log", "force"], False),
+    ]
+)
+def test_clear_logging_file_success(run_command, cli_args, expect_confirm):
+    """
+    Test clearing logging for a specific file with and without force.
+    """
+    with patch("click.confirm", MagicMock(return_value=True)) as confirm:
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands["logging"], cli_args)
+
+        assert result.exit_code == 0
+
+        run_command.assert_called_with(
+            ["sudo", "truncate", "-s", "0", "/tmp/test.log"]
+        )
+
+        if expect_confirm:
+            confirm.assert_called_once()
+        else:
+            confirm.assert_not_called()
+
+
+@pytest.mark.parametrize(
+    "exists,is_dir,access,expected_error",
+    [
+        (False, False, False, "does not exist"),
+        (True, True, True, "is a directory"),
+        (True, False, False, "No write permission"),
+    ]
+)
+def test_clear_logging_file_errors(exists, is_dir, access, expected_error):
+    """
+    Test error handling when clearing logging for a specific file with various file states.
+    """
+    with patch("os.path.exists", MagicMock(return_value=exists)), \
+         patch("os.path.isdir", MagicMock(return_value=is_dir)), \
+         patch("os.access", MagicMock(return_value=access)):
+
+        runner = CliRunner()
+        result = runner.invoke(
+            clear.cli.commands["logging"],
+            ["--file", "/tmp/test.log"]
+        )
+
+        assert result.exit_code != 0
+        assert expected_error in result.output
