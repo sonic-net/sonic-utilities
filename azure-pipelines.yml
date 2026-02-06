@@ -304,7 +304,7 @@ stages:
         cd sonic-utilities-data
         dpkg-buildpackage -b
         cd ..
-        mkdir dist
+        mkdir -p dist
         mv sonic-utilities-data_*.deb dist/
       displayName: 'Build sonic-utilities-data package'
 
