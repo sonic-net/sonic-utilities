@@ -3719,7 +3719,6 @@ def _qos_update_ports(ctx, ports, dry_run, json_data):
                     if element.startswith('Eth'):
                         port = element
                         break
-                assert port is not None, "Port is not found in config DB"
                 if not port in portset_to_handle:
                     continue
                 config_db.set_entry(table_name, '|'.join(key), None)
