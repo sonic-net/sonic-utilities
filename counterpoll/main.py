@@ -14,6 +14,8 @@ PORT_PHY_ATTR = "PORT_PHY_ATTR"
 PG_DROP = "PG_DROP"
 ACL = "ACL"
 ENI = "ENI"
+CP_DATA_CHANNEL = "CP_DATA_CHANNEL"
+BULK_SYNC = "BULK_SYNC"
 DISABLE = "disable"
 ENABLE = "enable"
 DEFLT_60_SEC= "default (60000)"
@@ -475,6 +477,73 @@ def eni_disable(ctx):
     eni_info['FLEX_COUNTER_STATUS'] = 'disable'
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", ENI, eni_info)
 
+# CP data channel counter commands
+@cli.group()
+@click.pass_context
+def cp_data_channel(ctx):
+    """ CP data channel counter commands """
+    ctx.obj = ConfigDBConnector()
+    ctx.obj.connect()
+
+
+@cp_data_channel.command(name='interval')
+@click.argument('poll_interval', type=click.IntRange(1000, 30000))
+@click.pass_context
+def cp_data_channel_interval(ctx, poll_interval):
+    """ Set cp data channel counter query interval """
+    cp_data_channel_info = {}
+    cp_data_channel_info['POLL_INTERVAL'] = poll_interval
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", CP_DATA_CHANNEL, cp_data_channel_info)
+
+@cp_data_channel.command(name='enable')
+@click.pass_context
+def cp_data_channel_enable(ctx):
+    """ Enable cp data channel counter query """
+    cp_data_channel_info = {}
+    cp_data_channel_info['FLEX_COUNTER_STATUS'] = 'enable'
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", CP_DATA_CHANNEL, cp_data_channel_info)
+
+@cp_data_channel.command(name='disable')
+@click.pass_context
+def cp_data_channel_disable(ctx):
+    """ Disable cp data channel counter query """
+    cp_data_channel_info = {}
+    cp_data_channel_info['FLEX_COUNTER_STATUS'] = 'disable'
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", CP_DATA_CHANNEL, cp_data_channel_info)
+
+# Bulk sync counter commands
+@cli.group()
+@click.pass_context
+def bulk_sync(ctx):
+    """ Bulk sync counter commands """
+    ctx.obj = ConfigDBConnector()
+    ctx.obj.connect()
+
+
+@bulk_sync.command(name='interval')
+@click.argument('poll_interval', type=click.IntRange(1000, 30000))
+@click.pass_context
+def bulk_sync_interval(ctx, poll_interval):
+    """ Set bulk sync counter query interval """
+    bulk_sync_info = {}
+    bulk_sync_info['POLL_INTERVAL'] = poll_interval
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", BULK_SYNC, bulk_sync_info)
+
+@bulk_sync.command(name='enable')
+@click.pass_context
+def bulk_sync_enable(ctx):
+    """ Enable bulk sync counter query """
+    bulk_sync_info = {}
+    bulk_sync_info['FLEX_COUNTER_STATUS'] = 'enable'
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", BULK_SYNC, bulk_sync_info)
+
+@bulk_sync.command(name='disable')
+@click.pass_context
+def bulk_sync_disable(ctx):
+    """ Disable bulk sync counter query """
+    bulk_sync_info = {}
+    bulk_sync_info['FLEX_COUNTER_STATUS'] = 'disable'
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", BULK_SYNC, bulk_sync_info)
 
 # WRED queue counter commands
 @cli.group()

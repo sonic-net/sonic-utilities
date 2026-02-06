@@ -56,6 +56,8 @@ WRED_ECN_PORT_STAT    1000                enable
 SRV6_STAT             10000               enable
 SWITCH_STAT           60000               enable
 ENI_STAT              1000                enable
+CP_DATA_CHANNEL_STAT  1000                enable
+BULK_SYNC_STAT        1000                enable
 """
 
 class TestCounterpoll(object):
