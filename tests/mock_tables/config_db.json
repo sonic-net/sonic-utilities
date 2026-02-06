@@ -1835,7 +1835,7 @@
         "POLL_INTERVAL": "1000",
         "FLEX_COUNTER_STATUS": "enable"
     },
-    "FLEX_COUNTER_TABKE|BULK_SYNC": {
+    "FLEX_COUNTER_TABLE|BULK_SYNC": {
         "POLL_INTERVAL": "1000",
         "FLEX_COUNTER_STATUS": "enable"
     },

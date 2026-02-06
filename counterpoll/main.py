@@ -722,6 +722,8 @@ def show():
     trap_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'FLOW_CNT_TRAP')
     route_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'FLOW_CNT_ROUTE')
     eni_info = configdb.get_entry('FLEX_COUNTER_TABLE', ENI)
+    cp_data_channel_info = configdb.get_entry('FLEX_COUNTER_TABLE', CP_DATA_CHANNEL)
+    bulk_sync_info = configdb.get_entry('FLEX_COUNTER_TABLE', BULK_SYNC)
     wred_queue_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'WRED_ECN_QUEUE')
     wred_port_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'WRED_ECN_PORT')
     srv6_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'SRV6')
@@ -776,6 +778,12 @@ def show():
     if is_dpu(configdb) and eni_info:
         data.append(["ENI_STAT", eni_info.get("POLL_INTERVAL", DEFLT_10_SEC),
                     eni_info.get("FLEX_COUNTER_STATUS", DISABLE)])
+    if is_dpu(configdb) and cp_data_channel_info:
+        data.append(["CP_DATA_CHANNEL_STAT", cp_data_channel_info.get("POLL_INTERVAL", DEFLT_10_SEC),
+                    cp_data_channel_info.get("FLEX_COUNTER_STATUS", DISABLE)])
+    if is_dpu(configdb) and bulk_sync_info:
+        data.append(["BULK_SYNC_STAT", bulk_sync_info.get("POLL_INTERVAL", DEFLT_10_SEC),
+                    bulk_sync_info.get("FLEX_COUNTER_STATUS", DISABLE)])
 
     click.echo(tabulate(data, headers=header, tablefmt="simple", missingval=""))
 
