@@ -7921,6 +7921,14 @@ def remove():
     """
     pass
 
+def remove_acl_rules(table_name):
+    cmd = ['acl-loader', 'delete']
+
+    if table_name is not None:
+        cmd += [str(table_name)]
+
+    clicommon.run_command(cmd)
+
 #
 # 'table' subcommand ('config acl remove table ...')
 #
@@ -7934,6 +7942,8 @@ def table(table_name):
     config_db = ConfigDBConnector()
     config_db.connect()
     config_db.set_entry("ACL_TABLE", table_name, None)
+    remove_acl_rules(table_name)
+
 
 
 #
