@@ -37,10 +37,7 @@ To verify:
 import argparse
 from enum import Enum
 import ipaddress
-try:
-    import ijson.backends.yajl2 as ijson
-except ImportError:
-    import ijson.backends.python as ijson
+import ijson.backends.python as ijson
 import json
 import os
 import re
