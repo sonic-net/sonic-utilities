@@ -1831,11 +1831,7 @@
         "POLL_INTERVAL": "1000",
         "FLEX_COUNTER_STATUS": "enable"
     },
-    "FLEX_COUNTER_TABLE|CP_DATA_CHANNEL": {
-        "POLL_INTERVAL": "1000",
-        "FLEX_COUNTER_STATUS": "enable"
-    },
-    "FLEX_COUNTER_TABLE|BULK_SYNC": {
+    "FLEX_COUNTER_TABLE|HA_SET": {
         "POLL_INTERVAL": "1000",
         "FLEX_COUNTER_STATUS": "enable"
     },

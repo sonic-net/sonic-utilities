@@ -14,8 +14,7 @@ PORT_PHY_ATTR = "PORT_PHY_ATTR"
 PG_DROP = "PG_DROP"
 ACL = "ACL"
 ENI = "ENI"
-CP_DATA_CHANNEL = "CP_DATA_CHANNEL"
-BULK_SYNC = "BULK_SYNC"
+HA_SET = "HA_SET"
 DISABLE = "disable"
 ENABLE = "enable"
 DEFLT_60_SEC= "default (60000)"
@@ -477,73 +476,39 @@ def eni_disable(ctx):
     eni_info['FLEX_COUNTER_STATUS'] = 'disable'
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", ENI, eni_info)
 
-# CP data channel counter commands
-@cli.group()
+# HA set counter commands
+@click.group()
 @click.pass_context
-def cp_data_channel(ctx):
-    """ CP data channel counter commands """
+def ha_set(ctx):
+    """ HA set counter commands """
     ctx.obj = ConfigDBConnector()
     ctx.obj.connect()
 
 
-@cp_data_channel.command(name='interval')
+@ha_set.command(name='interval')
 @click.argument('poll_interval', type=click.IntRange(1000, 30000))
 @click.pass_context
-def cp_data_channel_interval(ctx, poll_interval):
-    """ Set cp data channel counter query interval """
-    cp_data_channel_info = {}
-    cp_data_channel_info['POLL_INTERVAL'] = poll_interval
-    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", CP_DATA_CHANNEL, cp_data_channel_info)
+def ha_set_interval(ctx, poll_interval):
+    """ Set HA set counter query interval """
+    ha_set_info = {}
+    ha_set_info['POLL_INTERVAL'] = poll_interval
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", HA_SET, ha_set_info)
 
-@cp_data_channel.command(name='enable')
+@ha_set.command(name='enable')
 @click.pass_context
-def cp_data_channel_enable(ctx):
-    """ Enable cp data channel counter query """
-    cp_data_channel_info = {}
-    cp_data_channel_info['FLEX_COUNTER_STATUS'] = 'enable'
-    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", CP_DATA_CHANNEL, cp_data_channel_info)
+def ha_set_enable(ctx):
+    """ Enable HA set counter query """
+    ha_set_info = {}
+    ha_set_info['FLEX_COUNTER_STATUS'] = 'enable'
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", HA_SET, ha_set_info)
 
-@cp_data_channel.command(name='disable')
+@ha_set.command(name='disable')
 @click.pass_context
-def cp_data_channel_disable(ctx):
-    """ Disable cp data channel counter query """
-    cp_data_channel_info = {}
-    cp_data_channel_info['FLEX_COUNTER_STATUS'] = 'disable'
-    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", CP_DATA_CHANNEL, cp_data_channel_info)
-
-# Bulk sync counter commands
-@cli.group()
-@click.pass_context
-def bulk_sync(ctx):
-    """ Bulk sync counter commands """
-    ctx.obj = ConfigDBConnector()
-    ctx.obj.connect()
-
-
-@bulk_sync.command(name='interval')
-@click.argument('poll_interval', type=click.IntRange(1000, 30000))
-@click.pass_context
-def bulk_sync_interval(ctx, poll_interval):
-    """ Set bulk sync counter query interval """
-    bulk_sync_info = {}
-    bulk_sync_info['POLL_INTERVAL'] = poll_interval
-    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", BULK_SYNC, bulk_sync_info)
-
-@bulk_sync.command(name='enable')
-@click.pass_context
-def bulk_sync_enable(ctx):
-    """ Enable bulk sync counter query """
-    bulk_sync_info = {}
-    bulk_sync_info['FLEX_COUNTER_STATUS'] = 'enable'
-    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", BULK_SYNC, bulk_sync_info)
-
-@bulk_sync.command(name='disable')
-@click.pass_context
-def bulk_sync_disable(ctx):
-    """ Disable bulk sync counter query """
-    bulk_sync_info = {}
-    bulk_sync_info['FLEX_COUNTER_STATUS'] = 'disable'
-    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", BULK_SYNC, bulk_sync_info)
+def ha_set_disable(ctx):
+    """ Disable HA set counter query """
+    ha_set_info = {}
+    ha_set_info['FLEX_COUNTER_STATUS'] = 'disable'
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", HA_SET, ha_set_info)
 
 # WRED queue counter commands
 @cli.group()
@@ -722,8 +687,7 @@ def show():
     trap_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'FLOW_CNT_TRAP')
     route_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'FLOW_CNT_ROUTE')
     eni_info = configdb.get_entry('FLEX_COUNTER_TABLE', ENI)
-    cp_data_channel_info = configdb.get_entry('FLEX_COUNTER_TABLE', CP_DATA_CHANNEL)
-    bulk_sync_info = configdb.get_entry('FLEX_COUNTER_TABLE', BULK_SYNC)
+    ha_set_info = configdb.get_entry('FLEX_COUNTER_TABLE', HA_SET)
     wred_queue_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'WRED_ECN_QUEUE')
     wred_port_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'WRED_ECN_PORT')
     srv6_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'SRV6')
@@ -778,12 +742,9 @@ def show():
     if is_dpu(configdb) and eni_info:
         data.append(["ENI_STAT", eni_info.get("POLL_INTERVAL", DEFLT_10_SEC),
                     eni_info.get("FLEX_COUNTER_STATUS", DISABLE)])
-    if is_dpu(configdb) and cp_data_channel_info:
-        data.append(["CP_DATA_CHANNEL_STAT", cp_data_channel_info.get("POLL_INTERVAL", DEFLT_10_SEC),
-                    cp_data_channel_info.get("FLEX_COUNTER_STATUS", DISABLE)])
-    if is_dpu(configdb) and bulk_sync_info:
-        data.append(["BULK_SYNC_STAT", bulk_sync_info.get("POLL_INTERVAL", DEFLT_10_SEC),
-                    bulk_sync_info.get("FLEX_COUNTER_STATUS", DISABLE)])
+    if is_dpu(configdb) and ha_set_info:
+        data.append(["HA_SET_STAT", ha_set_info.get("POLL_INTERVAL", DEFLT_10_SEC),
+                    ha_set_info.get("FLEX_COUNTER_STATUS", DISABLE)])
 
     click.echo(tabulate(data, headers=header, tablefmt="simple", missingval=""))
 
@@ -793,7 +754,8 @@ Format:
     (click group/command, callback function)
 """
 dynamic_commands = [
-    (eni, is_dpu)
+    (eni, is_dpu),
+    (ha_set, is_dpu)
 ]
 
 
