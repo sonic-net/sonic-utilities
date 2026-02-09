@@ -9735,6 +9735,18 @@ def notice(db, category_list, max_events, namespace):
 
 
 #
+# 'local_users_passwords_reset' command ('config local-users-passwords-reset ...')
+#
+@config.command('local-users-passwords-reset')
+@click.argument('state', metavar='<enabled|disabled>', required=True, type=click.Choice(['enabled', 'disabled']))
+@clicommon.pass_db
+def state(db, state):
+    """Set local-users-passwords-reset feature state"""
+
+    config_db = db.cfgdb
+    config_db.mod_entry(swsscommon.CFG_LOCAL_USERS_PASSWORDS_RESET, 'global', {'state': state})
+
+
 # 'serial_console' group ('config  serial_console')
 #
 @config.group(cls=clicommon.AbbreviationGroup, name='serial_console')

@@ -2826,6 +2826,25 @@ def received(db, namespace):
 
 
 #
+# 'local-users-passwords-reset' command group ("show local-users-passwords-reset ...")
+#
+@cli.command('local-users-passwords-reset')
+@clicommon.pass_db
+def local_users_passwords_reset(db):
+    """Show local-users-passwords-reset state"""
+
+    feature_table = db.cfgdb.get_entry('LOCAL_USERS_PASSWORDS_RESET', 'global')
+
+    hdrs = ['state']
+    data = []
+
+    for key in hdrs:
+        data.append(feature_table.get(key, ''))
+
+    messages = [data]
+    click.echo(tabulate(messages, headers=hdrs, tablefmt='simple', missingval=''))
+
+
 # 'serial_console' command group ("show serial_console ...")
 #
 @cli.group('serial_console', invoke_without_command=True)
