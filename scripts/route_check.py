@@ -37,6 +37,7 @@ To verify:
 import argparse
 from enum import Enum
 import ipaddress
+import ijson
 import json
 import os
 import re
@@ -66,7 +67,7 @@ TIMEOUT_SECONDS = 120 if not device_info.is_virtual_chassis() else 360
 
 UNIT_TESTING = 0
 
-os.environ['PYTHONUNBUFFERED']='True'
+os.environ['PYTHONUNBUFFERED'] = 'True'
 
 PREFIX_SEPARATOR = '/'
 IPV6_SEPARATOR = ':'
@@ -81,6 +82,7 @@ FRR_WAIT_TIME = 15
 
 REDIS_TIMEOUT_MSECS = 0
 
+
 class Level(Enum):
     ERR = 'ERR'
     INFO = 'INFO'
@@ -93,10 +95,12 @@ class Level(Enum):
 report_level = syslog.LOG_WARNING
 write_to_syslog = False
 
+
 def handler(signum, frame):
-    print_message(syslog.LOG_ERR,
-            "Aborting routeCheck.py upon timeout signal after {} seconds".
-            format(TIMEOUT_SECONDS))
+    print_message(
+        syslog.LOG_ERR,
+        "Aborting routeCheck.py upon timeout signal after {} seconds".
+        format(TIMEOUT_SECONDS))
     print_message(syslog.LOG_ERR, str(traceback.extract_stack()))
     raise Exception("timeout occurred")
 
@@ -209,8 +213,8 @@ def diff_sorted_lists(t1, t2):
     t1_x = t2_x = 0
     t1_miss = []
     t2_miss = []
-    t1_len = len(t1);
-    t2_len = len(t2);
+    t1_len = len(t1)
+    t2_len = len(t2)
     while t1_x < t1_len and t2_x < t2_len:
         d = cmps(t1[t1_x], t2[t2_x])
         if (d == 0):
@@ -385,12 +389,74 @@ def is_suppress_fib_pending_enabled(namespace):
     return state == 'enabled'
 
 
-def fetch_routes(cmd):
+def fetch_routes(ipv6=False, namespace=multi_asic.DEFAULT_NAMESPACE):
     """
     Fetch routes using the given command.
+    Uses ijson for streaming JSON parsing to handle large route tables efficiently.
+    Parses each prefix entry as soon as it becomes available instead of waiting for the entire JSON.
     """
-    output = subprocess.check_output(cmd, text=True)
-    return json.loads(output)
+    missing_routes = []
+    failing_routes = []
+
+    asic_id = []
+    if namespace is not multi_asic.DEFAULT_NAMESPACE:
+        asic_id = ['-n', str(multi_asic.get_asic_id_from_name(namespace))]
+
+    if ipv6:
+        cmd = ["sudo", "vtysh"] + asic_id + ["-c", "show ipv6 route json"]
+    else:
+        cmd = ["sudo", "vtysh"] + asic_id + ["-c", "show ip route json"]
+
+    def process_route_entry(prefix, route_entry):
+        """Process a single route entry and add to missing_routes if needed."""
+        if route_entry.get('protocol') in ('connected', 'kernel', 'static'):
+            return
+        if route_entry.get('vrfName') != 'default':
+            return
+        # skip if this bgp source prefix is not selected as best
+        if not route_entry.get('selected', False):
+            return
+        if not route_entry.get('offloaded', False):
+            missing_routes.append(prefix)
+        if route_entry.get('failed', False):
+            failing_routes.append(prefix)
+
+    try:
+        with subprocess.Popen(cmd, stdout=subprocess.PIPE, bufsize=0) as proc:
+            try:
+                # Use ijson to parse the JSON stream incrementally
+                # kvitems('') iterates over key-value pairs at the root level
+                # This gives us each prefix and its route entries as they become available
+                for prefix, route_entries in ijson.kvitems(proc.stdout, ''):
+                    # Process each route entry for this prefix
+                    if isinstance(route_entries, list):
+                        for route_entry in route_entries:
+                            process_route_entry(prefix, route_entry)
+                    else:
+                        # Handle case where route_entries is not a list (shouldn't happen with valid FRR output)
+                        print_message(syslog.LOG_WARNING, f"Unexpected route entry format for prefix {prefix}")
+
+            except ijson.JSONError as e:
+                # Handle JSON parsing errors
+                print_message(syslog.LOG_WARNING, f"Failed to parse JSON stream: {e}")
+            except UnicodeDecodeError as e:
+                # Handle UTF-8 decoding errors
+                print_message(syslog.LOG_WARNING, f"UTF-8 decoding error: {e}")
+            except Exception as e:
+                # Handle any other unexpected errors during parsing
+                print_message(syslog.LOG_WARNING, f"Error during JSON parsing: {e}")
+
+            # Wait for the process to terminate and get the return code
+            return_code = proc.wait()
+            if return_code != 0:
+                print_message(syslog.LOG_WARNING, f"Subprocess exited with non-zero return code: {return_code}")
+
+    except FileNotFoundError:
+        print_message(syslog.LOG_ERR, f"Error: Command '{cmd[0]}' not found.")
+    except Exception as e:
+        print_message(syslog.LOG_ERR, f"An error occurred: {e}")
+
+    return missing_routes, failing_routes
 
 
 def get_frr_routes_parallel(namespace):
@@ -398,25 +464,22 @@ def get_frr_routes_parallel(namespace):
     Read routes from zebra through CLI command for IPv4 and IPv6 in parallel
     :return combined IPv4 and IPv6 routes dictionary.
     """
-    if namespace == multi_asic.DEFAULT_NAMESPACE:
-        v4_route_cmd = ['show', 'ip', 'route', 'json']
-        v6_route_cmd = ['show', 'ipv6', 'route', 'json']
-    else:
-        v4_route_cmd = ['show', 'ip', 'route', '-n', namespace, 'json']
-        v6_route_cmd = ['show', 'ipv6', 'route', '-n', namespace, 'json']
-
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        future_v4 = executor.submit(fetch_routes, v4_route_cmd)
-        future_v6 = executor.submit(fetch_routes, v6_route_cmd)
+        future_v4 = executor.submit(fetch_routes, ipv6=False, namespace=namespace)
+        future_v6 = executor.submit(fetch_routes, ipv6=True, namespace=namespace)
 
         # Wait for both results to complete
         v4_routes = future_v4.result()
         v6_routes = future_v6.result()
 
     # Combine both IPv4 and IPv6 routes
-    v4_routes.update(v6_routes)
-    print_message(syslog.LOG_DEBUG, "FRR Routes: namespace={}, routes={}".format(namespace, v4_routes))
-    return v4_routes
+    v4_miss_rt, v4_fail_rt = v4_routes
+    v6_miss_rt, v6_fail_rt = v6_routes
+    v4_miss_rt += v6_miss_rt
+    v4_fail_rt += v6_fail_rt
+    print_message(syslog.LOG_DEBUG, "FRR Missing Routes: namespace={}, routes={}".format(namespace, v4_miss_rt))
+    print_message(syslog.LOG_DEBUG, "FRR Failed Routes: namespace={}, routes={}".format(namespace, v4_fail_rt))
+    return v4_miss_rt, v4_fail_rt
 
 
 def get_interfaces(namespace):
@@ -510,7 +573,7 @@ def filter_out_local_interfaces(namespace, keys):
     :return keys filtered out of local
     """
     rt = []
-    local_if_lst = {'eth0', 'eth1', 'docker0'}  #eth1 is added to skip route installed in AAPL_DB on packet-chassis
+    local_if_lst = {'eth0', 'eth1', 'docker0'}  # eth1 is added to skip route installed in AAPL_DB on packet-chassis
     local_if_lo = [r'tun0', r'lo', r'Loopback\d+']
 
     chassis_local_intfs = chassis.get_chassis_local_interfaces()
@@ -558,8 +621,9 @@ def filter_out_voq_neigh_routes(namespace, keys):
         if not e:
             # Prefix might have been added. So try w/o it.
             e = dict(tbl.get(prefix[0])[1])
-        if not e or all([not (re.match(x, e['ifname']) and
-            ((prefix[1] == "32" and e['nexthop'] == "0.0.0.0") or
+        if not e or \
+            all([not (re.match(x, e['ifname']) and
+                ((prefix[1] == "32" and e['nexthop'] == "0.0.0.0") or
                 (prefix[1] == "128" and e['nexthop'] == "::"))) for x in local_if_re]):
             rt.append(k)
 
@@ -598,7 +662,6 @@ def filter_out_vnet_routes(namespace, routes):
 
     for vnet_route_db_key in vnet_routes_db_keys:
         vnet_route_attrs = vnet_route_db_key.split(':', 1)
-        vnet_name = vnet_route_attrs[0]
         vnet_route = vnet_route_attrs[1]
         vnet_routes.append(vnet_route)
 
@@ -653,6 +716,7 @@ def filter_out_standalone_tunnel_routes(namespace, routes):
 
     return updated_routes
 
+
 def is_feature_bgp_enabled(namespace):
     """
     Check if bgp feature is enabled or disabled.
@@ -666,6 +730,7 @@ def is_feature_bgp_enabled(namespace):
             bgp_enabled = True
     return bgp_enabled
 
+
 def check_frr_pending_routes(namespace):
     """
     Check FRR routes for offload flag presence by executing "show ip route json"
@@ -673,38 +738,17 @@ def check_frr_pending_routes(namespace):
     """
 
     missed_rt = []
+    failed_rt = []
     retries = FRR_CHECK_RETRIES
     for i in range(retries):
-        missed_rt = []
-        failed_rt = []
-        frr_routes = get_frr_routes_parallel(namespace)
-
-        for route_prefix, entries in frr_routes.items():
-            for entry in entries:
-                if entry['protocol'] in ('connected', 'kernel', 'static'):
-                    continue
-
-                # TODO: Also handle VRF routes. Currently this script does not check for VRF routes so it would be incorrect for us
-                # to assume they are installed in ASIC_DB, so we don't handle them.
-                if entry['vrfName'] != 'default':
-                    continue
-
-                # skip if this bgp source prefix is not selected as best
-                if not entry.get('selected', False):
-                    continue
-
-                if not entry.get('offloaded', False):
-                    missed_rt.append(entry)
-
-                if entry.get('failed', False):
-                    failed_rt.append(route_prefix)
+        missed_rt, failed_rt = get_frr_routes_parallel(namespace)
 
         if not missed_rt and not failed_rt:
             break
 
         time.sleep(FRR_WAIT_TIME)
-    print_message(syslog.LOG_DEBUG, "FRR missed routes: {}".format(json.dumps(missed_rt, indent=4)))
-    print_message(syslog.LOG_DEBUG, "FRR failed routes: {}".format(json.dumps(failed_rt, indent=4)))
+    print_message(syslog.LOG_DEBUG, f"FRR missed routes: {missed_rt}")
+    print_message(syslog.LOG_DEBUG, f"FRR failed routes: {failed_rt}")
     return missed_rt, failed_rt
 
 
@@ -1035,15 +1079,39 @@ def main():
     with given interval in-between calls to check_route
     :return Same return value as returned by check_route.
     """
+    global TIMEOUT_SECONDS
     interval = 0
-    parser=argparse.ArgumentParser(description="Verify routes between APPL-DB & ASIC-DB are in sync")
-    parser.add_argument('-m', "--mode", type=Level, choices=list(Level), default='ERR')
-    parser.add_argument("-i", "--interval", type=int, default=0, help="Scan interval in seconds")
-    parser.add_argument("-s", "--log_to_syslog", action="store_true", default=True, help="Write message to syslog")
-    parser.add_argument('-n','--namespace',   default=multi_asic.DEFAULT_NAMESPACE, help='Verify routes for this specific namespace')
+    parser = argparse.ArgumentParser(
+        description="Verify routes between APPL-DB & ASIC-DB are in sync")
+    parser.add_argument('-m',
+                        "--mode",
+                        type=Level,
+                        choices=list(Level),
+                        default='ERR')
+    parser.add_argument("-i",
+                        "--interval",
+                        type=int,
+                        default=0,
+                        help="Scan interval in seconds")
+    parser.add_argument("-s",
+                        "--log_to_syslog",
+                        action="store_true",
+                        default=True,
+                        help="Write message to syslog")
+    parser.add_argument('-n', '--namespace',
+                        default=multi_asic.DEFAULT_NAMESPACE,
+                        help='Verify routes for this specific namespace')
+    parser.add_argument('-t',
+                        '--timeout',
+                        type=int,
+                        default=TIMEOUT_SECONDS,
+                        help='Timeout in secs')
     args = parser.parse_args()
 
     namespace = args.namespace
+
+    TIMEOUT_SECONDS = args.timeout
+
     if namespace is not multi_asic.DEFAULT_NAMESPACE and not multi_asic.is_multi_asic():
         print_message(syslog.LOG_ERR, "Namespace option is not valid for a single-ASIC device")
         return -1, None

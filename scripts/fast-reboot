@@ -757,7 +757,7 @@ if [[ "$sonic_asic_type" == "mellanox" ]]; then
     MLNX_EXIT_FW_ERROR=100
     MLNX_EXIT_FFB_FAILURE=101
 
-    MLNX_FW_UPGRADE_SCRIPT="/usr/bin/mlnx-fw-upgrade.sh"
+    MLNX_FW_UPGRADE_SCRIPT="/usr/local/bin/mlnx-fw-manager"
 
 
     if [[ "$REBOOT_TYPE" = "fastfast-reboot" ]]; then
