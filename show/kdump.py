@@ -174,7 +174,7 @@ def files():
 #
 # 'logging' subcommand (show kdump logging)
 #
-@kdump.command(name="logging", short_help="Show last 10 lines of lastest kernel dmesg file")
+@kdump.command(name="logging", short_help="Show last 10 lines of latest kernel dmesg file")
 @click.argument('filename', required=False)
 @click.option('-l', '--lines', default=10, show_default=True)
 def logging(filename, lines):

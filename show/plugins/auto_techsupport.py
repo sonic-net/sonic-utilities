@@ -17,7 +17,7 @@ def format_attr_value(entry, attr):
         attr (Dict): Attribute metadata.
 
     Returns:
-        str: fomatted attribute value.
+        str: formatted attribute value.
     """
 
     if attr["is-leaf-list"]:
@@ -33,7 +33,7 @@ def format_group_value(entry, attrs):
         attrs (List[Dict]): Attributes metadata that belongs to the same group.
 
     Returns:
-        str: fomatted group attributes.
+        str: formatted group attributes.
     """
 
     data = []
@@ -80,11 +80,11 @@ def AUTO_TECHSUPPORT_GLOBAL(db):
         ),
         format_attr_value(
             entry,
-            {'name': 'max_techsupport_limit', 'description': 'Max Limit in percentage for the cummulative size of ts dumps. No cleanup is performed if the value isn\'t configured or is 0.0', 'is-leaf-list': False, 'is-mandatory': False, 'group': ''}
+            {'name': 'max_techsupport_limit', 'description': 'Max Limit in percentage for the cumulative size of ts dumps. No cleanup is performed if the value isn\'t configured or is 0.0', 'is-leaf-list': False, 'is-mandatory': False, 'group': ''}
         ),
         format_attr_value(
             entry,
-            {'name': 'max_core_limit', 'description': 'Max Limit in percentage for the cummulative size of core dumps. No cleanup is performed if the value isn\'t congiured or is 0.0', 'is-leaf-list': False, 'is-mandatory': False, 'group': ''}
+            {'name': 'max_core_limit', 'description': 'Max Limit in percentage for the cumulative size of core dumps. No cleanup is performed if the value isn\'t congiured or is 0.0', 'is-leaf-list': False, 'is-mandatory': False, 'group': ''}
         ),
         format_attr_value(
             entry,
