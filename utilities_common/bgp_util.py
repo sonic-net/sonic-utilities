@@ -243,22 +243,27 @@ def run_bgp_command(vtysh_cmd, bgp_namespace=multi_asic.DEFAULT_NAMESPACE,
 
 def run_bgp_show_command(vtysh_cmd, bgp_namespace=multi_asic.DEFAULT_NAMESPACE, exit_on_fail=True):
     output = run_bgp_command(vtysh_cmd, bgp_namespace, constants.RVTYSH_COMMAND, exit_on_fail)
-    # handle the the alias mode in the following code
+    # Convert interface names to aliases for route commands with JSON output
     if output is not None:
-        if clicommon.get_interface_naming_mode() == "alias" and re.search("show ip|ipv6 route", vtysh_cmd):
-            iface_alias_converter = clicommon.InterfaceAliasConverter()
-            route_info =json.loads(output)
-            for route, info in route_info.items():
-                for i in range(0, len(info)):
-                    if 'nexthops' in info[i]:
-                        for j in range(0, len(info[i]['nexthops'])):
-                            intf_name = ""
-                            if 'interfaceName' in info[i]['nexthops'][j]:
-                                intf_name  = info[i]['nexthops'][j]['interfaceName']
-                                alias = iface_alias_converter.name_to_alias(intf_name)
-                                if alias is not None:
-                                    info[i]['nexthops'][j]['interfaceName'] = alias 
-            output= json.dumps(route_info)
+        if (clicommon.get_interface_naming_mode() == "alias" and
+                re.search(r"show (ip|ipv6) route", vtysh_cmd) and
+                vtysh_cmd.strip().endswith("json")):
+            try:
+                iface_alias_converter = clicommon.InterfaceAliasConverter()
+                route_info = json.loads(output)
+                for route, info in route_info.items():
+                    for i in range(0, len(info)):
+                        if 'nexthops' in info[i]:
+                            for j in range(0, len(info[i]['nexthops'])):
+                                if 'interfaceName' in info[i]['nexthops'][j]:
+                                    intf_name = info[i]['nexthops'][j]['interfaceName']
+                                    alias = iface_alias_converter.name_to_alias(intf_name)
+                                    if alias is not None:
+                                        info[i]['nexthops'][j]['interfaceName'] = alias
+                output = json.dumps(route_info)
+            except (json.JSONDecodeError, ValueError):
+                # Non-JSON output, return as-is
+                pass
     return output
 
 

@@ -169,3 +169,35 @@ class TestShowIpRouteCommands(object):
                         bgp_routes_found = True
                         break
         assert bgp_routes_found, "BGP routes should be present in filtered output"
+
+    def test_show_ip_route_vrf_alias_mode(
+            self,
+            setup_ip_route_commands):
+        show = setup_ip_route_commands
+        runner = CliRunner()
+        os.environ['SONIC_CLI_IFACE_MODE'] = "alias"
+        # VRF routes return plain text, not JSON
+        with mock.patch('utilities_common.bgp_util.run_bgp_command',
+                        return_value=show_ip_route_common.show_ip_route_vrf_expected_output):
+            result = runner.invoke(
+                show.cli.commands["ip"].commands["route"], ["vrf", "Vrf1"])
+        os.environ['SONIC_CLI_IFACE_MODE'] = "default"
+        print("{}".format(result.output))
+        assert result.exit_code == 0
+        assert "Vrf1" in result.output or "10.10.0.0" in result.output
+
+    def test_show_ipv6_route_vrf_alias_mode(
+            self,
+            setup_ip_route_commands):
+        show = setup_ip_route_commands
+        runner = CliRunner()
+        os.environ['SONIC_CLI_IFACE_MODE'] = "alias"
+        # VRF routes return plain text, not JSON
+        with mock.patch('utilities_common.bgp_util.run_bgp_command',
+                        return_value=show_ip_route_common.show_ipv6_route_vrf_expected_output):
+            result = runner.invoke(
+                show.cli.commands["ipv6"].commands["route"], ["vrf", "Vrf1"])
+        os.environ['SONIC_CLI_IFACE_MODE'] = "default"
+        print("{}".format(result.output))
+        assert result.exit_code == 0
+        assert "Vrf1" in result.output or "2001:db8" in result.output
