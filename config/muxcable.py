@@ -115,7 +115,7 @@ def update_and_get_response_for_xcvr_cmd(cmd_name, rsp_name, exp_rsp, cmd_table_
         import sonic_platform_base.sonic_sfp.sfputilhelper
         asic_index = sonic_platform_base.sonic_sfp.sfputilhelper.SfpUtilHelper().get_asic_id_for_logical_port(port)
         if asic_index is None:
-            click.echo("Got invalid asic index for port {}, cant perform firmware cmd".format(port))
+            click.echo("Got invalid asic index for port {}, can't perform firmware cmd".format(port))
             res_dict[0] = rc
             return res_dict
 
@@ -371,7 +371,7 @@ def mode(db, state, port, json_output):
             import sonic_platform_base.sonic_sfp.sfputilhelper
             asic_index = sonic_platform_base.sonic_sfp.sfputilhelper.SfpUtilHelper().get_asic_id_for_logical_port(port)
             if asic_index is None:
-                click.echo("Got invalid asic index for port {}, cant retreive mux status".format(port))
+                click.echo("Got invalid asic index for port {}, can't retrieve mux status".format(port))
                 sys.exit(CONFIG_FAIL)
 
         if per_npu_statedb[asic_index] is not None:
@@ -459,7 +459,7 @@ def probertype(db, probertype, port):
             import sonic_platform_base.sonic_sfp.sfputilhelper
             asic_index = sonic_platform_base.sonic_sfp.sfputilhelper.SfpUtilHelper().get_asic_id_for_logical_port(port)
             if asic_index is None:
-                click.echo("Got invalid asic index for port {}, cant retreive mux status".format(port))
+                click.echo("Got invalid asic index for port {}, can't retrieve mux status".format(port))
                 sys.exit(CONFIG_FAIL)
 
         if per_npu_statedb[asic_index] is not None:
@@ -542,7 +542,7 @@ def packetloss(db, action, port):
             import sonic_platform_base.sonic_sfp.sfputilhelper
             asic_index = sonic_platform_base.sonic_sfp.sfputilhelper.SfpUtilHelper().get_asic_id_for_logical_port(port)
             if asic_index is None:
-                click.echo("Got invalid asic index for port {}, cant retreive mux status".format(port))
+                click.echo("Got invalid asic index for port {}, can't retrieve mux status".format(port))
                 sys.exit(CONFIG_FAIL)
 
         if per_npu_statedb[asic_index] is not None:
