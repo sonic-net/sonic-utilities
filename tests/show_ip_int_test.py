@@ -495,3 +495,67 @@ class TestShowIpIntFastPath(object):
             loader.exec_module(ipintutil)
             result = ipintutil.get_ip_intfs_in_namespace(netifaces.AF_INET, '', 'frontend')
             assert isinstance(result, dict)
+
+    def test_get_ip_intfs_in_namespace_fast_path_parses_ip_o_and_filters(self):
+        """
+        Covers:
+          - _addr_show parsing of `ip -o addr show` output:
+              * skips malformed/no-colon lines
+              * finds inet/inet6 token and extracts CIDR
+              * continues when no CIDR found
+              * applies skip_ip_intf_display when namespace != DEFAULT and display != all
+          - get_ip_intfs_in_namespace FAST path (addr_map loop + admin/oper/master + bgp mapping)
+        """
+        from importlib.machinery import SourceFileLoader
+        ipintutil_path = os.path.join(scripts_path, 'ipintutil')
+        loader = SourceFileLoader("ipintutil_parse_ip_o", ipintutil_path)
+        spec = importlib.util.spec_from_loader("ipintutil_parse_ip_o", loader)
+        ipintutil = importlib.util.module_from_spec(spec)
+
+        # Realistic `ip -o -f inet addr show` output (text, not JSON)
+        # Includes:
+        #  - malformed line (no ':') -> should be skipped
+        #  - line without inet token -> should be skipped (no CIDR)
+        #  - lo/eth0/veth -> should be filtered out when namespace != DEFAULT and display != all
+        ip_o_output = textwrap.dedent("""\
+            malformed line without colon
+            1: lo    inet 127.0.0.1/8 scope host lo
+            2: eth0  inet 172.18.0.2/16 brd 172.18.255.255 scope global eth0
+            7: veth123@if8 inet 10.0.0.1/24 scope global veth123
+            12: Ethernet0    inet 20.1.1.1/24 scope global Ethernet0
+            13: Ethernet1    bogus_token 99.9.9.9/32 scope global Ethernet1
+        """)
+
+        # Force fast-path: ensure UTILITIES_UNIT_TESTING is NOT set during module import
+        # (your setup_teardown_fastpath fixture already clears it, but keep this test self-contained)
+        os.environ.pop("UTILITIES_UNIT_TESTING", None)
+        os.environ.pop("UTILITIES_UNIT_TESTING_TOPOLOGY", None)
+
+        mock_config_db = mock.MagicMock()
+        mock_config_db.get_table.return_value = {}
+
+        with mock.patch('subprocess.check_output', return_value=ip_o_output), \
+             mock.patch('swsscommon.swsscommon.ConfigDBConnector', return_value=mock_config_db):
+            loader.exec_module(ipintutil)
+
+            # Avoid touching real sysfs + keep deterministic
+            ipintutil.get_if_admin_state = mock.MagicMock(return_value="up")
+            ipintutil.get_if_oper_state = mock.MagicMock(return_value="down")
+            ipintutil.get_if_master = mock.MagicMock(return_value="")
+            # Make BGP mapping deterministic and cover neighbor fill
+            ipintutil.get_bgp_peer = mock.MagicMock(return_value={
+                "20.1.1.1": ["T2-Peer", "20.1.1.5"]
+            })
+
+            # Non-default namespace + display != all => should filter lo/eth0/veth*
+            result = ipintutil.get_ip_intfs_in_namespace(netifaces.AF_INET, "asic0", "frontend")
+
+            assert isinstance(result, dict)
+            assert list(result.keys()) == ["Ethernet0"]
+
+            e0 = result["Ethernet0"]
+            assert e0["admin"] == "up"
+            assert e0["oper"] == "down"
+            assert e0["vrf"] == ""
+            assert e0["ipaddr"][0][1] == "20.1.1.1/24"
+            assert e0["bgp_neighs"]["20.1.1.1/24"] == ["T2-Peer", "20.1.1.5"]
