@@ -108,7 +108,8 @@ def connect(db, target, devicename):
         sys.exit(ERR_DEV)
 
     # interact
-    click.echo("Successful connection to line [{}]\nPress ^A ^X to disconnect".format(line_num))
+    click.echo("Successful connection to line [{}]\nPress ^{} ^X to disconnect"
+               .format(line_num, target_port._escape_char.upper() if target_port._escape_char is not None else "A"))
     session.interact()
 
 if __name__ == '__main__':
