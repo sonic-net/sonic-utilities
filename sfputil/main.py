@@ -396,7 +396,7 @@ def convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict):
     channel_threshold_align = 18
     module_threshold_align = 15
 
-    if sfp_type.startswith('QSFP') or sfp_type.startswith('OSFP'):
+    if sfp_type.startswith('QSFP') or is_sfp_cmis:
         # Channel Monitor
         if is_sfp_cmis:
             output_dom += (indent + 'ChannelMonitorValues:\n')
