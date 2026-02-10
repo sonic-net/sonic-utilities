@@ -3,7 +3,7 @@ Module sonic-installer exceptions
 """
 
 class SonicRuntimeException(Exception):
-    """SONiC Runtime Excpetion class used to report SONiC related errors
+    """SONiC Runtime Exception class used to report SONiC related errors
     """
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
