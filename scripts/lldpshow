@@ -60,7 +60,7 @@ class Lldpshow(object):
             per_asic_configdb[front_asic_namespaces] = ConfigDBConnector(
                 use_unix_socket_path=True, namespace=front_asic_namespaces)
             per_asic_configdb[front_asic_namespaces].connect()
-            # Initalize Interface list to be ''. We will do string append of the interfaces below.
+            # Initialize Interface list to be ''. We will do string append of the interfaces below.
             self.lldp_interface.append(LLDP_DEFAULT_INTERFACE_LIST_IN_ASIC_NAMESPACE)
             self.lldp_instance.append(instance_num)
             keys = per_asic_configdb[front_asic_namespaces].get_keys("PORT")
@@ -126,7 +126,7 @@ class Lldpshow(object):
 
     def parse_info(self, lldp_detail_info):
         """
-        Parse the lldp detailed infomation into dict
+        Parse the lldp detailed information into dict
         """
         if lldp_detail_info:
             return
