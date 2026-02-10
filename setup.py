@@ -198,7 +198,8 @@ setup(
         'scripts/sysreadyshow',
         'scripts/wredstat',
         'scripts/sonic-error-report',
-        'scripts/chassis_db_consistency_checker.py'
+        'scripts/chassis_db_consistency_checker.py',
+        'scripts/sonic-dpu-flow-dump.py'
     ],
     entry_points={
         'console_scripts': [
