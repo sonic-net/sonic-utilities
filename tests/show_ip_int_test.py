@@ -517,7 +517,7 @@ class TestShowIpIntFastPath(object):
         cfg.get_table.return_value = {}
 
         with mock.patch("subprocess.check_output", return_value=ip_o), \
-            mock.patch("swsscommon.swsscommon.ConfigDBConnector", return_value=cfg):
+             mock.patch("swsscommon.swsscommon.ConfigDBConnector", return_value=cfg):
             loader.exec_module(ipintutil)
             ipintutil.get_if_admin_state = mock.MagicMock(return_value="up")
             ipintutil.get_if_oper_state = mock.MagicMock(return_value="down")
