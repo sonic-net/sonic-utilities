@@ -159,10 +159,8 @@ class InterfaceStatus(object):
             name = name[0]
                         
             mac_lanes = get_appl_key_attr(self.appl_db, PORT_TABLE_ETHERNET_PREFIX.format(name), INTF_LANES)
-            lanes = mac_lanes.split(',')
-            lane_count = 0
-            for lane in lanes:
-                lane_count += 1
+            system_lanes = get_appl_key_attr(self.appl_db, GEARBOX_TABLE_INTERFACE_PREFIX.format(index), PHY_SYSTEM_LANES)
+            line_lanes = get_appl_key_attr(self.appl_db, GEARBOX_TABLE_INTERFACE_PREFIX.format(index), PHY_LINE_LANES)
 
             phy_id = get_appl_key_attr(self.appl_db, GEARBOX_TABLE_INTERFACE_PREFIX.format(index), PHY_ID)
                         
@@ -170,11 +168,14 @@ class InterfaceStatus(object):
                 phy_id,
                 name,
                 mac_lanes,
-                get_appl_key_attr(self.appl_db, PORT_TABLE_ETHERNET_PREFIX.format(name), INTF_SPEED, lane_count),
-                get_appl_key_attr(self.appl_db, GEARBOX_TABLE_INTERFACE_PREFIX.format(index), PHY_SYSTEM_LANES),
-                get_appl_key_attr(self.appl_db, GEARBOX_TABLE_PORT_PREFIX.format(phy_id, index), PORT_SYSTEM_SPEED),
-                get_appl_key_attr(self.appl_db, GEARBOX_TABLE_INTERFACE_PREFIX.format(index), PHY_LINE_LANES),
-                get_appl_key_attr(self.appl_db, GEARBOX_TABLE_PORT_PREFIX.format(phy_id, index), PORT_LINE_SPEED),
+                get_appl_key_attr(self.appl_db, PORT_TABLE_ETHERNET_PREFIX.format(name),
+                    INTF_SPEED, len(mac_lanes.split(','))),
+                system_lanes,
+                get_appl_key_attr(self.appl_db, GEARBOX_TABLE_PORT_PREFIX.format(phy_id, index),
+                    PORT_SYSTEM_SPEED, len(system_lanes.split(','))),
+                line_lanes,
+                get_appl_key_attr(self.appl_db, GEARBOX_TABLE_PORT_PREFIX.format(phy_id, index),
+                    PORT_LINE_SPEED, len(line_lanes.split(','))),
                 get_appl_key_attr(self.appl_db, PORT_TABLE_ETHERNET_PREFIX.format(name), PORT_OPER_STATUS),
                 get_appl_key_attr(self.appl_db, PORT_TABLE_ETHERNET_PREFIX.format(name), PORT_ADMIN_STATUS))
 
