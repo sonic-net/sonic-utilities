@@ -65,7 +65,7 @@ def add_vlan(db, vid, multiple):
             # Multiple VLANs need to be referenced
             vlan = 'Vlan{}'.format(vid)
 
-            # Defualt VLAN checker
+            # Default VLAN checker
             if vid == 1:
                 ctx.fail("{} is default VLAN".format(vlan))  # TODO: MISSING CONSTRAINT IN YANG MODEL
 

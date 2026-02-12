@@ -282,7 +282,7 @@ def is_vlanid_in_range(vid):
 
 
 def check_if_vlanid_exist(config_db, vlan, table_name='VLAN'):
-    """Check if vlan id exits in the config db or ot"""
+    """Check if vlan id exits in the config db or not"""
 
     if len(config_db.get_entry(table_name, vlan)) != 0:
         return True
