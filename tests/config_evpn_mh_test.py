@@ -1,9 +1,9 @@
 import os
 import pytest
-import config.evpn_mh as config
 
 from click.testing import CliRunner
 from utilities_common.db import Db
+from config.main import config
 from config.evpn_mh import EVPN_MH_TABLE
 
 
@@ -23,7 +23,7 @@ def cli_db_connection(enable_click_ut_mode):
 def configure_startup_delay(runner, db, startup_delay_value, startup_delay_expected_valid):
     evpn_mh_table = db['config_db'].get_table(EVPN_MH_TABLE)
 
-    result = runner.invoke(config.config.commands["evpn-mh"].commands["startup-delay"], [str(startup_delay_value)], obj=db)
+    result = runner.invoke(config.commands["evpn-mh"].commands["startup-delay"], [str(startup_delay_value)], obj=db)
     evpn_mh_table = db['config_db'].get_table(EVPN_MH_TABLE)
     if startup_delay_expected_valid:
         assert result.exit_code == 0, f"Got exit code {result.exit_code} - {result.output}, expected 0"
@@ -51,7 +51,7 @@ def configure_mac_holdtime(runner, db, mac_holdtime_value, mac_holdtime_expected
     if 'default' in evpn_mh_table.keys():
         previous_mac_holdtime_value = evpn_mh_table['default']['mac_holdtime']
 
-    result = runner.invoke(config.config.commands["evpn-mh"].commands["mac-holdtime"], [str(mac_holdtime_value)], obj=db)
+    result = runner.invoke(config.commands["evpn-mh"].commands["mac-holdtime"], [str(mac_holdtime_value)], obj=db)
     evpn_mh_table = db['config_db'].get_table(EVPN_MH_TABLE)
     if mac_holdtime_expected_valid:
         assert result.exit_code == 0, f"Got exit code {result.exit_code} - {result.output}, expected 0"
@@ -80,7 +80,7 @@ def configure_neigh_holdtime(runner, db, neigh_holdtime_value, neigh_holdtime_ex
     if 'default' in evpn_mh_table.keys():
         previous_neigh_holdtime_value = evpn_mh_table['default']['neigh_holdtime']
 
-    result = runner.invoke(config.config.commands["evpn-mh"].commands["neigh-holdtime"], [str(neigh_holdtime_value)], obj=db)
+    result = runner.invoke(config.commands["evpn-mh"].commands["neigh-holdtime"], [str(neigh_holdtime_value)], obj=db)
     evpn_mh_table = db['config_db'].get_table(EVPN_MH_TABLE)
     if neigh_holdtime_expected_valid:
         assert result.exit_code == 0, f"Got exit code {result.exit_code} - {result.output}, expected 0"
