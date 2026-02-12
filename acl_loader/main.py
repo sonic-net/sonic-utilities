@@ -44,6 +44,7 @@ class AclAction:
 
     PACKET         = "PACKET_ACTION"
     REDIRECT       = "REDIRECT_ACTION"
+    POLICER        = "POLICER_ACTION"
     MIRROR         = "MIRROR_ACTION"
     MIRROR_INGRESS = "MIRROR_INGRESS_ACTION"
     MIRROR_EGRESS  = "MIRROR_EGRESS_ACTION"
@@ -70,6 +71,7 @@ class AclLoaderException(Exception):
 
 class AclLoader(object):
 
+    ACL_TABLE_TYPES = "ACL_TABLE_TYPE"
     ACL_TABLE = "ACL_TABLE"
     ACL_RULE = "ACL_RULE"
     CFG_ACL_TABLE = "ACL_TABLE"
@@ -118,8 +120,10 @@ class AclLoader(object):
     def __init__(self):
         self.yang_acl = None
         self.requested_session = None
+        self.requested_policer = None
         self.mirror_stage = None
         self.current_table = None
+        self.table_types_db_info = {}
         self.tables_db_info = {}
         self.rules_db_info = {}
         self.rules_info = {}
@@ -132,6 +136,7 @@ class AclLoader(object):
         self.sessions_db_info = {}
         self.acl_table_status = {}
         self.acl_rule_status = {}
+        self.policer_db_info = {}
 
         self.configdb = ConfigDBConnector()
         self.configdb.connect()
@@ -165,6 +170,7 @@ class AclLoader(object):
             self.per_npu_statedb[front_asic_namespaces] = SonicV2Connector(namespace=front_asic_namespaces)
             self.per_npu_statedb[front_asic_namespaces].connect(self.per_npu_statedb[front_asic_namespaces].STATE_DB)
 
+        self.read_table_types_info()
         self.read_tables_info()
         self.read_rules_info()
         self.read_sessions_info()
@@ -251,6 +257,20 @@ class AclLoader(object):
     def get_rules_db_info(self):
         return self.rules_db_info
 
+    def read_table_types_info(self):
+        """
+        Read ACL_TABLE_TYPE table from configuration database
+        :return:
+        """
+        self.table_types_db_info = self.configdb.get_table(self.ACL_TABLE_TYPES)
+
+    def get_acl_table_types_info(self):
+        """
+        Get ACL table types from configuration database
+        :return: List of ACL table types
+        """
+        return self.table_types_db_info
+
     def read_policers_info(self):
         """
         Read POLICER table from configuration database
@@ -267,6 +287,27 @@ class AclLoader(object):
 
     def get_policers_db_info(self):
         return self.policers_db_info
+
+    def set_policer_name(self, policer_name):
+        """
+        Set policer object name to be used in ACL rule action
+        :param policer_name: policer object name
+        :return:
+        """
+        if policer_name not in self.get_policers_db_info():
+            raise AclLoaderException("Policer %s does not exist" % policer_name)
+
+        self.requested_policer = policer_name
+
+    def get_policer_name(self):
+        """
+        Get requested policer object name
+        :return: policer object name
+        """
+        if self.requested_policer:
+            return self.requested_policer
+
+        return None
 
     def read_sessions_info(self):
         """
@@ -387,6 +428,19 @@ class AclLoader(object):
         """
         return self.tables_db_info[tname].get("stage", Stage.INGRESS).upper() == Stage.EGRESS
 
+    def is_table_policer(self, tname):
+        """
+        check if the table type is supported for policer action
+        :param tname: ACL table name
+        :return: True if table type is supported for policer action
+        """
+        table_type = self.tables_db_info[tname].get("type", None)
+        if not table_type:
+            return False
+
+        supported_table_actions = self.table_types_db_info.get(table_type, {}).get("actions", None)
+        return self.POLICER in supported_table_actions
+
     def is_table_mirror(self, tname):
         """
         Check if ACL table type is ACL_TABLE_TYPE_MIRROR or ACL_TABLE_TYPE_MIRRORV6
@@ -471,6 +525,12 @@ class AclLoader(object):
                     mirror_action = AclAction.MIRROR_INGRESS
                 elif self.mirror_stage == Stage.EGRESS:
                     mirror_action = AclAction.MIRROR_EGRESS
+                elif self.is_table_policer(table_name):
+                    policer_name = self.get_policer_name()
+                    if not policer_name:
+                        raise AclLoaderException("Policer does not exist")
+
+                    rule_props[AclAction.POLICER] = policer_name
                 else:
                     raise AclLoaderException("Invalid mirror stage passed {}".format(self.mirror_stage))
 
@@ -1052,6 +1112,8 @@ class AclLoader(object):
                     action = val.pop(key)
                 elif key == AclAction.REDIRECT:
                     action = "REDIRECT: {}".format(val.pop(key))
+                elif key == AclAction.POLICER:
+                    action = "POLICER: {}".format(val.pop(key))
                 elif key in (AclAction.MIRROR, AclAction.MIRROR_INGRESS):
                     action = "MIRROR INGRESS: {}".format(val.pop(key))
                 elif key == AclAction.MIRROR_EGRESS:
@@ -1186,10 +1248,11 @@ def update(ctx):
 @click.option('--table_name', type=click.STRING, required=False)
 @click.option('--session_name', type=click.STRING, required=False)
 @click.option('--mirror_stage', type=click.Choice(["ingress", "egress"]), default="ingress")
+@click.option('--policer_name', type=click.STRING, required=False)
 @click.option('--max_priority', type=click.INT, required=False)
 @click.option('--skip_action_validation', is_flag=True, default=False, help="Skip action validation")
 @click.pass_context
-def full(ctx, filename, table_name, session_name, mirror_stage, max_priority, skip_action_validation):
+def full(ctx, filename, table_name, session_name, mirror_stage, policer_name, max_priority, skip_action_validation):
     """
     Full update of ACL rules configuration.
     If a table_name is provided, the operation will be restricted in the specified table.
@@ -1204,6 +1267,9 @@ def full(ctx, filename, table_name, session_name, mirror_stage, max_priority, sk
 
     acl_loader.set_mirror_stage(mirror_stage)
 
+    if policer_name:
+        acl_loader.set_policer_name(policer_name)
+
     if max_priority:
         acl_loader.set_max_priority(max_priority)
 
@@ -1215,9 +1281,10 @@ def full(ctx, filename, table_name, session_name, mirror_stage, max_priority, sk
 @click.argument('filename', type=click.Path(exists=True))
 @click.option('--session_name', type=click.STRING, required=False)
 @click.option('--mirror_stage', type=click.Choice(["ingress", "egress"]), default="ingress")
+@click.option('--policer_name', type=click.STRING, required=False)
 @click.option('--max_priority', type=click.INT, required=False)
 @click.pass_context
-def incremental(ctx, filename, session_name, mirror_stage, max_priority):
+def incremental(ctx, filename, session_name, mirror_stage, policer_name, max_priority):
     """
     Incremental update of ACL rule configuration.
     """
@@ -1227,6 +1294,9 @@ def incremental(ctx, filename, session_name, mirror_stage, max_priority):
         acl_loader.set_session_name(session_name)
 
     acl_loader.set_mirror_stage(mirror_stage)
+
+    if policer_name:
+        acl_loader.set_policer_name(policer_name)
 
     if max_priority:
         acl_loader.set_max_priority(max_priority)
