@@ -135,7 +135,7 @@ class TestMultiAiscShowIpRouteDisplayAllCommands(object):
             show.cli.commands["ip"].commands["route"], ["-nasic7"])
         print("{}".format(result.output))
         assert result.exit_code == 0
-        assert result.output == show_ip_route_common.show_ip_route_multi_asic_invalid_namesapce_err_output
+        assert result.output == show_ip_route_common.show_ip_route_multi_asic_invalid_namespace_err_output
 
     @pytest.mark.parametrize('setup_multi_asic_bgp_instance',
                              ['ip_route'], indirect=['setup_multi_asic_bgp_instance'])
@@ -163,7 +163,7 @@ class TestMultiAiscShowIpRouteDisplayAllCommands(object):
             show.cli.commands["ipv6"].commands["route"], ["-dfrontend"])
         print("{}".format(result.output))
         assert result.exit_code == 0
-        assert result.output == show_ip_route_common.show_ipv6_route_multi_asic_all_namesapce_output
+        assert result.output == show_ip_route_common.show_ipv6_route_multi_asic_all_namespace_output
 
     @pytest.mark.parametrize('setup_multi_asic_bgp_instance',
                              ['ipv6_route'], indirect=['setup_multi_asic_bgp_instance'])
@@ -179,7 +179,7 @@ class TestMultiAiscShowIpRouteDisplayAllCommands(object):
         os.environ['SONIC_CLI_IFACE_MODE'] = "default"
         print("{}".format(result.output))
         assert result.exit_code == 0
-        assert result.output == show_ip_route_common.show_ipv6_route_multi_asic_all_namesapce_alias_output
+        assert result.output == show_ip_route_common.show_ipv6_route_multi_asic_all_namespace_alias_output
 
     @pytest.mark.parametrize('setup_multi_asic_bgp_instance',
                              ['ipv6_route'], indirect=['setup_multi_asic_bgp_instance'])
@@ -193,7 +193,7 @@ class TestMultiAiscShowIpRouteDisplayAllCommands(object):
             show.cli.commands["ipv6"].commands["route"], ["-nasic2"])
         print("{}".format(result.output))
         assert result.exit_code == 0
-        assert result.output == show_ip_route_common.show_ipv6_route_multi_asic_single_namesapce_output
+        assert result.output == show_ip_route_common.show_ipv6_route_multi_asic_single_namespace_output
 
     @pytest.mark.parametrize('setup_multi_asic_bgp_instance',
                              ['ipv6_specific_route'], indirect=['setup_multi_asic_bgp_instance'])
