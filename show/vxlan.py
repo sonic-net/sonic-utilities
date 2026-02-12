@@ -257,14 +257,14 @@ def remotevni(remote_vtep_ip, count):
       num = 0
       if vxlan_keys is not None:
         for key in natsorted(vxlan_keys):
-            key1 = key.split(':', 2)
-            rmtip = key1[2];
+            key1 = key.split(':')
+            rmtip = key1.pop();
             #if remote_vtep_ip != 'all' and rmtip != remote_vtep_ip:
             #   continue
             vxlan_table = db.get_all(db.APPL_DB, key);
             if vxlan_table is None:
              continue
-            body.append([key1[1], rmtip, vxlan_table['vni']])
+            body.append([key1.pop(), rmtip, vxlan_table['vni']])
             num += 1
       click.echo(tabulate(body, header, tablefmt="grid"))
       output = 'Total count : '
@@ -272,48 +272,22 @@ def remotevni(remote_vtep_ip, count):
       click.echo(output)
 
 @vxlan.command()
-def l2nexthopgroup():
-    header = ['NHG', 'Tunnels', 'LocalMembers']
-    body = []
-    db = SonicV2Connector(host='127.0.0.1')
-    db.connect(db.APPL_DB)
-    nhg_keys = db.keys(db.APPL_DB, 'L2_NEXTHOP_GROUP_TABLE:*')
-    if nhg_keys is not None:
-        for key in natsorted(nhg_keys):
-            tunnel = str()
-            key1 = key.split(':')
-            nhg = key1.pop()
-            nhg_table = db.get_all(db.APPL_DB, key)
-            if not nhg_table:
-                continue
-            r_vtep = nhg_table.get('remote_vtep')
-            if r_vtep is None:
-                nh_group = nhg_table.get('nexthop_group')
-                if nh_group is not None:
-                    groups = nh_group.split(",")
-                    for g in groups:
-                        tunnel += g.split(":")[1] + ","
-            if_name = nhg_table.get('ifname')
-            if len(tunnel):
-                if_name = tunnel[:-1]
-            body.append([nhg, r_vtep, if_name])
-        click.echo(tabulate(body, header, tablefmt="grid"))
-
-@vxlan.command()
 @click.argument('remote_vtep_ip', required=True)
 @click.argument('count', required=False)
 def remotemac(remote_vtep_ip, count):
     """Show MACs pointing to the remote VTEP"""
+
     if (remote_vtep_ip != 'all') and (clicommon.is_ipaddress(remote_vtep_ip ) is False):
         click.echo("Remote VTEP IP {} invalid format".format(remote_vtep_ip))
         return
 
-    header = ['VLAN', 'MAC', 'RemoteTunnel', 'VNI', 'Type']
+    header = ['VLAN', 'MAC', 'RemoteVTEP', 'VNI', 'Type']
     body = []
     db = SonicV2Connector(host='127.0.0.1')
     db.connect(db.APPL_DB)
 
     vxlan_keys = db.keys(db.APPL_DB, 'VXLAN_FDB_TABLE:*')
+
     if ((count is not None) and (remote_vtep_ip == 'all')):
       if not vxlan_keys:
         vxlan_count = 0
@@ -327,43 +301,24 @@ def remotemac(remote_vtep_ip, count):
       num = 0
       if vxlan_keys is not None:
         for key in natsorted(vxlan_keys):
-            tunnel = list()
             key1 = key.split(':',2)
             mac = key1.pop();
             vlan = key1.pop();
             vxlan_table = db.get_all(db.APPL_DB, key);
             if vxlan_table is None:
-                continue
-            nh_group_id = vxlan_table.get('nexthop_group')
-            if nh_group_id is not None:
-                l2_nh_grp_tbl = db.get_all(db.APPL_DB, nh_group_id)
-                if l2_nh_grp_tbl is not None:
-                    nh_group = l2_nh_grp_tbl.get('nexthop_group')
-                    if nh_group:
-                        groups = nh_group.split(",")
-                        for g in groups:
-                            entry = db.get_all(db.APPL_DB, g)
-                            rmtip = entry.get('remote_vtep')
-                            if rmtip is not None:
-                                tunnel.append(rmtip)
-                    else:
-                        rmtip = l2_nh_grp_tbl.get('remote_vtep')
-            else:
-                rmtip = vxlan_table.get('remote_vtep')
-            if len(tunnel):
-                rmtip = ""
-                for t in tunnel:
-                    rmtip+=t+"\n"
+             continue
+            rmtip = vxlan_table.get('remote_vtep')
             if remote_vtep_ip != 'all' and rmtip != remote_vtep_ip or rmtip is None:
-                continue
+               continue
             if count is None:
-                body.append([vlan, mac, rmtip, vxlan_table['vni'], vxlan_table['type']])
+               body.append([vlan, mac, rmtip, vxlan_table['vni'], vxlan_table['type']])
             num += 1
       if count is None:
          click.echo(tabulate(body, header, tablefmt="grid"))
       output = 'Total count : '
       output += ('%s\n' % (str(num)))
       click.echo(output)
+
 @vxlan.command()
 @click.argument('tunnel', required=False)
 @click.option('-p', '--period')
