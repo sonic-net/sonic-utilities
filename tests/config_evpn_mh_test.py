@@ -30,7 +30,7 @@ def configure_startup_delay(runner, db, startup_delay_value, startup_delay_expec
         assert evpn_mh_table['default']['startup_delay'] == str(startup_delay_value), f"Found unexpected startup_delay {evpn_mh_table['default']['startup_delay']}, expected '{startup_delay_value}'"
     else:
         assert result.exit_code != 0, f"Got zero exit code {result.exit_code} - {result.output}, expected non-zero"
-        assert not evpn_mh_table, f"Invalid startup delay config changed what is stored in config DB to {evpn_mh_table['default']['startup_delay']}, expected empty evpn_mh_table"
+        assert not evpn_mh_table, f"Invalid startup delay config changed what is stored in config DB: {evpn_mh_table}, expected empty evpn_mh_table"
 
     return result
 
@@ -58,7 +58,7 @@ def configure_mac_holdtime(runner, db, mac_holdtime_value, mac_holdtime_expected
         assert evpn_mh_table['default']['mac_holdtime'] == str(mac_holdtime_value), f"Found unexpected mac_holdtime {evpn_mh_table['default']['mac_holdtime']}, expected '{mac_holdtime_value}'"
     else:
         assert result.exit_code != 0, f"Got zero exit code {result.exit_code} - {result.output}, expected non-zero"
-        assert not evpn_mh_table, f"Invalid mac holdtime config changed what is stored in config DB to {evpn_mh_table['default']['mac_holdtime']}, expected empty evpn_mh_table"
+        assert not evpn_mh_table, f"Invalid mac holdtime config changed what is stored in config DB: {evpn_mh_table}, expected empty evpn_mh_table"
 
     return result
 
@@ -87,7 +87,7 @@ def configure_neigh_holdtime(runner, db, neigh_holdtime_value, neigh_holdtime_ex
         assert evpn_mh_table['default']['neigh_holdtime'] == str(neigh_holdtime_value), f"Found unexpected neigh_holdtime {evpn_mh_table['default']['neigh_holdtime']}, expected '{neigh_holdtime_value}'"
     else:
         assert result.exit_code != 0, f"Got zero exit code {result.exit_code} - {result.output}, expected non-zero"
-        assert not evpn_mh_table, f"Invalid neigh holdtime config changed what is stored in config DB to {evpn_mh_table['default']['neigh_holdtime']}, expected empty evpn_mh_table"
+        assert not evpn_mh_table, f"Invalid neigh holdtime config changed what is stored in config DB: {evpn_mh_table}, expected empty evpn_mh_table"
 
     return result
 
