@@ -640,4 +640,3 @@ def test_installation_from_file_no_tags(package_manager, mock_docker_api, sonic_
     # Get the package from the database and verify the tag was set to the image ID
     package = package_manager.database.get_package('test-package')
     assert package.docker_image_reference == 'Azure/docker-test:1.6.0'
-
