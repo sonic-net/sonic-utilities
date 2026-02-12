@@ -41,6 +41,21 @@ machine_cfg = "/host/machine.conf"
 def print_err(*args):
     sys.stderr.write(' '.join(map(str,args)) + '\n')
 
+## Validate remote argument - only accept 'enable' or 'disable'
+def validate_remote_action(value):
+    """Validate remote argument - only accepts 'enable' or 'disable'"""
+    if isinstance(value, bool):
+        return value
+    if value.lower() == 'enable':
+        return True
+    elif value.lower() == 'disable':
+        return False
+    else:
+        raise argparse.ArgumentTypeError(
+            "Invalid action. Use 'enable' or 'disable'."
+        )
+
+
 ## Run an external command, either from the shell or not
 #  The function capture the output of stdout and stderr,
 #  and return then a tupple with exit code, stdout, stderr
@@ -871,19 +886,20 @@ def cmd_kdump_num_dumps(verbose, num_dumps):
         kdump_enabled = get_kdump_administrative_mode()
         kdump_memory = get_kdump_memory()
 
-def cmd_kdump_remote(verbose):
-    remote = get_kdump_remote()  # Retrieve the remote value from the config database
+def cmd_kdump_remote(verbose, remote):
+    """Enable or disable remote kdump feature and save to CONFIG_DB"""
+    # Save the remote setting to CONFIG_DB
+    config_db = ConfigDBConnector(use_unix_socket_path=True)
+    if config_db is not None:
+        config_db.connect()
+        # Convert boolean to string for CONFIG_DB
+        remote_str = "true" if remote else "false"
+        config_db.mod_entry("KDUMP", "config", {"remote": remote_str})
 
-    if remote:
-        # Uncomment SSH and SSH_KEY in the /etc/default/kdump-tools file
-        run_command("/bin/sed -i 's/^#SSH/SSH/' /etc/default/kdump-tools", use_shell=False)
-        if verbose:
-            print("SSH and SSH_KEY uncommented for remote configuration.")
-    else:
-        # Comment out SSH and SSH_KEY in the /etc/default/kdump-tools file
-        run_command("/bin/sed -i 's/^SSH/#SSH/' /etc/default/kdump-tools", use_shell=False)
-        if verbose:
-            print("SSH and SSH_KEY commented out for local configuration.")
+        if remote:
+            print("Remote kdump feature enabled.")
+        else:
+            print("Remote kdump feature disabled.")
 
 def cmd_kdump_ssh_string(verbose, ssh_string):
     if ssh_string is None:
@@ -945,9 +961,8 @@ def main():
     parser.add_argument('--num_dumps', nargs='?', type=int, action='store', default=False,
         help='Maximum number of kernel dump files stored')
 
-    parser.add_argument('--remote', action='store_true', default=False,
-                help='Update remote kdump via SSH based on CONFIG_DB')
-    
+    parser.add_argument('--remote', type=validate_remote_action, nargs='?', const=True, default=None,
+                help='Enable or disable remote kdump via SSH. Use: enable or disable')
     parser.add_argument('--ssh_string', nargs='?', type=str, action='store', default=False,
             help='ssh_string for remote kdump')
 
@@ -987,8 +1002,8 @@ def main():
             changed = cmd_kdump_disable(options.verbose)
         elif options.memory != False:
             cmd_kdump_memory(options.verbose, options.memory)
-        elif options.remote:
-            cmd_kdump_remote(options.verbose)
+        elif options.remote is not None:
+            cmd_kdump_remote(options.verbose, options.remote)
         elif options.ssh_string:
             cmd_kdump_ssh_string(options.verbose, options.ssh_string)
         elif options.ssh_path:
