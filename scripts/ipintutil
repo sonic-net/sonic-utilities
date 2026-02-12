@@ -34,7 +34,7 @@ except KeyError:
     pass
 
 
-def get_bgp_peer():
+def get_bgp_peer(namespace):
     """
     collects local and bgp neighbor ip along with device name in below format
     {
@@ -43,7 +43,7 @@ def get_bgp_peer():
     }
     """
     bgp_peer = {}
-    config_db = swsscommon.ConfigDBConnector()
+    config_db = swsscommon.ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
     config_db.connect()
     data = config_db.get_table('BGP_NEIGHBOR')
 
@@ -151,7 +151,7 @@ def get_ip_intfs_in_namespace(af, namespace, display):
     """
     ip_intfs = {}
     interfaces = multi_asic_util.multi_asic_get_ip_intf_from_ns(namespace)
-    bgp_peer = get_bgp_peer()
+    bgp_peer = get_bgp_peer(namespace)
     for iface in interfaces:
         ip_intf_attr = []
         if namespace != constants.DEFAULT_NAMESPACE and skip_ip_intf_display(iface, display):
