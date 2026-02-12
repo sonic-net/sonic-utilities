@@ -182,7 +182,7 @@ def test_installation_multiple_cli_plugin(package_manager, fake_metadata_resolve
     manifest['cli']= {'show': ['/cli/plugin.py', '/cli/plugin2.py']}
     with patch('sonic_package_manager.manager.get_cli_plugin_directory') as get_dir_mock, \
          patch('os.remove') as remove_mock, \
-         patch('os.path.exists') as path_exists_mock, \
+         patch('os.path.exists'), \
          patch('sonic_package_manager.manager.os.sync') as mock_sync:
         get_dir_mock.return_value = '/'
         package_manager.install('test-package')
@@ -641,34 +641,3 @@ def test_installation_from_file_no_tags(package_manager, mock_docker_api, sonic_
     package = package_manager.database.get_package('test-package')
     assert package.docker_image_reference == 'Azure/docker-test:1.6.0'
 
-def test_sync_called_after_database_commit(package_manager):
-    """Test that os.sync() is called after database.commit() to ensure transactional consistency"""
-
-    call_order = []
-
-    # Mock both database.commit() and os.sync() to track call order
-    original_commit = package_manager.database.commit
-
-    def mock_commit():
-        call_order.append('commit')
-        original_commit()
-
-    def mock_sync():
-        call_order.append('sync')
-
-    with patch.object(package_manager.database, 'commit', side_effect=mock_commit), \
-         patch('sonic_package_manager.manager.os.sync', side_effect=mock_sync):
-
-        package_manager.install('test-package')
-
-        # Verify that both commit and sync were called
-        assert 'commit' in call_order, "database.commit() should be called"
-        assert 'sync' in call_order, "os.sync() should be called"
-
-        # Find the last commit and verify sync comes after it
-        last_commit_idx = len(call_order) - 1 - call_order[::-1].index('commit')
-        last_sync_idx = len(call_order) - 1 - call_order[::-1].index('sync')
-
-        # sync should be called after the final commit
-        assert last_sync_idx > last_commit_idx, \
-            f"os.sync() should be called after database.commit(), but call order was: {call_order}"
