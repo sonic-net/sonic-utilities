@@ -1,7 +1,7 @@
 import os
-import sys
 import traceback
 import importlib
+from unittest.mock import patch
 
 from click.testing import CliRunner
 
@@ -679,6 +679,30 @@ class TestStaticRoutes(object):
         print(result.exit_code, result.output)
         assert '1.2.3.5/32' not in db.cfgdb.get_table('STATIC_ROUTE')
 
+    def test_route_callback_with_default_namespace(self):
+        db = Db()
+        runner = CliRunner()
+        result = runner.invoke(config.config.commands["route"],
+                               ["add", "prefix", "1.2.3.4/32", "nexthop", "30.0.0.5"], obj=db)
+        assert result.exit_code == 0
+        assert ('default', '1.2.3.4/32') in db.cfgdb.get_table('STATIC_ROUTE')
+        result = runner.invoke(config.config.commands["route"],
+                               ["del", "prefix", "1.2.3.4/32", "nexthop", "30.0.0.5"], obj=db)
+        assert result.exit_code == 0
+
+    @patch('config.main.ConfigDBConnector')
+    def test_route_callback_without_cfgdb_clients(self, mock_config_db_connector):
+        db = Db()
+        cfgdb = db.cfgdb
+        db.cfgdb_clients = {}
+        mock_config_db_connector.return_value = cfgdb
+        runner = CliRunner()
+        result = runner.invoke(config.config.commands["route"],
+                               ["add", "prefix", "1.2.3.4/32", "nexthop", "30.0.0.5"], obj=db)
+        assert result.exit_code == 0
+        mock_config_db_connector.assert_called_once_with(use_unix_socket_path=True, namespace='')
+        assert ('default', '1.2.3.4/32') in cfgdb.get_table('STATIC_ROUTE')
+
     @classmethod
     def teardown_class(cls):
         os.environ['UTILITIES_UNIT_TESTING'] = "0"
@@ -758,8 +782,7 @@ class TestStaticRoutesMultiAsic(object):
 
         import utilities_common.multi_asic
         importlib.reload(utilities_common.multi_asic)
-        # Reload config.main to pick up the reloaded multi_asic module  
+        # Reload config.main to pick up the reloaded multi_asic module
         importlib.reload(config)
 
         print("TEARDOWN")
-

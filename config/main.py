@@ -7618,7 +7618,8 @@ def del_vrf_vni_map(ctx, vrfname):
 
 @config.group(cls=clicommon.AbbreviationGroup)
 @click.option('-n', '--namespace', help='Namespace name',
-             required=True if multi_asic.is_multi_asic() else False, type=click.Choice(multi_asic.get_namespace_list()))
+              required=True if multi_asic.is_multi_asic() else False,
+              type=click.Choice(multi_asic.get_namespace_list()))
 @click.pass_context
 @clicommon.pass_db
 def route(db, ctx, namespace):
