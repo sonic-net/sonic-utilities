@@ -117,6 +117,75 @@ Ethernet8  ALL29             N/A              N/A               N/A             
 
 """
 
+show_wred_queue_counters_nz = """\
+     Port    TxQ    WredDrp/pkts    WredDrp/bytes    EcnMarked/pkts    EcnMarked/bytes
+---------  -----  --------------  ---------------  ----------------  -----------------
+Ethernet0    UC1              60               43                39                  1
+Ethernet0    UC2              82                7                39                 21
+Ethernet0    UC3              52               70                19                 76
+Ethernet0    UC4              11               59                12                 94
+Ethernet0    UC5              36               62                35                 40
+Ethernet0    UC6              49               91                 2                 88
+Ethernet0    UC7              33               17                94                 74
+Ethernet0    UC8              40               71                95                 33
+Ethernet0    UC9              54                8                93                 78
+Ethernet0   MC10              83               96                74                  9
+Ethernet0   MC11              15               60                61                 31
+Ethernet0   MC12              45               52                82                 94
+Ethernet0   MC13              55               88                89                 52
+Ethernet0   MC14              14               70                95                 79
+Ethernet0   MC15              68               60                66                 81
+Ethernet0   MC16              63                4                48                 76
+Ethernet0   MC17              41               73                77                 74
+Ethernet0   MC18              60               21                56                 54
+Ethernet0   MC19              57               31                12                 39
+
+     Port    TxQ    WredDrp/pkts    WredDrp/bytes    EcnMarked/pkts    EcnMarked/bytes
+---------  -----  --------------  ---------------  ----------------  -----------------
+Ethernet4    UC0              41               96                70                 98
+Ethernet4    UC1              18               49                63                 36
+Ethernet4    UC2              99               90                 3                 15
+Ethernet4    UC3              60               89                48                 41
+Ethernet4    UC4               8               84                82                 94
+Ethernet4    UC5              83               15                75                 92
+Ethernet4    UC6              84               26                50                 71
+Ethernet4    UC7              27               19                49                 80
+Ethernet4    UC8              13               89                13                 33
+Ethernet4    UC9              43               48                86                 31
+Ethernet4   MC10              50                1                57                 82
+Ethernet4   MC11              67               99                84                 59
+Ethernet4   MC12               4               58                27                  5
+Ethernet4   MC13              74                5                57                 39
+Ethernet4   MC14              21               59                 4                 14
+Ethernet4   MC15              24               61                19                 53
+Ethernet4   MC16              51               15                15                 32
+Ethernet4   MC17              98               18                23                 15
+Ethernet4   MC18              41               34                 9                 57
+Ethernet4   MC19              57                7                18                 99
+
+     Port    TxQ    WredDrp/pkts    WredDrp/bytes    EcnMarked/pkts    EcnMarked/bytes
+---------  -----  --------------  ---------------  ----------------  -----------------
+Ethernet8    UC1              38               17                68                 91
+Ethernet8    UC2              16               65                79                 51
+Ethernet8    UC3              11               97                63                 72
+Ethernet8    UC4              54               89                62                 62
+Ethernet8    UC5              13               84                30                 59
+Ethernet8    UC6              49               67                99                 85
+Ethernet8    UC7               2               63                38                 88
+Ethernet8    UC8               0               82                93                 43
+Ethernet8    UC9              80               17                91                 61
+Ethernet8   MC10              81               63                76                 73
+Ethernet8   MC11              29               16                29                 66
+Ethernet8   MC12              32               12                61                 35
+Ethernet8   MC13              79               17                72                 93
+Ethernet8   MC14              23               21                67                 50
+Ethernet8   MC15              37               10                97                 14
+Ethernet8   MC16              30               17                74                 43
+Ethernet8   MC17               0               63                54                 84
+Ethernet8   MC18              69               88                24                 79
+Ethernet8   MC19              20               12                84                  3
+
+"""
 
 show_wred_queue_counters_port = """\
      Port    TxQ    WredDrp/pkts    WredDrp/bytes    EcnMarked/pkts    EcnMarked/bytes
@@ -154,6 +223,30 @@ Ethernet8  ALL29             N/A              N/A               N/A             
 
 """
 
+show_wred_queue_counters_port_nz = """\
+     Port    TxQ    WredDrp/pkts    WredDrp/bytes    EcnMarked/pkts    EcnMarked/bytes
+---------  -----  --------------  ---------------  ----------------  -----------------
+Ethernet8    UC1              38               17                68                 91
+Ethernet8    UC2              16               65                79                 51
+Ethernet8    UC3              11               97                63                 72
+Ethernet8    UC4              54               89                62                 62
+Ethernet8    UC5              13               84                30                 59
+Ethernet8    UC6              49               67                99                 85
+Ethernet8    UC7               2               63                38                 88
+Ethernet8    UC8               0               82                93                 43
+Ethernet8    UC9              80               17                91                 61
+Ethernet8   MC10              81               63                76                 73
+Ethernet8   MC11              29               16                29                 66
+Ethernet8   MC12              32               12                61                 35
+Ethernet8   MC13              79               17                72                 93
+Ethernet8   MC14              23               21                67                 50
+Ethernet8   MC15              37               10                97                 14
+Ethernet8   MC16              30               17                74                 43
+Ethernet8   MC17               0               63                54                 84
+Ethernet8   MC18              69               88                24                 79
+Ethernet8   MC19              20               12                84                  3
+
+"""
 show_queue_counters_json = """\
 {
   "Ethernet0": {
@@ -890,6 +983,126 @@ show_queue_counters_port_json = """\
   }
 }"""
 
+show_queue_counters_port_json_nz = """\
+{
+  "Ethernet8": {
+    "MC10": {
+      "ecnmarkedbytes": "73",
+      "ecnmarkedpacket": "76",
+      "wreddropbytes": "63",
+      "wreddroppacket": "81"
+    },
+    "MC11": {
+      "ecnmarkedbytes": "66",
+      "ecnmarkedpacket": "29",
+      "wreddropbytes": "16",
+      "wreddroppacket": "29"
+    },
+    "MC12": {
+      "ecnmarkedbytes": "35",
+      "ecnmarkedpacket": "61",
+      "wreddropbytes": "12",
+      "wreddroppacket": "32"
+    },
+    "MC13": {
+      "ecnmarkedbytes": "93",
+      "ecnmarkedpacket": "72",
+      "wreddropbytes": "17",
+      "wreddroppacket": "79"
+    },
+    "MC14": {
+      "ecnmarkedbytes": "50",
+      "ecnmarkedpacket": "67",
+      "wreddropbytes": "21",
+      "wreddroppacket": "23"
+    },
+    "MC15": {
+      "ecnmarkedbytes": "14",
+      "ecnmarkedpacket": "97",
+      "wreddropbytes": "10",
+      "wreddroppacket": "37"
+    },
+    "MC16": {
+      "ecnmarkedbytes": "43",
+      "ecnmarkedpacket": "74",
+      "wreddropbytes": "17",
+      "wreddroppacket": "30"
+    },
+    "MC17": {
+      "ecnmarkedbytes": "84",
+      "ecnmarkedpacket": "54",
+      "wreddropbytes": "63",
+      "wreddroppacket": "0"
+    },
+    "MC18": {
+      "ecnmarkedbytes": "79",
+      "ecnmarkedpacket": "24",
+      "wreddropbytes": "88",
+      "wreddroppacket": "69"
+    },
+    "MC19": {
+      "ecnmarkedbytes": "3",
+      "ecnmarkedpacket": "84",
+      "wreddropbytes": "12",
+      "wreddroppacket": "20"
+    },
+    "UC1": {
+      "ecnmarkedbytes": "91",
+      "ecnmarkedpacket": "68",
+      "wreddropbytes": "17",
+      "wreddroppacket": "38"
+    },
+    "UC2": {
+      "ecnmarkedbytes": "51",
+      "ecnmarkedpacket": "79",
+      "wreddropbytes": "65",
+      "wreddroppacket": "16"
+    },
+    "UC3": {
+      "ecnmarkedbytes": "72",
+      "ecnmarkedpacket": "63",
+      "wreddropbytes": "97",
+      "wreddroppacket": "11"
+    },
+    "UC4": {
+      "ecnmarkedbytes": "62",
+      "ecnmarkedpacket": "62",
+      "wreddropbytes": "89",
+      "wreddroppacket": "54"
+    },
+    "UC5": {
+      "ecnmarkedbytes": "59",
+      "ecnmarkedpacket": "30",
+      "wreddropbytes": "84",
+      "wreddroppacket": "13"
+    },
+    "UC6": {
+      "ecnmarkedbytes": "85",
+      "ecnmarkedpacket": "99",
+      "wreddropbytes": "67",
+      "wreddroppacket": "49"
+    },
+    "UC7": {
+      "ecnmarkedbytes": "88",
+      "ecnmarkedpacket": "38",
+      "wreddropbytes": "63",
+      "wreddroppacket": "2"
+    },
+    "UC8": {
+      "ecnmarkedbytes": "43",
+      "ecnmarkedpacket": "93",
+      "wreddropbytes": "82",
+      "wreddroppacket": "0"
+    },
+    "UC9": {
+      "ecnmarkedbytes": "61",
+      "ecnmarkedpacket": "91",
+      "wreddropbytes": "17",
+      "wreddroppacket": "80"
+    }
+  }
+}"""
+
 show_queue_voq_counters = """\
             Port    Voq    WredDrp/pkts    WredDrp/bytes    EcnMarked/pkts    EcnMarked/bytes
 ----------------  -----  --------------  ---------------  ----------------  -----------------
@@ -1173,6 +1386,16 @@ class TestWredQueue(object):
         assert result.exit_code == 0
         assert result.output == show_wred_queue_counters
 
+    def test_queue_counters_nz(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["queue"].commands["wredcounters"],
+            ["-nz"]
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == show_wred_queue_counters_nz
+
     def test_queue_counters_port(self):
         runner = CliRunner()
         result = runner.invoke(
@@ -1182,6 +1405,16 @@ class TestWredQueue(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output == show_wred_queue_counters_port
+
+    def test_queue_counters_port_nz(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["queue"].commands["wredcounters"],
+            ["Ethernet8", "-nz"]
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == show_wred_queue_counters_port_nz
 
     def test_queue_counters_json(self):
         runner = CliRunner()
@@ -1212,6 +1445,22 @@ class TestWredQueue(object):
         for _, v in json_output.items():
             del v["time"]
         assert json_dump(json_output) == show_queue_counters_port_json
+
+    def test_queue_counters_port_json_nz(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["queue"].commands["wredcounters"],
+            ["Ethernet8", "--json", "-nz"]
+        )
+        print(result.output)
+        print()
+        assert result.exit_code == 0
+        json_output = json.loads(result.output)
+
+        # remove "time" from the output
+        for _, v in json_output.items():
+            del v["time"]
+        assert json_dump(json_output) == show_queue_counters_port_json_nz
 
     def test_queue_voq_counters(self):
         runner = CliRunner()
@@ -1273,6 +1522,30 @@ class TestWredQueue(object):
         print(result.output)
         assert result.exit_code == 0
         assert (wredstat_clear_str in result.output)
+
+    def test_queue_counters_after_clear(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["queue"].commands["wredcounters"],
+            ["-nz"]
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        output = result.output.splitlines()
+        f_output = [item for item in output if "time" not in item]
+        assert len(f_output) == 0
+
+    def test_queue_counters_port_after_clear(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["queue"].commands["wredcounters"],
+            ["Ethernet8", "-nz"]
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        output = result.output.splitlines()
+        f_output = [item for item in output if "time" not in item]
+        assert len(f_output) == 0
 
     def test_invalid_port(self):
         wredstat_inv_port = "Port does not exist"
