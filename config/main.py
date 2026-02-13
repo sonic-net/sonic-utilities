@@ -2887,6 +2887,7 @@ def remove_portchannel(ctx, portchannel_name):
             ctx.fail(str(e))
 
     try:
+        db.set_entry('PORTCHANNEL_INTERFACE', portchannel_name, None)
         db.set_entry('PORTCHANNEL', portchannel_name, None)
     except JsonPatchConflict:
         ctx.fail("{} is not present.".format(portchannel_name))
@@ -3123,6 +3124,38 @@ def set_portchannel_retry_count(ctx, portchannel_name, retry_count):
         ctx.fail("Unable to set the retry count: {}".format(e))
     except Exception as e:
         ctx.fail("Unable to set the retry count: {}".format(e))
+
+
+@portchannel.group(cls=clicommon.AbbreviationGroup, name='mac-addr')
+@click.pass_context
+def portchannel_mac_addr(ctx):
+    pass
+
+
+@portchannel_mac_addr.command('set')
+@click.argument('portchannel_name', metavar='<portchannel_name>', required=True)
+@click.argument('mac_addr', metavar='<mac_addr>', required=True)
+@click.pass_context
+def set_portchannel_mac_addr(ctx, portchannel_name, mac_addr):
+    """Set the mac address for a port channel"""
+    db = ValidatedConfigDBConnector(ctx.obj['db'])
+
+    # Don't proceed if the port channel name is not valid
+    if is_portchannel_name_valid(portchannel_name) is False:
+        ctx.fail("{} is invalid!, name should have prefix '{}' and suffix '{}'"
+                 .format(portchannel_name, CFG_PORTCHANNEL_PREFIX, CFG_PORTCHANNEL_NO))
+
+    # Don't proceed if the port channel does not exist
+    if is_portchannel_present_in_db(db, portchannel_name) is False:
+        ctx.fail("{} is not present.".format(portchannel_name))
+
+    if not re.match("^[0-9a-f]{2}([-:]?)[0-9a-f]{2}(\\1[0-9a-f]{2}){4}$", mac_addr.lower()):
+        ctx.fail("Provided mac address is not valid")
+
+    try:
+        db.set_entry("PORTCHANNEL_INTERFACE", portchannel_name, {"mac_addr": mac_addr})
+    except ValueError:
+        ctx.fail("Portchannel name is invalid or nonexistent")
 
 
 #
@@ -5694,9 +5727,12 @@ def remove(ctx, interface_name, ip_addr):
     clicommon.run_command(command)
     remove_router_interface_ip_address(config_db, interface_name, ip_address)
     interface_addresses = get_interface_ipaddresses(config_db, interface_name)
-    if len(interface_addresses) == 0 and is_interface_bind_to_vrf(config_db, interface_name) is False and get_intf_ipv6_link_local_mode(ctx, interface_name, table_name) != "enable":
+    if len(interface_addresses) == 0 and is_interface_bind_to_vrf(config_db, interface_name) is False and \
+            get_intf_ipv6_link_local_mode(ctx, interface_name, table_name) != "enable":
         if table_name != "VLAN_SUB_INTERFACE":
-            config_db.set_entry(table_name, interface_name, None)
+            interface_entry = config_db.get_entry(table_name, interface_name)
+            if len(interface_entry) == 0:
+                config_db.set_entry(table_name, interface_name, None)
 
 #
 # 'loopback-action' subcommand

@@ -348,6 +348,42 @@ class TestPortChannel(object):
         assert result.exit_code != 0
         assert "Error: PortChannel0005 is not present." in result.output
 
+    def test_set_invalid_portchannel_mac_addr(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands["portchannel"].commands["mac-addr"].commands["set"],
+                               ["Ethernet48", "00:11:22:33:44:55"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "Error: Ethernet48 is invalid!" in result.output
+
+    def test_set_non_existing_portchannel_mac_addr(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands["portchannel"].commands["mac-addr"].commands["set"],
+                               ["PortChannel0005", "00:11:22:33:44:55"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "Error: PortChannel0005 is not present." in result.output
+
+    def test_set_portchannel_mac_addr(self):
+        runner = CliRunner()
+        db = Db()
+        obj = {'db': db.cfgdb}
+
+        result = runner.invoke(config.config.commands["portchannel"].commands["mac-addr"].commands["set"],
+                               ["PortChannel1001", "00:11:22:33:44:55"], obj=obj)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == ""
+
     originalSubprocessPopen = subprocess.Popen
 
     class SubprocessMock:
