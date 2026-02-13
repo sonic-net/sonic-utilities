@@ -116,6 +116,14 @@ class AliasedGroup(click.Group):
             return None
         elif len(matches) == 1:
             return click.Group.get_command(self, ctx, matches[0])
+        
+        # Check if we're in bash completion context
+        # In completion context, we should return None instead of raising an error
+        # to avoid showing traceback during tab completion
+        if os.environ.get('_CLICK_COMPLETE') or os.environ.get('COMP_WORDS'):
+            return None
+        
+        # For normal command execution, use ctx.fail() to show usage error properly
         ctx.fail('Too many matches: %s' % ', '.join(sorted(matches)))
 
 
