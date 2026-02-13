@@ -5,6 +5,8 @@ import json
 import os
 from scapy.config import conf
 conf.ipv6_enabled = False
+# Fixes delayed import when we have a lot of routes installed
+conf.route_autoload = False
 from scapy.layers.l2 import Ether  # noqa: E402
 from scapy.sendrecv import sendp  # noqa: E402
 import scapy.contrib.lacp  # noqa: E402
