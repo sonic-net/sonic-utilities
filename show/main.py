@@ -509,6 +509,7 @@ def storm_control(ctx, namespace, display):
             click.echo(tabulate(body, header, tablefmt="grid"))
 
 @storm_control.command('interface')
+@multi_asic_util.multi_asic_click_options
 @click.argument('interface', metavar='<interface>',required=True)
 def interface(interface, namespace, display):
     if multi_asic.is_multi_asic() and namespace not in multi_asic.get_namespace_list():
