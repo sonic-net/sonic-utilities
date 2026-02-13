@@ -15,14 +15,16 @@
                     "afi": "ipv4",
                     "flags": 5,
                     "ip": "10.0.0.9",
-                    "recursive": true
+                    "recursive": true,
+                    "weight": "1"
                 },
                 {
                     "active": true,
                     "afi": "ipv4",
                     "flags": 5,
                     "ip": "10.0.0.1",
-                    "recursive": true
+                    "recursive": true,
+                    "weight": "1"
                 }
             ],
             "prefix": "193.11.208.0/25",
