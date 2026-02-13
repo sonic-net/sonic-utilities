@@ -11143,6 +11143,22 @@ This command takes global sflow sample direction. If not configured, default is 
   ```
   admin@sonic:~# sudo config sflow sample-direction tx
   ```
+**config sflow drop-monitor-limit**
+
+This command is used to enable or disable the drop notification and configure the maximum rate at which such notifications are sent. By default, drop monitoring is disabled.
+
+- Usage:
+  ```
+  config sflow drop-monitor-limit <limit>
+  ```
+
+  - Parameters:
+    - limit: specify the maximum number of drop notifications to be sent per second. The valid range is 0 to 500. 0 means disable drop monitoring.
+
+- Example:
+  ```
+  admin@sonic:~# sudo config sflow drop-monitor-limit 100
+  ```
 **config sflow interface**
 
 Enable/disable sflow at an interface level. By default, sflow is enabled on all interfaces at the interface level. Use this command to explicitly disable sFlow for a specific interface. An interface is sampled if sflow is enabled globally as well as at the interface level. Note that this configuration deals only with sFlow flow samples and not counter samples.
