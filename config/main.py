@@ -71,6 +71,7 @@ from . import switchport
 from . import dns
 from . import bgp_cli
 from . import stp
+from . import evpn_mh
 
 # mock masic APIs for unit test
 try:
@@ -1748,6 +1749,7 @@ config.add_command(muxcable.muxcable)
 config.add_command(nat.nat)
 config.add_command(vlan.vlan)
 config.add_command(vxlan.vxlan)
+config.add_command(evpn_mh.evpn_mh)
 
 # add stp commands
 config.add_command(stp.spanning_tree)
@@ -5482,6 +5484,203 @@ def fec(ctx, interface_name, interface_fec, verbose):
     if verbose:
         command += ["-vv"]
     clicommon.run_command(command, display_cmd=verbose)
+
+
+#
+# EVPN interface commands
+#
+EVPN_ES_TABLE = 'EVPN_ETHERNET_SEGMENT'
+EVPN_ES_DF_PREF_MIN = 1
+EVPN_ES_DF_PREF_DEFAULT = 32767
+EVPN_ES_DF_PREF_MAX = 65535
+EVPN_ESI_NUM_BYTES = 10
+
+def is_reserved_esi(esi_str):
+    is_reserved_esi = False
+
+    if esi_str == "00:00:00:00:00:00:00:00:00:00":
+        is_reserved_esi = True
+    elif esi_str.lower() == "ff:ff:ff:ff:ff:ff:ff:ff:ff:ff":
+        is_reserved_esi = True
+
+    return is_reserved_esi
+
+def parse_esi_input(ctx, esi_input_strs):
+    esi_args = {'df_pref': EVPN_ES_DF_PREF_DEFAULT}
+
+    if esi_input_strs[0] == 'auto-system-mac':
+        esi_args['type'] = 'TYPE_3_MAC_BASED'
+        esi_args['esi'] = 'AUTO'
+    elif ':' in esi_input_strs[0]:
+        if is_reserved_esi(esi_input_strs[0]):
+            ctx.fail(f"Not allowed to configure a reserved ESI")
+
+        esi_bytes = esi_input_strs[0].split(':')
+        if len(esi_bytes) != EVPN_ESI_NUM_BYTES:
+            ctx.fail(f"Failed to parse manual ESI {esi_input_strs[0]}")
+        if int(esi_bytes[0], 16) != 0:
+            ctx.fail(f"Manual ESI must start with type 0, got {esi_bytes[0]}")
+        for byte in esi_bytes:
+            try:
+                parsed_byte = int(byte, 16)
+            except Exception as e:
+                ctx.fail(f"Failed to parse ESI byte '{byte}' - {e}")
+            if parsed_byte > 0xFF:
+                ctx.fail(f"'Byte' {byte} is > 255")
+
+        esi_args['type'] = 'TYPE_0_OPERATOR_CONFIGURED'
+        esi_args['esi'] = esi_input_strs[0]
+    else:
+        ctx.fail(f"Unknown ESI type {esi_input_strs[0]}")
+
+    return esi_args
+
+def port_id_from_if_name(if_name):
+    port_id_re = re.compile(r'[a-zA-Z]+(?P<port_id>[0-9_]+)')
+    port_id = port_id_re.search(if_name)
+    port_id_group = port_id.group('port_id')
+
+    if port_id_group:
+        port_id = port_id_group.replace('_', '')
+
+    return port_id
+
+def run_vtysh_command(cmd):
+    return clicommon.run_command(cmd)
+
+def check_if_same_manual_esi_exists(ctx, esi_args, es_data):
+    if esi_args['type'] == 'TYPE_0_OPERATOR_CONFIGURED':
+        for es_intf_name, es_intf_data in es_data.items():
+            if esi_args['esi'] == es_intf_data['esi']:
+                ctx.fail(f"The ESI '{esi_args['esi']}' is already in use by '{es_intf_name}'")
+
+def is_valid_df_pref(df_pref):
+    is_valid = False
+
+    if int(df_pref) in range(EVPN_ES_DF_PREF_MIN, EVPN_ES_DF_PREF_MAX+1):
+        is_valid = True
+
+    return is_valid
+
+#
+# 'evpn-esi' group ('config interface evpn-esi ...')
+#
+@interface.group(cls=clicommon.AbbreviationGroup)
+@click.pass_context
+def evpn_esi(ctx):
+    """Set EVPN ES interface attributes"""
+    pass
+
+@evpn_esi.command('add')
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('esi_type', metavar='<esi_type>', required=True,
+                type=str, nargs=-1)
+def add_evpn_es(ctx, interface_name, esi_type):
+    """Add EVPN ES"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+
+    es_data = config_db.get_table(EVPN_ES_TABLE)
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        alias_name = interface_name
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail(f"The interface alias '{alias_name}' was not found!")
+
+    if interface_name in es_data:
+        ctx.fail(f"EVPN Ethernet segment {interface_name} already configured.")
+
+    esi_args = parse_esi_input(ctx, esi_type)
+
+    check_if_same_manual_esi_exists(ctx, esi_args, es_data)
+
+    try:
+        config_db.set_entry(EVPN_ES_TABLE, interface_name, esi_args)
+
+        # Update frr
+        port_id = port_id_from_if_name(interface_name)
+        cmd = ['sudo', 'vtysh', '-c', 'configure terminal', '-c', 'interface {}'.format(interface_name)]
+        esi_type = esi_args['type']
+        if esi_type == 'TYPE_0_OPERATOR_CONFIGURED' and esi_args['esi']:
+            cmd.append('-c')
+            cmd.append('evpn mh es-id {}'.format(esi_args['esi']))
+        elif esi_type == 'TYPE_3_MAC_BASED':
+            cmd.append('-c')
+            cmd.append('evpn mh es-id {}'.format(port_id))
+            po_table = config_db.get_entry('PORTCHANNEL', interface_name)
+            if po_table and 'system_mac' in po_table:
+                cmd.append('-c')
+                cmd.append('evpn mh es-sys-mac {}'.format(po_table['system_mac']))
+        op = run_vtysh_command(cmd)
+        if op:
+            ctx.fail("VTYSh config failed. Error: {}".format(op))
+    except ValueError as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+@evpn_esi.command('del')
+@click.pass_context
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+def del_evpn_es(ctx, interface_name):
+    """Del EVPN ES"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+
+    evpn_es_keys = config_db.get_keys(EVPN_ES_TABLE)
+    if interface_name not in evpn_es_keys:
+        ctx.fail(f"EVPN Ethernet Segment '{interface_name}' does not exist")
+
+    try:
+        config_db.set_entry(EVPN_ES_TABLE, interface_name, None)
+
+        # Update frr
+        cmd = ['sudo', 'vtysh', '-c', 'configure terminal', '-c', 'interface {}'.format(interface_name)]
+        cmd.append('-c')
+        cmd.append('no evpn mh es-sys-mac')
+        cmd.append('-c')
+        cmd.append('no evpn mh es-df-pref')
+        cmd.append('-c')
+        cmd.append('no evpn mh es-id')
+        op = run_vtysh_command(cmd)
+        if op:
+            ctx.fail("VTYSh config failed. Error: {}".format(op))
+    except JsonPatchConflict as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+@interface.command()
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('df_pref', metavar='<df_pref>', required=True)
+@click.pass_context
+def evpn_df_pref(ctx, interface_name, df_pref):
+    """Set EVPN ES DF Preference"""
+    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+
+    es_keys = config_db.get_keys(EVPN_ES_TABLE)
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        alias_name = interface_name
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail(f"The interface alias '{alias_name}' was not found!")
+
+    if interface_name not in es_keys:
+        ctx.fail(f"EVPN Ethernet segment {interface_name} does not exist")
+
+    if not is_valid_df_pref(df_pref):
+        ctx.fail(f"EVPN Ethernet Segment {interface_name} - DF Preference {df_pref} is not valid. " \
+                 "Valid values are {EVPN_ES_DF_PREF_MIN}-{EVPN_ES_DF_PREF_MAX}.")
+
+    try:
+        config_db.mod_entry(EVPN_ES_TABLE, interface_name, {'df_pref': int(df_pref)})
+
+        # Update frr
+        cmd = ['sudo', 'vtysh', '-c', 'configure terminal', '-c', 'interface {}'.format(interface_name)]
+        cmd.append('-c')
+        cmd.append('evpn mh es-df-pref {}'.format(int(df_pref)))
+        op = run_vtysh_command(cmd)
+        if op:
+            ctx.fail("VTYSh config failed. Error: {}".format(op))
+    except ValueError as e:
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
 #
 # 'ip' subgroup ('config interface ip ...')
