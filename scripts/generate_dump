@@ -2309,6 +2309,12 @@ save_counter_snapshot() {
     save_cmd "echo $counter_t" "date.counter_$idx"
     save_cmd "show interface counters" "interface.counters_$idx"
     save_cmd "show interface counters fec-stats" "interface.counters.fec-stats_$idx"
+
+    for netdev in /sys/class/net/Ethernet* ; do
+        iface=$(basename $netdev)
+        save_cmd "show interface counters fec-histogram $iface" "interface.counters.fec-histogram.$iface.$idx"
+    done
+
     if ! $IS_SUPERVISOR; then
        save_cmd "show queue counters" "queue.counters_$idx"
     fi
