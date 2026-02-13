@@ -2371,3 +2371,140 @@ class TestStpInterfaceBpduGuardEnable:
 
         assert result.exit_code != 0
         assert "Invalid interface" in result.output
+
+
+class TestDebugStp:
+    """Tests for debug spanning-tree commands"""
+
+    def setup_method(self):
+        self.runner = CliRunner()
+
+    @patch('utilities_common.cli.run_command')
+    def test_debug_spanning_tree(self, mock_run_command):
+        import debug.main as debug
+        result = self.runner.invoke(debug.cli.commands["spanning-tree"], [])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['sudo', 'stpctl', 'dbg', 'enable'])
+
+    @patch('utilities_common.cli.run_command')
+    def test_debug_spanning_tree_show(self, mock_run_command):
+        import debug.main as debug
+        result = self.runner.invoke(debug.cli.commands["spanning-tree"].commands["show"], [])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['sudo', 'stpctl', 'dbg', 'show'])
+
+    @patch('utilities_common.cli.run_command')
+    def test_debug_spanning_tree_reset(self, mock_run_command):
+        import debug.main as debug
+        result = self.runner.invoke(debug.cli.commands["spanning-tree"].commands["reset"], [])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['sudo', 'stpctl', 'dbg', 'disable'])
+
+    @patch('utilities_common.cli.run_command')
+    def test_debug_spanning_tree_bpdu(self, mock_run_command):
+        import debug.main as debug
+        result = self.runner.invoke(debug.cli.commands["spanning-tree"].commands["bpdu"], [])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['sudo', 'stpctl', 'dbg', 'bpdu', 'on'])
+
+    @patch('utilities_common.cli.run_command')
+    def test_debug_spanning_tree_bpdu_rx(self, mock_run_command):
+        import debug.main as debug
+        result = self.runner.invoke(debug.cli.commands["spanning-tree"].commands["bpdu"], ['rx'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['sudo', 'stpctl', 'dbg', 'bpdu', 'rx-on'])
+
+    @patch('utilities_common.cli.run_command')
+    def test_debug_spanning_tree_bpdu_tx_disable(self, mock_run_command):
+        import debug.main as debug
+        result = self.runner.invoke(debug.cli.commands["spanning-tree"].commands["bpdu"], ['tx', '-d'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['sudo', 'stpctl', 'dbg', 'bpdu', 'tx-off'])
+
+    @patch('utilities_common.cli.run_command')
+    def test_debug_spanning_tree_verbose(self, mock_run_command):
+        import debug.main as debug
+        result = self.runner.invoke(debug.cli.commands["spanning-tree"].commands["verbose"], [])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['sudo', 'stpctl', 'dbg', 'verbose', 'on'])
+
+    @patch('utilities_common.cli.run_command')
+    def test_debug_spanning_tree_verbose_disable(self, mock_run_command):
+        import debug.main as debug
+        result = self.runner.invoke(debug.cli.commands["spanning-tree"].commands["verbose"], ['-d'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['sudo', 'stpctl', 'dbg', 'verbose', 'off'])
+
+    @patch('utilities_common.cli.run_command')
+    def test_debug_spanning_tree_event(self, mock_run_command):
+        import debug.main as debug
+        result = self.runner.invoke(debug.cli.commands["spanning-tree"].commands["event"], [])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['sudo', 'stpctl', 'dbg', 'event', 'on'])
+
+    @patch('utilities_common.cli.run_command')
+    def test_debug_spanning_tree_dump_global(self, mock_run_command):
+        import debug.main as debug
+        result = self.runner.invoke(
+            debug.cli.commands["spanning-tree"].commands["dump"].commands["global"], [])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['sudo', 'stpctl', 'global'])
+
+    @patch('utilities_common.cli.run_command')
+    def test_debug_spanning_tree_dump_vlan(self, mock_run_command):
+        import debug.main as debug
+        result = self.runner.invoke(
+            debug.cli.commands["spanning-tree"].commands["dump"].commands["vlan"], ['100'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['sudo', 'stpctl', 'vlan', '100'])
+
+    @patch('utilities_common.cli.run_command')
+    def test_debug_spanning_tree_dump_interface(self, mock_run_command):
+        import debug.main as debug
+        result = self.runner.invoke(
+            debug.cli.commands["spanning-tree"].commands["dump"].commands["interface"],
+            ['100', 'Ethernet0'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['sudo', 'stpctl', 'port', '100', 'Ethernet0'])
+
+
+class TestClearStp:
+    """Tests for clear spanning-tree commands"""
+
+    def setup_method(self):
+        self.runner = CliRunner()
+
+    @patch('utilities_common.cli.run_command')
+    def test_clear_spanning_tree_statistics(self, mock_run_command):
+        import clear.main as clear
+        result = self.runner.invoke(
+            clear.cli.commands["spanning-tree"].commands["statistics"], [])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['sudo', 'stpctl', 'clrstsall'])
+
+    @patch('utilities_common.cli.run_command')
+    def test_clear_spanning_tree_statistics_interface(self, mock_run_command):
+        import clear.main as clear
+        result = self.runner.invoke(
+            clear.cli.commands["spanning-tree"].commands["statistics"].commands["interface"],
+            ['Ethernet0'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['sudo', 'stpctl', 'clrstsintf', 'Ethernet0'])
+
+    @patch('utilities_common.cli.run_command')
+    def test_clear_spanning_tree_statistics_vlan(self, mock_run_command):
+        import clear.main as clear
+        result = self.runner.invoke(
+            clear.cli.commands["spanning-tree"].commands["statistics"].commands["vlan"],
+            ['100'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['sudo', 'stpctl', 'clrstsvlan', '100'])
+
+    @patch('utilities_common.cli.run_command')
+    def test_clear_spanning_tree_statistics_vlan_interface(self, mock_run_command):
+        import clear.main as clear
+        result = self.runner.invoke(
+            clear.cli.commands["spanning-tree"].commands["statistics"].commands["vlan-interface"],
+            ['100', 'Ethernet0'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['sudo', 'stpctl', 'clrstsvlanintf', '100', 'Ethernet0'])
