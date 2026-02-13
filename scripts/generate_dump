@@ -1949,6 +1949,33 @@ collect_cisco_8000() {
 collect_marvell_teralynx() {
     save_cmd "ivmcmd 'show techsupport -i /innovium/show_techsupport_infile'" "show_techsupport_op_ifcs.log"
     save_cmd "ivmcmd 'show techsupport -i /innovium/show_techsupport_infile_iSAI'" "show_techsupport_op_iSAI.log"
+
+    local platform=$(show platform summary --json | python -c 'import sys, json; \
+        print(json.load(sys.stdin)["platform"])')
+    local hwsku=$(show platform summary --json | python -c 'import sys, json; \
+        print(json.load(sys.stdin)["hwsku"])')
+
+    if [ -d /usr/share/sonic/device/${platform}/${hwsku} ]; then
+        # copy all the files in the HWSKU directory
+        pushd /usr/share/sonic/device/${platform}/${hwsku} > /dev/null
+        for file in $(find . -maxdepth 2 -type f); do
+            save_file ${file} sai false
+        done
+        popd > /dev/null
+
+        if [ -f /usr/share/sonic/device/${platform}/${hwsku}/common_config_support ]; then
+            for file in $(find /var/run/docker-syncd -type f -name "*.yaml"); do
+                save_file ${file} sai false
+            done
+            # sai.profile - copy the final sai.profile generated in docker-syncd
+            if [ -f /var/run/docker-syncd/sai.profile ]; then
+                save_file /var/run/docker-syncd/sai.profile sai false
+            fi
+        fi
+    else
+        echo "'/usr/share/sonic/device/${platform}/${hwsku}' does not exist" > /tmp/error
+        save_file /tmp/error sai false
+    fi
 }
 
 ###############################################################################
