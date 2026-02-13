@@ -30,6 +30,7 @@ import config.main as config
 import config.validated_config_db_connector as validated_config_db_connector
 from config.main import config_file_yang_validation
 
+
 # Add Test, module and script path.
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
@@ -1811,9 +1812,68 @@ class TestConfigQos(object):
         )
         assert filecmp.cmp(output_file, expected_result, shallow=False)
 
+    def test_qos_update_multi_dut(
+            self, get_cmd_module, setup_qos_mock_apis
+        ):
+        import json
+        def print_file_content_as_json(file_path):
+            try:
+                # Open the file in read mode
+                with open(file_path, 'r') as file:
+                    # Read the content of the file
+                    content = file.read()
+                    # Assuming the content is in JSON format, parse it
+                    json_data = json.loads(content)
+                    # Convert the parsed data to a formatted JSON string
+                    json_string = json.dumps(json_data, indent=4)
+                    # Print the JSON string
+                    print(json_string)
+            except FileNotFoundError:
+                print(f"File '{file_path}' not found.")
+            except json.JSONDecodeError:
+                print(f"File '{file_path}' does not contain valid JSON.")
+        (config, show) = get_cmd_module
+        json_data = '{"DEVICE_METADATA": {"localhost": {"type": "spinerouter"}}, "PORT": {"Ethernet0": {}}}'
+        runner = CliRunner()
+        output_file = os.path.join(os.sep, "tmp", "qos_config_update_multi_dut.json")
+        print("Saving output in {}".format(output_file))
+        try:
+            os.remove(output_file)
+        except OSError:
+            pass
+        cmd_vector = ["reload", "--ports", "Ethernet0", "--json-data", json_data, "--dry_run", output_file]
+        result = runner.invoke(config.config.commands["qos"], cmd_vector)
+        print_file_content_as_json(output_file)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        cwd = os.path.dirname(os.path.realpath(__file__))
+
+        expected_result = os.path.join(
+            cwd, "qos_config_input", "update_qos_multi_dut.json"
+        )
+        assert filecmp.cmp(output_file, expected_result, shallow=False)
+
     def test_qos_update_single(
             self, get_cmd_module, setup_qos_mock_apis
         ):
+        import json
+        def print_file_content_as_json(file_path):
+            try:
+                # Open the file in read mode
+                with open(file_path, 'r') as file:
+                    # Read the content of the file
+                    content = file.read()
+                    # Assuming the content is in JSON format, parse it
+                    json_data = json.loads(content)
+                    # Convert the parsed data to a formatted JSON string
+                    json_string = json.dumps(json_data, indent=4)
+                    # Print the JSON string
+                    print(json_string)
+            except FileNotFoundError:
+                print(f"File '{file_path}' not found.")
+            except json.JSONDecodeError:
+                print(f"File '{file_path}' does not contain valid JSON.")
         (config, show) = get_cmd_module
         json_data = '{"DEVICE_METADATA": {"localhost": {}}, "PORT": {"Ethernet0": {}}}'
         runner = CliRunner()
@@ -1822,6 +1882,7 @@ class TestConfigQos(object):
         result = runner.invoke(config.config.commands["qos"], cmd_vector)
         print(result.exit_code)
         print(result.output)
+        print_file_content_as_json(output_file)
         assert result.exit_code == 0
         cwd = os.path.dirname(os.path.realpath(__file__))
         expected_result = os.path.join(
@@ -1833,7 +1894,6 @@ class TestConfigQos(object):
     def teardown_class(cls):
         print("TEARDOWN")
         os.environ['UTILITIES_UNIT_TESTING'] = "0"
-
 
 class TestConfigQosMasic(object):
     @classmethod
@@ -1926,6 +1986,7 @@ class TestConfigQosMasic(object):
         from .mock_tables import mock_single_asic
         importlib.reload(mock_single_asic)
         dbconnector.load_namespace_config()
+
 
 class TestGenericUpdateCommands(unittest.TestCase):
     def setUp(self):
