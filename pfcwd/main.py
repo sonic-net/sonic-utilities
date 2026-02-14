@@ -417,7 +417,7 @@ class PfcwdCli(object):
         port_num = len(list(self.config_db.get_table('PORT').keys()))
 
         # Paramter values positively correlate to the number of ports.
-        multiply = max(1, (port_num-1)//DEFAULT_PORT_NUM+1)
+        multiply = max(1, port_num//DEFAULT_PORT_NUM+1)
         pfcwd_info = {
             'detection_time': DEFAULT_DETECTION_TIME * multiply,
             'restoration_time': DEFAULT_RESTORATION_TIME * multiply,
