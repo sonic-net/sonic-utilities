@@ -7810,8 +7810,8 @@ def add():
     pass
 
 
-def get_acl_bound_ports():
-    config_db = ConfigDBConnector()
+def get_acl_bound_ports(namespace=None):
+    config_db = ConfigDBConnector(namespace=namespace)
     config_db.connect()
 
     ports = set()
@@ -7830,7 +7830,7 @@ def get_acl_bound_ports():
     return list(ports)
 
 
-def expand_vlan_ports(port_name):
+def expand_vlan_ports(port_name, namespace=None):
     """
     Expands a given VLAN interface into its member ports.
 
@@ -7839,7 +7839,7 @@ def expand_vlan_ports(port_name):
     If the provided interface is not a VLAN, then this method will return a list with only
     the provided interface in it.
     """
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(namespace=namespace)
     config_db.connect()
 
     if port_name not in config_db.get_keys("VLAN"):
@@ -7855,7 +7855,7 @@ def expand_vlan_ports(port_name):
     return members
 
 
-def parse_acl_table_info(table_name, table_type, description, ports, stage):
+def parse_acl_table_info(table_name, table_type, description, ports, stage, namespace=None):
     table_info = {"type": table_type}
 
     if description:
@@ -7867,10 +7867,10 @@ def parse_acl_table_info(table_name, table_type, description, ports, stage):
         raise ValueError("Cannot bind empty list of ports")
 
     port_list = []
-    valid_acl_ports = get_acl_bound_ports()
+    valid_acl_ports = get_acl_bound_ports(namespace)
     if ports:
         for port in ports.split(","):
-            port_list += expand_vlan_ports(port)
+            port_list += expand_vlan_ports(port, namespace)
         port_list = list(set(port_list))  # convert to set first to remove duplicate ifaces
     else:
         port_list = valid_acl_ports
@@ -7889,22 +7889,24 @@ def parse_acl_table_info(table_name, table_type, description, ports, stage):
 # 'table' subcommand ('config acl add table ...')
 #
 
-@add.command()
+
+@add.command('table')
 @click.argument("table_name", metavar="<table_name>")
 @click.argument("table_type", metavar="<table_type>")
 @click.option("-d", "--description")
 @click.option("-p", "--ports")
 @click.option("-s", "--stage", type=click.Choice(["ingress", "egress"]), default="ingress")
+@click.option('-n', '--namespace', help='Namespace name', type=click.Choice(multi_asic.get_namespace_list()))
 @click.pass_context
-def table(ctx, table_name, table_type, description, ports, stage):
+def add_table(ctx, table_name, table_type, description, ports, stage, namespace):
     """
     Add ACL table
     """
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(namespace=namespace)
     config_db.connect()
 
     try:
-        table_info = parse_acl_table_info(table_name, table_type, description, ports, stage)
+        table_info = parse_acl_table_info(table_name, table_type, description, ports, stage, namespace)
     except ValueError as e:
         ctx.fail("Failed to parse ACL table config: exception={}".format(e))
 
@@ -7925,13 +7927,15 @@ def remove():
 # 'table' subcommand ('config acl remove table ...')
 #
 
-@remove.command()
+
+@remove.command('table')
 @click.argument("table_name", metavar="<table_name>")
-def table(table_name):
+@click.option('-n', '--namespace', help='Namespace name', type=click.Choice(multi_asic.get_namespace_list()))
+def remove_table(table_name, namespace):
     """
     Remove ACL table
     """
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(namespace=namespace)
     config_db.connect()
     config_db.set_entry("ACL_TABLE", table_name, None)
 
