@@ -258,7 +258,7 @@ def breakout_warnUser_extraTables(cm, final_delPorts, confirm=True):
         # check if any extra tables exist
         eTables = cm.tablesWithOutYang()
         if len(eTables):
-            # find relavent tables in extra tables, i.e. one which can have deleted
+            # find relevant tables in extra tables, i.e. one which can have deleted
             # ports
             tables = cm.configWithKeys(configIn=eTables, keys=final_delPorts)
             click.secho("Below Config can not be verified, It may cause harm "\
@@ -981,7 +981,7 @@ def _get_disabled_services_list(config_db):
             if state == "disabled":
                 disabled_services_list.append(feature_name)
     else:
-        log.log_warning("Unable to retreive FEATURE table")
+        log.log_warning("Unable to retrieve FEATURE table")
 
     return disabled_services_list
 
@@ -1206,7 +1206,7 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
             if not interface_name_is_valid(config_db, port):
                 ctx.fail("Error: Source Interface {} is invalid".format(port))
             if dst_port and dst_port == port:
-                ctx.fail("Error: Destination Interface cant be same as Source Interface")
+                ctx.fail("Error: Destination Interface can't be same as Source Interface")
 
             namespace_set.add(get_port_namespace(port))
 
@@ -2399,7 +2399,7 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
         clicommon.run_command(command, display_cmd=True)
         client.set(config_db.INIT_INDICATOR, 1)
 
-    # Update SONiC environmnet file
+    # Update SONiC environment file
     update_sonic_environment()
 
     if os.path.isfile('/etc/sonic/acl.json'):
@@ -2515,7 +2515,7 @@ def override_config_by(golden_config_path):
     return
 
 
-# This funtion is to generate sysinfo if that is missing in config_input.
+# This function is to generate sysinfo if that is missing in config_input.
 # It will keep the same with sysinfo in cur_config if sysinfo exists.
 # Otherwise it will modify config_input with generated sysinfo.
 def generate_sysinfo(cur_config, config_input, ns=None):
@@ -2624,7 +2624,7 @@ def override_config_table(db, input_config_db, dry_run):
         # Use deepcopy by default to avoid modifying input config
         updated_config = update_config(current_config, ns_config_input)
 
-        # Enable YANG hard dependecy check to exit early if not satisfied
+        # Enable YANG hard dependency check to exit early if not satisfied
         table_hard_dependency_check(updated_config)
 
         yang_enabled = device_info.is_yang_config_validation_enabled(config_db)
@@ -2651,7 +2651,7 @@ def override_config_table(db, input_config_db, dry_run):
             except Exception as ex:
                 log.log_warning("Failed to validate running config. Alerting: {}".format(ex))
 
-            # YANG validate config of minigraph generated overriden by golden config
+            # YANG validate config of minigraph generated overridden by golden config
             if cm:
                 validate_config_by_cm_alerting(cm, updated_config, "updated_config")
 
@@ -2685,7 +2685,7 @@ def override_config_db(config_db, config_input):
     # Deserialized golden config to DB recognized format
     sonic_cfggen.FormatConverter.to_deserialized(config_input)
     # Delete table from DB then mod_config to apply golden config
-    click.echo("Removing configDB overriden table first ...")
+    click.echo("Removing configDB overridden table first ...")
     for table in config_input:
         config_db.delete_table(table)
     click.echo("Overriding input config to configDB ...")
@@ -3784,7 +3784,7 @@ def _qos_update_ports(ctx, ports, dry_run, json_data):
                         cable_length_from_template[port] = cable_len
                 # Reaching this point,
                 # - cable_length_from_template contains cable length rendered from the template, eg Ethernet0 and Ethernet4 in the above example
-                # - cable_length_from_db contains cable length existing in the CONFIG_DB, eg Ethernet8, Ethernet12, and Ethernet16 in the above exmaple
+                # - cable_length_from_db contains cable length existing in the CONFIG_DB, eg Ethernet8, Ethernet12, and Ethernet16 in the above example
 
                 if not items_to_apply.get(table_name):
                     items_to_apply[table_name] = {}
@@ -4779,7 +4779,7 @@ def all(verbose):
         namespaces = ns_list['front_ns']
 
     # Connect to CONFIG_DB in linux host (in case of single ASIC) or CONFIG_DB in all the
-    # namespaces (in case of multi ASIC) and do the sepcified "action" on the BGP neighbor(s)
+    # namespaces (in case of multi ASIC) and do the specified "action" on the BGP neighbor(s)
     for namespace in namespaces:
         config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
         config_db.connect()
@@ -4804,7 +4804,7 @@ def neighbor(ipaddr_or_hostname, verbose):
         namespaces = ns_list['front_ns'] + ns_list['back_ns']
 
     # Connect to CONFIG_DB in linux host (in case of single ASIC) or CONFIG_DB in all the
-    # namespaces (in case of multi ASIC) and do the sepcified "action" on the BGP neighbor(s)
+    # namespaces (in case of multi ASIC) and do the specified "action" on the BGP neighbor(s)
     for namespace in namespaces:
         config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
         config_db.connect()
@@ -4834,7 +4834,7 @@ def all(verbose):
         namespaces = ns_list['front_ns']
 
     # Connect to CONFIG_DB in linux host (in case of single ASIC) or CONFIG_DB in all the
-    # namespaces (in case of multi ASIC) and do the sepcified "action" on the BGP neighbor(s)
+    # namespaces (in case of multi ASIC) and do the specified "action" on the BGP neighbor(s)
     for namespace in namespaces:
         config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
         config_db.connect()
@@ -4859,7 +4859,7 @@ def neighbor(ipaddr_or_hostname, verbose):
         namespaces = ns_list['front_ns'] + ns_list['back_ns']
 
     # Connect to CONFIG_DB in linux host (in case of single ASIC) or CONFIG_DB in all the
-    # namespaces (in case of multi ASIC) and do the sepcified "action" on the BGP neighbor(s)
+    # namespaces (in case of multi ASIC) and do the specified "action" on the BGP neighbor(s)
     for namespace in namespaces:
         config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
         config_db.connect()
@@ -4892,7 +4892,7 @@ def remove_neighbor(neighbor_ip_or_hostname):
         namespaces = ns_list['front_ns'] + ns_list['back_ns']
 
     # Connect to CONFIG_DB in linux host (in case of single ASIC) or CONFIG_DB in all the
-    # namespaces (in case of multi ASIC) and do the sepcified "action" on the BGP neighbor(s)
+    # namespaces (in case of multi ASIC) and do the specified "action" on the BGP neighbor(s)
     for namespace in namespaces:
         config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
         config_db.connect()
@@ -5357,7 +5357,7 @@ def breakout(ctx, interface_name, mode, verbose, force_remove_dependencies, load
     with open('new_port_config.json', 'w') as f:
         json.dump(port_dict, f, indent=4)
 
-    # Start Interation with Dy Port BreakOut Config Mgmt
+    # Start Iteration with Dy Port BreakOut Config Mgmt
     try:
         """ Load config for the commands which are capable of change in config DB """
         cm = load_ConfigMgmt(verbose)
@@ -5950,7 +5950,7 @@ def remove_buffer_object_on_port(db, interface_name, buffer_object_map, is_pg=Tr
     if not ports:
         ctx.fail("Port {} doesn't exist".format(interface_name))
 
-    # Remvoe all dynamic lossless PGs on the port
+    # Remove all dynamic lossless PGs on the port
     buffer_table = "BUFFER_PG" if is_pg else "BUFFER_QUEUE"
     existing_buffer_objects = config_db.get_table(buffer_table)
     removed = False
@@ -6189,7 +6189,7 @@ def transceiver(ctx):
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @click.argument('frequency', metavar='<frequency>', required=True, type=int)
 def frequency(ctx, interface_name, frequency):
-    """Set transciever (only for 400G-ZR) frequency"""
+    """Set transceiver (only for 400G-ZR) frequency"""
     # Get the config_db connector
     config_db = ctx.obj['config_db']
 
@@ -6221,7 +6221,7 @@ def frequency(ctx, interface_name, frequency):
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @click.argument('tx-power', metavar='<tx-power>', required=True, type=float)
 def tx_power(ctx, interface_name, tx_power):
-    """Set transciever (only for 400G-ZR) Tx laser power"""
+    """Set transceiver (only for 400G-ZR) Tx laser power"""
     # Get the config_db connector
     config_db = ctx.obj['config_db']
 
@@ -6541,7 +6541,7 @@ def enable():
 
 @ipv6.group('disable')
 def disable():
-    """Disble IPv6 processing on interface"""
+    """Disable IPv6 processing on interface"""
     pass
 
 #
@@ -7570,7 +7570,7 @@ def add_vrf_vni_map(ctx, vrfname, vni):
     config_db = ctx.obj['config_db']
     found = 0
     if vrfname not in config_db.get_table('VRF').keys():
-        ctx.fail("vrf {} doesnt exists".format(vrfname))
+        ctx.fail("vrf {} doesn't exist".format(vrfname))
     if not vni.isdigit():
         ctx.fail("Invalid VNI {}. Only valid VNI is accepted".format(vni))
 
@@ -7608,7 +7608,7 @@ def add_vrf_vni_map(ctx, vrfname, vni):
 def del_vrf_vni_map(ctx, vrfname):
     config_db = ctx.obj['config_db']
     if vrfname not in config_db.get_table('VRF').keys():
-        ctx.fail("vrf {} doesnt exists".format(vrfname))
+        ctx.fail("vrf {} doesn't exist".format(vrfname))
 
     config_db.mod_entry('VRF', vrfname, {"vni": 0})
 
@@ -7716,7 +7716,7 @@ def del_route(ctx, command_str):
     keys = config_db.get_keys('STATIC_ROUTE')
 
     if not tuple(key.split("|")) in keys:
-        ctx.fail('Route {} doesnt exist'.format(key))
+        ctx.fail("Route {} doesn't exist".format(key))
     else:
         # If not defined nexthop or intf name remove entire route
         if not 'nexthop' in route and not 'ifname' in route:
@@ -9971,7 +9971,7 @@ def add_vnet_route(ctx, vnet_name, prefix, endpoint, vni, mac_address, endpoint_
     vnet_name_is_valid(ctx, vnet_name)
 
     if not is_vnet_exists(config_db, vnet_name):
-        ctx.fail("VNET {} doesnot exist, cannot add a route!".format(vnet_name))
+        ctx.fail("VNET {} does not exist, cannot add a route!".format(vnet_name))
     if not clicommon.is_ipprefix(prefix):
         ctx.fail("Invalid prefix {}".format(prefix))
     else:
@@ -10030,14 +10030,14 @@ def del_vnet_route(ctx, vnet_name, prefix):
     vnet_name_is_valid(ctx, vnet_name)
 
     if not is_vnet_exists(config_db, vnet_name):
-        ctx.fail("VNET {} doesnot exist, cannot delete the route!".format(vnet_name))
+        ctx.fail("VNET {} does not exist, cannot delete the route!".format(vnet_name))
     if not is_vnet_route_exists(config_db, vnet_name):
-        ctx.fail("Routes dont exist for the VNET {}, cant delete it!".format(vnet_name))
+        ctx.fail("Routes dont exist for the VNET {}, can't delete it!".format(vnet_name))
     if prefix:
         if not clicommon.is_ipprefix(prefix):
             ctx.fail("Invalid prefix {}".format(prefix))
         if not is_specific_vnet_route_exists(config_db, vnet_name, prefix):
-            ctx.fail("Route does not exist for the VNET {}, cant delete it!".format(vnet_name))
+            ctx.fail("Route does not exist for the VNET {}, can't delete it!".format(vnet_name))
         else:
             for key in config_db.get_table('VNET_ROUTE_TUNNEL'):
                 if key[0] == vnet_name and key[1] == prefix:
