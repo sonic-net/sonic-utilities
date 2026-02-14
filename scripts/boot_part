@@ -101,7 +101,7 @@ def set_boot_partition(blkdev, index):
 def main():
     parser = argparse.ArgumentParser(description='The default output is a list of partition information.')
     parser.add_argument('-i', '--index', type=int,
-        help='Set the index partition as boot partition. After reboot, GRUB will boot from that partion.')
+        help='Set the index partition as boot partition. After reboot, GRUB will boot from that partition.')
     parser.add_argument("-v", "--verbose", action="store_true",
         help="increase output verbosity")
     args = parser.parse_args()

@@ -150,7 +150,7 @@ save_bcmcmd() {
 }
 
 ###############################################################################
-# Runs a given bcmcmd command in all namesapces in case of multi ASIC platform
+# Runs a given bcmcmd command in all namespaces in case of multi ASIC platform
 # Globals:
 #  NUM_ASICS
 # Arguments:
@@ -178,7 +178,7 @@ save_bcmcmd_all_ns() {
 }
 
 ###############################################################################
-# Runs a comamnd and saves its output to the file.
+# Runs a command and saves its output to the file.
 # Command gets timedout if it runs for more than TIMEOUT_MIN minutes.
 # Globals:
 #  LOGDIR
@@ -298,7 +298,7 @@ dummy_cleanup_method() {
 }
 
 ###############################################################################
-# Runs a given command in all namesapces in case of multi ASIC platform, in
+# Runs a given command in all namespaces in case of multi ASIC platform, in
 # default (host) namespace in single ASIC platform
 # Globals:
 #  NUM_ASICS
@@ -400,7 +400,7 @@ copy_from_masic_docker() {
 }
 
 ###############################################################################
-# Returns namespace option to be used with vtysh commmand, based on the ASIC ID.
+# Returns namespace option to be used with vtysh command, based on the ASIC ID.
 # Returns empty string if no ASIC ID is provided
 # Globals:
 #  None
@@ -422,7 +422,7 @@ get_vtysh_namespace() {
 }
 
 ###############################################################################
-# Runs a vtysh command in all namesapces for a multi ASIC platform, and in
+# Runs a vtysh command in all namespaces for a multi ASIC platform, and in
 # default (host) namespace in single ASIC platforms. Saves its output to the
 # file.
 # Globals:
@@ -1171,7 +1171,7 @@ with open('$filepath') as json_file:
 # SAI DUMP based on the route table size
 # if the route table has more than ROUTE_TAB_LIMIT_DIRECT_ITERATION
 # then dump by Redis Save command,
-# otherwize, dump it by directly iteration the Redis
+# otherwise, dump it by directly iteration the Redis
 #
 # Globals:
 #  NUM_ASICS
@@ -1265,7 +1265,7 @@ save_chassis_modules_info() {
 }
 
 ###############################################################################
-# Runs a comamnd and saves its output to the incrementally built tar.
+# Runs a command and saves its output to the incrementally built tar.
 # Globals:
 #  LOGDIR
 #  BASE
@@ -1642,7 +1642,7 @@ collect_nvidia_sdk_dumps() {
 }
 
 ###############################################################################
-# Runs a given marvellcmd command in all namesapces in case of multi ASIC platform
+# Runs a given marvellcmd command in all namespaces in case of multi ASIC platform
 # Globals:
 #  NUM_ASICS
 # Arguments:
@@ -2607,7 +2607,7 @@ main() {
     # Remove secret from /etc files before tar
     remove_secret_from_etc_files $TARDIR
 
-    # Remove unecessary files
+    # Remove unnecessary files
     $RM $V -rf $TARDIR/etc/alternatives $TARDIR/etc/passwd* \
     $TARDIR/etc/shadow* $TARDIR/etc/group* $TARDIR/etc/gshadow* \
     $TARDIR/etc/ssh* $TARDIR/etc/mlnx $TARDIR/etc/mft \
@@ -2895,7 +2895,7 @@ if $MKDIR "${LOCKDIR}" &>/dev/null; then
     # Trap configured on EXIT will be triggered by the exit from handle_signal function
     trap 'handle_sigterm' SIGHUP SIGQUIT SIGTERM
     trap 'handle_sigint' SIGINT
-    echo "Lock succesfully accquired and installed signal handlers"
+    echo "Lock successfully acquired and installed signal handlers"
     # Proceed with the actual code
     if [[ ! -z "${V}" ]]; then
         set -v
@@ -2912,7 +2912,7 @@ else
 
     if ! kill -0 $PID_PROG &>/dev/null; then
         # Lock is stale
-        echo "Removing stale lock of nonexistant PID ${PID_PROG}"
+        echo "Removing stale lock of nonexistent PID ${PID_PROG}"
         rm_lock_and_exit
     else
         # Lock is valid and the other instance is active. Exit Now
