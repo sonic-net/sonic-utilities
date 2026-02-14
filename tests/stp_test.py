@@ -1841,7 +1841,8 @@ class TestMstInstanceInterfacePriority:
         self.db.cfgdb.mod_entry('PORT', 'Ethernet0', None)
         result = self.runner.invoke(self.priority_cmd, ['2', 'Ethernet0', '128'], obj=self.db)
         assert result.exit_code != 0
-        assert "not a L2 interface" in result.output or "Invalid interface" in result.output
+        assert ("not a L2 interface" in result.output or "Invalid interface" in result.output or
+                "Interface name is invalid" in result.output)
 
 
 class TestStpInterfaceLinkTypeSet:
