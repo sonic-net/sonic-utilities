@@ -7978,7 +7978,7 @@ This command displays whether the management VRF is enabled or disabled. It also
 
 **show mgmt-vrf routes**
 
-This command displays the routes that are present in the routing table 5000 that is meant for management VRF.
+This command displays the routes that are present in the routing table 6000 that is meant for management VRF.
 
 - Usage:
   ```
