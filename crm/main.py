@@ -138,7 +138,7 @@ class Crm:
 
     def get_acl_resources(self):
         """
-        CRM Handler to get ACL recources information.
+        CRM Handler to get ACL resources information.
         """
         data = []
 
@@ -200,7 +200,7 @@ class Crm:
     @multi_asic_util.run_on_multi_asic
     def show_acl_resources(self):
         """
-        CRM Handler to display ACL recources information.
+        CRM Handler to display ACL resources information.
         """
 
         if multi_asic.is_multi_asic():
@@ -390,7 +390,7 @@ def route(ctx):
 @ipv4.group()
 @click.pass_context
 def neighbor(ctx):
-    """CRM configuration for neigbor resource"""
+    """CRM configuration for neighbor resource"""
     ctx.obj["crm"].res_type = 'neighbor'
 
 @ipv4.group()

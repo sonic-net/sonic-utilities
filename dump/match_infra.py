@@ -48,7 +48,7 @@ class MatchRequest:
                           Only one of the db/file fields should have a non-empty string.
     "just_keys"         : If true, Only Returns the keys matched. Does not return field-value pairs. Defaults to True
     "ns"                : namespace argument, if nothing is provided, default namespace is used
-    "match_entire_list" : When this arg is set to true, entire list is matched incluing the ",".
+    "match_entire_list" : When this arg is set to true, entire list is matched including the ",".
                           When False, the values are split based on "," and individual items are matched with
     """
 
@@ -464,7 +464,7 @@ class MatchRequestOptimizer():
 
     def __mutate_request(self, req):
         """
-        Mutate the Request to fetch all the fv pairs, regardless of the orignal request
+        Mutate the Request to fetch all the fv pairs, regardless of the original request
         Save the return_fields and just_keys args of original request
         """
         fv_requested = []

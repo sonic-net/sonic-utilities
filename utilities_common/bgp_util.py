@@ -333,10 +333,10 @@ def display_bgp_summary(bgp_summary, af):
 
     '''
 
-    # "Neighbhor" is a known typo,
+    # "Neighbor" is a known typo,
     # but fix it will impact lots of automation scripts that the community users may have developed for years
     # for now, let's keep it as it is.
-    headers = ["Neighbhor", "V", "AS", "MsgRcvd", "MsgSent", "TblVer",
+    headers = ["Neighbor", "V", "AS", "MsgRcvd", "MsgSent", "TblVer",
                "InQ", "OutQ", "Up/Down", "State/PfxRcd", "NeighborName"]
 
     try:
@@ -412,7 +412,7 @@ def process_bgp_summary_json(bgp_summary, cmd_output, device, has_bgp_neighbors=
             bgp_summary['peerGroupMemory'] = bgp_summary.get(
                 'peerCount', 0) + 0
 
-        # store instance level field is seperate dict
+        # store instance level field is separate dict
         router_info = {}
         router_info['router_id'] = cmd_output['routerId']
         router_info['vrf'] = cmd_output['vrfId']
