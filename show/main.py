@@ -540,7 +540,7 @@ def mgmt_vrf(ctx,routes):
             run_command(cmd)
         else:
             click.echo("\nRoutes in Management VRF Routing Table:")
-            cmd = ['ip', 'route', 'show', 'table', '5000']
+            cmd = ['ip', 'route', 'show', 'table', '6000']
             run_command(cmd)
 
 #
