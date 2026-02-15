@@ -938,6 +938,96 @@ class TestBgpCommandsSingleAsic(object):
         dbconnector.load_database_config()
 
 
+class TestBgpUtilIpNormalization(object):
+    """
+    Test cases for IPv6 address normalization in bgp_util.
+    These tests verify that non-canonical IPv6 addresses are properly normalized
+    to canonical form for consistent neighbor lookups.
+    """
+
+    def test_normalize_ip_address(self):
+        """Test IP address normalization for IPv6, IPv4, and non-IP strings."""
+        test_cases = [
+            ('2000::0', '2000::'),
+            ('fc00::0001', 'fc00::1'),
+            ('2001:0db8:0000:0000:0000:0000:0000:0001', '2001:db8::1'),
+            ('fc00::42', 'fc00::42'),
+            ('::1', '::1'),
+            ('10.0.0.1', '10.0.0.1'),
+            ('Ethernet0', 'Ethernet0'),
+            ('', ''),
+        ]
+        for input_val, expected in test_cases:
+            result = bgp_util.normalize_ip_address(input_val)
+            assert result == expected, \
+                f"normalize_ip_address('{input_val}') = '{result}', expected '{expected}'"
+
+    def test_get_bgp_neighbor_ip_to_name_with_non_canonical_ipv6(self):
+        """
+        Test that get_bgp_neighbor_ip_to_name correctly finds neighbors
+        when Config DB uses non-canonical IPv6 but FRR returns canonical IPv6.
+        """
+        # Simulate static_neighbors dict as it would be built from Config DB
+        # with non-canonical IPv6 addresses that have been normalized
+        static_neighbors = {
+            # These are normalized keys (as they would be after get_neighbor_dict_from_table)
+            '2000::': 'NEIGHBOR_2000',
+            'fc00::42': 'NEIGHBOR_FC00_42',
+            '2001:db8::1': 'NEIGHBOR_2001',
+            '10.0.0.1': 'NEIGHBOR_IPV4',
+        }
+
+        dynamic_neighbors = {
+            constants.IPV4: {},
+            constants.IPV6: {},
+        }
+
+        # Test lookups with canonical addresses (as FRR would return)
+        assert bgp_util.get_bgp_neighbor_ip_to_name(
+            '2000::', static_neighbors, dynamic_neighbors) == 'NEIGHBOR_2000'
+        assert bgp_util.get_bgp_neighbor_ip_to_name(
+            'fc00::42', static_neighbors, dynamic_neighbors) == 'NEIGHBOR_FC00_42'
+        assert bgp_util.get_bgp_neighbor_ip_to_name(
+            '2001:db8::1', static_neighbors, dynamic_neighbors) == 'NEIGHBOR_2001'
+        assert bgp_util.get_bgp_neighbor_ip_to_name(
+            '10.0.0.1', static_neighbors, dynamic_neighbors) == 'NEIGHBOR_IPV4'
+
+        # Test lookups with non-canonical addresses (should also work due to normalization)
+        assert bgp_util.get_bgp_neighbor_ip_to_name(
+            '2000::0', static_neighbors, dynamic_neighbors) == 'NEIGHBOR_2000'
+        assert bgp_util.get_bgp_neighbor_ip_to_name(
+            'fc00::0042', static_neighbors, dynamic_neighbors) == 'NEIGHBOR_FC00_42'
+        assert bgp_util.get_bgp_neighbor_ip_to_name(
+            '2001:0db8::0001', static_neighbors, dynamic_neighbors) == 'NEIGHBOR_2001'
+
+    def test_get_bgp_neighbor_ip_to_name_with_vrf_tuple_keys(self):
+        """
+        Test that get_bgp_neighbor_ip_to_name correctly handles tuple keys
+        (VRF mode) with IPv6 normalization.
+        """
+        static_neighbors = {
+            ('default', '2000::'): 'VRF_DEFAULT_NEIGHBOR',
+            ('Vrf1', 'fc00::42'): 'VRF1_NEIGHBOR',
+            ('Vrf2', '10.0.0.1'): 'VRF2_IPV4_NEIGHBOR',
+        }
+
+        dynamic_neighbors = {
+            constants.IPV4: {},
+            constants.IPV6: {},
+        }
+
+        # Test lookups with canonical addresses
+        assert bgp_util.get_bgp_neighbor_ip_to_name(
+            '2000::', static_neighbors, dynamic_neighbors) == 'VRF_DEFAULT_NEIGHBOR'
+        assert bgp_util.get_bgp_neighbor_ip_to_name(
+            'fc00::42', static_neighbors, dynamic_neighbors) == 'VRF1_NEIGHBOR'
+
+        # Test lookups with non-canonical addresses
+        assert bgp_util.get_bgp_neighbor_ip_to_name(
+            '2000::0', static_neighbors, dynamic_neighbors) == 'VRF_DEFAULT_NEIGHBOR'
+        assert bgp_util.get_bgp_neighbor_ip_to_name(
+            'fc00::0042', static_neighbors, dynamic_neighbors) == 'VRF1_NEIGHBOR'
+
 
 class TestBgpCommandsMultiAsic(object):
     @classmethod
