@@ -706,7 +706,6 @@ case "$REBOOT_TYPE" in
         BOOT_TYPE_ARG=$REBOOT_TYPE
         trap clear_boot EXIT HUP INT QUIT TERM KILL ABRT ALRM
         sonic-db-cli STATE_DB HSET "FAST_RESTART_ENABLE_TABLE|system" "enable" "true" &>/dev/null
-        config warm_restart teamsyncd_timer 1
         config warm_restart enable system
         ;;
     "warm-reboot")
