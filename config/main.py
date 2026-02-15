@@ -3040,11 +3040,16 @@ def del_portchannel_member(ctx, portchannel_name, port_name):
 @portchannel.group(cls=clicommon.AbbreviationGroup, name='retry-count')
 @click.pass_context
 def portchannel_retry_count(ctx):
-    pass
+    teamdctl_command = ["teamdctl"]
+    if ctx.obj["namespace"] != DEFAULT_NAMESPACE:
+        teamdctl_command += ["-n", ctx.obj['namespace'].removeprefix("asic")]
+    ctx.obj["teamdctl_command"] = teamdctl_command
 
 def check_if_retry_count_is_enabled(ctx, portchannel_name):
     try:
-        proc = subprocess.Popen(["teamdctl", portchannel_name, "state", "item", "get", "runner.enable_retry_count_feature"], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        cmd = ctx.obj["teamdctl_command"] + [portchannel_name, "state", "item", "get",
+                                             "runner.enable_retry_count_feature"]
+        proc = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         output, err = proc.communicate(timeout=10)
         if proc.returncode != 0:
             ctx.fail("Unable to determine if the retry count feature is enabled or not: {}".format(err.strip()))
@@ -3075,7 +3080,9 @@ def get_portchannel_retry_count(ctx, portchannel_name):
         if not is_retry_count_enabled:
             ctx.fail("Retry count feature is not enabled!")
 
-        proc = subprocess.Popen(["teamdctl", portchannel_name, "state", "item", "get", "runner.retry_count"], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        cmd = ctx.obj["teamdctl_command"] + [portchannel_name, "state", "item", "get",
+                                             "runner.retry_count"]
+        proc = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         output, err = proc.communicate(timeout=10)
         if proc.returncode != 0:
             ctx.fail("Unable to get the retry count: {}".format(err.strip()))
@@ -3111,7 +3118,9 @@ def set_portchannel_retry_count(ctx, portchannel_name, retry_count):
         if not is_retry_count_enabled:
             ctx.fail("Retry count feature is not enabled!")
 
-        proc = subprocess.Popen(["teamdctl", portchannel_name, "state", "item", "set", "runner.retry_count", str(retry_count)], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        cmd = ctx.obj["teamdctl_command"] + [portchannel_name, "state", "item", "set",
+                                             "runner.retry_count", str(retry_count)]
+        proc = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         output, err = proc.communicate(timeout=10)
         if proc.returncode != 0:
             ctx.fail("Unable to set the retry count: {}".format(err.strip()))
