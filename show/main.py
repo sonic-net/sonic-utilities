@@ -50,6 +50,7 @@ from . import flow_counters
 from . import hft
 from . import gearbox
 from . import interfaces
+from . import isis_frr
 from . import kdump
 from . import kube
 from . import muxcable
@@ -314,6 +315,7 @@ if hft_common.is_supported_platform():
     cli.add_command(hft.hft)
 cli.add_command(kdump.kdump)
 cli.add_command(interfaces.interfaces)
+cli.add_command(isis_frr.isis)
 cli.add_command(kdump.kdump)
 cli.add_command(kube.kubernetes)
 cli.add_command(muxcable.muxcable)
@@ -1874,6 +1876,64 @@ def bgp(namespace, verbose):
     else:
         output += bgp_util.run_bgp_show_command(cmd)
     print(output)
+
+
+# 'isis' subcommand ("show runningconfiguration isis")
+@runningconfiguration.command()
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+@click.option('--config_db', is_flag=True, help="Enable config DB output")
+@click.option('--namespace', '-n', 'namespace', required=False, default=None, type=str, show_default=False,
+              help='Option needed for multi-asic only: provide namespace name',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def isis(namespace, config_db, verbose):
+    """
+    Show ISIS running configuration
+    Note:
+        multi-asic can run 'show run isis' and show from all asics, or 'show run isis -n <ns>'
+        single-asic only run 'show run isis', '-n' is not available
+    """
+
+    if multi_asic.is_multi_asic():
+        if namespace and namespace not in multi_asic.get_namespace_list():
+            ctx = click.get_current_context()
+            ctx.fail("invalid value for -n/--namespace option. provide namespace from list {}".format(multi_asic.get_namespace_list()))
+    if not multi_asic.is_multi_asic() and namespace:
+        ctx = click.get_current_context()
+        ctx.fail("-n/--namespace is not available for single asic")
+
+    if (config_db):
+        full_isis_conf = {}
+
+        cmd = "sonic-cfggen -d --var-json ISIS_GLOBAL"
+        global_output = run_command(cmd, return_cmd=True)
+
+        cmd = "sonic-cfggen -d --var-json ISIS_LEVEL"
+        level_output = run_command(cmd, return_cmd=True)
+
+        cmd = "sonic-cfggen -d --var-json ISIS_INTERFACE"
+        interface_output = run_command(cmd, return_cmd=True)
+
+        full_isis_conf["ISIS_GLOBAL"] = json.loads(global_output)
+        full_isis_conf["ISIS_LEVEL"] = json.loads(level_output)
+        full_isis_conf["ISIS_INTERFACE"] = json.loads(interface_output)
+
+        click.echo(json.dumps(full_isis_conf, indent=4))
+    else:
+        output = ""
+        cmd = "show running-config isis"
+        import utilities_common.bgp_util as bgp_util
+        if multi_asic.is_multi_asic():
+            if not namespace:
+                ns_list = multi_asic.get_namespace_list()
+                for ns in ns_list:
+                    output += "\n------------Showing running config isis on {}------------\n".format(ns)
+                    output += bgp_util.run_bgp_show_command(cmd, ns)
+            else:
+                output += "\n------------Showing running config isis on {}------------\n".format(namespace)
+                output += bgp_util.run_bgp_show_command(cmd, namespace)
+        else:
+            output += bgp_util.run_bgp_show_command(cmd)
+        click.echo(output.rstrip('\n'))
 
 
 # 'interfaces' subcommand ("show runningconfiguration interfaces")

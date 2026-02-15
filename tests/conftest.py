@@ -18,6 +18,15 @@ from .bgp_commands_input.bgp_network_test_vector import (
     mock_show_bgp_network_single_asic,
     mock_show_bgp_network_multi_asic
     )
+from .isis_frr_input.isis_frr_test_vector import(
+    mock_show_isis_neighbors,
+    mock_show_isis_database,
+    mock_show_isis_hostname,
+    mock_show_isis_interface,
+    mock_show_isis_topology,
+    mock_show_isis_summary,
+    mock_show_run_isis
+    )
 from . import config_int_ip_common
 import utilities_common.constants as constants
 import config.main as config
@@ -461,3 +470,46 @@ def mock_restart_dhcp_relay_service():
 
     config.vlan.dhcp_relay_util.restart_dhcp_relay_service = origin_funcs[0]
     config.vlan.is_dhcp_relay_running = origin_funcs[1]
+
+@pytest.fixture
+def setup_single_isis_instance(request):
+    import utilities_common.bgp_util as bgp_util
+
+    _old_run_bgp_command = bgp_util.run_bgp_command
+
+    if request.param.startswith('isis_neighbor') or \
+            request.param.startswith('isis_neighbor'):
+        bgp_util.run_bgp_command = mock.MagicMock(
+            return_value=mock_show_isis_neighbors(request))
+    elif request.param.startswith('isis_database') or \
+            request.param.startswith('isis_database'):
+        bgp_util.run_bgp_command = mock.MagicMock(
+            return_value=mock_show_isis_database(request))     
+    elif request.param.startswith('isis_hostname') or \
+            request.param.startswith('isis_hostname'):
+        bgp_util.run_bgp_command = mock.MagicMock(
+            return_value=mock_show_isis_hostname(request))
+    elif request.param.startswith('isis_interface') or \
+            request.param.startswith('isis_interface'):
+        bgp_util.run_bgp_command = mock.MagicMock(
+            return_value=mock_show_isis_interface(request))
+    elif request.param.startswith('isis_topology') or \
+            request.param.startswith('isis_topology'):
+        bgp_util.run_bgp_command = mock.MagicMock(
+            return_value=mock_show_isis_topology(request))
+    elif request.param.startswith('isis_summary'):
+        bgp_util.run_bgp_command = mock.MagicMock(
+            return_value=mock_show_isis_summary(request)) 
+    elif request.param.startswith('show_run_isis'):
+        bgp_util.run_bgp_command = mock.MagicMock(
+            return_value=mock_show_run_isis(request))    
+
+    yield
+
+    bgp_util.run_bgp_command = _old_run_bgp_command
+
+
+@pytest.fixture
+def setup_isis_commands():
+    import show.main as show
+    return show
