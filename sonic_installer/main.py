@@ -981,10 +981,18 @@ def rollback_docker(container_name):
 def verify_next_image():
     """ Verify the next image for reboot"""
     bootloader = get_bootloader()
+    nouse = 1
     if not bootloader.verify_next_image():
         echo_and_log('Image verification failed', LOG_ERR)
         sys.exit(1)
     click.echo('Image successfully verified')
+
+def test(m):
+    print(msg)
+
+def test(m):
+    print(undefinedValue)
+
 
 if __name__ == '__main__':
     sonic_installer()
