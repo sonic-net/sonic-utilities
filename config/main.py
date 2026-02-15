@@ -51,6 +51,7 @@ from utilities_common import hft as hft_common
 from .utils import log
 
 from . import aaa
+from . import bmc
 from . import chassis_modules
 from . import console
 from . import feature
@@ -1735,6 +1736,7 @@ def config(ctx):
 config.add_command(aaa.aaa)
 config.add_command(aaa.tacacs)
 config.add_command(aaa.radius)
+config.add_command(bmc.bmc)
 config.add_command(chassis_modules.chassis)
 config.add_command(console.console)
 config.add_command(fabric.fabric)
