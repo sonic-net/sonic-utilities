@@ -333,3 +333,136 @@ class TestClearFlowcnt(object):
     def teardown(self):
         print('TEAR DOWN')
 
+
+class TestClearArp(object):
+    def setup(self):
+        print('SETUP')
+
+    @patch('clear.main.run_command')
+    @patch('clear.main.multi_asic.is_multi_asic', MagicMock(return_value=False))
+    def test_clear_arp_single_asic(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['arp'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['sudo', 'ip', '-4', '-s', '-s', 'neigh', 'flush', 'all'])
+
+    @patch('clear.main.run_command', MagicMock(return_value=('', '')))
+    @patch('clear.main.multi_asic.is_multi_asic', MagicMock(return_value=False))
+    def test_clear_arp_single_asic_with_ip(self):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['arp'], ['192.168.1.1'])
+        assert result.exit_code == 0
+
+    @patch('clear.main.run_command',
+           MagicMock(return_value=('192.168.1.1 dev Ethernet0 lladdr 00:11:22:33:44:55 REACHABLE', '')))
+    @patch('clear.main.multi_asic.is_multi_asic', MagicMock(return_value=False))
+    def test_clear_arp_single_asic_with_ip_found(self):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['arp'], ['192.168.1.1'])
+        assert result.exit_code == 0
+
+    @patch('clear.main.run_command', MagicMock(return_value=('', 'Error')))
+    @patch('clear.main.multi_asic.is_multi_asic', MagicMock(return_value=False))
+    def test_clear_arp_single_asic_with_ip_not_found(self):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['arp'], ['192.168.1.1'])
+        assert result.exit_code == 0
+        assert 'Neighbor 192.168.1.1 not found' in result.output
+
+    @patch('clear.main.run_command')
+    @patch('clear.main.multi_asic.is_multi_asic', MagicMock(return_value=True))
+    @patch('utilities_common.multi_asic.multi_asic_namespace_validation_callback', MagicMock(return_value='asic0'))
+    def test_clear_arp_multi_asic_with_namespace(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['arp'], ['-n', 'asic0'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(
+            ['sudo', 'ip', 'netns', 'exec', 'asic0', 'ip', '-4', '-s', '-s', 'neigh', 'flush', 'all'])
+
+    @patch('clear.main.run_command',
+           MagicMock(return_value=('192.168.1.1 dev Ethernet0 lladdr 00:11:22:33:44:55 REACHABLE', '')))
+    @patch('clear.main.multi_asic.is_multi_asic', MagicMock(return_value=True))
+    @patch('utilities_common.multi_asic.multi_asic_namespace_validation_callback', MagicMock(return_value='asic0'))
+    def test_clear_arp_multi_asic_with_namespace_and_ip(self):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['arp'], ['-n', 'asic0', '192.168.1.1'])
+        assert result.exit_code == 0
+
+    @patch('clear.main.run_command', MagicMock(return_value=('', 'Error')))
+    @patch('clear.main.multi_asic.is_multi_asic', MagicMock(return_value=True))
+    @patch('utilities_common.multi_asic.multi_asic_namespace_validation_callback', MagicMock(return_value='asic0'))
+    def test_clear_arp_multi_asic_with_namespace_and_ip_not_found(self):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['arp'], ['-n', 'asic0', '192.168.1.1'])
+        assert result.exit_code == 0
+        assert 'Neighbor 192.168.1.1 not found in namespace asic0' in result.output
+
+    def teardown(self):
+        print('TEAR DOWN')
+
+
+class TestClearNdp(object):
+    def setup(self):
+        print('SETUP')
+
+    @patch('clear.main.run_command')
+    @patch('clear.main.multi_asic.is_multi_asic', MagicMock(return_value=False))
+    def test_clear_ndp_single_asic(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['ndp'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['sudo', 'ip', '-6', '-s', '-s', 'neigh', 'flush', 'all'])
+
+    @patch('clear.main.run_command', MagicMock(return_value=('', '')))
+    @patch('clear.main.multi_asic.is_multi_asic', MagicMock(return_value=False))
+    def test_clear_ndp_single_asic_with_ip(self):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['ndp'], ['fe80::1'])
+        assert result.exit_code == 0
+
+    @patch('clear.main.run_command',
+           MagicMock(return_value=('fe80::1 dev Ethernet0 lladdr 00:11:22:33:44:55 REACHABLE', '')))
+    @patch('clear.main.multi_asic.is_multi_asic', MagicMock(return_value=False))
+    def test_clear_ndp_single_asic_with_ip_found(self):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['ndp'], ['fe80::1'])
+        assert result.exit_code == 0
+
+    @patch('clear.main.run_command', MagicMock(return_value=('', 'Error')))
+    @patch('clear.main.multi_asic.is_multi_asic', MagicMock(return_value=False))
+    def test_clear_ndp_single_asic_with_ip_not_found(self):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['ndp'], ['fe80::1'])
+        assert result.exit_code == 0
+        assert 'Neighbor fe80::1 not found' in result.output
+
+    @patch('clear.main.run_command')
+    @patch('clear.main.multi_asic.is_multi_asic', MagicMock(return_value=True))
+    @patch('utilities_common.multi_asic.multi_asic_namespace_validation_callback', MagicMock(return_value='asic0'))
+    def test_clear_ndp_multi_asic_with_namespace(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['ndp'], ['-n', 'asic0'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(
+            ['sudo', 'ip', 'netns', 'exec', 'asic0', 'ip', '-6', '-s', '-s', 'neigh', 'flush', 'all'])
+
+    @patch('clear.main.run_command',
+           MagicMock(return_value=('fe80::1 dev Ethernet0 lladdr 00:11:22:33:44:55 REACHABLE', '')))
+    @patch('clear.main.multi_asic.is_multi_asic', MagicMock(return_value=True))
+    @patch('utilities_common.multi_asic.multi_asic_namespace_validation_callback', MagicMock(return_value='asic0'))
+    def test_clear_ndp_multi_asic_with_namespace_and_ip(self):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['ndp'], ['-n', 'asic0', 'fe80::1'])
+        assert result.exit_code == 0
+
+    @patch('clear.main.run_command', MagicMock(return_value=('', 'Error')))
+    @patch('clear.main.multi_asic.is_multi_asic', MagicMock(return_value=True))
+    @patch('utilities_common.multi_asic.multi_asic_namespace_validation_callback', MagicMock(return_value='asic0'))
+    def test_clear_ndp_multi_asic_with_namespace_and_ip_not_found(self):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['ndp'], ['-n', 'asic0', 'fe80::1'])
+        assert result.exit_code == 0
+        assert 'Neighbor fe80::1 not found in namespace asic0' in result.output
+
+    def teardown(self):
+        print('TEAR DOWN')
