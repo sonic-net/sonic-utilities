@@ -1001,6 +1001,20 @@ if [[ "$sonic_asic_type" == "mellanox" ]]; then
         error "Failed to burn MLNX FW: errno=${MLNX_EXIT_CODE}"
         exit "${MLNX_EXIT_FW_ERROR}"
     fi
+
+    function check_fw_upgrade_status() {
+        debug "Checking FW upgrade status for ASIC $DEV"
+        ${MLNX_FW_UPGRADE_SCRIPT} --status=$DEV && {
+            debug "FW upgrade successful for ASIC $DEV"
+        } || {
+            debug "FW upgrade failed for ASIC $DEV"
+            exit "${MLNX_EXIT_FW_ERROR}"
+        }
+    }
+
+    if [[ $NUM_ASIC -gt 1 ]]; then
+        execute_in_namespaces asic check_fw_upgrade_status
+    fi
 fi
 
 if is_secureboot && grep -q aboot_machine= /host/machine.conf; then
