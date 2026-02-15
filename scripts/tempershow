@@ -14,8 +14,11 @@ from natsort import natsorted
 header = ['Sensor', 'Temperature', 'High TH', 'Low TH', 'Crit High TH', 'Crit Low TH', 'Warning', 'Timestamp']
 
 TEMPER_TABLE_NAME = 'TEMPERATURE_INFO'
+TRANSCEIVER_DOM_TEMPERATURE_TABLE_NAME = 'TRANSCEIVER_DOM_TEMPERATURE'
+TRANSCEIVER_DOM_SENSOR_TABLE_NAME = 'TRANSCEIVER_DOM_SENSOR'
 TEMPER_FIELD_NAME = 'temperature'
 TIMESTAMP_FIELD_NAME = 'timestamp'
+LAST_UPDATE_TIME_FIELD_NAME = 'last_update_time'
 HIGH_THRESH_FIELD_NAME = 'high_threshold'
 LOW_THRESH_FIELD_NAME = 'low_threshold'
 CRIT_HIGH_THRESH_FIELD_NAME = 'critical_high_threshold'
@@ -28,53 +31,75 @@ class TemperShow(object):
         self.db = SonicV2Connector(host="127.0.0.1")
         self.db.connect(self.db.STATE_DB)
 
-    def show(self, output_json):
-        keys = self.db.keys(self.db.STATE_DB, TEMPER_TABLE_NAME + '*')
-        if not keys:
-            print('Thermal Not detected\n')
-            return
+    def _add_sensor_to_output(self, sensor_name, data_dict, json_output, table):
+        """
+        Helper method to add sensor data to output in both JSON and table format.
+        :param sensor_name: name of the sensor
+        :param data_dict: dict with temperature and optional threshold fields
+        :param json_output: list to append JSON output to
+        :param table: list to append table rows to
+        """
+        temperature = data_dict.get(TEMPER_FIELD_NAME, 'N/A')
+        high_th = data_dict.get(HIGH_THRESH_FIELD_NAME, 'N/A')
+        low_th = data_dict.get(LOW_THRESH_FIELD_NAME, 'N/A')
+        crit_high_th = data_dict.get(CRIT_HIGH_THRESH_FIELD_NAME, 'N/A')
+        crit_low_th = data_dict.get(CRIT_LOW_THRESH_FIELD_NAME, 'N/A')
+        warning = data_dict.get(WARNING_STATUS_FIELD_NAME, 'N/A')
+        # Check for 'timestamp' first, fallback to 'last_update_time'
+        timestamp = data_dict.get(TIMESTAMP_FIELD_NAME) or data_dict.get(LAST_UPDATE_TIME_FIELD_NAME, 'N/A')
 
-        table = []
-        json_output = []
-        for key in natsorted(keys):
+        json_output.append({
+            "Sensor": sensor_name,
+            "Temperature": temperature,
+            "High_TH": high_th,
+            "Low_TH": low_th,
+            "Crit_High_TH": crit_high_th,
+            "Crit_Low_TH": crit_low_th,
+            "Warning": warning,
+            "Timestamp": timestamp
+        })
+        table.append((sensor_name, temperature, high_th, low_th, crit_high_th,
+                     crit_low_th, warning, timestamp))
+
+    def _process_keys(self, keys, json_output, table):
+        """Process keys and add sensor data to output."""
+        for key in keys:
             key_list = key.split('|')
-            if len(key_list) != 2: # error data in DB, log it and ignore
+            if len(key_list) != 2:
                 print('Warn: Invalid key in table {}: {}'.format(TEMPER_TABLE_NAME, key))
                 continue
 
             name = key_list[1]
             data_dict = self.db.get_all(self.db.STATE_DB, key)
-            if output_json:
-                json_output.append({
-                    "Sensor": name,
-                    "Temperature": data_dict[TEMPER_FIELD_NAME],
-                    "High_TH": data_dict[HIGH_THRESH_FIELD_NAME],
-                    "Low_TH": data_dict[LOW_THRESH_FIELD_NAME],
-                    "Crit_High_TH": data_dict[CRIT_HIGH_THRESH_FIELD_NAME],
-                    "Crit_Low_TH": data_dict[CRIT_LOW_THRESH_FIELD_NAME],
-                    "Warning": data_dict[WARNING_STATUS_FIELD_NAME],
-                    "Timestamp": data_dict[TIMESTAMP_FIELD_NAME]
-                })
+            if data_dict:
+                self._add_sensor_to_output(name, data_dict, json_output, table)
 
-            else:
-                table.append((name, 
-                              data_dict[TEMPER_FIELD_NAME], 
-                              data_dict[HIGH_THRESH_FIELD_NAME],
-                              data_dict[LOW_THRESH_FIELD_NAME],
-                              data_dict[CRIT_HIGH_THRESH_FIELD_NAME],
-                              data_dict[CRIT_LOW_THRESH_FIELD_NAME],
-                              data_dict[WARNING_STATUS_FIELD_NAME],
-                              data_dict[TIMESTAMP_FIELD_NAME]
-                              ))
-        
-        if output_json:
+    def show(self, output_json):
+        table = []
+        json_output = []
+
+        # Collect thermal sensor data from TEMPERATURE_INFO table
+        thermal_keys = self.db.keys(self.db.STATE_DB, TEMPER_TABLE_NAME + '*')
+        self._process_keys(natsorted(thermal_keys or []), json_output, table)
+
+        # Collect transceiver temperature data for SFP modules
+        transceiver_keys = self.db.keys(self.db.STATE_DB, TRANSCEIVER_DOM_TEMPERATURE_TABLE_NAME + '*')
+        if not transceiver_keys:
+            transceiver_keys = self.db.keys(self.db.STATE_DB, TRANSCEIVER_DOM_SENSOR_TABLE_NAME + '*')
+
+        self._process_keys(natsorted(transceiver_keys or []), json_output, table)
+
+        # Output results
+        if not json_output:
+            print('No temperature data available\n')
+        elif output_json:
             print(json.dumps(json_output, indent=2))
         elif table:
             print(tabulate(table, header, tablefmt='simple', stralign='right'))
         else:
             print('No temperature data available\n')
 
-            
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Display the temperature Sensor information',
                                      formatter_class=argparse.RawTextHelpFormatter,
