@@ -561,11 +561,7 @@ TEST_DATA = {
             },
         },
         RESULT: {
-            DEFAULTNS: {
-                "missed_FRR_routes": [
-                    {"prefix": "10.10.196.12/31", "vrfName": "default", "protocol": "bgp", "selected": True}
-                ],
-            },
+            DEFAULTNS: {"missed_FRR_routes": ['10.10.196.12/31']}
         },
         RET: -1,
     },
@@ -975,11 +971,7 @@ TEST_DATA = {
             },
         },
         RESULT: {
-            ASIC1: {
-                "missed_FRR_routes": [
-                    {"prefix": "10.10.196.12/31", "vrfName": "default", "protocol": "bgp", "selected": True}
-                ],
-            },
+            ASIC1: {"missed_FRR_routes": ['10.10.196.12/31']},
         },
         RET: -1,
     },
@@ -1505,8 +1497,7 @@ TEST_DATA = {
         RESULT: {
             ASIC0: {
                 "missed_FRR_routes": [
-                    {"prefix": "10.10.196.20/31", "vrfName": "default", "protocol": "bgp",
-                     "selected": True, "offloaded": False, "failed": True}
+                    "10.10.196.20/31"
                 ],
                 "failed_FRR_routes": [
                     "10.10.196.12/31",
@@ -1599,10 +1590,8 @@ TEST_DATA = {
         RESULT: {
             DEFAULTNS: {
                 "missed_FRR_routes": [
-                    {"prefix": "10.10.196.12/31", "vrfName": "default", "protocol": "bgp",
-                     "selected": True, "offloaded": False},
-                    {"prefix": "192.168.1.0/24", "vrfName": "default", "protocol": "bgp",
-                     "selected": True, "offloaded": False, "failed": True}
+                    "10.10.196.12/31",
+                    "192.168.1.0/24"
                 ],
                 "failed_FRR_routes": [
                     "10.10.196.20/31",
@@ -1703,5 +1692,64 @@ TEST_DATA = {
             },
         },
         RET: -1,
+    },
+    "33": {
+        DESCR: "Good test case, only IPv4 routes",
+        MULTI_ASIC: False,
+        NAMESPACE: [''],
+        ARGS: "route_check -m INFO -i 1000",
+        PRE: {
+            DEFAULTNS: {
+                APPL_DB: {
+                    ROUTE_TABLE: {
+                        "0.0.0.0/0": {"ifname": "portchannel0"},
+                        "10.10.196.12/31": {"ifname": "portchannel0"},
+                        "10.10.196.20/31": {"ifname": "portchannel0"},
+                        "10.10.196.30/31": {"ifname": "lo"}
+                    },
+                    INTF_TABLE: {
+                        "PortChannel1013:10.10.196.24/31": {},
+                        "PortChannel1024": {}
+                    }
+                },
+                ASIC_DB: {
+                    RT_ENTRY_TABLE: {
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.12/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.20/31" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "10.10.196.24/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
+                    }
+                }
+            }
+        }
+    },
+    "34": {
+        DESCR: "Good test case, only IPv6 routes",
+        MULTI_ASIC: False,
+        NAMESPACE: [''],
+        ARGS: "route_check -m INFO -i 1000",
+        PRE: {
+            DEFAULTNS: {
+                APPL_DB: {
+                    ROUTE_TABLE: {
+                        "::/0": {"ifname": "portchannel0"},
+                        "2603:10b0:503:df4::6c/126": {"ifname": "portchannel0"},
+                        "2603:10b0:503:df4::7c/126": {"ifname": "portchannel0"},
+                    },
+                    INTF_TABLE: {
+                        "PortChannel1023:2603:10b0:503:df4::5d/126": {},
+                        "PortChannel1024": {}
+                    }
+                },
+                ASIC_DB: {
+                    RT_ENTRY_TABLE: {
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::5d/128" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::6c/126" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "2603:10b0:503:df4::7c/126" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        ASIC_RT_ENTRY_KEY_PREFIX + "::/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {}
+                    }
+                }
+            }
+        }
     },
 }

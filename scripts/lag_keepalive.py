@@ -12,12 +12,13 @@ import subprocess  # noqa: E402
 import syslog  # noqa: E402
 import time  # noqa: E402
 import traceback  # noqa: E402
-from swsscommon.swsscommon import ConfigDBConnector  # noqa: E402
+from pyroute2 import netns  # noqa: E402
+from swsscommon.swsscommon import ConfigDBConnector, SonicDBConfig  # noqa: E402
+from sonic_py_common import multi_asic  # noqa: E402
 
 SYSLOG_ID = 'lag_keepalive'
 SLOW_PROTOCOL_MAC_ADDRESS = "01:80:c2:00:00:02"
 LACP_ETHERTYPE = 0x8809
-
 
 def log_info(msg):
     syslog.openlog(SYSLOG_ID)
@@ -36,8 +37,11 @@ def getCmdOutput(cmd):
     return proc.communicate()[0], proc.returncode
 
 
-def get_port_channel_config(portChannelName):
-    (processStdout, _) = getCmdOutput(["teamdctl", portChannelName, "state", "dump"])
+def get_port_channel_config(portChannelName, namespace=""):
+    teamdctl_command = ["teamdctl"]
+    if namespace:
+        teamdctl_command += ["-n", namespace.removeprefix("asic")]
+    (processStdout, _) = getCmdOutput(teamdctl_command + [portChannelName, "state", "dump"])
     return json.loads(processStdout)
 
 
@@ -65,8 +69,8 @@ def craft_lacp_packet(portChannelConfig, portName):
     return packet
 
 
-def get_lacpdu_per_lag_member():
-    appDB = ConfigDBConnector()
+def get_lacpdu_per_lag_member(namespace):
+    appDB = ConfigDBConnector(namespace=namespace)
     appDB.db_connect('APPL_DB')
     appDB_lag_info = appDB.get_keys('LAG_MEMBER_TABLE')
     active_lag_members = list()
@@ -79,7 +83,7 @@ def get_lacpdu_per_lag_member():
             lag_member = str(lag_entry[1])
             active_lag_members.append(lag_member)
             # craft lacpdu packets for each lag member based on config
-            port_channel_config = get_port_channel_config(lag_name)
+            port_channel_config = get_port_channel_config(lag_name, namespace)
             packet = craft_lacp_packet(port_channel_config, lag_member)
             socket = conf.L2socket(iface=lag_member)
             lag_member_to_packet[lag_member] = (socket, packet)
@@ -108,11 +112,20 @@ def lag_keepalive(lag_member_to_packet):
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--fork-into-background', action='store_true')
+    parser.add_argument('-n', '--namespace', default="", type=str, help='namespace to use')
     args = parser.parse_args()
+
+    if multi_asic.is_multi_asic():
+        SonicDBConfig.initializeGlobalConfig()
+
+    if args.namespace:
+        netns.setns(args.namespace)
+        global SYSLOG_ID
+        SYSLOG_ID = f"{SYSLOG_ID}_{args.namespace}"
 
     while True:
         try:
-            active_lag_members, lag_member_to_packet = get_lacpdu_per_lag_member()
+            active_lag_members, lag_member_to_packet = get_lacpdu_per_lag_member(args.namespace)
             if len(active_lag_members) != len(lag_member_to_packet.keys()):
                 log_error("Failed to craft LACPDU packets for some lag members. " +
                           "Active lag members: {}. LACPDUs crafted for: {}".format(
