@@ -169,5 +169,13 @@
     "NEIGH_TABLE:Ethernet20:10.0.1.1": {
         "neigh": "00:11:22:33:44:bb",
         "family": "IPv4"
+    },
+    "INTF_TABLE:PortChannel1002.10": {
+        "admin_status": "up",
+        "vlan": "10"
+    },
+    "INTF_TABLE:PortChannel4001.20": {
+        "admin_status": "up",
+        "vlan": "20"
     }
 }

@@ -123,5 +123,21 @@
     "NEIGH_TABLE:Ethernet64:10.0.2.1": {
         "neigh": "00:11:22:33:44:cc",
         "family": "IPv4"
+    },
+    "INTF_TABLE:Ethernet64.10": {
+        "admin_status": "up",
+        "vlan": "10"
+    },
+    "INTF_TABLE:Ethernet64.20": {
+        "admin_status": "up",
+        "vlan": "20"
+    },
+    "INTF_TABLE:Ethernet-BP256.20": {
+        "admin_status": "up",
+        "vlan": "20"
+    },
+    "INTF_TABLE:Eth64.30": {
+        "admin_status": "up",
+        "vlan": "30"
     }
 }

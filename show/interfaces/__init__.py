@@ -411,6 +411,10 @@ def mpls(ctx, interfacename, namespace, display):
 
                 intf_found = True
 
+            # Skip subinterfaces (e.g., Ethernet0.100) - they are not in PORT table
+            if clicommon.VLAN_SUB_INTERFACE_SEPARATOR in ifname:
+                continue
+
             if (display != "all"):
                 if ("Loopback" in ifname):
                     continue

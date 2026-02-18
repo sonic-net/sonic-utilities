@@ -6249,12 +6249,16 @@ The show interface errors command provides detailed statistics and error counter
 
 **show interfaces mpls**
 
-This command is used to display the configured MPLS state for the list of configured interfaces.
+This command is used to display the configured MPLS state for the list of configured parent interfaces. Subinterfaces are not listed by this command.
 
 - Usage:
   ```
-  show interfaces mpls [<interface_name>]
+  show interfaces mpls [<interface_name>] [-d <display>] [-n <namespace>]
   ```
+
+- Options:
+  - _-d,--display_: Show interfaces (all | frontend). Default is all on single-ASIC and frontend on multi-ASIC.
+  - _-n,--namespace_: Specify one namespace on multi-ASIC systems. Omit `-n` to query all applicable namespaces.
 
 - Example:
   ```
@@ -6274,6 +6278,15 @@ This command is used to display the configured MPLS state for the list of config
   admin@sonic:~$ show interfaces mpls Ethernet4
   Interface    MPLS State
   -----------  ------------
+  Ethernet4    enable
+  ```
+
+- Example (Multi-ASIC, show MPLS state for a specific namespace):
+  ```
+  admin@sonic:~$ show interfaces mpls -n asic0
+  Interface    MPLS State
+  -----------  ------------
+  Ethernet0    disable
   Ethernet4    enable
   ```
 
@@ -12057,8 +12070,12 @@ This command displays all the subinterfaces that are configured on the device an
 
 - Usage:
   ```
-  show subinterfaces status
+  show subinterfaces status [<subinterfacename>] [-d <display>] [-n <namespace>]
   ```
+
+- Options:
+  - _-d,--display_: Show interfaces (all | frontend). Default is all on single-ASIC and frontend on multi-ASIC.
+  - _-n,--namespace_: Specify one namespace on multi-ASIC systems. Omit `-n` to display subinterfaces from all namespaces. `all` is not an accepted value.
 
 - Example:
   ```
@@ -12069,35 +12086,103 @@ This command displays all the subinterfaces that are configured on the device an
       Ethernet0.100     100G   9100    100       up  dot1q-encapsulation
   ```
 
+- Example (Multi-ASIC, show subinterfaces from all namespaces):
+  ```
+  admin@sonic:~$ show subinterfaces status
+  Sub port interface    Namespace    Speed    MTU    Vlan    Admin                 Type
+  ------------------  -----------  -------  -----  ------  -------  -------------------
+      Eth1000.100        asic1      100G    9100    100       up  dot1q-encapsulation
+      Ethernet0.100      asic0      100G    9100    100       up  dot1q-encapsulation
+  ```
+
+- Example (Multi-ASIC, show subinterfaces for a specific namespace):
+  ```
+  admin@sonic:~$ show subinterfaces status -n asic0
+  Sub port interface    Speed    MTU    Vlan    Admin                 Type
+  ------------------  -------  -----  ------  -------  -------------------
+      Ethernet0.100     100G   9100    100       up  dot1q-encapsulation
+  ```
+
 ### Subinterfaces Config Commands
 
 This sub-section explains how to configure subinterfaces.
 
-**config subinterface**
+**config subinterface add**
+
+This command is used to add a subinterface.
 
 - Usage:
   ```
-  config subinterface (add | del) <subinterface_name> [vlan <1-4094>]
+  config subinterface [-n <namespace>] [-s <redis_unix_socket_path>] add <subinterface_name> [<vid>]
   ```
 
-- Example (Create the subinterfces with name "Ethernet0.100"):
+- Options:
+  - _-n,--namespace_: Namespace name (required on multi-ASIC systems)
+  - _-s,--redis-unix-socket-path_: Unix socket path for redis connection
+
+- Arguments:
+  - _subinterface_name_: Name of the subinterface (e.g., Ethernet0.100, Eth64.100)
+  - _vid_: VLAN ID (1-4094). Required for short name subinterfaces (e.g., Eth64.100, Po1.100). Optional for long name subinterfaces (e.g., Ethernet0.100, PortChannel1.100) where the VLAN ID can be inferred from the name suffix.
+
+- Notes:
+  - The total subinterface name length must not exceed 15 characters.
+  - On platforms with large interface indices (for example, `Ethernet1000`), use the short name form (for example, `Eth1000.100`) if the long name would exceed 15 characters.
+  - For long name subinterfaces, the extra `<vid>` argument can be omitted even though `config subinterface add --help` prints `<vid>`.
+
+- Example (Create the subinterface with name "Ethernet0.100"):
   ```
   admin@sonic:~$ sudo config subinterface add Ethernet0.100
   ```
 
-- Example (Create the subinterfces with name "Eth64.100"):
+- Example (Create the subinterface with name "Eth64.100" with explicit VLAN ID):
   ```
   admin@sonic:~$ sudo config subinterface add Eth64.100 100
   ```
 
-- Example (Delete the subinterfces with name "Ethernet0.100"):
+- Example (Multi-ASIC, create a subinterface in a specific namespace):
+  ```
+  admin@sonic:~$ sudo config subinterface -n asic0 add Ethernet0.100
+  ```
+
+- Example (Multi-ASIC, create a subinterface using a Redis unix socket path):
+  ```
+  admin@sonic:~$ sudo config subinterface -n asic1 -s /var/run/redis1/redis.sock add Eth1000.100 100
+  ```
+
+**config subinterface del**
+
+This command is used to delete a subinterface.
+
+- Usage:
+  ```
+  config subinterface [-n <namespace>] [-s <redis_unix_socket_path>] del <subinterface_name>
+  ```
+
+- Options:
+  - _-n,--namespace_: Namespace name (required on multi-ASIC systems)
+  - _-s,--redis-unix-socket-path_: Unix socket path for redis connection
+
+- Arguments:
+  - _subinterface_name_: Name of the subinterface to delete
+
+- Example (Delete the subinterface with name "Ethernet0.100"):
   ```
   admin@sonic:~$ sudo config subinterface del Ethernet0.100
   ```
 
-- Example (Delete the subinterfces with name "Eth64.100"):
+- Example (Delete the subinterface with name "Eth64.100"):
   ```
-  admin@sonic:~$ sudo config subinterface del Eth64.100 100
+  admin@sonic:~$ sudo config subinterface del Eth64.100
+  ```
+
+- Example (Multi-ASIC, delete a subinterface in a specific namespace):
+  ```
+  admin@sonic:~$ sudo config subinterface -n asic0 del Ethernet0.100
+  ```
+
+- Example (Multi-ASIC, delete a subinterface using a Redis unix socket path):
+  ```
+  admin@sonic:~$ sudo config subinterface -n asic1 -s /var/run/redis1/redis.sock del Eth1000.100
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#subinterfaces)

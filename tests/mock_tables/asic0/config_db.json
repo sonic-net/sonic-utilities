@@ -435,5 +435,13 @@
     },
     "INTERFACE|Ethernet20": {
         "vnet_name": "Vnet_3000"
+    },
+    "VLAN_SUB_INTERFACE|PortChannel1002.10": {
+        "admin_status": "up",
+        "vlan": "10"
+    },
+    "VLAN_SUB_INTERFACE|PortChannel4001.20": {
+        "admin_status": "up",
+        "vlan": "20"
     }
 }

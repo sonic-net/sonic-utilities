@@ -323,6 +323,19 @@ class TestSubinterface(object):
         assert result.exit_code == 0
         assert ('Po0004.1004') not in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
 
+    def test_subintf_via_group_command(self):
+        runner = CliRunner()
+        result = runner.invoke(config.config.commands["subinterface"],
+                               ["add", "Ethernet0.102"])
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+    def test_subintf_via_group_command_with_redis_socket(self):
+        runner = CliRunner()
+        result = runner.invoke(config.config.commands["subinterface"],
+                               ["-s", "/tmp/test.sock", "add", "Ethernet0.103"])
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
 
     @classmethod
     def teardown_class(cls):
