@@ -3,9 +3,7 @@
 import subprocess
 import json
 from scapy.config import conf
-conf.ipv6_enabled = False
-conf.verb = False
-from scapy.fields import ByteField, ShortField, MACField, XStrFixedLenField, ConditionalField
+from scapy.fields import ByteField, ShortField, MACField, XStrFixedLenField, ConditionalField, MultipleTypeField
 from scapy.layers.l2 import Ether
 from scapy.sendrecv import sendp, sniff
 from scapy.packet import Packet, split_layers, bind_layers
@@ -20,6 +18,9 @@ import signal
 
 from sonic_py_common import logger
 from swsscommon.swsscommon import DBConnector, Table
+
+conf.ipv6_enabled = False
+conf.verb = False
 
 log = logger.Logger()
 revertTeamdRetryCountChanges = False
@@ -64,8 +65,13 @@ class LACPRetryCount(Packet):
         ConditionalField(XStrFixedLenField("partner_retry_count_reserved", "", 1), lambda pkt:pkt.version == 0xf1),
         ByteField("terminator_type", 0),
         ByteField("terminator_length", 0),
-        ConditionalField(XStrFixedLenField("reserved", "", 42), lambda pkt:pkt.version == 0xf1),
-        ConditionalField(XStrFixedLenField("reserved", "", 50), lambda pkt:pkt.version != 0xf1),
+        MultipleTypeField(
+            [
+                (XStrFixedLenField("reserved", "", 42), lambda pkt:pkt.version == 0xf1),
+                (XStrFixedLenField("reserved", "", 50), lambda pkt:pkt.version != 0xf1),
+            ],
+            XStrFixedLenField("reserved", "", 50)
+        ),
     ]
 
 split_layers(scapy.contrib.lacp.SlowProtocol, scapy.contrib.lacp.LACP, subtype=1)
