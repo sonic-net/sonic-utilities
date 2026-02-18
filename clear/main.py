@@ -5,7 +5,7 @@ import sys
 import click
 import utilities_common.cli as clicommon
 import utilities_common.multi_asic as multi_asic_util
-from sonic_py_common import multi_asic
+from sonic_py_common import multi_asic, device_info
 from sonic_py_common.general import getstatusoutput_noshell_pipe
 from flow_counter_util.route import exit_if_route_flow_counter_not_support
 from utilities_common import util_base
@@ -182,9 +182,11 @@ def rifcounters(interface):
 @cli.command()
 def queuecounters():
     """Clear queue counters"""
-    command = ["queuestat", "-c"]
-    run_command(command)
-
+    if(device_info.is_supervisor()):
+        print("INFO: On Supervisor, only Aggregate VOQ counters will be cleared")
+    else:
+        command = ["queuestat", "-c"]
+        run_command(command)
     command = ["queuestat", "-c", "--voq"]
     run_command(command)
 
