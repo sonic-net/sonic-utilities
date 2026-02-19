@@ -1708,10 +1708,12 @@ def version(verbose):
     click.echo("Hardware Revision: {}".format(chassis_info['revision']))
     click.echo("Uptime: {}".format(sys_uptime.stdout.read().strip()))
     click.echo("Date: {}".format(sys_date.strftime("%a %d %b %Y %X")))
-    click.echo("\nDocker images:")
-    cmd = ['sudo', 'docker', 'images', '--format', "table {{.Repository}}\\t{{.Tag}}\\t{{.ID}}\\t{{.Size}}"]
-    p = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE)
-    click.echo(p.stdout.read())
+
+    if verbose:
+        click.echo("\nDocker images:")
+        cmd = ['sudo', 'docker', 'images', '--format', "table {{.Repository}}\\t{{.Tag}}\\t{{.ID}}\\t{{.Size}}"]
+        p = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE)
+        click.echo(p.stdout.read())
 
 #
 # 'environment' command ("show environment")
