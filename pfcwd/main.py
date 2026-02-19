@@ -423,7 +423,7 @@ class PfcwdCli(object):
         pfc_wd_poll_interval_time = DEFAULT_POLL_INTERVAL * multiply
         if pfc_wd_poll_interval_time > MAX_POLL_INTERVAL_TIME:
             pfc_wd_poll_interval_time = MAX_POLL_INTERVAL_TIME
-        
+
         pfcwd_info = {
             'detection_time': DEFAULT_DETECTION_TIME * multiply,
             'restoration_time': DEFAULT_RESTORATION_TIME * multiply,
