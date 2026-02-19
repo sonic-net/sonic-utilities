@@ -86,7 +86,7 @@ class FibBase(object):
                 continue
 
             # Handle blackhole routes (routes without nexthop/ifname)
-            if "blackhole" in ent and ent["blackhole"] == "true":
+            if ent.get("blackhole") == "true":
                 self.fib_entry_list.append((fib,) + ("blackhole",) + ("blackhole",) )
             elif "nexthop" in ent and "ifname" in ent:
                 # Normal routes with nexthop and ifname
