@@ -6064,7 +6064,7 @@ At least one option must be specified for each subcommand.
   ```
 
   ```
-  admin@sonic:~$ show interfaces phy-serdes Ethernet0 vga
+  admin@sonic:~$ show interfaces phy-serdes Ethernet0 rxvga
   Interface: Ethernet0
   ================================================================================
     RX VGA:
