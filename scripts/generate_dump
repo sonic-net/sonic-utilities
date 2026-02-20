@@ -1947,6 +1947,7 @@ collect_cisco_8000() {
 #   None
 ##############################################################################
 collect_marvell_teralynx() {
+    trap 'handle_error $? $LINENO' ERR
     save_cmd "ivmcmd 'show techsupport -i /innovium/show_techsupport_infile'" "show_techsupport_op_ifcs.log"
     save_cmd "ivmcmd 'show techsupport -i /innovium/show_techsupport_infile_iSAI'" "show_techsupport_op_iSAI.log"
 
@@ -1964,12 +1965,14 @@ collect_marvell_teralynx() {
         popd > /dev/null
 
         if [ -f /usr/share/sonic/device/${platform}/${hwsku}/common_config_support ]; then
-            for file in $(find /var/run/docker-syncd -type f -name "*.yaml"); do
-                save_file ${file} sai false
-            done
-            # sai.profile - copy the final sai.profile generated in docker-syncd
-            if [ -f /var/run/docker-syncd/sai.profile ]; then
-                save_file /var/run/docker-syncd/sai.profile sai false
+            if [ -d /var/run/docker-syncd ]; then
+                for file in $(find /var/run/docker-syncd -type f -name "*.yaml"); do
+                    save_file ${file} sai false
+                done
+                # sai.profile - copy the final sai.profile generated in docker-syncd
+                if [ -f /var/run/docker-syncd/sai.profile ]; then
+                    save_file /var/run/docker-syncd/sai.profile sai false
+                fi
             fi
         fi
     else
