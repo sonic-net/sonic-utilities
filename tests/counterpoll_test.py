@@ -283,6 +283,7 @@ class TestCounterpoll(object):
 
     @pytest.mark.parametrize("status", ["disable", "enable"])
     def test_update_ha_set_status(self, status):
+        importlib.reload(counterpoll)
         runner = CliRunner()
         result = runner.invoke(counterpoll.cli, ["ha-set", status])
         assert 'No such command \'ha-set\'' in result.output
