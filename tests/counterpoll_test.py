@@ -282,6 +282,43 @@ class TestCounterpoll(object):
         assert test_interval == table["ENI"]["POLL_INTERVAL"]
 
     @pytest.mark.parametrize("status", ["disable", "enable"])
+    def test_update_ha_set_status(self, status):
+        runner = CliRunner()
+        result = runner.invoke(counterpoll.cli, ["ha_set", status])
+        assert 'No such command \'ha_set\'' in result.output
+        assert result.exit_code == 2
+
+    @pytest.mark.parametrize("status", ["disable", "enable"])
+    @mock.patch('counterpoll.main.device_info.get_platform_info')
+    def test_update_ha_set_status_dpu(self, mock_get_platform_info, status):
+        mock_get_platform_info.return_value = {'switch_type': 'dpu'}
+        importlib.reload(counterpoll)
+
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(counterpoll.cli.commands["ha_set"].commands[status], [], obj=db.cfgdb)
+        assert result.exit_code == 0
+
+        table = db.cfgdb.get_table('FLEX_COUNTER_TABLE')
+        assert status == table["HA_SET"]["FLEX_COUNTER_STATUS"]
+
+    @mock.patch('counterpoll.main.device_info.get_platform_info')
+    def test_update_ha_set_interval(self, mock_get_platform_info):
+        mock_get_platform_info.return_value = {'switch_type': 'dpu'}
+        importlib.reload(counterpoll)
+
+        runner = CliRunner()
+        db = Db()
+        test_interval = "2000"
+
+        result = runner.invoke(counterpoll.cli.commands["ha_set"].commands["interval"], [test_interval], obj=db.cfgdb)
+        assert result.exit_code == 0
+
+        table = db.cfgdb.get_table('FLEX_COUNTER_TABLE')
+        assert test_interval == table["HA_SET"]["POLL_INTERVAL"]
+
+    @pytest.mark.parametrize("status", ["disable", "enable"])
     def test_update_wred_port_counter_status(self, status):
         runner = CliRunner()
         db = Db()
