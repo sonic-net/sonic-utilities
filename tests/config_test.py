@@ -316,6 +316,8 @@ def mock_run_command_side_effect(*args, **kwargs):
             return f'{datetime.datetime.now()}', 0
         elif command == 'sudo systemctl show --no-pager networking -p ExecMainExitTimestamp --value':
             return f'{datetime.datetime.now()}', 0
+        elif command.startswith('sudo monit status'):
+            return '  monitoring status            Monitored\n', 0
         else:
             return '', 0
 
@@ -1058,7 +1060,7 @@ class TestLoadMinigraph(object):
                 (load_minigraph_command_output.format(config.SYSTEM_RELOAD_LOCK))
             # Verify "systemctl reset-failed" is called for services under sonic.target
             mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'swss'])
-            assert mock_run_command.call_count == 16
+            assert mock_run_command.call_count == 18
 
     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs',
                 mock.MagicMock(return_value=("dummy_path", None)))
