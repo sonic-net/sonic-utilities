@@ -34,26 +34,27 @@ To verify:
 
 """
 
+from utilities_common.general import load_db_config
+from sonic_py_common import multi_asic, device_info
+from utilities_common import chassis
+from swsscommon import swsscommon
+from ipaddress import ip_network
+import concurrent.futures
+import subprocess
+import traceback
+import signal
+import time
+import syslog
+import sys
+import re
 import argparse
 from enum import Enum
 import ipaddress
-import ijson.backends.python as ijson
 import json
 import os
-import re
-import sys
-import syslog
-import time
-import signal
-import traceback
-import subprocess
-import concurrent.futures
+os.environ.setdefault('IJSON_BACKEND', 'python')
+import ijson
 
-from ipaddress import ip_network
-from swsscommon import swsscommon
-from utilities_common import chassis
-from sonic_py_common import multi_asic, device_info
-from utilities_common.general import load_db_config
 
 APPL_DB_NAME = 'APPL_DB'
 ASIC_DB_NAME = 'ASIC_DB'
@@ -244,7 +245,8 @@ def checkout_rt_entry(k):
     :return (True, ip) or (False, None)
     """
     if k.startswith(ASIC_KEY_PREFIX):
-        e = k.lower()[len(ASIC_KEY_PREFIX) + len('{"dest":"'):].split("\"", 1)[0]
+        e = k.lower()[len(ASIC_KEY_PREFIX) +
+                      len('{"dest":"'):].split("\"", 1)[0]
         if not is_local(e):
             return True, e
     return False, None
@@ -290,7 +292,8 @@ def get_appdb_routes(namespace):
     helper to read route table from APPL-DB.
     :return list of sorted routes with prefix ensured
     """
-    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    db = swsscommon.DBConnector(
+        APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
     print_message(syslog.LOG_DEBUG, "APPL DB connected for routes")
     tbl = swsscommon.Table(db, 'ROUTE_TABLE')
     keys = tbl.getKeys()
@@ -303,7 +306,8 @@ def get_appdb_routes(namespace):
         if not is_local(k):
             valid_rt.append(add_prefix_ifnot(k.lower()))
 
-    print_message(syslog.LOG_DEBUG, json.dumps({"ROUTE_TABLE": sorted(valid_rt)}, indent=4))
+    print_message(syslog.LOG_DEBUG, json.dumps(
+        {"ROUTE_TABLE": sorted(valid_rt)}, indent=4))
     return sorted(valid_rt)
 
 
@@ -313,7 +317,8 @@ def get_asicdb_routes(namespace):
     as well initiate selector for ASIC-DB:ASIC-state updates.
     :return (selector,  subscriber, <list of sorted routes>)
     """
-    db = swsscommon.DBConnector(ASIC_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    db = swsscommon.DBConnector(
+        ASIC_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
     subs = swsscommon.SubscriberStateTable(db, ASIC_TABLE_NAME)
     print_message(syslog.LOG_DEBUG, "ASIC DB {} connected".format(namespace))
 
@@ -326,7 +331,8 @@ def get_asicdb_routes(namespace):
         if res:
             rt.append(e)
 
-    print_message(syslog.LOG_DEBUG, json.dumps({"ASIC_ROUTE_ENTRY": sorted(rt)}, indent=4))
+    print_message(syslog.LOG_DEBUG, json.dumps(
+        {"ASIC_ROUTE_ENTRY": sorted(rt)}, indent=4))
 
     selector = swsscommon.Select()
     selector.addSelectable(subs)
@@ -338,13 +344,15 @@ def get_appdb_sids(namespace):
     helper to read SIDs table from APPL-DB.
     :return list of sorted SIDs with prefix ensured
     """
-    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    db = swsscommon.DBConnector(
+        APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
     print_message(syslog.LOG_DEBUG, "APPL DB connected for sids")
     tbl = swsscommon.Table(db, 'SRV6_MY_SID_TABLE')
     keys = tbl.getKeys()
 
     sids = sorted(keys)
-    print_message(syslog.LOG_DEBUG, json.dumps({"APPL_MY_SID_TABLE": sids}, indent=4))
+    print_message(syslog.LOG_DEBUG, json.dumps(
+        {"APPL_MY_SID_TABLE": sids}, indent=4))
     return sids
 
 
@@ -353,7 +361,8 @@ def get_asicdb_sids(namespace):
     helper to read SIDs table from APPL-DB.
     :return list of sorted SIDs with prefix ensured
     """
-    db = swsscommon.DBConnector(ASIC_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    db = swsscommon.DBConnector(
+        ASIC_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
     print_message(syslog.LOG_DEBUG, "ASIC DB connected for sids")
     tbl = swsscommon.Table(db, ASIC_TABLE_NAME)
     keys = tbl.getKeys()
@@ -375,7 +384,8 @@ def get_asicdb_sids(namespace):
         sids.append(sid_entry)
 
     sids = sorted(sids)
-    print_message(syslog.LOG_DEBUG, json.dumps({"ASIC_MY_SID_TABLE": sids}, indent=4))
+    print_message(syslog.LOG_DEBUG, json.dumps(
+        {"ASIC_MY_SID_TABLE": sids}, indent=4))
     return sids
 
 
@@ -384,7 +394,8 @@ def is_suppress_fib_pending_enabled(namespace):
     Returns True if FIB suppression is enabled, False otherwise
     """
     cfg_db = multi_asic.connect_config_db_for_ns(namespace)
-    state = cfg_db.get_entry('DEVICE_METADATA', 'localhost').get('suppress-fib-pending')
+    state = cfg_db.get_entry('DEVICE_METADATA', 'localhost').get(
+        'suppress-fib-pending')
 
     return state == 'enabled'
 
@@ -434,22 +445,26 @@ def fetch_routes(ipv6=False, namespace=multi_asic.DEFAULT_NAMESPACE):
                             process_route_entry(prefix, route_entry)
                     else:
                         # Handle case where route_entries is not a list (shouldn't happen with valid FRR output)
-                        print_message(syslog.LOG_WARNING, f"Unexpected route entry format for prefix {prefix}")
+                        print_message(
+                            syslog.LOG_WARNING, f"Unexpected route entry format for prefix {prefix}")
 
             except ijson.JSONError as e:
                 # Handle JSON parsing errors
-                print_message(syslog.LOG_WARNING, f"Failed to parse JSON stream: {e}")
+                print_message(syslog.LOG_WARNING,
+                              f"Failed to parse JSON stream: {e}")
             except UnicodeDecodeError as e:
                 # Handle UTF-8 decoding errors
                 print_message(syslog.LOG_WARNING, f"UTF-8 decoding error: {e}")
             except Exception as e:
                 # Handle any other unexpected errors during parsing
-                print_message(syslog.LOG_WARNING, f"Error during JSON parsing: {e}")
+                print_message(syslog.LOG_WARNING,
+                              f"Error during JSON parsing: {e}")
 
             # Wait for the process to terminate and get the return code
             return_code = proc.wait()
             if return_code != 0:
-                print_message(syslog.LOG_WARNING, f"Subprocess exited with non-zero return code: {return_code}")
+                print_message(
+                    syslog.LOG_WARNING, f"Subprocess exited with non-zero return code: {return_code}")
 
     except FileNotFoundError:
         print_message(syslog.LOG_ERR, f"Error: Command '{cmd[0]}' not found.")
@@ -465,8 +480,10 @@ def get_frr_routes_parallel(namespace):
     :return combined IPv4 and IPv6 routes dictionary.
     """
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        future_v4 = executor.submit(fetch_routes, ipv6=False, namespace=namespace)
-        future_v6 = executor.submit(fetch_routes, ipv6=True, namespace=namespace)
+        future_v4 = executor.submit(
+            fetch_routes, ipv6=False, namespace=namespace)
+        future_v6 = executor.submit(
+            fetch_routes, ipv6=True, namespace=namespace)
 
         # Wait for both results to complete
         v4_routes = future_v4.result()
@@ -477,8 +494,10 @@ def get_frr_routes_parallel(namespace):
     v6_miss_rt, v6_fail_rt = v6_routes
     v4_miss_rt += v6_miss_rt
     v4_fail_rt += v6_fail_rt
-    print_message(syslog.LOG_DEBUG, "FRR Missing Routes: namespace={}, routes={}".format(namespace, v4_miss_rt))
-    print_message(syslog.LOG_DEBUG, "FRR Failed Routes: namespace={}, routes={}".format(namespace, v4_fail_rt))
+    print_message(syslog.LOG_DEBUG, "FRR Missing Routes: namespace={}, routes={}".format(
+        namespace, v4_miss_rt))
+    print_message(syslog.LOG_DEBUG, "FRR Failed Routes: namespace={}, routes={}".format(
+        namespace, v4_fail_rt))
     return v4_miss_rt, v4_fail_rt
 
 
@@ -487,7 +506,8 @@ def get_interfaces(namespace):
     helper to read interface table from APPL-DB.
     :return sorted list of IP addresses with added prefix
     """
-    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    db = swsscommon.DBConnector(
+        APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
     print_message(syslog.LOG_DEBUG, "APPL DB connected for interfaces")
     tbl = swsscommon.Table(db, 'INTF_TABLE')
     keys = tbl.getKeys()
@@ -503,7 +523,8 @@ def get_interfaces(namespace):
         if not is_local(ip):
             intf.append(ip)
 
-    print_message(syslog.LOG_DEBUG, json.dumps({"APPL_DB_INTF": sorted(intf)}, indent=4))
+    print_message(syslog.LOG_DEBUG, json.dumps(
+        {"APPL_DB_INTF": sorted(intf)}, indent=4))
     return sorted(intf)
 
 
@@ -528,7 +549,8 @@ def get_local_p2p_ips(namespace):
     helper to read p2p local IPs from interface table in APPL-DB.
     :return sorted list of local p2p IP addresses
     """
-    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    db = swsscommon.DBConnector(
+        APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
     print_message(syslog.LOG_DEBUG, "APPL DB connected for interfaces")
     tbl = swsscommon.Table(db, 'INTF_TABLE')
     keys = tbl.getKeys()
@@ -545,7 +567,8 @@ def get_local_p2p_ips(namespace):
         if is_point_to_point_prefix(ip):
             intf.append(ip)
 
-    print_message(syslog.LOG_DEBUG, json.dumps({"APPL_DB_INTF": sorted(intf)}, indent=4))
+    print_message(syslog.LOG_DEBUG, json.dumps(
+        {"APPL_DB_INTF": sorted(intf)}, indent=4))
     return sorted(intf)
 
 
@@ -573,13 +596,15 @@ def filter_out_local_interfaces(namespace, keys):
     :return keys filtered out of local
     """
     rt = []
-    local_if_lst = {'eth0', 'eth1', 'docker0'}  # eth1 is added to skip route installed in AAPL_DB on packet-chassis
+    # eth1 is added to skip route installed in AAPL_DB on packet-chassis
+    local_if_lst = {'eth0', 'eth1', 'docker0'}
     local_if_lo = [r'tun0', r'lo', r'Loopback\d+']
 
     chassis_local_intfs = chassis.get_chassis_local_interfaces()
     local_if_lst.update(set(chassis_local_intfs))
 
-    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    db = swsscommon.DBConnector(
+        APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
     tbl = swsscommon.Table(db, 'ROUTE_TABLE')
 
     for k in keys:
@@ -612,7 +637,8 @@ def filter_out_voq_neigh_routes(namespace, keys):
     rt = []
     local_if_re = [r'Ethernet-IB\d+']
 
-    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    db = swsscommon.DBConnector(
+        APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
     tbl = swsscommon.Table(db, 'ROUTE_TABLE')
 
     for k in keys:
@@ -651,7 +677,8 @@ def filter_out_vnet_routes(namespace, routes):
     :param routes: list of routes to filter
     :return filtered list of routes.
     """
-    db = swsscommon.DBConnector('APPL_DB', REDIS_TIMEOUT_MSECS, True, namespace)
+    db = swsscommon.DBConnector(
+        'APPL_DB', REDIS_TIMEOUT_MSECS, True, namespace)
 
     vnet_route_table = swsscommon.Table(db, 'VNET_ROUTE_TABLE')
     vnet_route_tunnel_table = swsscommon.Table(db, 'VNET_ROUTE_TUNNEL_TABLE')
@@ -687,7 +714,8 @@ def filter_out_standalone_tunnel_routes(namespace, routes):
     if not is_dualtor(config_db):
         return routes
 
-    app_db = swsscommon.DBConnector('APPL_DB', REDIS_TIMEOUT_MSECS, True, namespace)
+    app_db = swsscommon.DBConnector(
+        'APPL_DB', REDIS_TIMEOUT_MSECS, True, namespace)
     neigh_table = swsscommon.Table(app_db, 'NEIGH_TABLE')
     neigh_keys = neigh_table.getKeys()
     standalone_tunnel_route_ips = []
@@ -764,13 +792,17 @@ def mitigate_installed_not_offloaded_frr_routes(namespace, missed_frr_rt, rt_app
     All of the above mentioned cases must be considered as a bug, but even in that case we will report an error in the log but
     given that this script ensures the route is installed in the hardware it will automitigate such a bug.
     """
-    db = swsscommon.DBConnector('APPL_STATE_DB', REDIS_TIMEOUT_MSECS, True, namespace)
-    response_producer = swsscommon.NotificationProducer(db, f'{APPL_DB_NAME}_{swsscommon.APP_ROUTE_TABLE_NAME}_RESPONSE_CHANNEL')
+    db = swsscommon.DBConnector(
+        'APPL_STATE_DB', REDIS_TIMEOUT_MSECS, True, namespace)
+    response_producer = swsscommon.NotificationProducer(
+        db, f'{APPL_DB_NAME}_{swsscommon.APP_ROUTE_TABLE_NAME}_RESPONSE_CHANNEL')
     for entry in [entry for entry in missed_frr_rt if entry['prefix'] in rt_appl]:
-        fvs = swsscommon.FieldValuePairs([('err_str', 'SWSS_RC_SUCCESS'), ('protocol', entry['protocol'])])
+        fvs = swsscommon.FieldValuePairs(
+            [('err_str', 'SWSS_RC_SUCCESS'), ('protocol', entry['protocol'])])
         response_producer.send('SWSS_RC_SUCCESS', entry['prefix'], fvs)
 
-        print_message(syslog.LOG_ERR, f'Mitigated route {entry["prefix"]}', write_to_stdout=False)
+        print_message(syslog.LOG_ERR, f'Mitigated route {
+                      entry["prefix"]}', write_to_stdout=False)
 
 
 def get_soc_ips(config_db):
@@ -817,7 +849,8 @@ def filter_out_soc_ip_routes(namespace, routes):
 
 def get_vlan_neighbors(namespace):
     """Return a list of VLAN neighbors."""
-    db = swsscommon.DBConnector(APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
+    db = swsscommon.DBConnector(
+        APPL_DB_NAME, REDIS_TIMEOUT_MSECS, True, namespace)
     print_message(syslog.LOG_DEBUG, "APPL DB connected for neighbors")
     tbl = swsscommon.Table(db, 'NEIGH_TABLE')
     neigh_entries = tbl.getKeys()
@@ -829,7 +862,8 @@ def get_vlan_neighbors(namespace):
             if device.startswith("Vlan"):
                 valid_neighs.append(add_prefix_ifnot(prefix.lower()))
 
-    print_message(syslog.LOG_DEBUG, "Vlan neighbors:",  json.dumps(valid_neighs, indent=4))
+    print_message(syslog.LOG_DEBUG, "Vlan neighbors:",
+                  json.dumps(valid_neighs, indent=4))
     return valid_neighs
 
 
@@ -850,10 +884,14 @@ def filter_out_vlan_neigh_route_miss(namespace, rt_appl_miss, rt_asic_miss):
 
     if is_dualtor(config_db):
         vlan_neighs = set(get_vlan_neighbors(namespace))
-        rt_appl_miss, ignored_rt_appl_miss = _filter_out_neigh_route(rt_appl_miss, vlan_neighs)
-        print_message(syslog.LOG_DEBUG, "Ignored appl route miss:",  json.dumps(ignored_rt_appl_miss, indent=4))
-        rt_asic_miss, ignored_rt_asic_miss = _filter_out_neigh_route(rt_asic_miss, vlan_neighs)
-        print_message(syslog.LOG_DEBUG, "Ignored asic route miss:",  json.dumps(ignored_rt_asic_miss, indent=4))
+        rt_appl_miss, ignored_rt_appl_miss = _filter_out_neigh_route(
+            rt_appl_miss, vlan_neighs)
+        print_message(syslog.LOG_DEBUG, "Ignored appl route miss:",
+                      json.dumps(ignored_rt_appl_miss, indent=4))
+        rt_asic_miss, ignored_rt_asic_miss = _filter_out_neigh_route(
+            rt_asic_miss, vlan_neighs)
+        print_message(syslog.LOG_DEBUG, "Ignored asic route miss:",
+                      json.dumps(ignored_rt_asic_miss, indent=4))
 
     return rt_appl_miss, rt_asic_miss
 
@@ -915,7 +953,8 @@ def check_routes_for_namespace(namespace):
     # NOTE: On dualtor environment, ignore any route miss for the
     # neighbors learned from the vlan subnet.
     if rt_appl_miss or rt_asic_miss:
-        rt_appl_miss, rt_asic_miss = filter_out_vlan_neigh_route_miss(namespace, rt_appl_miss, rt_asic_miss)
+        rt_appl_miss, rt_asic_miss = filter_out_vlan_neigh_route_miss(
+            namespace, rt_appl_miss, rt_asic_miss)
 
     if rt_appl_miss or rt_asic_miss:
         # Look for subscribe updates for a second
@@ -953,7 +992,8 @@ def check_routes_for_namespace(namespace):
             print_message(syslog.LOG_ERR, "Some routes are not set offloaded in FRR{} \
                           but all routes in APPL_DB and ASIC_DB are in sync".format(namespace))
             if is_suppress_fib_pending_enabled(namespace):
-                mitigate_installed_not_offloaded_frr_routes(namespace, rt_frr_miss, rt_appl)
+                mitigate_installed_not_offloaded_frr_routes(
+                    namespace, rt_frr_miss, rt_appl)
         if rt_frr_failed:
             print_message(syslog.LOG_ERR, "Some routes have failed state in FRR {} \
                           : {}".format(namespace, rt_frr_failed))
@@ -970,7 +1010,8 @@ def check_routes(namespace):
         namespace_list.append(namespace)
     else:
         namespace_list = multi_asic.get_namespace_list()
-        print_message(syslog.LOG_INFO, "Checking routes for namespaces: ", namespace_list)
+        print_message(syslog.LOG_INFO,
+                      "Checking routes for namespaces: ", namespace_list)
 
     results = {}
     all_adds = {}
@@ -978,7 +1019,8 @@ def check_routes(namespace):
 
     # Use ThreadPoolExecutor to parallelize the check for each namespace
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = {executor.submit(check_routes_for_namespace, ns): ns for ns in namespace_list}
+        futures = {executor.submit(
+            check_routes_for_namespace, ns): ns for ns in namespace_list}
 
         for future in concurrent.futures.as_completed(futures):
             ns = futures[future]
@@ -991,14 +1033,19 @@ def check_routes(namespace):
                     all_adds[ns] = adds
                     all_deletes[ns] = deletes
             except Exception as e:
-                print_message(syslog.LOG_ERR, "Error processing namespace {}: {}".format(ns, e))
+                print_message(
+                    syslog.LOG_ERR, "Error processing namespace {}: {}".format(ns, e))
                 return -1, results
 
     if results:
-        print_message(syslog.LOG_WARNING, "Failure results: {",  json.dumps(results, indent=4), "}")
-        print_message(syslog.LOG_WARNING, "Failed. Look at reported mismatches above")
-        print_message(syslog.LOG_WARNING, "add: ", json.dumps(all_adds, indent=4))
-        print_message(syslog.LOG_WARNING, "del: ", json.dumps(all_deletes, indent=4))
+        print_message(syslog.LOG_WARNING,
+                      "Failure results: {",  json.dumps(results, indent=4), "}")
+        print_message(syslog.LOG_WARNING,
+                      "Failed. Look at reported mismatches above")
+        print_message(syslog.LOG_WARNING, "add: ",
+                      json.dumps(all_adds, indent=4))
+        print_message(syslog.LOG_WARNING, "del: ",
+                      json.dumps(all_deletes, indent=4))
         return -1, results
     else:
         print_message(syslog.LOG_INFO, "All good!")
@@ -1046,13 +1093,15 @@ def check_sids(namespace):
         namespace_list.append(namespace)
     else:
         namespace_list = multi_asic.get_namespace_list()
-        print_message(syslog.LOG_INFO, "Checking SIDs for namespaces: ", namespace_list)
+        print_message(syslog.LOG_INFO,
+                      "Checking SIDs for namespaces: ", namespace_list)
 
     results = {}
 
     # Use ThreadPoolExecutor to parallelize the check for each namespace
     with concurrent.futures.ThreadPoolExecutor() as executor:
-        futures = {executor.submit(check_sids_for_namespace, ns): ns for ns in namespace_list}
+        futures = {executor.submit(
+            check_sids_for_namespace, ns): ns for ns in namespace_list}
 
         for future in concurrent.futures.as_completed(futures):
             ns = futures[future]
@@ -1061,11 +1110,13 @@ def check_sids(namespace):
                 if result:
                     results[ns] = result
             except Exception as e:
-                print_message(syslog.LOG_ERR, "Error processing namespace {}: {}".format(ns, e))
+                print_message(
+                    syslog.LOG_ERR, "Error processing namespace {}: {}".format(ns, e))
                 return -1, results
 
     if results:
-        print_message(syslog.LOG_WARNING, "SIDs Check Failure results: {",  json.dumps(results, indent=4), "}")
+        print_message(syslog.LOG_WARNING, "SIDs Check Failure results: {",  json.dumps(
+            results, indent=4), "}")
         return -1, results
     else:
         print_message(syslog.LOG_INFO, "All good!")
@@ -1113,11 +1164,13 @@ def main():
     TIMEOUT_SECONDS = args.timeout
 
     if namespace is not multi_asic.DEFAULT_NAMESPACE and not multi_asic.is_multi_asic():
-        print_message(syslog.LOG_ERR, "Namespace option is not valid for a single-ASIC device")
+        print_message(syslog.LOG_ERR,
+                      "Namespace option is not valid for a single-ASIC device")
         return -1, None
 
     if namespace is not multi_asic.DEFAULT_NAMESPACE and namespace not in multi_asic.get_namespace_list():
-        print_message(syslog.LOG_ERR, "Namespace option is not valid. Choose one of {}".format(multi_asic.get_namespace_list()))
+        print_message(syslog.LOG_ERR, "Namespace option is not valid. Choose one of {}".format(
+            multi_asic.get_namespace_list()))
         return -1, None
 
     set_level(args.mode, args.log_to_syslog)
@@ -1136,15 +1189,18 @@ def main():
     load_db_config()
 
     if not is_feature_bgp_enabled(namespace):
-        print_message(syslog.LOG_INFO, "BGP feature is disabled, exiting without checking routes!!")
+        print_message(
+            syslog.LOG_INFO, "BGP feature is disabled, exiting without checking routes!!")
         return 0, None
 
     while True:
         signal.alarm(TIMEOUT_SECONDS)
         ret1, res1 = check_routes(namespace)
-        print_message(syslog.LOG_DEBUG, "check_routes: ret={}, res={}".format(ret1, res1))
+        print_message(syslog.LOG_DEBUG,
+                      "check_routes: ret={}, res={}".format(ret1, res1))
         ret2, res2 = check_sids(namespace)
-        print_message(syslog.LOG_DEBUG, "check_sids: ret={}, res={}".format(ret2, res2))
+        print_message(syslog.LOG_DEBUG,
+                      "check_sids: ret={}, res={}".format(ret2, res2))
         signal.alarm(0)
         if ret1 < 0 or ret2 < 0:
             ret = -1
