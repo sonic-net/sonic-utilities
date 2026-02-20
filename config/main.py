@@ -1053,6 +1053,26 @@ def wait_service_restart_finish(service, last_timestamp, timeout=30):
     log.log_warning("Service: {} does not restart in {} seconds, stop waiting".format(service, timeout))
 
 
+def _wait_for_monit_service_monitored(service, timeout=10):
+    """Poll monit status until the service leaves 'Not monitored' state.
+    Because monit monitor <service> is asynchronous — it returns before the action
+    completes.
+    """
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        output, ret = clicommon.run_command(
+            ['sudo', 'monit', 'status', service], return_cmd=True
+        )
+        if ret == 0:
+            for line in output.splitlines():
+                if 'monitoring status' in line.lower():
+                    if 'not monitored' not in line.lower():
+                        return
+                    break
+        time.sleep(0.1)
+    log.log_error("Monit monitor action for '{}' did not complete within {} seconds".format(service, timeout))
+
+
 def _restart_services():
     last_interface_config_timestamp = get_service_finish_timestamp('interfaces-config')
     last_networking_timestamp = get_service_finish_timestamp('networking')
@@ -1070,7 +1090,9 @@ def _restart_services():
         click.echo("Enabling container and routeCheck monitoring ...")
         clicommon.run_command(['sudo', 'monit', 'monitor', 'routeCheck'])
         clicommon.run_command(['sudo', 'monit', 'monitor', 'container_checker'])
-        time.sleep(1)
+        log.log_notice("Waiting for monit monitor actions to complete ...")
+        _wait_for_monit_service_monitored('routeCheck')
+        _wait_for_monit_service_monitored('container_checker')
     except subprocess.CalledProcessError as err:
         pass
     # Reload Monit configuration to pick up new hostname in case it changed
