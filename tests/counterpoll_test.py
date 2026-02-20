@@ -284,8 +284,8 @@ class TestCounterpoll(object):
     @pytest.mark.parametrize("status", ["disable", "enable"])
     def test_update_ha_set_status(self, status):
         runner = CliRunner()
-        result = runner.invoke(counterpoll.cli, ["ha_set", status])
-        assert 'No such command \'ha_set\'' in result.output
+        result = runner.invoke(counterpoll.cli, ["ha-set", status])
+        assert 'No such command \'ha-set\'' in result.output
         assert result.exit_code == 2
 
     @pytest.mark.parametrize("status", ["disable", "enable"])
@@ -297,7 +297,7 @@ class TestCounterpoll(object):
         runner = CliRunner()
         db = Db()
 
-        result = runner.invoke(counterpoll.cli.commands["ha_set"].commands[status], [], obj=db.cfgdb)
+        result = runner.invoke(counterpoll.cli.commands["ha-set"].commands[status], [], obj=db.cfgdb)
         assert result.exit_code == 0
 
         table = db.cfgdb.get_table('FLEX_COUNTER_TABLE')
@@ -312,7 +312,7 @@ class TestCounterpoll(object):
         db = Db()
         test_interval = "2000"
 
-        result = runner.invoke(counterpoll.cli.commands["ha_set"].commands["interval"], [test_interval], obj=db.cfgdb)
+        result = runner.invoke(counterpoll.cli.commands["ha-set"].commands["interval"], [test_interval], obj=db.cfgdb)
         assert result.exit_code == 0
 
         table = db.cfgdb.get_table('FLEX_COUNTER_TABLE')

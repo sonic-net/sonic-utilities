@@ -476,6 +476,7 @@ def eni_disable(ctx):
     eni_info['FLEX_COUNTER_STATUS'] = 'disable'
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", ENI, eni_info)
 
+
 # HA set counter commands
 @click.group()
 @click.pass_context
@@ -494,6 +495,7 @@ def ha_set_interval(ctx, poll_interval):
     ha_set_info['POLL_INTERVAL'] = poll_interval
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", HA_SET, ha_set_info)
 
+
 @ha_set.command(name='enable')
 @click.pass_context
 def ha_set_enable(ctx):
@@ -502,6 +504,7 @@ def ha_set_enable(ctx):
     ha_set_info['FLEX_COUNTER_STATUS'] = 'enable'
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", HA_SET, ha_set_info)
 
+
 @ha_set.command(name='disable')
 @click.pass_context
 def ha_set_disable(ctx):
@@ -509,6 +512,7 @@ def ha_set_disable(ctx):
     ha_set_info = {}
     ha_set_info['FLEX_COUNTER_STATUS'] = 'disable'
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", HA_SET, ha_set_info)
+
 
 # WRED queue counter commands
 @cli.group()
