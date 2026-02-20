@@ -48,7 +48,7 @@ import traceback
 import subprocess
 import concurrent.futures
 os.environ.setdefault('IJSON_BACKEND', 'python')
-import ijson
+import ijson # noqa: E402
 
 from ipaddress import ip_network
 from swsscommon import swsscommon
