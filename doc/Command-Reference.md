@@ -5984,10 +5984,10 @@ At least one option must be specified for each subcommand.
 | Option | SAI Attribute | Description |
 |--------|---------------|-------------|
 | `snr` | `SAI_PORT_ATTR_RX_SNR` | RX Signal-to-Noise Ratio (dB) per lane |
-| `tx-fir` | `SAI_PORT_SERDES_ATTR_TX_FIR_TAPS_LIST` | TX FIR tap values per lane |
-| `rx-ffe` | `SAI_PORT_SERDES_ATTR_RX_FFE_TAPS_LIST` | RX FFE tap values per lane |
-| `rx-dfe` | `SAI_PORT_SERDES_ATTR_RX_DFE_TAPS_LIST` | RX DFE tap values per lane |
-| `rx-vga` | `SAI_PORT_SERDES_ATTR_RX_VGA` | RX VGA values per lane |
+| `txfir` | `SAI_PORT_SERDES_ATTR_TX_FIR_TAPS_LIST` | TX FIR tap values per lane |
+| `rxffe` | `SAI_PORT_SERDES_ATTR_RX_FFE_TAPS_LIST` | RX FFE tap values per lane |
+| `rxdfe` | `SAI_PORT_SERDES_ATTR_RX_DFE_TAPS_LIST` | RX DFE tap values per lane |
+| `rxvga` | `SAI_PORT_SERDES_ATTR_RX_VGA` | RX VGA values per lane |
 
 **Status Output Legend:**
 - `T` = True (signal detected / locked)
@@ -5996,13 +5996,13 @@ At least one option must be specified for each subcommand.
 
 - Usage:
   ```
-  show interfaces phy-sig <interface_name> [rxsig] [feclock] [rxpcs] [rxlock]
-  show interfaces phy-serdes <interface_name> [snr] [tx-fir] [rx-ffe] [rx-dfe] [rx-vga]
+  show interfaces phy-signal <interface_name> [rxsig] [feclock] [rxpcs] [rxlock]
+  show interfaces phy-serdes <interface_name> [snr] [txfir] [rxffe] [rxdfe] [rxvga]
   ```
 
 - Example (status with RX signal detect and FEC alignment lock):
   ```
-  admin@sonic:~$ show interfaces phy-sig Ethernet0 rxsig
+  admin@sonic:~$ show interfaces phy-signal Ethernet0 rxsig
   Interface: Ethernet0
   ================================================================================
     RX Signal Detect:   Current State     Changes        Last Changes (UTC)
@@ -6018,7 +6018,7 @@ At least one option must be specified for each subcommand.
   ```
 
   ```
-  admin@sonic:~$ show interfaces phy-sig Ethernet0 feclock
+  admin@sonic:~$ show interfaces phy-signal Ethernet0 feclock
   Interface: Ethernet0
   ================================================================================
     FEC Alignment Lock:   Current State     Changes      Last Changes (UTC)
@@ -6078,7 +6078,7 @@ At least one option must be specified for each subcommand.
   > **Note:** The number of taps will vary from serdes to serdes.
 
   ```
-  admin@sonic:~$ show interfaces phy-serdes Ethernet0 serdes rx-ffe
+  admin@sonic:~$ show interfaces phy-serdes Ethernet0 rxffe
   Interface: Ethernet0
   ================================================================================
     RX FFE Taps:
@@ -6091,7 +6091,7 @@ At least one option must be specified for each subcommand.
     3      5      -11    8      -3     1      0
 
 
-  admin@sonic:~$ show interfaces phy-serdes Ethernet0 serdes rx-dfe
+  admin@sonic:~$ show interfaces phy-serdes Ethernet0 rxdfe
   Interface: Ethernet0
     RX DFE Taps:
     ------------------------------------------------------------------------------
