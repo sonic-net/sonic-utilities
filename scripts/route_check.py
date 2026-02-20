@@ -37,7 +37,6 @@ To verify:
 import argparse
 from enum import Enum
 import ipaddress
-import ijson.backends.python as ijson
 import json
 import os
 import re
@@ -48,6 +47,8 @@ import signal
 import traceback
 import subprocess
 import concurrent.futures
+os.environ.setdefault('IJSON_BACKEND', 'python')
+import ijson
 
 from ipaddress import ip_network
 from swsscommon import swsscommon
