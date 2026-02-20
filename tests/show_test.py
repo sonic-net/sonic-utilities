@@ -248,6 +248,34 @@ def test_show_version():
     runner = CliRunner()
     result = runner.invoke(show.cli.commands["version"])
     assert "SONiC OS Version: 11" in result.output
+    assert "Docker images:" in result.output
+    assert "REPOSITORY   TAG" in result.output
+
+
+@patch('sonic_py_common.device_info.get_sonic_version_info', MagicMock(return_value={  # noqa: E501
+        "build_version": "release-1.1-7d94c0c28",
+        "sonic_os_version": "11",
+        "debian_version": "11.6",
+        "kernel_version": "5.10",
+        "commit_id": "7d94c0c28",
+        "build_date": "Wed Feb 15 06:17:08 UTC 2023",
+        "built_by": "AzDevOps"}))
+@patch('sonic_py_common.device_info.get_platform_info', MagicMock(return_value={  # noqa: E501
+        "platform": "x86_64-kvm_x86_64-r0",
+        "hwsku": "Force10-S6000",
+        "asic_type": "vs",
+        "asic_count": 1}))
+@patch('sonic_py_common.device_info.get_chassis_info', MagicMock(return_value={
+        "serial": "N/A",
+        "model": "N/A",
+        "revision": "N/A"}))
+@patch('subprocess.Popen', MagicMock(side_effect=side_effect_subprocess_popen))
+def test_show_version_brief():
+    runner = CliRunner()
+    result = runner.invoke(show.cli.commands["version"], ["--brief"])
+    assert "SONiC OS Version: 11" in result.output
+    assert "Docker images:" not in result.output
+    assert "REPOSITORY   TAG" not in result.output
 
 
 @patch('sonic_py_common.device_info.get_sonic_version_info', MagicMock(return_value={
