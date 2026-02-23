@@ -48,13 +48,13 @@ import traceback
 import subprocess
 import concurrent.futures
 os.environ.setdefault('IJSON_BACKEND', 'python')
-import ijson # noqa: E402
+import ijson  # noqa: E402
 
-from ipaddress import ip_network
-from swsscommon import swsscommon
-from utilities_common import chassis
-from sonic_py_common import multi_asic, device_info
-from utilities_common.general import load_db_config
+from ipaddress import ip_network  # noqa: E402
+from swsscommon import swsscommon  # noqa: E402
+from utilities_common import chassis  # noqa: E402
+from sonic_py_common import multi_asic, device_info  # noqa: E402
+from utilities_common.general import load_db_config  # noqa: E402
 
 APPL_DB_NAME = 'APPL_DB'
 ASIC_DB_NAME = 'ASIC_DB'
