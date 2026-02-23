@@ -742,11 +742,11 @@ def show():
             switch_info.get("POLL_INTERVAL", DEFLT_60_SEC),
             switch_info.get("FLEX_COUNTER_STATUS", DISABLE)
         ])
-
-    if is_dpu(configdb) and eni_info:
+    dpu = is_dpu(configdb)
+    if dpu and eni_info:
         data.append(["ENI_STAT", eni_info.get("POLL_INTERVAL", DEFLT_10_SEC),
                     eni_info.get("FLEX_COUNTER_STATUS", DISABLE)])
-    if is_dpu(configdb) and ha_set_info:
+    if dpu and ha_set_info:
         data.append(["HA_SET_STAT", ha_set_info.get("POLL_INTERVAL", DEFLT_10_SEC),
                     ha_set_info.get("FLEX_COUNTER_STATUS", DISABLE)])
 
