@@ -130,7 +130,11 @@
         "tx5power": "1.175",
         "tx6power": "1.175",
         "tx7power": "1.175",
-        "tx8power": "1.175"
+        "tx8power": "1.175",
+        "laser_temperature": "47.7265625",
+        "laser_config_freq": "193100",
+        "laser_curr_freq": "193100.0",
+        "tx_config_power": "-8.5"
     },
     "TRANSCEIVER_DOM_THRESHOLD|Ethernet8": {
         "rxpowerhighalarm": "6.9999",
@@ -1248,6 +1252,15 @@
         "13": "200:200:200:200::5@Vlan1000",
         "14": "200:200:200:200::5@Vlan1000",
         "15": "200:200:200:200::5@Vlan1000"
+    },
+    "LIQUID_COOLING_INFO|leakage1": {
+        "leak_status": "No"
+    },
+    "LIQUID_COOLING_INFO|leakage2": {
+        "leak_status": "No"
+    },
+    "LIQUID_COOLING_INFO|leakage3": {
+        "leak_status": "Yes"
     },
     "FG_ROUTE_TABLE|100.50.25.12/32": {
         "0": "200.200.200.4@Vlan1000",

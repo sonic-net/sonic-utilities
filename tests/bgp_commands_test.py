@@ -178,14 +178,14 @@ Total number of neighbors 24
 
 show_error_invalid_json = """\
 Usage: summary [OPTIONS]
-Try "summary --help" for help.
+Try 'summary --help' for help.
 
 Error: bgp summary from bgp container not in json format
 """
 
 show_vrf_error_invalid_json = """\
-Usage: vrf summary [OPTIONS]
-Try "vrf summary --help" for help.
+Usage: vrf VRF summary [OPTIONS]
+Try 'vrf VRF summary --help' for help.
 
 Error: bgp summary from bgp container not in json format
 """
@@ -559,12 +559,11 @@ class TestBgpCommandsSingleAsic(object):
         indirect=['setup_single_bgp_instance_chassis']
     )
     @patch.object(multi_asic.MultiAsic, 'get_display_option', display_external)
-    @patch('sonic_py_common.device_info.get_platform_info')
+    @patch.object(device_info, 'is_voq_chassis', mock.MagicMock(return_value=True))
     def test_bgp_summary_v4_chassis(
-        self, mock_is_chassis, setup_bgp_commands,
+        self, setup_bgp_commands,
         setup_single_bgp_instance_chassis
     ):
-        mock_is_chassis.return_value = {'switch_type': 'voq'}
         show = setup_bgp_commands
         runner = CliRunner()
         result = runner.invoke(
@@ -578,12 +577,11 @@ class TestBgpCommandsSingleAsic(object):
         indirect=['setup_single_bgp_instance_chassis']
     )
     @patch.object(multi_asic.MultiAsic, 'get_display_option', display_external)
-    @patch('sonic_py_common.device_info.get_platform_info')
+    @patch.object(device_info, 'is_voq_chassis', mock.MagicMock(return_value=True))
     def test_bgp_vrf_summary_v4_chassis(
-        self, mock_is_chassis, setup_bgp_commands,
+        self, setup_bgp_commands,
         setup_single_bgp_instance_chassis
     ):
-        mock_is_chassis.return_value = {'switch_type': 'voq'}
         show = setup_bgp_commands
         runner = CliRunner()
         result = runner.invoke(
@@ -597,12 +595,11 @@ class TestBgpCommandsSingleAsic(object):
         indirect=['setup_single_bgp_instance_chassis']
     )
     @patch.object(multi_asic.MultiAsic, 'get_display_option', display_external)
-    @patch('sonic_py_common.device_info.get_platform_info')
+    @patch.object(device_info, 'is_voq_chassis', mock.MagicMock(return_value=True))
     def test_bgp_summary_v6_chassis(
-        self, mock_is_chassis, setup_bgp_commands,
+        self, setup_bgp_commands,
         setup_single_bgp_instance_chassis
     ):
-        mock_is_chassis.return_value = {'switch_type': 'voq'}
         show = setup_bgp_commands
         runner = CliRunner()
         result = runner.invoke(
@@ -616,12 +613,11 @@ class TestBgpCommandsSingleAsic(object):
         indirect=['setup_single_bgp_instance_chassis']
     )
     @patch.object(multi_asic.MultiAsic, 'get_display_option', display_external)
-    @patch('sonic_py_common.device_info.get_platform_info')
+    @patch.object(device_info, 'is_voq_chassis', mock.MagicMock(return_value=True))
     def test_bgp_vrf_summary_v6_chassis(
-        self, mock_is_chassis, setup_bgp_commands,
+        self, setup_bgp_commands,
         setup_single_bgp_instance_chassis
     ):
-        mock_is_chassis.return_value = {'switch_type': 'voq'}
         show = setup_bgp_commands
         runner = CliRunner()
         result = runner.invoke(

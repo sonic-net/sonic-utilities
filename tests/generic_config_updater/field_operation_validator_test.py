@@ -273,6 +273,50 @@ class TestValidateFieldOperation:
         ):
             assert fov.buffer_profile_config_update_validator(scope, patch_element) is True
 
+    def test_buffer_profile_config_update_validator_object_level_remove(self):
+        """Test that object-level remove operations are allowed (fixes rollback issue)"""
+        patch_element = {
+            "path": "/BUFFER_PROFILE/pg_lossless_40000_5m_profile",
+            "op": "remove"
+        }
+
+        # Object-level remove should be allowed without ASIC/version validation
+        assert fov.buffer_profile_config_update_validator("localhost", patch_element) is True
+
+    def test_buffer_profile_config_update_validator_object_level_add(self):
+        """Test that object-level add operations are allowed"""
+        patch_element = {
+            "path": "/BUFFER_PROFILE/new_profile",
+            "op": "add",
+            "value": {"size": "1024", "pool": "ingress_lossless_pool"}
+        }
+
+        # Object-level add should be allowed
+        assert fov.buffer_profile_config_update_validator("localhost", patch_element) is True
+
+    def test_buffer_profile_config_update_validator_object_level_unsupported_op(self):
+        """Test that unsupported operations on object-level are denied"""
+        patch_element = {
+            "path": "/BUFFER_PROFILE/my_profile",
+            "op": "move",  # Unsupported operation
+            "from": "/BUFFER_PROFILE/old_profile"
+        }
+
+        assert fov.buffer_profile_config_update_validator("localhost", patch_element) is False
+
+    def test_buffer_profile_config_update_validator_field_level_uses_existing_validation(self):
+        """Test that field-level operations use existing validation logic"""
+        patch_element = {
+            "path": "/BUFFER_PROFILE/my_profile/dynamic_th",
+            "op": "replace",
+            "value": "2"
+        }
+
+        # Mock the existing validation to return True
+        with patch("generic_config_updater.field_operation_validators.rdma_config_update_validator_common",
+                   return_value=True):
+            assert fov.buffer_profile_config_update_validator("localhost", patch_element) is True
+
     @patch("sonic_py_common.device_info.get_sonic_version_info",
            mock.Mock(return_value={"build_version": "SONiC.20220530"}))
     @patch("generic_config_updater.field_operation_validators.get_asic_name",
@@ -382,135 +426,47 @@ class TestValidateFieldOperation:
             assert generic_config_updater.field_operation_validators.\
                 rdma_config_update_validator(scope, patch_element) is True
 
-    @patch("sonic_py_common.device_info.get_sonic_version_info",
-           mock.Mock(return_value={"build_version": "20250530.12"}))
-    @patch("generic_config_updater.field_operation_validators.get_asic_name",
-           mock.Mock(return_value="th5"))
-    @patch("os.path.exists", mock.Mock(return_value=True))
-    @patch("builtins.open", mock_open(read_data='''{"tables": {"WRED_PROFILE": {"validator_data": {
-        "rdma_config_update_validator": {"ECN tuning": {"fields": [
-            "green_min_threshold", "green_max_threshold", "green_drop_probability"
-        ], "operations": ["replace"], "platforms": {"th5": "20240500"}}}}}}}'''))
-    def test_wred_profile_config_update_validator_lossless(self):
-        patch_element = {
-            "path": "/WRED_PROFILE/AZURE_LOSSLESS/green_min_threshold",
-            "op": "replace",
-            "value": "1234"
-        }
-        for scope in ["localhost", "asic0"]:
-            assert generic_config_updater.field_operation_validators.\
-                wred_profile_config_update_validator(scope, patch_element) is True
-
-    @patch("sonic_py_common.device_info.get_sonic_version_info",
-           mock.Mock(return_value={"build_version": "20250530.12"}))
-    @patch("generic_config_updater.field_operation_validators.get_asic_name",
-           mock.Mock(return_value="th5"))
-    @patch("os.path.exists", mock.Mock(return_value=True))
-    @patch("builtins.open", mock_open(read_data='''{"tables": {"WRED_PROFILE": {"validator_data": {
-        "rdma_config_update_validator": {"ECN tuning": {"fields": [
-            "green_min_threshold", "green_max_threshold", "green_drop_probability"
-        ], "operations": ["replace"], "platforms": {"th5": "20240500"}}}}}}}'''))
-    def test_wred_profile_config_update_validator_lossy(self):
-        patch_element = {
-            "path": "/WRED_PROFILE/AZURE_LOSSY/green_min_threshold",
-            "op": "replace",
-            "value": "1234"
-        }
-        for scope in ["localhost", "asic0"]:
-            assert generic_config_updater.field_operation_validators.\
-                wred_profile_config_update_validator(scope, patch_element) is True
-
-    @patch("sonic_py_common.device_info.get_sonic_version_info",
-           mock.Mock(return_value={"build_version": "20250530.12"}))
-    @patch("generic_config_updater.field_operation_validators.get_asic_name",
-           mock.Mock(return_value="th5"))
-    @patch("os.path.exists", mock.Mock(return_value=True))
-    @patch("builtins.open", mock_open(read_data='''{"tables": {"WRED_PROFILE": {"validator_data": {
-        "rdma_config_update_validator": {"ECN tuning": {"fields": [
-            "green_min_threshold", "green_max_threshold", "green_drop_probability"
-        ], "operations": ["replace"], "platforms": {"th5": "20240500"}}}}}}}'''))
-    def test_wred_profile_config_update_validator_invalid_field(self):
-        patch_element = {
-            "path": "/WRED_PROFILE/AZURE_LOSSY/invalid",
-            "op": "replace",
-            "value": "1234"
-        }
-        for scope in ["localhost", "asic0"]:
-            assert generic_config_updater.field_operation_validators.\
-                wred_profile_config_update_validator(scope, patch_element) is False
-
-    @patch("generic_config_updater.field_operation_validators.get_asic_name",
-           mock.Mock(return_value="unknown"))
-    def test_wred_profile_config_update_validator_unknown_asic(self):
-        patch_element = {
-            "path": "/WRED_PROFILE/AZURE_LOSSY/green_min_threshold",
-            "op": "replace",
-            "value": "1234"
-        }
-        for scope in ["localhost", "asic0"]:
-            assert generic_config_updater.field_operation_validators.\
-                wred_profile_config_update_validator(scope, patch_element) is False
-
-    @patch("sonic_py_common.device_info.get_sonic_version_info",
-           mock.Mock(return_value={"build_version": "SONiC.20220530"}))
-    @patch("generic_config_updater.field_operation_validators.get_asic_name",
-           mock.Mock(return_value="th5"))
-    @patch("os.path.exists", mock.Mock(return_value=True))
-    @patch("builtins.open", mock_open(read_data='''{"tables": {"WRED_PROFILE": {"validator_data": {
-        "rdma_config_update_validator": {"ECN tuning": {"fields": [
-            "green_min_threshold", "green_max_threshold", "green_drop_probability"
-        ], "operations": ["replace"], "platforms": {"th5": "20240500"}}}}}}}'''))
-    def test_wred_profile_config_update_validator_old_version(self):
-        patch_element = {
-            "path": "/WRED_PROFILE/AZURE_LOSSY/green_min_threshold",
-            "op": "replace",
-            "value": "1234"
-        }
-        for scope in ["localhost", "asic0"]:
-            assert generic_config_updater.field_operation_validators.\
-                wred_profile_config_update_validator(scope, patch_element) is False
-
-    @patch("sonic_py_common.device_info.get_sonic_version_info",
-           mock.Mock(return_value={"build_version": "20250530.12"}))
-    @patch("generic_config_updater.field_operation_validators.get_asic_name",
-           mock.Mock(return_value="th5"))
-    @patch("os.path.exists", mock.Mock(return_value=True))
-    @patch("builtins.open", mock_open(read_data='''{"tables": {"WRED_PROFILE": {"validator_data": {
-        "rdma_config_update_validator": {"ECN tuning": {"fields": [
-            "green_min_threshold", "green_max_threshold", "green_drop_probability"
-        ], "operations": ["replace"], "platforms": {"th5": "20240500"}}}}}}}'''))
-    def test_wred_profile_config_update_validator_invalid_op(self):
-        patch_element = {
-            "path": "/WRED_PROFILE/AZURE_LOSSY/green_min_threshold",
-            "op": "add",
-            "value": "1234"
-        }
-        for scope in ["localhost", "asic0"]:
-            assert generic_config_updater.field_operation_validators.\
-                wred_profile_config_update_validator(scope, patch_element) is False
-
-    @patch("sonic_py_common.device_info.get_sonic_version_info",
-           mock.Mock(return_value={"build_version": "20250530.12"}))
-    @patch("generic_config_updater.field_operation_validators.get_asic_name",
-           mock.Mock(return_value="spc1"))
-    @patch("os.path.exists", mock.Mock(return_value=True))
-    @patch("builtins.open", mock_open(read_data='''{"tables": {"WRED_PROFILE": {"validator_data": {
-        "rdma_config_update_validator": {"ECN tuning": {"fields": [
-            "green_min_threshold", "green_max_threshold", "green_drop_probability"
-        ], "operations": ["replace"], "platforms": {"th5": "20240500"}}}}}}}'''))
-    def test_wred_profile_config_update_validator_invalid_asic(self):
-        patch_element = {
-            "path": "/WRED_PROFILE/AZURE_LOSSY/green_min_threshold",
-            "op": "replace",
-            "value": "1234"
-        }
-        for scope in ["localhost", "asic0"]:
-            assert generic_config_updater.field_operation_validators.\
-                wred_profile_config_update_validator(scope, patch_element) is False
-
     def test_validate_field_operation_illegal__pfcwd(self):
         old_config = {"PFC_WD": {"GLOBAL": {"POLL_INTERVAL": "60"}}}
         target_config = {"PFC_WD": {"GLOBAL": {}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        pytest.raises(
+            gu_common.IllegalPatchOperationError,
+            config_wrapper.validate_field_operation,
+            old_config,
+            target_config
+        )
+
+    @patch("sonic_py_common.device_info.get_sonic_version_info",
+           mock.Mock(return_value={"build_version": "20241211.49"}))
+    @patch("generic_config_updater.field_operation_validators.get_asic_name",
+           mock.Mock(return_value="spc1"))
+    @patch("os.path.exists", mock.Mock(return_value=True))
+    @patch(
+        "builtins.open",
+        mock_open(
+            read_data=(
+                '{"tables": {"BUFFER_POOL": {'
+                '"field_operation_validators": ['
+                '"generic_config_updater.field_operation_validators.rdma_config_update_validator"'
+                '], "validator_data": {"rdma_config_update_validator": {"Blocked ops": '
+                '{"fields": ["ingress_lossless_pool/xoff", '
+                '"ingress_lossless_pool/size", "egress_lossy_pool/size"], '
+                '"operations": [], "platforms": {"spc1": "20181100"}}}}}}}'
+            )
+        )
+    )
+    def test_validate_field_operation_illegal__buffer_pool(self):
+        old_config = {
+            "BUFFER_POOL": {
+                "ingress_lossless_pool": {"xoff": "1000"}
+            }
+        }
+        target_config = {
+            "BUFFER_POOL": {
+                "ingress_lossless_pool": {"xoff": "2000"}
+            }
+        }
         config_wrapper = gu_common.ConfigWrapper()
         pytest.raises(
             gu_common.IllegalPatchOperationError,
@@ -559,6 +515,217 @@ class TestValidateFieldOperation:
             old_config,
             target_config
         )
+
+    def test_validate_field_operation_buffer_queue_replace_profile(self):
+        old_config = {
+            "BUFFER_QUEUE": {
+                "Ethernet0|3": {"profile": "ingress_lossless_profile"}
+            }
+        }
+        target_config = {
+            "BUFFER_QUEUE": {
+                "Ethernet0|3": {"profile": "ingress_lossless_profile_new"}
+            }
+        }
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_buffer_queue_add_profile(self):
+        old_config = {"BUFFER_QUEUE": {}}
+        target_config = {
+            "BUFFER_QUEUE": {
+                "Ethernet0|4": {"profile": "ingress_lossless_profile"}
+            }
+        }
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_buffer_queue_remove_entry(self):
+        old_config = {
+            "BUFFER_QUEUE": {
+                "Ethernet0|5": {"profile": "ingress_lossless_profile"}
+            }
+        }
+        target_config = {"BUFFER_QUEUE": {}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_buffer_pg_replace_profile(self):
+        old_config = {
+            "BUFFER_PG": {
+                "Ethernet0|3-4": {"profile": "pg_lossless_40000_5m_profile"}
+            }
+        }
+        target_config = {
+            "BUFFER_PG": {
+                "Ethernet0|3-4": {"profile": "pg_lossless_40000_10m_profile"}
+            }
+        }
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_buffer_pg_add_profile(self):
+        old_config = {"BUFFER_PG": {}}
+        target_config = {
+            "BUFFER_PG": {
+                "Ethernet0|5-6": {"profile": "pg_lossless_40000_5m_profile"}
+            }
+        }
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_buffer_pg_remove_entry(self):
+        old_config = {
+            "BUFFER_PG": {
+                "Ethernet0|7": {"profile": "pg_lossless_40000_5m_profile"}
+            }
+        }
+        target_config = {"BUFFER_PG": {}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    @pytest.mark.parametrize(
+        "field,old_value,new_value,op", [
+            ("ecn", "ecn_all", "ecn_green", "replace"),
+            ("green_drop_probability", "5", "6", "replace"),
+            ("green_max_threshold", "136200192", "136200193", "replace"),
+            ("green_min_threshold", "136200192", "136200193", "replace"),
+            ("red_drop_probability", "5", "6", "replace"),
+            ("red_max_threshold", "282624", "282625", "replace"),
+            ("red_min_threshold", "166912", "166913", "replace"),
+            ("wred_green_enable", "false", "true", "replace"),
+            ("wred_red_enable", "false", "true", "replace"),
+            ("wred_yellow_enable", "false", "true", "replace"),
+            ("yellow_drop_probability", "5", "6", "replace"),
+            ("yellow_max_threshold", "282624", "282625", "replace"),
+            ("yellow_min_threshold", "166912", "166913", "replace")
+        ]
+    )
+    def test_validate_field_operation_wred_profile_replace(self, field, old_value, new_value, op):
+        old_config = {"WRED_PROFILE": {"AZURE_LOSSY": {field: old_value}}}
+        target_config = {"WRED_PROFILE": {"AZURE_LOSSY": {field: new_value}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    @pytest.mark.parametrize(
+        "field,value", [
+            ("green_min_threshold", "1200"),
+            ("yellow_max_threshold", "2400"),
+            ("red_min_threshold", "3200"),
+            ("green_drop_probability", "10"),
+            ("wred_green_enable", "true"),
+            ("wred_yellow_enable", "true"),
+            ("wred_red_enable", "true")
+        ]
+    )
+    def test_validate_field_operation_wred_profile_add(self, field, value):
+        old_config = {"WRED_PROFILE": {"AZURE_LOSSY": {}}}
+        target_config = {"WRED_PROFILE": {"AZURE_LOSSY": {field: value}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    @pytest.mark.parametrize(
+        "table", [
+            "BUFFER_PORT_EGRESS_PROFILE_LIST",
+            "BUFFER_PORT_INGRESS_PROFILE_LIST"
+        ]
+    )
+    def test_validate_field_operation_buffer_port_profile_list_add(self, table):
+        old_config = {table: {"Ethernet0": {}}}
+        target_config = {table: {"Ethernet0": {"profile_list": "AZURE_PROFILE"}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    @pytest.mark.parametrize(
+        "table", [
+            "BUFFER_PORT_EGRESS_PROFILE_LIST",
+            "BUFFER_PORT_INGRESS_PROFILE_LIST"
+        ]
+    )
+    def test_validate_field_operation_buffer_port_profile_list_replace(self, table):
+        old_config = {table: {"Ethernet0": {"profile_list": "AZURE_PROFILE"}}}
+        target_config = {table: {"Ethernet0": {"profile_list": "NEW_PROFILE"}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    @pytest.mark.parametrize(
+        "table", [
+            "BUFFER_PORT_EGRESS_PROFILE_LIST",
+            "BUFFER_PORT_INGRESS_PROFILE_LIST"
+        ]
+    )
+    def test_validate_field_operation_buffer_port_profile_list_remove(self, table):
+        old_config = {table: {"Ethernet0": {"profile_list": "AZURE_PROFILE"}}}
+        target_config = {table: {"Ethernet0": {}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_queue_scheduler_replace(self):
+        old_config = {"QUEUE": {"Ethernet0|0": {"scheduler": "sched0"}}}
+        target_config = {"QUEUE": {"Ethernet0|0": {"scheduler": "sched1"}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_queue_wred_profile_add(self):
+        old_config = {"QUEUE": {"Ethernet0|1": {}}}
+        target_config = {"QUEUE": {"Ethernet0|1": {"wred_profile": "WRED_PROFILE"}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_queue_wred_profile_replace(self):
+        old_config = {"QUEUE": {"Ethernet0|1": {"wred_profile": "WRED_PROFILE"}}}
+        target_config = {"QUEUE": {"Ethernet0|1": {"wred_profile": "WRED_PROFILE_NEW"}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    @pytest.mark.parametrize(
+        "field,new_value", [
+            ("dscp_to_tc_map", "AZURE"),
+            ("tc_to_pg_map", "AZURE"),
+            ("tc_to_queue_map", "AZURE")
+        ]
+    )
+    def test_validate_field_operation_port_qos_map_replace(self, field, new_value):
+        old_config = {"PORT_QOS_MAP": {"Ethernet0": {field: "DEFAULT"}}}
+        target_config = {"PORT_QOS_MAP": {"Ethernet0": {field: new_value}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_port_qos_map_tc_to_dscp_add(self):
+        old_config = {"PORT_QOS_MAP": {"Ethernet0": {}}}
+        target_config = {"PORT_QOS_MAP": {"Ethernet0": {"tc_to_dscp_map": "AZURE"}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_port_qos_map_tc_to_dscp_replace(self):
+        old_config = {"PORT_QOS_MAP": {"Ethernet0": {"tc_to_dscp_map": "DEFAULT"}}}
+        target_config = {"PORT_QOS_MAP": {"Ethernet0": {"tc_to_dscp_map": "AZURE"}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_port_qos_map_dscp_to_tc_replace(self):
+        old_config = {"PORT_QOS_MAP": {"Ethernet0": {"dscp_to_tc_map": "DEFAULT"}}}
+        target_config = {"PORT_QOS_MAP": {"Ethernet0": {"dscp_to_tc_map": "AZURE"}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_port_qos_map_tc_to_pg_replace(self):
+        old_config = {"PORT_QOS_MAP": {"Ethernet0": {"tc_to_pg_map": "DEFAULT"}}}
+        target_config = {"PORT_QOS_MAP": {"Ethernet0": {"tc_to_pg_map": "AZURE"}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_port_qos_map_tc_to_queue_replace(self):
+        old_config = {"PORT_QOS_MAP": {"Ethernet0": {"tc_to_queue_map": "DEFAULT"}}}
+        target_config = {"PORT_QOS_MAP": {"Ethernet0": {"tc_to_queue_map": "AZURE"}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
+
+    def test_validate_field_operation_scheduler_weight_replace(self):
+        old_config = {"SCHEDULER": {"scheduler.0": {"weight": "10", "type": "DWRR"}}}
+        target_config = {"SCHEDULER": {"scheduler.0": {"weight": "20", "type": "DWRR"}}}
+        config_wrapper = gu_common.ConfigWrapper()
+        config_wrapper.validate_field_operation(old_config, target_config)
 
 class TestGetAsicName(unittest.TestCase):
 

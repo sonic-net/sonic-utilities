@@ -1,6 +1,7 @@
 import os
 import logging
 import pprint
+import pytest
 
 from sonic_cli_gen.yang_parser import YangParser
 from .cli_autogen_input.yang_parser_test import assert_dictionaries

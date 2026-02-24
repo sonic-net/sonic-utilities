@@ -46,6 +46,7 @@ from utilities_common.general import load_db_config, load_module_from_source
 from .validated_config_db_connector import ValidatedConfigDBConnector
 import utilities_common.multi_asic as multi_asic_util
 from utilities_common.flock import try_lock
+from utilities_common import hft as hft_common
 
 from .utils import log
 
@@ -55,6 +56,7 @@ from . import console
 from . import feature
 from . import fabric
 from . import flow_counters
+from . import hft
 from . import kdump
 from . import kube
 from . import muxcable
@@ -187,10 +189,11 @@ def write_json_file(json_input, fileName):
     except Exception as e:
         raise Exception(str(e))
 
-def _get_breakout_options(ctx, args, incomplete):
+
+def _get_breakout_options(ctx, param, incomplete):
     """ Provides dynamic mode option as per user argument i.e. interface name """
     all_mode_options = []
-    interface_name = args[-1]
+    interface_name = ctx.params["interface_name"]
 
     breakout_cfg_file = device_info.get_path_to_port_config_file()
 
@@ -1139,6 +1142,32 @@ def interface_has_mirror_config(ctx, mirror_table, dst_port, src_port, direction
 
     return False
 
+
+def is_port_mirror_capability_supported(direction, namespace=None):
+    """ Check if port mirror capability is supported for the given direction """
+    state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
+    state_db.connect(state_db.STATE_DB, False)
+    entry_name = "SWITCH_CAPABILITY|switch"
+
+    # If no direction is specified, check both ingress and egress capabilities
+    if not direction:
+        ingress_supported = state_db.get(state_db.STATE_DB, entry_name, "PORT_INGRESS_MIRROR_CAPABLE")
+        egress_supported = state_db.get(state_db.STATE_DB, entry_name, "PORT_EGRESS_MIRROR_CAPABLE")
+        return ingress_supported == "true" and egress_supported == "true"
+
+    if direction in ['rx', 'both']:
+        ingress_supported = state_db.get(state_db.STATE_DB, entry_name, "PORT_INGRESS_MIRROR_CAPABLE")
+        if ingress_supported != "true":
+            return False
+
+    if direction in ['tx', 'both']:
+        egress_supported = state_db.get(state_db.STATE_DB, entry_name, "PORT_EGRESS_MIRROR_CAPABLE")
+        if egress_supported != "true":
+            return False
+
+    return True
+
+
 def validate_mirror_session_config(config_db, session_name, dst_port, src_port, direction):
     """ Check if SPAN mirror-session config is valid """
     ctx = click.get_current_context()
@@ -1150,6 +1179,10 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
     mirror_table = config_db.get_table('MIRROR_SESSION')
     portchannel_member_table = config_db.get_table('PORTCHANNEL_MEMBER')
 
+    # Determine namespaces to validate: always include None (single-ASIC/back-compat),
+    # and for multi-ASIC include namespaces for dst/src ports if present.
+    namespace_set = set()
+
     if dst_port:
         if not interface_name_is_valid(config_db, dst_port):
             ctx.fail("Error: Destination Interface {} is invalid".format(dst_port))
@@ -1160,12 +1193,13 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
         if interface_is_in_vlan(vlan_member_table, dst_port):
             ctx.fail("Error: Destination Interface {} has vlan config".format(dst_port))
 
-
         if interface_is_in_portchannel(portchannel_member_table, dst_port):
             ctx.fail("Error: Destination Interface {} has portchannel config".format(dst_port))
 
         if clicommon.is_port_router_interface(config_db, dst_port):
             ctx.fail("Error: Destination Interface {} is a L3 interface".format(dst_port))
+
+        namespace_set.add(get_port_namespace(dst_port))
 
     if src_port:
         for port in src_port.split(","):
@@ -1174,12 +1208,22 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
             if dst_port and dst_port == port:
                 ctx.fail("Error: Destination Interface cant be same as Source Interface")
 
+            namespace_set.add(get_port_namespace(port))
+
     if interface_has_mirror_config(ctx, mirror_table, dst_port, src_port, direction):
         return False
 
     if direction:
         if direction not in ['rx', 'tx', 'both']:
             ctx.fail("Error: Direction {} is invalid".format(direction))
+
+    # Check port mirror capability before allowing configuration
+    # If direction is provided, check the specific direction
+
+    for ns in namespace_set:
+        if not is_port_mirror_capability_supported(direction, namespace=ns):
+            ctx.fail("Error: Port mirror direction '{}' is not supported by the ASIC".format(
+                direction if direction else 'both'))
 
     return True
 
@@ -1543,6 +1587,13 @@ def delete_transceiver_tables():
         state_db.delete_all_by_pattern(state_db.STATE_DB, table + state_db_del_pattern)
 
 
+def delete_bgp_peer_table():
+    # Delete all entries in BGP_PEER_CONFIGURED_TABLE in state db.
+    state_db = SonicV2Connector(use_unix_socket_path=True)
+    state_db.connect(state_db.STATE_DB, False)
+    state_db.delete_all_by_pattern(state_db.STATE_DB, "BGP_PEER_CONFIGURED_TABLE|*")
+
+
 def migrate_db_to_lastest(namespace=DEFAULT_NAMESPACE):
     # Migrate DB contents to latest version
     db_migrator = '/usr/local/bin/db_migrator.py'
@@ -1689,6 +1740,8 @@ config.add_command(console.console)
 config.add_command(fabric.fabric)
 config.add_command(feature.feature)
 config.add_command(flow_counters.flowcnt_route)
+if hft_common.is_supported_platform():
+    config.add_command(hft.hft)
 config.add_command(kdump.kdump)
 config.add_command(kube.kubernetes)
 config.add_command(muxcable.muxcable)
@@ -2178,6 +2231,7 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
 
             client, config_db = flush_configdb(namespace)
             delete_transceiver_tables()
+            delete_bgp_peer_table()
 
             if load_sysinfo:
                 if namespace is DEFAULT_NAMESPACE:
@@ -2315,6 +2369,7 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
     if not no_service_restart:
         log.log_notice("'load_minigraph' stopping services...")
         delete_transceiver_tables()
+        delete_bgp_peer_table()
         _stop_services()
 
     # For Single Asic platform the namespace list has the empty string
@@ -2985,11 +3040,16 @@ def del_portchannel_member(ctx, portchannel_name, port_name):
 @portchannel.group(cls=clicommon.AbbreviationGroup, name='retry-count')
 @click.pass_context
 def portchannel_retry_count(ctx):
-    pass
+    teamdctl_command = ["teamdctl"]
+    if ctx.obj["namespace"] != DEFAULT_NAMESPACE:
+        teamdctl_command += ["-n", ctx.obj['namespace'].removeprefix("asic")]
+    ctx.obj["teamdctl_command"] = teamdctl_command
 
 def check_if_retry_count_is_enabled(ctx, portchannel_name):
     try:
-        proc = subprocess.Popen(["teamdctl", portchannel_name, "state", "item", "get", "runner.enable_retry_count_feature"], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        cmd = ctx.obj["teamdctl_command"] + [portchannel_name, "state", "item", "get",
+                                             "runner.enable_retry_count_feature"]
+        proc = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         output, err = proc.communicate(timeout=10)
         if proc.returncode != 0:
             ctx.fail("Unable to determine if the retry count feature is enabled or not: {}".format(err.strip()))
@@ -3020,7 +3080,9 @@ def get_portchannel_retry_count(ctx, portchannel_name):
         if not is_retry_count_enabled:
             ctx.fail("Retry count feature is not enabled!")
 
-        proc = subprocess.Popen(["teamdctl", portchannel_name, "state", "item", "get", "runner.retry_count"], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        cmd = ctx.obj["teamdctl_command"] + [portchannel_name, "state", "item", "get",
+                                             "runner.retry_count"]
+        proc = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         output, err = proc.communicate(timeout=10)
         if proc.returncode != 0:
             ctx.fail("Unable to get the retry count: {}".format(err.strip()))
@@ -3056,7 +3118,9 @@ def set_portchannel_retry_count(ctx, portchannel_name, retry_count):
         if not is_retry_count_enabled:
             ctx.fail("Retry count feature is not enabled!")
 
-        proc = subprocess.Popen(["teamdctl", portchannel_name, "state", "item", "set", "runner.retry_count", str(retry_count)], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        cmd = ctx.obj["teamdctl_command"] + [portchannel_name, "state", "item", "set",
+                                             "runner.retry_count", str(retry_count)]
+        proc = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         output, err = proc.communicate(timeout=10)
         if proc.returncode != 0:
             ctx.fail("Unable to set the retry count: {}".format(err.strip()))
@@ -3771,92 +3835,156 @@ def warm_restart(ctx, redis_unix_socket_path):
     # Note: redis_unix_socket_path is a path string, and the ground truth is now from database_config.json.
     # We only use it as a bool indicator on either unix_socket_path or tcp port
     use_unix_socket_path = bool(redis_unix_socket_path)
-    config_db = ConfigDBConnector(use_unix_socket_path=use_unix_socket_path)
-    config_db.connect(wait_for_init=False)
-
-    # warm restart enable/disable config is put in stateDB, not persistent across cold reboot, not saved to config_DB.json file
-    state_db = SonicV2Connector(use_unix_socket_path=use_unix_socket_path)
-    state_db.connect(state_db.STATE_DB, False)
     TABLE_NAME_SEPARATOR = '|'
     prefix = 'WARM_RESTART_ENABLE_TABLE' + TABLE_NAME_SEPARATOR
-    ctx.obj = {'db': config_db, 'state_db': state_db, 'prefix': prefix}
+    ctx.obj = {'prefix': prefix}
+
+    asic_namespaces = multi_asic.get_namespace_list()
+    all_namespaces = asic_namespaces
+    if multi_asic.is_multi_asic():
+        all_namespaces = [multi_asic_util.constants.DEFAULT_NAMESPACE] + asic_namespaces
+    ctx.obj["all_namespaces"] = all_namespaces
+    ctx.obj["asic_namespaces"] = asic_namespaces
+    ctx.obj["state_db"] = {}
+    ctx.obj["config_db"] = {}
+    for namespace in all_namespaces:
+        config_db = ConfigDBConnector(namespace=namespace, use_unix_socket_path=use_unix_socket_path)
+        config_db.connect(wait_for_init=False)
+        state_db = SonicV2Connector(namespace=namespace, use_unix_socket_path=use_unix_socket_path)
+        state_db.connect(state_db.STATE_DB, False)
+        ctx.obj["state_db"][namespace] = state_db
+        ctx.obj["config_db"][namespace] = config_db
+
 
 @warm_restart.command('enable')
+@click.option('--namespace', '-n', 'namespace', default=None, help='Namespace name')
 @click.argument('module', metavar='<module>', default='system', required=False)
 @click.pass_context
-def warm_restart_enable(ctx, module):
-    state_db = ctx.obj['state_db']
-    config_db = ctx.obj['db']
+def warm_restart_enable(ctx, namespace, module):
+    if namespace is not None:
+        if namespace not in ctx.obj["all_namespaces"]:
+            raise click.UsageError("Invalid namespace: {}".format(namespace))
+    namespaces = [namespace] if namespace else ctx.obj["all_namespaces"]
+
+    config_db = ctx.obj["config_db"][multi_asic_util.constants.DEFAULT_NAMESPACE]
     feature_table = config_db.get_table('FEATURE')
     if module != 'system' and module not in feature_table:
         sys.exit('Feature {} is unknown'.format(module))
     prefix = ctx.obj['prefix']
     _hash = '{}{}'.format(prefix, module)
-    state_db.set(state_db.STATE_DB, _hash, 'enable', 'true')
-    state_db.close(state_db.STATE_DB)
+
+    for namespace in namespaces:
+        state_db = ctx.obj["state_db"][namespace]
+        state_db.set(state_db.STATE_DB, _hash, 'enable', 'true')
+        state_db.close(state_db.STATE_DB)
+
 
 @warm_restart.command('disable')
+@click.option('--namespace', '-n', 'namespace', default=None, help='Namespace name')
 @click.argument('module', metavar='<module>', default='system', required=False)
 @click.pass_context
-def warm_restart_disable(ctx, module):
-    state_db = ctx.obj['state_db']
-    config_db = ctx.obj['db']
+def warm_restart_disable(ctx, namespace, module):
+    if namespace is not None:
+        if namespace not in ctx.obj["all_namespaces"]:
+            raise click.UsageError("Invalid namespace: {}".format(namespace))
+    namespaces = [namespace] if namespace else ctx.obj["all_namespaces"]
+
+    config_db = ctx.obj["config_db"][multi_asic_util.constants.DEFAULT_NAMESPACE]
     feature_table = config_db.get_table('FEATURE')
     if module != 'system' and module not in feature_table:
         sys.exit('Feature {} is unknown'.format(module))
     prefix = ctx.obj['prefix']
     _hash = '{}{}'.format(prefix, module)
-    state_db.set(state_db.STATE_DB, _hash, 'enable', 'false')
-    state_db.close(state_db.STATE_DB)
+
+    for namespace in namespaces:
+        state_db = ctx.obj["state_db"][namespace]
+        state_db.set(state_db.STATE_DB, _hash, 'enable', 'false')
+        state_db.close(state_db.STATE_DB)
+
 
 @warm_restart.command('neighsyncd_timer')
+@click.option('--namespace', '-n', 'namespace', default=None, help='Namespace name')
 @click.argument('seconds', metavar='<seconds>', required=True, type=int)
 @click.pass_context
-def warm_restart_neighsyncd_timer(ctx, seconds):
-    db = ValidatedConfigDBConnector(ctx.obj['db'])
+def warm_restart_neighsyncd_timer(ctx, namespace, seconds):
+    if namespace is not None:
+        if namespace not in ctx.obj["asic_namespaces"]:
+            raise click.UsageError("Invalid namespace: {}".format(namespace))
+    namespaces = [namespace] if namespace else ctx.obj["asic_namespaces"]
+
     if ADHOC_VALIDATION:
         if seconds not in range(1, 9999):
             ctx.fail("neighsyncd warm restart timer must be in range 1-9999")
-    try:
-        db.mod_entry('WARM_RESTART', 'swss', {'neighsyncd_timer': seconds})
-    except ValueError as e:
-        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+    for namespace in namespaces:
+        db = ValidatedConfigDBConnector(ctx.obj["config_db"][namespace])
+        try:
+            db.mod_entry('WARM_RESTART', 'swss', {'neighsyncd_timer': seconds})
+        except ValueError as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
 
 @warm_restart.command('bgp_timer')
+@click.option('--namespace', '-n', 'namespace', default=None, help='Namespace name')
 @click.argument('seconds', metavar='<seconds>', required=True, type=int)
 @click.pass_context
-def warm_restart_bgp_timer(ctx, seconds):
-    db = ValidatedConfigDBConnector(ctx.obj['db'])
+def warm_restart_bgp_timer(ctx, namespace, seconds):
+    if namespace is not None:
+        if namespace not in ctx.obj["asic_namespaces"]:
+            raise click.UsageError("Invalid namespace: {}".format(namespace))
+    namespaces = [namespace] if namespace else ctx.obj["asic_namespaces"]
+
     if ADHOC_VALIDATION:
         if seconds not in range(1, 3600):
             ctx.fail("bgp warm restart timer must be in range 1-3600")
-    try:
-        db.mod_entry('WARM_RESTART', 'bgp', {'bgp_timer': seconds})
-    except ValueError as e:
-        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+    for namespace in namespaces:
+        db = ValidatedConfigDBConnector(ctx.obj["config_db"][namespace])
+        try:
+            db.mod_entry('WARM_RESTART', 'bgp', {'bgp_timer': seconds})
+        except ValueError as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
 
 @warm_restart.command('teamsyncd_timer')
+@click.option('--namespace', '-n', 'namespace', default=None, help='Namespace name')
 @click.argument('seconds', metavar='<seconds>', required=True, type=int)
 @click.pass_context
-def warm_restart_teamsyncd_timer(ctx, seconds):
-    db = ValidatedConfigDBConnector(ctx.obj['db'])
+def warm_restart_teamsyncd_timer(ctx, namespace, seconds):
+    if namespace is not None:
+        if namespace not in ctx.obj["asic_namespaces"]:
+            raise click.UsageError("Invalid namespace: {}".format(namespace))
+    namespaces = [namespace] if namespace else ctx.obj["asic_namespaces"]
+
     if ADHOC_VALIDATION:
         if seconds not in range(1, 3600):
             ctx.fail("teamsyncd warm restart timer must be in range 1-3600")
-    try:
-        db.mod_entry('WARM_RESTART', 'teamd', {'teamsyncd_timer': seconds})
-    except ValueError as e:
-        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+    for namespace in namespaces:
+        db = ValidatedConfigDBConnector(ctx.obj["config_db"][namespace])
+        try:
+            db.mod_entry('WARM_RESTART', 'teamd', {'teamsyncd_timer': seconds})
+        except ValueError as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
 
 @warm_restart.command('bgp_eoiu')
+@click.option('--namespace', '-n', 'namespace', default=None, help='Namespace name')
 @click.argument('enable', metavar='<enable>', default='true', required=False, type=click.Choice(["true", "false"]))
 @click.pass_context
-def warm_restart_bgp_eoiu(ctx, enable):
-    db = ValidatedConfigDBConnector(ctx.obj['db'])
-    try:
-        db.mod_entry('WARM_RESTART', 'bgp', {'bgp_eoiu': enable})
-    except ValueError as e:
-        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+def warm_restart_bgp_eoiu(ctx, namespace, enable):
+    if namespace is not None:
+        if namespace not in ctx.obj["asic_namespaces"]:
+            raise click.UsageError("Invalid namespace: {}".format(namespace))
+    namespaces = [namespace] if namespace else ctx.obj["asic_namespaces"]
+
+    for namespace in namespaces:
+        db = ValidatedConfigDBConnector(ctx.obj["config_db"][namespace])
+        try:
+            db.mod_entry('WARM_RESTART', 'bgp', {'bgp_eoiu': enable})
+        except ValueError as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
 
 def vrf_add_management_vrf(config_db):
     """Enable management vrf in config DB"""
@@ -4864,6 +4992,96 @@ def interface(ctx, namespace):
     config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=str(namespace))
     config_db.connect()
     ctx.obj = {'config_db': config_db, 'namespace': str(namespace)}
+
+
+@config.group(cls=clicommon.AliasedGroup, name='switch-fast-linkup', context_settings=CONTEXT_SETTINGS)
+@click.pass_context
+def switch_fast_linkup_group(ctx):
+    """Configure fast link-up global configuration parameters"""
+    pass
+
+
+# 'global' subcommand
+@switch_fast_linkup_group.command(name='global')
+@click.option('--polling-time', type=int, required=False, help='Polling time (sec)')
+@click.option('--guard-time', type=int, required=False, help='Guard time (sec)')
+@click.option('--ber', '--ber-threshold', type=int, required=False, help='BER threshold exponent (e.g., 12 for 1e-12)')
+@clicommon.pass_db
+def switch_fast_linkup_global_cmd(db, polling_time, guard_time, ber):
+    """Configure global fast link-up feature parameters"""
+    if polling_time is None and guard_time is None and ber is None:
+        raise click.UsageError('Failed to configure fast link-up global: no options are provided')
+    # Read capability and ranges from STATE_DB for validation
+    state_db = db.db.STATE_DB
+    cap_tbl = db.db.get_all(state_db, 'SWITCH_CAPABILITY|switch') or {}
+    if cap_tbl.get('FAST_LINKUP_CAPABLE', 'false') != 'true':
+        raise click.ClickException('Fast link-up is not supported on this platform')
+
+    poll_range_str = cap_tbl.get('FAST_LINKUP_POLLING_TIMER_RANGE')
+    guard_range_str = cap_tbl.get('FAST_LINKUP_GUARD_TIMER_RANGE')
+    if not poll_range_str or not guard_range_str:
+        raise click.ClickException('Fast link-up capability ranges are not defined on this platform')
+
+    poll_range = poll_range_str.split(',')
+    guard_range = guard_range_str.split(',')
+
+    data = {}
+    if polling_time is not None:
+        if not (int(poll_range[0]) <= int(polling_time) <= int(poll_range[1])):
+            raise click.ClickException('polling_time {} out of supported range [{}, {}]'.format(
+                polling_time, poll_range[0], poll_range[1]))
+        data['polling_time'] = str(polling_time)
+    if guard_time is not None:
+        if not (int(guard_range[0]) <= int(guard_time) <= int(guard_range[1])):
+            raise click.ClickException('guard_time {} out of supported range [{}, {}]'.format(
+                guard_time, guard_range[0], guard_range[1]))
+        data['guard_time'] = str(guard_time)
+    if ber is not None:
+        if int(ber) < 1 or int(ber) > 255:
+            raise click.ClickException('ber_threshold {} out of supported range [1, 255]'.format(ber))
+        data['ber_threshold'] = str(ber)
+    try:
+        db.cfgdb.mod_entry('SWITCH_FAST_LINKUP', 'GLOBAL', data)
+
+        log.log_notice('Configured fast link-up global: {}'.format(data))
+    except Exception as e:
+        log.log_error('Failed to configure fast link-up global: {}'.format(str(e)))
+        raise SystemExit(1)
+
+
+# 'fast-linkup' subcommand
+@interface.command('fast-linkup')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('mode', metavar='<enabled|disabled>', required=True, type=click.Choice(['enabled', 'disabled']))
+@click.option('-v', '--verbose', is_flag=True, help='Enable verbose output')
+@click.pass_context
+def fast_linkup(ctx, interface_name, mode, verbose):
+    """Enable/disable fast link-up on an interface"""
+    config_db = ctx.obj['config_db']
+    namespace = ctx.obj.get('namespace', DEFAULT_NAMESPACE)
+
+    if clicommon.get_interface_naming_mode() == 'alias':
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            raise click.ClickException("'interface_name' is None!")
+    if not interface_name_is_valid(config_db, interface_name):
+        raise click.ClickException('Interface name is invalid. Please enter a valid interface name')
+
+    # Read capability from STATE_DB for validation
+    db = Db()
+    state_db = db.db_clients.get(namespace, db.db)
+    cap_tbl = state_db.get_all(state_db.STATE_DB, 'SWITCH_CAPABILITY|switch') or {}
+    if cap_tbl.get('FAST_LINKUP_CAPABLE', 'false') != 'true':
+        raise click.ClickException('Fast link-up is not supported on this platform')
+
+    log.log_info("'interface fast-linkup {} {}' executing...".format(interface_name, mode))
+    if namespace is DEFAULT_NAMESPACE:
+        command = ['portconfig', '-p', str(interface_name), '-fl', str(mode)]
+    else:
+        command = ['portconfig', '-p', str(interface_name), '-fl', str(mode), '-n', str(namespace)]
+    if verbose:
+        command += ['-vv']
+    clicommon.run_command(command, display_cmd=verbose)
 #
 # 'startup' subcommand
 #
@@ -5140,7 +5358,7 @@ def advertised_types(ctx, interface_name, interface_type_list, verbose):
 
 @interface.command()
 @click.argument('interface_name', metavar='<interface_name>', required=True)
-@click.argument('mode', required=True, type=click.STRING, autocompletion=_get_breakout_options)
+@click.argument('mode', required=True, type=click.STRING, shell_complete=_get_breakout_options)
 @click.option('-f', '--force-remove-dependencies', is_flag=True,  help='Clear all dependencies internally first.')
 @click.option('-l', '--load-predefined-config', is_flag=True,  help='load predefied user configuration (alias, lanes, speed etc) first.')
 @click.option('-y', '--yes', is_flag=True, callback=_abort_if_false, expose_value=False, prompt='Do you want to Breakout the port, continue?')
@@ -9418,7 +9636,7 @@ def clock():
     pass
 
 
-def get_tzs(ctx, args, incomplete):
+def get_tzs(ctx, param, incomplete):
     ret = clicommon.run_command(['timedatectl', 'list-timezones'],
                                 display_cmd=False, ignore_error=False,
                                 return_cmd=True)
@@ -9431,7 +9649,7 @@ def get_tzs(ctx, args, incomplete):
 
 @clock.command()
 @click.argument('timezone', metavar='<timezone_name>', required=True,
-                autocompletion=get_tzs)
+                shell_complete=get_tzs)
 def timezone(timezone):
     """Set system timezone"""
 

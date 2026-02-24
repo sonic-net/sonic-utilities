@@ -1033,7 +1033,7 @@ srv6_nexthop                0               1024
 
 """
 
-crm_config_interval_too_big = "Error: Invalid value for \"INTERVAL\": 30000 is not in the valid range of 1 to 9999."
+crm_config_interval_too_big = "Error: Invalid value for 'INTERVAL': 30000 is not in the range 1<=x<=9999."
 
 class TestCrm(object):
     @classmethod

@@ -1,3 +1,4 @@
+import importlib
 import sys
 import pytest
 from unittest.mock import call, patch, MagicMock
@@ -243,3 +244,87 @@ class TestComponentUpdateProvider(object):
 
     def teardown(self):
         print('TEARDOWN')
+
+
+class TestFwutilMain(object):
+    def test_main_import_does_not_init_platform_provider(self):
+        import fwutil.lib as fwutil_lib
+        sys.modules.pop('fwutil.main', None)
+        with patch.object(fwutil_lib, "PlatformDataProvider") as pdp_cls:
+            import fwutil.main as fw_main
+            importlib.reload(fw_main)
+            pdp_cls.assert_not_called()
+
+    def test_get_pdp_is_singleton(self):
+        import fwutil.main as fw_main
+        with patch.object(fw_main, "PlatformDataProvider") as pdp_cls:
+            pdp_instance = MagicMock()
+            pdp_cls.return_value = pdp_instance
+            fw_main._pdp = None
+
+            first = fw_main.get_pdp()
+            second = fw_main.get_pdp()
+
+            assert first is pdp_instance
+            assert second is pdp_instance
+            pdp_cls.assert_called_once()
+
+    def test_chassis_handler_populates_context(self):
+        import fwutil.main as fw_main
+        ctx = MagicMock()
+        ctx.obj = {fw_main.COMPONENT_PATH_CTX_KEY: []}
+        pdp = MagicMock()
+        pdp.chassis.get_name.return_value = "ChassisA"
+
+        with patch.object(fw_main, "get_pdp", return_value=pdp) as mock_get_pdp:
+            fw_main.chassis_handler(ctx)
+
+        mock_get_pdp.assert_called_once()
+        assert ctx.obj[fw_main.CHASSIS_NAME_CTX_KEY] == "ChassisA"
+        assert ctx.obj[fw_main.COMPONENT_PATH_CTX_KEY] == ["ChassisA"]
+
+    def test_module_handler_populates_context(self):
+        import fwutil.main as fw_main
+        ctx = MagicMock()
+        ctx.obj = {fw_main.COMPONENT_PATH_CTX_KEY: []}
+        pdp = MagicMock()
+        pdp.chassis.get_name.return_value = "ChassisA"
+
+        with patch.object(fw_main, "get_pdp", return_value=pdp) as mock_get_pdp:
+            fw_main.module_handler(ctx, "Module1")
+
+        mock_get_pdp.assert_called_once()
+        assert ctx.obj[fw_main.MODULE_NAME_CTX_KEY] == "Module1"
+        assert ctx.obj[fw_main.COMPONENT_PATH_CTX_KEY] == ["ChassisA", "Module1"]
+
+    def test_validate_module_success(self):
+        import fwutil.main as fw_main
+        ctx = MagicMock()
+        param = MagicMock()
+        param.metavar = "<module_name>"
+        pdp = MagicMock()
+        pdp.is_modular_chassis.return_value = True
+        pdp.module_component_map = {"Module1": {}}
+
+        with patch.object(fw_main, "get_pdp", return_value=pdp) as mock_get_pdp:
+            result = fw_main.validate_module(ctx, param, "Module1")
+
+        mock_get_pdp.assert_called_once()
+        assert result == "Module1"
+
+    def test_validate_component_with_chassis(self):
+        import fwutil.main as fw_main
+        ctx = MagicMock()
+        ctx.obj = {fw_main.CHASSIS_NAME_CTX_KEY: "ChassisA"}
+        param = MagicMock()
+        param.metavar = "<component_name>"
+        component = MagicMock()
+        pdp = MagicMock()
+        pdp.chassis_component_map = {"ChassisA": {"Comp1": component}}
+
+        with patch.object(fw_main, "get_pdp", return_value=pdp) as mock_get_pdp:
+            result = fw_main.validate_component(ctx, param, "Comp1")
+
+        mock_get_pdp.assert_called_once()
+        assert result == "Comp1"
+        assert ctx.obj[fw_main.COMPONENT_CTX_KEY] is component

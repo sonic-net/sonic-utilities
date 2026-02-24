@@ -1,11 +1,13 @@
 import pytest
 import os
-import imp
+from .utils import load_source
 
 from click.testing import CliRunner
 from swsscommon.swsscommon import ConfigDBConnector
 
-null_route_helper = imp.load_source('null_route_helper', os.path.join(os.path.dirname(__file__), '..', 'scripts','null_route_helper'))
+
+null_route_helper = load_source('null_route_helper', os.path.join(os.path.dirname(__file__), '..',
+                                                                  'scripts', 'null_route_helper'))
 null_route_helper.ConfigDBConnector = ConfigDBConnector
 
 expected_stdout_v4 = "" + \

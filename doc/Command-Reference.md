@@ -1192,6 +1192,103 @@ This command displays information for all the interfaces for the transceiver req
                   Vcc : 0.0000Volts
   ```
 
+- Example (Decode and display information stored on the EEPROM of 400ZR QSFP+ transceiver connected to Ethernet0):
+```
+admin@sonic:~$ show interfaces transceiver eeprom --dom Ethernet0
+Ethernet0: SFP EEPROM detected
+        Active Firmware: X.X
+        Active application selected code assigned to host lane 1: 1
+        Active application selected code assigned to host lane 2: 1
+        Active application selected code assigned to host lane 3: 1
+        Active application selected code assigned to host lane 4: 1
+        Active application selected code assigned to host lane 5: 1
+        Active application selected code assigned to host lane 6: 1
+        Active application selected code assigned to host lane 7: 1
+        Active application selected code assigned to host lane 8: 1
+        Application Advertisement: 400GAUI-8 C2M (Annex 120E) - Host Assign (0x1) - 400ZR, DWDM, amplified - Media Assign (0x1)
+                                   100GAUI-2 C2M (Annex 135G) - Host Assign (0x55) - 400ZR, DWDM, amplified - Media Assign (0x1)
+        CMIS Rev: 5.0
+        Connector: LC
+        Encoding: N/A
+        Extended Identifier: Power Class 8 (18.0W Max)
+        Extended RateSelect Compliance: N/A
+        Host Lane Count: 8
+        Identifier: QSFP-DD Double Density 8X Pluggable Transceiver
+        Inactive Firmware: X.X
+        Length Cable Assembly(m): 0.0
+        Media Interface Technology: C-band tunable laser
+        Media Lane Count: 1
+        Module Hardware Rev: 0.0
+        Nominal Bit Rate(100Mbs): N/A
+        Specification compliance: sm_media_interface
+        Supported Max Laser Frequency: 196100
+        Supported Max TX Power: -8.5
+        Supported Min Laser Frequency: 191300
+        Supported Min TX Power: -14.0
+        Vendor Date Code(YYYY-MM-DD Lot): 2024-01-20 
+        Vendor Name: XXXX
+        Vendor OUI: XXXX
+        Vendor PN: XXXX
+        Vendor Rev: XX
+        Vendor SN: XXXX
+        is_replaceable: True
+        type_abbrv_name: QSFP-DD
+        vdm_supported: True
+        ChannelMonitorValues:
+                RX1Power: -8.729dBm
+                RX2Power: -infdBm
+                RX3Power: -infdBm
+                RX4Power: -infdBm
+                RX5Power: -infdBm
+                RX6Power: -infdBm
+                RX7Power: -infdBm
+                RX8Power: -infdBm
+                TX1Bias: 208.0mA
+                TX1Power: -8.492dBm
+                TX2Bias: 0.0mA
+                TX2Power: -infdBm
+                TX3Bias: 0.0mA
+                TX3Power: -infdBm
+                TX4Bias: 0.0mA
+                TX4Power: -infdBm
+                TX5Bias: 0.0mA
+                TX5Power: -infdBm
+                TX6Bias: 0.0mA
+                TX6Power: -infdBm
+                TX7Bias: 0.0mA
+                TX7Power: -infdBm
+                TX8Bias: 0.0mA
+                TX8Power: -infdBm
+        ChannelThresholdValues:
+                RxPowerHighAlarm  : 2.0dBm
+                RxPowerHighWarning: 0.0dBm
+                RxPowerLowAlarm   : -21.024dBm
+                RxPowerLowWarning : -18.013dBm
+                TxBiasHighAlarm   : 450.0mA
+                TxBiasHighWarning : 420.0mA
+                TxBiasLowAlarm    : 100.0mA
+                TxBiasLowWarning  : 110.0mA
+                TxPowerHighAlarm  : -5.0dBm
+                TxPowerHighWarning: -6.0dBm
+                TxPowerLowAlarm   : -16.99dBm
+                TxPowerLowWarning : -16.003dBm
+        ModuleMonitorValues:
+                Requested Laser Frequency: 193100GHz
+                Tx Frequency: 193100.0GHz
+                Temperature: 51.055C
+                Requested Tx Power: -8.5dBm
+                Vcc: 3.331Volts
+        ModuleThresholdValues:
+                TempHighAlarm  : 80.0C
+                TempHighWarning: 75.0C
+                TempLowAlarm   : -5.0C
+                TempLowWarning : 0.0C
+                VccHighAlarm   : 3.465Volts
+                VccHighWarning : 3.4Volts
+                VccLowAlarm    : 3.1Volts
+                VccLowWarning  : 3.15Volts
+```
+
 - Example (Decode and display information stored on the EEPROM of SFP transceiver connected to Ethernet16):
   ```
   admin@sonic:~$ show interfaces transceiver info Ethernet16
@@ -5323,6 +5420,92 @@ This command is used to manage switch hash algorithm global configuration.
   admin@sonic:~$ config switch-hash global lag-hash-algorithm 'CRC'
   ```
 
+## Fast Link-Up
+
+This section documents the commands to configure and display the Fast Link-Up feature.
+
+### Fast Link-Up Show Commands
+
+**show switch-fast-linkup global**
+
+Display switch Fast Link-Up global configuration.
+
+- Usage:
+  ```bash
+  show switch-fast-linkup global [--json]
+  ```
+
+- Examples:
+  ```bash
+  admin@sonic:~$ show switch-fast-linkup global
+  Field          Value
+  -------------  -----
+  polling_time   60
+  guard_time     10
+  ber_threshold  12
+  ```
+
+**show interfaces fast-linkup status**
+
+Display per-interface Fast Link-Up mode.
+
+- Usage:
+  ```bash
+  show interfaces fast-linkup status
+  ```
+
+- Example:
+  ```bash
+  admin@sonic:~$ show interfaces fast-linkup status
+  Interface    fast_linkup
+  -----------  -----------
+  Ethernet0    true
+  Ethernet4    false
+  ```
+
+### Fast Link-Up Config Commands
+
+**config switch-fast-linkup global**
+
+Configure the switch Fast Link-Up global parameters.
+
+- Usage:
+  ```bash
+  config switch-fast-linkup global [--polling-time <sec>] [--guard-time <sec>] [--ber <exp>]
+  ```
+
+- Parameters:
+  - _polling-time_: time in seconds to attempt fast link-up (uint16).
+  - _guard-time_: time in seconds link must stay up with low BER to keep fast link-up (uint8).
+  - _ber_: BER threshold exponent (uint8). Example: 12 means 1e-12.
+
+- Validation:
+  - Reads `SWITCH_CAPABILITY|switch` from STATE_DB. Fails if `FAST_LINKUP_CAPABLE != true`.
+  - If ranges are present, rejects out-of-range `polling_time`/`guard_time`.
+
+- Examples:
+  ```bash
+  admin@sonic:~$ config switch-fast-linkup global --polling-time 60 --guard-time 10 --ber 12
+  ```
+
+**config interface fast-linkup**
+
+Enable/disable Fast Link-Up per interface.
+
+- Usage:
+  ```bash
+  config interface fast-linkup <interface_name> <enabled|disabled>
+  ```
+
+- Behavior:
+  - Writes `PORT|<interface_name>:fast_linkup` as `true` (enabled) or `false` (disabled).
+
+- Examples:
+  ```bash
+  admin@sonic:~$ config interface fast-linkup Ethernet0 enabled
+  admin@sonic:~$ config interface fast-linkup Ethernet4 disabled
+  ```
+
 ## Interfaces
 
 ### Interface Show Commands
@@ -5647,12 +5830,14 @@ The "fec-stats" subcommand is used to disply the interface fec related statistic
 - Example:
   ```
   admin@ctd615:~$ show interfaces counters fec-stats
-        IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER    FEC_PRE_BER_MAX    FLR(O)    FLR(P) (Accuracy)
-  -----------  -------  ----------  ------------  ----------------  -------------  --------------    ---------------  --------  -------------------
-   Ethernet0        U           0             0                 0        1.48e-20        0.00e+00           1.78e-16  4.31e-10       7.81e-10 (89%)
-   Ethernet8        U           0             0                 0        1.98e-19        0.00e+00           1.67e-14         0       4.81e-10 (84%)
-  Ethernet16        U           0             0                 0        1.77e-20        0.00e+00           1.37e-13  1.24e-10       6.03e-09 (79%)
+        IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER    FEC_PRE_BER_MAX    FLR(O)    FLR(P) (Accuracy)    FEC_MAX_T
+  -----------  -------  ----------  ------------  ----------------  -------------  --------------    ---------------  --------  -------------------  -----------
+   Ethernet0        U           0             0                 0        1.48e-20        0.00e+00           1.78e-16  4.31e-10       7.81e-10 (89%)      2.34e-05
+   Ethernet8        U           0             0                 0        1.98e-19        0.00e+00           1.67e-14         0       4.81e-10 (84%)      1.87e-05
+  Ethernet16        U           0             0                 0        1.77e-20        0.00e+00           1.37e-13  1.24e-10       6.03e-09 (79%)      3.12e-05
   ```
+
+  FEC_MAX_T - Is the maximum NON-ZERO FEC histogram BIN (starting from Bin0). -1 indicates the value is invalid (For eg during link down)
 
 For debugging link related issues where you need to clear the FEC histogram and monitor the link again, use the following command
 
