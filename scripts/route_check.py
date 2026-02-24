@@ -37,7 +37,6 @@ To verify:
 import argparse
 from enum import Enum
 import ipaddress
-import ijson.backends.python as ijson
 import json
 import os
 import re
