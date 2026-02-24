@@ -510,9 +510,12 @@ def storm_control(ctx, namespace, display):
 
 @storm_control.command('interface')
 @click.argument('interface', metavar='<interface>',required=True)
-def interface(interface, namespace, display):
+@click.pass_context
+def interface(ctx, interface):
+    # Get namespace from parent context
+    namespace = ctx.parent.params.get('namespace')
+
     if multi_asic.is_multi_asic() and namespace not in multi_asic.get_namespace_list():
-        ctx = click.get_current_context()
         ctx.fail('-n/--namespace option required. provide namespace from list {}'.format(multi_asic.get_namespace_list()))
     if interface:
         display_storm_interface(interface)
