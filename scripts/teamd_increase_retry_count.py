@@ -266,9 +266,10 @@ def main(probeOnly=False, namespace=""):
                     log.log_warning("WARNING: No peer description available via LLDP for {}; skipping".format(portName))
                     continue
                 portChannelChecked = True
+                # Don't fail the port channel for non-SONiC peers, just skip the probe
                 if "sonic" not in peerInfo["descr"].lower():
-                    log.log_warning("WARNING: Peer device is not a SONiC device; skipping")
-                    failedPortChannels.append(portChannel)
+                    log.log_warning("WARNING: Peer device {} is not a SONiC device; "
+                                    "skipping teamd retry count probe".format(peerName))
                     break
 
                 sendReadyEvent = Event()
