@@ -99,6 +99,40 @@ def appl_db_interface_keys_get(appl_db):
     """
     return appl_db.keys(appl_db.APPL_DB, GEARBOX_TABLE_INTERFACE_PREFIX.format("*"))
 
+def format_ber(value):
+    """
+    Format BER value to scientific notation with 2 decimal places
+    Args:
+        value: String or numeric BER value
+    Returns:
+        Formatted string like "6.05e-10" or "N/A"
+    """
+    if value == 'N/A' or value == '-1':
+        return value
+
+    try:
+        num_value = float(value)
+        if num_value == 0:
+            return "0.00e+00"
+        # Format with 2 decimal places in scientific notation
+        return f"{num_value:.2e}"
+    except (ValueError, TypeError):
+        return value
+
+def format_number_with_commas(value):
+    """
+    Format numeric value with comma separators
+    Args:
+        value: String or numeric value
+    Returns:
+        Formatted string like "219,033,232,324"
+    """
+    try:
+        num_value = int(value)
+        return f"{num_value:,}"
+    except (ValueError, TypeError):
+        return value
+
 # ========================== phy-status logic ==========================
 
 phy_header_status = ['PHY Id', 'Name', 'Firmware']
@@ -195,31 +229,269 @@ class InterfaceStatus(object):
 
         self.display_intf_status(appl_db_keys)
 
+# ========================== interfaces-fec logic ==========================
+
+COUNTERS_PORT_NAME_MAP = "COUNTERS_PORT_NAME_MAP"
+COUNTER_TABLE_PREFIX = "COUNTERS:"
+RATES_TABLE_PREFIX = "RATES:"
+
+# FEC Histogram bins (S0-S15)
+FEC_HISTOGRAM_BINS = [f"SAI_PORT_STAT_IF_IN_FEC_CODEWORD_ERRORS_S{i}" for i in range(16)]
+
+class InterfaceFecStats(object):
+
+    def __init__(self, port_name=None, display_type='stats'):
+        """
+        Initialize and display FEC information
+        Args:
+            port_name: Optional port name to filter (e.g., "Ethernet0")
+                      If None, display for all ports
+            display_type: 'histogram' or 'stats'
+        """
+        self.port_name = port_name
+        self.display_type = display_type
+        self.gb_db = SonicV2Connector(use_unix_socket_path=False)
+        self.appl_db = SonicV2Connector(use_unix_socket_path=False)
+        
+        if self.gb_db is None or self.appl_db is None:
+            print("Error: Failed to connect to database")
+            return
+        
+        self.gb_db.connect(self.gb_db.GB_COUNTERS_DB)
+        self.appl_db.connect(self.appl_db.APPL_DB)
+        
+        if display_type == 'histogram':
+            self.display_fec_histogram()
+        elif display_type == 'stats':
+            self.display_fec_stats()
+
+    def get_port_name_map(self):
+        """
+        Get the port name to OID mapping from GB_COUNTERS_DB
+        """
+        port_name_map = self.gb_db.get_all('GB_COUNTERS_DB', COUNTERS_PORT_NAME_MAP)
+        return port_name_map if port_name_map else {}
+
+    def get_counters_for_oid(self, oid):
+        """
+        Get all counters for a specific OID
+        """
+        full_table_id = COUNTER_TABLE_PREFIX + oid
+        counters = self.gb_db.get_all('GB_COUNTERS_DB', full_table_id)
+        return counters if counters else {}
+
+    def get_rates_for_oid(self, oid):
+        """
+        Get all rates for a specific OID
+        """
+        full_table_id = RATES_TABLE_PREFIX + oid
+        rates = self.gb_db.get_all('GB_COUNTERS_DB', full_table_id)
+        return rates if rates else {}
+
+    def get_port_state(self, base_port_name):
+        """
+        Get port operational state from APPL_DB
+        """
+        port_key = PORT_TABLE_ETHERNET_PREFIX.format(base_port_name)
+        oper_status = self.appl_db.get(self.appl_db.APPL_DB, port_key, PORT_OPER_STATUS)
+        if oper_status and oper_status.lower() == 'up':
+            return 'U'
+        elif oper_status and oper_status.lower() == 'down':
+            return 'D'
+        else:
+            return 'N/A'
+
+    def get_matching_ports(self):
+        """
+        Get ports to display based on port_name filter
+        Returns dict of {port_name: oid}
+        """
+        port_name_map = self.get_port_name_map()
+        
+        if not port_name_map:
+            print("Error: No port name mapping found in GB_COUNTERS_DB")
+            return None
+        
+        # If specific port requested, filter to that port (both line and system)
+        if self.port_name:
+            matching_ports = {}
+            for full_port_name, oid in port_name_map.items():
+                if full_port_name.startswith(f"{self.port_name}_") and (full_port_name.endswith("_line") or full_port_name.endswith("_system")):
+                    matching_ports[full_port_name] = oid
+            
+            if not matching_ports:
+                print(f"Error: Port '{self.port_name}' not found in GB_COUNTERS_DB")
+                base_ports = set()
+                for port in port_name_map.keys():
+                    if port.endswith('_line'):
+                        base_ports.add(port[:-5])
+                    elif port.endswith('_system'):
+                        base_ports.add(port[:-7])
+                print(f"Available ports: {', '.join(natsorted(base_ports))}")
+                return None
+            return matching_ports
+        else:
+            return port_name_map
+
+    def extract_port_info(self, port_name):
+        """
+        Extract base name and side from port name
+        Returns tuple: (base_name, side)
+        """
+        if port_name.endswith('_line'):
+            return port_name[:-5], 'Line'
+        elif port_name.endswith('_system'):
+            return port_name[:-7], 'System'
+        else:
+            return port_name, ''
+
+    def display_histogram_for_port(self, counters, port_name):
+        """
+        Display FEC codeword error histogram for a port
+        """
+        base_name, side = self.extract_port_info(port_name)
+        
+        print(f"\n{base_name} {side}")
+        
+        # Display histogram bins
+        histogram_data = []
+        for i, bin_name in enumerate(FEC_HISTOGRAM_BINS):
+            value = counters.get(bin_name, '0')
+            histogram_data.append([f'BIN{i}', value])
+        
+        if histogram_data:
+            print(tabulate(histogram_data, headers=['Symbol Errors Per Codeword', 'Codewords'], tablefmt='simple'))
+
+    def display_fec_histogram(self):
+        """
+        Display FEC histogram from GB_COUNTERS_DB
+        """
+        try:
+            ports_to_display = self.get_matching_ports()
+            if ports_to_display is None:
+                return
+            
+            # Display histogram for each port
+            for port_name in natsorted(ports_to_display.keys()):
+                oid = ports_to_display[port_name]
+                counters = self.get_counters_for_oid(oid)
+                
+                if counters:
+                    self.display_histogram_for_port(counters, port_name)
+                else:
+                    print(f"\n{port_name}")
+                    print("No counter data available")
+                    
+        except Exception as e:
+            print(f"Error displaying FEC histogram: {e}")
+
+    def display_fec_stats(self):
+        """
+        Display FEC stats from GB_COUNTERS_DB
+        """
+        try:
+            ports_to_display = self.get_matching_ports()
+            if ports_to_display is None:
+                return
+            
+            # Collect stats for each port
+            table_data = []
+            for port_name in natsorted(ports_to_display.keys()):
+                oid = ports_to_display[port_name]
+                counters = self.get_counters_for_oid(oid)
+                rates = self.get_rates_for_oid(oid)
+                
+                base_name, side = self.extract_port_info(port_name)
+                
+                iface = f"{base_name} {side}"
+                state = self.get_port_state(base_name)
+
+                # Get counter values and format with commas
+                fec_corr = format_number_with_commas(counters.get('SAI_PORT_STAT_IF_IN_FEC_CORRECTABLE_FRAMES', '0'))
+                fec_uncorr = format_number_with_commas(counters.get('SAI_PORT_STAT_IF_IN_FEC_NOT_CORRECTABLE_FRAMES', '0'))
+                fec_symbol_err = format_number_with_commas(counters.get('SAI_PORT_STAT_IF_IN_FEC_SYMBOL_ERRORS', '0'))
+
+                # Format BER values with 2 decimal places
+                fec_pre_ber = format_ber(rates.get('FEC_PRE_BER', '0'))
+                fec_post_ber = format_ber(rates.get('FEC_POST_BER', '0'))
+                fec_pre_ber_max = format_ber(rates.get('FEC_PRE_BER_MAX', 'N/A'))
+                fec_max_t = rates.get('FEC_MAX_T', '-1')
+
+                table_data.append([
+                    iface,
+                    state,
+                    fec_corr,
+                    fec_uncorr,
+                    fec_symbol_err,
+                    fec_pre_ber,
+                    fec_post_ber,
+                    fec_pre_ber_max,
+                    fec_max_t
+                ])
+            
+            # Display table with proper alignment
+            headers = ['GB IFACE', 'STATE', 'FEC_CORR', 'FEC_UNCORR', 'FEC_SYMBOL_ERR',
+                      'FEC_PRE_BER', 'FEC_POST_BER', 'FEC_PRE_BER_MAX', 'FEC_MAX_T']
+
+            # Use 'simple' format with mixed alignment: left for GB IFACE, right for others
+            # colalign specifies alignment per column
+            print(tabulate(table_data, headers=headers, tablefmt='simple',
+                          colalign=('left', 'right', 'right', 'right', 'right', 'right', 'right', 'right', 'right')))
+                    
+        except Exception as e:
+            print(f"Error displaying FEC stats: {e}")
+            import traceback
+            traceback.print_exc()
+
 def main(args):
     """
-    phy status
-    interfaces status
-    interfaces counters
+    Usage:
+        gearboxutil phys status
+        gearboxutil interfaces status
+        gearboxutil interfaces fec-histogram [<port_name>]
+        gearboxutil interfaces fec-stats [<port_name>]
+    
+    Examples:
+        gearboxutil interfaces fec-histogram                # Show histogram for all ports
+        gearboxutil interfaces fec-histogram Ethernet0      # Show histogram for Ethernet0 (line and system)
+        gearboxutil interfaces fec-stats                    # Show FEC stats for all ports
+        gearboxutil interfaces fec-stats Ethernet0          # Show FEC stats for Ethernet0 (line and system)
     """
 
     if len(args) == 0:
         print("No valid arguments provided")
+        print(main.__doc__)
         return
 
     cmd1 = args[0]
     if cmd1 != "phys" and cmd1 != "interfaces":
         print("No valid command provided")
+        print(main.__doc__)
+        return
+
+    if len(args) < 2:
+        print("No valid command provided")
+        print(main.__doc__)
         return
 
     cmd2 = args[1]
-    if cmd2 != "status" and cmd2 != "counters":
+    if cmd2 not in ["status", "fec-histogram", "fec-stats"]:
         print("No valid command provided")
+        print(main.__doc__)
         return
 
     if cmd1 == "phys" and cmd2 == "status":
         PhyStatus()
     elif cmd1 == "interfaces" and cmd2 == "status":
         InterfaceStatus()
+    elif cmd1 == "interfaces" and cmd2 == "fec-histogram":
+        # Optional port name parameter
+        port_name = args[2] if len(args) > 2 else None
+        InterfaceFecStats(port_name, display_type='histogram')
+    elif cmd1 == "interfaces" and cmd2 == "fec-stats":
+        # Optional port name parameter
+        port_name = args[2] if len(args) > 2 else None
+        InterfaceFecStats(port_name, display_type='stats')
 
     sys.exit(0)
 
