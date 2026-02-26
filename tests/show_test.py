@@ -249,6 +249,7 @@ def test_show_version():
     result = runner.invoke(show.cli.commands["version"])
     assert "SONiC OS Version: 11" in result.output
 
+
 @patch('sonic_py_common.device_info.get_sonic_version_info', MagicMock(return_value={
         "build_version": "release-1.1-7d94c0c28",
         "sonic_os_version": "11",
