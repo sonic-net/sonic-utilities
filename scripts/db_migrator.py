@@ -402,7 +402,7 @@ class DBMigrator():
                     abandon_method()
                     return True
             except Exception:
-                log.log_notice("Exception occured during parsing the profiles")
+                log.log_notice("Exception occurred during parsing the profiles")
                 abandon_method()
                 return True
 
@@ -554,7 +554,7 @@ class DBMigrator():
 
     def migrate_qos_fieldval_reference_format(self):
         '''
-        This is to change for first time to remove field refernces of ABNF format
+        This is to change for first time to remove field references of ABNF format
         in APPL DB for warm boot.
         i.e "[Tabale_name:name]" to string in APPL_DB. Reasons for doing this
          - To consistent with all other SoNIC CONFIG_DB/APPL_DB tables and fields
@@ -1219,7 +1219,7 @@ class DBMigrator():
                             self.configDB.set(self.configDB.CONFIG_DB, '{}|{}'.format(table_name, component), loglevel_field, loglevel)
                             self.configDB.set(self.configDB.CONFIG_DB, '{}|{}'.format(table_name, component), logoutput_field, logoutput)
                     except Exception as err:
-                        log.log_warning('Error occured during LOGLEVEL_DB migration for {}. Ignoring key {}'.format(err, key))
+                        log.log_warning('Error occurred during LOGLEVEL_DB migration for {}. Ignoring key {}'.format(err, key))
                     finally:
                         self.loglevelDB.delete(self.loglevelDB.LOGLEVEL_DB, key)
         self.set_version('version_3_0_6')

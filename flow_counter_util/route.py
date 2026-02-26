@@ -26,7 +26,7 @@ PATTERN_SEPARATOR = '|'
 
 
 def extract_route_pattern(route_pattern):
-    """Extract vrf and prefix from route pattern, route pattrn shall be formated like: "Vrf_1:1.1.1.1/24"
+    """Extract vrf and prefix from route pattern, route pattern shall be formatted like: "Vrf_1:1.1.1.1/24"
        or "1.1.1.1/24"
 
     Args:

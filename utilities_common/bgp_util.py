@@ -412,7 +412,7 @@ def process_bgp_summary_json(bgp_summary, cmd_output, device, has_bgp_neighbors=
             bgp_summary['peerGroupMemory'] = bgp_summary.get(
                 'peerCount', 0) + 0
 
-        # store instance level field is seperate dict
+        # store instance level field is separate dict
         router_info = {}
         router_info['router_id'] = cmd_output['routerId']
         router_info['vrf'] = cmd_output['vrfId']
@@ -444,7 +444,7 @@ def process_bgp_summary_json(bgp_summary, cmd_output, device, has_bgp_neighbors=
                 else:
                     peers.append(value['state'])
 
-                # Get the bgp neighbour name ans store it
+                # Get the bgp neighbour name and store it
                 neigh_name = get_bgp_neighbor_ip_to_name(
                     peer_ip, static_neighbors, dynamic_neighbors)
                 peers.append(neigh_name)

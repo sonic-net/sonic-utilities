@@ -329,20 +329,20 @@ def show_routes(args, namespace, display, verbose, ipver):
     else:
         if multi_asic.is_multi_asic():
             if display not in multi_asic_util.multi_asic_display_choices():
-                print("dislay option '{}' is not a valid option.".format(display))
+                print("display option '{}' is not a valid option.".format(display))
                 return
             else:
                 if display == constants.DISPLAY_EXTERNAL:
                     filter_back_end = True
         else:
             if display not in ['frontend', 'all']:
-                print("dislay option '{}' is not a valid option.".format(display))
+                print("display option '{}' is not a valid option.".format(display))
                 return
 
     device = multi_asic_util.MultiAsic(display, namespace)
     arg_strg = ""
     found_json = 0
-    found_other_parms = 0
+    found_other_params = 0
     ns_l = []
     print_ns_str = False
     filter_by_ip = False
@@ -377,10 +377,10 @@ def show_routes(args, namespace, display, verbose, ipver):
                 filter_by_ip = ipaddress.ip_network(arg)
             except ValueError:
                 # Not ip address just ignore it
-                found_other_parms = 1
+                found_other_params = 1
 
     # using the same format for both multiasic or non-multiasic
-    if not found_json and not found_other_parms:
+    if not found_json and not found_other_params:
         arg_strg += "json"
 
     combined_route = {}
@@ -402,8 +402,8 @@ def show_routes(args, namespace, display, verbose, ipver):
             print(error_msg)
             return
 
-        # Multi-asic show ip route with additional parms are handled by going to FRR directly and get those outputs from each namespace
-        if found_other_parms and not found_json:
+        # Multi-asic show ip route with additional params are handled by going to FRR directly and get those outputs from each namespace
+        if found_other_params and not found_json:
             print("{}:".format(ns))
             print(output)
             continue

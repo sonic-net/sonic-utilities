@@ -260,7 +260,7 @@ def test_mirror_session_span_add():
             config.config.commands["mirror_session"].commands["span"].commands["add"],
             ["test_session", "Ethernet52", "Ethernet52", "rx", "100"])
     assert result.exit_code != 0
-    assert "Error: Destination Interface cant be same as Source Interface" in result.stdout
+    assert "Error: Destination Interface can't be same as Source Interface" in result.stdout
 
     # Verify destination port not have mirror config
     result = runner.invoke(

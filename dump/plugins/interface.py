@@ -141,7 +141,7 @@ class RIF(object):
         # Sanity check to see if the TYPE is SAI_ROUTER_INTERFACE_TYPE_PORT
         _, recv_type = self.verify_valid_rif_type(ret, exp_type)
         if exp_type != recv_type:
-            err_str = "TYPE Mismatch on SAI_OBJECT_TYPE_ROUTER_INTERFACE, {} oid:{}, expected type:{}, recieved type:{}"
+            err_str = "TYPE Mismatch on SAI_OBJECT_TYPE_ROUTER_INTERFACE, {} oid:{}, expected type:{}, received type:{}"
             handle_error(err_str.format(str_name, rif_oid, exp_type, recv_type), False)
         return
 

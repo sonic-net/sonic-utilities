@@ -7,15 +7,15 @@ import subprocess
 import argparse
 from swsscommon import swsscommon
 
-''' vnet_route_check.py: tool that verifies VNET routes consistancy between SONiC and vendor SDK DBs.
+''' vnet_route_check.py: tool that verifies VNET routes consistency between SONiC and vendor SDK DBs.
 
 Logically VNET route verification logic consists of 3 parts:
 1. Get VNET routes entries that are missed in ASIC_DB but present in APP_DB.
 2. Get VNET routes entries that are missed in APP_DB but present in ASIC_DB.
 3. Get VNET routes entries that are missed in SDK but present in ASIC_DB.
 
-Returns 0 if there is no inconsistancy found and all VNET routes are aligned in all DBs.
-Returns -1 if there is incosistancy found and prints differences between DBs in JSON format to standart output.
+Returns 0 if there is no inconsistency found and all VNET routes are aligned in all DBs.
+Returns -1 if there is incosistancy found and prints differences between DBs in JSON format to standard output.
 
 Format of differences output:
 {
@@ -179,7 +179,7 @@ def filter_out_vnet_ip2me_routes(vnet_routes):
             continue
 
         # rif_attrs[0] - RIF name
-        # rif_attrs[1] - IP prefix and prefix legth
+        # rif_attrs[1] - IP prefix and prefix length
         # IP2ME routes have '/32' prefix length so replace it and add to the list
         if rif_attrs[0] in vnet_intfs:
             rif_ip, _ = rif_attrs[1].split('/')
@@ -394,7 +394,7 @@ def main():
 
     rc = RC_OK
 
-    # Don't run VNET routes consistancy logic if there is no VNET configuration
+    # Don't run VNET routes consistency logic if there is no VNET configuration
     if not check_vnet_cfg():
         return rc
     asic_db = swsscommon.DBConnector('ASIC_DB', 0, True)
