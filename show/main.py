@@ -1520,6 +1520,7 @@ def link_local_mode(verbose):
     config_db = ConfigDBConnector()
     config_db.connect()
     interface = ""
+    subintf_table = 'VLAN_SUB_INTERFACE'
 
     for table in tables:
         if table == "PORT":
@@ -1547,6 +1548,18 @@ def link_local_mode(verbose):
                 else:
                     body.append([port, 'Disabled'])
 
+    sub_intf_dict = config_db.get_table(subintf_table)
+    for subport in sub_intf_dict.keys():
+        if not isinstance(subport, tuple):
+            value = sub_intf_dict[subport]
+            if 'ipv6_use_link_local_only' in value:
+                link_local_data[subport] = value['ipv6_use_link_local_only']
+                if link_local_data[subport] == 'enable':
+                    body.append([subport, 'Enabled'])
+                else:
+                    body.append([subport, 'Disabled'])
+            else:
+                body.append([subport, 'Disabled'])
     click.echo(tabulate(body, header, tablefmt="grid"))
 
 #
