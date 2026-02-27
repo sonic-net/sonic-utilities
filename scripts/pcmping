@@ -13,6 +13,10 @@ import sys
 import time
 
 from swsscommon.swsscommon import ConfigDBConnector
+from scapy.config import conf
+# Avoid long startup delays when route tables are large.
+conf.route_autoload = False
+conf.route6_autoload = False
 from scapy.all import *
 
 
