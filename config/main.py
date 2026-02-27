@@ -1,12 +1,9 @@
 #!/usr/sbin/env python
 
-import threading
 import click
-import concurrent.futures
 import datetime
 import ipaddress
 import json
-import jsonpatch
 import netaddr
 import netifaces
 import os
@@ -18,13 +15,15 @@ import itertools
 import copy
 import tempfile
 import sonic_yang
-import jsonpointer
 
 from jsonpatch import JsonPatchConflict
 from jsonpointer import JsonPointerException
 from collections import OrderedDict
-from generic_config_updater.generic_updater import GenericUpdater, ConfigFormat, extract_scope
-from generic_config_updater.gu_common import HOST_NAMESPACE, GenericConfigUpdaterError
+from generic_config_updater.generic_updater import GenericUpdater, ConfigFormat
+from generic_config_updater.gu_common import HOST_NAMESPACE
+from generic_config_updater.main import (
+    apply_patch_from_file as _gcu_apply_patch_from_file
+)
 from minigraph import parse_device_desc_xml, minigraph_encoder
 from natsort import natsorted
 from portconfig import get_child_ports
@@ -32,7 +31,6 @@ from socket import AF_INET, AF_INET6
 from sonic_py_common import device_info, multi_asic
 from sonic_py_common.general import getstatusoutput_noshell
 from sonic_py_common.interface import get_interface_table_name, get_port_table_name, get_intf_longname
-from sonic_yang_cfg_generator import SonicYangCfgDbGenerator
 from utilities_common import util_base
 from swsscommon import swsscommon
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector, ConfigDBPipeConnector, \
@@ -99,6 +97,11 @@ NAMESPACE_PREFIX = 'asic'
 INTF_KEY = "interfaces"
 DEFAULT_GOLDEN_CONFIG_DB_FILE = '/etc/sonic/golden_config_db.json'
 
+# Path to standalone GCU binary delivered by GCU container's virtual environment.
+# When this binary exists, apply-patch is redirected to it so the container can
+# deliver GCU fixes independently of the host sonic-utilities package.
+GCU_STANDALONE_BIN = "/opt/sonic/gcu/current/bin/gcu-standalone"
+
 INIT_CFG_FILE = '/etc/sonic/init_cfg.json'
 
 DEFAULT_NAMESPACE = ''
@@ -146,17 +149,7 @@ sonic_cfggen = load_module_from_source('sonic_cfggen', '/usr/local/bin/sonic-cfg
 #
 
 
-# Get all running configuration in JSON format
-def get_all_running_config():
-    command = ["show", "runningconfiguration", "all"]
-    proc = subprocess.Popen(command, text=True, stdout=subprocess.PIPE)
-
-    all_running_config, stderr_output = proc.communicate()
-    returncode = proc.returncode
-
-    if returncode:
-        raise GenericConfigUpdaterError(f"Fetch all runningconfiguration failed as {returncode}")
-    return all_running_config
+# get_all_running_config is imported from generic_config_updater.gcu
 
 
 # Sort nested dict
@@ -1387,154 +1380,6 @@ def multiasic_save_to_singlefile(db, filename):
         json.dump(all_current_config, file, indent=4)
 
 
-def apply_patch_wrapper(args):
-    return apply_patch_for_scope(*args)
-
-
-# Function to apply patch for a single ASIC.
-def apply_patch_for_scope(scope_changes, results, config_format, verbose, dry_run, ignore_non_yang_tables, ignore_path):
-    scope, changes = scope_changes
-    # Replace localhost to DEFAULT_NAMESPACE which is db definition of Host
-    if scope.lower() == HOST_NAMESPACE or scope == "":
-        scope = multi_asic.DEFAULT_NAMESPACE
-
-    scope_for_log = scope if scope else HOST_NAMESPACE
-    thread_id = threading.get_ident()
-    log.log_notice(f"apply_patch_for_scope started for {scope_for_log} by {changes} in thread:{thread_id}")
-
-    try:
-        # Call apply_patch with the ASIC-specific changes and predefined parameters
-        GenericUpdater(scope=scope).apply_patch(jsonpatch.JsonPatch(changes),
-                                                config_format,
-                                                verbose,
-                                                dry_run,
-                                                ignore_non_yang_tables,
-                                                ignore_path)
-        results[scope_for_log] = {"success": True, "message": "Success"}
-        log.log_notice(f"'apply-patch' executed successfully for {scope_for_log} by {changes} in thread:{thread_id}")
-    except Exception as e:
-        results[scope_for_log] = {"success": False, "message": str(e)}
-        log.log_error(f"'apply-patch' executed failed for {scope_for_log} by {changes} due to {str(e)}")
-
-
-def filter_duplicate_patch_operations(patch_ops, all_running_config):
-    # Return early if no patch operation targets a leaf-list append (path endswith "/-")
-    if not any(op.get("path", "").endswith("/-") for op in patch_ops):
-        return patch_ops
-    config = json.loads(all_running_config) if isinstance(all_running_config, str) else all_running_config
-
-    patch_copy = jsonpatch.JsonPatch([copy.deepcopy(op) for op in patch_ops])
-    all_target_config = patch_copy.apply(config)
-
-    def find_duplicate_entries_in_config(config):
-        duplicates = {}
-
-        def _check(obj, path=""):
-            if isinstance(obj, dict):
-                for k, v in obj.items():
-                    _check(v, f"{path}/{k}" if path else f"/{k}")
-            elif isinstance(obj, list):
-                seen = set()
-                dups = set()
-                for item in obj:
-                    if item in seen:
-                        dups.add(item)
-                    else:
-                        seen.add(item)
-                if dups:
-                    duplicates[path] = list(dups)
-                for idx, item in enumerate(obj):
-                    _check(item, f"{path}[{idx}]")
-        _check(config)
-        return duplicates
-
-    dups = find_duplicate_entries_in_config(all_target_config)
-
-    if not dups:
-        return patch_ops
-
-    ops_to_remove = set()
-    for path, dup_values in dups.items():
-        list_path = path
-        for op_idx, op in enumerate(patch_ops):
-            if op.get("op") == "add" and op.get("path", "").endswith("/-"):
-                if (
-                    op.get("path").startswith(list_path)
-                    and op.get("value") in dup_values
-                ):
-                    ops_to_remove.add(op_idx)
-
-    # Remove the duplicate-causing ops from patch
-    return [op for idx, op in enumerate(patch_ops) if idx not in ops_to_remove]
-
-
-def append_emptytables_if_required(patch_ops, all_running_config):
-    config = json.loads(all_running_config) if isinstance(all_running_config, str) else all_running_config
-    missing_tables = set()
-
-    patch_ops_copy = [copy.deepcopy(op) for op in patch_ops]
-
-    for operation in patch_ops_copy:
-        if 'path' in operation:
-            path_parts = operation['path'].strip('/').split('/')
-            if not path_parts:
-                continue
-
-            if path_parts[0].startswith('asic') or path_parts[0] == HOST_NAMESPACE:
-                if len(path_parts) < 2:
-                    continue
-                table_path = f"/{path_parts[0]}/{path_parts[1]}"
-            else:
-                table_path = f"/{path_parts[0]}"
-
-            try:
-                jsonpointer.resolve_pointer(config, table_path)
-            except jsonpointer.JsonPointerException as ex:
-                log.log_info(f"Table {table_path} is missing in running config: {ex}")
-                missing_tables.add(table_path)
-
-    if not missing_tables:
-        return patch_ops_copy
-
-    for table in missing_tables:
-        insert_idx = None
-        for idx, op in enumerate(patch_ops_copy):
-            if 'path' in op and op['path'].startswith(table):
-                insert_idx = idx
-                break
-        empty_table_patch = {"op": "add", "path": table, "value": {}}
-        if insert_idx is not None:
-            patch_ops_copy.insert(insert_idx, empty_table_patch)
-        else:
-            patch_ops_copy.append(empty_table_patch)
-
-    return patch_ops_copy
-
-
-def validate_patch(patch_ops, all_running_config):
-    try:
-        # Structure validation and simulate apply patch.
-        config = json.loads(all_running_config) if isinstance(all_running_config, str) else all_running_config
-        # Create a temporary JsonPatch object to apply without modifying the original
-        patch_copy = jsonpatch.JsonPatch([copy.deepcopy(op) for op in patch_ops])
-        all_target_config = patch_copy.apply(config)
-
-        # Verify target config by YANG models
-        target_config = all_target_config.pop(HOST_NAMESPACE) if multi_asic.is_multi_asic() else all_target_config
-        target_config.pop("bgpraw", None)
-        if not SonicYangCfgDbGenerator().validate_config_db_json(target_config):
-            return False
-
-        if multi_asic.is_multi_asic():
-            for asic in multi_asic.get_namespace_list():
-                target_config = all_target_config.pop(asic)
-                target_config.pop("bgpraw", None)
-                if not SonicYangCfgDbGenerator().validate_config_db_json(target_config):
-                    return False
-
-        return True
-    except Exception as e:
-        raise GenericConfigUpdaterError(f"Validate json patch: {patch_ops} failed due to:{e}")
 
 
 def multiasic_validate_single_file(filename):
@@ -1891,6 +1736,31 @@ def print_dry_run_message(dry_run):
     if dry_run:
         click.secho("** DRY RUN EXECUTION **", fg="yellow", underline=True)
 
+
+def run_gcu_standalone(patch_file_path, format, dry_run, parallel,
+                       ignore_non_yang_tables, ignore_path, verbose):
+    """Delegate apply-patch execution to the standalone GCU binary.
+    Returns the subprocess CompletedProcess so the caller can inspect the return code.
+    """
+    cmd = [GCU_STANDALONE_BIN, "apply-patch", patch_file_path]
+
+    if format and format.upper() != ConfigFormat.CONFIGDB.name:
+        cmd += ["--format", format]
+    if dry_run:
+        cmd.append("--dry-run")
+    if parallel:
+        cmd.append("--parallel")
+    if ignore_non_yang_tables:
+        cmd.append("--ignore-non-yang-tables")
+    for path in ignore_path:
+        cmd += ["--ignore-path", path]
+    if verbose:
+        cmd.append("--verbose")
+
+    log.log_notice(f"Redirecting apply-patch to standalone GCU: {' '.join(cmd)}")
+    return subprocess.run(cmd)
+
+
 @config.command('apply-patch')
 @click.argument('patch-file-path', type=str, required=True)
 @click.option('-f', '--format', type=click.Choice([e.name for e in ConfigFormat]),
@@ -1910,85 +1780,34 @@ def apply_patch(ctx, patch_file_path, format, dry_run, parallel, ignore_non_yang
        format or SonicYang format.
 
        <patch-file-path>: Path to the patch file on the file-system."""
+
+    # ---------- Standalone GCU redirect ----------
+    # If the GCU container has deployed a standalone virtual-env binary,
+    # delegate the entire apply-patch operation to it so the container
+    # can ship GCU fixes without touching the host sonic-utilities.
+    if os.path.exists(GCU_STANDALONE_BIN):
+        result = run_gcu_standalone(patch_file_path, format, dry_run, parallel,
+                                    ignore_non_yang_tables, ignore_path, verbose)
+        if result.returncode != 0:
+            ctx.fail(f"Standalone GCU apply-patch failed with exit code {result.returncode}")
+        return
+    # ---------- End standalone redirect ----------
+
     try:
         print_dry_run_message(dry_run)
 
-        with open(patch_file_path, 'r') as fh:
-            text = fh.read()
-            patch_as_json = json.loads(text)
-            patch_ops = patch_as_json
+        # Delegate to the consolidated implementation in generic_config_updater.gcu
+        _gcu_apply_patch_from_file(
+            patch_file_path,
+            config_format_name=format,
+            verbose=verbose,
+            dry_run=dry_run,
+            parallel=parallel,
+            ignore_non_yang_tables=ignore_non_yang_tables,
+            ignore_path=ignore_path,
+        )
 
-        all_running_config = get_all_running_config()
-
-        # Pre-process patch to append empty tables if required.
-        patch_ops = append_emptytables_if_required(patch_ops, all_running_config)
-
-        # Pre-process patch to filter duplicate leaf-list appends.
-        patch_ops = filter_duplicate_patch_operations(patch_ops, all_running_config)
-
-        if not validate_patch(patch_ops, all_running_config):
-            raise GenericConfigUpdaterError(f"Failed validating patch:{patch_ops}")
-
-        # Convert patch_ops to JsonPatch object for further processing
-        patch = jsonpatch.JsonPatch(patch_ops)
-
-        results = {}
-        config_format = ConfigFormat[format.upper()]
-        # Initialize a dictionary to hold changes categorized by scope
-        changes_by_scope = {}
-
-        # Iterate over each change in the JSON Patch
-        for change in patch:
-            scope, modified_path = extract_scope(change["path"])
-
-            # Modify the 'path' in the change to remove the scope
-            change["path"] = modified_path
-
-            # Check if the scope is already in our dictionary, if not, initialize it
-            if scope not in changes_by_scope:
-                changes_by_scope[scope] = []
-
-            # Add the modified change to the appropriate list based on scope
-            changes_by_scope[scope].append(change)
-
-        # Empty case to force validate YANG model.
-        if not changes_by_scope:
-            asic_list = [multi_asic.DEFAULT_NAMESPACE]
-            if multi_asic.is_multi_asic():
-                asic_list.extend(multi_asic.get_namespace_list())
-            for asic in asic_list:
-                changes_by_scope[asic] = []
-
-        # Apply changes for each scope
-        if parallel:
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                # Prepare the argument tuples
-                arguments = [(scope_changes, results, config_format,
-                              verbose, dry_run, ignore_non_yang_tables, ignore_path)
-                             for scope_changes in changes_by_scope.items()]
-
-                # Submit all tasks and wait for them to complete
-                futures = [executor.submit(apply_patch_wrapper, args) for args in arguments]
-
-                # Wait for all tasks to complete
-                concurrent.futures.wait(futures)
-        else:
-            for scope_changes in changes_by_scope.items():
-                apply_patch_for_scope(scope_changes,
-                                      results,
-                                      config_format,
-                                      verbose, dry_run,
-                                      ignore_non_yang_tables,
-                                      ignore_path)
-
-        # Check if any updates failed
-        failures = [scope for scope, result in results.items() if not result['success']]
-
-        if failures:
-            failure_messages = '\n'.join([f"- {failed_scope}: {results[failed_scope]['message']}" for failed_scope in failures])
-            raise GenericConfigUpdaterError(f"Failed to apply patch on the following scopes:\n{failure_messages}")
-
-        log.log_notice(f"Patch applied successfully for {patch}.")
+        log.log_notice("Patch applied successfully.")
         click.secho("Patch applied successfully.", fg="cyan", underline=True)
     except Exception as ex:
         click.secho("Failed to apply patch due to: {}".format(ex), fg="red", underline=True, err=True)
