@@ -214,7 +214,7 @@ def AUTO_TECHSUPPORT_GLOBAL_max_techsupport_limit(db, max_techsupport_limit):
 @clicommon.pass_db
 def AUTO_TECHSUPPORT_GLOBAL_max_core_limit(db, max_core_limit):
     """ Max Limit in percentage for the cumulative size of core dumps.
-        No cleanup is performed if the value isn't congiured or is 0.0
+        No cleanup is performed if the value isn't configured or is 0.0
     """
 
     table = "AUTO_TECHSUPPORT"
