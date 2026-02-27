@@ -271,7 +271,7 @@ def all_errors(ctx, device_key, verbose):
     pcie_aer_display(ctx, "non_fatal")
 
 
-#  Show PCIE Vender ID and Device ID
+#  Show PCIE Vendor ID and Device ID
 @cli.command()
 def check():
     '''Check PCIe Device '''

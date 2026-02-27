@@ -459,8 +459,8 @@ class PathAddressing:
     Path refers to the 'path' in JsonPatch operations: https://tools.ietf.org/html/rfc6902
     The path corresponds to JsonPointer: https://tools.ietf.org/html/rfc6901
 
-    All xpath operations in this class are only relevent to ConfigDb and the conversion to YANG xpath.
-    It is not meant to support all the xpath functionalities, just the ones relevent to ConfigDb/YANG.
+    All xpath operations in this class are only relevant to ConfigDb and the conversion to YANG xpath.
+    It is not meant to support all the xpath functionalities, just the ones relevant to ConfigDb/YANG.
     """
     PATH_SEPARATOR = "/"
     XPATH_SEPARATOR = "/"
@@ -621,7 +621,7 @@ class PathAddressing:
         """
         Given a path and a config, iterates across all keys at the path location
         to look up the number of backlinks per key, then returns the keys sorted
-        by backlinks in acending order by default (set reverse=True to use descending order)
+        by backlinks in ascending order by default (set reverse=True to use descending order)
 
         The configdb is only used to look up the keys at the given path, it is not
         loaded into the context.  The sort is not performed by actual references
