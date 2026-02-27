@@ -16,6 +16,7 @@ import sonic_platform_base.sonic_sfp.sfputilhelper
 
 from . import portchannel
 from collections import OrderedDict
+from datetime import datetime
 
 HWSKU_JSON = 'hwsku.json'
 
@@ -1238,3 +1239,263 @@ def fast_linkup_status(db):
         fast_linkup = entry.get('fast_linkup', 'false')
         rows.append([ifname, fast_linkup])
     click.echo(tabulate(rows, headers=['Interface', 'fast_linkup'], tablefmt='outline'))
+
+
+def display_phy_signal_attribute(attr_display_name, attr_json):
+    """
+    Display PHY signal attribute per lane for an interface.
+
+    Expected format: {"0": ["F", 0, 0], "1": ["T", 1234567890, 2], ...}
+    Array elements: [state, timestamp_ms, change_count]
+    - state: "T" (True), "F" (False), "T*" (True, just changed), "F*" (False, just changed)
+    - timestamp_ms: milliseconds since epoch of last change (0 = never changed)
+    - change_count: total number of state changes
+    """
+    if not attr_json:
+        click.echo("{}: No data available".format(attr_display_name))
+        return
+
+    try:
+        lane_data = json.loads(attr_json)
+    except json.JSONDecodeError:
+        click.echo("{}: Invalid data format".format(attr_display_name))
+        return
+
+    # Prepare table headers
+    header = [f"{attr_display_name}:", 'Current State', 'Changes', 'Last Change (UTC)']
+    body = []
+
+    # Build table rows
+    for lane_num in sorted(lane_data.keys(), key=int):
+        lane_info = lane_data[lane_num]
+        if isinstance(lane_info, list) and len(lane_info) >= 3:
+            status = lane_info[0]  # "T*", "F*", "T", or "F"
+            timestamp_ms = lane_info[1]
+            change_count = lane_info[2]
+
+            # Convert timestamp to UTC datetime
+            if timestamp_ms > 0:
+                dt = datetime.utcfromtimestamp(timestamp_ms / 1000.0)
+                last_change = dt.strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                last_change = 'Never'
+
+            # Add row to table body
+            body.append(['Lane{}'.format(lane_num), status, change_count, last_change])
+
+    # Display table.
+    click.echo(tabulate(body, header, tablefmt='simple', numalign='left'))
+    click.echo("")
+
+
+@interfaces.command('phy-signal')
+@click.argument('interfacename', required=True)
+@multi_asic_util.multi_asic_click_options
+@click.option('--rxsig', is_flag=True, help='Show RX signal detect status')
+@click.option('--feclock', is_flag=True, help='Show FEC alignment lock status')
+@click.pass_context
+def phy_signal(ctx, interfacename, namespace, display, rxsig, feclock):
+    """Show PHY signal attributes status for interface"""
+
+    # Validation: At least one option must be specified
+    if not any([rxsig, feclock]):
+        ctx.fail("At least one option must be specified.")
+
+    # Convert interface name from alias if needed
+    interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
+
+    # Validate interface exists
+    port_dict = multi_asic.get_port_table(namespace=namespace)
+    if interfacename not in port_dict:
+        ctx.fail("Invalid interface name {}".format(interfacename))
+
+    # Connect to COUNTERS_DB
+    db = SonicV2Connector(host=REDIS_HOSTIP)
+    db.connect(db.COUNTERS_DB)
+
+    # Get VID for the interface (PORT_PHY_ATTR uses VID as key)
+    vid_str = db.get(db.COUNTERS_DB, 'COUNTERS_PORT_NAME_MAP', interfacename)
+    if not vid_str:
+        db.close(db.COUNTERS_DB)
+        ctx.fail("Interface {} not found in counter map".format(interfacename))
+
+    # Query PORT_PHY_ATTR table
+    table_key = 'PORT_PHY_ATTR:{}'.format(vid_str)
+    port_phy_data = db.get_all(db.COUNTERS_DB, table_key)
+
+    db.close(db.COUNTERS_DB)
+
+    if not port_phy_data:
+        click.echo("No PHY attribute data available for {}".format(interfacename))
+        click.echo("Ensure 'counterpoll phy enable' has been run")
+        return
+
+    # Map option names to Redis field names and display names
+    attr_map = {
+        'rxsig': ('RX Signal Detect', 'phy_rx_signal_detect'),
+        'feclock': ('FEC Alignment Lock', 'pcs_fec_lane_alignment_lock')
+    }
+
+    # Print interface header
+    click.echo("Interface: {}".format(interfacename))
+    click.echo("=" * 80)
+
+    # Display all requested attributes
+    for option_name, (display_name, redis_field) in attr_map.items():
+        if locals()[option_name]:  # If this option flag is set
+            attr_data = port_phy_data.get(redis_field)
+            display_phy_signal_attribute(display_name, attr_data)
+
+
+def display_phy_numeric_attribute(attr_display_name, attr_json, val_header="Value"):
+    """
+    Display simple per-lane numeric values (SNR, VGA) in horizontal format for an interface.
+
+    Expected format: {"0": 36697, "1": 35200, "2": 34500, "3": 36000}
+    """
+    if not attr_json:
+        click.echo("{}: No data available".format(attr_display_name))
+        return
+
+    try:
+        lane_data = json.loads(attr_json)
+    except json.JSONDecodeError:
+        click.echo("{}: Invalid data format".format(attr_display_name))
+        return
+
+    # Print attribute name and separator
+    click.echo("{}:".format(attr_display_name))
+    click.echo("-" * 80)
+
+    # Build horizontal display (lanes as columns)
+    lanes = sorted(lane_data.keys(), key=int)
+
+    # Build lane header row
+    lane_row = ['Lane:'] + lanes
+
+    # Extract and format values
+    value_row = [val_header+":"]
+    for lane in lanes:
+        lane_value = lane_data[lane]
+        value_row.append(str(lane_value))
+
+    # Build table body (2 rows: lane numbers, then values)
+    body = [lane_row, value_row]
+
+    # Display using tabulate - it will auto-align columns
+    click.echo(tabulate(body, tablefmt='plain', numalign='left'))
+    click.echo("")
+
+
+def display_phy_taps_attribute(attr_display_name, attr_json):
+    """
+    Display per lane tap attribute values for an interface.
+
+    Input format: {"0": [{"tap0": -10}, {"tap1": 5}, ...], "1": [...], ...}
+    """
+    if not attr_json:
+        click.echo("{}: No data available".format(attr_display_name))
+        return
+
+    try:
+        tap_data = json.loads(attr_json)
+    except json.JSONDecodeError:
+        click.echo("{}: Invalid data format".format(attr_display_name))
+        return
+
+    # Print attribute name
+    click.echo("{}:".format(attr_display_name))
+
+    lanes = sorted(tap_data.keys(), key=int)
+
+    if not lanes:
+        click.echo("No tap data available")
+        return
+
+    # Try to parse structured tap data
+    first_lane_data = tap_data[lanes[0]]
+
+    # Check if it's a list of tap dictionaries
+    if isinstance(first_lane_data, list) and len(first_lane_data) > 0:
+        # Extract number of taps from first lane
+        num_taps = len(first_lane_data)
+
+        # Build header with tap columns
+        header = ['Lane'] + ['Tap{}'.format(i) for i in range(num_taps)]
+        body = []
+
+        # Build rows for each lane
+        for lane in lanes:
+            lane_taps = tap_data[lane]
+            row = ['Lane{}'.format(lane)]
+
+            if isinstance(lane_taps, list):
+                for tap_dict in lane_taps:
+                    if isinstance(tap_dict, dict):
+                        for tap_name, tap_val_list in tap_dict.items():
+                            row.append(str(tap_val_list))
+                            break  # There should only be one val.
+            body.append(row)
+        click.echo(tabulate(body, header, tablefmt='simple', numalign="left"))
+    click.echo("")
+
+
+@interfaces.command('phy-serdes')
+@click.argument('interfacename', required=True)
+@multi_asic_util.multi_asic_click_options
+@click.option('--snr', is_flag=True, help='Show RX SNR values')
+@click.option('--rxvga', is_flag=True, help='Show RX VGA values')
+@click.option('--txfir', is_flag=True, help='Show TX FIR tap values')
+@click.pass_context
+def phy_serdes(ctx, interfacename, namespace, display, snr, rxvga, txfir):
+    """Show PHY SERDES parameters for interface"""
+
+    # Validation: At least one option must be specified
+    if not any([snr, rxvga, txfir]):
+        ctx.fail("At least one option must be specified.")
+
+    # Convert interface name from alias if needed
+    interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
+
+    # Validate interface exists
+    port_dict = multi_asic.get_port_table(namespace=namespace)
+    if interfacename not in port_dict:
+        ctx.fail("Invalid interface name {}".format(interfacename))
+
+    # Connect to COUNTERS_DB
+    db = SonicV2Connector(host=REDIS_HOSTIP)
+    db.connect(db.COUNTERS_DB)
+
+    # Get VID for the interface
+    vid_str = db.get(db.COUNTERS_DB, 'COUNTERS_PORT_NAME_MAP', interfacename)
+    if not vid_str:
+        db.close(db.COUNTERS_DB)
+        ctx.fail("Interface {} not found in counter map".format(interfacename))
+
+    # Query PORT_PHY_ATTR table
+    table_key = 'PORT_PHY_ATTR:{}'.format(vid_str)
+    port_phy_data = db.get_all(db.COUNTERS_DB, table_key)
+
+    db.close(db.COUNTERS_DB)
+
+    if not port_phy_data:
+        click.echo("No PHY SERDES data available for {}".format(interfacename))
+        click.echo("Ensure 'counterpoll phy enable' has been run")
+        return
+
+    # Print interface header
+    click.echo("Interface: {}".format(interfacename))
+    click.echo("=" * 80)
+
+    # Display all requested attributes
+    if snr:
+        attr_data = port_phy_data.get('rx_snr')
+        display_phy_numeric_attribute('RX SNR', attr_data, "SNR")
+
+    if rxvga:
+        attr_data = port_phy_data.get('rx_vga')
+        display_phy_numeric_attribute('RX VGA', attr_data, "VGA")
+
+    if txfir:
+        attr_data = port_phy_data.get('tx_fir_taps_list')
+        display_phy_taps_attribute('TX FIR Taps', attr_data)
