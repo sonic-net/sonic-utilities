@@ -421,7 +421,7 @@ class SWAPAllocator(object):
 
         @param allocate: True to allocate SWAP memory if necessary
         @param swap_mem_size: the size of SWAP memory to allocate(in MiB)
-        @param total_mem_threshold: the system totla memory threshold(in MiB)
+        @param total_mem_threshold: the system total memory threshold(in MiB)
         @param available_mem_threshold: the system available memory threshold(in MiB)
         """
         self.allocate = allocate
