@@ -201,7 +201,7 @@ def nat():
 #
 @nat.group('add')
 def add():
-    """Add NAT-related configutation tasks"""
+    """Add NAT-related configuration tasks"""
     pass
 
 #
@@ -209,7 +209,7 @@ def add():
 #
 @nat.group('remove')
 def remove():
-    """Remove NAT-related configutation tasks"""
+    """Remove NAT-related configuration tasks"""
     pass
 
 #
@@ -217,7 +217,7 @@ def remove():
 #
 @nat.group('set')
 def set():
-    """Set NAT-related timeout configutation tasks"""
+    """Set NAT-related timeout configuration tasks"""
     pass
 
 #
@@ -225,7 +225,7 @@ def set():
 #
 @nat.group('reset')
 def reset():
-    """Reset NAT-related timeout configutation tasks"""
+    """Reset NAT-related timeout configuration tasks"""
     pass
 
 #
@@ -233,7 +233,7 @@ def reset():
 #
 @add.group('static')
 def static():
-    """Add Static related configutation"""
+    """Add Static related configuration"""
     pass
 
 #
@@ -246,7 +246,7 @@ def static():
 @click.option('-nat_type', metavar='<nat_type>', required=False, type=click.Choice(["snat", "dnat"]), help="Set nat type")
 @click.option('-twice_nat_id', metavar='<twice_nat_id>', required=False, type=click.IntRange(1, 9999), help="Set the twice nat id")
 def add_basic(ctx, global_ip, local_ip, nat_type, twice_nat_id):
-    """Add Static NAT-related configutation"""
+    """Add Static NAT-related configuration"""
     if ADHOC_VALIDATION:
         # Verify the ip address format 
         if is_valid_ipv4_address(local_ip) is False:
@@ -340,7 +340,7 @@ def add_basic(ctx, global_ip, local_ip, nat_type, twice_nat_id):
 @click.option('-nat_type', metavar='<nat_type>', required=False, type=click.Choice(["snat", "dnat"]), help="Set nat type")
 @click.option('-twice_nat_id', metavar='<twice_nat_id>', required=False, type=click.IntRange(1, 9999), help="Set the twice nat id")
 def add_tcp(ctx, global_ip, global_port, local_ip, local_port, nat_type, twice_nat_id):
-    """Add Static TCP Protocol NAPT-related configutation"""
+    """Add Static TCP Protocol NAPT-related configuration"""
     if ADHOC_VALIDATION: 
         # Verify the ip address format 
         if is_valid_ipv4_address(local_ip) is False:
@@ -432,7 +432,7 @@ def add_tcp(ctx, global_ip, global_port, local_ip, local_port, nat_type, twice_n
 @click.option('-nat_type', metavar='<nat_type>', required=False, type=click.Choice(["snat", "dnat"]), help="Set nat type")
 @click.option('-twice_nat_id', metavar='<twice_nat_id>', required=False, type=click.IntRange(1, 9999), help="Set the twice nat id")
 def add_udp(ctx, global_ip, global_port, local_ip, local_port, nat_type, twice_nat_id):
-    """Add Static UDP Protocol NAPT-related configutation"""
+    """Add Static UDP Protocol NAPT-related configuration"""
     
     if ADHOC_VALIDATION:
         # Verify the ip address format 
@@ -518,7 +518,7 @@ def add_udp(ctx, global_ip, global_port, local_ip, local_port, nat_type, twice_n
 #
 @remove.group('static')
 def static():
-    """Remove Static related configutation"""
+    """Remove Static related configuration"""
     pass
 
 #
@@ -529,7 +529,7 @@ def static():
 @click.argument('global_ip', metavar='<global_ip>', required=True)
 @click.argument('local_ip', metavar='<local_ip>', required=True)
 def remove_basic(ctx, global_ip, local_ip):
-    """Remove Static NAT-related configutation"""
+    """Remove Static NAT-related configuration"""
     
     if ADHOC_VALIDATION:
         # Verify the ip address format 
@@ -570,7 +570,7 @@ def remove_basic(ctx, global_ip, local_ip):
 @click.argument('local_ip', metavar='<local_ip>', required=True)
 @click.argument('local_port', metavar='<local_port>', type=click.IntRange(1, 65535), required=True)
 def remove_tcp(ctx, global_ip, global_port, local_ip, local_port):
-    """Remove Static TCP Protocol NAPT-related configutation"""
+    """Remove Static TCP Protocol NAPT-related configuration"""
     
     if ADHOC_VALIDATION:
         # Verify the ip address format 
@@ -609,7 +609,7 @@ def remove_tcp(ctx, global_ip, global_port, local_ip, local_port):
 @click.argument('local_ip', metavar='<local_ip>', required=True)
 @click.argument('local_port', metavar='<local_port>', type=click.IntRange(1, 65535), required=True)
 def remove_udp(ctx, global_ip, global_port, local_ip, local_port):
-    """Remove Static UDP Protocol NAPT-related configutation"""
+    """Remove Static UDP Protocol NAPT-related configuration"""
     
     if ADHOC_VALIDATION:
         # Verify the ip address format 
@@ -646,7 +646,7 @@ def remove_udp(ctx, global_ip, global_port, local_ip, local_port):
 @static.command('all')
 @click.pass_context
 def remove_static_all(ctx):
-    """Remove all Static related configutation"""
+    """Remove all Static related configuration"""
 
     config_db = ValidatedConfigDBConnector(ConfigDBConnector())
     config_db.connect()
@@ -671,7 +671,7 @@ def remove_static_all(ctx):
 @click.argument('global_ip_range', metavar='<global_ip_range>', required=True)
 @click.argument('global_port_range', metavar='<global_port_range>', required=False)
 def add_pool(ctx, pool_name, global_ip_range, global_port_range):
-    """Add Pool for Dynamic NAT-related configutation"""
+    """Add Pool for Dynamic NAT-related configuration"""
 
     if len(pool_name) > 32:
         ctx.fail("Invalid pool name. Maximum allowed pool name is 32 characters !!")
@@ -783,7 +783,7 @@ def add_pool(ctx, pool_name, global_ip_range, global_port_range):
 @click.option('-nat_type', metavar='<nat_type>', required=False, type=click.Choice(["snat", "dnat"]), help="Set nat type")
 @click.option('-twice_nat_id', metavar='<twice_nat_id>', required=False, type=click.IntRange(1, 9999), help="Set the twice nat id")
 def add_binding(ctx, binding_name, pool_name, acl_name, nat_type, twice_nat_id):
-    """Add Binding for Dynamic NAT-related configutation"""
+    """Add Binding for Dynamic NAT-related configuration"""
 
     entryFound = False
     table = 'NAT_BINDINGS'
@@ -815,7 +815,7 @@ def add_binding(ctx, binding_name, pool_name, acl_name, nat_type, twice_nat_id):
 
     if nat_type is not None:
         if nat_type == "dnat":
-            click.echo("Ignored, DNAT is not yet suported for Binding ")
+            click.echo("Ignored, DNAT is not yet supported for Binding ")
             entryFound = True
     else:
         nat_type = "snat"
@@ -844,7 +844,7 @@ def add_binding(ctx, binding_name, pool_name, acl_name, nat_type, twice_nat_id):
 @click.pass_context
 @click.argument('pool_name', metavar='<pool_name>', required=True)
 def remove_pool(ctx, pool_name):
-    """Remove Pool for Dynamic NAT-related configutation"""
+    """Remove Pool for Dynamic NAT-related configuration"""
  
     entryFound = False
     table = "NAT_POOL"
@@ -881,7 +881,7 @@ def remove_pool(ctx, pool_name):
 @remove.command('pools')
 @click.pass_context
 def remove_pools(ctx):
-    """Remove all Pools for Dynamic configutation"""
+    """Remove all Pools for Dynamic configuration"""
 
     config_db = ValidatedConfigDBConnector(ConfigDBConnector())
     config_db.connect()
@@ -913,7 +913,7 @@ def remove_pools(ctx):
 @click.pass_context
 @click.argument('binding_name', metavar='<binding_name>', required=True)
 def remove_binding(ctx, binding_name):
-    """Remove Binding for Dynamic NAT-related configutation"""
+    """Remove Binding for Dynamic NAT-related configuration"""
 
     entryFound = False
     table = 'NAT_BINDINGS'
@@ -942,7 +942,7 @@ def remove_binding(ctx, binding_name):
 @remove.command('bindings')
 @click.pass_context
 def remove_bindings(ctx):
-    """Remove all Bindings for Dynamic configutation"""
+    """Remove all Bindings for Dynamic configuration"""
 
     config_db = ValidatedConfigBConnector(ConfigDBConnector())
     config_db.connect()
@@ -1063,7 +1063,7 @@ def feature():
 @feature.command('enable')
 @click.pass_context
 def enable(ctx):
-    """Enbale the NAT feature """
+    """Enable the NAT feature """
 
     config_db = ValidatedConfigDBConnector(ConfigDBConnector())
     config_db.connect()
