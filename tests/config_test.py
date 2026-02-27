@@ -1947,7 +1947,6 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.any_checkpoints_list_as_text = json.dumps(self.any_checkpoints_list, indent=4)
         self.any_checkpoints_list_with_time_as_text = json.dumps(self.any_checkpoints_list_with_time, indent=4)
 
-
     @patch('generic_config_updater.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch__no_params__get_required_params_error_msg(self):
         # Arrange
@@ -2096,7 +2095,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         mock_generic_updater.apply_patch.assert_has_calls([expected_call])
 
     def test_filter_duplicate_patch_operations_basic(self):
-        from config.main import filter_duplicate_patch_operations
+        from generic_config_updater.main import filter_duplicate_patch_operations
         # Patch tries to add duplicate port to ACL_TABLE leaf-list
         patch_ops = [
             {"op": "add", "path": "/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet1"},
@@ -2116,7 +2115,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.assertEqual(filtered_patch_ops[0]['value'], "Ethernet3", "Only Ethernet3 add op should remain")
 
     def test_filter_duplicate_patch_operations_no_duplicates(self):
-        from config.main import filter_duplicate_patch_operations
+        from generic_config_updater.main import filter_duplicate_patch_operations
         # Patch does not contain any duplicate ops
         patch_ops = [
             {"op": "add", "path": "/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet3"},
@@ -2137,7 +2136,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.assertEqual(filtered_patch_ops, patch_ops, "Filtered ops should match original ops")
 
     def test_filter_duplicate_patch_operations_non_list_field(self):
-        from config.main import filter_duplicate_patch_operations
+        from generic_config_updater.main import filter_duplicate_patch_operations
         # Patch tries to add duplicate entries to a non-list field
         patch_ops = [
             {"op": "add", "path": "/PORT/Ethernet0/description", "value": "Desc1"},
@@ -2156,7 +2155,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.assertEqual(filtered_patch_ops, patch_ops, "Filtered ops should match original ops")
 
     def test_filter_duplicate_patch_operations_empty_config(self):
-        from config.main import filter_duplicate_patch_operations
+        from generic_config_updater.main import filter_duplicate_patch_operations
         patch_ops = [
             {"op": "add", "path": "/PORT/Ethernet0/allowed_vlans/-", "value": "100"},
             {"op": "add", "path": "/PORT/Ethernet0/allowed_vlans/-", "value": "200"}
@@ -2174,7 +2173,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.assertEqual(filtered_patch_ops, patch_ops, "Filtered ops should match original ops")
 
     def test_append_emptytables_if_required_basic_config(self):
-        from config.main import append_emptytables_if_required
+        from generic_config_updater.main import append_emptytables_if_required
 
         patch_ops = [
             {"op": "add", "path": "/ACL_TABLE2/ports", "value": ["Ethernet1", "Ethernet2"]}
@@ -2191,7 +2190,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         assert updated_patch_ops[1] == patch_ops[0], "Second op should be the original add operation"
 
     def test_append_emptytables_if_required_no_action_needed(self):
-        from config.main import append_emptytables_if_required
+        from generic_config_updater.main import append_emptytables_if_required
         patch_ops = [
             {"op": "add", "path": "/ACL_TABLE/ports", "value": ["Ethernet1", "Ethernet2"]}
         ]
@@ -2205,7 +2204,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         assert updated_patch_ops[0] == patch_ops[0], "Patch operation should remain unchanged"
 
     def test_append_emptytables_if_required_multiple_tables(self):
-        from config.main import append_emptytables_if_required
+        from generic_config_updater.main import append_emptytables_if_required
 
         patch_ops = [
             {"op": "add", "path": "/TABLE1/field", "value": "value1"},
@@ -4365,7 +4364,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
                     mock_config_db_connector.assert_not_called()
 
     def test_filter_duplicate_patch_operations_basic_multiasic(self):
-        from config.main import filter_duplicate_patch_operations
+        from generic_config_updater.main import filter_duplicate_patch_operations
         import jsonpatch
         # Multi-ASIC config: each ASIC has its own ACL_TABLE
         config = {
@@ -4406,7 +4405,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         self.assertEqual(len(filtered_ops), 0, "All adds are duplicates, should be filtered out in multi-asic config")
 
     def test_filter_duplicate_patch_operations_no_duplicates_multiasic(self):
-        from config.main import filter_duplicate_patch_operations
+        from generic_config_updater.main import filter_duplicate_patch_operations
         import jsonpatch
         # Multi-ASIC config: each ASIC has its own ACL_TABLE
         config = {
@@ -4451,7 +4450,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         )
 
     def test_filter_duplicate_patch_operations_mixed_multiasic(self):
-        from config.main import filter_duplicate_patch_operations
+        from generic_config_updater.main import filter_duplicate_patch_operations
         import jsonpatch
         # Multi-ASIC config: each ASIC has its own ACL_TABLE
         config = {
@@ -4496,7 +4495,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         )
 
     def test_filter_duplicate_patch_operations_empty_config_multiasic(self):
-        from config.main import filter_duplicate_patch_operations
+        from generic_config_updater.main import filter_duplicate_patch_operations
         import jsonpatch
         config = {
             "localhost": {
@@ -4541,7 +4540,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         )
 
     def test_test_append_emptytables_if_required_basic_config_multiasic(self):
-        from config.main import append_emptytables_if_required
+        from generic_config_updater.main import append_emptytables_if_required
         # Multi-ASIC config: each ASIC has its own PORT table
         config = {
             "localhost": {
@@ -4583,7 +4582,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         assert updated_patch_list[5] == patch_ops[2]
 
     def test_test_append_emptytables_if_required_no_additional_tables_multiasic(self):
-        from config.main import append_emptytables_if_required
+        from generic_config_updater.main import append_emptytables_if_required
         # Multi-ASIC config: each ASIC has its own PORT table
         config = {
             "localhost": {
