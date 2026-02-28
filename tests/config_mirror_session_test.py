@@ -76,25 +76,32 @@ def test_mirror_session_add():
                 config.config.commands["mirror_session"].commands["add"],
                 ["test_session", "100.1.1.1", "2.2.2.2", "8", "63", "10", "100"])
 
-        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 10, 100, None)
+        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 10, 100, None, None, None)
 
         result = runner.invoke(
                 config.config.commands["mirror_session"].commands["add"],
                 ["test_session", "100.1.1.1", "2.2.2.2", "8", "63", "0X1234", "100"])
 
-        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 0x1234, 100, None)
+        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 0x1234, 100, None, None, None)
 
         result = runner.invoke(
                 config.config.commands["mirror_session"].commands["add"],
                 ["test_session", "100.1.1.1", "2.2.2.2", "8", "63", "0", "0"])
 
-        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 0, 0, None)
+        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 0, 0, None, None, None)
 
         result = runner.invoke(
                 config.config.commands["mirror_session"].commands["add"],
                 ["test_session", "100.1.1.1", "2.2.2.2", "8", "63"])
 
-        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, None, None, None)
+        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, None, None, None, None, None)
+
+        # Test with src_port and direction
+        result = runner.invoke(
+                config.config.commands["mirror_session"].commands["add"],
+                ["test_session", "100.1.1.1", "2.2.2.2", "8", "63", "10", "100", "Ethernet0", "rx"])
+
+        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 10, 100, None, "Ethernet0", "rx")
 
 
 def test_mirror_session_erspan_add():
@@ -494,23 +501,35 @@ def test_legacy_mirror_session_add_skips_capability_check():
     """Test that legacy 'config mirror_session add' (no src_port) skips
     the port mirror capability check, fixing issue #4318.
 
-    The legacy ERSPAN command doesn't use port-based mirroring, so
-    validate_mirror_session_config should not check PORT_*_MIRROR_CAPABLE
-    when src_port is None.
+    The legacy ERSPAN command without src_port doesn't use port-based
+    mirroring, so validate_mirror_session_config should not check
+    PORT_*_MIRROR_CAPABLE when src_port is None.
     """
     config.ADHOC_VALIDATION = True
     runner = CliRunner()
 
     with mock.patch('config.main.add_erspan') as mock_add_erspan:
-        # Even though we don't mock is_port_mirror_capability_supported,
-        # the legacy add command should succeed because it has no src_port
-        # and the capability check should be skipped entirely.
         result = runner.invoke(
                 config.config.commands["mirror_session"].commands["add"],
                 ["test_session", "100.1.1.1", "2.2.2.2", "8", "63", "10", "100"])
 
         assert result.exit_code == 0
-        mock_add_erspan.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 10, 100, None)
+        mock_add_erspan.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 10, 100, None, None, None)
+
+
+def test_legacy_mirror_session_add_with_direction():
+    """Test that legacy 'config mirror_session add' accepts the new
+    src_port and direction parameters."""
+    config.ADHOC_VALIDATION = True
+    runner = CliRunner()
+
+    with mock.patch('config.main.add_erspan') as mock_add_erspan:
+        result = runner.invoke(
+                config.config.commands["mirror_session"].commands["add"],
+                ["test_session", "100.1.1.1", "2.2.2.2", "8", "63", "10", "100", "Ethernet0", "rx"])
+
+        assert result.exit_code == 0
+        mock_add_erspan.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 10, 100, None, "Ethernet0", "rx")
 
 
 def test_erspan_add_without_src_port_skips_capability_check():
