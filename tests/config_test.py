@@ -402,7 +402,7 @@ def mock_run_command_side_effect_disabled_timer(*args, **kwargs):
 sonic_cfggen = load_module_from_source('sonic_cfggen', '/usr/local/bin/sonic-cfggen')
 
 class TestHelper(object):
-    def setup(self):
+    def setup_method(self):
         print("SETUP")
 
     @patch('config.main.subprocess.Popen')
@@ -417,11 +417,11 @@ class TestHelper(object):
         mock_subprocess.assert_called_with(['/usr/local/bin/sonic-cfggen', '-m', '-v', 'DEVICE_METADATA.localhost.type'], text=True, stdout=-1)
         assert device_type == "Unknown"
 
-    def teardown(self):
+    def teardown_method(self):
         print("TEARDOWN")
 
 class TestConfig(object):
-    def setup(self):
+    def setup_method(self):
         print("SETUP")
 
     @patch('config.main.subprocess.check_call')
@@ -3463,7 +3463,7 @@ class TestConfigNtp(object):
 
 
 class TestConfigPfcwd(object):
-    def setup(self):
+    def setup_method(self):
         print("SETUP")
 
     @patch('utilities_common.cli.run_command')
@@ -3520,12 +3520,12 @@ class TestConfigPfcwd(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['pfcwd', 'start_default'], display_cmd=True)
 
-    def teardown(self):
+    def teardown_method(self):
         print("TEARDOWN")
 
 
 class TestConfigAclUpdate(object):
-    def setup(self):
+    def setup_method(self):
         print("SETUP")
 
     @patch('utilities_common.cli.run_command')
@@ -3548,12 +3548,12 @@ class TestConfigAclUpdate(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['acl-loader', 'update', 'incremental', file_name])
 
-    def teardown(self):
+    def teardown_method(self):
         print("TEARDOWN")
 
 
 class TestConfigDropcounters(object):
-    def setup(self):
+    def setup_method(self):
         print("SETUP")
 
     @patch('utilities_common.cli.run_command')
@@ -3620,12 +3620,12 @@ class TestConfigDropcounters(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['dropconfig', '-c', 'remove', '-n', str(counter_name), '-r', str(reasons)], display_cmd=True)
 
-    def teardown(self):
+    def teardown_method(self):
         print("TEARDOWN")
 
 
 class TestConfigDropcountersMasic(object):
-    def setup(self):
+    def setup_method(self):
         print("SETUP")
         os.environ['UTILITIES_UNIT_TESTING'] = "1"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
@@ -3746,7 +3746,7 @@ class TestConfigDropcountersMasic(object):
         dbconnector.load_namespace_config()
 
 class TestConfigWatermarkTelemetry(object):
-    def setup(self):
+    def setup_method(self):
         print("SETUP")
 
     @patch('utilities_common.cli.run_command')
@@ -3759,12 +3759,12 @@ class TestConfigWatermarkTelemetry(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['watermarkcfg', '--config-interval', str(interval)])
 
-    def teardown(self):
+    def teardown_method(self):
         print("TEARDOWN")
 
 
 class TestConfigZtp(object):
-    def setup(self):
+    def setup_method(self):
         print("SETUP")
 
     @patch('utilities_common.cli.run_command')
@@ -3794,7 +3794,7 @@ class TestConfigZtp(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['ztp', 'enable'], display_cmd=True)
 
-    def teardown(self):
+    def teardown_method(self):
         print("TEARDOWN")
 
 
@@ -3820,7 +3820,7 @@ def test_change_hostname(mock_run_command):
 
 
 class TestConfigInterface(object):
-    def setup(self):
+    def setup_method(self):
         print("SETUP")
 
     @patch('utilities_common.cli.run_command')
@@ -3960,7 +3960,7 @@ class TestConfigInterface(object):
         assert result.exit_code == 0
         assert db.cfgdb.get_table('LOOPBACK_INTERFACE')['Loopback0']['admin_status'] == 'up'
 
-    def teardown(self):
+    def teardown_method(self):
         print("TEARDOWN")
 
 

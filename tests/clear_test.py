@@ -5,7 +5,7 @@ from click.testing import CliRunner
 from unittest.mock import patch, MagicMock
 
 class TestClear(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('clear.main.run_command')
@@ -115,12 +115,12 @@ class TestClear(object):
         assert result.exit_code == 0
         run_command.assert_called_with(['switchstat', '-c'])
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 
 class TestClearQuaggav4(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('clear.main.run_command')
@@ -176,12 +176,12 @@ class TestClearQuaggav4(object):
         assert result.exit_code == 0
         run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear ip bgp 10.0.0.1 soft out"])
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 
 class TestClearQuaggav6(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('clear.main.run_command')
@@ -237,12 +237,12 @@ class TestClearQuaggav6(object):
         assert result.exit_code == 0
         run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear ipv6 bgp 10.0.0.1 soft out"])
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 
 class TestClearFrr(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('clear.main.run_command')
@@ -298,12 +298,12 @@ class TestClearFrr(object):
         assert result.exit_code == 0
         run_command.assert_called_with(['sudo', 'vtysh', '-c', "clear bgp ipv6 10.0.0.1 soft out"])
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 
 class TestClearFlowcnt(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -330,6 +330,6 @@ class TestClearFlowcnt(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_with(['flow_counters_stat', '-c', '-t', 'route', '--prefix', '3.3.0.0/16', '--vrf', str('Vrf_1'), '-n', 'asic0'])
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
