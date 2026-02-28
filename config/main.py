@@ -33,6 +33,7 @@ from sonic_py_common import device_info, multi_asic
 from sonic_py_common.general import getstatusoutput_noshell
 from sonic_py_common.interface import get_interface_table_name, get_port_table_name, get_intf_longname
 from sonic_yang_cfg_generator import SonicYangCfgDbGenerator
+from typing import IO, Optional
 from utilities_common import util_base
 from swsscommon import swsscommon
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector, ConfigDBPipeConnector, \
@@ -1387,12 +1388,21 @@ def multiasic_save_to_singlefile(db, filename):
         json.dump(all_current_config, file, indent=4)
 
 
-def apply_patch_wrapper(args):
-    return apply_patch_for_scope(*args)
+def apply_patch_wrapper(args, **kwargs):
+    return apply_patch_for_scope(*args, **kwargs)
 
 
 # Function to apply patch for a single ASIC.
-def apply_patch_for_scope(scope_changes, results, config_format, verbose, dry_run, ignore_non_yang_tables, ignore_path):
+def apply_patch_for_scope(
+    scope_changes,
+    results,
+    config_format,
+    verbose,
+    dry_run,
+    ignore_non_yang_tables,
+    ignore_path,
+    trace_io: Optional[IO] = None,
+):
     scope, changes = scope_changes
     # Replace localhost to DEFAULT_NAMESPACE which is db definition of Host
     if scope.lower() == HOST_NAMESPACE or scope == "":
@@ -1409,7 +1419,8 @@ def apply_patch_for_scope(scope_changes, results, config_format, verbose, dry_ru
                                                 verbose,
                                                 dry_run,
                                                 ignore_non_yang_tables,
-                                                ignore_path)
+                                                ignore_path,
+                                                trace_io=trace_io)
         results[scope_for_log] = {"success": True, "message": "Success"}
         log.log_notice(f"'apply-patch' executed successfully for {scope_for_log} by {changes} in thread:{thread_id}")
     except Exception as e:
@@ -1902,8 +1913,26 @@ def print_dry_run_message(dry_run):
 @click.option('-n', '--ignore-non-yang-tables', is_flag=True, default=False, help='ignore validation for tables without YANG models', hidden=True)
 @click.option('-i', '--ignore-path', multiple=True, help='ignore validation for config specified by given path which is a JsonPointer', hidden=True)
 @click.option('-v', '--verbose', is_flag=True, default=False, help='print additional details of what the operation is doing')
+@click.option(
+    '-t',
+    '--path-trace',
+    type=click.Path(writable=True),
+    help='filename to write decision path trace for patch generation as JSON',
+    hidden=True,
+)
+
 @click.pass_context
-def apply_patch(ctx, patch_file_path, format, dry_run, parallel, ignore_non_yang_tables, ignore_path, verbose):
+def apply_patch(
+    ctx,
+    patch_file_path,
+    format,
+    dry_run,
+    parallel,
+    ignore_non_yang_tables,
+    ignore_path,
+    verbose,
+    path_trace,
+):
     """Apply given patch of updates to Config. A patch is a JsonPatch which follows rfc6902.
        This command can be used do partial updates to the config with minimum disruption to running processes.
        It allows addition as well as deletion of configs. The patch file represents a diff of ConfigDb(ABNF)
@@ -1917,6 +1946,10 @@ def apply_patch(ctx, patch_file_path, format, dry_run, parallel, ignore_non_yang
             text = fh.read()
             patch_as_json = json.loads(text)
             patch_ops = patch_as_json
+
+        trace_io = None
+        if path_trace is not None:
+            trace_io = open(path_trace, 'w')
 
         all_running_config = get_all_running_config()
 
@@ -1968,7 +2001,7 @@ def apply_patch(ctx, patch_file_path, format, dry_run, parallel, ignore_non_yang
                              for scope_changes in changes_by_scope.items()]
 
                 # Submit all tasks and wait for them to complete
-                futures = [executor.submit(apply_patch_wrapper, args) for args in arguments]
+                futures = [executor.submit(apply_patch_wrapper, args, trace_io=trace_io) for args in arguments]
 
                 # Wait for all tasks to complete
                 concurrent.futures.wait(futures)
@@ -1979,10 +2012,14 @@ def apply_patch(ctx, patch_file_path, format, dry_run, parallel, ignore_non_yang
                                       config_format,
                                       verbose, dry_run,
                                       ignore_non_yang_tables,
-                                      ignore_path)
+                                      ignore_path,
+                                      trace_io=trace_io)
 
         # Check if any updates failed
         failures = [scope for scope, result in results.items() if not result['success']]
+
+        if trace_io is not None:
+            trace_io.close()
 
         if failures:
             failure_messages = '\n'.join([f"- {failed_scope}: {results[failed_scope]['message']}" for failed_scope in failures])
@@ -2004,8 +2041,15 @@ def apply_patch(ctx, patch_file_path, format, dry_run, parallel, ignore_non_yang
 @click.option('-n', '--ignore-non-yang-tables', is_flag=True, default=False, help='ignore validation for tables without YANG models', hidden=True)
 @click.option('-i', '--ignore-path', multiple=True, help='ignore validation for config specified by given path which is a JsonPointer', hidden=True)
 @click.option('-v', '--verbose', is_flag=True, default=False, help='print additional details of what the operation is doing')
+@click.option(
+    '-t',
+    '--path-trace',
+    type=click.Path(writable=True),
+    help='filename to output decision path trace for patch generation as JSON',
+    hidden=True,
+)
 @click.pass_context
-def replace(ctx, target_file_path, format, dry_run, ignore_non_yang_tables, ignore_path, verbose):
+def replace(ctx, target_file_path, format, dry_run, ignore_non_yang_tables, ignore_path, verbose, path_trace):
     """Replace the whole config with the specified config. The config is replaced with minimum disruption e.g.
        if ACL config is different between current and target config only ACL config is updated, and other config/services
        such as DHCP will not be affected.
@@ -2022,7 +2066,22 @@ def replace(ctx, target_file_path, format, dry_run, ignore_non_yang_tables, igno
 
         config_format = ConfigFormat[format.upper()]
 
-        GenericUpdater().replace(target_config, config_format, verbose, dry_run, ignore_non_yang_tables, ignore_path)
+        trace_io = None
+        if path_trace is not None:
+            trace_io = open(path_trace, 'w')
+
+        GenericUpdater().replace(
+            target_config,
+            config_format,
+            verbose,
+            dry_run,
+            ignore_non_yang_tables,
+            ignore_path,
+            trace_io=trace_io,
+        )
+
+        if trace_io is not None:
+            trace_io.close()
 
         click.secho("Config replaced successfully.", fg="cyan", underline=True)
     except Exception as ex:

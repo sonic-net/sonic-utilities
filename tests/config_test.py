@@ -1983,7 +1983,15 @@ class TestGenericUpdateCommands(unittest.TestCase):
         # Arrange
         expected_exit_code = 0
         expected_output = "Patch applied successfully"
-        expected_call_with_default_values = mock.call(mock.ANY, ConfigFormat.CONFIGDB, False, False, False, ())
+        expected_call_with_default_values = mock.call(
+            mock.ANY,
+            ConfigFormat.CONFIGDB,
+            False,
+            False,
+            False,
+            (),
+            trace_io=None,
+        )
         mock_generic_updater = mock.Mock()
         with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
             with mock.patch('builtins.open', mock.mock_open(read_data=self.any_patch_as_text)):
@@ -2008,7 +2016,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         expected_output = "Patch applied successfully"
         expected_ignore_path_tuple = ('/ANY_TABLE', '/ANY_OTHER_TABLE/ANY_FIELD', '')
         expected_call_with_non_default_values = \
-            mock.call(mock.ANY, ConfigFormat.SONICYANG, True, True, True, expected_ignore_path_tuple)
+            mock.call(mock.ANY, ConfigFormat.SONICYANG, True, True, True, expected_ignore_path_tuple, trace_io=None)
         mock_generic_updater = mock.Mock()
         with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
             with mock.patch('builtins.open', mock.mock_open(read_data=self.any_patch_as_text)):
@@ -2057,19 +2065,67 @@ class TestGenericUpdateCommands(unittest.TestCase):
     def test_apply_patch__optional_parameters_passed_correctly(self):
         self.validate_apply_patch_optional_parameter(
             ["--format", ConfigFormat.SONICYANG.name],
-            mock.call(mock.ANY, ConfigFormat.SONICYANG, False, False, False, ()))
+            mock.call(mock.ANY, ConfigFormat.SONICYANG, False, False, False, (), trace_io=None))
         self.validate_apply_patch_optional_parameter(
             ["--verbose"],
-            mock.call(mock.ANY, ConfigFormat.CONFIGDB, True, False, False, ()))
+            mock.call(mock.ANY, ConfigFormat.CONFIGDB, True, False, False, (), trace_io=None))
         self.validate_apply_patch_optional_parameter(
             ["--dry-run"],
-            mock.call(mock.ANY, ConfigFormat.CONFIGDB, False, True, False, ()))
+            mock.call(mock.ANY, ConfigFormat.CONFIGDB, False, True, False, (), trace_io=None))
         self.validate_apply_patch_optional_parameter(
             ["--ignore-non-yang-tables"],
-            mock.call(mock.ANY, ConfigFormat.CONFIGDB, False, False, True, ()))
+            mock.call(mock.ANY, ConfigFormat.CONFIGDB, False, False, True, (), trace_io=None))
         self.validate_apply_patch_optional_parameter(
             ["--ignore-path", "/ANY_TABLE"],
-            mock.call(mock.ANY, ConfigFormat.CONFIGDB, False, False, False, ("/ANY_TABLE",)))
+            mock.call(mock.ANY, ConfigFormat.CONFIGDB, False, False, False, ("/ANY_TABLE",), trace_io=None))
+
+    @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
+        communicate=mock.Mock(return_value=('{"some": "config"}', None)),
+        returncode=0
+    )))
+    @patch('config.main.validate_patch', mock.Mock(return_value=True))
+    def test_apply_patch__path_trace_option__trace_file_opened_and_passed(self):
+        # Arrange
+        import tempfile
+        expected_exit_code = 0
+        expected_output = "Patch applied successfully"
+        mock_generic_updater = mock.Mock()
+        mock_file_handle = mock.MagicMock()
+
+        # Create a temporary file for the trace output
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as trace_file:
+            trace_file_path = trace_file.name
+
+        try:
+            with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
+                with mock.patch('builtins.open', mock.mock_open(read_data=self.any_patch_as_text)) as mock_open_func:
+                    # Configure mock to return different handles for patch file and trace file
+                    def open_side_effect(filename, mode='r'):
+                        if filename == trace_file_path:
+                            return mock_file_handle
+                        else:
+                            return mock.mock_open(read_data=self.any_patch_as_text).return_value
+                    mock_open_func.side_effect = open_side_effect
+
+                    # Act
+                    result = self.runner.invoke(config.config.commands["apply-patch"],
+                                                [self.any_path, "--path-trace", trace_file_path],
+                                                catch_exceptions=False)
+
+            # Assert
+            self.assertEqual(expected_exit_code, result.exit_code)
+            self.assertIn(expected_output, result.output)
+            mock_generic_updater.apply_patch.assert_called_once()
+            # Verify that trace_io parameter is not None when --path-trace is used
+            call_args = mock_generic_updater.apply_patch.call_args
+            self.assertIsNotNone(call_args[1]['trace_io'])
+            # Verify the file handle was closed
+            mock_file_handle.close.assert_called_once()
+        finally:
+            # Clean up the temporary file
+            import os
+            if os.path.exists(trace_file_path):
+                os.unlink(trace_file_path)
 
     @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
         communicate=mock.Mock(return_value=('{"some": "config"}', None)),
@@ -2247,7 +2303,15 @@ class TestGenericUpdateCommands(unittest.TestCase):
         # Arrange
         expected_exit_code = 0
         expected_output = "Config replaced successfully"
-        expected_call_with_default_values = mock.call(mock.ANY, ConfigFormat.CONFIGDB, False, False, False, ())
+        expected_call_with_default_values = mock.call(
+            mock.ANY,
+            ConfigFormat.CONFIGDB,
+            False,
+            False,
+            False,
+            (),
+            trace_io=None
+        )
         mock_generic_updater = mock.Mock()
         with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
             with mock.patch('builtins.open', mock.mock_open(read_data=self.any_target_config_as_text)):
@@ -2267,7 +2331,15 @@ class TestGenericUpdateCommands(unittest.TestCase):
         expected_output = "Config replaced successfully"
         expected_ignore_path_tuple = ('/ANY_TABLE', '/ANY_OTHER_TABLE/ANY_FIELD', '')
         expected_call_with_non_default_values = \
-            mock.call(self.any_target_config, ConfigFormat.SONICYANG, True, True, True, expected_ignore_path_tuple)
+            mock.call(
+                self.any_target_config,
+                ConfigFormat.SONICYANG,
+                True,
+                True,
+                True,
+                expected_ignore_path_tuple,
+                trace_io=None
+            )
         mock_generic_updater = mock.Mock()
         with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
             with mock.patch('builtins.open', mock.mock_open(read_data=self.any_target_config_as_text)):
@@ -2311,19 +2383,74 @@ class TestGenericUpdateCommands(unittest.TestCase):
     def test_replace__optional_parameters_passed_correctly(self):
         self.validate_replace_optional_parameter(
             ["--format", ConfigFormat.SONICYANG.name],
-            mock.call(self.any_target_config, ConfigFormat.SONICYANG, False, False, False, ()))
+            mock.call(self.any_target_config, ConfigFormat.SONICYANG, False, False, False, (), trace_io=None))
         self.validate_replace_optional_parameter(
             ["--verbose"],
-            mock.call(self.any_target_config, ConfigFormat.CONFIGDB, True, False, False, ()))
+            mock.call(self.any_target_config, ConfigFormat.CONFIGDB, True, False, False, (), trace_io=None))
         self.validate_replace_optional_parameter(
             ["--dry-run"],
-            mock.call(self.any_target_config, ConfigFormat.CONFIGDB, False, True, False, ()))
+            mock.call(self.any_target_config, ConfigFormat.CONFIGDB, False, True, False, (), trace_io=None))
         self.validate_replace_optional_parameter(
             ["--ignore-non-yang-tables"],
-            mock.call(self.any_target_config, ConfigFormat.CONFIGDB, False, False, True, ()))
+            mock.call(self.any_target_config, ConfigFormat.CONFIGDB, False, False, True, (), trace_io=None))
         self.validate_replace_optional_parameter(
             ["--ignore-path", "/ANY_TABLE"],
-            mock.call(self.any_target_config, ConfigFormat.CONFIGDB, False, False, False, ("/ANY_TABLE",)))
+            mock.call(
+                self.any_target_config,
+                ConfigFormat.CONFIGDB,
+                False,
+                False,
+                False,
+                ("/ANY_TABLE",),
+                trace_io=None,
+            )
+        )
+
+    def test_replace__path_trace_option__trace_file_opened_and_passed(self):
+        # Arrange
+        import tempfile
+        expected_exit_code = 0
+        expected_output = "Config replaced successfully"
+        mock_generic_updater = mock.Mock()
+        mock_file_handle = mock.MagicMock()
+
+        # Create a temporary file for the trace output
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as trace_file:
+            trace_file_path = trace_file.name
+
+        try:
+            with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
+                with (
+                    mock.patch('builtins.open', mock.mock_open(read_data=self.any_target_config_as_text)) as
+                    mock_open_func
+                ):
+                    # Configure mock to return different handles for config file and trace file
+                    def open_side_effect(filename, mode='r'):
+                        if filename == trace_file_path:
+                            return mock_file_handle
+                        else:
+                            return mock.mock_open(read_data=self.any_target_config_as_text).return_value
+                    mock_open_func.side_effect = open_side_effect
+
+                    # Act
+                    result = self.runner.invoke(config.config.commands["replace"],
+                                                [self.any_path, "--path-trace", trace_file_path],
+                                                catch_exceptions=False)
+
+            # Assert
+            self.assertEqual(expected_exit_code, result.exit_code)
+            self.assertIn(expected_output, result.output)
+            mock_generic_updater.replace.assert_called_once()
+            # Verify that trace_io parameter is not None when --path-trace is used
+            call_args = mock_generic_updater.replace.call_args
+            self.assertIsNotNone(call_args[1]['trace_io'])
+            # Verify the file handle was closed
+            mock_file_handle.close.assert_called_once()
+        finally:
+            # Clean up the temporary file
+            import os
+            if os.path.exists(trace_file_path):
+                os.unlink(trace_file_path)
 
     def validate_replace_optional_parameter(self, param_args, expected_call):
         # Arrange
@@ -2376,7 +2503,8 @@ class TestGenericUpdateCommands(unittest.TestCase):
         mock_generic_updater = mock.Mock()
         with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
             # Act
-            result = self.runner.invoke(config.config.commands["rollback"], [self.any_checkpoint_name], catch_exceptions=False)
+            result = self.runner.invoke(
+                config.config.commands["rollback"], [self.any_checkpoint_name], catch_exceptions=False)
 
         # Assert
         self.assertEqual(expected_exit_code, result.exit_code)
@@ -4881,6 +5009,104 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
             # Assertions and verifications
             self.assertEqual(result.exit_code, 0, "Command should succeed")
             self.assertIn("Checkpoint deleted successfully.", result.output)
+
+    @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
+        communicate=mock.Mock(return_value=('{"some": "config"}', None)),
+        returncode=0
+    )))
+    @patch('config.main.validate_patch', mock.Mock(return_value=True))
+    def test_apply_patch__path_trace_option_multiasic__trace_file_opened_and_passed(self):
+        # Arrange
+        import tempfile
+        mock_file_handle = mock.MagicMock()
+
+        # Create a temporary file for the trace output
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as trace_file:
+            trace_file_path = trace_file.name
+
+        try:
+            # Mock open to simulate file reading
+            with (
+                patch('builtins.open', mock_open(read_data=json.dumps(self.patch_content)), create=True) as
+                mock_open_func
+            ):
+                # Configure mock to return different handles for patch file and trace file
+                def open_side_effect(filename, mode='r'):
+                    if filename == trace_file_path:
+                        return mock_file_handle
+                    else:
+                        return mock.mock_open(read_data=json.dumps(self.patch_content)).return_value
+                mock_open_func.side_effect = open_side_effect
+
+                # Mock GenericUpdater to avoid actual patch application
+                with patch('config.main.GenericUpdater') as mock_generic_updater:
+                    mock_generic_updater.return_value.apply_patch = MagicMock()
+
+                    print("Multi ASIC: {}".format(multi_asic.is_multi_asic()))
+                    # Invocation of the command with the CliRunner
+                    result = self.runner.invoke(config.config.commands["apply-patch"],
+                                                [self.patch_file_path, "--path-trace", trace_file_path],
+                                                catch_exceptions=False)
+
+                    print("Exit Code: {}, output: {}".format(result.exit_code, result.output))
+                    # Assertions and verifications
+                    self.assertEqual(result.exit_code, 0, "Command should succeed")
+                    self.assertIn("Patch applied successfully.", result.output)
+
+                    # Verify the file handle was closed
+                    mock_file_handle.close.assert_called_once()
+        finally:
+            # Clean up the temporary file
+            import os
+            if os.path.exists(trace_file_path):
+                os.unlink(trace_file_path)
+
+    @patch('generic_config_updater.generic_updater.ConfigReplacer.replace', MagicMock())
+    def test_replace__path_trace_option_multiasic__trace_file_opened_and_passed(self):
+        # Arrange
+        import tempfile
+        mock_file_handle = mock.MagicMock()
+        mock_replace_content = copy.deepcopy(self.all_config)
+
+        # Create a temporary file for the trace output
+        with tempfile.NamedTemporaryFile(mode='w', suffix='.json', delete=False) as trace_file:
+            trace_file_path = trace_file.name
+
+        try:
+            with (
+                patch('builtins.open', mock_open(read_data=json.dumps(mock_replace_content)), create=True) as
+                mock_open_func
+            ):
+                # Configure mock to return different handles for config file and trace file
+                def open_side_effect(filename, mode='r'):
+                    if filename == trace_file_path:
+                        return mock_file_handle
+                    else:
+                        return mock.mock_open(read_data=json.dumps(mock_replace_content)).return_value
+                mock_open_func.side_effect = open_side_effect
+
+                # Mock GenericUpdater to avoid actual replace operation
+                with patch('config.main.GenericUpdater') as mock_generic_updater:
+                    mock_generic_updater.return_value.replace_all = MagicMock()
+
+                    print("Multi ASIC: {}".format(multi_asic.is_multi_asic()))
+                    # Invocation of the command with the CliRunner
+                    result = self.runner.invoke(config.config.commands["replace"],
+                                                [self.replace_file_path, "--path-trace", trace_file_path],
+                                                catch_exceptions=False)
+
+                    print("Exit Code: {}, output: {}".format(result.exit_code, result.output))
+                    # Assertions and verifications
+                    self.assertEqual(result.exit_code, 0, "Command should succeed")
+                    self.assertIn("Config replaced successfully.", result.output)
+
+                    # Verify the file handle was closed
+                    mock_file_handle.close.assert_called_once()
+        finally:
+            # Clean up the temporary file
+            import os
+            if os.path.exists(trace_file_path):
+                os.unlink(trace_file_path)
 
     @classmethod
     def teardown_class(cls):
