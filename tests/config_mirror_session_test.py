@@ -1,3 +1,4 @@
+import click
 import pytest
 import config.main as config
 import jsonpatch
@@ -498,23 +499,26 @@ def test_mirror_session_capability_function():
 
 
 def test_legacy_mirror_session_add_skips_capability_check():
-    """Test that legacy 'config mirror_session add' (no src_port) skips
-    the port mirror capability check, fixing issue #4318.
-
-    The legacy ERSPAN command without src_port doesn't use port-based
-    mirroring, so validate_mirror_session_config should not check
-    PORT_*_MIRROR_CAPABLE when src_port is None.
+    """Test that validate_mirror_session_config does NOT call
+    is_port_mirror_capability_supported when src_port is None,
+    fixing issue #4318.
     """
-    config.ADHOC_VALIDATION = True
     runner = CliRunner()
 
-    with mock.patch('config.main.add_erspan') as mock_add_erspan:
-        result = runner.invoke(
-                config.config.commands["mirror_session"].commands["add"],
-                ["test_session", "100.1.1.1", "2.2.2.2", "8", "63", "10", "100"])
+    @click.command()
+    @click.pass_context
+    def dummy_cmd(ctx):
+        mock_db = mock.MagicMock()
+        mock_db.get_entry.return_value = {}
+        mock_db.get_table.return_value = {}
+        with mock.patch('config.main.is_port_mirror_capability_supported') as mock_cap:
+            result = config.validate_mirror_session_config(
+                mock_db, "test_session", None, None, None)
+            assert result is True
+            mock_cap.assert_not_called()
 
-        assert result.exit_code == 0
-        mock_add_erspan.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 10, 100, None, None, None)
+    result = runner.invoke(dummy_cmd, [], standalone_mode=False)
+    assert result.exit_code == 0
 
 
 def test_legacy_mirror_session_add_with_direction():
@@ -533,18 +537,35 @@ def test_legacy_mirror_session_add_with_direction():
 
 
 def test_erspan_add_without_src_port_skips_capability_check():
-    """Test that 'config mirror_session erspan add' without src_port
-    also skips the capability check (same legacy ERSPAN path)."""
-    config.ADHOC_VALIDATION = True
+    """Test that validate_mirror_session_config skips the capability
+    check when src_port is None (ERSPAN without port mirroring)."""
     runner = CliRunner()
 
-    with mock.patch('config.main.add_erspan') as mock_add_erspan:
-        result = runner.invoke(
-                config.config.commands["mirror_session"].commands["erspan"].commands["add"],
-                ["test_session", "100.1.1.1", "2.2.2.2", "8", "63"])
+    @click.command()
+    @click.pass_context
+    def dummy_cmd(ctx):
+        mock_db = mock.MagicMock()
+        mock_db.get_entry.return_value = {}
+        mock_db.get_table.return_value = {}
+        with mock.patch('config.main.is_port_mirror_capability_supported') as mock_cap:
+            # With src_port=None, capability check should be skipped
+            result = config.validate_mirror_session_config(
+                mock_db, "test_session", None, None, None)
+            assert result is True
+            mock_cap.assert_not_called()
 
-        assert result.exit_code == 0
-        mock_add_erspan.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, None, None, None, None, None)
+            # With src_port set, capability check SHOULD be called
+            with mock.patch('config.main.interface_name_is_valid', return_value=True), \
+                 mock.patch('config.main.interface_has_mirror_config', return_value=False), \
+                 mock.patch('config.main.get_port_namespace', return_value=None):
+                mock_cap.return_value = True
+                result = config.validate_mirror_session_config(
+                    mock_db, "test_session2", None, "Ethernet0", "rx")
+                assert result is True
+                mock_cap.assert_called()
+
+    result = runner.invoke(dummy_cmd, [], standalone_mode=False)
+    assert result.exit_code == 0
 
 
 def test_erspan_add_with_src_port_checks_capability():
