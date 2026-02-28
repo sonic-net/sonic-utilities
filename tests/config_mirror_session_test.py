@@ -454,7 +454,22 @@ def test_mirror_session_capability_function():
         result = config.is_port_mirror_capability_supported(None)
         assert result is False
 
-    # Test 3: Test with no capability support
+    # Test 3: Test with None returned from STATE_DB (keys not populated by orchagent)
+    with mock.patch('config.main.SonicV2Connector') as mock_connector:
+        mock_instance = mock.Mock()
+        mock_connector.return_value = mock_instance
+        mock_instance.connect.return_value = None
+
+        # orchagent doesn't populate these keys, so get() returns None
+        mock_instance.get.return_value = None
+
+        # All directions should fail since None != "true"
+        assert config.is_port_mirror_capability_supported("rx") is False
+        assert config.is_port_mirror_capability_supported("tx") is False
+        assert config.is_port_mirror_capability_supported("both") is False
+        assert config.is_port_mirror_capability_supported(None) is False
+
+    # Test 4: Test with no capability support
     with mock.patch('config.main.SonicV2Connector') as mock_connector:
         mock_instance = mock.Mock()
         mock_connector.return_value = mock_instance
@@ -473,3 +488,58 @@ def test_mirror_session_capability_function():
         assert config.is_port_mirror_capability_supported("tx") is False
         assert config.is_port_mirror_capability_supported("both") is False
         assert config.is_port_mirror_capability_supported(None) is False
+
+
+def test_legacy_mirror_session_add_skips_capability_check():
+    """Test that legacy 'config mirror_session add' (no src_port) skips
+    the port mirror capability check, fixing issue #4318.
+
+    The legacy ERSPAN command doesn't use port-based mirroring, so
+    validate_mirror_session_config should not check PORT_*_MIRROR_CAPABLE
+    when src_port is None.
+    """
+    config.ADHOC_VALIDATION = True
+    runner = CliRunner()
+
+    with mock.patch('config.main.add_erspan') as mock_add_erspan:
+        # Even though we don't mock is_port_mirror_capability_supported,
+        # the legacy add command should succeed because it has no src_port
+        # and the capability check should be skipped entirely.
+        result = runner.invoke(
+                config.config.commands["mirror_session"].commands["add"],
+                ["test_session", "100.1.1.1", "2.2.2.2", "8", "63", "10", "100"])
+
+        assert result.exit_code == 0
+        mock_add_erspan.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 10, 100, None)
+
+
+def test_erspan_add_without_src_port_skips_capability_check():
+    """Test that 'config mirror_session erspan add' without src_port
+    also skips the capability check (same legacy ERSPAN path)."""
+    config.ADHOC_VALIDATION = True
+    runner = CliRunner()
+
+    with mock.patch('config.main.add_erspan') as mock_add_erspan:
+        result = runner.invoke(
+                config.config.commands["mirror_session"].commands["erspan"].commands["add"],
+                ["test_session", "100.1.1.1", "2.2.2.2", "8", "63"])
+
+        assert result.exit_code == 0
+        mock_add_erspan.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, None, None, None, None, None)
+
+
+def test_erspan_add_with_src_port_checks_capability():
+    """Test that 'config mirror_session erspan add' WITH src_port
+    still performs the capability check."""
+    config.ADHOC_VALIDATION = True
+    runner = CliRunner()
+
+    with mock.patch('config.main.is_port_mirror_capability_supported') as mock_capability:
+        mock_capability.return_value = False
+
+        result = runner.invoke(
+                config.config.commands["mirror_session"].commands["erspan"].commands["add"],
+                ["test_session", "100.1.1.1", "2.2.2.2", "8", "63", "10", "100", "Ethernet0", "rx"])
+
+        assert result.exit_code != 0
+        assert "Error: Port mirror direction 'rx' is not supported by the ASIC" in result.output

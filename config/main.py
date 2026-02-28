@@ -1217,13 +1217,15 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
         if direction not in ['rx', 'tx', 'both']:
             ctx.fail("Error: Direction {} is invalid".format(direction))
 
-    # Check port mirror capability before allowing configuration
-    # If direction is provided, check the specific direction
-
-    for ns in namespace_set:
-        if not is_port_mirror_capability_supported(direction, namespace=ns):
-            ctx.fail("Error: Port mirror direction '{}' is not supported by the ASIC".format(
-                direction if direction else 'both'))
+    # Check port mirror capability before allowing configuration.
+    # Only check when src_port is specified (port-based mirroring).
+    # Legacy ERSPAN sessions without src_port don't use port-based mirroring
+    # and should not be subject to the capability check.
+    if src_port:
+        for ns in namespace_set:
+            if not is_port_mirror_capability_supported(direction, namespace=ns):
+                ctx.fail("Error: Port mirror direction '{}' is not supported by the ASIC".format(
+                    direction if direction else 'both'))
 
     return True
 
