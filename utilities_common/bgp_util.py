@@ -333,10 +333,10 @@ def display_bgp_summary(bgp_summary, af):
 
     '''
 
-    # "Neighbor" is a known typo,
+    # "Neighbhor" is a known typo,
     # but fix it will impact lots of automation scripts that the community users may have developed for years
     # for now, let's keep it as it is.
-    headers = ["Neighbor", "V", "AS", "MsgRcvd", "MsgSent", "TblVer",
+    headers = ["Neighbhor", "V", "AS", "MsgRcvd", "MsgSent", "TblVer",
                "InQ", "OutQ", "Up/Down", "State/PfxRcd", "NeighborName"]
 
     try:
