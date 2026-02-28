@@ -533,7 +533,8 @@ def test_legacy_mirror_session_add_with_direction():
                 ["test_session", "100.1.1.1", "2.2.2.2", "8", "63", "10", "100", "Ethernet0", "rx"])
 
         assert result.exit_code == 0
-        mock_add_erspan.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 10, 100, None, "Ethernet0", "rx")
+        mock_add_erspan.assert_called_with(
+                "test_session", "100.1.1.1", "2.2.2.2", 8, 63, 10, 100, None, "Ethernet0", "rx")
 
 
 def test_erspan_add_without_src_port_skips_capability_check():
