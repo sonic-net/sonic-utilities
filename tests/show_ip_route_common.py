@@ -111,7 +111,7 @@ Codes: K - kernel route, C - connected, S - static, R - RIP,
        F - PBR, f - OpenFabric,
        > - selected route, * - FIB route, q - queued route, r - rejected route
 
-C>*10.3.0.4/31 (blackhole)(vrf 2, PortChannel1014, inactive (recursive) 2d22h02m
+C>*10.3.0.4/31 (blackhole) (vrf 2, PortChannel1014) inactive (recursive) 2d22h02m
 C>*10.5.0.4/31 (ICMP unreachable) inactive 2d22h02m
 C>*10.5.0.8/31 (ICMP admin-prohibited) inactive onlink, src 10.2.3.4 2d22h02m
 C> 10.6.0.8/31 inactive 2d22h02m
