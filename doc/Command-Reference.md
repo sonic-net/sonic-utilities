@@ -6254,6 +6254,7 @@ This sub-section explains the following list of configuration on the interfaces.
 11) mpls - To add or remove MPLS operation for the interface
 12) loopback-action - to set action for packet that ingress and gets routed on the same IP interface
 13) link-training - to set interface link-training mode
+14) damping - to set link event damping configuration on an interface
 
 From 201904 release onwards, the “config interface” command syntax is changed and the format is as follows:
 
@@ -6862,6 +6863,80 @@ This command is used for setting link-training mode of a interface.
   admin@sonic:~$ sudo config interface link-training Ethernet0 on
   admin@sonic:~$ sudo config interface link-training Ethernet0 off
   ```
+
+**config interface damping <...> (Versions >= 202311)**
+
+This sub-section contains the config commands that are supported for configuring link event damping on an interface.
+ - Link event damping algorithm.
+ - Link event damping configuration.
+
+***config interface damping algo (Versions >= 202311)***
+
+ This command is used to configure link event damping algorithm on an interface.
+
+- Usage
+    ```
+    config interface damping algo --help
+    Usage: config interface damping algo [OPTIONS] <interface_name> <algo_type>
+
+      Set link event damping algorithm
+
+    Options:
+      -h, -?, --help  Show this message and exit.
+    ```
+    Currently link event damping supports `aied` (Additive Increase Exponential Decrease) algorithm, so expected algo value is either to set `aied` or disable the algorithm using `disabled` value.
+
+- Example
+
+  To set `aied` algorithm:
+    ```
+    config interface damping algo Ethernet20 aied
+    ```
+
+  To disable the link event damping algorithm:
+    ```
+    config interface damping algo Ethernet20 disabled
+    ```
+
+***config interface damping aied-param (Versions >= 202311***
+
+This command is used to configure link event damping AIED parameters on an interface.
+
+- Usage
+    ```
+    config interface damping aied-param --help
+    Usage: config interface damping aied-param [OPTIONS] <interface_name>
+
+      Set AIED link event damping configuration
+
+    Options:
+      --max-suppress-time INTEGER   Set max suppress time in ms
+      --decay-half-life INTEGER     Set decay half life in ms
+      --suppress-threshold INTEGER  Set suppress threshold
+      --reuse-threshold INTEGER     Set reuse threshold
+      --flap-penalty INTEGER        Set flap penalty
+      -h, -?, --help                Show this message and exit.
+
+    ```
+
+  One or more AIED link event damping config params can be configured at a time.
+
+- Examples
+
+  Set all the config parameters:
+    ```
+    config interface damping aied-param Ethernet20 --suppress-threshold 1200 --decay-half-life 15000 --max-suppress-time 30000 --flap-penalty 1000 --reuse-threshold 1000
+    ```
+
+  Set only flap penalty:
+    ```
+    config interface damping aied-param Ethernet20 --flap-penalty 500
+    ```
+
+  Set suppress threshold and reuse threshold:
+    ```
+    config interface damping aied-param Ethernet20 --suppress-threshold 1500 --reuse-threshold 1100
+    ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#interfaces)
 
