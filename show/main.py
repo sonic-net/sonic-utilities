@@ -2277,8 +2277,7 @@ def tacacs():
     tacplus = {
         'global': {
             'auth_type': 'pap (default)',
-            'timeout': '5 (default)',
-            'passkey': '<EMPTY_STRING> (default)'
+            'timeout': '5 (default)'
         }
     }
     if 'global' in data:
@@ -2307,8 +2306,7 @@ def radius(db):
         'global': {
             'auth_type': 'pap (default)',
             'retransmit': '3 (default)',
-            'timeout': '5 (default)',
-            'passkey': '<EMPTY_STRING> (default)'
+            'timeout': '5 (default)'
         }
     }
     if 'global' in data:
