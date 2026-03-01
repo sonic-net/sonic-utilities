@@ -1133,12 +1133,17 @@ def interface_has_mirror_config(ctx, mirror_table, dst_port, src_port, direction
             for port in src_port.split(","):
                 if 'dst_port' in v and v['dst_port'] == port:
                     ctx.fail("Error: Source Interface {} already has mirror config".format(port))
-                if 'src_port' in v and re.search(port,v['src_port']):
-                    if check_mirror_direction_config(v, direction):
-                        ctx.fail("Error: Source Interface {} already has mirror config in same direction".format(port))
+                if 'src_port' in v:
+                    for p in v['src_port'].split(","):
+                        if port == p and check_mirror_direction_config(v, direction):
+                            ctx.fail("Error: Source Interface {} already has mirror config in same direction".format(port))
         if dst_port:
-            if ('dst_port' in v and v['dst_port'] == dst_port) or ('src_port' in v and re.search(dst_port,v['src_port'])):
+            if ('dst_port' in v and v['dst_port'] == dst_port):
                 ctx.fail("Error: Destination Interface {} already has mirror config".format(dst_port))
+            if ('src_port' in v):
+                for port in v['src_port'].split(","):
+                    if(dst_port == port):
+                        ctx.fail("Error: Destination Interface {} already has mirror config".format(dst_port))
 
     return False
 
