@@ -1145,24 +1145,25 @@ def interface_has_mirror_config(ctx, mirror_table, dst_port, src_port, direction
 
 def is_port_mirror_capability_supported(direction, namespace=None):
     """ Check if port mirror capability is supported for the given direction """
+    # ERSPAN sessions have direction=None; PORT_INGRESS/EGRESS_MIRROR_CAPABLE only applies
+    # to SPAN (port mirror) sessions. Skip the capability check for ERSPAN.
+    if not direction:
+        return True
+
     state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
     state_db.connect(state_db.STATE_DB, False)
     entry_name = "SWITCH_CAPABILITY|switch"
 
-    # If no direction is specified, check both ingress and egress capabilities
-    if not direction:
-        ingress_supported = state_db.get(state_db.STATE_DB, entry_name, "PORT_INGRESS_MIRROR_CAPABLE")
-        egress_supported = state_db.get(state_db.STATE_DB, entry_name, "PORT_EGRESS_MIRROR_CAPABLE")
-        return ingress_supported == "true" and egress_supported == "true"
-
     if direction in ['rx', 'both']:
         ingress_supported = state_db.get(state_db.STATE_DB, entry_name, "PORT_INGRESS_MIRROR_CAPABLE")
-        if ingress_supported != "true":
+        # Treat absent key (None) as supported for backward compatibility
+        if ingress_supported is not None and ingress_supported != "true":
             return False
 
     if direction in ['tx', 'both']:
         egress_supported = state_db.get(state_db.STATE_DB, entry_name, "PORT_EGRESS_MIRROR_CAPABLE")
-        if egress_supported != "true":
+        # Treat absent key (None) as supported for backward compatibility
+        if egress_supported is not None and egress_supported != "true":
             return False
 
     return True

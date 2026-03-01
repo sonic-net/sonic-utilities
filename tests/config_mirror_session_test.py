@@ -450,9 +450,9 @@ def test_mirror_session_capability_function():
         result = config.is_port_mirror_capability_supported("both")
         assert result is False
 
-        # Test no direction (should fail)
+        # Test no direction (ERSPAN) - should always return True regardless of STATE_DB
         result = config.is_port_mirror_capability_supported(None)
-        assert result is False
+        assert result is True
 
     # Test 3: Test with no capability support
     with mock.patch('config.main.SonicV2Connector') as mock_connector:
@@ -468,8 +468,24 @@ def test_mirror_session_capability_function():
             ("SWITCH_CAPABILITY|switch", "PORT_EGRESS_MIRROR_CAPABLE"): "false"
         }.get((entry, field), "false")
 
-        # All directions should fail
+        # SPAN directions should fail when explicitly set to "false"
         assert config.is_port_mirror_capability_supported("rx") is False
         assert config.is_port_mirror_capability_supported("tx") is False
         assert config.is_port_mirror_capability_supported("both") is False
-        assert config.is_port_mirror_capability_supported(None) is False
+        # ERSPAN (direction=None) always returns True - no capability check
+        assert config.is_port_mirror_capability_supported(None) is True
+
+    # Test 4: Test with absent capability keys (None returned from STATE_DB)
+    with mock.patch('config.main.SonicV2Connector') as mock_connector:
+        mock_instance = mock.Mock()
+        mock_connector.return_value = mock_instance
+        mock_instance.connect.return_value = None
+
+        # Simulate keys absent from STATE_DB (returns None)
+        mock_instance.get.return_value = None
+
+        # All directions should return True (backward compatibility: absent = supported)
+        assert config.is_port_mirror_capability_supported("rx") is True
+        assert config.is_port_mirror_capability_supported("tx") is True
+        assert config.is_port_mirror_capability_supported("both") is True
+        assert config.is_port_mirror_capability_supported(None) is True
