@@ -226,14 +226,14 @@ class PfcwdCli(object):
         ).get('POLL_INTERVAL')
 
         current_ns = self.multi_asic.current_namespace
-        asic_namesapce = \
+        asic_namespace = \
             "" if current_ns is None or current_ns == "" else " on {}".format(
                 current_ns
             )
         if poll_interval is not None:
             click.echo(
                 "Changed polling interval to {}ms{}".format(
-                    poll_interval, asic_namesapce
+                    poll_interval, asic_namespace
                 )
             )
 
@@ -243,7 +243,7 @@ class PfcwdCli(object):
 
         if big_red_switch is not None:
             click.echo("BIG_RED_SWITCH status is {}{}".format(
-                big_red_switch, asic_namesapce
+                big_red_switch, asic_namespace
             ))
 
         self.table += table
