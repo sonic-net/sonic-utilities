@@ -1144,26 +1144,27 @@ def interface_has_mirror_config(ctx, mirror_table, dst_port, src_port, direction
 
 
 def is_port_mirror_capability_supported(direction, namespace=None):
-    """ Check if port mirror capability is supported for the given direction """
-    # ERSPAN sessions have direction=None; PORT_INGRESS/EGRESS_MIRROR_CAPABLE only applies
-    # to SPAN (port mirror) sessions. Skip the capability check for ERSPAN.
-    if not direction:
-        return True
+    """ Check if port mirror capability is supported for the given direction.
 
+    PORT_INGRESS_MIRROR_CAPABLE / PORT_EGRESS_MIRROR_CAPABLE only apply to SPAN
+    (port mirror) sessions. Callers should not invoke this for ERSPAN sessions.
+    Absent STATE_DB keys (None) are treated as supported for backward compatibility
+    with platforms that do not populate the SWITCH_CAPABILITY table.
+    """
     state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
     state_db.connect(state_db.STATE_DB, False)
     entry_name = "SWITCH_CAPABILITY|switch"
 
-    if direction in ['rx', 'both']:
-        ingress_supported = state_db.get(state_db.STATE_DB, entry_name, "PORT_INGRESS_MIRROR_CAPABLE")
-        # Treat absent key (None) as supported for backward compatibility
-        if ingress_supported is not None and ingress_supported != "true":
-            return False
+    directions_to_check = []
+    if not direction or direction in ['rx', 'both']:
+        directions_to_check.append("PORT_INGRESS_MIRROR_CAPABLE")
+    if not direction or direction in ['tx', 'both']:
+        directions_to_check.append("PORT_EGRESS_MIRROR_CAPABLE")
 
-    if direction in ['tx', 'both']:
-        egress_supported = state_db.get(state_db.STATE_DB, entry_name, "PORT_EGRESS_MIRROR_CAPABLE")
-        # Treat absent key (None) as supported for backward compatibility
-        if egress_supported is not None and egress_supported != "true":
+    for capability_key in directions_to_check:
+        value = state_db.get(state_db.STATE_DB, entry_name, capability_key)
+        # Treat absent key (None) as supported; only reject explicit "false"
+        if value is not None and value != "true":
             return False
 
     return True
@@ -1218,13 +1219,15 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
         if direction not in ['rx', 'tx', 'both']:
             ctx.fail("Error: Direction {} is invalid".format(direction))
 
-    # Check port mirror capability before allowing configuration
-    # If direction is provided, check the specific direction
-
-    for ns in namespace_set:
-        if not is_port_mirror_capability_supported(direction, namespace=ns):
-            ctx.fail("Error: Port mirror direction '{}' is not supported by the ASIC".format(
-                direction if direction else 'both'))
+    # Check port mirror capability before allowing configuration.
+    # ERSPAN sessions (dst_port=None) use src/dst IPs, not ports; the
+    # PORT_INGRESS/EGRESS_MIRROR_CAPABLE flags only apply to SPAN sessions.
+    is_erspan = dst_port is None
+    if not is_erspan:
+        for ns in namespace_set:
+            if not is_port_mirror_capability_supported(direction, namespace=ns):
+                ctx.fail("Error: Port mirror direction '{}' is not supported by the ASIC".format(
+                    direction if direction else 'both'))
 
     return True
 

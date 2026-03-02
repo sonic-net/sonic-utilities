@@ -390,6 +390,18 @@ def test_mirror_session_capability_checking():
         assert result.exit_code != 0
         assert "Error: Port mirror direction 'both' is not supported by the ASIC" in result.output
 
+    # Test 2: ERSPAN sessions bypass capability check even when capability returns False
+    with mock.patch('config.main.is_port_mirror_capability_supported') as mock_capability:
+        mock_capability.return_value = False
+
+        result = runner.invoke(
+                config.config.commands["mirror_session"].commands["erspan"].commands["add"],
+                ["test_erspan", "1.1.1.1", "2.2.2.2", "8", "64", "0x88be"])
+
+        # ERSPAN should not be blocked by port mirror capability
+        assert "is not supported by the ASIC" not in result.output
+        mock_capability.assert_not_called()
+
 
 def test_mirror_session_capability_function():
     """Test the is_port_mirror_capability_supported function directly"""
@@ -450,9 +462,9 @@ def test_mirror_session_capability_function():
         result = config.is_port_mirror_capability_supported("both")
         assert result is False
 
-        # Test no direction (ERSPAN) - should always return True regardless of STATE_DB
+        # Test no direction (checks both ingress and egress)
         result = config.is_port_mirror_capability_supported(None)
-        assert result is True
+        assert result is False  # egress is "false", so fails
 
     # Test 3: Test with no capability support
     with mock.patch('config.main.SonicV2Connector') as mock_connector:
@@ -472,8 +484,8 @@ def test_mirror_session_capability_function():
         assert config.is_port_mirror_capability_supported("rx") is False
         assert config.is_port_mirror_capability_supported("tx") is False
         assert config.is_port_mirror_capability_supported("both") is False
-        # ERSPAN (direction=None) always returns True - no capability check
-        assert config.is_port_mirror_capability_supported(None) is True
+        # direction=None checks both; both are "false" so fails
+        assert config.is_port_mirror_capability_supported(None) is False
 
     # Test 4: Test with absent capability keys (None returned from STATE_DB)
     with mock.patch('config.main.SonicV2Connector') as mock_connector:
