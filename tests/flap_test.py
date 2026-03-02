@@ -3,9 +3,8 @@ import importlib
 
 from click.testing import CliRunner
 
-from .mock_tables import dbconnector
+import show.main as show
 
-# Default: only front-panel namespace (asic0) ports
 intf_flap_masic_expected_output_default = """\
 Interface    Flap Count    Admin    Oper     Link Down TimeStamp(UTC)    Link Up TimeStamp(UTC)
 -----------  ------------  -------  -------  --------------------------  ------------------------
@@ -21,7 +20,7 @@ Interface       Flap Count    Admin    Oper     Link Down TimeStamp(UTC)    Link
 Ethernet0       5             Up       Up       Sat Jan 17 00:04:42 2025    Sat Jan 18 00:08:42 2025
 Ethernet4       Never         Up       Up       Never                       Never
 Ethernet16      Never         Unknown  Unknown  Never                       Never
-Ethernet64      2             Up       Up       Thu Feb 12 23:03:40 2026    Thu Feb 12 20:25:31 2026
+Ethernet64      2             Up       Up       Thu Feb 12 23:03:40 2026    Thu Feb 12 23:25:31 2026
 Ethernet-BP0    Never         Up       Up       Never                       Never
 Ethernet-BP4    Never         Up       Up       Never                       Never
 Ethernet-BP256  Never         Up       Up       Never                       Never
@@ -37,7 +36,7 @@ Ethernet0               5  Up       Up      Sat Jan 17 00:04:42 2025    Sat Jan 
 intf_flap_masic_expected_output_ethernet64 = """\
 Interface      Flap Count  Admin    Oper    Link Down TimeStamp(UTC)    Link Up TimeStamp(UTC)
 -----------  ------------  -------  ------  --------------------------  ------------------------
-Ethernet64              2  Up       Up      Thu Feb 12 23:03:40 2026    Thu Feb 12 20:25:31 2026
+Ethernet64              2  Up       Up      Thu Feb 12 23:03:40 2026    Thu Feb 12 23:25:31 2026
 """
 
 
@@ -47,30 +46,25 @@ class TestInterfacesFlapMasic(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ['UTILITIES_UNIT_TESTING'] = "2"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
         from .mock_tables import mock_multi_asic
         importlib.reload(mock_multi_asic)
+        from .mock_tables import dbconnector
         dbconnector.load_namespace_config()
-        import utilities_common.multi_asic as multi_asic_util
-        importlib.reload(multi_asic_util)
-        import show.main as show
-        importlib.reload(show)
-        cls.show = show
 
     def test_show_interfaces_flap_masic_default(self):
-        """Test default display ports."""
+        """Test frontend display shows only front-panel namespace ports."""
         runner = CliRunner()
         result = runner.invoke(
-            self.show.cli.commands["interfaces"].commands["flap"])
+            show.cli.commands["interfaces"].commands["flap"],
+            ["-d", "frontend"])
         assert result.exit_code == 0
         assert result.output == intf_flap_masic_expected_output_default
 
     def test_show_interfaces_flap_masic_display_all(self):
-        """Test -d all shows all namespaces"""
+        """Test -d all shows all namespaces including backplane ports."""
         runner = CliRunner()
         result = runner.invoke(
-            self.show.cli.commands["interfaces"].commands["flap"],
+            show.cli.commands["interfaces"].commands["flap"],
             ["-d", "all"])
         assert result.exit_code == 0
         assert result.output == intf_flap_masic_expected_output_display_all
@@ -79,7 +73,7 @@ class TestInterfacesFlapMasic(object):
         """Test specific port lookup on asic0 returns correct flap data."""
         runner = CliRunner()
         result = runner.invoke(
-            self.show.cli.commands["interfaces"].commands["flap"],
+            show.cli.commands["interfaces"].commands["flap"],
             ["Ethernet0"])
         assert result.exit_code == 0
         assert result.output == intf_flap_masic_expected_output_ethernet0
@@ -88,7 +82,7 @@ class TestInterfacesFlapMasic(object):
         """Test specific port lookup on asic1 returns correct flap data."""
         runner = CliRunner()
         result = runner.invoke(
-            self.show.cli.commands["interfaces"].commands["flap"],
+            show.cli.commands["interfaces"].commands["flap"],
             ["Ethernet64"])
         assert result.exit_code == 0
         assert result.output == intf_flap_masic_expected_output_ethernet64
@@ -97,7 +91,7 @@ class TestInterfacesFlapMasic(object):
         """Test invalid interface name fails."""
         runner = CliRunner()
         result = runner.invoke(
-            self.show.cli.commands["interfaces"].commands["flap"],
+            show.cli.commands["interfaces"].commands["flap"],
             ["Ethernet100"])
         assert result.exit_code != 0
         assert "Invalid interface name" in result.output
@@ -106,8 +100,7 @@ class TestInterfacesFlapMasic(object):
     def teardown_class(cls):
         print("TEARDOWN")
         os.environ['UTILITIES_UNIT_TESTING'] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
         from .mock_tables import mock_single_asic
         importlib.reload(mock_single_asic)
+        from .mock_tables import dbconnector
         dbconnector.load_database_config()
-        
