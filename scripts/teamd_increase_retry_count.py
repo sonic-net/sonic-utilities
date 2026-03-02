@@ -4,6 +4,9 @@ import subprocess
 import json
 from pyroute2 import netns
 from scapy.config import conf
+# Fixes delayed import when we have a lot of routes installed
+conf.route_autoload = False
+conf.route6_autoload = False
 import os
 import re
 import sys
