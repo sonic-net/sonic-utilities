@@ -1703,6 +1703,45 @@ collect_marvell_prestera() {
 }
 
 ###############################################################################
+# Get the BCM Asic from SAI to decide the Asic family
+# Globals:
+#  None
+# Arguments:
+#  None
+# Returns:
+#  DNX Asic fmaily
+###############################################################################
+get_bcm_dnx_family() {
+    trap 'handle_error $? $LINENO' ERR
+    local cmd=""
+    if [[ ( "$NUM_ASICS" > 1 ) ]]; then
+        for (( i=0; i<$NUM_ASICS; i++ ))
+        do
+            #Assuming all the asics are of same dnx family
+            cmd=$(bcmcmd -n $i 'show unit')
+            break
+        done
+    else
+        cmd=$(bcmcmd 'show unit')
+    fi
+
+    local asic=$(echo "$cmd" | grep -oP "chip\s+\K\w+")
+    dnx_chip=$asic
+    if [[ "$asic" == *"_"* ]]; then
+       dnx_chip="${asic%%_*}"
+    fi
+    dnx_family=""
+    if [[ $dnx_chip =~ "BCM8885" ]]  || [[ $dnx_chip =~ "BCM8869" ]]; then
+        dnx_family="dnx2"
+    elif [[ $dnx_chip =~ "BCM8886" ]] || [[ $dnx_chip =~ "BCM8887" ]]  || [[ $dnx_chip =~ "BCM8889" ]]; then
+          dnx_family="dnx3"
+    elif [[ $dnx_chip =~ "BCM9945" ]] || [[ $dnx_chip =~ "BCM9943" ]]; then
+          dnx_family="dnx4"
+    fi
+    echo "$dnx_family"
+}
+
+###############################################################################
 # Collect Broadcom specific information
 # Globals:
 #  None
@@ -1786,28 +1825,42 @@ collect_broadcom() {
           do
             save_bcmcmd_all_ns "\"field group info group=$fp_grp\"" "fpgroup$fp_grp.info.summary"
           done
-          save_bcmcmd_all_ns "\"dbal table dump table=IPV4_UNICAST_PRIVATE_LPM_FORWARD\"" "l3.ipv4.lpm.summary"
-          save_bcmcmd_all_ns "\"dbal table dump table=IPV6_UNICAST_PRIVATE_LPM_FORWARD\"" "l3.ipv6.lpm.summary"
-          save_bcmcmd_all_ns "\"dbal table dump table=IPV4_UNICAST_PRIVATE_HOST\"" "l3.ipv4.host.summary"
-          save_bcmcmd_all_ns "\"dbal table dump table=IPV6_UNICAST_PRIVATE_HOST\"" "l3.ipv6.host.summary"
-          save_bcmcmd_all_ns "\"dbal table dump table=SUPER_FEC_1ST_HIERARCHY\"" "l3.egress.fec.summary"
+          dnx_family=$(get_bcm_dnx_family)
+          if [[ $dnx_family == "dnx2" ]]; then
+             save_bcmcmd_all_ns "\"dbal table dump table=IPV4_UNICAST_PRIVATE_LPM_FORWARD\"" "l3.ipv4.lpm.summary"
+             save_bcmcmd_all_ns "\"dbal table dump table=IPV6_UNICAST_PRIVATE_LPM_FORWARD\"" "l3.ipv6.lpm.summary"
+             save_bcmcmd_all_ns "\"dbal table dump table=IPV4_UNICAST_PRIVATE_HOST\"" "l3.ipv4.host.summary"
+             save_bcmcmd_all_ns "\"dbal table dump table=IPV6_UNICAST_PRIVATE_HOST\"" "l3.ipv6.host.summary"
+             save_bcmcmd_all_ns "\"dbal table dump table=SUPER_FEC_1ST_HIERARCHY\"" "l3.egress.fec.summary"
+             save_bcmcmd_all_ns "\"dbal table dump table=ING_VSI_INFO_DB\"" "ing.vsi.summary"
+             save_bcmcmd_all_ns "\"dbal table dump table=LOCAL_SBC_IN_LIF_MATCH_INFO_SW\"" "sbc.inlif.summary"
+          else
+             #In DNX3 and DNX4, IPV4_FORWARD_LPM_FIB has both LPM and host routes
+             save_bcmcmd_all_ns "\"dbal table dump table=IPV4_FORWARD_LPM_FIB\"" "l3.ipv4.lpm.summary"
+             save_bcmcmd_all_ns "\"dbal table dump table=IPV6_FORWARD_LPM_FIB\"" "l3.ipv6.lpm.summary"
+             save_bcmcmd_all_ns "\"dbal table dump table=SUPER_FEC_X_HIERARCHY\"" "l3.egress.fec.summary"
+             save_bcmcmd_all_ns "\"dbal table dump table=VSI_INFO_DB\"" "ing.vsi.summary"
+             save_bcmcmd_all_ns "\"dbal table dump table=LOCAL_DPC_IN_LIF_MATCH_INFO_SW\"" "dbc.inlif.summary"
+          fi
+
           save_bcmcmd_all_ns "\"dbal table dump table=ECMP_TABLE\"" "ecmp.table.summary"
           save_bcmcmd_all_ns "\"dbal table dump table=ECMP_GROUP_PROFILE_TABLE\"" "ecmp.group.summary"
-          save_bcmcmd_all_ns "\"dbal table dump table=ING_VSI_INFO_DB\"" "ing.vsi.summary"
           save_bcmcmd_all_ns "\"dbal table dump table=L3_MY_MAC_DA_PREFIXES\"" "l3.mymac.summary"
           save_bcmcmd_all_ns "\"dbal table dump table=INGRESS_VLAN_MEMBERSHIP\"" "ing.vlan.summary"
-          save_bcmcmd_all_ns "\"dbal table dump table=LOCAL_SBC_IN_LIF_MATCH_INFO_SW\"" "sbc.inlif.summary"
           save_bcmcmd_all_ns "\"dbal table dump table=SNIF_COMMAND_TABLE\"" "snif.command.summary"
           save_bcmcmd_all_ns "\"port mgmt dump full\"" "port.mgmt.summary"
           save_bcmcmd_all_ns "\"tm lag\"" "tm.lag.summary"
           save_bcmcmd_all_ns "\"pp info fec\"" "pp.fec.summary"
           save_bcmcmd_all_ns "\"nif sts\"" "nif.sts.summary"
+          save_bcmcmd_all_ns "\"nif tx show\"" "nif.tx.summary"
+          save_bcmcmd_all_ns "\"nif rx show\"" "nif.rx.summary"
           save_bcmcmd_all_ns "\"tm ing q map\"" "tm.ingress.qmap.summary"
           save_bcmcmd_all_ns "\"tm ing vsq resources\"" "tm.ing.vsq.res.summary"
           for group in {a..f}
           do
              save_bcmcmd_all_ns "\"tm ing vsq non g=$group\"" "tm.ing.vsq.non.group-$group.summary"
           done
+          save_bcmcmd_all_ns "\"tm egr congestion\"" "tm.egr.cong.summary"
        fi
        save_bcmcmd_all_ns "\"port pm info\"" "port.pm.summary"
        save_bcmcmd_all_ns "\"conf show\"" "conf.show.summary"
