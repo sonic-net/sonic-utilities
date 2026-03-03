@@ -77,32 +77,25 @@ def test_mirror_session_add():
                 config.config.commands["mirror_session"].commands["add"],
                 ["test_session", "100.1.1.1", "2.2.2.2", "8", "63", "10", "100"])
 
-        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 10, 100, None, None, None)
+        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 10, 100, None)
 
         result = runner.invoke(
                 config.config.commands["mirror_session"].commands["add"],
                 ["test_session", "100.1.1.1", "2.2.2.2", "8", "63", "0X1234", "100"])
 
-        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 0x1234, 100, None, None, None)
+        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 0x1234, 100, None)
 
         result = runner.invoke(
                 config.config.commands["mirror_session"].commands["add"],
                 ["test_session", "100.1.1.1", "2.2.2.2", "8", "63", "0", "0"])
 
-        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 0, 0, None, None, None)
+        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 0, 0, None)
 
         result = runner.invoke(
                 config.config.commands["mirror_session"].commands["add"],
                 ["test_session", "100.1.1.1", "2.2.2.2", "8", "63"])
 
-        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, None, None, None, None, None)
-
-        # Test with src_port and direction
-        result = runner.invoke(
-                config.config.commands["mirror_session"].commands["add"],
-                ["test_session", "100.1.1.1", "2.2.2.2", "8", "63", "10", "100", "Ethernet0", "rx"])
-
-        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 10, 100, None, "Ethernet0", "rx")
+        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, None, None, None)
 
 
 def test_mirror_session_erspan_add():
@@ -500,8 +493,8 @@ def test_mirror_session_capability_function():
 
 def test_legacy_mirror_session_add_skips_capability_check():
     """Test that validate_mirror_session_config does NOT call
-    is_port_mirror_capability_supported when src_port is None,
-    fixing issue #4318.
+    is_port_mirror_capability_supported when direction is None,
+    fixing issue #4318. ERSPAN sessions have direction=None.
     """
     runner = CliRunner()
 
@@ -512,50 +505,13 @@ def test_legacy_mirror_session_add_skips_capability_check():
         mock_db.get_entry.return_value = {}
         mock_db.get_table.return_value = {}
         with mock.patch('config.main.is_port_mirror_capability_supported') as mock_cap:
+            # direction=None → capability check should be skipped
             result = config.validate_mirror_session_config(
                 mock_db, "test_session", None, None, None)
             assert result is True
             mock_cap.assert_not_called()
 
-    result = runner.invoke(dummy_cmd, [], standalone_mode=False)
-    assert result.exit_code == 0
-
-
-def test_legacy_mirror_session_add_with_direction():
-    """Test that legacy 'config mirror_session add' accepts the new
-    src_port and direction parameters."""
-    config.ADHOC_VALIDATION = True
-    runner = CliRunner()
-
-    with mock.patch('config.main.add_erspan') as mock_add_erspan:
-        result = runner.invoke(
-                config.config.commands["mirror_session"].commands["add"],
-                ["test_session", "100.1.1.1", "2.2.2.2", "8", "63", "10", "100", "Ethernet0", "rx"])
-
-        assert result.exit_code == 0
-        mock_add_erspan.assert_called_with(
-                "test_session", "100.1.1.1", "2.2.2.2", 8, 63, 10, 100, None, "Ethernet0", "rx")
-
-
-def test_erspan_add_without_src_port_skips_capability_check():
-    """Test that validate_mirror_session_config skips the capability
-    check when src_port is None (ERSPAN without port mirroring)."""
-    runner = CliRunner()
-
-    @click.command()
-    @click.pass_context
-    def dummy_cmd(ctx):
-        mock_db = mock.MagicMock()
-        mock_db.get_entry.return_value = {}
-        mock_db.get_table.return_value = {}
-        with mock.patch('config.main.is_port_mirror_capability_supported') as mock_cap:
-            # With src_port=None, capability check should be skipped
-            result = config.validate_mirror_session_config(
-                mock_db, "test_session", None, None, None)
-            assert result is True
-            mock_cap.assert_not_called()
-
-            # With src_port set, capability check SHOULD be called
+            # direction='rx' → capability check SHOULD be called
             with mock.patch('config.main.interface_name_is_valid', return_value=True), \
                  mock.patch('config.main.interface_has_mirror_config', return_value=False), \
                  mock.patch('config.main.get_port_namespace', return_value=None):

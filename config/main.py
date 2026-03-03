@@ -1218,10 +1218,9 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
             ctx.fail("Error: Direction {} is invalid".format(direction))
 
     # Check port mirror capability before allowing configuration.
-    # Only check when src_port is specified (port-based mirroring).
-    # Legacy ERSPAN sessions without src_port don't use port-based mirroring
-    # and should not be subject to the capability check.
-    if src_port:
+    # Only check when direction is specified (port-based mirroring).
+    # Legacy ERSPAN sessions have direction=None and don't need this check.
+    if direction:
         for ns in namespace_set:
             if not is_port_mirror_capability_supported(direction, namespace=ns):
                 ctx.fail("Error: Port mirror direction '{}' is not supported by the ASIC".format(
@@ -3155,12 +3154,10 @@ def mirror_session():
 @click.argument('ttl', metavar='<ttl>', type=TTL_RANGE, required=True)
 @click.argument('gre_type', metavar='[gre_type]', callback=validate_gre_type, required=False)
 @click.argument('queue', metavar='[queue]', type=QUEUE_RANGE, required=False)
-@click.argument('src_port', metavar='[src_port]', required=False)
-@click.argument('direction', metavar='[direction]', required=False)
 @click.option('--policer')
-def add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port, direction):
+def add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer):
     """ Add ERSPAN mirror session.(Legacy support) """
-    add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port, direction)
+    add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer)
 
 @mirror_session.group(cls=clicommon.AbbreviationGroup, name='erspan')
 @click.pass_context
