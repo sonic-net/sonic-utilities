@@ -249,6 +249,36 @@ def test_show_version():
     result = runner.invoke(show.cli.commands["version"])
     assert "SONiC OS Version: 11" in result.output
 
+
+@patch('sonic_py_common.device_info.get_sonic_version_info', MagicMock(return_value={
+        "build_version": "",
+        "commit_id": "46415d112",
+        "build_date": "Mon Mar  2 03:02:39 UTC 2026",
+        "built_by": "test@host",
+        "sonic_os_version": "13"}))
+@patch('sonic_py_common.device_info.get_platform_info', MagicMock(return_value={
+        "platform": "x86_64-kvm_x86_64-r0",
+        "hwsku": "Force10-S6000",
+        "asic_type": "vs",
+        "asic_count": 1}))
+@patch('sonic_py_common.device_info.get_chassis_info', MagicMock(return_value={
+        "serial": "N/A",
+        "model": "N/A",
+        "revision": "N/A"}))
+@patch('subprocess.Popen', MagicMock(side_effect=side_effect_subprocess_popen))
+def test_show_version_missing_fields():
+    """Test show version doesn't crash when debian_version and kernel_version are missing.
+
+    docker-sonic-vs containers may not have these fields in sonic_version.yml
+    since they are only populated during full image builds.
+    """
+    runner = CliRunner()
+    result = runner.invoke(show.cli.commands["version"])
+    assert result.exit_code == 0, "show version crashed: {}".format(result.output)
+    assert "Distribution: Debian N/A" in result.output
+    assert "Kernel:" in result.output
+    assert "Build commit: 46415d112" in result.output
+
 class TestShowAcl(object):
     def setup(self):
         print('SETUP')
