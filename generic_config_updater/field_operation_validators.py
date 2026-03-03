@@ -6,7 +6,10 @@ import subprocess
 from sonic_py_common import device_info
 from .gu_common import GenericConfigUpdaterError
 from swsscommon import swsscommon
-from utilities_common.constants import DEFAULT_SUPPORTED_FECS_LIST
+
+# Default FEC modes when STATE_DB does not advertise supported_fecs for a port.
+# Kept local to avoid pulling utilities_common into the GCU wheel.
+DEFAULT_SUPPORTED_FECS_LIST = ['rs', 'fc', 'none', 'auto']
 
 STATE_DB_NAME = 'STATE_DB'
 REDIS_TIMEOUT_MSECS = 0

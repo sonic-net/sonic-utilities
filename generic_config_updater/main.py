@@ -6,7 +6,6 @@ This module is the **single source of truth** for all apply-patch logic.
 It is consumed by:
 
 * ``config apply-patch``  (config/main.py — thin entry-point / standalone redirect)
-* ``scripts/gcu.py``      (raw-script entry point on the host)
 * ``gcu-standalone``       (console_scripts entry point installed by the GCU wheel
                             into the GCU container virtual-env at
                             /opt/sonic/gcu/current/bin/gcu-standalone)
