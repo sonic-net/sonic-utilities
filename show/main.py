@@ -280,6 +280,18 @@ def is_gearbox_configured():
     else:
         return False
 
+def check_vlan_exists(config_db, vlan_id):
+    """
+    Check if the specified VLAN ID exists in the VLAN table of CONFIG_DB.
+    """
+    vlan_key = "Vlan" + str(vlan_id)
+    
+    try:
+        vlan_data = config_db.get_entry('VLAN', vlan_key)
+        return bool(vlan_data)
+    except Exception as e:
+        return False
+
 CONTEXT_SETTINGS = dict(help_option_names=['-h', '--help', '-?'])
 
 #
@@ -2906,6 +2918,10 @@ def igmp_snooping_vlan(vlan_id):
     cfg_l2mc_table = config_db.get_table('L2MC')
     if not cfg_l2mc_table:
         return
+    vlan_exists = check_vlan_exists(config_db, vlan_id)
+    if not vlan_exists:
+        return
+
 
     app_db = SonicV2Connector(host='127.0.0.1')
     app_db.connect(app_db.APPL_DB) 
@@ -2916,7 +2932,7 @@ def igmp_snooping_vlan(vlan_id):
         for key in app_l2mc_mrouter_keys:
             list_items = key.split(':')
 
-            mrouter_vlan_id = str(list_items[1].strip("Vlan"))
+            mrouter_vlan_id = str(list_items[1].removeprefix("Vlan"))
             mrouter_interface = list_items[2]
 
             if mrouter_vlan_id in app_mrouter_dict:
@@ -3017,6 +3033,8 @@ def igmp_snooping_vlan():
     """ IGMP snooping all"""
     config_db = ConfigDBConnector()
     config_db.connect()
+    app_db = SonicV2Connector(host='127.0.0.1') 
+    app_db.connect(app_db.APPL_DB) 
     vlan_dict = {}
 
     l2mc_keys = config_db.get_keys('L2MC')
@@ -3024,7 +3042,7 @@ def igmp_snooping_vlan():
         return
 
     for key in l2mc_keys:
-        vlan_id = str(key.strip("Vlan"))
+        vlan_id = str(key.removeprefix("Vlan"))
         if vlan_id in vlan_dict:
             vlan_dict[vlan_id].append(vlan_id)
         else:
@@ -3043,9 +3061,7 @@ def igmp_snooping_vlan():
                 'ipv4-optimised-multicast-flood' : 'false',
                 'ipv4-link-local-groups-suppression' : 'false',
                 }  
-     
-        app_db = SonicV2Connector(host='127.0.0.1') 
-        app_db.connect(app_db.APPL_DB)  
+
         app_l2mc_mrouter_keys = app_db.keys(app_db.APPL_DB, 'L2MC_MROUTER_TABLE:*:V4') 
      
         if app_l2mc_mrouter_keys: 
@@ -3053,7 +3069,7 @@ def igmp_snooping_vlan():
             for key in app_l2mc_mrouter_keys: 
                 list_items = key.split(':') 
      
-                mrouter_vlan_id = str(list_items[1].strip("Vlan")) 
+                mrouter_vlan_id = str(list_items[1].removeprefix("Vlan")) 
                 mrouter_interface = list_items[2] 
      
                 if mrouter_vlan_id in app_mrouter_dict: 
@@ -3070,6 +3086,10 @@ def igmp_snooping_vlan():
      
         if not data: 
             continue 
+
+        vlan_exists = check_vlan_exists(config_db, vlan_id)
+        if not vlan_exists:
+            continue
 
         if data.get('enabled', "").lower() != "true":
             continue
@@ -3179,7 +3199,10 @@ def igmp_snooping_groups_all():
 
     for key in vlan_table_keys:
         list_items = key.split('|')
-        vlan_id = str(list_items[0].strip("Vlan"))
+        vlan_id = str(list_items[0].removeprefix("Vlan"))
+        vlan_exists = check_vlan_exists(config_db, vlan_id)
+        if not vlan_exists:
+            continue
         if vlan_id in vlan_dict:
             vlan_dict[vlan_id].append(vlan_id)
         else:
@@ -3188,7 +3211,7 @@ def igmp_snooping_groups_all():
     for key in member_table_keys:
         list_items = key.split(':')
 
-        vlan_id = str(list_items[1].strip("Vlan"))
+        vlan_id = str(list_items[1].removeprefix("Vlan"))
         if len(list_items) == 5:
             source = list_items[2]
             group = list_items[3]
@@ -3206,7 +3229,7 @@ def igmp_snooping_groups_all():
     for key in mrouter_table_keys:
         list_items = key.split(':')
 
-        vlan_id = str(list_items[1].strip("Vlan"))
+        vlan_id = str(list_items[1].removeprefix("Vlan"))
         member = list_items[2]
         mrouter_type = app_db.get(app_db.APPL_DB, key, 'type')
 
@@ -3254,21 +3277,27 @@ def igmp_snooping_groups_all():
 @click.argument('vlan-id', required=True)
 def igmp_snooping_groups_vlan(vlan_id):
     """ IGMP snooping groups vlan <vlan-id>"""
+    config_db = ConfigDBConnector()
+    config_db.connect()
     app_db = SonicV2Connector(host='127.0.0.1')
     app_db.connect(app_db.APPL_DB) 
+
+    vlan_exists = check_vlan_exists(config_db, vlan_id)
+    if not vlan_exists:
+        return
 
     member_type_dict = {}
     member_table_dict = {}
     mrouter_type_dict = {}
     mrouter_table_dict = {}
 
-    member_table_keys = app_db.keys(app_db.APPL_DB, 'L2MC_MEMBER_TABLE:*')
-    mrouter_table_keys = app_db.keys(app_db.APPL_DB, 'L2MC_MROUTER_TABLE:*:V4') 
+    member_table_keys = app_db.keys(app_db.APPL_DB, 'L2MC_MEMBER_TABLE:*')  or []
+    mrouter_table_keys = app_db.keys(app_db.APPL_DB, 'L2MC_MROUTER_TABLE:*:V4')  or []
     
     for key in member_table_keys:
         list_items = key.split(':')
 
-        vlan_id_val = str(list_items[1].strip("Vlan"))
+        vlan_id_val = str(list_items[1].removeprefix("Vlan"))
         if vlan_id_val != vlan_id:
             continue
 
@@ -3290,7 +3319,7 @@ def igmp_snooping_groups_vlan(vlan_id):
     for key in mrouter_table_keys:
         list_items = key.split(':')
 
-        vlan_id_val = str(list_items[1].strip("Vlan"))
+        vlan_id_val = str(list_items[1].removeprefix("Vlan"))
         if vlan_id_val != vlan_id:
             continue
         member = list_items[2]
@@ -3362,6 +3391,10 @@ def mld_snooping_vlan(vlan_id):
     cfg_l2mc_table = config_db.get_table('MLD_L2MC')
     if not cfg_l2mc_table:
         return
+    
+    vlan_exists = check_vlan_exists(config_db, vlan_id)
+    if not vlan_exists:
+        return
 
     app_db = SonicV2Connector(host='127.0.0.1')
     app_db.connect(app_db.APPL_DB) 
@@ -3372,7 +3405,7 @@ def mld_snooping_vlan(vlan_id):
         for key in app_l2mc_mrouter_keys:
             list_items = key.split(':')
 
-            mrouter_vlan_id = str(list_items[1].strip("Vlan"))
+            mrouter_vlan_id = str(list_items[1].removeprefix("Vlan"))
             mrouter_interface = list_items[2]
 
             if mrouter_vlan_id in app_mrouter_dict:
@@ -3470,6 +3503,8 @@ def mld_snooping_vlan():
     """ MLD snooping all"""
     config_db = ConfigDBConnector()
     config_db.connect()
+    app_db = SonicV2Connector(host='127.0.0.1') 
+    app_db.connect(app_db.APPL_DB)  
     vlan_dict = {}
 
     l2mc_keys = config_db.get_keys('MLD_L2MC')
@@ -3477,7 +3512,7 @@ def mld_snooping_vlan():
         return
 
     for key in l2mc_keys:
-        vlan_id = str(key.strip("Vlan"))
+        vlan_id = str(key.removeprefix("Vlan"))
         if vlan_id in vlan_dict:
             vlan_dict[vlan_id].append(vlan_id)
         else:
@@ -3496,9 +3531,7 @@ def mld_snooping_vlan():
                 'ipv6-optimised-multicast-flood' : 'false',
                 'ipv6-link-local-groups-suppression' : 'false',
                 }  
-     
-        app_db = SonicV2Connector(host='127.0.0.1') 
-        app_db.connect(app_db.APPL_DB)  
+
         app_l2mc_mrouter_keys = app_db.keys(app_db.APPL_DB, 'L2MC_MROUTER_TABLE:*:V6') 
      
         if app_l2mc_mrouter_keys: 
@@ -3506,7 +3539,7 @@ def mld_snooping_vlan():
             for key in app_l2mc_mrouter_keys: 
                 list_items = key.split(':') 
      
-                mrouter_vlan_id = str(list_items[1].strip("Vlan")) 
+                mrouter_vlan_id = str(list_items[1].removeprefix("Vlan")) 
                 mrouter_interface = list_items[2] 
      
                 if mrouter_vlan_id in app_mrouter_dict: 
@@ -3522,10 +3555,14 @@ def mld_snooping_vlan():
 
      
         if not data: 
-            return 
+            continue 
+
+        vlan_exists = check_vlan_exists(config_db, vlan_id)
+        if not vlan_exists:
+            continue
         
         if data.get('enabled', "").lower() != "true":
-            return
+            continue
 
         enabled_statue = data.get('enabled') 
         if enabled_statue == 'false': 
@@ -3628,12 +3665,15 @@ def mld_snooping_groups_all():
     if not vlan_table_keys:
         return
 
-    member_table_keys = app_db.keys(app_db.APPL_DB, 'L2MC_MEMBER_TABLE:*')
-    mrouter_table_keys = app_db.keys(app_db.APPL_DB, 'L2MC_MROUTER_TABLE:*:V6')
+    member_table_keys = app_db.keys(app_db.APPL_DB, 'L2MC_MEMBER_TABLE:*') or []
+    mrouter_table_keys = app_db.keys(app_db.APPL_DB, 'L2MC_MROUTER_TABLE:*:V6') or []
 
     for key in vlan_table_keys:
         list_items = key.split('|')
-        vlan_id = str(list_items[0].strip("Vlan"))
+        vlan_id = str(list_items[0].removeprefix("Vlan"))
+        vlan_exists = check_vlan_exists(config_db, vlan_id)
+        if not vlan_exists:
+            continue
         if vlan_id in vlan_dict:
             vlan_dict[vlan_id].append(vlan_id)
         else:
@@ -3642,7 +3682,7 @@ def mld_snooping_groups_all():
     for key in member_table_keys:
         list_items = key.split(':')
 
-        vlan_id = str(list_items[1].strip("Vlan"))
+        vlan_id = str(list_items[1].removeprefix("Vlan"))
         if len(list_items) == 19:
             source = ":".join(list_items[2:10])
             group = ":".join(list_items[10:18])
@@ -3663,7 +3703,7 @@ def mld_snooping_groups_all():
     for key in mrouter_table_keys:
         list_items = key.split(':')
 
-        vlan_id = str(list_items[1].strip("Vlan"))
+        vlan_id = str(list_items[1].removeprefix("Vlan"))
         member = list_items[2]
         mrouter_type = app_db.get(app_db.APPL_DB, key, 'type')
 
@@ -3711,8 +3751,14 @@ def mld_snooping_groups_all():
 @click.argument('vlan-id', required=True)
 def mld_snooping_groups_vlan(vlan_id):
     """ MLD snooping groups vlan <vlan-id>"""
+    config_db = ConfigDBConnector()
+    config_db.connect()
     app_db = SonicV2Connector(host='127.0.0.1')
     app_db.connect(app_db.APPL_DB) 
+
+    vlan_exists = check_vlan_exists(config_db, vlan_id)
+    if not vlan_exists:
+        return
 
     member_type_dict = {}
     member_table_dict = {}
@@ -3725,7 +3771,7 @@ def mld_snooping_groups_vlan(vlan_id):
     for key in member_table_keys:
         list_items = key.split(':')
 
-        vlan_id_val = str(list_items[1].strip("Vlan"))
+        vlan_id_val = str(list_items[1].removeprefix("Vlan"))
         if vlan_id_val != vlan_id:
             continue
 
@@ -3751,7 +3797,7 @@ def mld_snooping_groups_vlan(vlan_id):
     for key in mrouter_table_keys:
         list_items = key.split(':')
 
-        vlan_id_val = str(list_items[1].strip("Vlan"))
+        vlan_id_val = str(list_items[1].removeprefix("Vlan"))
         if vlan_id_val != vlan_id:
             continue
         member = list_items[2]

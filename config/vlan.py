@@ -146,20 +146,6 @@ def del_vlan(db, vid, multiple, no_restart_dhcp_relay):
         vid_list.append(int(vid))
 
     config_db = ValidatedConfigDBConnector(db.cfgdb)
-
-    keys = config_db.get_keys("L2MC")
-
-    for key in keys:
-        vlan_key = key
-        if vlan_key == f"Vlan{vid}" :
-            ctx.fail(f"Vlan{vid} cannot be removed. First IGMP Snooping disable.")
-
-    keys = config_db.get_keys("MLD_L2MC")
-
-    for key in keys:
-        vlan_key = key
-        if vlan_key == f"Vlan{vid}" :
-            ctx.fail(f"Vlan{vid} cannot be removed. First MLD Snooping disable.")
     
     if ADHOC_VALIDATION:
         for vid in vid_list:
@@ -170,6 +156,14 @@ def del_vlan(db, vid, multiple, no_restart_dhcp_relay):
 
             # Multiple VLANs needs to be referenced
             vlan = 'Vlan{}'.format(vid)
+
+            l2mc_keys = config_db.get_keys("L2MC")
+            if vlan in l2mc_keys:
+                ctx.fail(f"Vlan{vid} cannot be removed: IGMP Snooping is enabled (disable first)")
+            
+            mld_l2mc_keys = config_db.get_keys("MLD_L2MC")
+            if vlan in mld_l2mc_keys:
+                ctx.fail(f"Vlan{vid} cannot be removed: MLD Snooping is enabled (disable first)")
 
             # Multiple VLANs needs to be checked
             if no_restart_dhcp_relay:
@@ -384,20 +378,6 @@ def del_vlan_member(db, vid, port, multiple, except_flag):
 
     config_db = ValidatedConfigDBConnector(db.cfgdb)
 
-    keys = config_db.get_keys("L2MC_STATIC_MEMBER")
-
-    for key in keys:
-        vlan_key, _, port_key = key
-        if vlan_key == f"Vlan{vid}" and port_key == port:
-            ctx.fail(f"Port {port} cannot be removed from Vlan{vid}. Please remove all associated static Layer 2 multicast group entries first.")
-    
-    keys = config_db.get_keys("MLD_L2MC_STATIC_MEMBER")
-
-    for key in keys:
-        vlan_key, _, port_key = key
-        if vlan_key == f"Vlan{vid}" and port_key == port:
-            ctx.fail(f"Port {port} cannot be removed from Vlan{vid}. Please remove all associated static Layer 2 multicast group entries first.")
-
     if ADHOC_VALIDATION:
         for vid in vid_list:
             log.log_info("'vlan member del {} {}' executing...".format(vid, port))
@@ -406,6 +386,18 @@ def del_vlan_member(db, vid, port, multiple, except_flag):
                 ctx.fail("Invalid VLAN ID {} (2-4094)".format(vid))
 
             vlan = 'Vlan{}'.format(vid)
+
+            l2mc_keys = config_db.get_keys("L2MC_STATIC_MEMBER")
+            for key in l2mc_keys:
+                l2mc_vlan, _, l2mc_port = key
+                if l2mc_vlan == vlan and l2mc_port == port:
+                    ctx.fail(f"Batch delete failed: Port {port} cannot be removed from Vlan{vid}. Please remove all associated static Layer 2 multicast group entries first.")
+            
+            mld_keys = config_db.get_keys("MLD_L2MC_STATIC_MEMBER")
+            for key in mld_keys:
+                mld_vlan, _, mld_port = key
+                if mld_vlan == vlan and mld_port == port:
+                    ctx.fail(f"Batch delete failed: Port {port} cannot be removed from Vlan{vid}. Please remove all associated static Layer 2 multicast group entries first.")
 
             if clicommon.check_if_vlanid_exist(db.cfgdb, vlan) is False:
                 ctx.fail("{} does not exist".format(vlan))
