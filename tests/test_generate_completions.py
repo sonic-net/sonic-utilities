@@ -2,7 +2,6 @@
 import os
 import sys
 import tempfile
-import pytest
 from unittest.mock import patch, MagicMock
 
 # Add sonic-utilities-data to path so we can import generate_completions
