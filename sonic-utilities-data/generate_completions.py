@@ -4,8 +4,22 @@ import argparse
 from importlib import import_module
 import importlib.metadata
 from click import BaseCommand
-from click.shell_completion import get_completion_class
 import os.path
+
+# Click 8 outputs completions as "type,value" per line. Use bash_complete and
+# parse to extract only the value; redirect stderr so help text is not used.
+BASH_COMPLETION_TEMPLATE = """_%(func)s() {
+    COMPREPLY=( $( env COMP_WORDS="${COMP_WORDS[*]}" \\
+                   COMP_CWORD=$COMP_CWORD \\
+                   %(complete_var)s=bash_complete $1 2>/dev/null | \\
+                   while IFS= read -r line; do
+                     [[ "$line" == *,* ]] && echo "${line##*,}"
+                   done ) )
+    return 0
+}
+
+complete -F _%(func)s -o default %(prog)s;
+"""
 
 
 def generate_completions(output_dir):
@@ -21,14 +35,13 @@ def generate_completions(output_dir):
             module = import_module(module_path)  # nosem
             function = vars(module).get(function_name)
             if isinstance(function, BaseCommand):
-                comp_cls = get_completion_class("bash")
-                content = (
-                        comp_cls(
-                                 function, {}, prog, f"_{prog.upper()}_COMPLETE"
-                                 )
-                        .source()
-                        .replace("\r\n", "\n")
-                        )
+                complete_var = "_{}_COMPLETE".format(prog.upper().replace("-", "_"))
+                func = prog.replace("-", "_") + "_completion"
+                content = BASH_COMPLETION_TEMPLATE % {
+                    "func": func,
+                    "complete_var": complete_var,
+                    "prog": prog,
+                }
                 with open(os.path.join(output_dir, prog), "w", newline="") as f:
                     f.write(content)
         except Exception:
