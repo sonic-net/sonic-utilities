@@ -2908,6 +2908,41 @@
      },
      "COPP_TRAP|neighbor_miss": {
         "NULL":"NULL"
-     }
+     },
+     "LOCAL_USER|admin": {
+        "role": "administrator",
+        "enabled": "true",
+        "password_hash": "$y$j9T$salt$adminhash",
+        "ssh_keys": [
+            "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC7vbqnKMi0K9ZKdRTlIHwjlAzck+SQtDufzQg4mf0b1q2nKMi0K9ZKdRTlIHwjlAzck+SQtDufzQg4mf0b1q2 admin@sonic"
+        ]
+    },
+    "LOCAL_USER|operator1": {
+        "role": "operator",
+        "enabled": "false",
+        "password_hash": "$y$j9T$salt$operatorhash",
+        "ssh_keys": []
+    },
+    "LOCAL_USER|testuser": {
+        "role": "operator",
+        "enabled": "true",
+        "password_hash": "$y$j9T$salt$testuserhash",
+        "ssh_keys": [
+            "ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQC7vbqnKMi0K9ZKdRTlIHwjlAzck+SQtDufzQg4mf0b1q2nKMi0K9ZKdRTlIHwjlAzck+SQtDufzQg4mf0b1q2 testuser@sonic",
+            "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIGNqKKYlELY2IdwjlAzck+SQtDufzQg4mf0b1q2nKMi0K9ZK testuser@laptop"
+        ]
+    },
+    "LOCAL_ROLE_SECURITY_POLICY|administrator": {
+        "max_login_attempts": "5",
+        "lockout_duration": "300",
+        "password_min_length": "8",
+        "password_complexity": "enabled"
+    },
+    "LOCAL_ROLE_SECURITY_POLICY|operator": {
+        "max_login_attempts": "3",
+        "lockout_duration": "600",
+        "password_min_length": "6",
+        "password_complexity": "disabled"
+    }
 
 }
