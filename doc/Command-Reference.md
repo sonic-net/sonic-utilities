@@ -5982,7 +5982,7 @@ The show interfaces flap command provides detailed insights into interface event
   Ethernet8            4035  Up       Up      Sat Feb 21 11:00:41 2026    Sat Feb 21 11:00:59 2026
   Ethernet16           4015  Up       Up      Sat Feb 21 11:01:23 2026    Sat Feb 21 11:01:41 2026
   ```
-- Example (to only display flap count for interface Ethernet0):
+- Example (to display interface on multi-ASIC platform):
   ```
   admin@sonic:~$ show interfaces flap Ethernet0
   Interface      Flap Count  Admin    Oper    Link Down TimeStamp(UTC)    Link Up TimeStamp(UTC)
