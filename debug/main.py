@@ -291,7 +291,7 @@ def IGMP_Snooping():
 @click.argument('log', metavar='<0-6>', required=True, type=click.IntRange(0, 6))
 def loglevel(log):
     """Set loglevel for L2MCD (0-6)"""
-    command = ['docker', 'exec', '-it','l2mcd', 'l2mcd_ctl', '-d', str(log)]
+    command = ['docker', 'exec', '-i','l2mcd', 'l2mcd_ctl', '-d', str(log)]
     run_command(command)
 
 

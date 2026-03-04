@@ -10184,7 +10184,7 @@ def igmp_snooping_qmr_interval(ctx, vid, qmr_time):
         ctx.fail("{} doesn't exist".format(vlan_name))
     l2mc_cfg = db.get_entry('L2MC', vlan_name)
     if not l2mc_cfg:
-        ctx.fail(f"{vlan_name} does not enable MLD Snooping.")
+        ctx.fail(f"{vlan_name} does not enable IGMP Snooping.")
     q_time = l2mc_cfg.get('query-interval')
     if q_time is None:
         q_time = 125
@@ -10211,7 +10211,7 @@ def igmp_snooping_q_interval(ctx, vid, q_time):
         ctx.fail("{} doesn't exist".format(vlan_name))
     l2mc_cfg = db.get_entry('L2MC', vlan_name)
     if not l2mc_cfg:
-        ctx.fail(f"{vlan_name} does not enable MLD Snooping.")
+        ctx.fail(f"{vlan_name} does not enable IGMP Snooping.")
     qmr_time = l2mc_cfg.get('query-max-response-time')
     if qmr_time is None:
         qmr_time = 10
@@ -10249,8 +10249,8 @@ def igmp_snooping_optimised_multicast_flood(ctx, vid, optimised_multicast_flood)
 @click.argument('link_local_groups_suppression', metavar='<enable|disable>', required=True)
 @click.argument('vid', metavar='<vlan>', required=True, type=int)
 @click.pass_context
-def igmp_snooping_optimised_multicast_flood(ctx, vid, link_local_groups_suppression):
-    """IGMP optimised multicast flood"""
+def igmp_snooping_link_local_groups_suppression(ctx, vid, link_local_groups_suppression):
+    """IGMP link local groups suppression"""
     db = ctx.obj['db']
     vlan_valid = clicommon.is_vlanid_in_range(int(vid))
     if vlan_valid == False:
@@ -10288,8 +10288,8 @@ def igmp_snooping_version(ctx, vid, version):
     db.mod_entry('L2MC', vlan_name, {'version': ver_name})
 
 @igmp_snooping.group('querier')
-@clicommon.pass_db
-def igmp_snooping_querier(config_db):
+@click.pass_context
+def igmp_snooping_querier(ctx):
     """Configure IGMP snooping  querier"""
     pass
 
@@ -10324,8 +10324,8 @@ def igmp_snooping_querier_disable(ctx, vid):
     db.mod_entry('L2MC', vlan_name, {'querier': 'false'})
 
 @igmp_snooping.group('fast-leave')
-@clicommon.pass_db
-def igmp_snooping_fast_leave(config_db):
+@click.pass_context
+def igmp_snooping_fast_leave(ctx):
     """Configure IGMP snooping fast-leave"""
     pass
 
@@ -10360,8 +10360,8 @@ def igmp_snooping_fast_leave_disable(ctx, vid):
     db.mod_entry('L2MC', vlan_name, {'fast-leave': 'false'})
 
 @igmp_snooping.group('static-group')
-@clicommon.pass_db
-def igmp_snooping_static_group(config_db):
+@click.pass_context
+def igmp_snooping_static_group(ctx):
     """Configure IGMP snooping static-group"""
     pass
 
@@ -10401,7 +10401,7 @@ def igmp_snooping_static_add(ctx, vid, interface_name, ip_addr):
     if ip_address < ipaddress.IPv4Address("224.0.0.0") or ip_address > ipaddress.IPv4Address("239.255.255.255"):
         ctx.fail("IP address {} is outside the valid multicast range".format(str(ip_address)))
 
-    if ip_address < ipaddress.IPv4Address("224.0.0.0") or ip_address <= ipaddress.IPv4Address("224.0.0.255"):
+    if ip_address >= ipaddress.IPv4Address("224.0.0.0") and ip_address <= ipaddress.IPv4Address("224.0.0.255"):
         ctx.fail("IP address {} is reserved multicast".format(str(ip_address)))
     
     
@@ -10451,8 +10451,8 @@ def igmp_snooping_static_del(ctx, vid, interface_name, ip_addr):
     db.set_entry('L2MC_STATIC_MEMBER', static_group_mem_key, None)
 
 @igmp_snooping.group('mrouter')
-@clicommon.pass_db
-def igmp_snooping_mrouter(config_db):
+@click.pass_context
+def igmp_snooping_mrouter(ctx):
     """Configure IGMP snooping mrouter"""
     pass
 
@@ -10683,8 +10683,8 @@ def mld_snooping_q_interval(ctx, vid, q_time):
 @click.argument('link_local_groups_suppression', metavar='<enable|disable>', required=True)
 @click.argument('vid', metavar='<vlan>', required=True, type=int)
 @click.pass_context
-def mld_snooping_optimised_multicast_flood(ctx, vid, link_local_groups_suppression):
-    """MLD optimised multicast flood"""
+def mld_snooping_link_local_groups_suppression(ctx, vid, link_local_groups_suppression):
+    """MLD link local groups suppression"""
     db = ctx.obj['db']
     vlan_valid = clicommon.is_vlanid_in_range(int(vid))
     if vlan_valid == False:
@@ -10745,8 +10745,8 @@ def mld_snooping_version(ctx, vid, version):
     db.mod_entry('MLD_L2MC', vlan_name, {'version': ver_name})
 
 @mld_snooping.group('querier')
-@clicommon.pass_db
-def mld_snooping_querier(config_db):
+@click.pass_context
+def mld_snooping_querier(ctx):
     """Configure MLD snooping  querier"""
     pass
 
@@ -10781,16 +10781,16 @@ def mld_snooping_querier_disable(ctx, vid):
     db.mod_entry('MLD_L2MC', vlan_name, {'querier': 'false'})
 
 @mld_snooping.group('fast-leave')
-@clicommon.pass_db
-def mld_snooping_fast_leave(config_db):
-    """Configure IGMP snooping fast-leave"""
+@click.pass_context
+def mld_snooping_fast_leave(ctx):
+    """Configure MLD snooping fast-leave"""
     pass
 
 @mld_snooping_fast_leave.command('enable')
 @click.argument('vid', metavar='<vlan>', required=True, type=int)
 @click.pass_context
 def mld_snooping_fast_leave_enable(ctx, vid):
-    """Enable IGMP fast-leave for a VLAN"""
+    """Enable MLD fast-leave for a VLAN"""
     db = ctx.obj['db']
     vlan_valid = clicommon.is_vlanid_in_range(int(vid))
     if vlan_valid == False:
@@ -10805,7 +10805,7 @@ def mld_snooping_fast_leave_enable(ctx, vid):
 @click.argument('vid', metavar='<vlan>', required=True, type=int)
 @click.pass_context
 def mld_snooping_fast_leave_disable(ctx, vid):
-    """Disable IGMP fast-leave for a VLAN"""
+    """Disable MLD fast-leave for a VLAN"""
     db = ctx.obj['db']
     vlan_valid = clicommon.is_vlanid_in_range(int(vid))
     if vlan_valid == False:
@@ -10817,8 +10817,8 @@ def mld_snooping_fast_leave_disable(ctx, vid):
     db.mod_entry('MLD_L2MC', vlan_name, {'fast-leave': 'false'})
 
 @mld_snooping.group('static-group')
-@clicommon.pass_db
-def mld_snooping_static_group(config_db):
+@click.pass_context
+def mld_snooping_static_group(ctx):
     """Configure MLD snooping static-group"""
     pass
 
@@ -10933,8 +10933,8 @@ def mld_snooping_static_del(ctx, vid, interface_name, ip_addr):
     db.set_entry('MLD_L2MC_STATIC_MEMBER', static_group_mem_key, None)
 
 @mld_snooping.group('mrouter')
-@clicommon.pass_db
-def mld_snooping_mrouter(config_db):
+@click.pass_context
+def mld_snooping_mrouter(ctx):
     """Configure MLD snooping mrouter"""
     pass
 
