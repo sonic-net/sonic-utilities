@@ -6,6 +6,9 @@ import click
 import tabulate
 import json
 import utilities_common.cli as clicommon
+import utilities_common.multi_asic as multi_asic_util
+from sonic_py_common import multi_asic
+from utilities_common import constants
 
 from utilities_common.switch_hash import (
     CFG_SWITCH_HASH,
@@ -49,9 +52,10 @@ def format_attr_value(entry, attr):
     name="switch-hash",
     cls=clicommon.AliasedGroup
 )
-def SWITCH_HASH():
+@multi_asic_util.multi_asic_click_option_namespace
+@click.pass_context
+def SWITCH_HASH(ctx, namespace):
     """ Show switch hash feature configuration """
-
     pass
 
 
@@ -69,80 +73,96 @@ def SWITCH_HASH():
 def SWITCH_HASH_GLOBAL(ctx, db, json_format):
     """ Show switch hash global configuration """
 
-    header = [
-        "Hash",
-        "Configuration",
-    ]
-    body = []
+    namespace = ctx.parent.params['namespace']
+    ns_list = multi_asic.get_namespace_list(namespace)
 
-    sub_header = [
-        "Hash Field",
-        "Algorithm"
-    ]
-    ecmp_body = []
-    lag_body = []
+    for idx, ns in enumerate(ns_list):
+        cfgdb = db.cfgdb_clients.get(ns, db.cfgdb)
 
-    table = db.cfgdb.get_table(CFG_SWITCH_HASH)
-    entry = table.get(SW_HASH_KEY, {})
+        if multi_asic.is_multi_asic() and not namespace:
+            if idx > 0:
+                click.echo()
+            if ns != constants.DEFAULT_NAMESPACE:
+                click.echo("Namespace {}:".format(ns))
 
-    if not entry:
-        click.echo("No configuration is present in CONFIG DB")
-        ctx.exit(0)
+        header = [
+            "Hash",
+            "Configuration",
+        ]
+        body = []
 
-    if json_format:
-        json_dict = {
-            "ecmp": {
-                "hash_field": entry["ecmp_hash"] if "ecmp_hash" in entry else "N/A",
-                "algorithm": entry["ecmp_hash_algorithm"] if "ecmp_hash_algorithm" in entry else "N/A"
-            },
-            "lag": {
-                "hash_field": entry["lag_hash"] if "lag_hash" in entry else "N/A",
-                "algorithm": entry["lag_hash_algorithm"] if "lag_hash_algorithm" in entry else "N/A"
+        sub_header = [
+            "Hash Field",
+            "Algorithm"
+        ]
+        ecmp_body = []
+        lag_body = []
+
+        table = cfgdb.get_table(CFG_SWITCH_HASH)
+        entry = table.get(SW_HASH_KEY, {})
+
+        if not entry:
+            click.echo("No configuration is present in CONFIG DB")
+            if not multi_asic.is_multi_asic() or namespace:
+                ctx.exit(0)
+            continue
+
+        if json_format:
+            json_dict = {
+                "ecmp": {
+                    "hash_field": entry["ecmp_hash"] if "ecmp_hash" in entry else "N/A",
+                    "algorithm": entry["ecmp_hash_algorithm"] if "ecmp_hash_algorithm" in entry else "N/A"
+                },
+                "lag": {
+                    "hash_field": entry["lag_hash"] if "lag_hash" in entry else "N/A",
+                    "algorithm": entry["lag_hash_algorithm"] if "lag_hash_algorithm" in entry else "N/A"
+                }
             }
-        }
-        click.echo(json.dumps(json_dict, indent=4))
-        ctx.exit(0)
+            click.echo(json.dumps(json_dict, indent=4))
+            if not multi_asic.is_multi_asic() or namespace:
+                ctx.exit(0)
+            continue
 
-    ecmp_row = [
-        format_attr_value(
-            entry,
-            {
-                'name': 'ecmp_hash',
-                'is-leaf-list': True
-            }
-        ),
-        format_attr_value(
-            entry,
-            {
-                'name': 'ecmp_hash_algorithm',
-                'is-leaf-list': False
-            }
-        ),
-    ]
-    ecmp_body.append(ecmp_row)
+        ecmp_row = [
+            format_attr_value(
+                entry,
+                {
+                    'name': 'ecmp_hash',
+                    'is-leaf-list': True
+                }
+            ),
+            format_attr_value(
+                entry,
+                {
+                    'name': 'ecmp_hash_algorithm',
+                    'is-leaf-list': False
+                }
+            ),
+        ]
+        ecmp_body.append(ecmp_row)
 
-    lag_row = [
-        format_attr_value(
-            entry,
-            {
-                'name': 'lag_hash',
-                'is-leaf-list': True
-            }
-        ),
-        format_attr_value(
-            entry,
-            {
-                'name': 'lag_hash_algorithm',
-                'is-leaf-list': False
-            }
-        ),
-    ]
-    lag_body.append(lag_row)
+        lag_row = [
+            format_attr_value(
+                entry,
+                {
+                    'name': 'lag_hash',
+                    'is-leaf-list': True
+                }
+            ),
+            format_attr_value(
+                entry,
+                {
+                    'name': 'lag_hash_algorithm',
+                    'is-leaf-list': False
+                }
+            ),
+        ]
+        lag_body.append(lag_row)
 
-    body.append(["ECMP", tabulate.tabulate(ecmp_body, sub_header, "psql")])
-    body.append(["LAG", tabulate.tabulate(lag_body, sub_header, "psql")])
+        body.append(["ECMP", tabulate.tabulate(ecmp_body, sub_header, "psql")])
+        body.append(["LAG", tabulate.tabulate(lag_body, sub_header, "psql")])
 
-    click.echo(tabulate.tabulate(body, header, "grid"))
+        click.echo(tabulate.tabulate(body, header, "grid"))
 
 
 @SWITCH_HASH.command(
@@ -159,108 +179,144 @@ def SWITCH_HASH_GLOBAL(ctx, db, json_format):
 def SWITCH_HASH_CAPABILITIES(ctx, db, json_format):
     """ Show switch hash capabilities """
 
-    header = [
-        "Hash",
-        "Capabilities",
-    ]
-    body = []
+    namespace = ctx.parent.params['namespace']
+    ns_list = multi_asic.get_namespace_list(namespace)
 
-    sub_header = [
-        "Hash Field",
-        "Algorithm"
-    ]
-    ecmp_body = []
-    lag_body = []
+    for idx, ns in enumerate(ns_list):
+        state_db = db.db_clients.get(ns, db.db)
 
-    entry = db.db.get_all(db.db.STATE_DB, "{}|{}".format(STATE_SWITCH_CAPABILITY, SW_CAP_KEY))
+        if multi_asic.is_multi_asic() and not namespace:
+            if idx > 0:
+                click.echo()
+            if ns != constants.DEFAULT_NAMESPACE:
+                click.echo("Namespace {}:".format(ns))
 
-    if not entry:
-        ctx.fail("No data is present in STATE DB")
+        header = [
+            "Hash",
+            "Capabilities",
+        ]
+        body = []
 
-    entry.setdefault(SW_CAP_HASH_FIELD_LIST_KEY, 'N/A')
-    entry.setdefault(SW_CAP_ECMP_HASH_ALGORITHM_KEY, 'N/A')
-    entry.setdefault(SW_CAP_LAG_HASH_ALGORITHM_KEY, 'N/A')
-    entry.setdefault(SW_CAP_ECMP_HASH_CAPABLE_KEY, 'false')
-    entry.setdefault(SW_CAP_LAG_HASH_CAPABLE_KEY, 'false')
-    entry.setdefault(SW_CAP_ECMP_HASH_ALGORITHM_CAPABLE_KEY, 'false')
-    entry.setdefault(SW_CAP_LAG_HASH_ALGORITHM_CAPABLE_KEY, 'false')
+        sub_header = [
+            "Hash Field",
+            "Algorithm"
+        ]
+        ecmp_body = []
+        lag_body = []
 
-    if not entry[SW_CAP_HASH_FIELD_LIST_KEY]:
-        entry[SW_CAP_HASH_FIELD_LIST_KEY] = "no capabilities"
+        entry = state_db.get_all(state_db.STATE_DB, "{}|{}".format(STATE_SWITCH_CAPABILITY, SW_CAP_KEY))
 
-    if not entry[SW_CAP_ECMP_HASH_ALGORITHM_KEY]:
-        entry[SW_CAP_ECMP_HASH_ALGORITHM_KEY] = "no capabilities"
+        if not entry:
+            if not multi_asic.is_multi_asic() or namespace:
+                ctx.fail("No data is present in STATE DB")
+            continue
 
-    if not entry[SW_CAP_LAG_HASH_ALGORITHM_KEY]:
-        entry[SW_CAP_LAG_HASH_ALGORITHM_KEY] = "no capabilities"
+        entry.setdefault(SW_CAP_HASH_FIELD_LIST_KEY, 'N/A')
+        entry.setdefault(SW_CAP_ECMP_HASH_ALGORITHM_KEY, 'N/A')
+        entry.setdefault(SW_CAP_LAG_HASH_ALGORITHM_KEY, 'N/A')
+        entry.setdefault(SW_CAP_ECMP_HASH_CAPABLE_KEY, 'false')
+        entry.setdefault(SW_CAP_LAG_HASH_CAPABLE_KEY, 'false')
+        entry.setdefault(SW_CAP_ECMP_HASH_ALGORITHM_CAPABLE_KEY, 'false')
+        entry.setdefault(SW_CAP_LAG_HASH_ALGORITHM_CAPABLE_KEY, 'false')
 
-    if json_format:
-        if entry[SW_CAP_HASH_FIELD_LIST_KEY] not in ["N/A", "no capabilities"]:
-            entry[SW_CAP_HASH_FIELD_LIST_KEY] = entry[SW_CAP_HASH_FIELD_LIST_KEY].split(',')
+        if not entry[SW_CAP_HASH_FIELD_LIST_KEY]:
+            entry[SW_CAP_HASH_FIELD_LIST_KEY] = "no capabilities"
 
-        if entry[SW_CAP_ECMP_HASH_ALGORITHM_KEY] not in ["N/A", "no capabilities"]:
-            entry[SW_CAP_ECMP_HASH_ALGORITHM_KEY] = entry[SW_CAP_ECMP_HASH_ALGORITHM_KEY].split(',')
+        if not entry[SW_CAP_ECMP_HASH_ALGORITHM_KEY]:
+            entry[SW_CAP_ECMP_HASH_ALGORITHM_KEY] = "no capabilities"
 
-        if entry[SW_CAP_LAG_HASH_ALGORITHM_KEY] not in ["N/A", "no capabilities"]:
-            entry[SW_CAP_LAG_HASH_ALGORITHM_KEY] = entry[SW_CAP_LAG_HASH_ALGORITHM_KEY].split(',')
+        if not entry[SW_CAP_LAG_HASH_ALGORITHM_KEY]:
+            entry[SW_CAP_LAG_HASH_ALGORITHM_KEY] = "no capabilities"
 
-        json_dict = {
-            "ecmp": {
-                "hash_field": entry[SW_CAP_HASH_FIELD_LIST_KEY] if entry[SW_CAP_ECMP_HASH_CAPABLE_KEY] == 'true' else 'not supported',
-                "algorithm": entry[SW_CAP_ECMP_HASH_ALGORITHM_KEY] if entry[SW_CAP_ECMP_HASH_ALGORITHM_CAPABLE_KEY] == 'true' else 'not supported'
-            },
-            "lag": {
-                "hash_field": entry[SW_CAP_HASH_FIELD_LIST_KEY] if entry[SW_CAP_LAG_HASH_CAPABLE_KEY] == 'true' else 'not supported',
-                "algorithm": entry[SW_CAP_LAG_HASH_ALGORITHM_KEY] if entry[SW_CAP_LAG_HASH_ALGORITHM_CAPABLE_KEY] == 'true' else 'not supported'
+        if json_format:
+            if entry[SW_CAP_HASH_FIELD_LIST_KEY] not in ["N/A", "no capabilities"]:
+                entry[SW_CAP_HASH_FIELD_LIST_KEY] = entry[SW_CAP_HASH_FIELD_LIST_KEY].split(',')
+
+            if entry[SW_CAP_ECMP_HASH_ALGORITHM_KEY] not in ["N/A", "no capabilities"]:
+                entry[SW_CAP_ECMP_HASH_ALGORITHM_KEY] = entry[SW_CAP_ECMP_HASH_ALGORITHM_KEY].split(',')
+
+            if entry[SW_CAP_LAG_HASH_ALGORITHM_KEY] not in ["N/A", "no capabilities"]:
+                entry[SW_CAP_LAG_HASH_ALGORITHM_KEY] = entry[SW_CAP_LAG_HASH_ALGORITHM_KEY].split(',')
+
+            ecmp_hash_field = (
+                entry[SW_CAP_HASH_FIELD_LIST_KEY]
+                if entry[SW_CAP_ECMP_HASH_CAPABLE_KEY] == 'true'
+                else 'not supported'
+            )
+            ecmp_algorithm = (
+                entry[SW_CAP_ECMP_HASH_ALGORITHM_KEY]
+                if entry[SW_CAP_ECMP_HASH_ALGORITHM_CAPABLE_KEY] == 'true'
+                else 'not supported'
+            )
+            lag_hash_field = (
+                entry[SW_CAP_HASH_FIELD_LIST_KEY]
+                if entry[SW_CAP_LAG_HASH_CAPABLE_KEY] == 'true'
+                else 'not supported'
+            )
+            lag_algorithm = (
+                entry[SW_CAP_LAG_HASH_ALGORITHM_KEY]
+                if entry[SW_CAP_LAG_HASH_ALGORITHM_CAPABLE_KEY] == 'true'
+                else 'not supported'
+            )
+            json_dict = {
+                "ecmp": {
+                    "hash_field": ecmp_hash_field,
+                    "algorithm": ecmp_algorithm
+                },
+                "lag": {
+                    "hash_field": lag_hash_field,
+                    "algorithm": lag_algorithm
+                }
             }
-        }
-        click.echo(json.dumps(json_dict, indent=4))
-        ctx.exit(0)
+            click.echo(json.dumps(json_dict, indent=4))
+            if not multi_asic.is_multi_asic() or namespace:
+                ctx.exit(0)
+            continue
 
-    entry[SW_CAP_HASH_FIELD_LIST_KEY] = entry[SW_CAP_HASH_FIELD_LIST_KEY].split(',')
-    entry[SW_CAP_ECMP_HASH_ALGORITHM_KEY] = entry[SW_CAP_ECMP_HASH_ALGORITHM_KEY].split(',')
-    entry[SW_CAP_LAG_HASH_ALGORITHM_KEY] = entry[SW_CAP_LAG_HASH_ALGORITHM_KEY].split(',')
+        entry[SW_CAP_HASH_FIELD_LIST_KEY] = entry[SW_CAP_HASH_FIELD_LIST_KEY].split(',')
+        entry[SW_CAP_ECMP_HASH_ALGORITHM_KEY] = entry[SW_CAP_ECMP_HASH_ALGORITHM_KEY].split(',')
+        entry[SW_CAP_LAG_HASH_ALGORITHM_KEY] = entry[SW_CAP_LAG_HASH_ALGORITHM_KEY].split(',')
 
-    ecmp_row = [
-        format_attr_value(
-            entry,
-            {
-                'name': SW_CAP_HASH_FIELD_LIST_KEY,
-                'is-leaf-list': True
-            }
-        ) if entry[SW_CAP_ECMP_HASH_CAPABLE_KEY] == 'true' else 'not supported',
-        format_attr_value(
-            entry,
-            {
-                'name': SW_CAP_ECMP_HASH_ALGORITHM_KEY,
-                'is-leaf-list': True
-            }
-        ) if entry[SW_CAP_ECMP_HASH_ALGORITHM_CAPABLE_KEY] == 'true' else 'not supported',
-    ]
-    ecmp_body.append(ecmp_row)
+        ecmp_row = [
+            format_attr_value(
+                entry,
+                {
+                    'name': SW_CAP_HASH_FIELD_LIST_KEY,
+                    'is-leaf-list': True
+                }
+            ) if entry[SW_CAP_ECMP_HASH_CAPABLE_KEY] == 'true' else 'not supported',
+            format_attr_value(
+                entry,
+                {
+                    'name': SW_CAP_ECMP_HASH_ALGORITHM_KEY,
+                    'is-leaf-list': True
+                }
+            ) if entry[SW_CAP_ECMP_HASH_ALGORITHM_CAPABLE_KEY] == 'true' else 'not supported',
+        ]
+        ecmp_body.append(ecmp_row)
 
-    lag_row = [
-        format_attr_value(
-            entry,
-            {
-                'name': SW_CAP_HASH_FIELD_LIST_KEY,
-                'is-leaf-list': True
-            }
-        ) if entry[SW_CAP_LAG_HASH_CAPABLE_KEY] == 'true' else 'not supported',
-        format_attr_value(
-            entry,
-            {
-                'name': SW_CAP_LAG_HASH_ALGORITHM_KEY,
-                'is-leaf-list': True
-            }
-        ) if entry[SW_CAP_LAG_HASH_ALGORITHM_CAPABLE_KEY] == 'true' else 'not supported',
-    ]
-    lag_body.append(lag_row)
+        lag_row = [
+            format_attr_value(
+                entry,
+                {
+                    'name': SW_CAP_HASH_FIELD_LIST_KEY,
+                    'is-leaf-list': True
+                }
+            ) if entry[SW_CAP_LAG_HASH_CAPABLE_KEY] == 'true' else 'not supported',
+            format_attr_value(
+                entry,
+                {
+                    'name': SW_CAP_LAG_HASH_ALGORITHM_KEY,
+                    'is-leaf-list': True
+                }
+            ) if entry[SW_CAP_LAG_HASH_ALGORITHM_CAPABLE_KEY] == 'true' else 'not supported',
+        ]
+        lag_body.append(lag_row)
 
-    body.append(["ECMP", tabulate.tabulate(ecmp_body, sub_header, "psql")])
-    body.append(["LAG", tabulate.tabulate(lag_body, sub_header, "psql")])
+        body.append(["ECMP", tabulate.tabulate(ecmp_body, sub_header, "psql")])
+        body.append(["LAG", tabulate.tabulate(lag_body, sub_header, "psql")])
 
-    click.echo(tabulate.tabulate(body, header, "grid"))
+        click.echo(tabulate.tabulate(body, header, "grid"))
 
 
 def register(cli):

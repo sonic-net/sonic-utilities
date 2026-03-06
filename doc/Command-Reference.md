@@ -5218,11 +5218,17 @@ This command displays switch hash global configuration.
 
 - Usage:
   ```bash
-  show switch-hash global
+  show switch-hash global [--json]
+  show switch-hash -n <namespace> global [--json]
   ```
 
 - Options:
   - _-j,--json_: display in JSON format
+  - _-n,--namespace_: namespace name on multi-ASIC systems. Omit it to display all namespaces.
+
+- Note:
+  - On multi-ASIC systems, place _-n,--namespace_ before the sub-command. Without it, output is grouped by namespace.
+  - With _--json_ and no namespace on multi-ASIC systems, output is printed as one JSON block per namespace rather than a single JSON document.
 
 - Example:
   ```bash
@@ -5276,17 +5282,46 @@ This command displays switch hash global configuration.
   +--------+-------------------------------------+
   ```
 
+- Multi-ASIC Example:
+  ```bash
+  admin@sonic:~$ show switch-hash -n asic0 global
+  +--------+--------------------------------+
+  | Hash   | Configuration                  |
+  +========+================================+
+  | ECMP   | +--------------+-------------+ |
+  |        | | Hash Field   | Algorithm   | |
+  |        | |--------------+-------------| |
+  |        | | SRC_IP       | CRC         | |
+  |        | | DST_IP       |             | |
+  |        | +--------------+-------------+ |
+  +--------+--------------------------------+
+  | LAG    | +--------------+-------------+ |
+  |        | | Hash Field   | Algorithm   | |
+  |        | |--------------+-------------| |
+  |        | | SRC_MAC      | XOR         | |
+  |        | | DST_MAC      |             | |
+  |        | +--------------+-------------+ |
+  +--------+--------------------------------+
+  ```
+
 **show switch-hash capabilities**
 
 This command displays switch hash capabilities.
 
 - Usage:
   ```bash
-  show switch-hash capabilities
+  show switch-hash capabilities [--json]
+  show switch-hash -n <namespace> capabilities [--json]
   ```
 
 - Options:
   - _-j,--json_: display in JSON format
+  - _-n,--namespace_: namespace name on multi-ASIC systems. Omit it to display all namespaces.
+
+- Note:
+  - Supported hash fields and algorithms are platform dependent. Use this command to see valid values for the target namespace before configuring switch hash.
+  - On multi-ASIC systems, place _-n,--namespace_ before the sub-command.
+  - On multi-ASIC systems, use _-n,--namespace_ with _--json_ if you need one JSON object for a single namespace.
 
 - Example:
   ```bash
@@ -5344,6 +5379,12 @@ This command displays switch hash capabilities.
   +--------+-------------------------------------+
   ```
 
+- Multi-ASIC Examples:
+  ```bash
+  admin@sonic:~$ show switch-hash -n asic0 capabilities --json
+  admin@sonic:~$ show switch-hash capabilities
+  ```
+
 ### Hash Config Commands
 
 This subsection explains how to configure switch hash.
@@ -5356,10 +5397,17 @@ This command is used to manage switch hash global configuration.
   ```bash
   config switch-hash global ecmp-hash <hash_field_list>
   config switch-hash global lag-hash <hash_field_list>
+  config switch-hash global -n <namespace> ecmp-hash <hash_field_list>
+  config switch-hash global -n <namespace> lag-hash <hash_field_list>
   ```
 
 - Parameters:
   - _hash_field_list_: hash fields for hashing packets going through ECMP/LAG
+  - _-n,--namespace_: namespace name. Required on multi-ASIC systems.
+
+- Note:
+  - On multi-ASIC systems, place _-n,--namespace_ before _ecmp-hash_ or _lag-hash_.
+  - Use _show switch-hash capabilities_ or _show switch-hash -n <namespace> capabilities_ to see supported values for the target namespace.
 
 - Examples:
   ```bash
@@ -5401,6 +5449,12 @@ This command is used to manage switch hash global configuration.
   'IPV6_FLOW_LABEL'
   ```
 
+- Multi-ASIC Examples:
+  ```bash
+  admin@sonic:~$ config switch-hash global -n asic0 ecmp-hash SRC_IP DST_IP
+  admin@sonic:~$ config switch-hash global -n asic0 lag-hash SRC_MAC DST_MAC
+  ```
+
 **config switch-hash global ecmp/lag hash algorithm**
 
 This command is used to manage switch hash algorithm global configuration.
@@ -5409,15 +5463,28 @@ This command is used to manage switch hash algorithm global configuration.
   ```bash
   config switch-hash global ecmp-hash-algorithm <hash_algorithm>
   config switch-hash global lag-hash-algorithm <hash_algorithm>
+  config switch-hash global -n <namespace> ecmp-hash-algorithm <hash_algorithm>
+  config switch-hash global -n <namespace> lag-hash-algorithm <hash_algorithm>
   ```
 
 - Parameters:
   - _hash_algorithm_: hash algorithm for hashing packets going through ECMP/LAG
+  - _-n,--namespace_: namespace name. Required on multi-ASIC systems.
+
+- Note:
+  - On multi-ASIC systems, place _-n,--namespace_ before _ecmp-hash-algorithm_ or _lag-hash-algorithm_.
+  - Supported values depend on the target platform. Use _show switch-hash capabilities_ or _show switch-hash -n <namespace> capabilities_ to see supported values for the target namespace.
 
 - Examples:
   ```bash
   admin@sonic:~$ config switch-hash global ecmp-hash-algorithm 'CRC'
   admin@sonic:~$ config switch-hash global lag-hash-algorithm 'CRC'
+  ```
+
+- Multi-ASIC Examples:
+  ```bash
+  admin@sonic:~$ config switch-hash global -n asic0 ecmp-hash-algorithm CRC
+  admin@sonic:~$ config switch-hash global -n asic0 lag-hash-algorithm XOR
   ```
 
 ## Fast Link-Up
