@@ -436,12 +436,12 @@ def endpoint(args):
     click.echo(tabulate(table, header))
 
 
-@vnet.group()
-@click.argument('vnet_name', required=False)
+@vnet.command()
+@click.argument('vnet_name', required=True)
 def routes(vnet_name):
     """Show vnet routes related information"""
     #check vnet_name exist or not if specified
-    if vnet_name:
+    if vnet_name is not None:
         if vnet_name == 'tunnel':
             """Show vnet tunnel routes"""
             appl_db = SonicV2Connector()
