@@ -155,7 +155,7 @@ class TestRemoteExec(object):
             rexec.cli, [LINECARD_NAME, "-c", "show version"])
         print(result.output)
         assert result.exit_code == 1, result.output
-        assert "This commmand is only supported Chassis" in result.output
+        assert "This command is only supported Chassis" in result.output
 
     @mock.patch("sonic_py_common.device_info.is_chassis", mock.MagicMock(return_value=True))
     @mock.patch("os.getlogin", mock.MagicMock(return_value="admin"))
@@ -318,4 +318,4 @@ class TestRemoteCLI(object):
         result = runner.invoke(rshell.cli, [LINECARD_NAME])
         print(result.output)
         assert result.exit_code == 1, result.output
-        assert "This commmand is only supported Chassis" in result.output
+        assert "This command is only supported Chassis" in result.output

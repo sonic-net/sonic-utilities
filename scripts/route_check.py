@@ -37,7 +37,6 @@ To verify:
 import argparse
 from enum import Enum
 import ipaddress
-import ijson.backends.python as ijson
 import json
 import os
 import re
@@ -48,12 +47,14 @@ import signal
 import traceback
 import subprocess
 import concurrent.futures
+os.environ.setdefault('IJSON_BACKEND', 'python')
+import ijson  # noqa: E402
 
-from ipaddress import ip_network
-from swsscommon import swsscommon
-from utilities_common import chassis
-from sonic_py_common import multi_asic, device_info
-from utilities_common.general import load_db_config
+from ipaddress import ip_network  # noqa: E402
+from swsscommon import swsscommon  # noqa: E402
+from utilities_common import chassis  # noqa: E402
+from sonic_py_common import multi_asic, device_info  # noqa: E402
+from utilities_common.general import load_db_config  # noqa: E402
 
 APPL_DB_NAME = 'APPL_DB'
 ASIC_DB_NAME = 'ASIC_DB'
@@ -875,7 +876,7 @@ def check_routes_for_namespace(namespace):
     If there are FRR routes that aren't marked offloaded but all APPL & ASIC DB
     routes are in sync report failure and perform a mitigation action.
 
-    :return (0, None) on sucess, else (-1, results) where results holds
+    :return (0, None) on success, else (-1, results) where results holds
     the unjustifiable entries.
     """
 
@@ -1013,7 +1014,7 @@ def check_sids_for_namespace(namespace):
     this function does not wait for subscriber updates, as SIDs are not
     expected to change frequently.
 
-    :return (0, None) on sucess, else (-1, results) where results holds
+    :return (0, None) on success, else (-1, results) where results holds
     the unjustifiable entries.
     """
 

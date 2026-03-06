@@ -6,7 +6,7 @@ from unittest.mock import call, patch, mock_open, MagicMock
 
 
 class TestShowMlnx(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('click.style')
@@ -113,6 +113,6 @@ class TestShowMlnx(object):
         result = show.is_issu_status_enabled()
         assert result is status
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEARDOWN')
 

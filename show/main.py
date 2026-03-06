@@ -87,7 +87,7 @@ GEARBOX_TABLE_PHY_PATTERN = r"_GEARBOX_TABLE:phy:*"
 COMMAND_TIMEOUT = 300
 
 # To be enhanced. Routing-stack information should be collected from a global
-# location (configdb?), so that we prevent the continous execution of this
+# location (configdb?), so that we prevent the continuous execution of this
 # bash oneliner. To be revisited once routing-stack info is tracked somewhere.
 def get_routing_stack():
     result = 'frr'
@@ -510,9 +510,12 @@ def storm_control(ctx, namespace, display):
 
 @storm_control.command('interface')
 @click.argument('interface', metavar='<interface>',required=True)
-def interface(interface, namespace, display):
+@click.pass_context
+def interface(ctx, interface):
+    # Get namespace from parent context
+    namespace = ctx.parent.params.get('namespace')
+
     if multi_asic.is_multi_asic() and namespace not in multi_asic.get_namespace_list():
-        ctx = click.get_current_context()
         ctx.fail('-n/--namespace option required. provide namespace from list {}'.format(multi_asic.get_namespace_list()))
     if interface:
         display_storm_interface(interface)
@@ -1692,10 +1695,10 @@ def version(verbose):
 
     sys_date = datetime.now()
 
-    click.echo("\nSONiC Software Version: SONiC.{}".format(version_info['build_version']))
-    click.echo("SONiC OS Version: {}".format(version_info['sonic_os_version']))
-    click.echo("Distribution: Debian {}".format(version_info['debian_version']))
-    click.echo("Kernel: {}".format(version_info['kernel_version']))
+    click.echo("\nSONiC Software Version: SONiC.{}".format(version_info.get('build_version', 'N/A')))
+    click.echo("SONiC OS Version: {}".format(version_info.get('sonic_os_version', 'N/A')))
+    click.echo("Distribution: Debian {}".format(version_info.get('debian_version', 'N/A')))
+    click.echo("Kernel: {}".format(version_info.get('kernel_version', os.uname().release)))
     click.echo("Build commit: {}".format(version_info['commit_id']))
     click.echo("Build date: {}".format(version_info['build_date']))
     click.echo("Built by: {}".format(version_info['built_by']))
