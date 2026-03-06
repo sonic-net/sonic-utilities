@@ -4,7 +4,7 @@ import jsonpatch
 import sonic_yang
 from collections import deque, OrderedDict
 from enum import Enum
-from typing import IO, Optional, Tuple
+from typing import IO, List, Optional, Tuple
 from .gu_common import OperationWrapper, OperationType, GenericConfigUpdaterError, \
                        JsonChange, PathAddressing, genericUpdaterLogging
 
@@ -1580,54 +1580,80 @@ class RemoveCreateOnlyDependencyMoveGenerator:
         target_config = diff.target_config # Final config after applying whole patch
         reload_config = True
 
-        processed_tables = set()
         for path in self.create_only_filter.get_paths(current_config):
             tokens = self.path_addressing.get_path_tokens(path)
-            table_to_check, create_only_field = tokens[0], tokens[-1]
-
-            if table_to_check in processed_tables:
-                continue
-            else:
-                processed_tables.add(table_to_check)
+            table_to_check, member_name, create_only_field = tokens[0], tokens[1], tokens[2]
 
             if table_to_check not in current_config:
                 continue
 
-            current_members = current_config[table_to_check]
-            if not current_members:
+            if member_name not in current_config[table_to_check]:
                 continue
 
             if table_to_check not in target_config:
                 continue
 
-            target_members = target_config[table_to_check]
-            if not target_members:
+            if member_name not in target_config[table_to_check]:
                 continue
 
-            for member_name in current_members:
-                if member_name not in target_members:
-                    continue
+            current_field = self._get_create_only_field(
+                current_config, table_to_check, member_name, create_only_field)
+            target_field = self._get_create_only_field(
+                target_config, table_to_check, member_name, create_only_field)
 
-                current_field = self._get_create_only_field(
-                    current_config, table_to_check, member_name, create_only_field)
-                target_field = self._get_create_only_field(
-                    target_config, table_to_check, member_name, create_only_field)
+            if current_field == target_field:
+                continue
 
-                if current_field == target_field:
-                    continue
+            # Create only filters may reference an exact leaf, but its really the parent that is the
+            # object we're after.
+            tokens.pop()
 
-                member_path = f"/{table_to_check}/{member_name}"
+            # First see if there are any dependents for the exact path
+            for move in self.__remove_dependents(diff, tokens, reload_config=reload_config,
+                                                 remove_parent=False):
+                yield move
 
-                for ref_path in self.path_addressing.find_ref_paths(member_path, current_config,
-                                                                    reload_config=reload_config):
-                    yield JsonMoveGroup(self.__class__.__name__, JsonMove(diff, OperationType.REMOVE,
-                                        self.path_addressing.get_path_tokens(ref_path)))
+            # No need to reload config after first call
+            reload_config = False
 
-                # No need to reload config after first call
-                reload_config = False
+            yield self.__remove_nonempty(diff, tokens)
 
-    def _get_create_only_field(self, config, table_to_check,
-                               member_name, create_only_field):
+            # If that didn't work, likely the parents of the dependent path needs to be removed.
+            for move in self.__remove_dependents(diff, tokens, reload_config=reload_config,
+                                                 remove_parent=True):
+                yield move
+
+            # Remove self again after removing the parents of dependents
+            yield self.__remove_nonempty(diff, tokens)
+
+    def __get_path_count(self, config, tokens: List[str]):
+        for token in tokens:
+            config = config[token]
+        return len(config)
+
+    def __remove_nonempty(self, diff: Diff, tokens: List[str]):
+        remove_tokens = tokens
+        while self.__get_path_count(diff.current_config, remove_tokens[:-1]) == 1:
+            remove_tokens = remove_tokens[:-1]
+        return JsonMoveGroup(self.__class__.__name__, JsonMove(diff, OperationType.REMOVE, remove_tokens))
+
+    def __remove_dependents(self, diff: Diff, tokens: List[str], reload_config: bool, remove_parent: bool):
+        config = diff.current_config
+        path = self.path_addressing.create_path(tokens)
+        ref_paths = self.path_addressing.find_ref_paths(path, config, reload_config)
+        for ref in ref_paths:
+            ref_tokens = self.path_addressing.get_path_tokens(ref)
+            if remove_parent:
+                ref_tokens.pop()
+
+            # Recurse since there could be a dependency chain
+            for move in self.__remove_dependents(diff, ref_tokens, reload_config=False,
+                                                 remove_parent=remove_parent):
+                yield move
+
+            yield self.__remove_nonempty(diff, ref_tokens)
+
+    def _get_create_only_field(self, config, table_to_check, member_name, create_only_field):
         return config[table_to_check][member_name].get(create_only_field, None)
 
 
@@ -2222,10 +2248,10 @@ class SortAlgorithmFactory:
         self.path_addressing = path_addressing
 
     def create(self, algorithm=Algorithm.DFS, path_trace: bool = False):
-        move_generators = [RemoveCreateOnlyDependencyMoveGenerator(self.path_addressing),
-                           LowLevelMoveGenerator(self.path_addressing)]
+        move_generators = [LowLevelMoveGenerator(self.path_addressing)]
         # TODO: Enable TableLevelMoveGenerator once it is confirmed whole table can be updated at the same time
-        move_non_extendable_generators = [BulkKeyLevelMoveGenerator(self.path_addressing),
+        move_non_extendable_generators = [RemoveCreateOnlyDependencyMoveGenerator(self.path_addressing),
+                                          BulkKeyLevelMoveGenerator(self.path_addressing),
                                           KeyLevelMoveGenerator(self.path_addressing),
                                           BulkKeyGroupLowLevelMoveGenerator(self.path_addressing),
                                           BulkLowLevelMoveGenerator(self.path_addressing)]
