@@ -1,4 +1,5 @@
 import click
+import string
 import utilities_common.cli as clicommon
 from .validated_config_db_connector import ValidatedConfigDBConnector
 from jsonpatch import JsonPatchConflict
@@ -49,6 +50,39 @@ def disable_console_switch(db):
     except ValueError as e:
         ctx = click.get_current_context()
         ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+
+#
+# 'console escape' group ('config console escape A|B|...')
+#
+@console.command('escape')
+@clicommon.pass_db
+@click.argument('escape', metavar='<escape_char|clear>', required=True,
+                type=click.Choice(list(string.ascii_letters) + ["clear"], case_sensitive=True))
+def set_console_escape_char(db, escape):
+    """Set console escape character or clear the existing one"""
+    config_db = ValidatedConfigDBConnector(db.cfgdb)
+
+    table = "CONSOLE_SWITCH"
+    dataKey1 = 'console_mgmt'
+    dataKey2 = 'escape_char'
+
+    existing_entry = config_db.get_entry(table, dataKey1) or {}
+    if escape == "clear":
+        # Remove the escape_char field while preserving other keys (e.g., 'enabled')
+        if dataKey2 in existing_entry:
+            del existing_entry[dataKey2]
+        data = existing_entry
+    else:
+        existing_entry[dataKey2] = escape.lower()
+        data = existing_entry
+
+    try:
+        config_db.set_entry(table, dataKey1, data)
+    except ValueError as e:
+        ctx = click.get_current_context()
+        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
 
 #
 # 'console add' group ('config console add ...')
