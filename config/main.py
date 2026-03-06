@@ -1780,8 +1780,26 @@ def run_gcu_standalone(patch_file_path, format, dry_run, parallel,
 @click.option('-n', '--ignore-non-yang-tables', is_flag=True, default=False, help='ignore validation for tables without YANG models', hidden=True)
 @click.option('-i', '--ignore-path', multiple=True, help='ignore validation for config specified by given path which is a JsonPointer', hidden=True)
 @click.option('-v', '--verbose', is_flag=True, default=False, help='print additional details of what the operation is doing')
+@click.option(
+    '-t',
+    '--path-trace',
+    type=click.Path(writable=True),
+    help='filename to write decision path trace for patch generation as JSON',
+    hidden=True,
+)
+
 @click.pass_context
-def apply_patch(ctx, patch_file_path, format, dry_run, parallel, ignore_non_yang_tables, ignore_path, verbose):
+def apply_patch(
+    ctx,
+    patch_file_path,
+    format,
+    dry_run,
+    parallel,
+    ignore_non_yang_tables,
+    ignore_path,
+    verbose,
+    path_trace,
+):
     """Apply given patch of updates to Config. A patch is a JsonPatch which follows rfc6902.
        This command can be used do partial updates to the config with minimum disruption to running processes.
        It allows addition as well as deletion of configs. The patch file represents a diff of ConfigDb(ABNF)
@@ -1831,8 +1849,15 @@ def apply_patch(ctx, patch_file_path, format, dry_run, parallel, ignore_non_yang
 @click.option('-n', '--ignore-non-yang-tables', is_flag=True, default=False, help='ignore validation for tables without YANG models', hidden=True)
 @click.option('-i', '--ignore-path', multiple=True, help='ignore validation for config specified by given path which is a JsonPointer', hidden=True)
 @click.option('-v', '--verbose', is_flag=True, default=False, help='print additional details of what the operation is doing')
+@click.option(
+    '-t',
+    '--path-trace',
+    type=click.Path(writable=True),
+    help='filename to output decision path trace for patch generation as JSON',
+    hidden=True,
+)
 @click.pass_context
-def replace(ctx, target_file_path, format, dry_run, ignore_non_yang_tables, ignore_path, verbose):
+def replace(ctx, target_file_path, format, dry_run, ignore_non_yang_tables, ignore_path, verbose, path_trace):
     """Replace the whole config with the specified config. The config is replaced with minimum disruption e.g.
        if ACL config is different between current and target config only ACL config is updated, and other config/services
        such as DHCP will not be affected.
@@ -1849,7 +1874,22 @@ def replace(ctx, target_file_path, format, dry_run, ignore_non_yang_tables, igno
 
         config_format = ConfigFormat[format.upper()]
 
-        GenericUpdater().replace(target_config, config_format, verbose, dry_run, ignore_non_yang_tables, ignore_path)
+        trace_io = None
+        if path_trace is not None:
+            trace_io = open(path_trace, 'w')
+
+        GenericUpdater().replace(
+            target_config,
+            config_format,
+            verbose,
+            dry_run,
+            ignore_non_yang_tables,
+            ignore_path,
+            trace_io=trace_io,
+        )
+
+        if trace_io is not None:
+            trace_io.close()
 
         click.secho("Config replaced successfully.", fg="cyan", underline=True)
     except Exception as ex:
@@ -3215,7 +3255,8 @@ def stop(verbose):
 
 @pfcwd.command()
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-@click.argument('poll_interval', type=click.IntRange(100, 3000))
+# Keep in sync with the pfcwd CLI validation and sonic-pfcwd YANG model.
+@click.argument('poll_interval', type=click.IntRange(100, 1000))
 def interval(poll_interval, verbose):
     """ Set PFC watchdog counter polling interval (ms) """
 

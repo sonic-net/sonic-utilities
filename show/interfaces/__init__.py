@@ -449,24 +449,21 @@ def mpls(ctx, interfacename, namespace, display):
 interfaces.add_command(portchannel.portchannel)
 
 
-
 @interfaces.command()
 @click.argument('interfacename', required=False)
+@multi_asic_util.multi_asic_click_options
 @click.pass_context
-def flap(ctx, interfacename):
+def flap(ctx, interfacename, namespace, display):
     """Show Interface Flap Information <interfacename>"""
 
-    namespace = ''  # Default namespace
-    port_dict = multi_asic.get_port_table(namespace=namespace)
+    if interfacename:
+        display = constants.DISPLAY_ALL
 
-    # If interfacename is given, validate it
+    masic = multi_asic_util.MultiAsic(display_option=display, namespace_option=namespace)
+    ns_list = masic.get_ns_list_based_on_options()
+
     if interfacename:
         interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
-        if interfacename not in port_dict:
-            ctx.fail("Invalid interface name {}".format(interfacename))
-
-    db = SonicV2Connector(host=REDIS_HOSTIP)
-    db.connect(db.APPL_DB)
 
     # Prepare the table headers and body
     header = [
@@ -478,40 +475,56 @@ def flap(ctx, interfacename):
         'Link Up TimeStamp(UTC)'
     ]
     body = []
+    intf_found = False
 
-    # Loop through all ports or the specified port
-    ports = [interfacename] if interfacename else natsorted(list(port_dict.keys()))
+    for ns in ns_list:
+        masic.current_namespace = ns
+        appl_db = multi_asic.connect_to_all_dbs_for_ns(namespace=ns)
+        port_dict = multi_asic.get_port_table(namespace=ns)
 
-    for port in ports:
-        port_data = db.get_all(db.APPL_DB, f'PORT_TABLE:{port}') or {}
+        # Loop through all ports or the specified port
+        ports = [interfacename] if interfacename else natsorted(list(port_dict.keys()))
 
-        flap_count = port_data.get('flap_count', 'Never')
-        admin_status = port_data.get('admin_status', 'Unknown').capitalize()
-        oper_status = port_data.get('oper_status', 'Unknown').capitalize()
+        for port in ports:
+            if port not in port_dict:
+                continue
 
-        # Get timestamps and convert them to UTC format if possible
-        last_up_time = port_data.get('last_up_time', 'Never')
-        last_down_time = port_data.get('last_down_time', 'Never')
+            # Skip internal ports based on display option
+            if masic.skip_display(constants.PORT_OBJ, port):
+                continue
+            if interfacename and port == interfacename:
+                intf_found = True
+            port_data = appl_db.get_all(appl_db.APPL_DB, f'PORT_TABLE:{port}') or {}
 
-        # Format output row
-        row = [
-            port,
-            flap_count,
-            admin_status,
-            oper_status,
-            f"{last_down_time}" if last_down_time != 'Never' else 'Never',
-            f"{last_up_time}" if last_up_time != 'Never' else 'Never'
-        ]
+            flap_count = port_data.get('flap_count', 'Never')
+            admin_status = port_data.get('admin_status', 'Unknown').capitalize()
+            oper_status = port_data.get('oper_status', 'Unknown').capitalize()
 
-        body.append(row)
+            # Get timestamps and convert them to UTC format if possible
+            last_up_time = port_data.get('last_up_time', 'Never')
+            last_down_time = port_data.get('last_down_time', 'Never')
+
+            # Format output row
+            row = [
+                port,
+                flap_count,
+                admin_status,
+                oper_status,
+                last_down_time,
+                last_up_time
+            ]
+
+            body.append(row)
+
+    # Validate interface name after checking all namespaces
+    if interfacename and not intf_found:
+        ctx.fail("Invalid interface name {}".format(interfacename))
 
     # Sort the body by interface name for consistent display
     body = natsorted(body, key=lambda x: x[0])
 
     # Display the formatted table
     click.echo(tabulate(body, header))
-
-    db.close(db.APPL_DB)
 
 
 def get_all_port_errors(interfacename):
