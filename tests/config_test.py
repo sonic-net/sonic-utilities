@@ -2297,6 +2297,121 @@ class TestGenericUpdateCommands(unittest.TestCase):
         assert updated_patch_ops[2]['path'] == "/TABLE2", "Third op should create TABLE2"
         assert updated_patch_ops[3] == patch_ops[1], "Fourth op should be the original TABLE2 add operation"
 
+    # ------------------------------------------------------------------
+    # print_dry_run_message
+    # ------------------------------------------------------------------
+
+    def test_print_dry_run_message_dry_run_true_prints_banner(self):
+        """print_dry_run_message with dry_run=True should echo a banner."""
+        from config.main import print_dry_run_message
+        result = self.runner.invoke(
+            click.command()(lambda: print_dry_run_message(True))
+        )
+        self.assertIn("DRY RUN", result.output)
+
+    def test_print_dry_run_message_dry_run_false_no_output(self):
+        """print_dry_run_message with dry_run=False should produce no output."""
+        from config.main import print_dry_run_message
+        result = self.runner.invoke(
+            click.command()(lambda: print_dry_run_message(False))
+        )
+        self.assertEqual(result.output.strip(), "")
+
+    # ------------------------------------------------------------------
+    # run_gcu_standalone
+    # ------------------------------------------------------------------
+
+    def test_run_gcu_standalone_basic_command(self):
+        """run_gcu_standalone constructs the expected command and calls subprocess.run."""
+        from config.main import run_gcu_standalone, GCU_STANDALONE_BIN
+        mock_result = mock.Mock()
+        mock_result.returncode = 0
+        with mock.patch('subprocess.run', return_value=mock_result) as mock_run:
+            run_gcu_standalone('/tmp/p.json', 'CONFIGDB', False, False, False, (), False)
+        called_cmd = mock_run.call_args[0][0]
+        self.assertIn(GCU_STANDALONE_BIN, called_cmd)
+        self.assertIn('apply-patch', called_cmd)
+        self.assertIn('/tmp/p.json', called_cmd)
+
+    def test_run_gcu_standalone_non_default_format(self):
+        """Non-CONFIGDB format is passed via --format flag."""
+        from config.main import run_gcu_standalone
+        mock_result = mock.Mock()
+        with mock.patch('subprocess.run', return_value=mock_result) as mock_run:
+            run_gcu_standalone('/tmp/p.json', 'SONICYANG', False, False, False, (), False)
+        called_cmd = mock_run.call_args[0][0]
+        self.assertIn('--format', called_cmd)
+        self.assertIn('SONICYANG', called_cmd)
+
+    def test_run_gcu_standalone_with_all_flags(self):
+        """All optional flags are appended correctly."""
+        from config.main import run_gcu_standalone
+        mock_result = mock.Mock()
+        with mock.patch('subprocess.run', return_value=mock_result) as mock_run:
+            run_gcu_standalone(
+                '/tmp/p.json', 'CONFIGDB',
+                dry_run=True, parallel=True,
+                ignore_non_yang_tables=True,
+                ignore_path=['/T1', '/T2'],
+                verbose=True,
+            )
+        called_cmd = mock_run.call_args[0][0]
+        self.assertIn('--dry-run', called_cmd)
+        self.assertIn('--parallel', called_cmd)
+        self.assertIn('--ignore-non-yang-tables', called_cmd)
+        self.assertIn('--ignore-path', called_cmd)
+        self.assertIn('/T1', called_cmd)
+        self.assertIn('/T2', called_cmd)
+        self.assertIn('--verbose', called_cmd)
+
+    def test_run_gcu_standalone_returns_result(self):
+        """run_gcu_standalone returns the CompletedProcess object."""
+        from config.main import run_gcu_standalone
+        sentinel = mock.sentinel.completed_process
+        with mock.patch('subprocess.run', return_value=sentinel):
+            result = run_gcu_standalone('/tmp/p.json', 'CONFIGDB', False, False, False, (), False)
+        self.assertIs(result, sentinel)
+
+    # ------------------------------------------------------------------
+    # apply-patch : standalone GCU redirect path
+    # ------------------------------------------------------------------
+
+    @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
+        communicate=mock.Mock(return_value=('{"some": "config"}', None)),
+        returncode=0
+    )))
+    @patch('generic_config_updater.main.validate_patch', mock.Mock(return_value=True))
+    def test_apply_patch__gcu_standalone_exists_success__delegates_and_returns(self):
+        """When GCU_STANDALONE_BIN exists and returns 0, apply-patch succeeds."""
+        mock_run_result = mock.Mock()
+        mock_run_result.returncode = 0
+        with mock.patch('os.path.exists', return_value=True):
+            with mock.patch('config.main.run_gcu_standalone', return_value=mock_run_result) as mock_gcu:
+                result = self.runner.invoke(
+                    config.config.commands["apply-patch"],
+                    [self.any_path],
+                    catch_exceptions=False,
+                )
+        self.assertEqual(result.exit_code, 0)
+        mock_gcu.assert_called_once()
+
+    @patch('subprocess.Popen', mock.Mock(return_value=mock.Mock(
+        communicate=mock.Mock(return_value=('{"some": "config"}', None)),
+        returncode=0
+    )))
+    @patch('generic_config_updater.main.validate_patch', mock.Mock(return_value=True))
+    def test_apply_patch__gcu_standalone_exists_failure__ctx_fail(self):
+        """When GCU_STANDALONE_BIN returns non-zero, apply-patch fails."""
+        mock_run_result = mock.Mock()
+        mock_run_result.returncode = 1
+        with mock.patch('os.path.exists', return_value=True):
+            with mock.patch('config.main.run_gcu_standalone', return_value=mock_run_result):
+                result = self.runner.invoke(
+                    config.config.commands["apply-patch"],
+                    [self.any_path],
+                )
+        self.assertNotEqual(result.exit_code, 0)
+
     def test_replace__no_params__get_required_params_error_msg(self):
         # Arrange
         unexpected_exit_code = 0
