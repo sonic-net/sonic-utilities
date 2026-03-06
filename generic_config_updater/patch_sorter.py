@@ -1632,8 +1632,12 @@ class RemoveCreateOnlyDependencyMoveGenerator:
         return len(config)
 
     def __remove_nonempty(self, diff: Diff, tokens: List[str]):
-        remove_tokens = tokens
-        while self.__get_path_count(diff.current_config, remove_tokens[:-1]) == 1:
+        remove_tokens = list(tokens)
+        # Only trim while there is at least one table token and one deeper level.
+        # This prevents generating an empty path ("") and avoids an infinite loop
+        # when the top-level config has a single table.
+        while len(remove_tokens) > 1 and \
+                self.__get_path_count(diff.current_config, remove_tokens[:-1]) == 1:
             remove_tokens = remove_tokens[:-1]
         return JsonMoveGroup(self.__class__.__name__, JsonMove(diff, OperationType.REMOVE, remove_tokens))
 
