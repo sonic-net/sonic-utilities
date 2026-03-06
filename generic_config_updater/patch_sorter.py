@@ -1604,7 +1604,7 @@ class RemoveCreateOnlyDependencyMoveGenerator:
             if current_field == target_field:
                 continue
 
-            # Create only filters may reference an exact leaf, but its really the parent that is the
+            # Create only filters may reference an exact leaf, but it's really the parent that is the
             # object we're after.
             tokens.pop()
 
