@@ -1005,14 +1005,21 @@ def _stop_services():
     clicommon.run_command(['sudo', 'systemctl', 'stop', 'sonic.target', '--job-mode', 'replace-irreversibly'])
 
 
-def _get_sonic_services():
+def _get_sonic_services(reverse=False):
     cmd = ['systemctl', 'list-dependencies', '--plain', 'sonic.target']
+    if reverse:
+        cmd.append('--reverse')
+
     out, _ = clicommon.run_command(cmd, return_cmd=True)
     out = out.strip().split('\n')[1:]
     return (unit.strip() for unit in out)
 
+
 def _reset_failed_services():
-    for service in _get_sonic_services():
+    services = set(_get_sonic_services())
+    services.update(set(_get_sonic_services(True)))
+
+    for service in services:
         clicommon.run_command(['systemctl', 'reset-failed', str(service)])
 
 

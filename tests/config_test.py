@@ -1146,7 +1146,7 @@ class TestLoadMinigraph(object):
                 (load_minigraph_command_output.format(config.SYSTEM_RELOAD_LOCK))
             # Verify "systemctl reset-failed" is called for services under sonic.target
             mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'swss'])
-            assert mock_run_command.call_count == 19
+            assert mock_run_command.call_count == 20
 
     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs',
                 mock.MagicMock(return_value=("dummy_path", None)))
@@ -1190,7 +1190,7 @@ class TestLoadMinigraph(object):
                 assert result.exit_code == 0
                 assert result.output == \
                     load_minigraph_command_bypass_lock_output.format(config.SYSTEM_RELOAD_LOCK)
-                assert mock_run_command.call_count == 15
+                assert mock_run_command.call_count == 16
             finally:
                 flock.release_flock(fd)
 
@@ -1208,7 +1208,7 @@ class TestLoadMinigraph(object):
                 (load_minigraph_platform_plugin_command_output.format(config.SYSTEM_RELOAD_LOCK))
             # Verify "systemctl reset-failed" is called for services under sonic.target
             mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'swss'])
-            assert mock_run_command.call_count == 15
+            assert mock_run_command.call_count == 16
 
     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs', mock.MagicMock(return_value=(load_minigraph_platform_false_path, None)))
     def test_load_minigraph_platform_plugin_fail(self, get_cmd_module, setup_single_broadcom_asic):
