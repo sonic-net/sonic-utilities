@@ -1253,6 +1253,7 @@ def display_phy_signal_attribute(attr_display_name, attr_json):
     """
     if not attr_json:
         click.echo("{}: No data available".format(attr_display_name))
+        click.echo("")
         return
 
     try:
@@ -1268,7 +1269,7 @@ def display_phy_signal_attribute(attr_display_name, attr_json):
     # Build table rows
     for lane_num in sorted(lane_data.keys(), key=int):
         lane_info = lane_data[lane_num]
-        if isinstance(lane_info, list) and len(lane_info) >= 3:
+        if isinstance(lane_info, list) and len(lane_info) == 3:
             status = lane_info[0]  # "T*", "F*", "T", or "F"
             timestamp_ms = lane_info[1]
             change_count = lane_info[2]
@@ -1281,7 +1282,7 @@ def display_phy_signal_attribute(attr_display_name, attr_json):
                 last_change = 'Never'
 
             # Add row to table body
-            body.append(['Lane{}'.format(lane_num), status, change_count, last_change])
+            body.append(['Lane{}:'.format(lane_num), status, change_count, last_change])
 
     # Display table.
     click.echo(tabulate(body, header, tablefmt='simple', numalign='left'))
@@ -1317,7 +1318,7 @@ def phy_signal(ctx, interfacename, namespace, display, rxsig, feclock):
     vid_str = db.get(db.COUNTERS_DB, 'COUNTERS_PORT_NAME_MAP', interfacename)
     if not vid_str:
         db.close(db.COUNTERS_DB)
-        ctx.fail("Interface {} not found in counter map".format(interfacename))
+        ctx.fail("Interface {} not found in COUNTERS_PORT_NAME_MAP".format(interfacename))
 
     # Query PORT_PHY_ATTR table
     table_key = 'PORT_PHY_ATTR:{}'.format(vid_str)
@@ -1355,6 +1356,7 @@ def display_phy_numeric_attribute(attr_display_name, attr_json, val_header="Valu
     """
     if not attr_json:
         click.echo("{}: No data available".format(attr_display_name))
+        click.echo("")
         return
 
     try:
@@ -1395,6 +1397,7 @@ def display_phy_taps_attribute(attr_display_name, attr_json):
     """
     if not attr_json:
         click.echo("{}: No data available".format(attr_display_name))
+        click.echo("")
         return
 
     try:
@@ -1427,7 +1430,7 @@ def display_phy_taps_attribute(attr_display_name, attr_json):
         # Build rows for each lane
         for lane in lanes:
             lane_taps = tap_data[lane]
-            row = ['Lane{}'.format(lane)]
+            row = ['{}'.format(lane)]
 
             if isinstance(lane_taps, list):
                 for tap_dict in lane_taps:
@@ -1470,7 +1473,7 @@ def phy_serdes(ctx, interfacename, namespace, display, snr, rxvga, txfir):
     vid_str = db.get(db.COUNTERS_DB, 'COUNTERS_PORT_NAME_MAP', interfacename)
     if not vid_str:
         db.close(db.COUNTERS_DB)
-        ctx.fail("Interface {} not found in counter map".format(interfacename))
+        ctx.fail("Interface {} not found in COUNTERS_PORT_NAME_MAP".format(interfacename))
 
     # Query PORT_PHY_ATTR table
     table_key = 'PORT_PHY_ATTR:{}'.format(vid_str)
