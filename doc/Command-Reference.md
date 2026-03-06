@@ -33,6 +33,8 @@
   * [ASIC SDK health event config commands](#asic-sdk-health-event-config-commands)
   * [ASIC SDK health event show commands](#asic-sdk-health-event-show-commands)
   * [ASIC SDK health event clear commands](#asic-sdk-health-event-clear-commands)
+* [BMC](#bmc)
+  * [BMC config commands](#bmc-config-commands)
 * [BFD](#bfd)
   * [BFD show commands](#bfd-show-commands)
 * [BGP](#bgp)
@@ -1143,6 +1145,76 @@ This command displays the status of the device's thermal sensors
      xSFP module 30 Temp           35.3       70.0       N/A            90.0            N/A      False  20200302 06:59:58
      xSFP module 31 Temp           31.0       70.0       N/A            90.0            N/A      False  20200302 06:59:58
      xSFP module 32 Temp           39.5       70.0       N/A            90.0            N/A      False  20200302 06:59:58
+  ```
+
+**show platform bmc summary**
+
+This command displays BMC summary information including manufacturer, model, part number, serial number, power state, and firmware version
+
+- Usage:
+  ```
+  show platform bmc summary [--json]
+  ```
+
+- Options:
+  - `--json`: Output information in JSON format
+
+- Example:
+  ```
+  admin@sonic:~$ show platform bmc summary
+  Manufacturer: ASPEED
+  Model: P3809
+  PartNumber: 123-12345-1234-AB1
+  SerialNumber: 123456789
+  PowerState: On
+  FirmwareVersion: 1.0.0
+  ```
+
+- Example (JSON format):
+  ```
+  admin@sonic:~$ show platform bmc summary --json
+  {
+      "Manufacturer": "ASPEED",
+      "Model": "P3809",
+      "PartNumber": "123-12345-1234-AB1",
+      "SerialNumber": "123456789",
+      "PowerState": "On",
+      "FirmwareVersion": "2.13.0"
+  }
+  ```
+
+**show platform bmc eeprom**
+
+This command displays BMC EEPROM information
+
+- Usage:
+  ```
+  show platform bmc eeprom [--json]
+  ```
+
+- Options:
+  - `--json`: Output information in JSON format
+
+- Example:
+  ```
+  admin@sonic:~$ show platform bmc eeprom
+  Manufacturer: ASPEED
+  Model: P3809
+  PartNumber: 123-12345-1234-AB1
+  PowerState: On
+  SerialNumber: 123456789
+  ```
+
+- Example (JSON format):
+  ```
+  admin@sonic:~$ show platform bmc eeprom --json
+  {
+      "Manufacturer": "ASPEED",
+      "Model": "P3809",
+      "PartNumber": "123-12345-1234-AB1",
+      "PowerState": "On",
+      "SerialNumber": "123456789"
+  }
   ```
 
 #### Transceivers
@@ -2432,6 +2504,61 @@ This command displays either all the IPv6 neighbor mac addresses, or for a parti
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#arp--ndp)
+
+## BMC
+
+### BMC config commands
+
+**config bmc open-session**
+
+This command opens a session with the BMC and returns session credentials
+
+- Usage:
+  ```
+  config bmc open-session
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config bmc open-session
+  Session ID: qL8mAGlFvw
+  Token: ndCMbgPVd3d1LpRXXkTJ
+  ```
+
+**config bmc close-session**
+
+This command closes a BMC session using the provided session ID
+
+- Usage:
+  ```
+  config bmc close-session --session-id <session_id>
+  ```
+
+- Options:
+  - `-s, --session-id`: Session ID to close (required)
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config bmc close-session --session-id qL8mAGlFvw
+  Session closed successfully
+  ```
+
+**config bmc reset-root-password**
+
+This command resets the BMC root password to default
+
+- Usage:
+  ```
+  config bmc reset-root-password
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config bmc reset-root-password
+  BMC root password reset successful
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#bmc)
 
 ## BFD
 
