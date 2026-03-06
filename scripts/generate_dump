@@ -1532,14 +1532,22 @@ collect_mellanox() {
     done
 
     # collect the sdk dump
+    # Preserve per-ASIC subdirectory structure to avoid basename collisions
     local sdk_dbg_folder="/var/log/sdk_dbg"
     for file in $(find $sdk_dbg_folder -name "sx_sdk_*")
     do
+        local rel_dir
+        rel_dir=$(dirname "${file#$sdk_dbg_folder/}")
+        local dest_dir="sai_sdk_dump"
+        if [[ "$rel_dir" != "." ]]; then
+            dest_dir="sai_sdk_dump/$rel_dir"
+        fi
+
         if [[ $file != *.gz ]]
         then
-            save_file $file sai_sdk_dump true
+            save_file "$file" "$dest_dir" true
         else
-            save_file $file sai_sdk_dump false
+            save_file "$file" "$dest_dir" false
         fi
     done
 
