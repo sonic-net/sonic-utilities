@@ -2407,6 +2407,16 @@ save_container_files() {
 }
 
 ###############################################################################
+# Save gearbox data
+###############################################################################
+save_gearbox_data() {
+    save_cmd "gearboxutil phys status" "gearbox.phys_status" &
+    save_cmd "gearboxutil interfaces status" "gearbox.interfaces_status" &
+    save_cmd "gearboxutil interfaces fec-stats" "gearbox.interfaces_fec_stats" &
+    save_cmd "gearboxutil interfaces fec-histogram" "gearbox.interfaces_fec_histogram" &
+}
+
+###############################################################################
 # Main generate_dump routine
 # Globals:
 #  All of them.
@@ -2525,6 +2535,7 @@ main() {
     save_cmd "show interface transceiver eeprom --dom" "interface.xcvrs.eeprom" &
     save_cmd "show ip interface -d all" "ip.interface" &
     save_cmd "sfputil show eeprom-hexdump" "interface.xcvrs.eeprom.raw" &
+    save_gearbox_data &
     wait
 
     save_cmd "lldpctl" "lldpctl" &
