@@ -157,7 +157,7 @@ class ConfigWrapper:
                 if not success:
                     return success, error
         except sonic_yang.SonicYangException as ex:
-            return False, ex
+            return False, str(ex)
 
         return True, None
 
