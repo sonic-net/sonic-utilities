@@ -6695,11 +6695,7 @@ def disable():
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 def enable_use_link_local_only(ctx, interface_name):
     """Enable IPv6 link local address on interface"""
-    config_db = ConfigDBConnector()
-    config_db.connect()
-    ctx.obj = {}
-    ctx.obj['config_db'] = config_db
-    db = ctx.obj["config_db"]
+    db = ctx.obj['config_db']
 
     if clicommon.get_interface_naming_mode() == "alias":
         interface_name = interface_alias_to_name(db, interface_name)
@@ -6747,11 +6743,7 @@ def enable_use_link_local_only(ctx, interface_name):
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 def disable_use_link_local_only(ctx, interface_name):
     """Disable IPv6 link local address on interface"""
-    config_db = ConfigDBConnector()
-    config_db.connect()
-    ctx.obj = {}
-    ctx.obj['config_db'] = config_db
-    db = ctx.obj["config_db"]
+    db = ctx.obj['config_db']
 
     if clicommon.get_interface_naming_mode() == "alias":
         interface_name = interface_alias_to_name(db, interface_name)
@@ -9443,9 +9435,18 @@ def set_ipv6_link_local_only_on_interface(config_db, interface_dict, interface_t
 #
 
 @config.group()
+@click.option('-n', '--namespace', help='Namespace name',
+              required=True if multi_asic.is_multi_asic() else False,
+              type=click.Choice(multi_asic.get_namespace_list()))
 @click.pass_context
-def ipv6(ctx):
+def ipv6(ctx, namespace):
     """IPv6 configuration"""
+    if namespace is None:
+        namespace = DEFAULT_NAMESPACE
+    config_db = multi_asic.connect_config_db_for_ns(namespace)
+    ctx.ensure_object(dict)
+    ctx.obj['config_db'] = config_db
+    ctx.obj['namespace'] = str(namespace)
 
 #
 # 'enable' command ('config ipv6 enable ...')
@@ -9462,8 +9463,7 @@ def enable(ctx):
 @click.pass_context
 def enable_link_local(ctx):
     """Enable IPv6 link-local on all interfaces """
-    config_db = ConfigDBConnector()
-    config_db.connect()
+    config_db = ctx.obj['config_db']
     vlan_member_table = config_db.get_table('VLAN_MEMBER')
     portchannel_member_table = config_db.get_table('PORTCHANNEL_MEMBER')
 
@@ -9502,8 +9502,7 @@ def disable(ctx):
 @click.pass_context
 def disable_link_local(ctx):
     """Disable IPv6 link local on all interfaces """
-    config_db = ConfigDBConnector()
-    config_db.connect()
+    config_db = ctx.obj['config_db']
 
     mode = "disable"
 

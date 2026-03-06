@@ -1561,41 +1561,47 @@ elif device_info.is_supervisor():
 #
 
 @ipv6.command('link-local-mode')
+@multi_asic_util.multi_asic_click_option_namespace
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def link_local_mode(verbose):
+def link_local_mode(namespace, verbose):
     """show ipv6 link-local-mode"""
     header = ['Interface Name', 'Mode']
     body = []
     tables = ['PORT', 'PORTCHANNEL', 'VLAN']
-    config_db = ConfigDBConnector()
-    config_db.connect()
-    interface = ""
 
-    for table in tables:
-        if table == "PORT":
-            interface = "INTERFACE"
-        elif table == "PORTCHANNEL":
-            interface = "PORTCHANNEL_INTERFACE"
-        elif table == "VLAN":
-            interface = "VLAN_INTERFACE"
+    masic = multi_asic_util.MultiAsic(namespace_option=namespace)
+    ns_list = masic.get_ns_list_based_on_options()
 
-        port_dict = config_db.get_table(table)
-        interface_dict = config_db.get_table(interface)
-        link_local_data = {}
+    for ns in ns_list:
+        config_db = ConfigDBConnector(namespace=ns)
+        config_db.connect()
+        interface = ""
 
-        for port in port_dict.keys():
-            if port not in interface_dict:
-                body.append([port, 'Disabled'])
-            elif interface_dict:
-                value = interface_dict[port]
-                if 'ipv6_use_link_local_only' in value:
-                    link_local_data[port] = interface_dict[port]['ipv6_use_link_local_only']
-                    if link_local_data[port] == 'enable':
-                        body.append([port, 'Enabled'])
+        for table in tables:
+            if table == "PORT":
+                interface = "INTERFACE"
+            elif table == "PORTCHANNEL":
+                interface = "PORTCHANNEL_INTERFACE"
+            elif table == "VLAN":
+                interface = "VLAN_INTERFACE"
+
+            port_dict = config_db.get_table(table)
+            interface_dict = config_db.get_table(interface)
+            link_local_data = {}
+
+            for port in port_dict.keys():
+                if port not in interface_dict:
+                    body.append([port, 'Disabled'])
+                elif interface_dict:
+                    value = interface_dict[port]
+                    if 'ipv6_use_link_local_only' in value:
+                        link_local_data[port] = interface_dict[port]['ipv6_use_link_local_only']
+                        if link_local_data[port] == 'enable':
+                            body.append([port, 'Enabled'])
+                        else:
+                            body.append([port, 'Disabled'])
                     else:
                         body.append([port, 'Disabled'])
-                else:
-                    body.append([port, 'Disabled'])
 
     click.echo(tabulate(body, header, tablefmt="grid"))
 

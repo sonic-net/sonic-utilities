@@ -113,7 +113,7 @@ class TestIPv6LinkLocal(object):
     def test_config_enable_disable_ipv6_link_local_on_physical_interface(self):
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'config_db': db.cfgdb}
 
         # Enable ipv6 link local on Ethernet0
         result = runner.invoke(config.config.commands["interface"].commands["ipv6"].commands["enable"].commands["use-link-local-only"], ["Ethernet0"], obj=obj)
@@ -132,7 +132,7 @@ class TestIPv6LinkLocal(object):
     def test_config_enable_disable_ipv6_link_local_on_portchannel_interface(self):
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'config_db': db.cfgdb}
 
         # Enable ipv6 link local on PortChannel0001
         result = runner.invoke(config.config.commands["interface"].commands["ipv6"].commands["enable"].commands["use-link-local-only"], ["PortChannel0001"], obj=obj)
@@ -151,7 +151,7 @@ class TestIPv6LinkLocal(object):
     def test_config_enable_disable_ipv6_link_local_on_invalid_interface(self):
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'config_db': db.cfgdb}
 
         # Enable ipv6 link local on PortChannel1
         result = runner.invoke(config.config.commands["interface"].commands["ipv6"].commands["enable"].commands["use-link-local-only"], ["PortChannel1"], obj=obj)
@@ -170,7 +170,7 @@ class TestIPv6LinkLocal(object):
     def test_config_enable_disable_ipv6_link_local_on_interface_which_is_member_of_vlan(self):
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'config_db': db.cfgdb}
 
         # Enable ipv6 link local on Ethernet16
         result = runner.invoke(config.config.commands["interface"].commands["ipv6"].commands["enable"].commands["use-link-local-only"], ["Ethernet16"], obj=obj)
@@ -189,8 +189,8 @@ class TestIPv6LinkLocal(object):
     def test_config_enable_disable_ipv6_link_local_on_interface_which_is_member_of_portchannel(self):
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
-        
+        obj = {'config_db': db.cfgdb}
+
         # Enable ipv6 link local on Ethernet32
         result = runner.invoke(config.config.commands["interface"].commands["ipv6"].commands["enable"].commands["use-link-local-only"], ["Ethernet32"], obj=obj)
         print(result.exit_code)
@@ -208,7 +208,7 @@ class TestIPv6LinkLocal(object):
     def test_config_enable_disable_ipv6_link_local_on_all_valid_interfaces(self):
         runner = CliRunner()
         db = Db()
-        obj = {'db':db.cfgdb}
+        obj = {'config_db': db.cfgdb}
 
         # Enable ipv6 link local on all interfaces
         result = runner.invoke(config.config.commands["ipv6"].commands["enable"].commands["link-local"], obj=obj)
