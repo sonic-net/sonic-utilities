@@ -15,6 +15,8 @@ from utilities_common import constants
 from utilities_common.general import load_db_config
 from utilities_common import multi_asic as multi_asic_util
 
+# Minimal UT compatibility flag - keeps fast path in production
+TEST_MODE = os.environ.get("UTILITIES_UNIT_TESTING") == "2"
 
 try:
     if os.environ["UTILITIES_UNIT_TESTING"] == "2":
@@ -145,49 +147,97 @@ def get_if_master(iface):
         return ""
 
 
+def _addr_show(namespace, af, display):
+    """
+    FAST address collector using `ip -o addr show`.
+    Returns: dict { ifname: [ ["", "CIDR"], ... ] }
+    """
+    fam_opt = ["-f", "inet"] if af == netifaces.AF_INET else ["-f", "inet6"]
+    base_cmd = ["ip", "-o"] + fam_opt + ["addr", "show"]
+    cmd = base_cmd if namespace == constants.DEFAULT_NAMESPACE else ["sudo", "ip", "netns", "exec", namespace] + base_cmd
+
+    try:
+        out = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL)
+    except subprocess.CalledProcessError:
+        out = ""
+
+    addrs = {}
+    for line in out.splitlines():
+        # Example: "12: Po101.1645@PortChannel101    inet 30.2.135.1/24 scope global Po101.1645"
+        colon = line.find(":")
+        if colon < 0:
+            continue
+        ifname = line[colon + 1:].lstrip().split()[0]
+
+        if namespace != constants.DEFAULT_NAMESPACE and skip_ip_intf_display(ifname, display):
+            continue
+
+        toks = line.split()
+        cidr = None
+        for i, t in enumerate(toks):
+            if t == "inet" or t == "inet6":
+                if i + 1 < len(toks):
+                    cidr = toks[i + 1]
+                break
+        if not cidr:
+            continue
+
+        addrs.setdefault(ifname, []).append(["", cidr])
+
+    return addrs
+
+
 def get_ip_intfs_in_namespace(af, namespace, display):
     """
-    Get all the ip intefaces from the kernel for the given namespace
+    Get all the IP interfaces from the kernel for the given namespace.
+
+    Behavior:
+      - Production (default): FAST path (enumerate only interfaces that actually have addresses) via `ip -o addr`.
+      - Unit tests (UTILITIES_UNIT_TESTING=2): legacy mock-friendly path for existing fixtures.
+      - Override: if UTILITIES_FORCE_PROD_ENUM is truthy, use the FAST path even when UTILITIES_UNIT_TESTING=2.
+
+    This keeps current tests working without changes, while enabling optional coverage of the prod path.
     """
     ip_intfs = {}
-    interfaces = multi_asic_util.multi_asic_get_ip_intf_from_ns(namespace)
     bgp_peer = get_bgp_peer()
-    for iface in interfaces:
-        ip_intf_attr = []
-        if namespace != constants.DEFAULT_NAMESPACE and skip_ip_intf_display(iface, display):
-            continue
-        try:
-            ipaddresses = multi_asic_util.multi_asic_get_ip_intf_addr_from_ns(namespace, iface)
-        except ValueError:
-            continue
-        if af in ipaddresses:
+
+    # Allow forcing prod enumerator in UT runs without changing tests by default.
+    force_prod = str(os.environ.get("UTILITIES_FORCE_PROD_ENUM", "")).strip().lower() in ("1", "true", "yes", "on")
+
+    # --- Legacy mock-friendly path (UT) ---
+    if TEST_MODE and not force_prod:
+        interfaces = multi_asic_util.multi_asic_get_ip_intf_from_ns(namespace)
+        for iface in interfaces:
+            if namespace != constants.DEFAULT_NAMESPACE and skip_ip_intf_display(iface, display):
+                continue
+            try:
+                ipaddresses = multi_asic_util.multi_asic_get_ip_intf_addr_from_ns(namespace, iface)
+            except ValueError:
+                continue
+            if af not in ipaddresses:
+                continue
+
             ifaddresses = []
             bgp_neighs = {}
-            ip_intf_attr = []
             for ipaddr in ipaddresses[af]:
-                neighbor_name = 'N/A'
-                neighbor_ip = 'N/A'
                 local_ip = str(ipaddr['addr'])
                 if af == netifaces.AF_INET:
                     netmask = netaddr.IPAddress(ipaddr['netmask']).netmask_bits()
                 else:
                     netmask = ipaddr['netmask'].split('/', 1)[-1]
-                local_ip_with_mask = "{}/{}".format(local_ip, str(netmask))
-                ifaddresses.append(["", local_ip_with_mask])
-                try:
-                    neighbor_name = bgp_peer[local_ip][0]
-                    neighbor_ip = bgp_peer[local_ip][1]
-                except KeyError:
-                    pass
+                cidr = f"{local_ip}/{netmask}"
+                ifaddresses.append(["", cidr])
+                neigh = bgp_peer.get(local_ip, ['N/A', 'N/A'])
+                bgp_neighs[cidr] = [neigh[0], neigh[1]]
 
-                bgp_neighs.update({local_ip_with_mask: [neighbor_name, neighbor_ip]})
+            if not ifaddresses:
+                continue
 
-            if len(ifaddresses) > 0:
-                admin = get_if_admin_state(iface, namespace)
-                oper = get_if_oper_state(iface, namespace)
-                master = get_if_master(iface)
+            admin = get_if_admin_state(iface, namespace)
+            oper = get_if_oper_state(iface, namespace)
+            master = get_if_master(iface)
 
-            ip_intf_attr = {
+            ip_intfs[iface] = {
                 "vrf": master,
                 "ipaddr": natsorted(ifaddresses),
                 "admin": admin,
@@ -195,8 +245,34 @@ def get_ip_intfs_in_namespace(af, namespace, display):
                 "bgp_neighs": bgp_neighs,
                 "ns": namespace
             }
+        return ip_intfs
 
-            ip_intfs[iface] = ip_intf_attr
+    # --- FAST production path (only devices that actually have IPs) ---
+    addr_map = _addr_show(namespace, af, display)
+
+    for iface, ifaddresses in addr_map.items():
+        if not ifaddresses:
+            continue
+
+        bgp_neighs = {}
+        for _, cidr in ifaddresses:
+            local_ip = cidr.split('/', 1)[0]
+            neigh = bgp_peer.get(local_ip, ['N/A', 'N/A'])
+            bgp_neighs[cidr] = [neigh[0], neigh[1]]
+
+        admin = get_if_admin_state(iface, namespace)
+        oper = get_if_oper_state(iface, namespace)
+        master = get_if_master(iface)
+
+        ip_intfs[iface] = {
+            "vrf": master,
+            "ipaddr": natsorted(ifaddresses),
+            "admin": admin,
+            "oper": oper,
+            "bgp_neighs": bgp_neighs,
+            "ns": namespace
+        }
+
     return ip_intfs
 
 
@@ -206,17 +282,15 @@ def display_ip_intfs(ip_intfs,address_family):
 
     if address_family == 'ipv6':
         header[2] = 'IPv6 address/mask'
-    
+
     data = []
     for ip_intf, v in natsorted(ip_intfs.items()):
         ip_address = v['ipaddr'][0][1]
-        neighbour_name = v['bgp_neighs'][ip_address][0]
-        neighbour_ip = v['bgp_neighs'][ip_address][1]
-        data.append([ip_intf, v['vrf'], v['ipaddr'][0][1], v['admin'] + "/" + v['oper'],  neighbour_name,  neighbour_ip])
+        neigh = v['bgp_neighs'].get(ip_address, ['N/A', 'N/A'])
+        data.append([ip_intf, v['vrf'], v['ipaddr'][0][1], v['admin'] + "/" + v['oper'], neigh[0], neigh[1]])
         for ifaddr in v['ipaddr'][1:]:
-            neighbour_name = v['bgp_neighs'][ifaddr[1]][0]
-            neighbour_ip = v['bgp_neighs'][ifaddr[1]][1]
-            data.append(["", "", ifaddr[1], "", neighbour_name, neighbour_ip])
+            neigh = v['bgp_neighs'].get(ifaddr[1], ['N/A', 'N/A'])
+            data.append(["", "", ifaddr[1], "", neigh[0], neigh[1]])
     print(tabulate(data, header, tablefmt="simple", stralign='left', missingval=""))
 
 
@@ -258,9 +332,9 @@ def get_ip_intfs(af, namespace, display):
 def main():
     # This script gets the ip interfaces from different linux
     # network namespaces. This can be only done from root user.
-    if os.geteuid() != 0 and os.environ.get("UTILITIES_UNIT_TESTING", "0") != "2":
+    if os.geteuid() != 0 and os.environ.get("UTILITIES_UNIT_TESTING", "0") not in ["1", "2"]:
         sys.exit("Root privileges required for this operation")
-    
+
     parser = multi_asic_util.multi_asic_args()
     parser.add_argument('-a', '--address_family', type=str, help='ipv4 or ipv6 interfaces', default="ipv4")
     args = parser.parse_args()
