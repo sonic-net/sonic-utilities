@@ -2407,6 +2407,26 @@ save_container_files() {
 }
 
 ###############################################################################
+# Save SMART info of all devices
+# Globals:
+#  None
+# Arguments:
+#  None
+# Returns:
+#  None
+###############################################################################
+save_device_smart_info() {
+    trap 'handle_error $? $LINENO' ERR
+    # Get all SMART devices
+    for dev in $(smartctl --scan | cut -d ' ' -f 1); do
+        # Given the device of /dev/sda, save the output to smartctl_dev_sda
+        local cmd="smartctl -xa $dev"
+        local file="smartctl${dev//\//_}"
+        save_cmd "$cmd" "$file"
+    done
+}
+
+###############################################################################
 # Main generate_dump routine
 # Globals:
 #  All of them.
@@ -2508,6 +2528,9 @@ main() {
     save_cmd "lspci -vvv -xx" "lspci" &
     save_cmd "lsusb -v" "lsusb" &
     save_cmd "sysctl -a" "sysctl" &
+    wait
+
+    save_device_smart_info &
     wait
 
     save_ip_info &
