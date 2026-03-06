@@ -373,7 +373,8 @@
     },
     "VNET_ROUTE_TUNNEL_TABLE:test_v4_in_v4-0:160.163.191.1/32": {
         "endpoint":"100.251.7.1",
-        "endpoint_monitor":"100.251.7.1"
+        "endpoint_monitor":"100.251.7.1",
+        "metric": "0"
     },
     "VNET_ROUTE_TUNNEL_TABLE:Vnet_v6_in_v6-0:fddd:a156:a251::a6:1/128": {
         "endpoint": "fddd:a100:a251::a10:1,fddd:a101:a251::a10:1,fddd:a102:a251::a10:1,fddd:a103:a251::a10:1",
