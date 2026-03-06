@@ -1,14 +1,3 @@
-"""
-Tests for generic_config_updater/main.py
-
-Covers: validate_patch_format, get_all_running_config,
-filter_duplicate_patch_operations, append_emptytables_if_required,
-validate_patch, apply_patch_for_scope, apply_patch_from_file,
-sub-command functions (create_checkpoint, delete_checkpoint,
-list_checkpoints, apply_patch, replace_config, save_config,
-rollback_config), build_parser, and main().
-"""
-
 import io
 import json
 import os
@@ -18,16 +7,14 @@ import unittest
 from argparse import Namespace
 from unittest import mock
 
-import jsonpatch
-
 # Make sure the repo root is on the path
 _TEST_DIR = os.path.dirname(os.path.abspath(__file__))
 _ROOT_DIR = os.path.dirname(os.path.dirname(_TEST_DIR))
 sys.path.insert(0, _ROOT_DIR)
 
-from generic_config_updater.generic_updater import ConfigFormat
-from generic_config_updater.gu_common import GenericConfigUpdaterError
-import generic_config_updater.main as gcu_main
+from generic_config_updater.generic_updater import ConfigFormat  # noqa: E402
+from generic_config_updater.gu_common import GenericConfigUpdaterError  # noqa: E402
+import generic_config_updater.main as gcu_main  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
