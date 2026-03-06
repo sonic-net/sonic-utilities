@@ -94,6 +94,11 @@ def get_nexthop_info_str(nxhp_info, filterByIp):
     if "labels" in nxhp_info:
         # MPLS labels are stored as an array (list) in json if present. Need to print through each one in list
         str_2_return += ", label {}".format(get_mpls_label_strgs(nxhp_info['labels']))
+    if "weight" in nxhp_info:
+        if filterByIp:
+            str_2_return += ", weight {}".format(nxhp_info['weight'])
+        else:
+            str_2_return += " weight {},".format(nxhp_info['weight'])
     return str_2_return
 
 def get_ip_value(ipn):
