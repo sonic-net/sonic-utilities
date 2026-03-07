@@ -44,6 +44,8 @@
   * [Console connect commands](#console-connect-commands)
   * [Console clear commands](#console-clear-commands)
   * [DPU serial console utility](#dpu-serial-console-utility)
+* [CRM](#crm)
+  * [CRM show commands](#crm-show-commands)
 * [CMIS firmware upgrade](#cmis-firmware-upgrade)
   * [CMIS firmware version show commands](#cmis-firmware-version-show-commands)
   * [CMIS firmware upgrade commands](#cmis-firmware-upgrade-commands)
@@ -311,6 +313,8 @@ The direct scripts/utilities/commands (examples given below) that are not wrappe
   1. acl_loader – This script is already wrapped inside “config acl” command; i.e. any ACL configuration that user is allowed to do is already part of “config acl” command; users are not expected to use the acl_loader script directly and hence this document need not explain the “acl_loader” script.
   2. crm – this command is not explained in this document.
   3. sonic-clear, sfputil, etc., This document does not explain these scripts also.
+
+Exception: the `crm show resources` command family is documented in the [CRM](#crm) section.
 
 ## Basic Tasks
 
@@ -3313,6 +3317,90 @@ Optionally, user may overwrite TTY device for experiment.
   ```
   root@MtFuji:/home/cisco# dpu-tty.py -n dpu2 -t ttyS4
   ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#console)
+
+## CRM
+
+### CRM show commands
+
+**crm show resources**
+
+This command displays CRM resource usage and availability counters.
+
+- Usage:
+  ```
+  crm show resources [-n <namespace>] all
+  crm show resources [-n <namespace>] acl {group|table}
+  crm show resources [-n <namespace>] {fdb|ipmc|snat|dnat|srv6-nexthop|srv6-my-sid-entry}
+  crm show resources [-n <namespace>] ipv4 {route|neighbor|nexthop}
+  crm show resources [-n <namespace>] ipv6 {route|neighbor|nexthop}
+  crm show resources [-n <namespace>] mpls {inseg|nexthop}
+  crm show resources [-n <namespace>] nexthop group {member|object}
+  ```
+
+- Details:
+  - On a single-ASIC system, run the command without `-n`.
+  - On a multi-ASIC system, if `-n` or `--namespace` is not specified, the command applies to all namespaces and prints a separate section for each ASIC namespace.
+  - On a multi-ASIC system, `-n` or `--namespace` accepts one namespace name such as `asic0`, `asic1`, `asic2`, or `asic3`.
+  - Place `-n` or `--namespace` immediately after `crm show resources`, for example `crm show resources -n asic0 ipv4 route`.
+  - Some resources may display `CRM counters are not ready` until the counters have been populated after the CRM polling interval.
+
+- Examples:
+  ```
+  admin@sonic:~$ crm show resources all
+  ```
+
+  ```
+  admin@sonic:~$ crm show resources ipv4 route
+  ```
+
+  ```
+  admin@sonic:~$ crm show resources acl group
+  ```
+
+  ```
+  admin@sonic:~$ crm show resources nexthop group member
+  ```
+
+  ```
+  admin@sonic:~$ crm show resources -n asic0 all
+  ```
+
+  ```
+  admin@sonic:~$ crm show resources -n asic1 ipv4 route
+  ```
+
+- Example on a multi-ASIC system when namespace is not specified:
+  ```
+  admin@sonic:~$ crm show resources ipv4 route
+
+  ASIC0
+
+  Resource Name      Used Count    Available Count
+  ---------------  ------------  -----------------
+  ipv4_route                  1             202434
+
+
+  ASIC1
+
+  Resource Name      Used Count    Available Count
+  ---------------  ------------  -----------------
+  ipv4_route                  1             202434
+  ```
+
+- Example on a multi-ASIC system for a specific namespace:
+  ```
+  admin@sonic:~$ crm show resources -n asic0 ipv4 route
+
+  ASIC0
+
+  Resource Name      Used Count    Available Count
+  ---------------  ------------  -----------------
+  ipv4_route                  1             202434
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#crm)
 
 ## CMIS firmware upgrade
 

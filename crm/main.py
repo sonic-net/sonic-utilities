@@ -608,10 +608,12 @@ def summary(ctx):
     ctx.obj["crm"].show_summary()
 
 @show.group()
+@multi_asic_util.multi_asic_click_option_namespace
 @click.pass_context
-def resources(ctx):
+def resources(ctx, namespace):
     """Show CRM resources information"""
     ctx.obj["crm"].cli_mode = 'resources'
+    ctx.obj["crm"].multi_asic.namespace_option = namespace
 
 @show.group()
 @click.pass_context
