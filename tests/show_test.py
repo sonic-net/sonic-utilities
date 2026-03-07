@@ -703,8 +703,12 @@ class TestShowVxlan(object):
     def setup_method(self):
         print('SETUP')
 
+    @patch('show.vxlan.ConfigDBConnector')
     @patch('utilities_common.cli.run_command')
-    def test_counters(self, mock_run_command):
+    def test_counters(self, mock_run_command, mock_cfg_db_cls):
+        mock_cfg_db = MagicMock()
+        mock_cfg_db.get_entry.return_value = {'src_ip': '10.0.0.1'}
+        mock_cfg_db_cls.return_value = mock_cfg_db
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['vxlan'].commands['counters'], ['-p', '3', 'tunnel1', '--verbose'])
         print(result.exit_code)
