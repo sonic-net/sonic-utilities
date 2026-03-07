@@ -206,6 +206,7 @@
 * [VxLAN & Vnet](#vxlan--vnet)
   * [VxLAN](#vxlan)
     * [VxLAN show commands](#vxlan-show-commands)
+    * [VxLAN config commands](#vxlan-config-commands)
   * [Vnet](#vnet)
     * [Vnet show commands](#vnet-show-commands)
     * [Vnet config commands](#vnet-config-commands)
@@ -263,6 +264,7 @@
 
 | Version | Modification Date | Details |
 | --- | --- | --- |
+| v10 | Mar-07-2026 | Update VxLAN and Vnet command reference for namespace-aware multi-ASIC behavior |
 | v9 | Sep-19-2024 | Add DPU serial console utility |
 | v8 | Oct-09-2023 | Add CMIS firmware upgrade commands |
 | v7 | Jun-22-2023 | Add static DNS show and config commands |
@@ -12908,6 +12910,13 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#vlan--
 
 ### VxLAN
 
+On multi-ASIC platforms, the `show vxlan`, `show vnet`, `config vxlan`, and `config vnet` groups support the `-n/--namespace <namespace>` option.
+
+- For `show` commands, omit `-n` to display all namespaces.
+- For `config vxlan` on multi-ASIC, `-n <namespace>` is required.
+- Place `-n` immediately after the command group, for example `show vxlan -n asic0 tunnel`.
+- Literal `-n all` is not supported.
+
 #### VxLAN show commands
 
 **show vxlan tunnel**
@@ -12917,7 +12926,7 @@ This command displays brief information about all the vxlans configured in the d
 - Usage:
 
   ```
-  show vxlan tunnel
+  show vxlan [ -n <namespace> ] tunnel
   ```
 
 - Example:
@@ -12938,7 +12947,7 @@ This command displays <vlan_name> configuration.
 - Usage:
 
   ```
-  show vxlan name <vxlan_name>
+  show vxlan [ -n <namespace> ] name <vxlan_name>
   ```
 
 - Example:
@@ -12950,7 +12959,37 @@ This command displays <vlan_name> configuration.
   tunnel3              10.10.10.10  30.10.10.10       tmap2              1235 -> 200
   ```
 
-Go Back To [Beginning of the document](#) or [Beginning of this section](#vxlan--vnet)
+**Additional show vxlan commands**
+
+- `show vxlan [ -n <namespace> ] interface`
+- `show vxlan [ -n <namespace> ] vlanvnimap [count]`
+- `show vxlan [ -n <namespace> ] vrfvnimap`
+- `show vxlan [ -n <namespace> ] remotevtep [count]`
+- `show vxlan [ -n <namespace> ] remotevni <remote_vtep_ip|all> [count]`
+- `show vxlan [ -n <namespace> ] remotemac <remote_vtep_ip|all> [count]`
+- `show vxlan [ -n <namespace> ] counters [<tunnel>] [-p <period>] [--verbose]`
+
+For `show vxlan counters <tunnel>` without `-n` on a multi-ASIC platform, the CLI searches all namespaces and only runs `tunnelstat` in namespaces where that tunnel is configured.
+
+#### VxLAN config commands
+
+The `config vxlan` group supports:
+
+- `config vxlan [ -n <namespace> ] add <vxlan_name> <src_ip>`
+- `config vxlan [ -n <namespace> ] del <vxlan_name>`
+- `config vxlan [ -n <namespace> ] evpn_nvo add <nvo_name> <vxlan_name>`
+- `config vxlan [ -n <namespace> ] evpn_nvo del <nvo_name>`
+- `config vxlan [ -n <namespace> ] map add <vxlan_name> <vlan_id> <vni>`
+- `config vxlan [ -n <namespace> ] map del <vxlan_name> <vlan_id> <vni>`
+- `config vxlan [ -n <namespace> ] map_range add <vxlan_name> <vlan_start> <vlan_end> <vni_start>`
+- `config vxlan [ -n <namespace> ] map_range del <vxlan_name> <vlan_start> <vlan_end> <vni_start>`
+
+Notes:
+
+- On multi-ASIC platforms, `config vxlan` requires `-n <namespace>` and the option must appear before the subcommand.
+- Only one VXLAN tunnel is allowed per namespace.
+- `config vxlan map del` fails if the VNI is still mapped to a VRF.
+- `config vxlan map_range del` skips VLAN/VNI pairs whose VNI is still mapped to a VRF.
 
 ### Vnet
 
@@ -12963,7 +13002,7 @@ This command displays brief information about all the vnets configured in the de
 - Usage:
 
   ```
-  show vnet brief
+  show vnet [ -n <namespace> ] brief
   ```
 
 - Example:
@@ -12983,7 +13022,7 @@ This command displays the list or vxlan tunnel endpoints and their status. In ad
 - Usage:
 
   ```
-  show vnet endpoint <ipv4_address/ipv6_address>
+  show vnet [ -n <namespace> ] endpoint [<ipv4_address/ipv6_address>]
 
   ```
 
@@ -13019,7 +13058,7 @@ This command displays brief information about <vnet_name> configured in the devi
 - Usage:
 
   ```
-  show vnet name <vnet_name>
+  show vnet [ -n <namespace> ] name <vnet_name>
   ```
 
 - Example:
@@ -13038,7 +13077,7 @@ This command displays vnet interfaces information about all the vnets configured
 - Usage:
 
   ```
-  show vnet interfaces
+  show vnet [ -n <namespace> ] interfaces
   ```
 
 - Example:
@@ -13061,7 +13100,7 @@ This command displays vnet neighbor information about all the vnets configured i
 - Usage:
 
   ```
-  show vnet neighbors
+  show vnet [ -n <namespace> ] neighbors
   ```
 
 - Example:
@@ -13088,7 +13127,7 @@ This command displays all routes information about all the vnets configured in t
 - Usage:
 
   ```
-  show vnet routes all
+  show vnet [ -n <namespace> ] routes all
   ```
 
 - Example:
@@ -13114,7 +13153,7 @@ This command displays tunnel routes information about all the vnets configured i
 - Usage:
 
   ```
-  show vnet routes tunnel
+  show vnet [ -n <namespace> ] routes tunnel
   ```
 
 - Example:
@@ -13127,6 +13166,14 @@ This command displays tunnel routes information about all the vnets configured i
   Vnet_3000    100.100.2.1/32  10.10.10.2  00:00:00:00:03:04
   ```
 
+**Additional show vnet commands**
+
+- `show vnet [ -n <namespace> ] alias [<vnet_alias>]`
+- `show vnet [ -n <namespace> ] advertised-routes [<community>]`
+- `show vnet [ -n <namespace> ] guid <guid>`
+
+When `-n` is omitted on a multi-ASIC platform, `show vnet` commands iterate over all namespaces and print a `Namespace:` header before each section.
+
 #### Vnet config commands
 
 **config vnet add**
@@ -13135,7 +13182,7 @@ This command creates vnet in SONiC system with provided vnet-name.
 
 - Usage:
   ```
-  config vnet add <vnet-name> <vni> <vxlan-tunnel> [<peer_list>] [<guid>] [<scope>] [<advertise_prefix>] [<overlay_dmac>] [<src_mac>]
+  config vnet [ -n <namespace> ] add <vnet-name> <vni> <vxlan-tunnel> [<peer_list>] [<guid>] [<scope>] [<advertise_prefix>] [<overlay_dmac>] [<src_mac>]
   ```
 
 Note: vnet-name should always start with keyword "Vnet_"
@@ -13148,7 +13195,7 @@ This command deletes vnet with vnet-name and its associated binded interfaces an
 
 - Usage:
   ```
-  config vnet del <vnet-name>
+  config vnet [ -n <namespace> ] del <vnet-name>
   ```
 
 **config vnet add route**
@@ -13157,12 +13204,12 @@ This command creates vnet route in SONiC system with provided vnet-name and pref
 
 - Usage:
   ```
-  config vnet add-route <vnet-name> <prefix> <endpoint> [<vni>] [<endpoint_monitor>] [<mac_address>] [<profile>] [<primary>] [<monitoring>] [<adv_prefix>]
+  config vnet [ -n <namespace> ] add-route <vnet-name> <prefix> <endpoint> [<vni>] [<mac_address>] [<endpoint_monitor>] [<profile>] [<primary>] [<monitoring>] [<adv_prefix>]
   ```
 
 Note: vnet-name should always start with keyword "Vnet_"
 Mandatory Parameters: vnet_name, prefix, endpoint
-Optional Parameters: vni, endpoint_monitor, mac_address, profile, primary, monitoring, adv_prefix
+Optional Parameters: vni, mac_address, endpoint_monitor, profile, primary, monitoring, adv_prefix
 
 **config vnet del-route <vnet-name>**
 
@@ -13170,8 +13217,11 @@ This command deletes a vnet route with vnet-name and prefix. It deletes all rout
 
 - Usage:
   ```
-  config vnet del-route <vnet-name> [<prefix>]
+  config vnet [ -n <namespace> ] del-route <vnet-name> [<prefix>]
   ```
+
+On multi-ASIC platforms, `config vnet` also uses a group-level `-n <namespace>` option and the namespace must be placed before the subcommand.
+
 Go Back To [Beginning of the document](#) or [Beginning of this section](#vxlan--vnet)
 
 ## Warm Reboot

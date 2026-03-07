@@ -392,13 +392,33 @@ def remotemac(remote_vtep_ip, count):
 def counters(tunnel, period, verbose):
     """Show VxLAN counters"""
     namespace = multi_asic_util.get_namespace_from_ctx()
+    ns_list = multi_asic_util.multi_asic_get_ns_list(namespace)
 
-    cmd = ['tunnelstat', '-T', 'vxlan']
-    if period is not None:
-        cmd += ['-p', str(period)]
-    if tunnel is not None:
-        cmd += ['-i', str(tunnel)]
-    if namespace is not None:
-        cmd += ['-n', str(namespace)]
+    # When a tunnel name is provided without a namespace, only run tunnelstat
+    # in namespaces where the tunnel is configured.
+    if namespace is None and tunnel is not None:
+        filtered = []
+        for ns in ns_list:
+            config_db = ConfigDBConnector(namespace=ns)
+            config_db.connect()
+            if config_db.get_entry('VXLAN_TUNNEL', tunnel):
+                filtered.append(ns)
+        ns_list = filtered
 
-    clicommon.run_command(cmd, display_cmd=verbose)
+        if not ns_list:
+            click.echo("VXLAN tunnel {} not configured".format(tunnel))
+            return
+
+    for ns in ns_list:
+        if multi_asic.is_multi_asic() and namespace is None:
+            click.echo("\nNamespace: {}".format(ns))
+
+        cmd = ['tunnelstat', '-T', 'vxlan']
+        if period is not None:
+            cmd += ['-p', str(period)]
+        if tunnel is not None:
+            cmd += ['-i', str(tunnel)]
+        if ns:
+            cmd = ['sudo', 'ip', 'netns', 'exec', str(ns)] + cmd
+
+        clicommon.run_command(cmd, display_cmd=verbose)
