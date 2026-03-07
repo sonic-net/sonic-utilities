@@ -10000,13 +10000,10 @@ def motd(message):
 #
 
 @config.group(cls=clicommon.AbbreviationGroup, name='vnet')
-@click.pass_context
-def vnet(ctx):
+@multi_asic_util.multi_asic_click_option_namespace(required=True)
+def vnet(namespace):
     """VNET-related configuration tasks"""
-    config_db = ConfigDBConnector()
-    config_db.connect()
-    ctx.obj = {}
-    ctx.obj['config_db'] = config_db
+    pass
 
 
 @vnet.command('add')
@@ -10019,10 +10016,15 @@ def vnet(ctx):
 @click.argument('advertise_prefix', metavar='<advertise_prefix>', type=bool, required=False)
 @click.argument('overlay_dmac', metavar='<overlay_dmac>', required=False)
 @click.argument('src_mac', metavar='<src_mac>', required=False)
-@click.pass_context
-def add_vnet(ctx, vnet_name, vni, vxlan_tunnel, peer_list, guid, scope, advertise_prefix, overlay_dmac, src_mac):
+@clicommon.pass_db
+def add_vnet(db, vnet_name, vni, vxlan_tunnel, peer_list, guid, scope, advertise_prefix, overlay_dmac, src_mac):
     """Add Vnet"""
-    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+    ctx = click.get_current_context()
+
+    namespace = multi_asic_util.get_namespace_from_ctx(default=DEFAULT_NAMESPACE)
+
+    cfg_db = db.cfgdb_clients[namespace]
+    config_db = ValidatedConfigDBConnector(cfg_db)
 
     vnet_name_is_valid(ctx, vnet_name)
 
@@ -10073,10 +10075,15 @@ def add_vnet(ctx, vnet_name, vni, vxlan_tunnel, peer_list, guid, scope, advertis
 
 @vnet.command('del')
 @click.argument('vnet_name', metavar='<vnet_name>', required=True)
-@click.pass_context
-def del_vnet(ctx, vnet_name):
+@clicommon.pass_db
+def del_vnet(db, vnet_name):
     """Del Vnet"""
-    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+    ctx = click.get_current_context()
+
+    namespace = multi_asic_util.get_namespace_from_ctx(default=DEFAULT_NAMESPACE)
+
+    cfg_db = db.cfgdb_clients[namespace]
+    config_db = ValidatedConfigDBConnector(cfg_db)
 
     vnet_name_is_valid(ctx, vnet_name)
 
@@ -10104,11 +10111,16 @@ def del_vnet(ctx, vnet_name):
 @click.argument('primary', metavar='<primary>', required=False)
 @click.argument('monitoring', metavar='<monitoring>', type=str, required=False)
 @click.argument('adv_prefix', metavar='<adv_prefix>', required=False)
-@click.pass_context
-def add_vnet_route(ctx, vnet_name, prefix, endpoint, vni, mac_address, endpoint_monitor,
+@clicommon.pass_db
+def add_vnet_route(db, vnet_name, prefix, endpoint, vni, mac_address, endpoint_monitor,
                    profile, primary, monitoring, adv_prefix):
     """Add/Update VNET Route"""
-    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+    ctx = click.get_current_context()
+
+    namespace = multi_asic_util.get_namespace_from_ctx(default=DEFAULT_NAMESPACE)
+
+    cfg_db = db.cfgdb_clients[namespace]
+    config_db = ValidatedConfigDBConnector(cfg_db)
 
     vnet_name_is_valid(ctx, vnet_name)
 
@@ -10164,10 +10176,15 @@ def add_vnet_route(ctx, vnet_name, prefix, endpoint, vni, mac_address, endpoint_
 @vnet.command('del-route')
 @click.argument('vnet_name', metavar='<vnet_name>', type=str, required=True)
 @click.argument('prefix', metavar='<prefix>', required=False)
-@click.pass_context
-def del_vnet_route(ctx, vnet_name, prefix):
+@clicommon.pass_db
+def del_vnet_route(db, vnet_name, prefix):
     """Del a specific VNET route or all VNET routes"""
-    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+    ctx = click.get_current_context()
+
+    namespace = multi_asic_util.get_namespace_from_ctx(default=DEFAULT_NAMESPACE)
+
+    cfg_db = db.cfgdb_clients[namespace]
+    config_db = ValidatedConfigDBConnector(cfg_db)
 
     vnet_name_is_valid(ctx, vnet_name)
 

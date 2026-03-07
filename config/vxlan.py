@@ -1,5 +1,7 @@
 import click
 import utilities_common.cli as clicommon
+import utilities_common.multi_asic as multi_asic_util
+from utilities_common.constants import DEFAULT_NAMESPACE
 
 from jsonpatch import JsonPatchConflict
 from .validated_config_db_connector import ValidatedConfigDBConnector
@@ -10,7 +12,8 @@ ADHOC_VALIDATION = True
 # 'vxlan' group ('config vxlan ...')
 #
 @click.group()
-def vxlan():
+@multi_asic_util.multi_asic_click_option_namespace(required=True)
+def vxlan(namespace):
     pass
 
 @vxlan.command('add')
@@ -20,7 +23,11 @@ def vxlan():
 def add_vxlan(db, vxlan_name, src_ip):
     """Add VXLAN"""
     ctx = click.get_current_context()
-    config_db = ValidatedConfigDBConnector(db.cfgdb)
+
+    namespace = multi_asic_util.get_namespace_from_ctx(default=DEFAULT_NAMESPACE)
+
+    cfg_db = db.cfgdb_clients[namespace]
+    config_db = ValidatedConfigDBConnector(cfg_db)
 
     if ADHOC_VALIDATION:
         if not clicommon.is_ipaddress(src_ip):
@@ -28,7 +35,7 @@ def add_vxlan(db, vxlan_name, src_ip):
         if not isInterfaceNameValid(vxlan_name):
             ctx.fail("'vxlan_name' length should not exceed {} characters".format(IFACE_NAME_MAX_LEN))
 
-    vxlan_keys = db.cfgdb.get_keys('VXLAN_TUNNEL')
+    vxlan_keys = config_db.get_keys('VXLAN_TUNNEL')
     if not vxlan_keys:
       vxlan_count = 0
     else:
@@ -49,13 +56,17 @@ def add_vxlan(db, vxlan_name, src_ip):
 def del_vxlan(db, vxlan_name):
     """Del VXLAN"""
     ctx = click.get_current_context()
-    config_db = ValidatedConfigDBConnector(db.cfgdb)
 
-    vxlan_keys = db.cfgdb.get_keys('VXLAN_TUNNEL')
+    namespace = multi_asic_util.get_namespace_from_ctx(default=DEFAULT_NAMESPACE)
+
+    cfg_db = db.cfgdb_clients[namespace]
+    config_db = ValidatedConfigDBConnector(cfg_db)
+
+    vxlan_keys = config_db.get_keys('VXLAN_TUNNEL')
     if vxlan_name not in vxlan_keys:
         ctx.fail("Vxlan tunnel {} does not exist".format(vxlan_name))
 
-    vxlan_keys = db.cfgdb.get_keys('VXLAN_EVPN_NVO')
+    vxlan_keys = config_db.get_keys('VXLAN_EVPN_NVO')
     if not vxlan_keys:
       vxlan_count = 0
     else:
@@ -64,7 +75,7 @@ def del_vxlan(db, vxlan_name):
     if(vxlan_count > 0):
         ctx.fail("Please delete the EVPN NVO configuration.")  
 
-    vxlan_keys = db.cfgdb.get_keys("VXLAN_TUNNEL_MAP|*")
+    vxlan_keys = config_db.get_keys("VXLAN_TUNNEL_MAP")
     if not vxlan_keys:
       vxlan_count = 0
     else:
@@ -73,7 +84,7 @@ def del_vxlan(db, vxlan_name):
     if(vxlan_count > 0):
         ctx.fail("Please delete all VLAN VNI mappings.")  
 
-    vnet_table = db.cfgdb.get_table('VNET')
+    vnet_table = config_db.get_table('VNET')
     vnet_keys = vnet_table.keys()
     for vnet_key in vnet_keys:
         if ('vxlan_tunnel' in vnet_table[vnet_key] and vnet_table[vnet_key]['vxlan_tunnel'] == vxlan_name):
@@ -95,8 +106,13 @@ def vxlan_evpn_nvo():
 def add_vxlan_evpn_nvo(db, nvo_name, vxlan_name):
     """Add NVO"""
     ctx = click.get_current_context()
-    config_db = ValidatedConfigDBConnector(db.cfgdb)
-    vxlan_keys = db.cfgdb.get_keys("VXLAN_EVPN_NVO|*")
+
+    namespace = multi_asic_util.get_namespace_from_ctx(default=DEFAULT_NAMESPACE)
+
+    cfg_db = db.cfgdb_clients[namespace]
+    config_db = ValidatedConfigDBConnector(cfg_db)
+
+    vxlan_keys = config_db.get_keys("VXLAN_EVPN_NVO")
     if not vxlan_keys:
       vxlan_count = 0
     else:
@@ -105,7 +121,7 @@ def add_vxlan_evpn_nvo(db, nvo_name, vxlan_name):
     if(vxlan_count > 0):
         ctx.fail("EVPN NVO already configured")  
 
-    if len(db.cfgdb.get_entry('VXLAN_TUNNEL', vxlan_name)) == 0:
+    if len(config_db.get_entry('VXLAN_TUNNEL', vxlan_name)) == 0:
         ctx.fail("VTEP {} not configured".format(vxlan_name))
 
     fvs = {'source_vtep': vxlan_name}
@@ -120,8 +136,13 @@ def add_vxlan_evpn_nvo(db, nvo_name, vxlan_name):
 def del_vxlan_evpn_nvo(db, nvo_name):
     """Del NVO"""
     ctx = click.get_current_context()
-    config_db = ValidatedConfigDBConnector(db.cfgdb)
-    vxlan_keys = db.cfgdb.get_keys('VXLAN_TUNNEL_MAP')
+
+    namespace = multi_asic_util.get_namespace_from_ctx(default=DEFAULT_NAMESPACE)
+
+    cfg_db = db.cfgdb_clients[namespace]
+    config_db = ValidatedConfigDBConnector(cfg_db)
+
+    vxlan_keys = config_db.get_keys('VXLAN_TUNNEL_MAP')
     if not vxlan_keys:
       vxlan_count = 0
     else:
@@ -146,7 +167,11 @@ def vxlan_map():
 def add_vxlan_map(db, vxlan_name, vlan, vni):
     """Add VLAN-VNI map entry"""
     ctx = click.get_current_context()
-    config_db = ValidatedConfigDBConnector(db.cfgdb)
+
+    namespace = multi_asic_util.get_namespace_from_ctx(default=DEFAULT_NAMESPACE)
+
+    cfg_db = db.cfgdb_clients[namespace]
+    config_db = ValidatedConfigDBConnector(cfg_db)
 
     if not vlan.isdigit():
         ctx.fail("Invalid vlan {}. Only valid vlan is accepted".format(vni))
@@ -159,13 +184,13 @@ def add_vxlan_map(db, vxlan_name, vlan, vni):
 
     vlan_name = "Vlan" + vlan
 
-    if len(db.cfgdb.get_entry('VXLAN_TUNNEL', vxlan_name)) == 0:
+    if len(config_db.get_entry('VXLAN_TUNNEL', vxlan_name)) == 0:
         ctx.fail("VTEP {} not configured".format(vxlan_name))
 
-    if len(db.cfgdb.get_entry('VLAN', vlan_name)) == 0:
+    if len(config_db.get_entry('VLAN', vlan_name)) == 0:
         ctx.fail("{} not configured".format(vlan_name))
 
-    vxlan_table = db.cfgdb.get_table('VXLAN_TUNNEL_MAP')
+    vxlan_table = config_db.get_table('VXLAN_TUNNEL_MAP')
     vxlan_keys = vxlan_table.keys()
     if vxlan_keys is not None:
       for key in vxlan_keys:
@@ -190,7 +215,11 @@ def add_vxlan_map(db, vxlan_name, vlan, vni):
 def del_vxlan_map(db, vxlan_name, vlan, vni):
     """Del VLAN-VNI map entry"""
     ctx = click.get_current_context()
-    config_db = ValidatedConfigDBConnector(db.cfgdb)
+
+    namespace = multi_asic_util.get_namespace_from_ctx(default=DEFAULT_NAMESPACE)
+
+    cfg_db = db.cfgdb_clients[namespace]
+    config_db = ValidatedConfigDBConnector(cfg_db)
 
     if not vlan.isdigit():
         ctx.fail("Invalid vlan {}. Only valid vlan is accepted".format(vni))
@@ -201,10 +230,10 @@ def del_vxlan_map(db, vxlan_name, vlan, vni):
     if clicommon.vni_id_is_valid(int(vni)) is False:
         ctx.fail("Invalid VNI {}. Valid range [1 to 16777215].".format(vni))
 
-    if len(db.cfgdb.get_entry('VXLAN_TUNNEL', vxlan_name)) == 0:
+    if len(config_db.get_entry('VXLAN_TUNNEL', vxlan_name)) == 0:
         ctx.fail("VTEP {} not configured".format(vxlan_name))
     found = 0
-    vrf_table = db.cfgdb.get_table('VRF')
+    vrf_table = config_db.get_table('VRF')
     vrf_keys = vrf_table.keys()
     if vrf_keys is not None:
       for vrf_key in vrf_keys:
@@ -216,7 +245,7 @@ def del_vxlan_map(db, vxlan_name, vlan, vni):
         ctx.fail("VNI mapped to vrf {}, Please remove VRF VNI mapping".format(vrf_key))
 
     mapname = vxlan_name + '|' + 'map_' + vni + '_' + vlan
-    db.cfgdb.set_entry('VXLAN_TUNNEL_MAP', mapname, None)
+    config_db.set_entry('VXLAN_TUNNEL_MAP', mapname, None)
     mapname = vxlan_name + '|' + 'map_' + vni + '_Vlan' + vlan
     try:
         config_db.set_entry('VXLAN_TUNNEL_MAP', mapname, None)
@@ -235,52 +264,57 @@ def vxlan_map_range():
 @clicommon.pass_db
 def add_vxlan_map_range(db, vxlan_name, vlan_start, vlan_end, vni_start):
     """Add Range of vlan-vni mappings"""
-    config_db = ValidatedConfigDBConnector(db.cfgdb)
     ctx = click.get_current_context()
+
+    namespace = multi_asic_util.get_namespace_from_ctx(default=DEFAULT_NAMESPACE)
+
+    cfg_db = db.cfgdb_clients[namespace]
+    config_db = ValidatedConfigDBConnector(cfg_db)
+
     if clicommon.is_vlanid_in_range(vlan_start) is False:
         ctx.fail(" Invalid Vlan Id , Valid Range : 1 to 4094 ")
     if clicommon.is_vlanid_in_range(vlan_end) is False:
         ctx.fail(" Invalid Vlan Id , Valid Range : 1 to 4094 ")
     if (vlan_start > vlan_end):
-       ctx.fail("vlan_end should be greater or equal to vlan_start")
+        ctx.fail("vlan_end should be greater or equal to vlan_start")
     if clicommon.vni_id_is_valid(vni_start) is False:
         ctx.fail("Invalid VNI {}. Valid range [1 to 16777215].".format(vni_start))
     if clicommon.vni_id_is_valid(vni_start+vlan_end-vlan_start) is False:
         ctx.fail("Invalid VNI End {}. Valid range [1 to 16777215].".format(vni_start))
 
-    if len(db.cfgdb.get_entry('VXLAN_TUNNEL', vxlan_name)) == 0:
+    if len(config_db.get_entry('VXLAN_TUNNEL', vxlan_name)) == 0:
         ctx.fail("VTEP {} not configured".format(vxlan_name))
     vlan_end = vlan_end + 1
-    vxlan_table = db.cfgdb.get_table('VXLAN_TUNNEL_MAP')
+    vxlan_table = config_db.get_table('VXLAN_TUNNEL_MAP')
     vxlan_keys = vxlan_table.keys()
 
     for vid in range (vlan_start, vlan_end):
-       vlan_name = 'Vlan{}'.format(vid)
-       vnid = vni_start+vid-vlan_start
-       vni_name = '{}'.format(vnid)
-       match_found = 'no'
-       if len(db.cfgdb.get_entry('VLAN', vlan_name)) == 0:
-         click.echo("{} not configured".format(vlan_name))
-         continue
-       if vxlan_keys is not None:
-          for key in vxlan_keys:
-            if (vxlan_table[key]['vlan'] == vlan_name):
-              print(vlan_name + " already mapped")
-              match_found = 'yes'
-              break
-            if (vxlan_table[key]['vni'] == vni_name):
-              print("VNI:" + vni_name + " already mapped ")
-              match_found = 'yes'
-              break
-       if (match_found == 'yes'):
-         continue
-       fvs = {'vni': vni_name,
-              'vlan' : vlan_name}
-       mapname = vxlan_name + '|' + 'map_' + vni_name + '_' + vlan_name
-       try:
-           config_db.set_entry('VXLAN_TUNNEL_MAP', mapname, fvs)
-       except ValueError as e:
-           ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+        vlan_name = 'Vlan{}'.format(vid)
+        vnid = vni_start+vid-vlan_start
+        vni_name = '{}'.format(vnid)
+        match_found = 'no'
+        if len(config_db.get_entry('VLAN', vlan_name)) == 0:
+            click.echo("{} not configured".format(vlan_name))
+            continue
+        if vxlan_keys is not None:
+            for key in vxlan_keys:
+                if (vxlan_table[key]['vlan'] == vlan_name):
+                    print(vlan_name + " already mapped")
+                    match_found = 'yes'
+                    break
+                if (vxlan_table[key]['vni'] == vni_name):
+                    print("VNI:" + vni_name + " already mapped ")
+                    match_found = 'yes'
+                    break
+        if (match_found == 'yes'):
+            continue
+        fvs = {'vni': vni_name,
+               'vlan': vlan_name}
+        mapname = vxlan_name + '|' + 'map_' + vni_name + '_' + vlan_name
+        try:
+            config_db.set_entry('VXLAN_TUNNEL_MAP', mapname, fvs)
+        except ValueError as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
 @vxlan_map_range.command('del')
 @click.argument('vxlan_name', metavar='<vxlan_name>', required=True)
@@ -291,32 +325,37 @@ def add_vxlan_map_range(db, vxlan_name, vlan_start, vlan_end, vni_start):
 def del_vxlan_map_range(db, vxlan_name, vlan_start, vlan_end, vni_start):
     """Del Range of vlan-vni mappings"""
     ctx = click.get_current_context()
-    config_db = ValidatedConfigDBConnector(db.cfgdb)
+
+    namespace = multi_asic_util.get_namespace_from_ctx(default=DEFAULT_NAMESPACE)
+
+    cfg_db = db.cfgdb_clients[namespace]
+    config_db = ValidatedConfigDBConnector(cfg_db)
+
     if clicommon.is_vlanid_in_range(vlan_start) is False:
         ctx.fail(" Invalid Vlan Id , Valid Range : 1 to 4094 ")
     if clicommon.is_vlanid_in_range(vlan_end) is False:
         ctx.fail(" Invalid Vlan Id , Valid Range : 1 to 4094 ")
     if (vlan_start > vlan_end):
-       ctx.fail("vlan_end should be greater or equal to vlan_start")
+        ctx.fail("vlan_end should be greater or equal to vlan_start")
     if clicommon.vni_id_is_valid(vni_start) is False:
         ctx.fail("Invalid VNI {}. Valid range [1 to 16777215].".format(vni_start))
     if clicommon.vni_id_is_valid(vni_start+vlan_end-vlan_start) is False:
         ctx.fail("Invalid VNI End {}. Valid range [1 to 16777215].".format(vni_start))
 
-    if len(db.cfgdb.get_entry('VXLAN_TUNNEL', vxlan_name)) == 0:
+    if len(config_db.get_entry('VXLAN_TUNNEL', vxlan_name)) == 0:
         ctx.fail("VTEP {} not configured".format(vxlan_name))
 
     vlan_end = vlan_end + 1
     for vid in range (vlan_start, vlan_end):
-       vlan_name = 'Vlan{}'.format(vid)
-       vnid = vni_start+vid-vlan_start
-       vni_name = '{}'.format(vnid)
-       if clicommon.is_vni_vrf_mapped(db, vni_name) is False:
-           print("Skipping Vlan {} VNI {} mapped delete. ".format(vlan_name, vni_name))
-           continue
+        vlan_name = 'Vlan{}'.format(vid)
+        vnid = vni_start+vid-vlan_start
+        vni_name = '{}'.format(vnid)
+        if clicommon.is_vni_vrf_mapped(config_db, vni_name) is False:
+            print("Skipping Vlan {} VNI {} mapped delete. ".format(vlan_name, vni_name))
+            continue
 
-       mapname = vxlan_name + '|' + 'map_' + vni_name + '_' + vlan_name
-       try:
-           config_db.set_entry('VXLAN_TUNNEL_MAP', mapname, None)
-       except JsonPatchConflict as e:
-           ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+        mapname = vxlan_name + '|' + 'map_' + vni_name + '_' + vlan_name
+        try:
+            config_db.set_entry('VXLAN_TUNNEL_MAP', mapname, None)
+        except JsonPatchConflict as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))

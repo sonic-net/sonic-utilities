@@ -377,5 +377,63 @@
     "DEBUG_COUNTER_DROP_REASON|DEBUG_1|ACL_ANY": {},
     "DEBUG_COUNTER_DROP_REASON|DEBUG_2|IP_HEADER_ERROR": {},
     "DEBUG_COUNTER_DROP_REASON|DEBUG_2|NO_L3_HEADER": {},
-    "DEBUG_COUNTER_DROP_REASON|lowercase_counter|L2_ANY": {}
+    "DEBUG_COUNTER_DROP_REASON|lowercase_counter|L2_ANY": {},
+    "VXLAN_TUNNEL|vtep1": {
+        "src_ip": "10.10.10.1"
+    },
+    "VXLAN_EVPN_NVO|nvo1": {
+        "source_vtep": "vtep1"
+    },
+    "VXLAN_TUNNEL_MAP|vtep1|map_1000_Vlan100": {
+        "vni": "1000",
+        "vlan": "Vlan100"
+    },
+    "VXLAN_TUNNEL_MAP|vtep1|map_2000_Vlan200": {
+        "vni": "2000",
+        "vlan": "Vlan200"
+    },
+    "VRF|Vrf1": {
+        "fallback": "false",
+        "vni": "3000"
+    },
+    "VLAN|Vlan100": {
+        "vlanid": "100"
+    },
+    "VLAN|Vlan200": {
+        "vlanid": "200"
+    },
+    "LOOPBACK_INTERFACE|Loopback0": {
+        "NULL": "NULL"
+    },
+    "LOOPBACK_INTERFACE|Loopback0|10.10.10.1/32": {
+        "NULL": "NULL"
+    },
+    "VNET|Vnet_2000": {
+        "peer_list": "",
+        "vni": "5000",
+        "vxlan_tunnel": "vtep1",
+        "guid": "guid-2000-asic0"
+    },
+    "VNET|Vnet_3000": {
+        "vni": "6000",
+        "vxlan_tunnel": "vtep1",
+        "guid": "guid-3000-asic0"
+    },
+    "PORT|Ethernet20": {
+        "lanes": "21,22,23,24",
+        "description": "ARISTA01T2:Ethernet3/4/1",
+        "pfc_asym": "off",
+        "mtu": "9100",
+        "alias": "Ethernet1/6",
+        "admin_status": "up",
+        "role": "Ext",
+        "speed": "40000",
+        "asic_port_name": "Eth2-ASIC0"
+    },
+    "INTERFACE|Ethernet16": {
+        "vnet_name": "Vnet_2000"
+    },
+    "INTERFACE|Ethernet20": {
+        "vnet_name": "Vnet_3000"
+    }
 }

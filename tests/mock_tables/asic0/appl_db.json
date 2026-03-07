@@ -130,5 +130,44 @@
     },
     "INTF_TABLE:Ethernet-BP4": {
 	"mpls":"disable"
+    },
+    "VXLAN_REMOTE_VNI_TABLE:Vlan100:192.168.1.100": {
+        "vni": "1000"
+    },
+    "VXLAN_REMOTE_VNI_TABLE:Vlan200:192.168.1.101": {
+        "vni": "2000"
+    },
+    "VXLAN_FDB_TABLE:Vlan100:00:11:22:33:44:55": {
+        "remote_vtep": "192.168.1.100",
+        "type": "dynamic",
+        "vni": "1000"
+    },
+    "VXLAN_FDB_TABLE:Vlan200:00:11:22:33:44:66": {
+        "remote_vtep": "192.168.1.101",
+        "type": "dynamic",
+        "vni": "2000"
+    },
+    "VNET_ROUTE_TABLE:Vnet_2000:10.0.0.0/24": {
+        "nexthop": "10.10.10.100",
+        "ifname": "Ethernet16"
+    },
+    "VNET_ROUTE_TUNNEL_TABLE:Vnet_2000:20.0.0.0/24": {
+        "endpoint": "192.168.1.200",
+        "mac_address": "00:aa:bb:cc:dd:01",
+        "vni": "5000"
+    },
+    "VNET_ROUTE_TUNNEL_TABLE:Vnet_3000:30.0.0.0/24": {
+        "endpoint": "192.168.1.201",
+        "endpoint_monitor": "192.168.1.201",
+        "mac_address": "",
+        "vni": "6000"
+    },
+    "NEIGH_TABLE:Ethernet16:10.0.0.1": {
+        "neigh": "00:11:22:33:44:aa",
+        "family": "IPv4"
+    },
+    "NEIGH_TABLE:Ethernet20:10.0.1.1": {
+        "neigh": "00:11:22:33:44:bb",
+        "family": "IPv4"
     }
 }

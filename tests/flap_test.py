@@ -11,6 +11,7 @@ Interface    Flap Count    Admin    Oper     Link Down TimeStamp(UTC)    Link Up
 Ethernet0    5             Up       Up       Sat Jan 17 00:04:42 2025    Sat Jan 18 00:08:42 2025
 Ethernet4    Never         Up       Up       Never                       Never
 Ethernet16   Never         Unknown  Unknown  Never                       Never
+Ethernet20   Never         Unknown  Unknown  Never                       Never
 """
 
 # Display all: all namespaces (asic0 + asic1) including backplane ports
@@ -20,6 +21,7 @@ Interface       Flap Count    Admin    Oper     Link Down TimeStamp(UTC)    Link
 Ethernet0       5             Up       Up       Sat Jan 17 00:04:42 2025    Sat Jan 18 00:08:42 2025
 Ethernet4       Never         Up       Up       Never                       Never
 Ethernet16      Never         Unknown  Unknown  Never                       Never
+Ethernet20      Never         Unknown  Unknown  Never                       Never
 Ethernet64      2             Up       Up       Thu Feb 12 23:03:40 2026    Thu Feb 12 23:25:31 2026
 Ethernet-BP0    Never         Up       Up       Never                       Never
 Ethernet-BP4    Never         Up       Up       Never                       Never
