@@ -9557,16 +9557,22 @@ helper.load_and_register_plugins(plugins, config)
 # 'subinterface' group ('config subinterface ...')
 #
 @config.group()
-@click.pass_context
+@click.option('-n', '--namespace', help='Namespace name',
+              required=True if multi_asic.is_multi_asic() else False,
+              type=click.Choice(multi_asic.get_namespace_list()))
 @click.option('-s', '--redis-unix-socket-path', help='unix socket path for redis connection')
-def subinterface(ctx, redis_unix_socket_path):
+@click.pass_context
+def subinterface(ctx, namespace, redis_unix_socket_path):
     """subinterface-related configuration tasks"""
-    kwargs = {}
+    if namespace is None:
+        namespace = DEFAULT_NAMESPACE
+    kwargs = {'namespace': str(namespace)}
     if redis_unix_socket_path:
         kwargs['unix_socket_path'] = redis_unix_socket_path
+        kwargs['use_unix_socket_path'] = True
     config_db = ConfigDBConnector(**kwargs)
     config_db.connect(wait_for_init=False)
-    ctx.obj = {'db': config_db}
+    ctx.obj = {'db': config_db, 'namespace': str(namespace)}
 
 def subintf_vlan_check(config_db, parent_intf, vlan):
     subintf_db = config_db.get_table('VLAN_SUB_INTERFACE')

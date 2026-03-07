@@ -130,5 +130,13 @@
     },
     "INTF_TABLE:Ethernet-BP4": {
 	"mpls":"disable"
+    },
+    "INTF_TABLE:PortChannel1002.10": {
+        "admin_status": "up",
+        "vlan": "10"
+    },
+    "INTF_TABLE:PortChannel4001.20": {
+        "admin_status": "up",
+        "vlan": "20"
     }
 }

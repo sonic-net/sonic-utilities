@@ -377,5 +377,13 @@
     "DEBUG_COUNTER_DROP_REASON|DEBUG_1|ACL_ANY": {},
     "DEBUG_COUNTER_DROP_REASON|DEBUG_2|IP_HEADER_ERROR": {},
     "DEBUG_COUNTER_DROP_REASON|DEBUG_2|NO_L3_HEADER": {},
-    "DEBUG_COUNTER_DROP_REASON|lowercase_counter|L2_ANY": {}
+    "DEBUG_COUNTER_DROP_REASON|lowercase_counter|L2_ANY": {},
+    "VLAN_SUB_INTERFACE|PortChannel1002.10": {
+        "admin_status": "up",
+        "vlan": "10"
+    },
+    "VLAN_SUB_INTERFACE|PortChannel4001.20": {
+        "admin_status": "up",
+        "vlan": "20"
+    }
 }

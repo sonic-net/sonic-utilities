@@ -1,3 +1,4 @@
+import importlib
 import json
 import os
 import re
@@ -464,3 +465,75 @@ def mock_restart_dhcp_relay_service():
 
     config.vlan.dhcp_relay_util.restart_dhcp_relay_service = origin_funcs[0]
     config.vlan.is_dhcp_relay_running = origin_funcs[1]
+
+
+@pytest.fixture(scope='class')
+def setup_multi_asic_env():
+    """Set up multi-asic environment for testing.
+
+    This fixture:
+    1. Sets environment variables for multi-asic mode
+    2. Loads multi-asic mock patches via mock_multi_asic module
+    3. Reloads dependent modules to pick up patched functions
+    4. Restores single-asic state on teardown
+    """
+    # Set environment variables
+    os.environ['UTILITIES_UNIT_TESTING'] = "2"
+    os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
+
+    # Import and reload to apply multi-asic patches
+    from .mock_tables import mock_multi_asic
+    importlib.reload(mock_multi_asic)
+
+    dbconnector.load_namespace_config()
+
+    # Reload dependent modules to pick up patched functions
+    importlib.reload(sys.modules['utilities_common.multi_asic'])
+    importlib.reload(sys.modules['config.main'])
+
+    yield
+
+    # Restore single-asic state
+    from .mock_tables import mock_single_asic
+    importlib.reload(mock_single_asic)
+
+    dbconnector.load_database_config()
+
+    # Reload modules to pick up restored single-asic state
+    importlib.reload(sys.modules['utilities_common.multi_asic'])
+    importlib.reload(sys.modules['config.main'])
+
+    # Reset environment
+    os.environ['UTILITIES_UNIT_TESTING'] = "0"
+    os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
+
+
+@pytest.fixture(scope='class')
+def setup_env_paths(request):
+    """Add directories to PATH environment variable for subprocess-based tests.
+
+    This fixture reads 'env_paths' from the test class, which should be a list
+    of paths to add to the PATH environment variable.
+
+    Usage:
+        @pytest.mark.usefixtures("setup_env_paths")
+        class TestSomething:
+            env_paths = [scripts_path, other_path]  # List of paths to add
+    """
+    paths_to_add = getattr(request.cls, 'env_paths', None)
+    if paths_to_add is None:
+        yield
+        return
+
+    # Ensure paths_to_add is a list
+    if isinstance(paths_to_add, str):
+        paths_to_add = [paths_to_add]
+
+    original_path = os.environ.get("PATH", "")
+
+    for path in paths_to_add:
+        os.environ["PATH"] += os.pathsep + path
+
+    yield
+
+    os.environ["PATH"] = original_path

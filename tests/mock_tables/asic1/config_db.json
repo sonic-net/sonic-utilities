@@ -299,5 +299,21 @@
         "dynamic_th": "0",
         "pool": "egress_lossy_pool",
         "size": "0"
+    },
+    "VLAN_SUB_INTERFACE|Ethernet64.10": {
+        "admin_status": "up",
+        "vlan": "10"
+    },
+    "VLAN_SUB_INTERFACE|Ethernet64.20": {
+        "admin_status": "up",
+        "vlan": "20"
+    },
+    "VLAN_SUB_INTERFACE|Ethernet-BP256.20": {
+        "admin_status": "up",
+        "vlan": "20"
+    },
+    "VLAN_SUB_INTERFACE|Eth64.30": {
+        "admin_status": "up",
+        "vlan": "30"
     }
 }

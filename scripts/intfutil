@@ -492,7 +492,12 @@ class IntfStatus(object):
 
     def display_intf_status(self):
         self.get_intf_status()
-        header_status = header_stat if not self.sub_intf_only else header_stat_sub_intf
+        if not self.sub_intf_only:
+            header_status = header_stat
+        elif self.multi_asic.is_multi_asic and self.multi_asic.namespace_option is None:
+            header_status = [header_stat_sub_intf[0], 'Namespace'] + header_stat_sub_intf[1:]
+        else:
+            header_status = header_stat_sub_intf
         display_table(self.table, header_status, self.use_json)
 
     def generate_intf_status(self):
@@ -546,15 +551,28 @@ class IntfStatus(object):
                                 appl_db_portchannel_status_get(self.db, self.config_db, po, PORT_OPTICS_TYPE, self.portchannel_speed_dict),
                                 appl_db_portchannel_status_get(self.db, self.config_db, po, PORT_PFC_ASYM_STATUS, self.portchannel_speed_dict)))
         else:
+            show_namespace = self.multi_asic.is_multi_asic and self.multi_asic.namespace_option is None
             for key in self.appl_db_sub_intf_keys:
                 sub_intf = re.split(':', key, maxsplit=1)[-1].strip()
                 if sub_intf in self.sub_intf_list:
-                    table.append((sub_intf,
+                    sub_intf_sep_idx = sub_intf.find(VLAN_SUB_INTERFACE_SEPARATOR)
+                    if sub_intf_sep_idx != -1:
+                        parent_port = get_intf_longname(sub_intf[:sub_intf_sep_idx])
+                        if parent_port.startswith("Ethernet"):
+                            if self.multi_asic.skip_display(constants.PORT_OBJ, parent_port):
+                                continue
+                        elif parent_port.startswith("PortChannel"):
+                            if self.multi_asic.skip_display(constants.PORT_CHANNEL_OBJ, parent_port):
+                                continue
+                    row = (sub_intf,
                                 appl_db_sub_intf_status_get(self.db, self.config_db, self.front_panel_ports_list, self.portchannel_speed_dict, sub_intf, PORT_SPEED),
                                 appl_db_sub_intf_status_get(self.db, self.config_db, self.front_panel_ports_list, self.portchannel_speed_dict, sub_intf, PORT_MTU_STATUS),
                                 appl_db_sub_intf_status_get(self.db, self.config_db, self.front_panel_ports_list, self.portchannel_speed_dict, sub_intf, "vlan"),
                                 appl_db_sub_intf_status_get(self.db, self.config_db, self.front_panel_ports_list, self.portchannel_speed_dict, sub_intf, PORT_ADMIN_STATUS),
-                                appl_db_sub_intf_status_get(self.db, self.config_db, self.front_panel_ports_list, self.portchannel_speed_dict, sub_intf, PORT_OPTICS_TYPE)))
+                                appl_db_sub_intf_status_get(self.db, self.config_db, self.front_panel_ports_list, self.portchannel_speed_dict, sub_intf, PORT_OPTICS_TYPE))
+                    if show_namespace:
+                        row = (row[0], self.multi_asic.current_namespace) + row[1:]
+                    table.append(row)
         return table
 
 
