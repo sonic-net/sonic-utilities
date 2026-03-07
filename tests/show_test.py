@@ -249,8 +249,38 @@ def test_show_version():
     result = runner.invoke(show.cli.commands["version"])
     assert "SONiC OS Version: 11" in result.output
 
+
+@patch('sonic_py_common.device_info.get_sonic_version_info', MagicMock(return_value={
+        "build_version": "",
+        "commit_id": "46415d112",
+        "build_date": "Mon Mar  2 03:02:39 UTC 2026",
+        "built_by": "test@host",
+        "sonic_os_version": "13"}))
+@patch('sonic_py_common.device_info.get_platform_info', MagicMock(return_value={
+        "platform": "x86_64-kvm_x86_64-r0",
+        "hwsku": "Force10-S6000",
+        "asic_type": "vs",
+        "asic_count": 1}))
+@patch('sonic_py_common.device_info.get_chassis_info', MagicMock(return_value={
+        "serial": "N/A",
+        "model": "N/A",
+        "revision": "N/A"}))
+@patch('subprocess.Popen', MagicMock(side_effect=side_effect_subprocess_popen))
+def test_show_version_missing_fields():
+    """Test show version doesn't crash when debian_version and kernel_version are missing.
+
+    docker-sonic-vs containers may not have these fields in sonic_version.yml
+    since they are only populated during full image builds.
+    """
+    runner = CliRunner()
+    result = runner.invoke(show.cli.commands["version"])
+    assert result.exit_code == 0, "show version crashed: {}".format(result.output)
+    assert "Distribution: Debian N/A" in result.output
+    assert "Kernel:" in result.output
+    assert "Build commit: 46415d112" in result.output
+
 class TestShowAcl(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -271,12 +301,12 @@ class TestShowAcl(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['acl-loader', 'show', 'table', 'EVERFLOW'], display_cmd=True)
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 
 class TestShowChassis(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -306,12 +336,12 @@ class TestShowChassis(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['voqutil', '-c', 'system_lags', '-n', 'asic0', '-l', 'Linecard6'], display_cmd=True)
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 
 class TestShowFabric(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -334,12 +364,12 @@ class TestShowFabric(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(["fabricstat", '-q', '-n', 'asic0'])
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 
 class TestShowFlowCounters(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -382,12 +412,12 @@ class TestShowFlowCounters(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['flow_counters_stat', '-t', 'route', '--prefix', '2001::/64', '--vrf', 'Vrf_1', '-n', 'asic0'], display_cmd=True)
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 
 class TestShowInterfaces(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -639,12 +669,12 @@ class TestShowInterfaces(object):
             display_cmd=True,
         )
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 
 class TestShowIp(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -665,12 +695,12 @@ class TestShowIp(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['sudo', 'ipintutil', '-a', 'ipv6', '-d', 'all'])
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 
 class TestShowVxlan(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -682,12 +712,12 @@ class TestShowVxlan(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['tunnelstat', '-T', 'vxlan', '-p', '3', '-i', 'tunnel1'], display_cmd=True)
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 
 class TestShowNat(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -780,12 +810,12 @@ class TestShowNat(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['sudo', 'natconfig', '-z'], display_cmd=True)
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 
 class TestShowProcesses(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -815,12 +845,12 @@ class TestShowProcesses(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['top', '-bn', '1', '-o', '%MEM'], display_cmd=True)
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 
 class TestShowPlatform(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -881,11 +911,11 @@ class TestShowPlatform(object):
         assert result.exit_code == 0
         mock_check_call.assert_called_with(["sudo", "fwutil", "show"])
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 class TestShowQuagga(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('show.main.run_command')
@@ -920,12 +950,12 @@ class TestShowQuagga(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_with(['sudo', constants.RVTYSH_COMMAND, '-c', "show ipv6 bgp neighbor 0.0.0.0 routes"])
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 
 class TestShow(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('show.main.run_command')
@@ -1216,7 +1246,7 @@ class TestShow(object):
                           call(['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'chronyc', '-n', 'sources'], display_cmd=False)]
         mock_run_command.assert_has_calls(expected_calls)
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 
@@ -1260,7 +1290,7 @@ class TestShowRunningconfiguration(object):
 
 
 class TestShowSRv6Counters(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -1281,7 +1311,7 @@ class TestShowSRv6Counters(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['srv6stat', '-s', '1000:2:30::/48'], display_cmd=True)
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEAR DOWN')
 
 

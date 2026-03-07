@@ -9,7 +9,10 @@
         "admin_status": "up",
         "role": "Ext",
         "speed": "40000",
-        "asic_port_name": "Eth0-ASIC1"
+        "asic_port_name": "Eth0-ASIC1",
+        "flap_count": "2",
+        "last_down_time": "Thu Feb 12 23:03:40 2026",
+        "last_up_time": "Thu Feb 12 23:25:31 2026"
     },
     "PORT_TABLE:Ethernet-BP256": {
         "oper_status": "up",

@@ -55,7 +55,7 @@ def stp_get_key_from_pattern(db_connect, db, pattern):
         return None
 
 
-# get_all doesnt accept regex patterns, it requires exact key
+# get_all doesn't accept regex patterns, it requires exact key
 def stp_get_all_from_pattern(db_connect, db, pattern):
     key = stp_get_key_from_pattern(db_connect, db, pattern)
     if key:

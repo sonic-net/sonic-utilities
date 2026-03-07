@@ -5966,17 +5966,39 @@ The show interfaces flap command provides detailed insights into interface event
 
 - Usage:
   ```
-  show interfaces flap
+  show interfaces flap [OPTIONS] [<interfacename>]
+  
+  Options:
+  -d, --display [all|frontend]   Show internal interfaces  [default: frontend]
+  -n, --namespace <namespace>    Namespace name or all
+  -?, -h, --help                 Show this message and exit.
   ```
 - Example:
   ```
   admin@sonic:~$ show interfaces flap
-  Interface    Flap Count    Admin    Oper    Link Down TimeStamp (UTC)                                 Link Up TimeStamp (UTC)
-  -----------  ------------  -------  ------  --------------------------------------------------------  -----------------------------------------------------------
-  Ethernet0    5             Up       Up      Last flapped : 2024-10-01 10:00:00 (0 days 00:01:23 ago)  Last Link up: 2024-09-30 10:01:03 UTC (1 days 02:30:15 ago)
-  Ethernet4    Never         Up       Up      Never                                                     Last Link up: 2024-09-30 10:01:03 UTC (1 days 02:30:15 ago)
-  Ethernet8    1             Up       Up      Last flapped : 2024-10-01 10:01:00 (0 days 00:00:23 ago)  Last Link up: 2024-10-02 10:01:03 UTC (5 days 02:30:15 ago)
+  Interface      Flap Count  Admin    Oper    Link Down TimeStamp(UTC)    Link Up TimeStamp(UTC)
+  -----------  ------------  -------  ------  --------------------------  ------------------------
+  Ethernet0            4097  Up       Up      Sat Feb 21 11:00:41 2026    Sat Feb 21 11:00:59 2026
+  Ethernet8            4035  Up       Up      Sat Feb 21 11:00:41 2026    Sat Feb 21 11:00:59 2026
+  Ethernet16           4015  Up       Up      Sat Feb 21 11:01:23 2026    Sat Feb 21 11:01:41 2026
   ```
+- Example (to display interface on multi-ASIC platform):
+  ```
+  admin@sonic:~$ show interfaces flap Ethernet0
+  Interface      Flap Count  Admin    Oper    Link Down TimeStamp(UTC)    Link Up TimeStamp(UTC)
+  -----------  ------------  -------  ------  --------------------------  ------------------------
+  Ethernet0            4097  Up       Up      Sat Feb 21 11:00:41 2026    Sat Feb 21 11:00:59 2026
+  ```
+- Example (to display interfaces for specific ASIC on multi-ASIC platform):
+  ```
+  admin@sonic:~$ show interfaces flap -n asic1
+  Interface      Flap Count  Admin    Oper    Link Down TimeStamp(UTC)    Link Up TimeStamp(UTC)
+  -----------  ------------  -------  ------  --------------------------  ------------------------
+  Ethernet144            10  Up       Down    Wed Feb 18 20:55:09 2026    Wed Feb 18 20:53:02 2026
+  Ethernet152            14  Up       Down    Wed Feb 18 21:01:39 2026    Wed Feb 18 21:00:32 2026
+  Ethernet160            10  Up       Down    Wed Feb 18 21:04:36 2026    Wed Feb 18 21:01:58 2026
+  ```
+
 **show interfaces errors**
 
 The show interface errors command provides detailed statistics and error counters for MAC-level operations on an interface. It displays the status of various operational parameters, error counts, and timestamps for when these errors occurred.

@@ -19,7 +19,7 @@ ERROR_STR_MISS_NEXTHOP = '''
 Error: argument is incomplete, nexthop not found!
 '''
 ERROR_STR_DEL_NONEXIST_KEY = '''
-Error: Route {} doesnt exist
+Error: Route {} doesn't exist
 '''
 ERROR_STR_DEL_NONEXIST_ENTRY = '''
 Error: Not found {} in {}

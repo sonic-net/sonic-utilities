@@ -588,7 +588,7 @@ class RequiredValueIdentifier:
     """
     A class that identifies the config that requires other fields to be of specific value
     The "requiring" config is the config that requires other fields to be of specific value.
-    The "required" config is the confing that needs to be of specific value.
+    The "required" config is the config that needs to be of specific value.
     E.g. Changes to "QUEUE" table requires the corresponding "PORT" to be admin down.
     """
     def __init__(self, path_addressing):
@@ -2305,7 +2305,7 @@ class ChangeWrapper:
           }
 
           This is not correct, as we have deleted /ACL_TABLE/EVERFLOW/policy_desc
-          This problem happend because we used 'assumed_changes' for 'assumed_curr_config' on the full config.
+          This problem happened because we used 'assumed_changes' for 'assumed_curr_config' on the full config.
 
           The solution is to adjust the 'assumed_changes' list to be:
           {
