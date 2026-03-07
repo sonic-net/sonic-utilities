@@ -2528,12 +2528,20 @@ class RemoveCreateOnlyDependencyMoveGenerator(unittest.TestCase):
         moves = list(self.generator.generate(diff))
 
         # Assert
+
+        # This is a proper output even though it looks wrong.
+        # Due to logic in the generator to ensure it removes the exact referenced
+        # leaves for dependents, then the CreateOnly path, followed by the parents
+        # of the dependent paths.  Since this is a generator called by DFS it will
+        # be called recursively so the parent may not ever be removed in practice.
+        # Also since it is recursive and starts over, in practice if it did need
+        # to delete the parent path, it would emit another delete of the
+        # create-only attribute parent.
         self.verify_moves([{'op': 'remove', 'path': '/ACL_TABLE/NO-NSW-PACL-V4/ports/0'},
                            {'op': 'remove', 'path': '/VLAN_MEMBER/Vlan100|Ethernet0'},
                            {'op': 'remove', 'path': '/PORT/Ethernet0'},
                            {'op': 'remove', 'path': '/ACL_TABLE/NO-NSW-PACL-V4/ports'},
-                           {'op': 'remove', 'path': '/VLAN_MEMBER'},
-                           {'op': 'remove', 'path': '/PORT/Ethernet0'}],
+                           {'op': 'remove', 'path': '/VLAN_MEMBER'}],
                           moves)
 
     def test_generate__dpb_1_to_4_example(self):
@@ -2557,8 +2565,7 @@ class RemoveCreateOnlyDependencyMoveGenerator(unittest.TestCase):
                            {'op': 'remove', 'path': '/VLAN_MEMBER'},
                            {'op': 'remove', 'path': '/PORT'},
                            {'op': 'remove', 'path': '/ACL_TABLE/NO-NSW-PACL-V4/ports'},
-                           {'op': 'remove', 'path': '/VLAN_MEMBER'},
-                           {'op': 'remove', 'path': '/PORT'}],
+                           {'op': 'remove', 'path': '/VLAN_MEMBER'}],
                           moves)
 
     def verify_moves(self, ops, moves):

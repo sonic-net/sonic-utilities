@@ -4,7 +4,7 @@ import jsonpatch
 import sonic_yang
 from collections import deque, OrderedDict
 from enum import Enum
-from typing import IO, List, Optional, Tuple
+from typing import Any, IO, List, Optional, Tuple
 from .gu_common import OperationWrapper, OperationType, GenericConfigUpdaterError, \
                        JsonChange, PathAddressing, genericUpdaterLogging
 
@@ -1582,26 +1582,12 @@ class RemoveCreateOnlyDependencyMoveGenerator:
 
         for path in self.create_only_filter.get_paths(current_config):
             tokens = self.path_addressing.get_path_tokens(path)
-            table_to_check, member_name, create_only_field = tokens[0], tokens[1], tokens[2]
+            current_field = self.__fetch_path(current_config, tokens)
+            target_field = self.__fetch_path(target_config, tokens)
 
-            if table_to_check not in current_config:
-                continue
-
-            if member_name not in current_config[table_to_check]:
-                continue
-
-            if table_to_check not in target_config:
-                continue
-
-            if member_name not in target_config[table_to_check]:
-                continue
-
-            current_field = self._get_create_only_field(
-                current_config, table_to_check, member_name, create_only_field)
-            target_field = self._get_create_only_field(
-                target_config, table_to_check, member_name, create_only_field)
-
-            if current_field == target_field:
+            # If field is deleted or created we don't care, we only care when it was
+            # already set and is changing value.
+            if current_field is None or target_field is None or current_field == target_field:
                 continue
 
             # Create only filters may reference an exact leaf, but it's really the parent that is the
@@ -1624,11 +1610,22 @@ class RemoveCreateOnlyDependencyMoveGenerator:
                 yield move
 
             # Remove self again after removing the parents of dependents
-            yield self.__remove_nonempty(diff, tokens)
+            # NOTE: When we use the DFS sorter this is irrelevant.  Right now we only use DFS so we don't need it
+            #       as it will be called again after it removed any parent dependents.  Commenting out for now.
+            #
+            # yield self.__remove_nonempty(diff, tokens)
 
-    def __get_path_count(self, config, tokens: List[str]):
+    def __fetch_path(self, config, tokens: List[str]) -> Any:
         for token in tokens:
-            config = config[token]
+            config = config.get(token)
+            if config is None:
+                return None
+        return config
+
+    def __get_path_count(self, config, tokens: List[str]) -> int:
+        config = self.__fetch_path(config, tokens)
+        if config is None:
+            return 0
         return len(config)
 
     def __remove_nonempty(self, diff: Diff, tokens: List[str]):
@@ -1641,7 +1638,17 @@ class RemoveCreateOnlyDependencyMoveGenerator:
             remove_tokens = remove_tokens[:-1]
         return JsonMoveGroup(self.__class__.__name__, JsonMove(diff, OperationType.REMOVE, remove_tokens))
 
-    def __remove_dependents(self, diff: Diff, tokens: List[str], reload_config: bool, remove_parent: bool):
+    def __remove_dependents(
+        self,
+        diff: Diff,
+        tokens: List[str],
+        reload_config: bool,
+        remove_parent: bool,
+        recursion_depth: int = 0,
+    ):
+        if recursion_depth >= 10:
+            return
+
         config = diff.current_config
         path = self.path_addressing.create_path(tokens)
         ref_paths = self.path_addressing.find_ref_paths(path, config, reload_config)
@@ -1652,13 +1659,10 @@ class RemoveCreateOnlyDependencyMoveGenerator:
 
             # Recurse since there could be a dependency chain
             for move in self.__remove_dependents(diff, ref_tokens, reload_config=False,
-                                                 remove_parent=remove_parent):
+                                                 remove_parent=remove_parent, recursion_depth=recursion_depth+1):
                 yield move
 
             yield self.__remove_nonempty(diff, ref_tokens)
-
-    def _get_create_only_field(self, config, table_to_check, member_name, create_only_field):
-        return config[table_to_check][member_name].get(create_only_field, None)
 
 
 class LowLevelMoveGenerator:
