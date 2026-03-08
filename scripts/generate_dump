@@ -922,7 +922,8 @@ save_sdk_sysfs() {
     # sys files we do not want to include in dump
     local excludes=("$@")
     # there are module's sysfs which we cannot access while the module is in fw control
-    local fw_control_skip_list=(frequency_support frequency hw_present hw_reset low_power_mode power_good power_limit)
+    local fw_control_skip_list=(frequency_support frequency hw_present hw_reset low_power_mode power_good power_limit interrupt)
+
     $MKDIR $V -p "$dest"
 
     should_skip() {
@@ -965,7 +966,8 @@ save_sdk_sysfs() {
             local present=0 hw_present="" control="" frequency_support=0 only_copy_presence_files=false
             [[ -f "$d/control" ]] && control=$(<"$d/control")
             [[ -f "$d/present" ]] && present=$(<"$d/present")
-            [[ -f "$d/hw_present" ]] && hw_present=$(<"$d/hw_present")
+            # hw_present is supported only for SW control modules
+            [[ "$control" == "1" && -f "$d/hw_present" ]] && hw_present=$(<"$d/hw_present")
             # frequency_support is supported only for SW control modules
             [[ "$control" == "1" && -f "$d/frequency_support" ]] && frequency_support=$(<"$d/frequency_support")
 
