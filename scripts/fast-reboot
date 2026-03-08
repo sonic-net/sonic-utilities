@@ -68,7 +68,7 @@ function error()
         message="asic$DEV: $message"
     fi
     echo "$message" >&2
-    logger -p user.err "Error seen during warm-reboot shutdown process: $message"
+    logger -p user.err "Error seen during $REBOOT_SCRIPT_NAME shutdown process: $message"
 }
 
 function debug()
@@ -328,7 +328,7 @@ function filter_asic_list()
 function clear_boot()
 {
     # common_clear
-    debug "${REBOOT_TYPE} failure ($?) cleanup ..."
+    debug "${REBOOT_SCRIPT_NAME} failure ($?) cleanup ..."
 
     /sbin/kexec -u -a || /bin/true
 
@@ -726,9 +726,9 @@ function check_pfc_storm_active()
     fi
 
     if pfcwd show stats $options --check-storm >/dev/null 2>&1; then
-        debug "No active PFC storms detected. Safe to proceed with warm-reboot..."
+        debug "No active PFC storms detected. Safe to proceed with $REBOOT_SCRIPT_NAME..."
     else
-        error "PFC storm detected. Aborting warm-reboot to prevent failure in recovery path..."
+        error "PFC storm detected. Aborting $REBOOT_SCRIPT_NAME to prevent failure in recovery path..."
         exit ${EXIT_PFC_STORM_DETECTED}
     fi
 }
