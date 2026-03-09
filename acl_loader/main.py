@@ -274,22 +274,43 @@ class AclLoader(object):
         :return:
         """
 
-        # For multi-npu platforms we will read from any one of front asic namespace
-        # config db as the information should be same across all config db
+        # For multi-npu platforms, merge sessions from all front asic
+        # namespace config dbs and track per-session namespaces so that
+        # state_db queries only target relevant namespaces.
         if self.per_npu_configdb:
-            namespace_configdb = list(self.per_npu_configdb.values())[0]
-            self.sessions_db_info = namespace_configdb.get_table(self.CFG_MIRROR_SESSION_TABLE)
+            self.sessions_db_info = {}
+            session_namespaces = {}
+            for namespace, namespace_configdb in self.per_npu_configdb.items():
+                ns_sessions = namespace_configdb.get_table(self.CFG_MIRROR_SESSION_TABLE)
+                for key, val in ns_sessions.items():
+                    if key not in self.sessions_db_info:
+                        self.sessions_db_info[key] = val
+                        session_namespaces[key] = []
+                    else:
+                        # For ERSPAN with src_port in some namespaces:
+                        # merge src_port from all namespaces that have it.
+                        if 'src_port' in val:
+                            existing = self.sessions_db_info[key]
+                            if 'src_port' in existing:
+                                existing['src_port'] += ',' + val['src_port']
+                            else:
+                                existing['src_port'] = val['src_port']
+                                if 'direction' in val:
+                                    existing['direction'] = val['direction']
+                    session_namespaces[key].append(namespace)
         else:
             self.sessions_db_info = self.configdb.get_table(self.CFG_MIRROR_SESSION_TABLE)
         for key in self.sessions_db_info:
             if self.per_npu_statedb:
-                # For multi-npu platforms we will read from all front asic name space
-                # statedb as the monitor port will be different for each asic
-                # and it's status also might be different (ideally should not happen)
-                # We will store them as dict of 'asic' : value
+                # For multi-npu platforms we read state_db only from namespaces
+                # where the session exists in config_db. ERSPAN sessions exist
+                # in all namespaces so we query all; SPAN sessions exist in only
+                # one namespace (destination port's ASIC).
                 self.sessions_db_info[key]["status"] = {}
                 self.sessions_db_info[key]["monitor_port"] = {}
-                for namespace_key, namespace_statedb in self.per_npu_statedb.items():
+                relevant_namespaces = session_namespaces.get(key, self.per_npu_statedb.keys())
+                for namespace_key in relevant_namespaces:
+                    namespace_statedb = self.per_npu_statedb[namespace_key]
                     state_db_info = namespace_statedb.get_all(self.statedb.STATE_DB, "{}|{}".format(self.STATE_MIRROR_SESSION_TABLE, key))
                     self.sessions_db_info[key]["status"][namespace_key] = state_db_info.get("status", "inactive") if state_db_info else "error"
                     self.sessions_db_info[key]["monitor_port"][namespace_key] = state_db_info.get("monitor_port", "") if state_db_info else ""
