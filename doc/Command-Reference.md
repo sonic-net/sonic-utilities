@@ -6031,7 +6031,7 @@ At least one option must be specified for each subcommand.
     Lane5:                T                 0            Never
     Lane6:                T                 0            Never
     Lane7:                F                 0            Never
-  ``` 
+  
 
 - Example (PHY serdes SNR):
   ```
@@ -6093,6 +6093,7 @@ At least one option must be specified for each subcommand.
 
   admin@sonic:~$ show interfaces phy-serdes Ethernet0 rxdfe
   Interface: Ethernet0
+  ================================================================================
     RX DFE Taps:
     ------------------------------------------------------------------------------
     Lane   Tap0   Tap1   Tap2   Tap3   Tap4
