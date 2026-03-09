@@ -29,6 +29,8 @@
 * [ARP & NDP](#arp--ndp)
   * [ARP show commands](#arp-show-commands)
   * [NDP show commands](#ndp-show-commands)
+  * [ARP clear commands](#arp-clear-commands)
+  * [NDP clear commands](#ndp-clear-commands)
 * [ASIC SDK health event](#asic-sdk-health-event)
   * [ASIC SDK health event config commands](#asic-sdk-health-event-config-commands)
   * [ASIC SDK health event show commands](#asic-sdk-health-event-show-commands)
@@ -2408,16 +2410,19 @@ This command displays the ARP entries in the device with following options.
 1) Display the entire table.
 2) Display the ARP entries learnt on a specific interface.
 3) Display the ARP of a specific ip-address.
+4) On multi-ASIC platforms, filter by namespace and display option (all or frontend interfaces).
 
 - Usage:
   ```
-  show arp [-if <interface_name>] [<ip_address>]
+  show arp [-if <interface_name>] [<ip_address>] [-n|--namespace <namespace>] [-d|--display all|frontend]
   ```
 
 - Details:
   - show arp: Displays all entries
   - show arp -if <ifname>: Displays the ARP specific to the specified interface.
   - show arp <ip-address>: Displays the ARP specific to the specified ip-address.
+  - -n, --namespace: (Multi-ASIC) Namespace name. Omit to show all namespaces.
+  - -d, --display: (Multi-ASIC) all = all interfaces, frontend = external interfaces only.
 
 
 - Example:
@@ -2465,12 +2470,16 @@ Optionally, you can specify an IP address in order to display only that particul
 
 **show ndp**
 
-This command displays either all the IPv6 neighbor mac addresses, or for a particular IPv6 neighbor, or for all IPv6 neighbors reachable via a specific interface.
+This command displays either all the IPv6 neighbor mac addresses, or for a particular IPv6 neighbor, or for all IPv6 neighbors reachable via a specific interface. On multi-ASIC platforms, supports namespace and display filters.
 
 - Usage:
   ```
-  show ndp [-if|--iface <interface_name>] <ipv6_address>
+  show ndp [-if|--iface <interface_name>] [<ipv6_address>] [-n|--namespace <namespace>] [-d|--display all|frontend]
   ```
+
+- Details:
+  - -n, --namespace: (Multi-ASIC) Namespace name. Omit to show all namespaces.
+  - -d, --display: (Multi-ASIC) all = all interfaces, frontend = external interfaces only.
 
 - Example (show all IPv6 neighbors):
   ```
@@ -2502,6 +2511,38 @@ This command displays either all the IPv6 neighbor mac addresses, or for a parti
   fe80::20c:29ff:fef9:324   00:0c:29:f9:03:24  eth0     -       REACHABLE
   Total number of entries 3
   ```
+
+### ARP clear commands
+
+**sonic-clear arp**
+
+This command clears the IP ARP table. On multi-ASIC platforms, namespace is required to target a specific ASIC.
+
+- Usage:
+  ```
+  sonic-clear arp [<ip_address>] [-n|--namespace <namespace>]
+  ```
+
+- Details:
+  - sonic-clear arp: Clears all ARP entries (single-ASIC) or requires -n on multi-ASIC.
+  - sonic-clear arp <ip_address>: Clears the ARP entry for the given IP.
+  - -n, --namespace: (Multi-ASIC, required) Namespace name (e.g. asic0).
+
+### NDP clear commands
+
+**sonic-clear ndp**
+
+This command clears the IPv6 NDP table. On multi-ASIC platforms, namespace is required to target a specific ASIC.
+
+- Usage:
+  ```
+  sonic-clear ndp [<ipv6_address>] [-n|--namespace <namespace>]
+  ```
+
+- Details:
+  - sonic-clear ndp: Clears all NDP entries (single-ASIC) or requires -n on multi-ASIC.
+  - sonic-clear ndp <ipv6_address>: Clears the NDP entry for the given IPv6 address.
+  - -n, --namespace: (Multi-ASIC, required) Namespace name (e.g. asic0).
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#arp--ndp)
 
