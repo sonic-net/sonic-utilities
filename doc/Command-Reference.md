@@ -11735,7 +11735,7 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#Startu
 
 ### Static routing Config Commands
 
-This sub-section explains of commands is used to add or remove the static route.
+This sub-section explains of commands is used to add or remove the static route. On multi-ASIC platforms, the `-n`/`--namespace` option is required; on single-ASIC platforms it is optional.
 
 **config route add**
 
@@ -11744,7 +11744,7 @@ This command is used to add a static route. Note that prefix /nexthop vrf`s and 
 - Usage:
 
   ```
-  config route add prefix [vrf <vrf>] <A.B.C.D/M> nexthop [vrf <vrf>] <A.B.C.D> dev <interface name>
+  config route [-n <namespace>] add prefix [vrf <vrf>] <A.B.C.D/M> nexthop [vrf <vrf>] <A.B.C.D> dev <interface name>
   ```
 
 - Example:
@@ -11763,6 +11763,12 @@ It also supports ECMP, and adding a new nexthop to the existing prefix will comp
   admin@sonic:~$ sudo config route add prefix 2.2.3.4/32 nexthop vrf Vrf-BLUE 30.0.0.10
   ```
 
+  On multi-ASIC platforms, specify the namespace (e.g. `-n asic0`):
+
+  ```
+  admin@sonic:~$ sudo config route -n asic0 add prefix 2.2.3.4/32 nexthop 30.0.0.9
+  ```
+
 **config route del**
 
 This command is used to remove a static route. Note that prefix /nexthop vrf`s and interface name are optional.
@@ -11770,7 +11776,7 @@ This command is used to remove a static route. Note that prefix /nexthop vrf`s a
 - Usage:
 
   ```
-  config route del prefix [vrf <vrf>] <A.B.C.D/M> nexthop [vrf <vrf>] <A.B.C.D> dev <interface name>
+  config route [-n <namespace>] del prefix [vrf <vrf>] <A.B.C.D/M> nexthop [vrf <vrf>] <A.B.C.D> dev <interface name>
   ```
 
 - Example:
@@ -11778,6 +11784,12 @@ This command is used to remove a static route. Note that prefix /nexthop vrf`s a
   ```
   admin@sonic:~$ sudo config route del prefix 2.2.3.4/32 nexthop vrf Vrf-RED 30.0.0.9
   admin@sonic:~$ sudo config route del prefix 2.2.3.4/32 nexthop vrf Vrf-BLUE 30.0.0.10
+  ```
+
+  On multi-ASIC platforms, specify the namespace (e.g. `-n asic0`):
+
+  ```
+  admin@sonic:~$ sudo config route -n asic0 del prefix 2.2.3.4/32 nexthop 30.0.0.9
   ```
 
 This sub-section explains of command is used to show current routes.
