@@ -307,7 +307,9 @@ def mock_run_command_side_effect(*args, **kwargs):
         if command == "systemctl list-dependencies --plain sonic-delayed.target | sed '1d'":
             return 'snmp.timer', 0
         elif command == "systemctl list-dependencies --plain sonic.target":
-            return 'sonic.target\nswss', 0
+            return 'sonic.target\nswss\nfeatured.timer', 0
+        elif command == "systemctl list-dependencies --plain sonic.target --reverse --type=service":
+            return 'sonic.target\npmon', 0
         elif command == "systemctl is-enabled snmp.timer":
             return 'enabled', 0
         elif command == 'cat /var/run/dhclient.eth0.pid':
@@ -334,6 +336,8 @@ def mock_run_command_cat_failed_side_effect(*args, **kwargs):
             return 'snmp.timer', 0
         elif command == "systemctl list-dependencies --plain sonic.target":
             return 'sonic.target\nswss', 0
+        elif command == "systemctl list-dependencies --plain sonic.target --reverse --type=service":
+            return 'sonic.target\npmon', 0
         elif command == "systemctl is-enabled snmp.timer":
             return 'enabled', 0
         elif command == 'cat /var/run/dhclient.eth0.pid':
@@ -356,6 +360,8 @@ def mock_run_command_kill_failed_side_effect(*args, **kwargs):
             return 'snmp.timer', 0
         elif command == "systemctl list-dependencies --plain sonic.target":
             return 'sonic.target\nswss', 0
+        elif command == "systemctl list-dependencies --plain sonic.target --reverse --type=service":
+            return 'sonic.target\npmon', 0
         elif command == "systemctl is-enabled snmp.timer":
             return 'enabled', 0
         elif command == 'cat /var/run/dhclient.eth0.pid':
@@ -380,6 +386,8 @@ def mock_run_command_side_effect_disabled_timer(*args, **kwargs):
             return 'snmp.timer', 0
         elif command == "systemctl list-dependencies --plain sonic.target":
             return 'sonic.target\nswss', 0
+        elif command == "systemctl list-dependencies --plain sonic.target --reverse --type=service":
+            return 'sonic.target\npmon', 0
         elif command == "systemctl is-enabled snmp.timer":
             return 'masked', 0
         elif command == "systemctl show swss.service --property ActiveState --value":
@@ -1058,7 +1066,8 @@ class TestLoadMinigraph(object):
                 (load_minigraph_command_output.format(config.SYSTEM_RELOAD_LOCK))
             # Verify "systemctl reset-failed" is called for services under sonic.target
             mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'swss'])
-            assert mock_run_command.call_count == 16
+            mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'pmon'])
+            assert mock_run_command.call_count == 18
 
     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs',
                 mock.MagicMock(return_value=("dummy_path", None)))
@@ -1102,7 +1111,9 @@ class TestLoadMinigraph(object):
                 assert result.exit_code == 0
                 assert result.output == \
                     load_minigraph_command_bypass_lock_output.format(config.SYSTEM_RELOAD_LOCK)
-                assert mock_run_command.call_count == 12
+                mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'swss'])
+                mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'pmon'])
+                assert mock_run_command.call_count == 14
             finally:
                 flock.release_flock(fd)
 
@@ -1120,7 +1131,8 @@ class TestLoadMinigraph(object):
                 (load_minigraph_platform_plugin_command_output.format(config.SYSTEM_RELOAD_LOCK))
             # Verify "systemctl reset-failed" is called for services under sonic.target
             mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'swss'])
-            assert mock_run_command.call_count == 12
+            mock_run_command.assert_any_call(['systemctl', 'reset-failed', 'pmon'])
+            assert mock_run_command.call_count == 14
 
     @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs', mock.MagicMock(return_value=(load_minigraph_platform_false_path, None)))
     def test_load_minigraph_platform_plugin_fail(self, get_cmd_module, setup_single_broadcom_asic):
