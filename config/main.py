@@ -1009,6 +1009,7 @@ def _get_sonic_services(reverse=False):
     cmd = ['systemctl', 'list-dependencies', '--plain', 'sonic.target']
     if reverse:
         cmd.append('--reverse')
+        cmd.append('--type=service')
 
     out, _ = clicommon.run_command(cmd, return_cmd=True)
     out = out.strip().split('\n')[1:]
