@@ -2120,7 +2120,7 @@ This command is used to create new ACL tables.
 
 - Usage:
   ```
-  config acl add table [OPTIONS] <table_name> <table_type> [-d <description>] [-p <ports>] [-s (ingress | egress)]
+  config acl add table [OPTIONS] <table_name> <table_type> [-d <description>] [-p <ports>] [-s (ingress | egress)] [-n <namespace>]
   ```
 
 - Parameters:
@@ -2132,6 +2132,7 @@ This command is used to create new ACL tables.
     - Portchannels will be bound as portchannels - passing a portchannel member is invalid
     - VLANs will be expanded into their members (e.g. "Vlan1000" will become "Ethernet0,Ethernet2,Ethernet4...")
   - stage: The stage this ACL table will be applied to, either ingress or egress. (default is ingress)
+  - namespace: Namespace name for multi-ASIC platforms. When specified, the table is created in that ASIC's config DB.
 
 - Examples:
   ```
@@ -2139,6 +2140,30 @@ This command is used to create new ACL tables.
   ```
   ```
   admin@sonic:~$ sudo config acl add table EXAMPLE_2 L3V6 -p Vlan1000,PortChannel0001,Ethernet128 -s egress
+  ```
+  ```
+  admin@sonic:~$ sudo config acl add table EXAMPLE_ASIC0 L3 -p Ethernet0 -n asic0
+  ```
+
+**config acl remove table**
+
+This command is used to remove an ACL table.
+
+- Usage:
+  ```
+  config acl remove table <table_name> [-n <namespace>]
+  ```
+
+- Parameters:
+  - table_name: The name of the ACL table to remove.
+  - namespace: Namespace name for multi-ASIC platforms. When specified, the table is removed from that ASIC's config DB.
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config acl remove table EXAMPLE
+  ```
+  ```
+  admin@sonic:~$ sudo config acl remove table EXAMPLE_ASIC0 -n asic0
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#acl)
