@@ -12502,11 +12502,11 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#System
 
 **show vlan brief**
 
-This command displays brief information about all the vlans configured in the device. It displays the vlan ID, IP address (if configured for the vlan), list of vlan member ports, whether the port is tagged or in untagged mode, the DHCPv4 Helper Address, and the proxy ARP status
+This command displays brief information about all the vlans configured in the device. It displays the vlan ID, IP address (if configured for the vlan), list of vlan member ports, whether the port is tagged or in untagged mode, the DHCPv4 Helper Address, and the proxy ARP status. On multi-ASIC platforms, use -n to show a specific namespace or omit to show all namespaces.
 
 - Usage:
   ```
-  show vlan brief
+  show vlan brief [-n <namespace>]
   ```
 
 - Example:
@@ -12524,11 +12524,11 @@ This command displays brief information about all the vlans configured in the de
 
 **show vlan config**
 
-This command displays all the vlan configuration.
+This command displays all the vlan configuration. On multi-ASIC platforms, use -n to show a specific namespace or omit to show all namespaces.
 
 - Usage:
   ```
-  show vlan config
+  show vlan config [-n <namespace>]
   ```
 
 - Example:
@@ -12543,7 +12543,7 @@ This command displays all the vlan configuration.
 
 #### VLAN Config commands
 
-This sub-section explains how to configure the vlan and its member ports.
+This sub-section explains how to configure the vlan and its member ports. On multi-ASIC platforms, -n/--namespace is required for all config vlan commands. On single-ASIC platforms it is optional.
 
 **config vlan add/del**
 
@@ -12551,7 +12551,7 @@ This command is used to add or delete the vlan.
 
 - Usage:
   ```
-  config vlan (add | del) <vlan_id>
+  config vlan [-n <namespace>] (add | del) <vlan_id>
   ```
 
 - Example (Create the VLAN "Vlan100" if it does not already exist):
@@ -12564,7 +12564,7 @@ This command is used to add or delete the vlan.
 This command is used to add or delete multiple vlans via single command.
 - Usage:
   ```
-  config vlan (add | del) -m <vlan_id>
+  config vlan [-n <namespace>] (add | del) -m <vlan_id>
   ```
 - Example01 (Create the VLAN "Vlan100, Vlan101, Vlan102, Vlan103" if these does not already exist)
   ```
@@ -12581,7 +12581,7 @@ This command is to add or delete a member port into the already created vlan.
 
 - Usage:
   ```
-  config vlan member add/del [-u|--untagged] <vlan_id> <member_portname>
+  config vlan [-n <namespace>] member add/del [-u|--untagged] <vlan_id> <member_portname>
   ```
 
 *NOTE: Adding the -u or --untagged flag will set the member in "untagged" mode*
@@ -12600,7 +12600,7 @@ This command is to add or delete a member port into the already created vlan.
 This command is to add or delete a member port into multiple already created vlans.
 - Usage:
   ```
-  config vlan member add/del [-m] [-e] <vlan_id> <member_portname>
+  config vlan [-n <namespace>] member add/del [-m] [-e] <vlan_id> <member_portname>
   ```
 *NOTE: -m flag multiple Vlans in range or comma separted list can be added as a member port.*
 *NOTE: -e is used as an except flag as explained with examples below.*
@@ -12633,7 +12633,7 @@ This command is used to enable or disable proxy ARP for a VLAN interface
 
 - Usage:
   ```
-  config vlan proxy_arp <vlan_id> enabled/disabled
+  config vlan [-n <namespace>] proxy_arp <vlan_id> enabled/disabled
   ```
 
 - Example:
@@ -12782,7 +12782,7 @@ This command displays the default mac aging time on the switch
 
 **sonic-clear fdb all**
 
-Clear the FDB table
+Clear the FDB table. On multi-ASIC platforms, clears FDB entries in all namespaces. The fdbclear script (when run directly) supports -n <namespace> or -n all to clear a specific namespace or all namespaces.
 
 - Usage:
   ```
