@@ -1293,49 +1293,52 @@ def display_phy_signal_attribute(attr_display_name, attr_json):
 @click.option('--rxsig', is_flag=True, help='Show RX signal detect status')
 @click.option('--feclock', is_flag=True, help='Show FEC alignment lock status')
 @click.pass_context
-def phy_signal(ctx, interfacename, namespace, display, rxsig, feclock):
+@clicommon.pass_db
+def phy_signal(db, ctx, interfacename, namespace, display, rxsig, feclock):
     """Show PHY signal attributes status for interface"""
 
     if not any([rxsig, feclock]):
         ctx.fail("At least one option must be specified.")
 
+    if namespace is None:
+        namespace = constants.DEFAULT_NAMESPACE
+
     interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
+
+    # Convert to alias for display if in alias mode
+    display_name = interfacename
+    if clicommon.get_interface_naming_mode() == "alias":
+        display_name = clicommon.InterfaceAliasConverter().name_to_alias(interfacename)
 
     port_dict = multi_asic.get_port_table(namespace=namespace)
     if interfacename not in port_dict:
         ctx.fail("Invalid interface name {}".format(interfacename))
 
-    # Connect to DB to fetch interface phy data
-    db = SonicV2Connector(host=REDIS_HOSTIP)
-    db.connect(db.COUNTERS_DB)
-
-    vid_str = db.get(db.COUNTERS_DB, 'COUNTERS_PORT_NAME_MAP', interfacename)
-    if not vid_str:
-        db.close(db.COUNTERS_DB)
+    # Get port OID from COUNTERS_PORT_NAME_MAP
+    port_name_map = db.db_clients[namespace].get_all(db.db.COUNTERS_DB, 'COUNTERS_PORT_NAME_MAP')
+    if interfacename not in port_name_map:
         ctx.fail("Interface {} not found in COUNTERS_PORT_NAME_MAP".format(interfacename))
+
+    vid_str = port_name_map[interfacename]
     table_key = 'PORT_PHY_ATTR:{}'.format(vid_str)
-    port_phy_data = db.get_all(db.COUNTERS_DB, table_key)
-    db.close(db.COUNTERS_DB)
+    port_phy_data = db.db_clients[namespace].get_all(db.db.COUNTERS_DB, table_key)
 
     if not port_phy_data:
-        click.echo("No PHY attribute data available for {}".format(interfacename))
+        click.echo("No PHY attribute data available for {}".format(display_name))
         click.echo("Ensure 'counterpoll phy enable' has been run")
         return
 
-    # Map option names to Redis field names and display names
-    attr_map = {
-        'rxsig': ('RX Signal Detect', 'phy_rx_signal_detect'),
-        'feclock': ('FEC Alignment Lock', 'pcs_fec_lane_alignment_lock')
-    }
-
-    click.echo("Interface: {}".format(interfacename))
+    click.echo("Interface: {}".format(display_name))
     click.echo("=" * 80)
 
     # Display all requested attributes
-    for option_name, (display_name, redis_field) in attr_map.items():
-        if locals()[option_name]:  # If this option flag is set
-            attr_data = port_phy_data.get(redis_field)
-            display_phy_signal_attribute(display_name, attr_data)
+    if rxsig:
+        attr_data = port_phy_data.get('phy_rx_signal_detect')
+        display_phy_signal_attribute('RX Signal Detect', attr_data)
+
+    if feclock:
+        attr_data = port_phy_data.get('pcs_fec_lane_alignment_lock')
+        display_phy_signal_attribute('FEC Alignment Lock', attr_data)
 
 
 def display_phy_numeric_attribute(attr_display_name, attr_json, val_header="Value"):
@@ -1424,35 +1427,42 @@ def display_phy_taps_attribute(attr_display_name, attr_json):
 @click.option('--rxvga', is_flag=True, help='Show RX VGA values')
 @click.option('--txfir', is_flag=True, help='Show TX FIR tap values')
 @click.pass_context
-def phy_serdes(ctx, interfacename, namespace, display, snr, rxvga, txfir):
+@clicommon.pass_db
+def phy_serdes(db, ctx, interfacename, namespace, display, snr, rxvga, txfir):
     """Show PHY SERDES parameters for interface"""
 
     if not any([snr, rxvga, txfir]):
         ctx.fail("At least one option must be specified.")
 
+    if namespace is None:
+        namespace = constants.DEFAULT_NAMESPACE
+
     interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
+
+    # Convert to alias for display if in alias mode
+    display_name = interfacename
+    if clicommon.get_interface_naming_mode() == "alias":
+        display_name = clicommon.InterfaceAliasConverter().name_to_alias(interfacename)
+
     port_dict = multi_asic.get_port_table(namespace=namespace)
     if interfacename not in port_dict:
         ctx.fail("Invalid interface name {}".format(interfacename))
 
-    # Connect to DB to fetch interface phy data
-    db = SonicV2Connector(host=REDIS_HOSTIP)
-    db.connect(db.COUNTERS_DB)
-
-    vid_str = db.get(db.COUNTERS_DB, 'COUNTERS_PORT_NAME_MAP', interfacename)
-    if not vid_str:
-        db.close(db.COUNTERS_DB)
+    # Get port OID from COUNTERS_PORT_NAME_MAP
+    port_name_map = db.db_clients[namespace].get_all(db.db.COUNTERS_DB, 'COUNTERS_PORT_NAME_MAP')
+    if interfacename not in port_name_map:
         ctx.fail("Interface {} not found in COUNTERS_PORT_NAME_MAP".format(interfacename))
+
+    vid_str = port_name_map[interfacename]
     table_key = 'PORT_PHY_ATTR:{}'.format(vid_str)
-    port_phy_data = db.get_all(db.COUNTERS_DB, table_key)
-    db.close(db.COUNTERS_DB)
+    port_phy_data = db.db_clients[namespace].get_all(db.db.COUNTERS_DB, table_key)
 
     if not port_phy_data:
-        click.echo("No PHY SERDES data available for {}".format(interfacename))
+        click.echo("No PHY SERDES data available for {}".format(display_name))
         click.echo("Ensure 'counterpoll phy enable' has been run")
         return
 
-    click.echo("Interface: {}".format(interfacename))
+    click.echo("Interface: {}".format(display_name))
     click.echo("=" * 80)
 
     # Display all requested attributes
