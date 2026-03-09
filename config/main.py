@@ -3326,7 +3326,8 @@ def stop(verbose):
 
 @pfcwd.command()
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-@click.argument('poll_interval', type=click.IntRange(100, 3000))
+# Keep in sync with the pfcwd CLI validation and sonic-pfcwd YANG model.
+@click.argument('poll_interval', type=click.IntRange(100, 1000))
 def interval(poll_interval, verbose):
     """ Set PFC watchdog counter polling interval (ms) """
 
