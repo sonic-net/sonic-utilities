@@ -1282,8 +1282,11 @@ def display_phy_signal_attribute(attr_display_name, attr_json):
 
             body.append(['Lane{}:'.format(lane_num), status, change_count, last_change])
 
-    # Display table.
-    click.echo(tabulate(body, header, tablefmt='simple', numalign='left'))
+    # Display table if there's data
+    if not body:
+        click.echo("{}: No data available".format(attr_display_name))
+    else:
+        click.echo(tabulate(body, header, tablefmt='simple', numalign='left'))
     click.echo("")
 
 
@@ -1362,6 +1365,12 @@ def display_phy_numeric_attribute(attr_display_name, attr_json, val_header="Valu
     click.echo("-" * 80)
 
     lanes = sorted(lane_data.keys(), key=int)
+
+    # If no lanes, show "No data available"
+    if not lanes:
+        click.echo("No data available")
+        click.echo("")
+        return
 
     lane_row = ['Lane:'] + lanes
 
