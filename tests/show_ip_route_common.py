@@ -932,3 +932,27 @@ Routing entry for 0.0.0.0/0
   * 10.0.0.1, via PortChannel102
 
 """
+
+# VRF route output is plain text (not JSON) when VRF parameter is specified
+show_ip_route_vrf_expected_output = """\
+Codes: K - kernel route, C - connected, S - static, R - RIP,
+       O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
+       T - Table, v - VNC, V - VNC-Direct, A - Babel, D - SHARP,
+       F - PBR, f - OpenFabric,
+       > - selected route, * - FIB route, q - queued route, r - rejected route
+
+VRF Vrf1:
+B>*10.10.0.0/24 [20/0] via 10.0.0.1, Ethernet0, 1d00h00m
+C>*10.10.1.0/24 is directly connected, Ethernet4, 1d00h00m
+"""
+
+show_ipv6_route_vrf_expected_output = """\
+Codes: K - kernel route, C - connected, S - static, R - RIP,
+       O - OSPF, I - IS-IS, B - BGP, E - EIGRP, N - NHRP,
+       T - Table, v - VNC, V - VNC-Direct, A - Babel, D - SHARP,
+       F - PBR, f - OpenFabric,
+       > - selected route, * - FIB route, q - queued route, r - rejected route
+
+VRF Vrf1:
+B>*2001:db8::/64 [20/0] via fc00::1, Ethernet0, 1d00h00m
+"""
