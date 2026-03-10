@@ -181,7 +181,7 @@ def get_sfp_object(port_name):
         sys.exit(EXIT_FAIL)
 
     if sfp is None:
-        click.echo(f"{port_name}: SFP object is not retreived")
+        click.echo(f"{port_name}: SFP object is not retrieved")
         sys.exit(EXIT_FAIL)
 
     return sfp
@@ -192,7 +192,7 @@ def get_host_lane_count(port_name):
     lane_count = get_value_from_db_by_field("STATE_DB", "TRANSCEIVER_INFO", "host_lane_count", port_name)
 
     if lane_count == 0 or lane_count is None or lane_count == '':
-        click.echo(f"{port_name}: unable to retreive correct host lane count")
+        click.echo(f"{port_name}: unable to retrieve correct host lane count")
         sys.exit(EXIT_FAIL)
 
     return lane_count
@@ -203,7 +203,7 @@ def get_media_lane_count(port_name):
     lane_count = get_value_from_db_by_field("STATE_DB", "TRANSCEIVER_INFO", "media_lane_count", port_name)
 
     if lane_count == 0 or lane_count is None or lane_count == '':
-        click.echo(f"{port_name}: unable to retreive correct media lane count")
+        click.echo(f"{port_name}: unable to retrieve correct media lane count")
         sys.exit(EXIT_FAIL)
 
     return lane_count
@@ -317,7 +317,7 @@ def is_rj45_port(port_name):
     except (ModuleNotFoundError, FileNotFoundError) as e:
         # This method is referenced by intfutil which is called on vs image
         # sonic_platform API support is added for vs image(required for chassis), it expects a metadata file, which
-        # wont be available on vs pizzabox duts, So False is returned(if either ModuleNotFound or FileNotFound)
+        # won't be available on vs pizzabox duts, So False is returned(if either ModuleNotFound or FileNotFound)
         return False
 
     if platform_chassis and platform_sfp_base:

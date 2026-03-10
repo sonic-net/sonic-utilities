@@ -12,6 +12,7 @@ PORT_PHY_ATTR = "PORT_PHY_ATTR"
 PG_DROP = "PG_DROP"
 ACL = "ACL"
 ENI = "ENI"
+HA_SET = "HA_SET"
 DISABLE = "disable"
 ENABLE = "enable"
 DEFLT_60_SEC= "default (60000)"
@@ -542,6 +543,43 @@ def eni_disable(ctx):
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", ENI, eni_info)
 
 
+# HA set counter commands
+@click.group()
+@click.pass_context
+def ha_set(ctx):
+    """ HA set counter commands """
+    ctx.obj = ConfigDBConnector()
+    ctx.obj.connect()
+
+
+@ha_set.command(name='interval')
+@click.argument('poll_interval', type=click.IntRange(1000, 30000))
+@click.pass_context
+def ha_set_interval(ctx, poll_interval):
+    """ Set HA set counter query interval """
+    ha_set_info = {}
+    ha_set_info['POLL_INTERVAL'] = poll_interval
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", HA_SET, ha_set_info)
+
+
+@ha_set.command(name='enable')
+@click.pass_context
+def ha_set_enable(ctx):
+    """ Enable HA set counter query """
+    ha_set_info = {}
+    ha_set_info['FLEX_COUNTER_STATUS'] = 'enable'
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", HA_SET, ha_set_info)
+
+
+@ha_set.command(name='disable')
+@click.pass_context
+def ha_set_disable(ctx):
+    """ Disable HA set counter query """
+    ha_set_info = {}
+    ha_set_info['FLEX_COUNTER_STATUS'] = 'disable'
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", HA_SET, ha_set_info)
+
+
 # WRED queue counter commands
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
@@ -732,6 +770,7 @@ def show(namespace):
     trap_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'FLOW_CNT_TRAP')
     route_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'FLOW_CNT_ROUTE')
     eni_info = configdb.get_entry('FLEX_COUNTER_TABLE', ENI)
+    ha_set_info = configdb.get_entry('FLEX_COUNTER_TABLE', HA_SET)
     wred_queue_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'WRED_ECN_QUEUE')
     wred_port_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'WRED_ECN_PORT')
     srv6_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'SRV6')
@@ -782,10 +821,13 @@ def show(namespace):
             switch_info.get("POLL_INTERVAL", DEFLT_60_SEC),
             switch_info.get("FLEX_COUNTER_STATUS", DISABLE)
         ])
-
-    if is_dpu(configdb) and eni_info:
+    dpu = is_dpu(configdb)
+    if dpu and eni_info:
         data.append(["ENI_STAT", eni_info.get("POLL_INTERVAL", DEFLT_10_SEC),
                     eni_info.get("FLEX_COUNTER_STATUS", DISABLE)])
+    if dpu and ha_set_info:
+        data.append(["HA_SET_STAT", ha_set_info.get("POLL_INTERVAL", DEFLT_10_SEC),
+                    ha_set_info.get("FLEX_COUNTER_STATUS", DISABLE)])
 
     click.echo(tabulate(data, headers=header, tablefmt="simple", missingval=""))
 
@@ -795,7 +837,8 @@ Format:
     (click group/command, callback function)
 """
 dynamic_commands = [
-    (eni, is_dpu)
+    (eni, is_dpu),
+    (ha_set, is_dpu)
 ]
 
 

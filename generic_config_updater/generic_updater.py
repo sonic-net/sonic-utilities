@@ -5,6 +5,7 @@ import subprocess
 
 from datetime import datetime, timezone
 from enum import Enum
+from typing import IO, Optional
 from .gu_common import HOST_NAMESPACE, GenericConfigUpdaterError, EmptyTableError, ConfigWrapper, \
                     DryRunConfigWrapper, PatchWrapper, genericUpdaterLogging
 from .patch_sorter import StrictPatchSorter, NonStrictPatchSorter, ConfigSplitter, \
@@ -101,7 +102,7 @@ class PatchApplier:
         self.patchsorter = patchsorter if patchsorter is not None else StrictPatchSorter(self.config_wrapper, self.patch_wrapper)
         self.changeapplier = changeapplier if changeapplier is not None else ChangeApplier(scope=self.scope)
 
-    def apply(self, patch, sort=True):
+    def apply(self, patch, sort=True, trace_io: Optional[IO] = None):
         scope = self.scope if self.scope else HOST_NAMESPACE
         self.logger.log_notice(f"{scope}: Patch application starting.")
         self.logger.log_notice(f"{scope}: Patch: {patch}")
@@ -130,7 +131,7 @@ class PatchApplier:
         # Generate list of changes to apply
         if sort:
             self.logger.log_notice(f"{scope}: sorting patch updates.")
-            changes = self.patchsorter.sort(patch)
+            changes = self.patchsorter.sort(patch, trace_io=trace_io)
         else:
             self.logger.log_notice(f"{scope}: converting patch to JsonChange.")
             changes = [JsonChange(jsonpatch.JsonPatch([element])) for element in patch]
@@ -166,7 +167,7 @@ class ConfigReplacer:
         self.config_wrapper = config_wrapper if config_wrapper is not None else ConfigWrapper(scope=self.scope)
         self.patch_wrapper = patch_wrapper if patch_wrapper is not None else PatchWrapper(scope=self.scope)
 
-    def replace(self, target_config):
+    def replace(self, target_config, trace_io: Optional[IO] = None):
         self.logger.log_notice("Config replacement starting.")
         self.logger.log_notice(f"Target config length: {len(json.dumps(target_config))}.")
 
@@ -178,7 +179,7 @@ class ConfigReplacer:
         self.logger.log_debug(f"Generated patch: {patch}.") # debug since the patch will printed again in 'patch_applier.apply'
 
         self.logger.log_notice("Applying patch using 'Patch Applier'.")
-        self.patch_applier.apply(patch)
+        self.patch_applier.apply(patch, trace_io=trace_io)
 
         self.logger.log_notice("Verifying config replacement is reflected on ConfigDB.")
         new_config = self.config_wrapper.get_config_db_as_json()
@@ -303,7 +304,7 @@ class MultiASICConfigReplacer(ConfigReplacer):
         self.scopelist = [HOST_NAMESPACE, *multi_asic.get_namespace_list()]
         super().__init__(patch_applier, config_wrapper, patch_wrapper, scope)
 
-    def replace(self, target_config):
+    def replace(self, target_config, trace_io: Optional[IO] = None):
         config_keys = set(target_config.keys())
         missing_scopes = set(self.scopelist) - config_keys
         if missing_scopes:
@@ -313,7 +314,7 @@ class MultiASICConfigReplacer(ConfigReplacer):
             scope_config = target_config.pop(scope)
             if scope.lower() == HOST_NAMESPACE:
                 scope = multi_asic.DEFAULT_NAMESPACE
-            ConfigReplacer(scope=scope).replace(scope_config)
+            ConfigReplacer(scope=scope).replace(scope_config, trace_io=trace_io)
 
 
 class MultiASICConfigRollbacker(FileSystemConfigRollbacker):
@@ -420,11 +421,11 @@ class Decorator(PatchApplier, ConfigReplacer, FileSystemConfigRollbacker):
         self.decorated_config_replacer = decorated_config_replacer
         self.decorated_config_rollbacker = decorated_config_rollbacker
 
-    def apply(self, patch):
-        self.decorated_patch_applier.apply(patch)
+    def apply(self, patch, sort=True, trace_io: Optional[IO] = None):
+        self.decorated_patch_applier.apply(patch, sort, trace_io=trace_io)
 
-    def replace(self, target_config):
-        self.decorated_config_replacer.replace(target_config)
+    def replace(self, target_config, trace_io: Optional[IO] = None):
+        self.decorated_config_replacer.replace(target_config, trace_io=trace_io)
 
     def rollback(self, checkpoint_name):
         self.decorated_config_rollbacker.rollback(checkpoint_name)
@@ -451,13 +452,13 @@ class SonicYangDecorator(Decorator):
         self.patch_wrapper = patch_wrapper
         self.config_wrapper = config_wrapper
 
-    def apply(self, patch):
+    def apply(self, patch, sort=True, trace_io: Optional[IO] = None):
         config_db_patch = self.patch_wrapper.convert_sonic_yang_patch_to_config_db_patch(patch)
-        Decorator.apply(self, config_db_patch)
+        Decorator.apply(self, config_db_patch, sort, trace_io=trace_io)
 
-    def replace(self, target_config):
+    def replace(self, target_config, trace_io: Optional[IO] = None):
         config_db_target_config = self.config_wrapper.convert_sonic_yang_to_config_db(target_config)
-        Decorator.replace(self, config_db_target_config)
+        Decorator.replace(self, config_db_target_config, trace_io=trace_io)
 
 
 class ConfigLockDecorator(Decorator):
@@ -474,11 +475,11 @@ class ConfigLockDecorator(Decorator):
                            scope=scope)
         self.config_lock = config_lock
 
-    def apply(self, patch, sort=True):
-        self.execute_write_action(Decorator.apply, self, patch)
+    def apply(self, patch, sort=True, trace_io: Optional[IO] = None):
+        self.execute_write_action(Decorator.apply, self, patch, sort, trace_io=trace_io)
 
-    def replace(self, target_config):
-        self.execute_write_action(Decorator.replace, self, target_config)
+    def replace(self, target_config, trace_io: Optional[IO] = None):
+        self.execute_write_action(Decorator.replace, self, target_config, trace_io=trace_io)
 
     def rollback(self, checkpoint_name):
         self.execute_write_action(Decorator.rollback, self, checkpoint_name)
@@ -486,9 +487,9 @@ class ConfigLockDecorator(Decorator):
     def checkpoint(self, checkpoint_name):
         self.execute_write_action(Decorator.checkpoint, self, checkpoint_name)
 
-    def execute_write_action(self, action, *args):
+    def execute_write_action(self, action, *args, **kwargs):
         self.config_lock.acquire_lock()
-        action(*args)
+        action(*args, **kwargs)
         self.config_lock.release_lock()
 
 
@@ -496,7 +497,14 @@ class GenericUpdateFactory:
     def __init__(self, scope=multi_asic.DEFAULT_NAMESPACE):
         self.scope = scope
 
-    def create_patch_applier(self, config_format, verbose, dry_run, ignore_non_yang_tables, ignore_paths):
+    def create_patch_applier(
+        self,
+        config_format,
+        verbose,
+        dry_run,
+        ignore_non_yang_tables,
+        ignore_paths,
+    ):
         self.init_verbose_logging(verbose)
         config_wrapper = self.get_config_wrapper(dry_run)
         change_applier = self.get_change_applier(dry_run, config_wrapper)
@@ -523,7 +531,14 @@ class GenericUpdateFactory:
 
         return patch_applier
 
-    def create_config_replacer(self, config_format, verbose, dry_run, ignore_non_yang_tables, ignore_paths):
+    def create_config_replacer(
+        self,
+        config_format,
+        verbose,
+        dry_run,
+        ignore_non_yang_tables,
+        ignore_paths,
+    ):
         self.init_verbose_logging(verbose)
         config_wrapper = self.get_config_wrapper(dry_run)
         change_applier = self.get_change_applier(dry_run, config_wrapper)
@@ -622,13 +637,44 @@ class GenericUpdater:
         self.generic_update_factory = \
             generic_update_factory if generic_update_factory is not None else GenericUpdateFactory(scope=scope)
 
-    def apply_patch(self, patch, config_format, verbose, dry_run, ignore_non_yang_tables, ignore_paths, sort=True):
-        patch_applier = self.generic_update_factory.create_patch_applier(config_format, verbose, dry_run, ignore_non_yang_tables, ignore_paths)
-        patch_applier.apply(patch, sort)
+    def apply_patch(
+        self,
+        patch,
+        config_format,
+        verbose,
+        dry_run,
+        ignore_non_yang_tables,
+        ignore_paths,
+        sort=True,
+        trace_io: Optional[IO] = None,
+    ):
+        patch_applier = self.generic_update_factory.create_patch_applier(
+            config_format,
+            verbose,
+            dry_run,
+            ignore_non_yang_tables,
+            ignore_paths,
+        )
+        patch_applier.apply(patch, sort, trace_io=trace_io)
 
-    def replace(self, target_config, config_format, verbose, dry_run, ignore_non_yang_tables, ignore_paths):
-        config_replacer = self.generic_update_factory.create_config_replacer(config_format, verbose, dry_run, ignore_non_yang_tables, ignore_paths)
-        config_replacer.replace(target_config)
+    def replace(
+        self,
+        target_config,
+        config_format,
+        verbose,
+        dry_run,
+        ignore_non_yang_tables,
+        ignore_paths,
+        trace_io: Optional[IO] = None,
+    ):
+        config_replacer = self.generic_update_factory.create_config_replacer(
+            config_format,
+            verbose,
+            dry_run,
+            ignore_non_yang_tables,
+            ignore_paths,
+        )
+        config_replacer.replace(target_config, trace_io=trace_io)
 
     def rollback(self, checkpoint_name, verbose, dry_run, ignore_non_yang_tables, ignore_paths):
         config_rollbacker = self.generic_update_factory.create_config_rollbacker(verbose, dry_run, ignore_non_yang_tables, ignore_paths)

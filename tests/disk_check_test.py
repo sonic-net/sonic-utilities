@@ -126,7 +126,7 @@ def swap_work(tc):
 
 
 class TestDiskCheck(object):
-    def setup(self):
+    def setup_method(self):
         pass
 
 
@@ -248,5 +248,5 @@ class TestDiskCheck(object):
 
     @classmethod
     def teardown_class(cls):
-        subprocess.run("rm -rf /tmp/tmp*", shell=True)  # cleanup the temporary dirs
+        subprocess.run(["rm", "-rf", "/tmp/tmpx", "/tmp/tmpy"])  # cleanup the temporary dirs
         print("TEARDOWN")

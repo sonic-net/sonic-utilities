@@ -1,7 +1,8 @@
 import click
 from natsort import natsorted
 from tabulate import tabulate
-
+from sonic_py_common import multi_asic
+import utilities_common.multi_asic as multi_asic_util
 import utilities_common.cli as clicommon
 
 
@@ -117,64 +118,114 @@ class VlanBrief:
 
 @vlan.command()
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-@clicommon.pass_db
-def brief(db, verbose):
-    """Show all bridge information"""
-    header = [colname for colname, getter in VlanBrief.COLUMNS]
-    body = []
+@multi_asic_util.multi_asic_click_option_namespace
+def brief(verbose, namespace):
+    def _brief_helper(db):
+        """Show all bridge information"""
+        header = [colname for colname, getter in VlanBrief.COLUMNS]
+        body = []
 
-    # Fetching data from config db for VLAN, VLAN_INTERFACE and VLAN_MEMBER
-    vlan_data = db.cfgdb.get_table('VLAN')
-    vlan_ip_data = db.cfgdb.get_table('VLAN_INTERFACE')
-    vlan_ports_data = db.cfgdb.get_table('VLAN_MEMBER')
-    vlan_cfg = (vlan_data, vlan_ip_data, vlan_ports_data)
+        # Fetching data from config db for VLAN, VLAN_INTERFACE and VLAN_MEMBER
+        vlan_data = db.cfgdb.get_table('VLAN')
+        vlan_ip_data = db.cfgdb.get_table('VLAN_INTERFACE')
+        vlan_ports_data = db.cfgdb.get_table('VLAN_MEMBER')
+        vlan_cfg = (vlan_data, vlan_ip_data, vlan_ports_data)
 
-    for vlan in natsorted(vlan_data):
-        row = []
-        for column in VlanBrief.COLUMNS:
-            column_name, getter = column
-            row.append(getter((vlan_cfg, db), vlan))
-        body.append(row)
+        for vlan in natsorted(vlan_data):
+            row = []
+            for column in VlanBrief.COLUMNS:
+                column_name, getter = column
+                row.append(getter((vlan_cfg, db), vlan))
+            body.append(row)
 
-    click.echo(tabulate(body, header, tablefmt="grid"))
+        click.echo(tabulate(body, header, tablefmt="grid"))
+
+    if multi_asic.is_multi_asic():
+        ns_list = multi_asic.get_namespace_list()
+        if namespace:
+            ns_list = [namespace]
+    else:
+        ns_list = [multi_asic.DEFAULT_NAMESPACE]
+
+    for ns in ns_list:
+        if multi_asic.is_multi_asic() and len(ns_list) > 1:
+            click.echo("\nNamespace: {}".format(ns))
+
+        config_db = multi_asic.connect_config_db_for_ns(ns)
+        ns_db = multi_asic.connect_to_all_dbs_for_ns(ns)
+
+        # Create a db-like object for compatibility with getter functions
+        class ConfigDbWrapper:
+            def __init__(self, cfgdb, ns_db):
+                self.cfgdb = cfgdb
+                self.db = ns_db
+
+        db = ConfigDbWrapper(config_db, ns_db)
+        _brief_helper(db)
 
 
 @vlan.command()
-@clicommon.pass_db
-def config(db):
-    data = db.cfgdb.get_table('VLAN')
-    keys = list(data.keys())
-    member_data = db.cfgdb.get_table('VLAN_MEMBER')
-    interface_naming_mode = clicommon.get_interface_naming_mode()
-    iface_alias_converter = clicommon.InterfaceAliasConverter(db)
-   
-    def get_iface_name_for_display(member):
-        name_for_display = member
-        if interface_naming_mode == "alias" and member:
-            name_for_display = iface_alias_converter.name_to_alias(member)
-        return name_for_display
-    
-    def get_tagging_mode(vlan, member):
-        if not member:
+@multi_asic_util.multi_asic_click_option_namespace
+def config(namespace):
+    def _config_helper(db):
+        data = db.cfgdb.get_table('VLAN')
+        keys = list(data.keys())
+        member_data = db.cfgdb.get_table('VLAN_MEMBER')
+        interface_naming_mode = clicommon.get_interface_naming_mode()
+        iface_alias_converter = clicommon.InterfaceAliasConverter(db)
+
+        def get_iface_name_for_display(member):
+            if interface_naming_mode == "alias":
+                return iface_alias_converter.name_to_alias(member)
+            return member
+
+        def get_tagging_mode(vlan, member):
+            if not member:
+                return ''
+            key = (vlan, member)
+            if key in member_data:
+                return member_data[key].get('tagging_mode', '')
             return ''
-        tagging_mode = db.cfgdb.get_entry('VLAN_MEMBER', (vlan, member)).get('tagging_mode')
-        return '?' if tagging_mode is None else tagging_mode
-        
-    def tablelize(keys, data):
-        table = []
 
-        for k in natsorted(keys):
-            members = set([(vlan, member) for vlan, member in member_data if vlan == k] + [(k, member) for member in set(data[k].get('members', []))])
-            # vlan with no members
-            if not members:
-                members = [(k, '')]
-            
-            for vlan, member in natsorted(members):
-                r = [vlan, data[vlan]['vlanid'], get_iface_name_for_display(member), get_tagging_mode(vlan, member)]
-                table.append(r)
+        def tablelize(keys, data):
+            table = []
 
-        return table
+            for k in natsorted(keys):
+                members = set([(vlan, member) for vlan, member in member_data if vlan == k] +
+                              [(k, member) for member in set(data[k].get('members', []))])
+                # vlan with no members
+                if not members:
+                    members = [(k, '')]
 
-    header = ['Name', 'VID', 'Member', 'Mode']
-    click.echo(tabulate(tablelize(keys, data), header))
+                for vlan, member in natsorted(members):
+                    r = [vlan, data[vlan]['vlanid'], get_iface_name_for_display(member), get_tagging_mode(vlan, member)]
+                    table.append(r)
+
+            return table
+
+        header = ['Name', 'VID', 'Member', 'Mode']
+        click.echo(tabulate(tablelize(keys, data), header))
+
+    if multi_asic.is_multi_asic():
+        ns_list = multi_asic.get_namespace_list()
+        if namespace:
+            ns_list = [namespace]
+    else:
+        ns_list = [multi_asic.DEFAULT_NAMESPACE]
+
+    for ns in ns_list:
+        if multi_asic.is_multi_asic() and len(ns_list) > 1:
+            click.echo("\nNamespace: {}".format(ns))
+
+        config_db = multi_asic.connect_config_db_for_ns(ns)
+        ns_db = multi_asic.connect_to_all_dbs_for_ns(ns)
+
+        # Create a db-like object for compatibility with helper function
+        class ConfigDbWrapper:
+            def __init__(self, cfgdb, ns_db):
+                self.cfgdb = cfgdb
+                self.db = ns_db
+
+        db = ConfigDbWrapper(config_db, ns_db)
+        _config_helper(db)
 

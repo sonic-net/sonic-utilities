@@ -216,7 +216,7 @@ class TestRouteCheck(object):
                 return args[i + 1]
         return DEFAULTNS
 
-    def setup(self):
+    def setup_method(self):
         pass
 
     def init(self):

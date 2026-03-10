@@ -53,7 +53,7 @@ C_CMIS_DELTA_DATA_MAP = {
 CMIS_DATA_MAP = {**QSFP_DATA_MAP, **QSFP_CMIS_DELTA_DATA_MAP}
 C_CMIS_DATA_MAP = {**CMIS_DATA_MAP, **C_CMIS_DELTA_DATA_MAP}
 
-# Common fileds for all types:
+# Common fields for all types:
 # For non-CMIS, only first 1 or 4 lanes are applicable.
 # For CMIS, all 8 lanes are applicable.
 QSFP_STATUS_MAP = {

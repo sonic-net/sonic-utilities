@@ -29,10 +29,14 @@
 * [ARP & NDP](#arp--ndp)
   * [ARP show commands](#arp-show-commands)
   * [NDP show commands](#ndp-show-commands)
+  * [ARP clear commands](#arp-clear-commands)
+  * [NDP clear commands](#ndp-clear-commands)
 * [ASIC SDK health event](#asic-sdk-health-event)
   * [ASIC SDK health event config commands](#asic-sdk-health-event-config-commands)
   * [ASIC SDK health event show commands](#asic-sdk-health-event-show-commands)
   * [ASIC SDK health event clear commands](#asic-sdk-health-event-clear-commands)
+* [BMC](#bmc)
+  * [BMC config commands](#bmc-config-commands)
 * [BFD](#bfd)
   * [BFD show commands](#bfd-show-commands)
 * [BGP](#bgp)
@@ -44,6 +48,8 @@
   * [Console connect commands](#console-connect-commands)
   * [Console clear commands](#console-clear-commands)
   * [DPU serial console utility](#dpu-serial-console-utility)
+* [CRM](#crm)
+  * [CRM show commands](#crm-show-commands)
 * [CMIS firmware upgrade](#cmis-firmware-upgrade)
   * [CMIS firmware version show commands](#cmis-firmware-version-show-commands)
   * [CMIS firmware upgrade commands](#cmis-firmware-upgrade-commands)
@@ -206,6 +212,7 @@
 * [VxLAN & Vnet](#vxlan--vnet)
   * [VxLAN](#vxlan)
     * [VxLAN show commands](#vxlan-show-commands)
+    * [VxLAN config commands](#vxlan-config-commands)
   * [Vnet](#vnet)
     * [Vnet show commands](#vnet-show-commands)
     * [Vnet config commands](#vnet-config-commands)
@@ -263,6 +270,7 @@
 
 | Version | Modification Date | Details |
 | --- | --- | --- |
+| v10 | Mar-07-2026 | Update VxLAN and Vnet command reference for namespace-aware multi-ASIC behavior |
 | v9 | Sep-19-2024 | Add DPU serial console utility |
 | v8 | Oct-09-2023 | Add CMIS firmware upgrade commands |
 | v7 | Jun-22-2023 | Add static DNS show and config commands |
@@ -311,6 +319,8 @@ The direct scripts/utilities/commands (examples given below) that are not wrappe
   1. acl_loader – This script is already wrapped inside “config acl” command; i.e. any ACL configuration that user is allowed to do is already part of “config acl” command; users are not expected to use the acl_loader script directly and hence this document need not explain the “acl_loader” script.
   2. crm – this command is not explained in this document.
   3. sonic-clear, sfputil, etc., This document does not explain these scripts also.
+
+Exception: the `crm show resources` command family is documented in the [CRM](#crm) section.
 
 ## Basic Tasks
 
@@ -1143,6 +1153,76 @@ This command displays the status of the device's thermal sensors
      xSFP module 30 Temp           35.3       70.0       N/A            90.0            N/A      False  20200302 06:59:58
      xSFP module 31 Temp           31.0       70.0       N/A            90.0            N/A      False  20200302 06:59:58
      xSFP module 32 Temp           39.5       70.0       N/A            90.0            N/A      False  20200302 06:59:58
+  ```
+
+**show platform bmc summary**
+
+This command displays BMC summary information including manufacturer, model, part number, serial number, power state, and firmware version
+
+- Usage:
+  ```
+  show platform bmc summary [--json]
+  ```
+
+- Options:
+  - `--json`: Output information in JSON format
+
+- Example:
+  ```
+  admin@sonic:~$ show platform bmc summary
+  Manufacturer: ASPEED
+  Model: P3809
+  PartNumber: 123-12345-1234-AB1
+  SerialNumber: 123456789
+  PowerState: On
+  FirmwareVersion: 1.0.0
+  ```
+
+- Example (JSON format):
+  ```
+  admin@sonic:~$ show platform bmc summary --json
+  {
+      "Manufacturer": "ASPEED",
+      "Model": "P3809",
+      "PartNumber": "123-12345-1234-AB1",
+      "SerialNumber": "123456789",
+      "PowerState": "On",
+      "FirmwareVersion": "2.13.0"
+  }
+  ```
+
+**show platform bmc eeprom**
+
+This command displays BMC EEPROM information
+
+- Usage:
+  ```
+  show platform bmc eeprom [--json]
+  ```
+
+- Options:
+  - `--json`: Output information in JSON format
+
+- Example:
+  ```
+  admin@sonic:~$ show platform bmc eeprom
+  Manufacturer: ASPEED
+  Model: P3809
+  PartNumber: 123-12345-1234-AB1
+  PowerState: On
+  SerialNumber: 123456789
+  ```
+
+- Example (JSON format):
+  ```
+  admin@sonic:~$ show platform bmc eeprom --json
+  {
+      "Manufacturer": "ASPEED",
+      "Model": "P3809",
+      "PartNumber": "123-12345-1234-AB1",
+      "PowerState": "On",
+      "SerialNumber": "123456789"
+  }
   ```
 
 #### Transceivers
@@ -2120,7 +2200,7 @@ This command is used to create new ACL tables.
 
 - Usage:
   ```
-  config acl add table [OPTIONS] <table_name> <table_type> [-d <description>] [-p <ports>] [-s (ingress | egress)]
+  config acl add table [OPTIONS] <table_name> <table_type> [-d <description>] [-p <ports>] [-s (ingress | egress)] [-n <namespace>]
   ```
 
 - Parameters:
@@ -2132,6 +2212,7 @@ This command is used to create new ACL tables.
     - Portchannels will be bound as portchannels - passing a portchannel member is invalid
     - VLANs will be expanded into their members (e.g. "Vlan1000" will become "Ethernet0,Ethernet2,Ethernet4...")
   - stage: The stage this ACL table will be applied to, either ingress or egress. (default is ingress)
+  - namespace: Namespace name for multi-ASIC platforms. When specified, the table is created in that ASIC's config DB.
 
 - Examples:
   ```
@@ -2139,6 +2220,30 @@ This command is used to create new ACL tables.
   ```
   ```
   admin@sonic:~$ sudo config acl add table EXAMPLE_2 L3V6 -p Vlan1000,PortChannel0001,Ethernet128 -s egress
+  ```
+  ```
+  admin@sonic:~$ sudo config acl add table EXAMPLE_ASIC0 L3 -p Ethernet0 -n asic0
+  ```
+
+**config acl remove table**
+
+This command is used to remove an ACL table.
+
+- Usage:
+  ```
+  config acl remove table <table_name> [-n <namespace>]
+  ```
+
+- Parameters:
+  - table_name: The name of the ACL table to remove.
+  - namespace: Namespace name for multi-ASIC platforms. When specified, the table is removed from that ASIC's config DB.
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config acl remove table EXAMPLE
+  ```
+  ```
+  admin@sonic:~$ sudo config acl remove table EXAMPLE_ASIC0 -n asic0
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#acl)
@@ -2336,16 +2441,19 @@ This command displays the ARP entries in the device with following options.
 1) Display the entire table.
 2) Display the ARP entries learnt on a specific interface.
 3) Display the ARP of a specific ip-address.
+4) On multi-ASIC platforms, filter by namespace and display option (all or frontend interfaces).
 
 - Usage:
   ```
-  show arp [-if <interface_name>] [<ip_address>]
+  show arp [-if <interface_name>] [<ip_address>] [-n|--namespace <namespace>] [-d|--display all|frontend]
   ```
 
 - Details:
   - show arp: Displays all entries
   - show arp -if <ifname>: Displays the ARP specific to the specified interface.
   - show arp <ip-address>: Displays the ARP specific to the specified ip-address.
+  - -n, --namespace: (Multi-ASIC) Namespace name. Omit to show all namespaces.
+  - -d, --display: (Multi-ASIC) all = all interfaces, frontend = external interfaces only.
 
 
 - Example:
@@ -2393,12 +2501,16 @@ Optionally, you can specify an IP address in order to display only that particul
 
 **show ndp**
 
-This command displays either all the IPv6 neighbor mac addresses, or for a particular IPv6 neighbor, or for all IPv6 neighbors reachable via a specific interface.
+This command displays either all the IPv6 neighbor mac addresses, or for a particular IPv6 neighbor, or for all IPv6 neighbors reachable via a specific interface. On multi-ASIC platforms, supports namespace and display filters.
 
 - Usage:
   ```
-  show ndp [-if|--iface <interface_name>] <ipv6_address>
+  show ndp [-if|--iface <interface_name>] [<ipv6_address>] [-n|--namespace <namespace>] [-d|--display all|frontend]
   ```
+
+- Details:
+  - -n, --namespace: (Multi-ASIC) Namespace name. Omit to show all namespaces.
+  - -d, --display: (Multi-ASIC) all = all interfaces, frontend = external interfaces only.
 
 - Example (show all IPv6 neighbors):
   ```
@@ -2431,7 +2543,94 @@ This command displays either all the IPv6 neighbor mac addresses, or for a parti
   Total number of entries 3
   ```
 
+### ARP clear commands
+
+**sonic-clear arp**
+
+This command clears the IP ARP table. On multi-ASIC platforms, namespace is required to target a specific ASIC.
+
+- Usage:
+  ```
+  sonic-clear arp [<ip_address>] [-n|--namespace <namespace>]
+  ```
+
+- Details:
+  - sonic-clear arp: Clears all ARP entries (single-ASIC) or requires -n on multi-ASIC.
+  - sonic-clear arp <ip_address>: Clears the ARP entry for the given IP.
+  - -n, --namespace: (Multi-ASIC, required) Namespace name (e.g. asic0).
+
+### NDP clear commands
+
+**sonic-clear ndp**
+
+This command clears the IPv6 NDP table. On multi-ASIC platforms, namespace is required to target a specific ASIC.
+
+- Usage:
+  ```
+  sonic-clear ndp [<ipv6_address>] [-n|--namespace <namespace>]
+  ```
+
+- Details:
+  - sonic-clear ndp: Clears all NDP entries (single-ASIC) or requires -n on multi-ASIC.
+  - sonic-clear ndp <ipv6_address>: Clears the NDP entry for the given IPv6 address.
+  - -n, --namespace: (Multi-ASIC, required) Namespace name (e.g. asic0).
+
 Go Back To [Beginning of the document](#) or [Beginning of this section](#arp--ndp)
+
+## BMC
+
+### BMC config commands
+
+**config bmc open-session**
+
+This command opens a session with the BMC and returns session credentials
+
+- Usage:
+  ```
+  config bmc open-session
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config bmc open-session
+  Session ID: qL8mAGlFvw
+  Token: ndCMbgPVd3d1LpRXXkTJ
+  ```
+
+**config bmc close-session**
+
+This command closes a BMC session using the provided session ID
+
+- Usage:
+  ```
+  config bmc close-session --session-id <session_id>
+  ```
+
+- Options:
+  - `-s, --session-id`: Session ID to close (required)
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config bmc close-session --session-id qL8mAGlFvw
+  Session closed successfully
+  ```
+
+**config bmc reset-root-password**
+
+This command resets the BMC root password to default
+
+- Usage:
+  ```
+  config bmc reset-root-password
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config bmc reset-root-password
+  BMC root password reset successful
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#bmc)
 
 ## BFD
 
@@ -3313,6 +3512,90 @@ Optionally, user may overwrite TTY device for experiment.
   ```
   root@MtFuji:/home/cisco# dpu-tty.py -n dpu2 -t ttyS4
   ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#console)
+
+## CRM
+
+### CRM show commands
+
+**crm show resources**
+
+This command displays CRM resource usage and availability counters.
+
+- Usage:
+  ```
+  crm show resources [-n <namespace>] all
+  crm show resources [-n <namespace>] acl {group|table}
+  crm show resources [-n <namespace>] {fdb|ipmc|snat|dnat|srv6-nexthop|srv6-my-sid-entry}
+  crm show resources [-n <namespace>] ipv4 {route|neighbor|nexthop}
+  crm show resources [-n <namespace>] ipv6 {route|neighbor|nexthop}
+  crm show resources [-n <namespace>] mpls {inseg|nexthop}
+  crm show resources [-n <namespace>] nexthop group {member|object}
+  ```
+
+- Details:
+  - On a single-ASIC system, run the command without `-n`.
+  - On a multi-ASIC system, if `-n` or `--namespace` is not specified, the command applies to all namespaces and prints a separate section for each ASIC namespace.
+  - On a multi-ASIC system, `-n` or `--namespace` accepts one namespace name such as `asic0`, `asic1`, `asic2`, or `asic3`.
+  - Place `-n` or `--namespace` immediately after `crm show resources`, for example `crm show resources -n asic0 ipv4 route`.
+  - Some resources may display `CRM counters are not ready` until the counters have been populated after the CRM polling interval.
+
+- Examples:
+  ```
+  admin@sonic:~$ crm show resources all
+  ```
+
+  ```
+  admin@sonic:~$ crm show resources ipv4 route
+  ```
+
+  ```
+  admin@sonic:~$ crm show resources acl group
+  ```
+
+  ```
+  admin@sonic:~$ crm show resources nexthop group member
+  ```
+
+  ```
+  admin@sonic:~$ crm show resources -n asic0 all
+  ```
+
+  ```
+  admin@sonic:~$ crm show resources -n asic1 ipv4 route
+  ```
+
+- Example on a multi-ASIC system when namespace is not specified:
+  ```
+  admin@sonic:~$ crm show resources ipv4 route
+
+  ASIC0
+
+  Resource Name      Used Count    Available Count
+  ---------------  ------------  -----------------
+  ipv4_route                  1             202434
+
+
+  ASIC1
+
+  Resource Name      Used Count    Available Count
+  ---------------  ------------  -----------------
+  ipv4_route                  1             202434
+  ```
+
+- Example on a multi-ASIC system for a specific namespace:
+  ```
+  admin@sonic:~$ crm show resources -n asic0 ipv4 route
+
+  ASIC0
+
+  Resource Name      Used Count    Available Count
+  ---------------  ------------  -----------------
+  ipv4_route                  1             202434
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#crm)
 
 ## CMIS firmware upgrade
 
@@ -5960,23 +6243,189 @@ This command is to display the link-training status of the selected interfaces. 
     Ethernet8      trained          on      up       up
   ```
 
+**show interfaces phy**
+
+This command displays Layer 1 physical layer (PHY) diagnostics for interfaces.
+
+The command has two subcommands:
+- `phy-signal` - Displays boolean link/signal status indicators (quick health check)
+- `phy-serdes` - Displays analog/digital signal quality metrics (deeper diagnostics)
+
+At least one option must be specified for each subcommand.
+
+**Status Options:**
+
+| Option | SAI Attribute | Description |
+|--------|---------------|-------------|
+| `rxsig` | `SAI_PORT_ATTR_RX_SIGNAL_DETECT` | RX signal detect per lane |
+| `feclock` | `SAI_PORT_ATTR_FEC_ALIGNMENT_LOCK` | FEC alignment lock per lane |
+| `rxpcs` | `SAI_PORT_ATTR_PCS_RX_LINK_STATUS` | PCS RX link status |
+| `rxlock` | `SAI_PORT_ATTR_RX_LOCK_STATUS` | RX lock status per lane |
+
+**Serdes Options:**
+
+| Option | SAI Attribute | Description |
+|--------|---------------|-------------|
+| `snr` | `SAI_PORT_ATTR_RX_SNR` | RX Signal-to-Noise Ratio (dB) per lane |
+| `txfir` | `SAI_PORT_SERDES_ATTR_TX_FIR_TAPS_LIST` | TX FIR tap values per lane |
+| `rxffe` | `SAI_PORT_SERDES_ATTR_RX_FFE_TAPS_LIST` | RX FFE tap values per lane |
+| `rxdfe` | `SAI_PORT_SERDES_ATTR_RX_DFE_TAPS_LIST` | RX DFE tap values per lane |
+| `rxvga` | `SAI_PORT_SERDES_ATTR_RX_VGA` | RX VGA values per lane |
+
+**Status Output Legend:**
+- `T` = True (signal detected / locked)
+- `F` = False (no signal / not locked)
+- `*` suffix = Value changed since last poll (e.g., `T*` means it became True recently)
+
+- Usage:
+  ```
+  show interfaces phy-signal <interface_name> [rxsig] [feclock] [rxpcs] [rxlock]
+  show interfaces phy-serdes <interface_name> [snr] [txfir] [rxffe] [rxdfe] [rxvga]
+  ```
+
+- Example (status with RX signal detect and FEC alignment lock):
+  ```
+  admin@sonic:~$ show interfaces phy-signal Ethernet0 rxsig
+  Interface: Ethernet0
+  ================================================================================
+    RX Signal Detect:   Current State     Changes        Last Changes (UTC)
+    ------------------------------------------------------------------------------
+    Lane0:              T*                2              2026-05-01 11:07:01
+    Lane1:              T                 0              Never
+    Lane2:              T                 0              Never
+    Lane3:              T                 0              Never
+    Lane4:              F                 1              2026-05-01 00:10:11
+    Lane5:              T                 0              Never
+    Lane6:              T                 0              Never
+    Lane7:              F                 0              Never
+  ```
+
+  ```
+  admin@sonic:~$ show interfaces phy-signal Ethernet0 feclock
+  Interface: Ethernet0
+  ================================================================================
+    FEC Alignment Lock:   Current State     Changes      Last Changes (UTC)
+    ------------------------------------------------------------------------------
+    Lane0:                T                 2            2026-05-01 11:07:01
+    Lane1:                T                 0            Never
+    Lane2:                T                 0            Never
+    Lane3:                T                 0            Never
+    Lane4:                F*                1            2026-05-01 00:10:11
+    Lane5:                T                 0            Never
+    Lane6:                T                 0            Never
+    Lane7:                F                 0            Never
+  
+
+- Example (PHY serdes SNR):
+  ```
+  admin@sonic:~$ show interfaces phy-serdes Ethernet0 snr
+  Interface: Ethernet0
+  ================================================================================
+    RX SNR (dB):
+    ------------------------------------------------------------------------------
+    Lane:       0      1      2      3     4     5     6      7
+    SNR:        15.2   14.8   15.1   14.9  12.1  5.5  6.7     22.0
+  ```
+
+- Example (PHY serdes TX FIR and RX VGA):
+  ```
+  admin@sonic:~$ show interfaces phy-serdes Ethernet0 txfir
+  Interface: Ethernet0
+  ================================================================================
+    TX FIR Taps:
+    ------------------------------------------------------------------------------
+    Lane   Tap0   Tap1   Tap2   Tap3   Tap4   Tap5   Tap6
+    ----   ----   ----   ----   ----   -----  -----  -----
+    0      -3     8      -22    95     -9     -10    1
+    1      -1     5      -28    102    -13    -14    0
+    2      -4     7      -24    98     -10    -11    2
+    3      -2     9      -30    105    -12    -15    -1
+    4      -5     6      -20    92     -8     -9     3
+    5      -1     4      -25    99     -14    -13    0
+    6      -3     10     -27    103    -11    -16    1
+    7      -2     5      -23    97     -10    -12    -2
+  ```
+
+  ```
+  admin@sonic:~$ show interfaces phy-serdes Ethernet0 rxvga
+  Interface: Ethernet0
+  ================================================================================
+    RX VGA:
+    ------------------------------------------------------------------------------
+    Lane:       0      1      2      3     4     5     6      7
+    VGA:        27     28     40     38    31    33    34     29
+  ```
+
+- Example (serdes with RX FFE and RX DFE taps):
+
+  > **Note:** The number of taps will vary from serdes to serdes.
+
+  ```
+  admin@sonic:~$ show interfaces phy-serdes Ethernet0 rxffe
+  Interface: Ethernet0
+  ================================================================================
+    RX FFE Taps:
+    ------------------------------------------------------------------------------
+    Lane   Tap0   Tap1   Tap2   Tap3   Tap4   Tap5
+    ----   ----   ----   ----   ----   ----   ----
+    0      5      -12    8      -3     1      0
+    1      5      -11    8      -3     1      0
+    2      5      -12    8      -3     1      0
+    3      5      -11    8      -3     1      0
+
+
+  admin@sonic:~$ show interfaces phy-serdes Ethernet0 rxdfe
+  Interface: Ethernet0
+  ================================================================================
+    RX DFE Taps:
+    ------------------------------------------------------------------------------
+    Lane   Tap0   Tap1   Tap2   Tap3   Tap4
+    ----   ----   ----   ----   ----   ----
+    0      15     -8     4      -2     1
+    1      14     -7     4      -2     1
+    2      15     -8     4      -2     1
+    3      14     -8     4      -2     1
+  ```
+
 **show interfaces flap**
 
 The show interfaces flap command provides detailed insights into interface events, including the timestamp of the last link down event and the total flap count (number of times the link has gone up and down). This helps in diagnosing stability and connectivity issues.
 
 - Usage:
   ```
-  show interfaces flap
+  show interfaces flap [OPTIONS] [<interfacename>]
+  
+  Options:
+  -d, --display [all|frontend]   Show internal interfaces  [default: frontend]
+  -n, --namespace <namespace>    Namespace name or all
+  -?, -h, --help                 Show this message and exit.
   ```
 - Example:
   ```
   admin@sonic:~$ show interfaces flap
-  Interface    Flap Count    Admin    Oper    Link Down TimeStamp (UTC)                                 Link Up TimeStamp (UTC)
-  -----------  ------------  -------  ------  --------------------------------------------------------  -----------------------------------------------------------
-  Ethernet0    5             Up       Up      Last flapped : 2024-10-01 10:00:00 (0 days 00:01:23 ago)  Last Link up: 2024-09-30 10:01:03 UTC (1 days 02:30:15 ago)
-  Ethernet4    Never         Up       Up      Never                                                     Last Link up: 2024-09-30 10:01:03 UTC (1 days 02:30:15 ago)
-  Ethernet8    1             Up       Up      Last flapped : 2024-10-01 10:01:00 (0 days 00:00:23 ago)  Last Link up: 2024-10-02 10:01:03 UTC (5 days 02:30:15 ago)
+  Interface      Flap Count  Admin    Oper    Link Down TimeStamp(UTC)    Link Up TimeStamp(UTC)
+  -----------  ------------  -------  ------  --------------------------  ------------------------
+  Ethernet0            4097  Up       Up      Sat Feb 21 11:00:41 2026    Sat Feb 21 11:00:59 2026
+  Ethernet8            4035  Up       Up      Sat Feb 21 11:00:41 2026    Sat Feb 21 11:00:59 2026
+  Ethernet16           4015  Up       Up      Sat Feb 21 11:01:23 2026    Sat Feb 21 11:01:41 2026
   ```
+- Example (to display interface on multi-ASIC platform):
+  ```
+  admin@sonic:~$ show interfaces flap Ethernet0
+  Interface      Flap Count  Admin    Oper    Link Down TimeStamp(UTC)    Link Up TimeStamp(UTC)
+  -----------  ------------  -------  ------  --------------------------  ------------------------
+  Ethernet0            4097  Up       Up      Sat Feb 21 11:00:41 2026    Sat Feb 21 11:00:59 2026
+  ```
+- Example (to display interfaces for specific ASIC on multi-ASIC platform):
+  ```
+  admin@sonic:~$ show interfaces flap -n asic1
+  Interface      Flap Count  Admin    Oper    Link Down TimeStamp(UTC)    Link Up TimeStamp(UTC)
+  -----------  ------------  -------  ------  --------------------------  ------------------------
+  Ethernet144            10  Up       Down    Wed Feb 18 20:55:09 2026    Wed Feb 18 20:53:02 2026
+  Ethernet152            14  Up       Down    Wed Feb 18 21:01:39 2026    Wed Feb 18 21:00:32 2026
+  Ethernet160            10  Up       Down    Wed Feb 18 21:04:36 2026    Wed Feb 18 21:01:58 2026
+  ```
+
 **show interfaces errors**
 
 The show interface errors command provides detailed statistics and error counters for MAC-level operations on an interface. It displays the status of various operational parameters, error counts, and timestamps for when these errors occurred.
@@ -6010,12 +6459,16 @@ The show interface errors command provides detailed statistics and error counter
 
 **show interfaces mpls**
 
-This command is used to display the configured MPLS state for the list of configured interfaces.
+This command is used to display the configured MPLS state for the list of configured parent interfaces. Subinterfaces are not listed by this command.
 
 - Usage:
   ```
-  show interfaces mpls [<interface_name>]
+  show interfaces mpls [<interface_name>] [-d <display>] [-n <namespace>]
   ```
+
+- Options:
+  - _-d,--display_: Show interfaces (all | frontend). Default is all on single-ASIC and frontend on multi-ASIC.
+  - _-n,--namespace_: Specify one namespace on multi-ASIC systems. Omit `-n` to query all applicable namespaces.
 
 - Example:
   ```
@@ -6035,6 +6488,15 @@ This command is used to display the configured MPLS state for the list of config
   admin@sonic:~$ show interfaces mpls Ethernet4
   Interface    MPLS State
   -----------  ------------
+  Ethernet4    enable
+  ```
+
+- Example (Multi-ASIC, show MPLS state for a specific namespace):
+  ```
+  admin@sonic:~$ show interfaces mpls -n asic0
+  Interface    MPLS State
+  -----------  ------------
+  Ethernet0    disable
   Ethernet4    enable
   ```
 
@@ -11735,7 +12197,7 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#Startu
 
 ### Static routing Config Commands
 
-This sub-section explains of commands is used to add or remove the static route.
+This sub-section explains of commands is used to add or remove the static route. On multi-ASIC platforms, the `-n`/`--namespace` option is required; on single-ASIC platforms it is optional.
 
 **config route add**
 
@@ -11744,7 +12206,7 @@ This command is used to add a static route. Note that prefix /nexthop vrf`s and 
 - Usage:
 
   ```
-  config route add prefix [vrf <vrf>] <A.B.C.D/M> nexthop [vrf <vrf>] <A.B.C.D> dev <interface name>
+  config route [-n <namespace>] add prefix [vrf <vrf>] <A.B.C.D/M> nexthop [vrf <vrf>] <A.B.C.D> dev <interface name>
   ```
 
 - Example:
@@ -11763,6 +12225,12 @@ It also supports ECMP, and adding a new nexthop to the existing prefix will comp
   admin@sonic:~$ sudo config route add prefix 2.2.3.4/32 nexthop vrf Vrf-BLUE 30.0.0.10
   ```
 
+  On multi-ASIC platforms, specify the namespace (e.g. `-n asic0`):
+
+  ```
+  admin@sonic:~$ sudo config route -n asic0 add prefix 2.2.3.4/32 nexthop 30.0.0.9
+  ```
+
 **config route del**
 
 This command is used to remove a static route. Note that prefix /nexthop vrf`s and interface name are optional.
@@ -11770,7 +12238,7 @@ This command is used to remove a static route. Note that prefix /nexthop vrf`s a
 - Usage:
 
   ```
-  config route del prefix [vrf <vrf>] <A.B.C.D/M> nexthop [vrf <vrf>] <A.B.C.D> dev <interface name>
+  config route [-n <namespace>] del prefix [vrf <vrf>] <A.B.C.D/M> nexthop [vrf <vrf>] <A.B.C.D> dev <interface name>
   ```
 
 - Example:
@@ -11778,6 +12246,12 @@ This command is used to remove a static route. Note that prefix /nexthop vrf`s a
   ```
   admin@sonic:~$ sudo config route del prefix 2.2.3.4/32 nexthop vrf Vrf-RED 30.0.0.9
   admin@sonic:~$ sudo config route del prefix 2.2.3.4/32 nexthop vrf Vrf-BLUE 30.0.0.10
+  ```
+
+  On multi-ASIC platforms, specify the namespace (e.g. `-n asic0`):
+
+  ```
+  admin@sonic:~$ sudo config route -n asic0 del prefix 2.2.3.4/32 nexthop 30.0.0.9
   ```
 
 This sub-section explains of command is used to show current routes.
@@ -11818,8 +12292,12 @@ This command displays all the subinterfaces that are configured on the device an
 
 - Usage:
   ```
-  show subinterfaces status
+  show subinterfaces status [<subinterfacename>] [-d <display>] [-n <namespace>]
   ```
+
+- Options:
+  - _-d,--display_: Show interfaces (all | frontend). Default is all on single-ASIC and frontend on multi-ASIC.
+  - _-n,--namespace_: Specify one namespace on multi-ASIC systems. Omit `-n` to display subinterfaces from all namespaces. `all` is not an accepted value.
 
 - Example:
   ```
@@ -11830,35 +12308,103 @@ This command displays all the subinterfaces that are configured on the device an
       Ethernet0.100     100G   9100    100       up  dot1q-encapsulation
   ```
 
+- Example (Multi-ASIC, show subinterfaces from all namespaces):
+  ```
+  admin@sonic:~$ show subinterfaces status
+  Sub port interface    Namespace    Speed    MTU    Vlan    Admin                 Type
+  ------------------  -----------  -------  -----  ------  -------  -------------------
+      Eth1000.100        asic1      100G    9100    100       up  dot1q-encapsulation
+      Ethernet0.100      asic0      100G    9100    100       up  dot1q-encapsulation
+  ```
+
+- Example (Multi-ASIC, show subinterfaces for a specific namespace):
+  ```
+  admin@sonic:~$ show subinterfaces status -n asic0
+  Sub port interface    Speed    MTU    Vlan    Admin                 Type
+  ------------------  -------  -----  ------  -------  -------------------
+      Ethernet0.100     100G   9100    100       up  dot1q-encapsulation
+  ```
+
 ### Subinterfaces Config Commands
 
 This sub-section explains how to configure subinterfaces.
 
-**config subinterface**
+**config subinterface add**
+
+This command is used to add a subinterface.
 
 - Usage:
   ```
-  config subinterface (add | del) <subinterface_name> [vlan <1-4094>]
+  config subinterface [-n <namespace>] [-s <redis_unix_socket_path>] add <subinterface_name> [<vid>]
   ```
 
-- Example (Create the subinterfces with name "Ethernet0.100"):
+- Options:
+  - _-n,--namespace_: Namespace name (required on multi-ASIC systems)
+  - _-s,--redis-unix-socket-path_: Unix socket path for redis connection
+
+- Arguments:
+  - _subinterface_name_: Name of the subinterface (e.g., Ethernet0.100, Eth64.100)
+  - _vid_: VLAN ID (1-4094). Required for short name subinterfaces (e.g., Eth64.100, Po1.100). Optional for long name subinterfaces (e.g., Ethernet0.100, PortChannel1.100) where the VLAN ID can be inferred from the name suffix.
+
+- Notes:
+  - The total subinterface name length must not exceed 15 characters.
+  - On platforms with large interface indices (for example, `Ethernet1000`), use the short name form (for example, `Eth1000.100`) if the long name would exceed 15 characters.
+  - For long name subinterfaces, the extra `<vid>` argument can be omitted even though `config subinterface add --help` prints `<vid>`.
+
+- Example (Create the subinterface with name "Ethernet0.100"):
   ```
   admin@sonic:~$ sudo config subinterface add Ethernet0.100
   ```
 
-- Example (Create the subinterfces with name "Eth64.100"):
+- Example (Create the subinterface with name "Eth64.100" with explicit VLAN ID):
   ```
   admin@sonic:~$ sudo config subinterface add Eth64.100 100
   ```
 
-- Example (Delete the subinterfces with name "Ethernet0.100"):
+- Example (Multi-ASIC, create a subinterface in a specific namespace):
+  ```
+  admin@sonic:~$ sudo config subinterface -n asic0 add Ethernet0.100
+  ```
+
+- Example (Multi-ASIC, create a subinterface using a Redis unix socket path):
+  ```
+  admin@sonic:~$ sudo config subinterface -n asic1 -s /var/run/redis1/redis.sock add Eth1000.100 100
+  ```
+
+**config subinterface del**
+
+This command is used to delete a subinterface.
+
+- Usage:
+  ```
+  config subinterface [-n <namespace>] [-s <redis_unix_socket_path>] del <subinterface_name>
+  ```
+
+- Options:
+  - _-n,--namespace_: Namespace name (required on multi-ASIC systems)
+  - _-s,--redis-unix-socket-path_: Unix socket path for redis connection
+
+- Arguments:
+  - _subinterface_name_: Name of the subinterface to delete
+
+- Example (Delete the subinterface with name "Ethernet0.100"):
   ```
   admin@sonic:~$ sudo config subinterface del Ethernet0.100
   ```
 
-- Example (Delete the subinterfces with name "Eth64.100"):
+- Example (Delete the subinterface with name "Eth64.100"):
   ```
-  admin@sonic:~$ sudo config subinterface del Eth64.100 100
+  admin@sonic:~$ sudo config subinterface del Eth64.100
+  ```
+
+- Example (Multi-ASIC, delete a subinterface in a specific namespace):
+  ```
+  admin@sonic:~$ sudo config subinterface -n asic0 del Ethernet0.100
+  ```
+
+- Example (Multi-ASIC, delete a subinterface using a Redis unix socket path):
+  ```
+  admin@sonic:~$ sudo config subinterface -n asic1 -s /var/run/redis1/redis.sock del Eth1000.100
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#subinterfaces)
@@ -12588,11 +13134,11 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#System
 
 **show vlan brief**
 
-This command displays brief information about all the vlans configured in the device. It displays the vlan ID, IP address (if configured for the vlan), list of vlan member ports, whether the port is tagged or in untagged mode, the DHCPv4 Helper Address, and the proxy ARP status
+This command displays brief information about all the vlans configured in the device. It displays the vlan ID, IP address (if configured for the vlan), list of vlan member ports, whether the port is tagged or in untagged mode, the DHCPv4 Helper Address, and the proxy ARP status. On multi-ASIC platforms, use -n to show a specific namespace or omit to show all namespaces.
 
 - Usage:
   ```
-  show vlan brief
+  show vlan brief [-n <namespace>]
   ```
 
 - Example:
@@ -12610,11 +13156,11 @@ This command displays brief information about all the vlans configured in the de
 
 **show vlan config**
 
-This command displays all the vlan configuration.
+This command displays all the vlan configuration. On multi-ASIC platforms, use -n to show a specific namespace or omit to show all namespaces.
 
 - Usage:
   ```
-  show vlan config
+  show vlan config [-n <namespace>]
   ```
 
 - Example:
@@ -12629,7 +13175,7 @@ This command displays all the vlan configuration.
 
 #### VLAN Config commands
 
-This sub-section explains how to configure the vlan and its member ports.
+This sub-section explains how to configure the vlan and its member ports. On multi-ASIC platforms, -n/--namespace is required for all config vlan commands. On single-ASIC platforms it is optional.
 
 **config vlan add/del**
 
@@ -12637,7 +13183,7 @@ This command is used to add or delete the vlan.
 
 - Usage:
   ```
-  config vlan (add | del) <vlan_id>
+  config vlan [-n <namespace>] (add | del) <vlan_id>
   ```
 
 - Example (Create the VLAN "Vlan100" if it does not already exist):
@@ -12650,7 +13196,7 @@ This command is used to add or delete the vlan.
 This command is used to add or delete multiple vlans via single command.
 - Usage:
   ```
-  config vlan (add | del) -m <vlan_id>
+  config vlan [-n <namespace>] (add | del) -m <vlan_id>
   ```
 - Example01 (Create the VLAN "Vlan100, Vlan101, Vlan102, Vlan103" if these does not already exist)
   ```
@@ -12667,7 +13213,7 @@ This command is to add or delete a member port into the already created vlan.
 
 - Usage:
   ```
-  config vlan member add/del [-u|--untagged] <vlan_id> <member_portname>
+  config vlan [-n <namespace>] member add/del [-u|--untagged] <vlan_id> <member_portname>
   ```
 
 *NOTE: Adding the -u or --untagged flag will set the member in "untagged" mode*
@@ -12686,7 +13232,7 @@ This command is to add or delete a member port into the already created vlan.
 This command is to add or delete a member port into multiple already created vlans.
 - Usage:
   ```
-  config vlan member add/del [-m] [-e] <vlan_id> <member_portname>
+  config vlan [-n <namespace>] member add/del [-m] [-e] <vlan_id> <member_portname>
   ```
 *NOTE: -m flag multiple Vlans in range or comma separted list can be added as a member port.*
 *NOTE: -e is used as an except flag as explained with examples below.*
@@ -12719,7 +13265,7 @@ This command is used to enable or disable proxy ARP for a VLAN interface
 
 - Usage:
   ```
-  config vlan proxy_arp <vlan_id> enabled/disabled
+  config vlan [-n <namespace>] proxy_arp <vlan_id> enabled/disabled
   ```
 
 - Example:
@@ -12868,7 +13414,7 @@ This command displays the default mac aging time on the switch
 
 **sonic-clear fdb all**
 
-Clear the FDB table
+Clear the FDB table. On multi-ASIC platforms, clears FDB entries in all namespaces. The fdbclear script (when run directly) supports -n <namespace> or -n all to clear a specific namespace or all namespaces.
 
 - Usage:
   ```
@@ -12886,6 +13432,13 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#vlan--
 
 ### VxLAN
 
+On multi-ASIC platforms, the `show vxlan`, `show vnet`, `config vxlan`, and `config vnet` groups support the `-n/--namespace <namespace>` option.
+
+- For `show` commands, omit `-n` to display all namespaces.
+- For `config vxlan` on multi-ASIC, `-n <namespace>` is required.
+- Place `-n` immediately after the command group, for example `show vxlan -n asic0 tunnel`.
+- Literal `-n all` is not supported.
+
 #### VxLAN show commands
 
 **show vxlan tunnel**
@@ -12895,7 +13448,7 @@ This command displays brief information about all the vxlans configured in the d
 - Usage:
 
   ```
-  show vxlan tunnel
+  show vxlan [ -n <namespace> ] tunnel
   ```
 
 - Example:
@@ -12916,7 +13469,7 @@ This command displays <vlan_name> configuration.
 - Usage:
 
   ```
-  show vxlan name <vxlan_name>
+  show vxlan [ -n <namespace> ] name <vxlan_name>
   ```
 
 - Example:
@@ -12928,7 +13481,37 @@ This command displays <vlan_name> configuration.
   tunnel3              10.10.10.10  30.10.10.10       tmap2              1235 -> 200
   ```
 
-Go Back To [Beginning of the document](#) or [Beginning of this section](#vxlan--vnet)
+**Additional show vxlan commands**
+
+- `show vxlan [ -n <namespace> ] interface`
+- `show vxlan [ -n <namespace> ] vlanvnimap [count]`
+- `show vxlan [ -n <namespace> ] vrfvnimap`
+- `show vxlan [ -n <namespace> ] remotevtep [count]`
+- `show vxlan [ -n <namespace> ] remotevni <remote_vtep_ip|all> [count]`
+- `show vxlan [ -n <namespace> ] remotemac <remote_vtep_ip|all> [count]`
+- `show vxlan [ -n <namespace> ] counters [<tunnel>] [-p <period>] [--verbose]`
+
+For `show vxlan counters <tunnel>` without `-n` on a multi-ASIC platform, the CLI searches all namespaces and only runs `tunnelstat` in namespaces where that tunnel is configured.
+
+#### VxLAN config commands
+
+The `config vxlan` group supports:
+
+- `config vxlan [ -n <namespace> ] add <vxlan_name> <src_ip>`
+- `config vxlan [ -n <namespace> ] del <vxlan_name>`
+- `config vxlan [ -n <namespace> ] evpn_nvo add <nvo_name> <vxlan_name>`
+- `config vxlan [ -n <namespace> ] evpn_nvo del <nvo_name>`
+- `config vxlan [ -n <namespace> ] map add <vxlan_name> <vlan_id> <vni>`
+- `config vxlan [ -n <namespace> ] map del <vxlan_name> <vlan_id> <vni>`
+- `config vxlan [ -n <namespace> ] map_range add <vxlan_name> <vlan_start> <vlan_end> <vni_start>`
+- `config vxlan [ -n <namespace> ] map_range del <vxlan_name> <vlan_start> <vlan_end> <vni_start>`
+
+Notes:
+
+- On multi-ASIC platforms, `config vxlan` requires `-n <namespace>` and the option must appear before the subcommand.
+- Only one VXLAN tunnel is allowed per namespace.
+- `config vxlan map del` fails if the VNI is still mapped to a VRF.
+- `config vxlan map_range del` skips VLAN/VNI pairs whose VNI is still mapped to a VRF.
 
 ### Vnet
 
@@ -12941,7 +13524,7 @@ This command displays brief information about all the vnets configured in the de
 - Usage:
 
   ```
-  show vnet brief
+  show vnet [ -n <namespace> ] brief
   ```
 
 - Example:
@@ -12961,7 +13544,7 @@ This command displays the list or vxlan tunnel endpoints and their status. In ad
 - Usage:
 
   ```
-  show vnet endpoint <ipv4_address/ipv6_address>
+  show vnet [ -n <namespace> ] endpoint [<ipv4_address/ipv6_address>]
 
   ```
 
@@ -12997,7 +13580,7 @@ This command displays brief information about <vnet_name> configured in the devi
 - Usage:
 
   ```
-  show vnet name <vnet_name>
+  show vnet [ -n <namespace> ] name <vnet_name>
   ```
 
 - Example:
@@ -13016,7 +13599,7 @@ This command displays vnet interfaces information about all the vnets configured
 - Usage:
 
   ```
-  show vnet interfaces
+  show vnet [ -n <namespace> ] interfaces
   ```
 
 - Example:
@@ -13039,7 +13622,7 @@ This command displays vnet neighbor information about all the vnets configured i
 - Usage:
 
   ```
-  show vnet neighbors
+  show vnet [ -n <namespace> ] neighbors
   ```
 
 - Example:
@@ -13066,7 +13649,7 @@ This command displays all routes information about all the vnets configured in t
 - Usage:
 
   ```
-  show vnet routes all
+  show vnet [ -n <namespace> ] routes all
   ```
 
 - Example:
@@ -13092,7 +13675,7 @@ This command displays tunnel routes information about all the vnets configured i
 - Usage:
 
   ```
-  show vnet routes tunnel
+  show vnet [ -n <namespace> ] routes tunnel
   ```
 
 - Example:
@@ -13105,6 +13688,14 @@ This command displays tunnel routes information about all the vnets configured i
   Vnet_3000    100.100.2.1/32  10.10.10.2  00:00:00:00:03:04
   ```
 
+**Additional show vnet commands**
+
+- `show vnet [ -n <namespace> ] alias [<vnet_alias>]`
+- `show vnet [ -n <namespace> ] advertised-routes [<community>]`
+- `show vnet [ -n <namespace> ] guid <guid>`
+
+When `-n` is omitted on a multi-ASIC platform, `show vnet` commands iterate over all namespaces and print a `Namespace:` header before each section.
+
 #### Vnet config commands
 
 **config vnet add**
@@ -13113,7 +13704,7 @@ This command creates vnet in SONiC system with provided vnet-name.
 
 - Usage:
   ```
-  config vnet add <vnet-name> <vni> <vxlan-tunnel> [<peer_list>] [<guid>] [<scope>] [<advertise_prefix>] [<overlay_dmac>] [<src_mac>]
+  config vnet [ -n <namespace> ] add <vnet-name> <vni> <vxlan-tunnel> [<peer_list>] [<guid>] [<scope>] [<advertise_prefix>] [<overlay_dmac>] [<src_mac>]
   ```
 
 Note: vnet-name should always start with keyword "Vnet_"
@@ -13126,7 +13717,7 @@ This command deletes vnet with vnet-name and its associated binded interfaces an
 
 - Usage:
   ```
-  config vnet del <vnet-name>
+  config vnet [ -n <namespace> ] del <vnet-name>
   ```
 
 **config vnet add route**
@@ -13135,12 +13726,12 @@ This command creates vnet route in SONiC system with provided vnet-name and pref
 
 - Usage:
   ```
-  config vnet add-route <vnet-name> <prefix> <endpoint> [<vni>] [<endpoint_monitor>] [<mac_address>] [<profile>] [<primary>] [<monitoring>] [<adv_prefix>]
+  config vnet [ -n <namespace> ] add-route <vnet-name> <prefix> <endpoint> [<vni>] [<mac_address>] [<endpoint_monitor>] [<profile>] [<primary>] [<monitoring>] [<adv_prefix>]
   ```
 
 Note: vnet-name should always start with keyword "Vnet_"
 Mandatory Parameters: vnet_name, prefix, endpoint
-Optional Parameters: vni, endpoint_monitor, mac_address, profile, primary, monitoring, adv_prefix
+Optional Parameters: vni, mac_address, endpoint_monitor, profile, primary, monitoring, adv_prefix
 
 **config vnet del-route <vnet-name>**
 
@@ -13148,8 +13739,11 @@ This command deletes a vnet route with vnet-name and prefix. It deletes all rout
 
 - Usage:
   ```
-  config vnet del-route <vnet-name> [<prefix>]
+  config vnet [ -n <namespace> ] del-route <vnet-name> [<prefix>]
   ```
+
+On multi-ASIC platforms, `config vnet` also uses a group-level `-n <namespace>` option and the namespace must be placed before the subcommand.
+
 Go Back To [Beginning of the document](#) or [Beginning of this section](#vxlan--vnet)
 
 ## Warm Reboot

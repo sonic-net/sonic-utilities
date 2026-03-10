@@ -7,7 +7,7 @@ sys.modules['sonic_platform.platform'] = MagicMock()
 import fwutil.lib as fwutil_lib
 
 class TestSquashFs(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('fwutil.lib.check_output_pipe')
@@ -75,12 +75,12 @@ class TestSquashFs(object):
             call(sqfs.fs_mountpoint)
         ]
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEARDOWN')
 
 
 class TestComponentUpdateProvider(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch("glob.glob", MagicMock(side_effect=[[], ['abc'], [], ['abc']]))
@@ -242,7 +242,7 @@ class TestComponentUpdateProvider(object):
             )
         assert "Module names mismatch" in str(excinfo.value)
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEARDOWN')
 
 

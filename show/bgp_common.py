@@ -329,14 +329,14 @@ def show_routes(args, namespace, display, verbose, ipver):
     else:
         if multi_asic.is_multi_asic():
             if display not in multi_asic_util.multi_asic_display_choices():
-                print("dislay option '{}' is not a valid option.".format(display))
+                print("display option '{}' is not a valid option.".format(display))
                 return
             else:
                 if display == constants.DISPLAY_EXTERNAL:
                     filter_back_end = True
         else:
             if display not in ['frontend', 'all']:
-                print("dislay option '{}' is not a valid option.".format(display))
+                print("display option '{}' is not a valid option.".format(display))
                 return
 
     device = multi_asic_util.MultiAsic(display, namespace)

@@ -284,7 +284,7 @@ class Portstat(object):
     @multi_asic_util.run_on_multi_asic
     def collect_stat(self):
         """
-        Collect the statisitics from all the asics present on the
+        Collect the statistics from all the asics present on the
         device and store in a dict
         """
 

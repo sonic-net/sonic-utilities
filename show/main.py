@@ -87,7 +87,7 @@ GEARBOX_TABLE_PHY_PATTERN = r"_GEARBOX_TABLE:phy:*"
 COMMAND_TIMEOUT = 300
 
 # To be enhanced. Routing-stack information should be collected from a global
-# location (configdb?), so that we prevent the continous execution of this
+# location (configdb?), so that we prevent the continuous execution of this
 # bash oneliner. To be revisited once routing-stack info is tracked somewhere.
 def get_routing_stack():
     result = 'frr'
@@ -421,8 +421,9 @@ def event_counters():
 @cli.command()
 @click.argument('ipaddress', required=False)
 @click.option('-if', '--iface')
+@multi_asic_util.multi_asic_click_options
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def arp(ipaddress, iface, verbose):
+def arp(ipaddress, iface, namespace, display, verbose):
     """Show IP ARP table"""
     cmd = ['nbrshow', '-4']
 
@@ -437,6 +438,11 @@ def arp(ipaddress, iface, verbose):
 
         cmd += ['-if', str(iface)]
 
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
+
+    cmd += ['-d', str(display)]
+
     run_command(cmd, display_cmd=verbose)
 
 #
@@ -446,8 +452,9 @@ def arp(ipaddress, iface, verbose):
 @cli.command()
 @click.argument('ip6address', required=False)
 @click.option('-if', '--iface')
+@multi_asic_util.multi_asic_click_options
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def ndp(ip6address, iface, verbose):
+def ndp(ip6address, iface, namespace, display, verbose):
     """Show IPv6 Neighbour table"""
     cmd = ['nbrshow', '-6']
 
@@ -456,6 +463,11 @@ def ndp(ip6address, iface, verbose):
 
     if iface is not None:
         cmd += ['-if', str(iface)]
+
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
+
+    cmd += ['-d', str(display)]
 
     run_command(cmd, display_cmd=verbose)
 
@@ -510,9 +522,12 @@ def storm_control(ctx, namespace, display):
 
 @storm_control.command('interface')
 @click.argument('interface', metavar='<interface>',required=True)
-def interface(interface, namespace, display):
+@click.pass_context
+def interface(ctx, interface):
+    # Get namespace from parent context
+    namespace = ctx.parent.params.get('namespace')
+
     if multi_asic.is_multi_asic() and namespace not in multi_asic.get_namespace_list():
-        ctx = click.get_current_context()
         ctx.fail('-n/--namespace option required. provide namespace from list {}'.format(multi_asic.get_namespace_list()))
     if interface:
         display_storm_interface(interface)
@@ -621,8 +636,9 @@ def subinterfaces():
 # 'subinterfaces' subcommand ("show subinterfaces status")
 @subinterfaces.command()
 @click.argument('subinterfacename', type=str, required=False)
+@multi_asic_util.multi_asic_click_options
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def status(subinterfacename, verbose):
+def status(subinterfacename, namespace, display, verbose):
     """Show sub port interface status information"""
     cmd = ['intfutil', '-c', 'status']
 
@@ -638,6 +654,12 @@ def status(subinterfacename, verbose):
         cmd += ['-i', str(subinterfacename)]
     else:
         cmd += ['-i', 'subport']
+
+    if multi_asic.is_multi_asic():
+        cmd += ['-d', str(display)]
+    if namespace is not None:
+        cmd += ['-n', str(namespace)]
+
     run_command(cmd, display_cmd=verbose)
 
 #
@@ -1558,41 +1580,47 @@ elif device_info.is_supervisor():
 #
 
 @ipv6.command('link-local-mode')
+@multi_asic_util.multi_asic_click_option_namespace
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def link_local_mode(verbose):
+def link_local_mode(namespace, verbose):
     """show ipv6 link-local-mode"""
     header = ['Interface Name', 'Mode']
     body = []
     tables = ['PORT', 'PORTCHANNEL', 'VLAN']
-    config_db = ConfigDBConnector()
-    config_db.connect()
-    interface = ""
 
-    for table in tables:
-        if table == "PORT":
-            interface = "INTERFACE"
-        elif table == "PORTCHANNEL":
-            interface = "PORTCHANNEL_INTERFACE"
-        elif table == "VLAN":
-            interface = "VLAN_INTERFACE"
+    masic = multi_asic_util.MultiAsic(namespace_option=namespace)
+    ns_list = masic.get_ns_list_based_on_options()
 
-        port_dict = config_db.get_table(table)
-        interface_dict = config_db.get_table(interface)
-        link_local_data = {}
+    for ns in ns_list:
+        config_db = ConfigDBConnector(namespace=ns)
+        config_db.connect()
+        interface = ""
 
-        for port in port_dict.keys():
-            if port not in interface_dict:
-                body.append([port, 'Disabled'])
-            elif interface_dict:
-                value = interface_dict[port]
-                if 'ipv6_use_link_local_only' in value:
-                    link_local_data[port] = interface_dict[port]['ipv6_use_link_local_only']
-                    if link_local_data[port] == 'enable':
-                        body.append([port, 'Enabled'])
+        for table in tables:
+            if table == "PORT":
+                interface = "INTERFACE"
+            elif table == "PORTCHANNEL":
+                interface = "PORTCHANNEL_INTERFACE"
+            elif table == "VLAN":
+                interface = "VLAN_INTERFACE"
+
+            port_dict = config_db.get_table(table)
+            interface_dict = config_db.get_table(interface)
+            link_local_data = {}
+
+            for port in port_dict.keys():
+                if port not in interface_dict:
+                    body.append([port, 'Disabled'])
+                elif interface_dict:
+                    value = interface_dict[port]
+                    if 'ipv6_use_link_local_only' in value:
+                        link_local_data[port] = interface_dict[port]['ipv6_use_link_local_only']
+                        if link_local_data[port] == 'enable':
+                            body.append([port, 'Enabled'])
+                        else:
+                            body.append([port, 'Disabled'])
                     else:
                         body.append([port, 'Disabled'])
-                else:
-                    body.append([port, 'Disabled'])
 
     click.echo(tabulate(body, header, tablefmt="grid"))
 
@@ -1692,10 +1720,10 @@ def version(verbose):
 
     sys_date = datetime.now()
 
-    click.echo("\nSONiC Software Version: SONiC.{}".format(version_info['build_version']))
-    click.echo("SONiC OS Version: {}".format(version_info['sonic_os_version']))
-    click.echo("Distribution: Debian {}".format(version_info['debian_version']))
-    click.echo("Kernel: {}".format(version_info['kernel_version']))
+    click.echo("\nSONiC Software Version: SONiC.{}".format(version_info.get('build_version', 'N/A')))
+    click.echo("SONiC OS Version: {}".format(version_info.get('sonic_os_version', 'N/A')))
+    click.echo("Distribution: Debian {}".format(version_info.get('debian_version', 'N/A')))
+    click.echo("Kernel: {}".format(version_info.get('kernel_version', os.uname().release)))
     click.echo("Build commit: {}".format(version_info['commit_id']))
     click.echo("Build date: {}".format(version_info['build_date']))
     click.echo("Built by: {}".format(version_info['built_by']))

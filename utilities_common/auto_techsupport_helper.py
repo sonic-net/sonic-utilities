@@ -8,7 +8,7 @@ import math
 import syslog
 from os.path import basename, splitext
 
-__all__ = [  # Contants
+__all__ = [  # Constants
             "CORE_DUMP_DIR", "CORE_DUMP_PTRN", "TS_DIR", "TS_PTRN",
             "CFG_DB", "AUTO_TS", "CFG_STATE", "CFG_MAX_TS", "COOLOFF",
             "CFG_CORE_USAGE", "CFG_SINCE", "FEATURE", "STATE_DB",
@@ -70,7 +70,7 @@ TIME_BUF = 20
 SINCE_DEFAULT = "2 days ago"
 TS_GLOBAL_TIMEOUT = "60"
 
-# Explicity Pass this to the subprocess invoking techsupport
+# Explicitly Pass this to the subprocess invoking techsupport
 ENV_VAR = os.environ
 if ('CROSS_BUILD_ENVIRON' not in ENV_VAR) or (ENV_VAR['CROSS_BUILD_ENVIRON'] != 'y'):
 	# Add native system directories to PATH variable only if it is not cross-compilation build 
