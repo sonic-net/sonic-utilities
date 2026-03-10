@@ -388,7 +388,75 @@ oper error status                   0  Never
 signal local error                  0  Never
 """
 
+# PHY Signal expected outputs
+phy_signal_all_options_output = """\
+Interface: Ethernet0
+================================================================================
+RX Signal Detect:    Current State    Changes    Last Change (UTC)
+-------------------  ---------------  ---------  -------------------
+Lane0:               T                5          2023-03-15 13:20:00
+Lane1:               F                0          Never
 
+FEC Alignment Lock:    Current State    Changes    Last Change (UTC)
+---------------------  ---------------  ---------  -------------------
+Lane0:                 T*               10         2023-03-15 13:20:00
+Lane1:                 T                3          2023-03-15 13:20:00
+
+"""
+
+phy_signal_no_data_output = """\
+No PHY attribute data available for Ethernet4
+Ensure 'counterpoll phy enable' has been run
+"""
+
+# PHY SERDES expected outputs
+phy_serdes_all_options_output = """\
+Interface: Ethernet0
+================================================================================
+RX SNR:
+--------------------------------------------------------------------------------
+Lane:  0      1      2      3
+SNR:   36697  35200  34500  36000
+
+RX VGA:
+--------------------------------------------------------------------------------
+Lane:  0    1   2   3
+VGA:   100  95  98  102
+
+TX FIR Taps:
+Lane    Tap0    Tap1
+------  ------  ------
+0       -10     5
+1       -8      6
+
+"""
+
+phy_serdes_no_data_output = """\
+No PHY SERDES data available for Ethernet4
+Ensure 'counterpoll phy enable' has been run
+"""
+
+# PHY Signal alias mode expected output
+phy_signal_alias_mode_output = """\
+Interface: etp1
+================================================================================
+RX Signal Detect:    Current State    Changes    Last Change (UTC)
+-------------------  ---------------  ---------  -------------------
+Lane0:               T                5          2023-03-15 13:20:00
+Lane1:               F                0          Never
+
+"""
+
+# PHY SERDES alias mode expected output
+phy_serdes_alias_mode_output = """\
+Interface: etp1
+================================================================================
+RX SNR:
+--------------------------------------------------------------------------------
+Lane:  0      1      2      3
+SNR:   36697  35200  34500  36000
+
+"""
 
 
 class TestInterfaces(object):
@@ -700,6 +768,170 @@ class TestInterfaces(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output == intf_errors_Ethernet48
+
+    # PHY Signal Tests
+    def test_phy_signal_no_options(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-signal"],
+            ["Ethernet0"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "At least one option must be specified" in result.output
+
+    def test_phy_signal_invalid_interface(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-signal"],
+            ["Eth-invalid", "--rxsig"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "Invalid interface name" in result.output
+
+    @mock.patch('show.interfaces.multi_asic.get_port_table')
+    def test_phy_signal_not_in_port_map(self, mock_port_table):
+        runner = CliRunner()
+        # Use Ethernet100 which is NOT in COUNTERS_PORT_NAME_MAP
+        mock_port_table.return_value = {'Ethernet100': {}}
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-signal"],
+            ["Ethernet100", "--rxsig"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "not found in COUNTERS_PORT_NAME_MAP" in result.output
+
+    def test_phy_signal_no_data(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-signal"],
+            ["Ethernet4", "--rxsig"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == phy_signal_no_data_output
+
+    def test_phy_signal_all_options(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-signal"],
+            ["Ethernet0", "--rxsig", "--feclock"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == phy_signal_all_options_output
+
+    def test_phy_signal_alias_mode(self):
+        runner = CliRunner()
+        os.environ['SONIC_CLI_IFACE_MODE'] = "alias"
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-signal"],
+            ["etp1", "--rxsig"]
+        )
+        os.environ['SONIC_CLI_IFACE_MODE'] = "default"
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == phy_signal_alias_mode_output
+
+    def test_phy_signal_namespace(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-signal"],
+            ["Ethernet0", "--rxsig", "-n", ""]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+
+    # PHY SERDES Tests
+    def test_phy_serdes_no_options(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-serdes"],
+            ["Ethernet0"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "At least one option must be specified" in result.output
+
+    def test_phy_serdes_invalid_interface(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-serdes"],
+            ["Eth-invalid", "--snr"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "Invalid interface name" in result.output
+
+    @mock.patch('show.interfaces.multi_asic.get_port_table')
+    def test_phy_serdes_not_in_port_map(self, mock_port_table):
+        runner = CliRunner()
+        # Use Ethernet100 which is NOT in COUNTERS_PORT_NAME_MAP
+        mock_port_table.return_value = {'Ethernet100': {}}
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-serdes"],
+            ["Ethernet100", "--snr"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "not found in COUNTERS_PORT_NAME_MAP" in result.output
+
+    def test_phy_serdes_no_data(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-serdes"],
+            ["Ethernet4", "--snr"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == phy_serdes_no_data_output
+
+    def test_phy_serdes_all_options(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-serdes"],
+            ["Ethernet0", "--snr", "--rxvga", "--txfir"]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == phy_serdes_all_options_output
+
+    def test_phy_serdes_alias_mode(self):
+        runner = CliRunner()
+        os.environ['SONIC_CLI_IFACE_MODE'] = "alias"
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-serdes"],
+            ["etp1", "--snr"]
+        )
+        os.environ['SONIC_CLI_IFACE_MODE'] = "default"
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == phy_serdes_alias_mode_output
+
+    def test_phy_serdes_namespace(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["phy-serdes"],
+            ["Ethernet0", "--snr", "-n", ""]
+        )
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
 
     @classmethod
     def teardown_class(cls):
