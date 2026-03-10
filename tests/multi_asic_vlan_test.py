@@ -18,6 +18,10 @@ show_vlan_brief_asic0_output = """\
 +-----------+-----------------+-----------------+----------------+-------------+
 |   VLAN ID | IP Address      | Ports           | Port Tagging   | Proxy ARP   |
 +===========+=================+=================+================+=============+
+|       100 |                 |                 |                | disabled    |
++-----------+-----------------+-----------------+----------------+-------------+
+|       200 |                 |                 |                | disabled    |
++-----------+-----------------+-----------------+----------------+-------------+
 |      1000 | 192.168.0.1/21  | Ethernet4       | untagged       | disabled    |
 |           |                 | Ethernet16      | untagged       |             |
 |           |                 | PortChannel1002 | tagged         |             |
@@ -29,6 +33,8 @@ show_vlan_brief_asic0_output = """\
 show_vlan_config_asic0_output = """\
 Name        VID  Member           Mode
 --------  -----  ---------------  --------
+Vlan100     100
+Vlan200     200
 Vlan1000   1000  Ethernet4        untagged
 Vlan1000   1000  Ethernet16       untagged
 Vlan1000   1000  PortChannel1002  tagged
@@ -160,14 +166,16 @@ class TestVlanMultiAsic(object):
         runner = CliRunner()
         db = Db()
 
-        # Try to add Ethernet16 to vlan 2000 with namespace - will fail because it's already in VLAN 1000
+        # Try to add Ethernet16 to vlan 2000 with namespace - will fail because it has a
+        # router interface (INTERFACE entry with vnet_name) or is already in a VLAN,
         # but we're verifying the namespace parameter is accepted
         result = runner.invoke(config.config.commands["vlan"],
                                ["-n", "asic0", "member", "add", "2000", "Ethernet16"], obj=db)
         print(result.exit_code)
         print(result.output)
-        # Should fail because port is already in another VLAN, not because of namespace
-        assert "already a member of Vlan" in result.output or result.exit_code == 0
+        assert ("already a member of Vlan" in result.output or
+                "is a router interface" in result.output or
+                result.exit_code == 0)
 
     def test_config_vlan_add_member_multiple_with_namespace(self):
         """Test adding VLAN member to multiple VLANs with namespace in multi-asic"""
@@ -264,8 +272,9 @@ class TestVlanMultiAsic(object):
                                ["-n", "asic0", "member", "add", "2000", "Ethernet16"], obj=db)
         print(result.exit_code)
         print(result.output)
-        # May fail due to port already in VLAN, but namespace parameter should be accepted
-        assert "already a member of Vlan" in result.output or result.exit_code == 0
+        assert ("already a member of Vlan" in result.output or
+                "is a router interface" in result.output or
+                result.exit_code == 0)
 
     def test_config_vlan_invalid_namespace(self):
         """Test VLAN operations with invalid namespace"""

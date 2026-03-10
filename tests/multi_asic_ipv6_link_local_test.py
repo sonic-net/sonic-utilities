@@ -57,8 +57,8 @@ class TestIPv6LinkLocalMultiAsic(object):
         print(result.output)
         assert result.exit_code == 0
 
-        # Verify asic0 Ethernet16 is enabled
-        intf_entry = db.cfgdb_clients['asic0'].get_entry('INTERFACE', 'Ethernet16')
+        # Verify asic0 Ethernet20 is enabled (Ethernet20 is not a VLAN/portchannel member)
+        intf_entry = db.cfgdb_clients['asic0'].get_entry('INTERFACE', 'Ethernet20')
         assert intf_entry.get('ipv6_use_link_local_only') == 'enable'
 
         # Verify asic1 is NOT affected
@@ -77,21 +77,21 @@ class TestIPv6LinkLocalMultiAsic(object):
         db = Db()
         obj = {'config_db': db.cfgdb_clients['asic0']}
 
-        # Enable on Ethernet16 (external port, not a portchannel/vlan member)
+        # Enable on Ethernet20 (external port, not a portchannel/vlan member)
         result = runner.invoke(
             config.config.commands["interface"].commands["ipv6"].commands["enable"].commands["use-link-local-only"],
-            ["Ethernet16"], obj=obj)
+            ["Ethernet20"], obj=obj)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
 
-        intf_entry = db.cfgdb_clients['asic0'].get_entry('INTERFACE', 'Ethernet16')
+        intf_entry = db.cfgdb_clients['asic0'].get_entry('INTERFACE', 'Ethernet20')
         assert intf_entry.get('ipv6_use_link_local_only') == 'enable'
 
         # Disable
         result = runner.invoke(
             config.config.commands["interface"].commands["ipv6"].commands["disable"].commands["use-link-local-only"],
-            ["Ethernet16"], obj=obj)
+            ["Ethernet20"], obj=obj)
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
