@@ -2173,7 +2173,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         communicate=mock.Mock(return_value=('{"some": "config"}', None)),
         returncode=0
     )))
-    @patch('config.main.validate_patch', mock.Mock(return_value=True))
+    @patch('generic_config_updater.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch__path_trace_option__trace_file_opened_and_passed(self):
         # Arrange
         import tempfile
@@ -5221,7 +5221,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         communicate=mock.Mock(return_value=('{"some": "config"}', None)),
         returncode=0
     )))
-    @patch('config.main.validate_patch', mock.Mock(return_value=True))
+    @patch('generic_config_updater.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch__path_trace_option_multiasic__trace_file_opened_and_passed(self):
         # Arrange
         import tempfile
