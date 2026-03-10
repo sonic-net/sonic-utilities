@@ -2395,7 +2395,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         mock_result = mock.Mock()
         mock_result.returncode = 0
         with mock.patch('subprocess.run', return_value=mock_result) as mock_run:
-            run_gcu_standalone('/tmp/p.json', 'CONFIGDB', False, False, False, (), False)
+            run_gcu_standalone('/tmp/p.json', 'CONFIGDB', False, False, False, (), False, path_trace=None)
         called_cmd = mock_run.call_args[0][0]
         self.assertIn(GCU_STANDALONE_BIN, called_cmd)
         self.assertIn('apply-patch', called_cmd)
@@ -2406,7 +2406,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         from config.main import run_gcu_standalone
         mock_result = mock.Mock()
         with mock.patch('subprocess.run', return_value=mock_result) as mock_run:
-            run_gcu_standalone('/tmp/p.json', 'SONICYANG', False, False, False, (), False)
+            run_gcu_standalone('/tmp/p.json', 'SONICYANG', False, False, False, (), False, path_trace=None)
         called_cmd = mock_run.call_args[0][0]
         self.assertIn('--format', called_cmd)
         self.assertIn('SONICYANG', called_cmd)
@@ -2422,6 +2422,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
                 ignore_non_yang_tables=True,
                 ignore_path=['/T1', '/T2'],
                 verbose=True,
+                path_trace=None
             )
         called_cmd = mock_run.call_args[0][0]
         self.assertIn('--dry-run', called_cmd)
@@ -2431,13 +2432,14 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.assertIn('/T1', called_cmd)
         self.assertIn('/T2', called_cmd)
         self.assertIn('--verbose', called_cmd)
+        self.assertNotIn('--path-trace', called_cmd)
 
     def test_run_gcu_standalone_returns_result(self):
         """run_gcu_standalone returns the CompletedProcess object."""
         from config.main import run_gcu_standalone
         sentinel = mock.sentinel.completed_process
         with mock.patch('subprocess.run', return_value=sentinel):
-            result = run_gcu_standalone('/tmp/p.json', 'CONFIGDB', False, False, False, (), False)
+            result = run_gcu_standalone('/tmp/p.json', 'CONFIGDB', False, False, False, (), False, path_trace=None)
         self.assertIs(result, sentinel)
 
     # ------------------------------------------------------------------
