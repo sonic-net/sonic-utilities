@@ -407,5 +407,17 @@
         "rx_interval" : "500",
         "multiplier" : "5",
         "multihop": "false"
+    },
+    "VXLAN_TUNNEL_TABLE|EVPN_192.168.1.100": {
+        "src_ip": "10.10.10.1",
+        "dst_ip": "192.168.1.100",
+        "tnl_src": "EVPN",
+        "operstatus": "up"
+    },
+    "VXLAN_TUNNEL_TABLE|EVPN_192.168.1.101": {
+        "src_ip": "10.10.10.1",
+        "dst_ip": "192.168.1.101",
+        "tnl_src": "EVPN",
+        "operstatus": "up"
     }
 }

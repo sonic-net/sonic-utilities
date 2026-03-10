@@ -68,7 +68,7 @@ function error()
         message="asic$DEV: $message"
     fi
     echo "$message" >&2
-    logger -p user.err "Error seen during warm-reboot shutdown process: $message"
+    logger -p user.err "Error seen during $REBOOT_SCRIPT_NAME shutdown process: $message"
 }
 
 function debug()
@@ -117,8 +117,10 @@ function execute_in_namespaces()
             pid=$!
             wait "$pid" && rc=0 || rc=$?
             if [[ $rc -ne 0 ]]; then
-                error "Command $cmd failed returned $rc"
-                exit $rc
+                error "Command $cmd failed returned $rc in global namespace"
+                if [[ $FORCE == "no" ]]; then
+                    exit $rc
+                fi
             fi
         fi
 
@@ -130,7 +132,16 @@ function execute_in_namespaces()
             # If the command failed, remove the ASIC from the list
             if [[ $rc -ne 0 ]]; then
                 error "Command $cmd failed for $dev returned $rc"
-                exit $rc
+                if [[ $FORCE == "no" ]]; then
+                    exit $rc
+                else
+                    debug "Force disabling fast/warm-reboot for asic$dev"
+                    # Remove failed ASIC from the list
+                    ASIC_LIST=(${ASIC_LIST[@]/$dev})
+                    # Disable fast/warm-reboot for the failed ASIC
+                    sonic-db-cli -n "asic$dev" HSET "FAST_RESTART_ENABLE_TABLE|system" "enable" "false" &>/dev/null || /bin/true
+                    config warm_restart disable system -n "asic$dev" &>/dev/null || /bin/true
+                fi
             fi
         done
     else
@@ -328,7 +339,7 @@ function filter_asic_list()
 function clear_boot()
 {
     # common_clear
-    debug "${REBOOT_TYPE} failure ($?) cleanup ..."
+    debug "${REBOOT_SCRIPT_NAME} failure ($?) cleanup ..."
 
     /sbin/kexec -u -a || /bin/true
 
@@ -726,9 +737,9 @@ function check_pfc_storm_active()
     fi
 
     if pfcwd show stats $options --check-storm >/dev/null 2>&1; then
-        debug "No active PFC storms detected. Safe to proceed with warm-reboot..."
+        debug "No active PFC storms detected. Safe to proceed with $REBOOT_SCRIPT_NAME..."
     else
-        error "PFC storm detected. Aborting warm-reboot to prevent failure in recovery path..."
+        error "PFC storm detected. Aborting $REBOOT_SCRIPT_NAME to prevent failure in recovery path..."
         exit ${EXIT_PFC_STORM_DETECTED}
     fi
 }

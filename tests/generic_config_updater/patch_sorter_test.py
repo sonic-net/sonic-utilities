@@ -2528,8 +2528,20 @@ class RemoveCreateOnlyDependencyMoveGenerator(unittest.TestCase):
         moves = list(self.generator.generate(diff))
 
         # Assert
+
+        # This is a proper output even though it looks wrong.
+        # Due to logic in the generator to ensure it removes the exact referenced
+        # leaves for dependents, then the CreateOnly path, followed by the parents
+        # of the dependent paths.  Since this is a generator called by DFS it will
+        # be called recursively so the parent may not ever be removed in practice.
+        # Also since it is recursive and starts over, in practice if it did need
+        # to delete the parent path, it would emit another delete of the
+        # create-only attribute parent.
         self.verify_moves([{'op': 'remove', 'path': '/ACL_TABLE/NO-NSW-PACL-V4/ports/0'},
-                           {'op': 'remove', 'path': '/VLAN_MEMBER/Vlan100|Ethernet0'}],
+                           {'op': 'remove', 'path': '/VLAN_MEMBER/Vlan100|Ethernet0'},
+                           {'op': 'remove', 'path': '/PORT/Ethernet0'},
+                           {'op': 'remove', 'path': '/ACL_TABLE/NO-NSW-PACL-V4/ports'},
+                           {'op': 'remove', 'path': '/VLAN_MEMBER'}],
                           moves)
 
     def test_generate__dpb_1_to_4_example(self):
@@ -2540,8 +2552,20 @@ class RemoveCreateOnlyDependencyMoveGenerator(unittest.TestCase):
         moves = list(self.generator.generate(diff))
 
         # Assert
-        self.verify_moves([{'op': 'remove', 'path': '/ACL_TABLE/NO-NSW-PACL-V4/ports/0'},
-                           {'op': 'remove', 'path': '/VLAN_MEMBER/Vlan100|Ethernet0'}],
+
+        # This is a proper output even though it looks wrong on a couple of fronts.
+        # Due to logic in the generator to ensure it doesn't create empty tables, it
+        # will remove the parent if it removed the last entry in the table.  In this
+        # case in each of the tables we are removing the only entry.  Then the repetition
+        # is due to logic to remove the parent of a dependent if the prior generator
+        # failed to validate, which ends up resolving to the same path as the original
+        # due to the no-empty-table logic.  Since no validators are run we see the same
+        # output twice.
+        self.verify_moves([{'op': 'remove', 'path': '/ACL_TABLE/NO-NSW-PACL-V4/ports'},
+                           {'op': 'remove', 'path': '/VLAN_MEMBER'},
+                           {'op': 'remove', 'path': '/PORT'},
+                           {'op': 'remove', 'path': '/ACL_TABLE/NO-NSW-PACL-V4/ports'},
+                           {'op': 'remove', 'path': '/VLAN_MEMBER'}],
                           moves)
 
     def verify_moves(self, ops, moves):
@@ -3286,9 +3310,9 @@ class TestSortAlgorithmFactory(unittest.TestCase):
         # Arrange
         config_wrapper = ConfigWrapper()
         factory = ps.SortAlgorithmFactory(OperationWrapper(), config_wrapper, PathAddressing(config_wrapper))
-        expected_generators = [ps.RemoveCreateOnlyDependencyMoveGenerator,
-                               ps.LowLevelMoveGenerator]
-        expected_non_extendable_generators = [ps.BulkKeyLevelMoveGenerator,
+        expected_generators = [ps.LowLevelMoveGenerator]
+        expected_non_extendable_generators = [ps.RemoveCreateOnlyDependencyMoveGenerator,
+                                              ps.BulkKeyLevelMoveGenerator,
                                               ps.KeyLevelMoveGenerator,
                                               ps.BulkKeyGroupLowLevelMoveGenerator,
                                               ps.BulkLowLevelMoveGenerator]

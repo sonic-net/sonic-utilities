@@ -1,5 +1,7 @@
 import click
+from sonic_py_common import multi_asic
 import utilities_common.cli as clicommon
+import utilities_common.multi_asic as multi_asic_util
 from natsort import natsorted
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from tabulate import tabulate
@@ -9,7 +11,8 @@ import ipaddress
 # 'vnet' command ("show vnet")
 #
 @click.group(cls=clicommon.AliasedGroup)
-def vnet():
+@multi_asic_util.multi_asic_click_option_namespace
+def vnet(namespace):
     """Show vnet related information"""
     pass
 
@@ -18,50 +21,60 @@ def vnet():
 @click.argument('args', metavar='[community:string]', required=False)
 def advertised_routes(args):
     """Show vnet advertised-routes [community string XXXX:XXXX]"""
-    state_db = SonicV2Connector()
-    state_db.connect(state_db.STATE_DB)
-    appl_db = SonicV2Connector()
-    appl_db.connect(appl_db.APPL_DB)
+    namespace = multi_asic_util.get_namespace_from_ctx()
     community_filter = ''
-    profile_filter = 'NO_PROFILE'
     if args and len(args) > 0:
         community_filter = args
 
-    bgp_profile_keys = appl_db.keys(appl_db.APPL_DB, "BGP_PROFILE_TABLE:*")
-    bgp_profile_keys = natsorted(bgp_profile_keys) if bgp_profile_keys else []
-    profiles = {}
-    for  profilekey in bgp_profile_keys:
-        val = appl_db.get_all(appl_db.APPL_DB, profilekey)
-        if val:
-            community_id = val.get('community_id')
-            profiles[profilekey.split(':')[1]] = community_id
-            if community_filter and community_filter == community_id:
-                profile_filter = profilekey.split(':')[1]
-                break;
-
-    adv_table_keys = state_db.keys(state_db.STATE_DB, "ADVERTISE_NETWORK_TABLE|*")
-    adv_table_keys = natsorted(adv_table_keys) if adv_table_keys else []
     header = ['Prefix', 'Profile', 'Community Id']
-    table = []
-    for k in adv_table_keys:
-        ip = k.split('|')[1]
-        val = state_db.get_all(appl_db.STATE_DB, k)
-        profile = val.get('profile') if val else 'NA'
-        if community_filter:
-            if profile == profile_filter:
+
+    ns_list = multi_asic_util.multi_asic_get_ns_list(namespace)
+    for ns in ns_list:
+        if multi_asic.is_multi_asic() and len(ns_list) > 1:
+            click.echo("\nNamespace: {}".format(ns))
+
+        profiles = {}
+        profile_filter = 'NO_PROFILE'
+        table = []
+
+        state_db = SonicV2Connector(namespace=ns)
+        state_db.connect(state_db.STATE_DB)
+        appl_db = SonicV2Connector(namespace=ns)
+        appl_db.connect(appl_db.APPL_DB)
+
+        bgp_profile_keys = appl_db.keys(appl_db.APPL_DB, "BGP_PROFILE_TABLE:*")
+        bgp_profile_keys = natsorted(bgp_profile_keys) if bgp_profile_keys else []
+        for profilekey in bgp_profile_keys:
+            val = appl_db.get_all(appl_db.APPL_DB, profilekey)
+            if val:
+                community_id = val.get('community_id')
+                profiles[profilekey.split(':')[1]] = community_id
+                if community_filter and community_filter == community_id:
+                    profile_filter = profilekey.split(':')[1]
+                    break
+
+        adv_table_keys = state_db.keys(state_db.STATE_DB, "ADVERTISE_NETWORK_TABLE|*")
+        adv_table_keys = natsorted(adv_table_keys) if adv_table_keys else []
+        for k in adv_table_keys:
+            ip = k.split('|')[1]
+            val = state_db.get_all(state_db.STATE_DB, k)
+            profile = val.get('profile') if val else 'NA'
+            if community_filter:
+                if profile == profile_filter:
+                    r = []
+                    r.append(ip)
+                    r.append(profile)
+                    r.append(community_filter)
+                    table.append(r)
+            else:
                 r = []
                 r.append(ip)
                 r.append(profile)
-                r.append(community_filter)
+                if profile in profiles.keys():
+                    r.append(profiles[profile])
                 table.append(r)
-        else:
-            r = []
-            r.append(ip)
-            r.append(profile)
-            if profile in profiles.keys():
-                r.append(profiles[profile])
-            table.append(r)
-    click.echo(tabulate(table, header))
+
+        click.echo(tabulate(table, header))
 
 
 def get_vnet_info(config_db, vnet_name):
@@ -108,53 +121,71 @@ def format_vnet_output(vnet_name, vnet_data, interfaces):
 @click.argument('guid', required=True)
 def guid(guid):
     """Show VNET details using GUID"""
-    config_db = ConfigDBConnector()
-    config_db.connect()
+    namespace = multi_asic_util.get_namespace_from_ctx()
 
-    vnet_table = config_db.get_table('VNET')
+    ns_list = multi_asic_util.multi_asic_get_ns_list(namespace)
+    for ns in ns_list:
+        config_db = ConfigDBConnector(namespace=ns)
+        config_db.connect()
 
-    # Find VNET name with matching GUID
-    vnet_name = next((name for name, data in vnet_table.items() if data.get('guid') == guid), None)
+        vnet_table = config_db.get_table('VNET')
 
-    if not vnet_name:
-        click.echo(f"No VNET found with GUID '{guid}'")
-        return
+        # Find VNET name with matching GUID
+        vnet_name = next((name for name, data in vnet_table.items() if data.get('guid') == guid), None)
 
-    vnet_data, interfaces = get_vnet_info(config_db, vnet_name)
-    headers, table = format_vnet_output(vnet_name, vnet_data, interfaces)
-    click.echo(tabulate(table, headers=headers))
+        if vnet_name:
+            if multi_asic.is_multi_asic() and len(ns_list) > 1:
+                click.echo("\nNamespace: {}".format(ns))
+            vnet_data, interfaces = get_vnet_info(config_db, vnet_name)
+            headers, table = format_vnet_output(vnet_name, vnet_data, interfaces)
+            click.echo(tabulate(table, headers=headers))
+            return
+
+    click.echo(f"No VNET found with GUID '{guid}'")
 
 
 @vnet.command()
 @click.argument('vnet_name', required=True)
 def name(vnet_name):
     """Show VNET details for a given VNET name"""
-    config_db = ConfigDBConnector()
-    config_db.connect()
+    namespace = multi_asic_util.get_namespace_from_ctx()
 
-    vnet_data, interfaces = get_vnet_info(config_db, vnet_name)
+    ns_list = multi_asic_util.multi_asic_get_ns_list(namespace)
+    for ns in ns_list:
+        config_db = ConfigDBConnector(namespace=ns)
+        config_db.connect()
 
-    if not vnet_data:
-        click.echo(f"VNET '{vnet_name}' not found!")
-        return
+        vnet_data, interfaces = get_vnet_info(config_db, vnet_name)
 
-    headers, table = format_vnet_output(vnet_name, vnet_data, interfaces)
-    click.echo(tabulate(table, headers=headers))
+        if vnet_data:
+            if multi_asic.is_multi_asic() and len(ns_list) > 1:
+                click.echo("\nNamespace: {}".format(ns))
+            headers, table = format_vnet_output(vnet_name, vnet_data, interfaces)
+            click.echo(tabulate(table, headers=headers))
+            return
+
+    click.echo(f"VNET '{vnet_name}' not found!")
 
 
 @vnet.command()
 def brief():
     """Show vnet brief information"""
-    config_db = ConfigDBConnector()
-    config_db.connect()
+    namespace = multi_asic_util.get_namespace_from_ctx()
     header = ['vnet name', 'vxlan tunnel', 'vni', 'peer list', 'guid']
 
-    # Fetching data from config_db for VNET
-    vnet_data = config_db.get_table('VNET')
-    vnet_keys = natsorted(list(vnet_data.keys()))
+    ns_list = multi_asic_util.multi_asic_get_ns_list(namespace)
+    for ns in ns_list:
+        if multi_asic.is_multi_asic() and len(ns_list) > 1:
+            click.echo("\nNamespace: {}".format(ns))
 
-    def tablelize(vnet_keys, vnet_data):
         table = []
+        config_db = ConfigDBConnector(namespace=ns)
+        config_db.connect()
+
+        # Fetching data from config_db for VNET
+        vnet_data = config_db.get_table('VNET')
+        vnet_keys = natsorted(list(vnet_data.keys()))
+
         for k in vnet_keys:
             r = []
             r.append(k)
@@ -163,206 +194,221 @@ def brief():
             r.append(vnet_data[k].get('peer_list'))
             r.append(vnet_data[k].get('guid'))
             table.append(r)
-        return table
 
-    click.echo(tabulate(tablelize(vnet_keys, vnet_data), header))
+        click.echo(tabulate(table, header))
 
 
 @vnet.command()
 @click.argument('vnet_alias', required=False)
 def alias(vnet_alias):
     """Show vnet alias to name information"""
-    config_db = ConfigDBConnector()
-    config_db.connect()
+    namespace = multi_asic_util.get_namespace_from_ctx()
     header = ['Alias', 'Name']
 
-    # Fetching data from config_db for VNET
-    vnet_data = config_db.get_table('VNET')
-    vnet_keys = natsorted(list(vnet_data.keys()))
+    ns_list = multi_asic_util.multi_asic_get_ns_list(namespace)
+    if vnet_alias is not None:
+        # Search for specific alias across namespaces
+        for ns in ns_list:
+            config_db = ConfigDBConnector(namespace=ns)
+            config_db.connect()
 
-    def tablelize(vnet_keys, vnet_data, vnet_alias):
-        table = []
-        for k in vnet_keys:
-            r = []
-            if vnet_alias is not None:
+            vnet_data = config_db.get_table('VNET')
+            for k in natsorted(list(vnet_data.keys())):
                 if vnet_data[k].get('guid') == vnet_alias:
-                    r.append(vnet_data[k].get('guid'))
-                    r.append(k)
-                    table.append(r)
-                    return table
-                else:
-                    continue
+                    if multi_asic.is_multi_asic() and len(ns_list) > 1:
+                        click.echo("\nNamespace: {}".format(ns))
+                    click.echo(tabulate([[vnet_data[k].get('guid'), k]], header))
+                    return
+        # Not found in any namespace
+        click.echo(tabulate([], header))
+    else:
+        # List all aliases per namespace
+        for ns in ns_list:
+            if multi_asic.is_multi_asic() and len(ns_list) > 1:
+                click.echo("\nNamespace: {}".format(ns))
 
-            r.append(vnet_data[k].get('guid'))
-            r.append(k)
-            table.append(r)
-        return table
+            table = []
+            config_db = ConfigDBConnector(namespace=ns)
+            config_db.connect()
 
-    click.echo(tabulate(tablelize(vnet_keys, vnet_data, vnet_alias), header))
+            vnet_data = config_db.get_table('VNET')
+            for k in natsorted(list(vnet_data.keys())):
+                table.append([vnet_data[k].get('guid'), k])
+
+            click.echo(tabulate(table, header))
 
 
 @vnet.command()
 def interfaces():
     """Show vnet interfaces information"""
-    config_db = ConfigDBConnector()
-    config_db.connect()
-
+    namespace = multi_asic_util.get_namespace_from_ctx()
     header = ['vnet name', 'interfaces']
 
-    # Fetching data from config_db for interfaces
-    intfs_data = config_db.get_table("INTERFACE")
-    vlan_intfs_data = config_db.get_table("VLAN_INTERFACE")
-    vlan_sub_intfs_data = config_db.get_table("VLAN_SUB_INTERFACE")
-    portchannel_intfs_data = config_db.get_table("PORTCHANNEL_INTERFACE")
-    loopback_intfs_data = config_db.get_table("LOOPBACK_INTERFACE")
+    ns_list = multi_asic_util.multi_asic_get_ns_list(namespace)
+    for ns in ns_list:
+        if multi_asic.is_multi_asic() and len(ns_list) > 1:
+            click.echo("\nNamespace: {}".format(ns))
 
-    vnet_intfs = {}
-    for k, v in intfs_data.items():
-        if 'vnet_name' in v:
-            vnet_name = v['vnet_name']
-            if vnet_name in vnet_intfs:
-                vnet_intfs[vnet_name].append(k)
-            else:
-                vnet_intfs[vnet_name] = [k]
+        vnet_intfs = {}
+        config_db = ConfigDBConnector(namespace=ns)
+        config_db.connect()
 
-    for k, v in vlan_sub_intfs_data.items():
-        if 'vnet_name' in v:
-            vnet_name = v['vnet_name']
-            if vnet_name in vnet_intfs:
-                vnet_intfs[vnet_name].append(k)
-            else:
-                vnet_intfs[vnet_name] = [k]
+        # Fetching data from config_db for interfaces
+        intfs_data = config_db.get_table("INTERFACE")
+        vlan_intfs_data = config_db.get_table("VLAN_INTERFACE")
+        vlan_sub_intfs_data = config_db.get_table("VLAN_SUB_INTERFACE")
+        portchannel_intfs_data = config_db.get_table("PORTCHANNEL_INTERFACE")
+        loopback_intfs_data = config_db.get_table("LOOPBACK_INTERFACE")
 
-    for k, v in portchannel_intfs_data.items():
-        if 'vnet_name' in v:
-            vnet_name = v['vnet_name']
-            if vnet_name in vnet_intfs:
-                vnet_intfs[vnet_name].append(k)
-            else:
-                vnet_intfs[vnet_name] = [k]
+        for k, v in intfs_data.items():
+            if 'vnet_name' in v:
+                vnet_name = v['vnet_name']
+                if vnet_name in vnet_intfs:
+                    vnet_intfs[vnet_name].append(k)
+                else:
+                    vnet_intfs[vnet_name] = [k]
 
-    for k, v in loopback_intfs_data.items():
-        if 'vnet_name' in v:
-            vnet_name = v['vnet_name']
-            if vnet_name in vnet_intfs:
-                vnet_intfs[vnet_name].append(k)
-            else:
-                vnet_intfs[vnet_name] = [k]
+        for k, v in vlan_sub_intfs_data.items():
+            if 'vnet_name' in v:
+                vnet_name = v['vnet_name']
+                if vnet_name in vnet_intfs:
+                    vnet_intfs[vnet_name].append(k)
+                else:
+                    vnet_intfs[vnet_name] = [k]
 
-    for k, v in vlan_intfs_data.items():
-        if 'vnet_name' in v:
-            vnet_name = v['vnet_name']
-            if vnet_name in vnet_intfs:
-                vnet_intfs[vnet_name].append(k)
-            else:
-                vnet_intfs[vnet_name] = [k]
+        for k, v in portchannel_intfs_data.items():
+            if 'vnet_name' in v:
+                vnet_name = v['vnet_name']
+                if vnet_name in vnet_intfs:
+                    vnet_intfs[vnet_name].append(k)
+                else:
+                    vnet_intfs[vnet_name] = [k]
 
-    table = []
-    for k, v in vnet_intfs.items():
-        r = []
-        r.append(k)
-        r.append(",".join(natsorted(v)))
-        table.append(r)
+        for k, v in loopback_intfs_data.items():
+            if 'vnet_name' in v:
+                vnet_name = v['vnet_name']
+                if vnet_name in vnet_intfs:
+                    vnet_intfs[vnet_name].append(k)
+                else:
+                    vnet_intfs[vnet_name] = [k]
 
-    click.echo(tabulate(table, header))
+        for k, v in vlan_intfs_data.items():
+            if 'vnet_name' in v:
+                vnet_name = v['vnet_name']
+                if vnet_name in vnet_intfs:
+                    vnet_intfs[vnet_name].append(k)
+                else:
+                    vnet_intfs[vnet_name] = [k]
+
+        table = []
+        for k, v in vnet_intfs.items():
+            r = []
+            r.append(k)
+            r.append(",".join(natsorted(v)))
+            table.append(r)
+
+        click.echo(tabulate(table, header))
 
 
 @vnet.command()
 def neighbors():
     """Show vnet neighbors information"""
-    config_db = ConfigDBConnector()
-    config_db.connect()
-
+    namespace = multi_asic_util.get_namespace_from_ctx()
     header = ['<vnet_name>', 'neighbor', 'mac_address', 'interfaces']
 
-    # Fetching data from config_db for interfaces
-    intfs_data = config_db.get_table("INTERFACE")
-    vlan_intfs_data = config_db.get_table("VLAN_INTERFACE")
-    vlan_sub_intfs_data = config_db.get_table("VLAN_SUB_INTERFACE")
-    portchannel_intfs_data = config_db.get_table("PORTCHANNEL_INTERFACE")
-    loopback_intfs_data = config_db.get_table("LOOPBACK_INTERFACE")
+    ns_list = multi_asic_util.multi_asic_get_ns_list(namespace)
+    for ns in ns_list:
+        if multi_asic.is_multi_asic() and len(ns_list) > 1:
+            click.echo("\nNamespace: {}".format(ns))
 
-    vnet_intfs = {}
-    for k, v in intfs_data.items():
-        if 'vnet_name' in v:
-            vnet_name = v['vnet_name']
-            if vnet_name in vnet_intfs:
-                vnet_intfs[vnet_name].append(k)
-            else:
-                vnet_intfs[vnet_name] = [k]
+        vnet_intfs = {}
+        nbrs_data = {}
+        config_db = ConfigDBConnector(namespace=ns)
+        config_db.connect()
 
-    for k, v in vlan_intfs_data.items():
-        if 'vnet_name' in v:
-            vnet_name = v['vnet_name']
-            if vnet_name in vnet_intfs:
-                vnet_intfs[vnet_name].append(k)
-            else:
-                vnet_intfs[vnet_name] = [k]
+        # Fetching data from config_db for interfaces
+        intfs_data = config_db.get_table("INTERFACE")
+        vlan_intfs_data = config_db.get_table("VLAN_INTERFACE")
+        vlan_sub_intfs_data = config_db.get_table("VLAN_SUB_INTERFACE")
+        portchannel_intfs_data = config_db.get_table("PORTCHANNEL_INTERFACE")
+        loopback_intfs_data = config_db.get_table("LOOPBACK_INTERFACE")
 
-    for k, v in vlan_sub_intfs_data.items():
-        if 'vnet_name' in v:
-            vnet_name = v['vnet_name']
-            if vnet_name in vnet_intfs:
-                vnet_intfs[vnet_name].append(k)
-            else:
-                vnet_intfs[vnet_name] = [k]
+        for k, v in intfs_data.items():
+            if 'vnet_name' in v:
+                vnet_name = v['vnet_name']
+                if vnet_name in vnet_intfs:
+                    vnet_intfs[vnet_name].append(k)
+                else:
+                    vnet_intfs[vnet_name] = [k]
 
-    for k, v in portchannel_intfs_data.items():
-        if 'vnet_name' in v:
-            vnet_name = v['vnet_name']
-            if vnet_name in vnet_intfs:
-                vnet_intfs[vnet_name].append(k)
-            else:
-                vnet_intfs[vnet_name] = [k]
+        for k, v in vlan_intfs_data.items():
+            if 'vnet_name' in v:
+                vnet_name = v['vnet_name']
+                if vnet_name in vnet_intfs:
+                    vnet_intfs[vnet_name].append(k)
+                else:
+                    vnet_intfs[vnet_name] = [k]
 
-    for k, v in loopback_intfs_data.items():
-        if 'vnet_name' in v:
-            vnet_name = v['vnet_name']
-            if vnet_name in vnet_intfs:
-                vnet_intfs[vnet_name].append(k)
-            else:
-                vnet_intfs[vnet_name] = [k]
+        for k, v in vlan_sub_intfs_data.items():
+            if 'vnet_name' in v:
+                vnet_name = v['vnet_name']
+                if vnet_name in vnet_intfs:
+                    vnet_intfs[vnet_name].append(k)
+                else:
+                    vnet_intfs[vnet_name] = [k]
 
-    appl_db = SonicV2Connector()
-    appl_db.connect(appl_db.APPL_DB)
+        for k, v in portchannel_intfs_data.items():
+            if 'vnet_name' in v:
+                vnet_name = v['vnet_name']
+                if vnet_name in vnet_intfs:
+                    vnet_intfs[vnet_name].append(k)
+                else:
+                    vnet_intfs[vnet_name] = [k]
 
-    # Fetching data from appl_db for neighbors
-    nbrs = appl_db.keys(appl_db.APPL_DB, "NEIGH_TABLE:*")
-    nbrs_data = {}
-    for nbr in nbrs if nbrs else []:
-        tbl, intf, ip = nbr.split(":", 2)
-        mac = appl_db.get(appl_db.APPL_DB, nbr, 'neigh')
-        if intf in nbrs_data:
-            nbrs_data[intf].append((ip, mac))
-        else:
-            nbrs_data[intf] = [(ip, mac)]
+        for k, v in loopback_intfs_data.items():
+            if 'vnet_name' in v:
+                vnet_name = v['vnet_name']
+                if vnet_name in vnet_intfs:
+                    vnet_intfs[vnet_name].append(k)
+                else:
+                    vnet_intfs[vnet_name] = [k]
 
-    table = []
-    for k, v in vnet_intfs.items():
-        v = natsorted(v)
-        header[0] = k
-        table = []
-        for intf in v:
+        appl_db = SonicV2Connector(namespace=ns)
+        appl_db.connect(appl_db.APPL_DB)
+
+        # Fetching data from appl_db for neighbors
+        nbrs = appl_db.keys(appl_db.APPL_DB, "NEIGH_TABLE:*")
+        for nbr in nbrs if nbrs else []:
+            tbl, intf, ip = nbr.split(":", 2)
+            mac = appl_db.get(appl_db.APPL_DB, nbr, 'neigh')
             if intf in nbrs_data:
-                for ip, mac in nbrs_data[intf]:
-                    r = ["", ip, mac, intf]
-                    table.append(r)
-        click.echo(tabulate(table, header))
-        click.echo()
+                nbrs_data[intf].append((ip, mac))
+            else:
+                nbrs_data[intf] = [(ip, mac)]
 
-    if not bool(vnet_intfs):
-        click.echo(tabulate(table, header))
+        table = []
+        for k, v in vnet_intfs.items():
+            v = natsorted(v)
+            header[0] = k
+            table = []
+            for intf in v:
+                if intf in nbrs_data:
+                    for ip, mac in nbrs_data[intf]:
+                        r = ["", ip, mac, intf]
+                        table.append(r)
+            click.echo(tabulate(table, header))
+            click.echo()
+
+        if not bool(vnet_intfs):
+            click.echo(tabulate(table, header))
 
 @vnet.command()
 @click.argument('args', metavar='[IPADDRESS]', nargs=1, required=False)
 def endpoint(args):
     """Show Vxlan tunnel endpoint status"""
     """Specify IPv4 or IPv6 address for detail"""
+    namespace = multi_asic_util.get_namespace_from_ctx()
 
-    state_db = SonicV2Connector()
-    state_db.connect(state_db.STATE_DB)
-    appl_db = SonicV2Connector()
-    appl_db.connect(appl_db.APPL_DB)
     filter_by_ip = ''
     if args and len(args) > 0:
         try:
@@ -371,69 +417,107 @@ def endpoint(args):
             # Not ip address just ignore it
             print ("wrong parameter",args)
             return
-    # Fetching data from appl_db for VNET TUNNEL ROUTES
-    vnet_rt_keys = appl_db.keys(appl_db.APPL_DB, "VNET_ROUTE_TUNNEL_TABLE:*")
-    vnet_rt_keys = natsorted(vnet_rt_keys) if vnet_rt_keys else []
-    bfd_keys = state_db.keys(state_db.STATE_DB, "BFD_SESSION_TABLE|*")
+
+    ns_list = multi_asic_util.multi_asic_get_ns_list(namespace)
+
     if not filter_by_ip:
         header = ['Endpoint', 'Endpoint Monitor', 'prefix count', 'status']
-        prefix_count = {}
-        monitor_dict = {}
-        table = []
-        for k in vnet_rt_keys:
-            val = appl_db.get_all(appl_db.APPL_DB, k)
-            endpoints = val.get('endpoint').split(',') if 'endpoint' in val else []
-            if 'endpoint_monitor' in val:
-                monitors = val.get('endpoint_monitor').split(',')
-            else:
-                continue
-            for idx, endpoint in enumerate(endpoints):
-                monitor_dict[endpoint] = monitors[idx]
-                if endpoint not in prefix_count:
-                    prefix_count[endpoint] = 0
-                prefix_count[endpoint] += 1
-        for endpoint in prefix_count:
-            r = []
-            r.append(endpoint)
-            r.append(monitor_dict[endpoint])
-            r.append(prefix_count[endpoint])
-            bfd_session_key = "BFD_SESSION_TABLE|default|default|" + monitor_dict[endpoint]
-            if bfd_session_key in bfd_keys:
-                val_state = state_db.get_all(state_db.STATE_DB, bfd_session_key)
-                r.append(val_state.get('state'))
-            else:
-                r.append('Unknown')
-            table.append(r)
+
+        for ns in ns_list:
+            if multi_asic.is_multi_asic() and len(ns_list) > 1:
+                click.echo("\nNamespace: {}".format(ns))
+
+            prefix_count = {}
+            monitor_dict = {}
+            table = []
+
+            state_db = SonicV2Connector(namespace=ns)
+            state_db.connect(state_db.STATE_DB)
+            appl_db = SonicV2Connector(namespace=ns)
+            appl_db.connect(appl_db.APPL_DB)
+
+            # Fetching data from appl_db for VNET TUNNEL ROUTES
+            vnet_rt_keys = appl_db.keys(appl_db.APPL_DB, "VNET_ROUTE_TUNNEL_TABLE:*")
+            vnet_rt_keys = natsorted(vnet_rt_keys) if vnet_rt_keys else []
+            bfd_keys = state_db.keys(state_db.STATE_DB, "BFD_SESSION_TABLE|*") or []
+
+            for k in vnet_rt_keys:
+                val = appl_db.get_all(appl_db.APPL_DB, k)
+                endpoints = val.get('endpoint').split(',') if 'endpoint' in val else []
+                if 'endpoint_monitor' in val:
+                    monitors = val.get('endpoint_monitor').split(',')
+                else:
+                    continue
+                for idx, ep in enumerate(endpoints):
+                    monitor_dict[ep] = monitors[idx]
+                    if ep not in prefix_count:
+                        prefix_count[ep] = 0
+                    prefix_count[ep] += 1
+
+            for ep in prefix_count:
+                r = []
+                r.append(ep)
+                r.append(monitor_dict[ep])
+                r.append(prefix_count[ep])
+                bfd_session_key = "BFD_SESSION_TABLE|default|default|" + monitor_dict[ep]
+                if bfd_session_key in bfd_keys:
+                    val_state = state_db.get_all(state_db.STATE_DB, bfd_session_key)
+                    if val_state:
+                        r.append(val_state.get('state'))
+                    else:
+                        r.append('Unknown')
+                else:
+                    r.append('Unknown')
+                table.append(r)
+
+            click.echo(tabulate(table, header))
     else:
-        table = []
         header = ['Endpoint', 'Endpoint Monitor', 'prefix', 'status']
-        state = 'Unknown'
-        prefix = []
-        monitor_list = []
-        have_status = False
-        for k in vnet_rt_keys:
-            val = appl_db.get_all(appl_db.APPL_DB, k)
-            endpoints = val.get('endpoint').split(',')
-            monitors = val.get('endpoint_monitor').split(',')
-            for idx, endpoint in enumerate(endpoints):
-                if args == endpoint:
-                    prefix.append(k.split(":", 2)[2]) 
-                    if not have_status:
-                        bfd_session_key = "BFD_SESSION_TABLE|default|default|" + monitors[idx]
-                        if bfd_session_key in bfd_keys:
-                            val_state = state_db.get_all(state_db.STATE_DB, bfd_session_key)
-                            state = val_state.get('state')
-                            have_status = True
-                            monitor_list.append( monitors[idx])
-                            break
-        if prefix:
-            r = []
-            r.append(args)
-            r.append(monitor_list)
-            r.append(prefix)
-            r.append(state)
-            table.append(r)
-    click.echo(tabulate(table, header))
+
+        for ns in ns_list:
+            if multi_asic.is_multi_asic() and len(ns_list) > 1:
+                click.echo("\nNamespace: {}".format(ns))
+
+            table = []
+            state = 'Unknown'
+            prefix = []
+            monitor_list = []
+            have_status = False
+
+            state_db = SonicV2Connector(namespace=ns)
+            state_db.connect(state_db.STATE_DB)
+            appl_db = SonicV2Connector(namespace=ns)
+            appl_db.connect(appl_db.APPL_DB)
+
+            vnet_rt_keys = appl_db.keys(appl_db.APPL_DB, "VNET_ROUTE_TUNNEL_TABLE:*")
+            vnet_rt_keys = natsorted(vnet_rt_keys) if vnet_rt_keys else []
+            bfd_keys = state_db.keys(state_db.STATE_DB, "BFD_SESSION_TABLE|*")
+
+            for k in vnet_rt_keys:
+                val = appl_db.get_all(appl_db.APPL_DB, k)
+                endpoints = val.get('endpoint').split(',')
+                monitors = val.get('endpoint_monitor').split(',')
+                for idx, ep in enumerate(endpoints):
+                    if args == ep:
+                        prefix.append(k.split(":", 2)[2])
+                        if not have_status:
+                            bfd_session_key = "BFD_SESSION_TABLE|default|default|" + monitors[idx]
+                            if bfd_keys and bfd_session_key in bfd_keys:
+                                val_state = state_db.get_all(state_db.STATE_DB, bfd_session_key)
+                                state = val_state.get('state')
+                                have_status = True
+                                monitor_list.append(monitors[idx])
+                                break
+
+            if prefix:
+                r = []
+                r.append(args)
+                r.append(monitor_list)
+                r.append(prefix)
+                r.append(state)
+                table.append(r)
+
+            click.echo(tabulate(table, header))
 
 
 @vnet.group()
@@ -468,77 +552,89 @@ def pretty_print(table, r, epval, mac_addr, vni, state):
 @routes.command()
 def all():
     """Show all vnet routes"""
-    appl_db = SonicV2Connector()
-    appl_db.connect(appl_db.APPL_DB)
-    state_db = SonicV2Connector()
-    state_db.connect(state_db.STATE_DB)
-    header = ['vnet name', 'prefix', 'nexthop', 'interface']
+    namespace = multi_asic_util.get_namespace_from_ctx()
+    route_header = ['vnet name', 'prefix', 'nexthop', 'interface']
+    tunnel_header = ['vnet name', 'prefix', 'endpoint', 'mac address', 'vni', 'status']
 
-    # Fetching data from appl_db for VNET ROUTES
-    vnet_rt_keys = appl_db.keys(appl_db.APPL_DB, "VNET_ROUTE_TABLE:*")
-    vnet_rt_keys = natsorted(vnet_rt_keys) if vnet_rt_keys else []
+    ns_list = multi_asic_util.multi_asic_get_ns_list(namespace)
+    for ns in ns_list:
+        if multi_asic.is_multi_asic() and len(ns_list) > 1:
+            click.echo("\nNamespace: {}".format(ns))
 
-    table = []
-    for k in vnet_rt_keys:
-        r = []
-        r.extend(k.split(":", 2)[1:])
-        val = appl_db.get_all(appl_db.APPL_DB, k)
-        r.append(val.get('nexthop'))
-        r.append(val.get('ifname'))
-        table.append(r)
+        appl_db = SonicV2Connector(namespace=ns)
+        appl_db.connect(appl_db.APPL_DB)
+        state_db = SonicV2Connector(namespace=ns)
+        state_db.connect(state_db.STATE_DB)
 
-    click.echo(tabulate(table, header))
+        # VNET routes
+        table = []
+        vnet_rt_keys = appl_db.keys(appl_db.APPL_DB, "VNET_ROUTE_TABLE:*")
+        vnet_rt_keys = natsorted(vnet_rt_keys) if vnet_rt_keys else []
 
-    click.echo()
-
-    header = ['vnet name', 'prefix', 'endpoint', 'mac address', 'vni', 'status']
-
-    # Fetching data from appl_db for VNET TUNNEL ROUTES
-    vnet_rt_keys = appl_db.keys(appl_db.APPL_DB, "VNET_ROUTE_TUNNEL_TABLE:*")
-    vnet_rt_keys = natsorted(vnet_rt_keys) if vnet_rt_keys else []
-
-    table = []
-    for k in vnet_rt_keys:
-        r = []
-        r.extend(k.split(":", 2)[1:])
-        state_db_key = '|'.join(k.split(":",2))
-        val = appl_db.get_all(appl_db.APPL_DB, k)
-        val_state = state_db.get_all(state_db.STATE_DB, state_db_key)
-        epval = val.get('endpoint')
-        if len(epval) < 40:
-            r.append(epval)
-            r.append(val.get('mac_address'))
-            r.append(val.get('vni'))
-            if val_state:
-                r.append(val_state.get('state'))
+        for k in vnet_rt_keys:
+            r = []
+            r.extend(k.split(":", 2)[1:])
+            val = appl_db.get_all(appl_db.APPL_DB, k)
+            r.append(val.get('nexthop'))
+            r.append(val.get('ifname'))
             table.append(r)
-            continue
-        state = val_state.get('state') if val_state else ""
-        pretty_print(table, r, epval, val.get('mac_address'), val.get('vni'), state )
 
-    click.echo(tabulate(table, header))
+        click.echo(tabulate(table, route_header))
+
+        click.echo()
+
+        # VNET tunnel routes
+        table = []
+        vnet_rt_keys = appl_db.keys(appl_db.APPL_DB, "VNET_ROUTE_TUNNEL_TABLE:*")
+        vnet_rt_keys = natsorted(vnet_rt_keys) if vnet_rt_keys else []
+
+        for k in vnet_rt_keys:
+            r = []
+            r.extend(k.split(":", 2)[1:])
+            state_db_key = '|'.join(k.split(":", 2))
+            val = appl_db.get_all(appl_db.APPL_DB, k)
+            val_state = state_db.get_all(state_db.STATE_DB, state_db_key)
+            epval = val.get('endpoint')
+            if len(epval) < 40:
+                r.append(epval)
+                r.append(val.get('mac_address'))
+                r.append(val.get('vni'))
+                if val_state:
+                    r.append(val_state.get('state'))
+                table.append(r)
+                continue
+            state = val_state.get('state') if val_state else ""
+            pretty_print(table, r, epval, val.get('mac_address'), val.get('vni'), state)
+
+        click.echo(tabulate(table, tunnel_header))
 
 
 @routes.command()
 def tunnel():
     """Show vnet tunnel routes"""
-    appl_db = SonicV2Connector()
-    appl_db.connect(appl_db.APPL_DB)
-
+    namespace = multi_asic_util.get_namespace_from_ctx()
     header = ['vnet name', 'prefix', 'endpoint', 'mac address', 'vni']
 
-    # Fetching data from appl_db for VNET TUNNEL ROUTES
-    vnet_rt_keys = appl_db.keys(appl_db.APPL_DB, "VNET_ROUTE_TUNNEL_TABLE:*")
-    vnet_rt_keys = natsorted(vnet_rt_keys) if vnet_rt_keys else []
+    ns_list = multi_asic_util.multi_asic_get_ns_list(namespace)
+    for ns in ns_list:
+        if multi_asic.is_multi_asic() and len(ns_list) > 1:
+            click.echo("\nNamespace: {}".format(ns))
 
-    table = []
-    for k in vnet_rt_keys:
-        r = []
-        r.extend(k.split(":", 2)[1:])
-        val = appl_db.get_all(appl_db.APPL_DB, k)
-        r.append(val.get('endpoint'))
-        r.append(val.get('mac_address'))
-        r.append(val.get('vni'))
-        table.append(r)
+        table = []
+        appl_db = SonicV2Connector(namespace=ns)
+        appl_db.connect(appl_db.APPL_DB)
 
-    click.echo(tabulate(table, header))
+        # Fetching data from appl_db for VNET TUNNEL ROUTES
+        vnet_rt_keys = appl_db.keys(appl_db.APPL_DB, "VNET_ROUTE_TUNNEL_TABLE:*")
+        vnet_rt_keys = natsorted(vnet_rt_keys) if vnet_rt_keys else []
+
+        for k in vnet_rt_keys:
+            r = []
+            r.extend(k.split(":", 2)[1:])
+            val = appl_db.get_all(appl_db.APPL_DB, k)
+            r.append(val.get('endpoint'))
+            r.append(val.get('mac_address'))
+            r.append(val.get('vni'))
+            table.append(r)
+
+        click.echo(tabulate(table, header))

@@ -3,10 +3,11 @@
 """
     Script to clear MAC/FDB entries learnt in Hardware
 
-    usage: fdbclear [-p PORT] [-v VLAN]
+    usage: fdbclear [-p PORT] [-v VLAN] [-n NAMESPACE]
     optional arguments:
       -p,  --port              FDB learned on specific port: Ethernet0
       -v,  --vlan              FDB learned on specific Vlan: 1000
+      -n,  --namespace         Namespace name or all
 
     Example of the output:
 
@@ -16,14 +17,24 @@ import argparse
 import json
 import sys
 
-from swsscommon.swsscommon import SonicV2Connector
+from swsscommon.swsscommon import SonicV2Connector, SonicDBConfig
+from sonic_py_common import multi_asic
+from utilities_common import multi_asic as multi_asic_util
 
 class FdbClear(object):
 
-
-    def __init__(self):
+    def __init__(self, namespace=None):
         super(FdbClear,self).__init__()
-        self.db = SonicV2Connector(host="127.0.0.1")
+        self.namespace = namespace
+
+        if namespace is not None:
+            if not SonicDBConfig.isGlobalInit():
+                SonicDBConfig.load_sonic_global_db_config()
+
+            self.db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
+        else:
+            self.db = SonicV2Connector(host="127.0.0.1")
+
         self.db.connect(self.db.APPL_DB)
         return
 
@@ -38,22 +49,51 @@ def main():
     parser = argparse.ArgumentParser(description='Clear FDB entries', formatter_class=argparse.RawTextHelpFormatter)
     parser.add_argument('-p', '--port', type=str, help='Clear FDB learned on specific port: Ethernet0', default=None)
     parser.add_argument('-v', '--vlan', type=str, help='Clear FDB learned on specific Vlan: 1001', default=None)
+    parser.add_argument('-n', '--namespace', type=str, help='Namespace name or all', default=None)
     args = parser.parse_args()
 
     try:
-        fdb = FdbClear()
-        if args.vlan is not None and args.port is not None:
-            fdb.send_notification("PORTVLAN", args.port+'|'+args.vlan)
-            print("Port {} + Vlan{} FDB entries are cleared.".format(args.port, args.vlan))
-        elif args.vlan is not None:
-            fdb.send_notification("VLAN", args.vlan)
-            print("Vlan{} FDB entries are cleared.".format(args.vlan))
-        elif args.port is not None:
-            fdb.send_notification("PORT", args.port)
-            print("Port {} FDB entries are cleared.".format(args.port))
+        # Determine which namespaces to clear
+        namespaces = []
+        if multi_asic.is_multi_asic():
+            if args.namespace is not None and args.namespace.lower() != 'all':
+                # Validate the namespace
+                ns_list = multi_asic.get_namespace_list()
+                if args.namespace not in ns_list:
+                    print("Invalid namespace '{}'. Valid namespaces are: {}".format(
+                        args.namespace, ', '.join(ns_list)))
+                    sys.exit(1)
+                namespaces = [args.namespace]
+            else:
+                # Clear FDB in all namespaces
+                namespaces = multi_asic.get_namespace_list()
         else:
-            fdb.send_notification("ALL", "ALL")
-            print("FDB entries are cleared.")
+            # Single ASIC platform
+            if args.namespace is not None:
+                print("Namespace option is not supported on single ASIC platform")
+                sys.exit(1)
+            namespaces = [None]
+
+        # Execute FDB clear for each namespace
+        for ns in namespaces:
+            fdb = FdbClear(namespace=ns)
+
+            # Print namespace header for multi-ASIC
+            if multi_asic.is_multi_asic() and len(namespaces) > 1:
+                print("\nClearing FDB for namespace: {}".format(ns))
+
+            if args.vlan is not None and args.port is not None:
+                fdb.send_notification("PORTVLAN", args.port+'|'+args.vlan)
+                print("Port {} + Vlan{} FDB entries are cleared.".format(args.port, args.vlan))
+            elif args.vlan is not None:
+                fdb.send_notification("VLAN", args.vlan)
+                print("Vlan{} FDB entries are cleared.".format(args.vlan))
+            elif args.port is not None:
+                fdb.send_notification("PORT", args.port)
+                print("Port {} FDB entries are cleared.".format(args.port))
+            else:
+                fdb.send_notification("ALL", "ALL")
+                print("FDB entries are cleared.")
     except Exception as e:
         print(str(e))
         sys.exit(1)
