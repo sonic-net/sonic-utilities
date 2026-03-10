@@ -2988,5 +2988,14 @@
     "PERSISTENT_DROP_ALERTS":{
         "DEBUG_0|1746495543": "Persistent packet drops detected on Ethernet0",
         "DEBUG_0|1746495767": "Persistent packet drops detected on Ethernet1"
+    },
+    "PORT_PHY_ATTR:oid:0x1000000000012": {
+        "phy_rx_signal_detect": "{\"0\": [\"T\", 1678886400000, 5], \"1\": [\"F\", 0, 0]}",
+        "pcs_fec_lane_alignment_lock": "{\"0\": [\"T*\", 1678886400000, 10], \"1\": [\"T\", 1678886400000, 3]}",
+        "rx_snr": "{\"0\": 36697, \"1\": 35200, \"2\": 34500, \"3\": 36000}",
+        "rx_vga": "{\"0\": 100, \"1\": 95, \"2\": 98, \"3\": 102}",
+        "tx_fir_taps_list": "{\"0\": [{\"tap0\": -10}, {\"tap1\": 5}], \"1\": [{\"tap0\": -8}, {\"tap1\": 6}]}"
+    },
+    "PORT_PHY_ATTR:oid:0x1000000000013": {
     }
 }
