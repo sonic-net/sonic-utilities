@@ -2593,11 +2593,15 @@ main() {
         for (( i=0; i<$NUM_ASICS; i++ ))
         do
             save_cmd "docker exec lldp$i lldpcli show statistics" "lldp$i.statistics" &
+            save_cmd "docker exec lldp$i lldpcli show configuration" "lldp$i.config" &
+            save_cmd "docker exec lldp$i lldpcli show interfaces" "lldp$i.interfaces" &
             save_cmd "docker logs bgp$i" "docker.bgp$i.log" &
             save_cmd "docker logs swss$i" "docker.swss$i.log" &
         done
     else
         save_cmd "docker exec lldp lldpcli show statistics" "lldp.statistics" &
+        save_cmd "docker exec lldp lldpcli show configuration" "lldp.config" &
+        save_cmd "docker exec lldp lldpcli show interfaces" "lldp.interfaces" &
         save_cmd "docker logs bgp" "docker.bgp.log" &
         save_cmd "docker logs swss" "docker.swss.log" &
     fi
