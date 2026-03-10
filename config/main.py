@@ -23,8 +23,7 @@ from collections import OrderedDict
 from generic_config_updater.generic_updater import GenericUpdater, ConfigFormat
 from generic_config_updater.gu_common import HOST_NAMESPACE
 from generic_config_updater.main import (
-    apply_patch_from_file as _gcu_apply_patch_from_file,
-    validate_patch,
+    apply_patch_from_file as _gcu_apply_patch_from_file
 )
 from minigraph import parse_device_desc_xml, minigraph_encoder
 from natsort import natsorted

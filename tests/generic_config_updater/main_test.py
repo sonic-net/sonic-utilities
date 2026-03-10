@@ -359,20 +359,21 @@ class TestApplyPatchFromFile(unittest.TestCase):
         mock_updater = mock.Mock()
 
         with mock.patch('builtins.open', self._make_patch_file(patch_ops)):
-            with mock.patch('generic_config_updater.main.get_all_running_config',
-                            return_value=running_cfg):
-                with mock.patch('generic_config_updater.main.append_emptytables_if_required',
-                                return_value=patch_ops) as mock_append:
-                    with mock.patch('generic_config_updater.main.filter_duplicate_patch_operations',
-                                    return_value=patch_ops) as mock_filter:
-                        with mock.patch('generic_config_updater.main.validate_patch',
-                                        return_value=True) as mock_validate:
-                            with mock.patch('generic_config_updater.main.GenericUpdater',
-                                            return_value=mock_updater):
-                                gcu_main.apply_patch_from_file(
-                                    '/fake/patch.json', 'CONFIGDB',
-                                    False, False, False, False, (), preprocess=True
-                                )
+            with mock.patch('sonic_py_common.multi_asic.is_multi_asic', return_value=False):
+                with mock.patch('generic_config_updater.main.get_all_running_config',
+                                return_value=running_cfg):
+                    with mock.patch('generic_config_updater.main.append_emptytables_if_required',
+                                    return_value=patch_ops) as mock_append:
+                        with mock.patch('generic_config_updater.main.filter_duplicate_patch_operations',
+                                        return_value=patch_ops) as mock_filter:
+                            with mock.patch('generic_config_updater.main.validate_patch',
+                                            return_value=True) as mock_validate:
+                                with mock.patch('generic_config_updater.main.GenericUpdater',
+                                                return_value=mock_updater):
+                                    gcu_main.apply_patch_from_file(
+                                        '/fake/patch.json', 'CONFIGDB',
+                                        False, False, False, False, (), preprocess=True
+                                    )
             mock_append.assert_called_once()
             mock_filter.assert_called_once()
             mock_validate.assert_called_once()
