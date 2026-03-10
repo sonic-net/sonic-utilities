@@ -251,7 +251,8 @@ def validate_patch(patch_ops, all_running_config):
 
 def apply_patch_for_scope(scope_changes, results, config_format,
                           verbose, dry_run,
-                          ignore_non_yang_tables, ignore_path):
+                          ignore_non_yang_tables, ignore_path,
+                          trace_io=None):
     """Apply a patch for a single ASIC scope and record the outcome in
     *results* (a shared dict)."""
     scope, changes = scope_changes
@@ -273,6 +274,7 @@ def apply_patch_for_scope(scope_changes, results, config_format,
             dry_run,
             ignore_non_yang_tables,
             ignore_path,
+            trace_io=trace_io,
         )
         results[scope_for_log] = {"success": True, "message": "Success"}
         logger.info("apply-patch succeeded for %s", scope_for_log)
@@ -292,7 +294,7 @@ def _apply_patch_wrapper(args):
 
 def apply_patch_from_file(patch_file_path, config_format_name, verbose,
                           dry_run, parallel, ignore_non_yang_tables,
-                          ignore_path, preprocess=True):
+                          ignore_path, preprocess=True, trace_io=None):
     """Read a JSON-Patch file and apply it — the single implementation
     used by all entry points.
 
@@ -313,6 +315,9 @@ def apply_patch_from_file(patch_file_path, config_format_name, verbose,
         ``append_emptytables_if_required``, ``filter_duplicate_patch_operations``
         and ``validate_patch``.  Callers that already performed these steps
         (or intentionally want to skip them) can pass *False*.
+    trace_io : IO, optional
+        Writable file-like object for writing the patch-sorter decision path
+        trace as JSON.  ``None`` (default) disables tracing.
 
     Raises
     ------
@@ -368,7 +373,7 @@ def apply_patch_from_file(patch_file_path, config_format_name, verbose,
         with concurrent.futures.ThreadPoolExecutor() as executor:
             arguments = [
                 (sc, results, config_format, verbose, dry_run,
-                 ignore_non_yang_tables, ignore_path)
+                 ignore_non_yang_tables, ignore_path, trace_io)
                 for sc in changes_by_scope.items()
             ]
             futures = [
@@ -381,6 +386,7 @@ def apply_patch_from_file(patch_file_path, config_format_name, verbose,
             apply_patch_for_scope(
                 scope_changes, results, config_format,
                 verbose, dry_run, ignore_non_yang_tables, ignore_path,
+                trace_io,
             )
 
     # 5. Aggregate results

@@ -16,13 +16,15 @@ import copy
 import tempfile
 import sonic_yang
 
+import jsonpatch
 from jsonpatch import JsonPatchConflict
 from jsonpointer import JsonPointerException
 from collections import OrderedDict
 from generic_config_updater.generic_updater import GenericUpdater, ConfigFormat
 from generic_config_updater.gu_common import HOST_NAMESPACE
 from generic_config_updater.main import (
-    apply_patch_from_file as _gcu_apply_patch_from_file
+    apply_patch_from_file as _gcu_apply_patch_from_file,
+    validate_patch,
 )
 from minigraph import parse_device_desc_xml, minigraph_encoder
 from natsort import natsorted
@@ -1746,7 +1748,7 @@ def print_dry_run_message(dry_run):
 
 
 def run_gcu_standalone(patch_file_path, format, dry_run, parallel,
-                       ignore_non_yang_tables, ignore_path, verbose):
+                       ignore_non_yang_tables, ignore_path, verbose, path_trace):
     """Delegate apply-patch execution to the standalone GCU binary.
     Returns the subprocess CompletedProcess so the caller can inspect the return code.
     """
@@ -1764,6 +1766,8 @@ def run_gcu_standalone(patch_file_path, format, dry_run, parallel,
         cmd += ["--ignore-path", path]
     if verbose:
         cmd.append("--verbose")
+    if path_trace:
+        cmd += ["--path-trace", path_trace]
 
     log.log_notice(f"Redirecting apply-patch to standalone GCU: {' '.join(cmd)}")
     return subprocess.run(cmd)
@@ -1807,37 +1811,58 @@ def apply_patch(
 
        <patch-file-path>: Path to the patch file on the file-system."""
 
+    print_dry_run_message(dry_run)
+
     # ---------- Standalone GCU redirect ----------
     # If the GCU container has deployed a standalone virtual-env binary,
     # delegate the entire apply-patch operation to it so the container
     # can ship GCU fixes without touching the host sonic-utilities.
     if os.path.exists(GCU_STANDALONE_BIN):
         result = run_gcu_standalone(patch_file_path, format, dry_run, parallel,
-                                    ignore_non_yang_tables, ignore_path, verbose)
+                                    ignore_non_yang_tables, ignore_path, verbose, path_trace)
         if result.returncode != 0:
             ctx.fail(f"Standalone GCU apply-patch failed with exit code {result.returncode}")
         return
     # ---------- End standalone redirect ----------
 
+    trace_file = None
     try:
-        print_dry_run_message(dry_run)
-
-        # Delegate to the consolidated implementation in generic_config_updater.gcu
-        _gcu_apply_patch_from_file(
-            patch_file_path,
-            config_format_name=format,
-            verbose=verbose,
-            dry_run=dry_run,
-            parallel=parallel,
-            ignore_non_yang_tables=ignore_non_yang_tables,
-            ignore_path=ignore_path,
-        )
+        if path_trace:
+            # Open the trace file and call GenericUpdater directly so the
+            # caller-supplied file handle is forwarded as trace_io.
+            trace_file = open(path_trace, 'w')
+            with open(patch_file_path, 'r') as fh:
+                patch_ops = json.loads(fh.read())
+            config_format = ConfigFormat[format.upper()]
+            GenericUpdater().apply_patch(
+                jsonpatch.JsonPatch(patch_ops),
+                config_format,
+                verbose,
+                dry_run,
+                ignore_non_yang_tables,
+                ignore_path,
+                trace_io=trace_file,
+            )
+        else:
+            # Delegate to the consolidated implementation in generic_config_updater.main
+            _gcu_apply_patch_from_file(
+                patch_file_path,
+                config_format_name=format,
+                verbose=verbose,
+                dry_run=dry_run,
+                parallel=parallel,
+                ignore_non_yang_tables=ignore_non_yang_tables,
+                ignore_path=ignore_path,
+            )
 
         log.log_notice("Patch applied successfully.")
         click.secho("Patch applied successfully.", fg="cyan", underline=True)
     except Exception as ex:
         click.secho("Failed to apply patch due to: {}".format(ex), fg="red", underline=True, err=True)
         ctx.fail(ex)
+    finally:
+        if trace_file:
+            trace_file.close()
 
 @config.command()
 @click.argument('target-file-path', type=str, required=True)
