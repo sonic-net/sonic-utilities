@@ -76,7 +76,7 @@ class SensorShow(object):
         if table:
             print(tabulate(table, header, tablefmt='simple', stralign='right'))
         else:
-            print('No sensor data available')
+            print('No sensor data available!')
 
 
 if __name__ == "__main__":
