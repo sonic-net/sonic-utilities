@@ -2635,10 +2635,14 @@ def generate_sysinfo(cur_config, config_input, ns=None):
         asic_name = multi_asic.get_asic_id_from_name(ns)
         asic_id = multi_asic.get_asic_device_id(asic_name)
 
-    device_metadata['localhost']['mac'] = mac.rstrip('\n')
-    device_metadata['localhost']['platform'] = platform.rstrip('\n')
+    # Only backfill sysinfo fields if not explicitly provided in golden config
+    if 'mac' not in device_metadata['localhost']:
+        device_metadata['localhost']['mac'] = mac.rstrip('\n')
+    if 'platform' not in device_metadata['localhost']:
+        device_metadata['localhost']['platform'] = platform.rstrip('\n')
     if ns != DEFAULT_NAMESPACE and ns != HOST_NAMESPACE and asic_id:
-        device_metadata['localhost']['asic_id'] = asic_id.rstrip('\n')
+        if 'asic_id' not in device_metadata['localhost']:
+            device_metadata['localhost']['asic_id'] = asic_id.rstrip('\n')
 
     return
 
