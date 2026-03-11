@@ -1,4 +1,5 @@
 import importlib.util
+import json
 import os
 import shlex
 import subprocess
@@ -78,7 +79,6 @@ def _is_ip_json_addr_show(tokens):
     if not tokens:
         return False
     try:
-        # last 'ip' in the command (works with "ip netns exec XX ip ...")
         ip_idx = max(i for i, t in enumerate(tokens) if t == 'ip' or t.endswith('/ip'))
     except ValueError:
         return False
@@ -92,83 +92,69 @@ def _detect_family(tokens):
         return 'v6'
     if '-4' in tokens or 'inet ' in win or '-f inet' in win:
         return 'v4'
-    # default to v4 to match historical behavior
     return 'v4'
 
 
-# --- Global autouse fixture: mock ip -j addr show + /sys flags/carrier ---
 @pytest.fixture(autouse=True)
 def mock_ip_and_sysfs(monkeypatch):
     topo = os.environ.get("UTILITIES_UNIT_TESTING_TOPOLOGY", "")
 
-    SINGLE_V4 = textwrap.dedent("""\
-    [
-      {"ifname":"lo","addr_info":[{"family":"inet","local":"127.0.0.1","prefixlen":8}]},
-      {"ifname":"eth0","addr_info":[{"family":"inet","local":"172.18.0.2","prefixlen":16}]},
-      {"ifname":"Ethernet0","addr_info":[
-          {"family":"inet","local":"20.1.1.1","prefixlen":24},
-          {"family":"inet","local":"21.1.1.1","prefixlen":24}
-      ]},
-      {"ifname":"PortChannel0001","addr_info":[{"family":"inet","local":"30.1.1.1","prefixlen":24}]},
-      {"ifname":"Vlan100","addr_info":[{"family":"inet","local":"40.1.1.1","prefixlen":24}]}
-    ]""")
+    single_v4 = [
+        {"ifname": "lo", "addr_info": [{"family": "inet", "local": "127.0.0.1", "prefixlen": 8}]},
+        {"ifname": "eth0", "addr_info": [{"family": "inet", "local": "172.18.0.2", "prefixlen": 16}]},
+        {"ifname": "Ethernet0", "addr_info": [
+            {"family": "inet", "local": "20.1.1.1", "prefixlen": 24},
+            {"family": "inet", "local": "21.1.1.1", "prefixlen": 24}
+        ]},
+        {"ifname": "PortChannel0001", "addr_info": [{"family": "inet", "local": "30.1.1.1", "prefixlen": 24}]},
+        {"ifname": "Vlan100", "addr_info": [{"family": "inet", "local": "40.1.1.1", "prefixlen": 24}]}
+    ]
 
-    SINGLE_V6 = textwrap.dedent("""\
-    [
-      {"ifname":"lo","addr_info":[{"family":"inet6","local":"::1","prefixlen":128}]},
-      {"ifname":"eth0","addr_info":[{"family":"inet6","local":"fe80::64be:a1ff:fe85:c6c4","prefixlen":64}]},
-      {"ifname":"Ethernet0","addr_info":[
-          {"family":"inet6","local":"2100::1","prefixlen":64},
-          {"family":"inet6","local":"aa00::1","prefixlen":64},
-          {"family":"inet6","local":"fe80::64be:a1ff:fe85:c6c4%Ethernet0","prefixlen":64}
-      ]},
-      {"ifname":"PortChannel0001","addr_info":[
-          {"family":"inet6","local":"ab00::1","prefixlen":64},
-          {"family":"inet6","local":"fe80::cc8d:60ff:fe08:139f%PortChannel0001","prefixlen":64}
-      ]},
-      {"ifname":"Vlan100","addr_info":[
-          {"family":"inet6","local":"cc00::1","prefixlen":64},
-          {"family":"inet6","local":"fe80::c029:3fff:fe41:cf56%Vlan100","prefixlen":64}
-      ]}
-    ]""")
+    single_v6 = [
+        {"ifname": "lo", "addr_info": [{"family": "inet6", "local": "::1", "prefixlen": 128}]},
+        {"ifname": "eth0", "addr_info": [{"family": "inet6", "local": "fe80::64be:a1ff:fe85:c6c4", "prefixlen": 64}]},
+        {"ifname": "Ethernet0", "addr_info": [
+            {"family": "inet6", "local": "2100::1", "prefixlen": 64},
+            {"family": "inet6", "local": "aa00::1", "prefixlen": 64},
+            {"family": "inet6", "local": "fe80::64be:a1ff:fe85:c6c4%Ethernet0", "prefixlen": 64}
+        ]},
+        {"ifname": "PortChannel0001", "addr_info": [
+            {"family": "inet6", "local": "ab00::1", "prefixlen": 64},
+            {"family": "inet6", "local": "fe80::cc8d:60ff:fe08:139f%PortChannel0001", "prefixlen": 64}
+        ]},
+        {"ifname": "Vlan100", "addr_info": [
+            {"family": "inet6", "local": "cc00::1", "prefixlen": 64},
+            {"family": "inet6", "local": "fe80::c029:3fff:fe41:cf56%Vlan100", "prefixlen": 64}
+        ]}
+    ]
 
-    MULTI_V4 = textwrap.dedent("""\
-    [
-      {"ifname":"lo","addr_info":[{"family":"inet","local":"127.0.0.1","prefixlen":8}]},
-      {"ifname":"eth0","addr_info":[{"family":"inet","local":"172.18.0.2","prefixlen":16}]},
-      {"ifname":"Loopback0","addr_info":[{"family":"inet","local":"40.1.1.1","prefixlen":32}]},
-      {"ifname":"PortChannel0001","addr_info":[{"family":"inet","local":"20.1.1.1","prefixlen":24}]}
-    ]""")
+    multi_v4 = [
+        {"ifname": "lo", "addr_info": [{"family": "inet", "local": "127.0.0.1", "prefixlen": 8}]},
+        {"ifname": "eth0", "addr_info": [{"family": "inet", "local": "172.18.0.2", "prefixlen": 16}]},
+        {"ifname": "Loopback0", "addr_info": [{"family": "inet", "local": "40.1.1.1", "prefixlen": 32}]},
+        {"ifname": "PortChannel0001", "addr_info": [{"family": "inet", "local": "20.1.1.1", "prefixlen": 24}]}
+    ]
 
-    MULTI_V6 = textwrap.dedent("""\
-    [
-      {"ifname":"lo","addr_info":[{"family":"inet6","local":"::1","prefixlen":128}]},
-      {"ifname":"eth0","addr_info":[{"family":"inet6","local":"fe80::80fd:d1ff:fe5b:452f","prefixlen":64}]},
-      {"ifname":"Loopback0","addr_info":[{"family":"inet6","local":"fe80::60a5:9dff:fef4:1696%Loopback0","prefixlen":64}]},
-      {"ifname":"PortChannel0001","addr_info":[
-          {"family":"inet6","local":"aa00::1","prefixlen":64},
-          {"family":"inet6","local":"fe80::80fd:d1ff:fe5b:452f","prefixlen":64}
-      ]}
-    ]""")
+    multi_v6 = [
+        {"ifname": "lo", "addr_info": [{"family": "inet6", "local": "::1", "prefixlen": 128}]},
+        {"ifname": "eth0", "addr_info": [{"family": "inet6", "local": "fe80::80fd:d1ff:fe5b:452f", "prefixlen": 64}]},
+        {"ifname": "Loopback0", "addr_info": [{"family": "inet6", "local": "fe80::60a5:9dff:fef4:1696%Loopback0", "prefixlen": 64}]},
+        {"ifname": "PortChannel0001", "addr_info": [
+            {"family": "inet6", "local": "aa00::1", "prefixlen": 64},
+            {"family": "inet6", "local": "fe80::80fd:d1ff:fe5b:452f", "prefixlen": 64}
+        ]}
+    ]
 
     real_check_output = subprocess.check_output
 
     def fake_check_output(cmd, *a, **kw):
         tokens = _tokenize(cmd)
-        s = " ".join(tokens)
 
-        # sysfs emulation for admin/oper
-        if "/sys/class/net/" in s and "/carrier" in s:
-            return "0\n"  # oper: down
-        if "/sys/class/net/" in s and "/flags" in s:
-            raise subprocess.CalledProcessError(1, tokens)  # admin: error
-
-        # intercept 'ip -j addr show' calls
         if _is_ip_json_addr_show(tokens):
             fam = _detect_family(tokens)
             if topo == "multi_asic":
-                return MULTI_V6 if fam == 'v6' else MULTI_V4
-            return SINGLE_V6 if fam == 'v6' else SINGLE_V4
+                return json.dumps(multi_v6 if fam == 'v6' else multi_v4)
+            return json.dumps(single_v6 if fam == 'v6' else single_v4)
 
         return real_check_output(cmd, *a, **kw)
 
@@ -208,16 +194,11 @@ def setup_teardown_fastpath():
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = original_topo
 
 
-def _iface_name_from_table_line(line: str) -> str | None:
-    """
-    Parse the table's first column (interface name) from a prettytable-like row.
-    Returns the interface name or None for header/separator/blank lines.
-    """
+def _iface_name_from_table_line(line):
     if not line.strip():
         return None
     if line.startswith("Interface ") or set(line.strip()) == {"-"}:
         return None
-    # first column is left-justified; split on two or more spaces
     parts = [p for p in line.split("  ") if p != ""]
     return parts[0].strip() if parts else None
 
@@ -225,13 +206,11 @@ def _iface_name_from_table_line(line: str) -> str | None:
 def verify_output(output, expected_output):
     lines = output.splitlines()
 
-    # require 'lo' exactly once; 'eth0' is optional (if present, must be once)
     lo_hits = [ln for ln in lines if _iface_name_from_table_line(ln) == 'lo']
     assert len(lo_hits) == 1
     eth0_hits = [ln for ln in lines if _iface_name_from_table_line(ln) == 'eth0']
     assert len(eth0_hits) in (0, 1)
 
-    # drop rows whose FIRST COLUMN is eth0 or lo; keep header/separator
     filtered = []
     for ln in lines:
         name = _iface_name_from_table_line(ln)
@@ -279,30 +258,24 @@ class TestMultiAsicShowIpInt(object):
         verify_output(result, show_multi_asic_ip_intf)
 
     def test_show_ip_intf_v4_all(self):
-        extra_ipv4 = textwrap.dedent("""\
-        [
-          {"ifname":"lo","addr_info":[{"family":"inet","local":"127.0.0.1","prefixlen":8}]},
-          {"ifname":"eth0","addr_info":[{"family":"inet","local":"172.18.0.2","prefixlen":16}]},
-          {"ifname":"Loopback0","addr_info":[{"family":"inet","local":"40.1.1.1","prefixlen":32}]},
-          {"ifname":"Loopback4096","addr_info":[
-              {"family":"inet","local":"1.1.1.1","prefixlen":24},
-              {"family":"inet","local":"2.1.1.1","prefixlen":24}
-          ]},
-          {"ifname":"PortChannel0001","addr_info":[{"family":"inet","local":"20.1.1.1","prefixlen":24}]},
-          {"ifname":"PortChannel0002","addr_info":[{"family":"inet","local":"30.1.1.1","prefixlen":24}]},
-          {"ifname":"veth@eth1","addr_info":[{"family":"inet","local":"192.1.1.1","prefixlen":24}]},
-          {"ifname":"veth@eth2","addr_info":[{"family":"inet","local":"193.1.1.1","prefixlen":24}]}
-        ]""")
+        extra_ipv4 = json.dumps([
+            {"ifname": "lo", "addr_info": [{"family": "inet", "local": "127.0.0.1", "prefixlen": 8}]},
+            {"ifname": "eth0", "addr_info": [{"family": "inet", "local": "172.18.0.2", "prefixlen": 16}]},
+            {"ifname": "Loopback0", "addr_info": [{"family": "inet", "local": "40.1.1.1", "prefixlen": 32}]},
+            {"ifname": "Loopback4096", "addr_info": [
+                {"family": "inet", "local": "1.1.1.1", "prefixlen": 24},
+                {"family": "inet", "local": "2.1.1.1", "prefixlen": 24}
+            ]},
+            {"ifname": "PortChannel0001", "addr_info": [{"family": "inet", "local": "20.1.1.1", "prefixlen": 24}]},
+            {"ifname": "PortChannel0002", "addr_info": [{"family": "inet", "local": "30.1.1.1", "prefixlen": 24}]},
+            {"ifname": "veth@eth1", "addr_info": [{"family": "inet", "local": "192.1.1.1", "prefixlen": 24}]},
+            {"ifname": "veth@eth2", "addr_info": [{"family": "inet", "local": "193.1.1.1", "prefixlen": 24}]}
+        ])
 
         real = subprocess.check_output
 
         def se(cmd, *a, **kw):
             tokens = _tokenize(cmd)
-            s = " ".join(tokens)
-            if "/sys/class/net/" in s and "/carrier" in s:
-                return "0\n"
-            if "/sys/class/net/" in s and "/flags" in s:
-                raise subprocess.CalledProcessError(1, tokens)
             if _is_ip_json_addr_show(tokens):
                 return extra_ipv4
             return real(cmd, *a, **kw)
@@ -323,30 +296,24 @@ class TestMultiAsicShowIpInt(object):
         verify_output(result, show_multi_asic_ipv6_intf)
 
     def test_show_ip_intf_v6_all(self):
-        extra_ipv6 = textwrap.dedent("""\
-        [
-          {"ifname":"lo","addr_info":[{"family":"inet6","local":"::1","prefixlen":128}]},
-          {"ifname":"eth0","addr_info":[{"family":"inet6","local":"fe80::80fd:d1ff:fe5b:452f","prefixlen":64}]},
-          {"ifname":"Loopback0","addr_info":[{"family":"inet6","local":"fe80::60a5:9dff:fef4:1696%Loopback0","prefixlen":64}]},
-          {"ifname":"PortChannel0001","addr_info":[
-              {"family":"inet6","local":"aa00::1","prefixlen":64},
-              {"family":"inet6","local":"fe80::80fd:d1ff:fe5b:452f","prefixlen":64}
-          ]},
-          {"ifname":"PortChannel0002","addr_info":[
-              {"family":"inet6","local":"bb00::1","prefixlen":64},
-              {"family":"inet6","local":"fe80::80fd:abff:fe5b:452f","prefixlen":64}
-          ]}
-        ]""")
+        extra_ipv6 = json.dumps([
+            {"ifname": "lo", "addr_info": [{"family": "inet6", "local": "::1", "prefixlen": 128}]},
+            {"ifname": "eth0", "addr_info": [{"family": "inet6", "local": "fe80::80fd:d1ff:fe5b:452f", "prefixlen": 64}]},
+            {"ifname": "Loopback0", "addr_info": [{"family": "inet6", "local": "fe80::60a5:9dff:fef4:1696%Loopback0", "prefixlen": 64}]},
+            {"ifname": "PortChannel0001", "addr_info": [
+                {"family": "inet6", "local": "aa00::1", "prefixlen": 64},
+                {"family": "inet6", "local": "fe80::80fd:d1ff:fe5b:452f", "prefixlen": 64}
+            ]},
+            {"ifname": "PortChannel0002", "addr_info": [
+                {"family": "inet6", "local": "bb00::1", "prefixlen": 64},
+                {"family": "inet6", "local": "fe80::80fd:abff:fe5b:452f", "prefixlen": 64}
+            ]}
+        ])
 
         real = subprocess.check_output
 
         def se(cmd, *a, **kw):
             tokens = _tokenize(cmd)
-            s = " ".join(tokens)
-            if "/sys/class/net/" in s and "/carrier" in s:
-                return "0\n"
-            if "/sys/class/net/" in s and "/flags" in s:
-                raise subprocess.CalledProcessError(1, tokens)
             if _is_ip_json_addr_show(tokens):
                 return extra_ipv6
             return real(cmd, *a, **kw)
@@ -366,10 +333,10 @@ class TestShowIpIntFastPath(object):
         spec = importlib.util.spec_from_loader("ipintutil_v4", loader)
         ipintutil = importlib.util.module_from_spec(spec)
 
-        ip_output = """[
-          {"ifname":"Ethernet0","addr_info":[{"family":"inet","local":"20.1.1.1","prefixlen":24}]},
-          {"ifname":"PortChannel0001","addr_info":[{"family":"inet","local":"30.1.1.1","prefixlen":24}]}
-        ]"""
+        ip_output = json.dumps([
+            {"ifname": "Ethernet0", "addr_info": [{"family": "inet", "local": "20.1.1.1", "prefixlen": 24}]},
+            {"ifname": "PortChannel0001", "addr_info": [{"family": "inet", "local": "30.1.1.1", "prefixlen": 24}]}
+        ])
         mock_config_db = mock.MagicMock()
         mock_config_db.get_table.return_value = {}
 
@@ -386,10 +353,10 @@ class TestShowIpIntFastPath(object):
         spec = importlib.util.spec_from_loader("ipintutil_v6", loader)
         ipintutil = importlib.util.module_from_spec(spec)
 
-        ip_output = """[
-          {"ifname":"Ethernet0","addr_info":[{"family":"inet6","local":"2100::1","prefixlen":64}]},
-          {"ifname":"PortChannel0001","addr_info":[{"family":"inet6","local":"ab00::1","prefixlen":64}]}
-        ]"""
+        ip_output = json.dumps([
+            {"ifname": "Ethernet0", "addr_info": [{"family": "inet6", "local": "2100::1", "prefixlen": 64}]},
+            {"ifname": "PortChannel0001", "addr_info": [{"family": "inet6", "local": "ab00::1", "prefixlen": 64}]}
+        ])
         mock_config_db = mock.MagicMock()
         mock_config_db.get_table.return_value = {}
 
@@ -439,9 +406,9 @@ class TestShowIpIntFastPath(object):
         spec = importlib.util.spec_from_loader("ipintutil_ns", loader)
         ipintutil = importlib.util.module_from_spec(spec)
 
-        ip_output = """[
-          {"ifname":"Ethernet0","addr_info":[{"family":"inet","local":"10.0.0.1","prefixlen":24}]}
-        ]"""
+        ip_output = json.dumps([
+            {"ifname": "Ethernet0", "addr_info": [{"family": "inet", "local": "10.0.0.1", "prefixlen": 24}]}
+        ])
 
         mock_config_db = mock.MagicMock()
         mock_config_db.get_table.return_value = {}
@@ -459,10 +426,10 @@ class TestShowIpIntFastPath(object):
         spec = importlib.util.spec_from_loader("ipintutil_fast", loader)
         ipintutil = importlib.util.module_from_spec(spec)
 
-        ip_output = """[
-          {"ifname":"Ethernet0","addr_info":[{"family":"inet","local":"20.1.1.1","prefixlen":24}]},
-          {"ifname":"PortChannel0001","addr_info":[{"family":"inet","local":"30.1.1.1","prefixlen":24}]}
-        ]"""
+        ip_output = json.dumps([
+            {"ifname": "Ethernet0", "addr_info": [{"family": "inet", "local": "20.1.1.1", "prefixlen": 24}]},
+            {"ifname": "PortChannel0001", "addr_info": [{"family": "inet", "local": "30.1.1.1", "prefixlen": 24}]}
+        ])
         mock_config_db = mock.MagicMock()
         mock_config_db.get_table.return_value = {}
 
@@ -480,12 +447,12 @@ class TestShowIpIntFastPath(object):
         spec = importlib.util.spec_from_loader("ipintutil_filter", loader)
         ipintutil = importlib.util.module_from_spec(spec)
 
-        ip_output = """[
-          {"ifname":"eth0","addr_info":[{"family":"inet","local":"192.168.1.1","prefixlen":24}]},
-          {"ifname":"Loopback4096","addr_info":[{"family":"inet","local":"1.1.1.1","prefixlen":32}]},
-          {"ifname":"veth123","addr_info":[{"family":"inet","local":"10.0.0.1","prefixlen":24}]},
-          {"ifname":"Ethernet0","addr_info":[{"family":"inet","local":"20.1.1.1","prefixlen":24}]}
-        ]"""
+        ip_output = json.dumps([
+            {"ifname": "eth0", "addr_info": [{"family": "inet", "local": "192.168.1.1", "prefixlen": 24}]},
+            {"ifname": "Loopback4096", "addr_info": [{"family": "inet", "local": "1.1.1.1", "prefixlen": 32}]},
+            {"ifname": "veth123", "addr_info": [{"family": "inet", "local": "10.0.0.1", "prefixlen": 24}]},
+            {"ifname": "Ethernet0", "addr_info": [{"family": "inet", "local": "20.1.1.1", "prefixlen": 24}]}
+        ])
         mock_config_db = mock.MagicMock()
         mock_config_db.get_table.return_value = {}
 
@@ -496,27 +463,27 @@ class TestShowIpIntFastPath(object):
             result = ipintutil.get_ip_intfs_in_namespace(netifaces.AF_INET, '', 'frontend')
             assert isinstance(result, dict)
 
-    def test_get_ip_intfs_in_namespace_fast_path_parses_ip_o_and_filters(self):
+    def test_get_ip_intfs_in_namespace_fast_path_parses_ip_json_and_filters(self):
         from importlib.machinery import SourceFileLoader
 
         ipintutil_path = os.path.join(scripts_path, "ipintutil")
-        loader = SourceFileLoader("ipintutil_parse_ip_o", ipintutil_path)
-        spec = importlib.util.spec_from_loader("ipintutil_parse_ip_o", loader)
+        loader = SourceFileLoader("ipintutil_parse_ip_json", ipintutil_path)
+        spec = importlib.util.spec_from_loader("ipintutil_parse_ip_json", loader)
         ipintutil = importlib.util.module_from_spec(spec)
 
-        ip_o = textwrap.dedent("""\
-            badline
-            1: lo    inet 127.0.0.1/8 scope host lo
-            2: eth0  inet 172.18.0.2/16 brd 172.18.255.255 scope global eth0
-            7: veth123@if8 inet 10.0.0.1/24 scope global veth123
-            12: Ethernet0 inet 20.1.1.1/24 scope global Ethernet0
-            13: Ethernet1 bogus 99.9.9.9/32 scope global Ethernet1
-        """)
+        ip_json = json.dumps([
+            {"ifname": "lo", "addr_info": [{"family": "inet", "local": "127.0.0.1", "prefixlen": 8}]},
+            {"ifname": "eth0", "addr_info": [{"family": "inet", "local": "172.18.0.2", "prefixlen": 16}]},
+            {"ifname": "veth123@if8", "addr_info": [{"family": "inet", "local": "10.0.0.1", "prefixlen": 24}]},
+            {"ifname": "Ethernet0", "addr_info": [{"family": "inet", "local": "20.1.1.1", "prefixlen": 24}]},
+            {"ifname": "Ethernet1", "addr_info": [{"family": "inet6", "local": "fe80::1", "prefixlen": 64}]},
+            {"ifname": "", "addr_info": [{"family": "inet", "local": "99.9.9.9", "prefixlen": 32}]}
+        ])
 
         cfg = mock.MagicMock()
         cfg.get_table.return_value = {}
 
-        with mock.patch("subprocess.check_output", return_value=ip_o), \
+        with mock.patch("subprocess.check_output", return_value=ip_json), \
              mock.patch("swsscommon.swsscommon.ConfigDBConnector", return_value=cfg):
             loader.exec_module(ipintutil)
             ipintutil.get_if_admin_state = mock.MagicMock(return_value="up")

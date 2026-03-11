@@ -1,10 +1,10 @@
 #!/usr/bin/env python3
 
+import json
 import os
 import subprocess
 import sys
 
-import netaddr
 import netifaces
 from natsort import natsorted
 from tabulate import tabulate
@@ -14,26 +14,6 @@ from swsscommon import swsscommon
 from utilities_common import constants
 from utilities_common.general import load_db_config
 from utilities_common import multi_asic as multi_asic_util
-
-# Minimal UT compatibility flag - keeps fast path in production
-TEST_MODE = os.environ.get("UTILITIES_UNIT_TESTING") == "2"
-
-try:
-    if os.environ["UTILITIES_UNIT_TESTING"] == "2":
-
-        modules_path = os.path.join(os.path.dirname(__file__), "..")
-        tests_path = os.path.join(modules_path, "tests")
-        sys.path.insert(0, modules_path)
-        sys.path.insert(0, tests_path)
-        import mock_tables.dbconnector
-        if os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] == "multi_asic":
-            import mock_tables.mock_multi_asic
-            mock_tables.dbconnector.load_namespace_config()
-        else:
-            import mock_tables.mock_single_asic
-            mock_tables.mock_single_asic.add_unknown_intf=True
-except KeyError:
-    pass
 
 
 def get_bgp_peer():
@@ -147,9 +127,9 @@ def get_if_master(iface):
         return ""
 
 
-def _addr_show(namespace, af, display):
+def _addr_show_text(namespace, af, display):
     """
-    FAST address collector using `ip -o addr show`.
+    Compatibility fallback using `ip -o addr show`.
     Returns: dict { ifname: [ ["", "CIDR"], ... ] }
     """
     fam_opt = ["-f", "inet"] if af == netifaces.AF_INET else ["-f", "inet6"]
@@ -163,7 +143,6 @@ def _addr_show(namespace, af, display):
 
     addrs = {}
     for line in out.splitlines():
-        # Example: "12: Po101.1645@PortChannel101    inet 30.2.135.1/24 scope global Po101.1645"
         colon = line.find(":")
         if colon < 0:
             continue
@@ -187,67 +166,55 @@ def _addr_show(namespace, af, display):
     return addrs
 
 
+def _addr_show(namespace, af, display):
+    """
+    FAST address collector using `ip -j addr show`.
+    Returns: dict { ifname: [ ["", "CIDR"], ... ] }
+
+    Falls back to `ip -o addr show` for compatibility if JSON parsing fails.
+    """
+    fam = "inet" if af == netifaces.AF_INET else "inet6"
+    fam_opt = ["-f", fam]
+    base_cmd = ["ip", "-j"] + fam_opt + ["addr", "show"]
+    cmd = base_cmd if namespace == constants.DEFAULT_NAMESPACE else ["sudo", "ip", "netns", "exec", namespace] + base_cmd
+
+    try:
+        out = subprocess.check_output(cmd, text=True, stderr=subprocess.DEVNULL)
+        data = json.loads(out)
+    except (subprocess.CalledProcessError, json.JSONDecodeError, TypeError, ValueError):
+        return _addr_show_text(namespace, af, display)
+
+    addrs = {}
+    for entry in data:
+        ifname = entry.get("ifname")
+        if not ifname:
+            continue
+
+        if namespace != constants.DEFAULT_NAMESPACE and skip_ip_intf_display(ifname, display):
+            continue
+
+        ifaddresses = []
+        for addr_info in entry.get("addr_info", []):
+            if addr_info.get("family") != fam:
+                continue
+            local = addr_info.get("local")
+            prefixlen = addr_info.get("prefixlen")
+            if local is None or prefixlen is None:
+                continue
+            ifaddresses.append(["", "{}/{}".format(local, prefixlen)])
+
+        if ifaddresses:
+            addrs[ifname] = ifaddresses
+
+    return addrs
+
+
 def get_ip_intfs_in_namespace(af, namespace, display):
     """
     Get all the IP interfaces from the kernel for the given namespace.
-
-    Behavior:
-      - Production (default): FAST path (enumerate only interfaces that actually have addresses) via `ip -o addr`.
-      - Unit tests (UTILITIES_UNIT_TESTING=2): legacy mock-friendly path for existing fixtures.
-      - Override: if UTILITIES_FORCE_PROD_ENUM is truthy, use the FAST path even when UTILITIES_UNIT_TESTING=2.
-
-    This keeps current tests working without changes, while enabling optional coverage of the prod path.
     """
     ip_intfs = {}
     bgp_peer = get_bgp_peer()
-
-    # Allow forcing prod enumerator in UT runs without changing tests by default.
-    force_prod = str(os.environ.get("UTILITIES_FORCE_PROD_ENUM", "")).strip().lower() in ("1", "true", "yes", "on")
-
-    # --- Legacy mock-friendly path (UT) ---
-    if TEST_MODE and not force_prod:
-        interfaces = multi_asic_util.multi_asic_get_ip_intf_from_ns(namespace)
-        for iface in interfaces:
-            if namespace != constants.DEFAULT_NAMESPACE and skip_ip_intf_display(iface, display):
-                continue
-            try:
-                ipaddresses = multi_asic_util.multi_asic_get_ip_intf_addr_from_ns(namespace, iface)
-            except ValueError:
-                continue
-            if af not in ipaddresses:
-                continue
-
-            ifaddresses = []
-            bgp_neighs = {}
-            for ipaddr in ipaddresses[af]:
-                local_ip = str(ipaddr['addr'])
-                if af == netifaces.AF_INET:
-                    netmask = netaddr.IPAddress(ipaddr['netmask']).netmask_bits()
-                else:
-                    netmask = ipaddr['netmask'].split('/', 1)[-1]
-                cidr = f"{local_ip}/{netmask}"
-                ifaddresses.append(["", cidr])
-                neigh = bgp_peer.get(local_ip, ['N/A', 'N/A'])
-                bgp_neighs[cidr] = [neigh[0], neigh[1]]
-
-            if not ifaddresses:
-                continue
-
-            admin = get_if_admin_state(iface, namespace)
-            oper = get_if_oper_state(iface, namespace)
-            master = get_if_master(iface)
-
-            ip_intfs[iface] = {
-                "vrf": master,
-                "ipaddr": natsorted(ifaddresses),
-                "admin": admin,
-                "oper": oper,
-                "bgp_neighs": bgp_neighs,
-                "ns": namespace
-            }
-        return ip_intfs
-
-    # --- FAST production path (only devices that actually have IPs) ---
     addr_map = _addr_show(namespace, af, display)
 
     for iface, ifaddresses in addr_map.items():
@@ -276,7 +243,7 @@ def get_ip_intfs_in_namespace(af, namespace, display):
     return ip_intfs
 
 
-def display_ip_intfs(ip_intfs,address_family):
+def display_ip_intfs(ip_intfs, address_family):
     header = ['Interface', 'Master', 'IPv4 address/mask',
               'Admin/Oper', 'BGP Neighbor', 'Neighbor IP']
 
@@ -350,7 +317,7 @@ def main():
 
     load_db_config()
     ip_intfs = get_ip_intfs(af, namespace, display)
-    display_ip_intfs(ip_intfs,args.address_family)
+    display_ip_intfs(ip_intfs, args.address_family)
 
     sys.exit(0)
 
