@@ -572,6 +572,7 @@ class TestShowIpIntFastPath:
         assert result["Ethernet0"]["bgp_neighs"]["20.1.1.1/24"] == ["T2-Peer", "20.1.1.5"]
         assert result["eth0"]["bgp_neighs"]["172.18.0.2/16"] == ["N/A", "N/A"]
 
+
 class TestShowIpIntCoverageBoost:
     def test_get_unit_test_namespace_list_single_asic(self):
         ipintutil = _load_ipintutil_module("ipintutil_cov_ns_single")
