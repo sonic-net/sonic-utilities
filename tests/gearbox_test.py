@@ -17,10 +17,13 @@ from .mock_tables import dbconnector
 import show.main as show
 
 # Load gearboxutil script as a module for direct function testing
-_gearboxutil_spec = importlib.util.spec_from_file_location(
+# spec_from_file_location returns None for extensionless scripts; use SourceFileLoader explicitly
+import importlib.machinery
+_gearboxutil_loader = importlib.machinery.SourceFileLoader(
     "gearboxutil", os.path.join(scripts_path, "gearboxutil"))
+_gearboxutil_spec = importlib.util.spec_from_loader("gearboxutil", _gearboxutil_loader)
 gearboxutil = importlib.util.module_from_spec(_gearboxutil_spec)
-_gearboxutil_spec.loader.exec_module(gearboxutil)
+_gearboxutil_loader.exec_module(gearboxutil)
 
 class TestGearbox(TestCase):
     @classmethod
@@ -78,7 +81,6 @@ class TestFormatBer(TestCase):
 
     def test_non_numeric_passthrough(self):
         self.assertEqual(gearboxutil.format_ber("invalid"), "invalid")
-
 
 
 class TestInterfaceFecStats(TestCase):
