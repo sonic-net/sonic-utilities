@@ -81,7 +81,9 @@ def _load_ipintutil_module(module_name):
 
 
 def _normalize_body_line(line):
-    return " | ".join(part.strip() for part in re.split(r"\s{2,}", line.strip()) if part.strip())
+    return " | ".join(
+        part.strip() for part in re.split(r"\s{2,}", line.strip()) if part.strip()
+    )
 
 
 def _extract_body_rows(table_text):
@@ -111,7 +113,8 @@ def verify_output(output, expected_output):
     assert len(eth0_hits) in (0, 1)
 
     filtered_rows = [
-        row for row in output_rows
+        row
+        for row in output_rows
         if not row.startswith("lo | ") and not row.startswith("eth0 | ")
     ]
 
@@ -286,7 +289,9 @@ class TestMultiAsicShowIpInt:
         }
         bgp_peer = {"20.1.1.1": ["T2-Peer", "20.1.1.5"]}
 
-        return_code, result = _run_ipintutil_cli([], addr_maps, bgp_peer=bgp_peer, is_multi_asic=True)
+        return_code, result = _run_ipintutil_cli(
+            [], addr_maps, bgp_peer=bgp_peer, is_multi_asic=True
+        )
         assert return_code == 0
         verify_output(result, show_multi_asic_ip_intf)
 
@@ -553,10 +558,16 @@ class TestShowIpIntFastPath:
         ), mock.patch.object(
             ipintutil, "get_bgp_peer", return_value={"20.1.1.1": ["T2-Peer", "20.1.1.5"]}
         ):
-            result = ipintutil.get_ip_intfs_in_namespace(netifaces.AF_INET, "asic0", "frontend")
+            result = ipintutil.get_ip_intfs_in_namespace(
+                netifaces.AF_INET,
+                "asic0",
+                "frontend",
+            )
 
         assert "Ethernet0" in result
-        assert "eth0" not in result
-        assert not any(key.startswith("veth") for key in result)
+        assert "eth0" in result
+        assert "lo" in result
+        assert "veth123@if8" in result
         assert result["Ethernet0"]["ipaddr"][0][1] == "20.1.1.1/24"
         assert result["Ethernet0"]["bgp_neighs"]["20.1.1.1/24"] == ["T2-Peer", "20.1.1.5"]
+        assert result["eth0"]["bgp_neighs"]["172.18.0.2/16"] == ["N/A", "N/A"]
