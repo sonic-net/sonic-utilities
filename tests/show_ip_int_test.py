@@ -571,3 +571,312 @@ class TestShowIpIntFastPath:
         assert result["Ethernet0"]["ipaddr"][0][1] == "20.1.1.1/24"
         assert result["Ethernet0"]["bgp_neighs"]["20.1.1.1/24"] == ["T2-Peer", "20.1.1.5"]
         assert result["eth0"]["bgp_neighs"]["172.18.0.2/16"] == ["N/A", "N/A"]
+
+class TestShowIpIntCoverageBoost:
+    def test_get_unit_test_namespace_list_single_asic(self):
+        ipintutil = _load_ipintutil_module("ipintutil_cov_ns_single")
+
+        with mock.patch.dict(
+            os.environ,
+            {"UTILITIES_UNIT_TESTING_TOPOLOGY": ""},
+            clear=False,
+        ):
+            namespace_list, is_multi = ipintutil._get_unit_test_namespace_list("")
+            assert namespace_list == [ipintutil.constants.DEFAULT_NAMESPACE]
+            assert is_multi is False
+
+    def test_get_unit_test_namespace_list_multi_asic_default(self):
+        ipintutil = _load_ipintutil_module("ipintutil_cov_ns_multi_default")
+
+        with mock.patch.dict(
+            os.environ,
+            {"UTILITIES_UNIT_TESTING_TOPOLOGY": "multi_asic"},
+            clear=False,
+        ):
+            namespace_list, is_multi = ipintutil._get_unit_test_namespace_list("")
+            assert namespace_list == ["asic0", ipintutil.constants.DEFAULT_NAMESPACE]
+            assert is_multi is True
+
+    def test_get_unit_test_namespace_list_multi_asic_named(self):
+        ipintutil = _load_ipintutil_module("ipintutil_cov_ns_multi_named")
+
+        with mock.patch.dict(
+            os.environ,
+            {"UTILITIES_UNIT_TESTING_TOPOLOGY": "multi_asic"},
+            clear=False,
+        ):
+            namespace_list, is_multi = ipintutil._get_unit_test_namespace_list("asic3")
+            assert namespace_list == ["asic3", ipintutil.constants.DEFAULT_NAMESPACE]
+            assert is_multi is True
+
+    def test_get_bgp_peer_returns_empty_in_unit_testing(self):
+        ipintutil = _load_ipintutil_module("ipintutil_cov_bgp_ut")
+
+        with mock.patch.dict(
+            os.environ,
+            {"UTILITIES_UNIT_TESTING": "2"},
+            clear=False,
+        ):
+            assert ipintutil.get_bgp_peer() == {}
+
+    def test_get_bgp_peer_reads_configdb_and_ignores_keyerror(self):
+        ipintutil = _load_ipintutil_module("ipintutil_cov_bgp_cfg")
+
+        cfg = mock.MagicMock()
+        cfg.get_table.return_value = {
+            "10.0.0.2": {"local_addr": "10.0.0.1", "name": "PeerA"},
+            "10.0.0.4": {"name": "MissingLocal"},
+            "10.0.0.6": {"local_addr": "10.0.0.5"},
+        }
+
+        with mock.patch.dict(
+            os.environ,
+            {"UTILITIES_UNIT_TESTING": "0"},
+            clear=False,
+        ), mock.patch(
+            "swsscommon.swsscommon.ConfigDBConnector",
+            return_value=cfg,
+        ):
+            result = ipintutil.get_bgp_peer()
+
+        cfg.connect.assert_called_once()
+        assert result == {"10.0.0.1": ["PeerA", "10.0.0.2"]}
+
+    def test_skip_ip_intf_display_branches(self):
+        ipintutil = _load_ipintutil_module("ipintutil_cov_skip")
+
+        with mock.patch.object(
+            ipintutil.multi_asic,
+            "is_port_internal",
+            return_value=True,
+        ), mock.patch.object(
+            ipintutil.multi_asic,
+            "is_port_channel_internal",
+            return_value=True,
+        ):
+            assert ipintutil.skip_ip_intf_display("Ethernet0", "frontend") is True
+            assert ipintutil.skip_ip_intf_display("PortChannel0001", "frontend") is True
+            assert ipintutil.skip_ip_intf_display("Loopback4096", "frontend") is True
+            assert ipintutil.skip_ip_intf_display("eth0", "frontend") is True
+            assert ipintutil.skip_ip_intf_display("veth123", "frontend") is True
+            assert ipintutil.skip_ip_intf_display("Ethernet0", ipintutil.constants.DISPLAY_ALL) is False
+
+    def test_get_if_admin_state_up_down_error_paths(self):
+        ipintutil = _load_ipintutil_module("ipintutil_cov_admin")
+
+        proc_up = mock.MagicMock()
+        proc_up.communicate.return_value = ("0x1\n",)
+        proc_down = mock.MagicMock()
+        proc_down.communicate.return_value = ("0x0\n",)
+        proc_bad = mock.MagicMock()
+        proc_bad.communicate.return_value = ("nothex\n",)
+
+        with mock.patch("subprocess.Popen", return_value=proc_up) as popen:
+            assert ipintutil.get_if_admin_state("Ethernet0", "") == "up"
+            popen.assert_called_once()
+
+        with mock.patch("subprocess.Popen", return_value=proc_down):
+            assert ipintutil.get_if_admin_state("Ethernet0", "asic0") == "down"
+
+        with mock.patch("subprocess.Popen", return_value=proc_bad):
+            assert ipintutil.get_if_admin_state("Ethernet0", "") == "error"
+
+        with mock.patch("subprocess.Popen", side_effect=OSError):
+            assert ipintutil.get_if_admin_state("Ethernet0", "") == "error"
+
+    def test_get_if_oper_state_up_down_error_paths(self):
+        ipintutil = _load_ipintutil_module("ipintutil_cov_oper")
+
+        proc_up = mock.MagicMock()
+        proc_up.communicate.return_value = ("1\n",)
+        proc_down = mock.MagicMock()
+        proc_down.communicate.return_value = ("0\n",)
+
+        with mock.patch("subprocess.Popen", return_value=proc_up):
+            assert ipintutil.get_if_oper_state("Ethernet0", "") == "up"
+
+        with mock.patch("subprocess.Popen", return_value=proc_down):
+            assert ipintutil.get_if_oper_state("Ethernet0", "asic0") == "down"
+
+        with mock.patch("subprocess.Popen", side_effect=OSError):
+            assert ipintutil.get_if_oper_state("Ethernet0", "") == "error"
+
+    def test_get_if_master_exists_and_missing(self):
+        ipintutil = _load_ipintutil_module("ipintutil_cov_master")
+
+        with mock.patch("os.path.exists", return_value=True), mock.patch(
+            "os.path.realpath",
+            return_value="/sys/class/net/PortChannel0001",
+        ):
+            assert ipintutil.get_if_master("Ethernet0") == "PortChannel0001"
+
+        with mock.patch("os.path.exists", return_value=False):
+            assert ipintutil.get_if_master("Ethernet0") == ""
+
+    def test_addr_show_text_parses_and_filters(self):
+        ipintutil = _load_ipintutil_module("ipintutil_cov_addr_text")
+
+        text_output = "\n".join(
+            [
+                "1: lo    inet 127.0.0.1/8 scope host lo",
+                "2: eth0    inet 172.18.0.2/16 brd 172.18.255.255 scope global eth0",
+                "3: Ethernet0    inet 20.1.1.1/24 brd 20.1.1.255 scope global Ethernet0",
+                "4: veth123    inet 10.0.0.1/24 brd 10.0.0.255 scope global veth123",
+                "5: broken line without family",
+                "6: PortChannel0001    inet6 aa00::1/64 scope global",
+            ]
+        )
+
+        with mock.patch(
+            "subprocess.check_output",
+            return_value=text_output,
+        ), mock.patch.object(
+            ipintutil,
+            "skip_ip_intf_display",
+            side_effect=lambda ifname, display: ifname in ("eth0", "veth123"),
+        ):
+            result = ipintutil._addr_show_text("asic0", netifaces.AF_INET, "frontend")
+
+        assert "Ethernet0" in result
+        assert "eth0" not in result
+        assert "veth123" not in result
+        assert result["Ethernet0"][0][1] == "20.1.1.1/24"
+
+    def test_addr_show_text_handles_called_process_error(self):
+        ipintutil = _load_ipintutil_module("ipintutil_cov_addr_text_err")
+
+        with mock.patch(
+            "subprocess.check_output",
+            side_effect=subprocess.CalledProcessError(1, "cmd"),
+        ):
+            result = ipintutil._addr_show_text("", netifaces.AF_INET, "all")
+
+        assert result == {}
+
+    def test_addr_show_json_skips_invalid_entries(self):
+        ipintutil = _load_ipintutil_module("ipintutil_cov_addr_json_invalid")
+
+        ip_output = json.dumps(
+            [
+                {},
+                {"ifname": ""},
+                {
+                    "ifname": "Ethernet0",
+                    "addr_info": [
+                        {"family": "inet6", "local": "fe80::1", "prefixlen": 64},
+                        {"family": "inet", "prefixlen": 24},
+                        {"family": "inet", "local": "20.1.1.1"},
+                        {"family": "inet", "local": "20.1.1.1", "prefixlen": 24},
+                    ],
+                },
+            ]
+        )
+
+        with mock.patch("subprocess.check_output", return_value=ip_output):
+            result = ipintutil._addr_show("", netifaces.AF_INET, "all")
+
+        assert result == {"Ethernet0": [["", "20.1.1.1/24"]]}
+
+    def test_get_ip_intfs_uses_production_multiasic_path(self):
+        ipintutil = _load_ipintutil_module("ipintutil_cov_get_ip_prod")
+
+        device = mock.MagicMock()
+        device.get_ns_list_based_on_options.return_value = ["asic0"]
+        device.is_multi_asic = False
+
+        with mock.patch.dict(
+            os.environ,
+            {"UTILITIES_UNIT_TESTING": "0"},
+            clear=False,
+        ), mock.patch.object(
+            ipintutil.multi_asic_util,
+            "MultiAsic",
+            return_value=device,
+        ), mock.patch.object(
+            ipintutil,
+            "get_ip_intfs_in_namespace",
+            return_value={"Ethernet0": {"ipaddr": [["", "20.1.1.1/24"]]}}
+        ):
+            result = ipintutil.get_ip_intfs(netifaces.AF_INET, "", "frontend")
+
+        assert "Ethernet0" in result
+
+    def test_get_ip_intfs_merges_duplicate_interfaces_across_namespaces(self):
+        ipintutil = _load_ipintutil_module("ipintutil_cov_get_ip_merge")
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "UTILITIES_UNIT_TESTING": "2",
+                "UTILITIES_UNIT_TESTING_TOPOLOGY": "multi_asic",
+            },
+            clear=False,
+        ), mock.patch.object(
+            ipintutil,
+            "get_ip_intfs_in_namespace",
+            side_effect=[
+                {
+                    "Ethernet0": {
+                        "vrf": "",
+                        "ipaddr": [["", "20.1.1.1/24"]],
+                        "admin": "up",
+                        "oper": "down",
+                        "bgp_neighs": {"20.1.1.1/24": ["PeerA", "20.1.1.2"]},
+                        "ns": "asic0",
+                    }
+                },
+                {
+                    "Ethernet0": {
+                        "vrf": "",
+                        "ipaddr": [["", "21.1.1.1/24"]],
+                        "admin": "up",
+                        "oper": "down",
+                        "bgp_neighs": {"21.1.1.1/24": ["PeerB", "21.1.1.2"]},
+                        "ns": "",
+                    },
+                    "lo": {
+                        "vrf": "",
+                        "ipaddr": [["", "127.0.0.1/8"]],
+                        "admin": "up",
+                        "oper": "up",
+                        "bgp_neighs": {"127.0.0.1/8": ["N/A", "N/A"]},
+                        "ns": "",
+                    },
+                },
+            ],
+        ):
+            result = ipintutil.get_ip_intfs(netifaces.AF_INET, "", "frontend")
+
+        assert result["Ethernet0"]["ipaddr"] == [["", "20.1.1.1/24"], ["", "21.1.1.1/24"]]
+        assert result["Ethernet0"]["bgp_neighs"]["21.1.1.1/24"] == ["PeerB", "21.1.1.2"]
+        assert "lo" in result
+
+    def test_get_ip_intfs_skips_duplicate_identical_ip_list(self):
+        ipintutil = _load_ipintutil_module("ipintutil_cov_get_ip_same")
+
+        same_entry = {
+            "Ethernet0": {
+                "vrf": "",
+                "ipaddr": [["", "20.1.1.1/24"]],
+                "admin": "up",
+                "oper": "down",
+                "bgp_neighs": {"20.1.1.1/24": ["PeerA", "20.1.1.2"]},
+                "ns": "asic0",
+            }
+        }
+
+        with mock.patch.dict(
+            os.environ,
+            {
+                "UTILITIES_UNIT_TESTING": "2",
+                "UTILITIES_UNIT_TESTING_TOPOLOGY": "multi_asic",
+            },
+            clear=False,
+        ), mock.patch.object(
+            ipintutil,
+            "get_ip_intfs_in_namespace",
+            side_effect=[same_entry, same_entry],
+        ):
+            result = ipintutil.get_ip_intfs(netifaces.AF_INET, "", "frontend")
+
+        assert result["Ethernet0"]["ipaddr"] == [["", "20.1.1.1/24"]]
