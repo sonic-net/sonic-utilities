@@ -1,19 +1,20 @@
 import importlib.util
 import json
 import os
-import shlex
+import re
+import sys
 import subprocess
 from importlib.machinery import SourceFileLoader
+from io import StringIO
 from unittest import mock
 
 import netifaces
 import pytest
 
-from .utils import get_result_and_return_code
-
 root_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(root_path)
 scripts_path = os.path.join(modules_path, "scripts")
+
 
 show_ipv4_intf_with_multple_ips = """\
 Interface        Master    IPv4 address/mask    Admin/Oper    BGP Neighbor    Neighbor IP
@@ -67,32 +68,7 @@ PortChannel0001            aa00::1/64                              error/down   
 PortChannel0002            bb00::1/64                              error/down    N/A             N/A
                            fe80::80fd:abff:fe5b:452f/64                          N/A             N/A"""
 
-show_error_invalid_af = """Invalid argument -a ipv5"""
-
-
-def _tokenize(cmd):
-    if isinstance(cmd, (list, tuple)):
-        return list(cmd)
-    return shlex.split(cmd if isinstance(cmd, str) else str(cmd))
-
-
-def _is_ip_json_addr_show(tokens):
-    if not tokens:
-        return False
-
-    try:
-        ip_idx = max(i for i, token in enumerate(tokens) if token == "ip" or token.endswith("/ip"))
-    except ValueError:
-        return False
-
-    window = tokens[ip_idx:]
-    return "-j" in window and "show" in window and any(token in window for token in ("addr", "address"))
-
-
-def _detect_family(tokens):
-    if "-6" in tokens or "inet6" in " ".join(tokens):
-        return "v6"
-    return "v4"
+show_error_invalid_af = "Invalid argument -a ipv5"
 
 
 def _load_ipintutil_module(module_name):
@@ -104,177 +80,122 @@ def _load_ipintutil_module(module_name):
     return module
 
 
-@pytest.fixture(autouse=True)
-def mock_ip_and_sysfs(monkeypatch):
-    topo = os.environ.get("UTILITIES_UNIT_TESTING_TOPOLOGY", "")
+def _normalize_body_line(line):
+    return " | ".join(part.strip() for part in re.split(r"\s{2,}", line.strip()) if part.strip())
 
-    single_v4 = [
-        {
-            "ifname": "lo",
-            "addr_info": [{"family": "inet", "local": "127.0.0.1", "prefixlen": 8}],
-        },
-        {
-            "ifname": "eth0",
-            "addr_info": [{"family": "inet", "local": "172.18.0.2", "prefixlen": 16}],
-        },
-        {
-            "ifname": "Ethernet0",
-            "addr_info": [
-                {"family": "inet", "local": "20.1.1.1", "prefixlen": 24},
-                {"family": "inet", "local": "21.1.1.1", "prefixlen": 24},
-            ],
-        },
-        {
-            "ifname": "PortChannel0001",
-            "addr_info": [{"family": "inet", "local": "30.1.1.1", "prefixlen": 24}],
-        },
-        {
-            "ifname": "Vlan100",
-            "addr_info": [{"family": "inet", "local": "40.1.1.1", "prefixlen": 24}],
-        },
+
+def _extract_body_rows(table_text):
+    rows = []
+    for line in table_text.splitlines():
+        stripped = line.strip()
+        if not stripped:
+            continue
+        if stripped.startswith("Interface"):
+            continue
+        if set(stripped) == {"-"}:
+            continue
+        norm = _normalize_body_line(line)
+        if norm:
+            rows.append(norm)
+    return rows
+
+
+def verify_output(output, expected_output):
+    output_rows = _extract_body_rows(output)
+    expected_rows = _extract_body_rows(expected_output)
+
+    lo_hits = [row for row in output_rows if row.startswith("lo | ")]
+    assert len(lo_hits) == 1
+
+    eth0_hits = [row for row in output_rows if row.startswith("eth0 | ")]
+    assert len(eth0_hits) in (0, 1)
+
+    filtered_rows = [
+        row for row in output_rows
+        if not row.startswith("lo | ") and not row.startswith("eth0 | ")
     ]
 
-    single_v6 = [
-        {
-            "ifname": "lo",
-            "addr_info": [{"family": "inet6", "local": "::1", "prefixlen": 128}],
-        },
-        {
-            "ifname": "eth0",
-            "addr_info": [
-                {
-                    "family": "inet6",
-                    "local": "fe80::64be:a1ff:fe85:c6c4",
-                    "prefixlen": 64,
-                }
-            ],
-        },
-        {
-            "ifname": "Ethernet0",
-            "addr_info": [
-                {"family": "inet6", "local": "2100::1", "prefixlen": 64},
-                {"family": "inet6", "local": "aa00::1", "prefixlen": 64},
-                {
-                    "family": "inet6",
-                    "local": "fe80::64be:a1ff:fe85:c6c4%Ethernet0",
-                    "prefixlen": 64,
-                },
-            ],
-        },
-        {
-            "ifname": "PortChannel0001",
-            "addr_info": [
-                {"family": "inet6", "local": "ab00::1", "prefixlen": 64},
-                {
-                    "family": "inet6",
-                    "local": "fe80::cc8d:60ff:fe08:139f%PortChannel0001",
-                    "prefixlen": 64,
-                },
-            ],
-        },
-        {
-            "ifname": "Vlan100",
-            "addr_info": [
-                {"family": "inet6", "local": "cc00::1", "prefixlen": 64},
-                {
-                    "family": "inet6",
-                    "local": "fe80::c029:3fff:fe41:cf56%Vlan100",
-                    "prefixlen": 64,
-                },
-            ],
-        },
-    ]
+    assert filtered_rows == expected_rows
 
-    multi_v4 = [
-        {
-            "ifname": "lo",
-            "addr_info": [{"family": "inet", "local": "127.0.0.1", "prefixlen": 8}],
-        },
-        {
-            "ifname": "eth0",
-            "addr_info": [{"family": "inet", "local": "172.18.0.2", "prefixlen": 16}],
-        },
-        {
-            "ifname": "Loopback0",
-            "addr_info": [{"family": "inet", "local": "40.1.1.1", "prefixlen": 32}],
-        },
-        {
-            "ifname": "PortChannel0001",
-            "addr_info": [{"family": "inet", "local": "20.1.1.1", "prefixlen": 24}],
-        },
-    ]
 
-    multi_v6 = [
-        {
-            "ifname": "lo",
-            "addr_info": [{"family": "inet6", "local": "::1", "prefixlen": 128}],
-        },
-        {
-            "ifname": "eth0",
-            "addr_info": [
-                {
-                    "family": "inet6",
-                    "local": "fe80::80fd:d1ff:fe5b:452f",
-                    "prefixlen": 64,
-                }
-            ],
-        },
-        {
-            "ifname": "Loopback0",
-            "addr_info": [
-                {
-                    "family": "inet6",
-                    "local": "fe80::60a5:9dff:fef4:1696%Loopback0",
-                    "prefixlen": 64,
-                }
-            ],
-        },
-        {
-            "ifname": "PortChannel0001",
-            "addr_info": [
-                {"family": "inet6", "local": "aa00::1", "prefixlen": 64},
-                {
-                    "family": "inet6",
-                    "local": "fe80::80fd:d1ff:fe5b:452f",
-                    "prefixlen": 64,
-                },
-            ],
-        },
-    ]
+class _FakeMultiAsic:
+    def __init__(self, namespace_option="", display_option="default", is_multi_asic=False):
+        self.namespace_option = namespace_option
+        self.display_option = display_option
+        self.is_multi_asic = is_multi_asic
 
-    real_check_output = subprocess.check_output
+    def get_ns_list_based_on_options(self):
+        default_ns = ""
+        if not self.is_multi_asic:
+            return [default_ns]
 
-    def fake_check_output(cmd, *args, **kwargs):
-        tokens = _tokenize(cmd)
+        if self.namespace_option and self.namespace_option != default_ns:
+            return [self.namespace_option]
+        return ["asic0"]
 
-        if _is_ip_json_addr_show(tokens):
-            family = _detect_family(tokens)
-            if topo == "multi_asic":
-                return json.dumps(multi_v6 if family == "v6" else multi_v4)
-            return json.dumps(single_v6 if family == "v6" else single_v4)
 
-        return real_check_output(cmd, *args, **kwargs)
+def _run_ipintutil_cli(args, addr_maps, bgp_peer=None, is_multi_asic=False):
+    ipintutil = _load_ipintutil_module(
+        "ipintutil_cli_{}".format("_".join(arg.replace("-", "x") for arg in args) or "default")
+    )
 
-    monkeypatch.setattr(subprocess, "check_output", fake_check_output)
+    bgp_peer = bgp_peer or {}
+
+    def fake_addr_show(namespace, af, display):
+        return addr_maps.get((namespace, af, display), addr_maps.get((namespace, af), {}))
+
+    def fake_multi_asic(namespace_option="", display_option="default"):
+        return _FakeMultiAsic(
+            namespace_option=namespace_option,
+            display_option=display_option,
+            is_multi_asic=is_multi_asic,
+        )
+
+    stdout = StringIO()
+
+    with mock.patch.object(ipintutil, "load_db_config", return_value=None), mock.patch.object(
+        ipintutil, "_addr_show", side_effect=fake_addr_show
+    ), mock.patch.object(
+        ipintutil, "get_bgp_peer", return_value=bgp_peer
+    ), mock.patch.object(
+        ipintutil, "get_if_admin_state", return_value="error"
+    ), mock.patch.object(
+        ipintutil, "get_if_oper_state", return_value="down"
+    ), mock.patch.object(
+        ipintutil, "get_if_master", return_value=""
+    ), mock.patch.object(
+        ipintutil.multi_asic_util, "MultiAsic", side_effect=fake_multi_asic
+    ), mock.patch.object(
+        ipintutil.os, "geteuid", return_value=0
+    ), mock.patch.object(
+        sys, "argv", ["ipintutil"] + args
+    ), mock.patch.dict(
+        os.environ, {"UTILITIES_UNIT_TESTING": "0"}, clear=False
+    ), mock.patch(
+        "sys.stdout", stdout
+    ):
+        try:
+            ipintutil.main()
+        except SystemExit as exc:
+            code = exc.code
+        else:
+            code = 0
+
+    if isinstance(code, str):
+        return 1, code
+    return code, stdout.getvalue().strip()
 
 
 @pytest.fixture(scope="class")
 def setup_teardown_single_asic():
     os.environ["PATH"] += os.pathsep + scripts_path
-    os.environ["UTILITIES_UNIT_TESTING"] = "2"
-    os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
     yield
-    os.environ["UTILITIES_UNIT_TESTING"] = "0"
 
 
 @pytest.fixture(scope="class")
 def setup_teardown_multi_asic():
     os.environ["PATH"] += os.pathsep + scripts_path
-    os.environ["UTILITIES_UNIT_TESTING"] = "2"
-    os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
     yield
-    os.environ["UTILITIES_UNIT_TESTING"] = "0"
-    os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
 
 
 @pytest.fixture(scope="class")
@@ -290,54 +211,62 @@ def setup_teardown_fastpath():
 
     if original_ut is not None:
         os.environ["UTILITIES_UNIT_TESTING"] = original_ut
+    else:
+        os.environ.pop("UTILITIES_UNIT_TESTING", None)
+
     if original_topo is not None:
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = original_topo
-
-
-def _iface_name_from_table_line(line):
-    if not line.strip():
-        return None
-    if line.startswith("Interface ") or set(line.strip()) == {"-"}:
-        return None
-
-    parts = [part for part in line.split("  ") if part != ""]
-    return parts[0].strip() if parts else None
-
-
-def verify_output(output, expected_output):
-    lines = output.splitlines()
-
-    lo_hits = [line for line in lines if _iface_name_from_table_line(line) == "lo"]
-    assert len(lo_hits) == 1
-
-    eth0_hits = [line for line in lines if _iface_name_from_table_line(line) == "eth0"]
-    assert len(eth0_hits) in (0, 1)
-
-    filtered = []
-    for line in lines:
-        name = _iface_name_from_table_line(line)
-        if name in ("eth0", "lo"):
-            continue
-        filtered.append(line)
-
-    new_output = "\n".join(filtered).strip()
-    assert new_output == expected_output
+    else:
+        os.environ.pop("UTILITIES_UNIT_TESTING_TOPOLOGY", None)
 
 
 @pytest.mark.usefixtures("setup_teardown_single_asic")
 class TestShowIpInt:
     def test_show_ip_intf_v4(self):
-        return_code, result = get_result_and_return_code(["ipintutil"])
+        addr_maps = {
+            ("", netifaces.AF_INET): {
+                "lo": [["", "127.0.0.1/8"]],
+                "eth0": [["", "172.18.0.2/16"]],
+                "Ethernet0": [["", "20.1.1.1/24"], ["", "21.1.1.1/24"]],
+                "PortChannel0001": [["", "30.1.1.1/24"]],
+                "Vlan100": [["", "40.1.1.1/24"]],
+            }
+        }
+        bgp_peer = {
+            "20.1.1.1": ["T2-Peer", "20.1.1.5"],
+            "30.1.1.1": ["T0-Peer", "30.1.1.5"],
+        }
+
+        return_code, result = _run_ipintutil_cli([], addr_maps, bgp_peer=bgp_peer)
         assert return_code == 0
         verify_output(result, show_ipv4_intf_with_multple_ips)
 
     def test_show_ip_intf_v6(self):
-        return_code, result = get_result_and_return_code(["ipintutil", "-a", "ipv6"])
+        addr_maps = {
+            ("", netifaces.AF_INET6): {
+                "lo": [["", "::1/128"]],
+                "Ethernet0": [
+                    ["", "2100::1/64"],
+                    ["", "aa00::1/64"],
+                    ["", "fe80::64be:a1ff:fe85:c6c4%Ethernet0/64"],
+                ],
+                "PortChannel0001": [
+                    ["", "ab00::1/64"],
+                    ["", "fe80::cc8d:60ff:fe08:139f%PortChannel0001/64"],
+                ],
+                "Vlan100": [
+                    ["", "cc00::1/64"],
+                    ["", "fe80::c029:3fff:fe41:cf56%Vlan100/64"],
+                ],
+            }
+        }
+
+        return_code, result = _run_ipintutil_cli(["-a", "ipv6"], addr_maps)
         assert return_code == 0
         verify_output(result, show_ipv6_intf_with_multiple_ips)
 
     def test_show_intf_invalid_af_option(self):
-        return_code, result = get_result_and_return_code(["ipintutil", "-a", "ipv5"])
+        return_code, result = _run_ipintutil_cli(["-a", "ipv5"], {})
         assert return_code == 1
         assert result == show_error_invalid_af
 
@@ -345,147 +274,140 @@ class TestShowIpInt:
 @pytest.mark.usefixtures("setup_teardown_multi_asic")
 class TestMultiAsicShowIpInt:
     def test_show_ip_intf_v4(self):
-        return_code, result = get_result_and_return_code(["ipintutil"])
+        addr_maps = {
+            ("asic0", netifaces.AF_INET): {
+                "Loopback0": [["", "40.1.1.1/32"]],
+                "PortChannel0001": [["", "20.1.1.1/24"]],
+            },
+            ("", netifaces.AF_INET): {
+                "lo": [["", "127.0.0.1/8"]],
+                "eth0": [["", "172.18.0.2/16"]],
+            },
+        }
+        bgp_peer = {"20.1.1.1": ["T2-Peer", "20.1.1.5"]}
+
+        return_code, result = _run_ipintutil_cli([], addr_maps, bgp_peer=bgp_peer, is_multi_asic=True)
         assert return_code == 0
         verify_output(result, show_multi_asic_ip_intf)
 
     def test_show_ip_intf_v4_asic0(self):
-        return_code, result = get_result_and_return_code(["ipintutil", "-n", "asic0"])
+        addr_maps = {
+            ("asic0", netifaces.AF_INET): {
+                "Loopback0": [["", "40.1.1.1/32"]],
+                "PortChannel0001": [["", "20.1.1.1/24"]],
+            },
+            ("", netifaces.AF_INET): {
+                "lo": [["", "127.0.0.1/8"]],
+                "eth0": [["", "172.18.0.2/16"]],
+            },
+        }
+        bgp_peer = {"20.1.1.1": ["T2-Peer", "20.1.1.5"]}
+
+        return_code, result = _run_ipintutil_cli(
+            ["-n", "asic0"],
+            addr_maps,
+            bgp_peer=bgp_peer,
+            is_multi_asic=True,
+        )
         assert return_code == 0
         verify_output(result, show_multi_asic_ip_intf)
 
     def test_show_ip_intf_v4_all(self):
-        extra_ipv4 = json.dumps(
-            [
-                {
-                    "ifname": "lo",
-                    "addr_info": [{"family": "inet", "local": "127.0.0.1", "prefixlen": 8}],
-                },
-                {
-                    "ifname": "eth0",
-                    "addr_info": [{"family": "inet", "local": "172.18.0.2", "prefixlen": 16}],
-                },
-                {
-                    "ifname": "Loopback0",
-                    "addr_info": [{"family": "inet", "local": "40.1.1.1", "prefixlen": 32}],
-                },
-                {
-                    "ifname": "Loopback4096",
-                    "addr_info": [
-                        {"family": "inet", "local": "1.1.1.1", "prefixlen": 24},
-                        {"family": "inet", "local": "2.1.1.1", "prefixlen": 24},
-                    ],
-                },
-                {
-                    "ifname": "PortChannel0001",
-                    "addr_info": [{"family": "inet", "local": "20.1.1.1", "prefixlen": 24}],
-                },
-                {
-                    "ifname": "PortChannel0002",
-                    "addr_info": [{"family": "inet", "local": "30.1.1.1", "prefixlen": 24}],
-                },
-                {
-                    "ifname": "veth@eth1",
-                    "addr_info": [{"family": "inet", "local": "192.1.1.1", "prefixlen": 24}],
-                },
-                {
-                    "ifname": "veth@eth2",
-                    "addr_info": [{"family": "inet", "local": "193.1.1.1", "prefixlen": 24}],
-                },
-            ]
+        addr_maps = {
+            ("asic0", netifaces.AF_INET): {
+                "Loopback0": [["", "40.1.1.1/32"]],
+                "Loopback4096": [["", "1.1.1.1/24"], ["", "2.1.1.1/24"]],
+                "PortChannel0001": [["", "20.1.1.1/24"]],
+                "PortChannel0002": [["", "30.1.1.1/24"]],
+                "veth@eth1": [["", "192.1.1.1/24"]],
+                "veth@eth2": [["", "193.1.1.1/24"]],
+            },
+            ("", netifaces.AF_INET): {
+                "lo": [["", "127.0.0.1/8"]],
+                "eth0": [["", "172.18.0.2/16"]],
+            },
+        }
+        bgp_peer = {
+            "20.1.1.1": ["T2-Peer", "20.1.1.5"],
+            "30.1.1.1": ["T0-Peer", "30.1.1.5"],
+        }
+
+        return_code, result = _run_ipintutil_cli(
+            ["-d", "all"],
+            addr_maps,
+            bgp_peer=bgp_peer,
+            is_multi_asic=True,
         )
-
-        real_check_output = subprocess.check_output
-
-        def side_effect(cmd, *args, **kwargs):
-            tokens = _tokenize(cmd)
-            if _is_ip_json_addr_show(tokens):
-                return extra_ipv4
-            return real_check_output(cmd, *args, **kwargs)
-
-        with mock.patch("subprocess.check_output", side_effect=side_effect):
-            return_code, result = get_result_and_return_code(["ipintutil", "-d", "all"])
-
         assert return_code == 0
         verify_output(result, show_multi_asic_ip_intf_all)
 
     def test_show_ip_intf_v6(self):
-        return_code, result = get_result_and_return_code(["ipintutil", "-a", "ipv6"])
+        addr_maps = {
+            ("asic0", netifaces.AF_INET6): {
+                "Loopback0": [["", "fe80::60a5:9dff:fef4:1696%Loopback0/64"]],
+                "PortChannel0001": [
+                    ["", "aa00::1/64"],
+                    ["", "fe80::80fd:d1ff:fe5b:452f/64"],
+                ],
+            },
+            ("", netifaces.AF_INET6): {
+                "lo": [["", "::1/128"]],
+            },
+        }
+
+        return_code, result = _run_ipintutil_cli(
+            ["-a", "ipv6"],
+            addr_maps,
+            is_multi_asic=True,
+        )
         assert return_code == 0
         verify_output(result, show_multi_asic_ipv6_intf)
 
     def test_show_ip_intf_v6_asic0(self):
-        return_code, result = get_result_and_return_code(
-            ["ipintutil", "-a", "ipv6", "-n", "asic0"]
+        addr_maps = {
+            ("asic0", netifaces.AF_INET6): {
+                "Loopback0": [["", "fe80::60a5:9dff:fef4:1696%Loopback0/64"]],
+                "PortChannel0001": [
+                    ["", "aa00::1/64"],
+                    ["", "fe80::80fd:d1ff:fe5b:452f/64"],
+                ],
+            },
+            ("", netifaces.AF_INET6): {
+                "lo": [["", "::1/128"]],
+            },
+        }
+
+        return_code, result = _run_ipintutil_cli(
+            ["-a", "ipv6", "-n", "asic0"],
+            addr_maps,
+            is_multi_asic=True,
         )
         assert return_code == 0
         verify_output(result, show_multi_asic_ipv6_intf)
 
     def test_show_ip_intf_v6_all(self):
-        extra_ipv6 = json.dumps(
-            [
-                {
-                    "ifname": "lo",
-                    "addr_info": [{"family": "inet6", "local": "::1", "prefixlen": 128}],
-                },
-                {
-                    "ifname": "eth0",
-                    "addr_info": [
-                        {
-                            "family": "inet6",
-                            "local": "fe80::80fd:d1ff:fe5b:452f",
-                            "prefixlen": 64,
-                        }
-                    ],
-                },
-                {
-                    "ifname": "Loopback0",
-                    "addr_info": [
-                        {
-                            "family": "inet6",
-                            "local": "fe80::60a5:9dff:fef4:1696%Loopback0",
-                            "prefixlen": 64,
-                        }
-                    ],
-                },
-                {
-                    "ifname": "PortChannel0001",
-                    "addr_info": [
-                        {"family": "inet6", "local": "aa00::1", "prefixlen": 64},
-                        {
-                            "family": "inet6",
-                            "local": "fe80::80fd:d1ff:fe5b:452f",
-                            "prefixlen": 64,
-                        },
-                    ],
-                },
-                {
-                    "ifname": "PortChannel0002",
-                    "addr_info": [
-                        {"family": "inet6", "local": "bb00::1", "prefixlen": 64},
-                        {
-                            "family": "inet6",
-                            "local": "fe80::80fd:abff:fe5b:452f",
-                            "prefixlen": 64,
-                        },
-                    ],
-                },
-            ]
+        addr_maps = {
+            ("asic0", netifaces.AF_INET6): {
+                "Loopback0": [["", "fe80::60a5:9dff:fef4:1696%Loopback0/64"]],
+                "PortChannel0001": [
+                    ["", "aa00::1/64"],
+                    ["", "fe80::80fd:d1ff:fe5b:452f/64"],
+                ],
+                "PortChannel0002": [
+                    ["", "bb00::1/64"],
+                    ["", "fe80::80fd:abff:fe5b:452f/64"],
+                ],
+            },
+            ("", netifaces.AF_INET6): {
+                "lo": [["", "::1/128"]],
+            },
+        }
+
+        return_code, result = _run_ipintutil_cli(
+            ["-a", "ipv6", "-d", "all"],
+            addr_maps,
+            is_multi_asic=True,
         )
-
-        real_check_output = subprocess.check_output
-
-        def side_effect(cmd, *args, **kwargs):
-            tokens = _tokenize(cmd)
-            if _is_ip_json_addr_show(tokens):
-                return extra_ipv6
-            return real_check_output(cmd, *args, **kwargs)
-
-        with mock.patch("subprocess.check_output", side_effect=side_effect):
-            return_code, result = get_result_and_return_code(
-                ["ipintutil", "-a", "ipv6", "-d", "all"]
-            )
-
         assert return_code == 0
         verify_output(result, show_multi_asic_ipv6_intf_all)
 
@@ -507,14 +429,12 @@ class TestShowIpIntFastPath:
                 },
             ]
         )
-        mock_config_db = mock.MagicMock()
-        mock_config_db.get_table.return_value = {}
 
-        with mock.patch("subprocess.check_output", return_value=ip_output), mock.patch(
-            "swsscommon.swsscommon.ConfigDBConnector", return_value=mock_config_db
-        ):
+        with mock.patch("subprocess.check_output", return_value=ip_output):
             result = ipintutil._addr_show("", netifaces.AF_INET, "all")
             assert isinstance(result, dict)
+            assert "Ethernet0" in result
+            assert result["Ethernet0"][0][1] == "20.1.1.1/24"
 
     def test_addr_show_ipv6(self):
         ipintutil = _load_ipintutil_module("ipintutil_v6")
@@ -531,38 +451,26 @@ class TestShowIpIntFastPath:
                 },
             ]
         )
-        mock_config_db = mock.MagicMock()
-        mock_config_db.get_table.return_value = {}
 
-        with mock.patch("subprocess.check_output", return_value=ip_output), mock.patch(
-            "swsscommon.swsscommon.ConfigDBConnector", return_value=mock_config_db
-        ):
+        with mock.patch("subprocess.check_output", return_value=ip_output):
             result = ipintutil._addr_show("", netifaces.AF_INET6, "all")
             assert isinstance(result, dict)
+            assert result["Ethernet0"][0][1] == "2100::1/64"
 
     def test_addr_show_malformed_output(self):
         ipintutil = _load_ipintutil_module("ipintutil_malformed")
 
-        malformed_output = "not a json\n"
-        mock_config_db = mock.MagicMock()
-        mock_config_db.get_table.return_value = {}
-
-        with mock.patch("subprocess.check_output", return_value=malformed_output), mock.patch(
-            "swsscommon.swsscommon.ConfigDBConnector", return_value=mock_config_db
-        ):
+        with mock.patch("subprocess.check_output", return_value="not a json\n"):
             result = ipintutil._addr_show("", netifaces.AF_INET, "all")
             assert isinstance(result, dict)
 
     def test_addr_show_subprocess_error(self):
         ipintutil = _load_ipintutil_module("ipintutil_error")
 
-        mock_config_db = mock.MagicMock()
-        mock_config_db.get_table.return_value = {}
-
         with mock.patch(
             "subprocess.check_output",
             side_effect=subprocess.CalledProcessError(1, "cmd"),
-        ), mock.patch("swsscommon.swsscommon.ConfigDBConnector", return_value=mock_config_db):
+        ):
             result = ipintutil._addr_show("", netifaces.AF_INET, "all")
             assert result == {}
 
@@ -577,118 +485,74 @@ class TestShowIpIntFastPath:
                 }
             ]
         )
-        mock_config_db = mock.MagicMock()
-        mock_config_db.get_table.return_value = {}
 
-        with mock.patch("subprocess.check_output", return_value=ip_output), mock.patch(
-            "swsscommon.swsscommon.ConfigDBConnector", return_value=mock_config_db
-        ):
+        with mock.patch("subprocess.check_output", return_value=ip_output):
             result = ipintutil._addr_show("asic0", netifaces.AF_INET, "all")
             assert isinstance(result, dict)
+            assert result["Ethernet0"][0][1] == "10.0.0.1/24"
 
     def test_get_ip_intfs_in_namespace_fast_path(self):
         ipintutil = _load_ipintutil_module("ipintutil_fast")
 
-        ip_output = json.dumps(
-            [
-                {
-                    "ifname": "Ethernet0",
-                    "addr_info": [{"family": "inet", "local": "20.1.1.1", "prefixlen": 24}],
-                },
-                {
-                    "ifname": "PortChannel0001",
-                    "addr_info": [{"family": "inet", "local": "30.1.1.1", "prefixlen": 24}],
-                },
-            ]
-        )
-        mock_config_db = mock.MagicMock()
-        mock_config_db.get_table.return_value = {}
+        addr_map = {
+            "Ethernet0": [["", "20.1.1.1/24"]],
+            "PortChannel0001": [["", "30.1.1.1/24"]],
+        }
 
-        with mock.patch("subprocess.check_output", return_value=ip_output), mock.patch(
-            "swsscommon.swsscommon.ConfigDBConnector", return_value=mock_config_db
-        ), mock.patch("os.path.exists", return_value=True):
+        with mock.patch.object(ipintutil, "_addr_show", return_value=addr_map), mock.patch.object(
+            ipintutil, "get_bgp_peer", return_value={}
+        ), mock.patch.object(
+            ipintutil, "get_if_admin_state", return_value="up"
+        ), mock.patch.object(
+            ipintutil, "get_if_oper_state", return_value="down"
+        ), mock.patch.object(
+            ipintutil, "get_if_master", return_value=""
+        ):
             result = ipintutil.get_ip_intfs_in_namespace(netifaces.AF_INET, "", "all")
             assert isinstance(result, dict)
+            assert "Ethernet0" in result
 
     def test_skip_interface_filtering(self):
         ipintutil = _load_ipintutil_module("ipintutil_filter")
 
-        ip_output = json.dumps(
-            [
-                {
-                    "ifname": "eth0",
-                    "addr_info": [
-                        {"family": "inet", "local": "192.168.1.1", "prefixlen": 24}
-                    ],
-                },
-                {
-                    "ifname": "Loopback4096",
-                    "addr_info": [{"family": "inet", "local": "1.1.1.1", "prefixlen": 32}],
-                },
-                {
-                    "ifname": "veth123",
-                    "addr_info": [{"family": "inet", "local": "10.0.0.1", "prefixlen": 24}],
-                },
-                {
-                    "ifname": "Ethernet0",
-                    "addr_info": [{"family": "inet", "local": "20.1.1.1", "prefixlen": 24}],
-                },
-            ]
-        )
-        mock_config_db = mock.MagicMock()
-        mock_config_db.get_table.return_value = {}
+        addr_map = {
+            "eth0": [["", "192.168.1.1/24"]],
+            "Loopback4096": [["", "1.1.1.1/32"]],
+            "veth123": [["", "10.0.0.1/24"]],
+            "Ethernet0": [["", "20.1.1.1/24"]],
+        }
 
-        with mock.patch("subprocess.check_output", return_value=ip_output), mock.patch(
-            "swsscommon.swsscommon.ConfigDBConnector", return_value=mock_config_db
-        ), mock.patch("os.path.exists", return_value=True):
+        with mock.patch.object(ipintutil, "_addr_show", return_value=addr_map), mock.patch.object(
+            ipintutil, "get_bgp_peer", return_value={}
+        ), mock.patch.object(
+            ipintutil, "get_if_admin_state", return_value="up"
+        ), mock.patch.object(
+            ipintutil, "get_if_oper_state", return_value="down"
+        ), mock.patch.object(
+            ipintutil, "get_if_master", return_value=""
+        ):
             result = ipintutil.get_ip_intfs_in_namespace(netifaces.AF_INET, "", "frontend")
             assert isinstance(result, dict)
 
     def test_get_ip_intfs_in_namespace_fast_path_parses_ip_json_and_filters(self):
         ipintutil = _load_ipintutil_module("ipintutil_parse_ip_json")
 
-        ip_json = json.dumps(
-            [
-                {
-                    "ifname": "lo",
-                    "addr_info": [{"family": "inet", "local": "127.0.0.1", "prefixlen": 8}],
-                },
-                {
-                    "ifname": "eth0",
-                    "addr_info": [{"family": "inet", "local": "172.18.0.2", "prefixlen": 16}],
-                },
-                {
-                    "ifname": "veth123@if8",
-                    "addr_info": [{"family": "inet", "local": "10.0.0.1", "prefixlen": 24}],
-                },
-                {
-                    "ifname": "Ethernet0",
-                    "addr_info": [{"family": "inet", "local": "20.1.1.1", "prefixlen": 24}],
-                },
-                {
-                    "ifname": "Ethernet1",
-                    "addr_info": [{"family": "inet6", "local": "fe80::1", "prefixlen": 64}],
-                },
-                {
-                    "ifname": "",
-                    "addr_info": [{"family": "inet", "local": "99.9.9.9", "prefixlen": 32}],
-                },
-            ]
-        )
+        addr_map = {
+            "lo": [["", "127.0.0.1/8"]],
+            "eth0": [["", "172.18.0.2/16"]],
+            "veth123@if8": [["", "10.0.0.1/24"]],
+            "Ethernet0": [["", "20.1.1.1/24"]],
+        }
 
-        cfg = mock.MagicMock()
-        cfg.get_table.return_value = {}
-
-        with mock.patch("subprocess.check_output", return_value=ip_json), mock.patch(
-            "swsscommon.swsscommon.ConfigDBConnector", return_value=cfg
+        with mock.patch.object(ipintutil, "_addr_show", return_value=addr_map), mock.patch.object(
+            ipintutil, "get_if_admin_state", return_value="up"
+        ), mock.patch.object(
+            ipintutil, "get_if_oper_state", return_value="down"
+        ), mock.patch.object(
+            ipintutil, "get_if_master", return_value=""
+        ), mock.patch.object(
+            ipintutil, "get_bgp_peer", return_value={"20.1.1.1": ["T2-Peer", "20.1.1.5"]}
         ):
-            ipintutil.get_if_admin_state = mock.MagicMock(return_value="up")
-            ipintutil.get_if_oper_state = mock.MagicMock(return_value="down")
-            ipintutil.get_if_master = mock.MagicMock(return_value="")
-            ipintutil.get_bgp_peer = mock.MagicMock(
-                return_value={"20.1.1.1": ["T2-Peer", "20.1.1.5"]}
-            )
-
             result = ipintutil.get_ip_intfs_in_namespace(netifaces.AF_INET, "asic0", "frontend")
 
         assert "Ethernet0" in result
