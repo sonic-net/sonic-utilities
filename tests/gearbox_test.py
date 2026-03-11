@@ -1,5 +1,6 @@
 import sys
 import os
+import importlib.machinery
 import importlib.util
 from contextlib import redirect_stdout
 from io import StringIO
@@ -18,7 +19,6 @@ import show.main as show
 
 # Load gearboxutil script as a module for direct function testing
 # spec_from_file_location returns None for extensionless scripts; use SourceFileLoader explicitly
-import importlib.machinery
 _gearboxutil_loader = importlib.machinery.SourceFileLoader(
     "gearboxutil", os.path.join(scripts_path, "gearboxutil"))
 _gearboxutil_spec = importlib.util.spec_from_loader("gearboxutil", _gearboxutil_loader)
