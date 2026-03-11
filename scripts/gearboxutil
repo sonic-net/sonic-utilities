@@ -257,7 +257,7 @@ class InterfaceFecStats(object):
             print("Error: Failed to connect to database")
             return
         
-        self.gb_db.connect(self.gb_db.GB_COUNTERS_DB)
+        self.gb_db.connect("GB_COUNTERS_DB")
         self.appl_db.connect(self.appl_db.APPL_DB)
         
         if display_type == 'histogram':
