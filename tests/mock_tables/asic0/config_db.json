@@ -247,6 +247,9 @@
     "VLAN_MEMBER|Vlan1000|Ethernet4": {
         "tagging_mode": "untagged"
     },
+    "VLAN_MEMBER|Vlan1000|Ethernet16": {
+        "tagging_mode": "untagged"
+    },
     "VLAN_MEMBER|Vlan1000|PortChannel1002": {
         "tagging_mode": "tagged"
     },
