@@ -401,7 +401,7 @@ def apply_patch_from_file(patch_file_path, config_format_name, verbose,
 
 
 # ---------------------------------------------------------------------------
-# Helper utilities (used by scripts/gcu.py and the gcu-standalone entry point)
+# Helper utilities (used by the gcu-standalone entry point)
 # ---------------------------------------------------------------------------
 
 def multiasic_save_to_singlefile(filename):

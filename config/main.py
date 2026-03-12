@@ -16,7 +16,6 @@ import copy
 import tempfile
 import sonic_yang
 
-import jsonpatch
 from jsonpatch import JsonPatchConflict
 from jsonpointer import JsonPointerException
 from collections import OrderedDict
