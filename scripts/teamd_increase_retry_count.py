@@ -3,6 +3,11 @@
 import subprocess
 import json
 from scapy.config import conf
+
+# Fixes delayed import when we have a lot of routes installed
+conf.route_autoload = False
+conf.route6_autoload = False
+
 from scapy.fields import ByteField, ShortField, MACField, XStrFixedLenField, ConditionalField, MultipleTypeField
 from scapy.layers.l2 import Ether
 from scapy.sendrecv import sendp, sniff
