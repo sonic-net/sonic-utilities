@@ -312,7 +312,10 @@ def get_docker_opts():
         pid = int(pid_file.read())
 
     with open("/proc/{}/cmdline".format(pid)) as cmdline_file:
-        return cmdline_file.read().strip().split("\x00")[1:]
+        opts = cmdline_file.read().strip().split("\x00")[1:]
+        # Replace fd:// with unix:// to ensure dockerd can start properly
+        # inside a chroot environment without systemd socket activation
+        return [opt if opt != "fd://" else "unix://" for opt in opts]
 
 
 def migrate_sonic_packages(bootloader, binary_image_version):
