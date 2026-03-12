@@ -2187,7 +2187,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
             trace_file_path = trace_file.name
 
         try:
-            with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
+            with mock.patch('generic_config_updater.main.GenericUpdater', return_value=mock_generic_updater):
                 with mock.patch('builtins.open', mock.mock_open(read_data=self.any_patch_as_text)) as mock_open_func:
                     # Configure mock to return different handles for patch file and trace file
                     def open_side_effect(filename, mode='r'):
@@ -5246,7 +5246,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
                 mock_open_func.side_effect = open_side_effect
 
                 # Mock GenericUpdater to avoid actual patch application
-                with patch('config.main.GenericUpdater') as mock_generic_updater:
+                with patch('generic_config_updater.main.GenericUpdater') as mock_generic_updater:
                     mock_generic_updater.return_value.apply_patch = MagicMock()
 
                     print("Multi ASIC: {}".format(multi_asic.is_multi_asic()))
