@@ -1841,35 +1841,20 @@ def apply_patch(
         return
     # ---------- End standalone redirect ----------
 
-    trace_file = None
+    trace_io = None
     try:
         if path_trace:
-            # Open the trace file and call GenericUpdater directly so the
-            # caller-supplied file handle is forwarded as trace_io.
-            trace_file = open(path_trace, 'w')
-            with open(patch_file_path, 'r') as fh:
-                patch_ops = json.loads(fh.read())
-            config_format = ConfigFormat[format.upper()]
-            GenericUpdater().apply_patch(
-                jsonpatch.JsonPatch(patch_ops),
-                config_format,
-                verbose,
-                dry_run,
-                ignore_non_yang_tables,
-                ignore_path,
-                trace_io=trace_file,
-            )
-        else:
-            # Delegate to the consolidated implementation in generic_config_updater.main
-            _gcu_apply_patch_from_file(
-                patch_file_path,
-                config_format_name=format,
-                verbose=verbose,
-                dry_run=dry_run,
-                parallel=parallel,
-                ignore_non_yang_tables=ignore_non_yang_tables,
-                ignore_path=ignore_path,
-            )
+            trace_io = open(path_trace, 'w')
+        _gcu_apply_patch_from_file(
+            patch_file_path,
+            config_format_name=format,
+            verbose=verbose,
+            dry_run=dry_run,
+            parallel=parallel,
+            ignore_non_yang_tables=ignore_non_yang_tables,
+            ignore_path=ignore_path,
+            trace_io=trace_io,
+        )
 
         log.log_notice("Patch applied successfully.")
         click.secho("Patch applied successfully.", fg="cyan", underline=True)
@@ -1877,8 +1862,8 @@ def apply_patch(
         click.secho("Failed to apply patch due to: {}".format(ex), fg="red", underline=True, err=True)
         ctx.fail(ex)
     finally:
-        if trace_file:
-            trace_file.close()
+        if trace_io:
+            trace_io.close()
 
 @config.command()
 @click.argument('target-file-path', type=str, required=True)
