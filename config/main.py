@@ -1778,8 +1778,13 @@ def run_gcu_standalone(patch_file_path, format, dry_run, parallel,
     if path_trace:
         cmd += ["--path-trace", path_trace]
 
+    # Propagate a sentinel so that if the standalone binary somehow re-enters
+    # this redirect path it will not spawn another subprocess indefinitely.
+    env = os.environ.copy()
+    env["GCU_STANDALONE_ACTIVE"] = "1"
+
     log.log_notice(f"Redirecting apply-patch to standalone GCU: {' '.join(cmd)}")
-    return subprocess.run(cmd)
+    return subprocess.run(cmd, env=env)
 
 
 @config.command('apply-patch')
@@ -1826,7 +1831,9 @@ def apply_patch(
     # If the GCU container has deployed a standalone virtual-env binary,
     # delegate the entire apply-patch operation to it so the container
     # can ship GCU fixes without touching the host sonic-utilities.
-    if os.path.exists(GCU_STANDALONE_BIN):
+    # The GCU_STANDALONE_ACTIVE sentinel prevents an infinite redirect loop
+    # in case the standalone binary itself re-enters this code path.
+    if os.path.exists(GCU_STANDALONE_BIN) and not os.environ.get("GCU_STANDALONE_ACTIVE"):
         result = run_gcu_standalone(patch_file_path, format, dry_run, parallel,
                                     ignore_non_yang_tables, ignore_path, verbose, path_trace)
         if result.returncode != 0:
