@@ -247,7 +247,52 @@ def side_effect_subprocess_popen(*args, **kwargs):
 def test_show_version():
     runner = CliRunner()
     result = runner.invoke(show.cli.commands["version"])
+    assert result.exit_code == 0
+    assert "SONiC Software Version: SONiC.release-1.1-7d94c0c28" in result.output
     assert "SONiC OS Version: 11" in result.output
+    assert "Distribution: Debian 11.6" in result.output
+    assert "Kernel: 5.10" in result.output
+    assert "Build commit: 7d94c0c28" in result.output
+    assert "Build date: Wed Feb 15 06:17:08 UTC 2023" in result.output
+    assert "Built by: AzDevOps" in result.output
+    assert "Platform: x86_64-kvm_x86_64-r0" in result.output
+    assert "HwSKU: Force10-S6000" in result.output
+    assert "ASIC: vs" in result.output
+    assert "ASIC Count: 1" in result.output
+    assert "Serial Number: N/A" in result.output
+    assert "Docker images:" in result.output
+    assert "REPOSITORY   TAG" in result.output
+
+
+@patch('sonic_py_common.device_info.get_sonic_version_info', MagicMock(return_value={
+        "build_version": "release-1.1-7d94c0c28",
+        "sonic_os_version": "11",
+        "debian_version": "11.6",
+        "kernel_version": "5.10",
+        "commit_id": "7d94c0c28",
+        "build_date": "Wed Feb 15 06:17:08 UTC 2023",
+        "built_by": "AzDevOps"}))
+@patch('sonic_py_common.device_info.get_platform_info', MagicMock(return_value={
+        "platform": "x86_64-kvm_x86_64-r0",
+        "hwsku": "Force10-S6000",
+        "asic_type": "vs",
+        "asic_count": 1}))
+@patch('sonic_py_common.device_info.get_chassis_info', MagicMock(return_value={
+        "serial": "N/A",
+        "model": "N/A",
+        "revision": "N/A"}))
+@patch('subprocess.Popen', MagicMock(side_effect=side_effect_subprocess_popen))
+def test_show_version_brief():
+    """Test that --brief flag omits docker image information."""
+    runner = CliRunner()
+    result = runner.invoke(show.cli.commands["version"], ["--brief"])
+    assert result.exit_code == 0
+    assert "SONiC Software Version: SONiC.release-1.1-7d94c0c28" in result.output
+    assert "SONiC OS Version: 11" in result.output
+    assert "Platform: x86_64-kvm_x86_64-r0" in result.output
+    assert "HwSKU: Force10-S6000" in result.output
+    assert "Docker images:" not in result.output
+    assert "REPOSITORY" not in result.output
 
 
 @patch('sonic_py_common.device_info.get_sonic_version_info', MagicMock(return_value={

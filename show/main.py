@@ -1708,8 +1708,8 @@ def logging(process, lines, follow, verbose):
 #
 
 @cli.command()
-@click.option("--verbose", is_flag=True, help="Enable verbose output")
-def version(verbose):
+@click.option("--brief", is_flag=True, help="Brief output, omit docker image information")
+def version(brief):
     """Show version information"""
     version_info = device_info.get_sonic_version_info()
     platform_info = device_info.get_platform_info()
@@ -1736,10 +1736,12 @@ def version(verbose):
     click.echo("Hardware Revision: {}".format(chassis_info['revision']))
     click.echo("Uptime: {}".format(sys_uptime.stdout.read().strip()))
     click.echo("Date: {}".format(sys_date.strftime("%a %d %b %Y %X")))
-    click.echo("\nDocker images:")
-    cmd = ['sudo', 'docker', 'images', '--format', "table {{.Repository}}\\t{{.Tag}}\\t{{.ID}}\\t{{.Size}}"]
-    p = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE)
-    click.echo(p.stdout.read())
+
+    if not brief:
+        click.echo("\nDocker images:")
+        cmd = ['sudo', 'docker', 'images', '--format', "table {{.Repository}}\\t{{.Tag}}\\t{{.ID}}\\t{{.Size}}"]
+        p = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE)
+        click.echo(p.stdout.read())
 
 #
 # 'environment' command ("show environment")
