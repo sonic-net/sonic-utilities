@@ -4,6 +4,7 @@ import subprocess
 
 from sonic_py_common import multi_asic, device_info
 from show.main import ip
+from show import bgp_cli
 import utilities_common.bgp_util as bgp_util
 import utilities_common.cli as clicommon
 import utilities_common.constants as constants
@@ -81,6 +82,14 @@ def neighbors(ipaddress, info_type, namespace):
 def network(ipaddress, info_type, namespace):
     """Show IP (IPv4) BGP network"""
     network_helper(ipaddress, info_type, namespace)
+
+
+# 'aggregate-address' subcommand ("show ip bgp aggregate-address")
+@bgp.command('aggregate-address')
+@clicommon.pass_db
+def aggregate_address(db):
+    """Show IPv4 BGP aggregate addresses"""
+    bgp_cli.show_aggregate_address(db, "ipv4")
 
 
 @bgp.group(cls=clicommon.AliasedGroup)
