@@ -508,12 +508,16 @@ def list_checkpoints(args):
 
 def apply_patch(args):
     """Apply a configuration patch — delegates to apply_patch_from_file."""
+    trace_file = None
     try:
         if args.verbose:
             print(f"Applying patch from: {args.patch_file}")
             print(f"Format: {args.format}")
             if args.dry_run:
                 print("** DRY RUN EXECUTION **")
+
+        if args.path_trace:
+            trace_file = open(args.path_trace, 'w')
 
         apply_patch_from_file(
             patch_file_path=args.patch_file,
@@ -524,12 +528,16 @@ def apply_patch(args):
             ignore_non_yang_tables=args.ignore_non_yang_tables,
             ignore_path=args.ignore_path,
             preprocess=False,
+            trace_io=trace_file,
         )
 
         print_success("Patch applied successfully.")
     except Exception as ex:
         print_error(f"Failed to apply patch: {ex}")
         sys.exit(1)
+    finally:
+        if trace_file:
+            trace_file.close()
 
 
 def replace_config(args):
@@ -698,6 +706,12 @@ Examples:
         '-i', '--ignore-path', action='append', default=[],
         help='Ignore validation for config specified by given path '
              '(JsonPointer)',
+    )
+    p.add_argument(
+        '-t', '--path-trace',
+        metavar='FILE',
+        default=None,
+        help='Filename to write decision path trace for patch generation as JSON',
     )
 
     # ---- replace ----
