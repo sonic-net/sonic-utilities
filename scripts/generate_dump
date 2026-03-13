@@ -2491,7 +2491,7 @@ main() {
     # Start with this script so its obvious what code is responsible
     $LN $V -s /usr/local/bin/generate_dump $TARDIR
     $TAR $V -chf $TARFILE -C $DUMPDIR $BASE
-    $RM $V -f $TARDIR/sonic_dump
+    $RM $V -f $TARDIR/generate_dump
 
     # Start populating timing data
     echo $BASE > $TECHSUPPORT_TIME_INFO
