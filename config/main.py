@@ -4932,6 +4932,7 @@ def bgp():
 
 # BGP module extensions
 config.commands['bgp'].add_command(bgp_cli.DEVICE_GLOBAL)
+config.commands['bgp'].add_command(bgp_cli.AGGREGATE_ADDRESS)
 
 #
 # 'shutdown' subgroup ('config bgp shutdown ...')
