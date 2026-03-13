@@ -1,3 +1,20 @@
+# gcu/ — Standalone GCU wheel build context
+#
+# This directory exists as a separate build context for the 'sonic-gcu' Python
+# wheel, which is published independently from the main 'sonic-utilities' wheel.
+# The gcu-standalone binary installed from this wheel is placed at
+# /opt/sonic/gcu/current/bin/gcu-standalone and allows the GCU container to
+# deliver fixes to generic_config_updater without touching the host
+# sonic-utilities package.
+#
+# At build time, setup.py copies ../generic_config_updater/ into this directory
+# so the wheel ships a self-contained snapshot of the GCU code.
+# The pytest.ini and .coveragerc here configure test runs scoped to GCU only.
+#
+# DO NOT move setup.py/pytest.ini into generic_config_updater/ — doing so
+# would break the CI pipeline (see azure-pipelines.yml 'Build Python 3 wheel
+# for GCU' step) and conflate the two separate installable packages.
+#
 # https://github.com/ninjaaron/fast-entry_points
 # workaround for slow 'pkg_resources' import
 #
@@ -18,12 +35,6 @@ from packaging import version
 # Copy necessary directories and files for python package
 if os.path.exists("../generic_config_updater"):
     shutil.copytree("../generic_config_updater", "./generic_config_updater", dirs_exist_ok=True)
-if os.path.exists("../utilities_common"):
-    shutil.copytree("../utilities_common", "./utilities_common", dirs_exist_ok=True)
-if os.path.exists("../scripts/gcu.py"):
-    if not os.path.exists("./scripts"):
-        os.makedirs("./scripts")
-    shutil.copy("../scripts/gcu.py", "./scripts/")
 
 # sonic_dependencies, version requirement only supports '>='
 sonic_dependencies = [
@@ -57,16 +68,15 @@ setup(
     maintainer_email='ganglv@microsoft.com',
     packages=[
         'generic_config_updater',
-        'utilities_common',
     ],
     package_data={
         'generic_config_updater': ['gcu_services_validator.conf.json', 'gcu_field_operation_validators.conf.json']
     },
     scripts=[
-        'scripts/gcu.py'
     ],
     entry_points={
         'console_scripts': [
+            'gcu-standalone=generic_config_updater.main:main',
         ]
     },
     install_requires=[
