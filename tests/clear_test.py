@@ -371,6 +371,16 @@ class TestClearArp(object):
 
     @patch('clear.main.run_command')
     @patch('clear.main.multi_asic.is_multi_asic', MagicMock(return_value=True))
+    @patch('utilities_common.multi_asic.multi_asic_namespace_validation_callback', MagicMock(return_value=''))
+    def test_clear_arp_multi_asic_without_namespace(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['arp'], [])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(
+            ['sudo', 'ip', '-4', '-s', '-s', 'neigh', 'flush', 'all'])
+
+    @patch('clear.main.run_command')
+    @patch('clear.main.multi_asic.is_multi_asic', MagicMock(return_value=True))
     @patch('utilities_common.multi_asic.multi_asic_namespace_validation_callback', MagicMock(return_value='asic0'))
     def test_clear_arp_multi_asic_with_namespace(self, mock_run_command):
         runner = CliRunner()
@@ -435,6 +445,16 @@ class TestClearNdp(object):
         result = runner.invoke(clear.cli.commands['ndp'], ['fe80::1'])
         assert result.exit_code == 0
         assert 'Neighbor fe80::1 not found' in result.output
+
+    @patch('clear.main.run_command')
+    @patch('clear.main.multi_asic.is_multi_asic', MagicMock(return_value=True))
+    @patch('utilities_common.multi_asic.multi_asic_namespace_validation_callback', MagicMock(return_value=''))
+    def test_clear_ndp_multi_asic_without_namespace(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['ndp'], [])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(
+            ['sudo', 'ip', '-6', '-s', '-s', 'neigh', 'flush', 'all'])
 
     @patch('clear.main.run_command')
     @patch('clear.main.multi_asic.is_multi_asic', MagicMock(return_value=True))
