@@ -298,7 +298,7 @@ class TestSfputil(object):
                 Vcc: 3.2577Volts
         ModuleThresholdValues:
 '''
-        ), 
+        ),
         (
             'QSFP-DD Double Density 8X Pluggable Transceiver',
             True,
@@ -1044,15 +1044,11 @@ Ethernet0  N/A
 
         runner = CliRunner()
         result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'])
+        # With continue-on-failure behavior: exit 0 and failed pages are reported, not abort
         assert result.exit_code == 0
-        expected_output = """EEPROM hexdump for port Ethernet0
-        Error: Failed to read EEPROM for page 0h, flat_offset 0, page_offset 0, size 128!
-
-EEPROM hexdump for port Ethernet4
-        Error: Failed to read EEPROM for A0h!
-
-"""
-        assert result.output == expected_output
+        assert "EEPROM hexdump for port Ethernet0" in result.output
+        assert "EEPROM hexdump for port Ethernet4" in result.output
+        assert "Error: Failed to read EEPROM" in result.output
 
     @patch('sfputil.main.platform_chassis')
     @patch('sfputil.main.platform_sfputil')
@@ -1169,6 +1165,47 @@ EEPROM hexdump for port Ethernet4
         mock_dump.reset_mock()
         sfputil.eeprom_hexdump_single_port('Ethernet0', 3)
         mock_dump.assert_called_with('Ethernet0', [0, 3], 3)
+
+    @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=0))
+    @patch('sfputil.main.eeprom_dump_general')
+    def test_eeprom_hexdump_pages_general_continues_on_single_page_failure(self, mock_eeprom_dump_general):
+        """When one page read fails, dump continues and returns 0 with failure line in output."""
+        # Call 1: Lower page 0h success, Call 2: Upper page 0h fail, Call 3: Upper page 1h success
+        mock_eeprom_dump_general.side_effect = [
+            (0, "        00000000 00 01 02 03 ..."),
+            (1, "read error"),
+            (0, "        00000080 10 11 12 13 ..."),
+        ]
+        rc, output = sfputil.eeprom_hexdump_pages_general("Ethernet0", [0, 1], None)
+        assert rc == 0
+        assert "Lower page 0h" in output
+        assert "00000000 00 01 02 03" in output
+        assert "read error" in output
+        assert "Upper page 1h" in output
+        assert "00000080 10 11 12 13" in output
+
+    @patch('sfputil.main.platform_chassis')
+    @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=0))
+    @patch('sfputil.main.eeprom_dump_general')
+    def test_eeprom_hexdump_pages_sff8472_continues_on_single_page_failure(
+            self, mock_eeprom_dump_general, mock_chassis):
+        """When one SFF8472 page (e.g. A2h lower) fails, dump continues and returns 0."""
+        mock_api = MagicMock()
+        mock_api.is_flat_memory.return_value = False
+        mock_chassis.get_sfp.return_value.get_xcvr_api.return_value = mock_api
+        # A0h success, A2h lower fail, A2h upper success
+        mock_eeprom_dump_general.side_effect = [
+            (0, "        00000000 03 04 07 ..."),
+            (1, "A2h lower read error"),
+            (0, "        00000100 00 00 00 ..."),
+        ]
+        rc, output = sfputil.eeprom_hexdump_pages_sff8472("Ethernet0", [0, 1, 2], None)
+        assert rc == 0
+        assert "A0h dump" in output
+        assert "00000000 03 04 07" in output
+        assert "A2h lower read error" in output
+        assert "A2h dump (upper 128 bytes) page 0h" in output
+        assert "00000100 00 00 00" in output
 
     @patch('sfputil.main.logical_port_name_to_physical_port_list', MagicMock(return_value=[1]))
     @patch('sfputil.main.platform_chassis')
@@ -1628,40 +1665,40 @@ EEPROM hexdump for port Ethernet4
 
         mock_sfp.get_presence = MagicMock(return_value=True)
         mock_sfp.get_xcvr_api = MagicMock(return_value=api)
-        
+
         runner = CliRunner()
         result = runner.invoke(sfputil.cli.commands['write-eeprom'],
                                ['-p', "Ethernet0", '-n', '-1', '-o', '0', '-d', '01'])
         assert result.exit_code != 0
-        
+
         result = runner.invoke(sfputil.cli.commands['write-eeprom'],
                                ['-p', "Ethernet0", '-n', '256', '-o', '0', '-d', '01'])
         assert result.exit_code != 0
-        
+
         result = runner.invoke(sfputil.cli.commands['write-eeprom'],
                                ['-p', "Ethernet0", '-n', '0', '-o', '-1', '-d', '01'])
         assert result.exit_code != 0
-        
+
         result = runner.invoke(sfputil.cli.commands['write-eeprom'],
                                ['-p', "Ethernet0", '-n', '0', '-o', '256', '-d', '01'])
         assert result.exit_code != 0
-        
+
         result = runner.invoke(sfputil.cli.commands['write-eeprom'],
                                ['-p', "Ethernet0", '-n', '1', '-o', '127', '-d', '01'])
         assert result.exit_code != 0
-        
+
         result = runner.invoke(sfputil.cli.commands['write-eeprom'],
                                ['-p', "Ethernet0", '-n', '1', '-o', '256', '-d', '01'])
         assert result.exit_code != 0
-        
+
         result = runner.invoke(sfputil.cli.commands['read-eeprom'],
                                ['-p', "Ethernet0", '-n', '0', '-o', '0', '-s', '0'])
         assert result.exit_code != 0
-        
+
         result = runner.invoke(sfputil.cli.commands['read-eeprom'],
                                ['-p', "Ethernet0", '-n', '0', '-o', '0', '-s', '257'])
         assert result.exit_code != 0
-        
+
         result = runner.invoke(sfputil.cli.commands['write-eeprom'],
                                ['-p', "Ethernet0", '-n', '0', '-o', '1', '-d', '01'])
         assert result.exit_code == 0
@@ -1679,13 +1716,13 @@ EEPROM hexdump for port Ethernet4
 
         mock_sfp.get_presence = MagicMock(return_value=True)
         mock_sfp.get_xcvr_api = MagicMock(return_value=api)
-        
+
         runner = CliRunner()
         result = runner.invoke(sfputil.cli.commands['read-eeprom'],
                                ['-p', "Ethernet0", '-n', '0', '-o', '0', '-s', '1'])
         assert result.exit_code != 0
         print(result.output)
-        
+
         result = runner.invoke(sfputil.cli.commands['read-eeprom'],
                                ['-p', "Ethernet0", '--wire-addr', 'invalid', '-n', '0', '-o', '0', '-s', '1'])
         assert result.exit_code != 0
@@ -1700,49 +1737,49 @@ EEPROM hexdump for port Ethernet4
                                ['-p', "Ethernet0", '--wire-addr', 'A0h', '-n', '0', '-o', '-1', '-s', '1'])
         assert result.exit_code != 0
         print(result.output)
-        
+
         result = runner.invoke(sfputil.cli.commands['read-eeprom'],
                                ['-p', "Ethernet0", '--wire-addr', 'A0h', '-n', '0', '-o', '256', '-s', '1'])
         assert result.exit_code != 0
         print(result.output)
 
-        result = runner.invoke(sfputil.cli.commands['read-eeprom'], 
+        result = runner.invoke(sfputil.cli.commands['read-eeprom'],
                                ['-p', "Ethernet0", '--wire-addr', 'A0h', '-n', '0', '-o', '0', '-s', '0'])
         assert result.exit_code != 0
         print(result.output)
-        
+
         result = runner.invoke(sfputil.cli.commands['read-eeprom'],
                                ['-p', "Ethernet0", '--wire-addr', 'A0h', '-n', '0', '-o', '0', '-s', '257'])
         assert result.exit_code != 0
         print(result.output)
-        
+
         assert sfputil.get_overall_offset_sff8472(api, 0, 2, 2, wire_addr='A0h') == 2
-        
+
         result = runner.invoke(sfputil.cli.commands['read-eeprom'],
                                ['-p', "Ethernet0", '--wire-addr', 'a2h', '-n', '-1', '-o', '0', '-s', '1'])
         assert result.exit_code != 0
         print(result.output)
-        
+
         result = runner.invoke(sfputil.cli.commands['read-eeprom'],
                                ['-p', "Ethernet0", '--wire-addr', 'a2h', '-n', '256', '-o', '0', '-s', '1'])
         assert result.exit_code != 0
         print(result.output)
-        
+
         result = runner.invoke(sfputil.cli.commands['read-eeprom'],
                                ['-p', "Ethernet0", '--wire-addr', 'a2h', '-n', '0', '-o', '-1', '-s', '1'])
         assert result.exit_code != 0
         print(result.output)
-        
+
         result = runner.invoke(sfputil.cli.commands['read-eeprom'],
                                ['-p', "Ethernet0", '--wire-addr', 'a2h', '-n', '0', '-o', '0', '-s', '0'])
         assert result.exit_code != 0
         print(result.output)
-        
+
         result = runner.invoke(sfputil.cli.commands['read-eeprom'],
                                ['-p', "Ethernet0", '--wire-addr', 'a2h', '-n', '0', '-o', '0', '-s', '257'])
         assert result.exit_code != 0
         print(result.output)
-        
+
         assert sfputil.get_overall_offset_sff8472(api, 0, 2, 2, wire_addr='A2h') == 258
 
     @patch('sfputil.main.platform_chassis')
