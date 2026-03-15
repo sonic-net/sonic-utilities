@@ -2469,11 +2469,13 @@ def information():
 # 'line' command ("show line")
 #
 @cli.command('line')
-@click.option('--brief', '-b', metavar='<brief_mode>', required=False, is_flag=True)
+@click.option('--brief', '-b', is_flag=True,
+              help="Show information for only configured console lines")
+@click.option('--show-escape', "-e", is_flag=True, help="Show escape character for each line")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-def line(brief, verbose):
+def line(brief, show_escape, verbose):
     """Show all console lines and their info include available ttyUSB devices unless specified brief mode"""
-    cmd = ['consutil', 'show'] + (["-b"] if brief else [])
+    cmd = ['consutil', 'show-escape' if show_escape else 'show'] + (["-b"] if brief else [])
     run_command(cmd, display_cmd=verbose)
     return
 
