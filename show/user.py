@@ -3,6 +3,7 @@ import os
 import getpass
 from swsscommon.swsscommon import ConfigDBConnector
 import utilities_common.cli as clicommon
+from utilities_common.general import is_true, is_user_feature_enabled
 
 # Constants
 LOCAL_USER_TABLE = "LOCAL_USER"
@@ -33,7 +34,12 @@ def can_view_passwords():
         return True
 
     # Check if current user has administrator role in SONiC user management
-    current_username = getpass.getuser()
+    try:
+        current_username = getpass.getuser()
+    except Exception:
+        # Cannot determine username (e.g., in containers without proper user mapping)
+        return False
+
     users = get_user_database()
 
     user_data = users.get(current_username)
@@ -120,7 +126,13 @@ def display_user_details(username, user_data):
     """Display detailed information for a single user"""
     click.echo(f"User: {username}")
     click.echo(f"  Role: {user_data.get('role', 'N/A')}")
-    click.echo(f"  Enabled: {'Yes' if user_data.get('enabled', True) else 'No'}")
+
+    # Show N/A if enabled field is missing to avoid misleading defaults
+    if 'enabled' in user_data:
+        enabled = is_true(user_data.get('enabled'), default=True)
+        click.echo(f"  Enabled: {'Yes' if enabled else 'No'}")
+    else:
+        click.echo("  Enabled: N/A")
 
     # Show password hash only if user has administrator privileges
     if can_view_passwords():
@@ -143,6 +155,11 @@ def user():
 def show_users(db):
     """Show all configured users"""
 
+    # Show feature status
+    feature_enabled = is_user_feature_enabled(db.cfgdb)
+    click.echo(f"Local User Management: {'Enabled' if feature_enabled else 'Disabled'}")
+    click.echo()
+
     users = get_user_database(db.cfgdb)
 
     if not users:
@@ -154,8 +171,10 @@ def show_users(db):
 
     click.echo("Users:")
     for username, user_data in users.items():
+        if not isinstance(user_data, dict):
+            continue
         role = user_data.get('role', 'N/A')
-        enabled = user_data.get('enabled', True)
+        enabled = is_true(user_data.get('enabled'), default=True)
         ssh_keys = user_data.get('ssh_keys', [])
 
         click.echo(f"  Username: {username}")
@@ -180,6 +199,11 @@ def show_users(db):
 @clicommon.pass_db
 def show_user_details(db, username):
     """Show detailed information for a specific user or all users"""
+
+    # Show feature status
+    feature_enabled = is_user_feature_enabled(db.cfgdb)
+    click.echo(f"Local User Management: {'Enabled' if feature_enabled else 'Disabled'}")
+    click.echo()
 
     users = get_user_database(db.cfgdb)
 

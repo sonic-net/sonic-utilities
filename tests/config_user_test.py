@@ -35,24 +35,25 @@ class TestUserCLI(unittest.TestCase):
         })
 
         # Add some test users
+        # Note: CONFIG_DB stores boolean values as strings 'true'/'false'
         self.db.cfgdb.set_entry("LOCAL_USER", "admin", {
             "role": "administrator",
             "password_hash": "$y$j9T$salt$adminhash",
-            "enabled": True,
+            "enabled": "true",
             "ssh_keys": ["ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7vbqajDhA admin@host"]
         })
 
         self.db.cfgdb.set_entry("LOCAL_USER", "operator1", {
             "role": "operator",
             "password_hash": "$y$j9T$salt$ophash",
-            "enabled": True,
+            "enabled": "true",
             "ssh_keys": []
         })
 
         self.db.cfgdb.set_entry("LOCAL_USER", "disabled_user", {
             "role": "operator",
             "password_hash": "$y$j9T$salt$disabledhash",
-            "enabled": False,
+            "enabled": "false",
             "ssh_keys": []
         })
 
@@ -101,7 +102,8 @@ class TestUserCLI(unittest.TestCase):
 
         # Verify command succeeded
         self.assertEqual(result.exit_code, 0)
-        # Silent on success - no output expected
+        # Silent on success - verify no output is produced
+        self.assertEqual(result.output.strip(), "")
 
         # Verify user was added to database
         user_data = self.db.cfgdb.get_entry("LOCAL_USER", "newuser")
@@ -109,7 +111,7 @@ class TestUserCLI(unittest.TestCase):
         self.assertEqual(user_data["role"], "operator")
         self.assertEqual(user_data["password_hash"], "$y$j9T$salt$newhash")
         # CONFIG_DB stores boolean values as strings
-        self.assertIn(user_data["enabled"], [True, "True"])  # Default enabled
+        self.assertEqual(user_data["enabled"], "true")  # Default enabled
 
     def test_cli_add_user_disabled(self):
         """Test adding user in disabled state via CLI"""
@@ -126,7 +128,7 @@ class TestUserCLI(unittest.TestCase):
         # Verify user is disabled
         user_data = self.db.cfgdb.get_entry("LOCAL_USER", "disableduser")
         # CONFIG_DB stores boolean values as strings
-        self.assertIn(user_data["enabled"], [False, "False"])
+        self.assertEqual(user_data["enabled"], "false")
 
     def test_cli_add_user_already_exists(self):
         """Test adding user that already exists via CLI"""
@@ -141,7 +143,7 @@ class TestUserCLI(unittest.TestCase):
         self.assertIn("already exists", result.output)
 
     def test_cli_add_user_feature_disabled(self):
-        """Test adding user when feature is disabled via CLI"""
+        """Test adding user when feature is disabled via CLI - should succeed with warning"""
         # Disable the feature first
         self.runner.invoke(user_module.user, ["feature", "disabled"], obj=self.db)
 
@@ -154,9 +156,9 @@ class TestUserCLI(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertIn("not enabled", result.output)
 
-        # Verify user was NOT added (CONFIG_DB returns empty dict for non-existent entries)
+        # Verify user WAS added (allowed even when feature is disabled, with warning)
         user_data = self.db.cfgdb.get_entry("LOCAL_USER", "newuser")
-        self.assertIn(user_data, [None, {}])  # Accept both None and empty dict
+        self.assertEqual(user_data.get('role'), 'operator')
 
     def test_cli_delete_user_success(self):
         """Test successful user deletion via CLI"""
@@ -196,7 +198,7 @@ class TestUserCLI(unittest.TestCase):
         user_data = self.db.cfgdb.get_entry("LOCAL_USER", "disabled_user")
         self.assertEqual(user_data["password_hash"], "$y$j9T$salt$newhash")
         # CONFIG_DB stores boolean values as strings
-        self.assertIn(user_data["enabled"], [True, "True"])
+        self.assertEqual(user_data["enabled"], "true")
 
     def test_cli_security_policy_set(self):
         """Test setting security policy via CLI"""
@@ -223,7 +225,7 @@ class TestUserCLI(unittest.TestCase):
             'linuxuser1': {
                 'role': 'operator',  # Determined from group membership
                 'password_hash': '$y$j9T$salt$linuxhash1',
-                'enabled': True,  # Based on shell (not /usr/sbin/nologin)
+                'enabled': 'true',  # Based on shell (not /usr/sbin/nologin)
                 'ssh_keys': [],  # From ~/.ssh/authorized_keys
                 'uid': 1001,
                 'gid': 1001,
@@ -233,7 +235,7 @@ class TestUserCLI(unittest.TestCase):
             'linuxuser2': {
                 'role': 'operator',  # Determined from group membership
                 'password_hash': '$y$j9T$salt$linuxhash2',
-                'enabled': True,  # Based on shell (not /usr/sbin/nologin)
+                'enabled': 'true',  # Based on shell (not /usr/sbin/nologin)
                 'ssh_keys': [],  # From ~/.ssh/authorized_keys
                 'uid': 1002,
                 'gid': 1002,
@@ -258,7 +260,7 @@ class TestUserCLI(unittest.TestCase):
         self.assertEqual(user1_data["role"], "operator")  # Default role
         self.assertEqual(user1_data["password_hash"], "$y$j9T$salt$linuxhash1")
         # CONFIG_DB stores boolean values as strings
-        self.assertIn(user1_data["enabled"], [True, "True"])
+        self.assertEqual(user1_data["enabled"], "true")
 
     def test_cli_import_existing_feature_enabled(self):
         """Test import-existing when feature is enabled (should fail) via CLI"""
@@ -282,7 +284,7 @@ class TestUserCLI(unittest.TestCase):
             'dryrunuser': {
                 'role': 'operator',  # Determined from group membership
                 'password_hash': '$y$j9T$salt$dryrunhash',
-                'enabled': True,  # Based on shell (not /usr/sbin/nologin)
+                'enabled': 'true',  # Based on shell (not /usr/sbin/nologin)
                 'ssh_keys': [],  # From ~/.ssh/authorized_keys
                 'uid': 1003,
                 'gid': 1003,
@@ -329,21 +331,43 @@ class TestUserCLI(unittest.TestCase):
 
         # Should fail with Click validation error
         self.assertNotEqual(result.exit_code, 0)
-        self.assertIn('Invalid value for "--role"', result.output)
+        self.assertIn("Invalid value for '--role'", result.output)
 
-    def test_cli_add_user_no_password(self):
-        """Test adding user without password via CLI"""
+    def test_cli_add_user_no_password_no_ssh_key(self):
+        """Test adding user without password or SSH key via CLI - should fail"""
         result = self.runner.invoke(user_module.user, [
             "add", "newuser",
             "--role", "operator"
-            # No password provided
+            # No password or SSH key provided
         ], obj=self.db)
 
         self.assertEqual(result.exit_code, 0)
-        self.assertIn("password", result.output.lower())  # Should mention password requirement
+        self.assertIn("at least one authentication method", result.output)
+
+        # Verify user was NOT added
+        user_data = self.db.cfgdb.get_entry("LOCAL_USER", "newuser")
+        self.assertIn(user_data, [None, {}])
+
+    def test_cli_add_user_ssh_key_only(self):
+        """Test adding user with SSH key only (no password) via CLI"""
+        result = self.runner.invoke(user_module.user, [
+            "add", "sshonlyuser",
+            "--role", "operator",
+            "--ssh-key", "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIHYAev8HgrcPTf5lOGAmtDDQkQx3xV1EUhGQ96+4LJOI test@host"
+        ], obj=self.db)
+
+        self.assertEqual(result.exit_code, 0)
+
+        # Verify user was added with locked password
+        user_data = self.db.cfgdb.get_entry("LOCAL_USER", "sshonlyuser")
+        self.assertEqual(user_data["role"], "operator")
+        self.assertEqual(user_data["password_hash"], "!")  # Locked password
+        self.assertEqual(user_data["enabled"], "true")
+        self.assertEqual(len(user_data["ssh_keys"]), 1)
+        self.assertIn("test@host", str(user_data["ssh_keys"]))
 
     def test_cli_delete_user_feature_disabled(self):
-        """Test deleting user when feature is disabled via CLI"""
+        """Test deleting user when feature is disabled via CLI - should succeed with warning"""
         # Disable feature first
         self.runner.invoke(user_module.user, ["feature", "disabled"], obj=self.db)
 
@@ -354,9 +378,9 @@ class TestUserCLI(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         self.assertIn("not enabled", result.output)
 
-        # Verify user was NOT deleted
+        # Verify user WAS deleted (allowed even when feature is disabled, with warning)
         user_data = self.db.cfgdb.get_entry("LOCAL_USER", "operator1")
-        self.assertIsNotNone(user_data)
+        self.assertIn(user_data, [None, {}])  # Accept both None and empty dict
 
     def test_cli_delete_last_admin(self):
         """Test deleting the last administrator user via CLI"""
@@ -365,7 +389,7 @@ class TestUserCLI(unittest.TestCase):
         self.db.cfgdb.set_entry("LOCAL_USER", "lastadmin", {
             "role": "administrator",
             "password_hash": "$y$j9T$salt$lastadminhash",
-            "enabled": True,
+            "enabled": "true",
             "ssh_keys": []
         })
 
@@ -443,7 +467,7 @@ class TestUserCLI(unittest.TestCase):
 
         user_data = self.db.cfgdb.get_entry("LOCAL_USER", "disabled_user")
         # CONFIG_DB stores boolean values as strings
-        self.assertIn(user_data["enabled"], [True, "True"])
+        self.assertEqual(user_data["enabled"], "true")
 
         # Test disable enabled user
         result = self.runner.invoke(user_module.user, [
@@ -456,7 +480,7 @@ class TestUserCLI(unittest.TestCase):
 
         user_data = self.db.cfgdb.get_entry("LOCAL_USER", "disabled_user")
         # CONFIG_DB stores boolean values as strings
-        self.assertIn(user_data["enabled"], [False, "False"])
+        self.assertEqual(user_data["enabled"], "false")
 
     def test_cli_modify_user_conflicting_flags(self):
         """Test modifying user with conflicting enabled/disabled flags via CLI"""
@@ -476,7 +500,7 @@ class TestUserCLI(unittest.TestCase):
         self.db.cfgdb.set_entry("LOCAL_USER", "admin", {
             "role": "administrator",
             "password_hash": "$y$j9T$salt$adminhash",
-            "enabled": True,
+            "enabled": "true",
             "ssh_keys": []
         })
 
@@ -491,7 +515,7 @@ class TestUserCLI(unittest.TestCase):
         # Verify admin was NOT disabled
         user_data = self.db.cfgdb.get_entry("LOCAL_USER", "admin")
         # CONFIG_DB stores boolean values as strings
-        self.assertIn(user_data["enabled"], [True, "True"])
+        self.assertEqual(user_data["enabled"], "true")
 
     def test_cli_security_policy_set_all_options(self):
         """Test setting security policy with available options via CLI"""
@@ -527,7 +551,7 @@ class TestUserCLI(unittest.TestCase):
         ], obj=self.db)
 
         self.assertEqual(result.exit_code, 2)  # Click validation error
-        self.assertIn("not in the valid range", result.output)
+        self.assertIn("not in the range", result.output)
 
         # Test invalid max-login-attempts too high (Click validation error)
         result = self.runner.invoke(user_module.user, [
@@ -536,7 +560,7 @@ class TestUserCLI(unittest.TestCase):
         ], obj=self.db)
 
         self.assertEqual(result.exit_code, 2)  # Click validation error
-        self.assertIn("not in the valid range", result.output)
+        self.assertIn("not in the range", result.output)
 
     def test_cli_security_policy_clear(self):
         """Test clearing security policy via CLI"""
@@ -879,15 +903,20 @@ class TestUserCLI(unittest.TestCase):
             "--password-prompt"
         ], obj=self.db)
 
-        # System should fail when password policies have invalid values
-        # Invalid numeric values like "invalid_number" should cause validation to fail
-        self.assertNotEqual(result.exit_code, 0,
-                            "Command should fail when password policies contain invalid values")
+        # System should succeed but warn about invalid numeric values
+        # Invalid fields are now removed with a warning, allowing the command to proceed
+        self.assertEqual(result.exit_code, 0,
+                         "Command should succeed after ignoring invalid policy values")
 
-        # Verify user was NOT created due to policy validation failure
+        # Verify warning was shown about invalid value
+        self.assertIn("Warning", result.output,
+                      "Should show warning about invalid policy values")
+
+        # Verify user was created successfully
         user_data = self.db.cfgdb.get_entry("LOCAL_USER", "edgeuser")
-        self.assertIn(user_data, [None, {}],
-                      "User should not be created when policy validation fails")
+        self.assertIsNotNone(user_data,
+                             "User should be created when invalid policies are ignored")
+        self.assertEqual(user_data.get('role'), 'operator')
 
     def test_cli_password_hardening_policies_disabled(self):
         """Test that weak passwords are accepted when policies are disabled"""
@@ -1035,17 +1064,21 @@ class TestUserCLI(unittest.TestCase):
         self.assertIn("Cannot specify multiple SSH key options", result.output)
 
     def test_cli_admin_constraint_scenarios(self):
-        """Test admin constraint scenarios through CLI operations"""
+        """Test admin constraint scenarios through CLI operations.
+
+        Note: CONFIG_DB stores boolean values as strings 'true'/'false',
+        so we use string values here to match real behavior.
+        """
         # Scenario 1: Multiple admins - should allow disabling one
         self.db.cfgdb.set_entry("LOCAL_USER", "admin1", {
             "role": "administrator",
-            "enabled": True,
+            "enabled": "true",
             "password_hash": "$y$j9T$salt$hash1",
             "ssh_keys": []
         })
         self.db.cfgdb.set_entry("LOCAL_USER", "admin2", {
             "role": "administrator",
-            "enabled": True,
+            "enabled": "true",
             "password_hash": "$y$j9T$salt$hash2",
             "ssh_keys": []
         })
@@ -1058,14 +1091,14 @@ class TestUserCLI(unittest.TestCase):
         self.assertEqual(result.exit_code, 0)
         # Verify admin1 was disabled
         user_data = self.db.cfgdb.get_entry("LOCAL_USER", "admin1")
-        self.assertIn(user_data["enabled"], [False, "False"])
+        self.assertEqual(user_data["enabled"], "false")
 
         # Scenario 2: Last admin - should NOT allow disabling
         # Clear all users and add only one admin
         self.db.cfgdb.delete_table("LOCAL_USER")
         self.db.cfgdb.set_entry("LOCAL_USER", "lastadmin", {
             "role": "administrator",
-            "enabled": True,
+            "enabled": "true",
             "password_hash": "$y$j9T$salt$lasthash",
             "ssh_keys": []
         })
@@ -1080,7 +1113,7 @@ class TestUserCLI(unittest.TestCase):
 
         # Verify admin was NOT disabled
         user_data = self.db.cfgdb.get_entry("LOCAL_USER", "lastadmin")
-        self.assertIn(user_data["enabled"], [True, "True"])
+        self.assertEqual(user_data["enabled"], "true")
 
         # Scenario 3: Should not allow deleting the last admin
         result = self.runner.invoke(user_module.user, [
@@ -1133,7 +1166,7 @@ class TestUserCLI(unittest.TestCase):
             'admin': {  # This user already exists in test data
                 'role': 'administrator',
                 'password_hash': '$y$j9T$salt$linuxhash',
-                'enabled': True,
+                'enabled': 'true',
                 'ssh_keys': [],
                 'uid': 1001,
                 'gid': 1001,
@@ -1160,7 +1193,7 @@ class TestUserCLI(unittest.TestCase):
             'customuser': {
                 'role': 'operator',
                 'password_hash': '$y$j9T$salt$customhash',
-                'enabled': True,
+                'enabled': 'true',
                 'ssh_keys': [],
                 'uid': 2001,
                 'gid': 2001,
@@ -1391,7 +1424,7 @@ class TestUserCLI(unittest.TestCase):
         self.db.cfgdb.set_entry("LOCAL_USER", "only_admin", {
             "role": "administrator",
             "password_hash": "$y$j9T$salt$adminhash",
-            "enabled": True
+            "enabled": "true"
         })
 
         # Try to delete the only admin (should fail)
@@ -1415,7 +1448,7 @@ class TestUserCLI(unittest.TestCase):
 
         # Verify admin is still enabled
         user_data = self.db.cfgdb.get_entry("LOCAL_USER", "only_admin")
-        self.assertIn(user_data["enabled"], [True, "True"])
+        self.assertEqual(user_data["enabled"], "true")
 
         # Add another admin
         result = self.runner.invoke(user_module.user, [
@@ -1434,11 +1467,11 @@ class TestUserCLI(unittest.TestCase):
 
         # Verify first admin is now disabled
         user_data = self.db.cfgdb.get_entry("LOCAL_USER", "only_admin")
-        self.assertIn(user_data["enabled"], [False, "False"])
+        self.assertEqual(user_data["enabled"], "false")
 
         # Verify second admin is still enabled
         second_admin_data = self.db.cfgdb.get_entry("LOCAL_USER", "second_admin")
-        self.assertIn(second_admin_data["enabled"], [True, "True"])
+        self.assertEqual(second_admin_data["enabled"], "true")
 
     @mock.patch('config.user.get_existing_linux_users')
     def test_integration_import_and_feature_enable(self, mock_get_users):
@@ -1451,7 +1484,7 @@ class TestUserCLI(unittest.TestCase):
             'imported_user1': {
                 'role': 'administrator',
                 'password_hash': '$y$j9T$salt$importhash1',
-                'enabled': True,
+                'enabled': 'true',
                 'ssh_keys': ['ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABgQC7vbqajDhA imported1@host'],
                 'uid': 1001,
                 'gid': 1001,
@@ -1499,7 +1532,7 @@ class TestUserCLI(unittest.TestCase):
 
         # Verify modification worked
         user2_data = self.db.cfgdb.get_entry("LOCAL_USER", "imported_user2")
-        self.assertIn(user2_data["enabled"], [True, "True"])
+        self.assertEqual(user2_data["enabled"], "true")
 
     def test_negative_security_policy_extreme_values(self):
         """Test security policy with extreme values"""
@@ -1510,7 +1543,7 @@ class TestUserCLI(unittest.TestCase):
         ], obj=self.db)
 
         self.assertEqual(result.exit_code, 2)  # Click validation error
-        self.assertIn("not in the valid range", result.output)
+        self.assertIn("not in the range", result.output)
 
         # Test minimum boundary - 1
         result = self.runner.invoke(user_module.user, [
@@ -1519,7 +1552,7 @@ class TestUserCLI(unittest.TestCase):
         ], obj=self.db)
 
         self.assertEqual(result.exit_code, 2)  # Click validation error
-        self.assertIn("not in the valid range", result.output)
+        self.assertIn("not in the range", result.output)
 
     def test_negative_security_policy_non_numeric_values(self):
         """Test security policy with non-numeric values"""

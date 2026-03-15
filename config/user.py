@@ -1,12 +1,12 @@
 import click
 import getpass
 import re
-import time
 import grp
 import subprocess
 from .validated_config_db_connector import ValidatedConfigDBConnector
 from jsonpatch import JsonPatchConflict
 import utilities_common.cli as clicommon
+from utilities_common.general import is_true, is_user_feature_enabled
 
 # Constants
 LOCAL_USER_TABLE = "LOCAL_USER"
@@ -16,6 +16,10 @@ DEVICE_METADATA_LOCALHOST_KEY = "localhost"
 LOCAL_USER_MANAGEMENT_FIELD = "local_user_management"
 
 # System users to exclude from import
+# These users are managed by the system and should not be imported to SONiC user management:
+# - Standard Linux system users (root, daemon, bin, sys, etc.)
+# - System service accounts (systemd-*, messagebus, sshd, _apt)
+# - SONiC-specific service accounts (redis, ntp, frr, snmp) that are managed by their respective containers
 SYSTEM_USERS = {'root', 'daemon', 'bin', 'sys', 'sync', 'games', 'man', 'lp', 'mail',
                 'news', 'uucp', 'proxy', 'www-data', 'backup', 'list', 'irc', 'gnats',
                 'nobody', '_apt', 'systemd-network', 'systemd-resolve', 'messagebus',
@@ -87,7 +91,6 @@ def handle_password_input(username, password_hash, password_prompt, db, is_new_u
             # Check for empty password
             if not password or password.strip() == "":
                 click.echo("Error: Password cannot be empty")
-                time.sleep(3)  # Security delay to prevent rapid brute-force attempts
                 return None, False
 
             # Validate password against hardening policies
@@ -95,7 +98,6 @@ def handle_password_input(username, password_hash, password_prompt, db, is_new_u
             valid, error_msg = validate_password_against_policies(password, username, policies)
             if not valid:
                 click.echo(f"Error: {error_msg}")
-                time.sleep(3)  # Security delay to prevent rapid brute-force attempts
                 return None, False
 
             password_hash = hash_password(password)
@@ -103,7 +105,7 @@ def handle_password_input(username, password_hash, password_prompt, db, is_new_u
                 click.echo("Error: Failed to generate password hash")
                 return None, False
         finally:
-            # Always clear passwords from memory
+            # Clear passwords from memory for security
             password = None
             confirm_password = None
 
@@ -112,7 +114,6 @@ def handle_password_input(username, password_hash, password_prompt, db, is_new_u
         valid, error_msg = validate_password_hash(password_hash)
         if not valid:
             click.echo(f"Error: {error_msg}")
-            time.sleep(3)  # Security delay to prevent rapid brute-force attempts
             return None, False
 
     return password_hash, True
@@ -191,7 +192,10 @@ def get_password_hardening_policies(db):
             try:
                 policies[field] = int(policies[field])
             except (ValueError, TypeError):
-                pass
+                click.echo(
+                    f"Warning: Invalid value for password policy '{field}': {policies[field]!r}. "
+                    f"Ignoring this policy.", err=True)
+                del policies[field]
 
     return policies
 
@@ -206,7 +210,7 @@ def validate_password_against_policies(password, username, policies):
     # Check minimum length
     if 'len_min' in policies:
         min_len = policies['len_min']
-        if len(password) < min_len:
+        if isinstance(min_len, int) and len(password) < min_len:
             errors.append(f"Password must be at least {min_len} characters long")
 
     # Check character class requirements
@@ -263,22 +267,13 @@ def check_admin_constraint(db, username, enabled):
 
     for user, data in users.items():
         if data.get('role') == 'administrator':
-            user_enabled = data.get('enabled', True)
+            user_enabled = is_true(data.get('enabled'), default=True)
             if user == username:
                 user_enabled = enabled
             if user_enabled:
                 admin_count += 1
 
     return admin_count >= 1
-
-
-def is_feature_enabled(db):
-    """Check if local user management is enabled in DEVICE_METADATA"""
-    config_db = get_config_db(db)
-
-    device_metadata = config_db.get_table(DEVICE_METADATA_TABLE)
-    localhost_data = device_metadata.get(DEVICE_METADATA_LOCALHOST_KEY, {})
-    return localhost_data.get(LOCAL_USER_MANAGEMENT_FIELD) == 'enabled'
 
 
 def get_existing_linux_users(uid_min=1000, uid_max=60000):
@@ -302,8 +297,8 @@ def get_existing_linux_users(uid_min=1000, uid_max=60000):
                 if len(parts) >= 2:
                     shadow_passwords[parts[0]] = parts[1]
     except (IOError, OSError):
-        # Shadow file may not be readable, continue with default password hash
-        pass
+        click.echo("Warning: Unable to read /etc/shadow. Imported users will have locked accounts ('!' password hash).")
+        click.echo("Run as root to import password hashes.")
 
     # Process each user
     for line in passwd_lines:
@@ -351,10 +346,10 @@ def get_existing_linux_users(uid_min=1000, uid_max=60000):
         auth_keys_file = f"{home}/.ssh/authorized_keys"
         try:
             with open(auth_keys_file, 'r') as f:
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith('#'):
-                        ssh_keys.append(line)
+                for ssh_line in f:
+                    ssh_line = ssh_line.strip()
+                    if ssh_line and not ssh_line.startswith('#'):
+                        ssh_keys.append(ssh_line)
         except (IOError, OSError):
             # SSH keys file may not exist or be readable
             pass
@@ -362,7 +357,7 @@ def get_existing_linux_users(uid_min=1000, uid_max=60000):
         users[username] = {
             'role': role,
             'password_hash': password_hash,
-            'enabled': shell != '/usr/sbin/nologin',
+            'enabled': 'true' if shell != '/usr/sbin/nologin' else 'false',
             'ssh_keys': ssh_keys,
             'uid': uid,
             'gid': gid,
@@ -411,7 +406,7 @@ def import_existing(db, dry_run, uid_range):
     to ensure a clean transition from system users to managed users.
     """
 
-    if is_feature_enabled(db):
+    if is_user_feature_enabled(db.cfgdb):
         click.echo("Error: Local user management is already enabled")
         click.echo("Import existing users before enabling the feature for safer operation")
         return
@@ -478,9 +473,7 @@ def import_existing(db, dry_run, uid_range):
 def add(db, username, role, password_hash, password_prompt, ssh_key, disabled):
     """Add a new user"""
 
-    if not is_feature_enabled(db):
-        click.echo("Error: Local user management is not enabled")
-        return
+    feature_enabled = is_user_feature_enabled(db.cfgdb)
 
     # Validate username
     valid, error_msg = validate_username(username)
@@ -503,15 +496,22 @@ def add(db, username, role, password_hash, password_prompt, ssh_key, disabled):
     if not success:
         return
 
+    # If no password provided, use locked password hash '!' (SSH-key-only user)
+    # Note: password_hash can be None when neither --password-prompt nor --password-hash is provided
     if not password_hash:
-        click.echo("Error: Failed to generate password hash")
+        password_hash = '!'
+
+    # Validate that user has at least one authentication method
+    if password_hash == '!' and not ssh_key:
+        click.echo("Error: User must have at least one authentication method")
+        click.echo("Please provide either a password (--password-prompt or --password-hash) or an SSH key (--ssh-key)")
         return
 
     # Prepare user data
     user_data = {
         'role': role,
         'password_hash': password_hash,
-        'enabled': not disabled
+        'enabled': 'false' if disabled else 'true'
     }
 
     if ssh_key:
@@ -520,6 +520,10 @@ def add(db, username, role, password_hash, password_prompt, ssh_key, disabled):
     # Add user to CONFIG_DB
     update_user_in_db(config_db, username, user_data, "added")
 
+    # Show warning if feature is not enabled
+    if not feature_enabled:
+        click.echo("Warning: Local user management is not enabled.")
+
 
 @click.command()
 @click.argument('username')
@@ -527,9 +531,7 @@ def add(db, username, role, password_hash, password_prompt, ssh_key, disabled):
 def delete(db, username):
     """Delete a user"""
 
-    if not is_feature_enabled(db):
-        click.echo("Error: Local user management is not enabled")
-        return
+    feature_enabled = is_user_feature_enabled(db.cfgdb)
 
     config_db = get_config_db(db)
 
@@ -539,14 +541,19 @@ def delete(db, username):
         click.echo(f"Error: User '{username}' does not exist")
         return
 
-    # Check admin constraint
-    if user_data.get('role') == 'administrator':
+    # Check admin constraint only when feature is enabled
+    # (when disabled, allow deleting even the last admin since userd won't act on it)
+    if feature_enabled and user_data.get('role') == 'administrator':
         if not check_admin_constraint(db, username, False):
             click.echo("Error: Cannot delete the last administrator user")
             return
 
     # Delete user
     update_user_in_db(config_db, username, None, "deleted")
+
+    # Show warning if feature is not enabled
+    if not feature_enabled:
+        click.echo("Warning: Local user management is not enabled.")
 
 
 @click.command()
@@ -563,9 +570,7 @@ def modify(db, username, password_hash, password_prompt, add_ssh_key, remove_ssh
            replace_ssh_keys, enabled_flag, disabled_flag):
     """Modify an existing user"""
 
-    if not is_feature_enabled(db):
-        click.echo("Error: Local user management is not enabled")
-        return
+    feature_enabled = is_user_feature_enabled(db.cfgdb)
 
     config_db = get_config_db(db)
 
@@ -606,29 +611,26 @@ def modify(db, username, password_hash, password_prompt, add_ssh_key, remove_ssh
     # Update user data - start with existing data and only modify specified fields
     updated_data = user_data.copy()
 
-    # Update password if specified
     if password_hash:
         updated_data['password_hash'] = password_hash
 
-    # Handle SSH key modifications (only if SSH key changes were requested)
     if add_ssh_key or remove_ssh_key or replace_ssh_keys:
         ssh_keys_result = handle_ssh_key_modifications(user_data, add_ssh_key,
                                                        remove_ssh_key, replace_ssh_keys)
-        if ssh_keys_result:
-            # Only set ssh_keys field if there are actual keys
-            updated_data['ssh_keys'] = ssh_keys_result
-        elif 'ssh_keys' in updated_data:
-            # Remove ssh_keys field if result is empty (all keys were removed)
-            del updated_data['ssh_keys']
+        updated_data['ssh_keys'] = ssh_keys_result
 
     # Update enabled status if specified
     if enabled_flag:
-        updated_data['enabled'] = True
+        updated_data['enabled'] = 'true'
     elif disabled_flag:
-        updated_data['enabled'] = False
+        updated_data['enabled'] = 'false'
 
     # Update user in CONFIG_DB
     update_user_in_db(config_db, username, updated_data, "modified")
+
+    # Show warning if feature is not enabled
+    if not feature_enabled:
+        click.echo("Warning: Local user management is not enabled.")
 
 
 @click.group()
@@ -645,14 +647,14 @@ def security_policy():
 def set_policy(db, role, max_login_attempts):
     """Set security policy for a role"""
 
-    if not is_feature_enabled(db):
+    if not is_user_feature_enabled(db.cfgdb):
         click.echo("Error: Local user management is not enabled")
         return
 
     config_db = get_config_db(db)
 
     policy_data = {
-        'max_login_attempts': max_login_attempts
+        'max_login_attempts': str(max_login_attempts)
     }
 
     try:
@@ -667,7 +669,7 @@ def set_policy(db, role, max_login_attempts):
 def clear_policy(db, role):
     """Clear security policy for a role"""
 
-    if not is_feature_enabled(db):
+    if not is_user_feature_enabled(db.cfgdb):
         click.echo("Error: Local user management is not enabled")
         return
 

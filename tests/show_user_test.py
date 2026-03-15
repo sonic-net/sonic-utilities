@@ -62,6 +62,7 @@ class TestShowUserCLI(unittest.TestCase):
             self.assertIn('SSH Keys: None', result.output)  # operator1 has no SSH keys
             self.assertIn('SSH Keys (2)', result.output)  # testuser has 2 SSH keys
         finally:
+            # Cleanup handled by mock_tables reset
             pass
 
     @mock.patch('show.user.can_view_passwords', return_value=True)
@@ -82,6 +83,7 @@ class TestShowUserCLI(unittest.TestCase):
             self.assertIn('$y$j9T$salt$operatorhash', result.output)
             self.assertIn('$y$j9T$salt$testuserhash', result.output)
         finally:
+            # Cleanup handled by mock_tables reset
             pass
 
     @mock.patch('show.user.can_view_passwords', return_value=False)
@@ -105,7 +107,7 @@ class TestShowUserCLI(unittest.TestCase):
             self.assertIn('administrator', result.output)
             self.assertIn('operator1', result.output)
         finally:
-
+            # Cleanup handled by mock_tables reset
             pass
 
     def test_show_user_specific(self):
@@ -124,7 +126,7 @@ class TestShowUserCLI(unittest.TestCase):
             self.assertIn('administrator', result.output)
             self.assertIn('Yes', result.output)  # enabled should show as "Yes"
         finally:
-
+            # Cleanup handled by mock_tables reset
             pass
 
     def test_show_user_not_found(self):
@@ -141,7 +143,7 @@ class TestShowUserCLI(unittest.TestCase):
             self.assertEqual(result.exit_code, 0)  # Command succeeds but shows error message
             self.assertIn("User 'nonexistent' not found", result.output)
         finally:
-
+            # Cleanup handled by mock_tables reset
             pass
 
     def test_show_user_with_sudo(self):
@@ -162,7 +164,7 @@ class TestShowUserCLI(unittest.TestCase):
             # Should show password hash from config_db.json when running with sudo
             self.assertIn('$y$j9T$salt$adminhash', result.output)
         finally:
-
+            # Cleanup handled by mock_tables reset
             pass
 
     @mock.patch('show.user.get_security_policies')
@@ -254,11 +256,15 @@ class TestShowUserCLI(unittest.TestCase):
             self.assertIn('testuser', result.output)
             self.assertIn('SSH Keys (2)', result.output)  # testuser has 2 SSH keys in config_db.json
         finally:
-
+            # Cleanup handled by mock_tables reset
             pass
 
     def test_show_user_disabled(self):
-        """Test showing disabled user"""
+        """Test showing disabled user.
+
+        Note: operator1 has "enabled": "false" (string) in config_db.json,
+        which should display as 'Enabled: No'.
+        """
 
         from .mock_tables import dbconnector
 
@@ -270,9 +276,10 @@ class TestShowUserCLI(unittest.TestCase):
 
             self.assertEqual(result.exit_code, 0)
             self.assertIn('operator1', result.output)
-            self.assertIn('No', result.output)  # operator1 is disabled in config_db.json
+            # Use specific assertion to verify disabled status (not just 'No' which could match other output)
+            self.assertIn('Enabled: No', result.output)
         finally:
-
+            # Cleanup handled by mock_tables reset
             pass
 
     def test_cli_ssh_key_formatting_through_show_commands(self):
@@ -314,7 +321,7 @@ class TestShowUserCLI(unittest.TestCase):
             self.assertEqual(result.exit_code, 0)
             self.assertIn("SSH Keys: None", result.output)
         finally:
-
+            # Cleanup handled by mock_tables reset
             pass
 
     @mock.patch('show.user.getpass.getuser')
@@ -358,7 +365,7 @@ class TestShowUserCLI(unittest.TestCase):
             self.assertIn('operator1', result.output)
             self.assertIn('administrator', result.output)
         finally:
-
+            # Cleanup handled by mock_tables reset
             pass
 
         # Test 4: Unknown user should NOT see password hashes
@@ -388,7 +395,7 @@ class TestShowUserCLI(unittest.TestCase):
             self.assertIn('SSH Keys (1)', result.output)  # admin has 1 key
             self.assertIn('SSH Keys (2)', result.output)  # testuser has 2 keys
         finally:
-
+            # Cleanup handled by mock_tables reset
             pass
 
     @mock.patch('show.user.get_user_database')
@@ -462,7 +469,7 @@ class TestShowUserCLI(unittest.TestCase):
             # Should not show password hashes (operator view)
             self.assertNotIn('$y$j9T$salt$adminhash', result.output)
         finally:
-
+            # Cleanup handled by mock_tables reset
             pass
 
     def test_show_user_with_missing_fields(self):
@@ -482,7 +489,7 @@ class TestShowUserCLI(unittest.TestCase):
             self.assertIn('No', result.output)  # operator1 is disabled in config_db.json
             self.assertIn('SSH Keys: None', result.output)  # operator1 has no SSH keys
         finally:
-
+            # Cleanup handled by mock_tables reset
             pass
 
     @mock.patch('show.user.get_user_database')
@@ -520,7 +527,7 @@ class TestShowUserCLI(unittest.TestCase):
             self.assertIn('SSH Keys (1)', result.output)  # admin has 1 SSH key
             self.assertIn('SSH Keys (2)', result.output)  # testuser has 2 SSH keys
         finally:
-
+            # Cleanup handled by mock_tables reset
             pass
 
     @mock.patch('show.user.get_user_database')
@@ -559,11 +566,7 @@ class TestShowUserCLI(unittest.TestCase):
         }
         mock_get_policies.return_value = mock_policies
 
-        # Use valid role name instead of 'test_role'
-        result = self.runner.invoke(show_user.show_security_policy, ['administrator'], obj=self.db)
-
-        # Should fail with exit code 2 because 'test_role' is not a valid choice
-        # But let's test with a valid role name and mock data
+        # Use valid role name and set appropriate mock data
         mock_policies = {
             'administrator': {
                 'max_login_attempts': 5,  # Integer
@@ -589,25 +592,14 @@ class TestShowUserCLI(unittest.TestCase):
         # Test database connection error during show users
         mock_get_users.side_effect = Exception("Database connection failed")
 
-        # Should handle database exceptions gracefully
-        try:
-            result = self.runner.invoke(show_user.show_users, [], obj=self.db)
-            # If no exception propagates, command should handle it gracefully
-            self.assertEqual(result.exit_code, 0)
-        except Exception:
-            # If exception propagates, it should be handled appropriately
-            pass
+        result = self.runner.invoke(show_user.show_users, [], obj=self.db)
+        # Command may fail gracefully (exit code 1) or suppress error (exit code 0)
+        self.assertIn(result.exit_code, [0, 1])
 
-        # Test with security policies
         with mock.patch('show.user.get_security_policies') as mock_get_policies:
             mock_get_policies.side_effect = Exception("Database connection failed")
-
-            try:
-                result = self.runner.invoke(show_user.show_security_policy, [], obj=self.db)
-                # Should handle gracefully
-                self.assertEqual(result.exit_code, 0)
-            except Exception:
-                pass
+            result = self.runner.invoke(show_user.show_security_policy, [], obj=self.db)
+            self.assertIn(result.exit_code, [0, 1])
 
     def test_show_users_case_sensitivity(self):
         """Test that usernames are case-sensitive in display"""
@@ -629,7 +621,7 @@ class TestShowUserCLI(unittest.TestCase):
             self.assertNotIn('ADMIN', result.output)
             self.assertNotIn('Admin', result.output)
         finally:
-
+            # Cleanup handled by mock_tables reset
             pass
 
     def test_show_user_details_case_sensitive_lookup(self):
@@ -651,7 +643,7 @@ class TestShowUserCLI(unittest.TestCase):
             self.assertEqual(result.exit_code, 0)
             self.assertIn("User 'ADMIN' not found", result.output)
         finally:
-
+            # Cleanup handled by mock_tables reset
             pass
 
     @mock.patch('show.user.get_user_database')
@@ -702,8 +694,9 @@ class TestShowUserCLI(unittest.TestCase):
 
         result = self.runner.invoke(show_user.show_users, [], obj=self.db)
 
-        # Should handle corrupted data gracefully (may fail with exit code 1)
-        self.assertIn(result.exit_code, [0, 1])
+        # Should handle corrupted data gracefully by skipping invalid users
+        # Prefer graceful handling (exit code 0) over failing
+        self.assertEqual(result.exit_code, 0)
 
     @mock.patch('show.user.get_user_database')
     def test_cli_special_username_handling(self, mock_get_users):
@@ -718,9 +711,7 @@ class TestShowUserCLI(unittest.TestCase):
         for username in special_usernames:
             with self.subTest(username=repr(username)):
                 result = self.runner.invoke(show_user.show_user_details, [username], obj=self.db)
-
                 self.assertEqual(result.exit_code, 0)
-                # When no users are configured, should show "No users configured"
                 self.assertIn("No users configured", result.output)
 
     @mock.patch('show.user.get_security_policies')
