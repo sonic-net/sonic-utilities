@@ -53,9 +53,9 @@ def disable_console_switch(db):
 
 
 #
-# 'console escape' group ('config console escape A|B|...')
+# 'console default_escape' group ('config console default_escape A|B|...')
 #
-@console.command('escape')
+@console.command('default_escape')
 @clicommon.pass_db
 @click.argument('escape', metavar='<escape_char|clear>', required=True,
                 type=click.Choice(list(string.ascii_letters) + ["clear"], case_sensitive=True))
@@ -65,11 +65,11 @@ def set_console_escape_char(db, escape):
 
     table = "CONSOLE_SWITCH"
     dataKey1 = 'console_mgmt'
-    dataKey2 = 'escape_char'
+    dataKey2 = 'default_escape_char'
 
     existing_entry = config_db.get_entry(table, dataKey1) or {}
     if escape == "clear":
-        # Remove the escape_char field while preserving other keys (e.g., 'enabled')
+        # Remove the default_escape_char field while preserving other keys (e.g., 'enabled')
         if dataKey2 in existing_entry:
             del existing_entry[dataKey2]
         data = existing_entry
@@ -93,7 +93,9 @@ def set_console_escape_char(db, escape):
 @click.option('--baud', '-b', metavar='<baud>', required=True, type=click.INT)
 @click.option('--flowcontrol', '-f', metavar='<flow_control>', required=False, is_flag=True)
 @click.option('--devicename', '-d', metavar='<device_name>', required=False)
-def add_console_setting(db, linenum, baud, flowcontrol, devicename):
+@click.option('--escape', '-e', metavar='<escape_char>', required=False,
+              type=click.Choice(list(string.ascii_letters), case_sensitive=True))
+def add_console_setting(db, linenum, baud, flowcontrol, devicename, escape):
     """Add Console-realted configuration tasks"""
     config_db = ValidatedConfigDBConnector(db.cfgdb)
 
@@ -101,6 +103,7 @@ def add_console_setting(db, linenum, baud, flowcontrol, devicename):
     dataKey1 = 'baud_rate'
     dataKey2 = 'flow_control'
     dataKey3 = 'remote_device'
+    dataKey4 = 'escape_char'
 
     ctx = click.get_current_context()
     data = config_db.get_entry(table, linenum)
@@ -114,6 +117,9 @@ def add_console_setting(db, linenum, baud, flowcontrol, devicename):
             if isExistingSameDevice(config_db, devicename, table):
                 ctx.fail("Given device name {} has been used. Please enter a valid device name or remove the existing one !!".format(devicename))
             console_entry[dataKey3] = devicename
+
+        if escape:
+            console_entry[dataKey4] = escape.lower()
 
         try:
             config_db.set_entry(table, linenum, console_entry)
@@ -150,7 +156,7 @@ def remove_console_setting(db, linenum):
 @clicommon.pass_db
 @click.argument('linenum', metavar='<line_number>', required=True, type=click.IntRange(0, 65535))
 @click.argument('devicename', metavar='<device_name>', required=False)
-def upate_console_remote_device_name(db, linenum, devicename):
+def update_console_remote_device_name(db, linenum, devicename):
     """Update remote device name for a console line"""
     config_db = ValidatedConfigDBConnector(db.cfgdb)
     ctx = click.get_current_context()
@@ -239,6 +245,36 @@ def update_console_flow_control(db, mode, linenum):
                 config_db.mod_entry(table, linenum, data)
             except ValueError as e:
                 ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+    else:
+        ctx.fail("Trying to update console port setting, which is not present.")
+
+#
+# 'console escape' group ('config console escape ...')
+#
+@console.command('escape')
+@clicommon.pass_db
+@click.argument('linenum', metavar='<line_number>', required=True, type=click.IntRange(0, 65535))
+@click.argument('escape', metavar='<escape_char|clear>', required=True,
+                type=click.Choice(list(string.ascii_letters) + ["clear"], case_sensitive=True))
+def update_console_escape_char(db, linenum, escape):
+    """Update escape character for a console line"""
+    config_db = ValidatedConfigDBConnector(db.cfgdb)
+    ctx = click.get_current_context()
+
+    table = "CONSOLE_PORT"
+    dataKey = 'escape_char'
+
+    data = config_db.get_entry(table, linenum)
+    if data:
+        if escape == "clear" and dataKey in data:
+            del data[dataKey]
+        else:
+            data[dataKey] = escape.lower()
+
+        try:
+            config_db.set_entry(table, linenum, data)
+        except ValueError as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
     else:
         ctx.fail("Trying to update console port setting, which is not present.")
 
