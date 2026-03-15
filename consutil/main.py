@@ -41,7 +41,7 @@ def show(db, brief):
     ports.sort(key=lambda p: int(p.line_num))
 
     # set table header style
-    header = ["Line", "Baud", "Flow Control", "PID", "Start Time", "Device"]
+    header = ["Line", "Baud", "Flow Control", "PID", "Start Time", "Device", "Escape Char"]
     body = []
     for port in ports:
         # runtime information
@@ -50,7 +50,16 @@ def show(db, brief):
         date = port.session_start_date if port.session_start_date else "-"
         baud = port.baud
         flow_control = "Enabled" if port.flow_control else "Disabled"
-        body.append([busy+port.line_num, baud if baud else "-", flow_control, pid if pid else "-", date if date else "-", port.remote_device])
+        escape_char = port._escape_char.upper() if port._escape_char else "-"
+        body.append([
+            busy+port.line_num,
+            baud if baud else "-",
+            flow_control,
+            pid if pid else "-",
+            date if date else "-",
+            port.remote_device,
+            escape_char,
+        ])
     click.echo(tabulate(body, header, stralign='right'))
 
 # 'clear' subcommand
@@ -108,7 +117,8 @@ def connect(db, target, devicename):
         sys.exit(ERR_DEV)
 
     # interact
-    click.echo("Successful connection to line [{}]\nPress ^A ^X to disconnect".format(line_num))
+    click.echo("Successful connection to line [{}]\nPress ^{} ^X to disconnect"
+               .format(line_num, target_port._escape_char.upper() if target_port._escape_char is not None else "A"))
     session.interact()
 
 if __name__ == '__main__':
