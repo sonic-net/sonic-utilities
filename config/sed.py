@@ -14,17 +14,16 @@ def change_password(password):
     try:
         from sonic_platform import platform
         chassis = platform.Platform().get_chassis()
-        if not hasattr(chassis, 'change_sed_password'):
+        sed_mgmt = chassis.get_sed_mgmt()
+        if sed_mgmt is None:
             click.echo("Error: SED management not supported on this platform")
             return
         click.echo("Handling SED password change started...")
-        success = chassis.change_sed_password(password)
+        success = sed_mgmt.change_sed_password(password)
         if success:
             click.echo("SED password change process completed successfully")
         else:
             click.echo("Error: SED password change failed")
-    except NotImplementedError:
-        click.echo("Error: SED management not implemented on this platform")
     except Exception as e:
         click.echo(f"Error changing SED password: {str(e)}")
 
@@ -35,16 +34,15 @@ def reset_password():
     try:
         from sonic_platform import platform
         chassis = platform.Platform().get_chassis()
-        if not hasattr(chassis, 'reset_sed_password'):
+        sed_mgmt = chassis.get_sed_mgmt()
+        if sed_mgmt is None:
             click.echo("Error: SED management not supported on this platform")
             return
         click.echo("Handling SED password reset started...")
-        success = chassis.reset_sed_password()
+        success = sed_mgmt.reset_sed_password()
         if success:
             click.echo("SED password reset process completed successfully")
         else:
             click.echo("Error: SED password reset failed")
-    except NotImplementedError:
-        click.echo("Error: SED management not implemented on this platform")
     except Exception as e:
         click.echo(f"Error resetting SED password: {str(e)}")

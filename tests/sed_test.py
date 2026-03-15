@@ -13,7 +13,9 @@ class TestSed(object):
         """Test successful password change"""
         runner = CliRunner()
         mock_chassis = MagicMock()
-        mock_chassis.change_sed_password.return_value = True
+        mock_sed_mgmt = MagicMock()
+        mock_sed_mgmt.change_sed_password.return_value = True
+        mock_chassis.get_sed_mgmt.return_value = mock_sed_mgmt
         mock_platform.return_value.get_chassis.return_value = mock_chassis
         result = runner.invoke(
             config.config.commands["sed"].commands["change-password"],
@@ -21,14 +23,16 @@ class TestSed(object):
         )
         assert "Handling SED password change started..." in result.output
         assert "SED password change process completed successfully" in result.output
-        mock_chassis.change_sed_password.assert_called_once_with("validpassword")
+        mock_sed_mgmt.change_sed_password.assert_called_once_with("validpassword")
 
     @patch('sonic_platform.platform.Platform')
     def test_change_password_failure(self, mock_platform):
         """Test failed password change"""
         runner = CliRunner()
         mock_chassis = MagicMock()
-        mock_chassis.change_sed_password.return_value = False
+        mock_sed_mgmt = MagicMock()
+        mock_sed_mgmt.change_sed_password.return_value = False
+        mock_chassis.get_sed_mgmt.return_value = mock_sed_mgmt
         mock_platform.return_value.get_chassis.return_value = mock_chassis
         result = runner.invoke(
             config.config.commands["sed"].commands["change-password"],
@@ -38,24 +42,26 @@ class TestSed(object):
         assert "Error: SED password change failed" in result.output
 
     @patch('sonic_platform.platform.Platform')
-    def test_change_password_not_implemented(self, mock_platform):
-        """Test NotImplementedError handling"""
+    def test_change_password_not_supported(self, mock_platform):
+        """Test when SED management is not supported (get_sed_mgmt returns None)"""
         runner = CliRunner()
         mock_chassis = MagicMock()
-        mock_chassis.change_sed_password.side_effect = NotImplementedError
+        mock_chassis.get_sed_mgmt.return_value = None
         mock_platform.return_value.get_chassis.return_value = mock_chassis
         result = runner.invoke(
             config.config.commands["sed"].commands["change-password"],
             ["-p", "validpassword"]
         )
-        assert "Error: SED management not implemented on this platform" in result.output
+        assert "Error: SED management not supported on this platform" in result.output
 
     @patch('sonic_platform.platform.Platform')
     def test_change_password_exception(self, mock_platform):
         """Test general exception handling"""
         runner = CliRunner()
         mock_chassis = MagicMock()
-        mock_chassis.change_sed_password.side_effect = Exception("Test error")
+        mock_sed_mgmt = MagicMock()
+        mock_sed_mgmt.change_sed_password.side_effect = Exception("Test error")
+        mock_chassis.get_sed_mgmt.return_value = mock_sed_mgmt
         mock_platform.return_value.get_chassis.return_value = mock_chassis
         result = runner.invoke(
             config.config.commands["sed"].commands["change-password"],
@@ -68,7 +74,9 @@ class TestSed(object):
         """Test successful password reset"""
         runner = CliRunner()
         mock_chassis = MagicMock()
-        mock_chassis.reset_sed_password.return_value = True
+        mock_sed_mgmt = MagicMock()
+        mock_sed_mgmt.reset_sed_password.return_value = True
+        mock_chassis.get_sed_mgmt.return_value = mock_sed_mgmt
         mock_platform.return_value.get_chassis.return_value = mock_chassis
         result = runner.invoke(
             config.config.commands["sed"].commands["reset-password"],
@@ -76,14 +84,16 @@ class TestSed(object):
         )
         assert "Handling SED password reset started..." in result.output
         assert "SED password reset process completed successfully" in result.output
-        mock_chassis.reset_sed_password.assert_called_once()
+        mock_sed_mgmt.reset_sed_password.assert_called_once()
 
     @patch('sonic_platform.platform.Platform')
     def test_reset_password_failure(self, mock_platform):
         """Test failed password reset"""
         runner = CliRunner()
         mock_chassis = MagicMock()
-        mock_chassis.reset_sed_password.return_value = False
+        mock_sed_mgmt = MagicMock()
+        mock_sed_mgmt.reset_sed_password.return_value = False
+        mock_chassis.get_sed_mgmt.return_value = mock_sed_mgmt
         mock_platform.return_value.get_chassis.return_value = mock_chassis
         result = runner.invoke(
             config.config.commands["sed"].commands["reset-password"],
@@ -93,25 +103,26 @@ class TestSed(object):
         assert "Error: SED password reset failed" in result.output
 
     @patch('sonic_platform.platform.Platform')
-    def test_reset_password_not_implemented(self, mock_platform):
-        """Test NotImplementedError handling for reset"""
+    def test_reset_password_not_supported(self, mock_platform):
+        """Test when SED management is not supported (get_sed_mgmt returns None)"""
         runner = CliRunner()
         mock_chassis = MagicMock()
-        mock_chassis.reset_sed_password.side_effect = NotImplementedError
+        mock_chassis.get_sed_mgmt.return_value = None
         mock_platform.return_value.get_chassis.return_value = mock_chassis
-
         result = runner.invoke(
             config.config.commands["sed"].commands["reset-password"],
             []
         )
-        assert "Error: SED management not implemented on this platform" in result.output
+        assert "Error: SED management not supported on this platform" in result.output
 
     @patch('sonic_platform.platform.Platform')
     def test_reset_password_exception(self, mock_platform):
         """Test general exception handling for reset"""
         runner = CliRunner()
         mock_chassis = MagicMock()
-        mock_chassis.reset_sed_password.side_effect = Exception("Reset test error")
+        mock_sed_mgmt = MagicMock()
+        mock_sed_mgmt.reset_sed_password.side_effect = Exception("Reset test error")
+        mock_chassis.get_sed_mgmt.return_value = mock_sed_mgmt
         mock_platform.return_value.get_chassis.return_value = mock_chassis
         result = runner.invoke(
             config.config.commands["sed"].commands["reset-password"],
