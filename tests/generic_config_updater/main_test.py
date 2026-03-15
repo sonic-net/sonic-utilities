@@ -625,7 +625,8 @@ class TestApplyPatchSubcommand(unittest.TestCase):
 
     def _make_args(self, patch_file='/fake/p.json', fmt='CONFIGDB',
                    verbose=False, dry_run=False, parallel=False,
-                   ignore_non_yang_tables=False, ignore_path=None):
+                   ignore_non_yang_tables=False, ignore_path=None,
+                   path_trace=None):
         return Namespace(
             patch_file=patch_file,
             format=fmt,
@@ -634,6 +635,7 @@ class TestApplyPatchSubcommand(unittest.TestCase):
             parallel=parallel,
             ignore_non_yang_tables=ignore_non_yang_tables,
             ignore_path=ignore_path or [],
+            path_trace=path_trace,
         )
 
     def test_success(self):

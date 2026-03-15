@@ -516,7 +516,7 @@ def apply_patch(args):
             if args.dry_run:
                 print("** DRY RUN EXECUTION **")
 
-        if args.path_trace:
+        if getattr(args, 'path_trace', None):
             trace_file = open(args.path_trace, 'w')
 
         apply_patch_from_file(
