@@ -382,12 +382,13 @@ def get_asicdb_sids(namespace):
 
 def is_suppress_fib_pending_enabled(namespace):
     """
-    Returns True if FIB suppression is enabled, False otherwise
+    Returns True if FIB suppression is operationally enabled, False otherwise.
     """
-    cfg_db = multi_asic.connect_config_db_for_ns(namespace)
-    state = cfg_db.get_entry('DEVICE_METADATA', 'localhost').get('suppress-fib-pending')
+    state_db = swsscommon.DBConnector('STATE_DB', REDIS_TIMEOUT_MSECS, True, namespace)
+    tbl = swsscommon.Table(state_db, 'FIB_SUPPRESS_TABLE')
+    status, value = tbl.hget('system', 'oper_state')
 
-    return state == 'enabled'
+    return status and value == 'enabled'
 
 
 def fetch_routes(ipv6=False, namespace=multi_asic.DEFAULT_NAMESPACE):
