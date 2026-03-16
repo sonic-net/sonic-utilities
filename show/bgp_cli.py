@@ -164,15 +164,19 @@ def show_aggregate_address(db, af):
     try:
         state_db = db.db
         state_db.connect(state_db.STATE_DB, False)
-        keys = state_db.keys(state_db.STATE_DB, "BGP_AGGREGATE_ADDRESS|*")
+        keys = state_db.keys(state_db.STATE_DB, f"{CFG_BGP_AGGREGATE_ADDRESS}|*") 
         if keys:
             for key in keys:
                 entry_key = key.split("|", 1)[1]
                 state_table[entry_key] = state_db.get_all(state_db.STATE_DB, key)
-    except Exception:
-        pass
+    except Exception as exec:
+        click.echo(f"Warning:failed to read BGP aggregate state from STATE_DB: {exec}\n", err=True)
 
-    for prefix in sorted(cfg_table.keys()):
+    for prefix in sorted(cfg_table.keys(),
+                         key=lambda p: (
+                             ipaddress.ip_network(p, strict=False).version,
+                             ipaddress.ip_network(p, strict=False),
+                             p)):
         # Filter by address family
         try:
             net = ipaddress.ip_network(prefix, strict=False)

@@ -3082,6 +3082,46 @@ This command displays BGP device global configuration.
   enabled  enabled
   ```
 
+**show ip bgp aggregate-address**
+
+This command displays configured IPv4 BGP aggregate addresses from the CONFIG_DB.
+
+- Usage:
+  ```
+  show ip bgp aggregate-address
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show ip bgp aggregate-address
+  Flags: A - As Set, B - BBR Required, S - Summary Only
+
+  Prefix          State    Option Flags    Aggregate Address Prefix List    Contributing Address Prefix List
+  --------------  -------  --------------  -------------------------------  ----------------------------------
+  10.0.0.0/24     N/A      A,B,S
+  192.168.0.0/24  Active   B               AGG_ROUTES_V4                    AGG_CONTRIBUTING_ROUTES_V4
+  ```
+
+**show ipv6 bgp aggregate-address**
+
+This command displays configured IPv6 BGP aggregate addresses from the CONFIG_DB.
+
+- Usage:
+  ```
+  show ipv6 bgp aggregate-address
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show ipv6 bgp aggregate-address
+  Flags: A - As Set, B - BBR Required, S - Summary Only
+
+  Prefix       State    Option Flags    Aggregate Address Prefix List    Contributing Address Prefix List
+  -----------  -------  --------------  -------------------------------  ----------------------------------
+  fc00:1::/64  Active   A               AGG_ROUTES_V6                    AGG_CONTRIBUTING_ROUTES_V6
+  fc00:3::/64  N/A      B,S
+  ```
+
 Go Back To [Beginning of the document](#) or [Beginning of this section](#bgp)
 
 ### BGP config commands
@@ -3210,6 +3250,45 @@ Feature list:
   ```bash
   admin@sonic:~$ config bgp device-global tsa enabled
   admin@sonic:~$ config bgp device-global w-ecmp enabled
+  ```
+
+**config bgp aggregate-address add**
+
+This command adds a BGP aggregate address entry to the CONFIG_DB.
+
+- Usage:
+  ```
+  config bgp aggregate-address add <ip-prefix> [--bbr-required] [--summary-only] [--as-set]
+      [--aggregate-address-prefix-list <name>] [--contributing-address-prefix-list <name>]
+  ```
+
+- Options:
+  - _--bbr-required_: set if BBR is required for generating aggregate address
+  - _--summary-only_: only advertise the summary of aggregate address
+  - _--as-set_: include the AS set when advertising the aggregated address
+  - _--aggregate-address-prefix-list_: prefix list to match aggregated address
+  - _--contributing-address-prefix-list_: prefix list to filter contributing addresses
+
+- Examples:
+  ```
+  admin@sonic:~$ sudo config bgp aggregate-address add 192.168.0.0/24 --bbr-required --summary-only
+  ```
+  ```
+  admin@sonic:~$ sudo config bgp aggregate-address add fc00:1::/64 --as-set --aggregate-address-prefix-list AGG_ROUTES_V6 --contributing-address-prefix-list AGG_CONTRIBUTING_ROUTES_V6
+  ```
+
+**config bgp aggregate-address remove**
+
+This command removes a BGP aggregate address entry from the CONFIG_DB.
+
+- Usage:
+  ```
+  config bgp aggregate-address remove <ip-prefix>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config bgp aggregate-address remove 192.168.0.0/24
   ```
 
 Go Back To [Beginning of the document](#) or [Beginning of this section](#bgp)

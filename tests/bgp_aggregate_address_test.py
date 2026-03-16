@@ -211,7 +211,7 @@ class TestBgpAggregateAddress:
 
     def test_show_ip_bgp_aggregate_address(self, setup_bgp_commands):
         dbconnector.dedicated_dbs["CONFIG_DB"] = os.path.join(
-            mock_config_path, "aggregate_address.json")
+            mock_config_path, "aggregate_address")
 
         db = Db()
         runner = CliRunner()
@@ -229,7 +229,7 @@ class TestBgpAggregateAddress:
 
     def test_show_ipv6_bgp_aggregate_address(self, setup_bgp_commands):
         dbconnector.dedicated_dbs["CONFIG_DB"] = os.path.join(
-            mock_config_path, "aggregate_address.json")
+            mock_config_path, "aggregate_address")
 
         db = Db()
         runner = CliRunner()
@@ -247,7 +247,7 @@ class TestBgpAggregateAddress:
 
     def test_show_ip_bgp_aggregate_address_empty(self, setup_bgp_commands):
         dbconnector.dedicated_dbs["CONFIG_DB"] = os.path.join(
-            mock_config_path, "aggregate_address_empty.json")
+            mock_config_path, "aggregate_address_empty")
 
         db = Db()
         runner = CliRunner()
