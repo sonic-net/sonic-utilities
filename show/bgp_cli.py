@@ -164,7 +164,7 @@ def show_aggregate_address(db, af):
     try:
         state_db = db.db
         state_db.connect(state_db.STATE_DB, False)
-        keys = state_db.keys(state_db.STATE_DB, f"{CFG_BGP_AGGREGATE_ADDRESS}|*") 
+        keys = state_db.keys(state_db.STATE_DB, f"{CFG_BGP_AGGREGATE_ADDRESS}|*")
         if keys:
             for key in keys:
                 entry_key = key.split("|", 1)[1]

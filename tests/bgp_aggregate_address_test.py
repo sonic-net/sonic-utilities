@@ -1,4 +1,3 @@
-import pytest
 import os
 import logging
 import show.main as show
