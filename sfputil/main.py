@@ -1576,7 +1576,7 @@ def download_firmware(port_name, filepath):
     except NotImplementedError:
         click.echo("Platform doesn't implement optoe write max change. Skipping value increase.")
 
-    with click.progressbar(length=file_size, label="Downloading ...") as bar:
+    with click.progressbar(length=file_size - startLPLsize, label="Downloading ...") as bar:
         address = 0
         if lplonly_flag:
             BLOCK_SIZE = min(MAX_LPL_FIRMWARE_BLOCK_SIZE, maxblocksize)
