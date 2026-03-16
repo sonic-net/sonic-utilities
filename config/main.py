@@ -1399,6 +1399,8 @@ def multiasic_save_to_singlefile(db, filename):
     click.echo("Integrate each ASIC's config into a single JSON file {}.".format(filename))
     with open(filename, 'w') as file:
         json.dump(all_current_config, file, indent=4)
+        file.flush()
+        os.fsync(file.fileno())
 
 
 def apply_patch_wrapper(args):
@@ -1810,6 +1812,8 @@ def save(db, filename):
         config_db = sort_dict(read_json_file(file))
         with open(file, 'w') as config_db_file:
             json.dump(config_db, config_db_file, indent=4)
+            config_db_file.flush()
+            os.fsync(config_db_file.fileno())
 
 @config.command()
 @click.option('-y', '--yes', is_flag=True)
