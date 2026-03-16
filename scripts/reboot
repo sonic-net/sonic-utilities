@@ -138,6 +138,21 @@ function clear_warm_boot()
     /sbin/kexec -u -a || /bin/true
 }
 
+function backup_database()
+{
+   COLD_DIR=/host/coldboot
+   REDIS_FILE=dump.rdb
+   mkdir -p $COLD_DIR
+
+   # Dump redis EventDB content to file in case 'dump.rdb' in case of coldreboot
+   sonic-db-cli EVENT_DB save
+
+   docker cp database:/var/lib/redis1/$REDIS_FILE $COLD_DIR
+
+   # Cleanup all dump.rdb files, if any
+   docker exec -i database find /var/lib/ | grep $REDIS_FILE | xargs docker exec -i database rm
+}
+
 SCRIPT=$0
 
 function show_help_and_exit()
@@ -317,6 +332,8 @@ if [[ x"$ASAN" == x"yes" ]]; then
 fi
 
 clear_warm_boot
+
+backup_database
 
 # Update the reboot cause file to reflect that user issued 'reboot' command
 # Upon next boot, the contents of this file will be used to determine the
