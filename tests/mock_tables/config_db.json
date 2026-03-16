@@ -919,7 +919,7 @@
         "set_owner": "local"
     },
     "FEATURE|sflow": {
-        "state": "disabled",
+        "state": "enabled",
         "auto_restart": "enabled",
         "high_mem_alert": "disabled",
         "set_owner": "local"
