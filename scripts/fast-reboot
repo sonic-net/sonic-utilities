@@ -761,6 +761,26 @@ function check_db_integrity()
     fi
 }
 
+function check_suppress_fib_pending()
+{
+    if [[ "$REBOOT_TYPE" = "warm-reboot" || "$REBOOT_TYPE" = "express-reboot" ]]; then
+        SUPPRESS_FIB_OPER=$(sonic-db-cli -n "$NETNS" STATE_DB hget "FIB_SUPPRESS_TABLE|system" "oper_state")
+        SUPPRESS_FIB_OPER=${SUPPRESS_FIB_OPER:-disabled}
+
+        SUPPRESS_FIB_CONFIG=$(sonic-db-cli -n "$NETNS" CONFIG_DB hget "DEVICE_METADATA|localhost" "suppress-fib-pending")
+        SUPPRESS_FIB_CONFIG=${SUPPRESS_FIB_CONFIG:-disabled}
+
+        if [[ "$SUPPRESS_FIB_CONFIG" != "$SUPPRESS_FIB_OPER" ]]; then
+            error "CONFIG_DB suppress-fib-pending ($SUPPRESS_FIB_CONFIG) does not match oper state ($SUPPRESS_FIB_OPER)"
+            error "Config change not yet applied. Warm reboot is not supported with unapplied config changes."
+            error "To apply the config change, use: 'systemctl restart swss' or 'config reload -y'"
+            error "After applying, you can perform warm reboot."
+            exit ${EXIT_FAILURE}
+        fi
+        debug "suppress-fib-pending config is consistent with oper state"
+    fi
+}
+
 function reboot_pre_check()
 {
     execute_in_namespaces asic check_pfc_storm_active
@@ -773,6 +793,7 @@ function reboot_pre_check()
     rm ${filename}
 
     execute_in_namespaces asic check_db_integrity
+    execute_in_namespaces asic check_suppress_fib_pending
 
     # Make sure /host has enough space for warm reboot temp files
     avail=$(df -k /host | tail -1 | awk '{ print $4 }')
