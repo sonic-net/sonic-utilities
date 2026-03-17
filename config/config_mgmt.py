@@ -228,8 +228,34 @@ class ConfigMgmt():
             configdb = self.configdb
         sonic_cfggen.deep_update(data, sonic_cfggen.FormatConverter.to_deserialized(jDiff))
         self.sysLog(msg="Write in DB: {}".format(data))
-        configdb.mod_config(sonic_cfggen.FormatConverter.output_to_db(data))
+        db_payload = sonic_cfggen.FormatConverter.output_to_db(data)
+        configdb.mod_config(db_payload)
 
+        # Handle deletion of column key when it's value is 'None' using set_entry
+        # data: config data in a dictionary form
+        # {
+        #     'TABLE_NAME': { 'row_key': {'column_key': None, ...}, ...}
+        # }
+        for table_name, table_data in db_payload.items():
+            if table_data is None:
+                continue
+            for row_key, row_val in table_data.items():
+                if row_val is None:
+                    continue
+                elif isinstance(row_val, dict):
+                    # Only fetch the existing entry if there is at least one column
+                    # with a None value that needs deletion.
+                    if not any(col_val is None for col_val in row_val.values()):
+                        continue
+                    entry = configdb.get_entry(table_name, row_key)
+                    if entry and isinstance(entry, dict):
+                        need_modification = 0
+                        for col_key, col_val in row_val.items():
+                            if col_key in entry and col_val is None:
+                                need_modification = 1
+                                del entry[col_key]
+                        if need_modification == 1:
+                            configdb.set_entry(table_name, row_key, entry)
         return
 
     def add_module(self, yang_module_str):
