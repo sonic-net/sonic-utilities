@@ -150,7 +150,7 @@ sonic_cfggen = load_module_from_source('sonic_cfggen', '/usr/local/bin/sonic-cfg
 #
 
 
-# get_all_running_config is imported from generic_config_updater.gcu
+# get_all_running_config is imported from generic_config_updater.main
 
 
 # Sort nested dict

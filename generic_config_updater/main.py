@@ -527,7 +527,7 @@ def apply_patch(args):
             parallel=args.parallel,
             ignore_non_yang_tables=args.ignore_non_yang_tables,
             ignore_path=args.ignore_path,
-            preprocess=False,
+            preprocess=True,
             trace_io=trace_file,
         )
 

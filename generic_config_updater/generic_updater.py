@@ -1,4 +1,5 @@
 import json
+import jsonpatch
 import jsonpointer
 import os
 import subprocess
@@ -7,7 +8,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import IO, Optional
 from .gu_common import HOST_NAMESPACE, GenericConfigUpdaterError, EmptyTableError, ConfigWrapper, \
-                    DryRunConfigWrapper, PatchWrapper, genericUpdaterLogging
+                    DryRunConfigWrapper, JsonChange, PatchWrapper, genericUpdaterLogging
 from .patch_sorter import StrictPatchSorter, NonStrictPatchSorter, ConfigSplitter, \
                         TablesWithoutYangConfigSplitter, IgnorePathsFromYangConfigSplitter
 from .change_applier import ChangeApplier, DryRunChangeApplier
