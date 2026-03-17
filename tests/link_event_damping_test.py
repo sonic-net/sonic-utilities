@@ -1,8 +1,5 @@
 import os
-import sys
-import pytest
 from click.testing import CliRunner
-from unittest import mock
 from unittest.mock import patch, MagicMock
 
 import config.main as config
