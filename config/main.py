@@ -6407,10 +6407,17 @@ def enable(ctx, interface_name, half_life, reuse, suppress, max_suppress_time,
             half_life, max_suppress_time))
 
     # Calculate ceiling and warn if very high
-    ceiling = reuse * (2 ** (max_suppress_time / half_life))
-    if ceiling > 100000:
-        click.echo("Warning: calculated penalty ceiling is very high ({:.0f}). "
-                    "Consider reducing max-suppress-time or increasing reuse threshold.".format(ceiling))
+    exponent = max_suppress_time / half_life
+    if exponent > 50:
+        click.echo("Warning: calculated penalty ceiling is extremely high "
+                    "(exponent={:.0f}). Consider reducing max-suppress-time or "
+                    "increasing half-life.".format(exponent))
+    else:
+        ceiling = reuse * (2 ** exponent)
+        if ceiling > 100000:
+            click.echo("Warning: calculated penalty ceiling is very high ({:.0f}). "
+                        "Consider reducing max-suppress-time or increasing reuse "
+                        "threshold.".format(ceiling))
 
     algorithm = "aied-monitor" if monitor else "aied"
 

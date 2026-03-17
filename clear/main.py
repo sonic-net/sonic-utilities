@@ -787,9 +787,15 @@ def dampening(interface_name):
     port_table = config_db.get_table("PORT")
 
     if interface_name:
+        if clicommon.get_interface_naming_mode() == "alias":
+            alias = interface_name
+            interface_name = clicommon.InterfaceAliasConverter().alias_to_name(interface_name)
+            if interface_name == alias:
+                click.echo("Error: invalid interface alias {}".format(alias))
+                sys.exit(1)
         if interface_name not in port_table:
             click.echo("Error: Interface {} does not exist".format(interface_name))
-            raise SystemExit(1)
+            sys.exit(1)
         ports_to_clear = [interface_name]
     else:
         ports_to_clear = []
