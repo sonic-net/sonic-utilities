@@ -93,7 +93,7 @@ test_v4_in_v4-0  160.164.191.1/32          100.251.7.1
         runner = CliRunner()
         db = Db()
         
-        result = runner.invoke(show.cli.commands['vnet'].commands['routes'].commands['name'], ['test_v4_in_v4-0'], obj=db)
+        result = runner.invoke(show.cli.commands['vnet'].commands['routes'].commands['all'], ['test_v4_in_v4-0'], obj=db)
         assert result.exit_code == 0
         expected_output = """\
 vnet name    prefix    nexthop    interface
