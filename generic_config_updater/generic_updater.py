@@ -1,4 +1,5 @@
 import json
+import jsonpatch
 import jsonpointer
 import os
 import subprocess
@@ -7,7 +8,7 @@ from datetime import datetime, timezone
 from enum import Enum
 from typing import IO, Optional
 from .gu_common import HOST_NAMESPACE, GenericConfigUpdaterError, EmptyTableError, ConfigWrapper, \
-                    DryRunConfigWrapper, PatchWrapper, genericUpdaterLogging
+                    DryRunConfigWrapper, JsonChange, PatchWrapper, genericUpdaterLogging
 from .patch_sorter import StrictPatchSorter, NonStrictPatchSorter, ConfigSplitter, \
                         TablesWithoutYangConfigSplitter, IgnorePathsFromYangConfigSplitter
 from .change_applier import ChangeApplier, DryRunChangeApplier
@@ -129,6 +130,20 @@ class PatchApplier:
                                 which is not allowed in ConfigDb. \
                                 Table{'s' if len(empty_tables) != 1 else ''}: {empty_tables_txt}")
         # Generate list of changes to apply
+
+        # Skip sorting for DENY_NEW_INGRESS_TABLE patches
+        if sort:
+            deny_path = "/ACL_TABLE/DENY_NEW_INGRESS_TABLE"
+            for operation in patch:
+                path = operation.get("path", "")
+                if path.startswith(deny_path):
+                    self.logger.log_notice(
+                        f"{scope}: patch targets "
+                        f"{deny_path}, skipping sort."
+                    )
+                    sort = False
+                    break
+
         if sort:
             self.logger.log_notice(f"{scope}: sorting patch updates.")
             changes = self.patchsorter.sort(patch, trace_io=trace_io)

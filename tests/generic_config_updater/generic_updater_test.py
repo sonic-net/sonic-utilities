@@ -1,4 +1,5 @@
 import json
+import jsonpatch
 import os
 import shutil
 import unittest
@@ -46,6 +47,82 @@ class TestPatchApplier(unittest.TestCase):
         patch_applier.changeapplier.apply.assert_called()
         patch_applier.patch_wrapper.verify_same_json.assert_has_calls(
             [call(Files.CONFIG_DB_AFTER_MULTI_PATCH, Files.CONFIG_DB_AFTER_MULTI_PATCH)])
+
+    def test_apply__deny_new_ingress_table__sort_skipped(self):
+        """Patch targeting ACL_TABLE/DENY_NEW_INGRESS_TABLE
+        should skip sorting."""
+        # Arrange
+        deny_patch = jsonpatch.JsonPatch([
+            {
+                "op": "add",
+                "path": "/ACL_TABLE/DENY_NEW_INGRESS_TABLE/ports",
+                "value": ["Ethernet0", "Ethernet1"]
+            }
+        ])
+        patch_applier = self.__create_patch_applier_for_patch(
+            deny_patch
+        )
+
+        # Act
+        patch_applier.apply(deny_patch)
+
+        # Assert - sort should NOT be called
+        patch_applier.patchsorter.sort.assert_not_called()
+
+    def test_apply__non_deny_ingress_table__sort_not_skipped(self):
+        """Patch NOT targeting ACL_TABLE/DENY_NEW_INGRESS_TABLE
+        should still sort."""
+        # Arrange
+        normal_patch = jsonpatch.JsonPatch([
+            {
+                "op": "add",
+                "path": "/ACL_TABLE/SOME_OTHER_TABLE/ports",
+                "value": ["Ethernet0"]
+            }
+        ])
+        changes = [Mock()]
+        patch_applier = self.__create_patch_applier_for_patch(
+            normal_patch, changes=changes
+        )
+
+        # Act
+        patch_applier.apply(normal_patch)
+
+        # Assert - sort SHOULD be called
+        patch_applier.patchsorter.sort.assert_called_once()
+
+    def __create_patch_applier_for_patch(
+        self, patch_obj, changes=None
+    ):
+        """Helper to create PatchApplier with mocks for any patch."""
+        config_wrapper = Mock()
+        old_config = {"ACL_TABLE": {}}
+        new_config = {"ACL_TABLE": {
+            "DENY_NEW_INGRESS_TABLE": {
+                "ports": ["Ethernet0", "Ethernet1"]
+            }
+        }}
+        config_wrapper.get_config_db_as_json.side_effect = [
+            old_config, new_config
+        ]
+        config_wrapper.get_empty_tables.return_value = []
+
+        patch_wrapper = Mock()
+        patch_wrapper.simulate_patch.return_value = new_config
+        patch_wrapper.verify_same_json.return_value = True
+
+        if changes is None:
+            changes = [Mock()]
+        patchsorter = Mock()
+        patchsorter.sort.return_value = changes
+
+        changeapplier = Mock()
+        changeapplier.apply.return_value = new_config
+
+        return gu.PatchApplier(
+            patchsorter, changeapplier,
+            config_wrapper, patch_wrapper
+        )
 
     def __create_patch_applier(self,
                                changes=None,
