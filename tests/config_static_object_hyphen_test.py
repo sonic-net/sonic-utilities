@@ -35,10 +35,6 @@ def {{ table.name }}_{{ object.name }}_{{ attr.name|lower|replace("-", "_") }}(d
     assert "def SAMPLE_DATA_local_attribute_with_hyphen(" in result
     assert "attribute_with_hyphen" in result  # parameter name
 
-    print("✅ Config Template fragment test passed!")
-    print("Generated function signature:")
-    print(result.split('\n')[3])  # Print function definition line
-
 
 def test_edge_cases():
     """Test edge cases for function naming"""
@@ -59,8 +55,6 @@ def test_edge_cases():
     for input_name, expected_output in test_cases:
         result = template.render(attr={'name': input_name})
         assert result == expected_output, f"Failed for {input_name}: got {result}, expected {expected_output}"
-
-    print("✅ Edge case tests passed!")
 
 
 if __name__ == "__main__":
