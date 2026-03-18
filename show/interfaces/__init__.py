@@ -1446,6 +1446,146 @@ def display_phy_taps_attribute(attr_display_name, attr_json):
     click.echo("")
 
 
+#
+# 'dampening' subcommand ("show interfaces dampening")
+#
+@interfaces.command()
+@click.argument('interfacename', required=False)
+@clicommon.pass_db
+def dampening(db, interfacename):
+    """Show link event dampening configuration and operational state"""
+
+    ctx = click.get_current_context()
+
+    if interfacename:
+        interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
+
+    config_db = db.cfgdb
+    state_db = db.db
+
+    port_table = config_db.get_table("PORT")
+
+    if interfacename:
+        if interfacename not in port_table:
+            ctx.fail("Interface {} does not exist".format(interfacename))
+        ports = {interfacename: port_table[interfacename]}
+    else:
+        ports = port_table
+
+    header = [
+        "Interface",
+        "Algorithm",
+        "Half-Life(s)",
+        "Reuse",
+        "Suppress",
+        "Max-Suppress(s)",
+        "Penalty",
+        "Flap-Penalty",
+        "Suppressed",
+        "Time-Left(s)",
+    ]
+
+    rows = []
+    for port_name in natsorted(ports.keys()):
+        port_data = ports[port_name]
+        algorithm = port_data.get("link_event_damping_algorithm", "disabled")
+
+        if algorithm == "disabled":
+            # Only show this port if specifically requested
+            if interfacename:
+                rows.append([
+                    port_name,
+                    "disabled",
+                    "-", "-", "-", "-", "-", "-", "-", "-"
+                ])
+            continue
+
+        is_monitor = (algorithm == "aied-monitor")
+
+        half_life = port_data.get("decay_half_life", "0")
+        reuse = port_data.get("reuse_threshold", "0")
+        suppress = port_data.get("suppress_threshold", "0")
+        max_suppress = port_data.get("max_suppress_time", "0")
+        flap_penalty = port_data.get("flap_penalty", "1000")
+
+        # Read operational state from STATE_DB
+        state_key = "PORT_TABLE|{}".format(port_name)
+        current_penalty = "N/A"
+        suppressed = "N/A"
+        time_remaining = "N/A"
+
+        if state_db:
+            penalty_val = state_db.get(state_db.STATE_DB, state_key,
+                                       "damping_current_penalty")
+            suppressed_val = state_db.get(state_db.STATE_DB, state_key,
+                                          "damping_suppressed")
+            time_val = state_db.get(state_db.STATE_DB, state_key,
+                                    "damping_time_remaining")
+
+            if penalty_val:
+                current_penalty = penalty_val
+            if suppressed_val:
+                if is_monitor and suppressed_val == "true":
+                    suppressed = "(Mon)"
+                else:
+                    suppressed = "Yes" if suppressed_val == "true" else "No"
+            if time_val:
+                time_remaining = time_val if suppressed == "Yes" else "-"
+
+        rows.append([
+            port_name,
+            algorithm,
+            half_life,
+            reuse,
+            suppress,
+            max_suppress,
+            current_penalty,
+            flap_penalty,
+            suppressed,
+            time_remaining,
+        ])
+
+    if not rows:
+        if interfacename:
+            click.echo("Link event dampening is not configured on {}".format(
+                interfacename))
+        else:
+            click.echo("Link event dampening is not configured on any interface")
+        return
+
+    click.echo(tabulate(rows, header, tablefmt="simple"))
+    click.echo("")
+
+    # Show counters if a specific interface is queried
+    if interfacename and state_db:
+        _show_dampening_counters(state_db, interfacename)
+
+
+def _show_dampening_counters(state_db, interface_name):
+    """Display per-interface dampening event counters."""
+    state_key = "PORT_TABLE|{}".format(interface_name)
+
+    counter_fields = [
+        ("damping_pre_transitions", "Pre-damping transitions (total)"),
+        ("damping_post_transitions", "Post-damping transitions (total)"),
+        ("damping_pre_up_transitions", "Pre-damping UP transitions"),
+        ("damping_pre_down_transitions", "Pre-damping DOWN transitions"),
+        ("damping_post_up_transitions", "Post-damping UP transitions"),
+        ("damping_post_down_transitions", "Post-damping DOWN transitions"),
+    ]
+
+    counter_rows = []
+    for field, description in counter_fields:
+        value = state_db.get(state_db.STATE_DB, state_key, field)
+        if value:
+            counter_rows.append([description, value])
+
+    if counter_rows:
+        click.echo("Dampening Counters for {}:".format(interface_name))
+        click.echo(tabulate(counter_rows, ["Counter", "Value"], tablefmt="simple"))
+        click.echo("")
+
+
 @interfaces.command('phy-serdes')
 @click.argument('interfacename', required=True)
 @multi_asic_util.multi_asic_click_options

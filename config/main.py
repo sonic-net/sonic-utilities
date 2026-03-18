@@ -6349,6 +6349,124 @@ def cable_length(ctx, interface_name, length):
     except ValueError as e:
         ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
+
+#
+# 'dampening' subgroup ('config interface dampening ...')
+#
+
+
+@interface.group(cls=clicommon.AbbreviationGroup)
+@click.pass_context
+def dampening(ctx):
+    """Configure link event dampening on an interface"""
+    pass
+
+
+@dampening.command()
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.option('--half-life', type=click.IntRange(min=1, max=3600), default=5,
+              show_default=True,
+              help='Decay half-life in seconds (1-3600).')
+@click.option('--reuse', type=click.IntRange(min=1, max=20000), default=1000,
+              show_default=True,
+              help='Reuse threshold (1-20000).')
+@click.option('--suppress', type=click.IntRange(min=1, max=20000), default=2000,
+              show_default=True,
+              help='Suppress threshold (1-20000).')
+@click.option('--max-suppress-time', type=click.IntRange(min=1, max=3600), default=20,
+              show_default=True,
+              help='Max suppress time in seconds (1-3600).')
+@click.option('--flap-penalty', type=click.IntRange(min=1, max=20000), default=1000,
+              show_default=True,
+              help='Penalty per link-down event (1-20000).')
+@click.option('--monitor', is_flag=True, default=False,
+              help='Monitor-only mode: calculate penalties and emit syslog '
+                   'but do NOT suppress events. Use to safely tune parameters '
+                   'in production before enabling full dampening.')
+@click.pass_context
+def enable(ctx, interface_name, half_life, reuse, suppress, max_suppress_time,
+           flap_penalty, monitor):
+    """Enable link event dampening on an interface with AIED algorithm."""
+    config_db = ctx.obj['config_db']
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    # Validate interface exists in PORT table
+    port_table = config_db.get_table("PORT")
+    if interface_name not in port_table:
+        ctx.fail("Interface {} does not exist".format(interface_name))
+
+    # Validate parameter relationships
+    if reuse >= suppress:
+        ctx.fail("Reuse threshold ({}) must be less than suppress threshold ({})".format(
+            reuse, suppress))
+
+    if half_life > max_suppress_time:
+        ctx.fail("Half-life ({}) must not exceed max-suppress-time ({})".format(
+            half_life, max_suppress_time))
+
+    # Calculate ceiling and warn if very high
+    exponent = max_suppress_time / half_life
+    if exponent > 50:
+        click.echo("Warning: calculated penalty ceiling is extremely high "
+                   "(exponent={:.0f}). Consider reducing max-suppress-time or "
+                   "increasing half-life.".format(exponent))
+    else:
+        ceiling = reuse * (2 ** exponent)
+        if ceiling > 100000:
+            click.echo("Warning: calculated penalty ceiling is very high ({:.0f}). "
+                       "Consider reducing max-suppress-time or increasing reuse "
+                       "threshold.".format(ceiling))
+
+    algorithm = "aied-monitor" if monitor else "aied"
+
+    config_db.mod_entry("PORT", interface_name, {
+        "link_event_damping_algorithm": algorithm,
+        "decay_half_life": str(half_life),
+        "reuse_threshold": str(reuse),
+        "suppress_threshold": str(suppress),
+        "max_suppress_time": str(max_suppress_time),
+        "flap_penalty": str(flap_penalty),
+    })
+
+    mode_str = "monitor-only" if monitor else "active"
+    click.echo("Link event dampening enabled on {} (algorithm={}, mode={}, half-life={}s, "
+               "reuse={}, suppress={}, max-suppress={}s, penalty={})".format(
+                   interface_name, algorithm, mode_str, half_life, reuse, suppress,
+                   max_suppress_time, flap_penalty))
+
+
+@dampening.command()
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.pass_context
+def disable(ctx, interface_name):
+    """Disable link event dampening on an interface."""
+    config_db = ctx.obj['config_db']
+
+    if clicommon.get_interface_naming_mode() == "alias":
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            ctx.fail("'interface_name' is None!")
+
+    port_table = config_db.get_table("PORT")
+    if interface_name not in port_table:
+        ctx.fail("Interface {} does not exist".format(interface_name))
+
+    config_db.mod_entry("PORT", interface_name, {
+        "link_event_damping_algorithm": "disabled",
+        "decay_half_life": "0",
+        "reuse_threshold": "0",
+        "suppress_threshold": "0",
+        "max_suppress_time": "0",
+        "flap_penalty": "0",
+    })
+
+    click.echo("Link event dampening disabled on {}".format(interface_name))
+
+
 #
 # 'transceiver' subgroup ('config interface transceiver ...')
 #

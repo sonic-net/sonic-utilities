@@ -11,6 +11,7 @@ from flow_counter_util.route import exit_if_route_flow_counter_not_support
 from utilities_common import util_base
 from show.plugins.pbh import read_pbh_counters
 from config.plugins.pbh import serialize_pbh_counters
+from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector
 from . import plugins
 from . import stp
 # This is from the aliases example:
@@ -761,6 +762,62 @@ def asic_sdk_health_event(db, namespace):
         keys = state_db.keys(db.db.STATE_DB, "ASIC_SDK_HEALTH_EVENT_TABLE*")
         for key in keys:
             state_db.delete(state_db.STATE_DB, key);
+
+
+#
+# 'interfaces' group ("sonic-clear interfaces ...")
+#
+
+@cli.group(cls=AliasedGroup)
+def interfaces():
+    """Clear interface-related state"""
+    pass
+
+
+@interfaces.command()
+@click.argument('interface_name', metavar='<interface_name>', required=False)
+def dampening(interface_name):
+    """Clear link event dampening state (reset penalty to 0).
+
+    Without an interface name, clears dampening on all interfaces.
+    The interface is immediately unsuppressed if currently damped.
+    """
+    config_db = ConfigDBConnector()
+    config_db.connect()
+    port_table = config_db.get_table("PORT")
+
+    if interface_name:
+        if clicommon.get_interface_naming_mode() == "alias":
+            alias = interface_name
+            interface_name = clicommon.InterfaceAliasConverter().alias_to_name(interface_name)
+            if interface_name == alias:
+                click.echo("Error: invalid interface alias {}".format(alias))
+                sys.exit(1)
+        if interface_name not in port_table:
+            click.echo("Error: Interface {} does not exist".format(interface_name))
+            sys.exit(1)
+        ports_to_clear = [interface_name]
+    else:
+        ports_to_clear = []
+        for port_name, port_data in port_table.items():
+            algo = port_data.get("link_event_damping_algorithm", "disabled")
+            if algo != "disabled":
+                ports_to_clear.append(port_name)
+
+    if not ports_to_clear:
+        click.echo("No interfaces have dampening configured")
+        return
+
+    state_db = SonicV2Connector(host="127.0.0.1")
+    state_db.connect(state_db.STATE_DB)
+
+    for port_name in ports_to_clear:
+        state_key = "CLEAR_DAMPENING|{}".format(port_name)
+        state_db.set(state_db.STATE_DB, state_key, "clear", "true")
+        click.echo("Cleared dampening on {}".format(port_name))
+
+    if not interface_name:
+        click.echo("Cleared dampening on {} interface(s)".format(len(ports_to_clear)))
 
 
 if __name__ == '__main__':
