@@ -123,8 +123,9 @@ class TestYangParser:
         """
 
         base_test('sonic-static-object-complex-3',
-                 assert_dictionaries.static_object_complex_3)
-        
+                  assert_dictionaries.static_object_complex_3)
+
+
     def test_dynamic_object_complex_1(self):
         """ Test for object container with:
             1 key, 1 leaf, 1 leaf-list, 1 choice.

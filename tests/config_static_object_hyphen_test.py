@@ -48,7 +48,7 @@ def test_edge_cases():
 
     test_cases = [
         ('single-hyphen', 'single_hyphen'),
-        ('multi-hyphen-test', 'multi_hyphen_test'), 
+        ('multi-hyphen-test', 'multi_hyphen_test'),
         ('no_hyphens', 'no_hyphens'),
         ('Mixed-Case-Hyphens', 'mixed_case_hyphens'),
         ('trailing-', 'trailing_'),
