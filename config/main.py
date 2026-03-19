@@ -63,6 +63,7 @@ from . import kdump
 from . import kube
 from . import muxcable
 from . import nat
+from . import user
 from . import vlan
 from . import vxlan
 from . import plugins
@@ -1795,6 +1796,7 @@ config.add_command(kdump.kdump)
 config.add_command(kube.kubernetes)
 config.add_command(muxcable.muxcable)
 config.add_command(nat.nat)
+config.add_command(user.user)
 config.add_command(vlan.vlan)
 config.add_command(vxlan.vxlan)
 
