@@ -98,11 +98,6 @@ NAMESPACE_PREFIX = 'asic'
 INTF_KEY = "interfaces"
 DEFAULT_GOLDEN_CONFIG_DB_FILE = '/etc/sonic/golden_config_db.json'
 
-# Path to standalone GCU binary delivered by GCU container's virtual environment.
-# When this binary exists, apply-patch is redirected to it so the container can
-# deliver GCU fixes independently of the host sonic-utilities package.
-GCU_STANDALONE_BIN = "/opt/sonic/gcu/current/bin/gcu-standalone"
-
 INIT_CFG_FILE = '/etc/sonic/init_cfg.json'
 
 DEFAULT_NAMESPACE = ''
@@ -1755,37 +1750,6 @@ def print_dry_run_message(dry_run):
         click.secho("** DRY RUN EXECUTION **", fg="yellow", underline=True)
 
 
-def run_gcu_standalone(patch_file_path, format, dry_run, parallel,
-                       ignore_non_yang_tables, ignore_path, verbose, path_trace):
-    """Delegate apply-patch execution to the standalone GCU binary.
-    Returns the subprocess CompletedProcess so the caller can inspect the return code.
-    """
-    cmd = [GCU_STANDALONE_BIN, "apply-patch", patch_file_path]
-
-    if format and format.upper() != ConfigFormat.CONFIGDB.name:
-        cmd += ["--format", format]
-    if dry_run:
-        cmd.append("--dry-run")
-    if parallel:
-        cmd.append("--parallel")
-    if ignore_non_yang_tables:
-        cmd.append("--ignore-non-yang-tables")
-    for path in ignore_path:
-        cmd += ["--ignore-path", path]
-    if verbose:
-        cmd.append("--verbose")
-    if path_trace:
-        cmd += ["--path-trace", path_trace]
-
-    # Propagate a sentinel so that if the standalone binary somehow re-enters
-    # this redirect path it will not spawn another subprocess indefinitely.
-    env = os.environ.copy()
-    env["GCU_STANDALONE_ACTIVE"] = "1"
-
-    log.log_notice(f"Redirecting apply-patch to standalone GCU: {' '.join(cmd)}")
-    return subprocess.run(cmd, env=env)
-
-
 @config.command('apply-patch')
 @click.argument('patch-file-path', type=str, required=True)
 @click.option('-f', '--format', type=click.Choice([e.name for e in ConfigFormat]),
@@ -1825,20 +1789,6 @@ def apply_patch(
        <patch-file-path>: Path to the patch file on the file-system."""
 
     print_dry_run_message(dry_run)
-
-    # ---------- Standalone GCU redirect ----------
-    # If the GCU container has deployed a standalone virtual-env binary,
-    # delegate the entire apply-patch operation to it so the container
-    # can ship GCU fixes without touching the host sonic-utilities.
-    # The GCU_STANDALONE_ACTIVE sentinel prevents an infinite redirect loop
-    # in case the standalone binary itself re-enters this code path.
-    if os.path.exists(GCU_STANDALONE_BIN) and not os.environ.get("GCU_STANDALONE_ACTIVE"):
-        result = run_gcu_standalone(patch_file_path, format, dry_run, parallel,
-                                    ignore_non_yang_tables, ignore_path, verbose, path_trace)
-        if result.returncode != 0:
-            ctx.fail(f"Standalone GCU apply-patch failed with exit code {result.returncode}")
-        return
-    # ---------- End standalone redirect ----------
 
     trace_io = None
     try:
