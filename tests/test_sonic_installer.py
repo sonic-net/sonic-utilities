@@ -86,7 +86,12 @@ def test_install(run_command, run_command_or_raise, get_bootloader, swap, fs):
         call(["chroot", mounted_image_folder, "mount", "proc", "/proc", "-t", "proc"]),
         call(["chroot", mounted_image_folder, "mount", "sysfs", "/sys", "-t", "sysfs"]),
         call(["cp", f"{mounted_image_folder}/etc/default/docker", f"{mounted_image_folder}/tmp/docker_config_backup"]),
-        call(["sh", "-c", f"echo 'DOCKER_OPTS=\"$DOCKER_OPTS {' '.join(expected_dockerd_opts)}\"' >> {mounted_image_folder}/etc/default/docker"]), # dockerd started with added options as host dockerd
+        # dockerd started with unix:// instead of fd://
+        call([
+            "sh", "-c",
+            f"echo 'DOCKER_OPTS=\"$DOCKER_OPTS {' '.join(expected_dockerd_opts)}\"' "
+            f">> {mounted_image_folder}/etc/default/docker"
+        ]),
         call(["chroot", mounted_image_folder, "/usr/lib/docker/docker.sh", "start"]),
         call(["cp", "/var/lib/sonic-package-manager/packages.json", f"{mounted_image_folder}/tmp/packages.json"]),
         call(["mkdir", "-p", "/var/lib/sonic-package-manager/manifests"]),
