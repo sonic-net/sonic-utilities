@@ -948,7 +948,7 @@ class TestShow(object):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["mgmt-vrf"], ['routes'])
         assert result.exit_code == 0
-        mock_run_command.assert_called_with(['ip', 'route', 'show', 'table', '5000'])
+        mock_run_command.assert_called_with(['ip', 'route', 'show', 'table', '6000'])
 
     @patch('show.main.run_command')
     @patch('show.main.is_mgmt_vrf_enabled', MagicMock(return_value=True))
