@@ -1,3 +1,4 @@
+import re
 import click
 import ipaddress
 import utilities_common.cli as clicommon
@@ -199,12 +200,30 @@ def DEVICE_GLOBAL_WCMP_DISABLED(ctx, db):
 #
 
 
+PREFIX_LIST_PATTERN = re.compile(r'^[0-9a-zA-Z_-]*$')
+PREFIX_LIST_MAX_LEN = 128
+
+
 def validate_ip_prefix(ctx, param, value):
     """ Validate that the argument is a valid IP prefix """
     try:
         return str(ipaddress.ip_network(value, strict=False))
     except ValueError:
         raise click.BadParameter("'{}' is not a valid IP prefix".format(value))
+
+
+def validate_prefix_list_name(name, field_name):
+    """ Validate prefix list name against YANG schema constraints.
+    Pattern: [0-9a-zA-Z_-]*, max length: 128
+    """
+    if len(name) > PREFIX_LIST_MAX_LEN:
+        raise click.ClickException(
+            "'{}' is invalid for {}: length exceeds {}".format(
+                name, field_name, PREFIX_LIST_MAX_LEN))
+    if not PREFIX_LIST_PATTERN.match(name):
+        raise click.ClickException(
+            "'{}' is invalid for {}: only alphanumeric characters, "
+            "underscores and hyphens are allowed".format(name, field_name))
 
 
 @click.group(
@@ -239,6 +258,12 @@ def AGGREGATE_ADDRESS_ADD(ctx, db, address, bbr_required, summary_only, as_set,
 
     table = CFG_BGP_AGGREGATE_ADDRESS
     key = address
+
+    # Validate prefix list names against YANG schema
+    validate_prefix_list_name(aggregate_address_prefix_list,
+                              "aggregate-address-prefix-list")
+    validate_prefix_list_name(contributing_address_prefix_list,
+                              "contributing-address-prefix-list")
 
     # Check if entry already exists
     cfg = db.cfgdb.get_config()

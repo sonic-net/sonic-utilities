@@ -362,4 +362,124 @@ class TestBgpAggregateAddress:
 
         assert result.exit_code != SUCCESS
 
+    # ---------- PREFIX LIST NAME VALIDATION ---------- #
 
+    def test_config_aggregate_address_add_invalid_prefix_list_pattern(self):
+        """Verify that prefix list names with invalid characters are rejected"""
+        db = Db()
+        runner = CliRunner()
+
+        result = runner.invoke(
+            config.config.commands["bgp"].commands["aggregate-address"].
+            commands["add"],
+            ["192.168.0.0/24",
+             "--aggregate-address-prefix-list", "bad!name@#"],
+            obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+
+        assert result.exit_code != SUCCESS
+        assert "invalid" in result.output.lower()
+
+    def test_config_aggregate_address_add_invalid_contributing_prefix_list_pattern(self):
+        """Verify that contributing prefix list names with invalid characters are rejected"""
+        db = Db()
+        runner = CliRunner()
+
+        result = runner.invoke(
+            config.config.commands["bgp"].commands["aggregate-address"].
+            commands["add"],
+            ["192.168.0.0/24",
+             "--contributing-address-prefix-list", "has spaces"],
+            obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+
+        assert result.exit_code != SUCCESS
+        assert "invalid" in result.output.lower()
+
+    def test_config_aggregate_address_add_prefix_list_too_long(self):
+        """Verify that prefix list names exceeding 128 characters are rejected"""
+        db = Db()
+        runner = CliRunner()
+
+        long_name = "a" * 129
+        result = runner.invoke(
+            config.config.commands["bgp"].commands["aggregate-address"].
+            commands["add"],
+            ["192.168.0.0/24",
+             "--aggregate-address-prefix-list", long_name],
+            obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+
+        assert result.exit_code != SUCCESS
+        assert "length" in result.output.lower()
+
+    def test_config_aggregate_address_add_valid_prefix_list_names(self):
+        """Verify that valid prefix list names with allowed characters are accepted"""
+        db = Db()
+        runner = CliRunner()
+
+        result = runner.invoke(
+            config.config.commands["bgp"].commands["aggregate-address"].
+            commands["add"],
+            ["192.168.0.0/24",
+             "--aggregate-address-prefix-list", "AGG_ROUTE-v4",
+             "--contributing-address-prefix-list", "CONTRIB_ROUTE-v4"],
+            obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+
+        assert result.exit_code == SUCCESS
+        table = db.cfgdb.get_table("BGP_AGGREGATE_ADDRESS")
+        assert "192.168.0.0/24" in table
+        assert table["192.168.0.0/24"]["aggregate-address-prefix-list"] == "AGG_ROUTE-v4"
+        assert table["192.168.0.0/24"]["contributing-address-prefix-list"] == "CONTRIB_ROUTE-v4"
+
+    def test_config_aggregate_address_add_prefix_list_max_length(self):
+        """Verify that prefix list name at exactly 128 characters is accepted"""
+        db = Db()
+        runner = CliRunner()
+
+        max_name = "a" * 128
+        result = runner.invoke(
+            config.config.commands["bgp"].commands["aggregate-address"].
+            commands["add"],
+            ["192.168.0.0/24",
+             "--aggregate-address-prefix-list", max_name],
+            obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+
+        assert result.exit_code == SUCCESS
+
+    def test_config_aggregate_address_add_empty_prefix_list(self):
+        """Verify that empty prefix list name (default) is accepted"""
+        db = Db()
+        runner = CliRunner()
+
+        result = runner.invoke(
+            config.config.commands["bgp"].commands["aggregate-address"].
+            commands["add"],
+            ["192.168.0.0/24"],
+            obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+
+        assert result.exit_code == SUCCESS
+        table = db.cfgdb.get_table("BGP_AGGREGATE_ADDRESS")
+        assert table["192.168.0.0/24"]["aggregate-address-prefix-list"] == ""
+        assert table["192.168.0.0/24"]["contributing-address-prefix-list"] == ""
