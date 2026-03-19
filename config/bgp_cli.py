@@ -202,10 +202,9 @@ def DEVICE_GLOBAL_WCMP_DISABLED(ctx, db):
 def validate_ip_prefix(ctx, param, value):
     """ Validate that the argument is a valid IP prefix """
     try:
-        ipaddress.ip_network(value, strict=False)
+        return str(ipaddress.ip_network(value, strict=False))
     except ValueError:
         raise click.BadParameter("'{}' is not a valid IP prefix".format(value))
-    return value
 
 
 @click.group(

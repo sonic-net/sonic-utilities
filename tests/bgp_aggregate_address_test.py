@@ -261,3 +261,105 @@ class TestBgpAggregateAddress:
 
         assert result.exit_code == SUCCESS
         assert result.output == assert_show_output.show_aggregate_address_empty
+
+    # ---------- PREFIX NORMALIZATION ---------- #
+
+    def test_config_aggregate_address_add_normalizes_host_bits(self):
+        """Verify that non-canonical prefix (with host bits) is normalized to network form"""
+        db = Db()
+        runner = CliRunner()
+
+        # 10.1.1.5/24 should be normalized to 10.1.1.0/24
+        result = runner.invoke(
+            config.config.commands["bgp"].commands["aggregate-address"].
+            commands["add"],
+            ["10.1.1.5/24"],
+            obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+
+        assert result.exit_code == SUCCESS
+        table = db.cfgdb.get_table("BGP_AGGREGATE_ADDRESS")
+        assert "10.1.1.0/24" in table
+        assert "10.1.1.5/24" not in table
+
+    def test_config_aggregate_address_add_normalizes_ipv6(self):
+        """Verify that non-canonical IPv6 prefix is normalized"""
+        db = Db()
+        runner = CliRunner()
+
+        # fc00:1::5/64 should be normalized to fc00:1::/64
+        result = runner.invoke(
+            config.config.commands["bgp"].commands["aggregate-address"].
+            commands["add"],
+            ["fc00:1::5/64"],
+            obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+
+        assert result.exit_code == SUCCESS
+        table = db.cfgdb.get_table("BGP_AGGREGATE_ADDRESS")
+        assert "fc00:1::/64" in table
+        assert "fc00:1::5/64" not in table
+
+    def test_config_aggregate_address_remove_with_normalized_prefix(self):
+        """Verify add with host bits, then remove with canonical form succeeds"""
+        db = Db()
+        runner = CliRunner()
+
+        # Add with host bits
+        result = runner.invoke(
+            config.config.commands["bgp"].commands["aggregate-address"].
+            commands["add"],
+            ["10.2.3.4/16"],
+            obj=db
+        )
+        assert result.exit_code == SUCCESS
+
+        # Remove with canonical form
+        result = runner.invoke(
+            config.config.commands["bgp"].commands["aggregate-address"].
+            commands["remove"],
+            ["10.2.0.0/16"],
+            obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+
+        assert result.exit_code == SUCCESS
+        table = db.cfgdb.get_table("BGP_AGGREGATE_ADDRESS")
+        assert "10.2.0.0/16" not in table
+
+    def test_config_aggregate_address_duplicate_after_normalization(self):
+        """Verify that adding the same network with different host bits is rejected as duplicate"""
+        db = Db()
+        runner = CliRunner()
+
+        # Add 10.1.1.5/24 (normalized to 10.1.1.0/24)
+        result = runner.invoke(
+            config.config.commands["bgp"].commands["aggregate-address"].
+            commands["add"],
+            ["10.1.1.5/24"],
+            obj=db
+        )
+        assert result.exit_code == SUCCESS
+
+        # Add 10.1.1.99/24 (also normalizes to 10.1.1.0/24) — should fail as duplicate
+        result = runner.invoke(
+            config.config.commands["bgp"].commands["aggregate-address"].
+            commands["add"],
+            ["10.1.1.99/24"],
+            obj=db
+        )
+
+        logger.debug("\n" + result.output)
+        logger.debug(result.exit_code)
+
+        assert result.exit_code != SUCCESS
+
+
