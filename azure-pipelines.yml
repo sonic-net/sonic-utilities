@@ -178,11 +178,11 @@ stages:
 
     - script: |
         set -e
-        pushd gcu
+        pushd generic_config_updater
         python3 -m build -n
       displayName: 'Build Python 3 wheel for GCU'
 
-    - publish: '$(System.DefaultWorkingDirectory)/gcu/dist/'
+    - publish: '$(System.DefaultWorkingDirectory)/generic_config_updater/dist/'
       artifact: gcu_wheels
       displayName: "Publish Python wheels for GCU"
 

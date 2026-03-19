@@ -439,7 +439,7 @@ def print_success(message):
 
 
 # ---------------------------------------------------------------------------
-# Sub-command implementations (used by gcu-standalone and scripts/gcu.py)
+# Sub-command implementations (used by gcu-standalone)
 # ---------------------------------------------------------------------------
 
 def create_checkpoint(args):
@@ -616,7 +616,7 @@ def rollback_config(args):
 
 
 # ---------------------------------------------------------------------------
-# Argument parser (shared by gcu-standalone entry point and scripts/gcu.py)
+# Argument parser (shared by gcu-standalone entry point)
 # ---------------------------------------------------------------------------
 
 def build_parser():
