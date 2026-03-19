@@ -174,11 +174,13 @@ def port_buffer_drop_disable(ctx):
 
 # PHY counter commands
 @cli.group()
+@click.option('-n', '--namespace', help='Namespace name',
+              required=False,
+              type=click.Choice(multi_asic.get_namespace_list()))
 @click.pass_context
-def phy(ctx):
+def phy(ctx, namespace):
     """ PHY counter commands """
-    ctx.obj = ConfigDBConnector()
-    ctx.obj.connect()
+    ctx.obj = connect_to_db(namespace)
 
 
 @phy.command()
@@ -186,30 +188,27 @@ def phy(ctx):
 @click.pass_context
 def interval(ctx, poll_interval):  # noqa: F811
     """ Set PHY counter query interval """
-    configdb = ctx.obj
     port_info = {}
     port_info['POLL_INTERVAL'] = poll_interval
-    configdb.mod_entry("FLEX_COUNTER_TABLE", PORT_PHY_ATTR, port_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", PORT_PHY_ATTR, port_info)
 
 
 @phy.command()
 @click.pass_context
 def enable(ctx):  # noqa: F811
     """ Enable PHY counter query """
-    configdb = ctx.obj
     port_info = {}
     port_info['FLEX_COUNTER_STATUS'] = ENABLE
-    configdb.mod_entry("FLEX_COUNTER_TABLE", PORT_PHY_ATTR, port_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", PORT_PHY_ATTR, port_info)
 
 
 @phy.command()
 @click.pass_context
 def disable(ctx):  # noqa: F811
     """ Disable PHY counter query """
-    configdb = ctx.obj
     port_info = {}
     port_info['FLEX_COUNTER_STATUS'] = DISABLE
-    configdb.mod_entry("FLEX_COUNTER_TABLE", PORT_PHY_ATTR, port_info)
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", PORT_PHY_ATTR, port_info)
 
 
 # Ingress PG drop packet stat
