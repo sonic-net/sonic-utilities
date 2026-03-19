@@ -26,6 +26,7 @@ setup(
     url='https://github.com/Azure/sonic-utilities/generic_config_updater',
     maintainer='Xincun Li',
     maintainer_email='xincun.li@microsoft.com',
+    package_dir={'generic_config_updater': '.'},
     packages=[
         'generic_config_updater',
     ],
