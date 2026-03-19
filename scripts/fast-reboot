@@ -897,10 +897,14 @@ parseOptions $@
 # Filter ASIC list based on -m option
 filter_asic_list
 
+if [[ -z "$SUDO_USER" || "$SUDO_USER" == "root" ]]; then
+    echo "This command must be run as admin#sudo... but not as root" >&2
+    exit "${EXIT_FAILURE}"
+fi
 # Check root privileges
 if [[ "$EUID" -ne 0 ]]
 then
-    echo "This command must be run as root" >&2
+    echo "This command must be run as sudo" >&2
     exit "${EXIT_FAILURE}"
 fi
 
