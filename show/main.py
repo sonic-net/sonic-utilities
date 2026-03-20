@@ -73,6 +73,7 @@ from . import srv6
 from . import switch
 from . import icmp
 from . import copp
+from . import tam
 
 # Global Variables
 PLATFORM_JSON = 'platform.json'
@@ -333,6 +334,7 @@ cli.add_command(stp.spanning_tree)
 cli.add_command(srv6.srv6)
 cli.add_command(switch.switch)
 cli.add_command(icmp.icmp)
+cli.add_command(tam.tam)
 cli.add_command(copp.copp)
 
 # syslog module

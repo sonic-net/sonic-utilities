@@ -86,19 +86,19 @@
         "cable_length": "10",
         "specification_compliance": "Not supported for CMIS cables",
         "nominal_bit_rate": "Not supported for CMIS cables",
-        "application_advertisement" : "{1: {'host_electrical_interface_id': '400GAUI-8 C2M (Annex 120E)', 'module_media_interface_id': '400ZR, DWDM, amplified', 'media_lane_count': 1, 'host_lane_count': 8, 'host_lane_assignment_options': 1, 'media_lane_assignment_options': 1}, 2: {'host_electrical_interface_id': '400GAUI-8 C2M (Annex 120E)', 'module_media_interface_id': '400ZR, Single Wavelength, Unamplified', 'media_lane_count': 1, 'host_lane_count': 8, 'host_lane_assignment_options': 1, 'media_lane_assignment_options': 1}, 3: {'host_electrical_interface_id': '100GAUI-2 C2M (Annex 135G)', 'module_media_interface_id': '400ZR, DWDM, amplified', 'media_lane_count': 1, 'host_lane_count': 2, 'host_lane_assignment_options': 85, 'media_lane_assignment_options': 1}}",
-        "host_lane_count" : "8",
-        "media_lane_count" : "1",
-        "active_apsel_hostlane1" : "1",
-        "active_apsel_hostlane2" : "1",
-        "active_apsel_hostlane3" : "1",
-        "active_apsel_hostlane4" : "1",
-        "active_apsel_hostlane5" : "1",
-        "active_apsel_hostlane6" : "1",
-        "active_apsel_hostlane7" : "1",
-        "active_apsel_hostlane8" : "1",
-        "hardware_rev" : "X.X",
-        "media_interface_technology" : "1550 nm DFB"
+        "application_advertisement": "{1: {'host_electrical_interface_id': '400GAUI-8 C2M (Annex 120E)', 'module_media_interface_id': '400ZR, DWDM, amplified', 'media_lane_count': 1, 'host_lane_count': 8, 'host_lane_assignment_options': 1, 'media_lane_assignment_options': 1}, 2: {'host_electrical_interface_id': '400GAUI-8 C2M (Annex 120E)', 'module_media_interface_id': '400ZR, Single Wavelength, Unamplified', 'media_lane_count': 1, 'host_lane_count': 8, 'host_lane_assignment_options': 1, 'media_lane_assignment_options': 1}, 3: {'host_electrical_interface_id': '100GAUI-2 C2M (Annex 135G)', 'module_media_interface_id': '400ZR, DWDM, amplified', 'media_lane_count': 1, 'host_lane_count': 2, 'host_lane_assignment_options': 85, 'media_lane_assignment_options': 1}}",
+        "host_lane_count": "8",
+        "media_lane_count": "1",
+        "active_apsel_hostlane1": "1",
+        "active_apsel_hostlane2": "1",
+        "active_apsel_hostlane3": "1",
+        "active_apsel_hostlane4": "1",
+        "active_apsel_hostlane5": "1",
+        "active_apsel_hostlane6": "1",
+        "active_apsel_hostlane7": "1",
+        "active_apsel_hostlane8": "1",
+        "hardware_rev": "X.X",
+        "media_interface_technology": "1550 nm DFB"
     },
     "TRANSCEIVER_FIRMWARE_INFO|Ethernet8": {
         "active_firmware": "2.1.1",
@@ -230,7 +230,7 @@
         "nominal_bit_rate": "Not supported for CMIS cables",
         "application_advertisement": "{1: {'host_electrical_interface_id': '400G CR8', 'module_media_interface_id': 'Copper cable', 'media_lane_count': 8, 'host_lane_count': 8, 'host_lane_assignment_options': 1, 'media_lane_assignment_options': 2}, 2: {'host_electrical_interface_id': '200GBASE-CR4 (Clause 136)'}}"
     },
-    "TRANSCEIVER_DOM_THRESHOLD|Ethernet44":{
+    "TRANSCEIVER_DOM_THRESHOLD|Ethernet44": {
         "temphighalarm": "80.0",
         "templowalarm": "-5.0",
         "temphighwarning": "75.0",
@@ -332,7 +332,7 @@
         "rxsigpowerhighwarning": "10.0",
         "rxsigpowerlowwarning": "-15.0"
     },
-    "TRANSCEIVER_PM|Ethernet44":{
+    "TRANSCEIVER_PM|Ethernet44": {
         "prefec_ber_avg": "0.00046578129838019075",
         "prefec_ber_min": "0.00045750117895600233",
         "prefec_ber_max": "0.000575639239547097",
@@ -376,7 +376,7 @@
         "rx_sig_power_min": "-40",
         "rx_sig_power_max": "40"
     },
-    "TRANSCEIVER_STATUS|Ethernet44":{
+    "TRANSCEIVER_STATUS|Ethernet44": {
         "DP1State": "DataPathActivated",
         "DP2State": "DataPathActivated",
         "DP3State": "DataPathActivated",
@@ -432,7 +432,7 @@
         "tx8OutputStatus": "False",
         "wavelength_unlock_status": "False"
     },
-    "TRANSCEIVER_STATUS_FLAG|Ethernet44":{
+    "TRANSCEIVER_STATUS_FLAG|Ethernet44": {
         "datapath_firmware_fault": "False",
         "fine_tuning_oor": "False",
         "invalid_channel_num": "False",
@@ -481,12 +481,12 @@
         "tx7los_hostlane": "False",
         "tx8los_hostlane": "False"
     },
-    "TRANSCEIVER_STATUS_SW|Ethernet44":{
+    "TRANSCEIVER_STATUS_SW|Ethernet44": {
         "cmis_state": "READY",
         "status": "1",
         "error": "N/A"
     },
-    "TRANSCEIVER_VDM_HALARM_FLAG|Ethernet44":{
+    "TRANSCEIVER_VDM_HALARM_FLAG|Ethernet44": {
         "biasxi1": "False",
         "biasxp1": "False",
         "biasxq1": "False",
@@ -505,7 +505,7 @@
         "rxtotpower1": "False",
         "txcurrpower1": "False"
     },
-    "TRANSCEIVER_VDM_HWARN_FLAG|Ethernet44":{
+    "TRANSCEIVER_VDM_HWARN_FLAG|Ethernet44": {
         "biasxi1": "False",
         "biasxp1": "False",
         "biasxq1": "False",
@@ -524,7 +524,7 @@
         "rxtotpower1": "False",
         "txcurrpower1": "False"
     },
-    "TRANSCEIVER_VDM_LWARN_FLAG|Ethernet44":{
+    "TRANSCEIVER_VDM_LWARN_FLAG|Ethernet44": {
         "biasxi1": "False",
         "biasxp1": "False",
         "biasxq1": "False",
@@ -543,7 +543,7 @@
         "rxtotpower1": "False",
         "txcurrpower1": "False"
     },
-    "TRANSCEIVER_VDM_LALARM_FLAG|Ethernet44":{
+    "TRANSCEIVER_VDM_LALARM_FLAG|Ethernet44": {
         "biasxi1": "False",
         "biasxp1": "False",
         "biasxq1": "False",
@@ -562,7 +562,7 @@
         "rxtotpower1": "False",
         "txcurrpower1": "False"
     },
-    "TRANSCEIVER_DOM_FLAG|Ethernet44":{
+    "TRANSCEIVER_DOM_FLAG|Ethernet44": {
         "lasertempHAlarm": "False",
         "lasertempHWarn": "False",
         "lasertempLAlarm": "False",
@@ -672,51 +672,50 @@
         "tempLAlarm": "False",
         "tempLWarn": "False"
     },
-
     "TRANSCEIVER_INFO|Ethernet64": {
-        "type" : "QSFP-DD Double Density 8X Pluggable Transceiver",
-        "hardware_rev" : "X.X",
-        "serial" : "0123456789",
-        "manufacturer" : "XXXX",
-        "model" : "XXX",
-        "connector" : "LC",
-        "encoding" : "N/A",
-        "ext_identifier" : "Power Class 8 (20.0W Max)",
-        "ext_rateselect_compliance" : "N/A",
-        "cable_type" : "Length Cable Assembly(m)",
-        "cable_length" : "0.0",
-        "nominal_bit_rate" : "0",
-        "specification_compliance" : "sm_media_interface",
-        "vendor_date" : "2021-11-19",
-        "vendor_oui" : "XX-XX-XX",
-        "application_advertisement" : "{1: {'host_electrical_interface_id': '400GAUI-8 C2M (Annex 120E)', 'module_media_interface_id': '400ZR, DWDM, amplified', 'media_lane_count': 1, 'host_lane_count': 8, 'host_lane_assignment_options': 1, 'media_lane_assignment_options': 1}, 2: {'host_electrical_interface_id': '400GAUI-8 C2M (Annex 120E)', 'module_media_interface_id': '400ZR, Single Wavelength, Unamplified', 'media_lane_count': 1, 'host_lane_count': 8, 'host_lane_assignment_options': 1, 'media_lane_assignment_options': 1}, 3: {'host_electrical_interface_id': '100GAUI-2 C2M (Annex 135G)', 'module_media_interface_id': '400ZR, DWDM, amplified', 'media_lane_count': 1, 'host_lane_count': 2, 'host_lane_assignment_options': 85, 'media_lane_assignment_options': 1}}",
-        "host_lane_count" : "8",
-        "media_lane_count" : "1",
-        "active_apsel_hostlane1" : "1",
-        "active_apsel_hostlane2" : "1",
-        "active_apsel_hostlane3" : "1",
-        "active_apsel_hostlane4" : "1",
-        "active_apsel_hostlane5" : "1",
-        "active_apsel_hostlane6" : "1",
-        "active_apsel_hostlane7" : "1",
-        "active_apsel_hostlane8" : "1",
-        "media_interface_technology" : "1550 nm DFB",
-        "vendor_rev" : "XX",
-        "cmis_rev" : "4.1",
-        "supported_max_tx_power" : "4.0",
-        "supported_min_tx_power" : "-22.9",
-        "supported_max_laser_freq" : "196100",
-        "supported_min_laser_freq" : "191300"
+        "type": "QSFP-DD Double Density 8X Pluggable Transceiver",
+        "hardware_rev": "X.X",
+        "serial": "0123456789",
+        "manufacturer": "XXXX",
+        "model": "XXX",
+        "connector": "LC",
+        "encoding": "N/A",
+        "ext_identifier": "Power Class 8 (20.0W Max)",
+        "ext_rateselect_compliance": "N/A",
+        "cable_type": "Length Cable Assembly(m)",
+        "cable_length": "0.0",
+        "nominal_bit_rate": "0",
+        "specification_compliance": "sm_media_interface",
+        "vendor_date": "2021-11-19",
+        "vendor_oui": "XX-XX-XX",
+        "application_advertisement": "{1: {'host_electrical_interface_id': '400GAUI-8 C2M (Annex 120E)', 'module_media_interface_id': '400ZR, DWDM, amplified', 'media_lane_count': 1, 'host_lane_count': 8, 'host_lane_assignment_options': 1, 'media_lane_assignment_options': 1}, 2: {'host_electrical_interface_id': '400GAUI-8 C2M (Annex 120E)', 'module_media_interface_id': '400ZR, Single Wavelength, Unamplified', 'media_lane_count': 1, 'host_lane_count': 8, 'host_lane_assignment_options': 1, 'media_lane_assignment_options': 1}, 3: {'host_electrical_interface_id': '100GAUI-2 C2M (Annex 135G)', 'module_media_interface_id': '400ZR, DWDM, amplified', 'media_lane_count': 1, 'host_lane_count': 2, 'host_lane_assignment_options': 85, 'media_lane_assignment_options': 1}}",
+        "host_lane_count": "8",
+        "media_lane_count": "1",
+        "active_apsel_hostlane1": "1",
+        "active_apsel_hostlane2": "1",
+        "active_apsel_hostlane3": "1",
+        "active_apsel_hostlane4": "1",
+        "active_apsel_hostlane5": "1",
+        "active_apsel_hostlane6": "1",
+        "active_apsel_hostlane7": "1",
+        "active_apsel_hostlane8": "1",
+        "media_interface_technology": "1550 nm DFB",
+        "vendor_rev": "XX",
+        "cmis_rev": "4.1",
+        "supported_max_tx_power": "4.0",
+        "supported_min_tx_power": "-22.9",
+        "supported_max_laser_freq": "196100",
+        "supported_min_laser_freq": "191300"
     },
     "TRANSCEIVER_FIRMWARE_INFO|Ethernet64": {
         "active_firmware": "X.X",
         "inactive_firmware": "X.X",
-        "e1_active_firmware" : "X.X",
-        "e1_inactive_firmware" : "Y.Y",
-        "e1_server_firmware" : "A.B.C.D",
-        "e2_active_firmware" : "X.X",
-        "e2_inactive_firmware" : "Y.Y",
-        "e2_server_firmware" : "A.B.C.D"
+        "e1_active_firmware": "X.X",
+        "e1_inactive_firmware": "Y.Y",
+        "e1_server_firmware": "A.B.C.D",
+        "e2_active_firmware": "X.X",
+        "e2_inactive_firmware": "Y.Y",
+        "e2_server_firmware": "A.B.C.D"
     },
     "TRANSCEIVER_INFO|Ethernet72": {
         "active_apsel_hostlane4": "N/A",
@@ -793,7 +792,7 @@
         "tx8bias": "6.1",
         "rx8power": "0.3",
         "tx8power": "0.4",
-        "laser_temperature": "N/A" 
+        "laser_temperature": "N/A"
     },
     "TRANSCEIVER_DOM_THRESHOLD|Ethernet72": {
         "temphighalarm": "N/A",
@@ -912,7 +911,7 @@
         "status": "true",
         "model": "0J6J4K",
         "serial": "CN-0J6J4K-17972-5AF-008M-A00",
-	"revision": "A",
+        "revision": "A",
         "temp": "None",
         "temp_threshold": "None",
         "voltage": "12.18",
@@ -1035,7 +1034,7 @@
         "self_mux_direction": "active",
         "grpc_connection_status": "READY",
         "Value": "AABB"
-     },
+    },
     "MUX_CABLE_INFO|Ethernet4": {
         "version_peer_next": "0.2MS",
         "version_peer_active": "0.2MS",
@@ -1435,12 +1434,12 @@
         "access": "True"
     },
     "PORT_TABLE|Ethernet0": {
-        "rmt_adv_speeds" : "10,100,1000",
-        "speed" : "100000",
+        "rmt_adv_speeds": "10,100,1000",
+        "speed": "100000",
         "supported_speeds": "10000,25000,40000,100000",
         "supported_fecs": "rs,none,test",
         "link_training_status": "not_trained",
-	"fec": "rs"
+        "fec": "rs"
     },
     "PORT_TABLE|Ethernet32": {
         "link_training_status": "trained"
@@ -1457,14 +1456,12 @@
     },
     "PCIE_DEVICE|00:01.0": {
         "correctable|BadDLLP": "0",
-        "correctable|BadTLP": "0",
         "correctable|BadTLP": "1",
         "correctable|CorrIntErr": "0",
         "correctable|HeaderOF": "0",
         "correctable|NonFatalErr": "0",
         "correctable|Rollover": "0",
         "correctable|RxErr": "0",
-        "correctable|TOTAL_ERR_COR": "0",
         "correctable|TOTAL_ERR_COR": "1",
         "correctable|Timeout": "0",
         "fatal|ACSViol": "0",
@@ -1572,21 +1569,21 @@
         "state": "ok",
         "netdev_oper_status": "up",
         "admin_status": "up",
-        "mtu":  "9100",
+        "mtu": "9100",
         "speed": "100"
     },
     "PORT_TABLE|Ethernet36": {
         "state": "ok",
         "netdev_oper_status": "up",
         "admin_status": "up",
-        "mtu":  "9100",
+        "mtu": "9100",
         "speed": "10"
     },
     "PORT_TABLE|Ethernet24": {
         "state": "ok",
         "netdev_oper_status": "up",
         "admin_status": "up",
-        "mtu":  "9100",
+        "mtu": "9100",
         "speed": "1000"
     },
     "LINK_TRAINING|Ethernet0": {
@@ -1596,63 +1593,63 @@
         "status": "trained"
     },
     "LINK_TRAINING|Ethernet112": {
-         "status": "off"
+        "status": "off"
     },
     "ALL_SERVICE_STATUS|mgmt-framework": {
-      "app_ready_status": "OK",
-      "fail_reason": "-",
-      "service_status": "OK",
-      "update_time": "-"
+        "app_ready_status": "OK",
+        "fail_reason": "-",
+        "service_status": "OK",
+        "update_time": "-"
     },
     "ALL_SERVICE_STATUS|swss": {
-      "app_ready_status": "OK",
-      "fail_reason": "-",
-      "service_status": "OK",
-      "update_time": "-"
+        "app_ready_status": "OK",
+        "fail_reason": "-",
+        "service_status": "OK",
+        "update_time": "-"
     },
     "ALL_SERVICE_STATUS|bgp": {
-      "app_ready_status": "Down",
-      "fail_reason": "Inactive",
-      "service_status": "Down",
-      "update_time": "-"
+        "app_ready_status": "Down",
+        "fail_reason": "Inactive",
+        "service_status": "Down",
+        "update_time": "-"
     },
     "ALL_SERVICE_STATUS|pmon": {
-      "app_ready_status": "OK",
-      "fail_reason": "-",
-      "service_status": "OK",
-      "update_time": "-"
+        "app_ready_status": "OK",
+        "fail_reason": "-",
+        "service_status": "OK",
+        "update_time": "-"
     },
     "SYSTEM_READY|SYSTEM_STATE": {
-        "Status":"DOWN"
+        "Status": "DOWN"
     },
     "VNET_ROUTE_TUNNEL_TABLE|test_v4_in_v4-0|160.162.191.1/32": {
-        "active_endpoints":"100.251.7.1",
-        "state":"active"
+        "active_endpoints": "100.251.7.1",
+        "state": "active"
     },
     "VNET_ROUTE_TUNNEL_TABLE|test_v4_in_v4-0|160.163.191.1/32": {
-        "active_endpoints":"100.251.7.1",
-        "state":"active"
+        "active_endpoints": "100.251.7.1",
+        "state": "active"
     },
     "VNET_ROUTE_TUNNEL_TABLE|Vnet_v6_in_v6-0|fddd:a156:a251::a6:1/128": {
-        "active_endpoints":"fddd:a100:a251::a10:1,fddd:a101:a251::a10:1,fddd:a102:a251::a10:1,fddd:a103:a251::a10:1",
-        "state":"active"
+        "active_endpoints": "fddd:a100:a251::a10:1,fddd:a101:a251::a10:1,fddd:a102:a251::a10:1,fddd:a103:a251::a10:1",
+        "state": "active"
     },
     "BFD_SESSION_TABLE|default|default|100.251.7.1": {
-        "state":"Up",
+        "state": "Up",
         "type": "async_active",
-        "local_addr" : "10.0.0.1",
-        "tx_interval" :"300",
-        "rx_interval" : "500",
-        "multiplier" : "3",
+        "local_addr": "10.0.0.1",
+        "tx_interval": "300",
+        "rx_interval": "500",
+        "multiplier": "3",
         "multihop": "true"
     },
     "BFD_SESSION_TABLE|default|default|fddd:a101:a251::a10:1": {
-        "state":"Down",
+        "state": "Down",
         "type": "async_active",
-        "local_addr" : "fddd:c101:a251::a10:2",
-        "tx_interval" :"300",
-        "rx_interval" : "500",
-        "multiplier" : "3",
+        "local_addr": "fddd:c101:a251::a10:2",
+        "tx_interval": "300",
+        "rx_interval": "500",
+        "multiplier": "3",
         "multihop": "true"
     },
     "ADVERTISE_NETWORK_TABLE|160.63.191.1/32": {
@@ -1670,50 +1667,50 @@
     "ADVERTISE_NETWORK_TABLE|fccc:a250:a251::a6:1/128": {
         "profile": ""
     },
-    "FABRIC_PORT_TABLE|PORT0" : {
+    "FABRIC_PORT_TABLE|PORT0": {
         "STATUS": "up",
         "REMOTE_MOD": "0",
         "REMOTE_PORT": "79"
     },
-    "FABRIC_PORT_TABLE|PORT1" : {
+    "FABRIC_PORT_TABLE|PORT1": {
         "STATUS": "down"
     },
-    "FABRIC_PORT_TABLE|PORT2" : {
+    "FABRIC_PORT_TABLE|PORT2": {
         "STATUS": "up",
         "REMOTE_MOD": "0",
         "REMOTE_PORT": "94"
     },
-    "FABRIC_PORT_TABLE|PORT3" : {
+    "FABRIC_PORT_TABLE|PORT3": {
         "STATUS": "down"
     },
-    "FABRIC_PORT_TABLE|PORT4" : {
+    "FABRIC_PORT_TABLE|PORT4": {
         "STATUS": "up",
         "REMOTE_MOD": "0",
         "REMOTE_PORT": "85"
     },
-    "FABRIC_PORT_TABLE|PORT5" : {
+    "FABRIC_PORT_TABLE|PORT5": {
         "STATUS": "down"
     },
-    "FABRIC_PORT_TABLE|PORT6" : {
+    "FABRIC_PORT_TABLE|PORT6": {
         "STATUS": "up",
         "REMOTE_MOD": "0",
         "REMOTE_PORT": "84"
     },
-    "FABRIC_PORT_TABLE|PORT7" : {
+    "FABRIC_PORT_TABLE|PORT7": {
         "STATUS": "up",
         "REMOTE_MOD": "0",
         "REMOTE_PORT": "93"
     },
-    "ACL_TABLE_TABLE|DATAACL_5" : {
+    "ACL_TABLE_TABLE|DATAACL_5": {
         "status": "Active"
     },
-    "ACL_TABLE_TABLE|ENI" : {
+    "ACL_TABLE_TABLE|ENI": {
         "status": "Active"
     },
-    "ACL_RULE_TABLE|DATAACL_5|RULE_1" : {
+    "ACL_RULE_TABLE|DATAACL_5|RULE_1": {
         "status": "Active"
     },
-    "ACL_RULE_TABLE|ENI|Vnet100_F4939FEFC47E_OUT" : {
+    "ACL_RULE_TABLE|ENI|Vnet100_F4939FEFC47E_OUT": {
         "status": "Active"
     },
     "VOLTAGE_INFO|VSENSOR0": {
@@ -1746,7 +1743,7 @@
         "critical_high_threshold": "460",
         "critical_low_threshold": "300",
         "current": "410",
-         "unit": "mA",
+        "unit": "mA",
         "high_threshold": "440",
         "is_replaceable": "False",
         "low_threshold": "320",
@@ -1759,7 +1756,7 @@
         "critical_high_threshold": "460",
         "critical_low_threshold": "300",
         "current": "360",
-         "unit": "mA",
+        "unit": "mA",
         "high_threshold": "440",
         "is_replaceable": "False",
         "low_threshold": "320",
@@ -1768,21 +1765,20 @@
         "timestamp": "20230704 17:38:04",
         "warning_status": "False"
     },
-    "FABRIC_CAPACITY_TABLE|FABRIC_CAPACITY_DATA" : {
+    "FABRIC_CAPACITY_TABLE|FABRIC_CAPACITY_DATA": {
         "fabric_capacity": "88632",
         "missing_capacity": "265896",
         "operating_links": "2",
         "number_of_links": "8",
         "warning_threshold": "100"
     },
-    "PORT_CAPACITY_TABLE|PORT_CAPACITY_DATA" : {
+    "PORT_CAPACITY_TABLE|PORT_CAPACITY_DATA": {
         "capacity": "80000"
     },
     "STP_TABLE|GLOBAL": {
         "max_stp_inst": "510"
     },
-    "PORT_OPERR_TABLE|Ethernet72": {
-    },
+    "PORT_OPERR_TABLE|Ethernet72": {},
     "PORT_OPERR_TABLE|Ethernet64": {
         "oper_error_status": "2",
         "oper_error_status_time": "2025-01-17 19:51:12",
@@ -1809,7 +1805,7 @@
         "mac_local_fault_count": "0",
         "mac_local_fault_time": ""
     },
-    "ICMP_ECHO_SESSION_TABLE|default|Ethernet8|0x69f578f5|NORMAL" : {
+    "ICMP_ECHO_SESSION_TABLE|default|Ethernet8|0x69f578f5|NORMAL": {
         "dst_ip": "192.168.0.5",
         "hw_lookup": "false",
         "rx_interval": "300",
@@ -1819,7 +1815,7 @@
         "state": "Up",
         "tx_interval": "100"
     },
-    "ICMP_ECHO_SESSION_TABLE|default|Ethernet0|0x4eb39592|RX" : {
+    "ICMP_ECHO_SESSION_TABLE|default|Ethernet0|0x4eb39592|RX": {
         "dst_ip": "192.168.0.3",
         "hw_lookup": "false",
         "rx_interval": "300",
@@ -1829,7 +1825,7 @@
         "state": "Up",
         "tx_interval": "0"
     },
-    "ICMP_ECHO_SESSION_TABLE|default|Ethernet128|0x23ffb930|NORMAL" : {
+    "ICMP_ECHO_SESSION_TABLE|default|Ethernet128|0x23ffb930|NORMAL": {
         "dst_ip": "192.168.0.31",
         "hw_lookup": "false",
         "rx_interval": "300",
@@ -1839,7 +1835,7 @@
         "state": "Down",
         "tx_interval": "100"
     },
-    "ICMP_ECHO_SESSION_TABLE|default|Ethernet152|0x39e05375|NORMAL" : {
+    "ICMP_ECHO_SESSION_TABLE|default|Ethernet152|0x39e05375|NORMAL": {
         "dst_ip": "192.168.0.37",
         "hw_lookup": "false",
         "rx_interval": "300",
@@ -1855,5 +1851,31 @@
     },
     "COPP_TRAP_TABLE|neighbor_miss": {
         "state": "ok"
+    },
+    "TAM_DROP_MONITOR_SESSION_TABLE|SESSION1": {
+        "status": "active",
+        "report_type": "ipfix",
+        "event_type": "packet-drop-stateless",
+        "drop_stages": "ingress,egress,tm",
+        "collectors": "COLLECTOR1,COLLECTOR2",
+        "flow_group": ""
+    },
+    "TAM_DROP_MONITOR_SESSION_TABLE|SESSION2": {
+        "status": "inactive",
+        "report_type": "ipfix",
+        "event_type": "packet-drop-stateful",
+        "drop_stages": "ingress",
+        "collectors": "COLLECTOR3",
+        "flow_group": "FG1",
+        "status_detail": "Collector not reachable"
+    },
+    "TAM_DROP_MONITOR_SESSION_TABLE|SESSION3": {
+        "status": "inactive",
+        "report_type": "ipfix",
+        "event_type": "packet-drop-stateless",
+        "drop_stages": "egress",
+        "collectors": "",
+        "flow_group": "",
+        "status_detail": "Configuration error"
     }
 }
