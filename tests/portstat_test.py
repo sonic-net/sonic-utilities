@@ -82,6 +82,28 @@ BIN14                                   0
 BIN15                                   0
 """
 
+intf_fec_counters_fec_hist_unsupported = """\
+Symbol Errors Per Codeword    Codewords
+----------------------------  -----------
+BIN0                          UNDEFINED
+BIN1                          UNDEFINED
+BIN2                          UNDEFINED
+BIN3                          UNDEFINED
+BIN4                          UNDEFINED
+BIN5                          UNDEFINED
+BIN6                          UNDEFINED
+BIN7                          UNDEFINED
+BIN8                          UNDEFINED
+BIN9                          UNDEFINED
+BIN10                         UNDEFINED
+BIN11                         UNDEFINED
+BIN12                         UNDEFINED
+BIN13                         UNDEFINED
+BIN14                         UNDEFINED
+BIN15                         UNDEFINED
+FEC histogram data for port Ethernet4 not found
+"""
+
 intf_fec_counters_period = """\
 The rates are calculated within 3 seconds period
     IFACE    STATE    FEC_CORR    FEC_UNCORR    FEC_SYMBOL_ERR    FEC_PRE_BER    FEC_POST_BER    FEC_PRE_BER_MAX    FLR(O)    FLR(P) (Accuracy)    FEC_MAX_T
@@ -496,6 +518,15 @@ class TestPortStat(object):
         print(result.output)
         assert result.exit_code == 0
         assert result.output == intf_fec_counters_fec_hist
+
+    def test_show_intf_counters_fec_histogram_unsupported(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["counters"].commands["fec-histogram"], ["Ethernet4"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == intf_fec_counters_fec_hist_unsupported
 
     def test_show_intf_fec_counters_period(self):
         runner = CliRunner()
