@@ -2040,8 +2040,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.any_checkpoints_list_as_text = json.dumps(self.any_checkpoints_list, indent=4)
         self.any_checkpoints_list_with_time_as_text = json.dumps(self.any_checkpoints_list_with_time, indent=4)
 
-
-    @patch('config.main.validate_patch', mock.Mock(return_value=True))
+    @patch('generic_config_updater.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch__no_params__get_required_params_error_msg(self):
         # Arrange
         unexpected_exit_code = 0
@@ -2054,7 +2053,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.assertNotEqual(unexpected_exit_code, result.exit_code)
         self.assertIn(expected_output, result.output)
 
-    @patch('config.main.validate_patch', mock.Mock(return_value=True))
+    @patch('generic_config_updater.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch__help__gets_help_msg(self):
         # Arrange
         expected_exit_code = 0
@@ -2071,7 +2070,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         communicate=mock.Mock(return_value=('{"some": "config"}', None)),
         returncode=0
     )))
-    @patch('config.main.validate_patch', mock.Mock(return_value=True))
+    @patch('generic_config_updater.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch__only_required_params__default_values_used_for_optional_params(self):
         # Arrange
         expected_exit_code = 0
@@ -2086,7 +2085,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
             trace_io=None,
         )
         mock_generic_updater = mock.Mock()
-        with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
+        with mock.patch('generic_config_updater.main.GenericUpdater', return_value=mock_generic_updater):
             with mock.patch('builtins.open', mock.mock_open(read_data=self.any_patch_as_text)):
 
                 # Act
@@ -2102,7 +2101,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         communicate=mock.Mock(return_value=('{"some": "config"}', None)),
         returncode=0
     )))
-    @patch('config.main.validate_patch', mock.Mock(return_value=True))
+    @patch('generic_config_updater.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch__all_optional_params_non_default__non_default_values_used(self):
         # Arrange
         expected_exit_code = 0
@@ -2111,7 +2110,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         expected_call_with_non_default_values = \
             mock.call(mock.ANY, ConfigFormat.SONICYANG, True, True, True, expected_ignore_path_tuple, trace_io=None)
         mock_generic_updater = mock.Mock()
-        with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
+        with mock.patch('generic_config_updater.main.GenericUpdater', return_value=mock_generic_updater):
             with mock.patch('builtins.open', mock.mock_open(read_data=self.any_patch_as_text)):
 
                 # Act
@@ -2136,14 +2135,14 @@ class TestGenericUpdateCommands(unittest.TestCase):
         communicate=mock.Mock(return_value=('{"some": "config"}', None)),
         returncode=0
     )))
-    @patch('config.main.validate_patch', mock.Mock(return_value=True))
+    @patch('generic_config_updater.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch__exception_thrown__error_displayed_error_code_returned(self):
         # Arrange
         unexpected_exit_code = 0
         any_error_message = "any_error_message"
         mock_generic_updater = mock.Mock()
         mock_generic_updater.apply_patch.side_effect = Exception(any_error_message)
-        with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
+        with mock.patch('generic_config_updater.main.GenericUpdater', return_value=mock_generic_updater):
             with mock.patch('builtins.open', mock.mock_open(read_data=self.any_patch_as_text)):
 
                 # Act
@@ -2176,7 +2175,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         communicate=mock.Mock(return_value=('{"some": "config"}', None)),
         returncode=0
     )))
-    @patch('config.main.validate_patch', mock.Mock(return_value=True))
+    @patch('generic_config_updater.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch__path_trace_option__trace_file_opened_and_passed(self):
         # Arrange
         import tempfile
@@ -2190,7 +2189,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
             trace_file_path = trace_file.name
 
         try:
-            with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
+            with mock.patch('generic_config_updater.main.GenericUpdater', return_value=mock_generic_updater):
                 with mock.patch('builtins.open', mock.mock_open(read_data=self.any_patch_as_text)) as mock_open_func:
                     # Configure mock to return different handles for patch file and trace file
                     def open_side_effect(filename, mode='r'):
@@ -2224,13 +2223,13 @@ class TestGenericUpdateCommands(unittest.TestCase):
         communicate=mock.Mock(return_value=('{"some": "config"}', None)),
         returncode=0
     )))
-    @patch('config.main.validate_patch', mock.Mock(return_value=True))
+    @patch('generic_config_updater.main.validate_patch', mock.Mock(return_value=True))
     def validate_apply_patch_optional_parameter(self, param_args, expected_call):
         # Arrange
         expected_exit_code = 0
         expected_output = "Patch applied successfully"
         mock_generic_updater = mock.Mock()
-        with mock.patch('config.main.GenericUpdater', return_value=mock_generic_updater):
+        with mock.patch('generic_config_updater.main.GenericUpdater', return_value=mock_generic_updater):
             with mock.patch('builtins.open', mock.mock_open(read_data=self.any_patch_as_text)):
 
                 # Act
@@ -2245,7 +2244,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         mock_generic_updater.apply_patch.assert_has_calls([expected_call])
 
     def test_filter_duplicate_patch_operations_basic(self):
-        from config.main import filter_duplicate_patch_operations
+        from generic_config_updater.main import filter_duplicate_patch_operations
         # Patch tries to add duplicate port to ACL_TABLE leaf-list
         patch_ops = [
             {"op": "add", "path": "/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet1"},
@@ -2265,7 +2264,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.assertEqual(filtered_patch_ops[0]['value'], "Ethernet3", "Only Ethernet3 add op should remain")
 
     def test_filter_duplicate_patch_operations_no_duplicates(self):
-        from config.main import filter_duplicate_patch_operations
+        from generic_config_updater.main import filter_duplicate_patch_operations
         # Patch does not contain any duplicate ops
         patch_ops = [
             {"op": "add", "path": "/ACL_TABLE/MY_ACL_TABLE/ports/-", "value": "Ethernet3"},
@@ -2286,7 +2285,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.assertEqual(filtered_patch_ops, patch_ops, "Filtered ops should match original ops")
 
     def test_filter_duplicate_patch_operations_non_list_field(self):
-        from config.main import filter_duplicate_patch_operations
+        from generic_config_updater.main import filter_duplicate_patch_operations
         # Patch tries to add duplicate entries to a non-list field
         patch_ops = [
             {"op": "add", "path": "/PORT/Ethernet0/description", "value": "Desc1"},
@@ -2305,7 +2304,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.assertEqual(filtered_patch_ops, patch_ops, "Filtered ops should match original ops")
 
     def test_filter_duplicate_patch_operations_empty_config(self):
-        from config.main import filter_duplicate_patch_operations
+        from generic_config_updater.main import filter_duplicate_patch_operations
         patch_ops = [
             {"op": "add", "path": "/PORT/Ethernet0/allowed_vlans/-", "value": "100"},
             {"op": "add", "path": "/PORT/Ethernet0/allowed_vlans/-", "value": "200"}
@@ -2323,7 +2322,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         self.assertEqual(filtered_patch_ops, patch_ops, "Filtered ops should match original ops")
 
     def test_append_emptytables_if_required_basic_config(self):
-        from config.main import append_emptytables_if_required
+        from generic_config_updater.main import append_emptytables_if_required
 
         patch_ops = [
             {"op": "add", "path": "/ACL_TABLE2/ports", "value": ["Ethernet1", "Ethernet2"]}
@@ -2340,7 +2339,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         assert updated_patch_ops[1] == patch_ops[0], "Second op should be the original add operation"
 
     def test_append_emptytables_if_required_no_action_needed(self):
-        from config.main import append_emptytables_if_required
+        from generic_config_updater.main import append_emptytables_if_required
         patch_ops = [
             {"op": "add", "path": "/ACL_TABLE/ports", "value": ["Ethernet1", "Ethernet2"]}
         ]
@@ -2354,7 +2353,7 @@ class TestGenericUpdateCommands(unittest.TestCase):
         assert updated_patch_ops[0] == patch_ops[0], "Patch operation should remain unchanged"
 
     def test_append_emptytables_if_required_multiple_tables(self):
-        from config.main import append_emptytables_if_required
+        from generic_config_updater.main import append_emptytables_if_required
 
         patch_ops = [
             {"op": "add", "path": "/TABLE1/field", "value": "value1"},
@@ -2367,6 +2366,26 @@ class TestGenericUpdateCommands(unittest.TestCase):
         assert updated_patch_ops[1] == patch_ops[0], "Second op should be the original TABLE1 add operation"
         assert updated_patch_ops[2]['path'] == "/TABLE2", "Third op should create TABLE2"
         assert updated_patch_ops[3] == patch_ops[1], "Fourth op should be the original TABLE2 add operation"
+
+    # ------------------------------------------------------------------
+    # print_dry_run_message
+    # ------------------------------------------------------------------
+
+    def test_print_dry_run_message_dry_run_true_prints_banner(self):
+        """print_dry_run_message with dry_run=True should echo a banner."""
+        from config.main import print_dry_run_message
+        result = self.runner.invoke(
+            click.command()(lambda: print_dry_run_message(True))
+        )
+        self.assertIn("DRY RUN", result.output)
+
+    def test_print_dry_run_message_dry_run_false_no_output(self):
+        """print_dry_run_message with dry_run=False should produce no output."""
+        from config.main import print_dry_run_message
+        result = self.runner.invoke(
+            click.command()(lambda: print_dry_run_message(False))
+        )
+        self.assertEqual(result.output.strip(), "")
 
     def test_replace__no_params__get_required_params_error_msg(self):
         # Arrange
@@ -4312,12 +4331,12 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         communicate=mock.Mock(return_value=('{"some": "config"}', None)),
         returncode=0
     )))
-    @patch('config.main.validate_patch', mock.Mock(return_value=True))
+    @patch('generic_config_updater.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch_multiasic(self):
         # Mock open to simulate file reading
         with patch('builtins.open', mock_open(read_data=json.dumps(self.patch_content)), create=True) as mocked_open:
             # Mock GenericUpdater to avoid actual patch application
-            with patch('config.main.GenericUpdater') as mock_generic_updater:
+            with patch('generic_config_updater.main.GenericUpdater') as mock_generic_updater:
                 mock_generic_updater.return_value.apply_patch = MagicMock()
 
                 print("Multi ASIC: {}".format(multi_asic.is_multi_asic()))
@@ -4336,12 +4355,12 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         communicate=mock.Mock(return_value=('{"some": "config"}', None)),
         returncode=0
     )))
-    @patch('config.main.validate_patch', mock.Mock(return_value=True))
+    @patch('generic_config_updater.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch_dryrun_multiasic(self):
         # Mock open to simulate file reading
         with patch('builtins.open', mock_open(read_data=json.dumps(self.patch_content)), create=True) as mocked_open:
             # Mock GenericUpdater to avoid actual patch application
-            with patch('config.main.GenericUpdater') as mock_generic_updater:
+            with patch('generic_config_updater.main.GenericUpdater') as mock_generic_updater:
                 mock_generic_updater.return_value.apply_patch = MagicMock()
 
                 # Mock ConfigDBConnector to ensure it's not called during dry-run
@@ -4375,13 +4394,13 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         communicate=mock.Mock(return_value=('{"some": "config"}', None)),
         returncode=0
     )))
-    @patch('config.main.validate_patch', mock.Mock(return_value=True))
-    @patch('config.main.concurrent.futures.wait', autospec=True)
+    @patch('generic_config_updater.main.validate_patch', mock.Mock(return_value=True))
+    @patch('generic_config_updater.main.concurrent.futures.wait', autospec=True)
     def test_apply_patch_dryrun_parallel_multiasic(self, MockThreadPoolWait):
         # Mock open to simulate file reading
         with patch('builtins.open', mock_open(read_data=json.dumps(self.patch_content)), create=True) as mocked_open:
             # Mock GenericUpdater to avoid actual patch application
-            with patch('config.main.GenericUpdater') as mock_generic_updater:
+            with patch('generic_config_updater.main.GenericUpdater') as mock_generic_updater:
                 mock_generic_updater.return_value.apply_patch = MagicMock()
 
                 # Mock ConfigDBConnector to ensure it's not called during dry-run
@@ -4419,13 +4438,13 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         communicate=mock.Mock(return_value=('{"some": "config"}', None)),
         returncode=0
     )))
-    @patch('config.main.validate_patch', mock.Mock(return_value=True))
-    @patch('config.main.concurrent.futures.wait', autospec=True)
+    @patch('generic_config_updater.main.validate_patch', mock.Mock(return_value=True))
+    @patch('generic_config_updater.main.concurrent.futures.wait', autospec=True)
     def test_apply_patch_check_running_in_parallel_multiasic(self, MockThreadPoolWait):
         # Mock open to simulate file reading
         with patch('builtins.open', mock_open(read_data=json.dumps(self.patch_content)), create=True) as mocked_open:
             # Mock GenericUpdater to avoid actual patch application
-            with patch('config.main.GenericUpdater') as mock_generic_updater:
+            with patch('generic_config_updater.main.GenericUpdater') as mock_generic_updater:
                 mock_generic_updater.return_value.apply_patch = MagicMock()
 
                 # Mock ConfigDBConnector to ensure it's not called during dry-run
@@ -4462,13 +4481,13 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         communicate=mock.Mock(return_value=('{"some": "config"}', None)),
         returncode=0
     )))
-    @patch('config.main.validate_patch', mock.Mock(return_value=True))
-    @patch('config.main.apply_patch_wrapper')
+    @patch('generic_config_updater.main.validate_patch', mock.Mock(return_value=True))
+    @patch('generic_config_updater.main._apply_patch_wrapper')
     def test_apply_patch_check_apply_call_parallel_multiasic(self, mock_apply_patch):
         # Mock open to simulate file reading
         with patch('builtins.open', mock_open(read_data=json.dumps(self.patch_content)), create=True) as mocked_open:
             # Mock GenericUpdater to avoid actual patch application
-            with patch('config.main.GenericUpdater') as mock_generic_updater:
+            with patch('generic_config_updater.main.GenericUpdater') as mock_generic_updater:
                 mock_generic_updater.return_value.apply_patch = MagicMock()
 
                 # Mock ConfigDBConnector to ensure it's not called during dry-run
@@ -4507,13 +4526,13 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         communicate=mock.Mock(return_value=('{"some": "config"}', None)),
         returncode=0
     )))
-    @patch('config.main.validate_patch', mock.Mock(return_value=True))
-    @patch('config.main.concurrent.futures.wait', autospec=True)
+    @patch('generic_config_updater.main.validate_patch', mock.Mock(return_value=True))
+    @patch('generic_config_updater.main.concurrent.futures.wait', autospec=True)
     def test_apply_patch_check_running_in_not_parallel_multiasic(self, MockThreadPoolWait):
         # Mock open to simulate file reading
         with patch('builtins.open', mock_open(read_data=json.dumps(self.patch_content)), create=True) as mocked_open:
             # Mock GenericUpdater to avoid actual patch application
-            with patch('config.main.GenericUpdater') as mock_generic_updater:
+            with patch('generic_config_updater.main.GenericUpdater') as mock_generic_updater:
                 mock_generic_updater.return_value.apply_patch = MagicMock()
 
                 # Mock ConfigDBConnector to ensure it's not called during dry-run
@@ -4549,12 +4568,12 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         communicate=mock.Mock(return_value=('{"some": "config"}', None)),
         returncode=0
     )))
-    @patch('config.main.validate_patch', mock.Mock(return_value=True))
+    @patch('generic_config_updater.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch_parallel_with_error_multiasic(self):
         # Mock open to simulate file reading
         with patch('builtins.open', mock_open(read_data=json.dumps(self.patch_content)), create=True) as mocked_open:
             # Mock GenericUpdater to avoid actual patch application
-            with patch('config.main.GenericUpdater') as mock_generic_updater:
+            with patch('generic_config_updater.main.GenericUpdater') as mock_generic_updater:
                 mock_generic_updater.return_value.apply_patch = MagicMock()
 
                 # Mock ConfigDBConnector to ensure it's not called during dry-run
@@ -4586,7 +4605,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
                     mock_config_db_connector.assert_not_called()
 
     def test_filter_duplicate_patch_operations_basic_multiasic(self):
-        from config.main import filter_duplicate_patch_operations
+        from generic_config_updater.main import filter_duplicate_patch_operations
         import jsonpatch
         # Multi-ASIC config: each ASIC has its own ACL_TABLE
         config = {
@@ -4627,7 +4646,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         self.assertEqual(len(filtered_ops), 0, "All adds are duplicates, should be filtered out in multi-asic config")
 
     def test_filter_duplicate_patch_operations_no_duplicates_multiasic(self):
-        from config.main import filter_duplicate_patch_operations
+        from generic_config_updater.main import filter_duplicate_patch_operations
         import jsonpatch
         # Multi-ASIC config: each ASIC has its own ACL_TABLE
         config = {
@@ -4672,7 +4691,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         )
 
     def test_filter_duplicate_patch_operations_mixed_multiasic(self):
-        from config.main import filter_duplicate_patch_operations
+        from generic_config_updater.main import filter_duplicate_patch_operations
         import jsonpatch
         # Multi-ASIC config: each ASIC has its own ACL_TABLE
         config = {
@@ -4717,7 +4736,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         )
 
     def test_filter_duplicate_patch_operations_empty_config_multiasic(self):
-        from config.main import filter_duplicate_patch_operations
+        from generic_config_updater.main import filter_duplicate_patch_operations
         import jsonpatch
         config = {
             "localhost": {
@@ -4762,7 +4781,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         )
 
     def test_test_append_emptytables_if_required_basic_config_multiasic(self):
-        from config.main import append_emptytables_if_required
+        from generic_config_updater.main import append_emptytables_if_required
         # Multi-ASIC config: each ASIC has its own PORT table
         config = {
             "localhost": {
@@ -4804,7 +4823,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         assert updated_patch_list[5] == patch_ops[2]
 
     def test_test_append_emptytables_if_required_no_additional_tables_multiasic(self):
-        from config.main import append_emptytables_if_required
+        from generic_config_updater.main import append_emptytables_if_required
         # Multi-ASIC config: each ASIC has its own PORT table
         config = {
             "localhost": {
@@ -4838,8 +4857,8 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         updated_patch = append_emptytables_if_required(patch_ops, config)
         assert len(updated_patch) == len(patch_ops), "No additional tables should be added to the patch"
 
-    @patch('config.main.subprocess.Popen')
-    @patch('config.main.SonicYangCfgDbGenerator.validate_config_db_json', mock.Mock(return_value=True))
+    @patch('generic_config_updater.main.subprocess.Popen')
+    @patch('sonic_yang_cfg_generator.SonicYangCfgDbGenerator.validate_config_db_json', mock.Mock(return_value=True))
     def test_apply_patch_validate_patch_multiasic(self, mock_subprocess_popen):
         mock_instance = MagicMock()
         mock_instance.communicate.return_value = (json.dumps(self.all_config), 0)
@@ -4849,7 +4868,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         # Mock open to simulate file reading
         with patch('builtins.open', mock_open(read_data=json.dumps(self.patch_content)), create=True) as mocked_open:
             # Mock GenericUpdater to avoid actual patch application
-            with patch('config.main.GenericUpdater') as mock_generic_updater:
+            with patch('generic_config_updater.main.GenericUpdater') as mock_generic_updater:
                 mock_generic_updater.return_value.apply_patch = MagicMock()
 
                 print("Multi ASIC: {}".format(multi_asic.is_multi_asic()))
@@ -4866,8 +4885,8 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
                 # Verify mocked_open was called as expected
                 mocked_open.assert_called_with(self.patch_file_path, 'r')
 
-    @patch('config.main.subprocess.Popen')
-    @patch('config.main.SonicYangCfgDbGenerator.validate_config_db_json', mock.Mock(return_value=True))
+    @patch('generic_config_updater.main.subprocess.Popen')
+    @patch('sonic_yang_cfg_generator.SonicYangCfgDbGenerator.validate_config_db_json', mock.Mock(return_value=True))
     def test_apply_patch_validate_patch_with_badpath_multiasic(self, mock_subprocess_popen):
         mock_instance = MagicMock()
         mock_instance.communicate.return_value = (json.dumps(self.all_config), 0)
@@ -4886,7 +4905,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         # Mock open to simulate file reading
         with patch('builtins.open', mock_open(read_data=json.dumps(bad_patch)), create=True) as mocked_open:
             # Mock GenericUpdater to avoid actual patch application
-            with patch('config.main.GenericUpdater') as mock_generic_updater:
+            with patch('generic_config_updater.main.GenericUpdater') as mock_generic_updater:
                 mock_generic_updater.return_value.apply_patch = MagicMock()
 
                 print("Multi ASIC: {}".format(multi_asic.is_multi_asic()))
@@ -4903,8 +4922,8 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
                 # Verify mocked_open was called as expected
                 mocked_open.assert_called_with(self.patch_file_path, 'r')
 
-    @patch('config.main.subprocess.Popen')
-    @patch('config.main.SonicYangCfgDbGenerator.validate_config_db_json', mock.Mock(return_value=True))
+    @patch('generic_config_updater.main.subprocess.Popen')
+    @patch('sonic_yang_cfg_generator.SonicYangCfgDbGenerator.validate_config_db_json', mock.Mock(return_value=True))
     def test_apply_patch_parallel_badpath_multiasic(self, mock_subprocess_popen):
         mock_instance = MagicMock()
         mock_instance.communicate.return_value = (json.dumps(self.all_config), 0)
@@ -4923,7 +4942,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         # Mock open to simulate file reading
         with patch('builtins.open', mock_open(read_data=json.dumps(bad_patch)), create=True) as mocked_open:
             # Mock GenericUpdater to avoid actual patch application
-            with patch('config.main.GenericUpdater') as mock_generic_updater:
+            with patch('generic_config_updater.main.GenericUpdater') as mock_generic_updater:
                 mock_generic_updater.return_value.apply_patch = MagicMock()
 
                 print("Multi ASIC: {}".format(multi_asic.is_multi_asic()))
@@ -4941,8 +4960,8 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
                 # Verify mocked_open was called as expected
                 mocked_open.assert_called_with(self.patch_file_path, 'r')
 
-    @patch('config.main.subprocess.Popen')
-    @patch('config.main.SonicYangCfgDbGenerator.validate_config_db_json', mock.Mock(return_value=True))
+    @patch('generic_config_updater.main.subprocess.Popen')
+    @patch('sonic_yang_cfg_generator.SonicYangCfgDbGenerator.validate_config_db_json', mock.Mock(return_value=True))
     def test_apply_patch_validate_patch_with_wrong_fetch_config(self, mock_subprocess_popen):
         mock_instance = MagicMock()
         mock_instance.communicate.return_value = (json.dumps(self.all_config), 2)
@@ -4951,7 +4970,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         # Mock open to simulate file reading
         with patch('builtins.open', mock_open(read_data=json.dumps(self.patch_content)), create=True) as mocked_open:
             # Mock GenericUpdater to avoid actual patch application
-            with patch('config.main.GenericUpdater') as mock_generic_updater:
+            with patch('generic_config_updater.main.GenericUpdater') as mock_generic_updater:
                 mock_generic_updater.return_value.apply_patch = MagicMock()
 
                 print("Multi ASIC: {}".format(multi_asic.is_multi_asic()))
@@ -5107,7 +5126,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
         communicate=mock.Mock(return_value=('{"some": "config"}', None)),
         returncode=0
     )))
-    @patch('config.main.validate_patch', mock.Mock(return_value=True))
+    @patch('generic_config_updater.main.validate_patch', mock.Mock(return_value=True))
     def test_apply_patch__path_trace_option_multiasic__trace_file_opened_and_passed(self):
         # Arrange
         import tempfile
@@ -5132,7 +5151,7 @@ class TestApplyPatchMultiAsic(unittest.TestCase):
                 mock_open_func.side_effect = open_side_effect
 
                 # Mock GenericUpdater to avoid actual patch application
-                with patch('config.main.GenericUpdater') as mock_generic_updater:
+                with patch('generic_config_updater.main.GenericUpdater') as mock_generic_updater:
                     mock_generic_updater.return_value.apply_patch = MagicMock()
 
                     print("Multi ASIC: {}".format(multi_asic.is_multi_asic()))
