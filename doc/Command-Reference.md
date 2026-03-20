@@ -8442,7 +8442,7 @@ Go Back To [Beginning of the document](#) or [Beginning of this section](#loopba
 **show vrf**
 
 This command displays all vrfs configured on the system along with interface binding to the vrf.
-If vrf-name is also provided as part of the command, if the vrf is created it will display all interfaces binding to the vrf, if vrf is not created nothing will be displayed.
+If vrf-name is also provided as part of the command, if the vrf is created it will display all interfaces binding to the vrf, if vrf is not created, the command will exit with a failure code and a message "VRF <vrf-name> is not configured."
 
 - Usage:
   ```

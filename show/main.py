@@ -364,13 +364,16 @@ def get_interface_bind_to_vrf(config_db, vrf_name):
 
 @cli.command()
 @click.argument('vrf_name', required=False)
-def vrf(vrf_name):
+@click.pass_context
+def vrf(ctx, vrf_name):
     """Show vrf config"""
     config_db = ConfigDBConnector()
     config_db.connect()
     header = ['VRF', 'Interfaces']
     body = []
     vrf_dict = config_db.get_table('VRF')
+    if vrf_name is not None and vrf_name not in vrf_dict:
+        ctx.fail(f"VRF {vrf_name} is not configured.")
     if vrf_dict:
         vrfs = []
         if vrf_name is None:
