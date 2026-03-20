@@ -20,6 +20,7 @@ test_yang_models = [
     'sonic-2-lists.yang',
     'sonic-static-object-complex-1.yang',
     'sonic-static-object-complex-2.yang',
+    'sonic-static-object-complex-3.yang',
     'sonic-dynamic-object-complex-1.yang',
     'sonic-dynamic-object-complex-2.yang',
     'sonic-choice-complex.yang',
@@ -115,6 +116,15 @@ class TestYangParser:
 
         base_test('sonic-static-object-complex-2',
                  assert_dictionaries.static_object_complex_2)
+
+    def test_static_object_complex_3(self):
+        """ Test for the object container with:
+            1 leaf with hyphen, 1 leaf-list with hyphen, 1 choice with hyphen.
+        """
+
+        base_test('sonic-static-object-complex-3',
+                  assert_dictionaries.static_object_complex_3)
+
 
     def test_dynamic_object_complex_1(self):
         """ Test for object container with:
