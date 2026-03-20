@@ -34,6 +34,8 @@ def test_install(run_command, run_command_or_raise, get_bootloader, swap, fs):
     fs.create_dir(os.path.join(mounted_image_folder, "usr/lib/docker/docker.sh"))
     fs.create_file("/var/run/docker.pid", contents="15")
     fs.create_file("/proc/15/cmdline", contents="\x00".join(["dockerd"] + dockerd_opts))
+    # Simulate new image: /etc/resolv.conf is a dangling symlink (target doesn't exist in squashfs)
+    fs.create_symlink(f"{mounted_image_folder}/etc/resolv.conf", "/run/resolvconf/resolv.conf")
 
     # Setup bootloader mock
     mock_bootloader = Mock()
@@ -91,12 +93,12 @@ def test_install(run_command, run_command_or_raise, get_bootloader, swap, fs):
              f"{mounted_image_folder}/var/lib/sonic-package-manager"]),
         call(["touch", f"{mounted_image_folder}/tmp/docker.sock"]),
         call(["mount", "--bind", "/var/run/docker.sock", f"{mounted_image_folder}/tmp/docker.sock"]),
-        call(["cp", f"{mounted_image_folder}/etc/resolv.conf", "/tmp/resolv.conf.backup"]),
-        call(["cp", "/etc/resolv.conf", f"{mounted_image_folder}/etc/resolv.conf"]),
+        # /etc/resolv.conf is a dangling symlink -> /run/resolvconf/resolv.conf, populate its target
+        call(["mkdir", "-p", f"{mounted_image_folder}/run/resolvconf"]),
+        call(["cp", "-L", "/etc/resolv.conf", f"{mounted_image_folder}/run/resolvconf/resolv.conf"]),
         call(["chroot", mounted_image_folder, "sh", "-c", "command -v sonic-package-manager"]),
         call(["chroot", mounted_image_folder, "sonic-package-manager", "migrate", "/tmp/packages.json", "--dockerd-socket", "/tmp/docker.sock", "-y"], capture=False),
         call(["chroot", mounted_image_folder, "/usr/lib/docker/docker.sh", "stop"], raise_exception=False),
-        call(["cp", "/tmp/resolv.conf.backup", f"{mounted_image_folder}/etc/resolv.conf"], raise_exception=False),
         call(["umount", "-f", "-R", mounted_image_folder], raise_exception=False),
         call(["umount", "-r", "-f", mounted_image_folder], raise_exception=False),
         call(["rm", "-rf", mounted_image_folder], raise_exception=False),
