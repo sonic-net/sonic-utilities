@@ -307,6 +307,29 @@ Error: 'vrf_name' length should not exceed 15 characters
         assert expected_output in result.output
 
 
+    def test_vrf_show_unconfigured(self):
+        """Test that 'show vrf <name>' returns an error for unconfigured VRF (issue #4378)."""
+        from .mock_tables import dbconnector
+        jsonfile_config = os.path.join(mock_db_path, "config_db")
+        dbconnector.dedicated_dbs['CONFIG_DB'] = jsonfile_config
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(show.cli.commands['vrf'], ['VrfNonExistent'], obj=db)
+        dbconnector.dedicated_dbs = {}
+        assert result.exit_code != 0
+        assert "Error: VRF VrfNonExistent is not configured" in result.output
+
+    def test_vrf_show_unconfigured_empty_table(self):
+        """Test that 'show vrf <name>' returns an error when no VRFs exist at all (issue #4378)."""
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(show.cli.commands['vrf'], ['VrfDoesNotExist'], obj=db)
+        assert result.exit_code != 0
+        assert "Error: VRF VrfDoesNotExist is not configured" in result.output
+
+
 class TestVnet(object):
     @classmethod
     def setup_class(cls):
