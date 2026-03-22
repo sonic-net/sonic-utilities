@@ -334,6 +334,62 @@ class TestClearFlowcnt(object):
         print('TEAR DOWN')
 
 
+class TestClearFlowcntTrap(object):
+    def setup(self):
+        print('SETUP')
+
+    @patch('clear.main.run_command')
+    @patch('utilities_common.multi_asic.multi_asic_ns_choices', MagicMock(return_value=['']))
+    def test_clear_flowcnt_trap_single_asic(self, mock_run_command):
+        """Test flowcnt-trap clear on single ASIC without namespace option"""
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['flowcnt-trap'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['flow_counters_stat', '-c', '-t', 'trap'])
+
+    @patch('clear.main.run_command')
+    @patch('utilities_common.multi_asic.multi_asic_ns_choices', MagicMock(return_value=['asic0', 'asic1', 'asic2', 'asic3']))
+    @patch.object(click.Choice, 'convert', MagicMock(return_value='asic0'))
+    def test_clear_flowcnt_trap_multi_asic_with_namespace(self, mock_run_command):
+        """Test flowcnt-trap clear on multi-ASIC with specific namespace"""
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['flowcnt-trap'], ['-n', 'asic0'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['flow_counters_stat', '-c', '-t', 'trap', '-n', 'asic0'])
+
+    @patch('clear.main.run_command')
+    @patch('utilities_common.multi_asic.multi_asic_ns_choices', MagicMock(return_value=['asic0', 'asic1', 'asic2', 'asic3']))
+    @patch.object(click.Choice, 'convert', MagicMock(return_value='asic1'))
+    def test_clear_flowcnt_trap_multi_asic_different_namespace(self, mock_run_command):
+        """Test flowcnt-trap clear on multi-ASIC with different namespace"""
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['flowcnt-trap'], ['-n', 'asic1'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['flow_counters_stat', '-c', '-t', 'trap', '-n', 'asic1'])
+
+    @patch('clear.main.run_command')
+    @patch('utilities_common.multi_asic.multi_asic_ns_choices', MagicMock(return_value=['asic0', 'asic1', 'asic2', 'asic3']))
+    def test_clear_flowcnt_trap_multi_asic_without_namespace(self, mock_run_command):
+        """Test flowcnt-trap clear on multi-ASIC without namespace (default behavior)"""
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['flowcnt-trap'])
+        assert result.exit_code == 0
+        # When no namespace is specified, command runs without -n flag
+        mock_run_command.assert_called_with(['flow_counters_stat', '-c', '-t', 'trap'])
+
+    @patch('utilities_common.multi_asic.multi_asic_ns_choices', MagicMock(return_value=['asic0', 'asic1']))
+    def test_clear_flowcnt_trap_multi_asic_invalid_namespace(self):
+        """Test flowcnt-trap clear with invalid namespace should fail"""
+        runner = CliRunner()
+        result = runner.invoke(clear.cli.commands['flowcnt-trap'], ['-n', 'invalid_asic'])
+        # Click.Choice should reject invalid namespace
+        assert result.exit_code != 0
+        assert 'Invalid value' in result.output or 'invalid_asic' in result.output
+
+    def teardown(self):
+        print('TEAR DOWN')
+
+
 class TestClearArp(object):
     def setup(self):
         print('SETUP')

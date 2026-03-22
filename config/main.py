@@ -7671,13 +7671,18 @@ def remove_vrrp_v6(ctx, interface_name, vrrp_id):
 #
 
 @config.group(cls=clicommon.AbbreviationGroup, name='vrf')
+@click.option('-n', '--namespace', help='Namespace name',
+             required=True if multi_asic.is_multi_asic() else False, type=click.Choice(multi_asic.get_namespace_list()))
 @click.pass_context
-def vrf(ctx):
-    """VRF-related configuration tasks"""
-    config_db = ConfigDBConnector()
+def vrf(ctx, namespace):
+    """ VRF-related configuration tasks """
+    if namespace is None:
+        namespace = DEFAULT_NAMESPACE
+    config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=str(namespace))
     config_db.connect()
     ctx.obj = {}
     ctx.obj['config_db'] = config_db
+    ctx.obj['namespace'] = str(namespace)
 
 @vrf.command('add')
 @click.argument('vrf_name', metavar='<vrf_name>', required=True)
