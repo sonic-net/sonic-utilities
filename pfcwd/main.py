@@ -1,4 +1,5 @@
 import importlib
+import json
 import os
 import sys
 
@@ -10,6 +11,7 @@ from tabulate import tabulate
 from utilities_common import multi_asic as multi_asic_util
 from utilities_common import constants
 from utilities_common.general import load_db_config
+from utilities_common.netstat import table_as_json
 from sonic_py_common import logger
 
 SYSLOG_IDENTIFIER = "config"
@@ -58,8 +60,16 @@ CONFIG_DESCRIPTION = [
 
 STATS_HEADER = ('QUEUE', 'STATUS',) + list(zip(*STATS_DESCRIPTION))[0]
 CONFIG_HEADER = ('PORT',) + list(zip(*CONFIG_DESCRIPTION))[0]
+STATUS_HEADER = (
+    'PORT',
+    'STATUS',
+    'HW DETECTION TIME (ms)',
+    'HW RESTORATION TIME (ms)'
+)
 
 CONFIG_DB_PFC_WD_TABLE_NAME = 'PFC_WD'
+STATE_DB_PFC_WD_STATE_TABLE = 'PFC_WD_STATE_TABLE'
+STATE_DB_PFC_WD_HW_STATE_TABLE = 'PFC_WD_HW_STATE'
 PORT_QOS_MAP =  "PORT_QOS_MAP"
 
 # Main entrypoint
@@ -130,6 +140,9 @@ class PfcwdCli(object):
         )
         self.table = []
         self.all_ports = []
+        self.detection_range = None
+        self.restoration_range = None
+        self.is_hardware_mode = False
 
     @multi_asic_util.run_on_multi_asic
     def collect_stats(self, empty, queues):
@@ -257,6 +270,132 @@ class PfcwdCli(object):
             tablefmt='simple'
         ))
 
+    @multi_asic_util.run_on_multi_asic
+    def collect_status(self, ports):
+        table = []
+        TABLE_NAME_SEPARATOR = '|'
+
+        # Read GLOBAL STATE_DB entry to check recovery type and get ranges
+        global_key = STATE_DB_PFC_WD_STATE_TABLE + TABLE_NAME_SEPARATOR + 'PFC_WD'
+        global_entry = self.db.get_all(self.db.STATE_DB, global_key)
+
+        if global_entry is None or len(global_entry) == 0:
+            # No global entry means hardware watchdog is not initialized
+            self.is_hardware_mode = False
+            return
+
+        recovery_type = global_entry.get('RECOVERY_MECHANISM', 'N/A')
+
+        # Skip if not hardware mode
+        if recovery_type.upper() != 'HARDWARE':
+            self.is_hardware_mode = False
+            return
+
+        # We are in hardware mode
+        self.is_hardware_mode = True
+
+        # Get global ranges from STATE_DB
+        self.detection_range = (
+            global_entry.get('DETECTION_TIME_MIN', 'N/A')
+            + '-'
+            + global_entry.get('DETECTION_TIME_MAX', 'N/A')
+        )
+        self.restoration_range = (
+            global_entry.get('RESTORATION_TIME_MIN', 'N/A')
+            + '-'
+            + global_entry.get('RESTORATION_TIME_MAX', 'N/A')
+        )
+
+        if len(ports) == 0:
+            ports = get_all_ports(
+                self.db, self.multi_asic.current_namespace,
+                self.multi_asic.display_option
+            )
+
+        # For each port, read CONFIG_DB to see if watchdog is configured
+        for port in ports:
+            config_entry = self.config_db.get_entry(CONFIG_DB_PFC_WD_TABLE_NAME, port)
+            if config_entry is None or config_entry == {}:
+                continue
+
+            # Get configured values from CONFIG_DB
+            status = config_entry.get('status', 'N/A')
+            detection_time = config_entry.get('detection_time', 'N/A')
+            restoration_time = config_entry.get('restoration_time', 'N/A')
+
+            table.append([
+                port,
+                status,
+                detection_time,
+                restoration_time
+            ])
+
+        self.table += table
+
+    def show_status(self, ports, json_output=False):
+        del self.table[:]
+        self.detection_range = None
+        self.restoration_range = None
+        self.is_hardware_mode = False
+        self.collect_status(ports)
+
+        # Show "not supported" message only if not in hardware mode
+        if not self.is_hardware_mode:
+            if json_output:
+                result = {
+                    "mode": "software",
+                    "error": "This command is not applicable for software-based PFC watchdog recovery mode."
+                }
+                click.echo(json.dumps(result, indent=4, sort_keys=True))
+            else:
+                click.echo("This command is not applicable for software-based PFC watchdog recovery mode.")
+            return
+
+        if json_output:
+            # Build JSON output using table_as_json for the table portion
+            detection_range = (
+                self.detection_range
+                if self.detection_range and self.detection_range != 'N/A'
+                else None
+            )
+            restoration_range = (
+                self.restoration_range
+                if self.restoration_range and self.restoration_range != 'N/A'
+                else None
+            )
+
+            # Use table_as_json to convert table data to JSON format
+            table_json = table_as_json(self.table, STATUS_HEADER)
+            table_dict = json.loads(table_json)
+
+            # Build final result with metadata and table data
+            result = {
+                "mode": "hardware",
+                "detection_range": detection_range,
+                "restoration_range": restoration_range,
+                "ports_cfg": table_dict
+            }
+
+            click.echo(json.dumps(result, indent=4, sort_keys=True))
+        else:
+            # Display header indicating hardware recovery mode
+            click.echo("PFC Watchdog Mode: Hardware")
+
+            # Display global range info at top (if available)
+            if self.detection_range and self.detection_range != 'N/A':
+                click.echo("Supported hardware detection interval range: {} ms".format(
+                    self.detection_range))
+            if self.restoration_range and self.restoration_range != 'N/A':
+                click.echo("Supported hardware restoration interval range: {} ms".format(
+                    self.restoration_range))
+
+            click.echo()
+
+            click.echo(tabulate(
+                self.table, STATUS_HEADER, stralign='right', numalign='right',
+                tablefmt='simple'
+            ))
+
     def start(self, action, restoration_time, ports, detection_time, pfc_stat_history):
         invalid_ports = self.get_invalid_ports(ports)
         if len(invalid_ports):
@@ -339,12 +478,115 @@ class PfcwdCli(object):
         if pfc_stat_history:
             pfcwd_info["pfc_stat_history"] = "enable"
 
+        # Validate against hardware limits if in HW recovery mode
+        hw_limits = self.get_hw_recovery_limits()
+        if hw_limits:
+            if not (hw_limits['detection_min'] <= detection_time <= hw_limits['detection_max']):
+                click.echo(
+                    "Error: detection_time {}ms is outside hardware supported "
+                    "range [{}-{}]ms".format(
+                        detection_time,
+                        hw_limits['detection_min'],
+                        hw_limits['detection_max']
+                    ),
+                    err=True
+                )
+                sys.exit(1)
+
+            if not (hw_limits['restoration_min'] <= restoration_time <= hw_limits['restoration_max']):
+                click.echo(
+                    "Error: restoration_time {}ms is outside hardware supported "
+                    "range [{}-{}]ms".format(
+                        restoration_time,
+                        hw_limits['restoration_min'],
+                        hw_limits['restoration_max']
+                    ),
+                    err=True
+                )
+                sys.exit(1)
+
+            # Validate action consistency for hardware mode
+            if action:
+                current_global_action = self.get_hw_global_action()
+                if current_global_action and current_global_action != action:
+                    # Count configured ports (excluding GLOBAL entry)
+                    pfcwd_table = self.config_db.get_table(CONFIG_DB_PFC_WD_TABLE_NAME)
+                    configured_ports = [entry for entry in pfcwd_table if 'Ethernet' in entry]
+
+                    # Allow action change if only one port is configured
+                    if len(configured_ports) > 1:
+                        click.echo(
+                            "Error: Action mismatch. Hardware PFC watchdog requires all ports "
+                            "to use the same action.\n"
+                            "Current global action: {}\n"
+                            "Requested action: {}\n"
+                            "Please use action '{}' or remove all existing ports first.".format(
+                                current_global_action,
+                                action,
+                                current_global_action
+                            ),
+                            err=True
+                        )
+                        sys.exit(1)
+
         self.configure_ports(ports, pfcwd_info, overwrite=True)
+
+        if hw_limits:
+            click.echo("Configuration submitted. Run 'show pfcwd status' to verify hardware programming.")
+
+    def get_hw_recovery_limits(self):
+        """Get hardware recovery time limits from STATE_DB.
+
+        Returns a dict with limits if hardware mode is enabled, None otherwise.
+        """
+        entry = self.db.get_all(self.db.STATE_DB, 'PFC_WD_STATE_TABLE|PFC_WD')
+        if not entry:
+            return None
+
+        if entry.get('RECOVERY_MECHANISM', '').upper() != 'HARDWARE':
+            return None
+
+        try:
+            return {
+                'detection_min': int(entry.get('DETECTION_TIME_MIN', 0)),
+                'detection_max': int(entry.get('DETECTION_TIME_MAX', 0)),
+                'restoration_min': int(entry.get('RESTORATION_TIME_MIN', 0)),
+                'restoration_max': int(entry.get('RESTORATION_TIME_MAX', 0)),
+            }
+        except (ValueError, TypeError):
+            return None
+
+    def get_hw_global_action(self):
+        """Get current global action from STATE_DB for hardware mode.
+
+        Returns the current action string if hardware mode is enabled and action is set,
+        None otherwise (including when action is UNKNOWN or empty).
+        """
+        entry = self.db.get_all(self.db.STATE_DB, 'PFC_WD_STATE_TABLE|PFC_WD')
+        if not entry:
+            return None
+
+        if entry.get('RECOVERY_MECHANISM', '').upper() != 'HARDWARE':
+            return None
+
+        action = entry.get('DLR_PACKET_ACTION', '')
+        # Return None for UNKNOWN or empty, otherwise return the action in lowercase
+        if action.upper() in ['UNKNOWN', '']:
+            return None
+        return action.lower()
 
     @multi_asic_util.run_on_multi_asic
     def interval(self, poll_interval):
         if os.geteuid() != 0:
             sys.exit("Root privileges are required for this operation")
+
+        if self.get_hw_recovery_limits() is not None:
+            click.echo(
+                "Error: This command is not supported with hardware based PFC watchdog",
+                err=True
+            )
+            sys.exit(1)
+
         pfcwd_info = {}
         if poll_interval is not None:
             pfcwd_table = self.config_db.get_table(CONFIG_DB_PFC_WD_TABLE_NAME)
@@ -383,6 +625,46 @@ class PfcwdCli(object):
                 CONFIG_DB_PFC_WD_TABLE_NAME, "GLOBAL", pfcwd_info
             )
 
+    def get_stormed_queues(self, ports):
+        """Get list of queues in stormed state for given ports.
+
+        Args:
+            ports: List of port names to check
+
+        Returns:
+            List of queue names (port:queue_index) that are in stormed state
+        """
+        stormed_queues = []
+
+        all_queues = get_all_queues(
+            self.db,
+            self.multi_asic.current_namespace,
+            self.multi_asic.display_option
+        )
+
+        for queue in all_queues:
+            port_name = queue.split(':')[0]
+            if port_name not in ports:
+                continue
+
+            queue_oid = self.db.get(
+                self.db.COUNTERS_DB, 'COUNTERS_QUEUE_NAME_MAP', queue
+            )
+            if queue_oid is None:
+                continue
+
+            stats = self.db.get_all(
+                self.db.COUNTERS_DB, 'COUNTERS:' + queue_oid
+            )
+            if stats is None:
+                continue
+
+            status = stats.get('PFC_WD_STATUS', '')
+            if status == 'stormed':
+                stormed_queues.append(queue)
+
+        return stormed_queues
+
     @multi_asic_util.run_on_multi_asic
     def stop(self, ports):
         if os.geteuid() != 0:
@@ -395,6 +677,17 @@ class PfcwdCli(object):
 
         if len(ports) == 0:
             ports = all_ports
+
+        # For hardware mode, check if any queues are in stormed state
+        if self.get_hw_recovery_limits() is not None:
+            stormed_queues = self.get_stormed_queues(ports)
+            if stormed_queues:
+                click.echo(
+                    "Error: Cannot stop PFC watchdog while queues are in stormed state.\n"
+                    "Stormed queues: {}".format(', '.join(stormed_queues)),
+                    err=True
+                )
+                sys.exit(1)
 
         for port in ports:
             if port not in all_ports:
@@ -500,6 +793,16 @@ class Show(object):
     def config(db, namespace, display, ports):
         """ Show PFC Watchdog configuration """
         PfcwdCli(db, namespace, display).config(ports)
+
+    # Show status
+    @show.command()
+    @click.argument('ports', nargs=-1)
+    @multi_asic_util.multi_asic_click_options
+    @click.option('--json', 'json_output', is_flag=True, help="Display output in JSON format")
+    @clicommon.pass_db
+    def status(db, namespace, display, ports, json_output):
+        """ Show PFC Watchdog hardware recovery status """
+        PfcwdCli(db, namespace, display).show_status(ports, json_output)
 
 
 # Start WD
