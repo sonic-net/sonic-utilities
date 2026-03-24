@@ -1018,6 +1018,22 @@ def wait_service_restart_finish(service, last_timestamp, timeout=30):
 
     log.log_warning("Service: {} does not restart in {} seconds, stop waiting".format(service, timeout))
 
+
+def get_device_name():
+    """
+    Return the device/model id from /host/machine.conf onie_platform line.
+    Hardware SKU string, e.g. armhf-nokia_ixs7215_52x-r0.
+    """
+    machine_conf = "/host/machine.conf"
+    try:
+        with open(machine_conf) as f:
+            for line in f:
+                if line.startswith("onie_platform="):
+                    return line.strip().split("=", 1)[1]
+    except Exception:
+        return None
+
+
 def get_mgmt_interface():
     """
     Parse /etc/sonic/config_db.json to find the management interface name (e.g., eth0).
@@ -1030,9 +1046,10 @@ def get_mgmt_interface():
             return None
         # Example key: "eth0|10.3.141.10/24"
         return list(mgmt_entries.keys())[0].split('|')[0]
-    except Exception as e:
+    except Exception:
         # Valid - no mgmt interface in config_db.json
         return None
+
 
 def reset_mgmt_interface_if_usb_not_running():
     """
@@ -1085,6 +1102,17 @@ def _restart_services():
     # Reload Monit configuration to pick up new hostname in case it changed
     click.echo("Reloading Monit configuration ...")
     clicommon.run_command(['sudo', 'monit', 'reload'])
+
+    device_name = get_device_name()
+    if device_name == "armhf-nokia_ixs7215_52x-r0":
+        click.echo("ARMHF/Nokia-7215: force restart swss and syncd")
+        time.sleep(15)
+        clicommon.run_command(['sudo', 'systemctl', 'stop', 'swss'])
+        clicommon.run_command(['sudo', 'systemctl', 'stop', 'syncd'])
+        time.sleep(1)
+        clicommon.run_command(['sudo', 'systemctl', 'reset-failed', 'swss'])
+        clicommon.run_command(['sudo', 'systemctl', 'reset-failed', 'syncd'])
+        clicommon.run_command(['sudo', 'systemctl', 'restart', 'swss'])
 
     reset_mgmt_interface_if_usb_not_running()
 
