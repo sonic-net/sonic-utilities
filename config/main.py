@@ -7664,6 +7664,21 @@ def add_route(ctx, command_str):
         # If exist update current entry
         current_entry = config_db.get_entry('STATIC_ROUTE', key)
 
+        # Check for duplicate nexthop: build existing (nexthop, nexthop-vrf, ifname) tuples
+        # and reject the add if the incoming tuple is already present.
+        existing_nh = current_entry.get('nexthop', '').split(',')
+        existing_nhvrf = current_entry.get('nexthop-vrf', '').split(',')
+        existing_ifname = current_entry.get('ifname', '').split(',')
+        existing_zip = list(itertools.zip_longest(existing_nh, existing_nhvrf, existing_ifname, fillvalue=''))
+
+        incoming_tuple = (
+            route.get('nexthop', ''),
+            route.get('nexthop-vrf', vrf),
+            route.get('ifname', ''),
+        )
+        if incoming_tuple in existing_zip:
+            ctx.fail('Nexthop {} already exists for route {}'.format(incoming_tuple, key))
+
         for item in ['nexthop', 'nexthop-vrf', 'ifname', 'distance', 'blackhole']:
             if item not in current_entry:
                 current_entry[item] = ''
