@@ -2173,16 +2173,6 @@ acl-loader update incremental --help
 
 The following examples show cases where operators may choose to call `acl-loader` directly instead of using the `config acl` and `show acl` wrappers.
 
-- Show all ACL tables:
-  ```
-  admin@sonic:~$ sudo acl-loader show table
-  ```
-
-- Show a specific ACL rule:
-  ```
-  admin@sonic:~$ sudo acl-loader show rule DATAACL RULE_1
-  ```
-
 - Perform a full update for a specific ACL table:
   ```
   admin@sonic:~$ sudo acl-loader update full --table_name DATAACL /etc/sonic/acl_rules.json
