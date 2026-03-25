@@ -19,7 +19,8 @@ class TestSed(object):
         mock_platform.return_value.get_chassis.return_value = mock_chassis
         result = runner.invoke(
             config.config.commands["sed"].commands["change-password"],
-            ["-p", "validpassword"]
+            [],
+            input='validpassword\n',
         )
         assert "Handling SED password change started..." in result.output
         assert "SED password change process completed successfully" in result.output
@@ -36,7 +37,8 @@ class TestSed(object):
         mock_platform.return_value.get_chassis.return_value = mock_chassis
         result = runner.invoke(
             config.config.commands["sed"].commands["change-password"],
-            ["-p", "validpassword"]
+            [],
+            input='validpassword\n',
         )
         assert "Handling SED password change started..." in result.output
         assert "Error: SED password change failed" in result.output
@@ -49,9 +51,7 @@ class TestSed(object):
         mock_chassis.get_sed_mgmt.return_value = None
         mock_platform.return_value.get_chassis.return_value = mock_chassis
         result = runner.invoke(
-            config.config.commands["sed"].commands["change-password"],
-            ["-p", "validpassword"]
-        )
+            config.config.commands["sed"].commands["change-password"], [])
         assert "Error: SED management not supported on this platform" in result.output
 
     @patch('sonic_platform.platform.Platform')
@@ -65,7 +65,8 @@ class TestSed(object):
         mock_platform.return_value.get_chassis.return_value = mock_chassis
         result = runner.invoke(
             config.config.commands["sed"].commands["change-password"],
-            ["-p", "validpassword"]
+            [],
+            input='validpassword\n',
         )
         assert "Error changing SED password: Test error" in result.output
 

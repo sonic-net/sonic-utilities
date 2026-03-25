@@ -8,8 +8,7 @@ def sed():
 
 
 @sed.command('change-password')
-@click.option('-p', '--password', required=True, help='New SED password')
-def change_password(password):
+def change_password():
     """Change SED password"""
     try:
         from sonic_platform import platform
@@ -18,6 +17,10 @@ def change_password(password):
         if sed_mgmt is None:
             click.echo("Error: SED management not supported on this platform")
             return
+        password = click.prompt(
+            'New SED password',
+            hide_input=True
+        )
         click.echo("Handling SED password change started...")
         success = sed_mgmt.change_sed_password(password)
         if success:

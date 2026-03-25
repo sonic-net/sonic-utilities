@@ -11050,22 +11050,20 @@ SED (Self-Encrypting Drive) commands are used to manage password changes for sel
 
 **config sed change-password**
 
-This command changes the SED password. The new password must be provided using the `-p` or `--password` option.
+This command changes the SED password. The new password is entered at interactive prompts (hidden input).
 
 - Usage:
   ```
-  config sed change-password -p <NEW_PASSWORD>
+  config sed change-password
   ```
 
 - Example:
   ```
-  admin@sonic:~$ config sed change-password -p NewSecurePassword123
+  admin@sonic:~$ config sed change-password
+  New SED password:
   Handling SED password change started...
   SED password change process completed successfully
   ```
-
-- Parameters:
-  - `-p, --password`: New SED password (required)
 
 **config sed reset-password**
 
