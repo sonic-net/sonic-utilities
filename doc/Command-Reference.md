@@ -2169,6 +2169,35 @@ For advanced options supported by the underlying utility, use:
 acl-loader update incremental --help
 ```
 
+**acl-loader direct usage examples**
+
+The following examples show cases where operators may choose to call `acl-loader` directly instead of using the `config acl` and `show acl` wrappers.
+
+- Show all ACL tables:
+  ```
+  admin@sonic:~$ sudo acl-loader show table
+  ```
+
+- Show a specific ACL rule:
+  ```
+  admin@sonic:~$ sudo acl-loader show rule DATAACL RULE_1
+  ```
+
+- Perform a full update for a specific ACL table:
+  ```
+  admin@sonic:~$ sudo acl-loader update full --table_name DATAACL /etc/sonic/acl_rules.json
+  ```
+
+- Perform an incremental update for mirror rules with an explicit session and stage:
+  ```
+  admin@sonic:~$ sudo acl-loader update incremental --session_name everflow0 --mirror_stage egress /etc/sonic/acl_mirror_incremental.json
+  ```
+
+- Delete a specific ACL rule from a table:
+  ```
+  admin@sonic:~$ sudo acl-loader delete DATAACL RULE_1
+  ```
+
 **config acl add table**
 
 This command is used to create new ACL tables.
