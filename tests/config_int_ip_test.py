@@ -105,6 +105,27 @@ class TestIntIp(object):
             assert result.exit_code == 0
             assert mock_run_command.call_count == 1
 
+        # Ethernet24 has a single IP and no static route bound to it.
+        # A static route exists via Ethernet240.  Verify the interface
+        # name match does not treat "Ethernet24" as a substring of
+        # "Ethernet240".
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"],
+                                   ["Ethernet24", "192.168.24.1/24"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 1
+
+        # Ethernet16 has a single IP and no static route bound to it.
+        # A static route exists via subinterface Ethernet16.16.  Verify
+        # the match does not treat "Ethernet16" as matching "Ethernet16.16".
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"],
+                                   ["Ethernet16", "192.168.10.1/24"], obj=obj)
+            print(result.exit_code, result.output)
+            assert result.exit_code == 0
+            assert mock_run_command.call_count == 1
+
     @pytest.mark.parametrize('setup_single_bgp_instance',
                              ['ip_route_for_int_ip'], indirect=['setup_single_bgp_instance'])
     def test_config_int_ip_rem_sub_intf(
