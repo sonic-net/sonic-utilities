@@ -5629,7 +5629,8 @@ def remove(ctx, interface_name, ip_addr):
             # If there is output data, check is there a static route,
             # bound to the interface.
             if output != "":
-                if any(interface_name in output_line for output_line in output.splitlines()):
+                if any(re.search(r'\b{}\b'.format(re.escape(interface_name)), output_line)
+                       for output_line in output.splitlines()):
                     ctx.fail("Cannot remove the last IP entry of interface {}. A static {} route is still bound to the RIF.".format(interface_name, ip_ver))
     if multi_asic.is_multi_asic():
         command = ['sudo', 'ip', 'netns', 'exec', str(ctx.obj['namespace']), 'ip', 'neigh', 'flush', 'dev', str(interface_name), str(ip_address)]
