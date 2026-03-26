@@ -116,12 +116,12 @@ class TestIntIp(object):
             assert result.exit_code == 0
             assert mock_run_command.call_count == 1
 
-        # Ethernet16 has a single IP and no static route bound to it.
-        # A static route exists via subinterface Ethernet16.16.  Verify
-        # the match does not treat "Ethernet16" as matching "Ethernet16.16".
+        # Ethernet6 has a single IP and no static route bound to it.
+        # A static route exists via subinterface Ethernet6.10.  Verify
+        # the match does not treat "Ethernet6" as matching "Ethernet6.10".
         with mock.patch('utilities_common.cli.run_command') as mock_run_command:
             result = runner.invoke(config.config.commands["interface"].commands["ip"].commands["remove"],
-                                   ["Ethernet16", "192.168.10.1/24"], obj=obj)
+                                   ["Ethernet6", "192.168.6.1/24"], obj=obj)
             print(result.exit_code, result.output)
             assert result.exit_code == 0
             assert mock_run_command.call_count == 1
