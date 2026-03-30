@@ -1325,6 +1325,7 @@ class TestShow(object):
                           call(['chronyc', '-n', 'sources'], display_cmd=False)]
         mock_run_command.assert_has_calls(expected_calls)
 
+    @patch('show.main.subprocess.check_output', MagicMock(return_value='mgmt\n'))
     @patch('show.main.is_mgmt_vrf_enabled', MagicMock(return_value=True))
     @patch('show.main.run_command')
     def test_show_ntp_mgmt_vrf(self, mock_run_command):
@@ -1334,6 +1335,31 @@ class TestShow(object):
         expected_calls = [call(['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'chronyc', '-n', 'tracking'], display_cmd=False),
                           call(['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'chronyc', '-n', 'sources'], display_cmd=False)]
         mock_run_command.assert_has_calls(expected_calls)
+        assert mock_run_command.call_count == 2
+
+    @patch('show.main.subprocess.check_output', MagicMock(return_value='default\n'))
+    @patch('show.main.is_mgmt_vrf_enabled', MagicMock(return_value=True))
+    @patch('show.main.run_command')
+    def test_show_ntp_mgmt_vrf_ntp_default(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands['ntp'])
+        assert result.exit_code == 0
+        expected_calls = [call(['chronyc', '-n', 'tracking'], display_cmd=False),
+                          call(['chronyc', '-n', 'sources'], display_cmd=False)]
+        mock_run_command.assert_has_calls(expected_calls)
+        assert mock_run_command.call_count == 2
+
+    @patch('show.main.subprocess.check_output', MagicMock(side_effect=Exception('db read failed')))
+    @patch('show.main.is_mgmt_vrf_enabled', MagicMock(return_value=True))
+    @patch('show.main.run_command')
+    def test_show_ntp_mgmt_vrf_db_failure(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands['ntp'])
+        assert result.exit_code == 0
+        expected_calls = [call(['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'chronyc', '-n', 'tracking'], display_cmd=False),
+                          call(['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'chronyc', '-n', 'sources'], display_cmd=False)]
+        mock_run_command.assert_has_calls(expected_calls)
+        assert mock_run_command.call_count == 2
 
     def teardown_method(self):
         print('TEAR DOWN')
