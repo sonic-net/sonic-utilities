@@ -306,28 +306,35 @@ class PfcwdCli(object):
             + global_entry.get('RESTORATION_TIME_MAX', 'N/A')
         )
 
+        # Determine which ports to display
         if len(ports) == 0:
+            # Get all configured ports from CONFIG_DB
             ports = get_all_ports(
                 self.db, self.multi_asic.current_namespace,
                 self.multi_asic.display_option
             )
 
-        # For each port, read CONFIG_DB to see if watchdog is configured
+        # For each port, check if it's configured in CONFIG_DB, then read HW state from STATE_DB
         for port in ports:
             config_entry = self.config_db.get_entry(CONFIG_DB_PFC_WD_TABLE_NAME, port)
             if config_entry is None or config_entry == {}:
                 continue
 
-            # Get configured values from CONFIG_DB
-            status = config_entry.get('status', 'N/A')
-            detection_time = config_entry.get('detection_time', 'N/A')
-            restoration_time = config_entry.get('restoration_time', 'N/A')
+            # Read actual hardware state from STATE_DB
+            hw_key = STATE_DB_PFC_WD_HW_STATE_TABLE + TABLE_NAME_SEPARATOR + port
+            hw_entry = self.db.get_all(self.db.STATE_DB, hw_key)
+
+            if hw_entry:
+                # Hardware has been programmed, show actual values
+                status = hw_entry.get('status', 'N/A')
+                hw_detection_time = hw_entry.get('hw_detection_time', 'N/A')
+                hw_restoration_time = hw_entry.get('hw_restoration_time', 'N/A')
 
             table.append([
                 port,
                 status,
-                detection_time,
-                restoration_time
+                hw_detection_time,
+                hw_restoration_time
             ])
 
         self.table += table
@@ -509,20 +516,38 @@ class PfcwdCli(object):
             if action:
                 current_global_action = self.get_hw_global_action()
                 if current_global_action and current_global_action != action:
-                    # Count configured ports (excluding GLOBAL entry and ports being configured now)
+                    # Get all currently configured ports
                     pfcwd_table = self.config_db.get_table(CONFIG_DB_PFC_WD_TABLE_NAME)
-                    configured_ports = [entry for entry in pfcwd_table if 'Ethernet' in entry and entry not in ports]
+                    configured_ports = set(entry for entry in pfcwd_table if 'Ethernet' in entry)
 
-                    # Allow action change if no other ports are configured with different action
-                    if len(configured_ports) > 0:
+                    # Resolve which ports will be reconfigured
+                    all_ports = get_all_ports(
+                        self.db, self.multi_asic.current_namespace,
+                        self.multi_asic.display_option
+                    )
+
+                    if len(ports) == 0 or "all" in ports:
+                        # Reconfiguring all ports - this is allowed
+                        ports_being_reconfigured = set(all_ports)
+                    else:
+                        # Specific ports being reconfigured
+                        ports_being_reconfigured = set(ports)
+
+                    # Ports that will remain with old action (not being reconfigured)
+                    ports_with_old_action = configured_ports - ports_being_reconfigured
+
+                    # Block if there are other ports that would remain with different action
+                    if len(ports_with_old_action) > 0:
                         click.echo(
                             "Error: Action mismatch. Hardware PFC watchdog requires all ports "
                             "to use the same action.\n"
                             "Current global action: {}\n"
                             "Requested action: {}\n"
+                            "Ports with current action: {}\n"
                             "Please use action '{}' or remove all existing ports first.".format(
                                 current_global_action,
                                 action,
+                                ', '.join(sorted(ports_with_old_action)),
                                 current_global_action
                             ),
                             err=True
