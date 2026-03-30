@@ -19,7 +19,8 @@ def change_password():
             return
         password = click.prompt(
             'New SED password',
-            hide_input=True
+            hide_input=True,
+            confirmation_prompt=True
         )
         click.echo("Handling SED password change started...")
         success = sed_mgmt.change_sed_password(password)

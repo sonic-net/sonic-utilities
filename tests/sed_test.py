@@ -20,7 +20,7 @@ class TestSed(object):
         result = runner.invoke(
             config.config.commands["sed"].commands["change-password"],
             [],
-            input='validpassword\n',
+            input='validpassword\nvalidpassword\n',
         )
         assert "Handling SED password change started..." in result.output
         assert "SED password change process completed successfully" in result.output
@@ -38,7 +38,7 @@ class TestSed(object):
         result = runner.invoke(
             config.config.commands["sed"].commands["change-password"],
             [],
-            input='validpassword\n',
+            input='validpassword\nvalidpassword\n',
         )
         assert "Handling SED password change started..." in result.output
         assert "Error: SED password change failed" in result.output
@@ -66,7 +66,7 @@ class TestSed(object):
         result = runner.invoke(
             config.config.commands["sed"].commands["change-password"],
             [],
-            input='validpassword\n',
+            input='validpassword\nvalidpassword\n',
         )
         assert "Error changing SED password: Test error" in result.output
 
