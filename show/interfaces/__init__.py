@@ -16,6 +16,7 @@ import sonic_platform_base.sonic_sfp.sfputilhelper
 
 from . import portchannel
 from collections import OrderedDict
+from datetime import datetime
 
 HWSKU_JSON = 'hwsku.json'
 
@@ -229,7 +230,7 @@ def breakout(ctx):
                 continue
             cur_brkout_mode = cur_brkout_tbl[port_name]["brkout_mode"]
 
-            # Update deafult breakout mode and current breakout mode to platform_dict
+            # Update default breakout mode and current breakout mode to platform_dict
             platform_dict[port_name].update(hwsku_dict[port_name])
             platform_dict[port_name]["Current Breakout Mode"] = cur_brkout_mode
 
@@ -411,6 +412,10 @@ def mpls(ctx, interfacename, namespace, display):
 
                 intf_found = True
 
+            # Skip subinterfaces (e.g., Ethernet0.100) - they are not in PORT table
+            if clicommon.VLAN_SUB_INTERFACE_SEPARATOR in ifname:
+                continue
+
             if (display != "all"):
                 if ("Loopback" in ifname):
                     continue
@@ -449,24 +454,21 @@ def mpls(ctx, interfacename, namespace, display):
 interfaces.add_command(portchannel.portchannel)
 
 
-
 @interfaces.command()
 @click.argument('interfacename', required=False)
+@multi_asic_util.multi_asic_click_options
 @click.pass_context
-def flap(ctx, interfacename):
+def flap(ctx, interfacename, namespace, display):
     """Show Interface Flap Information <interfacename>"""
 
-    namespace = ''  # Default namespace
-    port_dict = multi_asic.get_port_table(namespace=namespace)
+    if interfacename:
+        display = constants.DISPLAY_ALL
 
-    # If interfacename is given, validate it
+    masic = multi_asic_util.MultiAsic(display_option=display, namespace_option=namespace)
+    ns_list = masic.get_ns_list_based_on_options()
+
     if interfacename:
         interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
-        if interfacename not in port_dict:
-            ctx.fail("Invalid interface name {}".format(interfacename))
-
-    db = SonicV2Connector(host=REDIS_HOSTIP)
-    db.connect(db.APPL_DB)
 
     # Prepare the table headers and body
     header = [
@@ -478,40 +480,56 @@ def flap(ctx, interfacename):
         'Link Up TimeStamp(UTC)'
     ]
     body = []
+    intf_found = False
 
-    # Loop through all ports or the specified port
-    ports = [interfacename] if interfacename else natsorted(list(port_dict.keys()))
+    for ns in ns_list:
+        masic.current_namespace = ns
+        appl_db = multi_asic.connect_to_all_dbs_for_ns(namespace=ns)
+        port_dict = multi_asic.get_port_table(namespace=ns)
 
-    for port in ports:
-        port_data = db.get_all(db.APPL_DB, f'PORT_TABLE:{port}') or {}
+        # Loop through all ports or the specified port
+        ports = [interfacename] if interfacename else natsorted(list(port_dict.keys()))
 
-        flap_count = port_data.get('flap_count', 'Never')
-        admin_status = port_data.get('admin_status', 'Unknown').capitalize()
-        oper_status = port_data.get('oper_status', 'Unknown').capitalize()
+        for port in ports:
+            if port not in port_dict:
+                continue
 
-        # Get timestamps and convert them to UTC format if possible
-        last_up_time = port_data.get('last_up_time', 'Never')
-        last_down_time = port_data.get('last_down_time', 'Never')
+            # Skip internal ports based on display option
+            if masic.skip_display(constants.PORT_OBJ, port):
+                continue
+            if interfacename and port == interfacename:
+                intf_found = True
+            port_data = appl_db.get_all(appl_db.APPL_DB, f'PORT_TABLE:{port}') or {}
 
-        # Format output row
-        row = [
-            port,
-            flap_count,
-            admin_status,
-            oper_status,
-            f"{last_down_time}" if last_down_time != 'Never' else 'Never',
-            f"{last_up_time}" if last_up_time != 'Never' else 'Never'
-        ]
+            flap_count = port_data.get('flap_count', 'Never')
+            admin_status = port_data.get('admin_status', 'Unknown').capitalize()
+            oper_status = port_data.get('oper_status', 'Unknown').capitalize()
 
-        body.append(row)
+            # Get timestamps and convert them to UTC format if possible
+            last_up_time = port_data.get('last_up_time', 'Never')
+            last_down_time = port_data.get('last_down_time', 'Never')
+
+            # Format output row
+            row = [
+                port,
+                flap_count,
+                admin_status,
+                oper_status,
+                last_down_time,
+                last_up_time
+            ]
+
+            body.append(row)
+
+    # Validate interface name after checking all namespaces
+    if interfacename and not intf_found:
+        ctx.fail("Invalid interface name {}".format(interfacename))
 
     # Sort the body by interface name for consistent display
     body = natsorted(body, key=lambda x: x[0])
 
     # Display the formatted table
     click.echo(tabulate(body, header))
-
-    db.close(db.APPL_DB)
 
 
 def get_all_port_errors(interfacename):
@@ -531,7 +549,7 @@ def get_all_port_errors(interfacename):
 @click.argument('interfacename', required=True)
 @click.pass_context
 def errors(ctx, interfacename):
-    """Show Interface Erorrs <interfacename>"""
+    """Show Interface Errors <interfacename>"""
     # Try to convert interface name from alias
     interfacename = try_convert_interfacename_from_alias(click.get_current_context(), interfacename)
 
@@ -1214,3 +1232,274 @@ def dhcp_mitigation_rate(db, interfacename):
 
     header = ['Interface', 'DHCP Mitigation Rate']
     click.echo(tabulate(tablelize(keys), header, tablefmt="simple", stralign='left'))
+
+
+#
+# fast-linkup group (show interfaces fast-linkup ...)
+#
+
+
+@interfaces.group(name='fast-linkup', cls=clicommon.AliasedGroup)
+def fast_linkup():
+    """Show interface fast-linkup information"""
+    pass
+
+
+@fast_linkup.command(name='status')
+@clicommon.pass_db
+def fast_linkup_status(db):
+    """show interfaces fast-linkup status"""
+    config_db = db.cfgdb
+    ports = config_db.get_table('PORT') or {}
+    rows = []
+    for ifname, entry in natsorted(ports.items()):
+        fast_linkup = entry.get('fast_linkup', 'false')
+        rows.append([ifname, fast_linkup])
+    click.echo(tabulate(rows, headers=['Interface', 'fast_linkup'], tablefmt='outline'))
+
+
+def display_phy_signal_attribute(attr_display_name, attr_json):
+    """
+    Display PHY signal attribute per lane for an interface.
+
+    Expected format: {"0": ["F", 0, 0], "1": ["T", 1234567890, 2], ...}
+    Array elements: [state, timestamp_ms, change_count]
+    - state: "T" (True), "F" (False), "T*" (True, just changed), "F*" (False, just changed)
+    - timestamp_ms: milliseconds since epoch of last change (0 = never changed)
+    - change_count: total number of state changes
+    """
+    if not attr_json:
+        click.echo("{}: No data available".format(attr_display_name))
+        click.echo("")
+        return
+
+    try:
+        lane_data = json.loads(attr_json)
+    except json.JSONDecodeError:
+        click.echo("{}: Invalid data format".format(attr_display_name))
+        return
+
+    # Prepare table headers
+    header = [f"{attr_display_name}:", 'Current State', 'Changes', 'Last Change (UTC)']
+    body = []
+
+    # Build table rows
+    for lane_num in sorted(lane_data.keys(), key=int):
+        lane_info = lane_data[lane_num]
+        if isinstance(lane_info, list) and len(lane_info) == 3:
+            status = lane_info[0]  # "T*", "F*", "T", or "F"
+            timestamp_ms = lane_info[1]
+            change_count = lane_info[2]
+
+            if timestamp_ms > 0:
+                dt = datetime.utcfromtimestamp(timestamp_ms / 1000.0)
+                last_change = dt.strftime('%Y-%m-%d %H:%M:%S')
+            else:
+                last_change = 'Never'
+
+            body.append(['Lane{}:'.format(lane_num), status, change_count, last_change])
+
+    # Display table if there's data
+    if not body:
+        click.echo("{}: No data available".format(attr_display_name))
+    else:
+        click.echo(tabulate(body, header, tablefmt='simple', numalign='left'))
+    click.echo("")
+
+
+@interfaces.command('phy-signal')
+@click.argument('interfacename', required=True)
+@multi_asic_util.multi_asic_click_options
+@click.option('--rxsig', is_flag=True, help='Show RX signal detect status')
+@click.option('--feclock', is_flag=True, help='Show FEC alignment lock status')
+@click.pass_context
+@clicommon.pass_db
+def phy_signal(db, ctx, interfacename, namespace, display, rxsig, feclock):
+    """Show PHY signal attributes status for interface"""
+
+    if not any([rxsig, feclock]):
+        ctx.fail("At least one option must be specified.")
+
+    if namespace is None:
+        namespace = constants.DEFAULT_NAMESPACE
+
+    interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
+
+    # Convert to alias for display if in alias mode
+    display_name = interfacename
+    if clicommon.get_interface_naming_mode() == "alias":
+        display_name = clicommon.InterfaceAliasConverter().name_to_alias(interfacename)
+
+    port_dict = multi_asic.get_port_table(namespace=namespace)
+    if interfacename not in port_dict:
+        ctx.fail("Invalid interface name {}".format(interfacename))
+
+    # Get port OID from COUNTERS_PORT_NAME_MAP
+    port_name_map = db.db_clients[namespace].get_all(db.db.COUNTERS_DB, 'COUNTERS_PORT_NAME_MAP')
+    if interfacename not in port_name_map:
+        ctx.fail("Interface {} not found in COUNTERS_PORT_NAME_MAP".format(interfacename))
+
+    vid_str = port_name_map[interfacename]
+    table_key = 'PORT_PHY_ATTR:{}'.format(vid_str)
+    port_phy_data = db.db_clients[namespace].get_all(db.db.COUNTERS_DB, table_key)
+
+    if not port_phy_data:
+        click.echo("No PHY attribute data available for {}".format(display_name))
+        click.echo("Ensure 'counterpoll phy enable' has been run")
+        return
+
+    click.echo("Interface: {}".format(display_name))
+    click.echo("=" * 80)
+
+    # Display all requested attributes
+    if rxsig:
+        attr_data = port_phy_data.get('phy_rx_signal_detect')
+        display_phy_signal_attribute('RX Signal Detect', attr_data)
+
+    if feclock:
+        attr_data = port_phy_data.get('pcs_fec_lane_alignment_lock')
+        display_phy_signal_attribute('FEC Alignment Lock', attr_data)
+
+
+def display_phy_numeric_attribute(attr_display_name, attr_json, val_header="Value"):
+    """
+    Display simple per-lane numeric values (SNR, VGA) in horizontal format for an interface.
+
+    Expected format: {"0": 36697, "1": 35200, "2": 34500, "3": 36000}
+    """
+    if not attr_json:
+        click.echo("{}: No data available".format(attr_display_name))
+        click.echo("")
+        return
+
+    try:
+        lane_data = json.loads(attr_json)
+    except json.JSONDecodeError:
+        click.echo("{}: Invalid data format".format(attr_display_name))
+        return
+
+    click.echo("{}:".format(attr_display_name))
+    click.echo("-" * 80)
+
+    lanes = sorted(lane_data.keys(), key=int)
+
+    # If no lanes, show "No data available"
+    if not lanes:
+        click.echo("No data available")
+        click.echo("")
+        return
+
+    lane_row = ['Lane:'] + lanes
+
+    value_row = [val_header+":"]
+    for lane in lanes:
+        lane_value = lane_data[lane]
+        value_row.append(str(lane_value))
+
+    body = [lane_row, value_row]
+
+    click.echo(tabulate(body, tablefmt='plain', numalign='left'))
+    click.echo("")
+
+
+def display_phy_taps_attribute(attr_display_name, attr_json):
+    """
+    Display per lane tap attribute values for an interface.
+
+    Input format: {"0": [{"tap0": -10}, {"tap1": 5}, ...], "1": [...], ...}
+    """
+    if not attr_json:
+        click.echo("{}: No data available".format(attr_display_name))
+        click.echo("")
+        return
+
+    try:
+        tap_data = json.loads(attr_json)
+    except json.JSONDecodeError:
+        click.echo("{}: Invalid data format".format(attr_display_name))
+        return
+
+    click.echo("{}:".format(attr_display_name))
+
+    lanes = sorted(tap_data.keys(), key=int)
+    if not lanes:
+        click.echo("No tap data available")
+        return
+
+    first_lane_data = tap_data[lanes[0]]
+    if isinstance(first_lane_data, list) and len(first_lane_data) > 0:
+        num_taps = len(first_lane_data)
+        header = ['Lane'] + ['Tap{}'.format(i) for i in range(num_taps)]
+        body = []
+
+        for lane in lanes:
+            lane_taps = tap_data[lane]
+            row = ['{}'.format(lane)]
+            if isinstance(lane_taps, list):
+                for tap_dict in lane_taps:
+                    if isinstance(tap_dict, dict):
+                        for tap_name, tap_val_list in tap_dict.items():
+                            row.append(str(tap_val_list))
+                            break  # There should only be one val.
+            body.append(row)
+        click.echo(tabulate(body, header, tablefmt='simple', numalign="left"))
+    click.echo("")
+
+
+@interfaces.command('phy-serdes')
+@click.argument('interfacename', required=True)
+@multi_asic_util.multi_asic_click_options
+@click.option('--snr', is_flag=True, help='Show RX SNR values')
+@click.option('--rxvga', is_flag=True, help='Show RX VGA values')
+@click.option('--txfir', is_flag=True, help='Show TX FIR tap values')
+@click.pass_context
+@clicommon.pass_db
+def phy_serdes(db, ctx, interfacename, namespace, display, snr, rxvga, txfir):
+    """Show PHY SERDES parameters for interface"""
+
+    if not any([snr, rxvga, txfir]):
+        ctx.fail("At least one option must be specified.")
+
+    if namespace is None:
+        namespace = constants.DEFAULT_NAMESPACE
+
+    interfacename = try_convert_interfacename_from_alias(ctx, interfacename)
+
+    # Convert to alias for display if in alias mode
+    display_name = interfacename
+    if clicommon.get_interface_naming_mode() == "alias":
+        display_name = clicommon.InterfaceAliasConverter().name_to_alias(interfacename)
+
+    port_dict = multi_asic.get_port_table(namespace=namespace)
+    if interfacename not in port_dict:
+        ctx.fail("Invalid interface name {}".format(interfacename))
+
+    # Get port OID from COUNTERS_PORT_NAME_MAP
+    port_name_map = db.db_clients[namespace].get_all(db.db.COUNTERS_DB, 'COUNTERS_PORT_NAME_MAP')
+    if interfacename not in port_name_map:
+        ctx.fail("Interface {} not found in COUNTERS_PORT_NAME_MAP".format(interfacename))
+
+    vid_str = port_name_map[interfacename]
+    table_key = 'PORT_PHY_ATTR:{}'.format(vid_str)
+    port_phy_data = db.db_clients[namespace].get_all(db.db.COUNTERS_DB, table_key)
+
+    if not port_phy_data:
+        click.echo("No PHY SERDES data available for {}".format(display_name))
+        click.echo("Ensure 'counterpoll phy enable' has been run")
+        return
+
+    click.echo("Interface: {}".format(display_name))
+    click.echo("=" * 80)
+
+    # Display all requested attributes
+    if snr:
+        attr_data = port_phy_data.get('rx_snr')
+        display_phy_numeric_attribute('RX SNR', attr_data, "SNR")
+
+    if rxvga:
+        attr_data = port_phy_data.get('rx_vga')
+        display_phy_numeric_attribute('RX VGA', attr_data, "VGA")
+
+    if txfir:
+        attr_data = port_phy_data.get('tx_fir_taps_list')
+        display_phy_taps_attribute('TX FIR Taps', attr_data)

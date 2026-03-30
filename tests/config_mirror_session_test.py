@@ -89,7 +89,7 @@ def test_mirror_session_add():
                 ["test_session", "100.1.1.1", "2.2.2.2", "8", "63", "0", "0"])
 
         mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2", 8, 63, 0, 0, None)
-        
+
         result = runner.invoke(
                 config.config.commands["mirror_session"].commands["add"],
                 ["test_session", "100.1.1.1", "2.2.2.2", "8", "63"])
@@ -141,7 +141,7 @@ def test_mirror_session_erspan_add():
             ["test_session", "1.1.1.1", "2.2.2.2", "6", "63", "65536", "100"])
     assert result.exit_code != 0
     assert ERR_MSG_GRE_TYPE_FAILURE in result.stdout
-    
+
     result = runner.invoke(
             config.config.commands["mirror_session"].commands["erspan"].commands["add"],
             ["test_session", "1.1.1.1", "2.2.2.2", "6", "63", "abcd", "100"])
@@ -260,7 +260,7 @@ def test_mirror_session_span_add():
             config.config.commands["mirror_session"].commands["span"].commands["add"],
             ["test_session", "Ethernet52", "Ethernet52", "rx", "100"])
     assert result.exit_code != 0
-    assert "Error: Destination Interface cant be same as Source Interface" in result.stdout
+    assert "Error: Destination Interface can't be same as Source Interface" in result.stdout
 
     # Verify destination port not have mirror config
     result = runner.invoke(
@@ -295,7 +295,7 @@ def test_mirror_session_span_add():
         result = runner.invoke(
                 config.config.commands["mirror_session"].commands["span"].commands["add"],
                 ["test_session", "Ethernet8", "Ethernet4", "tx", "100"])
-        
+
         mocked.assert_called_with("test_session", "Ethernet8", "Ethernet4", "tx", 100, None)
 
         result = runner.invoke(
@@ -355,3 +355,149 @@ def test_mirror_session_remove_invalid_yang_validation():
             ["mrr_sample"])
     print(result.output)
     assert "Invalid ConfigDB. Error" in result.output
+
+
+def test_mirror_session_capability_checking():
+    """Test mirror session capability checking functionality"""
+    config.ADHOC_VALIDATION = True
+    runner = CliRunner()
+
+    # Test 1: Check that capability checking fails when direction is not supported
+    with mock.patch('config.main.is_port_mirror_capability_supported') as mock_capability:
+        mock_capability.return_value = False
+
+        # Test with rx direction - should fail
+        result = runner.invoke(
+                config.config.commands["mirror_session"].commands["span"].commands["add"],
+                ["test_session", "Ethernet20", "Ethernet24", "rx", "100"])
+
+        assert result.exit_code != 0
+        assert "Error: Port mirror direction 'rx' is not supported by the ASIC" in result.output
+
+        # Test with tx direction - should fail
+        result = runner.invoke(
+                config.config.commands["mirror_session"].commands["span"].commands["add"],
+                ["test_session", "Ethernet20", "Ethernet24", "tx", "100"])
+
+        assert result.exit_code != 0
+        assert "Error: Port mirror direction 'tx' is not supported by the ASIC" in result.output
+
+        # Test with both direction - should fail
+        result = runner.invoke(
+                config.config.commands["mirror_session"].commands["span"].commands["add"],
+                ["test_session", "Ethernet20", "Ethernet24", "both", "100"])
+
+        assert result.exit_code != 0
+        assert "Error: Port mirror direction 'both' is not supported by the ASIC" in result.output
+
+    # Test 2: ERSPAN sessions bypass capability check even when capability returns False
+    with mock.patch('config.main.is_port_mirror_capability_supported') as mock_capability:
+        mock_capability.return_value = False
+
+        result = runner.invoke(
+                config.config.commands["mirror_session"].commands["erspan"].commands["add"],
+                ["test_erspan", "1.1.1.1", "2.2.2.2", "8", "64", "0x88be"])
+
+        # ERSPAN should not be blocked by port mirror capability
+        assert "is not supported by the ASIC" not in result.output
+        mock_capability.assert_not_called()
+
+
+def test_mirror_session_capability_function():
+    """Test the is_port_mirror_capability_supported function directly"""
+
+    # Test 1: Test with valid STATE_DB responses
+    with mock.patch('config.main.SonicV2Connector') as mock_connector:
+        mock_instance = mock.Mock()
+        mock_connector.return_value = mock_instance
+
+        # Mock successful connection
+        mock_instance.connect.return_value = None
+
+        # Test ingress capability check
+        mock_instance.get.side_effect = lambda db, entry, field: {
+            ("SWITCH_CAPABILITY|switch", "PORT_INGRESS_MIRROR_CAPABLE"): "true",
+            ("SWITCH_CAPABILITY|switch", "PORT_EGRESS_MIRROR_CAPABLE"): "true"
+        }.get((entry, field), "false")
+
+        # Test rx direction
+        result = config.is_port_mirror_capability_supported("rx")
+        assert result is True
+
+        # Test tx direction
+        result = config.is_port_mirror_capability_supported("tx")
+        assert result is True
+
+        # Test both direction
+        result = config.is_port_mirror_capability_supported("both")
+        assert result is True
+
+        # Test no direction (should check both)
+        result = config.is_port_mirror_capability_supported(None)
+        assert result is True
+
+    # Test 2: Test with partial capability support
+    with mock.patch('config.main.SonicV2Connector') as mock_connector:
+        mock_instance = mock.Mock()
+        mock_connector.return_value = mock_instance
+
+        # Mock successful connection
+        mock_instance.connect.return_value = None
+
+        # Mock only ingress supported
+        mock_instance.get.side_effect = lambda db, entry, field: {
+            ("SWITCH_CAPABILITY|switch", "PORT_INGRESS_MIRROR_CAPABLE"): "true",
+            ("SWITCH_CAPABILITY|switch", "PORT_EGRESS_MIRROR_CAPABLE"): "false"
+        }.get((entry, field), "false")
+
+        # Test rx direction (should pass)
+        result = config.is_port_mirror_capability_supported("rx")
+        assert result is True
+
+        # Test tx direction (should fail)
+        result = config.is_port_mirror_capability_supported("tx")
+        assert result is False
+
+        # Test both direction (should fail)
+        result = config.is_port_mirror_capability_supported("both")
+        assert result is False
+
+        # Test no direction (checks both ingress and egress)
+        result = config.is_port_mirror_capability_supported(None)
+        assert result is False  # egress is "false", so fails
+
+    # Test 3: Test with no capability support
+    with mock.patch('config.main.SonicV2Connector') as mock_connector:
+        mock_instance = mock.Mock()
+        mock_connector.return_value = mock_instance
+
+        # Mock successful connection
+        mock_instance.connect.return_value = None
+
+        # Mock no capabilities supported
+        mock_instance.get.side_effect = lambda db, entry, field: {
+            ("SWITCH_CAPABILITY|switch", "PORT_INGRESS_MIRROR_CAPABLE"): "false",
+            ("SWITCH_CAPABILITY|switch", "PORT_EGRESS_MIRROR_CAPABLE"): "false"
+        }.get((entry, field), "false")
+
+        # SPAN directions should fail when explicitly set to "false"
+        assert config.is_port_mirror_capability_supported("rx") is False
+        assert config.is_port_mirror_capability_supported("tx") is False
+        assert config.is_port_mirror_capability_supported("both") is False
+        # direction=None checks both; both are "false" so fails
+        assert config.is_port_mirror_capability_supported(None) is False
+
+    # Test 4: Test with absent capability keys (None returned from STATE_DB)
+    with mock.patch('config.main.SonicV2Connector') as mock_connector:
+        mock_instance = mock.Mock()
+        mock_connector.return_value = mock_instance
+        mock_instance.connect.return_value = None
+
+        # Simulate keys absent from STATE_DB (returns None)
+        mock_instance.get.return_value = None
+
+        # All directions should return True (backward compatibility: absent = supported)
+        assert config.is_port_mirror_capability_supported("rx") is True
+        assert config.is_port_mirror_capability_supported("tx") is True
+        assert config.is_port_mirror_capability_supported("both") is True
+        assert config.is_port_mirror_capability_supported(None) is True

@@ -1,12 +1,9 @@
 #!/usr/sbin/env python
 
-import threading
 import click
-import concurrent.futures
 import datetime
 import ipaddress
 import json
-import jsonpatch
 import netaddr
 import netifaces
 import os
@@ -22,8 +19,11 @@ import sonic_yang
 from jsonpatch import JsonPatchConflict
 from jsonpointer import JsonPointerException
 from collections import OrderedDict
-from generic_config_updater.generic_updater import GenericUpdater, ConfigFormat, extract_scope
-from generic_config_updater.gu_common import HOST_NAMESPACE, GenericConfigUpdaterError
+from generic_config_updater.generic_updater import GenericUpdater, ConfigFormat
+from generic_config_updater.gu_common import HOST_NAMESPACE
+from generic_config_updater.main import (
+    apply_patch_from_file as _gcu_apply_patch_from_file
+)
 from minigraph import parse_device_desc_xml, minigraph_encoder
 from natsort import natsorted
 from portconfig import get_child_ports
@@ -31,7 +31,6 @@ from socket import AF_INET, AF_INET6
 from sonic_py_common import device_info, multi_asic
 from sonic_py_common.general import getstatusoutput_noshell
 from sonic_py_common.interface import get_interface_table_name, get_port_table_name, get_intf_longname
-from sonic_yang_cfg_generator import SonicYangCfgDbGenerator
 from utilities_common import util_base
 from swsscommon import swsscommon
 from swsscommon.swsscommon import SonicV2Connector, ConfigDBConnector, ConfigDBPipeConnector, \
@@ -45,15 +44,18 @@ from utilities_common.general import load_db_config, load_module_from_source
 from .validated_config_db_connector import ValidatedConfigDBConnector
 import utilities_common.multi_asic as multi_asic_util
 from utilities_common.flock import try_lock
+from utilities_common import hft as hft_common
 
 from .utils import log
 
 from . import aaa
+from . import bmc
 from . import chassis_modules
 from . import console
 from . import feature
 from . import fabric
 from . import flow_counters
+from . import hft
 from . import kdump
 from . import kube
 from . import muxcable
@@ -142,6 +144,10 @@ sonic_cfggen = load_module_from_source('sonic_cfggen', '/usr/local/bin/sonic-cfg
 # Helper functions
 #
 
+
+# get_all_running_config is imported from generic_config_updater.main
+
+
 # Sort nested dict
 def sort_dict(data):
     """ Sort of 1st level and 2nd level dict of data naturally by its key
@@ -172,10 +178,11 @@ def write_json_file(json_input, fileName):
     except Exception as e:
         raise Exception(str(e))
 
-def _get_breakout_options(ctx, args, incomplete):
+
+def _get_breakout_options(ctx, param, incomplete):
     """ Provides dynamic mode option as per user argument i.e. interface name """
     all_mode_options = []
-    interface_name = args[-1]
+    interface_name = ctx.params["interface_name"]
 
     breakout_cfg_file = device_info.get_path_to_port_config_file()
 
@@ -240,7 +247,7 @@ def breakout_warnUser_extraTables(cm, final_delPorts, confirm=True):
         # check if any extra tables exist
         eTables = cm.tablesWithOutYang()
         if len(eTables):
-            # find relavent tables in extra tables, i.e. one which can have deleted
+            # find relevant tables in extra tables, i.e. one which can have deleted
             # ports
             tables = cm.configWithKeys(configIn=eTables, keys=final_delPorts)
             click.secho("Below Config can not be verified, It may cause harm "\
@@ -963,7 +970,7 @@ def _get_disabled_services_list(config_db):
             if state == "disabled":
                 disabled_services_list.append(feature_name)
     else:
-        log.log_warning("Unable to retreive FEATURE table")
+        log.log_warning("Unable to retrieve FEATURE table")
 
     return disabled_services_list
 
@@ -977,18 +984,32 @@ def _stop_services():
     except subprocess.CalledProcessError as err:
         pass
 
+    # Get the list of dependencies for sonic.target to fetch timer units
+    for service in _get_sonic_services():
+        if service.endswith('.timer'):
+            # Stop the timer unit
+            clicommon.run_command(['sudo', 'systemctl', 'stop', service], display_cmd=True)
+
     click.echo("Stopping SONiC target ...")
     clicommon.run_command(['sudo', 'systemctl', 'stop', 'sonic.target', '--job-mode', 'replace-irreversibly'])
 
 
-def _get_sonic_services():
+def _get_sonic_services(reverse=False):
     cmd = ['systemctl', 'list-dependencies', '--plain', 'sonic.target']
+    if reverse:
+        cmd.append('--reverse')
+        cmd.append('--type=service')
+
     out, _ = clicommon.run_command(cmd, return_cmd=True)
     out = out.strip().split('\n')[1:]
     return (unit.strip() for unit in out)
 
+
 def _reset_failed_services():
-    for service in _get_sonic_services():
+    services = set(_get_sonic_services())
+    services.update(set(_get_sonic_services(True)))
+
+    for service in services:
         clicommon.run_command(['systemctl', 'reset-failed', str(service)])
 
 
@@ -1019,6 +1040,26 @@ def wait_service_restart_finish(service, last_timestamp, timeout=30):
     log.log_warning("Service: {} does not restart in {} seconds, stop waiting".format(service, timeout))
 
 
+def _wait_for_monit_service_monitored(service, timeout=10):
+    """Poll monit status until the service leaves 'Not monitored' state.
+    Because monit monitor <service> is asynchronous — it returns before the action
+    completes.
+    """
+    start_time = time.time()
+    while time.time() - start_time < timeout:
+        output, ret = clicommon.run_command(
+            ['sudo', 'monit', 'status', service], return_cmd=True
+        )
+        if ret == 0:
+            for line in output.splitlines():
+                if 'monitoring status' in line.lower():
+                    if 'not monitored' not in line.lower():
+                        return
+                    break
+        time.sleep(0.1)
+    log.log_error("Monit monitor action for '{}' did not complete within {} seconds".format(service, timeout))
+
+
 def _restart_services():
     last_interface_config_timestamp = get_service_finish_timestamp('interfaces-config')
     last_networking_timestamp = get_service_finish_timestamp('networking')
@@ -1036,7 +1077,9 @@ def _restart_services():
         click.echo("Enabling container and routeCheck monitoring ...")
         clicommon.run_command(['sudo', 'monit', 'monitor', 'routeCheck'])
         clicommon.run_command(['sudo', 'monit', 'monitor', 'container_checker'])
-        time.sleep(1)
+        log.log_notice("Waiting for monit monitor actions to complete ...")
+        _wait_for_monit_service_monitored('routeCheck')
+        _wait_for_monit_service_monitored('container_checker')
     except subprocess.CalledProcessError as err:
         pass
     # Reload Monit configuration to pick up new hostname in case it changed
@@ -1118,6 +1161,34 @@ def interface_has_mirror_config(ctx, mirror_table, dst_port, src_port, direction
 
     return False
 
+
+def is_port_mirror_capability_supported(direction, namespace=None):
+    """ Check if port mirror capability is supported for the given direction.
+
+    PORT_INGRESS_MIRROR_CAPABLE / PORT_EGRESS_MIRROR_CAPABLE only apply to SPAN
+    (port mirror) sessions. Callers should not invoke this for ERSPAN sessions.
+    Absent STATE_DB keys (None) are treated as supported for backward compatibility
+    with platforms that do not populate the SWITCH_CAPABILITY table.
+    """
+    state_db = SonicV2Connector(use_unix_socket_path=True, namespace=namespace)
+    state_db.connect(state_db.STATE_DB, False)
+    entry_name = "SWITCH_CAPABILITY|switch"
+
+    directions_to_check = []
+    if not direction or direction in ['rx', 'both']:
+        directions_to_check.append("PORT_INGRESS_MIRROR_CAPABLE")
+    if not direction or direction in ['tx', 'both']:
+        directions_to_check.append("PORT_EGRESS_MIRROR_CAPABLE")
+
+    for capability_key in directions_to_check:
+        value = state_db.get(state_db.STATE_DB, entry_name, capability_key)
+        # Treat absent key (None) as supported; only reject explicit "false"
+        if value is not None and value != "true":
+            return False
+
+    return True
+
+
 def validate_mirror_session_config(config_db, session_name, dst_port, src_port, direction):
     """ Check if SPAN mirror-session config is valid """
     ctx = click.get_current_context()
@@ -1129,6 +1200,10 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
     mirror_table = config_db.get_table('MIRROR_SESSION')
     portchannel_member_table = config_db.get_table('PORTCHANNEL_MEMBER')
 
+    # Determine namespaces to validate: always include None (single-ASIC/back-compat),
+    # and for multi-ASIC include namespaces for dst/src ports if present.
+    namespace_set = set()
+
     if dst_port:
         if not interface_name_is_valid(config_db, dst_port):
             ctx.fail("Error: Destination Interface {} is invalid".format(dst_port))
@@ -1139,19 +1214,22 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
         if interface_is_in_vlan(vlan_member_table, dst_port):
             ctx.fail("Error: Destination Interface {} has vlan config".format(dst_port))
 
-
         if interface_is_in_portchannel(portchannel_member_table, dst_port):
             ctx.fail("Error: Destination Interface {} has portchannel config".format(dst_port))
 
         if clicommon.is_port_router_interface(config_db, dst_port):
             ctx.fail("Error: Destination Interface {} is a L3 interface".format(dst_port))
 
+        namespace_set.add(get_port_namespace(dst_port))
+
     if src_port:
         for port in src_port.split(","):
             if not interface_name_is_valid(config_db, port):
                 ctx.fail("Error: Source Interface {} is invalid".format(port))
             if dst_port and dst_port == port:
-                ctx.fail("Error: Destination Interface cant be same as Source Interface")
+                ctx.fail("Error: Destination Interface can't be same as Source Interface")
+
+            namespace_set.add(get_port_namespace(port))
 
     if interface_has_mirror_config(ctx, mirror_table, dst_port, src_port, direction):
         return False
@@ -1159,6 +1237,16 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
     if direction:
         if direction not in ['rx', 'tx', 'both']:
             ctx.fail("Error: Direction {} is invalid".format(direction))
+
+    # Check port mirror capability before allowing configuration.
+    # ERSPAN sessions (dst_port=None) use src/dst IPs, not ports; the
+    # PORT_INGRESS/EGRESS_MIRROR_CAPABLE flags only apply to SPAN sessions.
+    is_erspan = dst_port is None
+    if not is_erspan:
+        for ns in namespace_set:
+            if not is_port_mirror_capability_supported(direction, namespace=ns):
+                ctx.fail("Error: Port mirror direction '{}' is not supported by the ASIC".format(
+                    direction if direction else 'both'))
 
     return True
 
@@ -1248,7 +1336,7 @@ def cli_sroute_to_config(ctx, command_str, strict_nh = True):
     else:
         key = ip_prefix
 
-    return key, config_entry
+    return key, config_entry, vrf_name
 
 def update_sonic_environment():
     """Prepare sonic environment variable using SONiC environment template file.
@@ -1320,66 +1408,10 @@ def multiasic_save_to_singlefile(db, filename):
     click.echo("Integrate each ASIC's config into a single JSON file {}.".format(filename))
     with open(filename, 'w') as file:
         json.dump(all_current_config, file, indent=4)
+        file.flush()
+        os.fsync(file.fileno())
 
 
-def apply_patch_wrapper(args):
-    return apply_patch_for_scope(*args)
-
-
-# Function to apply patch for a single ASIC.
-def apply_patch_for_scope(scope_changes, results, config_format, verbose, dry_run, ignore_non_yang_tables, ignore_path):
-    scope, changes = scope_changes
-    # Replace localhost to DEFAULT_NAMESPACE which is db definition of Host
-    if scope.lower() == HOST_NAMESPACE or scope == "":
-        scope = multi_asic.DEFAULT_NAMESPACE
-
-    scope_for_log = scope if scope else HOST_NAMESPACE
-    thread_id = threading.get_ident()
-    log.log_notice(f"apply_patch_for_scope started for {scope_for_log} by {changes} in thread:{thread_id}")
-
-    try:
-        # Call apply_patch with the ASIC-specific changes and predefined parameters
-        GenericUpdater(scope=scope).apply_patch(jsonpatch.JsonPatch(changes),
-                                                config_format,
-                                                verbose,
-                                                dry_run,
-                                                ignore_non_yang_tables,
-                                                ignore_path)
-        results[scope_for_log] = {"success": True, "message": "Success"}
-        log.log_notice(f"'apply-patch' executed successfully for {scope_for_log} by {changes} in thread:{thread_id}")
-    except Exception as e:
-        results[scope_for_log] = {"success": False, "message": str(e)}
-        log.log_error(f"'apply-patch' executed failed for {scope_for_log} by {changes} due to {str(e)}")
-
-
-def validate_patch(patch):
-    try:
-        command = ["show", "runningconfiguration", "all"]
-        proc = subprocess.Popen(command, text=True, stdout=subprocess.PIPE)
-        all_running_config, returncode = proc.communicate()
-        if returncode:
-            log.log_notice(f"Fetch all runningconfiguration failed as output:{all_running_config}")
-            return False
-
-        # Structure validation and simulate apply patch.
-        all_target_config = patch.apply(json.loads(all_running_config))
-
-        # Verify target config by YANG models
-        target_config = all_target_config.pop(HOST_NAMESPACE) if multi_asic.is_multi_asic() else all_target_config
-        target_config.pop("bgpraw", None)
-        if not SonicYangCfgDbGenerator().validate_config_db_json(target_config):
-            return False
-
-        if multi_asic.is_multi_asic():
-            for asic in multi_asic.get_namespace_list():
-                target_config = all_target_config.pop(asic)
-                target_config.pop("bgpraw", None)
-                if not SonicYangCfgDbGenerator().validate_config_db_json(target_config):
-                    return False
-
-        return True
-    except Exception as e:
-        raise GenericConfigUpdaterError(f"Validate json patch: {patch} failed due to:{e}")
 
 
 def multiasic_validate_single_file(filename):
@@ -1430,6 +1462,13 @@ def delete_transceiver_tables():
     state_db.connect(state_db.STATE_DB, False)
     for table in tables:
         state_db.delete_all_by_pattern(state_db.STATE_DB, table + state_db_del_pattern)
+
+
+def delete_bgp_peer_table():
+    # Delete all entries in BGP_PEER_CONFIGURED_TABLE in state db.
+    state_db = SonicV2Connector(use_unix_socket_path=True)
+    state_db.connect(state_db.STATE_DB, False)
+    state_db.delete_all_by_pattern(state_db.STATE_DB, "BGP_PEER_CONFIGURED_TABLE|*")
 
 
 def migrate_db_to_lastest(namespace=DEFAULT_NAMESPACE):
@@ -1514,6 +1553,28 @@ def config_file_yang_validation(filename):
     return True
 
 
+def check_dhcpv4_relay_dependencies(db, object_name, object_type):
+    """Checks if to be deleted interface/VRF is used in DHCPV4_RELAY table."""
+    # Check if has_sonic_dhcpv4_relay flag is enabled
+    feature_table = db.get_table("DEVICE_METADATA")
+    dhcp_relay_feature = feature_table.get("localhost", {})
+    if dhcp_relay_feature.get("has_sonic_dhcpv4_relay") != "True":
+        return
+
+    for relay_vlan, data in db.get_table('DHCPV4_RELAY').items():
+        if object_type == 'interface':
+            source_intf = data.get('source_interface')
+            if source_intf == object_name:
+                raise ValueError(f"Interface '{object_name}' is in use by {relay_vlan}")
+
+        elif object_type == 'vrf':
+            server_vrf = data.get('server_vrf')
+            if server_vrf == object_name:
+                raise ValueError(f"VRF '{object_name}' is in use for dhcp_relay configurations for {relay_vlan}")
+        else:
+            raise ValueError("Unsupported object_type: {}".format(object_type))
+
+
 # This is our main entrypoint - the main 'config' command
 @click.group(cls=clicommon.AbbreviationGroup, context_settings=CONTEXT_SETTINGS)
 @click.pass_context
@@ -1551,11 +1612,14 @@ def config(ctx):
 config.add_command(aaa.aaa)
 config.add_command(aaa.tacacs)
 config.add_command(aaa.radius)
+config.add_command(bmc.bmc)
 config.add_command(chassis_modules.chassis)
 config.add_command(console.console)
 config.add_command(fabric.fabric)
 config.add_command(feature.feature)
 config.add_command(flow_counters.flowcnt_route)
+if hft_common.is_supported_platform():
+    config.add_command(hft.hft)
 config.add_command(kdump.kdump)
 config.add_command(kube.kubernetes)
 config.add_command(muxcable.muxcable)
@@ -1639,6 +1703,8 @@ def save(db, filename):
         config_db = sort_dict(read_json_file(file))
         with open(file, 'w') as config_db_file:
             json.dump(config_db, config_db_file, indent=4)
+            config_db_file.flush()
+            os.fsync(config_db_file.fileno())
 
 @config.command()
 @click.option('-y', '--yes', is_flag=True)
@@ -1705,6 +1771,7 @@ def print_dry_run_message(dry_run):
     if dry_run:
         click.secho("** DRY RUN EXECUTION **", fg="yellow", underline=True)
 
+
 @config.command('apply-patch')
 @click.argument('patch-file-path', type=str, required=True)
 @click.option('-f', '--format', type=click.Choice([e.name for e in ConfigFormat]),
@@ -1716,86 +1783,58 @@ def print_dry_run_message(dry_run):
 @click.option('-n', '--ignore-non-yang-tables', is_flag=True, default=False, help='ignore validation for tables without YANG models', hidden=True)
 @click.option('-i', '--ignore-path', multiple=True, help='ignore validation for config specified by given path which is a JsonPointer', hidden=True)
 @click.option('-v', '--verbose', is_flag=True, default=False, help='print additional details of what the operation is doing')
+@click.option(
+    '-t',
+    '--path-trace',
+    type=click.Path(writable=True),
+    help='filename to write decision path trace for patch generation as JSON',
+    hidden=True,
+)
+
 @click.pass_context
-def apply_patch(ctx, patch_file_path, format, dry_run, parallel, ignore_non_yang_tables, ignore_path, verbose):
+def apply_patch(
+    ctx,
+    patch_file_path,
+    format,
+    dry_run,
+    parallel,
+    ignore_non_yang_tables,
+    ignore_path,
+    verbose,
+    path_trace,
+):
     """Apply given patch of updates to Config. A patch is a JsonPatch which follows rfc6902.
        This command can be used do partial updates to the config with minimum disruption to running processes.
        It allows addition as well as deletion of configs. The patch file represents a diff of ConfigDb(ABNF)
        format or SonicYang format.
 
        <patch-file-path>: Path to the patch file on the file-system."""
+
+    print_dry_run_message(dry_run)
+
+    trace_io = None
     try:
-        print_dry_run_message(dry_run)
+        if path_trace:
+            trace_io = open(path_trace, 'w')
+        _gcu_apply_patch_from_file(
+            patch_file_path,
+            config_format_name=format,
+            verbose=verbose,
+            dry_run=dry_run,
+            parallel=parallel,
+            ignore_non_yang_tables=ignore_non_yang_tables,
+            ignore_path=ignore_path,
+            trace_io=trace_io,
+        )
 
-        with open(patch_file_path, 'r') as fh:
-            text = fh.read()
-            patch_as_json = json.loads(text)
-            patch = jsonpatch.JsonPatch(patch_as_json)
-
-        if not validate_patch(patch):
-            raise GenericConfigUpdaterError(f"Failed validating patch:{patch}")
-
-        results = {}
-        config_format = ConfigFormat[format.upper()]
-        # Initialize a dictionary to hold changes categorized by scope
-        changes_by_scope = {}
-
-        # Iterate over each change in the JSON Patch
-        for change in patch:
-            scope, modified_path = extract_scope(change["path"])
-
-            # Modify the 'path' in the change to remove the scope
-            change["path"] = modified_path
-
-            # Check if the scope is already in our dictionary, if not, initialize it
-            if scope not in changes_by_scope:
-                changes_by_scope[scope] = []
-
-            # Add the modified change to the appropriate list based on scope
-            changes_by_scope[scope].append(change)
-
-        # Empty case to force validate YANG model.
-        if not changes_by_scope:
-            asic_list = [multi_asic.DEFAULT_NAMESPACE]
-            if multi_asic.is_multi_asic():
-                asic_list.extend(multi_asic.get_namespace_list())
-            for asic in asic_list:
-                changes_by_scope[asic] = []
-
-        # Apply changes for each scope
-        if parallel:
-            with concurrent.futures.ThreadPoolExecutor() as executor:
-                # Prepare the argument tuples
-                arguments = [(scope_changes, results, config_format,
-                              verbose, dry_run, ignore_non_yang_tables, ignore_path)
-                             for scope_changes in changes_by_scope.items()]
-
-                # Submit all tasks and wait for them to complete
-                futures = [executor.submit(apply_patch_wrapper, args) for args in arguments]
-
-                # Wait for all tasks to complete
-                concurrent.futures.wait(futures)
-        else:
-            for scope_changes in changes_by_scope.items():
-                apply_patch_for_scope(scope_changes,
-                                      results,
-                                      config_format,
-                                      verbose, dry_run,
-                                      ignore_non_yang_tables,
-                                      ignore_path)
-
-        # Check if any updates failed
-        failures = [scope for scope, result in results.items() if not result['success']]
-
-        if failures:
-            failure_messages = '\n'.join([f"- {failed_scope}: {results[failed_scope]['message']}" for failed_scope in failures])
-            raise GenericConfigUpdaterError(f"Failed to apply patch on the following scopes:\n{failure_messages}")
-
-        log.log_notice(f"Patch applied successfully for {patch}.")
+        log.log_notice("Patch applied successfully.")
         click.secho("Patch applied successfully.", fg="cyan", underline=True)
     except Exception as ex:
         click.secho("Failed to apply patch due to: {}".format(ex), fg="red", underline=True, err=True)
         ctx.fail(ex)
+    finally:
+        if trace_io:
+            trace_io.close()
 
 @config.command()
 @click.argument('target-file-path', type=str, required=True)
@@ -1807,8 +1846,15 @@ def apply_patch(ctx, patch_file_path, format, dry_run, parallel, ignore_non_yang
 @click.option('-n', '--ignore-non-yang-tables', is_flag=True, default=False, help='ignore validation for tables without YANG models', hidden=True)
 @click.option('-i', '--ignore-path', multiple=True, help='ignore validation for config specified by given path which is a JsonPointer', hidden=True)
 @click.option('-v', '--verbose', is_flag=True, default=False, help='print additional details of what the operation is doing')
+@click.option(
+    '-t',
+    '--path-trace',
+    type=click.Path(writable=True),
+    help='filename to output decision path trace for patch generation as JSON',
+    hidden=True,
+)
 @click.pass_context
-def replace(ctx, target_file_path, format, dry_run, ignore_non_yang_tables, ignore_path, verbose):
+def replace(ctx, target_file_path, format, dry_run, ignore_non_yang_tables, ignore_path, verbose, path_trace):
     """Replace the whole config with the specified config. The config is replaced with minimum disruption e.g.
        if ACL config is different between current and target config only ACL config is updated, and other config/services
        such as DHCP will not be affected.
@@ -1825,7 +1871,22 @@ def replace(ctx, target_file_path, format, dry_run, ignore_non_yang_tables, igno
 
         config_format = ConfigFormat[format.upper()]
 
-        GenericUpdater().replace(target_config, config_format, verbose, dry_run, ignore_non_yang_tables, ignore_path)
+        trace_io = None
+        if path_trace is not None:
+            trace_io = open(path_trace, 'w')
+
+        GenericUpdater().replace(
+            target_config,
+            config_format,
+            verbose,
+            dry_run,
+            ignore_non_yang_tables,
+            ignore_path,
+            trace_io=trace_io,
+        )
+
+        if trace_io is not None:
+            trace_io.close()
 
         click.secho("Config replaced successfully.", fg="cyan", underline=True)
     except Exception as ex:
@@ -2034,6 +2095,7 @@ def reload(db, filename, yes, load_sysinfo, no_service_restart, force, file_form
 
             client, config_db = flush_configdb(namespace)
             delete_transceiver_tables()
+            delete_bgp_peer_table()
 
             if load_sysinfo:
                 if namespace is DEFAULT_NAMESPACE:
@@ -2171,6 +2233,7 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
     if not no_service_restart:
         log.log_notice("'load_minigraph' stopping services...")
         delete_transceiver_tables()
+        delete_bgp_peer_table()
         _stop_services()
 
     # For Single Asic platform the namespace list has the empty string
@@ -2200,7 +2263,7 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
         clicommon.run_command(command, display_cmd=True)
         client.set(config_db.INIT_INDICATOR, 1)
 
-    # Update SONiC environmnet file
+    # Update SONiC environment file
     update_sonic_environment()
 
     if os.path.isfile('/etc/sonic/acl.json'):
@@ -2316,7 +2379,7 @@ def override_config_by(golden_config_path):
     return
 
 
-# This funtion is to generate sysinfo if that is missing in config_input.
+# This function is to generate sysinfo if that is missing in config_input.
 # It will keep the same with sysinfo in cur_config if sysinfo exists.
 # Otherwise it will modify config_input with generated sysinfo.
 def generate_sysinfo(cur_config, config_input, ns=None):
@@ -2359,10 +2422,14 @@ def generate_sysinfo(cur_config, config_input, ns=None):
         asic_name = multi_asic.get_asic_id_from_name(ns)
         asic_id = multi_asic.get_asic_device_id(asic_name)
 
-    device_metadata['localhost']['mac'] = mac.rstrip('\n')
-    device_metadata['localhost']['platform'] = platform.rstrip('\n')
+    # Only backfill sysinfo fields if not explicitly provided in golden config
+    if 'mac' not in device_metadata['localhost']:
+        device_metadata['localhost']['mac'] = mac.rstrip('\n')
+    if 'platform' not in device_metadata['localhost']:
+        device_metadata['localhost']['platform'] = platform.rstrip('\n')
     if ns != DEFAULT_NAMESPACE and ns != HOST_NAMESPACE and asic_id:
-        device_metadata['localhost']['asic_id'] = asic_id.rstrip('\n')
+        if 'asic_id' not in device_metadata['localhost']:
+            device_metadata['localhost']['asic_id'] = asic_id.rstrip('\n')
 
     return
 
@@ -2425,7 +2492,7 @@ def override_config_table(db, input_config_db, dry_run):
         # Use deepcopy by default to avoid modifying input config
         updated_config = update_config(current_config, ns_config_input)
 
-        # Enable YANG hard dependecy check to exit early if not satisfied
+        # Enable YANG hard dependency check to exit early if not satisfied
         table_hard_dependency_check(updated_config)
 
         yang_enabled = device_info.is_yang_config_validation_enabled(config_db)
@@ -2452,7 +2519,7 @@ def override_config_table(db, input_config_db, dry_run):
             except Exception as ex:
                 log.log_warning("Failed to validate running config. Alerting: {}".format(ex))
 
-            # YANG validate config of minigraph generated overriden by golden config
+            # YANG validate config of minigraph generated overridden by golden config
             if cm:
                 validate_config_by_cm_alerting(cm, updated_config, "updated_config")
 
@@ -2486,7 +2553,7 @@ def override_config_db(config_db, config_input):
     # Deserialized golden config to DB recognized format
     sonic_cfggen.FormatConverter.to_deserialized(config_input)
     # Delete table from DB then mod_config to apply golden config
-    click.echo("Removing configDB overriden table first ...")
+    click.echo("Removing configDB overridden table first ...")
     for table in config_input:
         config_db.delete_table(table)
     click.echo("Overriding input config to configDB ...")
@@ -2572,8 +2639,15 @@ def suppress_pending_fib(db, state):
     ''' Enable or disable pending FIB suppression. Once enabled,
         BGP will not advertise routes that are not yet installed in the hardware '''
 
-    config_db = db.cfgdb
-    config_db.mod_entry('DEVICE_METADATA', 'localhost', {"suppress-fib-pending": state})
+    namespace_list = [multi_asic.DEFAULT_NAMESPACE]
+
+    # For multi-asic system apply configuration to all asics
+    if multi_asic.get_num_asics() > 1:
+        namespace_list = multi_asic.get_namespaces_from_linux()
+
+    for ns in namespace_list:
+        config_db = db.cfgdb_clients[ns]
+        config_db.mod_entry('DEVICE_METADATA', 'localhost', {"suppress-fib-pending": state})
 
 #
 # 'yang_config_validation' command ('config yang_config_validation ...')
@@ -2673,6 +2747,12 @@ def remove_portchannel(ctx, portchannel_name):
 
         if len([(k, v) for k, v in db.get_table('PORTCHANNEL_MEMBER') if k == portchannel_name]) != 0: # TODO: MISSING CONSTRAINT IN YANG MODEL
             ctx.fail("Error: Portchannel {} contains members. Remove members before deleting Portchannel!".format(portchannel_name))
+
+        # Dont proceed if the port channel is used in dhcpv4_relay
+        try:
+            check_dhcpv4_relay_dependencies(db, portchannel_name, 'interface')
+        except ValueError as e:
+            ctx.fail(str(e))
 
     try:
         db.set_entry('PORTCHANNEL', portchannel_name, None)
@@ -2828,11 +2908,16 @@ def del_portchannel_member(ctx, portchannel_name, port_name):
 @portchannel.group(cls=clicommon.AbbreviationGroup, name='retry-count')
 @click.pass_context
 def portchannel_retry_count(ctx):
-    pass
+    teamdctl_command = ["teamdctl"]
+    if ctx.obj["namespace"] != DEFAULT_NAMESPACE:
+        teamdctl_command += ["-n", ctx.obj['namespace'].removeprefix("asic")]
+    ctx.obj["teamdctl_command"] = teamdctl_command
 
 def check_if_retry_count_is_enabled(ctx, portchannel_name):
     try:
-        proc = subprocess.Popen(["teamdctl", portchannel_name, "state", "item", "get", "runner.enable_retry_count_feature"], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        cmd = ctx.obj["teamdctl_command"] + [portchannel_name, "state", "item", "get",
+                                             "runner.enable_retry_count_feature"]
+        proc = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         output, err = proc.communicate(timeout=10)
         if proc.returncode != 0:
             ctx.fail("Unable to determine if the retry count feature is enabled or not: {}".format(err.strip()))
@@ -2863,7 +2948,9 @@ def get_portchannel_retry_count(ctx, portchannel_name):
         if not is_retry_count_enabled:
             ctx.fail("Retry count feature is not enabled!")
 
-        proc = subprocess.Popen(["teamdctl", portchannel_name, "state", "item", "get", "runner.retry_count"], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        cmd = ctx.obj["teamdctl_command"] + [portchannel_name, "state", "item", "get",
+                                             "runner.retry_count"]
+        proc = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         output, err = proc.communicate(timeout=10)
         if proc.returncode != 0:
             ctx.fail("Unable to get the retry count: {}".format(err.strip()))
@@ -2899,7 +2986,9 @@ def set_portchannel_retry_count(ctx, portchannel_name, retry_count):
         if not is_retry_count_enabled:
             ctx.fail("Retry count feature is not enabled!")
 
-        proc = subprocess.Popen(["teamdctl", portchannel_name, "state", "item", "set", "runner.retry_count", str(retry_count)], text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        cmd = ctx.obj["teamdctl_command"] + [portchannel_name, "state", "item", "set",
+                                             "runner.retry_count", str(retry_count)]
+        proc = subprocess.Popen(cmd, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
         output, err = proc.communicate(timeout=10)
         if proc.returncode != 0:
             ctx.fail("Unable to set the retry count: {}".format(err.strip()))
@@ -3125,10 +3214,11 @@ def pfcwd():
 @pfcwd.command()
 @click.option('--action', '-a', type=click.Choice(['drop', 'forward', 'alert']))
 @click.option('--restoration-time', '-r', type=click.IntRange(100, 60000))
+@click.option('--pfc-stat-history', is_flag=True, help="Enable historical statistics tracking")
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
 @click.argument('ports', nargs=-1)
 @click.argument('detection-time', type=click.IntRange(100, 5000))
-def start(action, restoration_time, ports, detection_time, verbose):
+def start(action, restoration_time, pfc_stat_history, ports, detection_time, verbose):
     """
     Start PFC watchdog on port(s). To config all ports, use all as input.
 
@@ -3150,6 +3240,9 @@ def start(action, restoration_time, ports, detection_time, verbose):
     if restoration_time:
         cmd += ['--restoration-time', str(restoration_time)]
 
+    if pfc_stat_history:
+        cmd += ['--pfc-stat-history']
+
     clicommon.run_command(cmd, display_cmd=verbose)
 
 @pfcwd.command()
@@ -3163,7 +3256,8 @@ def stop(verbose):
 
 @pfcwd.command()
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
-@click.argument('poll_interval', type=click.IntRange(100, 3000))
+# Keep in sync with the pfcwd CLI validation and sonic-pfcwd YANG model.
+@click.argument('poll_interval', type=click.IntRange(100, 1000))
 def interval(poll_interval, verbose):
     """ Set PFC watchdog counter polling interval (ms) """
 
@@ -3190,6 +3284,21 @@ def big_red_switch(big_red_switch, verbose):
     cmd = ['pfcwd', 'big_red_switch', str(big_red_switch)]
 
     clicommon.run_command(cmd, display_cmd=verbose)
+
+
+@pfcwd.command('pfc_stat_history')
+@click.option('--verbose', is_flag=True, help="Enable verbose output")
+@click.argument('pfc_stat_history', type=click.Choice(['enable', 'disable']))
+@click.argument('ports', nargs=-1)
+def pfc_stat_history(ports, pfc_stat_history, verbose):
+    """ Enable/disable PFC Historical Statistics mode on ports"""
+
+    cmd = ['pfcwd', 'pfc_stat_history', pfc_stat_history]
+    ports = set(ports) - set(['ports'])
+    cmd += list(ports)
+
+    clicommon.run_command(cmd, display_cmd=verbose)
+
 
 @pfcwd.command('start_default')
 @click.option('--verbose', is_flag=True, help="Enable verbose output")
@@ -3553,7 +3662,8 @@ def _qos_update_ports(ctx, ports, dry_run, json_data):
                         cable_length_from_template[port] = cable_len
                 # Reaching this point,
                 # - cable_length_from_template contains cable length rendered from the template, eg Ethernet0 and Ethernet4 in the above example
-                # - cable_length_from_db contains cable length existing in the CONFIG_DB, eg Ethernet8, Ethernet12, and Ethernet16 in the above exmaple
+                # - cable_length_from_db contains cable length existing in the CONFIG_DB,
+                #   eg Ethernet8, Ethernet12, and Ethernet16 in the above example
 
                 if not items_to_apply.get(table_name):
                     items_to_apply[table_name] = {}
@@ -3595,92 +3705,156 @@ def warm_restart(ctx, redis_unix_socket_path):
     # Note: redis_unix_socket_path is a path string, and the ground truth is now from database_config.json.
     # We only use it as a bool indicator on either unix_socket_path or tcp port
     use_unix_socket_path = bool(redis_unix_socket_path)
-    config_db = ConfigDBConnector(use_unix_socket_path=use_unix_socket_path)
-    config_db.connect(wait_for_init=False)
-
-    # warm restart enable/disable config is put in stateDB, not persistent across cold reboot, not saved to config_DB.json file
-    state_db = SonicV2Connector(use_unix_socket_path=use_unix_socket_path)
-    state_db.connect(state_db.STATE_DB, False)
     TABLE_NAME_SEPARATOR = '|'
     prefix = 'WARM_RESTART_ENABLE_TABLE' + TABLE_NAME_SEPARATOR
-    ctx.obj = {'db': config_db, 'state_db': state_db, 'prefix': prefix}
+    ctx.obj = {'prefix': prefix}
+
+    asic_namespaces = multi_asic.get_namespace_list()
+    all_namespaces = asic_namespaces
+    if multi_asic.is_multi_asic():
+        all_namespaces = [multi_asic_util.constants.DEFAULT_NAMESPACE] + asic_namespaces
+    ctx.obj["all_namespaces"] = all_namespaces
+    ctx.obj["asic_namespaces"] = asic_namespaces
+    ctx.obj["state_db"] = {}
+    ctx.obj["config_db"] = {}
+    for namespace in all_namespaces:
+        config_db = ConfigDBConnector(namespace=namespace, use_unix_socket_path=use_unix_socket_path)
+        config_db.connect(wait_for_init=False)
+        state_db = SonicV2Connector(namespace=namespace, use_unix_socket_path=use_unix_socket_path)
+        state_db.connect(state_db.STATE_DB, False)
+        ctx.obj["state_db"][namespace] = state_db
+        ctx.obj["config_db"][namespace] = config_db
+
 
 @warm_restart.command('enable')
+@click.option('--namespace', '-n', 'namespace', default=None, help='Namespace name')
 @click.argument('module', metavar='<module>', default='system', required=False)
 @click.pass_context
-def warm_restart_enable(ctx, module):
-    state_db = ctx.obj['state_db']
-    config_db = ctx.obj['db']
+def warm_restart_enable(ctx, namespace, module):
+    if namespace is not None:
+        if namespace not in ctx.obj["all_namespaces"]:
+            raise click.UsageError("Invalid namespace: {}".format(namespace))
+    namespaces = [namespace] if namespace else ctx.obj["all_namespaces"]
+
+    config_db = ctx.obj["config_db"][multi_asic_util.constants.DEFAULT_NAMESPACE]
     feature_table = config_db.get_table('FEATURE')
     if module != 'system' and module not in feature_table:
         sys.exit('Feature {} is unknown'.format(module))
     prefix = ctx.obj['prefix']
     _hash = '{}{}'.format(prefix, module)
-    state_db.set(state_db.STATE_DB, _hash, 'enable', 'true')
-    state_db.close(state_db.STATE_DB)
+
+    for namespace in namespaces:
+        state_db = ctx.obj["state_db"][namespace]
+        state_db.set(state_db.STATE_DB, _hash, 'enable', 'true')
+        state_db.close(state_db.STATE_DB)
+
 
 @warm_restart.command('disable')
+@click.option('--namespace', '-n', 'namespace', default=None, help='Namespace name')
 @click.argument('module', metavar='<module>', default='system', required=False)
 @click.pass_context
-def warm_restart_disable(ctx, module):
-    state_db = ctx.obj['state_db']
-    config_db = ctx.obj['db']
+def warm_restart_disable(ctx, namespace, module):
+    if namespace is not None:
+        if namespace not in ctx.obj["all_namespaces"]:
+            raise click.UsageError("Invalid namespace: {}".format(namespace))
+    namespaces = [namespace] if namespace else ctx.obj["all_namespaces"]
+
+    config_db = ctx.obj["config_db"][multi_asic_util.constants.DEFAULT_NAMESPACE]
     feature_table = config_db.get_table('FEATURE')
     if module != 'system' and module not in feature_table:
         sys.exit('Feature {} is unknown'.format(module))
     prefix = ctx.obj['prefix']
     _hash = '{}{}'.format(prefix, module)
-    state_db.set(state_db.STATE_DB, _hash, 'enable', 'false')
-    state_db.close(state_db.STATE_DB)
+
+    for namespace in namespaces:
+        state_db = ctx.obj["state_db"][namespace]
+        state_db.set(state_db.STATE_DB, _hash, 'enable', 'false')
+        state_db.close(state_db.STATE_DB)
+
 
 @warm_restart.command('neighsyncd_timer')
+@click.option('--namespace', '-n', 'namespace', default=None, help='Namespace name')
 @click.argument('seconds', metavar='<seconds>', required=True, type=int)
 @click.pass_context
-def warm_restart_neighsyncd_timer(ctx, seconds):
-    db = ValidatedConfigDBConnector(ctx.obj['db'])
+def warm_restart_neighsyncd_timer(ctx, namespace, seconds):
+    if namespace is not None:
+        if namespace not in ctx.obj["asic_namespaces"]:
+            raise click.UsageError("Invalid namespace: {}".format(namespace))
+    namespaces = [namespace] if namespace else ctx.obj["asic_namespaces"]
+
     if ADHOC_VALIDATION:
         if seconds not in range(1, 9999):
             ctx.fail("neighsyncd warm restart timer must be in range 1-9999")
-    try:
-        db.mod_entry('WARM_RESTART', 'swss', {'neighsyncd_timer': seconds})
-    except ValueError as e:
-        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+    for namespace in namespaces:
+        db = ValidatedConfigDBConnector(ctx.obj["config_db"][namespace])
+        try:
+            db.mod_entry('WARM_RESTART', 'swss', {'neighsyncd_timer': seconds})
+        except ValueError as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
 
 @warm_restart.command('bgp_timer')
+@click.option('--namespace', '-n', 'namespace', default=None, help='Namespace name')
 @click.argument('seconds', metavar='<seconds>', required=True, type=int)
 @click.pass_context
-def warm_restart_bgp_timer(ctx, seconds):
-    db = ValidatedConfigDBConnector(ctx.obj['db'])
+def warm_restart_bgp_timer(ctx, namespace, seconds):
+    if namespace is not None:
+        if namespace not in ctx.obj["asic_namespaces"]:
+            raise click.UsageError("Invalid namespace: {}".format(namespace))
+    namespaces = [namespace] if namespace else ctx.obj["asic_namespaces"]
+
     if ADHOC_VALIDATION:
         if seconds not in range(1, 3600):
             ctx.fail("bgp warm restart timer must be in range 1-3600")
-    try:
-        db.mod_entry('WARM_RESTART', 'bgp', {'bgp_timer': seconds})
-    except ValueError as e:
-        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+    for namespace in namespaces:
+        db = ValidatedConfigDBConnector(ctx.obj["config_db"][namespace])
+        try:
+            db.mod_entry('WARM_RESTART', 'bgp', {'bgp_timer': seconds})
+        except ValueError as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
 
 @warm_restart.command('teamsyncd_timer')
+@click.option('--namespace', '-n', 'namespace', default=None, help='Namespace name')
 @click.argument('seconds', metavar='<seconds>', required=True, type=int)
 @click.pass_context
-def warm_restart_teamsyncd_timer(ctx, seconds):
-    db = ValidatedConfigDBConnector(ctx.obj['db'])
+def warm_restart_teamsyncd_timer(ctx, namespace, seconds):
+    if namespace is not None:
+        if namespace not in ctx.obj["asic_namespaces"]:
+            raise click.UsageError("Invalid namespace: {}".format(namespace))
+    namespaces = [namespace] if namespace else ctx.obj["asic_namespaces"]
+
     if ADHOC_VALIDATION:
         if seconds not in range(1, 3600):
             ctx.fail("teamsyncd warm restart timer must be in range 1-3600")
-    try:
-        db.mod_entry('WARM_RESTART', 'teamd', {'teamsyncd_timer': seconds})
-    except ValueError as e:
-        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+    for namespace in namespaces:
+        db = ValidatedConfigDBConnector(ctx.obj["config_db"][namespace])
+        try:
+            db.mod_entry('WARM_RESTART', 'teamd', {'teamsyncd_timer': seconds})
+        except ValueError as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
 
 @warm_restart.command('bgp_eoiu')
+@click.option('--namespace', '-n', 'namespace', default=None, help='Namespace name')
 @click.argument('enable', metavar='<enable>', default='true', required=False, type=click.Choice(["true", "false"]))
 @click.pass_context
-def warm_restart_bgp_eoiu(ctx, enable):
-    db = ValidatedConfigDBConnector(ctx.obj['db'])
-    try:
-        db.mod_entry('WARM_RESTART', 'bgp', {'bgp_eoiu': enable})
-    except ValueError as e:
-        ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+def warm_restart_bgp_eoiu(ctx, namespace, enable):
+    if namespace is not None:
+        if namespace not in ctx.obj["asic_namespaces"]:
+            raise click.UsageError("Invalid namespace: {}".format(namespace))
+    namespaces = [namespace] if namespace else ctx.obj["asic_namespaces"]
+
+    for namespace in namespaces:
+        db = ValidatedConfigDBConnector(ctx.obj["config_db"][namespace])
+        try:
+            db.mod_entry('WARM_RESTART', 'bgp', {'bgp_eoiu': enable})
+        except ValueError as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
 
 def vrf_add_management_vrf(config_db):
     """Enable management vrf in config DB"""
@@ -4523,6 +4697,7 @@ def bgp():
 
 # BGP module extensions
 config.commands['bgp'].add_command(bgp_cli.DEVICE_GLOBAL)
+config.commands['bgp'].add_command(bgp_cli.AGGREGATE_ADDRESS)
 
 #
 # 'shutdown' subgroup ('config bgp shutdown ...')
@@ -4548,7 +4723,7 @@ def all(verbose):
         namespaces = ns_list['front_ns']
 
     # Connect to CONFIG_DB in linux host (in case of single ASIC) or CONFIG_DB in all the
-    # namespaces (in case of multi ASIC) and do the sepcified "action" on the BGP neighbor(s)
+    # namespaces (in case of multi ASIC) and do the specified "action" on the BGP neighbor(s)
     for namespace in namespaces:
         config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
         config_db.connect()
@@ -4573,7 +4748,7 @@ def neighbor(ipaddr_or_hostname, verbose):
         namespaces = ns_list['front_ns'] + ns_list['back_ns']
 
     # Connect to CONFIG_DB in linux host (in case of single ASIC) or CONFIG_DB in all the
-    # namespaces (in case of multi ASIC) and do the sepcified "action" on the BGP neighbor(s)
+    # namespaces (in case of multi ASIC) and do the specified "action" on the BGP neighbor(s)
     for namespace in namespaces:
         config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
         config_db.connect()
@@ -4603,7 +4778,7 @@ def all(verbose):
         namespaces = ns_list['front_ns']
 
     # Connect to CONFIG_DB in linux host (in case of single ASIC) or CONFIG_DB in all the
-    # namespaces (in case of multi ASIC) and do the sepcified "action" on the BGP neighbor(s)
+    # namespaces (in case of multi ASIC) and do the specified "action" on the BGP neighbor(s)
     for namespace in namespaces:
         config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
         config_db.connect()
@@ -4628,7 +4803,7 @@ def neighbor(ipaddr_or_hostname, verbose):
         namespaces = ns_list['front_ns'] + ns_list['back_ns']
 
     # Connect to CONFIG_DB in linux host (in case of single ASIC) or CONFIG_DB in all the
-    # namespaces (in case of multi ASIC) and do the sepcified "action" on the BGP neighbor(s)
+    # namespaces (in case of multi ASIC) and do the specified "action" on the BGP neighbor(s)
     for namespace in namespaces:
         config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
         config_db.connect()
@@ -4661,7 +4836,7 @@ def remove_neighbor(neighbor_ip_or_hostname):
         namespaces = ns_list['front_ns'] + ns_list['back_ns']
 
     # Connect to CONFIG_DB in linux host (in case of single ASIC) or CONFIG_DB in all the
-    # namespaces (in case of multi ASIC) and do the sepcified "action" on the BGP neighbor(s)
+    # namespaces (in case of multi ASIC) and do the specified "action" on the BGP neighbor(s)
     for namespace in namespaces:
         config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
         config_db.connect()
@@ -4688,6 +4863,96 @@ def interface(ctx, namespace):
     config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=str(namespace))
     config_db.connect()
     ctx.obj = {'config_db': config_db, 'namespace': str(namespace)}
+
+
+@config.group(cls=clicommon.AliasedGroup, name='switch-fast-linkup', context_settings=CONTEXT_SETTINGS)
+@click.pass_context
+def switch_fast_linkup_group(ctx):
+    """Configure fast link-up global configuration parameters"""
+    pass
+
+
+# 'global' subcommand
+@switch_fast_linkup_group.command(name='global')
+@click.option('--polling-time', type=int, required=False, help='Polling time (sec)')
+@click.option('--guard-time', type=int, required=False, help='Guard time (sec)')
+@click.option('--ber', '--ber-threshold', type=int, required=False, help='BER threshold exponent (e.g., 12 for 1e-12)')
+@clicommon.pass_db
+def switch_fast_linkup_global_cmd(db, polling_time, guard_time, ber):
+    """Configure global fast link-up feature parameters"""
+    if polling_time is None and guard_time is None and ber is None:
+        raise click.UsageError('Failed to configure fast link-up global: no options are provided')
+    # Read capability and ranges from STATE_DB for validation
+    state_db = db.db.STATE_DB
+    cap_tbl = db.db.get_all(state_db, 'SWITCH_CAPABILITY|switch') or {}
+    if cap_tbl.get('FAST_LINKUP_CAPABLE', 'false') != 'true':
+        raise click.ClickException('Fast link-up is not supported on this platform')
+
+    poll_range_str = cap_tbl.get('FAST_LINKUP_POLLING_TIMER_RANGE')
+    guard_range_str = cap_tbl.get('FAST_LINKUP_GUARD_TIMER_RANGE')
+    if not poll_range_str or not guard_range_str:
+        raise click.ClickException('Fast link-up capability ranges are not defined on this platform')
+
+    poll_range = poll_range_str.split(',')
+    guard_range = guard_range_str.split(',')
+
+    data = {}
+    if polling_time is not None:
+        if not (int(poll_range[0]) <= int(polling_time) <= int(poll_range[1])):
+            raise click.ClickException('polling_time {} out of supported range [{}, {}]'.format(
+                polling_time, poll_range[0], poll_range[1]))
+        data['polling_time'] = str(polling_time)
+    if guard_time is not None:
+        if not (int(guard_range[0]) <= int(guard_time) <= int(guard_range[1])):
+            raise click.ClickException('guard_time {} out of supported range [{}, {}]'.format(
+                guard_time, guard_range[0], guard_range[1]))
+        data['guard_time'] = str(guard_time)
+    if ber is not None:
+        if int(ber) < 1 or int(ber) > 255:
+            raise click.ClickException('ber_threshold {} out of supported range [1, 255]'.format(ber))
+        data['ber_threshold'] = str(ber)
+    try:
+        db.cfgdb.mod_entry('SWITCH_FAST_LINKUP', 'GLOBAL', data)
+
+        log.log_notice('Configured fast link-up global: {}'.format(data))
+    except Exception as e:
+        log.log_error('Failed to configure fast link-up global: {}'.format(str(e)))
+        raise SystemExit(1)
+
+
+# 'fast-linkup' subcommand
+@interface.command('fast-linkup')
+@click.argument('interface_name', metavar='<interface_name>', required=True)
+@click.argument('mode', metavar='<enabled|disabled>', required=True, type=click.Choice(['enabled', 'disabled']))
+@click.option('-v', '--verbose', is_flag=True, help='Enable verbose output')
+@click.pass_context
+def fast_linkup(ctx, interface_name, mode, verbose):
+    """Enable/disable fast link-up on an interface"""
+    config_db = ctx.obj['config_db']
+    namespace = ctx.obj.get('namespace', DEFAULT_NAMESPACE)
+
+    if clicommon.get_interface_naming_mode() == 'alias':
+        interface_name = interface_alias_to_name(config_db, interface_name)
+        if interface_name is None:
+            raise click.ClickException("'interface_name' is None!")
+    if not interface_name_is_valid(config_db, interface_name):
+        raise click.ClickException('Interface name is invalid. Please enter a valid interface name')
+
+    # Read capability from STATE_DB for validation
+    db = Db()
+    state_db = db.db_clients.get(namespace, db.db)
+    cap_tbl = state_db.get_all(state_db.STATE_DB, 'SWITCH_CAPABILITY|switch') or {}
+    if cap_tbl.get('FAST_LINKUP_CAPABLE', 'false') != 'true':
+        raise click.ClickException('Fast link-up is not supported on this platform')
+
+    log.log_info("'interface fast-linkup {} {}' executing...".format(interface_name, mode))
+    if namespace is DEFAULT_NAMESPACE:
+        command = ['portconfig', '-p', str(interface_name), '-fl', str(mode)]
+    else:
+        command = ['portconfig', '-p', str(interface_name), '-fl', str(mode), '-n', str(namespace)]
+    if verbose:
+        command += ['-vv']
+    clicommon.run_command(command, display_cmd=verbose)
 #
 # 'startup' subcommand
 #
@@ -4964,7 +5229,7 @@ def advertised_types(ctx, interface_name, interface_type_list, verbose):
 
 @interface.command()
 @click.argument('interface_name', metavar='<interface_name>', required=True)
-@click.argument('mode', required=True, type=click.STRING, autocompletion=_get_breakout_options)
+@click.argument('mode', required=True, type=click.STRING, shell_complete=_get_breakout_options)
 @click.option('-f', '--force-remove-dependencies', is_flag=True,  help='Clear all dependencies internally first.')
 @click.option('-l', '--load-predefined-config', is_flag=True,  help='load predefied user configuration (alias, lanes, speed etc) first.')
 @click.option('-y', '--yes', is_flag=True, callback=_abort_if_false, expose_value=False, prompt='Do you want to Breakout the port, continue?')
@@ -5036,7 +5301,7 @@ def breakout(ctx, interface_name, mode, verbose, force_remove_dependencies, load
     with open('new_port_config.json', 'w') as f:
         json.dump(port_dict, f, indent=4)
 
-    # Start Interation with Dy Port BreakOut Config Mgmt
+    # Start Iteration with Dy Port BreakOut Config Mgmt
     try:
         """ Load config for the commands which are capable of change in config DB """
         cm = load_ConfigMgmt(verbose)
@@ -5196,47 +5461,7 @@ def add_interface_ip(ctx, interface_name, ip_addr, gw, secondary):
         interface_name = interface_alias_to_name(config_db, interface_name)
         if interface_name is None:
             ctx.fail("'interface_name' is None!")
-        # Add a validation to check this interface is not a member in vlan before
-        # changing it to a router port mode
-    vlan_member_table = config_db.get_table('VLAN_MEMBER')
 
-    if (interface_is_in_vlan(vlan_member_table, interface_name)):
-        click.echo("Interface {} is a member of vlan\nAborting!".format(interface_name))
-        return
-
-
-    portchannel_member_table = config_db.get_table('PORTCHANNEL_MEMBER')
-
-    if interface_is_in_portchannel(portchannel_member_table, interface_name):
-        ctx.fail("{} is configured as a member of portchannel."
-                .format(interface_name))
-
-    # Add a validation to check this interface is in routed mode before
-    # assigning an IP address to it
-
-    sub_intf = False
-
-    if clicommon.is_valid_port(config_db, interface_name):
-        is_port = True
-    elif clicommon.is_valid_portchannel(config_db, interface_name):
-        is_port = False
-    else:
-        sub_intf = True
-
-    if not sub_intf:
-        interface_mode = None
-        if is_port:
-            interface_data = config_db.get_entry('PORT', interface_name)
-        else:
-            interface_data = config_db.get_entry('PORTCHANNEL', interface_name)
-
-        if "mode" in interface_data:
-            interface_mode = interface_data["mode"]
-
-        if interface_mode == "trunk" or interface_mode == "access":
-            click.echo("Interface {} is in {} mode and needs to be in routed mode!".format(
-                interface_name, interface_mode))
-            return
     try:
         ip_address = ipaddress.ip_interface(ip_addr)
     except ValueError as err:
@@ -5267,7 +5492,65 @@ def add_interface_ip(ctx, interface_name, ip_addr, gw, secondary):
 
     table_name = get_interface_table_name(interface_name)
     if table_name == "":
-        ctx.fail("'interface_name' is not valid. Valid names [Ethernet/PortChannel/Vlan/Loopback]")
+        ctx.fail(f"{interface_name} is not valid. Valid names [Ethernet/PortChannel/Vlan/Loopback]")
+
+    # Add a validation to check this interface is in routed mode before
+    # assigning an IP address to it. For sub-interfaces, check that the base
+    # interface is in the right mode
+
+    base_interface_name = interface_name
+
+    # Handle short name
+    match = re.search(r'\d', interface_name)
+    if match:
+        index = match.start()
+        intf_type = interface_name[:index]
+        intf_val = interface_name[index:]
+        if intf_type == "Eth":
+            intf_type = "Ethernet"
+        elif intf_type == "Po":
+            intf_type = "PortChannel"
+        base_interface_name = intf_type + intf_val
+
+    base_table_name = table_name
+    if table_name == "VLAN_SUB_INTERFACE":
+        interface_name_parts = base_interface_name.split(".")
+        base_interface_name = interface_name_parts[0] if len(interface_name_parts) >= 2 else interface_name
+        base_table_name = get_interface_table_name(base_interface_name)
+        if base_table_name == "":
+            ctx.fail(f"{interface_name} is not valid. Valid names [Ethernet/PortChannel/Vlan/Loopback]")
+
+    portchannel_member_table = config_db.get_table('PORTCHANNEL_MEMBER')
+    if interface_is_in_portchannel(portchannel_member_table, base_interface_name):
+        ctx.fail(f"{base_interface_name} is configured as a member of portchannel.")
+
+    # Add a validation to check this interface is not a member in vlan before
+    vlan_member_table = config_db.get_table('VLAN_MEMBER')
+    if (interface_is_in_vlan(vlan_member_table, base_interface_name)):
+        ctx.fail("Interface {} is a member of vlan\nAborting!".format(base_interface_name))
+        return
+
+    if base_table_name == "INTERFACE" or base_table_name == "PORTCHANNEL_INTERFACE":
+        if clicommon.is_valid_port(config_db, base_interface_name):
+            is_port = True
+        elif clicommon.is_valid_portchannel(config_db, base_interface_name):
+            is_port = False
+        else:
+            ctx.fail("Interface {} does not exist".format(interface_name))
+
+        interface_mode = None
+        if is_port:
+            interface_data = config_db.get_entry('PORT', base_interface_name)
+        else:
+            interface_data = config_db.get_entry('PORTCHANNEL', base_interface_name)
+
+        if "mode" in interface_data:
+            interface_mode = interface_data["mode"]
+
+        if interface_mode == "trunk" or interface_mode == "access":
+            click.echo("Interface {} is in {} mode and needs to be in routed mode!".format(
+                interface_name, interface_mode))
+            return
 
     if table_name == "VLAN_INTERFACE":
         if not validate_vlan_exists(config_db, interface_name):
@@ -5611,7 +5894,7 @@ def remove_buffer_object_on_port(db, interface_name, buffer_object_map, is_pg=Tr
     if not ports:
         ctx.fail("Port {} doesn't exist".format(interface_name))
 
-    # Remvoe all dynamic lossless PGs on the port
+    # Remove all dynamic lossless PGs on the port
     buffer_table = "BUFFER_PG" if is_pg else "BUFFER_QUEUE"
     existing_buffer_objects = config_db.get_table(buffer_table)
     removed = False
@@ -5850,7 +6133,7 @@ def transceiver(ctx):
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @click.argument('frequency', metavar='<frequency>', required=True, type=int)
 def frequency(ctx, interface_name, frequency):
-    """Set transciever (only for 400G-ZR) frequency"""
+    """Set transceiver (only for 400G-ZR) frequency"""
     # Get the config_db connector
     config_db = ctx.obj['config_db']
 
@@ -5882,7 +6165,7 @@ def frequency(ctx, interface_name, frequency):
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 @click.argument('tx-power', metavar='<tx-power>', required=True, type=float)
 def tx_power(ctx, interface_name, tx_power):
-    """Set transciever (only for 400G-ZR) Tx laser power"""
+    """Set transceiver (only for 400G-ZR) Tx laser power"""
     # Get the config_db connector
     config_db = ctx.obj['config_db']
 
@@ -6202,7 +6485,7 @@ def enable():
 
 @ipv6.group('disable')
 def disable():
-    """Disble IPv6 processing on interface"""
+    """Disable IPv6 processing on interface"""
     pass
 
 #
@@ -6214,11 +6497,7 @@ def disable():
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 def enable_use_link_local_only(ctx, interface_name):
     """Enable IPv6 link local address on interface"""
-    config_db = ConfigDBConnector()
-    config_db.connect()
-    ctx.obj = {}
-    ctx.obj['config_db'] = config_db
-    db = ctx.obj["config_db"]
+    db = ctx.obj['config_db']
 
     if clicommon.get_interface_naming_mode() == "alias":
         interface_name = interface_alias_to_name(db, interface_name)
@@ -6266,11 +6545,7 @@ def enable_use_link_local_only(ctx, interface_name):
 @click.argument('interface_name', metavar='<interface_name>', required=True)
 def disable_use_link_local_only(ctx, interface_name):
     """Disable IPv6 link local address on interface"""
-    config_db = ConfigDBConnector()
-    config_db.connect()
-    ctx.obj = {}
-    ctx.obj['config_db'] = config_db
-    db = ctx.obj["config_db"]
+    db = ctx.obj['config_db']
 
     if clicommon.get_interface_naming_mode() == "alias":
         interface_name = interface_alias_to_name(db, interface_name)
@@ -7205,6 +7480,12 @@ def del_vrf(ctx, vrf_name):
         syslog_vrf = syslog_data.get("vrf")
         if syslog_vrf == syslog_vrf_dev:
             ctx.fail("Failed to remove VRF device: {} is in use by SYSLOG_SERVER|{}".format(syslog_vrf, syslog_entry))
+    # Dont proceed if the vrf is used in dhcpv4_relay
+    try:
+        check_dhcpv4_relay_dependencies(config_db, vrf_name, 'vrf')
+    except ValueError as e:
+        ctx.fail(str(e))
+
     if not is_vrf_exists(config_db, vrf_name):
         ctx.fail("VRF {} does not exist!".format(vrf_name))
     elif (vrf_name == 'mgmt' or vrf_name == 'management'):
@@ -7225,7 +7506,7 @@ def add_vrf_vni_map(ctx, vrfname, vni):
     config_db = ctx.obj['config_db']
     found = 0
     if vrfname not in config_db.get_table('VRF').keys():
-        ctx.fail("vrf {} doesnt exists".format(vrfname))
+        ctx.fail("vrf {} doesn't exist".format(vrfname))
     if not vni.isdigit():
         ctx.fail("Invalid VNI {}. Only valid VNI is accepted".format(vni))
 
@@ -7263,7 +7544,7 @@ def add_vrf_vni_map(ctx, vrfname, vni):
 def del_vrf_vni_map(ctx, vrfname):
     config_db = ctx.obj['config_db']
     if vrfname not in config_db.get_table('VRF').keys():
-        ctx.fail("vrf {} doesnt exists".format(vrfname))
+        ctx.fail("vrf {} doesn't exist".format(vrfname))
 
     config_db.mod_entry('VRF', vrfname, {"vni": 0})
 
@@ -7272,13 +7553,25 @@ def del_vrf_vni_map(ctx, vrfname):
 #
 
 @config.group(cls=clicommon.AbbreviationGroup)
+@click.option('-n', '--namespace', help='Namespace name',
+              required=True if multi_asic.is_multi_asic() else False,
+              type=click.Choice(multi_asic.get_namespace_list()))
 @click.pass_context
-def route(ctx):
+@clicommon.pass_db
+def route(db, ctx, namespace):
     """route-related configuration tasks"""
-    config_db = ConfigDBConnector()
-    config_db.connect()
-    ctx.obj = {}
+    if namespace is None:
+        namespace = DEFAULT_NAMESPACE
+    if db.cfgdb_clients:
+        config_db = db.cfgdb_clients[namespace]
+    else:
+        config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=str(namespace))
+        config_db.connect()
+    # Preserve ctx.obj if it's already set (e.g., in tests or when called from other commands)
+    if not isinstance(ctx.obj, dict):
+        ctx.obj = {}
     ctx.obj['config_db'] = config_db
+    ctx.obj['namespace'] = str(namespace)
 
 
 @route.command('add', context_settings={"ignore_unknown_options": True})
@@ -7288,7 +7581,7 @@ def route(ctx):
 def add_route(ctx, command_str):
     """Add route command"""
     config_db = ctx.obj['config_db']
-    key, route = cli_sroute_to_config(ctx, command_str)
+    key, route, vrf = cli_sroute_to_config(ctx, command_str)
 
     entry_counter = 1
     if 'nexthop' in route:
@@ -7304,7 +7597,7 @@ def add_route(ctx, command_str):
                 vrf = route['nexthop-vrf'].split(',')[0]
                 route['nexthop-vrf'] += ',' + vrf
         else:
-            route['nexthop-vrf'] = ''
+            route['nexthop-vrf'] = vrf
 
         # Set nexthop to empty string if not defined
         if 'nexthop' in route:
@@ -7367,11 +7660,11 @@ def add_route(ctx, command_str):
 def del_route(ctx, command_str):
     """Del route command"""
     config_db = ctx.obj['config_db']
-    key, route = cli_sroute_to_config(ctx, command_str, strict_nh=False)
+    key, route, vrf = cli_sroute_to_config(ctx, command_str, strict_nh=False)
     keys = config_db.get_keys('STATIC_ROUTE')
 
     if not tuple(key.split("|")) in keys:
-        ctx.fail('Route {} doesnt exist'.format(key))
+        ctx.fail("Route {} doesn't exist".format(key))
     else:
         # If not defined nexthop or intf name remove entire route
         if not 'nexthop' in route and not 'ifname' in route:
@@ -7410,6 +7703,8 @@ def del_route(ctx, command_str):
                 if ',' in route[item]:
                     ctx.fail('Only one nexthop can be deleted at a time')
                 cli_tuple += (route[item],)
+            elif item == 'nexthop-vrf':
+                cli_tuple += (vrf,)
             else:
                 cli_tuple += ('',)
 
@@ -7463,8 +7758,8 @@ def add():
     pass
 
 
-def get_acl_bound_ports():
-    config_db = ConfigDBConnector()
+def get_acl_bound_ports(namespace=None):
+    config_db = ConfigDBConnector(namespace=namespace)
     config_db.connect()
 
     ports = set()
@@ -7483,7 +7778,7 @@ def get_acl_bound_ports():
     return list(ports)
 
 
-def expand_vlan_ports(port_name):
+def expand_vlan_ports(port_name, namespace=None):
     """
     Expands a given VLAN interface into its member ports.
 
@@ -7492,7 +7787,7 @@ def expand_vlan_ports(port_name):
     If the provided interface is not a VLAN, then this method will return a list with only
     the provided interface in it.
     """
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(namespace=namespace)
     config_db.connect()
 
     if port_name not in config_db.get_keys("VLAN"):
@@ -7508,7 +7803,7 @@ def expand_vlan_ports(port_name):
     return members
 
 
-def parse_acl_table_info(table_name, table_type, description, ports, stage):
+def parse_acl_table_info(table_name, table_type, description, ports, stage, namespace=None):
     table_info = {"type": table_type}
 
     if description:
@@ -7520,10 +7815,10 @@ def parse_acl_table_info(table_name, table_type, description, ports, stage):
         raise ValueError("Cannot bind empty list of ports")
 
     port_list = []
-    valid_acl_ports = get_acl_bound_ports()
+    valid_acl_ports = get_acl_bound_ports(namespace)
     if ports:
         for port in ports.split(","):
-            port_list += expand_vlan_ports(port)
+            port_list += expand_vlan_ports(port, namespace)
         port_list = list(set(port_list))  # convert to set first to remove duplicate ifaces
     else:
         port_list = valid_acl_ports
@@ -7542,22 +7837,24 @@ def parse_acl_table_info(table_name, table_type, description, ports, stage):
 # 'table' subcommand ('config acl add table ...')
 #
 
-@add.command()
+
+@add.command('table')
 @click.argument("table_name", metavar="<table_name>")
 @click.argument("table_type", metavar="<table_type>")
 @click.option("-d", "--description")
 @click.option("-p", "--ports")
 @click.option("-s", "--stage", type=click.Choice(["ingress", "egress"]), default="ingress")
+@click.option('-n', '--namespace', help='Namespace name', type=click.Choice(multi_asic.get_namespace_list()))
 @click.pass_context
-def table(ctx, table_name, table_type, description, ports, stage):
+def add_table(ctx, table_name, table_type, description, ports, stage, namespace):
     """
     Add ACL table
     """
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(namespace=namespace)
     config_db.connect()
 
     try:
-        table_info = parse_acl_table_info(table_name, table_type, description, ports, stage)
+        table_info = parse_acl_table_info(table_name, table_type, description, ports, stage, namespace)
     except ValueError as e:
         ctx.fail("Failed to parse ACL table config: exception={}".format(e))
 
@@ -7578,13 +7875,15 @@ def remove():
 # 'table' subcommand ('config acl remove table ...')
 #
 
-@remove.command()
+
+@remove.command('table')
 @click.argument("table_name", metavar="<table_name>")
-def table(table_name):
+@click.option('-n', '--namespace', help='Namespace name', type=click.Choice(multi_asic.get_namespace_list()))
+def remove_table(table_name, namespace):
     """
     Remove ACL table
     """
-    config_db = ConfigDBConnector()
+    config_db = ConfigDBConnector(namespace=namespace)
     config_db.connect()
     config_db.set_entry("ACL_TABLE", table_name, None)
 
@@ -7645,6 +7944,11 @@ def dropcounters():
 @click.option("-a", "--alias", type=str, help="Alias for this counter")
 @click.option("-g", "--group", type=str, help="Group for this counter")
 @click.option("-d", "--desc",  type=str, help="Description for this counter")
+@click.option("-w", "--window", type=int, help="Window size in seconds")
+@click.option("-dct", "--drop-count-threshold",  type=int,
+              help="Minimum threshold for drop counts to be classified as an incident")
+@click.option('-ict', '--incident-count-threshold', type=int,
+              help="Minimum number of incidents to trigger a persistent drop alert")
 @click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
 @click.option('--namespace',
               '-n',
@@ -7654,7 +7958,8 @@ def dropcounters():
               show_default=True,
               help='Namespace name or all',
               callback=multi_asic_util.multi_asic_namespace_validation_callback)
-def install(counter_name, alias, group, counter_type, desc, reasons, verbose, namespace):
+def install(counter_name, alias, group, counter_type, desc, reasons, window,
+            incident_count_threshold, drop_count_threshold, verbose, namespace):
     """Install a new drop counter"""
     command = ['dropconfig', '-c', 'install', '-n', str(counter_name), '-t', str(counter_type), '-r', str(reasons)]
     if alias:
@@ -7665,7 +7970,73 @@ def install(counter_name, alias, group, counter_type, desc, reasons, verbose, na
         command += ['-d', str(desc)]
     if namespace:
         command += ['-ns', str(namespace)]
+    if window:
+        command += ['-w', str(window)]
+    if drop_count_threshold:
+        command += ['-dct', str(drop_count_threshold)]
+    if incident_count_threshold:
+        command += ['-ict', str(incident_count_threshold)]
 
+    clicommon.run_command(command, display_cmd=verbose)
+
+
+#
+# 'enable drop monitor' subcommand  ('config dropcounters enable_monitor')
+#
+@dropcounters.command()
+@click.option("-c", "--counter-name", type=str, help="Name of the counter", default=None)
+@click.option("-w", "--window", type=int, help="Window size in seconds")
+@click.option("-dct", "--drop-count-threshold",  type=int,
+              help="Minimum threshold for drop counts to be classified as an incident")
+@click.option('-ict', '--incident-count-threshold', type=int,
+              help="Minimum number of incidents to trigger a persistent drop alert")
+@click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def enable_monitor(counter_name, window, incident_count_threshold, drop_count_threshold, verbose, namespace):
+    """Enable drop monitor feature. If no counter is provided, global feature status is set to enabled."""
+    command = ['dropconfig', '-c', 'enable_drop_monitor']
+    if counter_name:
+        command += ['-n', str(counter_name)]
+    if window:
+        command += ['-w', str(window)]
+    if drop_count_threshold:
+        command += ['-dct', str(drop_count_threshold)]
+    if incident_count_threshold:
+        command += ['-ict', str(incident_count_threshold)]
+    if namespace:
+        command += ['-ns', str(namespace)]
+
+    clicommon.run_command(command, display_cmd=verbose)
+
+
+#
+# 'disable drop monitor' subcommand  ('config dropcounters disable_monitor')
+#
+@dropcounters.command()
+@click.option("-c", "--counter-name", type=str, help="Name of the counter", default=None)
+@click.option('-v', '--verbose', is_flag=True, help="Enable verbose output")
+@click.option('--namespace',
+              '-n',
+              'namespace',
+              default=None,
+              type=str,
+              show_default=True,
+              help='Namespace name or all',
+              callback=multi_asic_util.multi_asic_namespace_validation_callback)
+def disable_monitor(counter_name, verbose, namespace):
+    """Disable drop monitor feature. If no counter is provided, global feature status is set to disabled."""
+    command = ['dropconfig', '-c', 'disable_drop_monitor']
+    if counter_name:
+        command += ['-n', str(counter_name)]
+    if namespace:
+        command += ['-ns', str(namespace)]
     clicommon.run_command(command, display_cmd=verbose)
 
 
@@ -8309,6 +8680,12 @@ def del_loopback(ctx, loopback_name):
         if loopback_name not in lo_intfs:
             ctx.fail("{} does not exist".format(loopback_name))
 
+    # Dont proceed if the loopback is used in dhcpv4_relay
+    try:
+        check_dhcpv4_relay_dependencies(config_db, loopback_name, 'interface')
+    except ValueError as e:
+        ctx.fail(str(e))
+
     ips = [ k[1] for k in lo_config_db if type(k) == tuple and k[0] == loopback_name ]
     for ip in ips:
         config_db.set_entry('LOOPBACK_INTERFACE', (loopback_name, ip), None)
@@ -8876,9 +9253,18 @@ def set_ipv6_link_local_only_on_interface(config_db, interface_dict, interface_t
 #
 
 @config.group()
+@click.option('-n', '--namespace', help='Namespace name',
+              required=True if multi_asic.is_multi_asic() else False,
+              type=click.Choice(multi_asic.get_namespace_list()))
 @click.pass_context
-def ipv6(ctx):
+def ipv6(ctx, namespace):
     """IPv6 configuration"""
+    if namespace is None:
+        namespace = DEFAULT_NAMESPACE
+    config_db = multi_asic.connect_config_db_for_ns(namespace)
+    ctx.ensure_object(dict)
+    ctx.obj['config_db'] = config_db
+    ctx.obj['namespace'] = str(namespace)
 
 #
 # 'enable' command ('config ipv6 enable ...')
@@ -8895,8 +9281,7 @@ def enable(ctx):
 @click.pass_context
 def enable_link_local(ctx):
     """Enable IPv6 link-local on all interfaces """
-    config_db = ConfigDBConnector()
-    config_db.connect()
+    config_db = ctx.obj['config_db']
     vlan_member_table = config_db.get_table('VLAN_MEMBER')
     portchannel_member_table = config_db.get_table('PORTCHANNEL_MEMBER')
 
@@ -8935,8 +9320,7 @@ def disable(ctx):
 @click.pass_context
 def disable_link_local(ctx):
     """Disable IPv6 link local on all interfaces """
-    config_db = ConfigDBConnector()
-    config_db.connect()
+    config_db = ctx.obj['config_db']
 
     mode = "disable"
 
@@ -8990,16 +9374,22 @@ helper.load_and_register_plugins(plugins, config)
 # 'subinterface' group ('config subinterface ...')
 #
 @config.group()
-@click.pass_context
+@click.option('-n', '--namespace', help='Namespace name',
+              required=True if multi_asic.is_multi_asic() else False,
+              type=click.Choice(multi_asic.get_namespace_list()))
 @click.option('-s', '--redis-unix-socket-path', help='unix socket path for redis connection')
-def subinterface(ctx, redis_unix_socket_path):
+@click.pass_context
+def subinterface(ctx, namespace, redis_unix_socket_path):
     """subinterface-related configuration tasks"""
-    kwargs = {}
+    if namespace is None:
+        namespace = DEFAULT_NAMESPACE
+    kwargs = {'namespace': str(namespace)}
     if redis_unix_socket_path:
         kwargs['unix_socket_path'] = redis_unix_socket_path
+        kwargs['use_unix_socket_path'] = True
     config_db = ConfigDBConnector(**kwargs)
     config_db.connect(wait_for_init=False)
-    ctx.obj = {'db': config_db}
+    ctx.obj = {'db': config_db, 'namespace': str(namespace)}
 
 def subintf_vlan_check(config_db, parent_intf, vlan):
     subintf_db = config_db.get_table('VLAN_SUB_INTERFACE')
@@ -9138,7 +9528,7 @@ def clock():
     pass
 
 
-def get_tzs(ctx, args, incomplete):
+def get_tzs(ctx, param, incomplete):
     ret = clicommon.run_command(['timedatectl', 'list-timezones'],
                                 display_cmd=False, ignore_error=False,
                                 return_cmd=True)
@@ -9151,7 +9541,7 @@ def get_tzs(ctx, args, incomplete):
 
 @clock.command()
 @click.argument('timezone', metavar='<timezone_name>', required=True,
-                autocompletion=get_tzs)
+                shell_complete=get_tzs)
 def timezone(timezone):
     """Set system timezone"""
 
@@ -9433,13 +9823,10 @@ def motd(message):
 #
 
 @config.group(cls=clicommon.AbbreviationGroup, name='vnet')
-@click.pass_context
-def vnet(ctx):
+@multi_asic_util.multi_asic_click_option_namespace(required=True)
+def vnet(namespace):
     """VNET-related configuration tasks"""
-    config_db = ConfigDBConnector()
-    config_db.connect()
-    ctx.obj = {}
-    ctx.obj['config_db'] = config_db
+    pass
 
 
 @vnet.command('add')
@@ -9452,10 +9839,15 @@ def vnet(ctx):
 @click.argument('advertise_prefix', metavar='<advertise_prefix>', type=bool, required=False)
 @click.argument('overlay_dmac', metavar='<overlay_dmac>', required=False)
 @click.argument('src_mac', metavar='<src_mac>', required=False)
-@click.pass_context
-def add_vnet(ctx, vnet_name, vni, vxlan_tunnel, peer_list, guid, scope, advertise_prefix, overlay_dmac, src_mac):
+@clicommon.pass_db
+def add_vnet(db, vnet_name, vni, vxlan_tunnel, peer_list, guid, scope, advertise_prefix, overlay_dmac, src_mac):
     """Add Vnet"""
-    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+    ctx = click.get_current_context()
+
+    namespace = multi_asic_util.get_namespace_from_ctx(default=DEFAULT_NAMESPACE)
+
+    cfg_db = db.cfgdb_clients[namespace]
+    config_db = ValidatedConfigDBConnector(cfg_db)
 
     vnet_name_is_valid(ctx, vnet_name)
 
@@ -9506,10 +9898,15 @@ def add_vnet(ctx, vnet_name, vni, vxlan_tunnel, peer_list, guid, scope, advertis
 
 @vnet.command('del')
 @click.argument('vnet_name', metavar='<vnet_name>', required=True)
-@click.pass_context
-def del_vnet(ctx, vnet_name):
+@clicommon.pass_db
+def del_vnet(db, vnet_name):
     """Del Vnet"""
-    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+    ctx = click.get_current_context()
+
+    namespace = multi_asic_util.get_namespace_from_ctx(default=DEFAULT_NAMESPACE)
+
+    cfg_db = db.cfgdb_clients[namespace]
+    config_db = ValidatedConfigDBConnector(cfg_db)
 
     vnet_name_is_valid(ctx, vnet_name)
 
@@ -9537,16 +9934,21 @@ def del_vnet(ctx, vnet_name):
 @click.argument('primary', metavar='<primary>', required=False)
 @click.argument('monitoring', metavar='<monitoring>', type=str, required=False)
 @click.argument('adv_prefix', metavar='<adv_prefix>', required=False)
-@click.pass_context
-def add_vnet_route(ctx, vnet_name, prefix, endpoint, vni, mac_address, endpoint_monitor,
+@clicommon.pass_db
+def add_vnet_route(db, vnet_name, prefix, endpoint, vni, mac_address, endpoint_monitor,
                    profile, primary, monitoring, adv_prefix):
     """Add/Update VNET Route"""
-    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+    ctx = click.get_current_context()
+
+    namespace = multi_asic_util.get_namespace_from_ctx(default=DEFAULT_NAMESPACE)
+
+    cfg_db = db.cfgdb_clients[namespace]
+    config_db = ValidatedConfigDBConnector(cfg_db)
 
     vnet_name_is_valid(ctx, vnet_name)
 
     if not is_vnet_exists(config_db, vnet_name):
-        ctx.fail("VNET {} doesnot exist, cannot add a route!".format(vnet_name))
+        ctx.fail("VNET {} does not exist, cannot add a route!".format(vnet_name))
     if not clicommon.is_ipprefix(prefix):
         ctx.fail("Invalid prefix {}".format(prefix))
     else:
@@ -9597,22 +9999,27 @@ def add_vnet_route(ctx, vnet_name, prefix, endpoint, vni, mac_address, endpoint_
 @vnet.command('del-route')
 @click.argument('vnet_name', metavar='<vnet_name>', type=str, required=True)
 @click.argument('prefix', metavar='<prefix>', required=False)
-@click.pass_context
-def del_vnet_route(ctx, vnet_name, prefix):
+@clicommon.pass_db
+def del_vnet_route(db, vnet_name, prefix):
     """Del a specific VNET route or all VNET routes"""
-    config_db = ValidatedConfigDBConnector(ctx.obj['config_db'])
+    ctx = click.get_current_context()
+
+    namespace = multi_asic_util.get_namespace_from_ctx(default=DEFAULT_NAMESPACE)
+
+    cfg_db = db.cfgdb_clients[namespace]
+    config_db = ValidatedConfigDBConnector(cfg_db)
 
     vnet_name_is_valid(ctx, vnet_name)
 
     if not is_vnet_exists(config_db, vnet_name):
-        ctx.fail("VNET {} doesnot exist, cannot delete the route!".format(vnet_name))
+        ctx.fail("VNET {} does not exist, cannot delete the route!".format(vnet_name))
     if not is_vnet_route_exists(config_db, vnet_name):
-        ctx.fail("Routes dont exist for the VNET {}, cant delete it!".format(vnet_name))
+        ctx.fail("Routes dont exist for the VNET {}, can't delete it!".format(vnet_name))
     if prefix:
         if not clicommon.is_ipprefix(prefix):
             ctx.fail("Invalid prefix {}".format(prefix))
         if not is_specific_vnet_route_exists(config_db, vnet_name, prefix):
-            ctx.fail("Route does not exist for the VNET {}, cant delete it!".format(vnet_name))
+            ctx.fail("Route does not exist for the VNET {}, can't delete it!".format(vnet_name))
         else:
             for key in config_db.get_table('VNET_ROUTE_TUNNEL'):
                 if key[0] == vnet_name and key[1] == prefix:

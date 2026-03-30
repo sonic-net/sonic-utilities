@@ -169,7 +169,7 @@ class ServiceCreator:
 
         Args:
             package: Package object to install.
-            register_feature: Wether to register this package in FEATURE table.
+            register_feature: Whether to register this package in FEATURE table.
             state: Default feature state.
             owner: Default feature owner.
 
@@ -204,7 +204,7 @@ class ServiceCreator:
 
         Args:
             package: Package object to uninstall.
-            deregister_feature: Wether to deregister this package from FEATURE table.
+            deregister_feature: Whether to deregister this package from FEATURE table.
             keep_config: Whether to remove package configuration.
 
         Returns:
@@ -283,7 +283,7 @@ class ServiceCreator:
             'docker_container_name': name,
             'docker_image_id': image_id,
             'docker_image_name': package.entry.repository,
-            'docker_image_tag': package.entry.tag,
+            'docker_image_reference': package.entry.docker_image_reference,
             'docker_image_run_opt': run_opt,
             'sonic_asic_platform': sonic_asic_platform
         }

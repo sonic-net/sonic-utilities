@@ -135,7 +135,7 @@ class Copp(Executor):
             err_str_tup = ("The Associated Trap_group for the trap_id found in APPL",
                            "and CONFIG_DB/CONFIG_FILE did not match.",
                            "In APPL_DB: {}, CONFIG_DB: {}",
-                           "\n Proceding with the trap group found in APPL DB")
+                           "\n Proceeding with the trap group found in APPL DB")
             err_str = " ".join(err_str_tup)
             err_str = err_str.format(tg, self.trap_group)
             handle_error(err_str, False)

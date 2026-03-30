@@ -54,90 +54,65 @@ class TestSonicKdumpConfig(unittest.TestCase):
     def setup_class(cls):
         print("SETUP")
 
-    @patch("sonic_kdump_config.run_command")
+    @patch('sonic_kdump_config.getstatusoutput_noshell_pipe')
     def test_read_num_kdumps(self, mock_run_cmd):
         """Tests the function `read_num_kdumps(...)` in script `sonic-kdump-config`.
         """
-        mock_run_cmd.return_value = (0, ["0"], None)
+        mock_run_cmd.return_value = ([0, 0], "0")
         num_dumps = sonic_kdump_config.read_num_dumps()
         assert num_dumps == 0
         logger.info("Value of 'num_dumps' is: '{}'.".format(num_dumps))
         logger.info("Expected value of 'num_dumps' is: '0'.")
 
-        mock_run_cmd.return_value = (0, ["NotInteger"], None)
+        mock_run_cmd.return_value = ([0, 0], "NotInteger")
         with self.assertRaises(SystemExit) as sys_exit:
             num_dumps = sonic_kdump_config.read_num_dumps()
         self.assertEqual(sys_exit.exception.code, 1)
 
-        mock_run_cmd.return_value = (0, (), None)
+        mock_run_cmd.return_value = ([0, 0], "")
         with self.assertRaises(SystemExit) as sys_exit:
             num_dumps = sonic_kdump_config.read_num_dumps()
         self.assertEqual(sys_exit.exception.code, 1)
 
-        mock_run_cmd.return_value = (0, [], None)
+        mock_run_cmd.return_value = ([1, 0], "3")
         with self.assertRaises(SystemExit) as sys_exit:
             num_dumps = sonic_kdump_config.read_num_dumps()
         self.assertEqual(sys_exit.exception.code, 1)
 
-        mock_run_cmd.return_value = (1, [], None)
+        mock_run_cmd.return_value = ([0, 1], "3")
         with self.assertRaises(SystemExit) as sys_exit:
             num_dumps = sonic_kdump_config.read_num_dumps()
         self.assertEqual(sys_exit.exception.code, 1)
 
-        mock_run_cmd.return_value = (1, ["3"], None)
+        mock_run_cmd.return_value = ([0, 1], "NotInteger")
         with self.assertRaises(SystemExit) as sys_exit:
             num_dumps = sonic_kdump_config.read_num_dumps()
         self.assertEqual(sys_exit.exception.code, 1)
 
-        mock_run_cmd.return_value = (1, (), None)
-        with self.assertRaises(SystemExit) as sys_exit:
-            num_dumps = sonic_kdump_config.read_num_dumps()
-        self.assertEqual(sys_exit.exception.code, 1)
-
-        mock_run_cmd.return_value = (1, ["NotInteger"], None)
-        with self.assertRaises(SystemExit) as sys_exit:
-            num_dumps = sonic_kdump_config.read_num_dumps()
-        self.assertEqual(sys_exit.exception.code, 1)
-
-    @patch("sonic_kdump_config.run_command")
+    @patch('sonic_kdump_config.getstatusoutput_noshell_pipe')
     def test_read_use_kdump(self, mock_run_cmd):
         """Tests the function `read_use_kdump(...)` in script `sonic-kdump-config`.
         """
-        mock_run_cmd.return_value = (0, ["0"], None)
+        mock_run_cmd.return_value = ([0, 0], "0")
         is_kdump_enabled = sonic_kdump_config.read_use_kdump()
         assert is_kdump_enabled == 0
 
-        mock_run_cmd.return_value = (0, (), None)
+        mock_run_cmd.return_value = ([0, 0], "NotInteger")
         with self.assertRaises(SystemExit) as sys_exit:
             is_kdump_enabled = sonic_kdump_config.read_use_kdump()
         self.assertEqual(sys_exit.exception.code, 1)
 
-        mock_run_cmd.return_value = (0, [], None)
+        mock_run_cmd.return_value = ([0, 0], "")
         with self.assertRaises(SystemExit) as sys_exit:
             is_kdump_enabled = sonic_kdump_config.read_use_kdump()
         self.assertEqual(sys_exit.exception.code, 1)
 
-        mock_run_cmd.return_value = (0, ["NotInteger"], None)
+        mock_run_cmd.return_value = ([1, 0], "3")
         with self.assertRaises(SystemExit) as sys_exit:
             is_kdump_enabled = sonic_kdump_config.read_use_kdump()
         self.assertEqual(sys_exit.exception.code, 1)
 
-        mock_run_cmd.return_value = (1, ["0"], None)
-        with self.assertRaises(SystemExit) as sys_exit:
-            is_kdump_enabled = sonic_kdump_config.read_use_kdump()
-        self.assertEqual(sys_exit.exception.code, 1)
-
-        mock_run_cmd.return_value = (1, ["NotInteger"], None)
-        with self.assertRaises(SystemExit) as sys_exit:
-            is_kdump_enabled = sonic_kdump_config.read_use_kdump()
-        self.assertEqual(sys_exit.exception.code, 1)
-
-        mock_run_cmd.return_value = (1, (), None)
-        with self.assertRaises(SystemExit) as sys_exit:
-            is_kdump_enabled = sonic_kdump_config.read_use_kdump()
-        self.assertEqual(sys_exit.exception.code, 1)
-
-        mock_run_cmd.return_value = (1, [], None)
+        mock_run_cmd.return_value = ([0, 1], "3")
         with self.assertRaises(SystemExit) as sys_exit:
             is_kdump_enabled = sonic_kdump_config.read_use_kdump()
         self.assertEqual(sys_exit.exception.code, 1)
@@ -420,9 +395,8 @@ class TestSonicKdumpConfig(unittest.TestCase):
         sonic_kdump_config.write_kdump_remote()  # Call the function
 
         # Ensure the correct commands were run to uncomment SSH and SSH_KEY
-        mock_run_command.assert_any_call("/bin/sed -i 's/#SSH/SSH/' /etc/default/kdump-tools", use_shell=False)
-        mock_run_command.assert_any_call("/bin/sed -i 's/#SSH_KEY/SSH_KEY/' /etc/default/kdump-tools", use_shell=False)
-        self.assertEqual(mock_run_command.call_count, 2)  # Ensure both commands were called
+        mock_run_command.assert_any_call("/bin/sed -i 's/^#SSH/SSH/' /etc/default/kdump-tools", use_shell=False)
+        self.assertEqual(mock_run_command.call_count, 1)  # Ensure the sed command was called once
 
     @patch("sonic_kdump_config.run_command")
     @patch("sonic_kdump_config.get_kdump_remote")
@@ -433,9 +407,8 @@ class TestSonicKdumpConfig(unittest.TestCase):
         sonic_kdump_config.write_kdump_remote()  # Call the function
 
         # Ensure the correct commands were run to comment SSH and SSH_KEY
-        mock_run_command.assert_any_call("/bin/sed -i 's/SSH/#SSH/' /etc/default/kdump-tools", use_shell=False)
-        mock_run_command.assert_any_call("/bin/sed -i 's/SSH_KEY/#SSH_KEY/' /etc/default/kdump-tools", use_shell=False)
-        self.assertEqual(mock_run_command.call_count, 2)
+        mock_run_command.assert_any_call("/bin/sed -i 's/^SSH/#SSH/' /etc/default/kdump-tools", use_shell=False)
+        self.assertEqual(mock_run_command.call_count, 1)
 
     @patch("sonic_kdump_config.get_kdump_remote")
     @patch("sonic_kdump_config.run_command")
@@ -447,16 +420,14 @@ class TestSonicKdumpConfig(unittest.TestCase):
         sonic_kdump_config.cmd_kdump_remote(verbose=True)
 
         # Ensure the correct commands are being run
-        mock_run_command.assert_any_call("/bin/sed -i 's/#SSH/SSH/' /etc/default/kdump-tools", use_shell=False)
-        mock_run_command.assert_any_call("/bin/sed -i 's/#SSH_KEY/SSH_KEY/' /etc/default/kdump-tools", use_shell=False)
+        mock_run_command.assert_any_call("/bin/sed -i 's/^#SSH/SSH/' /etc/default/kdump-tools", use_shell=False)
 
         # Test case: Remote is False
         mock_read_remote.return_value = False
         sonic_kdump_config.cmd_kdump_remote(verbose=True)
 
         # Ensure the correct commands are being run
-        mock_run_command.assert_any_call("/bin/sed -i 's/SSH/#SSH/' /etc/default/kdump-tools", use_shell=False)
-        mock_run_command.assert_any_call("/bin/sed -i 's/SSH_KEY/#SSH_KEY/' /etc/default/kdump-tools", use_shell=False)
+        mock_run_command.assert_any_call("/bin/sed -i 's/^SSH/#SSH/' /etc/default/kdump-tools", use_shell=False)
 
         # Test case: Checking output messages
         with patch("builtins.print") as mock_print:
@@ -467,28 +438,28 @@ class TestSonicKdumpConfig(unittest.TestCase):
             sonic_kdump_config.cmd_kdump_remote(verbose=True)
             mock_print.assert_called_with("SSH and SSH_KEY commented out for local configuration.")
 
-    @patch("sonic_kdump_config.run_command")
+    @patch('sonic_kdump_config.getstatusoutput_noshell_pipe')
     def test_read_ssh_string(self, mock_run_cmd):
         """Tests the function `read_ssh_string(...)` in script `sonic-kdump-config`."""
 
         # Test case for successful read
-        mock_run_cmd.return_value = (0, ['user@ip_address'], None)  # Simulate successful command execution
+        mock_run_cmd.return_value = ([0, 0, 0], 'user@ip_address')  # Simulate successful command execution
         ssh_string = sonic_kdump_config.read_ssh_string()
         self.assertEqual(ssh_string, 'user@ip_address')
 
         # Test case for non-integer output
-        mock_run_cmd.return_value = (0, ['NotAString'], None)  # Simulate command execution returning a non-string
+        mock_run_cmd.return_value = ([0, 0, 0], 'NotAString')  # Simulate command execution returning a non-string
         ssh_string = sonic_kdump_config.read_ssh_string()
         self.assertEqual(ssh_string, 'NotAString')
 
         # Test case for empty output
-        mock_run_cmd.return_value = (0, [], None)  # Simulate command execution with empty output
+        mock_run_cmd.return_value = ([0, 0, 0], '')  # Simulate command execution with empty output
         with self.assertRaises(SystemExit) as sys_exit:
             sonic_kdump_config.read_ssh_string()
         self.assertEqual(sys_exit.exception.code, 1)
 
         # Test case for command failure
-        mock_run_cmd.return_value = (1, [], None)  # Simulate command failure
+        mock_run_cmd.return_value = ([0, 0, 1], '')  # Simulate command failure
         with self.assertRaises(SystemExit) as sys_exit:
             sonic_kdump_config.read_ssh_string()
         self.assertEqual(sys_exit.exception.code, 1)
@@ -530,23 +501,23 @@ class TestSonicKdumpConfig(unittest.TestCase):
             sonic_kdump_config.write_ssh_string('user@ip_address')
         self.assertEqual(sys_exit.exception.code, 1)
 
-    @patch("sonic_kdump_config.run_command")
+    @patch('sonic_kdump_config.getstatusoutput_noshell_pipe')
     def test_read_ssh_path(self, mock_run_cmd):
         """Tests the function `read_ssh_path(...)` in script `sonic-kdump-config`."""
 
         # Test successful case with valid SSH path
-        mock_run_cmd.return_value = (0, ['/path/to/keys'], None)
+        mock_run_cmd.return_value = ([0, 0, 0], '/path/to/keys')
         ssh_path = sonic_kdump_config.read_ssh_path()
         self.assertEqual(ssh_path, '/path/to/keys')
 
         # Test case where SSH path is invalid
-        mock_run_cmd.return_value = (0, ['NotAPath'], None)
+        mock_run_cmd.return_value = ([0, 0, 0], 'NotAPath')
         with self.assertRaises(SystemExit) as sys_exit:
             ssh_path = sonic_kdump_config.read_ssh_path()
         self.assertEqual(sys_exit.exception.code, 1)
 
         # Test case where grep fails (no SSH path found)
-        mock_run_cmd.return_value = (1, [], None)
+        mock_run_cmd.return_value = ([0, 0, 1], '')
         with self.assertRaises(SystemExit) as sys_exit:
             ssh_path = sonic_kdump_config.read_ssh_path()
         self.assertEqual(sys_exit.exception.code, 1)
@@ -563,7 +534,7 @@ class TestSonicKdumpConfig(unittest.TestCase):
         sonic_kdump_config.write_ssh_path('/path/to/keys')  # Call function with valid path
         # Ensure the correct command is being run
         expected_cmd = (
-            "/bin/sed -i -e 's/#*SSH_KEY=.*/SSH_KEY=\"/path/to/keys\"/' %s"
+            "/bin/sed -i -e 's|#*SSH_KEY=.*|SSH_KEY=\"/path/to/keys\"|' %s"
             % sonic_kdump_config.kdump_cfg
         )
         mock_run_cmd.assert_called_once_with(expected_cmd, use_shell=False)
@@ -695,22 +666,34 @@ class TestSonicKdumpConfig(unittest.TestCase):
         # Verify that the correct message is printed
         mock_print.assert_called_once_with("SSH path updated. Changes will take effect after reboot.")
 
-    @patch('sonic_kdump_config.run_command')
-    @patch('sonic_kdump_config.read_ssh_path')
-    @patch('sonic_kdump_config.write_ssh_path')
-    @patch('builtins.print')  # Mock print to capture printed output
-    def test_cmd_kdump_ssh_path_no_update(self, mock_print, mock_write, mock_read, mock_run):
-        # Mock read_ssh_path to return the same SSH path provided
-        mock_read.return_value = '/same/path/to/keys'
+    def create_mock_script(self, name):
+        py_content = 'print("linuxargs=crashkernel=8192")'
+        if not os.path.exists(name):
+            try:
+                with open(name, 'w') as f:
+                    f.write('#!/usr/bin/env python3\n')
+                    f.write(py_content)
+                os.chmod(name, 0o777)
+            except IOError as e:
+                print(f"Error creating file {e}")
 
-        # Call the function with the same SSH path
-        sonic_kdump_config.cmd_kdump_ssh_path(verbose=True, ssh_path='/same/path/to/keys')
+    def create_mock_script_empty(self, name):
+        if not os.path.exists(name):
+            try:
+                with open(name, 'w') as f:
+                    f.write('#!/usr/bin/env python3\n')
+                os.chmod(name, 0o777)
+            except IOError as e:
+                print(f"Error creating file {e}")
 
-        # Check that write_ssh_path was not called
-        mock_write.assert_not_called()
-
-        # Check that no message is printed for update
-        mock_print.assert_not_called()
+    def create_mock_file(self, name):
+        py_content = 'print("linuxargs=crashkernel=8192")'
+        if not os.path.exists(name):
+            try:
+                with open(name, 'w') as f:
+                    f.write(py_content)
+            except IOError as e:
+                print(f"Error creating file {e}")
 
     @patch("sonic_kdump_config.write_use_kdump")
     @patch("os.path.exists")
@@ -748,6 +731,58 @@ class TestSonicKdumpConfig(unittest.TestCase):
         with patch("sonic_kdump_config.open", mock_open_func):
             return_result = sonic_kdump_config.kdump_disable(True, "20201230.63", "/host/grub/grub.cfg")
             assert return_result == False
+
+        sys.path.append('./')
+        os.environ["PATH"] += ":./"
+        sonic_kdump_config.get_uboot_env()
+        sonic_kdump_config.dump_uboot_env("mock-uboot-env.txt")
+        self.create_mock_file("fw_printenv")
+        os.chmod("fw_printenv", 0o777)
+        sonic_kdump_config.dump_uboot_env("mock-uboot-env.txt")
+        os.remove("fw_printenv")
+        sonic_kdump_config.set_uboot_env("mock_key", "mock_value")
+        sonic_kdump_config.modify_crashkernel_param_uboot_env("0")
+        sonic_kdump_config.modify_crashkernel_param_uboot_env("8192")
+        self.create_mock_script_empty("fw_printenv")
+        sonic_kdump_config.modify_crashkernel_param_uboot_env("0")
+        sonic_kdump_config.modify_crashkernel_param_uboot_env("8192")
+        os.remove("fw_printenv")
+        self.create_mock_script("fw_printenv")
+        self.create_mock_script("fw_setenv")
+        self.create_mock_file("uboot-env.txt")
+        sonic_kdump_config.get_uboot_env()
+        sonic_kdump_config.modify_crashkernel_param_uboot_env("0")
+        sonic_kdump_config.modify_crashkernel_param_uboot_env("8192")
+
+        mock_open_func = mock_open(read_data=KERNEL_BOOTING_CFG_KDUMP_ENABLED)
+        with patch("sonic_kdump_config.open", mock_open_func):
+            try:
+                sonic_kdump_config.cmd_kdump_config_next(False)
+            except Exception as e:
+                print(f"Error {e}")
+            return_result = sonic_kdump_config.kdump_disable(True, "20201230.63", "uboot-env.txt")
+            handle = mock_open_func()
+            handle.writelines.assert_called_once()
+
+        mock_open_func = mock_open(read_data=KERNEL_BOOTING_CFG_KDUMP_DISABLED)
+        with patch("sonic_kdump_config.open", mock_open_func):
+            return_result = sonic_kdump_config.kdump_disable(True, "20201230.63", "uboot-env.txt")
+            try:
+                sonic_kdump_config.cmd_kdump_disable(False)
+            except Exception as e:
+                print(f"Error {e}")
+
+        mock_path_exist.return_value = False
+        mock_open_func = mock_open(read_data=KERNEL_BOOTING_CFG_KDUMP_ENABLED)
+        with patch("sonic_kdump_config.open", mock_open_func):
+            return_result = sonic_kdump_config.kdump_disable(True, "20201230.63", "uboot-env.txt")
+            handle = mock_open_func()
+            handle.writelines.assert_called_once()
+
+        mock_path_exist.return_value = False
+        mock_open_func = mock_open(read_data=KERNEL_BOOTING_CFG_KDUMP_DISABLED)
+        with patch("sonic_kdump_config.open", mock_open_func):
+            return_result = sonic_kdump_config.kdump_disable(True, "20201230.63", "uboot-env.txt")
 
     @classmethod
     def teardown_class(cls):

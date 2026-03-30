@@ -276,7 +276,7 @@ class SystemNeighStatus(object):
         # the result table.
         #
         for i in self.chassis_app_db_keys_system_neigh:
-            key_tokens = re.split('\|', i)
+            key_tokens = re.split(r'\|', i)
             nbr = key_tokens[-1].strip()
             intf = '|'.join(key_tokens[1:-1])
             key = '|'.join(key_tokens[1:])
@@ -338,7 +338,7 @@ class SystemLagStatus(object):
         # the result table.
         #
         for i in self.chassis_app_db_keys_system_lag:
-            key_tokens = re.split('\|', i)
+            key_tokens = re.split(r'\|', i)
             key = '|'.join(key_tokens[1:])
             if ((self.system_lag_name is None or key in intf_fs) and
                 (self.asicname is None or self.asicname in key) and

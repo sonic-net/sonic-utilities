@@ -14,6 +14,9 @@
     "LINECARD_PORT_STAT_MARK_TABLE|sonic-lc3": {
         "timestamp": "2020-07-01 00:00:00"
     },
+    "LINECARD_PORT_STAT_MARK_TABLE|sonic-lc4": {
+        "timestamp": "2020-07-01 00:00:00"
+    },
     "LINECARD_PORT_STAT_TABLE|HundredGigE0/1/0/1": {
         "state": "U",
         "rx_ok": 100,

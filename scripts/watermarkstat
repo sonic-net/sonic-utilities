@@ -81,13 +81,13 @@ class WatermarkstatWrapper(object):
         self.db = None
 
     @multi_asic_util.run_on_multi_asic
-    def run(self, clear, persistent, wm_type):
+    def run(self, clear, persistent, wm_type, json_output):
         watermarkstat = Watermarkstat(self.db, self.multi_asic.current_namespace)
         if clear:
             watermarkstat.send_clear_notification(("PERSISTENT" if persistent else "USER", wm_type.upper()))
         else:
             table_prefix = PERSISTENT_TABLE_PREFIX if persistent else USER_TABLE_PREFIX
-            watermarkstat.print_all_stat(table_prefix, wm_type)
+            watermarkstat.print_all_stat(table_prefix, wm_type, json_output)
 
 
 class Watermarkstat(object):
@@ -283,8 +283,9 @@ class Watermarkstat(object):
                 fields[pos] = str(int(counter_data))
         return fields
 
-    def print_all_stat(self, table_prefix, key):
+    def print_all_stat(self, table_prefix, key, json_output):
         table = []
+        json_result = []
         type = self.watermark_types[key]
         if key in ['buffer_pool', 'headroom_pool']:
             self.header_list = type['header']
@@ -298,6 +299,7 @@ class Watermarkstat(object):
                 if data is None:
                     data = STATUS_NA
                 table.append((buf_pool, data))
+                json_result.append({buf_pool:data})
         else:
             self.build_header(type, key)
             # Get stat for each port
@@ -309,10 +311,14 @@ class Watermarkstat(object):
                 row_data.append(port)
                 row_data.extend(data)
                 table.append(tuple(row_data))
-
-        namespace_str = f" (Namespace {self.namespace})" if multi_asic.is_multi_asic() else ''
-        print(type["message"] + namespace_str)
-        print(tabulate(table, self.header_list, tablefmt='simple', stralign='right'))
+                json_result.append(dict(zip(self.header_list, [port]+data)))
+        
+        if json_output:
+            print(json.dumps(json_result, indent=4))
+        else:
+            namespace_str = f" (Namespace {self.namespace})" if multi_asic.is_multi_asic() else ''
+            print(type["message"] + namespace_str)
+            print(tabulate(table, self.header_list, tablefmt='simple', stralign='right'))
 
     def send_clear_notification(self, data):
         msg = json.dumps(data, separators=(',', ':'))
@@ -324,8 +330,9 @@ class Watermarkstat(object):
 @click.option('-p', '--persistent', is_flag=True, help='Do the operations on the persistent watermark')
 @click.option('-t', '--type', 'wm_type', type=click.Choice(['pg_headroom', 'pg_shared', 'q_shared_uni', 'q_shared_multi', 'buffer_pool', 'headroom_pool', 'q_shared_all']), help='The type of watermark', required=True)
 @click.option('-n', '--namespace', type=click.Choice(multi_asic.get_namespace_list()), help='Namespace name or skip for all', default=None)
+@click.option('--json','-j','json_output', is_flag=True, default=False, show_default=True, help="Display output in JSON format")
 @click.version_option(version='1.0')
-def main(clear, persistent, wm_type, namespace):
+def main(clear, persistent, wm_type, namespace, json_output=False):
     """
        Display the watermark counters
 
@@ -347,7 +354,7 @@ def main(clear, persistent, wm_type, namespace):
     """
 
     namespace_context = WatermarkstatWrapper(namespace)
-    namespace_context.run(clear, persistent, wm_type)
+    namespace_context.run(clear, persistent, wm_type, json_output)
     sys.exit(0)
 
 if __name__ == "__main__":

@@ -1,3 +1,4 @@
+import importlib
 import sys
 import pytest
 from unittest.mock import call, patch, MagicMock
@@ -6,7 +7,7 @@ sys.modules['sonic_platform.platform'] = MagicMock()
 import fwutil.lib as fwutil_lib
 
 class TestSquashFs(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('fwutil.lib.check_output_pipe')
@@ -74,12 +75,12 @@ class TestSquashFs(object):
             call(sqfs.fs_mountpoint)
         ]
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEARDOWN')
 
 
 class TestComponentUpdateProvider(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch("glob.glob", MagicMock(side_effect=[[], ['abc'], [], ['abc']]))
@@ -92,5 +93,238 @@ class TestComponentUpdateProvider(object):
         assert CUProvider.is_capable_auto_update('none') == True
         assert CUProvider.is_capable_auto_update('def') == True
 
-    def teardown(self):
+    @patch('fwutil.lib.Platform')
+    @patch('fwutil.lib.PlatformComponentsParser')
+    @patch('fwutil.lib.ComponentUpdateProvider._ComponentUpdateProvider__validate_platform_schema')
+    @patch('os.path.isdir', return_value=True)
+    def test_is_smart_switch_method(self, mock_isdir, mock_validate,
+                                    mock_parser_class, mock_platform_class):
+        """Test that the is_smart_switch method correctly returns True
+        when the chassis.is_smartswitch() method returns True."""
+        # Setup mock chassis
+        mock_chassis = MagicMock()
+        mock_chassis.is_smartswitch.return_value = True
+
+        # Setup mock platform
+        mock_platform = MagicMock()
+        mock_platform.get_chassis.return_value = mock_chassis
+        mock_platform_class.return_value = mock_platform
+
+        # Create ComponentUpdateProvider instance
+        cup = fwutil_lib.ComponentUpdateProvider()
+
+        # Test is_smart_switch method
+        assert cup.is_smart_switch()
+        mock_chassis.is_smartswitch.assert_called_once()
+
+    @patch('fwutil.lib.Platform')
+    @patch('fwutil.lib.PlatformComponentsParser')
+    @patch('fwutil.lib.ComponentUpdateProvider._ComponentUpdateProvider__validate_platform_schema')
+    @patch('os.mkdir')
+    def test_smartswitch_modular_chassis_parsing(self, mock_mkdir, mock_validate,
+                                                 mock_parser_class, mock_platform_class):
+        """Test that SmartSwitch devices with modules are passed as non-modular (False)
+        to the PlatformComponentsParser constructor."""
+        # Setup mock chassis that is SmartSwitch and has modules
+        mock_chassis = MagicMock()
+        mock_chassis.is_smartswitch.return_value = True
+        mock_chassis.get_all_modules.return_value = [MagicMock(), MagicMock()]  # 2 modules
+
+        # Setup mock platform
+        mock_platform = MagicMock()
+        mock_platform.get_chassis.return_value = mock_chassis
+        mock_platform_class.return_value = mock_platform
+
+        # Setup mock parser
+        mock_parser = MagicMock()
+        mock_parser_class.return_value = mock_parser
+
+        # Create ComponentUpdateProvider instance
+        fwutil_lib.ComponentUpdateProvider()
+
+        # Verify that PlatformComponentsParser was called with is_modular_chassis=False
+        # because SmartSwitch should be treated as non-modular for parsing purposes
+        mock_parser_class.assert_called_once_with(False)
+
+    @patch('fwutil.lib.Platform')
+    @patch('fwutil.lib.PlatformComponentsParser')
+    @patch('fwutil.lib.ComponentUpdateProvider._ComponentUpdateProvider__validate_platform_schema')
+    @patch('os.mkdir')
+    def test_regular_modular_chassis_parsing(self, mock_mkdir, mock_validate, mock_parser_class, mock_platform_class):
+        """Test that regular modular chassis is treated as modular for parsing"""
+        # Setup mock chassis that is not SmartSwitch but has modules
+        mock_chassis = MagicMock()
+        mock_chassis.is_smartswitch.return_value = False
+        mock_chassis.get_all_modules.return_value = [MagicMock(), MagicMock()]  # 2 modules
+
+        # Setup mock platform
+        mock_platform = MagicMock()
+        mock_platform.get_chassis.return_value = mock_chassis
+        mock_platform_class.return_value = mock_platform
+
+        # Setup mock parser
+        mock_parser = MagicMock()
+        mock_parser_class.return_value = mock_parser
+
+        # Create ComponentUpdateProvider instance
+        fwutil_lib.ComponentUpdateProvider()
+
+        # Verify that PlatformComponentsParser was called with is_modular_chassis=True
+        # because regular modular chassis should be treated as modular
+        mock_parser_class.assert_called_once_with(True)
+
+    @patch('fwutil.lib.Platform')
+    @patch('fwutil.lib.PlatformComponentsParser')
+    @patch('fwutil.lib.ComponentUpdateProvider._ComponentUpdateProvider__validate_platform_schema')
+    @patch('os.mkdir')
+    def test_smartswitch_module_validation_skip(self, mock_mkdir, mock_validate,
+                                                mock_parser_class, mock_platform_class):
+        """Test that module validation is skipped for SmartSwitch platforms"""
+        # Setup mock chassis that is SmartSwitch
+        mock_chassis = MagicMock()
+        mock_chassis.is_smartswitch.return_value = True
+        mock_chassis.get_all_modules.return_value = [MagicMock()]  # Has modules
+
+        # Setup mock platform
+        mock_platform = MagicMock()
+        mock_platform.get_chassis.return_value = mock_chassis
+        mock_platform_class.return_value = mock_platform
+
+        # Setup mock parser
+        mock_parser = MagicMock()
+        mock_parser_class.return_value = mock_parser
+
+        # Create ComponentUpdateProvider instance
+        cup = fwutil_lib.ComponentUpdateProvider()
+
+        # Test that module validation is skipped for SmartSwitch
+        # This should not raise an exception even if there are differences
+        pdp_map = {'module1': {'comp1': MagicMock()}}
+        pcp_map = {'module2': {'comp2': MagicMock()}}  # Different modules
+
+        # Should not raise exception for SmartSwitch module validation
+        cup._ComponentUpdateProvider__validate_component_map(
+            cup.SECTION_MODULE, pdp_map, pcp_map
+        )
+
+    @patch('fwutil.lib.Platform')
+    @patch('fwutil.lib.PlatformComponentsParser')
+    @patch('fwutil.lib.ComponentUpdateProvider._ComponentUpdateProvider__validate_platform_schema')
+    @patch('os.mkdir')
+    def test_regular_chassis_module_validation_error(self, mock_mkdir, mock_validate,
+                                                     mock_parser_class, mock_platform_class):
+        """Test that module validation raises error for regular modular chassis"""
+        # Setup mock chassis that is not SmartSwitch but has modules
+        mock_chassis = MagicMock()
+        mock_chassis.is_smartswitch.return_value = False
+        mock_chassis.get_all_modules.return_value = [MagicMock()]  # Has modules
+
+        # Setup mock platform
+        mock_platform = MagicMock()
+        mock_platform.get_chassis.return_value = mock_chassis
+        mock_platform_class.return_value = mock_platform
+
+        # Setup mock parser
+        mock_parser = MagicMock()
+        mock_parser_class.return_value = mock_parser
+
+        # Create ComponentUpdateProvider instance
+        cup = fwutil_lib.ComponentUpdateProvider()
+
+        # Test that module validation raises error for regular modular chassis
+        pdp_map = {'module1': {'comp1': MagicMock()}}
+        pcp_map = {'module2': {'comp2': MagicMock()}}  # Different modules
+
+        # Should raise exception for regular modular chassis
+        with pytest.raises(RuntimeError) as excinfo:
+            cup._ComponentUpdateProvider__validate_component_map(
+                cup.SECTION_MODULE, pdp_map, pcp_map
+            )
+        assert "Module names mismatch" in str(excinfo.value)
+
+    def teardown_method(self):
         print('TEARDOWN')
+
+
+class TestFwutilMain(object):
+    def test_main_import_does_not_init_platform_provider(self):
+        import fwutil.lib as fwutil_lib
+        sys.modules.pop('fwutil.main', None)
+        with patch.object(fwutil_lib, "PlatformDataProvider") as pdp_cls:
+            import fwutil.main as fw_main
+            importlib.reload(fw_main)
+            pdp_cls.assert_not_called()
+
+    def test_get_pdp_is_singleton(self):
+        import fwutil.main as fw_main
+        with patch.object(fw_main, "PlatformDataProvider") as pdp_cls:
+            pdp_instance = MagicMock()
+            pdp_cls.return_value = pdp_instance
+            fw_main._pdp = None
+
+            first = fw_main.get_pdp()
+            second = fw_main.get_pdp()
+
+            assert first is pdp_instance
+            assert second is pdp_instance
+            pdp_cls.assert_called_once()
+
+    def test_chassis_handler_populates_context(self):
+        import fwutil.main as fw_main
+        ctx = MagicMock()
+        ctx.obj = {fw_main.COMPONENT_PATH_CTX_KEY: []}
+        pdp = MagicMock()
+        pdp.chassis.get_name.return_value = "ChassisA"
+
+        with patch.object(fw_main, "get_pdp", return_value=pdp) as mock_get_pdp:
+            fw_main.chassis_handler(ctx)
+
+        mock_get_pdp.assert_called_once()
+        assert ctx.obj[fw_main.CHASSIS_NAME_CTX_KEY] == "ChassisA"
+        assert ctx.obj[fw_main.COMPONENT_PATH_CTX_KEY] == ["ChassisA"]
+
+    def test_module_handler_populates_context(self):
+        import fwutil.main as fw_main
+        ctx = MagicMock()
+        ctx.obj = {fw_main.COMPONENT_PATH_CTX_KEY: []}
+        pdp = MagicMock()
+        pdp.chassis.get_name.return_value = "ChassisA"
+
+        with patch.object(fw_main, "get_pdp", return_value=pdp) as mock_get_pdp:
+            fw_main.module_handler(ctx, "Module1")
+
+        mock_get_pdp.assert_called_once()
+        assert ctx.obj[fw_main.MODULE_NAME_CTX_KEY] == "Module1"
+        assert ctx.obj[fw_main.COMPONENT_PATH_CTX_KEY] == ["ChassisA", "Module1"]
+
+    def test_validate_module_success(self):
+        import fwutil.main as fw_main
+        ctx = MagicMock()
+        param = MagicMock()
+        param.metavar = "<module_name>"
+        pdp = MagicMock()
+        pdp.is_modular_chassis.return_value = True
+        pdp.module_component_map = {"Module1": {}}
+
+        with patch.object(fw_main, "get_pdp", return_value=pdp) as mock_get_pdp:
+            result = fw_main.validate_module(ctx, param, "Module1")
+
+        mock_get_pdp.assert_called_once()
+        assert result == "Module1"
+
+    def test_validate_component_with_chassis(self):
+        import fwutil.main as fw_main
+        ctx = MagicMock()
+        ctx.obj = {fw_main.CHASSIS_NAME_CTX_KEY: "ChassisA"}
+        param = MagicMock()
+        param.metavar = "<component_name>"
+        component = MagicMock()
+        pdp = MagicMock()
+        pdp.chassis_component_map = {"ChassisA": {"Comp1": component}}
+
+        with patch.object(fw_main, "get_pdp", return_value=pdp) as mock_get_pdp:
+            result = fw_main.validate_component(ctx, param, "Comp1")
+
+        mock_get_pdp.assert_called_once()
+        assert result == "Comp1"
+        assert ctx.obj[fw_main.COMPONENT_CTX_KEY] is component

@@ -32,9 +32,9 @@ ERROR_PATTERN_PROHIBITED_IP = "is a loopback/multicast/link-local IP address"
 ERROR_PATTERN_IP_FAMILY_MISMATCH = "IP address family mismatch"
 
 ERROR_PATTERN_INVALID_PORT = "is not a valid integer"
-ERROR_PATTERN_INVALID_PORT_RANGE = "is not in the valid range of 0 to 65535"
+ERROR_PATTERN_INVALID_PORT_RANGE = "is not in the range 0<=x<=65535"
 
-ERROR_PATTERN_INVALID_VRF = "invalid choice"
+ERROR_PATTERN_INVALID_VRF = "is not one of"
 ERROR_PATTERN_NONEXISTENT_VRF = "VRF doesn't exist in Linux"
 
 SUCCESS = 0

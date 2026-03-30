@@ -1,0 +1,184 @@
+#!/usr/bin/env python3
+"""
+SONiC error report management CLI tool.
+"""
+import sys
+import json
+import argparse
+import os
+from utilities_common.error_reporter import SonicErrorReportManager, get_logger
+
+
+def main():
+    # Initialize SONiC logger
+    get_logger()  # Ensure logger is initialized
+    
+    parser = argparse.ArgumentParser(
+        description="SONiC error report management tool",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+        epilog="""
+Examples:
+  sonic-error-report --scenario <scenario-name> -e uuid-123 init <operation-type>
+  sonic-error-report --scenario <scenario-name> -e uuid-456 init <operation-type>
+  sonic-error-report --scenario <scenario-name> -e uuid-123 fail 1 --reason "Operation failed"
+  sonic-error-report --scenario <scenario-name> -e uuid-789 success --duration 60
+
+File naming:
+  Creates: <scenario>.<eventGuid>.json
+  Examples: <scenario-name>.uuid-123.json, <scenario-name>.uuid-456.json
+        """
+    )
+
+    parser.add_argument(
+        '--report-dir',
+        default="/host/sonic-upgrade-reports",
+        help="Directory to store report files (default: /host/sonic-upgrade-reports)"
+    )
+    
+    parser.add_argument(
+        '--scenario',
+        required=True,
+        help="Scenario name for file naming (creates <scenario>.<eventGuid>.json format)"
+    )
+    
+    parser.add_argument(
+        '-e', '--event-guid',
+        required=True,
+        help="Event GUID for report naming (required)"
+    )
+
+    subparsers = parser.add_subparsers(dest='command', help='Available commands')
+
+    # Init command
+    init_parser = subparsers.add_parser('init', help='Initialize staged report')
+    init_parser.add_argument('operation_type', help='Type of operation (fast-reboot, upgrade, etc.)')
+    init_parser.add_argument('guid', nargs='?', help='Optional GUID (auto-generated if not provided)')
+
+    # Add kwargs support for init command
+    init_parser.add_argument('--package-version', help='SONiC upgrade package version')
+    init_parser.add_argument('--reputation-impact', type=bool, help='Reputation impact (true/false)')
+    init_parser.add_argument('--retriable', type=bool, help='Is retriable (true/false)')
+    init_parser.add_argument('--isolate-on-failure', type=bool, help='Isolate on failure (true/false)')
+    init_parser.add_argument('--triage-status', type=bool, help='Auto triage status (true/false)')
+    init_parser.add_argument('--triage-queue', help='Triage queue name')
+    init_parser.add_argument('--triage-action', help='Triage action/workflow name')
+    init_parser.add_argument('--duration', help='Operation duration in seconds')
+
+    # Fail command
+    fail_parser = subparsers.add_parser('fail', help='Mark report as failed')
+    fail_parser.add_argument('exit_code', type=int, help='Exit code from failed operation')
+    fail_parser.add_argument('-r', '--reason', help='Optional fault reason description')
+
+    # Add identical kwargs support for fail command
+    fail_parser.add_argument('--package-version', help='SONiC upgrade package version')
+    fail_parser.add_argument('--reputation-impact', type=bool, help='Reputation impact (true/false)')
+    fail_parser.add_argument('--retriable', type=bool, help='Is retriable (true/false)')
+    fail_parser.add_argument('--isolate-on-failure', type=bool, help='Isolate on failure (true/false)')
+    fail_parser.add_argument('--triage-status', type=bool, help='Auto triage status (true/false)')
+    fail_parser.add_argument('--triage-queue', help='Triage queue name')
+    fail_parser.add_argument('--triage-action', help='Triage action/workflow name')
+    fail_parser.add_argument('--duration', help='Operation duration in seconds')
+
+    # Success command
+    success_parser = subparsers.add_parser('success', help='Mark report as successful')
+    
+    # Add kwargs support for success command (matching init/fail commands)
+    success_parser.add_argument('--package-version', help='SONiC upgrade package version')
+    success_parser.add_argument('--duration', help='Operation duration in seconds')
+    success_parser.add_argument('--triage-status', type=bool, help='Auto triage status (true/false)')
+    success_parser.add_argument('--triage-queue', help='Triage queue name')
+    success_parser.add_argument('--triage-action', help='Triage action/workflow name')
+
+    # Don't catch parse_args() - let argparse handle argument errors gracefully
+    args = parser.parse_args()
+
+    if not args.command:
+        parser.print_help()
+        sys.exit(1)
+
+    # Handle system/environmental errors during manager setup
+    try:
+        manager = SonicErrorReportManager(args.report_dir, args.scenario)
+    except (OSError, IOError) as e:
+        get_logger().log_error("Cannot access report directory '{}': {}".format(args.report_dir, e))
+        # Try to generate a minimal framework error report if possible
+        try:
+            if args.event_guid and os.path.exists(os.path.dirname(args.report_dir)):
+                # Create minimal error report directly
+                report_path = os.path.join(args.report_dir, "{}.{}.json".format(args.scenario, args.event_guid))
+                minimal_report = {
+                    "sonic_upgrade_summary": {
+                        "script_name": args.scenario,
+                        "fault_code": "254",
+                        "fault_reason": "Framework initialization failed: Cannot access report directory: {}".format(str(e)),
+                        "guid": args.event_guid
+                    },
+                    "sonic_upgrade_actions": {"reputation_impact": False, "retriable": True, "isolate_on_failure": False, "auto_triage": {"status": False, "triage_queue": "", "triage_action": ""}},
+                    "sonic_upgrade_report": {"duration": "0", "stages": [], "health_checks": [], "errors": [{"name": "FRAMEWORK_INIT_ERROR", "message": "Cannot access report directory"}]}
+                }
+                with open(report_path, 'w') as f:
+                    json.dump(minimal_report, f, indent=2)
+                sys.stderr.write("Generated minimal error report for GUID: {}\n".format(args.event_guid))
+        except Exception:
+            pass
+        sys.exit(2)
+    except Exception as e:
+        get_logger().log_error("Failed to initialize report manager: {}".format(e))
+        sys.exit(2)
+
+    # Helper function to extract kwargs from args
+    def extract_kwargs(args):
+        kwargs = {}
+        # Map CLI args to kwargs (replace dashes with underscores)
+        if hasattr(args, 'package_version') and args.package_version is not None:
+            kwargs['package_version'] = args.package_version
+        if hasattr(args, 'reputation_impact') and args.reputation_impact is not None:
+            kwargs['reputation_impact'] = args.reputation_impact
+        if hasattr(args, 'retriable') and args.retriable is not None:
+            kwargs['retriable'] = args.retriable
+        if hasattr(args, 'isolate_on_failure') and args.isolate_on_failure is not None:
+            kwargs['isolate_on_failure'] = args.isolate_on_failure
+        if hasattr(args, 'triage_status') and args.triage_status is not None:
+            kwargs['triage_status'] = args.triage_status
+        if hasattr(args, 'triage_queue') and args.triage_queue is not None:
+            kwargs['triage_queue'] = args.triage_queue
+        if hasattr(args, 'triage_action') and args.triage_action is not None:
+            kwargs['triage_action'] = args.triage_action
+        if hasattr(args, 'duration') and args.duration is not None:
+            kwargs['duration'] = args.duration
+        return kwargs
+
+    # Handle business logic errors during command execution
+    try:
+        if args.command == 'init':
+            kwargs = extract_kwargs(args)
+            manager.init_report(args.operation_type, args.event_guid, **kwargs)
+        elif args.command == 'fail':
+            kwargs = extract_kwargs(args)
+            manager.mark_failure(args.event_guid, args.exit_code, args.reason, **kwargs)
+        elif args.command == 'success':
+            kwargs = extract_kwargs(args)
+            manager.mark_success(args.event_guid, **kwargs)
+    except Exception as e:
+        get_logger().log_error("Operation failed: {}".format(e))
+        
+        # If we have enough context, try to generate a framework error report
+        try:
+            if args.event_guid and args.scenario:
+                # Create a generic framework error report to ensure JSON always exists
+                framework_manager = SonicErrorReportManager(args.report_dir, args.scenario)
+                framework_manager.mark_failure(
+                    args.event_guid, 
+                    255,  # Generic framework error code
+                    "Error reporting framework failure: {}".format(str(e))
+                )
+                sys.stderr.write("Generated framework error report for GUID: {}\n".format(args.event_guid))
+        except Exception:
+            # If we can't even create the error report, just pass
+            pass
+        
+        sys.exit(1)
+
+
+if __name__ == "__main__":
+    main()

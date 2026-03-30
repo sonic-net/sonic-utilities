@@ -1,4 +1,3 @@
-import imp
 import json
 import os
 import sys
@@ -2245,6 +2244,7 @@ class TestQueue(object):
     def setup_class(cls):
         os.environ["PATH"] += os.pathsep + scripts_path
         os.environ['UTILITIES_UNIT_TESTING'] = "2"
+        os.environ['UTILITIES_UNIT_TESTING_IS_SUP'] = "0"
         print("SETUP")
 
     def test_queue_counters(self):

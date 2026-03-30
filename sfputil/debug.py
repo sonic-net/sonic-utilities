@@ -65,6 +65,10 @@ def loopback(port_name, loopback_mode, enable):
     lane_mask = get_subport_lane_mask(int(subport), lane_count)
 
     try:
+        if not api.get_diag_page_support():
+            click.echo(f"{port_name}: The module does not support diagnostic pages required for loopback configuration")
+            click.echo(f"{port_name}: {enable} {loopback_mode} loopback failed")
+            sys.exit(EXIT_FAIL)
         status = api.set_loopback_mode(loopback_mode, lane_mask=lane_mask, enable=(enable == 'enable'))
     except AttributeError:
         click.echo(f"{port_name}: Set loopback mode is not applicable for this module")
@@ -92,6 +96,20 @@ def set_output(port_name, enable, direction):
         sys.exit(ERROR_NOT_IMPLEMENTED)
 
     subport = get_subport(port_name)
+
+    if hasattr(api, 'get_cmis_rev'):
+        cmis_rev = api.get_cmis_rev()
+        if cmis_rev is None:
+            click.echo(f"{port_name}: CMIS revision not available for subport {subport}")
+            sys.exit(EXIT_FAIL)
+
+        # OutputStatusRx and OutputStatusTx are supported from CMIS 5.0
+        if float(cmis_rev) < 5.0:
+            click.echo(
+                f"{port_name}: This functionality is not supported"
+                f" with CMIS version {cmis_rev}, requires CMIS 5.0 and above"
+            )
+            sys.exit(EXIT_FAIL)
 
     try:
         if direction == "tx":

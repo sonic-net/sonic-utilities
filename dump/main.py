@@ -7,11 +7,12 @@ from tabulate import tabulate
 from sonic_py_common import multi_asic
 from utilities_common.constants import DEFAULT_NAMESPACE
 from dump.match_infra import RedisSource, JsonSource, MatchEngine, CONN
-from swsscommon.swsscommon import ConfigDBConnector
+from swsscommon.swsscommon import ConfigDBConnector, SonicDBConfig
 from dump import plugins
 
+
 # Autocompletion Helper
-def get_available_modules(ctx, args, incomplete):
+def get_available_modules(ctx, param, incomplete):
     return [k for k in plugins.dump_modules.keys() if incomplete in k]
 
 
@@ -35,7 +36,7 @@ def dump(ctx):
 
 @dump.command()
 @click.pass_context
-@click.argument('module', required=True, type=str, autocompletion=get_available_modules)
+@click.argument('module', required=True, type=str, shell_complete=get_available_modules)
 @click.argument('identifier', required=True, type=str)
 @click.option('--show', '-s', is_flag=True, default=False, expose_value=False,
               callback=show_modules, help='Display Modules Available', is_eager=True)
@@ -60,6 +61,9 @@ def state(ctx, module, identifier, db, table, key_map, verbose, namespace):
     if multi_asic.is_multi_asic() and (namespace != DEFAULT_NAMESPACE and namespace not in multi_asic.get_namespace_list()):
         click.echo("Namespace option is not valid. Choose one of {}".format(multi_asic.get_namespace_list()))
         ctx.exit()
+
+    if multi_asic.is_multi_asic() and not SonicDBConfig.isGlobalInit():
+        SonicDBConfig.initializeGlobalConfig()
 
     if module not in plugins.dump_modules:
         click.echo("No Matching Plugin has been Implemented")

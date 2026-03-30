@@ -1,0 +1,62 @@
+#!/usr/bin/env python3
+
+"""
+    Script to show leakage status.
+"""
+
+import os
+import sys
+from tabulate import tabulate
+from natsort import natsorted
+
+# mock the redis for unit test purposes #
+try:
+    if os.environ["UTILITIES_UNIT_TESTING"] == "1":
+        modules_path = os.path.join(os.path.dirname(__file__), "..")
+        test_path = os.path.join(modules_path, "tests")
+        sys.path.insert(0, modules_path)
+        sys.path.insert(0, test_path)
+        import mock_tables.dbconnector
+except KeyError:
+    pass
+
+from swsscommon.swsscommon import SonicV2Connector
+
+header = ['Name', 'Leaking']
+
+LIQUID_COOLING_TABLE_NAME = 'LIQUID_COOLING_INFO'
+STATUS_FIELD_NAME = 'leak_status'
+
+class LeakageShow(object):
+    def __init__(self):
+        self.db = SonicV2Connector(host="127.0.0.1")
+        self.db.connect(self.db.STATE_DB)
+
+    def show(self):
+        keys = self.db.keys(self.db.STATE_DB, LIQUID_COOLING_TABLE_NAME + '*')
+        if not keys:
+            print('Leakage sensor Not detected\n')
+            return
+
+        table = []
+        for key in natsorted(keys):
+            key_list = key.split('|')
+            if len(key_list) != 2: # error data in DB, log it and ignore
+                print('Warn: Invalid key in table LIQUID_COOLING_INFO: {}'.format(key))
+                continue
+
+            name = key_list[1]
+            data_dict = self.db.get_all(self.db.STATE_DB, key)
+            status = data_dict[STATUS_FIELD_NAME]
+            
+            table.append((name, status))
+
+        if table:
+            print(tabulate(table, header, tablefmt='simple', stralign='right'))
+        else:
+            print('No leakage status data available\n')
+
+
+if __name__ == "__main__":
+    leakageShow = LeakageShow()
+    leakageShow.show()

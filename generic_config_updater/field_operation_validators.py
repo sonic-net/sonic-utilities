@@ -6,7 +6,12 @@ import subprocess
 from sonic_py_common import device_info
 from .gu_common import GenericConfigUpdaterError
 from swsscommon import swsscommon
-from utilities_common.constants import DEFAULT_SUPPORTED_FECS_LIST
+
+# Default FEC modes when STATE_DB does not advertise supported_fecs for a port.
+# Kept local to avoid pulling utilities_common into the GCU wheel.
+# NOTE: A duplicate of this list exists in utilities_common/constants.py.
+# If you update this list, update that copy too.
+DEFAULT_SUPPORTED_FECS_LIST = ['rs', 'fc', 'none', 'auto']
 
 STATE_DB_NAME = 'STATE_DB'
 REDIS_TIMEOUT_MSECS = 0
@@ -17,13 +22,13 @@ GET_HWSKU_CMD = "sonic-cfggen -d -v DEVICE_METADATA.localhost.hwsku"
 
 def get_asic_name():
     asic = "unknown"
-    
+
     if os.path.exists(GCU_TABLE_MOD_CONF_FILE):
         with open(GCU_TABLE_MOD_CONF_FILE, "r") as s:
             gcu_field_operation_conf = json.load(s)
     else:
         raise GenericConfigUpdaterError("GCU table modification validators config file not found")
-    
+
     asic_mapping = gcu_field_operation_conf["helper_data"]["rdma_config_update_validator"]
     asic_type = device_info.get_sonic_version_info()['asic_type'] 
 
@@ -170,7 +175,31 @@ def rdma_config_update_validator(scope, patch_element):
     return rdma_config_update_validator_common(scope, patch_element, exact_field_match=True, remove_port=True)
 
 
-def wred_profile_config_update_validator(scope, patch_element):
+def buffer_profile_config_update_validator(scope, patch_element):
+    """
+    Enhanced buffer profile validator that handles both field-level and object-level operations.
+    - Field-level operations (e.g., /BUFFER_PROFILE/profile/dynamic_th) follow existing rules
+    - Object-level operations (e.g., /BUFFER_PROFILE/profile) allow remove operations
+    """
+    path = patch_element["path"]
+    path_parts = jsonpointer.JsonPointer(path).parts
+
+    # Determine if this is an object-level operation (entire profile) or field-level operation
+    # Object-level: /BUFFER_PROFILE/profile_name (2 parts)
+    # Field-level: /BUFFER_PROFILE/profile_name/field_name (3+ parts)
+    is_object_level = len(path_parts) == 2  # table + profile_name only
+
+    if is_object_level:
+        # For object-level operations, we're more permissive
+        # Allow add/remove/replace operations for entire profile objects
+        allowed_object_operations = ['add', 'remove', 'replace']
+
+        if patch_element['op'] in allowed_object_operations:
+            return True  # Allow object-level operations
+        else:
+            return False  # Disallow unsupported operations
+
+    # For field-level operations, use the existing validation logic
     return rdma_config_update_validator_common(scope, patch_element)
 
 
@@ -196,6 +225,9 @@ def port_config_update_validator(scope, patch_element):
                 return False
             return True
         if field == "speed":
+            # For chassis, skip speed validation as desired speed is not in supported_speeds of StateDB.
+            if device_info.is_chassis():
+                return True
             supported_speeds_str = read_statedb_entry(scope, "PORT_TABLE", port, "supported_speeds") or ''
             try:
                 supported_speeds = [int(s) for s in supported_speeds_str.split(',') if s]

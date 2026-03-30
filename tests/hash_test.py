@@ -112,17 +112,17 @@ class TestHash:
         "args,pattern", [
             pytest.param(
                 "DST_MAC1 SRC_MAC ETHERTYPE",
-                "invalid choice: DST_MAC1.",
+                "'DST_MAC1' is not one of",
                 id="INVALID,SRC_MAC,ETHERTYPE"
             ),
             pytest.param(
                 "DST_MAC SRC_MAC1 ETHERTYPE",
-                "invalid choice: SRC_MAC1.",
+                "'SRC_MAC1' is not one of",
                 id="DST_MAC,INVALID,ETHERTYPE"
             ),
             pytest.param(
                 "DST_MAC SRC_MAC ETHERTYPE1",
-                "invalid choice: ETHERTYPE1.",
+                "'ETHERTYPE1' is not one of",
                 id="DST_MAC,SRC_MAC,INVALID"
             ),
             pytest.param(
@@ -190,7 +190,7 @@ class TestHash:
         "arg,pattern", [
             pytest.param(
                 "CRC1",
-                "invalid choice: CRC1.",
+                "'CRC1' is not one of",
                 id="INVALID"
             )
         ]
