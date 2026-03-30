@@ -48,14 +48,13 @@ def parse_args():
     parser.add_argument('-t', '--target', type=str, default="127.0.0.1:8080",
                         help='GNMI server address in the format of host:port')
     parser.add_argument('-d', '--debug', action='store_true', required=False, default=False, help='turn on debug log')
-    parser.add_argument('-i', "--dpu_index", type=int_range_type(0, 7), default=0, required=False,
-                        help="DPU index [0-7]")
-    parser.add_argument('-n', "--num_dpus", type=int_range_type(1, 8), default=1, required=False, help="Number of DPUs")
-    parser.add_argument('-s', "--sleep_secs", type=int, default=0, required=False,
-                        help="Delay before each batch operation in seconds")
+    parser.add_argument('-i', "--dpu_index", type=int_range_type(0, 7),
+                        default=0, required=False, help="DPU index [0-7]")
+    parser.add_argument('-n', "--num_dpus", type=int_range_type(1, 8), default=1,
+                        required=False, help="Number of DPUs")
+    parser.add_argument('-s', "--sleep_secs", type=int, default=0,
+                        required=False, help="Delay before each batch operation in seconds")
     parser.add_argument('-b', "--batch_val", type=int, default=10, required=False, help="Batch operation size")
-    parser.add_argument('-u', '--username', type=str, default="admin", help='GNMI server user name')
-    parser.add_argument('-p', '--password', type=str, default="password", help='GNMI server password')
 
     # Create the subparser
     subparsers = parser.add_subparsers(title='subcommands', dest='topsubcmd', required=True)
@@ -87,8 +86,8 @@ def parse_args():
 
 def exec_action(args):
     env = GNMIEnvironment()
-    env.username = args.username
-    env.password = args.password
+    env.username = "cisco"
+    env.password = "cisco123"
     target = args.target.split(":", 1)
     env.gnmi_ip = target[0]
     if len(target) == 1:

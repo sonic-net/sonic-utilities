@@ -5,7 +5,6 @@ import time
 import subprocess
 import os
 
-
 TIME_BETWEEN_CHUNKS = 1
 
 
@@ -13,15 +12,15 @@ class GNMIEnvironment:
     gnmi_ip = "127.0.0.1"
     gnmi_port = 8080
     work_dir = "/"
-    username = "admin"
-    password = "password"
+    username = "cisco"
+    password = "cisco123"
     dpu_index = 0
     num_dpus = 1
 
 
 def exec_cmd(cmd):
     logging.debug(cmd)
-    result = subprocess.run(cmd, shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
     # Check the result
     if result.returncode == 0:
@@ -58,8 +57,7 @@ def gnmi_set(env, delete_list, update_list, replace_list):
     Returns:
     """
     cmd = '/usr/sbin/gnmi_set '
-    cmd += '-insecure -target_addr %s:%u ' % (env.gnmi_ip, env.gnmi_port)
-    cmd += '-username %s -password %s -alsologtostderr ' % (env.username, env.password)
+    cmd += '-notls -target_addr %s:%u -alsologtostderr ' % (env.gnmi_ip, env.gnmi_port)
 
     for delete in delete_list:
         cmd += '--delete ' + delete
@@ -97,8 +95,7 @@ def gnmi_get(env, path_list):
         msg_list: list for get result
     """
     base_cmd = '/usr/sbin/gnmi_get '
-    base_cmd += '-insecure -target_addr %s:%u ' % (env.gnmi_ip, env.gnmi_port)
-    base_cmd += '-username %s -password %s -alsologtostderr -encoding PROTO ' % (env.username, env.password)
+    base_cmd += '-notls -target_addr %s:%u -alsologtostderr -encoding PROTO ' % (env.gnmi_ip, env.gnmi_port)
 
     for index, path in enumerate(path_list):
         cmd = base_cmd
@@ -144,7 +141,7 @@ def process_template_chunk(res, env, dest_path, batch_val, sleep_secs):
     update_list = []
     replace_list = []
     update_cnt = 0
-    base_path = "/sonic-db:APPL_DB"
+    base_path = "/sonic-db:DPU_APPL_DB"
     base_path = "%s/dpu%d" % (base_path, env.dpu_index)
     batch_cnt = 0
 
@@ -236,4 +233,7 @@ def apply_gnmi_file(env, dest_path, batch_val=10, sleep_secs=0):
     else:
         for i in res:
             process_template_chunk(i, env, dest_path, batch_val, sleep_secs)
-            time.sleep(TIME_BETWEEN_CHUNKS)
+            if sleep_secs > 0:
+                time.sleep(sleep_secs)
+            else:
+                time.sleep(TIME_BETWEEN_CHUNKS)
