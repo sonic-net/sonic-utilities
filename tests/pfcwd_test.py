@@ -4,10 +4,45 @@ import sys
 from unittest.mock import patch, MagicMock
 
 from click.testing import CliRunner
+from swsscommon import swsscommon
 
 from utilities_common.db import Db
 
 from .pfcwd_input import pfcwd_test_vectors as test_vectors
+
+
+# Override only the PFC_WD_STATE_TABLE global entry for hardware-mode tests
+_orig_sonic_get_all = swsscommon.SonicV2Connector.get_all
+
+
+def _hw_get_all(self, db_id, key):
+    """
+    Test-only override for STATE_DB hardware mode entries.
+
+    Returns hardware mode metadata and per-port hardware state matching
+    the multi-asic test environment where ports are configured with
+    200ms detection/restoration times.
+    """
+    if db_id == 'STATE_DB' and key == 'PFC_WD_STATE_TABLE|PFC_WD':
+        return {
+            'RECOVERY_MECHANISM': 'HARDWARE',
+            'DETECTION_TIME_MIN': '100',
+            'DETECTION_TIME_MAX': '5000',
+            'RESTORATION_TIME_MIN': '100',
+            'RESTORATION_TIME_MAX': '60000',
+            'DLR_PACKET_ACTION': 'drop',
+        }
+
+    # Return per-port hardware state for PFC_WD_HW_STATE entries
+    if db_id == 'STATE_DB' and key.startswith('PFC_WD_HW_STATE|'):
+        # Simulate orchagent having programmed the hardware for all configured ports
+        return {
+            'status': 'configured',
+            'hw_detection_time': '200',
+            'hw_restoration_time': '200',
+        }
+
+    return _orig_sonic_get_all(self, db_id, key)
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
@@ -954,6 +989,112 @@ class TestMultiAsicPfcwdShow(object):
         assert result.exit_code == 0
         # same as original config
         assert result.output == test_vectors.show_pfc_config_all
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    def test_pfcwd_show_status_hardware_mode(self):
+        """Test show pfcwd status command in hardware mode"""
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["status"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == test_vectors.pfcwd_show_status_hardware_mode
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    def test_pfcwd_show_status_hardware_mode_single_port(self):
+        """Test show pfcwd status command with single port"""
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["status"],
+            ["Ethernet0"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == test_vectors.pfcwd_show_status_hardware_mode_single_port
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    def test_pfcwd_show_status_hardware_mode_multi_port(self):
+        """Test show pfcwd status command with multiple ports"""
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["status"],
+            ["Ethernet0", "Ethernet4"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        assert result.output == test_vectors.pfcwd_show_status_hardware_mode_multi_port
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    def test_pfcwd_show_status_hardware_mode_json(self):
+        """Test show pfcwd status --json in hardware mode"""
+        import pfcwd.main as pfcwd
+        import json
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(
+            pfcwd.cli.commands["show"].commands["status"],
+            ["--json"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+        expected = json.loads(test_vectors.pfcwd_show_status_hardware_mode_json)
+        actual = json.loads(result.output)
+        assert actual == expected
+
+    @patch.object(swsscommon.SonicV2Connector, 'get_all', new=_hw_get_all)
+    @patch('pfcwd.main.os')
+    def test_pfcwd_start_action_override_multiple_ports_blocked(self, mock_os):
+        """Test that action override is blocked when multiple ports are configured"""
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        mock_os.geteuid.return_value = 0
+
+        # First, configure Ethernet0 with 'drop' action
+        result = runner.invoke(
+            pfcwd.cli.commands["start"],
+            ["--action", "drop", "--restoration-time", "600", "Ethernet0", "600"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+
+        # Configure Ethernet4 with 'drop' action
+        result = runner.invoke(
+            pfcwd.cli.commands["start"],
+            ["--action", "drop", "--restoration-time", "600", "Ethernet4", "600"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0
+
+        # Now try to configure Ethernet-BP0 with 'forward' action - should fail
+        result = runner.invoke(
+            pfcwd.cli.commands["start"],
+            ["--action", "forward", "--restoration-time", "600", "Ethernet-BP0", "600"],
+            obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 1
+        assert "Error: Action mismatch" in result.output
+        assert "Current global action: drop" in result.output
+        assert "Requested action: forward" in result.output
 
     @classmethod
     def teardown_class(cls):
