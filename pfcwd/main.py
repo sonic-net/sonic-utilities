@@ -505,12 +505,12 @@ class PfcwdCli(object):
             if action:
                 current_global_action = self.get_hw_global_action()
                 if current_global_action and current_global_action != action:
-                    # Count configured ports (excluding GLOBAL entry)
+                    # Count configured ports (excluding GLOBAL entry and ports being configured now)
                     pfcwd_table = self.config_db.get_table(CONFIG_DB_PFC_WD_TABLE_NAME)
-                    configured_ports = [entry for entry in pfcwd_table if 'Ethernet' in entry]
+                    configured_ports = [entry for entry in pfcwd_table if 'Ethernet' in entry and entry not in ports]
 
-                    # Allow action change if only one port is configured
-                    if len(configured_ports) > 1:
+                    # Allow action change if no other ports are configured with different action
+                    if len(configured_ports) > 0:
                         click.echo(
                             "Error: Action mismatch. Hardware PFC watchdog requires all ports "
                             "to use the same action.\n"
