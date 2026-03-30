@@ -428,3 +428,99 @@ BIG_RED_SWITCH status is enable on asic1
   Ethernet-BP0      drop               200                 200    disable
 Ethernet-BP256      drop               200                 200    disable
 """
+
+# Test vectors for show pfcwd status command
+pfcwd_show_status_software_mode = """\
+This command is not applicable for software-based PFC watchdog recovery mode.
+"""
+
+pfcwd_show_status_hardware_mode = """\
+PFC Watchdog Mode: Hardware
+Supported hardware detection interval range: 100-5000 ms
+Supported hardware restoration interval range: 100-60000 ms
+
+          PORT      STATUS    HW DETECTION TIME (ms)    HW RESTORATION TIME (ms)
+--------------  ----------  ------------------------  --------------------------
+     Ethernet0  configured                       200                         200
+     Ethernet4  configured                       200                         200
+  Ethernet-BP0  configured                       200                         200
+  Ethernet-BP4  configured                       200                         200
+Ethernet-BP256  configured                       200                         200
+Ethernet-BP260  configured                       200                         200
+"""
+
+pfcwd_show_status_hardware_mode_single_port = """\
+PFC Watchdog Mode: Hardware
+Supported hardware detection interval range: 100-5000 ms
+Supported hardware restoration interval range: 100-60000 ms
+
+     PORT      STATUS    HW DETECTION TIME (ms)    HW RESTORATION TIME (ms)
+---------  ----------  ------------------------  --------------------------
+Ethernet0  configured                       200                         200
+"""
+
+pfcwd_show_status_hardware_mode_multi_port = """\
+PFC Watchdog Mode: Hardware
+Supported hardware detection interval range: 100-5000 ms
+Supported hardware restoration interval range: 100-60000 ms
+
+     PORT      STATUS    HW DETECTION TIME (ms)    HW RESTORATION TIME (ms)
+---------  ----------  ------------------------  --------------------------
+Ethernet0  configured                       200                         200
+Ethernet4  configured                       200                         200
+"""
+
+pfcwd_show_status_software_mode_json = """\
+{
+    "error": "This command is not applicable for software-based PFC watchdog recovery mode.",
+    "mode": "software"
+}
+"""
+
+pfcwd_show_status_hardware_mode_json = """\
+{
+    "detection_range": "100-5000",
+    "mode": "hardware",
+    "ports_cfg": {
+        "Ethernet-BP0": {
+            "HW DETECTION TIME (ms)": "200",
+            "HW RESTORATION TIME (ms)": "200",
+            "STATUS": "configured"
+        },
+        "Ethernet-BP256": {
+            "HW DETECTION TIME (ms)": "200",
+            "HW RESTORATION TIME (ms)": "200",
+            "STATUS": "configured"
+        },
+        "Ethernet-BP260": {
+            "HW DETECTION TIME (ms)": "200",
+            "HW RESTORATION TIME (ms)": "200",
+            "STATUS": "configured"
+        },
+        "Ethernet-BP4": {
+            "HW DETECTION TIME (ms)": "200",
+            "HW RESTORATION TIME (ms)": "200",
+            "STATUS": "configured"
+        },
+        "Ethernet0": {
+            "HW DETECTION TIME (ms)": "200",
+            "HW RESTORATION TIME (ms)": "200",
+            "STATUS": "configured"
+        },
+        "Ethernet4": {
+            "HW DETECTION TIME (ms)": "200",
+            "HW RESTORATION TIME (ms)": "200",
+            "STATUS": "configured"
+        }
+    },
+    "restoration_range": "100-60000"
+}
+"""
+
+# Test vectors for global action validation
+pfcwd_action_mismatch_multiple_ports = """\
+Error: Action mismatch. Hardware PFC watchdog requires all ports to use the same action.
+Current global action: drop
+Requested action: forward
+Please use action 'drop' or remove all existing ports first.
+"""
