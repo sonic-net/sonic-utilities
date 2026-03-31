@@ -975,12 +975,25 @@ def _get_disabled_services_list(config_db):
     return disabled_services_list
 
 
+def _monit_service_exists(service):
+    """Return True if monit knows about the given service."""
+    try:
+        subprocess.check_call(
+            ['sudo', 'monit', 'status', service],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
 def _stop_services():
     try:
         subprocess.check_call(['sudo', 'monit', 'status'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         click.echo("Disabling container and routeCheck monitoring ...")
         clicommon.run_command(['sudo', 'monit', 'unmonitor', 'container_checker'])
-        clicommon.run_command(['sudo', 'monit', 'unmonitor', 'routeCheck'])
+        if _monit_service_exists('routeCheck'):
+            clicommon.run_command(['sudo', 'monit', 'unmonitor', 'routeCheck'])
     except subprocess.CalledProcessError as err:
         pass
 
@@ -1075,10 +1088,13 @@ def _restart_services():
     try:
         subprocess.check_call(['sudo', 'monit', 'status'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         click.echo("Enabling container and routeCheck monitoring ...")
-        clicommon.run_command(['sudo', 'monit', 'monitor', 'routeCheck'])
+        has_route_check = _monit_service_exists('routeCheck')
+        if has_route_check:
+            clicommon.run_command(['sudo', 'monit', 'monitor', 'routeCheck'])
         clicommon.run_command(['sudo', 'monit', 'monitor', 'container_checker'])
         log.log_notice("Waiting for monit monitor actions to complete ...")
-        _wait_for_monit_service_monitored('routeCheck')
+        if has_route_check:
+            _wait_for_monit_service_monitored('routeCheck')
         _wait_for_monit_service_monitored('container_checker')
     except subprocess.CalledProcessError as err:
         pass
