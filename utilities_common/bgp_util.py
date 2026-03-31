@@ -23,7 +23,7 @@ def get_namespace_for_bgp_neighbor(neighbor_ip):
                  ' Bgp neighbor {} not configured'.format(neighbor_ip))
 
 
-def is_bgp_neigh_present(neighbor_ip, namespace=multi_asic.DEFAULT_NAMESPACE):
+def is_bgp_neigh_present(neighbor_ip, namespace=multi_asic.DEFAULT_NAMESPACE, vrf_name=None):
     config_db = multi_asic.connect_config_db_for_ns(namespace)
 
     tables = [
@@ -48,6 +48,25 @@ def is_bgp_neigh_present(neighbor_ip, namespace=multi_asic.DEFAULT_NAMESPACE):
                 key_str = "|".join(key)
                 if pattern.match(key_str) and config_db.get_entry(table, key):
                     return True
+
+    # Check if the neighbor IP falls within any dynamic peer range (BGP_PEER_RANGE).
+    # Entry keys are either 'name' or 'vrf_name|name'; filter by vrf_name when provided.
+    peer_range_data = config_db.get_table('BGP_PEER_RANGE')
+    for entry in peer_range_data:
+        try:
+            entry_vrf = entry.split('|', 1)[0] if '|' in entry else None
+            if vrf_name != entry_vrf:
+                continue
+            ip_ranges = peer_range_data[entry].get('ip_range', [])
+            for subnet in ip_ranges:
+                if is_ipv4_address(neighbor_ip) and '.' in subnet:
+                    if ipaddress.IPv4Address(neighbor_ip) in ipaddress.IPv4Network(subnet):
+                        return True
+                elif is_ipv6_address(neighbor_ip) and ':' in subnet:
+                    if ipaddress.IPv6Address(neighbor_ip) in ipaddress.IPv6Network(subnet):
+                        return True
+        except (ValueError, KeyError):
+            continue
 
     return False
 
@@ -89,7 +108,10 @@ def is_ipv6_address(ip_address):
 
 def get_dynamic_neighbor_subnet(db):
     """
-    Returns dict of description and subnet info from bgp_peer_range table
+    Returns dict of description and subnet info from bgp_peer_range table.
+    Keys in BGP_PEER_RANGE can be either 'name' or 'vrf_name|name'.
+    The returned dict uses (vrf, subnet) tuples as keys, where vrf is None
+    for entries without a VRF prefix.
     :param db: config_db
     """
     dynamic_neighbor = {}
@@ -98,12 +120,14 @@ def get_dynamic_neighbor_subnet(db):
     neighbor_data = db.get_table('BGP_PEER_RANGE')
     try:
         for entry in neighbor_data:
-            new_key = neighbor_data[entry]['ip_range'][0]
-            new_value = neighbor_data[entry]['name']
-            if is_ipv4_address(neighbor_data[entry]['src_address']):
-                v4_subnet[new_key] = new_value
-            elif is_ipv6_address(neighbor_data[entry]['src_address']):
-                v6_subnet[new_key] = new_value
+            vrf = entry.split('|', 1)[0] if '|' in entry else None
+            peer_name = neighbor_data[entry]['name']
+            for ip_range in neighbor_data[entry].get('ip_range', []):
+                subnet = ipaddress.ip_network(ip_range, strict=False)
+                if subnet.version == 4:
+                    v4_subnet[(vrf, ip_range)] = peer_name
+                elif subnet.version == 6:
+                    v6_subnet[(vrf, ip_range)] = peer_name
         dynamic_neighbor[constants.IPV4] = v4_subnet
         dynamic_neighbor[constants.IPV6] = v6_subnet
         return dynamic_neighbor
@@ -141,7 +165,7 @@ def get_external_bgp_neighbors_dict(namespace=multi_asic.DEFAULT_NAMESPACE):
     return external_neighbors
 
 
-def get_bgp_neighbor_ip_to_name(ip, static_neighbors, dynamic_neighbors):
+def get_bgp_neighbor_ip_to_name(ip, static_neighbors, dynamic_neighbors, vrf_name=None):
     """
     return neighbor name for the ip provided
     :param ip: ip address str
@@ -162,13 +186,13 @@ def get_bgp_neighbor_ip_to_name(ip, static_neighbors, dynamic_neighbors):
     ):
         return static_neighbors[matching_key]
     elif is_ipv4_address(ip):
-        for subnet in dynamic_neighbors[constants.IPV4]:
-            if ipaddress.IPv4Address(ip) in ipaddress.IPv4Network(subnet):
-                return dynamic_neighbors[constants.IPV4][subnet]
+        for (vrf, subnet) in dynamic_neighbors[constants.IPV4]:
+            if ipaddress.IPv4Address(ip) in ipaddress.IPv4Network(subnet) and vrf == vrf_name:
+                    return dynamic_neighbors[constants.IPV4][(vrf, subnet)]
     elif is_ipv6_address(ip):
-        for subnet in dynamic_neighbors[constants.IPV6]:
-            if ipaddress.IPv6Address(ip) in ipaddress.IPv6Network(subnet):
-                return dynamic_neighbors[constants.IPV6][subnet]
+        for (vrf, subnet) in dynamic_neighbors[constants.IPV6]:
+            if ipaddress.IPv6Address(ip) in ipaddress.IPv6Network(subnet) and vrf == vrf_name:
+                    return dynamic_neighbors[constants.IPV6][(vrf, subnet)]
     else:
         return "NotAvailable"
 
@@ -444,9 +468,10 @@ def process_bgp_summary_json(bgp_summary, cmd_output, device, has_bgp_neighbors=
                 else:
                     peers.append(value['state'])
 
-                # Get the bgp neighbour name ans store it
+                # Get the bgp neighbour name and store it
+                vrf_name = cmd_output.get('vrfName', None)
                 neigh_name = get_bgp_neighbor_ip_to_name(
-                    peer_ip, static_neighbors, dynamic_neighbors)
+                    peer_ip, static_neighbors, dynamic_neighbors, vrf_name)
                 peers.append(neigh_name)
 
                 bgp_summary.setdefault('peers', []).append(peers)
