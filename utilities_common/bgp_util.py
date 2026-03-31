@@ -12,10 +12,10 @@ from tabulate import tabulate
 from utilities_common import constants
 
 
-def get_namespace_for_bgp_neighbor(neighbor_ip):
+def get_namespace_for_bgp_neighbor(neighbor_ip, vrf_name=None):
     namespace_list = multi_asic.get_namespace_list()
     for namespace in namespace_list:
-        if is_bgp_neigh_present(neighbor_ip, namespace):
+        if is_bgp_neigh_present(neighbor_ip, namespace, vrf_name):
             return namespace
 
     # neighbor IP not present in any namespace

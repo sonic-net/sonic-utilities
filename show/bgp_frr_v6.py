@@ -163,7 +163,7 @@ def neighbors_helper(ipaddress, info_type, namespace, vrf=None):
             ctx.fail("{} is not valid ipv6 address\n".format(ipaddress))
         try:
             actual_namespace = bgp_util.get_namespace_for_bgp_neighbor(
-                ipaddress)
+                ipaddress, vrf)
             if namespace is not None and namespace != actual_namespace:
                 click.echo(
                     "bgp neighbor {} is present in namespace {} not in {}"
