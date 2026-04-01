@@ -7,6 +7,7 @@ import os
 from swsscommon import swsscommon
 
 from config.config_mgmt import sonic_cfggen
+from sonic_py_common import device_info
 
 from sonic_package_manager.service_creator import ETC_SONIC_PATH
 from sonic_package_manager.service_creator.utils import in_chroot
@@ -92,6 +93,7 @@ class SonicDB:
     configs. """
 
     _running_db_conn = None
+    _namespace_db_conns = None
 
     @classmethod
     def get_connectors(cls):
@@ -103,6 +105,35 @@ class SonicDB:
         yield initial_db_conn
         if running_db_conn is not None:
             yield running_db_conn
+            for ns_conn in cls.get_namespace_db_connectors():
+                yield ns_conn
+
+    @classmethod
+    def get_namespace_db_connectors(cls):
+        """ Returns namespace CONFIG_DB connectors for multi-ASIC platforms.
+
+        On multi-ASIC systems each ASIC namespace has its own CONFIG_DB.
+        This method returns connectors for all namespace CONFIG_DBs so that
+        callers of get_connectors() write to every CONFIG_DB instance.
+        """
+
+        if in_chroot():
+            return []
+
+        if cls._namespace_db_conns is None:
+            cls._namespace_db_conns = []
+            if device_info.is_multi_npu():
+                from swsscommon.swsscommon import SonicDBConfig
+                SonicDBConfig.initializeGlobalConfig()
+                for ns in device_info.get_namespaces():
+                    try:
+                        conn = swsscommon.ConfigDBConnector(namespace=ns)
+                        conn.connect()
+                        cls._namespace_db_conns.append(conn)
+                    except RuntimeError:
+                        pass
+
+        return cls._namespace_db_conns
 
     @classmethod
     def get_running_db_connector(cls):
