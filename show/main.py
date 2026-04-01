@@ -1736,6 +1736,8 @@ def version(brief):
     click.echo("ASIC: {}".format(platform_info['asic_type']))
     click.echo("ASIC Count: {}".format(platform_info['asic_count']))
     click.echo("Serial Number: {}".format(chassis_info['serial']))
+    if chassis_info.get('switch_host_serial') != 'N/A':
+        click.echo("Switch-Host Serial Number: {}".format(chassis_info['switch_host_serial']))
     click.echo("Model Number: {}".format(chassis_info['model']))
     click.echo("Hardware Revision: {}".format(chassis_info['revision']))
     click.echo("Uptime: {}".format(sys_uptime.stdout.read().strip()))
