@@ -5,6 +5,7 @@ from sonic_py_common import device_info
 SUPPORTED_PLATFORMS = (
     'x86_64-nvidia_sn5640-r0',
     'x86_64-kvm_x86_64-r0',
+    'x86_64-arista_7060x6_64pe',
     'x86_64-arista_7060x6_64pe_b',
 )
 
