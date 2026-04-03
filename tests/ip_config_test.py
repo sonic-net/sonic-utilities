@@ -586,6 +586,56 @@ class TestConfigIP(object):
         assert "Invalid ConfigDB. Error" in result.output
         assert result.exit_code != 0
     
+    def test_add_eth0_ip_creates_mgmt_port(self):
+        db = Db()
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb}
+
+        # Ensure MGMT_PORT|eth0 does NOT exist initially
+        db.cfgdb.set_entry("MGMT_PORT", "eth0", None)
+        mgmt_port = db.cfgdb.get_entry("MGMT_PORT", "eth0")
+        assert not mgmt_port, "MGMT_PORT|eth0 should not exist before test"
+
+        # Mock _get_all_mgmtinterface_keys to return empty (clean boot scenario)
+        with mock.patch("config.main._get_all_mgmtinterface_keys", return_value=[]):
+            result = runner.invoke(
+                config.config.commands["interface"].commands["ip"].commands["add"],
+                ["eth0", "192.168.1.10/24", "192.168.1.1"],
+                obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        # Verify MGMT_PORT|eth0 was auto-created
+        mgmt_port = db.cfgdb.get_entry("MGMT_PORT", "eth0")
+        assert mgmt_port, "MGMT_PORT|eth0 should be auto-created"
+        assert mgmt_port.get("admin_status") == "up"
+
+        # Verify MGMT_INTERFACE was also created
+        mgmt_intf = db.cfgdb.get_entry("MGMT_INTERFACE", ("eth0", "192.168.1.10/24"))
+        assert mgmt_intf, "MGMT_INTERFACE entry should exist"
+        assert mgmt_intf.get("gwaddr") == "192.168.1.1"
+
+    def test_add_eth0_ip_preserves_existing_mgmt_port(self):
+        db = Db()
+        runner = CliRunner()
+        obj = {'config_db': db.cfgdb}
+
+        # Pre-populate MGMT_PORT|eth0 with extra attributes (e.g. from minigraph)
+        db.cfgdb.set_entry("MGMT_PORT", "eth0", {"admin_status": "up", "alias": "Management0", "speed": "1000"})
+
+        with mock.patch("config.main._get_all_mgmtinterface_keys", return_value=[]):
+            result = runner.invoke(
+                config.config.commands["interface"].commands["ip"].commands["add"],
+                ["eth0", "10.0.0.100/24", "10.0.0.1"],
+                obj=obj)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+        # Verify MGMT_PORT|eth0 was NOT overwritten
+        mgmt_port = db.cfgdb.get_entry("MGMT_PORT", "eth0")
+        assert mgmt_port.get("alias") == "Management0", "Existing MGMT_PORT attributes should be preserved"
+        assert mgmt_port.get("speed") == "1000", "Existing MGMT_PORT speed should be preserved"
+
     @classmethod
     def teardown_class(cls):
         os.environ['UTILITIES_UNIT_TESTING'] = "0"
