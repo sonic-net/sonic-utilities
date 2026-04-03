@@ -396,7 +396,7 @@ def convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict):
     channel_threshold_align = 18
     module_threshold_align = 15
 
-    if sfp_type.startswith('QSFP') or sfp_type.startswith('OSFP'):
+    if sfp_type.startswith('QSFP') or is_sfp_cmis:
         # Channel Monitor
         if is_sfp_cmis:
             output_dom += (indent + 'ChannelMonitorValues:\n')
@@ -727,7 +727,7 @@ def eeprom(port, dump_dom, namespace):
 # 'eeprom-hexdump' subcommand
 @show.command()
 @click.option('-p', '--port', metavar='<port_name>', help="Display SFP EEPROM hexdump for port <port_name>")
-@click.option('-n', '--page', metavar='<page_number>', help="Display SFP EEEPROM hexdump for <page_number_in_hex>")
+@click.option('-n', '--page', metavar='<page_number>', help="Display SFP EEPROM hexdump for <page_number_in_hex>")
 def eeprom_hexdump(port, page):
     """Display EEPROM hexdump of SFP transceiver(s)"""
     if port:
@@ -1181,7 +1181,11 @@ def lpmode(port):
                 port_name = get_physical_port_name(logical_port_name, i, ganged)
 
                 try:
-                    lpmode = platform_chassis.get_sfp(physical_port).get_lpmode()
+                    sfp = platform_chassis.get_sfp(physical_port)
+                    if not sfp.get_presence():
+                        output_table.append([port_name, "Not Present"])
+                        continue
+                    lpmode = sfp.get_lpmode()
                 except NotImplementedError:
                     click.echo("This functionality is currently not implemented for this platform")
                     sys.exit(ERROR_NOT_IMPLEMENTED)
@@ -1261,12 +1265,15 @@ def set_lpmode(logical_port, enable):
         ganged = True
 
     for physical_port in physical_port_list:
-        click.echo("{} low-power mode for port {} ... ".format(
-            "Enabling" if enable else "Disabling",
-            get_physical_port_name(logical_port, i, ganged)), nl=False)
-
         try:
-            result = platform_chassis.get_sfp(physical_port).set_lpmode(enable)
+            sfp = platform_chassis.get_sfp(physical_port)
+            if not sfp.get_presence():
+                click.echo(f"{logical_port}: module {physical_port} is not present, skipping")
+                continue
+            click.echo("{} low-power mode for port {} ... ".format(
+                "Enabling" if enable else "Disabling",
+                get_physical_port_name(logical_port, i, ganged)), nl=False)
+            result = sfp.set_lpmode(enable)
         except NotImplementedError:
             click.echo("This functionality is currently not implemented for this platform")
             sys.exit(ERROR_NOT_IMPLEMENTED)
@@ -1321,10 +1328,13 @@ def reset(port_name):
         ganged = True
 
     for physical_port in physical_port_list:
-        click.echo("Resetting port {} ... ".format(get_physical_port_name(port_name, i, ganged)), nl=False)
-
         try:
-            result = platform_chassis.get_sfp(physical_port).reset()
+            sfp = platform_chassis.get_sfp(physical_port)
+            if not sfp.get_presence():
+                click.echo(f"{port_name}: module {physical_port} is not present, skipping")
+                continue
+            click.echo("Resetting port {} ... ".format(get_physical_port_name(port_name, i, ganged)), nl=False)
+            result = sfp.reset()
         except NotImplementedError:
             click.echo("This functionality is currently not implemented for this platform")
             sys.exit(ERROR_NOT_IMPLEMENTED)

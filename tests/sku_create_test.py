@@ -525,7 +525,7 @@ class TestSkuCreate(object):
             sku.fpp_split = {1: [['etp1a', 'etp1b'], [1, 2]]}
             sku.default_lanes_per_port = ['0,1,2', '3,4,5', '6,7,8']
             sku.set_lanes()
-        mock_print.assert_called_once_with("Lanes(0,1,2) could not be evenly splitted by 2.")
+        mock_print.assert_called_once_with("Lanes(0,1,2) could not be evenly split by 2.")
         assert e.value.code == 1
 
     @patch('builtins.print')

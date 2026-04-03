@@ -152,7 +152,7 @@ class ConfigWrapper:
                 if not success:
                     return success, error
         except sonic_yang.SonicYangException as ex:
-            return False, ex
+            return False, str(ex)
 
         return True, None
 
@@ -307,10 +307,17 @@ class ConfigWrapper:
             # TODO: convert string to IpAddress object for better handling of IPs
             # TODO: validate range intersection
             ip_range = peer_group["ip_range"]
+
+            # Use "default" vrf name if not specified
+            name_split = peer_group_name.split('|')
+            vrf_name = name_split[0] if len(name_split) > 1 else "default"
+
             for ip in ip_range:
-                if ip in visited:
-                    return False, f"{ip} is duplicated in BGP_PEER_RANGE: {set([peer_group_name, visited[ip]])}"
-                visited[ip] = peer_group_name
+                key = (ip, vrf_name)
+                if key in visited:
+                    return False, (f"{ip} with vrf {vrf_name} is duplicated in BGP_PEER_RANGE: "
+                                   f"{set([peer_group_name, visited[key]])}")
+                visited[key] = peer_group_name
 
         return True, None
 
@@ -452,8 +459,8 @@ class PathAddressing:
     Path refers to the 'path' in JsonPatch operations: https://tools.ietf.org/html/rfc6902
     The path corresponds to JsonPointer: https://tools.ietf.org/html/rfc6901
 
-    All xpath operations in this class are only relevent to ConfigDb and the conversion to YANG xpath.
-    It is not meant to support all the xpath functionalities, just the ones relevent to ConfigDb/YANG.
+    All xpath operations in this class are only relevant to ConfigDb and the conversion to YANG xpath.
+    It is not meant to support all the xpath functionalities, just the ones relevant to ConfigDb/YANG.
     """
     PATH_SEPARATOR = "/"
     XPATH_SEPARATOR = "/"
@@ -614,7 +621,7 @@ class PathAddressing:
         """
         Given a path and a config, iterates across all keys at the path location
         to look up the number of backlinks per key, then returns the keys sorted
-        by backlinks in acending order by default (set reverse=True to use descending order)
+        by backlinks in ascending order by default (set reverse=True to use descending order)
 
         The configdb is only used to look up the keys at the given path, it is not
         loaded into the context.  The sort is not performed by actual references

@@ -39,7 +39,7 @@ class VersionConstraint:
         Args:
             version: Version to check against this constraint.
         Returns:
-            Boolean wether this constraint allows version.
+            Boolean whether this constraint allows version.
         """
 
         return self._constraint.match(version._version)
@@ -48,7 +48,7 @@ class VersionConstraint:
         """ Is the version constraint exact, meaning only one version is allowed.
 
         Returns:
-            Boolean wether this constraint is exact.
+            Boolean whether this constraint is exact.
         """
 
         clause = self._constraint.clause
@@ -164,13 +164,13 @@ class PackageConstraint:
         {
             "name": "swss",
             "version": "^1.0.0",
-            "componenets": {
+            "components": {
                 "libswsscommon": "^1.0.0"
             }
         }
 
         Args:
-            constraint_dict: Dictionary of constraint infromation.
+            constraint_dict: Dictionary of constraint information.
 
         Returns:
             PackageConstraint object.

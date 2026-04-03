@@ -2,7 +2,9 @@ import importlib
 import os
 import sys
 from importlib import reload
+from unittest.mock import patch, MagicMock
 
+import click
 from click.testing import CliRunner
 import crm.main as crm
 from utilities_common.db import Db
@@ -1033,6 +1035,116 @@ srv6_nexthop                0               1024
 
 """
 
+crm_multi_asic_show_resources_all_asic0 = """\
+
+ASIC0
+
+Resource Name           Used Count    Available Count
+--------------------  ------------  -----------------
+ipv4_route                      58              98246
+ipv6_route                      60              16324
+ipv4_nexthop                     8              49086
+ipv6_nexthop                     8              49086
+ipv4_neighbor                    8               8168
+ipv6_neighbor                    8               4084
+nexthop_group_member             0              16384
+nexthop_group                    0                512
+fdb_entry                        0              32767
+ipmc_entry                       0              24576
+snat_entry                       0               1024
+dnat_entry                       0               1024
+mpls_inseg                       0               1024
+mpls_nexthop                     0               1024
+srv6_nexthop                     0               1024
+srv6_my_sid_entry                0               1024
+
+
+ASIC0
+
+Stage    Bind Point    Resource Name      Used Count    Available Count
+-------  ------------  ---------------  ------------  -----------------
+INGRESS  PORT          acl_group                  16                232
+INGRESS  PORT          acl_table                   2                  3
+INGRESS  LAG           acl_group                   8                232
+INGRESS  LAG           acl_table                   0                  3
+INGRESS  VLAN          acl_group                   0                232
+INGRESS  VLAN          acl_table                   0                  6
+INGRESS  RIF           acl_group                   0                232
+INGRESS  RIF           acl_table                   0                  6
+INGRESS  SWITCH        acl_group                   0                232
+INGRESS  SWITCH        acl_table                   0                  6
+EGRESS   PORT          acl_group                   0                232
+EGRESS   PORT          acl_table                   0                  2
+EGRESS   LAG           acl_group                   0                232
+EGRESS   LAG           acl_table                   0                  2
+EGRESS   VLAN          acl_group                   0                232
+EGRESS   VLAN          acl_table                   0                  2
+EGRESS   RIF           acl_group                   0                232
+EGRESS   RIF           acl_table                   0                  2
+EGRESS   SWITCH        acl_group                   0                232
+EGRESS   SWITCH        acl_table                   0                  2
+
+
+ASIC0
+
+Table ID         Resource Name      Used Count    Available Count
+---------------  ---------------  ------------  -----------------
+0x700000000063f  acl_entry                   0               2048
+0x700000000063f  acl_counter                 0               2048
+0x7000000000670  acl_entry                   0               1024
+0x7000000000670  acl_counter                 0               1280
+
+"""
+
+crm_multi_asic_show_resources_fdb_asic0 = """\
+
+ASIC0
+
+Resource Name      Used Count    Available Count
+---------------  ------------  -----------------
+fdb_entry                   0              32767
+
+"""
+
+crm_multi_asic_show_resources_ipv4_route_asic0 = """\
+
+ASIC0
+
+Resource Name      Used Count    Available Count
+---------------  ------------  -----------------
+ipv4_route                 58              98246
+
+"""
+
+crm_multi_asic_show_resources_acl_group_asic0 = """\
+
+ASIC0
+
+Stage    Bind Point    Resource Name      Used Count    Available Count
+-------  ------------  ---------------  ------------  -----------------
+INGRESS  PORT          acl_group                  16                232
+INGRESS  PORT          acl_table                   2                  3
+INGRESS  LAG           acl_group                   8                232
+INGRESS  LAG           acl_table                   0                  3
+INGRESS  VLAN          acl_group                   0                232
+INGRESS  VLAN          acl_table                   0                  6
+INGRESS  RIF           acl_group                   0                232
+INGRESS  RIF           acl_table                   0                  6
+INGRESS  SWITCH        acl_group                   0                232
+INGRESS  SWITCH        acl_table                   0                  6
+EGRESS   PORT          acl_group                   0                232
+EGRESS   PORT          acl_table                   0                  2
+EGRESS   LAG           acl_group                   0                232
+EGRESS   LAG           acl_table                   0                  2
+EGRESS   VLAN          acl_group                   0                232
+EGRESS   VLAN          acl_table                   0                  2
+EGRESS   RIF           acl_group                   0                232
+EGRESS   RIF           acl_table                   0                  2
+EGRESS   SWITCH        acl_group                   0                232
+EGRESS   SWITCH        acl_table                   0                  2
+
+"""
+
 crm_config_interval_too_big = "Error: Invalid value for 'INTERVAL': 30000 is not in the range 1<=x<=9999."
 
 class TestCrm(object):
@@ -1922,6 +2034,37 @@ class TestCrmMultiAsic(object):
         assert result.exit_code == 0
         assert result.output == crm_multi_asic_show_resources_srv6_nexthop
 
+    @patch.object(click.Choice, 'convert', MagicMock(return_value='asic0'))
+    def test_crm_multi_asic_show_resources_all_namespace_asic0(self):
+        runner = CliRunner()
+        result = runner.invoke(crm.cli, ['show', 'resources', '-n', 'asic0', 'all'])
+        print(sys.stderr, result.output)
+        assert result.exit_code == 0
+        assert result.output == crm_multi_asic_show_resources_all_asic0
+
+    @patch.object(click.Choice, 'convert', MagicMock(return_value='asic0'))
+    def test_crm_multi_asic_show_resources_fdb_namespace_asic0(self):
+        runner = CliRunner()
+        result = runner.invoke(crm.cli, ['show', 'resources', '-n', 'asic0', 'fdb'])
+        print(sys.stderr, result.output)
+        assert result.exit_code == 0
+        assert result.output == crm_multi_asic_show_resources_fdb_asic0
+
+    @patch.object(click.Choice, 'convert', MagicMock(return_value='asic0'))
+    def test_crm_multi_asic_show_resources_ipv4_route_namespace_asic0(self):
+        runner = CliRunner()
+        result = runner.invoke(crm.cli, ['show', 'resources', '-n', 'asic0', 'ipv4', 'route'])
+        print(sys.stderr, result.output)
+        assert result.exit_code == 0
+        assert result.output == crm_multi_asic_show_resources_ipv4_route_asic0
+
+    @patch.object(click.Choice, 'convert', MagicMock(return_value='asic0'))
+    def test_crm_multi_asic_show_resources_acl_group_namespace_asic0(self):
+        runner = CliRunner()
+        result = runner.invoke(crm.cli, ['show', 'resources', '-n', 'asic0', 'acl', 'group'])
+        print(sys.stderr, result.output)
+        assert result.exit_code == 0
+        assert result.output == crm_multi_asic_show_resources_acl_group_asic0
 
     @classmethod
     def teardown_class(cls):

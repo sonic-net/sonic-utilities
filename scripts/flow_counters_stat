@@ -29,7 +29,7 @@ from utilities_common import constants
 from utilities_common.netstat import format_number_with_comma, table_as_json, ns_diff, format_prate
 from utilities_common.cli import UserCache
 
-# Flow counter meta data, new type of flow counters can extend this dictinary to reuse existing logic
+# Flow counter meta data, new type of flow counters can extend this dictionary to reuse existing logic
 flow_counter_meta = {
     'trap': {
         'headers': ['Trap Name', 'Packets', 'Bytes', 'PPS'],

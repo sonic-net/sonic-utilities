@@ -143,30 +143,30 @@ tabular_data_config_output_expected = """\
 SWITCH_NAME    PEER_TOR
 -------------  ----------
 sonic-switch   10.2.2.2
-port        state    ipv4      ipv6      cable_type      soc_ipv4    soc_ipv6    prober_type
-----------  -------  --------  --------  --------------  ----------  ----------  -------------
-Ethernet0   active   10.2.1.1  e800::46                                          software
-Ethernet4   auto     10.3.1.1  e801::46                              e801::47    software
-Ethernet8   active   10.4.1.1  e802::46                                          hardware
-Ethernet12  active   10.4.1.1  e802::46                                          software
-Ethernet16  standby  10.1.1.1  fc00::75  active-standby                          software
-Ethernet28  manual   10.1.1.1  fc00::75                                          software
-Ethernet32  auto     10.1.1.1  fc00::75  active-active   10.1.1.2    fc00::76    software
+port        state    ipv4      ipv6      cable_type      soc_ipv4    soc_ipv6    prober_type    neighbor_mode
+----------  -------  --------  --------  --------------  ----------  ----------  -------------  ---------------
+Ethernet0   active   10.2.1.1  e800::46                                          software       host-route
+Ethernet4   auto     10.3.1.1  e801::46                              e801::47    software       host-route
+Ethernet8   active   10.4.1.1  e802::46                                          hardware       host-route
+Ethernet12  active   10.4.1.1  e802::46                                          software       host-route
+Ethernet16  standby  10.1.1.1  fc00::75  active-standby                          software       host-route
+Ethernet28  manual   10.1.1.1  fc00::75                                          software       host-route
+Ethernet32  auto     10.1.1.1  fc00::75  active-active   10.1.1.2    fc00::76    software       prefix-route
 """
 
 tabular_data_config_output_expected_alias = """\
 SWITCH_NAME    PEER_TOR
 -------------  ----------
 sonic-switch   10.2.2.2
-port    state    ipv4      ipv6      cable_type      soc_ipv4    soc_ipv6    prober_type
-------  -------  --------  --------  --------------  ----------  ----------  -------------
-etp1    active   10.2.1.1  e800::46                                          software
-etp2    auto     10.3.1.1  e801::46                              e801::47    software
-etp3    active   10.4.1.1  e802::46                                          hardware
-etp4    active   10.4.1.1  e802::46                                          software
-etp5    standby  10.1.1.1  fc00::75  active-standby                          software
-etp8    manual   10.1.1.1  fc00::75                                          software
-etp9    auto     10.1.1.1  fc00::75  active-active   10.1.1.2    fc00::76    software
+port    state    ipv4      ipv6      cable_type      soc_ipv4    soc_ipv6    prober_type    neighbor_mode
+------  -------  --------  --------  --------------  ----------  ----------  -------------  ---------------
+etp1    active   10.2.1.1  e800::46                                          software       host-route
+etp2    auto     10.3.1.1  e801::46                              e801::47    software       host-route
+etp3    active   10.4.1.1  e802::46                                          hardware       host-route
+etp4    active   10.4.1.1  e802::46                                          software       host-route
+etp5    standby  10.1.1.1  fc00::75  active-standby                          software       host-route
+etp8    manual   10.1.1.1  fc00::75                                          software       host-route
+etp9    auto     10.1.1.1  fc00::75  active-active   10.1.1.2    fc00::76    software       prefix-route
 """
 
 json_data_status_config_output_expected = """\
@@ -187,7 +187,8 @@ json_data_status_config_output_expected = """\
                     "IPv4": "10.3.1.1",
                     "IPv6": "e801::46",
                     "soc_ipv6": "e801::47",
-                    "prober_type": "software"
+                    "prober_type": "software",
+                    "neighbor_mode": "host-route"
                 }
             },
             "Ethernet8": {
@@ -227,7 +228,8 @@ json_data_status_config_output_expected = """\
                     "IPv6": "fc00::75",
                     "cable_type": "active-active",
                     "soc_ipv4": "10.1.1.2",
-                    "soc_ipv6": "fc00::76"
+                    "soc_ipv6": "fc00::76",
+                    "neighbor_mode": "prefix-route"
                 }
             }
         }
@@ -253,7 +255,8 @@ json_data_status_config_output_expected_alias = """\
                     "IPv4": "10.3.1.1",
                     "IPv6": "e801::46",
                     "soc_ipv6": "e801::47",
-                    "prober_type": "software"
+                    "prober_type": "software",
+                    "neighbor_mode": "host-route"
                 }
             },
             "etp3": {
@@ -293,7 +296,8 @@ json_data_status_config_output_expected_alias = """\
                     "IPv6": "fc00::75",
                     "cable_type": "active-active",
                     "soc_ipv4": "10.1.1.2",
-                    "soc_ipv6": "fc00::76"
+                    "soc_ipv6": "fc00::76",
+                    "neighbor_mode": "prefix-route"
                 }
             }
         }
@@ -310,7 +314,8 @@ json_port_data_status_config_output_expected = """\
                 "STATE": "auto",
                 "SERVER": {
                     "IPv4": "10.1.1.1",
-                    "IPv6": "fc00::75"
+                    "IPv6": "fc00::75",
+                    "neighbor_mode": "prefix-route"
                 }
             }
         }
@@ -327,7 +332,8 @@ json_port_data_status_config_output_expected_alias = """\
                 "STATE": "auto",
                 "SERVER": {
                     "IPv4": "10.1.1.1",
-                    "IPv6": "fc00::75"
+                    "IPv6": "fc00::75",
+                    "neighbor_mode": "prefix-route"
                 }
             }
         }

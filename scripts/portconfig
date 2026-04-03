@@ -6,6 +6,7 @@ portconfig is the utility to show and change ECN configuration
 usage: portconfig [-h] [-v] [-s] [-f] [-m] [-tp] [-p PROFILE] [-gmin GREEN_MIN]
                  [-gmax GREEN_MAX] [-ymin YELLOW_MIN] [-ymax YELLOW_MAX]
                  [-rmin RED_MIN] [-rmax RED_MAX] [-vv] [-n namespace]
+                 [-fl FAST_LINKUP]
 
 optional arguments:
   -h     --help                show this help message and exit
@@ -16,12 +17,13 @@ optional arguments:
   -f     --fec                 port fec mode
   -m     --mtu                 port mtu in bytes
   -tp    --tpid                interface tpid (0x8100, 9100, 9200, 88A8)
-  -n     --namesapce           Namespace name
+  -n     --namespace           Namespace name
   -an    --autoneg             port auto negotiation mode
   -S     --adv-speeds          port advertised speeds
   -t     --interface-type      port interface type
   -T     --adv-interface-types port advertised interface types
   -lt    --link-training       port link training mode
+  -fl    --fast-linkup         port fast link-up mode (enabled/disabled)
   -P     --tx-power            400G ZR modulet target Tx output power (dBm)
   -F     --laser-freq          400G ZR module 75GHz grid frequency (GHz)
 """
@@ -56,6 +58,7 @@ PORT_ADV_SPEEDS_CONFIG_FIELD_NAME = "adv_speeds"
 PORT_INTERFACE_TYPE_CONFIG_FIELD_NAME = "interface_type"
 PORT_ADV_INTERFACE_TYPES_CONFIG_FIELD_NAME = "adv_interface_types"
 PORT_LINK_TRAINING_CONFIG_FIELD_NAME = "link_training"
+PORT_FAST_LINKUP_CONFIG_FIELD_NAME = "fast_linkup"
 PORT_XCVR_LASER_FREQ_FIELD_NAME = "laser_freq"
 PORT_XCVR_TX_POWER_FIELD_NAME = "tx_power"
 PORT_CHANNEL_TABLE_NAME = "PORTCHANNEL"
@@ -114,7 +117,7 @@ class portconfig(object):
             raise Exception("Invalid port %s" % (port))
 
     def list_params(self, port):
-        # chack whether table for this port exists
+        # check whether table for this port exists
         port_tables = self.db.get_table(PORT_TABLE_NAME)
         if port in port_tables:
             print(port_tables[port])
@@ -258,7 +261,7 @@ class portconfig(object):
         if not self.namespace:
             state_db = SonicV2Connector(host="127.0.0.1")
         else:
-            state_db = SonicV2Connector(host="127.0.0.1", namesapce=self.namespace, use_unix_socket_path=True)
+            state_db = SonicV2Connector(host="127.0.0.1", namespace=self.namespace, use_unix_socket_path=True)
         state_db.connect(state_db.STATE_DB)
         return state_db.get(state_db.STATE_DB, '{}|{}'.format(PORT_STATE_TABLE_NAME, port), PORT_STATE_SUPPORTED_SPEEDS)
 
@@ -325,6 +328,23 @@ class portconfig(object):
         else:
             raise Exception("System not ready to accept TPID config. Please try again later.")
 
+    def set_fast_linkup(self, port, mode):
+        if self.is_lag:
+            raise Exception("Invalid port %s" % (port))
+        if self.verbose:
+            print("Setting fast-linkup %s on port %s" % (mode, port))
+
+        normalized = str(mode).strip().lower()
+        if normalized == 'enabled':
+            value = 'true'
+        elif normalized == 'disabled':
+            value = 'false'
+        else:
+            print('Invalid fast-linkup mode specified: {}'.format(mode))
+            print('Valid modes: enabled, disabled')
+            exit(1)
+        self.db.mod_entry(PORT_TABLE_NAME, port, {PORT_FAST_LINKUP_CONFIG_FIELD_NAME: value})
+
 
 def main():
     parser = argparse.ArgumentParser(description='Set SONiC port parameters',
@@ -349,6 +369,8 @@ def main():
                         help = 'port advertised interface types', default=None)
     parser.add_argument('-lt', '--link-training', type = str, required = False,
                         help = 'port link training mode', default=None)
+    parser.add_argument('-fl', '--fast-linkup', type=str, required=False,
+                        help='port fast link-up mode (enabled|disabled)', default=None)
     parser.add_argument('-P', '--tx-power', type=float, required=False,
                                             help='Tx output power(dBm)', default=None)
     parser.add_argument('-F', '--laser-freq', type=int, required=False,
@@ -363,7 +385,7 @@ def main():
             port.list_params(args.port)
         elif args.speed or args.fec or args.mtu or args.link_training or args.autoneg or args.adv_speeds or \
             args.interface_type or args.adv_interface_types or args.tpid or \
-            args.tx_power or args.laser_freq:
+            args.tx_power or args.laser_freq or args.fast_linkup:
             if args.speed:
                 port.set_speed(args.port, args.speed)
             if args.fec:
@@ -374,6 +396,8 @@ def main():
                 port.set_link_training(args.port, args.link_training)
             if args.autoneg:
                 port.set_autoneg(args.port, args.autoneg)
+            if args.fast_linkup:
+                port.set_fast_linkup(args.port, args.fast_linkup)
             if args.adv_speeds:
                 port.set_adv_speeds(args.port, args.adv_speeds)
             if args.interface_type:

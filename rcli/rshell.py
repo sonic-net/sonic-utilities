@@ -18,7 +18,7 @@ def cli(linecard_name, username):
     :param linecard_name: The name of the linecard to connect to
     """
     if not device_info.is_chassis():
-        click.echo("This commmand is only supported Chassis")
+        click.echo("This command is only supported Chassis")
         sys.exit(1)
 
     if not username:
