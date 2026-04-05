@@ -1811,7 +1811,7 @@ class LowLevelMoveGenerator:
             yield move
 
     def _traverse_current_list(self, ptr, current_tokens):
-        if len(ptr) == 0:
+        if len(ptr) <= 1:
             yield JsonMoveGroup(self.__class__.__name__, JsonMove(self.diff, OperationType.REMOVE, current_tokens))
             return
 
