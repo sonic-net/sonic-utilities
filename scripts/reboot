@@ -135,7 +135,7 @@ function clear_warm_boot()
     if [[ -f ${WARM_DIR}/${REDIS_FILE} ]]; then
         mv -f ${WARM_DIR}/${REDIS_FILE} ${WARM_DIR}/${REDIS_FILE}.${TIMESTAMP} || /bin/true
     fi
-    /sbin/kexec -u || /bin/true
+    /sbin/kexec -u -a || /bin/true
 }
 
 SCRIPT=$0
