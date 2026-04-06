@@ -26,7 +26,7 @@ def test_install(run_command, run_command_or_raise, get_bootloader, swap, fs):
     new_image_folder = f"/images/{new_image_version}"
     image_docker_folder = os.path.join(new_image_folder, "docker")
     mounted_image_folder = f"/tmp/image-{new_image_version}-fs"
-    dockerd_opts = ["--iptables=false", "--bip=1.1.1.1/24"]
+    dockerd_opts = ["--iptables=false", "--bip=1.1.1.1/24", "-H", "fd://"]
 
     # Setup mock files needed for our test scenario
     fs.create_file(sonic_image_filename)
@@ -36,6 +36,9 @@ def test_install(run_command, run_command_or_raise, get_bootloader, swap, fs):
     fs.create_file("/proc/15/cmdline", contents="\x00".join(["dockerd"] + dockerd_opts))
     # Simulate new image: /etc/resolv.conf is a dangling symlink (target doesn't exist in squashfs)
     fs.create_symlink(f"{mounted_image_folder}/etc/resolv.conf", "/run/resolvconf/resolv.conf")
+
+    # Expect fd:// to be replaced by unix://
+    expected_dockerd_opts = [opt if opt != "fd://" else "unix://" for opt in dockerd_opts]
 
     # Setup bootloader mock
     mock_bootloader = Mock()
@@ -85,7 +88,12 @@ def test_install(run_command, run_command_or_raise, get_bootloader, swap, fs):
         call(["chroot", mounted_image_folder, "mount", "proc", "/proc", "-t", "proc"]),
         call(["chroot", mounted_image_folder, "mount", "sysfs", "/sys", "-t", "sysfs"]),
         call(["cp", f"{mounted_image_folder}/etc/default/docker", f"{mounted_image_folder}/tmp/docker_config_backup"]),
-        call(["sh", "-c", f"echo 'DOCKER_OPTS=\"$DOCKER_OPTS {' '.join(dockerd_opts)}\"' >> {mounted_image_folder}/etc/default/docker"]), # dockerd started with added options as host dockerd
+        # dockerd started with unix:// instead of fd://
+        call([
+            "sh", "-c",
+            f"echo 'DOCKER_OPTS=\"$DOCKER_OPTS {' '.join(expected_dockerd_opts)}\"' "
+            f">> {mounted_image_folder}/etc/default/docker"
+        ]),
         call(["chroot", mounted_image_folder, "/usr/lib/docker/docker.sh", "start"]),
         call(["cp", "/var/lib/sonic-package-manager/packages.json", f"{mounted_image_folder}/tmp/packages.json"]),
         call(["mkdir", "-p", "/var/lib/sonic-package-manager/manifests"]),
@@ -165,7 +173,7 @@ def test_install_failed(rmtree, run_command, run_command_or_raise, get_bootloade
     new_image_folder = f"/images/{new_image_version}"
     image_docker_folder = os.path.join(new_image_folder, "docker")
     mounted_image_folder = f"/tmp/image-{new_image_version}-fs"
-    dockerd_opts = ["--iptables=false", "--bip=1.1.1.1/24"]
+    dockerd_opts = ["--iptables=false", "--bip=1.1.1.1/24", "-H", "fd://"]
 
     # Setup mock files needed for our test scenario
     fs.create_file(sonic_image_filename)
