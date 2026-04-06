@@ -32,7 +32,7 @@ def is_dpu(db):
 
 
 def connect_to_db(namespace):
-    if namespace is None:
+    if not namespace:
         namespace = DEFAULT_NAMESPACE
     else:
         if not SonicDBConfig.isGlobalInit():
@@ -51,7 +51,8 @@ def cli():
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(multi_asic.get_namespace_list()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def queue(ctx, namespace):
     """ Queue counter commands """
@@ -91,7 +92,8 @@ def queue_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(multi_asic.get_namespace_list()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def port(ctx, namespace):
     """ Port counter commands """
@@ -131,7 +133,8 @@ def port_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(multi_asic.get_namespace_list()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def port_buffer_drop(ctx, namespace):
     """ Port buffer drop  counter commands """
@@ -216,7 +219,8 @@ def disable(ctx):  # noqa: F811
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(multi_asic.get_namespace_list()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def pg_drop(ctx, namespace):
     """  Ingress PG drop counter commands """
@@ -258,7 +262,8 @@ def pg_drop_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(multi_asic.get_namespace_list()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def rif(ctx, namespace):
     """ RIF counter commands """
@@ -298,7 +303,8 @@ def rif_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(multi_asic.get_namespace_list()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def watermark(ctx, namespace):
     """ Watermark counter commands """
@@ -348,7 +354,8 @@ def watermark_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(multi_asic.get_namespace_list()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def acl(ctx, namespace):
     """  ACL counter commands """
@@ -390,7 +397,8 @@ def acl_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(multi_asic.get_namespace_list()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def tunnel(ctx, namespace):
     """ Tunnel counter commands """
@@ -429,7 +437,8 @@ def tunnel_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(multi_asic.get_namespace_list()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def flowcnt_trap(ctx, namespace):
     """ Trap flow counter commands """
@@ -468,7 +477,8 @@ def flowcnt_trap_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(multi_asic.get_namespace_list()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def flowcnt_route(ctx, namespace):
     """ Route flow counter commands """
@@ -508,7 +518,8 @@ def flowcnt_route_disable(ctx):
 @click.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(multi_asic.get_namespace_list()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def eni(ctx, namespace):
     """ ENI counter commands """
@@ -547,7 +558,8 @@ def eni_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(multi_asic.get_namespace_list()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def wredqueue(ctx, namespace):
     """ WRED queue counter commands """
@@ -586,7 +598,8 @@ def wredqueue_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(multi_asic.get_namespace_list()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def wredport(ctx, namespace):
     """ WRED port counter commands """
@@ -625,7 +638,8 @@ def wredport_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(multi_asic.get_namespace_list()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def srv6(ctx, namespace):
     """ SRv6 counter commands """
@@ -661,7 +675,8 @@ def srv6_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(multi_asic.get_namespace_list()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def switch(ctx, namespace):
     """ Switch counter commands """
@@ -715,7 +730,8 @@ def switch_disable(ctx):
 @cli.command()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(multi_asic.get_namespace_list()),
+              default=multi_asic.get_current_namespace())
 def show(namespace):
     """ Show the counter configuration """
     configdb = connect_to_db(namespace)
