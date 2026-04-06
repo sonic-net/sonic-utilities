@@ -195,7 +195,8 @@ setup(
         'scripts/check_db_integrity.py',
         'scripts/sysreadyshow',
         'scripts/wredstat',
-        'scripts/sonic-error-report'
+        'scripts/sonic-error-report',
+        'scripts/chassis_db_consistency_checker.py'
     ],
     entry_points={
         'console_scripts': [
