@@ -23,10 +23,17 @@ RUN apt-get clean -y      && \
 
 RUN mkdir -p /usr/lib/python3/dist-packages/gnmi_agent
 RUN mkdir -p /sonic/templates
+
+ # Add a new user and group
+RUN groupadd -r gnmi_agent_group && useradd -r -g gnmi_agent_group gnmi_agent_user
+
+RUN chown -R gnmi_agent_user:gnmi_agent_group /sonic/templates
+RUN chown -R gnmi_agent_user:gnmi_agent_group /usr/lib/python3/dist-packages/gnmi_agent
 COPY ["src/__init__.py", "src/proto_utils.py", "src/go_gnmi_utils.py", "/usr/lib/python3/dist-packages/gnmi_agent/"]
 COPY ["src/gnmi_client.py", "/usr/sbin"]
 COPY ["templates/*", "/sonic/templates/"]
 RUN chmod a+x /usr/sbin/gnmi_client.py
 RUN rm /etc/supervisor/conf.d/supervisord.conf
+USER gnmi_agent_user
 
 ENTRYPOINT ["/bin/bash"]

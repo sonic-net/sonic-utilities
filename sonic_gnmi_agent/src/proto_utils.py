@@ -4,14 +4,31 @@ import uuid
 import base64
 
 from ipaddress import ip_address as IP
-import importlib
 
 from dash_api.eni_pb2 import State  # noqa: F401
 from dash_api.route_type_pb2 import RoutingType, ActionType, RouteType, RouteTypeItem, EncapType  # noqa: F401
 from dash_api.types_pb2 import IpVersion, Range, ValueOrRange, IpPrefix, IpAddress, HaScope, HaOwner  # noqa: F401
 
+import dash_api.appliance_pb2 as appliance_pb2
+import dash_api.eni_pb2 as eni_pb2
+import dash_api.eni_route_pb2 as eni_route_pb2
+import dash_api.ha_set_config_pb2 as ha_set_config_pb2
+import dash_api.ha_scope_config_pb2 as ha_scope_config_pb2
+import dash_api.meter_policy_pb2 as meter_policy_pb2
+import dash_api.meter_rule_pb2 as meter_rule_pb2
+import dash_api.route_pb2 as route_pb2
+import dash_api.route_group_pb2 as route_group_pb2
+import dash_api.route_rule_pb2 as route_rule_pb2
+import dash_api.route_type_pb2 as route_type_pb2
+import dash_api.tunnel_pb2 as tunnel_pb2
+import dash_api.types_pb2 as types_pb2
+import dash_api.vnet_mapping_pb2 as vnet_mapping_pb2
+import dash_api.vnet_pb2 as vnet_pb2
+
 from google.protobuf.descriptor import FieldDescriptor
 from google.protobuf.json_format import ParseDict
+from google.protobuf.internal.enum_type_wrapper import EnumTypeWrapper
+
 
 ENABLE_PROTO = True
 
@@ -28,6 +45,55 @@ PB_INT_TYPES = set([
     FieldDescriptor.TYPE_SINT64
 ])
 
+PROTO_MODULES = [
+    appliance_pb2,
+    eni_pb2,
+    eni_route_pb2,
+    ha_set_config_pb2,
+    ha_scope_config_pb2,
+    meter_policy_pb2,
+    meter_rule_pb2,
+    route_pb2,
+    route_group_pb2,
+    route_rule_pb2,
+    route_type_pb2,
+    tunnel_pb2,
+    types_pb2,
+    vnet_mapping_pb2,
+    vnet_pb2
+]
+
+ENUM_TYPE_MAP = {
+    "ActionType": route_type_pb2.ActionType,
+    "EncapType": route_type_pb2.EncapType,
+    "RoutingType": route_type_pb2.RoutingType,
+    "State": eni_pb2.State,
+    "IpVersion": types_pb2.IpVersion,
+    "HaScope": types_pb2.HaScope,
+    "HaOwner": types_pb2.HaOwner,
+    "DesiredHaState": ha_scope_config_pb2.DesiredHaState,
+}
+
+
+def _get_enum_wrapper(enum_type_str):
+    enum_wrapper = ENUM_TYPE_MAP.get(enum_type_str)
+    if enum_wrapper is not None:
+        return enum_wrapper
+
+    for module in PROTO_MODULES:
+        if module and hasattr(module, enum_type_str):
+            candidate = getattr(module, enum_type_str)
+            if isinstance(candidate, EnumTypeWrapper):
+                return candidate
+    return None
+
+
+def _get_message_class_by_name(message_name):
+    for module in PROTO_MODULES:
+        if module and hasattr(module, message_name):
+            return getattr(module, message_name)
+    raise Exception(f"Cannot find message type {message_name}")
+
 
 def get_enum_type_from_str(enum_type_str, enum_name_str):
 
@@ -38,27 +104,10 @@ def get_enum_type_from_str(enum_type_str, enum_name_str):
     my_enum_type_parts = re.findall(r'[A-Z][^A-Z]*', enum_type_str)
     my_enum_type_concatenated = '_'.join(my_enum_type_parts)
     enum_name = f"{my_enum_type_concatenated.upper()}_{enum_name_str.upper()}"
-    a = globals()[enum_type_str]
-    if a is not None:
-        return a.Value(enum_name)
-    else:
-        raise Exception(f"Cannot find enum type {enum_type_str}")
-
-
-'''
-message RouteTypeItem {
-    string action_name = 1;
-    route_type.ActionType action_type = 2;
-    // Optional
-    // encap type depends on the action_type - {vxlan, nvgre}
-    optional route_type.EncapType encap_type = 3;
-    // Optional
-    // vni value to be used as the key for encapsulation. Applicable if encap_type is specified.
-    optional uint32 vni = 4;
-}
-message RouteType {
-    repeated RouteTypeItem items = 1;
-}'''
+    enum_wrapper = _get_enum_wrapper(enum_type_str)
+    if enum_wrapper is not None:
+        return enum_wrapper.Value(enum_name)
+    raise Exception(f"Cannot find enum type {enum_type_str}")
 
 
 def routing_type_from_json(json_obj):
@@ -89,14 +138,8 @@ def get_message_from_table_name(table_name):
     table_name_lis = table_name.lower().split("_")
     table_name_lis2 = [item.capitalize() for item in table_name_lis]
     message_name = ''.join(table_name_lis2)
-    module_name = f'dash_api.{table_name.lower()}_pb2'
 
-    # Import the module dynamically
-    module = importlib.import_module(module_name)
-
-    # Get the class object
-    message_class = getattr(module, message_name)
-
+    message_class = _get_message_class_by_name(message_name)
     return message_class()
 
 
@@ -238,7 +281,7 @@ def tbl_name_to_type(tbl_name):
 
 def from_pb(tbl_name, byte_array):
     type_name = tbl_name_to_type(tbl_name)
-    obj_type = globals()[type_name]
+    obj_type = _get_message_class_by_name(type_name)
     obj = obj_type()
     obj.ParseFromString(byte_array)
     return obj

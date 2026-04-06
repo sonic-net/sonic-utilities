@@ -20,7 +20,7 @@ class GNMIEnvironment:
 
 def exec_cmd(cmd):
     logging.debug(cmd)
-    result = subprocess.run(cmd, shell=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
+    result = subprocess.run(cmd, shell=False, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)
 
     # Check the result
     if result.returncode == 0:
