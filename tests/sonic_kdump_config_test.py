@@ -644,7 +644,8 @@ class TestSonicKdumpConfig(unittest.TestCase):
 
         # Assertions
         self.assertTrue(changed)  # Expect some changes to be made
-        mock_run.assert_called_once_with(["/usr/sbin/kdump-config", "set-remote", "user@remote", "/path/to/keys"], use_shell=False)
+        mock_run.assert_called_once_with(
+            ["/usr/sbin/kdump-config", "set-remote", "user@remote", "/path/to/keys"], use_shell=False)
 
     @patch('builtins.open', new_callable=mock_open, read_data='loop=image-myimage crashkernel=128M')
     @patch('sonic_kdump_config.run_command')
@@ -672,7 +673,8 @@ class TestSonicKdumpConfig(unittest.TestCase):
                 )
 
         # Check that the error message was printed
-        mock_run.assert_called_once_with(["/usr/sbin/kdump-config", "set-remote", "user@remote", "/path/to/keys"], use_shell=False)
+        mock_run.assert_called_once_with(
+            ["/usr/sbin/kdump-config", "set-remote", "user@remote", "/path/to/keys"], use_shell=False)
 
     @patch('builtins.open', new_callable=mock_open, read_data='loop=image-myimage crashkernel=128M')
     @patch('sonic_kdump_config.run_command')

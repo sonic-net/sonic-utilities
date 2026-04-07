@@ -560,6 +560,7 @@ def read_ssh_string():
         print_err("Unable to read SSH_STRING from %s" % kdump_cfg)
         sys.exit(1)
 
+
 # Allowlist patterns matching sonic-kdump.yang. Enforced here because raw
 # CONFIG_DB writes (via redis/gNMI) bypass YANG validation, and these values
 # are written into /etc/default/kdump-tools which is shell-sourced as root.
@@ -698,7 +699,8 @@ def kdump_enable(verbose, kdump_enabled, memory, num_dumps, image, cmdline_file,
             print(f"Configuring remote crash dump to {ssh_string} using SSH keys from {ssh_path}")
 
         # Set up SSH connection with ssh_string and ssh_path
-        (rc, lines, err_str) = run_command(["/usr/sbin/kdump-config", "set-remote", ssh_string, ssh_path], use_shell=False)
+        (rc, lines, err_str) = run_command(
+            ["/usr/sbin/kdump-config", "set-remote", ssh_string, ssh_path], use_shell=False)
         if rc != 0:
             print_err("Error: Unable to set remote crash dump configuration", err_str)
             sys.exit(1)
