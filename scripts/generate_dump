@@ -399,25 +399,6 @@ copy_from_masic_docker() {
     fi
 }
 
-###############################################################################
-# Populates ASIC_SUFFIXES array for iterating over ASIC instances.
-# Multi-ASIC: ("0" "1" ... "N-1"), Single-ASIC: ("") so that
-# ${container}${sfx} resolves to the unsuffixed container name.
-# Globals:
-#  NUM_ASICS
-#  ASIC_SUFFIXES (set by this function)
-# Arguments:
-#  None
-# Returns:
-#  None
-###############################################################################
-get_asic_suffixes() {
-    if [[ ( "$NUM_ASICS" > 1 ) ]]; then
-        ASIC_SUFFIXES=( $(seq 0 $((NUM_ASICS - 1))) )
-    else
-        ASIC_SUFFIXES=( "" )
-    fi
-}
 
 ###############################################################################
 # Returns namespace option to be used with vtysh command, based on the ASIC ID.
@@ -2501,7 +2482,11 @@ main() {
     local start_t=0
     local end_t=0
     NUM_ASICS=$(get_asic_count)
-    get_asic_suffixes
+    if [[ ( "$NUM_ASICS" > 1 ) ]]; then
+        ASIC_SUFFIXES=( $(seq 0 $((NUM_ASICS - 1))) )
+    else
+        ASIC_SUFFIXES=( "" )
+    fi
     ${CMD_PREFIX}renice +5 -p $$ >> /dev/null
     ${CMD_PREFIX}ionice -c 2 -n 5 -p $$ >> /dev/null
 
