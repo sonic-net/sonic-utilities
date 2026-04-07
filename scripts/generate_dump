@@ -399,7 +399,6 @@ copy_from_masic_docker() {
     fi
 }
 
-
 ###############################################################################
 # Returns namespace option to be used with vtysh command, based on the ASIC ID.
 # Returns empty string if no ASIC ID is provided
