@@ -400,6 +400,26 @@ copy_from_masic_docker() {
 }
 
 ###############################################################################
+# Populates ASIC_SUFFIXES array for iterating over ASIC instances.
+# Multi-ASIC: ("0" "1" ... "N-1"), Single-ASIC: ("") so that
+# ${container}${sfx} resolves to the unsuffixed container name.
+# Globals:
+#  NUM_ASICS
+#  ASIC_SUFFIXES (set by this function)
+# Arguments:
+#  None
+# Returns:
+#  None
+###############################################################################
+get_asic_suffixes() {
+    if [[ ( "$NUM_ASICS" > 1 ) ]]; then
+        ASIC_SUFFIXES=( $(seq 0 $((NUM_ASICS - 1))) )
+    else
+        ASIC_SUFFIXES=( "" )
+    fi
+}
+
+###############################################################################
 # Returns namespace option to be used with vtysh command, based on the ASIC ID.
 # Returns empty string if no ASIC ID is provided
 # Globals:
@@ -2589,22 +2609,14 @@ main() {
     wait
 
     save_cmd "lldpctl" "lldpctl" &
-    if [[ ( "$NUM_ASICS" > 1 ) ]]; then
-        for (( i=0; i<$NUM_ASICS; i++ ))
-        do
-            save_cmd "docker exec lldp$i lldpcli show statistics" "lldp$i.statistics" &
-            save_cmd "docker exec lldp$i lldpcli show configuration" "lldp$i.config" &
-            save_cmd "docker exec lldp$i lldpcli show interfaces" "lldp$i.interfaces" &
-            save_cmd "docker logs bgp$i" "docker.bgp$i.log" &
-            save_cmd "docker logs swss$i" "docker.swss$i.log" &
-        done
-    else
-        save_cmd "docker exec lldp lldpcli show statistics" "lldp.statistics" &
-        save_cmd "docker exec lldp lldpcli show configuration" "lldp.config" &
-        save_cmd "docker exec lldp lldpcli show interfaces" "lldp.interfaces" &
-        save_cmd "docker logs bgp" "docker.bgp.log" &
-        save_cmd "docker logs swss" "docker.swss.log" &
-    fi
+    get_asic_suffixes
+    for sfx in "${ASIC_SUFFIXES[@]}"; do
+        save_cmd "docker exec lldp${sfx} lldpcli show statistics" "lldp${sfx}.statistics" &
+        save_cmd "docker exec lldp${sfx} lldpcli show configuration" "lldp${sfx}.config" &
+        save_cmd "docker exec lldp${sfx} lldpcli show interfaces" "lldp${sfx}.interfaces" &
+        save_cmd "docker logs bgp${sfx}" "docker.bgp${sfx}.log" &
+        save_cmd "docker logs swss${sfx}" "docker.swss${sfx}.log" &
+    done
     wait
 
  	save_cmd "stpctl all" "stp.log"
