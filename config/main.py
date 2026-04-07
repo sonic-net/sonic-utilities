@@ -5618,10 +5618,18 @@ def remove(ctx, interface_name, ip_addr):
             else:
                 output = bgp_util.run_bgp_command(cmd)
             # If there is output data, check is there a static route,
-            # bound to the interface.
+            # bound to the interface.  Works with sub-interfaces as
+            # "." is treated as part of the name (avoids Ethernet0 matching
+            # Ethernet0.10) and digits are not truncated (avoids Ethernet24
+            # matching Ethernet240).
             if output != "":
-                if any(interface_name in output_line for output_line in output.splitlines()):
-                    ctx.fail("Cannot remove the last IP entry of interface {}. A static {} route is still bound to the RIF.".format(interface_name, ip_ver))
+                intf_pattern = re.compile(
+                    r'(?<![\w.]){}(?![\w.])'.format(re.escape(interface_name)))
+                if intf_pattern.search(output):
+                    ctx.fail(
+                        "Cannot remove the last IP entry of interface {}."
+                        " A static {} route is still bound to the RIF."
+                        .format(interface_name, ip_ver))
     if multi_asic.is_multi_asic():
         command = ['sudo', 'ip', 'netns', 'exec', str(ctx.obj['namespace']), 'ip', 'neigh', 'flush', 'dev', str(interface_name), str(ip_address)]
     else:
