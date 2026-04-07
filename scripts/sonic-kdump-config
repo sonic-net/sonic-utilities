@@ -563,8 +563,8 @@ def read_ssh_string():
 # Allowlist patterns matching sonic-kdump.yang. Enforced here because raw
 # CONFIG_DB writes (via redis/gNMI) bypass YANG validation, and these values
 # are written into /etc/default/kdump-tools which is shell-sourced as root.
-SSH_STRING_RE = re.compile(r'^[a-zA-Z0-9._%+-]+@([a-zA-Z0-9.-]+|[0-9]{1,3}(\.[0-9]{1,3}){3})$')
-SSH_PATH_RE = re.compile(r'^(/[a-zA-Z0-9._-]+)+$')
+SSH_STRING_RE = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9._%+-]*@([a-zA-Z0-9.-]+|[0-9]{1,3}(\.[0-9]{1,3}){3})\Z')
+SSH_PATH_RE = re.compile(r'^(/[a-zA-Z0-9._-]+)+\Z')
 
 def write_ssh_string(ssh_string):
     if not SSH_STRING_RE.match(ssh_string):

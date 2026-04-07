@@ -574,7 +574,7 @@ class TestSonicKdumpConfig(unittest.TestCase):
             mock_run_cmd.assert_not_called()
             mock_run_cmd.reset_mock()
 
-        for path in ["relative/path", ""]:
+        for path in ["relative/path", "", "/path\n"]:
             with self.assertRaises(SystemExit, msg=repr(path)):
                 sonic_kdump_config.write_ssh_path(path)
             mock_run_cmd.assert_not_called()
@@ -594,11 +594,11 @@ class TestSonicKdumpConfig(unittest.TestCase):
 
         for ch in ["'", '"', '|', ';', '$', '`', ' ', '\n', '/', '&']:
             with self.assertRaises(SystemExit, msg=repr(ch)):
-                sonic_kdump_config.write_ssh_string('user@host' + ch)
+                sonic_kdump_config.write_ssh_string('user' + ch + '@host')
             mock_run_cmd.assert_not_called()
             mock_run_cmd.reset_mock()
 
-        for s in ["noatsign", ""]:
+        for s in ["noatsign", "", "user@host\n", "-x@host"]:
             with self.assertRaises(SystemExit, msg=repr(s)):
                 sonic_kdump_config.write_ssh_string(s)
             mock_run_cmd.assert_not_called()
