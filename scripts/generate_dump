@@ -2501,6 +2501,7 @@ main() {
     local start_t=0
     local end_t=0
     NUM_ASICS=$(get_asic_count)
+    get_asic_suffixes
     ${CMD_PREFIX}renice +5 -p $$ >> /dev/null
     ${CMD_PREFIX}ionice -c 2 -n 5 -p $$ >> /dev/null
 
@@ -2609,7 +2610,6 @@ main() {
     wait
 
     save_cmd "lldpctl" "lldpctl" &
-    get_asic_suffixes
     for sfx in "${ASIC_SUFFIXES[@]}"; do
         save_cmd "docker exec lldp${sfx} lldpcli show statistics" "lldp${sfx}.statistics" &
         save_cmd "docker exec lldp${sfx} lldpcli show configuration" "lldp${sfx}.config" &
