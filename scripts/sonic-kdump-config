@@ -568,7 +568,11 @@ SSH_PATH_RE = re.compile(r'^(/[a-zA-Z0-9._-]+)+\Z')
 
 def write_ssh_string(ssh_string):
     if not SSH_STRING_RE.match(ssh_string):
-        print_err("Invalid ssh_string %r: must be user@host with characters [a-zA-Z0-9._%%+-@]" % ssh_string)
+        print_err(
+            "Invalid ssh_string %r: must be user@host, where user starts with an "
+            "alphanumeric character and may contain [a-zA-Z0-9._%%+-], and host "
+            "contains only [a-zA-Z0-9.-] or is an IPv4 address" % ssh_string
+        )
         sys.exit(1)
     cmd = [
         "/bin/sed",
