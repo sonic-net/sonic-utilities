@@ -533,10 +533,13 @@ class TestSonicKdumpConfig(unittest.TestCase):
 
         sonic_kdump_config.write_ssh_path('/path/to/keys')  # Call function with valid path
         # Ensure the correct command is being run
-        expected_cmd = (
-            "/bin/sed -i -e 's|#*SSH_KEY=.*|SSH_KEY=\"/path/to/keys\"|' %s"
-            % sonic_kdump_config.kdump_cfg
-        )
+        expected_cmd = [
+            "/bin/sed",
+            "-i",
+            "-e",
+            's|#*SSH_KEY=.*|SSH_KEY="/path/to/keys"|',
+            sonic_kdump_config.kdump_cfg
+        ]
         mock_run_cmd.assert_called_once_with(expected_cmd, use_shell=False)
 
         # Test case: SSH path in config doesn't match the provided one
@@ -550,6 +553,56 @@ class TestSonicKdumpConfig(unittest.TestCase):
         with self.assertRaises(SystemExit) as sys_exit:
             sonic_kdump_config.write_ssh_path('/path/to/keys')
         self.assertEqual(sys_exit.exception.code, 1)
+
+    @patch("sonic_kdump_config.run_command")
+    @patch("sonic_kdump_config.read_ssh_path")
+    def test_write_ssh_path_validation(self, mock_read, mock_run_cmd):
+        """ssh_path must match the allowlist defined in sonic-kdump.yang."""
+        mock_run_cmd.return_value = (0, [], None)
+
+        for path in ["/root/.ssh/id_rsa", "/etc/kdump/key", "/a/b_c-d.e"]:
+            mock_read.return_value = path
+            sonic_kdump_config.write_ssh_path(path)
+            mock_run_cmd.assert_called_once()
+            mock_run_cmd.reset_mock()
+
+        # Inputs containing characters outside [a-zA-Z0-9._/-] must be rejected
+        # before any external command runs.
+        for ch in ["'", '"', '|', ';', '$', '`', ' ', '\n', '&', '(', ')']:
+            with self.assertRaises(SystemExit, msg=repr(ch)):
+                sonic_kdump_config.write_ssh_path('/path' + ch + 'x')
+            mock_run_cmd.assert_not_called()
+            mock_run_cmd.reset_mock()
+
+        for path in ["relative/path", ""]:
+            with self.assertRaises(SystemExit, msg=repr(path)):
+                sonic_kdump_config.write_ssh_path(path)
+            mock_run_cmd.assert_not_called()
+            mock_run_cmd.reset_mock()
+
+    @patch("sonic_kdump_config.run_command")
+    @patch("sonic_kdump_config.read_ssh_string")
+    def test_write_ssh_string_validation(self, mock_read, mock_run_cmd):
+        """ssh_string must match the allowlist defined in sonic-kdump.yang."""
+        mock_run_cmd.return_value = (0, [], None)
+
+        for s in ["admin@10.0.0.1", "user.name+tag@host.example.com", "kdump@192.168.1.1"]:
+            mock_read.return_value = s
+            sonic_kdump_config.write_ssh_string(s)
+            mock_run_cmd.assert_called_once()
+            mock_run_cmd.reset_mock()
+
+        for ch in ["'", '"', '|', ';', '$', '`', ' ', '\n', '/', '&']:
+            with self.assertRaises(SystemExit, msg=repr(ch)):
+                sonic_kdump_config.write_ssh_string('user@host' + ch)
+            mock_run_cmd.assert_not_called()
+            mock_run_cmd.reset_mock()
+
+        for s in ["noatsign", ""]:
+            with self.assertRaises(SystemExit, msg=repr(s)):
+                sonic_kdump_config.write_ssh_string(s)
+            mock_run_cmd.assert_not_called()
+            mock_run_cmd.reset_mock()
 
     @patch('sonic_kdump_config.run_command')
     @patch('sonic_kdump_config.read_ssh_path')
@@ -591,7 +644,7 @@ class TestSonicKdumpConfig(unittest.TestCase):
 
         # Assertions
         self.assertTrue(changed)  # Expect some changes to be made
-        mock_run.assert_called_once_with("/usr/sbin/kdump-config set-remote user@remote /path/to/keys", use_shell=False)
+        mock_run.assert_called_once_with(["/usr/sbin/kdump-config", "set-remote", "user@remote", "/path/to/keys"], use_shell=False)
 
     @patch('builtins.open', new_callable=mock_open, read_data='loop=image-myimage crashkernel=128M')
     @patch('sonic_kdump_config.run_command')
@@ -619,7 +672,7 @@ class TestSonicKdumpConfig(unittest.TestCase):
                 )
 
         # Check that the error message was printed
-        mock_run.assert_called_once_with("/usr/sbin/kdump-config set-remote user@remote /path/to/keys", use_shell=False)
+        mock_run.assert_called_once_with(["/usr/sbin/kdump-config", "set-remote", "user@remote", "/path/to/keys"], use_shell=False)
 
     @patch('builtins.open', new_callable=mock_open, read_data='loop=image-myimage crashkernel=128M')
     @patch('sonic_kdump_config.run_command')
