@@ -6,6 +6,7 @@ Interface     Asymmetric
 Ethernet0     off
 Ethernet4     off
 Ethernet16    off
+Ethernet20    off
 Ethernet-BP0  off
 Ethernet-BP4  off
 
@@ -28,6 +29,7 @@ Interface     Asymmetric
 Ethernet0     off
 Ethernet4     off
 Ethernet16    off
+Ethernet20    off
 Ethernet-BP0  off
 Ethernet-BP4  off
 

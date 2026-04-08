@@ -1,25 +1,36 @@
 import os
+import pytest
 import sys
 import argparse
 from unittest.mock import patch, MagicMock
 import sonic_platform_base  # noqa: F401
 
+
 tests_path = os.path.dirname(os.path.abspath(__file__))
+mocked_libs_path = os.path.join(tests_path, "mocked_libs")
 
-# Add mocked_libs path so that the file under test
-# can load mocked modules from there
-mocked_libs_path = os.path.join(tests_path, "mocked_libs")  # noqa: E402,F401
-sys.path.insert(0, mocked_libs_path)
 
-from .mocked_libs import psutil  # noqa: E402,F401
-from .mocked_libs.blkinfo import BlkDiskInfo  # noqa: E402,F401
+@pytest.fixture(scope="function")
+def load_ssdutil_with_mocked_libs(monkeypatch):
+    """Fixture to load ssdutil with mocked psutil and blkinfo modules.
 
-sys.modules['os.stat'] = MagicMock()
-sys.modules['os.major'] = MagicMock(return_value=8)
+    Loads the ssdutil module with internal fake/mocked psutil and blkinfo modules.
+    The test case needs to import ssdutil to access the loaded module.
+    """
+    with monkeypatch.context() as temp_mp:
+        # Temporary monkeypatch out existing psutil and blkinfo, and patch in path to the mocked
+        # implementations, while loading ssdutil.
+        temp_mp.delitem(sys.modules, 'psutil', raising=False)
+        temp_mp.delitem(sys.modules, 'blkinfo', raising=False)
+        temp_mp.syspath_prepend(mocked_libs_path)
+        # Long-lived monkeypatch of ssdutil module with the mocked psutil and blkinfo modules.
+        monkeypatch.delitem(sys.modules, 'ssdutil.main', raising=False)
+        import ssdutil.main  # noqa
+    yield
+
+
 sys.modules['sonic_platform'] = MagicMock()
 sys.modules['sonic_platform_base.sonic_ssd.ssd_generic'] = MagicMock()
-
-import ssdutil.main as ssdutil  # noqa: E402
 
 
 class Ssd():
@@ -48,7 +59,9 @@ class TestSsdutil:
     @patch('os.geteuid', MagicMock(return_value=0))
     @patch('os.stat', MagicMock(st_rdev=2049))
     @patch('os.major', MagicMock(return_value=8))
-    def test_get_default_disk(self):
+    def test_get_default_disk(self, load_ssdutil_with_mocked_libs):
+        import ssdutil.main as ssdutil  # See load_ssdutil_with_mocked_libs fixture.
+
         (default_device, disk_type) = ssdutil.get_default_disk()
 
         assert default_device == "/dev/sdx"
@@ -57,14 +70,18 @@ class TestSsdutil:
     @patch('os.geteuid', MagicMock(return_value=0))
     @patch('os.stat', MagicMock(st_rdev=2049))
     @patch('os.major', MagicMock(return_value=8))
-    @patch('psutil.disk_partitions', MagicMock(return_value=None))
-    def test_get_default_disk_none_partitions(self):
+    @patch('ssdutil.main.psutil.disk_partitions', MagicMock(return_value=None))
+    def test_get_default_disk_none_partitions(self, load_ssdutil_with_mocked_libs):
+        import ssdutil.main as ssdutil  # See load_ssdutil_with_mocked_libs fixture.
+
         (default_device, disk_type) = ssdutil.get_default_disk()
 
         assert default_device == "/dev/sda"
         assert disk_type is None
 
-    def test_is_number_valueerror(self):
+    def test_is_number_valueerror(self, load_ssdutil_with_mocked_libs):
+        import ssdutil.main as ssdutil  # See load_ssdutil_with_mocked_libs fixture.
+
         outcome = ssdutil.is_number("nope")
         assert outcome is False
 
@@ -72,7 +89,8 @@ class TestSsdutil:
     @patch('os.geteuid', MagicMock(return_value=0))
     @patch('os.stat', MagicMock(st_rdev=2049))
     @patch('os.major', MagicMock(return_value=8))
-    def test_sonic_storage_path(self):
+    def test_sonic_storage_path(self, load_ssdutil_with_mocked_libs):
+        import ssdutil.main as ssdutil  # See load_ssdutil_with_mocked_libs fixture.
 
         with patch('argparse.ArgumentParser.parse_args', MagicMock()) as mock_args:  # noqa: E501
             sys.modules['sonic_platform_base.sonic_storage.ssd'] = MagicMock(return_value=Ssd())  # noqa: E501

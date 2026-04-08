@@ -11,7 +11,7 @@ class MockSideEffectDict:
     def __init__(self, map):
         self.map = map
 
-    def side_effect_func(self, *args):
+    def side_effect_func(self, *args, **kwargs):
         l = [str(arg) for arg in args]
         key = tuple(l)
         value = self.map.get(key)
@@ -47,7 +47,7 @@ class MockSideEffectDict:
 
         rv = []
         for val in value:
-            rv.append(JsonMoveGroup(val))
+            rv.append(JsonMoveGroup(self.__class__.__name__, val))
         return rv
 
 

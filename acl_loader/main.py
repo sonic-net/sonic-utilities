@@ -750,7 +750,7 @@ class AclLoader(object):
 
         rule_props["PRIORITY"] = str(self.max_priority - rule_idx)
 
-        # setup default ip type match to dataplane acl (could be overriden by rule later)
+        # setup default ip type match to dataplane acl (could be overridden by rule later)
         if self.is_table_l3v4v6(table_name):
             # ETHERTYPE must be passed and it should be one of IPv4 or IPv6
             try:

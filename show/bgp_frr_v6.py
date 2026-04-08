@@ -3,6 +3,7 @@ import click
 from sonic_py_common import multi_asic
 import utilities_common.cli as clicommon
 from show.main import ipv6
+from show import bgp_cli
 import utilities_common.multi_asic as multi_asic_util
 import utilities_common.bgp_util as bgp_util
 import utilities_common.constants as constants
@@ -70,6 +71,14 @@ def neighbors(ipaddress, info_type, namespace):
 def network(ipaddress, info_type, namespace):
     """Show BGP ipv6 network"""
     network_helper(ipaddress, info_type, namespace)
+
+
+# 'aggregate-address' subcommand ("show ipv6 bgp aggregate-address")
+@bgp.command('aggregate-address')
+@clicommon.pass_db
+def aggregate_address(db):
+    """Show IPv6 BGP aggregate addresses"""
+    bgp_cli.show_aggregate_address(db, "ipv6")
 
 
 @bgp.group(cls=clicommon.AliasedGroup)

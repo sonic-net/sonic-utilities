@@ -93,8 +93,8 @@ class TestHash:
         runner = CliRunner()
 
         result = runner.invoke(
-            config.config.commands["switch-hash"].commands["global"].
-            commands[hash], args, obj=db
+            config.config.commands["switch-hash"].commands["global"],
+            [hash] + args.split(), obj=db
         )
 
         logger.debug("\n" + result.output)
@@ -147,8 +147,8 @@ class TestHash:
         runner = CliRunner()
 
         result = runner.invoke(
-            config.config.commands["switch-hash"].commands["global"].
-            commands[hash], args, obj=db
+            config.config.commands["switch-hash"].commands["global"],
+            [hash] + args.split(), obj=db
         )
 
         logger.debug("\n" + result.output)
@@ -171,8 +171,8 @@ class TestHash:
         runner = CliRunner()
 
         result = runner.invoke(
-            config.config.commands["switch-hash"].commands["global"].
-            commands[hash], arg, obj=db
+            config.config.commands["switch-hash"].commands["global"],
+            [hash, arg], obj=db
         )
 
         logger.debug("\n" + result.output)
@@ -200,8 +200,8 @@ class TestHash:
         runner = CliRunner()
 
         result = runner.invoke(
-            config.config.commands["switch-hash"].commands["global"].
-            commands[hash], arg, obj=db
+            config.config.commands["switch-hash"].commands["global"],
+            [hash, arg], obj=db
         )
 
         logger.debug("\n" + result.output)
@@ -263,8 +263,8 @@ class TestHash:
         runner = CliRunner()
 
         result = runner.invoke(
-            show.cli.commands["switch-hash"].commands["global"],
-            [] if format == "plain" else ["--json"], obj=db
+            show.cli.commands["switch-hash"],
+            ["global"] + ([] if format == "plain" else ["--json"]), obj=db
         )
 
         logger.debug("\n" + result.output)
@@ -338,8 +338,8 @@ class TestHash:
         runner = CliRunner()
 
         result = runner.invoke(
-            show.cli.commands["switch-hash"].commands["capabilities"],
-            [] if format == "plain" else ["--json"], obj=db
+            show.cli.commands["switch-hash"],
+            ["capabilities"] + ([] if format == "plain" else ["--json"]), obj=db
         )
 
         logger.debug("\n" + result.output)

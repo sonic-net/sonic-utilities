@@ -7,7 +7,7 @@ from unittest.mock import call, patch, mock_open, MagicMock
 
 
 class TestShowBarefoot(object):
-    def setup(self):
+    def setup_method(self):
         print('SETUP')
 
     @patch('subprocess.run')
@@ -48,6 +48,6 @@ class TestShowBarefoot(object):
         mock_open_file.assert_called_once_with('/usr/share/sonic/hwsku_dir/switch-tna-sai.conf')
         assert mock_cmd.call_args_list == expected_calls
 
-    def teardown(self):
+    def teardown_method(self):
         print('TEARDOWN')
 

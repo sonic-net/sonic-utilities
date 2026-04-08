@@ -739,27 +739,6 @@
         "expected_changes": [
             [
                 {
-                    "op": "replace",
-                    "path": "/PORT/Ethernet0/alias",
-                    "value": "Eth1/1"
-                }
-            ],
-            [
-                {
-                    "op": "replace",
-                    "path": "/PORT/Ethernet0/description",
-                    "value": ""
-                }
-            ],
-            [
-                {
-                    "op": "replace",
-                    "path": "/PORT/Ethernet0/speed",
-                    "value": "10000"
-                }
-            ],
-            [
-                {
                     "op": "remove",
                     "path": "/ACL_TABLE/NO-NSW-PACL-V4/ports"
                 }
@@ -1017,42 +996,37 @@
             [
                 {
                     "op": "remove",
-                    "path": "/VLAN_MEMBER/Vlan100|Ethernet1"
-                },
-                {
-                    "op": "remove",
-                    "path": "/VLAN_MEMBER/Vlan100|Ethernet2"
-                },
-                {
-                    "op": "remove",
-                    "path": "/VLAN_MEMBER/Vlan100|Ethernet3"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
                     "path": "/ACL_TABLE/NO-NSW-PACL-V4/ports/0"
                 }
             ],
             [
                 {
-                    "op": "replace",
-                    "path": "/PORT/Ethernet0/alias",
-                    "value": "Eth1"
+                    "op": "remove",
+                    "path": "/VLAN_MEMBER/Vlan100|Ethernet0"
                 }
             ],
             [
                 {
-                    "op": "replace",
-                    "path": "/PORT/Ethernet0/description",
-                    "value": "Ethernet0 100G link"
+                    "op": "remove",
+                    "path": "/PORT/Ethernet0"
                 }
             ],
             [
                 {
-                    "op": "replace",
-                    "path": "/PORT/Ethernet0/speed",
-                    "value": "100000"
+                    "op": "remove",
+                    "path": "/VLAN_MEMBER/Vlan100|Ethernet1"
+                }
+            ],
+            [
+                {
+                    "op": "remove",
+                    "path": "/VLAN_MEMBER/Vlan100|Ethernet2"
+                }
+            ],
+            [
+                {
+                    "op": "remove",
+                    "path": "/VLAN_MEMBER"
                 }
             ],
             [
@@ -1117,25 +1091,6 @@
             ],
             [
                 {
-                    "op": "add",
-                    "path": "/ACL_TABLE/NO-NSW-PACL-V4/ports/0",
-                    "value": "Ethernet0"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/ACL_TABLE/NO-NSW-PACL-V4/ports/1"
-                }
-            ],
-            [
-                {
-                    "op": "remove",
-                    "path": "/PORT/Ethernet3"
-                }
-            ],
-            [
-                {
                     "op": "remove",
                     "path": "/ACL_TABLE/NO-NSW-PACL-V4/ports"
                 }
@@ -1143,10 +1098,8 @@
             [
                 {
                     "op": "remove",
-                    "path": "/VLAN_MEMBER"
-                }
-            ],
-            [
+                    "path": "/PORT/Ethernet3"
+                },
                 {
                     "op": "remove",
                     "path": "/PORT"
@@ -1159,8 +1112,8 @@
                     "value": {
                         "Ethernet0": {
                             "alias": "Eth1",
-                            "description": "Ethernet0 100G link",
                             "lanes": "65, 66, 67, 68",
+                            "description": "Ethernet0 100G link",
                             "speed": "100000"
                         }
                     }
@@ -5689,6 +5642,126 @@
                 {
                     "op": "remove",
                     "path": "/PORT_QOS_MAP/Ethernet64"
+                }
+            ]
+        ]
+    },
+    "CREATE_ONLY_PATH_TEST_MIRROR_SESSION__SUCCESS": {
+        "desc": "Mirror changes should not remove ACL Table.",
+        "current_config": {
+            "MIRROR_SESSION": {
+                "EVERFLOW_TUNNEL": {
+                    "dscp": "8",
+                    "dst_ip": "200.1.1.200",
+                    "src_ip": "100.1.1.1",
+                    "ttl": "255",
+                    "type": "ERSPAN"
+                }
+            },
+            "ACL_TABLE": {
+                "DATAACL": {
+                    "policy_desc": "DATAACL",
+                    "ports": [
+                        "Ethernet4"
+                    ],
+                    "stage": "ingress",
+                    "type": "L3"
+                },
+                "EVERFLOW": {
+                    "policy_desc": "EVERFLOW",
+                    "ports": [
+                        "Ethernet8"
+                    ],
+                    "stage": "ingress",
+                    "type": "MIRROR"
+                },
+                "EVERFLOWV6": {
+                    "policy_desc": "EVERFLOWV6",
+                    "ports": [
+                        "Ethernet4",
+                        "Ethernet8"
+                    ],
+                    "stage": "ingress",
+                    "type": "MIRRORV6"
+                }
+            },
+            "ACL_RULE": {
+                "DATAACL|RULE_1": {
+                    "DST_IP": "192.168.1.1/32",
+                    "IP_TYPE": "IP",
+                    "L4_DST_PORT": "22",
+                    "PACKET_ACTION": "DROP",
+                    "PRIORITY": "10"
+                },
+                "EVERFLOW|RULE_1": {
+                    "PRIORITY": "1000",
+                    "IP_TYPE": "IP",
+                    "MIRROR_INGRESS_ACTION": "EVERFLOW_TUNNEL"
+                }
+            },
+            "PORT": {
+                "Ethernet4": {
+                    "admin_status": "up",
+                    "alias": "fortyGigE0/4",
+                    "description": "Servers0:eth0",
+                    "index": "1",
+                    "lanes": "29,30,31,32",
+                    "mtu": "9100",
+                    "pfc_asym": "off",
+                    "speed": "40000"
+                },
+                "Ethernet8": {
+                    "admin_status": "up",
+                    "alias": "fortyGigE0/8",
+                    "description": "Servers1:eth0",
+                    "index": "2",
+                    "lanes": "33,34,35,36",
+                    "mtu": "9100",
+                    "pfc_asym": "off",
+                    "speed": "40000"
+                }
+            }
+        },
+        "patch": [
+            {
+                "op": "replace",
+                "path": "/MIRROR_SESSION/EVERFLOW_TUNNEL/dst_ip",
+                "value": "200.1.1.203"
+            }
+        ],
+        "expected_changes": [
+            [
+                {
+                    "op": "remove",
+                    "path": "/ACL_RULE/EVERFLOW|RULE_1/MIRROR_INGRESS_ACTION"
+                }
+            ],
+            [
+                {
+                    "op": "remove",
+                    "path": "/MIRROR_SESSION"
+                }
+            ],
+            [
+                {
+                    "op": "add",
+                    "path": "/MIRROR_SESSION",
+                    "value": {
+                        "EVERFLOW_TUNNEL": {
+                            "dscp": "8",
+                            "dst_ip": "200.1.1.203",
+                            "src_ip": "100.1.1.1",
+                            "ttl": "255",
+                            "type": "ERSPAN"
+                        }
+                    }
+                }
+            ],
+            [
+                {
+                    "op": "add",
+                    "path": "/ACL_RULE/EVERFLOW|RULE_1/MIRROR_INGRESS_ACTION",
+                    "value": "EVERFLOW_TUNNEL"
                 }
             ]
         ]
