@@ -36,15 +36,15 @@ def is_bgp_neigh_present(neighbor_ip, namespace=multi_asic.DEFAULT_NAMESPACE, vr
         if vrf_name in ('all', constants.DEFAULT_VRF) and config_db.get_entry(table, neighbor_ip):
             return True
 
-        # Check for any string|neighbor_ip format using regex. This is needed
+        # Check for any string|neighbor_ip format. This is needed
         # when unified routing config mode is enabled, as in that case
         # vrfname|neighbor_ip is the key instead of just neighbor_ip
         keys = config_db.get_keys(table)
         for key in keys:
-            # Convert the key from tuple like ('default', 'x.x.x.x') to a string
-            # like 'default|x.x.x.x'
-            if (isinstance(key, tuple) and len(key) == 2 and key[1] == neighbor_ip and
-              (vrf_name == 'all' or key[0] == vrf_name) and config_db.get_entry(table, key)):
+            if (
+                    isinstance(key, tuple) and len(key) == 2 and key[1] == neighbor_ip and
+                    (vrf_name == 'all' or key[0] == vrf_name) and config_db.get_entry(table, key)
+            ):
                 return True
 
     # Check if the neighbor IP falls within any dynamic peer range (BGP_PEER_RANGE).
@@ -107,8 +107,7 @@ def is_ipv6_address(ip_address):
 def get_dynamic_neighbor_subnet(db):
     """
     Returns dict of description and subnet info from bgp_peer_range table.
-    Keys in BGP_PEER_RANGE can be either 'name' or 'vrf_name|name'.
-    The returned dict uses (vrf, subnet) tuples as keys, where vrf is None
+    Keys in BGP_PEER_RANGE can be either 'name' or 'vrf_name|name', where vrf is 'default'
     for entries without a VRF prefix.
     :param db: config_db
     """

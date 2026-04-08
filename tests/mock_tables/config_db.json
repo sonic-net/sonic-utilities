@@ -3351,6 +3351,11 @@
         "ip_range@": "10.0.0.64/30",
         "name": "BGPSLBPassive",
         "src_address": "10.0.0.32"
+     },
+     "BGP_PEER_RANGE|BGPSLBPassiveV6": {
+        "ip_range@": "fc00::80/126",
+        "name": "BGPSLBPassiveV6",
+        "src_address": "fc00::1"
      }
 
 }

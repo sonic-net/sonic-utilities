@@ -180,6 +180,9 @@ def setup_single_bgp_instance(request):
     elif request.param == 'v4_dynamic':
         bgp_mocked_json = os.path.join(
             test_path, 'mock_tables', 'ipv4_bgp_summary_dynamic.json')
+    elif request.param == 'v6_dynamic':
+        bgp_mocked_json = os.path.join(
+            test_path, 'mock_tables', 'ipv6_bgp_summary_dynamic.json')
     elif request.param == 'v4_vrf':
         bgp_mocked_json = os.path.join(
             test_path, 'mock_tables', 'ipv4_bgp_summary_vrf.json')

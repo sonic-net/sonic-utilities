@@ -469,6 +469,24 @@ class TestBgpCommandsSingleAsic(object):
         assert 'Total number of neighbors 25' in result.output
 
     @pytest.mark.parametrize('setup_single_bgp_instance',
+                             ['v6_dynamic'], indirect=['setup_single_bgp_instance'])
+    def test_bgp_summary_v6_dynamic_neighbor(
+            self,
+            setup_bgp_commands,
+            setup_single_bgp_instance):
+        show = setup_bgp_commands
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["ipv6"].commands["bgp"].commands["summary"], [])
+        print("{}".format(result.output))
+        assert result.exit_code == 0
+        # fc00::82 has no static BGP_NEIGHBOR entry; it should be resolved
+        # via the BGP_PEER_RANGE|BGPSLBPassiveV6 entry covering fc00::80/126
+        assert 'fc00::82' in result.output
+        assert 'BGPSLBPassiveV6' in result.output
+        assert 'Total number of neighbors 25' in result.output
+
+    @pytest.mark.parametrize('setup_single_bgp_instance',
                              ['v4'], indirect=['setup_single_bgp_instance'])
     def test_bgp_default_vrf_summary_v4(
             self,
