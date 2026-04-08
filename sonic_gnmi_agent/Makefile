@@ -1,5 +1,5 @@
 
-TOP_DIR := $(abspath ../../..)
+TOP_DIR := $(abspath ../..)
 BLDENV := bookworm
 CONFIGURED_ARCH := amd64
 include $(TOP_DIR)/rules/sonic-dash-api.mk

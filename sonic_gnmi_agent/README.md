@@ -1,10 +1,20 @@
 Sonic Smart-Switch GNMI agent
-In order to build the docker gnmi agent image, these 2 dependencies need to be built:
-make SONIC_BUILD_JOBS=4 NOBULLSEYE=1 NOBUSTER=1 target/docker-sonic-gnmi.gz
-make SONIC_BUILD_JOBS=4 NOBULLSEYE=1 NOBUSTER=1 target/debs/bookworm/libdashapi_1.0.0_amd64.deb
 
-Then you can use this command to build the sonic gnmi agent docker:
-make -C SONIC_BUILD_JOBS=4 NOBULLSEYE=1 NOBUSTER=1 src/sonic-utilities/sonic_gnmi_agent clean all
+Building
+1. Clone sonic-buildimage:
+    git clone --recurse-submodules https://github.com/sonic-net/sonic-buildimage.git
+    make init
+    make NOBULLSEYE=1 NOBUSTER=1 configure PLATFORM=vpp
+Note: we are using the VPP platform for faster build time compared to an HW platform
+2. Build needed dependencies:
+  make SONIC_BUILD_JOBS=4 NOBULLSEYE=1 NOBUSTER=1 target/docker-sonic-gnmi.gz
+  make SONIC_BUILD_JOBS=4 NOBULLSEYE=1 NOBUSTER=1 target/debs/bookworm/libdashapi_1.0.0_amd64.deb
+Alternatively, the entire vpp platform can be built:
+    make SONIC_BUILD_JOBS=4 target/docker-sonic-vpp.gz NOBULLSEYE=1 NOBUSTER=1
+
+3. Clone sonic-utilities into sonic-buildimage directory and call make:
+    git clone --recursive https://github.com/sonic-net/sonic-utilities.git
+    make SONIC_BUILD_JOBS=4 NOBULLSEYE=1 NOBUSTER=1 -C sonic-utilities/sonic_gnmi_agent clean all
 
 The generated file will be located here:
 ./target/docker-sonic-gnmi-agent.gz
@@ -41,65 +51,8 @@ Installing and using the agent
 2. Launch the docker container:
    docker run -it --name=sonic_gnmi_agent --network host sonic-gnmi-agent:latest
 
-3. Execute the gnmi_client operatioons from inside the docker
-
-General Syntax
-python gnmi_client.py [options] <subcommand> [subcommand options]
-Options
--t, --target: (Optional) Address of the GNMI server formatted as host:port. Defaults to 127.0.0.1:8080.
--d, --debug: (Optional) Enable debug log output. Defaults to False.
--i, --dpu_index: (Optional) Index of the Data Processing Unit (DPU) ranging from 0 to 7. Defaults to 0.
--n, --num_dpus: (Optional) Number of DPUs, between 1 and 8. Defaults to 1.
--s, --sleep_secs: (Optional) Delay in seconds before each batch operation. Defaults to 0.
--b, --batch_val: (Optional) Size of batch operations. Defaults to 10.
-
-Subcommands
-update
-    Performs an update operation using a JSON template.
-    Syntax:
-    gnmi_client.py update -f <template_path>
-    -f, --filename: (Required) Path to the JSON template file.
-
-replace
-    Performs a replace operation using a JSON template.
-    Syntax:
-    gnmi_client.py replace -f <template_path>
-    -f, --filename: (Required) Path to the JSON template file.
-
-delete
-    Performs a delete operation based on a JSON template or an XPath.
-    Syntax:
-    gnmi_client.py delete [-f <template_path>] | [-x <xpath>]
-    -f, --filename: Path to the JSON template file.
-    -x, --xpath: XPath of the object to be deleted.
-
-get
-    Fetches data from the device using a JSON template or an XPath.
-    Syntax:
-    gnmi_client.py get [-f <template_path>] | [-x <xpath>]
-    -f, --filename: Path to the JSON template file.
-    -x, --xpath: XPath of the object to be retrieved.
-
-Examples
-Update a Device Configuration Using Template:
-    gnmi_client.py  -i 0 -n 8 -t 127.0.0.1:8080 -s 5 update -f /sonic/templates/pl_combined.j2
-Replace a Configuration with Debug Mode Enabled:
-    gnmi_client.py  -i 0 -n 8 -t 127.0.0.1:8080 -s 5 update -d -f /sonic/templates/pl_combined.j2
-Delete a Configuration:
-    gnmi_client.py  -i 0 -n 8 -t 127.0.0.1:8080 -s 5 delete -f /sonic/templates/pl_combined.j2
-Get Configuration Details with Template:
-    gnmi_client.py  -i 0 -n 8 -t 127.0.0.1:8080 -s 5 get -f /sonic/templates/pl_combined.j2
-Logging
-    The gnmi_client provides logging functionality. Enable debug logs using the -d or --debug option to get detailed output for troubleshooting.
-
-Notes
-    Ensure your templates are correctly formatted and valid JSON to avoid errors during rendering.
-    The default user credentials for gNMI operations are set to cisco/cisco123 in the gnmi_client and may need to be updated based on your environment.
-
-Troubleshooting
-If you encounter errors, consider the following:
-    Check the gNMI server connectivity (IP address and port).
-    Verify access credentials.
-    Ensure JSON templates are valid.
-    Use the --debug option to obtain detailed logs for debugging.
+3. Push configurations to the DPU from inside the docker
+   gnmi_client.py -i <dpu_id> -n 8 -t 127.0.0.1:8080 <op> -f <template_name>
+      dpu_id=0,1…7
+      op=update|delete|replace
 
