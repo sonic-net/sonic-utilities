@@ -242,7 +242,8 @@ def side_effect_subprocess_popen(*args, **kwargs):
 @patch('sonic_py_common.device_info.get_chassis_info', MagicMock(return_value={
         "serial": "N/A",
         "model": "N/A",
-        "revision": "N/A"}))
+        "revision": "N/A",
+        "switch_host_serial": "N/A"}))
 @patch('subprocess.Popen', MagicMock(side_effect=side_effect_subprocess_popen))
 def test_show_version():
     runner = CliRunner()
@@ -280,7 +281,8 @@ def test_show_version():
 @patch('sonic_py_common.device_info.get_chassis_info', MagicMock(return_value={
         "serial": "N/A",
         "model": "N/A",
-        "revision": "N/A"}))
+        "revision": "N/A",
+        "switch_host_serial": "N/A"}))
 @patch('subprocess.Popen', MagicMock(side_effect=side_effect_subprocess_popen))
 def test_show_version_brief():
     """Test that --brief flag omits docker image information."""
@@ -309,7 +311,8 @@ def test_show_version_brief():
 @patch('sonic_py_common.device_info.get_chassis_info', MagicMock(return_value={
         "serial": "N/A",
         "model": "N/A",
-        "revision": "N/A"}))
+        "revision": "N/A",
+        "switch_host_serial": "N/A"}))
 @patch('subprocess.Popen', MagicMock(side_effect=side_effect_subprocess_popen))
 def test_show_version_missing_fields():
     """Test show version doesn't crash when debian_version and kernel_version are missing.
