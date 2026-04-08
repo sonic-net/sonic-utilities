@@ -11,6 +11,7 @@ from swsscommon import swsscommon
 # Kept local to avoid pulling utilities_common into the GCU wheel.
 # NOTE: A duplicate of this list exists in utilities_common/constants.py.
 # If you update this list, update that copy too.
+DEFAULT_VRF = 'default'
 DEFAULT_SUPPORTED_FECS_LIST = ['rs', 'fc', 'none', 'auto']
 
 STATE_DB_NAME = 'STATE_DB'

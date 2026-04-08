@@ -12,7 +12,7 @@ from tabulate import tabulate
 from utilities_common import constants
 
 
-def get_namespace_for_bgp_neighbor(neighbor_ip, vrf_name=None):
+def get_namespace_for_bgp_neighbor(neighbor_ip, vrf_name=constants.DEFAULT_VRF):
     namespace_list = multi_asic.get_namespace_list()
     for namespace in namespace_list:
         if is_bgp_neigh_present(neighbor_ip, namespace, vrf_name):
@@ -23,18 +23,17 @@ def get_namespace_for_bgp_neighbor(neighbor_ip, vrf_name=None):
                  ' Bgp neighbor {} not configured'.format(neighbor_ip))
 
 
-def is_bgp_neigh_present(neighbor_ip, namespace=multi_asic.DEFAULT_NAMESPACE, vrf_name="default"):
+def is_bgp_neigh_present(neighbor_ip, namespace=multi_asic.DEFAULT_NAMESPACE, vrf_name=constants.DEFAULT_VRF):
     config_db = multi_asic.connect_config_db_for_ns(namespace)
 
     tables = [
         multi_asic.BGP_NEIGH_CFG_DB_TABLE,
         multi_asic.BGP_INTERNAL_NEIGH_CFG_DB_TABLE,
     ]
-    pattern = re.compile(rf".*\|{re.escape(neighbor_ip)}")
 
     for table in tables:
-        # Check for the neighbor_ip format
-        if config_db.get_entry(table, neighbor_ip):
+        # Check for the neighbor_ip format (no VRF prefix = default VRF)
+        if vrf_name in ('all', constants.DEFAULT_VRF) and config_db.get_entry(table, neighbor_ip):
             return True
 
         # Check for any string|neighbor_ip format using regex. This is needed
@@ -44,17 +43,16 @@ def is_bgp_neigh_present(neighbor_ip, namespace=multi_asic.DEFAULT_NAMESPACE, vr
         for key in keys:
             # Convert the key from tuple like ('default', 'x.x.x.x') to a string
             # like 'default|x.x.x.x'
-            if isinstance(key, tuple):
-                key_str = "|".join(key)
-                if pattern.match(key_str) and config_db.get_entry(table, key):
-                    return True
+            if (isinstance(key, tuple) and len(key) == 2 and key[1] == neighbor_ip
+                and (vrf_name == 'all' or key[0] == vrf_name) and config_db.get_entry(table, key)):
+                return True
 
     # Check if the neighbor IP falls within any dynamic peer range (BGP_PEER_RANGE).
     # Entry keys are either 'name' or 'vrf_name|name'; filter by vrf_name when provided.
     peer_range_data = config_db.get_table('BGP_PEER_RANGE')
     for entry in peer_range_data:
         try:
-            entry_vrf = entry.split('|', 1)[0] if '|' in entry else "default"
+            entry_vrf = entry[0] if isinstance(entry, tuple) else constants.DEFAULT_VRF
             if vrf_name != 'all' and vrf_name != entry_vrf:
                 continue
             ip_ranges = peer_range_data[entry].get('ip_range', [])
@@ -120,7 +118,7 @@ def get_dynamic_neighbor_subnet(db):
     neighbor_data = db.get_table('BGP_PEER_RANGE')
     try:
         for entry in neighbor_data:
-            vrf = entry.split('|', 1)[0] if '|' in entry else constants.DEFAULT_VRF
+            vrf = entry[0] if isinstance(entry, tuple) else constants.DEFAULT_VRF
             peer_name = neighbor_data[entry]['name']
             for ip_range in neighbor_data[entry].get('ip_range', []):
                 subnet = ipaddress.ip_network(ip_range, strict=False)
@@ -174,14 +172,15 @@ def get_bgp_neighbor_ip_to_name(ip, static_neighbors, dynamic_neighbors, vrf_nam
     :return: name of neighbor
     """
     # Direct IP match
-    if ip in static_neighbors:
+    if ip in static_neighbors and vrf_name in ('all', constants.DEFAULT_VRF):
         return static_neighbors[ip]
     # Try to find the key where IP is the second element of any tuple key.
     # This is to handle the case where the key is a tuple like (vrfname, IP)
     # when unified routing config mode is enabled
     elif matching_key := next(
         (key for key in static_neighbors.keys()
-         if isinstance(key, tuple) and len(key) == 2 and key[1] == ip),
+         if isinstance(key, tuple) and len(key) == 2 and key[1] == ip
+         and (vrf_name == 'all' or key[0] == vrf_name)),
         None
     ):
         return static_neighbors[matching_key]
@@ -288,11 +287,12 @@ def run_bgp_show_command(vtysh_cmd, bgp_namespace=multi_asic.DEFAULT_NAMESPACE, 
 
 def process_bgp_vrf_summary(cmd_output_json, bgp_summary, key, ns, device, vrf):
     ctx = click.get_current_context()
-        
+
     # no bgp neighbors found so print basic device bgp info
     if key not in cmd_output_json:
         has_bgp_neighbors = False
     else:
+        has_bgp_neighbors = True
         # for multi asic devices or chassis linecards, the output of 'show ip bgp summary json'
         # will have both internal and external bgp neighbors
         # So, check if the current namespace has external bgp neighbors.
@@ -340,7 +340,6 @@ def get_bgp_summary_from_all_bgp_instances(af, namespace, display, vrf):
     cmd_output_json = {}
 
     for ns in device.get_ns_list_based_on_options():
-        has_bgp_neighbors = True
         cmd_output = run_bgp_show_command(vtysh_cmd, ns)
         device.current_namespace = ns
         try:
