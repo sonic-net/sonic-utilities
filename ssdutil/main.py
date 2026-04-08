@@ -56,7 +56,10 @@ def get_default_disk():
     default_device = os.path.join("/dev/", blkdev)
 
     # Disk Type Support for eMMC devices
-    disk_type = 'eMMC' if len(disk_type) == 0 and 'mmcblk' in host_partition.device else disk_type  # noqa: E501
+    # Some platforms (e.g., 7060CX) report tran='mmc' (non-empty) for eMMC devices,
+    # so we treat both an empty tran and tran='mmc' as eMMC when the device path
+    # contains 'mmcblk'.
+    disk_type = 'eMMC' if (len(disk_type) == 0 or disk_type.lower() == 'mmc') and 'mmcblk' in host_partition.device else disk_type  # noqa: E501
 
     return default_device, disk_type
 
