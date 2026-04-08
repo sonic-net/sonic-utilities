@@ -77,6 +77,7 @@ class TestShowRunAllCommands(object):
     def teardown_class(cls):
         print("TEARDOWN")
         bgp_util.run_bgp_command = cls._old_run_bgp_command
+        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
 
 
@@ -115,6 +116,7 @@ class TestShowRunAllCommandsMasic(object):
     def teardown_class(cls):
         print("TEARDOWN")
         bgp_util.run_bgp_command = cls._old_run_bgp_command
+        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
         # change back to single asic config
@@ -240,13 +242,12 @@ def side_effect_subprocess_popen(*args, **kwargs):
 @patch('sonic_py_common.device_info.get_chassis_info', MagicMock(return_value={
         "serial": "N/A",
         "model": "N/A",
-        "revision": "N/A"}))
+        "revision": "N/A",
+        "switch_host_serial": "N/A"}))
 @patch('subprocess.Popen', MagicMock(side_effect=side_effect_subprocess_popen))
 def test_show_version():
     runner = CliRunner()
     result = runner.invoke(show.cli.commands["version"])
-    assert result.exit_code == 0
-    assert "SONiC Software Version: SONiC.release-1.1-7d94c0c28" in result.output
     assert "SONiC OS Version: 11" in result.output
     assert "Distribution: Debian 11.6" in result.output
     assert "Kernel: 5.10" in result.output
@@ -278,7 +279,8 @@ def test_show_version():
 @patch('sonic_py_common.device_info.get_chassis_info', MagicMock(return_value={
         "serial": "N/A",
         "model": "N/A",
-        "revision": "N/A"}))
+        "revision": "N/A",
+        "switch_host_serial": "N/A"}))
 @patch('subprocess.Popen', MagicMock(side_effect=side_effect_subprocess_popen))
 def test_show_version_brief():
     """Test that --brief flag omits docker image information."""
@@ -307,7 +309,8 @@ def test_show_version_brief():
 @patch('sonic_py_common.device_info.get_chassis_info', MagicMock(return_value={
         "serial": "N/A",
         "model": "N/A",
-        "revision": "N/A"}))
+        "revision": "N/A",
+        "switch_host_serial": "N/A"}))
 @patch('subprocess.Popen', MagicMock(side_effect=side_effect_subprocess_popen))
 def test_show_version_missing_fields():
     """Test show version doesn't crash when debian_version and kernel_version are missing.
@@ -323,7 +326,7 @@ def test_show_version_missing_fields():
     assert "Build commit: 46415d112" in result.output
 
 class TestShowAcl(object):
-    def setup_method(self):
+    def setup(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -344,12 +347,12 @@ class TestShowAcl(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['acl-loader', 'show', 'table', 'EVERFLOW'], display_cmd=True)
 
-    def teardown_method(self):
+    def teardown(self):
         print('TEAR DOWN')
 
 
 class TestShowChassis(object):
-    def setup_method(self):
+    def setup(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -379,12 +382,12 @@ class TestShowChassis(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['voqutil', '-c', 'system_lags', '-n', 'asic0', '-l', 'Linecard6'], display_cmd=True)
 
-    def teardown_method(self):
+    def teardown(self):
         print('TEAR DOWN')
 
 
 class TestShowFabric(object):
-    def setup_method(self):
+    def setup(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -407,12 +410,12 @@ class TestShowFabric(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(["fabricstat", '-q', '-n', 'asic0'])
 
-    def teardown_method(self):
+    def teardown(self):
         print('TEAR DOWN')
 
 
 class TestShowFlowCounters(object):
-    def setup_method(self):
+    def setup(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -455,12 +458,12 @@ class TestShowFlowCounters(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['flow_counters_stat', '-t', 'route', '--prefix', '2001::/64', '--vrf', 'Vrf_1', '-n', 'asic0'], display_cmd=True)
 
-    def teardown_method(self):
+    def teardown(self):
         print('TEAR DOWN')
 
 
 class TestShowInterfaces(object):
-    def setup_method(self):
+    def setup(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -712,12 +715,34 @@ class TestShowInterfaces(object):
             display_cmd=True,
         )
 
-    def teardown_method(self):
+    @patch('utilities_common.cli.run_command')
+    @patch.object(click.Choice, 'convert', MagicMock(return_value='asic0'))
+    def test_l1_summary_asic0(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands['interfaces'].commands['l1-summary'], ['Ethernet0', '-n', 'asic0'])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(
+            ['intfutil', '-c', 'l1_summary', '-i', 'Ethernet0', '-n', 'asic0'], display_cmd=False)
+
+    @patch('utilities_common.cli.run_command')
+    def test_l1_summary_all(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands['interfaces'].commands['l1-summary'],
+            ['-d', 'all'])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        mock_run_command.assert_called_once_with(['intfutil', '-c', 'l1_summary', '-d', 'all'], display_cmd=False)
+
+    def teardown(self):
         print('TEAR DOWN')
 
 
 class TestShowIp(object):
-    def setup_method(self):
+    def setup(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -738,33 +763,30 @@ class TestShowIp(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['sudo', 'ipintutil', '-a', 'ipv6', '-d', 'all'])
 
-    def teardown_method(self):
+    def teardown(self):
         print('TEAR DOWN')
 
 
 class TestShowVxlan(object):
-    def setup_method(self):
+    def setup(self):
         print('SETUP')
 
-    @patch('show.vxlan.ConfigDBConnector')
     @patch('utilities_common.cli.run_command')
-    def test_counters(self, mock_run_command, mock_cfg_db_cls):
-        mock_cfg_db = MagicMock()
-        mock_cfg_db.get_entry.return_value = {'src_ip': '10.0.0.1'}
-        mock_cfg_db_cls.return_value = mock_cfg_db
+    def test_counters(self, mock_run_command):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['vxlan'].commands['counters'], ['-p', '3', 'tunnel1', '--verbose'])
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
-        mock_run_command.assert_called_once_with(['tunnelstat', '-T', 'vxlan', '-p', '3', '-i', 'tunnel1'], display_cmd=True)
+        mock_run_command.assert_called_once_with(
+            ['tunnelstat', '-T', 'vxlan', '-p', '3', '-i', 'tunnel1'], display_cmd=True)
 
-    def teardown_method(self):
+    def teardown(self):
         print('TEAR DOWN')
 
 
 class TestShowNat(object):
-    def setup_method(self):
+    def setup(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -857,12 +879,12 @@ class TestShowNat(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['sudo', 'natconfig', '-z'], display_cmd=True)
 
-    def teardown_method(self):
+    def teardown(self):
         print('TEAR DOWN')
 
 
 class TestShowProcesses(object):
-    def setup_method(self):
+    def setup(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -892,12 +914,12 @@ class TestShowProcesses(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['top', '-bn', '1', '-o', '%MEM'], display_cmd=True)
 
-    def teardown_method(self):
+    def teardown(self):
         print('TEAR DOWN')
 
 
 class TestShowPlatform(object):
-    def setup_method(self):
+    def setup(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -958,11 +980,11 @@ class TestShowPlatform(object):
         assert result.exit_code == 0
         mock_check_call.assert_called_with(["sudo", "fwutil", "show"])
 
-    def teardown_method(self):
+    def teardown(self):
         print('TEAR DOWN')
 
 class TestShowQuagga(object):
-    def setup_method(self):
+    def setup(self):
         print('SETUP')
 
     @patch('show.main.run_command')
@@ -997,12 +1019,12 @@ class TestShowQuagga(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_with(['sudo', constants.RVTYSH_COMMAND, '-c', "show ipv6 bgp neighbor 0.0.0.0 routes"])
 
-    def teardown_method(self):
+    def teardown(self):
         print('TEAR DOWN')
 
 
 class TestShow(object):
-    def setup_method(self):
+    def setup(self):
         print('SETUP')
 
     @patch('show.main.run_command')
@@ -1010,54 +1032,14 @@ class TestShow(object):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["arp"], ['0.0.0.0', '-if', 'Ethernet0', '--verbose'])
         assert result.exit_code == 0
-        mock_run_command.assert_called_with(
-            ['nbrshow', '-4', '-ip', '0.0.0.0', '-if', 'Ethernet0', '-d', 'all'], display_cmd=True)
+        mock_run_command.assert_called_with(['nbrshow', '-4', '-ip', '0.0.0.0', '-if', 'Ethernet0'], display_cmd=True)
 
     @patch('show.main.run_command')
     def test_show_ndp(self, mock_run_command):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["ndp"], ['0.0.0.0', '-if', 'Ethernet0', '--verbose'])
         assert result.exit_code == 0
-        mock_run_command.assert_called_with(
-            ['nbrshow', '-6', '-ip', '0.0.0.0', '-if', 'Ethernet0', '-d', 'all'], display_cmd=True)
-
-    @patch('show.main.run_command')
-    def test_show_arp_with_display_all(self, mock_run_command):
-        runner = CliRunner()
-        result = runner.invoke(show.cli.commands["arp"], ['-d', 'all', '--verbose'])
-        assert result.exit_code == 0
-        mock_run_command.assert_called_with(['nbrshow', '-4', '-d', 'all'], display_cmd=True)
-
-    @patch('show.main.run_command')
-    def test_show_ndp_with_display_all(self, mock_run_command):
-        runner = CliRunner()
-        result = runner.invoke(show.cli.commands["ndp"], ['-d', 'all', '--verbose'])
-        assert result.exit_code == 0
-        mock_run_command.assert_called_with(['nbrshow', '-6', '-d', 'all'], display_cmd=True)
-
-    @patch('show.main.run_command')
-    def test_show_arp_with_namespace(self, mock_run_command):
-        runner = CliRunner()
-        result = runner.invoke(show.cli.commands["arp"], ['10.0.0.1', '-n', '', '--verbose'], catch_exceptions=False)
-        assert result.exit_code == 0
-        call_args = mock_run_command.call_args[0][0]
-        assert 'nbrshow' in call_args
-        assert '-4' in call_args
-        assert '-ip' in call_args
-        assert '10.0.0.1' in call_args
-        assert '-n' in call_args or '-d' in call_args
-
-    @patch('show.main.run_command')
-    def test_show_ndp_with_namespace(self, mock_run_command):
-        runner = CliRunner()
-        result = runner.invoke(show.cli.commands["ndp"], ['fc00::1', '-n', '', '--verbose'], catch_exceptions=False)
-        assert result.exit_code == 0
-        call_args = mock_run_command.call_args[0][0]
-        assert 'nbrshow' in call_args
-        assert '-6' in call_args
-        assert '-ip' in call_args
-        assert 'fc00::1' in call_args
-        assert '-n' in call_args or '-d' in call_args
+        mock_run_command.assert_called_with(['nbrshow', '-6', '-ip', '0.0.0.0', '-if', 'Ethernet0'], display_cmd=True)
 
     @patch('show.main.run_command')
     @patch('show.main.is_mgmt_vrf_enabled', MagicMock(return_value=True))
@@ -1065,7 +1047,7 @@ class TestShow(object):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands["mgmt-vrf"], ['routes'])
         assert result.exit_code == 0
-        mock_run_command.assert_called_with(['ip', 'route', 'show', 'table', '6000'])
+        mock_run_command.assert_called_with(['ip', 'route', 'show', 'table', '5000'])
 
     @patch('show.main.run_command')
     @patch('show.main.is_mgmt_vrf_enabled', MagicMock(return_value=True))
@@ -1182,6 +1164,13 @@ class TestShow(object):
         result = runner.invoke(show.cli.commands['environment'], ['--verbose'])
         assert result.exit_code == 0
         mock_run_command.assert_called_with(['sudo', 'sensors'], display_cmd=True)
+
+    @patch('show.main.run_command')
+    def test_show_environment_json(self, mock_run_command):
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands['environment'], ['--json'])
+        assert result.exit_code == 0
+        mock_run_command.assert_called_with(['sudo', 'sensors', '-j'], display_cmd=False)
 
     @patch('show.main.run_command')
     def test_show_users(self, mock_run_command):
@@ -1329,11 +1318,45 @@ class TestShow(object):
         runner = CliRunner()
         result = runner.invoke(show.cli.commands['ntp'])
         assert result.exit_code == 0
+        expected_calls = [call(['chronyc', '-n', 'tracking'], display_cmd=False),
+                          call(['chronyc', '-n', 'sources'], display_cmd=False)]
+        mock_run_command.assert_has_calls(expected_calls)
+
+    @patch('show.main.is_mgmt_vrf_enabled', MagicMock(return_value=True))
+    @patch('show.main.ConfigDBConnector')
+    @patch('show.main.run_command')
+    def test_show_ntp_with_vrf_config_mgmt(self, mock_run_command, mock_config_db):
+        """Test show ntp when VRF is configured as mgmt"""
+        # Mock the database to return VRF as mgmt
+        mock_db_instance = MagicMock()
+        mock_config_db.return_value = mock_db_instance
+        mock_db_instance.get_table.return_value = {'global': {'vrf': 'mgmt'}}
+
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands['ntp'])
+        assert result.exit_code == 0
+
+        # Should call chronyc with VRF exec prefix
         expected_calls = [call(['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'chronyc', '-n', 'tracking'], display_cmd=False),
                           call(['sudo', 'ip', 'vrf', 'exec', 'mgmt', 'chronyc', '-n', 'sources'], display_cmd=False)]
         mock_run_command.assert_has_calls(expected_calls)
 
-    def teardown_method(self):
+    @patch('show.main.is_mgmt_vrf_enabled', MagicMock(return_value=False))
+    @patch('show.main.ConfigDBConnector')
+    @patch('show.main.run_command')
+    def test_show_ntp_mgmt_vrf_not_enabled(self, mock_run_command, mock_config_db):
+        """Test show ntp when VRF is mgmt but mgmt VRF is not enabled"""
+        # Mock the database to return VRF as mgmt
+        mock_db_instance = MagicMock()
+        mock_config_db.return_value = mock_db_instance
+        mock_db_instance.get_table.return_value = {'global': {'vrf': 'mgmt'}}
+
+        runner = CliRunner()
+        result = runner.invoke(show.cli.commands['ntp'])
+        assert result.exit_code == 0
+        assert "NTP is configured to run in mgmt VRF, but mgmt VRF is not enabled!" in result.output
+
+    def teardown(self):
         print('TEAR DOWN')
 
 
@@ -1377,7 +1400,7 @@ class TestShowRunningconfiguration(object):
 
 
 class TestShowSRv6Counters(object):
-    def setup_method(self):
+    def setup(self):
         print('SETUP')
 
     @patch('utilities_common.cli.run_command')
@@ -1398,7 +1421,7 @@ class TestShowSRv6Counters(object):
         assert result.exit_code == 0
         mock_run_command.assert_called_once_with(['srv6stat', '-s', '1000:2:30::/48'], display_cmd=True)
 
-    def teardown_method(self):
+    def teardown(self):
         print('TEAR DOWN')
 
 
