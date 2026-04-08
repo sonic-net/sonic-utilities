@@ -158,9 +158,10 @@ def vrf_network(ctx, ipaddress, info_type, namespace):
 
 
 def summary_helper(namespace, display, vrf=constants.DEFAULT_VRF):
-    bgp_summary = bgp_util.get_bgp_summary_from_all_bgp_instances(
+    vrf_summaries = bgp_util.get_bgp_summary_from_all_bgp_instances(
         constants.IPV4, namespace, display, vrf)
-    bgp_util.display_bgp_summary(bgp_summary=bgp_summary, af=constants.IPV4)
+    for _, bgp_summary in vrf_summaries:
+        bgp_util.display_bgp_summary(bgp_summary=bgp_summary, af=constants.IPV4)
 
 
 def neighbors_helper(ipaddress, info_type, namespace, vrf=constants.DEFAULT_VRF):

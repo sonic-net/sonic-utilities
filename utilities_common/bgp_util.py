@@ -43,9 +43,9 @@ def is_bgp_neigh_present(neighbor_ip, namespace=multi_asic.DEFAULT_NAMESPACE, vr
         for key in keys:
             # Convert the key from tuple like ('default', 'x.x.x.x') to a string
             # like 'default|x.x.x.x'
-            if (isinstance(key, tuple) and len(key) == 2 and key[1] == neighbor_ip
-                and (vrf_name == 'all' or key[0] == vrf_name) and config_db.get_entry(table, key)):
-                    return True
+            if (isinstance(key, tuple) and len(key) == 2 and key[1] == neighbor_ip and
+              (vrf_name == 'all' or key[0] == vrf_name) and config_db.get_entry(table, key)):
+                return True
 
     # Check if the neighbor IP falls within any dynamic peer range (BGP_PEER_RANGE).
     # Entry keys are either 'name' or 'vrf_name|name'; filter by vrf_name when provided.
@@ -296,10 +296,9 @@ def process_bgp_vrf_summary(cmd_output_json, bgp_summary, key, ns, device, vrf):
         # will have both internal and external bgp neighbors
         # So, check if the current namespace has external bgp neighbors.
         # If not, treat it as no bgp neighbors
-        if (device.get_display_option() == constants.DISPLAY_EXTERNAL and
-            (device_info.is_chassis() or multi_asic.is_multi_asic())):
-                external_peers_list_in_cfg_db = get_external_bgp_neighbors_dict(
-                    device.current_namespace).keys()
+        if (device.get_display_option() == constants.DISPLAY_EXTERNAL):
+            if (device_info.is_chassis() or multi_asic.is_multi_asic()):
+                external_peers_list_in_cfg_db = get_external_bgp_neighbors_dict(device.current_namespace).keys()
                 if not external_peers_list_in_cfg_db:
                     has_bgp_neighbors = False
 
@@ -335,25 +334,32 @@ def get_bgp_summary_from_all_bgp_instances(af, namespace, display, vrf):
         vtysh_cmd += " ipv6 summary json"
         key = 'ipv6Unicast'
 
-    bgp_summary = {}
-    cmd_output_json = {}
-
-    for ns in device.get_ns_list_based_on_options():
-        cmd_output = run_bgp_show_command(vtysh_cmd, ns)
-        device.current_namespace = ns
-        try:
-            cmd_output_json = json.loads(cmd_output)
-        except ValueError:
-            ctx.fail("bgp summary from bgp container not in json format")
-
-        if vrf == 'all':
-            # process each VRF
+    if vrf == 'all':
+        # Return per-VRF summaries as an ordered list of (vrf_name, bgp_summary) tuples
+        vrf_summaries = {}
+        for ns in device.get_ns_list_based_on_options():
+            cmd_output = run_bgp_show_command(vtysh_cmd, ns)
+            device.current_namespace = ns
+            try:
+                cmd_output_json = json.loads(cmd_output)
+            except ValueError:
+                ctx.fail("bgp summary from bgp container not in json format")
             for vrf_name, vrf_data in cmd_output_json.items():
-                process_bgp_vrf_summary(vrf_data, bgp_summary, key, ns, device, vrf_name)
-        else:
+                if vrf_name not in vrf_summaries:
+                    vrf_summaries[vrf_name] = {}
+                process_bgp_vrf_summary(vrf_data, vrf_summaries[vrf_name], key, ns, device, vrf_name)
+        return list(vrf_summaries.items())
+    else:
+        bgp_summary = {}
+        for ns in device.get_ns_list_based_on_options():
+            cmd_output = run_bgp_show_command(vtysh_cmd, ns)
+            device.current_namespace = ns
+            try:
+                cmd_output_json = json.loads(cmd_output)
+            except ValueError:
+                ctx.fail("bgp summary from bgp container not in json format")
             process_bgp_vrf_summary(cmd_output_json, bgp_summary, key, ns, device, vrf)
-
-    return bgp_summary
+        return [(vrf, bgp_summary)]
 
 
 def display_bgp_summary(bgp_summary, af):
@@ -365,7 +371,6 @@ def display_bgp_summary(bgp_summary, af):
         af: IPV4 or IPV6
 
     '''
-
     # "Neighbhor" is a known typo,
     # but fix it will impact lots of automation scripts that the community users may have developed for years
     # for now, let's keep it as it is.

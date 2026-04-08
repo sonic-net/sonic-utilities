@@ -3346,6 +3346,11 @@
      },
      "COPP_TRAP|neighbor_miss": {
         "NULL":"NULL"
+     },
+     "BGP_PEER_RANGE|BGPSLBPassive": {
+        "ip_range@": "10.0.0.64/30",
+        "name": "BGPSLBPassive",
+        "src_address": "10.0.0.32"
      }
 
 }
