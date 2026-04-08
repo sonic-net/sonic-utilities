@@ -157,13 +157,13 @@ def vrf_network(ctx, ipaddress, info_type, namespace):
     network_helper(ipaddress, info_type, namespace, vrf)
 
 
-def summary_helper(namespace, display, vrf=None):
+def summary_helper(namespace, display, vrf=constants.DEFAULT_VRF):
     bgp_summary = bgp_util.get_bgp_summary_from_all_bgp_instances(
         constants.IPV4, namespace, display, vrf)
     bgp_util.display_bgp_summary(bgp_summary=bgp_summary, af=constants.IPV4)
 
 
-def neighbors_helper(ipaddress, info_type, namespace, vrf=None):
+def neighbors_helper(ipaddress, info_type, namespace, vrf=constants.DEFAULT_VRF):
     command = 'show ip bgp'
     if vrf is not None:
         command += ' vrf {}'.format(vrf)
