@@ -19,6 +19,7 @@ class TestFdbshowMultiAsic(object):
         os.environ["PATH"] += os.pathsep + scripts_path
         os.environ['UTILITIES_UNIT_TESTING'] = "1"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
+        os.environ["FDBSHOW_UNIT_TESTING"] = "0"
         print("SETUP")
 
     def test_show_mac_masic_asic0(self):

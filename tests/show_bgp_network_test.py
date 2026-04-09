@@ -58,7 +58,7 @@ class TestBgpNetwork(object):
         from .mock_tables import mock_single_asic
         importlib.reload(mock_single_asic)
         from .mock_tables import dbconnector
-        dbconnector.load_database_config
+        dbconnector.load_database_config()
 
 
     @pytest.mark.parametrize(
@@ -116,4 +116,4 @@ class TestMultiAsicBgpNetwork(object):
         from .mock_tables import mock_single_asic
         importlib.reload(mock_single_asic)
         from .mock_tables import dbconnector
-        dbconnector.load_database_config
+        dbconnector.load_database_config()

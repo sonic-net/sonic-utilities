@@ -13,6 +13,10 @@ port2alias_path = os.path.join(os.path.dirname(__file__), '..', 'scripts', 'port
 
 
 class TestPort2Alias(TestCase):
+    @classmethod
+    def setup_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "1"
+
     def setUp(self):
         self.port2alias = load_module_from_source('port2alias', port2alias_path)
         self.ports = {
@@ -51,6 +55,10 @@ class TestPort2Alias(TestCase):
 
     def test_translate_line_empty_ports(self):
         self.assertEqual(self.port2alias.translate_line("Ethernet1\n", {}),"Ethernet1\n")
+
+    @classmethod
+    def teardown_class(cls):
+        os.environ['UTILITIES_UNIT_TESTING'] = "0"
 
 class TestPort2AliasNamespace(TestCase):
     @classmethod

@@ -48,6 +48,8 @@ class TestInterfacesFlapMasic(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
+        os.environ['UTILITIES_UNIT_TESTING'] = "2"
+        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
         from .mock_tables import mock_multi_asic
         importlib.reload(mock_multi_asic)
         from .mock_tables import dbconnector

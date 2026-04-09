@@ -18,6 +18,7 @@ class TestPfcMultiAsic(TestPfcBase):
     @classmethod
     def setup_class(cls):
         super().setup_class()
+        os.environ['UTILITIES_UNIT_TESTING'] = "2"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
 
         # Multi-asic utils rely on the database that is loaded

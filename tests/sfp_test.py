@@ -1228,9 +1228,10 @@ Ethernet200  Not present
     def test_is_rj45_port(self):
         import utilities_common.platform_sfputil_helper as platform_sfputil_helper
         platform_sfputil_helper.platform_chassis = None
-        if 'sonic_platform' in sys.modules:
-            sys.modules.pop('sonic_platform')
-        assert platform_sfputil_helper.is_rj45_port("Ethernet0") == False
+        mods_to_hide = {k: None for k in list(sys.modules)
+                        if k == 'sonic_platform' or k.startswith('sonic_platform.')}
+        with patch.dict(sys.modules, mods_to_hide):
+            assert platform_sfputil_helper.is_rj45_port("Ethernet0") is False
 
     def test_qsfp_dd_pm_all(self):
         runner = CliRunner()

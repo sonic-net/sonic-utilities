@@ -1,4 +1,5 @@
 import mock
+import os
 import pytest
 from click.testing import CliRunner
 from importlib import reload
@@ -68,12 +69,15 @@ database   222         22222
 
 @pytest.fixture(scope='module')
 def setup_cmd_module():
+    os.environ['UTILITIES_UNIT_TESTING'] = "2"
+    os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
+
     # Mock to multi ASIC
     from .mock_tables import mock_multi_asic
     from .mock_tables import dbconnector
     reload(mock_multi_asic)
     dbconnector.load_namespace_config()
-    
+
     import show.main as show
     import config.main as config
     
@@ -89,6 +93,8 @@ def setup_cmd_module():
     yield show, config
     
     # Mock back to single ASIC
+    os.environ.pop('UTILITIES_UNIT_TESTING', None)
+    os.environ.pop('UTILITIES_UNIT_TESTING_TOPOLOGY', None)
     from .mock_tables import mock_single_asic
     reload(mock_single_asic)
     

@@ -1730,12 +1730,6 @@ class TestVlan(object):
         assert result.exit_code != 0
         assert "DHCPv6 relay config for Vlan1001 already exists" in result.output
 
-    @classmethod
-    def teardown_class(cls):
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
-        bgp_util.run_bgp_command = cls._old_run_bgp_command
-        print("TEARDOWN")
-
     def test_config_vlan_del_dhcp_relay_restart(self):
         runner = CliRunner()
         db = Db()
