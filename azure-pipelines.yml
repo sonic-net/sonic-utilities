@@ -39,8 +39,7 @@ stages:
     variables:
       DIFF_COVER_CHECK_THRESHOLD: 80
       DIFF_COVER_ENABLE: 'true'
-    pool:
-      vmImage: ubuntu-24.04
+    pool: sonicso1ES-amd64
 
     container:
       image: sonicdev-microsoft.azurecr.io:443/sonic-slave-bookworm:$(BUILD_BRANCH)
