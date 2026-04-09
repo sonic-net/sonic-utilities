@@ -912,10 +912,12 @@ Ethernet0  N/A
         mock_chassis.get_sfp = MagicMock(return_value=mock_sfp)
         mock_sfp.read_eeprom = MagicMock(side_effect=side_effect)
         runner = CliRunner()
-        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ["-p", "Ethernet0", "-n", "10"])
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'],
+                               ["-p", "Ethernet0", "-n", "0x10"])
         assert result.exit_code == 0
         assert result.output == page10_expected_output
-        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ["-p", "Ethernet0", "-n", "11"])
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'],
+                               ["-p", "Ethernet0", "-n", "0x11"])
         assert result.exit_code == 0
         assert result.output == page11_expected_output
 
@@ -1068,7 +1070,7 @@ Ethernet0  N/A
         runner = CliRunner()
         result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'])
         assert result.exit_code == 0
-        expected_output = """EEPROM hexdump for port Ethernet0
+        expected_output = r"""EEPROM hexdump for port Ethernet0
         Lower page 0h
         00000000 00 01 02 03 04 05 06 07  08 09 0a 0b 0c 0d 0e 0f |................|
         00000010 10 11 12 13 14 15 16 17  18 19 1a 1b 1c 1d 1e 1f |................|
@@ -1113,6 +1115,59 @@ EEPROM hexdump for port Ethernet4
 
         result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ['--page', 'invalid_number'])
         assert result.exit_code != 0
+
+    def test_validate_eeprom_page_decimal(self):
+        assert sfputil.validate_eeprom_page('0') == 0
+        assert sfputil.validate_eeprom_page('16') == 16
+        assert sfputil.validate_eeprom_page('255') == 255
+
+    def test_validate_eeprom_page_hex(self):
+        assert sfputil.validate_eeprom_page('0x0') == 0
+        assert sfputil.validate_eeprom_page('0x10') == 16
+        assert sfputil.validate_eeprom_page('0xff') == 255
+        assert sfputil.validate_eeprom_page('0xFF') == 255
+
+    def test_validate_eeprom_page_octal(self):
+        assert sfputil.validate_eeprom_page('0o0') == 0
+        assert sfputil.validate_eeprom_page('0o20') == 16
+        assert sfputil.validate_eeprom_page('0o377') == 255
+
+    def test_validate_eeprom_page_invalid_string(self):
+        with pytest.raises(SystemExit) as exc_info:
+            sfputil.validate_eeprom_page('not_a_number')
+        assert exc_info.value.code == sfputil.ERROR_NOT_IMPLEMENTED
+
+    def test_validate_eeprom_page_out_of_range(self):
+        with pytest.raises(SystemExit) as exc_info:
+            sfputil.validate_eeprom_page('256')
+        assert exc_info.value.code == sfputil.ERROR_INVALID_PAGE
+
+        with pytest.raises(SystemExit) as exc_info:
+            sfputil.validate_eeprom_page('-1')
+        assert exc_info.value.code == sfputil.ERROR_INVALID_PAGE
+
+    def test_validate_eeprom_page_cli_hex(self):
+        runner = CliRunner()
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ['--page', '0x10'])
+        assert result.exit_code != sfputil.ERROR_INVALID_PAGE
+        assert 'Invalid page number' not in result.output
+
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ['--page', '0xff'])
+        assert result.exit_code != sfputil.ERROR_INVALID_PAGE
+        assert 'Invalid page number' not in result.output
+
+    def test_validate_eeprom_page_cli_octal(self):
+        runner = CliRunner()
+        # octal input that maps to a valid page should be accepted
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ['--page', '0o20'])
+        assert result.exit_code != sfputil.ERROR_INVALID_PAGE
+        assert 'Invalid page number' not in result.output
+
+    def test_validate_eeprom_page_cli_out_of_range_hex(self):
+        runner = CliRunner()
+        result = runner.invoke(sfputil.cli.commands['show'].commands['eeprom-hexdump'], ['--page', '0x100'])
+        assert result.exit_code == sfputil.ERROR_INVALID_PAGE
+        assert 'Invalid page number' in result.output
 
     @patch('sfputil.main.platform_chassis')
     @patch('sfputil.main.logical_port_to_physical_port_index', MagicMock(return_value=1))

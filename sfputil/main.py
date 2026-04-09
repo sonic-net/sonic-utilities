@@ -727,7 +727,13 @@ def eeprom(port, dump_dom, namespace):
 # 'eeprom-hexdump' subcommand
 @show.command()
 @click.option('-p', '--port', metavar='<port_name>', help="Display SFP EEPROM hexdump for port <port_name>")
+<<<<<<< HEAD
 @click.option('-n', '--page', metavar='<page_number>', help="Display SFP EEPROM hexdump for <page_number_in_hex>")
+=======
+@click.option('-n', '--page', metavar='<page_number>',
+              help="Display SFP EEEPROM hexdump for <page_number> "
+                   "(decimal, hex (with 0x prefix) or octal (with 0o prefix))")
+>>>>>>> 8d3bc8c0 (NOS-5031: update conversion and validation function for page numbers in SFPUtil (#383))
 def eeprom_hexdump(port, page):
     """Display EEPROM hexdump of SFP transceiver(s)"""
     if port:
@@ -752,23 +758,25 @@ def eeprom_hexdump(port, page):
             lines.append(output)
         click.echo('\n'.join(lines))
 
-def validate_eeprom_page(page):
+
+def validate_eeprom_page(page: str) -> int:
     """
     Validate input page module EEPROM
     Args:
-        page: str page input by user
+        page: str page input by user (supports decimal, hex with 0x prefix, and octal with 0o prefix)
     Returns:
         int page
     """
     try:
-        page = int(str(page), base=16)
+        validated_page = int(page, base=0)
     except ValueError:
-        click.echo('Please enter a numeric page number')
+        click.echo(f'Please enter a numeric page number (decimal, hex with 0x prefix and octal with '
+                   f'0o prefix). Got: "{page}"')
         sys.exit(ERROR_NOT_IMPLEMENTED)
-    if page < 0 or page > MAX_EEPROM_PAGE:
-        click.echo(f'Error: Invalid page number {page}')
+    if validated_page < 0 or validated_page > MAX_EEPROM_PAGE:
+        click.echo(f'Error: Invalid page number {page}. Must be between 0 and {MAX_EEPROM_PAGE}')
         sys.exit(ERROR_INVALID_PAGE)
-    return page
+    return validated_page
 
 def eeprom_hexdump_single_port(logical_port_name, page):
     """
@@ -1812,7 +1820,9 @@ def target(port_name, target):
 # 'read-eeprom' subcommand
 @cli.command()
 @click.option('-p', '--port', metavar='<logical_port_name>', help="Logical port name", required=True)
-@click.option('-n', '--page', metavar='<page>', help="EEPROM page number in hex", required=True)
+@click.option('-n', '--page', metavar='<page>',
+              help="EEPROM page number in decimal, hex (with 0x prefix) or octal (with 0o prefix)",
+              required=True)
 @click.option('-o', '--offset', metavar='<offset>', type=click.IntRange(0, MAX_EEPROM_OFFSET), help="EEPROM offset within the page", required=True)
 @click.option('-s', '--size', metavar='<size>', type=click.IntRange(1, MAX_EEPROM_OFFSET + 1), help="Size of byte to be read", required=True)
 @click.option('--no-format', is_flag=True, help="Display non formatted data")
@@ -1862,7 +1872,9 @@ def read_eeprom(port, page, offset, size, no_format, wire_addr):
 # 'write-eeprom' subcommand
 @cli.command()
 @click.option('-p', '--port', metavar='<logical_port_name>', help="Logical port name", required=True)
-@click.option('-n', '--page', metavar='<page>', help="EEPROM page number in hex", required=True)
+@click.option('-n', '--page', metavar='<page>',
+              help="EEPROM page number in decimal, hex (with 0x prefix) or octal (with 0o prefix)",
+              required=True)
 @click.option('-o', '--offset', metavar='<offset>', type=click.IntRange(0, MAX_EEPROM_OFFSET), help="EEPROM offset within the page", required=True)
 @click.option('-d', '--data', metavar='<data>', help="Hex string EEPROM data", required=True)
 @click.option('--wire-addr', help="Wire address of sff8472")
