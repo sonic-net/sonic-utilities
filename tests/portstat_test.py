@@ -441,8 +441,6 @@ class TestPortStat(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ["UTILITIES_UNIT_TESTING"] = "2"
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] = "0"
         _backup_mock_file("counters_db.json", ".orig")
@@ -810,8 +808,6 @@ class TestPortStat(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(
-            os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] = "0"
@@ -823,15 +819,12 @@ class TestPortTrimStat(object):
     @classmethod
     def setup_class(cls):
         logger.info("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "2"
         remove_tmp_cnstat_file()
 
     @classmethod
     def teardown_class(cls):
         logger.info("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(
-            os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         remove_tmp_cnstat_file()
 
@@ -1004,7 +997,6 @@ class TestMultiAsicPortStat(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "2"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
         remove_tmp_cnstat_file()
@@ -1132,8 +1124,6 @@ class TestMultiAsicPortStat(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(
-            os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
         remove_tmp_cnstat_file()

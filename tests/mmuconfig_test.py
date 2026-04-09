@@ -23,8 +23,6 @@ class TestMmuConfigBase(object):
     @classmethod
     def setup_class(cls):
         print('SETUP')
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ['UTILITIES_UNIT_TESTING'] = "2"
         worker_tmp = os.environ.get('WORKER_TMP', '/tmp')
         cls._mmuconfig_file = os.path.join(worker_tmp, 'mmuconfig')
         os.environ['MMUCONFIG_FILE'] = cls._mmuconfig_file
@@ -73,7 +71,6 @@ class TestMmuConfigBase(object):
 
     @classmethod
     def teardown_class(cls):
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ['UTILITIES_UNIT_TESTING'] = "0"
         if cls._mmuconfig_file and os.path.isfile(cls._mmuconfig_file):
             os.remove(cls._mmuconfig_file)

@@ -33,7 +33,6 @@ class TestYangParser:
     @classmethod
     def setup_class(cls):
         logger.info("SETUP")
-        os.environ['UTILITIES_UNIT_TESTING'] = "2"
         import config.config_mgmt as config_mgmt
         cls._orig_yang_dir = config_mgmt.YANG_DIR
         temp_dir = setup_temp_yang_dir(test_path, 'yang_parser_test', test_yang_models)
@@ -42,7 +41,6 @@ class TestYangParser:
     @classmethod
     def teardown_class(cls):
         logger.info("TEARDOWN")
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
         import config.config_mgmt as config_mgmt
         config_mgmt.YANG_DIR = cls._orig_yang_dir
         cleanup_temp_yang_dir()

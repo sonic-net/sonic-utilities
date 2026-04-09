@@ -138,7 +138,6 @@ class TestSNMPShowCommands(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "1"
 
     # mock the redis for unit test purposes #
@@ -461,6 +460,3 @@ class TestSNMPShowCommands(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
-

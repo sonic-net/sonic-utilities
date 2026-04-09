@@ -208,12 +208,6 @@ class TestMpls(object):
     @classmethod 
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
-        from .mock_tables import mock_single_asic
-        importlib.reload(mock_single_asic)
-        from .mock_tables import dbconnector
-        dbconnector.load_database_config()
-        dbconnector.dedicated_dbs['APPL_DB'] = {}
 
 class TestMplsMasic(object):
     @classmethod
@@ -224,6 +218,7 @@ class TestMplsMasic(object):
         from .mock_tables import mock_multi_asic
         importlib.reload(mock_multi_asic)
         from .mock_tables import dbconnector
+        dbconnector.dedicated_dbs.clear()
         dbconnector.load_namespace_config()
 
     def test_config_mpls_masic_add(self):
@@ -347,8 +342,3 @@ class TestMplsMasic(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
-        from .mock_tables import mock_single_asic
-        importlib.reload(mock_single_asic)
-        from .mock_tables import dbconnector
-        dbconnector.load_database_config()

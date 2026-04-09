@@ -14,7 +14,6 @@ sys.path.insert(0, modules_path)
 class TestEcnConfigMultiAsic(TestEcnConfigBase):
     @classmethod
     def setup_class(cls):
-        super().setup_class()
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
         from .mock_tables import mock_multi_asic
         importlib.reload(mock_multi_asic)
@@ -71,4 +70,3 @@ class TestEcnConfigMultiAsic(TestEcnConfigBase):
     @classmethod
     def teardown_class(cls):
         super().teardown_class()
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""

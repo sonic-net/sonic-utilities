@@ -45,8 +45,6 @@ Vlan2000   2000  Ethernet0        tagged
 class TestVlanMultiAsic(object):
     @classmethod
     def setup_class(cls):
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ['UTILITIES_UNIT_TESTING'] = "2"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
 
         # Set the database to mock multi-asic state
@@ -318,8 +316,5 @@ class TestVlanMultiAsic(object):
         from mock_tables import dbconnector
         dbconnector.load_database_config()
 
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
 
         print("TEARDOWN")

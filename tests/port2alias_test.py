@@ -56,9 +56,6 @@ class TestPort2Alias(TestCase):
     def test_translate_line_empty_ports(self):
         self.assertEqual(self.port2alias.translate_line("Ethernet1\n", {}),"Ethernet1\n")
 
-    @classmethod
-    def teardown_class(cls):
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
 
 class TestPort2AliasNamespace(TestCase):
     @classmethod
@@ -81,9 +78,3 @@ class TestPort2AliasNamespace(TestCase):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
-        # change back to single asic config
-        from .mock_tables import dbconnector
-        from .mock_tables import mock_single_asic
-        importlib.reload(mock_single_asic)
-        dbconnector.load_namespace_config()

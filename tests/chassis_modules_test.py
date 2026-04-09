@@ -145,7 +145,6 @@ class TestChassisModules(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "1"
 
     def test_show_and_verify_output(self):
@@ -571,6 +570,3 @@ class TestChassisModules(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(
-            p for p in os.environ["PATH"].split(os.pathsep) if p != scripts_path)
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"

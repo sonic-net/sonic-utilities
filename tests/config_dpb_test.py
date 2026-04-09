@@ -704,10 +704,8 @@ class TestConfigDPB(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.system("rm /tmp/startConfigDb.json")
-        os.system("rm /tmp/portBreakOutConfigDb.json")
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
-        return
+        os.system("rm -f /tmp/startConfigDb.json")
+        os.system("rm -f /tmp/portBreakOutConfigDb.json")
 
 ###########GLOBAL Configs#####################################
 '''

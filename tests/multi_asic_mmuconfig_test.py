@@ -51,4 +51,3 @@ class TestMmuConfigMultiAsic(TestMmuConfigBase):
     @classmethod
     def teardown_class(cls):
         super().teardown_class()
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""

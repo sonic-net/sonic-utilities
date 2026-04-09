@@ -17,7 +17,6 @@ class TestGearbox(TestCase):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "1"
 
     def setUp(self):
@@ -43,9 +42,7 @@ class TestGearbox(TestCase):
             "       1  Ethernet200  200,201,202,203               25G  300,301,302,303               25G       304,305                50G    down       up"
         )
         self.assertEqual(result.output.strip(), expected_output)
-    
+
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"

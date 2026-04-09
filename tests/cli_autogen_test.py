@@ -37,7 +37,6 @@ class TestCliAutogen:
     @classmethod
     def setup_class(cls):
         logger.info('SETUP')
-        os.environ['UTILITIES_UNIT_TESTING'] = '2'
 
         import config.config_mgmt as config_mgmt
         cls._orig_yang_dir = config_mgmt.YANG_DIR
@@ -77,7 +76,6 @@ class TestCliAutogen:
 
         dbconnector.dedicated_dbs['CONFIG_DB'] = None
 
-        os.environ['UTILITIES_UNIT_TESTING'] = '0'
 
 
     def test_show_device_metadata(self):

@@ -556,4 +556,3 @@ class TestShowSflow(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"

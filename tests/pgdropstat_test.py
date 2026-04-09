@@ -39,8 +39,6 @@ Ethernet8      0      0      0      0      0      0      0      0
 class TestPgDropstat(object):
     @classmethod
     def setup_class(cls):
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ['UTILITIES_UNIT_TESTING'] = "2"
         print("SETUP")
 
     def replace_file(self, file_name_src, file_name_dst):
@@ -171,7 +169,5 @@ class TestPgDropstat(object):
 
     @classmethod
     def teardown_class(cls):
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
         UserCache('pg-drop').remove_all()
         print("TEARDOWN")

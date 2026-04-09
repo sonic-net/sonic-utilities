@@ -103,6 +103,9 @@ def setup_db_config():
 
 
 _last_seen_file = None
+_original_path = None
+_scripts_path = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
 
 
 @pytest.hookimpl(tryfirst=True)
@@ -140,6 +143,12 @@ def _reset_between_files():
     """
     from sonic_py_common import multi_asic
     from utilities_common import multi_asic as multi_asic_util
+
+    # Reset PATH to baseline + scripts directory
+    global _original_path
+    if _original_path is None:
+        _original_path = os.environ.get("PATH", "")
+    os.environ["PATH"] = _original_path + os.pathsep + _scripts_path
 
     # Reset mutable mock DB state
     dbconnector.dedicated_dbs.clear()
@@ -198,6 +207,12 @@ def _reset_between_files():
     multi_asic_util.multi_asic_get_ip_intf_from_ns = lambda ns: []
     multi_asic_util.multi_asic_get_ip_intf_addr_from_ns = lambda ns, iface: []
     multi_asic.get_namespaces_from_linux = lambda namespace=None: ['']
+
+    # Reload config.main so Click decorators re-evaluate
+    # multi_asic.is_multi_asic() with restored single-asic state.
+    # Without this, commands like 'config route' and 'config subinterface'
+    # keep required=True on --namespace from a prior multi-asic file.
+    importlib.reload(sys.modules['config.main'])
 
     # Restore DB config to single-asic
     dbconnector.load_database_config()

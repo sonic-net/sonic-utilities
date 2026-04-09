@@ -77,7 +77,6 @@ class TestShowRunAllCommands(object):
     def teardown_class(cls):
         print("TEARDOWN")
         bgp_util.run_bgp_command = cls._old_run_bgp_command
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
 
 
@@ -116,7 +115,6 @@ class TestShowRunAllCommandsMasic(object):
     def teardown_class(cls):
         print("TEARDOWN")
         bgp_util.run_bgp_command = cls._old_run_bgp_command
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
         # change back to single asic config

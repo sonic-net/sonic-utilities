@@ -278,8 +278,6 @@ class TestTrapStat:
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ["UTILITIES_UNIT_TESTING"] = "2"
         delete_cache()
 
     def test_show(self):
@@ -353,8 +351,6 @@ class TestTrapStatsMultiAsic:
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ["UTILITIES_UNIT_TESTING"] = "2"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
         delete_cache()
 
@@ -362,9 +358,6 @@ class TestTrapStatsMultiAsic:
     def teardown_class(cls):
         print("TEARDOWN")
         delete_cache()
-        os.environ["PATH"] = os.pathsep.join(
-            os.environ["PATH"].split(os.pathsep)[:-1]
-        )
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
         from .mock_tables import mock_single_asic
@@ -409,15 +402,11 @@ class TestConfigRoutePattern:
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "2"
 
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(
-            os.environ["PATH"].split(os.pathsep)[:-1]
-        )
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
 
@@ -673,16 +662,12 @@ class TestRouteStats:
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "2"
         delete_cache(stat_type='route')
 
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(
-            os.environ["PATH"].split(os.pathsep)[:-1]
-        )
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
 
@@ -887,7 +872,6 @@ class TestRouteStatsMultiAsic:
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "2"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
         delete_cache(stat_type='route')
@@ -896,11 +880,6 @@ class TestRouteStatsMultiAsic:
     def teardown_class(cls):
         print("TEARDOWN")
         delete_cache(stat_type='route')
-        os.environ["PATH"] = os.pathsep.join(
-            os.environ["PATH"].split(os.pathsep)[:-1]
-        )
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
         from .mock_tables import mock_single_asic
         importlib.reload(mock_single_asic)
 
