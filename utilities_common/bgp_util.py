@@ -185,14 +185,13 @@ def get_bgp_neighbor_ip_to_name(ip, static_neighbors, dynamic_neighbors, vrf_nam
         return static_neighbors[matching_key]
     elif is_ipv4_address(ip):
         for (vrf, subnet) in dynamic_neighbors[constants.IPV4]:
-            if ipaddress.IPv4Address(ip) in ipaddress.ip_network(subnet) and vrf == vrf_name:
+            if (ipaddress.IPv4Address(ip) in ipaddress.ip_network(subnet) and (vrf == vrf_name or vrf_name == 'all')):
                 return dynamic_neighbors[constants.IPV4][(vrf, subnet)]
     elif is_ipv6_address(ip):
         for (vrf, subnet) in dynamic_neighbors[constants.IPV6]:
-            if ipaddress.IPv6Address(ip) in ipaddress.ip_network(subnet) and vrf == vrf_name:
+            if (ipaddress.IPv6Address(ip) in ipaddress.ip_network(subnet) and (vrf == vrf_name or vrf_name == 'all')):
                 return dynamic_neighbors[constants.IPV6][(vrf, subnet)]
-    else:
-        return "NotAvailable"
+    return "NotAvailable"
 
 def get_bgp_summary_extended(command_output):
     """
@@ -283,7 +282,7 @@ def run_bgp_show_command(vtysh_cmd, bgp_namespace=multi_asic.DEFAULT_NAMESPACE, 
     return output
 
 
-def process_bgp_vrf_summary(cmd_output_json, bgp_summary, key, ns, device, vrf):
+def process_bgp_vrf_summary(cmd_output_json, bgp_summary, key, ns, device, vrf=constants.DEFAULT_VRF):
     ctx = click.get_current_context()
 
     # no bgp neighbors found so print basic device bgp info
@@ -302,10 +301,7 @@ def process_bgp_vrf_summary(cmd_output_json, bgp_summary, key, ns, device, vrf):
                     has_bgp_neighbors = False
 
     if not has_bgp_neighbors:
-        vtysh_bgp_json_cmd = "show ip bgp"
-        if vrf is not None:
-            vtysh_bgp_json_cmd += " vrf {}".format(vrf)
-        vtysh_bgp_json_cmd += " json"
+        vtysh_bgp_json_cmd = "show ip bgp vrf {} json".format(vrf)
         no_neigh_cmd_output = run_bgp_show_command(vtysh_bgp_json_cmd, ns)
         try:
             no_neigh_cmd_output_json = json.loads(no_neigh_cmd_output)
@@ -316,21 +312,15 @@ def process_bgp_vrf_summary(cmd_output_json, bgp_summary, key, ns, device, vrf):
     process_bgp_summary_json(bgp_summary, out_cmd, device, has_bgp_neighbors=has_bgp_neighbors)
 
 
-def get_bgp_summary_from_all_bgp_instances(af, namespace, display, vrf):
+def get_bgp_summary_from_all_bgp_instances(af, namespace, display, vrf=constants.DEFAULT_VRF):
 
     device = multi_asic_util.MultiAsic(display, namespace)
     ctx = click.get_current_context()
     if af is constants.IPV4:
-        vtysh_cmd = "show ip bgp"
-        if vrf is not None:
-            vtysh_cmd += ' vrf {}'.format(vrf)
-        vtysh_cmd += " summary json"
+        vtysh_cmd = "show ip bgp vrf {} summary json".format(vrf)
         key = 'ipv4Unicast'
     else:
-        vtysh_cmd = "show bgp"
-        if vrf is not None:
-            vtysh_cmd += ' vrf {}'.format(vrf)
-        vtysh_cmd += " ipv6 summary json"
+        vtysh_cmd = "show bgp vrf {} ipv6 summary json".format(vrf)
         key = 'ipv6Unicast'
 
     if vrf == 'all':

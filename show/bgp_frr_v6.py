@@ -154,9 +154,7 @@ def summary_helper(namespace, display, vrf=constants.DEFAULT_VRF):
 
 
 def neighbors_helper(ipaddress, info_type, namespace, vrf=constants.DEFAULT_VRF):
-    command = 'show bgp'
-    if vrf is not None:
-        command += ' vrf {}'.format(vrf)
+    command = 'show bgp vrf {}'.format(vrf)
 
     if ipaddress is not None:
         if not bgp_util.is_ipv6_address(ipaddress):
@@ -190,11 +188,8 @@ def neighbors_helper(ipaddress, info_type, namespace, vrf=constants.DEFAULT_VRF)
     click.echo(output.rstrip('\n'))
 
 
-def network_helper(ipaddress, info_type, namespace, vrf=None):
-    command = 'show bgp'
-    if vrf is not None:
-        command += ' vrf {}'.format(vrf)
-    command += ' ipv6'
+def network_helper(ipaddress, info_type, namespace, vrf=constants.DEFAULT_VRF):
+    command = 'show bgp vrf {} ipv6'.format(vrf)
 
     if multi_asic.is_multi_asic() and namespace not in multi_asic.get_namespace_list():
         ctx = click.get_current_context()

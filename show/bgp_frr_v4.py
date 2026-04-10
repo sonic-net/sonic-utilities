@@ -165,10 +165,7 @@ def summary_helper(namespace, display, vrf=constants.DEFAULT_VRF):
 
 
 def neighbors_helper(ipaddress, info_type, namespace, vrf=constants.DEFAULT_VRF):
-    command = 'show ip bgp'
-    if vrf is not None:
-        command += ' vrf {}'.format(vrf)
-    command += ' neighbor'
+    command = 'show ip bgp vrf {} neighbor'.format(vrf)
 
     if ipaddress is not None:
         if not bgp_util.is_ipv4_address(ipaddress):
@@ -202,10 +199,8 @@ def neighbors_helper(ipaddress, info_type, namespace, vrf=constants.DEFAULT_VRF)
     click.echo(output.rstrip('\n'))
 
 
-def network_helper(ipaddress, info_type, namespace, vrf=None):
-    command = 'show ip bgp'
-    if vrf is not None:
-        command += ' vrf {}'.format(vrf)
+def network_helper(ipaddress, info_type, namespace, vrf=constants.DEFAULT_VRF):
+    command = 'show ip bgp vrf {}'.format(vrf)
 
     if device_info.is_supervisor():
         # the command will be executed by rexec
