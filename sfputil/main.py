@@ -869,20 +869,14 @@ def eeprom_hexdump_pages_general(logical_port_name, pages, target_page):
         if page == 0:
             lines.append(f'{EEPROM_DUMP_INDENT}Lower page 0h')
             return_code, output = eeprom_dump_general(physical_port, page, 0, PAGE_SIZE, 0)
-            if return_code != 0:
-                return return_code, output
             lines.append(output)
 
             lines.append(f'\n{EEPROM_DUMP_INDENT}Upper page 0h')
             return_code, output = eeprom_dump_general(physical_port, page, PAGE_OFFSET, PAGE_SIZE, PAGE_OFFSET)
-            if return_code != 0:
-                return return_code, output
             lines.append(output)
         else:
             lines.append(f'\n{EEPROM_DUMP_INDENT}Upper page {page:x}h')
             return_code, output = eeprom_dump_general(physical_port, page, page * PAGE_SIZE + PAGE_OFFSET, PAGE_SIZE, PAGE_OFFSET)
-            if return_code != 0:
-                return return_code, output
             lines.append(output)
 
     lines.append('') # add a new line
@@ -915,20 +909,14 @@ def eeprom_hexdump_pages_sff8472(logical_port_name, pages, target_page):
                 return_code, output = eeprom_dump_general(physical_port, page, 0, SFF8472_A0_SIZE, 0)
             else:
                 return_code, output = eeprom_dump_general(physical_port, page, 0, PAGE_SIZE, 0)
-            if return_code != 0:
-                return return_code, 'Error: Failed to read EEPROM for A0h!'
             lines.append(output)
         elif page == 1:
             lines.append(f'\n{EEPROM_DUMP_INDENT}A2h dump (lower 128 bytes)')
             return_code, output = eeprom_dump_general(physical_port, page, SFF8472_A0_SIZE, PAGE_SIZE, 0)
-            if return_code != 0:
-                return ERROR_NOT_IMPLEMENTED, 'Error: Failed to read EEPROM for A2h!'
             lines.append(output)
         else:
             lines.append(f'\n{EEPROM_DUMP_INDENT}A2h dump (upper 128 bytes) page {page - 2:x}h')
             return_code, output = eeprom_dump_general(physical_port, page, SFF8472_A0_SIZE + PAGE_OFFSET + page * PAGE_SIZE, PAGE_SIZE, PAGE_SIZE)
-            if return_code != 0:
-                return ERROR_NOT_IMPLEMENTED, 'Error: Failed to read EEPROM for A2h upper page!'
             lines.append(output)
 
     lines.append('') # add a new line
