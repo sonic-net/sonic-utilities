@@ -727,13 +727,9 @@ def eeprom(port, dump_dom, namespace):
 # 'eeprom-hexdump' subcommand
 @show.command()
 @click.option('-p', '--port', metavar='<port_name>', help="Display SFP EEPROM hexdump for port <port_name>")
-<<<<<<< HEAD
-@click.option('-n', '--page', metavar='<page_number>', help="Display SFP EEPROM hexdump for <page_number_in_hex>")
-=======
 @click.option('-n', '--page', metavar='<page_number>',
               help="Display SFP EEEPROM hexdump for <page_number> "
                    "(decimal, hex (with 0x prefix) or octal (with 0o prefix))")
->>>>>>> 8d3bc8c0 (NOS-5031: update conversion and validation function for page numbers in SFPUtil (#383))
 def eeprom_hexdump(port, page):
     """Display EEPROM hexdump of SFP transceiver(s)"""
     if port:
