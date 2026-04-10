@@ -185,11 +185,11 @@ def get_bgp_neighbor_ip_to_name(ip, static_neighbors, dynamic_neighbors, vrf_nam
         return static_neighbors[matching_key]
     elif is_ipv4_address(ip):
         for (vrf, subnet) in dynamic_neighbors[constants.IPV4]:
-            if (ipaddress.IPv4Address(ip) in ipaddress.ip_network(subnet) and (vrf == vrf_name or vrf_name == 'all')):
+            if (ipaddress.IPv4Address(ip) in ipaddress.ip_network(subnet, strict=False) and (vrf == vrf_name or vrf_name == 'all')):
                 return dynamic_neighbors[constants.IPV4][(vrf, subnet)]
     elif is_ipv6_address(ip):
         for (vrf, subnet) in dynamic_neighbors[constants.IPV6]:
-            if (ipaddress.IPv6Address(ip) in ipaddress.ip_network(subnet) and (vrf == vrf_name or vrf_name == 'all')):
+            if (ipaddress.IPv6Address(ip) in ipaddress.ip_network(subnet, strict=False) and (vrf == vrf_name or vrf_name == 'all')):
                 return dynamic_neighbors[constants.IPV6][(vrf, subnet)]
     return "NotAvailable"
 
