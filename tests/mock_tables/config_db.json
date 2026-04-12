@@ -1831,6 +1831,10 @@
         "POLL_INTERVAL": "1000",
         "FLEX_COUNTER_STATUS": "enable"
     },
+    "FLEX_COUNTER_TABLE|HA_SET": {
+        "POLL_INTERVAL": "1000",
+        "FLEX_COUNTER_STATUS": "enable"
+    },
     "FLEX_COUNTER_TABLE|WRED_ECN_QUEUE": {
         "POLL_INTERVAL": "10000",
         "FLEX_COUNTER_STATUS": "enable"
@@ -1940,6 +1944,7 @@
         "cable_type": "active-active",
         "soc_ipv4": "10.1.1.2",
         "soc_ipv6": "fc00::76",
+        "neighbor_mode": "prefix-route",
         "server_ipv6": "fc00::75"
     },
     "MUX_CABLE|Ethernet16": {
@@ -1961,6 +1966,7 @@
     "MUX_CABLE|Ethernet4": {
         "state": "auto",
 	"prober_type": "software",
+	"neighbor_mode": "host-route",
         "server_ipv4": "10.3.1.1",
         "server_ipv6": "e801::46",
         "soc_ipv6": "e801::47"

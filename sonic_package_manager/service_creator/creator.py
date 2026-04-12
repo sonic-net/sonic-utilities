@@ -169,7 +169,7 @@ class ServiceCreator:
 
         Args:
             package: Package object to install.
-            register_feature: Wether to register this package in FEATURE table.
+            register_feature: Whether to register this package in FEATURE table.
             state: Default feature state.
             owner: Default feature owner.
 
@@ -204,7 +204,7 @@ class ServiceCreator:
 
         Args:
             package: Package object to uninstall.
-            deregister_feature: Wether to deregister this package from FEATURE table.
+            deregister_feature: Whether to deregister this package from FEATURE table.
             keep_config: Whether to remove package configuration.
 
         Returns:

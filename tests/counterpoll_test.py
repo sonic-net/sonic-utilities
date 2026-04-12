@@ -56,6 +56,7 @@ WRED_ECN_PORT_STAT    1000                enable
 SRV6_STAT             10000               enable
 SWITCH_STAT           60000               enable
 ENI_STAT              1000                enable
+HA_SET_STAT           1000                enable
 """
 
 class TestCounterpoll(object):
@@ -281,6 +282,44 @@ class TestCounterpoll(object):
         assert test_interval == table["ENI"]["POLL_INTERVAL"]
 
     @pytest.mark.parametrize("status", ["disable", "enable"])
+    def test_update_ha_set_status(self, status):
+        importlib.reload(counterpoll)
+        runner = CliRunner()
+        result = runner.invoke(counterpoll.cli, ["ha-set", status])
+        assert 'No such command \'ha-set\'' in result.output
+        assert result.exit_code == 2
+
+    @pytest.mark.parametrize("status", ["disable", "enable"])
+    @mock.patch('counterpoll.main.device_info.get_platform_info')
+    def test_update_ha_set_status_dpu(self, mock_get_platform_info, status):
+        mock_get_platform_info.return_value = {'switch_type': 'dpu'}
+        importlib.reload(counterpoll)
+
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(counterpoll.cli.commands["ha-set"].commands[status], [], obj=db.cfgdb)
+        assert result.exit_code == 0
+
+        table = db.cfgdb.get_table('FLEX_COUNTER_TABLE')
+        assert status == table["HA_SET"]["FLEX_COUNTER_STATUS"]
+
+    @mock.patch('counterpoll.main.device_info.get_platform_info')
+    def test_update_ha_set_interval(self, mock_get_platform_info):
+        mock_get_platform_info.return_value = {'switch_type': 'dpu'}
+        importlib.reload(counterpoll)
+
+        runner = CliRunner()
+        db = Db()
+        test_interval = "2000"
+
+        result = runner.invoke(counterpoll.cli.commands["ha-set"].commands["interval"], [test_interval], obj=db.cfgdb)
+        assert result.exit_code == 0
+
+        table = db.cfgdb.get_table('FLEX_COUNTER_TABLE')
+        assert test_interval == table["HA_SET"]["POLL_INTERVAL"]
+
+    @pytest.mark.parametrize("status", ["disable", "enable"])
     def test_update_wred_port_counter_status(self, status):
         runner = CliRunner()
         db = Db()
@@ -370,7 +409,7 @@ class TestCounterpoll(object):
         runner = CliRunner()
         db = Db()
 
-        result = runner.invoke(counterpoll.cli.commands["switch"].commands[status], [], obj=db)
+        result = runner.invoke(counterpoll.cli.commands["switch"].commands[status], [], obj=db.cfgdb)
         print(result.exit_code, result.output)
         assert result.exit_code == 0
 
@@ -382,7 +421,7 @@ class TestCounterpoll(object):
         db = Db()
         test_interval = "20000"
 
-        result = runner.invoke(counterpoll.cli.commands["switch"].commands["interval"], [test_interval], obj=db)
+        result = runner.invoke(counterpoll.cli.commands["switch"].commands["interval"], [test_interval], obj=db.cfgdb)
         print(result.exit_code, result.output)
         assert result.exit_code == 0
 
@@ -413,6 +452,97 @@ class TestCounterpoll(object):
         table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
         assert test_interval == table["PORT_PHY_ATTR"]["POLL_INTERVAL"]
 
+    @pytest.mark.parametrize("status", ["disable", "enable"])
+    def test_queue_status(self, status):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(counterpoll.cli.commands["queue"].commands[status],
+                               [], obj=db.cfgdb)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
+        assert status == table["QUEUE"]["FLEX_COUNTER_STATUS"]
+
+    def test_queue_interval(self):
+        runner = CliRunner()
+        db = Db()
+        test_interval = "8888"
+        result = runner.invoke(counterpoll.cli.commands["queue"].commands["interval"],
+                               [test_interval], obj=db.cfgdb)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
+        assert test_interval == table["QUEUE"]["POLL_INTERVAL"]
+
+    @pytest.mark.parametrize("status", ["disable", "enable"])
+    def test_port_status(self, status):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(counterpoll.cli.commands["port"].commands[status],
+                               [], obj=db.cfgdb)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
+        assert status == table["PORT"]["FLEX_COUNTER_STATUS"]
+
+    def test_port_interval(self):
+        runner = CliRunner()
+        db = Db()
+        test_interval = "6565"
+        result = runner.invoke(counterpoll.cli.commands["port"].commands["interval"],
+                               [test_interval], obj=db.cfgdb)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
+        assert test_interval == table["PORT"]["POLL_INTERVAL"]
+
+    @pytest.mark.parametrize("status", ["disable", "enable"])
+    def test_watermark_status(self, status):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(counterpoll.cli.commands["watermark"].commands[status],
+                               [], obj=db.cfgdb)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
+        assert status == table["QUEUE_WATERMARK"]["FLEX_COUNTER_STATUS"]
+        assert status == table["PG_WATERMARK"]["FLEX_COUNTER_STATUS"]
+        assert status == table["BUFFER_POOL_WATERMARK"]["FLEX_COUNTER_STATUS"]
+
+    def test_watermark_interval(self):
+        runner = CliRunner()
+        db = Db()
+        test_interval = "8888"
+        result = runner.invoke(counterpoll.cli.commands["watermark"].commands["interval"],
+                               [test_interval], obj=db.cfgdb)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
+        assert test_interval == table["QUEUE_WATERMARK"]["POLL_INTERVAL"]
+        assert test_interval == table["PG_WATERMARK"]["POLL_INTERVAL"]
+        assert test_interval == table["BUFFER_POOL_WATERMARK"]["POLL_INTERVAL"]
+
+    @pytest.mark.parametrize("status", ["disable", "enable"])
+    def test_tunnel_status(self, status):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(counterpoll.cli.commands["tunnel"].commands[status],
+                               [], obj=db.cfgdb)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
+        assert status == table["TUNNEL"]["FLEX_COUNTER_STATUS"]
+
+    def test_tunnel_interval(self):
+        runner = CliRunner()
+        db = Db()
+        test_interval = "5565"
+        result = runner.invoke(counterpoll.cli.commands["tunnel"].commands["interval"],
+                               [test_interval], obj=db.cfgdb)
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+        table = db.cfgdb.get_table("FLEX_COUNTER_TABLE")
+        assert test_interval == table["TUNNEL"]["POLL_INTERVAL"]
 
     @classmethod
     def teardown_class(cls):

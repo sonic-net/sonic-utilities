@@ -37,8 +37,17 @@ ROOT_UID = 0
 
 # ========================= Variables ==========================================
 
-pdp = PlatformDataProvider()
+# Lazily initialize PlatformDataProvider to avoid expensive platform probing on import
+_pdp = None
 log_helper = LogHelper()
+
+
+def get_pdp():
+    """Singleton accessor to defer platform initialization until first use."""
+    global _pdp
+    if _pdp is None:
+        _pdp = PlatformDataProvider()
+    return _pdp
 
 # ========================= Helper functions ===================================
 
@@ -98,6 +107,7 @@ def all_update(ctx):
 
 
 def chassis_handler(ctx):
+    pdp = get_pdp()
     ctx.obj[CHASSIS_NAME_CTX_KEY] = pdp.chassis.get_name()
     ctx.obj[COMPONENT_PATH_CTX_KEY].append(pdp.chassis.get_name())
 
@@ -119,12 +129,14 @@ def chassis_update(ctx):
 
 
 def module_handler(ctx, module_name):
+    pdp = get_pdp()
     ctx.obj[MODULE_NAME_CTX_KEY] = module_name
     ctx.obj[COMPONENT_PATH_CTX_KEY].append(pdp.chassis.get_name())
     ctx.obj[COMPONENT_PATH_CTX_KEY].append(module_name)
 
 
 def validate_module(ctx, param, value):
+    pdp = get_pdp()
     if value == HELP:
         cli_show_help(ctx)
 
@@ -160,6 +172,7 @@ def component_handler(ctx, component_name):
 
 
 def validate_component(ctx, param, value):
+    pdp = get_pdp()
     if value == HELP:
         cli_show_help(ctx)
 
@@ -296,6 +309,7 @@ def fw_update(ctx, yes, force, image):
         chassis_name = ctx.obj[CHASSIS_NAME_CTX_KEY]
         module_name = None
     elif MODULE_NAME_CTX_KEY in ctx.obj:
+        pdp = get_pdp()
         chassis_name = pdp.chassis.get_name()
         module_name = ctx.obj[MODULE_NAME_CTX_KEY]
 

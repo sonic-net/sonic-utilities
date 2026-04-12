@@ -7,7 +7,7 @@ from sonic_py_common import logger
 # Constants ====================================================================
 PDDF_SUPPORT_FILE = '/usr/share/sonic/platform/pddf_support'
 
-# Helper classs
+# Helper class
 
 log = logger.Logger()
 

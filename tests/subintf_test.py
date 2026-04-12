@@ -242,7 +242,7 @@ class TestSubinterface(object):
         db.cfgdb.set_entry("VXLAN_TUNNEL", "tunnel1", {"src_ip": "10.1.0.1", "dst_port": "4789"})
 
         # Add Vnet_1000
-        result = runner.invoke(config.config.commands["vnet"].commands["add"], ["Vnet_1000", "222", "tunnel1"], obj=obj)
+        result = runner.invoke(config.config.commands["vnet"].commands["add"], ["Vnet_1000", "222", "tunnel1"], obj=db)
         assert ('Vnet_1000') in db.cfgdb.get_table('VNET')
         assert result.exit_code == 0
 
@@ -323,6 +323,19 @@ class TestSubinterface(object):
         assert result.exit_code == 0
         assert ('Po0004.1004') not in db.cfgdb.get_table('VLAN_SUB_INTERFACE')
 
+    def test_subintf_via_group_command(self):
+        runner = CliRunner()
+        result = runner.invoke(config.config.commands["subinterface"],
+                               ["add", "Ethernet0.102"])
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
+
+    def test_subintf_via_group_command_with_redis_socket(self):
+        runner = CliRunner()
+        result = runner.invoke(config.config.commands["subinterface"],
+                               ["-s", "/tmp/test.sock", "add", "Ethernet0.103"])
+        print(result.exit_code, result.output)
+        assert result.exit_code == 0
 
     @classmethod
     def teardown_class(cls):
