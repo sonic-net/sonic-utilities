@@ -55,6 +55,36 @@ class TestShowVnetRoutesAll(object):
             ['Vnet_v6_in_v6-0', 'fddd:a156:a251::a6:1/128', '192.168.1.1', '', '', '0', 'active']]
         assert table == expected_output
 
+        # same endpoint, per-endpoint MACs and VNIs are wrapped in sync with endpoints
+        table = []
+        row = ["TestVnet", "10.0.0.1/32"]
+        epval = "1.1.1.1,1.1.1.1,1.1.1.1,1.1.1.1"
+        mac_addr = "aa:bb:cc:00:00:01,aa:bb:cc:00:00:02,aa:bb:cc:00:00:03,aa:bb:cc:00:00:04"
+        vni = "100,200,300,400"
+        metric = ""
+        # MAC items are 17 chars > 15, so row_width=2
+        vnet.pretty_print(table, row, epval, mac_addr, vni, metric, state)
+        expected_output = [
+            ["TestVnet", "10.0.0.1/32", "1.1.1.1,1.1.1.1", "aa:bb:cc:00:00:01,aa:bb:cc:00:00:02", "100,200", "", "active"],
+            ["",         "",            "1.1.1.1,1.1.1.1", "aa:bb:cc:00:00:03,aa:bb:cc:00:00:04", "300,400", "", ""],
+        ]
+        assert table == expected_output
+
+        # row_width decided by MAC item length, not just endpoint length
+        table = []
+        row = ["TestVnet", "10.0.0.1/32"]
+        epval = "1.1.1.1,2.2.2.2,3.3.3.3"
+        mac_addr = "aa:bb:cc:00:00:01,aa:bb:cc:00:00:02,aa:bb:cc:00:00:03"
+        vni = "100,200,300"
+        metric = "5"
+        # All endpoints are <=7 chars, MAC items are 17 chars > 15 → row_width=2
+        vnet.pretty_print(table, row, epval, mac_addr, vni, metric, state)
+        expected_output = [
+            ["TestVnet", "10.0.0.1/32", "1.1.1.1,2.2.2.2", "aa:bb:cc:00:00:01,aa:bb:cc:00:00:02", "100,200", "5",  "active"],
+            ["",         "",            "3.3.3.3",          "aa:bb:cc:00:00:03",                   "300",     "",   ""],
+        ]
+        assert table == expected_output
+
     def test_show_vnet_routes_all_basic(self):
         runner = CliRunner()
         db = Db()
@@ -69,13 +99,16 @@ test_v4_in_v4-0  160.163.191.1/32  100.101.4.1, 100.101.4.2               Ethern
 test_v4_in_v4-0  160.164.191.1/32  100.102.4.1, 100.102.4.2, 100.102.4.3  Ethernet1, Ethernet2, Ethernet3
 test_v4_in_v4-1  160.165.191.1/32  100.103.4.1, 100.103.4.2, 100.103.4.3  Ethernet1, Ethernet2, Ethernet3
 
-vnet name        prefix                    endpoint                                     mac address    vni    metric    status
----------------  ------------------------  -------------------------------------------  -------------  -----  --------  --------
-Vnet_v6_in_v6-0  fddd:a156:a251::a6:1/128  fddd:a100:a251::a10:1,fddd:a101:a251::a10:1                                  active
-                                           fddd:a102:a251::a10:1,fddd:a103:a251::a10:1
-test_v4_in_v4-0  160.162.191.1/32          100.251.7.1                                                                  active
-test_v4_in_v4-0  160.163.191.1/32          100.251.7.1                                                        0         active
-test_v4_in_v4-0  160.164.191.1/32          100.251.7.1
+vnet name           prefix                    endpoint                                     mac address                          vni      metric    status
+------------------  ------------------------  -------------------------------------------  -----------------------------------  -------  --------  --------
+Vnet_mac_vni_scale  10.0.0.0/24               10.0.0.1,10.0.0.2                            aa:bb:cc:00:00:01,aa:bb:cc:00:00:02  100,200            active
+                                              10.0.0.3,10.0.0.4                            aa:bb:cc:00:00:03,aa:bb:cc:00:00:04  300,400
+                                              10.0.0.5,10.0.0.6                            aa:bb:cc:00:00:05,aa:bb:cc:00:00:06  500,600
+Vnet_v6_in_v6-0     fddd:a156:a251::a6:1/128  fddd:a100:a251::a10:1,fddd:a101:a251::a10:1                                                          active
+                                              fddd:a102:a251::a10:1,fddd:a103:a251::a10:1
+test_v4_in_v4-0     160.162.191.1/32          100.251.7.1                                                                                          active
+test_v4_in_v4-0     160.163.191.1/32          100.251.7.1                                                                                0         active
+test_v4_in_v4-0     160.164.191.1/32          100.251.7.1
 """
         assert result.output == expected_output
 
@@ -93,10 +126,10 @@ test_v4_in_v4-0  160.162.191.1/32  100.100.4.1                            Ethern
 test_v4_in_v4-0  160.163.191.1/32  100.101.4.1, 100.101.4.2               Ethernet1, Ethernet2
 test_v4_in_v4-0  160.164.191.1/32  100.102.4.1, 100.102.4.2, 100.102.4.3  Ethernet1, Ethernet2, Ethernet3
 
-vnet name        prefix            endpoint     mac address    vni      metric  status
+vnet name        prefix            endpoint     mac address    vni    metric    status
 ---------------  ----------------  -----------  -------------  -----  --------  --------
 test_v4_in_v4-0  160.162.191.1/32  100.251.7.1                                  active
-test_v4_in_v4-0  160.163.191.1/32  100.251.7.1                               0  active
+test_v4_in_v4-0  160.163.191.1/32  100.251.7.1                        0         active
 test_v4_in_v4-0  160.164.191.1/32  100.251.7.1
 """
         assert result.output == expected_output
@@ -108,13 +141,16 @@ test_v4_in_v4-0  160.164.191.1/32  100.251.7.1
         result = runner.invoke(show.cli.commands['vnet'].commands['routes'].commands['tunnel'], [], obj=db)
         assert result.exit_code == 0
         expected_output = """\
-vnet name        prefix                    endpoint                                     mac address    vni    metric    status
----------------  ------------------------  -------------------------------------------  -------------  -----  --------  --------
-Vnet_v6_in_v6-0  fddd:a156:a251::a6:1/128  fddd:a100:a251::a10:1,fddd:a101:a251::a10:1                                  active
-                                           fddd:a102:a251::a10:1,fddd:a103:a251::a10:1
-test_v4_in_v4-0  160.162.191.1/32          100.251.7.1                                                                  active
-test_v4_in_v4-0  160.163.191.1/32          100.251.7.1                                                        0         active
-test_v4_in_v4-0  160.164.191.1/32          100.251.7.1
+vnet name           prefix                    endpoint                                     mac address                          vni      metric    status
+------------------  ------------------------  -------------------------------------------  -----------------------------------  -------  --------  --------
+Vnet_mac_vni_scale  10.0.0.0/24               10.0.0.1,10.0.0.2                            aa:bb:cc:00:00:01,aa:bb:cc:00:00:02  100,200            active
+                                              10.0.0.3,10.0.0.4                            aa:bb:cc:00:00:03,aa:bb:cc:00:00:04  300,400
+                                              10.0.0.5,10.0.0.6                            aa:bb:cc:00:00:05,aa:bb:cc:00:00:06  500,600
+Vnet_v6_in_v6-0     fddd:a156:a251::a6:1/128  fddd:a100:a251::a10:1,fddd:a101:a251::a10:1                                                          active
+                                              fddd:a102:a251::a10:1,fddd:a103:a251::a10:1
+test_v4_in_v4-0     160.162.191.1/32          100.251.7.1                                                                                          active
+test_v4_in_v4-0     160.163.191.1/32          100.251.7.1                                                                                0         active
+test_v4_in_v4-0     160.164.191.1/32          100.251.7.1
 """
         assert result.output == expected_output
 
@@ -126,10 +162,10 @@ test_v4_in_v4-0  160.164.191.1/32          100.251.7.1
                                ['test_v4_in_v4-0'], obj=db)
         assert result.exit_code == 0
         expected_output = """\
-vnet name        prefix            endpoint     mac address    vni      metric  status
+vnet name        prefix            endpoint     mac address    vni    metric    status
 ---------------  ----------------  -----------  -------------  -----  --------  --------
 test_v4_in_v4-0  160.162.191.1/32  100.251.7.1                                  active
-test_v4_in_v4-0  160.163.191.1/32  100.251.7.1                               0  active
+test_v4_in_v4-0  160.163.191.1/32  100.251.7.1                        0         active
 test_v4_in_v4-0  160.164.191.1/32  100.251.7.1
 """
         assert result.output == expected_output
@@ -163,6 +199,21 @@ vnet name        prefix            nexthop                                interf
 test_v4_in_v4-0  160.162.191.1/32  100.100.4.1                            Ethernet1
 test_v4_in_v4-0  160.163.191.1/32  100.101.4.1, 100.101.4.2               Ethernet1, Ethernet2
 test_v4_in_v4-0  160.164.191.1/32  100.102.4.1, 100.102.4.2, 100.102.4.3  Ethernet1, Ethernet2, Ethernet3
+"""
+        assert result.output == expected_output
+
+    def test_show_vnet_routes_tunnel_mac_vni_list(self):
+        runner = CliRunner()
+        db = Db()
+        result = runner.invoke(show.cli.commands['vnet'].commands['routes'].commands['tunnel'],
+                               ['Vnet_mac_vni_scale'], obj=db)
+        assert result.exit_code == 0
+        expected_output = """\
+vnet name           prefix       endpoint           mac address                          vni      metric    status
+------------------  -----------  -----------------  -----------------------------------  -------  --------  --------
+Vnet_mac_vni_scale  10.0.0.0/24  10.0.0.1,10.0.0.2  aa:bb:cc:00:00:01,aa:bb:cc:00:00:02  100,200            active
+                                 10.0.0.3,10.0.0.4  aa:bb:cc:00:00:03,aa:bb:cc:00:00:04  300,400
+                                 10.0.0.5,10.0.0.6  aa:bb:cc:00:00:05,aa:bb:cc:00:00:06  500,600
 """
         assert result.output == expected_output
 
