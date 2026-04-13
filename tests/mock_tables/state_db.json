@@ -1624,6 +1624,10 @@
         "active_endpoints":"fddd:a100:a251::a10:1,fddd:a101:a251::a10:1,fddd:a102:a251::a10:1,fddd:a103:a251::a10:1",
         "state":"active"
     },
+    "VNET_ROUTE_TUNNEL_TABLE|Vnet_mac_vni_scale|10.0.0.0/24": {
+        "active_endpoints":"10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.4,10.0.0.5,10.0.0.6",
+        "state":"active"
+    },
     "BFD_SESSION_TABLE|default|default|100.251.7.1": {
         "state":"Up",
         "type": "async_active",
