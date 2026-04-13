@@ -413,8 +413,8 @@ def endpoint(args):
         have_status = False
         for k in vnet_rt_keys:
             val = appl_db.get_all(appl_db.APPL_DB, k)
-            endpoints = val.get('endpoint').split(',')
-            monitors = val.get('endpoint_monitor').split(',')
+            endpoints = val.get('endpoint').split(',') if val and 'endpoint' in val else []
+            monitors = val.get('endpoint_monitor').split(',') if val and 'endpoint_monitor' in val else []
             for idx, endpoint in enumerate(endpoints):
                 if args == endpoint:
                     prefix.append(k.split(":", 2)[2]) 
@@ -444,28 +444,42 @@ def routes():
 
 def pretty_print(table, r, epval, mac_addr, vni, metric, state):
     endpoints = epval.split(',')
-    row_width = 3
-    max_len = 0
-    for ep in endpoints:
-        max_len = len(ep) if len(ep) > max_len else max_len
-    if max_len > 15:
-        row_width = 2
-    iter = 0
-    while iter < len(endpoints):
-        if iter +row_width > len(endpoints):
-            r.append(",".join(endpoints[iter:]))
+    # When mac_address or vni is a per-endpoint list, split so all three fields
+    # wrap in the same chunks, keeps rows aligned at any ECMP scale.
+    macs = mac_addr.split(',') if mac_addr and ',' in mac_addr else None
+    vnis = vni.split(',') if vni and ',' in vni else None
+
+    # Derive row_width from the longest single item across all three fields so
+    # that long MAC addresses or IPv6 endpoints don't overflow the terminal.
+    all_items = list(endpoints)
+    if macs:
+        all_items.extend(macs)
+    if vnis:
+        all_items.extend(vnis)
+    max_len = max((len(item) for item in all_items), default=0)
+    row_width = 2 if max_len > 15 else 3
+
+    i = 0
+    while i < len(endpoints):
+        r.append(",".join(endpoints[i:i + row_width]))
+        # Wrap mac and vni in sync with endpoints when they are lists
+        if macs:
+            r.append(",".join(macs[i:i + row_width]) if i < len(macs) else "")
         else:
-            r.append(",".join(endpoints[iter:iter + row_width]))
-        if iter == 0:
-            r.append(mac_addr)
-            r.append(vni)
+            r.append(mac_addr if i == 0 else "")
+        if vnis:
+            r.append(",".join(vnis[i:i + row_width]) if i < len(vnis) else "")
+        else:
+            r.append(vni if i == 0 else "")
+        if i == 0:
             r.append(metric)
             r.append(state)
         else:
-            r.extend(["", "", "", ""])
-        iter += row_width
+            r.extend(["", ""])
+        i += row_width
         table.append(r)
-        r = ["",""]
+        r = ["", ""]
+
 
 @routes.command()
 @click.argument('vnet_name', required=False)
@@ -544,16 +558,9 @@ def _show_tunnel_helper(vnet_name=None, appl_db=None, state_db=None):
         val = appl_db.get_all(appl_db.APPL_DB, k)
         val_state = state_db.get_all(state_db.STATE_DB, state_db_key)
         epval = val.get('endpoint')
-        if len(epval) < 40:
-            r.append(epval)
-            r.append(val.get('mac_address'))
-            r.append(val.get('vni'))
-            r.append(val.get('metric'))
-            if val_state:
-                r.append(val_state.get('state'))
-            table.append(r)
-            continue
         state = val_state.get('state') if val_state else ""
-        pretty_print(table, r, epval, val.get('mac_address'), val.get('vni'), val.get('metric'), state)
+        pretty_print(table, r, epval,
+                     val.get('mac_address') or '', val.get('vni') or '',
+                     val.get('metric') or '', state)
 
     click.echo(tabulate(table, tunnel_header))

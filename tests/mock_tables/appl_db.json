@@ -404,6 +404,11 @@
         "endpoint":"100.251.7.1",
         "endpoint_monitor":"100.251.7.1"
     },
+    "VNET_ROUTE_TUNNEL_TABLE:Vnet_mac_vni_scale:10.0.0.0/24": {
+        "endpoint": "10.0.0.1,10.0.0.2,10.0.0.3,10.0.0.4,10.0.0.5,10.0.0.6",
+        "mac_address": "aa:bb:cc:00:00:01,aa:bb:cc:00:00:02,aa:bb:cc:00:00:03,aa:bb:cc:00:00:04,aa:bb:cc:00:00:05,aa:bb:cc:00:00:06",
+        "vni": "100,200,300,400,500,600"
+    },
     "BGP_PROFILE_TABLE:FROM_SDN_SLB_ROUTES": {
         "community_id" : "1234:1235"
     },
