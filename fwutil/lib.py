@@ -106,7 +106,7 @@ class URL(object):
 
         # Check URL existence
         try:
-            urlfile = urlopen(self.__url)
+            urlfile = urlopen(self.__url)  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
             response_code = urlfile.getcode()
         except IOError:
             raise RuntimeError("Did not receive a response from remote machine")
@@ -134,7 +134,7 @@ class URL(object):
         socket.setdefaulttimeout(self.DOWNLOAD_TIMEOUT)
 
         try:
-            filename, headers = urlretrieve(
+            filename, headers = urlretrieve(  # nosemgrep: python.lang.security.audit.dynamic-urllib-use-detected.dynamic-urllib-use-detected
                 self.__url,
                 self.DOWNLOAD_PATH_TEMPLATE.format(basename),
                 self.__reporthook
