@@ -7833,7 +7833,7 @@ def parse_acl_table_info(table_name, table_type, description, ports, stage, name
         if services:
             raise ValueError("--services is only valid for CTRLPLANE ACL tables")
 
-        if not ports and ports != None:
+        if not ports and ports is not None:
             raise ValueError("Cannot bind empty list of ports")
 
         port_list = []
