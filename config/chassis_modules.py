@@ -207,7 +207,12 @@ def startup_chassis_module(db, chassis_module_name):
         config_db.set_entry('CHASSIS_MODULE', chassis_module_name, fvs)
     else:
         click.echo(f"Starting up chassis module {chassis_module_name}")
-        config_db.set_entry('CHASSIS_MODULE', chassis_module_name, None)
+        # For SWITCH-HOST modules, bmcctld needs explicit admin_status='up' event
+        # For other modules, None (delete entry) means default 'up' state
+        if chassis_module_name.startswith("SWITCH-HOST"):
+            config_db.set_entry('CHASSIS_MODULE', chassis_module_name, {'admin_status': 'up'})
+        else:
+            config_db.set_entry('CHASSIS_MODULE', chassis_module_name, None)
 
     if chassis_module_name.startswith("FABRIC-CARD"):
         if not check_config_module_state_with_timeout(ctx, db, chassis_module_name, 'up'):
