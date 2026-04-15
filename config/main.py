@@ -3068,12 +3068,12 @@ def erspan(ctx):
               help='Sampling rate (1-in-N). 0 = full mirror.')
 @click.option('--truncate_size', type=click.IntRange(min=0), default=0,
               help='Truncation size in bytes. 0 = no truncation.')
-def add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue,
+def add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue,  # noqa: F811
         policer, src_port, direction, sample_rate, truncate_size):
     """ Add ERSPAN mirror session """
     add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type,
-                queue, policer, src_port, direction,
-                sample_rate, truncate_size)
+               queue, policer, src_port, direction,
+               sample_rate, truncate_size)
 
 def gather_session_info(session_info, policer, queue, src_port, direction):
     if policer:
@@ -3095,6 +3095,7 @@ def gather_session_info(session_info, policer, queue, src_port, direction):
         session_info['direction'] = direction.upper()
 
     return session_info
+
 
 def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue,
                policer, src_port=None, direction=None,
