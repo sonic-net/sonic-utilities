@@ -289,6 +289,9 @@ class PfcwdCli(object):
 
             pfcwd_info.setdefault("pfc_stat_history", cur_pfc_history)
 
+            self.config_db.mod_entry(
+                CONFIG_DB_PFC_WD_TABLE_NAME, port, None
+            )
             self.config_db.set_entry(
                 CONFIG_DB_PFC_WD_TABLE_NAME, port, pfcwd_info
             )

@@ -975,12 +975,25 @@ def _get_disabled_services_list(config_db):
     return disabled_services_list
 
 
+def _monit_service_exists(service):
+    """Return True if monit knows about the given service."""
+    try:
+        subprocess.check_call(
+            ['sudo', 'monit', 'status', service],
+            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL
+        )
+        return True
+    except subprocess.CalledProcessError:
+        return False
+
+
 def _stop_services():
     try:
         subprocess.check_call(['sudo', 'monit', 'status'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         click.echo("Disabling container and routeCheck monitoring ...")
         clicommon.run_command(['sudo', 'monit', 'unmonitor', 'container_checker'])
-        clicommon.run_command(['sudo', 'monit', 'unmonitor', 'routeCheck'])
+        if _monit_service_exists('routeCheck'):
+            clicommon.run_command(['sudo', 'monit', 'unmonitor', 'routeCheck'])
     except subprocess.CalledProcessError as err:
         pass
 
@@ -1075,10 +1088,13 @@ def _restart_services():
     try:
         subprocess.check_call(['sudo', 'monit', 'status'], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         click.echo("Enabling container and routeCheck monitoring ...")
-        clicommon.run_command(['sudo', 'monit', 'monitor', 'routeCheck'])
+        has_route_check = _monit_service_exists('routeCheck')
+        if has_route_check:
+            clicommon.run_command(['sudo', 'monit', 'monitor', 'routeCheck'])
         clicommon.run_command(['sudo', 'monit', 'monitor', 'container_checker'])
         log.log_notice("Waiting for monit monitor actions to complete ...")
-        _wait_for_monit_service_monitored('routeCheck')
+        if has_route_check:
+            _wait_for_monit_service_monitored('routeCheck')
         _wait_for_monit_service_monitored('container_checker')
     except subprocess.CalledProcessError as err:
         pass
@@ -5627,10 +5643,18 @@ def remove(ctx, interface_name, ip_addr):
             else:
                 output = bgp_util.run_bgp_command(cmd)
             # If there is output data, check is there a static route,
-            # bound to the interface.
+            # bound to the interface.  Works with sub-interfaces as
+            # "." is treated as part of the name (avoids Ethernet0 matching
+            # Ethernet0.10) and digits are not truncated (avoids Ethernet24
+            # matching Ethernet240).
             if output != "":
-                if any(interface_name in output_line for output_line in output.splitlines()):
-                    ctx.fail("Cannot remove the last IP entry of interface {}. A static {} route is still bound to the RIF.".format(interface_name, ip_ver))
+                intf_pattern = re.compile(
+                    r'(?<![\w.]){}(?![\w.])'.format(re.escape(interface_name)))
+                if intf_pattern.search(output):
+                    ctx.fail(
+                        "Cannot remove the last IP entry of interface {}."
+                        " A static {} route is still bound to the RIF."
+                        .format(interface_name, ip_ver))
     if multi_asic.is_multi_asic():
         command = ['sudo', 'ip', 'netns', 'exec', str(ctx.obj['namespace']), 'ip', 'neigh', 'flush', 'dev', str(interface_name), str(ip_address)]
     else:

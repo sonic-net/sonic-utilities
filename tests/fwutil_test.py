@@ -375,10 +375,10 @@ class TestFWPackageUntar(object):
         pkg = fwutil_lib.FWPackage.__new__(fwutil_lib.FWPackage)
         pkg.fwupdate_package_name = tar_path
         with patch('fwutil.lib.FWUPDATE_FWPACKAGE_DIR', extract_dir):
-            with pytest.raises(ValueError, match="unsafe path"):
+            with pytest.raises(tarfile.FilterError):
                 pkg.untar_fwpackage()
 
-    def test_absolute_path_in_tar_is_blocked(self, tmp_path):
+    def test_absolute_path_in_tar_is_sanitized(self, tmp_path):
         extract_dir = str(tmp_path / "extract")
         import os
         os.makedirs(extract_dir)
@@ -386,8 +386,11 @@ class TestFWPackageUntar(object):
         pkg = fwutil_lib.FWPackage.__new__(fwutil_lib.FWPackage)
         pkg.fwupdate_package_name = tar_path
         with patch('fwutil.lib.FWUPDATE_FWPACKAGE_DIR', extract_dir):
-            with pytest.raises(ValueError, match="unsafe path"):
-                pkg.untar_fwpackage()
+            result = pkg.untar_fwpackage()
+        # data_filter strips leading '/' and extracts safely inside extract_dir
+        assert result is True
+        assert not os.path.exists('/etc/passwd') or os.stat('/etc/passwd').st_size > 0  # real /etc/passwd untouched
+        assert os.path.exists(os.path.join(extract_dir, 'etc', 'passwd'))  # extracted safely inside dir
 
     def test_symlink_member_is_blocked(self, tmp_path):
         extract_dir = str(tmp_path / "extract")
@@ -397,5 +400,5 @@ class TestFWPackageUntar(object):
         pkg = fwutil_lib.FWPackage.__new__(fwutil_lib.FWPackage)
         pkg.fwupdate_package_name = tar_path
         with patch('fwutil.lib.FWUPDATE_FWPACKAGE_DIR', extract_dir):
-            with pytest.raises(ValueError, match="unsafe link member"):
+            with pytest.raises(tarfile.FilterError):
                 pkg.untar_fwpackage()

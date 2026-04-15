@@ -147,15 +147,14 @@ def vrf_network(ctx, ipaddress, info_type, namespace):
     network_helper(ipaddress, info_type, namespace, vrf)
 
 
-def summary_helper(namespace, display, vrf=None):
-    bgp_summary = bgp_util.get_bgp_summary_from_all_bgp_instances(constants.IPV6, namespace, display, vrf)
-    bgp_util.display_bgp_summary(bgp_summary=bgp_summary, af=constants.IPV6)
+def summary_helper(namespace, display, vrf=constants.DEFAULT_VRF):
+    vrf_summaries = bgp_util.get_bgp_summary_from_all_bgp_instances(constants.IPV6, namespace, display, vrf)
+    for _, bgp_summary in vrf_summaries:
+        bgp_util.display_bgp_summary(bgp_summary=bgp_summary, af=constants.IPV6)
 
 
-def neighbors_helper(ipaddress, info_type, namespace, vrf=None):
-    command = 'show bgp'
-    if vrf is not None:
-        command += ' vrf {}'.format(vrf)
+def neighbors_helper(ipaddress, info_type, namespace, vrf=constants.DEFAULT_VRF):
+    command = 'show bgp vrf {}'.format(vrf)
 
     if ipaddress is not None:
         if not bgp_util.is_ipv6_address(ipaddress):
@@ -163,7 +162,7 @@ def neighbors_helper(ipaddress, info_type, namespace, vrf=None):
             ctx.fail("{} is not valid ipv6 address\n".format(ipaddress))
         try:
             actual_namespace = bgp_util.get_namespace_for_bgp_neighbor(
-                ipaddress)
+                ipaddress, vrf)
             if namespace is not None and namespace != actual_namespace:
                 click.echo(
                     "bgp neighbor {} is present in namespace {} not in {}"
@@ -189,11 +188,8 @@ def neighbors_helper(ipaddress, info_type, namespace, vrf=None):
     click.echo(output.rstrip('\n'))
 
 
-def network_helper(ipaddress, info_type, namespace, vrf=None):
-    command = 'show bgp'
-    if vrf is not None:
-        command += ' vrf {}'.format(vrf)
-    command += ' ipv6'
+def network_helper(ipaddress, info_type, namespace, vrf=constants.DEFAULT_VRF):
+    command = 'show bgp vrf {} ipv6'.format(vrf)
 
     if multi_asic.is_multi_asic() and namespace not in multi_asic.get_namespace_list():
         ctx = click.get_current_context()
