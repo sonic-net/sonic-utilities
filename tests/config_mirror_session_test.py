@@ -501,3 +501,34 @@ def test_mirror_session_capability_function():
         assert config.is_port_mirror_capability_supported("tx") is True
         assert config.is_port_mirror_capability_supported("both") is True
         assert config.is_port_mirror_capability_supported(None) is True
+
+def test_mirror_session_erspan_add_with_sample_rate():
+    config.ADHOC_VALIDATION = True
+    runner = CliRunner()
+    with mock.patch('config.main.ConfigDBConnector', spec=True) as mock_db:
+        mock_instance = mock_db.return_value
+        mock_instance.connect = mock.Mock()
+        mock_instance.get_entry = mock.Mock(return_value={})
+        mock_instance.set_entry = mock.Mock()
+        with mock.patch('config.main.ValidatedConfigDBConnector', return_value=mock_instance):
+            result = runner.invoke(
+                config.config.commands["mirror_session"].commands["erspan"].commands["add"],
+                ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
+                 "--sample_rate", "50000", "--truncate_size", "128"])
+            print(result.output)
+            assert result.exit_code == 0
+            # Verify set_entry was called with sample_rate and truncate_size as strings
+            call_args = mock_instance.set_entry.call_args
+            session_info = call_args[0][2]  # third positional arg is the entry dict
+            assert session_info.get("sample_rate") == "50000"
+            assert session_info.get("truncate_size") == "128"
+
+
+def test_mirror_session_erspan_add_with_negative_sample_rate():
+    runner = CliRunner()
+    result = runner.invoke(
+        config.config.commands["mirror_session"].commands["erspan"].commands["add"],
+        ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
+         "--sample_rate", "-1"])
+    assert result.exit_code != 0
+    assert ERR_MSG_VALUE_FAILURE in result.stdout or "is not in the range" in result.stdout

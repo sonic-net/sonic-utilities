@@ -982,7 +982,8 @@ class AclLoader(object):
         :return:
         """
         erspan_header = ("Name", "Status", "SRC IP", "DST IP", "GRE", "DSCP", "TTL", "Queue",
-                            "Policer", "Monitor Port", "SRC Port", "Direction")
+                            "Policer", "Monitor Port", "SRC Port", "Direction",
+                            "Sample Rate", "Truncate Size")
         span_header = ("Name", "Status", "DST Port", "SRC Port", "Direction", "Queue", "Policer")
 
         erspan_data = []
@@ -999,7 +1000,8 @@ class AclLoader(object):
                 erspan_data.append([key, val.get("status", ""), val.get("src_ip", ""),
                                          val.get("dst_ip", ""), val.get("gre_type", ""), val.get("dscp", ""),
                                          val.get("ttl", ""), val.get("queue", ""), val.get("policer", ""),
-                                         val.get("monitor_port", ""), val.get("src_port", ""), val.get("direction", "").lower()])
+                                         val.get("monitor_port", ""), val.get("src_port", ""), val.get("direction", "").lower(),
+                                         val.get("sample_rate", ""), val.get("truncate_size", "")])
 
         print("ERSPAN Sessions")
         erspan_data = natsorted(erspan_data)

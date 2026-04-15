@@ -22,8 +22,8 @@ class TestShowMirror(object):
         }
         expected_output = """\
 ERSPAN Sessions
-Name              Status    SRC IP    DST IP    GRE    DSCP    TTL    Queue    Policer    Monitor Port    SRC Port               Direction
-----------------  --------  --------  --------  -----  ------  -----  -------  ---------  --------------  ---------------------  -----------
+Name              Status    SRC IP    DST IP    GRE    DSCP    TTL    Queue    Policer    Monitor Port    SRC Port               Direction      Sample Rate    Truncate Size
+----------------  --------  --------  --------  -----  ------  -----  -------  ---------  --------------  ---------------------  -----------  -------------  ---------------
 test_session_db1  active                                                                                   Ethernet40,Ethernet48  rx
 
 SPAN Sessions
@@ -41,3 +41,29 @@ session15  active     Ethernet2   Ethernet3   tx
         result_output = result.output.replace('error', 'active')
         result_output = result_output.replace('inactive', 'active')
         assert result_output == expected_output
+
+    def test_mirror_show_with_sample_rate(self):
+        runner = CliRunner()
+        aclloader = AclLoader()
+        aclloader.configdb.set_entry("MIRROR_SESSION", "erspan_sampled", {
+            "type": "ERSPAN",
+            "src_ip": "10.0.1.192",
+            "dst_ip": "10.0.1.193",
+            "gre_type": "0x8949",
+            "dscp": "8",
+            "ttl": "64",
+            "src_port": "Ethernet0",
+            "direction": "RX",
+            "sample_rate": "50000",
+            "truncate_size": "128"
+        })
+        aclloader.read_sessions_info()
+        context = {
+            "acl_loader": aclloader
+        }
+        result = runner.invoke(acl_loader_show.cli.commands['show'].commands['session'], [], obj=context)
+        assert result.exit_code == 0
+        assert "50000" in result.output
+        assert "128" in result.output
+        assert "Sample Rate" in result.output
+        assert "Truncate Size" in result.output
