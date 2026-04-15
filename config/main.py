@@ -3064,11 +3064,16 @@ def erspan(ctx):
 @click.argument('src_port', metavar='[src_port]', required=False)
 @click.argument('direction', metavar='[direction]', required=False)
 @click.option('--policer')
-@click.option('--sample_rate', type=int, default=0, help='Sampling rate (1-in-N packets). 0 = full mirror.')
-@click.option('--truncate_size', type=int, default=0, help='Truncation size in bytes. 0 = no truncation.')
-def add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port, direction, sample_rate, truncate_size):
+@click.option('--sample_rate', type=click.IntRange(min=0), default=0,
+              help='Sampling rate (1-in-N). 0 = full mirror.')
+@click.option('--truncate_size', type=click.IntRange(min=0), default=0,
+              help='Truncation size in bytes. 0 = no truncation.')
+def add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue,
+        policer, src_port, direction, sample_rate, truncate_size):
     """ Add ERSPAN mirror session """
-    add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port, direction, sample_rate, truncate_size)
+    add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type,
+                queue, policer, src_port, direction,
+                sample_rate, truncate_size)
 
 def gather_session_info(session_info, policer, queue, src_port, direction):
     if policer:
@@ -3091,7 +3096,9 @@ def gather_session_info(session_info, policer, queue, src_port, direction):
 
     return session_info
 
-def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port=None, direction=None, sample_rate=0, truncate_size=0):
+def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue,
+               policer, src_port=None, direction=None,
+               sample_rate=0, truncate_size=0):
     session_info = {
             "type" : "ERSPAN",
             "src_ip": src_ip,

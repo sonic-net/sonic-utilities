@@ -6,7 +6,8 @@ from utilities_common.db import Db
 
 import acl_loader.main as acl_loader_show
 from acl_loader import *
-from acl_loader.main import *
+from acl_loader.main import *  # noqa: F403
+from acl_loader.main import AclLoader  # noqa: F405
 
 class TestShowMirror(object):
     def test_mirror_show(self):

@@ -502,6 +502,7 @@ def test_mirror_session_capability_function():
         assert config.is_port_mirror_capability_supported("both") is True
         assert config.is_port_mirror_capability_supported(None) is True
 
+
 def test_mirror_session_erspan_add_with_sample_rate():
     config.ADHOC_VALIDATION = True
     runner = CliRunner()
