@@ -67,6 +67,25 @@ function debug()
     logger "$@"
 }
 
+function is_bmc_platform()
+{
+    # Check if this is a BMC/Aspeed platform by looking at platform_env.conf
+    if [ -f "${DEVPATH}/${PLATFORM}/platform_env.conf" ]; then
+        if grep -q "switch_bmc=1" "${DEVPATH}/${PLATFORM}/platform_env.conf" 2>/dev/null; then
+            return 0  # True, this is a BMC platform
+        fi
+    fi
+
+    # Alternative check: look at platform_asic file
+    if [ -f "${DEVPATH}/${PLATFORM}/platform_asic" ]; then
+        if grep -q "aspeed" "${DEVPATH}/${PLATFORM}/platform_asic" 2>/dev/null; then
+            return 0  # True, this is an Aspeed platform
+        fi
+    fi
+
+    return 1  # False, not a BMC platform
+}
+
 function tag_images()
 {
     if test -f /usr/local/bin/ctrmgr_tools.py
@@ -74,6 +93,32 @@ function tag_images()
         if [[ x"${TAG_LATEST}" == x"yes" ]]; then
             /usr/local/bin/ctrmgr_tools.py tag-all
         fi
+    fi
+}
+
+function optimize_service_timeouts()
+{
+    # Optimize service shutdown timeouts for services that are slow to stop
+    # This is especially important for BMC/Aspeed platforms
+    local services_to_optimize=("system-health.service" "redfish.service")
+    local timeout=10  # 10 seconds timeout instead of default 90s
+
+    for service in "${services_to_optimize[@]}"; do
+        if systemctl is-active --quiet "$service" 2>/dev/null; then
+            debug "Setting shutdown timeout for $service to ${timeout}s"
+            # Create a runtime override for the service timeout
+            mkdir -p /run/systemd/system/${service}.d
+            cat > /run/systemd/system/${service}.d/timeout.conf <<EOF
+[Service]
+TimeoutStopSec=${timeout}
+EOF
+        fi
+    done
+
+    # Reload systemd to apply the runtime overrides
+    if [ ${#services_to_optimize[@]} -gt 0 ]; then
+        systemctl daemon-reload 2>/dev/null || true
+        debug "Service timeout optimizations applied"
     fi
 }
 
@@ -98,7 +143,12 @@ function stop_sonic_services()
         systemctl stop mux
     fi
 
-    if [[ x"$ASIC_TYPE" != x"mellanox" && x"$ASIC_TYPE" != x"pensando" ]]; then
+    # BMC/Aspeed platforms don't have syncd, skip syncd shutdown entirely
+    # This check must be done first, before checking ASIC_TYPE or NUM_ASIC
+    # because Aspeed platforms may have NUM_ASIC=1 set in asic.conf but no actual syncd
+    if is_bmc_platform; then
+        debug "BMC/Aspeed platform detected, skipping syncd shutdown (syncd not present on BMC)"
+    elif [[ x"$ASIC_TYPE" != x"mellanox" && x"$ASIC_TYPE" != x"pensando" ]]; then
         ASIC_CONF=${DEVPATH}/$PLATFORM/asic.conf
         if [ -f "$ASIC_CONF" ]; then
             source $ASIC_CONF
@@ -106,13 +156,23 @@ function stop_sonic_services()
         if [[ ($NUM_ASIC -gt 1) ]]; then
             asic_num=0
             while [[ ($asic_num -lt $NUM_ASIC) ]]; do
-                debug "Stopping syncd$asic_num process..."
-                docker exec -i syncd$asic_num /usr/bin/syncd_request_shutdown --cold > /dev/null
+                # Check if syncd container exists before trying to stop it
+                if docker ps -a --format '{{.Names}}' | grep -q "^syncd$asic_num$"; then
+                    debug "Stopping syncd$asic_num process..."
+                    docker exec -i syncd$asic_num /usr/bin/syncd_request_shutdown --cold > /dev/null || debug "Failed to stop syncd$asic_num (may not be running)"
+                else
+                    debug "syncd$asic_num container does not exist, skipping..."
+                fi
                 ((asic_num = asic_num + 1))
             done
         else
-            debug "Stopping syncd process..."
-            docker exec -i syncd /usr/bin/syncd_request_shutdown --cold > /dev/null
+            # Check if syncd container exists before trying to stop it
+            if docker ps -a --format '{{.Names}}' | grep -q "^syncd$"; then
+                debug "Stopping syncd process..."
+                docker exec -i syncd /usr/bin/syncd_request_shutdown --cold > /dev/null || debug "Failed to stop syncd (may not be running)"
+            else
+                debug "syncd container does not exist, skipping..."
+            fi
         fi
         sleep 3
     fi
@@ -309,6 +369,9 @@ tag_images
 
 # Linecard reboot notify supervisor
 linecard_reboot_notify_supervisor
+
+# Optimize service timeouts to avoid long shutdown delays
+optimize_service_timeouts
 
 # Stop SONiC services gracefully.
 stop_sonic_services
