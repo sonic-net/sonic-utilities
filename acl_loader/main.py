@@ -600,7 +600,7 @@ class AclLoader(object):
                         rule.ip.config.protocol, table_name, rule_idx))
 
                 rule_props["IP_PROTOCOL"] = rule.ip.config.protocol
-            if "IP_PROTOCOL" in rule_props:
+            if "IP_PROTOCOL" in rule_props and "IP_TYPE" not in rule_props:
                 # If we don't include IP_TYPE as a qualifier in the IP_PROTOCOL rule
                 # we could match on non-IP packets if the bits at the same offset match
                 # https://github.com/sonic-net/sonic-mgmt/issues/23960
