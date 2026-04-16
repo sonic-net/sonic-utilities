@@ -2,11 +2,13 @@ import os
 import traceback
 
 from click.testing import CliRunner
+from tabulate import tabulate
 from unittest import mock
 from utilities_common.intf_filter import parse_interface_in_filter
 
 import config.main as config
 import show.main as show
+from show import interfaces as interfaces_mod
 from utilities_common.db import Db
 
 show_interfaces_alias_output = """\
@@ -936,3 +938,228 @@ class TestInterfaces(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
+
+
+class MockLabelPortDb:
+    APPL_DB = 0
+
+    def __init__(self, oper_status):
+        self._oper_status = oper_status
+
+    def get(self, dbid, key, field):
+        if dbid == self.APPL_DB and field == 'oper_status':
+            return self._oper_status.get(key)
+        return None
+
+
+def setup_labelport_status_test(monkeypatch, platform_data, port_tables_by_ns,
+                                oper_status_by_ns=None, multi_asic=False):
+    namespaces = list(port_tables_by_ns.keys())
+    oper_status_by_ns = oper_status_by_ns or {}
+    asic_indexes = {'': 0}
+    asic_indexes.update({namespace: index for index, namespace in enumerate(namespaces)})
+
+    monkeypatch.setattr(interfaces_mod.device_info, 'get_platform_json_data', lambda: platform_data)
+    monkeypatch.setattr(interfaces_mod.multi_asic, 'is_multi_asic', lambda: multi_asic)
+    monkeypatch.setattr(interfaces_mod.multi_asic, 'get_namespace_list', lambda: namespaces)
+    monkeypatch.setattr(interfaces_mod.multi_asic, 'get_asic_index_from_namespace',
+                        lambda namespace: asic_indexes[namespace])
+    monkeypatch.setattr(interfaces_mod.multi_asic, 'get_port_table',
+                        lambda namespace=None: port_tables_by_ns[namespace])
+    monkeypatch.setattr(interfaces_mod.multi_asic, 'connect_to_all_dbs_for_ns',
+                        lambda namespace=None: MockLabelPortDb(oper_status_by_ns.get(namespace, {})))
+
+
+def invoke_labelport_status():
+    runner = CliRunner()
+    return runner.invoke(
+        show.cli.commands["interfaces"].commands["label-port"].commands["status"],
+        [],
+        obj=object.__new__(Db)
+    )
+
+
+def expected_labelport_output(rows, lane_count=4):
+    header = ['Label Port'] + [f'Lane {index + 1}' for index in range(lane_count)]
+    return tabulate(rows, header, tablefmt="outline") + "\n"
+
+
+class TestInterfacesLabelPortStatus(object):
+    def test_basic_single_asic(self, monkeypatch):
+        platform_data = {
+            'label_port_lanes_mapping': {
+                '1': ['0', '1', '2', '3'],
+                '2': ['4', '5', '6', '7'],
+            }
+        }
+        port_tables_by_ns = {
+            '': {
+                'Ethernet0': {'lanes': '0,1,2,3'},
+                'Ethernet4': {'lanes': '4,5,6,7'},
+            }
+        }
+        oper_status_by_ns = {
+            '': {
+                'PORT_TABLE:Ethernet0': 'up',
+                'PORT_TABLE:Ethernet4': 'down',
+            }
+        }
+        setup_labelport_status_test(monkeypatch, platform_data, port_tables_by_ns, oper_status_by_ns)
+
+        result = invoke_labelport_status()
+
+        assert result.exit_code == 0
+        assert result.output == expected_labelport_output([
+            [1, 'Ethernet0(UP)', 'Ethernet0(UP)', 'Ethernet0(UP)', 'Ethernet0(UP)'],
+            [2, 'Ethernet4(DOWN)', 'Ethernet4(DOWN)', 'Ethernet4(DOWN)', 'Ethernet4(DOWN)'],
+        ])
+
+    def test_basic_multi_asic(self, monkeypatch):
+        platform_data = {
+            'number_of_lanes_per_asic': 4,
+            'label_port_lanes_mapping': {
+                '1': ['0', '4', '8', '12'],
+                '2': ['1', '5', '9', '13'],
+            }
+        }
+        port_tables_by_ns = {
+            'asic0': {'Ethernet0': {'lanes': '0'}, 'Ethernet1': {'lanes': '1'}},
+            'asic1': {'Ethernet512': {'lanes': '0'}, 'Ethernet513': {'lanes': '1'}},
+            'asic2': {'Ethernet1024': {'lanes': '0'}, 'Ethernet1025': {'lanes': '1'}},
+            'asic3': {'Ethernet1536': {'lanes': '0'}, 'Ethernet1537': {'lanes': '1'}},
+        }
+        oper_status_by_ns = {
+            namespace: {f'PORT_TABLE:{port}': 'up' for port in port_table}
+            for namespace, port_table in port_tables_by_ns.items()
+        }
+        setup_labelport_status_test(monkeypatch, platform_data, port_tables_by_ns,
+                                    oper_status_by_ns, multi_asic=True)
+
+        result = invoke_labelport_status()
+
+        assert result.exit_code == 0
+        assert result.output == expected_labelport_output([
+            [1, 'Ethernet0/asic0(UP)', 'Ethernet512/asic1(UP)', 'Ethernet1024/asic2(UP)',
+             'Ethernet1536/asic3(UP)'],
+            [2, 'Ethernet1/asic0(UP)', 'Ethernet513/asic1(UP)', 'Ethernet1025/asic2(UP)',
+             'Ethernet1537/asic3(UP)'],
+        ])
+
+    def test_mixed_splits_lane_positions_and_fanout(self, monkeypatch):
+        platform_data = {
+            'label_port_lanes_mapping': {
+                '1': ['0', '1', '2', '3'],
+                '2': ['4', '5', '6', '7'],
+            }
+        }
+        port_tables_by_ns = {
+            '': {
+                'Ethernet0': {'lanes': '0,1,2,3'},
+                'Ethernet4': {'lanes': '4,5'},
+                'Ethernet6': {'lanes': '6'},
+                'Ethernet7': {'lanes': '7'},
+            }
+        }
+        oper_status_by_ns = {
+            '': {
+                'PORT_TABLE:Ethernet0': 'up',
+                'PORT_TABLE:Ethernet4': 'down',
+                'PORT_TABLE:Ethernet6': 'up',
+                'PORT_TABLE:Ethernet7': 'up',
+            }
+        }
+        setup_labelport_status_test(monkeypatch, platform_data, port_tables_by_ns, oper_status_by_ns)
+
+        result = invoke_labelport_status()
+
+        assert result.exit_code == 0
+        assert result.output == expected_labelport_output([
+            [1, 'Ethernet0(UP)', 'Ethernet0(UP)', 'Ethernet0(UP)', 'Ethernet0(UP)'],
+            [2, 'Ethernet4(DOWN)', 'Ethernet4(DOWN)', 'Ethernet6(UP)', 'Ethernet7(UP)'],
+        ])
+        assert result.output.count('Ethernet0(UP)') == 4
+        assert result.output.count('Ethernet4(DOWN)') == 2
+        assert result.output.count('Ethernet6(UP)') == 1
+        assert result.output.count('Ethernet7(UP)') == 1
+
+    def test_platform_json_read_error(self, monkeypatch):
+        setup_labelport_status_test(monkeypatch, None, {'': {}})
+
+        result = invoke_labelport_status()
+
+        assert result.exit_code != 0
+        assert "No platform data found" in result.output
+
+    def test_missing_labelport_lanes_mapping(self, monkeypatch):
+        setup_labelport_status_test(monkeypatch, {}, {'': {}})
+
+        result = invoke_labelport_status()
+
+        assert result.exit_code != 0
+        assert "No Label-port  mapping found in platform data" in result.output
+
+    def test_multi_asic_missing_number_of_lanes_per_asic(self, monkeypatch):
+        platform_data = {
+            'label_port_lanes_mapping': {
+                '1': ['0', '4', '8', '12'],
+            }
+        }
+        port_tables_by_ns = {
+            'asic0': {'Ethernet0': {'lanes': '0'}},
+            'asic1': {'Ethernet512': {'lanes': '0'}},
+        }
+        setup_labelport_status_test(monkeypatch, platform_data, port_tables_by_ns, multi_asic=True)
+
+        result = invoke_labelport_status()
+
+        assert result.exit_code != 0
+        assert "No number of lanes per ASIC found in platform data" in result.output
+
+    def test_multi_asic_one_asic_down(self, monkeypatch):
+        platform_data = {
+            'number_of_lanes_per_asic': 4,
+            'label_port_lanes_mapping': {
+                '1': ['0', '4', '8', '12'],
+                '2': ['1', '5', '9', '13'],
+            }
+        }
+        port_tables_by_ns = {
+            'asic0': {'Ethernet0': {'lanes': '0'}, 'Ethernet1': {'lanes': '1'}},
+            'asic1': {},
+            'asic2': {'Ethernet1024': {'lanes': '0'}, 'Ethernet1025': {'lanes': '1'}},
+            'asic3': {'Ethernet1536': {'lanes': '0'}, 'Ethernet1537': {'lanes': '1'}},
+        }
+        oper_status_by_ns = {
+            namespace: {f'PORT_TABLE:{port}': 'up' for port in port_table}
+            for namespace, port_table in port_tables_by_ns.items()
+        }
+        setup_labelport_status_test(monkeypatch, platform_data, port_tables_by_ns,
+                                    oper_status_by_ns, multi_asic=True)
+
+        result = invoke_labelport_status()
+
+        assert result.exit_code == 0
+        assert result.output == expected_labelport_output([
+            [1, 'Ethernet0/asic0(UP)', '-', 'Ethernet1024/asic2(UP)', 'Ethernet1536/asic3(UP)'],
+            [2, 'Ethernet1/asic0(UP)', '-', 'Ethernet1025/asic2(UP)', 'Ethernet1537/asic3(UP)'],
+        ])
+
+    def test_missing_oper_status_displays_down(self, monkeypatch):
+        platform_data = {
+            'label_port_lanes_mapping': {
+                '1': ['0', '1', '2', '3'],
+            }
+        }
+        port_tables_by_ns = {
+            '': {
+                'Ethernet0': {'lanes': '0,1,2,3'},
+            }
+        }
+        setup_labelport_status_test(monkeypatch, platform_data, port_tables_by_ns)
+
+        result = invoke_labelport_status()
+
+        assert result.exit_code == 0
+        assert result.output == expected_labelport_output([
+            [1, 'Ethernet0(DOWN)', 'Ethernet0(DOWN)', 'Ethernet0(DOWN)', 'Ethernet0(DOWN)'],
+        ])
