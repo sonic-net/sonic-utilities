@@ -309,7 +309,20 @@ class FWPackage(object):
     def untar_fwpackage(self):
         if self.fwupdate_package_name is not None:
             with tarfile.open(self.fwupdate_package_name) as fwupdate_tar:
-                fwupdate_tar.extractall(FWUPDATE_FWPACKAGE_DIR, filter='data')
+                extract_dir = os.path.realpath(FWUPDATE_FWPACKAGE_DIR)
+                for member in fwupdate_tar.getmembers():
+                    if member.issym() or member.islnk():
+                        if os.path.isabs(member.linkname):
+                            raise ValueError("Firmware package contains unsafe link: {}".format(member.name))
+                        link_target = os.path.realpath(
+                            os.path.join(extract_dir, os.path.dirname(member.name), member.linkname))
+                        if not link_target.startswith(extract_dir + os.sep) and link_target != extract_dir:
+                            raise ValueError("Firmware package contains unsafe link: {}".format(member.name))
+                    else:
+                        member_path = os.path.realpath(os.path.join(extract_dir, member.name))
+                        if not member_path.startswith(extract_dir + os.sep) and member_path != extract_dir:
+                            raise ValueError("Firmware package contains unsafe path: {}".format(member.name))
+                fwupdate_tar.extractall(FWUPDATE_FWPACKAGE_DIR)
             return True
         return False
 

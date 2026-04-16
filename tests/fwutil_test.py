@@ -1,3 +1,4 @@
+import os
 import tarfile
 import importlib
 import sys
@@ -358,7 +359,6 @@ class TestFWPackageUntar(object):
 
     def test_valid_tar_extracts_successfully(self, tmp_path):
         extract_dir = str(tmp_path / "extract")
-        import os
         os.makedirs(extract_dir)
         tar_path = self._make_tar(['platform_components.json', 'bios.bin'], tmp_path)
         pkg = fwutil_lib.FWPackage.__new__(fwutil_lib.FWPackage)
@@ -369,36 +369,41 @@ class TestFWPackageUntar(object):
 
     def test_path_traversal_is_blocked(self, tmp_path):
         extract_dir = str(tmp_path / "extract")
-        import os
         os.makedirs(extract_dir)
         tar_path = self._make_tar(['../../etc/cron.d/evil'], tmp_path)
         pkg = fwutil_lib.FWPackage.__new__(fwutil_lib.FWPackage)
         pkg.fwupdate_package_name = tar_path
         with patch('fwutil.lib.FWUPDATE_FWPACKAGE_DIR', extract_dir):
-            with pytest.raises(tarfile.FilterError):
+            with pytest.raises(ValueError, match="unsafe path"):
                 pkg.untar_fwpackage()
 
-    def test_absolute_path_in_tar_is_sanitized(self, tmp_path):
+    def test_absolute_path_in_tar_is_blocked(self, tmp_path):
         extract_dir = str(tmp_path / "extract")
-        import os
         os.makedirs(extract_dir)
         tar_path = self._make_tar(['/etc/passwd'], tmp_path)
         pkg = fwutil_lib.FWPackage.__new__(fwutil_lib.FWPackage)
         pkg.fwupdate_package_name = tar_path
         with patch('fwutil.lib.FWUPDATE_FWPACKAGE_DIR', extract_dir):
-            result = pkg.untar_fwpackage()
-        # data_filter strips leading '/' and extracts safely inside extract_dir
-        assert result is True
-        assert not os.path.exists('/etc/passwd') or os.stat('/etc/passwd').st_size > 0  # real /etc/passwd untouched
-        assert os.path.exists(os.path.join(extract_dir, 'etc', 'passwd'))  # extracted safely inside dir
+            with pytest.raises(ValueError, match="unsafe path"):
+                pkg.untar_fwpackage()
 
-    def test_symlink_member_is_blocked(self, tmp_path):
+    def test_symlink_escaping_is_blocked(self, tmp_path):
         extract_dir = str(tmp_path / "extract")
-        import os
         os.makedirs(extract_dir)
         tar_path = self._make_symlink_tar(tmp_path, 'evil_link', '/etc/passwd')
         pkg = fwutil_lib.FWPackage.__new__(fwutil_lib.FWPackage)
         pkg.fwupdate_package_name = tar_path
         with patch('fwutil.lib.FWUPDATE_FWPACKAGE_DIR', extract_dir):
-            with pytest.raises(tarfile.FilterError):
+            with pytest.raises(ValueError, match="unsafe link"):
                 pkg.untar_fwpackage()
+
+    def test_symlink_within_tarball_is_allowed(self, tmp_path):
+        extract_dir = str(tmp_path / "extract")
+        os.makedirs(extract_dir)
+        # Symlink pointing to another file inside the tarball is safe
+        tar_path = self._make_symlink_tar(tmp_path, 'link_to_config', './platform_components.json')
+        pkg = fwutil_lib.FWPackage.__new__(fwutil_lib.FWPackage)
+        pkg.fwupdate_package_name = tar_path
+        with patch('fwutil.lib.FWUPDATE_FWPACKAGE_DIR', extract_dir):
+            result = pkg.untar_fwpackage()
+        assert result is True
