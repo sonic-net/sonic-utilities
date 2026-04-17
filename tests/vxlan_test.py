@@ -406,6 +406,122 @@ Error: 'vxlan_name' length should not exceed 15 characters
         assert result.exit_code != 0
         assert "Please delete all VNET configuration referencing the tunnel" in result.output
 
+    @mock.patch('config.vxlan.ProducerStateTable')
+    @mock.patch('config.vxlan.SonicV2Connector')
+    def test_config_vxlan_destination_port(self, mock_sonic_v2_connector, mock_producer_state_table):
+        """Test setting valid VXLAN destination port writes to both CONFIG_DB and APP_DB,
+        and invalid port values are rejected"""
+        runner = CliRunner()
+        db = Db()
+
+        # Test invalid port - too low
+        result = runner.invoke(config.config.commands["vxlan"].commands["destination-port"], ["0"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "Invalid port number 0. Valid range is 1-65535" in result.output
+
+        # Test invalid port - too high
+        result = runner.invoke(config.config.commands["vxlan"].commands["destination-port"], ["65536"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "Invalid port number 65536. Valid range is 1-65535" in result.output
+
+        # Test valid port - mock APP_DB
+        mock_app_db = mock.Mock()
+        mock_sonic_v2_connector.return_value = mock_app_db
+        mock_tbl = mock.Mock()
+        mock_producer_state_table.return_value = mock_tbl
+
+        result = runner.invoke(config.config.commands["vxlan"].commands["destination-port"], ["4789"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert "VXLAN destination port set to 4789" in result.output
+
+        # Verify CONFIG_DB was updated
+        assert db.cfgdb.get_entry('DEVICE_METADATA', 'localhost').get('vxlan_port') == '4789'
+
+        # Verify ProducerStateTable was used to notify orchagent
+        mock_producer_state_table.assert_called_once_with(mock_app_db.get_redis_client.return_value, 'SWITCH_TABLE')
+        mock_tbl.set.assert_called_once_with('switch', [('vxlan_port', '4789')])
+
+    @mock.patch('config.vxlan.ProducerStateTable')
+    @mock.patch('config.vxlan.SonicV2Connector')
+    def test_config_vxlan_source_port(self, mock_sonic_v2_connector, mock_producer_state_table):
+        """Test setting valid VXLAN source port writes to both CONFIG_DB and APP_DB,
+        and invalid port values are rejected"""
+        runner = CliRunner()
+        db = Db()
+
+        # Test invalid port - too low
+        result = runner.invoke(config.config.commands["vxlan"].commands["source-port"], ["0"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "Invalid port number 0. Valid range is 1-65535" in result.output
+
+        # Test invalid port - too high
+        result = runner.invoke(config.config.commands["vxlan"].commands["source-port"], ["65536"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "Invalid port number 65536. Valid range is 1-65535" in result.output
+
+        # Test valid port - mock APP_DB
+        mock_app_db = mock.Mock()
+        mock_sonic_v2_connector.return_value = mock_app_db
+        mock_tbl = mock.Mock()
+        mock_producer_state_table.return_value = mock_tbl
+
+        result = runner.invoke(config.config.commands["vxlan"].commands["source-port"], ["1024"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert "VXLAN source port set to 1024" in result.output
+
+        # Verify CONFIG_DB was updated
+        assert db.cfgdb.get_entry('DEVICE_METADATA', 'localhost').get('vxlan_sport') == '1024'
+
+        # Verify ProducerStateTable was used to notify orchagent
+        mock_producer_state_table.assert_called_once_with(mock_app_db.get_redis_client.return_value, 'SWITCH_TABLE')
+        mock_tbl.set.assert_called_once_with('switch', [('vxlan_sport', '1024')])
+
+    @mock.patch('config.vxlan.ProducerStateTable')
+    @mock.patch('config.vxlan.SonicV2Connector')
+    def test_config_vxlan_source_port_mask(self, mock_sonic_v2_connector, mock_producer_state_table):
+        """Test setting valid VXLAN source port mask writes to both CONFIG_DB and APP_DB,
+        and invalid mask values are rejected"""
+        runner = CliRunner()
+        db = Db()
+
+        # Test invalid mask - too high (> 255, mask is 8-bit)
+        result = runner.invoke(config.config.commands["vxlan"].commands["source-port-mask"], ["256"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "Invalid mask 256. Valid range is 0-255" in result.output
+
+        # Test valid mask - mock APP_DB
+        mock_app_db = mock.Mock()
+        mock_sonic_v2_connector.return_value = mock_app_db
+        mock_tbl = mock.Mock()
+        mock_producer_state_table.return_value = mock_tbl
+
+        result = runner.invoke(config.config.commands["vxlan"].commands["source-port-mask"], ["255"], obj=db)
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert "VXLAN source port mask set to 255" in result.output
+
+        # Verify CONFIG_DB was updated
+        assert db.cfgdb.get_entry('DEVICE_METADATA', 'localhost').get('vxlan_mask') == '255'
+
+        # Verify ProducerStateTable was used to notify orchagent
+        mock_producer_state_table.assert_called_once_with(mock_app_db.get_redis_client.return_value, 'SWITCH_TABLE')
+        mock_tbl.set.assert_called_once_with('switch', [('vxlan_mask', '255')])
+
     @classmethod
     def teardown_class(cls):
         os.environ['UTILITIES_UNIT_TESTING'] = "0"
