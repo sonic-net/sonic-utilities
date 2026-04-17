@@ -531,10 +531,15 @@ def get_port_namespace(port):
     if not multi_asic.is_multi_asic() or port == 'eth0':
         return DEFAULT_NAMESPACE
 
-    # Get the table to check for interface presence
+    # Get the table to check for interface presence.
+    # Physical port aliases do not look like "Ethernet*" so in alias mode we
+    # need to fall back to scanning PORT aliases across namespaces.
     table_name = get_port_table_name(port)
     if table_name == "":
-        return None
+        if clicommon.get_interface_naming_mode() == "alias":
+            table_name = 'PORT'
+        else:
+            return None
 
     ns_list = multi_asic.get_all_namespaces()
     namespaces = ns_list['front_ns'] + ns_list['back_ns']
@@ -542,12 +547,16 @@ def get_port_namespace(port):
         config_db = ConfigDBConnector(use_unix_socket_path=True, namespace=namespace)
         config_db.connect()
 
-        # If the interface naming mode is alias, search the tables for alias_name.
-        if clicommon.get_interface_naming_mode() == "alias":
+        # Physical ports should resolve by either canonical name or alias, regardless
+        # of the CLI naming mode. Other interface types (for example PortChannel)
+        # are stored by name and should use direct lookup.
+        if table_name == 'PORT':
             port_dict = config_db.get_table(table_name)
             if port_dict:
                 for port_name in port_dict:
-                    if port == port_dict[port_name]['alias']:
+                    if port == port_name:
+                        return namespace
+                    if clicommon.get_interface_naming_mode() == "alias" and port == port_dict[port_name].get('alias'):
                         return namespace
         else:
             entry = config_db.get_entry(table_name, port)
@@ -1161,18 +1170,46 @@ def check_mirror_direction_config(v, direction):
     else:
         return True
 
+
+def split_mirror_ports(port_list):
+    """Return normalized mirror port tokens from a comma-separated string."""
+    if not port_list:
+        return []
+
+    return [port.strip() for port in port_list.split(",") if port.strip()]
+
+
+def normalize_mirror_src_port(config_db, src_port):
+    """Return canonical source-port list for ConfigDB storage."""
+    if not src_port:
+        return None
+
+    normalized_ports = []
+    for port in split_mirror_ports(src_port):
+        if clicommon.get_interface_naming_mode() == "alias":
+            port = interface_alias_to_name(config_db, port)
+        normalized_ports.append(port)
+
+    return ",".join(normalized_ports)
+
+
+def mirror_entry_has_port(entry, port_name):
+    """Check whether a mirror session entry contains a specific source port."""
+    return port_name in split_mirror_ports(entry.get('src_port', ''))
+
+
 def interface_has_mirror_config(ctx, mirror_table, dst_port, src_port, direction):
     """ Check if dst/src port is already configured with mirroring in same direction """
     for _, v in mirror_table.items():
         if src_port:
-            for port in src_port.split(","):
+            for port in split_mirror_ports(src_port):
                 if 'dst_port' in v and v['dst_port'] == port:
                     ctx.fail("Error: Source Interface {} already has mirror config".format(port))
-                if 'src_port' in v and re.search(port,v['src_port']):
+                if mirror_entry_has_port(v, port):
                     if check_mirror_direction_config(v, direction):
                         ctx.fail("Error: Source Interface {} already has mirror config in same direction".format(port))
         if dst_port:
-            if ('dst_port' in v and v['dst_port'] == dst_port) or ('src_port' in v and re.search(dst_port,v['src_port'])):
+            if ('dst_port' in v and v['dst_port'] == dst_port) or mirror_entry_has_port(v, dst_port):
                 ctx.fail("Error: Destination Interface {} already has mirror config".format(dst_port))
 
     return False
@@ -1205,16 +1242,30 @@ def is_port_mirror_capability_supported(direction, namespace=None):
     return True
 
 
-def validate_mirror_session_config(config_db, session_name, dst_port, src_port, direction):
+def mirror_session_exists(config_db, session_name):
+    """Check whether a mirror session name already exists in the given ConfigDB."""
+    return bool(config_db.get_entry('MIRROR_SESSION', session_name))
+
+
+def validate_mirror_session_config(config_db, session_name, dst_port, src_port, direction,
+                                   namespace=None, front_asic_configdbs=None):
     """ Check if SPAN mirror-session config is valid """
     ctx = click.get_current_context()
-    if len(config_db.get_entry('MIRROR_SESSION', session_name)) != 0:
+    if mirror_session_exists(config_db, session_name):
         click.echo("Error: {} already exists".format(session_name))
         return False
+    if front_asic_configdbs:
+        for front_asic_configdb in front_asic_configdbs.values():
+            if front_asic_configdb is config_db:
+                continue
+            if mirror_session_exists(front_asic_configdb, session_name):
+                click.echo("Error: {} already exists".format(session_name))
+                return False
 
     vlan_member_table = config_db.get_table('VLAN_MEMBER')
     mirror_table = config_db.get_table('MIRROR_SESSION')
     portchannel_member_table = config_db.get_table('PORTCHANNEL_MEMBER')
+    normalized_src_port = src_port
 
     # Determine namespaces to validate: always include None (single-ASIC/back-compat),
     # and for multi-ASIC include namespaces for dst/src ports if present.
@@ -1239,15 +1290,17 @@ def validate_mirror_session_config(config_db, session_name, dst_port, src_port, 
         namespace_set.add(get_port_namespace(dst_port))
 
     if src_port:
-        for port in src_port.split(","):
+        for port in split_mirror_ports(src_port):
             if not interface_name_is_valid(config_db, port):
                 ctx.fail("Error: Source Interface {} is invalid".format(port))
+        normalized_src_port = normalize_mirror_src_port(config_db, src_port)
+        for port in split_mirror_ports(normalized_src_port):
             if dst_port and dst_port == port:
                 ctx.fail("Error: Destination Interface can't be same as Source Interface")
 
             namespace_set.add(get_port_namespace(port))
 
-    if interface_has_mirror_config(ctx, mirror_table, dst_port, src_port, direction):
+    if interface_has_mirror_config(ctx, mirror_table, dst_port, normalized_src_port, direction):
         return False
 
     if direction:
@@ -3064,9 +3117,10 @@ def erspan(ctx):
 @click.argument('src_port', metavar='[src_port]', required=False)
 @click.argument('direction', metavar='[direction]', required=False)
 @click.option('--policer')
-def add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port, direction):
+def erspan_add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port, direction):
     """ Add ERSPAN mirror session """
     add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port, direction)
+
 
 def gather_session_info(session_info, policer, queue, src_port, direction):
     if policer:
@@ -3076,13 +3130,7 @@ def gather_session_info(session_info, policer, queue, src_port, direction):
         session_info['queue'] = queue
 
     if src_port:
-        if clicommon.get_interface_naming_mode() == "alias":
-            src_port_list = []
-            for port in src_port.split(","):
-                src_port_list.append(interface_alias_to_name(None, port))
-            src_port=",".join(src_port_list)
-
-        session_info['src_port'] = src_port
+        session_info['src_port'] = ",".join(split_mirror_ports(src_port))
         if not direction:
             direction = "both"
         session_info['direction'] = direction.upper()
@@ -3102,6 +3150,7 @@ def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer
         session_info['gre_type'] = gre_type
 
     session_info = gather_session_info(session_info, policer, queue, src_port, direction)
+    raw_src_port = session_info.get('src_port')
     ctx = click.get_current_context()
 
     """
@@ -3112,23 +3161,84 @@ def add_erspan(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer
         config_db = ValidatedConfigDBConnector(ConfigDBConnector())
         config_db.connect()
         if ADHOC_VALIDATION:
-            if validate_mirror_session_config(config_db, session_name, None, src_port, direction) is False:
+            if validate_mirror_session_config(config_db, session_name, None, raw_src_port, direction) is False:
                 return
+        if raw_src_port:
+            session_info['src_port'] = normalize_mirror_src_port(config_db, raw_src_port)
         try:
             config_db.set_entry("MIRROR_SESSION", session_name, session_info)
         except ValueError as e:
             ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
     else:
+        # Validate and write src_port only in the matching namespace
+        # so ERSPAN is still available for ACL-based mirroring everywhere.
+        ns_src_ports = {}
+        if raw_src_port:
+            front_ns_set = set(namespaces['front_ns'])
+            for orig in split_mirror_ports(raw_src_port):
+                if not interface_name_is_valid(None, orig):
+                    ctx.fail("Error: Source Interface {} is invalid".format(orig))
+                port_ns = get_port_namespace(orig)
+                if port_ns not in front_ns_set:
+                    ctx.fail("Error: Source Interface {} is not a front-panel port".format(orig))
+                ns_src_ports.setdefault(port_ns, []).append(orig)
+
+        base_session_info = {k: v for k, v in session_info.items()
+                             if k not in ('src_port', 'direction')}
+
         per_npu_configdb = {}
         for front_asic_namespaces in namespaces['front_ns']:
-            per_npu_configdb[front_asic_namespaces] = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespaces))
+            per_npu_configdb[front_asic_namespaces] = ValidatedConfigDBConnector(
+                ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespaces)
+            )
             per_npu_configdb[front_asic_namespaces].connect()
-            if ADHOC_VALIDATION:
-                if validate_mirror_session_config(per_npu_configdb[front_asic_namespaces], session_name, None, src_port, direction) is False:
-                    return
+
+        ns_session_infos = {}
+        for front_asic_namespaces in namespaces['front_ns']:
+            ns_ports = ns_src_ports.get(front_asic_namespaces)
+            if ns_ports:
+                ns_src_port = ",".join(ns_ports)
+                if ADHOC_VALIDATION:
+                    if validate_mirror_session_config(
+                        per_npu_configdb[front_asic_namespaces],
+                        session_name,
+                        None,
+                        ns_src_port,
+                        direction,
+                        front_asic_namespaces,
+                        front_asic_configdbs=per_npu_configdb
+                    ) is False:
+                        return
+                ns_session_info = dict(base_session_info)
+                ns_session_info['src_port'] = normalize_mirror_src_port(
+                    per_npu_configdb[front_asic_namespaces], ns_src_port
+                )
+                ns_session_info['direction'] = session_info.get('direction', 'BOTH')
+            else:
+                ns_src_port = None
+                if ADHOC_VALIDATION:
+                    if validate_mirror_session_config(
+                        per_npu_configdb[front_asic_namespaces],
+                        session_name,
+                        None,
+                        ns_src_port,
+                        direction,
+                        front_asic_namespaces,
+                        front_asic_configdbs=per_npu_configdb
+                    ) is False:
+                        return
+                ns_session_info = dict(base_session_info)
+
+            ns_session_infos[front_asic_namespaces] = ns_session_info
+
+        for front_asic_namespaces in namespaces['front_ns']:
             try:
-                per_npu_configdb[front_asic_namespaces].set_entry("MIRROR_SESSION", session_name, session_info)
+                per_npu_configdb[front_asic_namespaces].set_entry(
+                    "MIRROR_SESSION",
+                    session_name,
+                    ns_session_infos[front_asic_namespaces]
+                )
             except ValueError as e:
                 ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
@@ -3138,6 +3248,7 @@ def span(ctx):
     """ SPAN mirror session """
     pass
 
+
 @span.command('add')
 @click.argument('session_name', metavar='<session_name>', required=True)
 @click.argument('dst_port', metavar='<dst_port>', required=True)
@@ -3145,15 +3256,18 @@ def span(ctx):
 @click.argument('direction', metavar='[direction]', required=False)
 @click.argument('queue', metavar='[queue]', type=QUEUE_RANGE, required=False)
 @click.option('--policer')
-def add(session_name, dst_port, src_port, direction, queue, policer):
+def span_add(session_name, dst_port, src_port, direction, queue, policer):
     """ Add SPAN mirror session """
     add_span(session_name, dst_port, src_port, direction, queue, policer)
 
 def add_span(session_name, dst_port, src_port, direction, queue, policer):
+    # Save original dst_port for namespace detection (before alias conversion)
+    original_dst_port = dst_port
+
     if clicommon.get_interface_naming_mode() == "alias":
         dst_port = interface_alias_to_name(None, dst_port)
         if dst_port is None:
-            click.echo("Error: Destination Interface {} is invalid".format(dst_port))
+            click.echo("Error: Destination Interface {} is invalid".format(original_dst_port))
             return False
 
     session_info = {
@@ -3162,6 +3276,7 @@ def add_span(session_name, dst_port, src_port, direction, queue, policer):
             }
 
     session_info = gather_session_info(session_info, policer, queue, src_port, direction)
+    raw_src_port = session_info.get('src_port')
     ctx = click.get_current_context()
 
     """
@@ -3172,24 +3287,59 @@ def add_span(session_name, dst_port, src_port, direction, queue, policer):
         config_db = ValidatedConfigDBConnector(ConfigDBConnector())
         config_db.connect()
         if ADHOC_VALIDATION:
-            if validate_mirror_session_config(config_db, session_name, dst_port, src_port, direction) is False:
+            if validate_mirror_session_config(config_db, session_name, dst_port, raw_src_port, direction) is False:
                 return
+        if raw_src_port:
+            session_info['src_port'] = normalize_mirror_src_port(config_db, raw_src_port)
         try:
             config_db.set_entry("MIRROR_SESSION", session_name, session_info)
         except ValueError as e:
             ctx.fail("Invalid ConfigDB. Error: {}".format(e))
     else:
+        # Auto-detect namespace from destination port
+        dst_port_namespace = get_port_namespace(original_dst_port)
+        if dst_port_namespace is None:
+            ctx.fail("Error: Destination Interface {} is invalid".format(original_dst_port))
+        if dst_port_namespace not in namespaces['front_ns']:
+            ctx.fail("Error: Destination Interface {} is not a front-panel port".format(original_dst_port))
+
+        # Verify all source ports are in the same namespace as destination port.
+        if src_port:
+            for port in split_mirror_ports(src_port):
+                port_ns = get_port_namespace(port)
+                if port_ns is None:
+                    ctx.fail("Error: Source Interface {} is invalid".format(port))
+                if port_ns != dst_port_namespace:
+                    ctx.fail(
+                        ("Error: Source Interface {} is not on the same ASIC as "
+                         "Destination Interface {}").format(port, dst_port)
+                    )
+
         per_npu_configdb = {}
         for front_asic_namespaces in namespaces['front_ns']:
-            per_npu_configdb[front_asic_namespaces] = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespaces))
+            per_npu_configdb[front_asic_namespaces] = ValidatedConfigDBConnector(
+                ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespaces)
+            )
             per_npu_configdb[front_asic_namespaces].connect()
-            if ADHOC_VALIDATION:
-                if validate_mirror_session_config(per_npu_configdb[front_asic_namespaces], session_name, dst_port, src_port, direction) is False:
-                    return
-            try:
-                per_npu_configdb[front_asic_namespaces].set_entry("MIRROR_SESSION", session_name, session_info)
-            except ValueError as e:
-                ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+
+        config_db = per_npu_configdb[dst_port_namespace]
+        if ADHOC_VALIDATION:
+            if validate_mirror_session_config(
+                config_db,
+                session_name,
+                dst_port,
+                raw_src_port,
+                direction,
+                dst_port_namespace,
+                front_asic_configdbs=per_npu_configdb
+            ) is False:
+                return
+        if raw_src_port:
+            session_info['src_port'] = normalize_mirror_src_port(config_db, raw_src_port)
+        try:
+            config_db.set_entry("MIRROR_SESSION", session_name, session_info)
+        except ValueError as e:
+            ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
 
 @mirror_session.command()
@@ -3214,10 +3364,11 @@ def remove(session_name):
         for front_asic_namespaces in namespaces['front_ns']:
             per_npu_configdb[front_asic_namespaces] = ValidatedConfigDBConnector(ConfigDBConnector(use_unix_socket_path=True, namespace=front_asic_namespaces))
             per_npu_configdb[front_asic_namespaces].connect()
-            try:
-                per_npu_configdb[front_asic_namespaces].set_entry("MIRROR_SESSION", session_name, None)
-            except JsonPatchConflict as e:
-                ctx.fail("Invalid ConfigDB. Error: {}".format(e))
+            if per_npu_configdb[front_asic_namespaces].get_entry("MIRROR_SESSION", session_name):
+                try:
+                    per_npu_configdb[front_asic_namespaces].set_entry("MIRROR_SESSION", session_name, None)
+                except JsonPatchConflict as e:
+                    ctx.fail("Invalid ConfigDB. Error: {}".format(e))
 
 #
 # 'pfcwd' group ('config pfcwd ...')
