@@ -81,6 +81,8 @@ class ConfigWrapper:
         self.scope = scope
         self.yang_dir = YANG_DIR
         self.sonic_yang_with_loaded_models = None
+        self._loaded_data_config_id = None
+        self._loaded_data_config_hash = None
 
     def get_config_db_as_json(self):
         return get_config_db_as_json(self.scope)
@@ -131,11 +133,39 @@ class ConfigWrapper:
         sy = self.create_sonic_yang_with_loaded_models()
 
         try:
-            # Loading data automatically does full validation
             sy.loadData(config_db_as_json)
+            self._mark_data_loaded(config_db_as_json)
             return True, None
         except sonic_yang.SonicYangException as ex:
+            self._clear_data_loaded()
             return False, ex
+
+    def _compute_config_hash(self, config):
+        """Compute a content hash for a config dict."""
+        import hashlib
+        return hashlib.md5(json.dumps(config, sort_keys=True).encode()).hexdigest()
+
+    def _is_data_loaded_for(self, config):
+        """
+        Check if the shared SonicYang instance already has data loaded for
+        the given config. Uses fast id() check first, falls back to content
+        hash comparison on id() miss.
+        """
+        if self._loaded_data_config_id is not None and self._loaded_data_config_id == id(config):
+            return True
+        if self._loaded_data_config_hash is not None and self._loaded_data_config_hash == self._compute_config_hash(config):
+            return True
+        return False
+
+    def _mark_data_loaded(self, config):
+        """Record that SonicYang currently has data loaded for this config."""
+        self._loaded_data_config_id = id(config)
+        self._loaded_data_config_hash = self._compute_config_hash(config)
+
+    def _clear_data_loaded(self):
+        """Clear the loaded-data cache (e.g. after an exception)."""
+        self._loaded_data_config_id = None
+        self._loaded_data_config_hash = None
 
     def validate_config_db_config(self, config_db_as_json):
         sy = self.create_sonic_yang_with_loaded_models()
@@ -145,13 +175,15 @@ class ConfigWrapper:
                                         self.validate_lanes]
 
         try:
-            # Loading data automatically does full validation
-            sy.loadData(config_db_as_json)
+            if not self._is_data_loaded_for(config_db_as_json):
+                sy.loadData(config_db_as_json)
+                self._mark_data_loaded(config_db_as_json)
             for supplemental_yang_validator in supplemental_yang_validators:
                 success, error = supplemental_yang_validator(config_db_as_json)
                 if not success:
                     return success, error
         except sonic_yang.SonicYangException as ex:
+            self._clear_data_loaded()
             return False, str(ex)
 
         return True, None
@@ -533,7 +565,14 @@ class PathAddressing:
         sy = self._create_sonic_yang_with_loaded_models()
 
         if reload_config:
-            sy.loadData(config)
+            # Skip loadData if the shared SonicYang instance already has this
+            # config loaded (e.g. by a prior validate_config_db_config call
+            # or a previous find_ref_paths call with the same config).
+            # This avoids redundant O(N^2) leafref resolution in libyang v1.
+            if self.config_wrapper is None or not self.config_wrapper._is_data_loaded_for(config):
+                sy.loadData(config)
+                if self.config_wrapper is not None:
+                    self.config_wrapper._mark_data_loaded(config)
 
         # Force to be a list
         if not isinstance(paths, list):
