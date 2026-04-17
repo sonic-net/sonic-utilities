@@ -1026,14 +1026,15 @@ class NoDependencyMoveValidator:
         deleted_paths, added_paths = self._get_paths(diff.current_config, simulated_config, [])
 
         # Note: on replace operations we are loading both current and simulated configs so we have to
-        #       load twice :(
-
-        # For deleted paths, we check the current config has no dependencies between nodes under the removed path
-        if not self._validate_paths_config(deleted_paths, diff.current_config, reload_config=True):
-            return False
+        #       load twice. Check simulated first so it can reuse data already loaded by
+        #       FullConfigMoveValidator.validate_config_db_config() (same simulated_config).
 
         # For added paths, we check the simulated config has no dependencies between nodes under the added path
         if not self._validate_paths_config(added_paths, simulated_config, reload_config=True):
+            return False
+
+        # For deleted paths, we check the current config has no dependencies between nodes under the removed path
+        if not self._validate_paths_config(deleted_paths, diff.current_config, reload_config=True):
             return False
 
         return True
