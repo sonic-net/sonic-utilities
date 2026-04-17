@@ -946,6 +946,21 @@ class TestFullConfigMoveValidator(unittest.TestCase):
         self.assertTrue(
                 validator.validate(JsonMoveGroup("", self.any_move), self.any_diff, self.any_simulated_config)[0])
 
+    def test_validate__passes_quiet_true_to_config_wrapper(self):
+        # Regression guard: FullConfigMoveValidator MUST invoke the config
+        # wrapper with quiet=True so the speculative patch-sort search does
+        # not spam syslog with transient YANG leafref LOG_ERR lines (the
+        # sorter already handles those via the returned tuple).
+        config_wrapper = Mock()
+        config_wrapper.validate_config_db_config.return_value = (True, None)
+        validator = ps.FullConfigMoveValidator(config_wrapper)
+
+        validator.validate(JsonMoveGroup("", self.any_move), self.any_diff, self.any_simulated_config)
+
+        config_wrapper.validate_config_db_config.assert_called_once_with(
+            self.any_simulated_config, quiet=True)
+
+
 class TestCreateOnlyMoveValidator(unittest.TestCase):
     def setUp(self):
         self.validator = ps.CreateOnlyMoveValidator(ps.PathAddressing())
