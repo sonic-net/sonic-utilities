@@ -322,6 +322,8 @@ class FWPackage(object):
                         member_path = os.path.realpath(os.path.join(extract_dir, member.name))
                         if not member_path.startswith(extract_dir + os.sep) and member_path != extract_dir:
                             raise ValueError("Firmware package contains unsafe path: {}".format(member.name))
+                # TODO: Replace manual validation with filter='data' once CI upgrades to Python 3.12+
+                # fwupdate_tar.extractall(FWUPDATE_FWPACKAGE_DIR, filter='data')
                 fwupdate_tar.extractall(FWUPDATE_FWPACKAGE_DIR)  # nosemgrep
             return True
         return False
