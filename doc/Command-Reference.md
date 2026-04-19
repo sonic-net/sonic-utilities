@@ -115,6 +115,10 @@
   * [LDAP global config commands](#LDAP-global-config-commands)
   * [show LDAP server commands](#LDAP-server-show-commands)
   * [LDAP server config commands](#LDAP-server-config-commands)
+* [LLR](#llr)
+  * [LLR show commands](#llr-show-commands)
+  * [LLR config commands](#llr-config-commands)
+  * [LLR clear commands](#llr-clear-commands)
 * [LLDP](#lldp)
   * [LLDP show commands](#lldp-show-commands)
 * [Loading, Reloading And Saving Configuration](#loading-reloading-and-saving-configuration)
@@ -8266,6 +8270,224 @@ Since this command might require changing the kernel parameters to specify the a
 
   ```
 Go Back To [Beginning of the document](#) or [Beginning of this section](#linux-kernel-dump)
+
+## LLR
+
+This section explains the show, configuration and clear commands for LLR (Link Layer Retry). LLR enables local retransmission of lost frames at the data link layer to reduce reliance on higher-layer recovery.
+
+All LLR configuration commands check LLR capability in STATE_DB. If the switch does not support LLR, commands are rejected with an error message.
+
+### LLR show commands
+
+**show llr interface**
+
+This command displays LLR interface configuration from APPL_DB. Optionally specify an interface name to filter.
+
+- Usage:
+  ```
+  show llr interface [<interface-name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show llr interface
+
+  LLR Interface Configuration
+  ----------------------------
+
+  PORT          LLR Mode    LLR Local    LLR Remote    LLR Profile
+  ----------    --------    ----------   -----------   ------------------------------
+  Ethernet0     static      enabled      enabled       llr_800000_40m_profile
+  Ethernet4     static      enabled      disabled      llr_400000_5m_profile
+  ```
+
+**show llr profile**
+
+This command displays LLR profile configuration from APPL_DB. Optionally specify a profile name to filter.
+
+- Usage:
+  ```
+  show llr profile [<profile-name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show llr profile llr_800000_40m_profile
+  +---------------------------------------+--------------+
+  | LLR Profile: llr_800000_40m_profile                  |
+  +=======================================+==============+
+  | Maximum Outstanding Frames            | 264          |
+  +---------------------------------------+--------------+
+  | Maximum Outstanding Bytes             | 135000       |
+  +---------------------------------------+--------------+
+  | Maximum Replay Count                  | 3            |
+  +---------------------------------------+--------------+
+  | Maximum Replay Timer(ns)              | 5000         |
+  +---------------------------------------+--------------+
+  | PCS Lost Status Timeout(ns)           | 50000        |
+  +---------------------------------------+--------------+
+  | Data Age Timeout(ns)                  | 20000        |
+  +---------------------------------------+--------------+
+  | CTLOS Spacing Bytes                   | 2048         |
+  +---------------------------------------+--------------+
+  | Init Action                           | best_effort  |
+  +---------------------------------------+--------------+
+  | Flush Action                          | best_effort  |
+  +---------------------------------------+--------------+
+  ```
+
+**show llr counters**
+
+This command displays LLR counter statistics (summary view). Use `-i` to filter by interface.
+
+- Usage:
+  ```
+  show llr counters [-i <interface-name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show llr counters -i Ethernet0
+
+  Port Rx    STATUS   RX_INIT  RX_INIT_ECHO    RX_ACK     RX_NACK      RX_OK      RX_BAD        RX_POISONED    RX_REPLAY
+  ---------  -------  -------  ------------    ------     -------      -----      ------        -----------    ---------
+  Ethernet0  Enable         1             1     15000           0      35000         0                  0            0
+
+  Port Tx    STATUS   TX_INIT  TX_INIT_ECHO    TX_ACK     TX_NACK      TX_OK      TX_DISCARD    TX_POISONED    TX_REPLAY
+  ---------  -------  -------  ------------    ------     -------      -----      ----------    -----------    ---------
+  Ethernet0  Enable         1             1     15000           0      35000           0              0            0
+  ```
+
+**show llr counters detailed**
+
+This command displays detailed LLR counter statistics per port, including all RX/TX counters. Optionally specify an interface name.
+
+- Usage:
+  ```
+  show llr counters detailed [<interface-name>]
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ show llr counters detailed Ethernet0
+
+  LLR Counters - Ethernet0
+  -----------------------
+  LLR_INIT      CtrlOS Transmitted ............................. 1
+  LLR_INIT_ECHO CtrlOS Transmitted ............................. 1
+  LLR_ACK       CtrlOS Transmitted ............................. 35000
+  LLR_NACK      CtrlOS Transmitted ............................. 0
+
+  LLR Frames Transmitted OK .................................... 35000
+  LLR Frames Transmitted as poisoned ........................... 0
+  LLR Frames Discarded at Transmit ............................. 0
+  LLR Tx Replay Triggered Count ................................ 0
+
+  LLR_INIT      CtrlOS Received ................................ 1
+  LLR_INIT_ECHO CtrlOS Received ................................ 1
+  LLR_ACK       CtrlOS Received ................................ 15000
+  LLR_NACK      CtrlOS Received ................................ 0
+  LLR_ACK/NACK  CtrlOS Received with SeqNum error .............. 0
+
+  LLR Frames Received OK ....................................... 35000
+  LLR Frames Received as Poisoned .............................. 0
+  LLR Frames Received as Bad ................................... 0
+  LLR Rx Replay Detect Count ................................... 0
+
+  LLR Frames Received OK with expected seq num ................. 0
+  LLR Frames Received Poisoned with expected seq num ........... 0
+  LLR Frames Received Bad with expected seq num ................ 0
+
+  LLR Frames Received with Unexpected seq num .................. 0
+  LLR Frames Received with Duplicate seq num ................... 0
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#llr)
+
+### LLR config commands
+
+**config llr interface mode**
+
+This command configures the LLR mode on a per-port basis.
+
+- Usage:
+  ```
+  config llr interface mode <interface-name> <static>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config llr interface mode Ethernet0 static
+  ```
+
+**config llr interface local**
+
+This command enables or disables LLR local (reception) on an interface. Only applicable when the port's LLR mode is `static`.
+
+- Usage:
+  ```
+  config llr interface local <interface-name> {enabled|disabled}
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config llr interface local Ethernet0 enabled
+  ```
+
+**config llr interface remote**
+
+This command enables or disables LLR remote (transmission) on an interface. Only applicable when the port's LLR mode is `static`.
+
+- Usage:
+  ```
+  config llr interface remote <interface-name> {enabled|disabled}
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo config llr interface remote Ethernet0 enabled
+  ```
+
+**counterpoll llr**
+
+These commands enable, disable, or set the polling interval for LLR counters.
+
+- Usage:
+  ```
+  counterpoll llr enable
+  counterpoll llr disable
+  counterpoll llr interval <milliseconds>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sudo counterpoll llr enable
+  admin@sonic:~$ sudo counterpoll llr interval 1000
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#llr)
+
+### LLR clear commands
+
+**sonic-clear llr counters**
+
+This command clears LLR counter statistics for all ports or a specific interface.
+
+- Usage:
+  ```
+  sonic-clear llr counters
+  sonic-clear llr counters interface <interface-name>
+  ```
+
+- Example:
+  ```
+  admin@sonic:~$ sonic-clear llr counters
+  LLR counters cleared.
+  admin@sonic:~$ sonic-clear llr counters interface Ethernet0
+  LLR counters cleared for Ethernet0.
+  ```
+
+Go Back To [Beginning of the document](#) or [Beginning of this section](#llr)
 
 ## LLDP
 
