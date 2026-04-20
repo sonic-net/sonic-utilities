@@ -23,9 +23,10 @@ class TestShowMirror(object):
         }
         expected_output = """\
 ERSPAN Sessions
-Name              Status    SRC IP    DST IP    GRE    DSCP    TTL    Queue    Policer    Monitor Port    SRC Port               Direction    Sample Rate    Truncate Size
-----------------  --------  --------  --------  -----  ------  -----  -------  ---------  --------------  ---------------------  -----------  -------------  ---------------
-test_session_db1  active                                                                                   Ethernet40,Ethernet48  rx
+Name                  Status    SRC IP    DST IP    GRE     DSCP    TTL    Queue    Policer    Monitor Port    SRC Port               Direction    Sample Rate    Truncate Size
+--------------------  --------  --------  --------  ------  ------  -----  -------  ---------  --------------  ---------------------  -----------  -------------  ---------------
+test_session_db1      active                                                                                    Ethernet40,Ethernet48  rx
+test_session_sampled  active     10.0.0.1  10.0.0.2  0x8949  8       64                                         Ethernet0              rx           50000          128
 
 SPAN Sessions
 Name       Status    DST Port    SRC Port    Direction    Queue    Policer
