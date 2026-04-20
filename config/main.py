@@ -125,6 +125,18 @@ GUID_MAX_LEN = 255
 
 asic_type = None
 
+def validate_sample_rate(ctx, param, value):
+    if value != 0 and (value < 256 or value > 8388608):
+        raise click.BadParameter("must be 0 (disabled) or 256-8388608")
+    return value
+
+
+def validate_truncate_size(ctx, param, value):
+    if value != 0 and (value < 64 or value > 9216):
+        raise click.BadParameter("must be 0 (disabled) or 64-9216")
+    return value
+
+
 DSCP_RANGE = click.IntRange(min=0, max=63)
 TTL_RANGE = click.IntRange(min=0, max=255)
 QUEUE_RANGE = click.IntRange(min=0, max=255)
@@ -3064,10 +3076,10 @@ def erspan(ctx):
 @click.argument('src_port', metavar='[src_port]', required=False)
 @click.argument('direction', metavar='[direction]', required=False)
 @click.option('--policer')
-@click.option('--sample_rate', type=click.IntRange(min=0), default=0,
-              help='Sampling rate (1-in-N). 0 = full mirror.')
-@click.option('--truncate_size', type=click.IntRange(min=0), default=0,
-              help='Truncation size in bytes. 0 = no truncation.')
+@click.option('--sample_rate', type=int, default=0, callback=validate_sample_rate,
+              help='Sampling rate (1-in-N). 0 = full mirror, valid range: 256-8388608.')
+@click.option('--truncate_size', type=int, default=0, callback=validate_truncate_size,
+              help='Truncation size in bytes. 0 = no truncation, valid range: 64-9216.')
 def add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue,  # noqa: F811
         policer, src_port, direction, sample_rate, truncate_size):
     """ Add ERSPAN mirror session """

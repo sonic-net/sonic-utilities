@@ -519,3 +519,15 @@ def test_mirror_session_erspan_add_with_invalid_sample_rate():
             ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
              "--truncate_size", "-1"])
     assert result.exit_code != 0
+
+
+def test_mirror_session_erspan_add_with_valid_sample_rate_and_truncate():
+    runner = CliRunner()
+    with mock.patch('config.main.add_erspan') as mocked:
+        result = runner.invoke(
+                config.config.commands["mirror_session"].commands["erspan"].commands["add"],
+                ["test_session", "100.1.1.1", "2.2.2.2", "8", "64",
+                 "--sample_rate", "50000", "--truncate_size", "128"])
+        assert result.exit_code == 0
+        mocked.assert_called_with("test_session", "100.1.1.1", "2.2.2.2",
+                                  8, 64, None, None, None, None, None, 50000, 128)
