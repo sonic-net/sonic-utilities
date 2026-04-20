@@ -20,6 +20,7 @@ limitations under the License.
 import argparse
 import json
 import os
+import re
 import shlex
 import sys
 import syslog
@@ -559,13 +560,26 @@ def read_ssh_string():
         print_err("Unable to read SSH_STRING from %s" % kdump_cfg)
         sys.exit(1)
 
+
+# Allowlist patterns matching sonic-kdump.yang. Enforced here because raw
+# CONFIG_DB writes (via redis/gNMI) bypass YANG validation, and these values
+# are written into /etc/default/kdump-tools which is shell-sourced as root.
+SSH_STRING_RE = re.compile(r'^[a-zA-Z0-9][a-zA-Z0-9._%+-]*@([a-zA-Z0-9.-]+|[0-9]{1,3}(\.[0-9]{1,3}){3})\Z')
+SSH_PATH_RE = re.compile(r'^(/[a-zA-Z0-9._-]+)+\Z')
+
 def write_ssh_string(ssh_string):
-    ssh_string = ssh_string.replace('/', '\/')  # Escape any slashes in the SSH string
+    if not SSH_STRING_RE.match(ssh_string):
+        print_err(
+            "Invalid ssh_string %r: must be user@host, where user starts with an "
+            "alphanumeric character and may contain [a-zA-Z0-9._%%+-], and host "
+            "contains only [a-zA-Z0-9.-] or is an IPv4 address" % ssh_string
+        )
+        sys.exit(1)
     cmd = [
         "/bin/sed",
         "-i",
         "-e",
-        f"s/#*SSH=.*/SSH=\"{ssh_string}\"/",
+        's/#*SSH=.*/SSH="%s"/' % ssh_string,
         kdump_cfg
     ]
     (rc, lines, err_str) = run_command(cmd, use_shell=False)
@@ -599,9 +613,17 @@ def read_ssh_path():
         sys.exit(1)
 
 def write_ssh_path(ssh_path):
-    cmd = "/bin/sed -i -e 's|#*SSH_KEY=.*|SSH_KEY=\"%s\"|' %s" % (ssh_path, kdump_cfg)
-
-    (rc, lines, err_str) = run_command(cmd, use_shell=False)  # Make sure to set use_shell=True
+    if not SSH_PATH_RE.match(ssh_path):
+        print_err("Invalid ssh_path %r: must be an absolute path with characters [a-zA-Z0-9._/-]" % ssh_path)
+        sys.exit(1)
+    cmd = [
+        "/bin/sed",
+        "-i",
+        "-e",
+        's|#*SSH_KEY=.*|SSH_KEY="%s"|' % ssh_path,
+        kdump_cfg
+    ]
+    (rc, lines, err_str) = run_command(cmd, use_shell=False)
     if rc == 0 and type(lines) == list and len(lines) == 0:
         ssh_path_in_cfg = read_ssh_path()
         if ssh_path_in_cfg != ssh_path:
@@ -677,7 +699,8 @@ def kdump_enable(verbose, kdump_enabled, memory, num_dumps, image, cmdline_file,
             print(f"Configuring remote crash dump to {ssh_string} using SSH keys from {ssh_path}")
 
         # Set up SSH connection with ssh_string and ssh_path
-        (rc, lines, err_str) = run_command(f"/usr/sbin/kdump-config set-remote {ssh_string} {ssh_path}", use_shell=False)
+        (rc, lines, err_str) = run_command(
+            ["/usr/sbin/kdump-config", "set-remote", ssh_string, ssh_path], use_shell=False)
         if rc != 0:
             print_err("Error: Unable to set remote crash dump configuration", err_str)
             sys.exit(1)
