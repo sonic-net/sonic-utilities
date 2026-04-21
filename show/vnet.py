@@ -559,8 +559,10 @@ def _show_tunnel_helper(vnet_name=None, appl_db=None, state_db=None):
         val_state = state_db.get_all(state_db.STATE_DB, state_db_key)
         epval = val.get('endpoint')
         state = val_state.get('state') if val_state else ""
+        raw_metric = val.get('metric')
+        metric = int(raw_metric) if raw_metric else ''
         pretty_print(table, r, epval,
                      val.get('mac_address') or '', val.get('vni') or '',
-                     val.get('metric') or '', state)
+                     metric, state)
 
     click.echo(tabulate(table, tunnel_header))

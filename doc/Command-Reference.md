@@ -12902,6 +12902,8 @@ This command displays vnet neighbor information about all the vnets configured i
 
 This command displays either all routes information about all the vnets or a specified vnet configured in the device. It also shows the vnet routes which are configured but may or may not be active based on endpoint BFD status.
 
+For ECMP tunnel routes with per-endpoint `mac_address` or `vni` lists, the endpoints, MAC addresses, and VNIs are wrapped together in aligned chunks (2 per row when any item exceeds 15 characters, 3 per row otherwise).
+
 - Usage:
 
   ```
@@ -12917,11 +12919,12 @@ This command displays either all routes information about all the vnets or a spe
   Vnet_2000    100.100.3.0/24             Ethernet52
   Vnet_3000    100.100.4.0/24             Vlan2000
 
-  vnet name    prefix          endpoint    mac address        vni      metric  status
-  -----------  --------------  ----------  -----------------  -----  --------  --------
-  Vnet_2000    100.100.1.1/32  10.10.10.1                                   0  active
-  Vnet_3000    100.100.2.1/32  10.10.10.2  00:00:00:00:03:04                   inactive
-  Vnet_3000    100.100.2.3/32  10.10.10.6  00:00:00:00:03:04
+  vnet name         prefix           endpoint                             mac address                          vni      metric    status
+  ----------------  ---------------  -----------------------------------  -----------------------------------  -------  --------  --------
+  Vnet_2000         100.100.1.1/32   10.10.10.1,10.10.10.2                aa:bb:cc:00:00:01,aa:bb:cc:00:00:02  100,200            active
+                                     10.10.10.3,10.10.10.4                aa:bb:cc:00:00:03,aa:bb:cc:00:00:04  300,400
+  Vnet_3000         100.100.2.1/32   10.10.10.5                           00:00:00:00:03:04                             0         inactive
+  Vnet_3000         100.100.2.3/32   10.10.10.6                           00:00:00:00:03:04
   ```
 
 **show vnet routes local [<vnet_name>]**
@@ -12948,6 +12951,8 @@ This command displays either local routes information about all the vnets or a s
 
 This command displays tunnel routes information about all the vnets or a specified vnet configured in the device.
 
+For ECMP routes with per-endpoint `mac_address` or `vni` lists, the endpoints, MAC addresses, and VNIs are wrapped together in aligned chunks. An optional vnet name argument filters the output to a single vnet.
+
 - Usage:
 
   ```
@@ -12958,11 +12963,17 @@ This command displays tunnel routes information about all the vnets or a specifi
 
   ```
   admin@sonic:~$ show vnet routes tunnel
-  vnet name    prefix          endpoint    mac address        vni      metric  status
-  -----------  --------------  ----------  -----------------  -----  --------  --------
-  Vnet_2000    100.100.1.1/32  10.10.10.1                                   0  active
-  Vnet_3000    100.100.2.1/32  10.10.10.2  00:00:00:00:03:04                   inactive
-  Vnet_3000    100.100.2.3/32  10.10.10.6  00:00:00:00:03:04
+  vnet name         prefix           endpoint                             mac address                          vni      metric    status
+  ----------------  ---------------  -----------------------------------  -----------------------------------  -------  --------  --------
+  Vnet_2000         100.100.1.1/32   10.10.10.1,10.10.10.2                aa:bb:cc:00:00:01,aa:bb:cc:00:00:02  100,200            active
+                                     10.10.10.3,10.10.10.4                aa:bb:cc:00:00:03,aa:bb:cc:00:00:04  300,400
+  Vnet_3000         100.100.2.1/32   10.10.10.5                           00:00:00:00:03:04                             0         inactive
+
+  admin@sonic:~$ show vnet routes tunnel Vnet_2000
+  vnet name         prefix           endpoint                             mac address                          vni      metric    status
+  ----------------  ---------------  -----------------------------------  -----------------------------------  -------  --------  --------
+  Vnet_2000         100.100.1.1/32   10.10.10.1,10.10.10.2                aa:bb:cc:00:00:01,aa:bb:cc:00:00:02  100,200            active
+                                     10.10.10.3,10.10.10.4                aa:bb:cc:00:00:03,aa:bb:cc:00:00:04  300,400
   ```
 
 #### Vnet config commands
