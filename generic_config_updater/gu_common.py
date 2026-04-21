@@ -82,6 +82,8 @@ class ConfigWrapper:
         self.scope = scope
         self.yang_dir = YANG_DIR
         self.sonic_yang_with_loaded_models = None
+        self._validate_config_cache = {}
+        self._currently_loaded_hash = None
 
     def get_config_db_as_json(self):
         return get_config_db_as_json(self.scope)
@@ -146,8 +148,6 @@ class ConfigWrapper:
         _cache_key = hashlib.md5(
             json.dumps(config_db_as_json, sort_keys=True).encode()
         ).hexdigest()
-        if not hasattr(self, '_validate_config_cache'):
-            self._validate_config_cache = {}
         if _cache_key in self._validate_config_cache:
             return self._validate_config_cache[_cache_key]
 
@@ -169,6 +169,7 @@ class ConfigWrapper:
 =======
             # Loading data automatically does full validation
             sy.loadData(config_db_as_json)
+<<<<<<< HEAD
             # Populate shared sy cache so find_ref_paths can reuse this loaded sy object.
             # At DFS depth N, NoDependencyMoveValidator calls find_ref_paths(current_config_N).
             # current_config_N equals simulated_config_{N-1}, which FullConfigMoveValidator
@@ -178,6 +179,9 @@ class ConfigWrapper:
                 self._sy_loaded_cache = {}
             self._sy_loaded_cache[_cache_key] = sy
 >>>>>>> 136a8e4e ([generic_config_updater] Cache loadData() calls to reduce redundant YANG parsing)
+=======
+            self._currently_loaded_hash = _cache_key
+>>>>>>> 268a7e8d (Fix stale singleton bug in loadData cache: use _currently_loaded_hash instead of sy object references)
             for supplemental_yang_validator in supplemental_yang_validators:
                 success, error = supplemental_yang_validator(config_db_as_json)
                 if not success:
@@ -185,6 +189,7 @@ class ConfigWrapper:
                     self._validate_config_cache[_cache_key] = result
                     return result
         except sonic_yang.SonicYangException as ex:
+            self._currently_loaded_hash = None
             result = (False, str(ex))
             self._validate_config_cache[_cache_key] = result
             return result
@@ -567,34 +572,20 @@ class PathAddressing:
             /ACL_TABLE/EVERFLOW6/ports/1
         """
         # TODO: Also fetch references by must statement (check similar statements)
-        # Cache the loaded SonicYang object by config content hash to avoid redundant
-        # loadData() calls. validate_config_db_config populates _sy_loaded_cache on the
-        # config_wrapper after loading a config. Since DFS current_config at depth N equals
-        # simulated_config at depth N-1, the sy object loaded by FullConfigMoveValidator
-        # can be reused by NoDependencyMoveValidator — saving one loadData() per accepted move.
-        _config_hash = hashlib.md5(
-            json.dumps(config, sort_keys=True).encode()
-        ).hexdigest() if reload_config else None
-
-        if not hasattr(self, '_sy_cache'):
-            self._sy_cache = {}
-
         sy = self._create_sonic_yang_with_loaded_models()
 
         if reload_config:
-            if _config_hash in self._sy_cache:
-                # Reuse sy object from a previous find_ref_paths call with same config
-                sy = self._sy_cache[_config_hash]
-            else:
-                # Check shared cache populated by validate_config_db_config
-                _cw_cache = getattr(self.config_wrapper, '_sy_loaded_cache', {})
-                if _config_hash in _cw_cache:
-                    # Reuse sy object already loaded by FullConfigMoveValidator
-                    sy = _cw_cache[_config_hash]
-                    self._sy_cache[_config_hash] = sy
-                else:
-                    sy.loadData(config)
-                    self._sy_cache[_config_hash] = sy
+            _config_hash = hashlib.md5(
+                json.dumps(config, sort_keys=True).encode()
+            ).hexdigest()
+            already_loaded = (
+                self.config_wrapper is not None and
+                self.config_wrapper._currently_loaded_hash == _config_hash
+            )
+            if not already_loaded:
+                sy.loadData(config)
+                if self.config_wrapper is not None:
+                    self.config_wrapper._currently_loaded_hash = _config_hash
 
         # Force to be a list
         if not isinstance(paths, list):
