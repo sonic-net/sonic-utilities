@@ -537,14 +537,25 @@ def get_feature_names_to_proceed(db, service_name, namespace):
         else:
             feature_config = features[service_name]
             feature_list = []
-            if feature_config[syslog_common.FEATURE_HAS_GLOBAL_SCOPE].lower() == 'true':
-                feature_list.append(service_name)
-            
+            has_global_scope = feature_config.get(syslog_common.FEATURE_HAS_GLOBAL_SCOPE, '').lower() == 'true'
+            has_per_asic_scope = feature_config.get(syslog_common.FEATURE_HAS_PER_ASIC_SCOPE, '').lower() == 'true'
+
             if multi_asic.is_multi_asic():
-                if feature_config[syslog_common.FEATURE_HAS_PER_ASIC_SCOPE].lower() == 'true':
+                if has_global_scope:
+                    feature_list.append(service_name)
+                if has_per_asic_scope:
                     asic_count = multi_asic.get_num_asics()
                     for i in range(asic_count):
                         feature_list.append(multi_asic.get_container_name_from_asic_id(service_name, i))
+            else:
+                # On a single-ASIC platform a feature has exactly one running container
+                # whose name equals the service name, regardless of whether it is tagged
+                # with has_global_scope, has_per_asic_scope, or both. Treating the two
+                # flags symmetrically here keeps this helper consistent with
+                # syslog_util.common.extract_feature_data, which also collapses both
+                # scopes onto the single-ASIC namespace.
+                if has_global_scope or has_per_asic_scope:
+                    feature_list.append(service_name)
     elif namespace == 'default':
         if not service_name:
             feature_list = [feature_name for feature_name in global_feature_data.keys()]
@@ -570,6 +581,9 @@ def get_feature_names_to_proceed(db, service_name, namespace):
 def enable_rate_limit_feature(db, service_name, namespace):
     """ Enable syslog rate limit feature """
     feature_list = get_feature_names_to_proceed(db, service_name, namespace)
+    if not feature_list:
+        click.echo(f'No container resolved for service {service_name!r} in namespace {namespace!r}, nothing to enable')
+        return
     for feature_name in feature_list:
         click.echo(f'Enabling syslog rate limit feature for {feature_name}')
         shell_cmd = f'docker ps -f status=running --format "{{{{.Names}}}}" | grep -E "^{feature_name}$"'
@@ -612,6 +626,9 @@ def enable_rate_limit_feature(db, service_name, namespace):
 def disable_rate_limit_feature(db, service_name, namespace):
     """ Disable syslog rate limit feature """
     feature_list = get_feature_names_to_proceed(db, service_name, namespace)
+    if not feature_list:
+        click.echo(f'No container resolved for service {service_name!r} in namespace {namespace!r}, nothing to disable')
+        return
     for feature_name in feature_list:
         click.echo(f'Disabling syslog rate limit feature for {feature_name}')
         shell_cmd = f'docker ps -f status=running --format "{{{{.Names}}}}" | grep -E "^{feature_name}$"'
