@@ -651,8 +651,8 @@ def _show_tunnel_helper(vnet_name=None, appl_db=None, state_db=None):
             r.append(val.get('mac_address'))
             r.append(val.get('vni'))
             r.append(val.get('metric'))
-            if val_state:
-                r.append(val_state.get('state'))
+            state = val_state.get('state') if val_state else ""
+            r.append(state)
             table.append(r)
             continue
         state = val_state.get('state') if val_state else ""
