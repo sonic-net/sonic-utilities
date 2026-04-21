@@ -9,6 +9,7 @@ import yang as ly
 import copy
 import re
 import os
+import hashlib
 from sonic_py_common import logger, multi_asic
 from enum import Enum
 from functools import cmp_to_key
@@ -138,6 +139,18 @@ class ConfigWrapper:
             return False, ex
 
     def validate_config_db_config(self, config_db_as_json):
+        # Cache validation results by config content hash.
+        # validate_config_db_config is a pure function: same config always produces
+        # the same result. Caching avoids redundant loadData() calls when the DFS
+        # revisits the same config state during backtracking.
+        _cache_key = hashlib.md5(
+            json.dumps(config_db_as_json, sort_keys=True).encode()
+        ).hexdigest()
+        if not hasattr(self, '_validate_config_cache'):
+            self._validate_config_cache = {}
+        if _cache_key in self._validate_config_cache:
+            return self._validate_config_cache[_cache_key]
+
         sy = self.create_sonic_yang_with_loaded_models()
 
         # TODO: Move these validators to YANG models
@@ -145,6 +158,7 @@ class ConfigWrapper:
                                         self.validate_lanes]
 
         try:
+<<<<<<< HEAD
             # Loading data automatically does full validation.
             # quiet=True suppresses sonic_yang.loadData's LOG_ERR
             # "Data Loading Failed" line on every exception (log-and-throw
@@ -152,14 +166,32 @@ class ConfigWrapper:
             # tuple / SonicYangException, so callers retain full error
             # signal -- only the duplicate syslog spam is silenced.
             sy.loadData(config_db_as_json, quiet=True)
+=======
+            # Loading data automatically does full validation
+            sy.loadData(config_db_as_json)
+            # Populate shared sy cache so find_ref_paths can reuse this loaded sy object.
+            # At DFS depth N, NoDependencyMoveValidator calls find_ref_paths(current_config_N).
+            # current_config_N equals simulated_config_{N-1}, which FullConfigMoveValidator
+            # already loaded here at depth N-1. Sharing the sy object eliminates one
+            # loadData() call per accepted move — halving total loadData() calls.
+            if not hasattr(self, '_sy_loaded_cache'):
+                self._sy_loaded_cache = {}
+            self._sy_loaded_cache[_cache_key] = sy
+>>>>>>> 136a8e4e ([generic_config_updater] Cache loadData() calls to reduce redundant YANG parsing)
             for supplemental_yang_validator in supplemental_yang_validators:
                 success, error = supplemental_yang_validator(config_db_as_json)
                 if not success:
-                    return success, error
+                    result = (success, error)
+                    self._validate_config_cache[_cache_key] = result
+                    return result
         except sonic_yang.SonicYangException as ex:
-            return False, str(ex)
+            result = (False, ex)
+            self._validate_config_cache[_cache_key] = result
+            return result
 
-        return True, None
+        result = (True, None)
+        self._validate_config_cache[_cache_key] = result
+        return result
 
     def validate_field_operation(self, old_config, target_config):
         """
@@ -535,10 +567,34 @@ class PathAddressing:
             /ACL_TABLE/EVERFLOW6/ports/1
         """
         # TODO: Also fetch references by must statement (check similar statements)
+        # Cache the loaded SonicYang object by config content hash to avoid redundant
+        # loadData() calls. validate_config_db_config populates _sy_loaded_cache on the
+        # config_wrapper after loading a config. Since DFS current_config at depth N equals
+        # simulated_config at depth N-1, the sy object loaded by FullConfigMoveValidator
+        # can be reused by NoDependencyMoveValidator — saving one loadData() per accepted move.
+        _config_hash = hashlib.md5(
+            json.dumps(config, sort_keys=True).encode()
+        ).hexdigest() if reload_config else None
+
+        if not hasattr(self, '_sy_cache'):
+            self._sy_cache = {}
+
         sy = self._create_sonic_yang_with_loaded_models()
 
         if reload_config:
-            sy.loadData(config)
+            if _config_hash in self._sy_cache:
+                # Reuse sy object from a previous find_ref_paths call with same config
+                sy = self._sy_cache[_config_hash]
+            else:
+                # Check shared cache populated by validate_config_db_config
+                _cw_cache = getattr(self.config_wrapper, '_sy_loaded_cache', {})
+                if _config_hash in _cw_cache:
+                    # Reuse sy object already loaded by FullConfigMoveValidator
+                    sy = _cw_cache[_config_hash]
+                    self._sy_cache[_config_hash] = sy
+                else:
+                    sy.loadData(config)
+                    self._sy_cache[_config_hash] = sy
 
         # Force to be a list
         if not isinstance(paths, list):
