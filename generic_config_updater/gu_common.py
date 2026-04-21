@@ -185,7 +185,7 @@ class ConfigWrapper:
                     self._validate_config_cache[_cache_key] = result
                     return result
         except sonic_yang.SonicYangException as ex:
-            result = (False, ex)
+            result = (False, str(ex))
             self._validate_config_cache[_cache_key] = result
             return result
 
