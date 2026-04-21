@@ -954,6 +954,89 @@ class TestPathAddressing(unittest.TestCase):
         # Assert
         self.assertEqual(expected, actual)
 
+    def test_find_ref_paths__same_path_and_config_called_twice__loadData_called_once(self):
+        """
+        Result cache: second call with same path + config must skip loadData entirely.
+        find_ref_paths is a pure function so result is deterministic.
+        """
+        config_wrapper = gu_common.ConfigWrapper()
+        mock_sy = MagicMock()
+        mock_sy.loadData = MagicMock()
+        mock_sy.root = MagicMock()
+        mock_sy.root.find_path = MagicMock(return_value=MagicMock(data=MagicMock(return_value=[])))
+        config_wrapper.sonic_yang_with_loaded_models = mock_sy
+
+        path_addressing = gu_common.PathAddressing(config_wrapper)
+        config = {"ACL_TABLE": {"RULE1": {}}}
+        path = "/ACL_TABLE"
+
+        # First call: computes result, caches it
+        path_addressing.find_ref_paths(path, config, reload_config=True)
+        load_count_first = mock_sy.loadData.call_count
+
+        # Second call: same path + config -> cache hit, no loadData
+        path_addressing.find_ref_paths(path, config, reload_config=True)
+        load_count_second = mock_sy.loadData.call_count
+
+        self.assertEqual(load_count_first, load_count_second,
+                         "find_ref_paths result cache must skip loadData on second call with same path+config")
+
+    def test_find_ref_paths__different_configs__loadData_called_each_time(self):
+        """
+        Result cache miss: different config content must each call loadData.
+        """
+        config_wrapper = gu_common.ConfigWrapper()
+        mock_sy = MagicMock()
+        mock_sy.loadData = MagicMock()
+        mock_sy.root = MagicMock()
+        mock_sy.root.find_path = MagicMock(return_value=MagicMock(data=MagicMock(return_value=[])))
+        config_wrapper.sonic_yang_with_loaded_models = mock_sy
+
+        path_addressing = gu_common.PathAddressing(config_wrapper)
+        config_a = {"ACL_TABLE": {"RULE1": {}}}
+        config_b = {"ACL_TABLE": {"RULE2": {}}}
+        path = "/ACL_TABLE"
+
+        path_addressing.find_ref_paths(path, config_a, reload_config=True)
+        count_after_a = mock_sy.loadData.call_count
+
+        path_addressing.find_ref_paths(path, config_b, reload_config=True)
+        count_after_b = mock_sy.loadData.call_count
+
+        self.assertGreater(count_after_b, count_after_a,
+                           "find_ref_paths must call loadData for different config content")
+
+    def test_find_ref_paths__cross_depth_remove_scenario__cache_hit(self):
+        """
+        Cross-depth REMOVE optimization:
+        At DFS depth N, NoDep calls find_ref_paths(path, cur_N) - result cached.
+        At DFS depth N+1, current_config = sim_N (same content as cur_N from prior depth).
+        NoDep calls find_ref_paths(path, sim_N) -> content hash matches -> cache hit, no loadData.
+        """
+        config_wrapper = gu_common.ConfigWrapper()
+        mock_sy = MagicMock()
+        mock_sy.loadData = MagicMock()
+        mock_sy.root = MagicMock()
+        mock_sy.root.find_path = MagicMock(return_value=MagicMock(data=MagicMock(return_value=[])))
+        config_wrapper.sonic_yang_with_loaded_models = mock_sy
+
+        path_addressing = gu_common.PathAddressing(config_wrapper)
+        path = "/ACL_TABLE"
+
+        # Simulate depth N: NoDep calls find_ref_paths(path, cur_N)
+        cur_n = {"ACL_TABLE": {"RULE1": {}, "RULE2": {}}}
+        path_addressing.find_ref_paths(path, cur_n, reload_config=True)
+        load_count_depth_n = mock_sy.loadData.call_count
+
+        # Simulate depth N+1: current_config = sim_N = deep copy of cur_N (same content, different object)
+        import copy
+        sim_n = copy.deepcopy(cur_n)  # Different object, same content - simulates DFS progression
+        path_addressing.find_ref_paths(path, sim_n, reload_config=True)
+        load_count_depth_n1 = mock_sy.loadData.call_count
+
+        self.assertEqual(load_count_depth_n, load_count_depth_n1,
+                         "Cross-depth cache hit: find_ref_paths with same content (different object) must skip loadData")
+
     def test_convert_path_to_xpath(self):
         def check(path, xpath, config=None):
             if not config:
