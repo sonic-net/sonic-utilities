@@ -4468,16 +4468,12 @@ def contact(db):
     pass
 
 
-def is_valid_email(email):
-    return bool(re.search(r"^[\w\.\+\-]+\@[\w]+\.[a-z]{2,3}$", email))
-
-
 @contact.command('add')
 @click.argument('contact', metavar='<contact_name>', required=True)
-@click.argument('contact_email', metavar='<contact_email>', required=True)
+@click.argument('contact_email', metavar='<contact_info>', required=True)
 @clicommon.pass_db
 def add_contact(db, contact, contact_email):
-    """ Add snmp contact name and email """
+    """ Add snmp contact name and contact info """
     snmp = db.cfgdb.get_table("SNMP")
     try:
         if snmp['CONTACT']:
@@ -4485,7 +4481,7 @@ def add_contact(db, contact, contact_email):
             sys.exit(1)
         else:
             db.cfgdb.set_entry('SNMP', 'CONTACT', {contact: contact_email}) # TODO: ERROR IN YANG MODEL. Contact name is not defined as key
-            click.echo("Contact name {} and contact email {} have been added to "
+            click.echo("Contact name {} and contact info {} have been added to "
                        "configuration".format(contact, contact_email))
             try:
                 click.echo("Restarting SNMP service...")
@@ -4496,11 +4492,8 @@ def add_contact(db, contact, contact_email):
                 raise click.Abort()
     except KeyError:
         if "CONTACT" not in snmp.keys():
-            if not is_valid_email(contact_email):
-                click.echo("Contact email {} is not valid".format(contact_email))
-                sys.exit(2)
             db.cfgdb.set_entry('SNMP', 'CONTACT', {contact: contact_email})
-            click.echo("Contact name {} and contact email {} have been added to "
+            click.echo("Contact name {} and contact info {} have been added to "
                        "configuration".format(contact, contact_email))
             try:
                 click.echo("Restarting SNMP service...")
@@ -4539,7 +4532,7 @@ def del_contact(db, contact):
 
 @contact.command('modify')
 @click.argument('contact', metavar='<contact>', required=True)
-@click.argument('contact_email', metavar='<contact email>', required=True)
+@click.argument('contact_email', metavar='<contact_info>', required=True)
 @clicommon.pass_db
 def modify_contact(db, contact, contact_email):
     """ Modify snmp contact"""
@@ -4554,11 +4547,8 @@ def modify_contact(db, contact, contact_email):
             click.echo("SNMP contact {} {} already exists".format(contact, contact_email))
             sys.exit(1)
         elif contact == current_snmp_contact_name and contact_email != current_snmp_contact_email:
-            if not is_valid_email(contact_email):
-                click.echo("Contact email {} is not valid".format(contact_email))
-                sys.exit(2)
             db.cfgdb.mod_entry('SNMP', 'CONTACT', {contact: contact_email})
-            click.echo("SNMP contact {} email updated to {}".format(contact, contact_email))
+            click.echo("SNMP contact {} info updated to {}".format(contact, contact_email))
             try:
                 click.echo("Restarting SNMP service...")
                 clicommon.run_command(['systemctl', 'reset-failed', 'snmp.service'], display_cmd=False)
@@ -4567,12 +4557,9 @@ def modify_contact(db, contact, contact_email):
                 click.echo("Restart service snmp failed with error {}".format(e))
                 raise click.Abort()
         else:
-            if not is_valid_email(contact_email):
-                click.echo("Contact email {} is not valid".format(contact_email))
-                sys.exit(2)
             db.cfgdb.set_entry('SNMP', 'CONTACT', None)
             db.cfgdb.set_entry('SNMP', 'CONTACT', {contact: contact_email})
-            click.echo("SNMP contact {} and contact email {} updated".format(contact, contact_email))
+            click.echo("SNMP contact {} and contact info {} updated".format(contact, contact_email))
             try:
                 click.echo("Restarting SNMP service...")
                 clicommon.run_command(['systemctl', 'reset-failed', 'snmp.service'], display_cmd=False)
