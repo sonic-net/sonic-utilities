@@ -1396,6 +1396,47 @@ class TestNoDependencyMoveValidator(unittest.TestCase):
         # Act and assert
         self.assertTrue(self.validator.validate(move, diff, move.apply(diff.current_config))[0])
 
+    def test_validate_replace__calls_find_ref_paths_simulated_config_before_current_config(self):
+        """
+        _validate_replace must check added_paths/simulated_config FIRST, then deleted_paths/current_config.
+        This ordering lets find_ref_paths reuse the sy singleton already loaded with simulated_config
+        by FullConfigMoveValidator (via _currently_loaded_hash), saving one loadData call per REPLACE.
+        """
+        config_wrapper = ConfigWrapper()
+        mock_pa = MagicMock(spec=PathAddressing)
+
+        # _get_paths returns (deleted_paths, added_paths) — both non-empty to exercise both branches
+        deleted_paths = ["/PORT/Ethernet0"]
+        added_paths = ["/PORT/Ethernet4"]
+        mock_pa._get_paths = MagicMock(return_value=(deleted_paths, added_paths))
+
+        # Track which config is passed to find_ref_paths in call order
+        configs_seen = []
+        def track_find_ref_paths(paths, config, reload_config=True):
+            configs_seen.append(config)
+            return []  # no refs → validation passes
+        mock_pa.find_ref_paths = MagicMock(side_effect=track_find_ref_paths)
+        mock_pa.create_path = PathAddressing.create_path
+
+        validator = ps.NoDependencyMoveValidator(mock_pa, config_wrapper)
+
+        current_config = {"PORT": {"Ethernet0": {"lanes": "0"}}}
+        simulated_config = {"PORT": {"Ethernet4": {"lanes": "4"}}}
+        diff = ps.Diff(current_config, simulated_config)
+        move = MagicMock()
+        move.op_type = OperationType.REPLACE
+        move.path = ""
+
+        validator.validate(move, diff, simulated_config)
+
+        # Assert: simulated_config must be checked first (for added_paths),
+        # then current_config (for deleted_paths)
+        self.assertEqual(len(configs_seen), 2, "find_ref_paths should be called exactly twice")
+        self.assertIs(configs_seen[0], simulated_config,
+                      "First find_ref_paths call must use simulated_config (for added_paths)")
+        self.assertIs(configs_seen[1], current_config,
+                      "Second find_ref_paths call must use current_config (for deleted_paths)")
+
     def prepare_config(self, config, patch):
         return patch.apply(config)
 

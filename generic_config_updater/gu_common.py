@@ -509,7 +509,6 @@ class PathAddressing:
 
     def __init__(self, config_wrapper=None):
         self.config_wrapper = config_wrapper
-        self._ref_paths_cache = {}   # result cache: (paths_key, config_hash) → ref_paths list
 
     @staticmethod
     def get_path_tokens(path):
@@ -573,31 +572,12 @@ class PathAddressing:
             /ACL_TABLE/EVERFLOW6/ports/1
         """
         # TODO: Also fetch references by must statement (check similar statements)
-
-        # Result cache: find_ref_paths is a pure function — same (paths, config) always
-        # produces the same ref_paths list. Cache by (paths_key, config_hash) to avoid
-        # redundant loadData() calls across DFS depths and candidate moves.
-        #
-        # Key benefit for REMOVE: at DFS depth N, NoDep caches find_ref_paths(path, cur_N).
-        # At depth N+1, current_config = sim_N (same content) → cache hit, no loadData needed.
-        # Key benefit for multiple candidates: all candidate moves at the same DFS depth call
-        # find_ref_paths with the same current_config → only first call loads, rest are cache hits.
-        #
-        # Only cache when reload_config=True: when reload_config=False the result depends on
-        # whatever sy currently has loaded, not on config content, so it is not safely cacheable.
-        _cache_key = None
-        if reload_config:
-            _paths_normalized = tuple(sorted(paths)) if isinstance(paths, list) else (paths,)
-            _config_hash = hashlib.md5(
-                json.dumps(config, sort_keys=True).encode()
-            ).hexdigest()
-            _cache_key = (_paths_normalized, _config_hash)
-            if _cache_key in self._ref_paths_cache:
-                return self._ref_paths_cache[_cache_key]
-
         sy = self._create_sonic_yang_with_loaded_models()
 
         if reload_config:
+            _config_hash = hashlib.md5(
+                json.dumps(config, sort_keys=True).encode()
+            ).hexdigest()
             already_loaded = (
                 self.config_wrapper is not None and
                 self.config_wrapper._currently_loaded_hash == _config_hash
@@ -631,11 +611,6 @@ class PathAddressing:
                 ref_paths_set.add(ref_path)
 
         ref_paths.sort()
-
-        # Store result in cache for future calls with same (paths, config)
-        if _cache_key is not None:
-            self._ref_paths_cache[_cache_key] = ref_paths
-
         return ref_paths
 
     def _get_inner_leaf_xpaths(self, xpath, sy):
