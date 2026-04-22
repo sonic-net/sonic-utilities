@@ -137,7 +137,7 @@ class ConfigWrapper:
         except sonic_yang.SonicYangException as ex:
             return False, ex
 
-    def validate_config_db_config(self, config_db_as_json, quiet=False):
+    def validate_config_db_config(self, config_db_as_json):
         sy = self.create_sonic_yang_with_loaded_models()
 
         # TODO: Move these validators to YANG models
@@ -145,8 +145,13 @@ class ConfigWrapper:
                                         self.validate_lanes]
 
         try:
-            # Loading data automatically does full validation
-            sy.loadData(config_db_as_json, quiet=quiet)
+            # Loading data automatically does full validation.
+            # quiet=True suppresses sonic_yang.loadData's LOG_ERR
+            # "Data Loading Failed" line on every exception (log-and-throw
+            # antipattern). Real failures still surface via the returned
+            # tuple / SonicYangException, so callers retain full error
+            # signal -- only the duplicate syslog spam is silenced.
+            sy.loadData(config_db_as_json, quiet=True)
             for supplemental_yang_validator in supplemental_yang_validators:
                 success, error = supplemental_yang_validator(config_db_as_json)
                 if not success:

@@ -849,12 +849,7 @@ class FullConfigMoveValidator:
         self.config_wrapper = config_wrapper
 
     def validate(self, move, diff, simulated_config) -> Tuple[bool, Optional[str]]:
-        # Speculative validation during patch-sort search. Transient YANG
-        # leafref failures are expected here and are handled by the sorter
-        # as a signal to prune the search branch. Pass quiet=True so
-        # sonic_yang.loadData does not leak a LOG_ERR line to syslog for
-        # every transient failure during the search.
-        is_valid, error = self.config_wrapper.validate_config_db_config(simulated_config, quiet=True)
+        is_valid, error = self.config_wrapper.validate_config_db_config(simulated_config)
         return is_valid, error
 
 class CreateOnlyMoveValidator:
