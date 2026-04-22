@@ -137,7 +137,7 @@ class ConfigWrapper:
         except sonic_yang.SonicYangException as ex:
             return False, ex
 
-    def validate_config_db_config(self, config_db_as_json):
+    def validate_config_db_config(self, config_db_as_json, quiet=False):
         sy = self.create_sonic_yang_with_loaded_models()
 
         # TODO: Move these validators to YANG models
@@ -146,7 +146,7 @@ class ConfigWrapper:
 
         try:
             # Loading data automatically does full validation
-            sy.loadData(config_db_as_json)
+            sy.loadData(config_db_as_json, quiet=quiet)
             for supplemental_yang_validator in supplemental_yang_validators:
                 success, error = supplemental_yang_validator(config_db_as_json)
                 if not success:
