@@ -810,7 +810,7 @@ def test_mirror_session_erspan_add_with_invalid_sample_rate():
             ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
              "--sample_rate", "-1"])
     assert result.exit_code != 0
-    assert 'must be 0 (disabled) or 256-8388608' in result.output
+    assert 'must be 256..8388608' in result.output
 
     # Verify invalid truncate_size (negative)
     result = runner.invoke(
@@ -818,7 +818,7 @@ def test_mirror_session_erspan_add_with_invalid_sample_rate():
             ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
              "--truncate_size", "-1"])
     assert result.exit_code != 0
-    assert 'must be 0 (disabled) or 64-9216' in result.output
+    assert 'must be 64..9216' in result.output
 
 
 def test_mirror_session_erspan_add_sample_rate_boundary():
@@ -830,7 +830,7 @@ def test_mirror_session_erspan_add_sample_rate_boundary():
             ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
              "--sample_rate", "1"])
     assert result.exit_code != 0
-    assert 'must be 0 (disabled) or 256-8388608' in result.output
+    assert 'must be 256..8388608' in result.output
 
     # sample_rate=255 (upper boundary of hole, should fail)
     result = runner.invoke(
@@ -838,7 +838,7 @@ def test_mirror_session_erspan_add_sample_rate_boundary():
             ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
              "--sample_rate", "255"])
     assert result.exit_code != 0
-    assert 'must be 0 (disabled) or 256-8388608' in result.output
+    assert 'must be 256..8388608' in result.output
 
     # sample_rate=256 (minimum valid, should pass)
     with mock.patch('config.main.add_erspan') as _:
@@ -862,7 +862,7 @@ def test_mirror_session_erspan_add_sample_rate_boundary():
             ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
              "--sample_rate", "8388609"])
     assert result.exit_code != 0
-    assert 'must be 0 (disabled) or 256-8388608' in result.output
+    assert 'must be 256..8388608' in result.output
 
 
 def test_mirror_session_erspan_add_truncate_size_boundary():
@@ -874,7 +874,7 @@ def test_mirror_session_erspan_add_truncate_size_boundary():
             ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
              "--truncate_size", "1"])
     assert result.exit_code != 0
-    assert 'must be 0 (disabled) or 64-9216' in result.output
+    assert 'must be 64..9216' in result.output
 
     # truncate_size=63 (upper boundary of hole, should fail)
     result = runner.invoke(
@@ -882,7 +882,7 @@ def test_mirror_session_erspan_add_truncate_size_boundary():
             ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
              "--truncate_size", "63"])
     assert result.exit_code != 0
-    assert 'must be 0 (disabled) or 64-9216' in result.output
+    assert 'must be 64..9216' in result.output
 
     # truncate_size=64 (minimum valid, should pass)
     with mock.patch('config.main.add_erspan') as _:
@@ -906,7 +906,7 @@ def test_mirror_session_erspan_add_truncate_size_boundary():
             ["test_session", "1.1.1.1", "2.2.2.2", "8", "64",
              "--truncate_size", "9217"])
     assert result.exit_code != 0
-    assert 'must be 0 (disabled) or 64-9216' in result.output
+    assert 'must be 64..9216' in result.output
 
 
 def test_mirror_session_erspan_add_with_valid_sample_rate_and_truncate():

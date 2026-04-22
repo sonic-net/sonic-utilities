@@ -126,15 +126,21 @@ GUID_MAX_LEN = 255
 asic_type = None
 
 
+SAMPLE_RATE_MIN = 256
+SAMPLE_RATE_MAX = 8388608
+TRUNCATE_SIZE_MIN = 64
+TRUNCATE_SIZE_MAX = 9216
+
+
 def validate_sample_rate(ctx, param, value):
-    if value != 0 and (value < 256 or value > 8388608):
-        raise click.BadParameter("must be 0 (disabled) or 256-8388608")
+    if value != 0 and (value < SAMPLE_RATE_MIN or value > SAMPLE_RATE_MAX):
+        raise click.BadParameter(f"must be {SAMPLE_RATE_MIN}..{SAMPLE_RATE_MAX}")
     return value
 
 
 def validate_truncate_size(ctx, param, value):
-    if value != 0 and (value < 64 or value > 9216):
-        raise click.BadParameter("must be 0 (disabled) or 64-9216")
+    if value != 0 and (value < TRUNCATE_SIZE_MIN or value > TRUNCATE_SIZE_MAX):
+        raise click.BadParameter(f"must be {TRUNCATE_SIZE_MIN}..{TRUNCATE_SIZE_MAX}")
     return value
 
 
@@ -3204,9 +3210,9 @@ def erspan(ctx):
 @click.argument('direction', metavar='[direction]', required=False)
 @click.option('--policer')
 @click.option('--sample_rate', type=int, default=0, callback=validate_sample_rate,
-              help='Sampling rate (1-in-N). 0 = full mirror, valid range: 256-8388608.')
+              help='Sampling rate (1-in-N). Valid range: 256..8388608. Omit for full mirror.')
 @click.option('--truncate_size', type=int, default=0, callback=validate_truncate_size,
-              help='Truncation size in bytes. 0 = no truncation, valid range: 64-9216.')
+              help='Truncation size in bytes. Valid range: 64..9216. Omit for no truncation.')
 def erspan_add(session_name, src_ip, dst_ip, dscp, ttl, gre_type, queue, policer, src_port, direction,
                sample_rate, truncate_size):
     """ Add ERSPAN mirror session """

@@ -9256,8 +9256,8 @@ While adding a new ERSPAN session, users need to configure the following fields 
 7) optional - Policer which will be used to control the rate at which frames are mirrored.
 8) optional - List of source ports which can have both Ethernet and LAG ports.
 9) optional - Direction - Mirror session direction when configured along with Source port. (Supported rx/tx/both. default direction is both)
-10) optional - Sample rate for sampled mirroring. N means mirror 1-in-N packets. 0 = full mirror (default). Valid range: 256-8388608.
-11) optional - Truncate size in bytes for mirrored packets. 0 = no truncation (default). Valid range: 64-9216.
+10) optional - Sample rate for sampled mirroring. N means mirror 1-in-N packets. When not specified, full mirroring is used. Valid range: 256..8388608.
+11) optional - Truncate size in bytes for mirrored packets. When not specified, no truncation is applied. Valid range: 64..9216.
 
 - Usage:
   ```
