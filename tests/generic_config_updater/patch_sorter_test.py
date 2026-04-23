@@ -1424,11 +1424,16 @@ class TestNoDependencyMoveValidator(unittest.TestCase):
         current_config = {"PORT": {"Ethernet0": {"lanes": "0"}}}
         simulated_config = {"PORT": {"Ethernet4": {"lanes": "4"}}}
         diff = ps.Diff(current_config, simulated_config)
-        move = MagicMock()
-        move.op_type = OperationType.REPLACE
-        move.path = ""
 
-        validator.validate(move, diff, simulated_config)
+        # Create a move mock with the right attributes, wrapped in a group mock
+        # that is iterable (validate() does `for move in group:`)
+        inner_move = MagicMock()
+        inner_move.op_type = OperationType.REPLACE
+        inner_move.path = ""
+        group = MagicMock()
+        group.__iter__ = MagicMock(return_value=iter([inner_move]))
+
+        validator.validate(group, diff, simulated_config)
 
         # Assert: simulated_config must be checked first (for added_paths),
         # then current_config (for deleted_paths)

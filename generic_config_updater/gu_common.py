@@ -158,7 +158,6 @@ class ConfigWrapper:
                                         self.validate_lanes]
 
         try:
-<<<<<<< HEAD
             # Loading data automatically does full validation.
             # quiet=True suppresses sonic_yang.loadData's LOG_ERR
             # "Data Loading Failed" line on every exception (log-and-throw
@@ -166,22 +165,7 @@ class ConfigWrapper:
             # tuple / SonicYangException, so callers retain full error
             # signal -- only the duplicate syslog spam is silenced.
             sy.loadData(config_db_as_json, quiet=True)
-=======
-            # Loading data automatically does full validation
-            sy.loadData(config_db_as_json)
-<<<<<<< HEAD
-            # Populate shared sy cache so find_ref_paths can reuse this loaded sy object.
-            # At DFS depth N, NoDependencyMoveValidator calls find_ref_paths(current_config_N).
-            # current_config_N equals simulated_config_{N-1}, which FullConfigMoveValidator
-            # already loaded here at depth N-1. Sharing the sy object eliminates one
-            # loadData() call per accepted move — halving total loadData() calls.
-            if not hasattr(self, '_sy_loaded_cache'):
-                self._sy_loaded_cache = {}
-            self._sy_loaded_cache[_cache_key] = sy
->>>>>>> 136a8e4e ([generic_config_updater] Cache loadData() calls to reduce redundant YANG parsing)
-=======
             self._currently_loaded_hash = _cache_key
->>>>>>> 268a7e8d (Fix stale singleton bug in loadData cache: use _currently_loaded_hash instead of sy object references)
             for supplemental_yang_validator in supplemental_yang_validators:
                 success, error = supplemental_yang_validator(config_db_as_json)
                 if not success:
