@@ -1,10 +1,8 @@
 import fnmatch
 
-import click
-import pytest
 import clear.main as clear
 from click.testing import CliRunner
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 
 class MockStateDB:
@@ -204,3 +202,34 @@ class TestClearPrbsInterface:
         assert result.exit_code == 0
         assert "Cleared PRBS test results for Ethernet0" in result.output
         assert 'PORT_PRBS_TEST|Ethernet4' in state_db._store
+
+
+class TestClearPrbsAlias:
+    """Tests for alias mode in 'sonic-clear prbs results -i'."""
+
+    def _invoke_alias(self, state_db, args, alias_return):
+        from unittest.mock import MagicMock
+        mock_converter = MagicMock()
+        mock_converter.alias_to_name.return_value = alias_return
+        runner = CliRunner()
+        cmd = clear.cli.commands['prbs'].commands['results']
+        with patch('swsscommon.swsscommon.SonicV2Connector', return_value=state_db), \
+             patch('swsscommon.swsscommon.ConfigDBConnector', return_value=MockConfigDB()), \
+             patch('utilities_common.cli.get_interface_naming_mode', return_value='alias'), \
+             patch('utilities_common.cli.iface_alias_converter', mock_converter):
+            return runner.invoke(cmd, args)
+
+    def test_valid_alias_resolves_and_clears(self):
+        state_db = MockStateDB()
+        state_db.seed({
+            'PORT_PRBS_TEST|Ethernet0': {'status': 'completed'},
+        })
+        result = self._invoke_alias(state_db, ['-i', 'etp1'], 'Ethernet0')
+        assert result.exit_code == 0
+        assert 'Ethernet0' in result.output
+
+    def test_invalid_alias_fails(self):
+        state_db = MockStateDB()
+        result = self._invoke_alias(state_db, ['-i', 'bad_alias'], None)
+        assert result.exit_code != 0
+        assert 'Invalid interface name' in result.output

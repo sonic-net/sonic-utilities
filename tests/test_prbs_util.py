@@ -1,5 +1,5 @@
 import pytest
-from datetime import datetime, timedelta
+from datetime import datetime
 from unittest.mock import patch
 from utilities_common.prbs_util import (
     PRBS_MODES,
@@ -81,6 +81,12 @@ class TestFormatBer:
         result = format_ber(1, 9)
         assert "⁻" in result
 
+    def test_sub_one_mantissa_normalization(self):
+        """mantissa < 1 triggers the upward-normalization while loop (lines 55-56)."""
+        result = format_ber(0.5, 5)
+        assert "× 10" in result
+        assert "5.00" in result
+
 
 # ---------------------------------------------------------------------------
 # format_ber_scientific
@@ -120,6 +126,13 @@ class TestFormatBerScientific:
         result = format_ber_scientific(5, 0)
         val = float(result)
         assert abs(val - 5.0) < 0.01
+
+    def test_sub_one_mantissa_normalization(self):
+        """mantissa < 1 triggers the upward-normalization while loop (lines 94-95)."""
+        result = format_ber_scientific(0.5, 5)
+        assert result is not None
+        val = float(result)
+        assert abs(val - 5e-6) < 1e-8
 
 
 # ---------------------------------------------------------------------------

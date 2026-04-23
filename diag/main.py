@@ -95,7 +95,8 @@ def enable(ctx, interface_name, mode, pattern):
     diag_tbl.set(interface_name, FieldValuePairs(fvs))
 
     click.echo(f"PRBS enabled on {interface_name} (mode={mode}, pattern={pattern})")
-    click.echo(f"Note: PRBS test is now running. Use 'diag interface prbs disable {interface_name}' to stop and capture results.")
+    click.echo(f"Note: PRBS test is now running. Use 'diag interface prbs disable "
+               f"{interface_name}' to stop and capture results.")
 
 
 @prbs.command()

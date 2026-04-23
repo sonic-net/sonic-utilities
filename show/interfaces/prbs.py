@@ -16,7 +16,6 @@ from utilities_common.prbs_util import (
     format_elapsed_time,
     calculate_duration,
     get_lock_status_from_rx_status,
-    PRBS_RX_STATUS
 )
 
 
@@ -189,12 +188,13 @@ def show_all_prbs_status(db, output_json):
             click.echo("No active PRBS tests")
         else:
             headers = ['Interface', 'Mode', 'Pattern', 'Status', 'RX Status',
-                        'Error Count', 'BER', 'Start Time', 'Duration']
+                       'Error Count', 'BER', 'Start Time', 'Duration']
             click.echo(tabulate(table_data, headers=headers, tablefmt='simple'))
 
 
 @prbs_group.command()
-@click.option('-i', '--interface', 'interface_name', metavar='<interface_name>', default=None, help='Display detailed PRBS test results for interface <interface_name>')
+@click.option('-i', '--interface', 'interface_name', metavar='<interface_name>',
+              default=None, help='Display detailed PRBS test results for interface <interface_name>')
 @click.option('--json', 'output_json', is_flag=True, help='Output in JSON format')
 @click.pass_context
 def status(ctx, interface_name, output_json):
@@ -251,7 +251,8 @@ def status(ctx, interface_name, output_json):
         'status': display_status,
         'duration': duration,
     }
-    header_line = f"Interface: {interface_name} | Mode: {mode} | Pattern: {pattern} | Status: {display_status} | Duration: {duration}"
+    header_line = (f"Interface: {interface_name} | Mode: {mode} | Pattern: {pattern} | "
+                   f"Status: {display_status} | Duration: {duration}")
 
     if mode == 'tx':
         message = 'TX mode does not capture PRBS results'

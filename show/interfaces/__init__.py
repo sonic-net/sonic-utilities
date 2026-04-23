@@ -64,6 +64,7 @@ def interfaces():
     """Show details of the network interfaces"""
     pass
 
+
 prbs.register(interfaces)
 
 

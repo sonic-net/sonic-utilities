@@ -1,7 +1,6 @@
-import pytest
 import diag.main as diag
 from click.testing import CliRunner
-from unittest.mock import patch, MagicMock, call
+from unittest.mock import patch, MagicMock
 
 
 # ---------------------------------------------------------------------------
@@ -89,24 +88,26 @@ class TestPrbsEnable:
         result, pst = self._invoke(['Ethernet0'])
         assert result.exit_code == 0
         assert "PRBS enabled on Ethernet0 (mode=rx, pattern=none)" in result.output
-        assert pst.set_calls[0] == ('Ethernet0', [('prbs_mode', 'rx')])
+        assert pst.set_calls[0] == ('Ethernet0', [('prbs_mode', 'rx'), ('prbs_pattern', 'none')])
 
     def test_enable_tx_mode(self):
         result, pst = self._invoke(['Ethernet0', '-m', 'tx'])
         assert result.exit_code == 0
         assert "mode=tx" in result.output
-        assert pst.set_calls[0] == ('Ethernet0', [('prbs_mode', 'tx')])
+        assert pst.set_calls[0] == ('Ethernet0', [('prbs_mode', 'tx'), ('prbs_pattern', 'none')])
 
     def test_enable_both_mode(self):
-        result, _ = self._invoke(['Ethernet0', '-m', 'both'])
+        result, pst = self._invoke(['Ethernet0', '-m', 'both'])
         assert result.exit_code == 0
         assert "mode=both" in result.output
+        assert pst.set_calls[0] == ('Ethernet0', [('prbs_mode', 'both'), ('prbs_pattern', 'none')])
 
     def test_enable_with_pattern(self):
         result, pst = self._invoke(['Ethernet0', '-p', 'PRBS31'])
         assert result.exit_code == 0
         assert "pattern=PRBS31" in result.output
         fvs_dict = dict(pst.set_calls[0][1])
+        assert fvs_dict['prbs_mode'] == 'rx'
         assert fvs_dict['prbs_pattern'] == 'PRBS31'
 
     def test_enable_mode_and_pattern(self):
@@ -114,6 +115,25 @@ class TestPrbsEnable:
         assert result.exit_code == 0
         assert "mode=both" in result.output
         assert "pattern=PRBS7" in result.output
+        fvs_dict = dict(pst.set_calls[0][1])
+        assert fvs_dict['prbs_mode'] == 'both'
+        assert fvs_dict['prbs_pattern'] == 'PRBS7'
+
+    def test_enable_tx_with_pattern(self):
+        result, pst = self._invoke(['Ethernet0', '-m', 'tx', '-p', 'PRBS9'])
+        assert result.exit_code == 0
+        assert "mode=tx" in result.output
+        assert "pattern=PRBS9" in result.output
+        fvs_dict = dict(pst.set_calls[0][1])
+        assert fvs_dict['prbs_mode'] == 'tx'
+        assert fvs_dict['prbs_pattern'] == 'PRBS9'
+
+    def test_enable_default_pattern_written_as_none(self):
+        """prbs_pattern is always written, defaulting to 'none' when no -p flag is given."""
+        result, pst = self._invoke(['Ethernet0'])
+        assert result.exit_code == 0
+        fvs_dict = dict(pst.set_calls[0][1])
+        assert fvs_dict['prbs_pattern'] == 'none'
 
     def test_enable_shows_running_note(self):
         result, _ = self._invoke(['Ethernet0'])
@@ -211,6 +231,7 @@ class TestPrbsEnable:
         assert result.exit_code == 0
         fvs_dict = dict(pst.set_calls[0][1])
         assert fvs_dict['prbs_mode'] == 'tx'
+        assert fvs_dict['prbs_pattern'] == 'none'
 
     # -- alias handling --
 
@@ -419,3 +440,40 @@ class TestPrbsDisable:
     def test_disable_no_db_write_on_nonexistent(self):
         _, pst = self._invoke(['EthernetXYZ'])
         assert pst.set_calls == []
+
+
+# ---------------------------------------------------------------------------
+# CLI group callbacks (cli / interface / prbs pass lines)
+# ---------------------------------------------------------------------------
+
+class TestCliGroupCallbacks:
+    """Invoke each Click group via the top-level CLI to exercise the group
+    callback bodies (the `pass` statements at lines 22, 29, 36 in diag/main.py).
+    """
+
+    def _invoke_top(self, args):
+        runner = CliRunner()
+        with patch('diag.main.ConfigDBConnector', return_value=MockConfigDB()), \
+             patch('diag.main.SonicV2Connector', return_value=MockSonicV2Connector()), \
+             patch('diag.main.DBConnector'), \
+             patch('diag.main.ProducerStateTable', return_value=MockProducerStateTable()), \
+             patch('diag.main.FieldValuePairs', side_effect=lambda x: x), \
+             patch('utilities_common.cli.get_interface_naming_mode',
+                   return_value='default'):
+            return runner.invoke(diag.cli, args)
+
+    def test_cli_group_help(self):
+        result = self._invoke_top(['--help'])
+        assert result.exit_code == 0
+        assert 'interface' in result.output
+
+    def test_interface_group_help(self):
+        result = self._invoke_top(['interface', '--help'])
+        assert result.exit_code == 0
+        assert 'prbs' in result.output
+
+    def test_prbs_group_help(self):
+        result = self._invoke_top(['interface', 'prbs', '--help'])
+        assert result.exit_code == 0
+        assert 'enable' in result.output
+        assert 'disable' in result.output

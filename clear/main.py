@@ -792,7 +792,8 @@ def _is_prbs_running_on_interface(state_db, interface_name):
 
 
 @prbs.command()
-@click.option('-i', '--interface', 'interface_name', metavar='<interface_name>', required=False, default=None, help='Interface name (e.g. Ethernet0).')
+@click.option('-i', '--interface', 'interface_name', metavar='<interface_name>',
+              required=False, default=None, help='Interface name (e.g. Ethernet0).')
 @click.pass_context
 def results(ctx, interface_name):
     """Clear PRBS test results
