@@ -10,7 +10,8 @@ from unittest.mock import MagicMock, patch
 from tests.route_check_test_data import (
     APPL_DB, MULTI_ASIC, NAMESPACE, DEFAULTNS, ARGS, ASIC_DB, CONFIG_DB,
     DEFAULT_CONFIG_DB, APPL_STATE_DB, OP_DEL, OP_SET, PRE, RESULT, RET, TEST_DATA,
-    UPD, FRR_ROUTES
+    UPD, FRR_ROUTES, ROUTE_TABLE, RT_ENTRY_TABLE, INTF_TABLE,
+    ASIC_RT_ENTRY_KEY_PREFIX, ASIC_RT_ENTRY_KEY_SUFFIX
 )
 
 import pytest
@@ -222,6 +223,8 @@ class TestRouteCheck(object):
     def init(self):
         route_check.UNIT_TESTING = 1
         route_check.FRR_WAIT_TIME = 0
+        route_check.ROUTE_CHECK_RETRIES = 0
+        route_check.ROUTE_CHECK_WAIT_TIME = 0
 
     @pytest.fixture
     def force_hang(self):
@@ -349,3 +352,89 @@ class TestRouteCheck(object):
             route_check.mitigate_installed_not_offloaded_frr_routes(namespace, missed_frr_rt, rt_appl)
         # Verify that the stdout are suppressed in this function
         assert not mock_stdout.getvalue()
+
+    def test_retry_exhausted(self, mock_dbs):
+        """Retry loop runs but mismatches never resolve — for-else warning fires."""
+        ct_data = TEST_DATA['2']
+        set_test_case_data(ct_data)
+        route_check.ROUTE_CHECK_RETRIES = 1
+        route_check.ROUTE_CHECK_WAIT_TIME = 0
+        try:
+            self.run_test(ct_data)
+        finally:
+            route_check.ROUTE_CHECK_RETRIES = 0
+
+    def test_retry_resolves_appl_miss(self, mock_dbs):
+        """rt_appl_miss resolved in retry via ASIC subscriber SET event — early break."""
+        ct_data = {
+            MULTI_ASIC: False,
+            NAMESPACE: [''],
+            ARGS: "route_check",
+            PRE: {
+                DEFAULTNS: {
+                    APPL_DB: {
+                        ROUTE_TABLE: {
+                            "0.0.0.0/0": {"ifname": "portchannel0"},
+                            "10.10.196.12/31": {"ifname": "portchannel0"},
+                        },
+                        INTF_TABLE: {}
+                    },
+                    ASIC_DB: {
+                        RT_ENTRY_TABLE: {
+                            ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        }
+                    }
+                }
+            }
+        }
+        set_test_case_data(ct_data)
+        route_check.ROUTE_CHECK_RETRIES = 1
+        route_check.ROUTE_CHECK_WAIT_TIME = 0
+        # First get_subscribe_updates (before retry loop) finds no new events.
+        # Second call (inside retry) delivers the missing route as a SET event,
+        # clearing rt_appl_miss and triggering the early break.
+        try:
+            with patch('route_check.get_subscribe_updates',
+                       side_effect=[([], []), (["10.10.196.12/31"], [])]):
+                self.run_test(ct_data)
+        finally:
+            route_check.ROUTE_CHECK_RETRIES = 0
+
+    def test_retry_resolves_asic_miss(self, mock_dbs):
+        """rt_asic_miss resolved in retry via APPL_DB re-read — early break."""
+        ct_data = {
+            MULTI_ASIC: False,
+            NAMESPACE: [''],
+            ARGS: "route_check",
+            PRE: {
+                DEFAULTNS: {
+                    APPL_DB: {
+                        ROUTE_TABLE: {
+                            "0.0.0.0/0": {"ifname": "portchannel0"},
+                        },
+                        INTF_TABLE: {}
+                    },
+                    ASIC_DB: {
+                        RT_ENTRY_TABLE: {
+                            ASIC_RT_ENTRY_KEY_PREFIX + "0.0.0.0/0" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                            ASIC_RT_ENTRY_KEY_PREFIX + "10.10.10.10/32" + ASIC_RT_ENTRY_KEY_SUFFIX: {},
+                        }
+                    }
+                }
+            }
+        }
+        set_test_case_data(ct_data)
+        route_check.ROUTE_CHECK_RETRIES = 1
+        route_check.ROUTE_CHECK_WAIT_TIME = 0
+        # get_subscribe_updates returns no events on both calls (no DEL events).
+        # get_appdb_routes: first call reflects initial state (no 10.10.10.10/32);
+        # second call (inside retry) sees the route appeared in APPL_DB, filtering
+        # it out of rt_asic_miss and triggering the early break.
+        try:
+            with patch('route_check.get_subscribe_updates',
+                       side_effect=[([], []), ([], [])]), \
+                 patch('route_check.get_appdb_routes',
+                       side_effect=[["0.0.0.0/0"], ["0.0.0.0/0", "10.10.10.10/32"]]):
+                self.run_test(ct_data)
+        finally:
+            route_check.ROUTE_CHECK_RETRIES = 0
