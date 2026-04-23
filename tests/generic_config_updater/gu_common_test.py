@@ -269,6 +269,8 @@ class TestConfigWrapper(unittest.TestCase):
 
         # First: validate loads the config into sy and sets _currently_loaded_hash
         config_wrapper.validate_config_db_config(config)
+        self.assertIsNotNone(config_wrapper._currently_loaded_hash,
+                             "validate_config_db_config should have set _currently_loaded_hash")
         load_count_after_validate = mock_sy.loadData.call_count
 
         # Second: find_ref_paths with same config should NOT call loadData again
@@ -295,13 +297,15 @@ class TestConfigWrapper(unittest.TestCase):
         config_b = {"ACL_TABLE": {"rule2": {}}}
 
         config_wrapper.validate_config_db_config(config_a)
+        self.assertIsNotNone(config_wrapper._currently_loaded_hash,
+                             "validate_config_db_config should have set _currently_loaded_hash")
         load_count_after_validate = mock_sy.loadData.call_count
 
         path_addressing.find_ref_paths("/ACL_TABLE", config_b, reload_config=True)
         load_count_after_find = mock_sy.loadData.call_count
 
-        self.assertGreater(load_count_after_find, load_count_after_validate,
-                           "find_ref_paths must call loadData when config differs from currently loaded")
+        self.assertEqual(load_count_after_find, load_count_after_validate + 1,
+                         "find_ref_paths should call loadData exactly once when config differs")
 
     def test_validate_bgp_peer_group__valid_non_intersecting_ip_ranges__returns_true(self):
         # Arrange

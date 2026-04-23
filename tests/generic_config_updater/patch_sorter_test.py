@@ -1405,11 +1405,6 @@ class TestNoDependencyMoveValidator(unittest.TestCase):
         config_wrapper = ConfigWrapper()
         mock_pa = MagicMock(spec=PathAddressing)
 
-        # _get_paths returns (deleted_paths, added_paths) — both non-empty to exercise both branches
-        deleted_paths = ["/PORT/Ethernet0"]
-        added_paths = ["/PORT/Ethernet4"]
-        mock_pa._get_paths = MagicMock(return_value=(deleted_paths, added_paths))
-
         # Track which config is passed to find_ref_paths in call order
         configs_seen = []
         def track_find_ref_paths(paths, config, reload_config=True):
@@ -1419,6 +1414,12 @@ class TestNoDependencyMoveValidator(unittest.TestCase):
         mock_pa.create_path = PathAddressing.create_path
 
         validator = ps.NoDependencyMoveValidator(mock_pa, config_wrapper)
+
+        # Patch _get_paths on the validator instance (not on mock_pa — _get_paths is a method
+        # on NoDependencyMoveValidator, not on PathAddressing)
+        deleted_paths = ["/PORT/Ethernet0"]
+        added_paths = ["/PORT/Ethernet4"]
+        validator._get_paths = MagicMock(return_value=(deleted_paths, added_paths))
 
         current_config = {"PORT": {"Ethernet0": {"lanes": "0"}}}
         simulated_config = {"PORT": {"Ethernet4": {"lanes": "4"}}}
