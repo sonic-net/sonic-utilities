@@ -2236,6 +2236,8 @@ def load_minigraph(db, no_service_restart, traffic_shift_away, override_config, 
             raise click.Abort()
 
         config_to_check = read_json_file(golden_config_path)
+        # Check for missing SNMP community in golden config (runs even if config is empty)
+        snmp_community_check(config_to_check)
         # Dependency check golden config json
         asic_list = [HOST_NAMESPACE]
         if multi_asic.is_multi_asic():
