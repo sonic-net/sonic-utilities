@@ -147,7 +147,13 @@ class ConfigWrapper:
         try:
             tmp_config_db_as_json = copy.deepcopy(config_db_as_json)
 
-            sy.loadData(tmp_config_db_as_json)
+            # Loading data automatically does full validation.
+            # quiet=True suppresses sonic_yang.loadData's LOG_ERR
+            # "Data Loading Failed" line on every exception (log-and-throw
+            # antipattern). Real failures still surface via the returned
+            # tuple / SonicYangException, so callers retain full error
+            # signal -- only the duplicate syslog spam is silenced.
+            sy.loadData(tmp_config_db_as_json, quiet=True)
 
             sy.validate_data_tree()
 
