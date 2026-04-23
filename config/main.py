@@ -2508,8 +2508,6 @@ def override_config_table(db, input_config_db, dry_run):
         # Use deepcopy by default to avoid modifying input config
         updated_config = update_config(current_config, ns_config_input)
 
-        # Check golden config for missing SNMP community (before merging with running config)
-        snmp_community_check(ns_config_input)
         # Enable YANG hard dependency check to exit early if not satisfied
         table_hard_dependency_check(updated_config)
 
@@ -2589,6 +2587,7 @@ def snmp_community_check(config_json):
 
 def table_hard_dependency_check(config_json):
     aaa_table_hard_dependency_check(config_json)
+    snmp_community_check(config_json)
 
 
 def aaa_table_hard_dependency_check(config_json):
