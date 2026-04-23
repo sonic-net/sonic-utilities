@@ -2578,8 +2578,16 @@ def override_config_db(config_db, config_input):
     click.echo("Overriding completed. No service is restarted.")
 
 
+def snmp_community_check(config_json):
+    snmp_community = config_json.get("SNMP_COMMUNITY", {})
+    if not snmp_community:
+        click.secho("Warning: no SNMP community string found in golden config. "
+                    "SNMPv2c will be disabled until a community is configured.", fg="yellow")
+
+
 def table_hard_dependency_check(config_json):
     aaa_table_hard_dependency_check(config_json)
+    snmp_community_check(config_json)
 
 
 def aaa_table_hard_dependency_check(config_json):
