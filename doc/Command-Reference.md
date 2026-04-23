@@ -10999,15 +10999,17 @@ Display status values and their meaning:
   - **Errored**: SAI returned an error during the PRBS operation.
   - **Failed**: PRBS test failed to start (SAI enable failed).
 
-### PRBS config commands
+### PRBS diag commands
 
-**config interface prbs enable**
+PRBS configuration is transient — it writes to APPL_DB (not CONFIG_DB) and does not survive `config save` or reboot.
+
+**diag interface prbs enable**
 
 This command enables PRBS on a specific interface. The test begins immediately after the command is executed.
 
 - Usage:
   ```
-  config interface prbs enable <interface_name> [--mode|-m <mode>] [--pattern|-p <pattern>]
+  diag interface prbs enable <interface_name> [--mode|-m <mode>] [--pattern|-p <pattern>]
   ```
 
 - Options:
@@ -11019,50 +11021,50 @@ This command enables PRBS on a specific interface. The test begins immediately a
 
 - Example:
   ```
-  admin@sonic:~$ sudo config interface prbs enable Ethernet0 --mode rx --pattern PRBS31
+  admin@sonic:~$ sudo diag interface prbs enable Ethernet0 --mode rx --pattern PRBS31
   PRBS enabled on Ethernet0 (mode=rx, pattern=PRBS31)
-  Note: PRBS test is now running. Use 'config interface prbs disable Ethernet0' to stop and capture results.
+  Note: PRBS test is now running. Use 'diag interface prbs disable Ethernet0' to stop and capture results.
   ```
 
 - Example (default mode and pattern):
   ```
-  admin@sonic:~$ sudo config interface prbs enable Ethernet0
+  admin@sonic:~$ sudo diag interface prbs enable Ethernet0
   PRBS enabled on Ethernet0 (mode=rx, pattern=none)
-  Note: PRBS test is now running. Use 'config interface prbs disable Ethernet0' to stop and capture results.
+  Note: PRBS test is now running. Use 'diag interface prbs disable Ethernet0' to stop and capture results.
   ```
 
 - Example (unsupported pattern on platform):
   ```
-  admin@sonic:~$ sudo config interface prbs enable Ethernet0 --pattern PRBS58
+  admin@sonic:~$ sudo diag interface prbs enable Ethernet0 --pattern PRBS58
   Error: PRBS pattern PRBS58 is not supported on Ethernet0.
   Supported patterns: PRBS7, PRBS9, PRBS31
   ```
 
   NOTE: If PRBS is already enabled on the interface, the command will fail and ask you to disable first:
   ```
-  admin@sonic:~$ sudo config interface prbs enable Ethernet0
-  Error: PRBS is already enabled on Ethernet0 in 'rx' mode. Please disable first using 'config interface prbs disable Ethernet0' to capture results, then re-enable with new settings.
+  admin@sonic:~$ sudo diag interface prbs enable Ethernet0
+  Error: PRBS is already enabled on Ethernet0 in 'rx' mode. Please disable first using 'diag interface prbs disable Ethernet0' to capture results, then re-enable with new settings.
   ```
 
-**config interface prbs disable**
+**diag interface prbs disable**
 
 This command disables PRBS on a specific interface and captures the test results. After disabling, results are stored in STATE_DB and can be viewed using the show command. It is recommended to disable PRBS on the RX side first in order to capture valid PRBS results.
 
 - Usage:
   ```
-  config interface prbs disable <interface_name>
+  diag interface prbs disable <interface_name>
   ```
 
 - Example:
   ```
-  admin@sonic:~$ sudo config interface prbs disable Ethernet0
+  admin@sonic:~$ sudo diag interface prbs disable Ethernet0
   PRBS disabled on Ethernet0
-  Results captured and stored. Use 'show interface prbs status -i Ethernet0' to view.
+  Results captured and stored. Use 'show interfaces prbs status -i Ethernet0' to view.
   ```
 
 - Example (PRBS not enabled):
   ```
-  admin@sonic:~$ sudo config interface prbs disable Ethernet0
+  admin@sonic:~$ sudo diag interface prbs disable Ethernet0
   PRBS is not enabled on Ethernet0
   ```
 
@@ -11093,7 +11095,7 @@ This command clears PRBS test results from STATE_DB. It can clear results for al
   NOTE: If PRBS is currently running on the interface, the command will fail:
   ```
   admin@sonic:~$ sonic-clear prbs results -i Ethernet0
-  Error: Cannot clear PRBS results while PRBS is running on Ethernet0. Stop the test first with 'config interface prbs disable Ethernet0'.
+  Error: Cannot clear PRBS results while PRBS is running on Ethernet0. Stop the test first with 'diag interface prbs disable Ethernet0'.
   ```
 
 ### PRBS Typical Workflow
@@ -11101,17 +11103,17 @@ This command clears PRBS test results from STATE_DB. It can clear results for al
 1. **Enable** PRBS on the interface:
    ```
    Switch-1  ( Tx End )
-   sudo config interface prbs enable Ethernet0 --mode tx --pattern PRBS31
+   sudo diag interface prbs enable Ethernet0 --mode tx --pattern PRBS31
    Switch-1  ( Rx End )
-   sudo config interface prbs enable Ethernet0 --mode rx --pattern PRBS31
+   sudo diag interface prbs enable Ethernet0 --mode rx --pattern PRBS31
    ```
 2. **Wait** for the desired test duration.
 3. **Disable** PRBS to stop and capture results:
    ```
    Switch-1  ( Rx End )
-   sudo config interface prbs disable Ethernet0 
+   sudo diag interface prbs disable Ethernet0 
    Switch-1  ( Tx End )
-   sudo config interface prbs disable Ethernet0 
+   sudo diag interface prbs disable Ethernet0 
    ```
 4. **View** the results:
    ```

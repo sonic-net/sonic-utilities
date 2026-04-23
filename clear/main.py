@@ -809,7 +809,7 @@ def results(ctx, interface_name):
     if interface_name is None:
         if _is_prbs_running_on_any(state_db):
             ctx.fail("Cannot clear PRBS results while PRBS is running on one or more interfaces. "
-                     "Stop the test(s) first with 'config interface prbs disable <interface>'.")
+                     "Stop the test(s) first with 'diag interface prbs disable <interface>'.")
         # Clear all interfaces
         deleted_count = 0
 
@@ -853,7 +853,7 @@ def results(ctx, interface_name):
 
     if _is_prbs_running_on_interface(state_db, interface_name):
         ctx.fail(f"Cannot clear PRBS results while PRBS is running on {interface_name}. "
-                 f"Stop the test first with 'config interface prbs disable {interface_name}'.")
+                 f"Stop the test first with 'diag interface prbs disable {interface_name}'.")
 
     # Delete PRBS test results from STATE_DB (all three tables)
     test_key = f'PORT_PRBS_TEST|{interface_name}'

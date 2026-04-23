@@ -70,7 +70,6 @@ from . import switchport
 from . import dns
 from . import bgp_cli
 from . import stp
-from . import interface_prbs
 
 # mock masic APIs for unit test
 try:
@@ -5105,7 +5104,6 @@ def interface(ctx, namespace):
     config_db.connect()
     ctx.obj = {'config_db': config_db, 'namespace': str(namespace)}
 
-interface_prbs.register(interface)
 
 @config.group(cls=clicommon.AliasedGroup, name='switch-fast-linkup', context_settings=CONTEXT_SETTINGS)
 @click.pass_context
