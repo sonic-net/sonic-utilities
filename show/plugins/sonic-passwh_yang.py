@@ -20,7 +20,7 @@ def format_attr_value(entry, attr):
         attr (Dict): Attribute metadata.
 
     Returns:
-        str: fomatted attribute value.
+        str: formatted attribute value.
     """
 
     if attr["is-leaf-list"]:

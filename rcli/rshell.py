@@ -9,7 +9,7 @@ from rcli import utils as rcli_utils
 
 
 @click.command()
-@click.argument('linecard_name', type=str, autocompletion=rcli_utils.get_all_linecards)
+@click.argument('linecard_name', type=str, shell_complete=rcli_utils.get_all_linecards)
 @click.option('-u', '--username', type=str, default=None, help="Username for login")
 def cli(linecard_name, username):
     """
@@ -18,7 +18,7 @@ def cli(linecard_name, username):
     :param linecard_name: The name of the linecard to connect to
     """
     if not device_info.is_chassis():
-        click.echo("This commmand is only supported Chassis")
+        click.echo("This command is only supported Chassis")
         sys.exit(1)
 
     if not username:

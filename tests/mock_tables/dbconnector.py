@@ -3,6 +3,7 @@ import json
 import os
 import sys
 import re
+import ipaddress
 from unittest import mock
 
 import mockredis
@@ -228,6 +229,43 @@ class CounterTable:
         return True, tuple(self.db.get("COUNTERS:" + key).items())
 
 
+class DBConnector:
+
+    def __init__(self, *args):
+
+        self.data = None
+        ip_to_asic = {
+            "192.168.3.10": "asic0",
+            "192.168.3.11": "asic1",
+            "192.168.5.1": "asic2",
+            "192.168.6.1": "asic3"
+        }
+
+        redis_kwargs = {}
+
+        # Check if IP is being used to connect to redis
+        if len(args) == 4:
+            try:
+                ip = args[1]
+                ipaddress.ip_address(args[1])
+                redis_kwargs['namespace'] = ip_to_asic[ip] if ip is not None else ip
+            except ValueError:
+                redis_kwargs['namespace'] = None
+
+        redis_kwargs['db_name'] = 'counters_db'
+        redis_kwargs['topo'] = None
+        redis_kwargs['unix_socket_path'] = None
+        redis_kwargs['decode_responses'] = True
+        self.swsssyncclient = SwssSyncClient(**redis_kwargs)
+
+    def hgetall(self, key):
+        return self.swsssyncclient.hgetall(key)
+
+    def hget(self, key, attr):
+        return self.swsssyncclient.hget(key, attr)
+
+
+swsscommon.DBConnector = DBConnector
 swsssdk.interface.DBInterface._subscribe_keyspace_notification = _subscribe_keyspace_notification
 swsssdk.interface.DBInterface.close = mock_close
 mockredis.MockRedis.config_set = config_set

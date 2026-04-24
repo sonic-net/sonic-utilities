@@ -9,7 +9,7 @@ import termios
 import tty
 
 from .utils import get_linecard_ip, get_linecard_hostname_from_module_name, get_linecard_module_name_from_hostname
-from paramiko.py3compat import u
+from paramiko.util import u
 from paramiko import Channel
 
 EMPTY_OUTPUTS = ['', '\x1b[?2004l\r']

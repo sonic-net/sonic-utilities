@@ -16,7 +16,6 @@ import re
 import sys
 import errno
 
-import sonic_platform
 from sonic_platform_base.sonic_eeprom.eeprom_tlvinfo import TlvInfoDecoder
 from sonic_py_common import device_info, logger
 from swsscommon.swsscommon import SonicV2Connector
@@ -32,6 +31,7 @@ def instantiate_eeprom_object():
     eeprom = None
 
     try:
+        import sonic_platform
         eeprom = sonic_platform.platform.Platform().get_chassis().get_eeprom()
     except Exception as e:
         log.log_error('Failed to obtain EEPROM object due to {}'.format(repr(e)))

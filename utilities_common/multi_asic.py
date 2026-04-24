@@ -121,9 +121,38 @@ def multi_asic_click_options(func):
         func = option(func)
     return func
 
-def multi_asic_click_option_namespace(func):
-   func = _multi_asic_click_option_namespace(func)
-   return func
+
+def multi_asic_click_option_namespace(func=None, required=False, default=None,
+                                      type=None, show_default=True,
+                                      help=None, callback=None):
+    """
+    Configurable decorator for adding --namespace click option.
+    Supports @multi_asic_click_option_namespace and
+    @multi_asic_click_option_namespace(required=True) syntax.
+    On single-asic platforms, required is always forced to False.
+    """
+    # Called without parentheses: use the original default namespace option
+    if func is not None:
+        return _multi_asic_click_option_namespace(func)
+
+    # Called with parentheses: build a custom namespace option
+    actual_required = required and multi_asic.is_multi_asic()
+
+    if type is None:
+        type = click.Choice(multi_asic_ns_choices())
+
+    if help is None:
+        help = 'Namespace name' if required else 'Namespace name or all'
+
+    return click.option(
+        '--namespace', '-n', 'namespace',
+        default=default,
+        type=type,
+        show_default=show_default,
+        required=actual_required,
+        callback=callback,
+        help=help
+    )
 
 def run_on_multi_asic(func):
     '''
@@ -187,3 +216,33 @@ def multi_asic_get_ip_intf_addr_from_ns(namespace, iface):
         pyroute2.netns.popns()
 
     return ipaddresses
+
+
+def multi_asic_get_ns_list(namespace=None):
+    """Get namespace list to iterate. Returns all if namespace is None on multi-asic."""
+    if (namespace is not None and namespace != constants.DEFAULT_NAMESPACE and
+            namespace not in multi_asic.get_namespace_list()):
+        raise ValueError('Unknown Namespace {}'.format(namespace))
+    if not multi_asic.is_multi_asic():
+        return [constants.DEFAULT_NAMESPACE]
+    if namespace is not None:
+        return [namespace]
+    return multi_asic.get_namespace_list()
+
+
+def get_namespace_from_ctx(default=None):
+    """Walk up the Click context chain to find a 'namespace' parameter from a parent group.
+
+    This is used when the --namespace option is defined on a group command
+    and sub-commands need to retrieve it without having their own option.
+    Returns *default* if no namespace is found or if the found value is None
+    (e.g., single-ASIC platform where the option exists but was not supplied).
+    """
+    _sentinel = object()
+    ctx = click.get_current_context()
+    while ctx is not None:
+        ns = (ctx.params or {}).get('namespace', _sentinel)
+        if ns is not _sentinel:
+            return ns if ns is not None else default
+        ctx = ctx.parent
+    return default

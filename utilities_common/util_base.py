@@ -7,7 +7,7 @@ from sonic_py_common import logger
 # Constants ====================================================================
 PDDF_SUPPORT_FILE = '/usr/share/sonic/platform/pddf_support'
 
-# Helper classs
+# Helper class
 
 log = logger.Logger()
 
@@ -29,6 +29,12 @@ class UtilHelper(object):
             log.log_debug('importing plugin: {}'.format(module_name))
             try:
                 module = importlib.import_module(module_name)
+
+            except ModuleNotFoundError as err:
+                log.log_warning('failed to import plugin {}: {}'.format(module_name, err),
+                                also_print_to_console=True)
+                continue
+
             except Exception as err:
                 log.log_error('failed to import plugin {}: {}'.format(module_name, err),
                               also_print_to_console=True)

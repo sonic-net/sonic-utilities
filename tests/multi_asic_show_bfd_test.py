@@ -32,6 +32,9 @@ class TestShowBfdMultiAsic(object):
     def test_show_bfd_summary_masic_asic0(self):
         self.command_executor(test_data["show_bfd_summary_masic_asic0"])
 
+    def test_show_bfd_summary_masic_all(self):
+        self.command_executor(test_data["show_bfd_summary_masic_all"])
+
     def test_show_bfd_peer_masic_asic0(self):
         self.command_executor(test_data["show_bfd_peer_masic_asic0"])
 

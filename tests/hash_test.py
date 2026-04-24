@@ -93,8 +93,8 @@ class TestHash:
         runner = CliRunner()
 
         result = runner.invoke(
-            config.config.commands["switch-hash"].commands["global"].
-            commands[hash], args, obj=db
+            config.config.commands["switch-hash"].commands["global"],
+            [hash] + args.split(), obj=db
         )
 
         logger.debug("\n" + result.output)
@@ -112,17 +112,17 @@ class TestHash:
         "args,pattern", [
             pytest.param(
                 "DST_MAC1 SRC_MAC ETHERTYPE",
-                "invalid choice: DST_MAC1.",
+                "'DST_MAC1' is not one of",
                 id="INVALID,SRC_MAC,ETHERTYPE"
             ),
             pytest.param(
                 "DST_MAC SRC_MAC1 ETHERTYPE",
-                "invalid choice: SRC_MAC1.",
+                "'SRC_MAC1' is not one of",
                 id="DST_MAC,INVALID,ETHERTYPE"
             ),
             pytest.param(
                 "DST_MAC SRC_MAC ETHERTYPE1",
-                "invalid choice: ETHERTYPE1.",
+                "'ETHERTYPE1' is not one of",
                 id="DST_MAC,SRC_MAC,INVALID"
             ),
             pytest.param(
@@ -147,8 +147,8 @@ class TestHash:
         runner = CliRunner()
 
         result = runner.invoke(
-            config.config.commands["switch-hash"].commands["global"].
-            commands[hash], args, obj=db
+            config.config.commands["switch-hash"].commands["global"],
+            [hash] + args.split(), obj=db
         )
 
         logger.debug("\n" + result.output)
@@ -171,8 +171,8 @@ class TestHash:
         runner = CliRunner()
 
         result = runner.invoke(
-            config.config.commands["switch-hash"].commands["global"].
-            commands[hash], arg, obj=db
+            config.config.commands["switch-hash"].commands["global"],
+            [hash, arg], obj=db
         )
 
         logger.debug("\n" + result.output)
@@ -190,7 +190,7 @@ class TestHash:
         "arg,pattern", [
             pytest.param(
                 "CRC1",
-                "invalid choice: CRC1.",
+                "'CRC1' is not one of",
                 id="INVALID"
             )
         ]
@@ -200,8 +200,8 @@ class TestHash:
         runner = CliRunner()
 
         result = runner.invoke(
-            config.config.commands["switch-hash"].commands["global"].
-            commands[hash], arg, obj=db
+            config.config.commands["switch-hash"].commands["global"],
+            [hash, arg], obj=db
         )
 
         logger.debug("\n" + result.output)
@@ -263,8 +263,8 @@ class TestHash:
         runner = CliRunner()
 
         result = runner.invoke(
-            show.cli.commands["switch-hash"].commands["global"],
-            [] if format == "plain" else ["--json"], obj=db
+            show.cli.commands["switch-hash"],
+            ["global"] + ([] if format == "plain" else ["--json"]), obj=db
         )
 
         logger.debug("\n" + result.output)
@@ -338,8 +338,8 @@ class TestHash:
         runner = CliRunner()
 
         result = runner.invoke(
-            show.cli.commands["switch-hash"].commands["capabilities"],
-            [] if format == "plain" else ["--json"], obj=db
+            show.cli.commands["switch-hash"],
+            ["capabilities"] + ([] if format == "plain" else ["--json"]), obj=db
         )
 
         logger.debug("\n" + result.output)
