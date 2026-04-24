@@ -1407,6 +1407,7 @@ class TestNoDependencyMoveValidator(unittest.TestCase):
 
         # Track which config is passed to find_ref_paths in call order
         configs_seen = []
+      
         def track_find_ref_paths(paths, config, reload_config=True):
             configs_seen.append(config)
             return []  # no refs → validation passes
