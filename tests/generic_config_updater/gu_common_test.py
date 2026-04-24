@@ -894,6 +894,109 @@ class TestPathAddressing(unittest.TestCase):
               xpath="/sonic-acl:sonic-acl/ACL_TABLE/ACL_TABLE_LIST[ACL_TABLE_NAME='NO-NSW-PACL-V4']/ports[.='Ethernet0']")
         check(path="/VLAN_MEMBER/Vlan1000|Ethernet8/tagging_mode",
              xpath="/sonic-vlan:sonic-vlan/VLAN_MEMBER/VLAN_MEMBER_LIST[name='Vlan1000'][port='Ethernet8']/tagging_mode")
+
+
+class TestPathAddressingRefPathsCache(unittest.TestCase):
+    """Tests for the _ref_paths_cache optimization on PathAddressing.find_ref_paths()."""
+
+    def _create_path_addressing_with_mock_sy(self):
+        """Helper: creates a PathAddressing with a mocked sonic_yang object."""
+        config_wrapper = gu_common.ConfigWrapper()
+
+        mock_sy = MagicMock()
+        # loadData succeeds silently
+        mock_sy.loadData = MagicMock()
+        # find_data_dependencies returns empty (no refs)
+        mock_sy.find_data_dependencies = MagicMock(return_value=[])
+        # root.find_path(...).data() yields nothing
+        mock_node_iter = MagicMock()
+        mock_node_iter.data = MagicMock(return_value=iter([]))
+        mock_sy.root.find_path = MagicMock(return_value=mock_node_iter)
+        # configdb_path_to_xpath returns a dummy xpath
+        mock_sy.configdb_path_to_xpath = MagicMock(return_value="/dummy:xpath")
+
+        config_wrapper.sonic_yang_with_loaded_models = mock_sy
+
+        pa = gu_common.PathAddressing(config_wrapper)
+        return pa, mock_sy
+
+    def test_find_ref_paths__same_paths_same_config__loadData_called_once(self):
+        pa, mock_sy = self._create_path_addressing_with_mock_sy()
+        config = {"PORT": {"Ethernet0": {"lanes": "0"}}}
+
+        pa.find_ref_paths("/PORT", config)
+        pa.find_ref_paths("/PORT", config)
+
+        self.assertEqual(mock_sy.loadData.call_count, 1)
+
+    def test_find_ref_paths__same_paths_different_config__loadData_called_twice(self):
+        pa, mock_sy = self._create_path_addressing_with_mock_sy()
+        config_a = {"PORT": {"Ethernet0": {"lanes": "0"}}}
+        config_b = {"PORT": {"Ethernet0": {"lanes": "1"}}}
+
+        pa.find_ref_paths("/PORT", config_a)
+        pa.find_ref_paths("/PORT", config_b)
+
+        self.assertEqual(mock_sy.loadData.call_count, 2)
+
+    def test_find_ref_paths__different_paths_same_config__loadData_called_twice(self):
+        pa, mock_sy = self._create_path_addressing_with_mock_sy()
+        config = {"PORT": {"Ethernet0": {"lanes": "0"}}, "VLAN": {}}
+
+        pa.find_ref_paths("/PORT", config)
+        pa.find_ref_paths("/VLAN", config)
+
+        self.assertEqual(mock_sy.loadData.call_count, 2)
+
+    def test_find_ref_paths__cache_returns_same_result_object(self):
+        pa, _ = self._create_path_addressing_with_mock_sy()
+        config = {"PORT": {"Ethernet0": {"lanes": "0"}}}
+
+        result1 = pa.find_ref_paths("/PORT", config)
+        result2 = pa.find_ref_paths("/PORT", config)
+
+        self.assertIs(result1, result2)
+
+    def test_find_ref_paths__reload_config_false__result_not_cached(self):
+        pa, mock_sy = self._create_path_addressing_with_mock_sy()
+        config = {"PORT": {"Ethernet0": {"lanes": "0"}}}
+
+        # First call with reload_config=False — should NOT cache
+        pa.find_ref_paths("/PORT", config, reload_config=False)
+        # Second call with reload_config=True — should miss cache and call loadData
+        pa.find_ref_paths("/PORT", config, reload_config=True)
+
+        # loadData is NOT called when reload_config=False, but IS called when True
+        self.assertEqual(mock_sy.loadData.call_count, 1)
+        # The cache should have exactly 1 entry (from the reload_config=True call)
+        self.assertEqual(len(pa._ref_paths_cache), 1)
+
+    def test_find_ref_paths__cache_independent_of_validate_config_cache(self):
+        config_wrapper = gu_common.ConfigWrapper()
+
+        mock_sy = MagicMock()
+        mock_sy.loadData = MagicMock()
+        mock_sy.find_data_dependencies = MagicMock(return_value=[])
+        mock_node_iter = MagicMock()
+        mock_node_iter.data = MagicMock(return_value=iter([]))
+        mock_sy.root.find_path = MagicMock(return_value=mock_node_iter)
+        mock_sy.configdb_path_to_xpath = MagicMock(return_value="/dummy:xpath")
+
+        config_wrapper.sonic_yang_with_loaded_models = mock_sy
+
+        config = {"PORT": {"Ethernet0": {"lanes": "0"}}}
+
+        # Call validate_config_db_config (uses config_wrapper directly)
+        config_wrapper.validate_config_db_config(config)
+
+        # Call find_ref_paths via PathAddressing
+        pa = gu_common.PathAddressing(config_wrapper)
+        pa.find_ref_paths("/PORT", config)
+
+        # _ref_paths_cache on PathAddressing should have exactly 1 entry
+        self.assertEqual(len(pa._ref_paths_cache), 1)
+        # PathAddressing and ConfigWrapper caches are separate objects
+        self.assertFalse(hasattr(config_wrapper, '_ref_paths_cache'))
         check(path="/VLAN_MEMBER/Vlan1000|Ethernet8",
               xpath="/sonic-vlan:sonic-vlan/VLAN_MEMBER/VLAN_MEMBER_LIST[name='Vlan1000'][port='Ethernet8']")
         check(path="/DEVICE_METADATA/localhost/hwsku",

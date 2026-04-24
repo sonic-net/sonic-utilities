@@ -1,3 +1,4 @@
+import hashlib
 import json
 import jsonpatch
 import importlib
@@ -472,6 +473,7 @@ class PathAddressing:
 
     def __init__(self, config_wrapper=None):
         self.config_wrapper = config_wrapper
+        self._ref_paths_cache = {}
 
     @staticmethod
     def get_path_tokens(path):
@@ -534,6 +536,18 @@ class PathAddressing:
             /ACL_TABLE/EVERFLOW6/ports/0
             /ACL_TABLE/EVERFLOW6/ports/1
         """
+        # Only cache when reload_config=True. When reload_config=False the caller
+        # has already loaded sy externally; the config argument may not accurately
+        # represent what is in sy, so caching by config hash would be incorrect.
+        if reload_config:
+            paths_key = tuple(sorted(paths)) if isinstance(paths, list) else (paths,)
+            config_hash = hashlib.md5(
+                json.dumps(config, sort_keys=True).encode()
+            ).hexdigest()
+            cache_key = (paths_key, config_hash)
+            if cache_key in self._ref_paths_cache:
+                return self._ref_paths_cache[cache_key]
+
         # TODO: Also fetch references by must statement (check similar statements)
         sy = self._create_sonic_yang_with_loaded_models()
 
@@ -564,6 +578,10 @@ class PathAddressing:
                 ref_paths_set.add(ref_path)
 
         ref_paths.sort()
+
+        if reload_config:
+            self._ref_paths_cache[cache_key] = ref_paths
+
         return ref_paths
 
     def _get_inner_leaf_xpaths(self, xpath, sy):
