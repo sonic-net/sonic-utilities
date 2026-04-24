@@ -126,6 +126,45 @@ class AliasedGroup(click.Group):
         ctx.fail('Too many matches: %s' % ', '.join(sorted(matches)))
 
 
+class CountersGroup(click.Group):
+    """
+    This subclass of click.Group supports `show interfaces counters` commands
+    with interface name as a positional argument
+    """
+    def format_usage(self, ctx, formatter):
+        formatter.write_usage(ctx.command_path, "[OPTIONS] [INTERFACE]")
+        formatter.write_usage(ctx.command_path, "[OPTIONS] COMMAND [ARGS]...")
+
+    def parse_args(self, ctx, args):
+        args = list(args)
+
+        value_opts = []
+        for param in self.params:
+            if isinstance(param, click.Option) and not param.is_flag:
+                value_opts += param.opts
+        # set of options that take in a value, unlike boolean flags
+        value_opts = set(value_opts)
+
+        interface = None
+        i = 0
+        while i < len(args):
+            arg = args[i]
+            if arg.startswith('-'):
+                i += 2 if arg in value_opts else 1
+                continue
+
+            # if a valid command, delegate rest of args to that sub-command
+            if arg in self.commands:
+                break
+            interface = arg
+            i += 1
+
+        if interface is not None:
+            args.remove(interface)
+        ctx.params['interface'] = interface
+        return super().parse_args(ctx, args)
+
+
 class InterfaceAliasConverter(object):
     """Class which handles conversion between interface name and alias"""
 

@@ -465,7 +465,7 @@ class TestPortStat(object):
     def test_show_intf_counters_ethernet4(self):
         runner = CliRunner()
         result = runner.invoke(
-            show.cli.commands["interfaces"].commands["counters"], ["-i", "Ethernet4"])
+            show.cli.commands["interfaces"].commands["counters"], ["Ethernet4"])
         print(result.exit_code)
         print(result.output)
         assert result.exit_code == 0
@@ -507,6 +507,33 @@ class TestPortStat(object):
         print("result = {}".format(result))
         assert return_code == 0
         assert result == intf_fec_counters
+
+    def test_show_intf_fec_counters_interface_filter(self):
+        remove_tmp_cnstat_file()
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["counters"].commands["fec-stats"], ["Ethernet4"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert "Ethernet4" in result.output
+        assert "Ethernet0" not in result.output
+        assert "Ethernet8" not in result.output
+
+        return_code, portstat_result = get_result_and_return_code(['portstat', '-f', '-i', 'Ethernet4'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(portstat_result))
+        assert return_code == 0
+        assert portstat_result == result.output
+
+    def test_show_intf_fec_counters_invalid_interface(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["counters"].commands["fec-stats"], ["InvalidEth"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "interface InvalidEth does not exist" in result.output
 
     def test_show_intf_counters_fec_histogram(self):
         runner = CliRunner()
@@ -804,6 +831,59 @@ class TestPortStat(object):
         print("result = {}".format(result))
         assert return_code == 0
         assert result == intf_rates_nonzero
+
+    def test_show_intf_rates_interface_filter(self):
+        remove_tmp_cnstat_file()
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["counters"].commands["rates"], ["Ethernet4"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert "Ethernet4" in result.output
+        assert "Ethernet0" not in result.output
+        assert "Ethernet8" not in result.output
+
+        return_code, portstat_result = get_result_and_return_code(['portstat', '-R', '-i', 'Ethernet4'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(portstat_result))
+        assert return_code == 0
+        assert portstat_result == result.output
+
+    def test_show_intf_rates_invalid_interface(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["counters"].commands["rates"], ["InvalidEth"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "interface InvalidEth does not exist" in result.output
+
+    def test_show_intf_errors_interface_filter(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["counters"].commands["errors"], ["Ethernet4"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code == 0
+        assert "Ethernet4" in result.output
+        assert "Ethernet0" not in result.output
+        assert "Ethernet8" not in result.output
+
+        return_code, portstat_result = get_result_and_return_code(['portstat', '-e', '-i', 'Ethernet4'])
+        print("return_code: {}".format(return_code))
+        print("result = {}".format(portstat_result))
+        assert return_code == 0
+        assert portstat_result == result.output
+
+    def test_show_intf_errors_invalid_interface(self):
+        runner = CliRunner()
+        result = runner.invoke(
+            show.cli.commands["interfaces"].commands["counters"].commands["errors"], ["InvalidEth"])
+        print(result.exit_code)
+        print(result.output)
+        assert result.exit_code != 0
+        assert "interface InvalidEth does not exist" in result.output
 
     @classmethod
     def teardown_class(cls):
