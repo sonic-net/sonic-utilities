@@ -98,7 +98,7 @@ function stop_sonic_services()
         systemctl stop mux
     fi
 
-    if [[ x"$ASIC_TYPE" != x"mellanox" ]]; then
+    if [[ x"$ASIC_TYPE" != x"mellanox" && x"$ASIC_TYPE" != x"pensando" ]]; then
         ASIC_CONF=${DEVPATH}/$PLATFORM/asic.conf
         if [ -f "$ASIC_CONF" ]; then
             source $ASIC_CONF
@@ -122,7 +122,9 @@ function stop_sonic_services()
 function stop_services_asan()
 {
     debug "Stopping swss for ASAN"
-    systemctl stop swss
+    if [[ x"$ASIC_TYPE" != x"pensando" ]]; then
+        systemctl stop swss
+    fi
 }
 
 function clear_warm_boot()
