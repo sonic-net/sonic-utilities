@@ -27,7 +27,7 @@ Restarting SNMP service...
 """
 
 config_snmp_contact_add_del_new_contact ="""\
-Contact name testuser and contact email testuser@contoso.com have been added to configuration
+Contact name testuser and contact info testuser@contoso.com have been added to configuration
 Restarting SNMP service...
 """ 
 
