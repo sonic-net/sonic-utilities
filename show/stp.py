@@ -349,6 +349,40 @@ def show_stp_root_guard(ctx):
                             click.echo("{:17}{:7}{}".format(ifname, vlanid, state))
 
 
+@spanning_tree.command('loop_guard')
+@click.pass_context
+def show_stp_loop_guard(ctx):
+    """Show spanning_tree loop_guard"""
+
+    print_header = 1
+    ifname_all = g_stp_cfg_db.get_keys("STP_PORT")
+    for ifname in ifname_all:
+        entry = g_stp_cfg_db.get_entry("STP_PORT", ifname)
+        if entry.get('loop_guard') == 'true' and entry.get('enabled') == 'true':
+            if print_header:
+                click.echo("{:17}{:7}{}".format("Port", "VLAN", "Current State"))
+                click.echo("-------------------------------------------")
+                print_header = 0
+
+            state = ''
+            vlanid = ''
+            keys = g_stp_appl_db.keys(g_stp_appl_db.APPL_DB, "*STP_VLAN_PORT_TABLE:*:{}".format(ifname))
+            if keys:
+                for key in keys:
+                    entry = g_stp_appl_db.get_all(g_stp_appl_db.APPL_DB, key)
+                    if entry and 'loop_guard_active' in entry:
+                        if entry['loop_guard_active'] == '0':
+                            state = 'Consistent state'
+                        else:
+                            state = 'Loop-inconsistent state'
+
+                        vlanid = re.search(':Vlan(.*):', key)
+                        if vlanid:
+                            click.echo("{:17}{:7}{}".format(ifname, vlanid.group(1), state))
+                        else:
+                            click.echo("{:17}{:7}{}".format(ifname, vlanid, state))
+
+
 @spanning_tree.group('statistics', cls=clicommon.AliasedGroup, invoke_without_command=True)
 @click.pass_context
 def show_stp_statistics(ctx):
