@@ -346,7 +346,7 @@ def show_stp_root_guard(ctx):
                         if vlanid:
                             click.echo("{:17}{:7}{}".format(ifname, vlanid.group(1), state))
                         else:
-                            click.echo("{:17}{:7}{}".format(ifname, vlanid, state))
+                            click.echo("{:17}{:7}{}".format(ifname, str(vlanid), state))
 
 
 @spanning_tree.command('loop_guard')
