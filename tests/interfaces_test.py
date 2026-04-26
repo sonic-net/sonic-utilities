@@ -1096,7 +1096,7 @@ class TestInterfacesLabelPortStatus(object):
         result = invoke_labelport_status()
 
         assert result.exit_code != 0
-        assert "No Label-port  mapping found in platform data" in result.output
+        assert "No Label-port mapping found in platform data" in result.output
 
     def test_multi_asic_missing_number_of_lanes_per_asic(self, monkeypatch):
         platform_data = {

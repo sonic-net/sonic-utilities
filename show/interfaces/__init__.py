@@ -1532,7 +1532,8 @@ def get_ports_data():
         port_table = multi_asic.get_port_table(namespace=namespace)
         for port_name, port_info in port_table.items():
             lanes = port_info.get(LANES, []).split(',')
-            status = db.get(db.APPL_DB, f"{APPL_PORT_TABLE}:{port_name}", OPER_STATUS).upper()
+            oper = db.get(db.APPL_DB, f"{APPL_PORT_TABLE}:{port_name}", OPER_STATUS)
+            status = (oper or DOWN).upper()
             if namespace not in ports_dict:
                 ports_dict[namespace] = {}
             ports_dict[port_name] = {
@@ -1545,7 +1546,8 @@ def get_ports_data():
 
 def get_labelport_to_ports_map(ports_dict, labelport_map, lanes_per_asic):
     """
-    This function returns a dictionary of LabelPorts -> ports: key = labelport_num, value = list of ports connected to this LabelPort
+    This function returns a dictionary of LabelPorts -> ports
+    key = labelport_num, value = list of ports connected to this LabelPort
     """
     lanes_to_labelport = {}
     for k, values in labelport_map.items():
@@ -1560,7 +1562,7 @@ def get_labelport_to_ports_map(ports_dict, labelport_map, lanes_per_asic):
             labelport_num = lanes_to_labelport.get(lane)
             try:
                 position = labelport_map[str(labelport_num)].index(str(lane))
-            except KeyError:
+            except (KeyError, ValueError):
                 log.log_debug("Lane {} not found in labelport {}".format(lane, labelport_num))
                 continue
             port_name = f"{port}/{info.get(ASIC)}" if info.get(ASIC) != "" else port
@@ -1582,20 +1584,24 @@ def labelport_status(db):
         click.echo("No platform data found", err=True)
         raise click.Abort()
     labelport_map = platform_data.get('label_port_lanes_mapping')
-    lanes_per_asic = int(platform_data.get('number_of_lanes_per_asic', 0))
     if labelport_map is None:
-        click.echo("No Label-ports mapping found in platform data", err=True)
+        click.echo("No Label-port mapping found in platform data", err=True)
         raise click.Abort()
+    lanes_per_asic = 0
+    if multi_asic.is_multi_asic():
+        try:
+            lanes_per_asic = int(platform_data.get('number_of_lanes_per_asic'))
+        except (TypeError, ValueError):
+            click.echo("No number of lanes per ASIC found in platform data", err=True)
+            raise click.Abort()
     labelport_lanes_number = len(labelport_map[list(labelport_map.keys())[0]])
-
     # Get all ports data
     ports_dict = get_ports_data()
 
     # Create a dictionary of labelports -> ports: key = labelport_num, value = list of ports connected to this labelport
     labelport_to_ports_map = get_labelport_to_ports_map(ports_dict, labelport_map, lanes_per_asic)
-    
+
     # Build the table
     header = ['Label Port'] + [f'Lane {i+1}' for i in range(labelport_lanes_number)]
     body = [[int(labelport)] + labelport_to_ports_map[labelport] for labelport in sorted(labelport_to_ports_map.keys())]
     click.echo(tabulate(body, header, tablefmt="outline"))
-    
