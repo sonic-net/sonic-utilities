@@ -370,6 +370,22 @@ class TestSNMPConfigCommands(object):
             assert result.exit_code == 1
             assert 'SNMP contact testuser testuser@contoso.com already exists' in result.output
 
+
+    def test_config_snmp_contact_modify_contact_new_name(self):
+        db = Db()
+        runner = CliRunner()
+        with mock.patch('utilities_common.cli.run_command') as mock_run_command:
+            result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["add"],
+                                    ["testuser", "testuser@contoso.com"], obj=db)
+            assert result.exit_code == 0
+
+            result = runner.invoke(config.config.commands["snmp"].commands["contact"].commands["modify"],
+                                    ["newuser", "newuser@contoso.com"], obj=db)
+            print(result.exit_code)
+            print(result.output)
+            assert result.exit_code == 0
+            assert "SNMP contact newuser and contact info newuser@contoso.com updated" in result.output
+
     # Add snmp location tests
     def test_config_snmp_location_add_exiting_location_with_same_location_already_existing(self):
         db = Db()
