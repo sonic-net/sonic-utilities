@@ -380,7 +380,7 @@ def show_stp_loop_guard(ctx):
                         if vlanid:
                             click.echo("{:17}{:7}{}".format(ifname, vlanid.group(1), state))
                         else:
-                            click.echo("{:17}{:7}{}".format(ifname, vlanid, state))
+                            click.echo("{:17}{:7}{}".format(ifname, str(vlanid), state))
 
 
 @spanning_tree.group('statistics', cls=clicommon.AliasedGroup, invoke_without_command=True)
