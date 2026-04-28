@@ -2609,6 +2609,8 @@ main() {
     save_cmd "show spanning-tree bpdu_guard" "stp.bg"
     save_cmd "show spanning-tree root_guard" "stp.rg"
 
+    save_cmd "show monitor-link-group" "monitor_link_group.show"
+
     save_cmd "ps aux" "ps.aux" &
     save_cmd "top -b -n 1" "top" &
     save_cmd "free" "free" &

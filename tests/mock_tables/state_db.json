@@ -1855,5 +1855,89 @@
     },
     "COPP_TRAP_TABLE|neighbor_miss": {
         "state": "ok"
+    },
+    "MONITOR_LINK_GROUP_STATE|critical_links": {
+        "state": "up",
+        "description": "Critical uplink and downlink monitoring group",
+        "uplinks": "Ethernet64,Ethernet72",
+        "downlinks": "Ethernet80",
+        "link_up_threshold": "2",
+        "link_up_delay": "10",
+        "uplink_up_count": "2"
+    },
+    "MONITOR_LINK_GROUP_STATE|test_group": {
+        "state": "down",
+        "description": "Test monitoring group",
+        "uplinks": "PortChannel101,PortChannel103",
+        "downlinks": "PortChannel102",
+        "link_up_threshold": "1",
+        "link_up_delay": "5",
+        "uplink_up_count": "0"
+    },
+    "MONITOR_LINK_GROUP_STATE|pending_group": {
+        "state": "pending",
+        "description": "Group in pending state",
+        "uplinks": "Ethernet96,Ethernet100",
+        "downlinks": "Ethernet104",
+        "link_up_threshold": "2",
+        "link_up_delay": "15",
+        "uplink_up_count": "2"
+    },
+    "PORT_TABLE|Ethernet64": {
+        "netdev_oper_status": "up",
+        "state": "ok",
+        "admin_status": "up"
+    },
+    "PORT_TABLE|Ethernet72": {
+        "netdev_oper_status": "up",
+        "state": "ok",
+        "admin_status": "up"
+    },
+    "PORT_TABLE|Ethernet80": {
+        "netdev_oper_status": "down",
+        "state": "down",
+        "admin_status": "down"
+    },
+    "PORT_TABLE|Ethernet96": {
+        "netdev_oper_status": "up",
+        "state": "ok",
+        "admin_status": "up"
+    },
+    "PORT_TABLE|Ethernet100": {
+        "netdev_oper_status": "up",
+        "state": "ok",
+        "admin_status": "up"
+    },
+    "PORT_TABLE|Ethernet104": {
+        "netdev_oper_status": "down",
+        "state": "down",
+        "admin_status": "down"
+    },
+    "LAG_TABLE|PortChannel101": {
+        "oper_status": "up",
+        "state": "ok",
+        "admin_status": "up"
+    },
+    "LAG_TABLE|PortChannel103": {
+        "oper_status": "down",
+        "state": "down",
+        "admin_status": "up"
+    },
+    "LAG_TABLE|PortChannel102": {
+        "oper_status": "down",
+        "state": "down",
+        "admin_status": "down"
+    },
+    "MONITOR_LINK_GROUP_MEMBER|Ethernet80": {
+        "state": "force_down",
+        "down_due_to": "critical_links"
+    },
+    "MONITOR_LINK_GROUP_MEMBER|PortChannel102": {
+        "state": "force_down",
+        "down_due_to": "test_group"
+    },
+    "MONITOR_LINK_GROUP_MEMBER|Ethernet104": {
+        "state": "force_down",
+        "down_due_to": "pending_group"
     }
 }
