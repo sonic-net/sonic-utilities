@@ -933,6 +933,23 @@ class TestFullConfigMoveValidator(unittest.TestCase):
         # Act and assert
         self.assertTrue(validator.validate(self.any_move, self.any_diff))
 
+    def test_validate__passes_quiet_true_to_config_wrapper(self):
+        # Regression guard: gu_common.ConfigWrapper.validate_config_db_config
+        # MUST call sonic_yang.loadData with quiet=True so the speculative
+        # patch-sort search does not spam syslog with transient YANG
+        # leafref LOG_ERR lines (the sorter already handles those via the
+        # returned tuple). This is enforced inside ConfigWrapper itself,
+        # so all callers benefit; FullConfigMoveValidator simply delegates.
+        config_wrapper = Mock()
+        config_wrapper.validate_config_db_config.return_value = (True, None)
+        validator = ps.FullConfigMoveValidator(config_wrapper)
+
+        validator.validate(self.any_move, self.any_diff)
+
+        config_wrapper.validate_config_db_config.assert_called_once_with(
+            self.any_simulated_config)
+
+
 class TestCreateOnlyMoveValidator(unittest.TestCase):
     def setUp(self):
         self.validator = ps.CreateOnlyMoveValidator(ps.PathAddressing())
