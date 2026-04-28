@@ -2232,6 +2232,91 @@ class TestKeyLevelMoveGenerator(unittest.TestCase):
             moves_ops.extend(move.get_jsonpatch())
         self.assertCountEqual(ops, moves_ops)
 
+
+class TestBulkLeafListMoveGenerator(unittest.TestCase):
+    def setUp(self):
+        path_addressing = PathAddressing()
+        self.generator = ps.BulkLeafListMoveGenerator(path_addressing)
+
+    def test_generate__leaf_list_items_removed__single_replace_move(self):
+        """Removing items from a leaf-list should produce one REPLACE move."""
+        self.verify(
+            current={"ACL_TABLE": {"EVERFLOW": {"ports": ["Ethernet0", "Ethernet4", "Ethernet8"], "type": "MIRROR"}}},
+            target={"ACL_TABLE": {"EVERFLOW": {"ports": ["Ethernet8"], "type": "MIRROR"}}},
+            ex_ops=[{"op": "replace", "path": "/ACL_TABLE/EVERFLOW/ports",
+                     "value": ["Ethernet8"]}])
+
+    def test_generate__leaf_list_items_added__single_replace_move(self):
+        """Adding items to a leaf-list should produce one REPLACE move."""
+        self.verify(
+            current={"ACL_TABLE": {"EVERFLOW": {"ports": ["Ethernet0"], "type": "MIRROR"}}},
+            target={"ACL_TABLE": {"EVERFLOW": {"ports": ["Ethernet0", "Ethernet4", "Ethernet8"], "type": "MIRROR"}}},
+            ex_ops=[{"op": "replace", "path": "/ACL_TABLE/EVERFLOW/ports",
+                     "value": ["Ethernet0", "Ethernet4", "Ethernet8"]}])
+
+    def test_generate__leaf_list_unchanged__no_moves(self):
+        """Identical leaf-lists should produce no moves."""
+        self.verify(
+            current={"ACL_TABLE": {"EVERFLOW": {"ports": ["Ethernet0", "Ethernet4"], "type": "MIRROR"}}},
+            target={"ACL_TABLE": {"EVERFLOW": {"ports": ["Ethernet0", "Ethernet4"], "type": "MIRROR"}}},
+            ex_ops=[])
+
+    def test_generate__non_list_fields_differ__no_moves(self):
+        """Non-list field changes should not produce moves from this generator."""
+        self.verify(
+            current={"ACL_TABLE": {"EVERFLOW": {"ports": ["Ethernet0"], "type": "MIRROR"}}},
+            target={"ACL_TABLE": {"EVERFLOW": {"ports": ["Ethernet0"], "type": "L3"}}},
+            ex_ops=[])
+
+    def test_generate__list_of_dicts__no_moves(self):
+        """Lists of dicts (not leaf-lists) should be skipped."""
+        self.verify(
+            current={"TABLE": {"KEY": {"items": [{"a": 1}, {"b": 2}]}}},
+            target={"TABLE": {"KEY": {"items": [{"a": 1}]}}},
+            ex_ops=[])
+
+    def test_generate__list_only_in_current__no_moves(self):
+        """List exists in current but not target — not a REPLACE, skip."""
+        self.verify(
+            current={"ACL_TABLE": {"EVERFLOW": {"ports": ["Ethernet0"], "type": "MIRROR"}}},
+            target={"ACL_TABLE": {"EVERFLOW": {"type": "MIRROR"}}},
+            ex_ops=[])
+
+    def test_generate__list_only_in_target__no_moves(self):
+        """List exists in target but not current — handled by other generators, skip."""
+        self.verify(
+            current={"ACL_TABLE": {"EVERFLOW": {"type": "MIRROR"}}},
+            target={"ACL_TABLE": {"EVERFLOW": {"type": "MIRROR", "ports": ["Ethernet0"]}}},
+            ex_ops=[])
+
+    def test_generate__leaf_list_all_items_removed__single_replace_move(self):
+        """Removing all items from a leaf-list should produce one REPLACE with empty list."""
+        self.verify(
+            current={"ACL_TABLE": {"EVERFLOW": {"ports": ["Ethernet0", "Ethernet4"], "type": "MIRROR"}}},
+            target={"ACL_TABLE": {"EVERFLOW": {"ports": [], "type": "MIRROR"}}},
+            ex_ops=[{"op": "replace", "path": "/ACL_TABLE/EVERFLOW/ports", "value": []}])
+
+    def test_generate__multiple_tables_with_leaf_lists__multiple_moves(self):
+        """Multiple differing leaf-lists should each get a REPLACE move."""
+        self.verify(
+            current={"ACL_TABLE": {
+                "T1": {"ports": ["Ethernet0", "Ethernet4"], "type": "L3"},
+                "T2": {"ports": ["Ethernet8", "Ethernet12"], "type": "MIRROR"}}},
+            target={"ACL_TABLE": {
+                "T1": {"ports": ["Ethernet0"], "type": "L3"},
+                "T2": {"ports": ["Ethernet12"], "type": "MIRROR"}}},
+            ex_ops=[{"op": "replace", "path": "/ACL_TABLE/T1/ports", "value": ["Ethernet0"]},
+                    {"op": "replace", "path": "/ACL_TABLE/T2/ports", "value": ["Ethernet12"]}])
+
+    def verify(self, current, target, ex_ops):
+        diff = ps.Diff(current, target)
+        moves = list(self.generator.generate(diff))
+        moves_ops = []
+        for move in moves:
+            moves_ops.extend(move.get_jsonpatch())
+        self.assertCountEqual(ex_ops, moves_ops)
+
+
 class TestLowLevelMoveGenerator(unittest.TestCase):
     def setUp(self):
         path_addressing = PathAddressing()
@@ -3332,7 +3417,8 @@ class TestSortAlgorithmFactory(unittest.TestCase):
                                               ps.BulkKeyLevelMoveGenerator,
                                               ps.KeyLevelMoveGenerator,
                                               ps.BulkKeyGroupLowLevelMoveGenerator,
-                                              ps.BulkLowLevelMoveGenerator]
+                                              ps.BulkLowLevelMoveGenerator,
+                                              ps.BulkLeafListMoveGenerator]
         expected_extenders = [ps.RequiredValueMoveExtender,
                               ps.UpperLevelMoveExtender,
                               ps.DeleteInsteadOfReplaceMoveExtender,

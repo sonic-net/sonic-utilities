@@ -1272,6 +1272,62 @@ class KeyLevelMoveGenerator:
                     yield [table, key]
 
 
+class BulkLeafListMoveGenerator:
+    """
+    A non-extendable generator that produces a single REPLACE move for each
+    leaf-list field whose items differ between current and target configs.
+
+    Instead of generating N individual REMOVE/ADD moves (one per list item),
+    this emits one REPLACE of the whole list. The DFS tries non-extendable
+    generators first, so if the bulk replace validates, we skip N-1 moves
+    and their associated loadData() calls.
+
+    This is conservative:
+    - Only handles leaf-lists (lists of scalars, not lists of dicts)
+    - Only replaces lists that already exist in both current and target
+    - If this move fails validation, DFS continues to other generators
+      which produce per-item moves (no explicit fallback mechanism)
+    """
+    def __init__(self, path_addressing):
+        self.path_addressing = path_addressing
+
+    def generate(self, diff):
+        for move in self._traverse(diff, diff.current_config, diff.target_config, []):
+            yield move
+
+    def _traverse(self, diff, current_ptr, target_ptr, tokens):
+        if not isinstance(current_ptr, dict) or not isinstance(target_ptr, dict):
+            return
+
+        for key in current_ptr:
+            if key not in target_ptr:
+                continue
+
+            tokens.append(key)
+            current_val = current_ptr[key]
+            target_val = target_ptr[key]
+
+            if isinstance(current_val, list) and isinstance(target_val, list):
+                # Only handle leaf-lists (lists of scalars)
+                if (current_val != target_val and
+                        self._is_leaf_list(current_val) and
+                        self._is_leaf_list(target_val)):
+                    yield JsonMoveGroup(
+                        self.__class__.__name__,
+                        JsonMove(diff, OperationType.REPLACE, list(tokens), list(tokens)),
+                    )
+            elif isinstance(current_val, dict) and isinstance(target_val, dict):
+                for move in self._traverse(diff, current_val, target_val, tokens):
+                    yield move
+
+            tokens.pop()
+
+    @staticmethod
+    def _is_leaf_list(lst):
+        """Return True if lst contains only scalars (str, int, float, bool)."""
+        return all(isinstance(item, (str, int, float, bool)) for item in lst)
+
+
 class BulkKeyLevelMoveGenerator:
     """
     Same concept as KeyLevelMoveGenerator, but groups additions and removals of sibling keys.
@@ -2259,6 +2315,7 @@ class SortAlgorithmFactory:
         move_generators = [LowLevelMoveGenerator(self.path_addressing)]
         # TODO: Enable TableLevelMoveGenerator once it is confirmed whole table can be updated at the same time
         move_non_extendable_generators = [RemoveCreateOnlyDependencyMoveGenerator(self.path_addressing),
+                                          BulkLeafListMoveGenerator(self.path_addressing),
                                           BulkKeyLevelMoveGenerator(self.path_addressing),
                                           KeyLevelMoveGenerator(self.path_addressing),
                                           BulkKeyGroupLowLevelMoveGenerator(self.path_addressing),
