@@ -77,7 +77,7 @@ class TestGetChassisInfo(object):
         mock_sonic_platform.platform.Platform.return_value = mock_platform
 
         with mock.patch("sonic_py_common.device_info.get_chassis_info",
-                       return_value={"serial": None, "model": None, "revision": None, "switch_host_serial": None}):
+                        return_value={"serial": None, "model": None, "revision": None, "switch_host_serial": None}):
             with mock.patch.dict('sys.modules', {'sonic_platform': mock_sonic_platform,
                                                  'sonic_platform.platform': mock_sonic_platform.platform}):
                 result = get_chassis_info()
@@ -109,7 +109,7 @@ class TestGetChassisInfo(object):
         mock_sonic_platform.platform.Platform.return_value = mock_platform
 
         with mock.patch("sonic_py_common.device_info.get_chassis_info",
-                       return_value={"serial": None, "model": None, "revision": None, "switch_host_serial": None}):
+                        return_value={"serial": None, "model": None, "revision": None, "switch_host_serial": None}):
             with mock.patch.dict('sys.modules', {'sonic_platform': mock_sonic_platform,
                                                  'sonic_platform.platform': mock_sonic_platform.platform}):
                 result = get_chassis_info()
@@ -143,7 +143,7 @@ class TestGetChassisInfo(object):
         mock_sonic_platform.platform.Platform.return_value = mock_platform
 
         with mock.patch("sonic_py_common.device_info.get_chassis_info",
-                       return_value={"serial": None, "model": None, "revision": None, "switch_host_serial": None}):
+                        return_value={"serial": None, "model": None, "revision": None, "switch_host_serial": None}):
             with mock.patch.dict('sys.modules', {'sonic_platform': mock_sonic_platform,
                                                  'sonic_platform.platform': mock_sonic_platform.platform}):
                 result = get_chassis_info()
@@ -158,12 +158,12 @@ class TestGetChassisInfo(object):
         from show.platform import get_chassis_info
 
         with mock.patch("sonic_py_common.device_info.get_chassis_info",
-                       return_value={
-                           "serial": "DB-SERIAL-123",
-                           "model": "DB-MODEL",
-                           "revision": "DB-REV",
-                           "switch_host_serial": "DB-SWITCH-SERIAL"
-                       }):
+                        return_value={
+                            "serial": "DB-SERIAL-123",
+                            "model": "DB-MODEL",
+                            "revision": "DB-REV",
+                            "switch_host_serial": "DB-SWITCH-SERIAL"
+                        }):
             result = get_chassis_info()
 
             # When STATE_DB has all values, they should be used directly
@@ -193,7 +193,7 @@ class TestGetChassisInfo(object):
         mock_sonic_platform.platform.Platform.return_value = mock_platform
 
         with mock.patch("sonic_py_common.device_info.get_chassis_info",
-                       return_value={"serial": None, "model": None, "revision": None, "switch_host_serial": None}):
+                        return_value={"serial": None, "model": None, "revision": None, "switch_host_serial": None}):
             with mock.patch.dict('sys.modules', {'sonic_platform': mock_sonic_platform,
                                                  'sonic_platform.platform': mock_sonic_platform.platform}):
                 result = get_chassis_info()
