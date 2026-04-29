@@ -2710,7 +2710,8 @@ main() {
     $TARDIR/etc/ssh* $TARDIR/etc/mlnx $TARDIR/etc/mft \
     $TARDIR/etc/ssl/certs/* $TARDIR/etc/ssl/private/*
     rm_list=$(find -L $TARDIR -type f \( -iname \*.cer -o -iname \*.crt -o \
-        -iname \*.pem -o -iname \*.key -o -iname \*snmpd.conf\* -o -iname \*get_creds\* \))
+        -iname \*.pem -o -iname \*.key -o -iname \*snmpd.conf\* -o -iname \*get_creds\* \
+        -o -path \*/credentials/\* \))
     if [ ! -z "$rm_list" ]
     then
         rm $rm_list
