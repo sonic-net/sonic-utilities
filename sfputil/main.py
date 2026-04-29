@@ -1467,36 +1467,32 @@ def is_fw_switch_done(port_name):
         sys.exit(ERROR_NOT_IMPLEMENTED)
 
     try:
-        MAX_WAIT = 60 # 60s timeout.
-        is_busy = 1 # Initial to 1 for entering while loop at least one time.
+        MAX_WAIT = 60
         timeout_time = time.time() + MAX_WAIT
-        while is_busy and (time.time() < timeout_time):
+        while time.time() < timeout_time:
             fw_info = api.get_module_fw_info()
-            is_busy = 1 if (fw_info['status'] == False) and (fw_info['result'] is not None) else 0
+            if fw_info['status'] is True and fw_info['result'] is not None:
+                (ImageA, ImageARunning, ImageACommitted, ImageAInvalid,
+                 ImageB, ImageBRunning, ImageBCommitted, ImageBInvalid, _, _) = fw_info['result']
+
+                if (ImageARunning == 1) and (ImageAInvalid == 1):
+                    click.echo("FW info error : ImageA shows running, but also shows invalid!")
+                    return -1
+                elif (ImageBRunning == 1) and (ImageBInvalid == 1):
+                    click.echo("FW info error : ImageB shows running, but also shows invalid!")
+                    return -1
+                elif (ImageARunning == 1) and (ImageACommitted == 0):
+                    click.echo("FW images switch successful : ImageA is running")
+                    return 1
+                elif (ImageBRunning == 1) and (ImageBCommitted == 0):
+                    click.echo("FW images switch successful : ImageB is running")
+                    return 1
+                # Switch not done yet — module may have returned stale pre-reset data, keep polling
+
             time.sleep(2)
 
-        if fw_info['status'] == True:
-            (ImageA, ImageARunning, ImageACommitted, ImageAInvalid,
-             ImageB, ImageBRunning, ImageBCommitted, ImageBInvalid, _, _) = fw_info['result']
-
-            if (ImageARunning == 1) and (ImageAInvalid == 1):       # ImageA is running, but also invalid.
-                click.echo("FW info error : ImageA shows running, but also shows invalid!")
-                status = -1 # Abnormal status.
-            elif (ImageBRunning == 1) and (ImageBInvalid == 1):     # ImageB is running, but also invalid.
-                click.echo("FW info error : ImageB shows running, but also shows invalid!")
-                status = -1 # Abnormal status.
-            elif (ImageARunning == 1) and (ImageACommitted == 0):   # ImageA is running, but not committed.
-                click.echo("FW images switch successful : ImageA is running")
-                status = 1  # run_firmware is done. 
-            elif (ImageBRunning == 1) and (ImageBCommitted == 0):   # ImageB is running, but not committed.
-                click.echo("FW images switch successful : ImageB is running")
-                status = 1  # run_firmware is done. 
-            else:                                                   # No image is running, or running and committed image is same.
-                click.echo("FW info error : Failed to switch into uncommitted image!")
-                status = -1 # Failure for Switching images.
-        else:
-            click.echo("FW switch : Timeout!")
-            status = -1     # Timeout or check code error or CDB not supported.
+        click.echo("FW switch : Timeout!")
+        status = -1
 
     except NotImplementedError:
         click.echo("This functionality is not applicable for this transceiver")
