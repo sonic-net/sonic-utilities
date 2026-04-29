@@ -2904,30 +2904,15 @@ OPTIONS
         Redirect any intermediate errors to STDERR
     -d
         Collect the output of debug dump cli
-<<<<<<< HEAD
-=======
-    -T
-        Enable tcpdump capture during techsupport collection
-    -P PERIOD
-        Duration in seconds for tcpdump capture (default: 60). Requires -T
-    -L LIMIT
-        Maximum number of packets to capture (default: 10000). Requires -T
-    -F FILTER
-        BPF filter expression for tcpdump (e.g., 'port 179', 'udp port 3784'). Requires -T
     -f FILENAME
         Base name for the output dump file (default: sonic_dump_<hostname>_<timestamp>).
         The file will be created as $DUMPDIR/<FILENAME>.tar[.gz].
         WARN: if the file already exists, this command will fail and exit.
->>>>>>> 4d8fde59 (NOS-6386: Allow show techsupport to save with a custom filename (#417))
 EOF
 }
 
 
-<<<<<<< HEAD
-while getopts ":xnvhzas:t:r:d" opt; do
-=======
-while getopts ":xnvhzas:t:r:dTP:L:F:f:" opt; do
->>>>>>> 4d8fde59 (NOS-6386: Allow show techsupport to save with a custom filename (#417))
+while getopts ":xnvhzas:t:r:d:f:" opt; do
     case $opt in
         x)
             # enable bash debugging
@@ -2978,32 +2963,6 @@ while getopts ":xnvhzas:t:r:dTP:L:F:f:" opt; do
         d)
             DEBUG_DUMP=true
             ;;
-<<<<<<< HEAD
-        /?)
-=======
-        T)
-            WITH_TCPDUMP=true
-            ;;
-        P)
-            if ! [[ ${OPTARG} =~ ^[0-9]+$ ]]; then
-                echo "Invalid tcpdump duration value: ${OPTARG}, Please enter a numeric value."
-                exit $EXT_GENERAL
-            fi
-            TCPDUMP_DURATION="${OPTARG}"
-            TCPDUMP_DURATION_SET=true
-            ;;
-        L)
-            if ! [[ ${OPTARG} =~ ^[0-9]+$ ]]; then
-                echo "Invalid tcpdump packet limit value: ${OPTARG}, Please enter a numeric value."
-                exit $EXT_GENERAL
-            fi
-            TCPDUMP_PACKET_LIMIT="${OPTARG}"
-            TCPDUMP_PACKET_LIMIT_SET=true
-            ;;
-        F)
-            TCPDUMP_FILTER="${OPTARG}"
-            TCPDUMP_FILTER_SET=true
-            ;;
         f)
             BASE="${OPTARG}"
             if [[ "$BASE" == */* ]]; then
@@ -3025,15 +2984,12 @@ while getopts ":xnvhzas:t:r:dTP:L:F:f:" opt; do
             fi
             ;;
         \?)
->>>>>>> 4d8fde59 (NOS-6386: Allow show techsupport to save with a custom filename (#417))
             echo "Invalid option: -$OPTARG" >&2
             exit $EXT_GENERAL
             ;;
     esac
 done
 
-<<<<<<< HEAD
-=======
 if $CUSTOM_FILENAME_SET; then
     if $DO_COMPRESS && [[ -f ${TARFILE}.gz ]]; then
         echo "WARNING: ${TARFILE}.gz already exists, aborting without dumping." >&2
@@ -3044,23 +3000,6 @@ if $CUSTOM_FILENAME_SET; then
     fi
 fi
 
-# Validate that tcpdump options (-P, -L, -F) require -T to be specified
-if ! $WITH_TCPDUMP; then
-    if $TCPDUMP_DURATION_SET; then
-        echo "Error: -P (tcpdump duration) requires -T (enable tcpdump) to be specified" >&2
-        exit $EXT_INVALID_ARGUMENT
-    fi
-    if $TCPDUMP_PACKET_LIMIT_SET; then
-        echo "Error: -L (tcpdump packet limit) requires -T (enable tcpdump) to be specified" >&2
-        exit $EXT_INVALID_ARGUMENT
-    fi
-    if $TCPDUMP_FILTER_SET; then
-        echo "Error: -F (tcpdump filter) requires -T (enable tcpdump) to be specified" >&2
-        exit $EXT_INVALID_ARGUMENT
-    fi
-fi
-
->>>>>>> 4d8fde59 (NOS-6386: Allow show techsupport to save with a custom filename (#417))
 # Check permissions before proceeding further
 if [ `whoami` != root ] && ! $NOOP;
 then

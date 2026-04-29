@@ -1786,20 +1786,8 @@ def users(verbose):
 @click.option('--silent', is_flag=True, help="Run techsupport in silent mode")
 @click.option('--debug-dump', is_flag=True, help="Collect Debug Dump Output")
 @click.option('--redirect-stderr', '-r', is_flag=True, help="Redirect an intermediate errors to STDERR")
-<<<<<<< HEAD
-def techsupport(since, global_timeout, cmd_timeout, verbose, allow_process_stop, silent, debug_dump, redirect_stderr):
-=======
-@click.option('--with-tcpdump', is_flag=True, help="Capture traffic with tcpdump during techsupport")
-@click.option('--tcpdump-duration', 'tcpdump_duration', type=click.IntRange(1, 300), default=None,
-              help="Duration in seconds for tcpdump capture (default: 60, range: 1-300). Requires --with-tcpdump")
-@click.option('--tcpdump-packet-limit', 'tcpdump_packet_limit', type=click.IntRange(1, 100000), default=None,
-              help="Maximum number of packets to capture (default: 10000, range: 1-100000). Requires --with-tcpdump")
-@click.option('--tcpdump-filter', 'tcpdump_filter', type=str, default=None,
-              help="BPF filter expression for tcpdump (e.g., 'port 179', 'udp port 3784'). Requires --with-tcpdump")
-def techsupport(since, filename, global_timeout, cmd_timeout, verbose,
-                allow_process_stop, silent, debug_dump, redirect_stderr,
-                with_tcpdump, tcpdump_duration, tcpdump_packet_limit, tcpdump_filter):
->>>>>>> 4d8fde59 (NOS-6386: Allow show techsupport to save with a custom filename (#417))
+def techsupport(since, filename, global_timeout, cmd_timeout, 
+                verbose, allow_process_stop, silent, debug_dump, redirect_stderr):
     """Gather information for troubleshooting"""
     cmd = ["sudo"]
 
