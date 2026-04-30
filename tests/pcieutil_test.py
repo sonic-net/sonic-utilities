@@ -202,7 +202,9 @@ class TestPcieUtil(object):
         result = runner.invoke(pcieutil.cli.commands["pcie-aer"].commands["correctable"], ["-d", "0:1.0"])
         assert result.output == pcieutil_pcie_aer_correctable_dev_output
 
-    def test_load_pcie_module_warning(self): 
+    @mock.patch('sonic_py_common.device_info.get_paths_to_platform_and_hwsku_dirs',
+                mock.MagicMock(return_value=("dummy_path", None)))
+    def test_load_pcie_module_warning(self):
         stdout = sys.stdout
         sys.stdout = result = StringIO()
         try:
@@ -215,4 +217,3 @@ class TestPcieUtil(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"

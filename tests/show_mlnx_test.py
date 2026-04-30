@@ -115,4 +115,3 @@ class TestShowMlnx(object):
 
     def teardown_method(self):
         print('TEARDOWN')
-

@@ -2481,6 +2481,11 @@ main() {
     local start_t=0
     local end_t=0
     NUM_ASICS=$(get_asic_count)
+    if [[ ( "$NUM_ASICS" > 1 ) ]]; then
+        ASIC_SUFFIXES=( $(seq 0 $((NUM_ASICS - 1))) )
+    else
+        ASIC_SUFFIXES=( "" )
+    fi
     ${CMD_PREFIX}renice +5 -p $$ >> /dev/null
     ${CMD_PREFIX}ionice -c 2 -n 5 -p $$ >> /dev/null
 
@@ -2589,18 +2594,13 @@ main() {
     wait
 
     save_cmd "lldpctl" "lldpctl" &
-    if [[ ( "$NUM_ASICS" > 1 ) ]]; then
-        for (( i=0; i<$NUM_ASICS; i++ ))
-        do
-            save_cmd "docker exec lldp$i lldpcli show statistics" "lldp$i.statistics" &
-            save_cmd "docker logs bgp$i" "docker.bgp$i.log" &
-            save_cmd "docker logs swss$i" "docker.swss$i.log" &
-        done
-    else
-        save_cmd "docker exec lldp lldpcli show statistics" "lldp.statistics" &
-        save_cmd "docker logs bgp" "docker.bgp.log" &
-        save_cmd "docker logs swss" "docker.swss.log" &
-    fi
+    for sfx in "${ASIC_SUFFIXES[@]}"; do
+        save_cmd "docker exec lldp${sfx} lldpcli show statistics" "lldp${sfx}.statistics" &
+        save_cmd "docker exec lldp${sfx} lldpcli show configuration" "lldp${sfx}.config" &
+        save_cmd "docker exec lldp${sfx} lldpcli show interfaces" "lldp${sfx}.interfaces" &
+        save_cmd "docker logs bgp${sfx}" "docker.bgp${sfx}.log" &
+        save_cmd "docker logs swss${sfx}" "docker.swss${sfx}.log" &
+    done
     wait
 
  	save_cmd "stpctl all" "stp.log"

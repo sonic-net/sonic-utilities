@@ -11,6 +11,10 @@ from .utils import get_result_and_return_code
 from unittest import mock
 sys.modules['clicommon'] = mock.Mock()
 
+test_path = os.path.dirname(os.path.abspath(__file__))
+modules_path = os.path.dirname(test_path)
+scripts_path = os.path.join(modules_path, "scripts")
+
 show_linecard0_shutdown_output="""\
 LINE-CARD0 line-card 1 Empty down LC1000101
 """
@@ -566,4 +570,3 @@ class TestChassisModules(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"

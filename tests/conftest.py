@@ -2,6 +2,7 @@ import importlib
 import json
 import os
 import re
+import shutil
 import sys
 import unittest
 from unittest import mock
@@ -12,6 +13,7 @@ from swsscommon.swsscommon import ConfigDBConnector
 
 from .mock_tables import dbconnector
 from . import show_ip_route_common
+
 from .bgp_commands_input.bgp_neighbor_test_vector import(
     mock_show_bgp_neighbor_single_asic,
     mock_show_bgp_neighbor_multi_asic,
@@ -23,12 +25,216 @@ from .bgp_commands_input.bgp_network_test_vector import (
 from . import config_int_ip_common
 import utilities_common.constants as constants
 import config.main as config
+import show.main  # noqa: F401, E402 — import early so mock tables load with UUT="2"
 
 unittest.TestCase.maxDiff = None
 
 test_path = os.path.dirname(os.path.abspath(__file__))
 modules_path = os.path.dirname(test_path)
 sys.path.insert(0, modules_path)
+
+# ---------------------------------------------------------------------------
+# pytest-xdist parallelization support
+# ---------------------------------------------------------------------------
+# Serial test file list and pytest_collection_modifyitems hook are in the
+# root-level conftest.py (next to pytest.ini) to ensure they run before
+# xdist schedules tests to workers.
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture(autouse=True, scope='session')
+def setup_db_config():
+    """Initialize mock DB config once per xdist worker process."""
+    from swsssdk import SonicDBConfig as _PyDBConfig
+    from swsscommon.swsscommon import SonicDBConfig as _CppDBConfig
+
+    from .mock_tables import mock_single_asic  # noqa: F401
+    dbconnector.load_database_config()
+
+    # Also load global DB config so that SonicDBConfig.namespace_validation()
+    # does not raise "Load the global DB config first" when tests create
+    # SonicV2Connector instances.
+    mock_tables_dir = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), 'mock_tables')
+    _PyDBConfig.load_sonic_global_db_config(
+        global_db_file_path=os.path.join(mock_tables_dir, 'database_global.json'))
+
+    # Initialize the C++ swsscommon.SonicDBConfig as well.
+    db_config_path = os.path.join(mock_tables_dir, 'database_config.json')
+    global_db_config_path = os.path.join(mock_tables_dir, 'database_global.json')
+    if not _CppDBConfig.isInit():
+        _CppDBConfig.load_sonic_db_config(db_config_path)
+    if not _CppDBConfig.isGlobalInit():
+        _CppDBConfig.load_sonic_global_db_config(global_db_config_path)
+
+    # Give each xdist worker its own directory tree to prevent
+    # cross-worker contamination.  Everything worker-specific lives
+    # under a single root: /tmp/worker-<id>/.
+    worker_id = os.environ.get('PYTEST_XDIST_WORKER', 'master')
+    worker_root = f'/tmp/worker-{worker_id}'
+    if os.path.exists(worker_root):
+        shutil.rmtree(worker_root)
+    os.makedirs(worker_root)
+
+    # Per-worker cache dir for stat script cache files (intfstat, etc.)
+    worker_cache_dir = os.path.join(worker_root, 'cache')
+    os.makedirs(worker_cache_dir)
+    os.environ['SONIC_CLI_CACHE_DIR'] = worker_cache_dir
+
+    # Per-worker copy of mock_tables so tests that overwrite shared
+    # JSON files (e.g. portstat_test replaces counters_db.json) only
+    # affect their own worker's sandbox.
+    worker_mock_tables = os.path.join(worker_root, 'mock_tables')
+    shutil.copytree(dbconnector.INPUT_DIR, worker_mock_tables)
+    dbconnector.INPUT_DIR = worker_mock_tables
+    os.environ['MOCK_TABLES_DIR'] = worker_mock_tables
+
+    # Per-worker scratch dir for test scripts that write temp files
+    # (e.g. mmuconfig).  Tests should use WORKER_TMP for any /tmp/
+    # file that could race across workers.
+    os.environ['WORKER_TMP'] = worker_root
+
+    yield
+
+    if os.path.exists(worker_root):
+        shutil.rmtree(worker_root, ignore_errors=True)
+    os.environ.pop('MOCK_TABLES_DIR', None)
+    os.environ.pop('WORKER_TMP', None)
+
+
+_last_seen_file = None
+_original_path = None
+_scripts_path = os.path.join(
+    os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+
+
+@pytest.hookimpl(tryfirst=True)
+def pytest_runtest_setup(item):
+    """Reset global state when transitioning between test files.
+
+    Ensures every test file starts from a clean single-asic baseline,
+    regardless of what the previous file left behind.  This makes tests
+    independent of execution order and safe under any xdist worker count
+    (including -n 1).
+
+    Only resets on FILE transitions, not class transitions within the same
+    file.  Intra-file class setup (setup_class) is responsible for
+    configuring its own state from the file-level baseline.  Module-scoped
+    fixtures span the whole file and must not be disrupted mid-file.
+
+    tryfirst=True ensures this runs BEFORE the default setup hook which
+    triggers setup_class, so the reset happens before the next file's
+    setup_class configures its own state.
+    """
+    global _last_seen_file
+    current_file = str(item.fspath)
+
+    if current_file != _last_seen_file:
+        _reset_between_files()
+
+    _last_seen_file = current_file
+
+
+def _reset_between_files():
+    """Reset global state to single-asic defaults between test files.
+
+    This must undo ALL side-effects that any test file can leave behind,
+    including module reloads, env var changes, and mock patches.
+    """
+    from sonic_py_common import multi_asic
+    from utilities_common import multi_asic as multi_asic_util
+
+    # Reset PATH to baseline + scripts directory
+    global _original_path
+    if _original_path is None:
+        _original_path = os.environ.get("PATH", "")
+    os.environ["PATH"] = _original_path + os.pathsep + _scripts_path
+
+    # Reset mutable mock DB state
+    dbconnector.dedicated_dbs.clear()
+    dbconnector.topo = None
+
+    # Reset environment variables that tests may have set
+    os.environ['UTILITIES_UNIT_TESTING'] = "2"
+    os.environ['UTILITIES_UNIT_TESTING_TOPOLOGY'] = ""
+    os.environ.pop('UTILITIES_UNIT_TESTING_IS_SUP', None)
+    os.environ.pop('SONIC_CLI_IFACE_MODE', None)
+    os.environ.pop('FDBSHOW_UNIT_TESTING', None)
+    os.environ.pop('WATERMARKSTAT_UNIT_TESTING', None)
+    os.environ.pop('VOQ_DROP_COUNTER_TESTING', None)
+    os.environ.pop('UTILITIES_UNIT_TESTING_VOQ', None)
+    os.environ.pop('UTILITIES_UNIT_TESTING_DROPSTAT_CLEAN_CACHE', None)
+    os.environ.pop('FIBSHOW_MOCK', None)
+
+    # Clean up any dedicated_dbs env vars set for subprocess support
+    for env_key in [k for k in os.environ if k.startswith('MOCK_DEDICATED_DB_')]:
+        del os.environ[env_key]
+
+    # Reset config.main module-level state that tests may mutate
+    config.ADHOC_VALIDATION = True
+    config.asic_type = None
+
+    # Restore CliRunner.invoke if a test replaced it (e.g. vlan_test.py)
+    from click.testing import CliRunner as _CliRunner
+    import click.testing as _click_testing
+    _orig_invoke = _click_testing.__dict__.get('_original_CliRunner_invoke')
+    if _orig_invoke is None:
+        # First call — save the real invoke for future resets
+        _click_testing._original_CliRunner_invoke = _CliRunner.invoke
+    elif _CliRunner.invoke is not _orig_invoke:
+        _CliRunner.invoke = _orig_invoke
+
+    # Clear per-worker cache files left by stat utilities (intfstat,
+    # srv6stat, queuestat, etc.).  Without this, counter cache from one
+    # test file leaks into the next file on the same worker.
+    worker_cache_dir = os.environ.get('SONIC_CLI_CACHE_DIR', '')
+    if worker_cache_dir and os.path.isdir(worker_cache_dir):
+        for entry in os.listdir(worker_cache_dir):
+            entry_path = os.path.join(worker_cache_dir, entry)
+            if os.path.isdir(entry_path):
+                shutil.rmtree(entry_path, ignore_errors=True)
+            else:
+                try:
+                    os.remove(entry_path)
+                except OSError:
+                    pass
+
+    # Restore single-asic mock patches (same as mock_single_asic.py)
+    multi_asic.is_multi_asic = lambda: False
+    multi_asic.get_num_asics = lambda: 1
+    multi_asic.get_namespace_list = lambda namespace=None: ['']
+    multi_asic.get_all_namespaces = lambda: {'front_ns': [], 'back_ns': [], 'fabric_ns': []}
+    multi_asic_util.multi_asic_get_ip_intf_from_ns = lambda ns: []
+    multi_asic_util.multi_asic_get_ip_intf_addr_from_ns = lambda ns, iface: []
+    multi_asic.get_namespaces_from_linux = lambda namespace=None: ['']
+
+    # Reload config.main so Click decorators re-evaluate
+    # multi_asic.is_multi_asic() with restored single-asic state.
+    # Without this, commands like 'config route' and 'config subinterface'
+    # keep required=True on --namespace from a prior multi-asic file.
+    importlib.reload(sys.modules['config.main'])
+
+    # Restore DB config to single-asic
+    dbconnector.load_database_config()
+
+    # Restore global DB config flag that clean_up_config() clears
+    from swsssdk import SonicDBConfig as _PyDBConfig
+    mock_tables_dir = os.path.join(
+        os.path.dirname(os.path.abspath(__file__)), 'mock_tables')
+    if not _PyDBConfig._sonic_db_global_config_init:
+        _PyDBConfig.load_sonic_global_db_config(
+            global_db_file_path=os.path.join(mock_tables_dir, 'database_global.json'))
+
+    # Restore C++ SonicDBConfig to single-asic mock paths.
+    # Always reset and reload so that multi-asic C++ config from a
+    # previous file is replaced with single-asic defaults.
+    from swsscommon.swsscommon import SonicDBConfig as _CppDBConfig
+    db_config_path = os.path.join(mock_tables_dir, 'database_config.json')
+    global_db_config_path = os.path.join(mock_tables_dir, 'database_global.json')
+    _CppDBConfig.reset()
+    _CppDBConfig.load_sonic_db_config(db_config_path)
+    _CppDBConfig.load_sonic_global_db_config(global_db_config_path)
+
 
 generated_services_list = [
     'warmboot-finalizer.service',

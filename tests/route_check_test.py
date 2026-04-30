@@ -241,8 +241,8 @@ class TestRouteCheck(object):
              patch("route_check.swsscommon.Select") as mock_sel, \
              patch("route_check.swsscommon.SubscriberStateTable") as mock_subs, \
              patch("sonic_py_common.multi_asic.connect_config_db_for_ns") as mock_config_db, \
-             patch("route_check.swsscommon.NotificationProducer"):
-            device_info.get_platform = MagicMock(return_value='unittest')
+             patch("route_check.swsscommon.NotificationProducer"), \
+             patch.object(device_info, 'get_platform', return_value='unittest'):
             set_mock(mock_table, mock_conn, mock_sel, mock_subs, mock_config_db)
             yield
 

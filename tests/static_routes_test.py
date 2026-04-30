@@ -705,7 +705,6 @@ class TestStaticRoutes(object):
 
     @classmethod
     def teardown_class(cls):
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
         print("TEARDOWN")
 
 
@@ -772,8 +771,6 @@ class TestStaticRoutesMultiAsic(object):
 
     @classmethod
     def teardown_class(cls):
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
 
         from .mock_tables import mock_single_asic
         importlib.reload(mock_single_asic)
@@ -782,7 +779,6 @@ class TestStaticRoutesMultiAsic(object):
 
         import utilities_common.multi_asic
         importlib.reload(utilities_common.multi_asic)
-        # Reload config.main to pick up the reloaded multi_asic module
         importlib.reload(config)
 
         print("TEARDOWN")

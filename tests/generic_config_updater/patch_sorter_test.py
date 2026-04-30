@@ -1396,6 +1396,54 @@ class TestNoDependencyMoveValidator(unittest.TestCase):
         # Act and assert
         self.assertTrue(self.validator.validate(move, diff, move.apply(diff.current_config))[0])
 
+    def test_validate_replace__calls_find_ref_paths_simulated_config_before_current_config(self):
+        """
+        _validate_replace must check added_paths/simulated_config FIRST, then deleted_paths/current_config.
+        This ordering lets find_ref_paths reuse the sy singleton already loaded with simulated_config
+        by FullConfigMoveValidator (via _currently_loaded_hash), saving one loadData call per REPLACE.
+        """
+        config_wrapper = ConfigWrapper()
+        mock_pa = MagicMock(spec=PathAddressing)
+
+        # Track which config is passed to find_ref_paths in call order
+        configs_seen = []
+
+        def track_find_ref_paths(paths, config, reload_config=True):
+            configs_seen.append(config)
+            return []  # no refs → validation passes
+        mock_pa.find_ref_paths = MagicMock(side_effect=track_find_ref_paths)
+        mock_pa.create_path = PathAddressing.create_path
+
+        validator = ps.NoDependencyMoveValidator(mock_pa, config_wrapper)
+
+        # Patch _get_paths on the validator instance (not on mock_pa — _get_paths is a method
+        # on NoDependencyMoveValidator, not on PathAddressing)
+        deleted_paths = ["/PORT/Ethernet0"]
+        added_paths = ["/PORT/Ethernet4"]
+        validator._get_paths = MagicMock(return_value=(deleted_paths, added_paths))
+
+        current_config = {"PORT": {"Ethernet0": {"lanes": "0"}}}
+        simulated_config = {"PORT": {"Ethernet4": {"lanes": "4"}}}
+        diff = ps.Diff(current_config, simulated_config)
+
+        # Create a move mock with the right attributes, wrapped in a group mock
+        # that is iterable (validate() does `for move in group:`)
+        inner_move = MagicMock()
+        inner_move.op_type = OperationType.REPLACE
+        inner_move.path = ""
+        group = MagicMock()
+        group.__iter__ = MagicMock(return_value=iter([inner_move]))
+
+        validator.validate(group, diff, simulated_config)
+
+        # Assert: simulated_config must be checked first (for added_paths),
+        # then current_config (for deleted_paths)
+        self.assertEqual(len(configs_seen), 2, "find_ref_paths should be called exactly twice")
+        self.assertIs(configs_seen[0], simulated_config,
+                      "First find_ref_paths call must use simulated_config (for added_paths)")
+        self.assertIs(configs_seen[1], current_config,
+                      "Second find_ref_paths call must use current_config (for deleted_paths)")
+
     def prepare_config(self, config, patch):
         return patch.apply(config)
 
@@ -2231,6 +2279,91 @@ class TestKeyLevelMoveGenerator(unittest.TestCase):
         for move in moves:
             moves_ops.extend(move.get_jsonpatch())
         self.assertCountEqual(ops, moves_ops)
+
+
+class TestBulkLeafListMoveGenerator(unittest.TestCase):
+    def setUp(self):
+        path_addressing = PathAddressing()
+        self.generator = ps.BulkLeafListMoveGenerator(path_addressing)
+
+    def test_generate__leaf_list_items_removed__single_replace_move(self):
+        """Removing items from a leaf-list should produce one REPLACE move."""
+        self.verify(
+            current={"ACL_TABLE": {"EVERFLOW": {"ports": ["Ethernet0", "Ethernet4", "Ethernet8"], "type": "MIRROR"}}},
+            target={"ACL_TABLE": {"EVERFLOW": {"ports": ["Ethernet8"], "type": "MIRROR"}}},
+            ex_ops=[{"op": "replace", "path": "/ACL_TABLE/EVERFLOW/ports",
+                     "value": ["Ethernet8"]}])
+
+    def test_generate__leaf_list_items_added__single_replace_move(self):
+        """Adding items to a leaf-list should produce one REPLACE move."""
+        self.verify(
+            current={"ACL_TABLE": {"EVERFLOW": {"ports": ["Ethernet0"], "type": "MIRROR"}}},
+            target={"ACL_TABLE": {"EVERFLOW": {"ports": ["Ethernet0", "Ethernet4", "Ethernet8"], "type": "MIRROR"}}},
+            ex_ops=[{"op": "replace", "path": "/ACL_TABLE/EVERFLOW/ports",
+                     "value": ["Ethernet0", "Ethernet4", "Ethernet8"]}])
+
+    def test_generate__leaf_list_unchanged__no_moves(self):
+        """Identical leaf-lists should produce no moves."""
+        self.verify(
+            current={"ACL_TABLE": {"EVERFLOW": {"ports": ["Ethernet0", "Ethernet4"], "type": "MIRROR"}}},
+            target={"ACL_TABLE": {"EVERFLOW": {"ports": ["Ethernet0", "Ethernet4"], "type": "MIRROR"}}},
+            ex_ops=[])
+
+    def test_generate__non_list_fields_differ__no_moves(self):
+        """Non-list field changes should not produce moves from this generator."""
+        self.verify(
+            current={"ACL_TABLE": {"EVERFLOW": {"ports": ["Ethernet0"], "type": "MIRROR"}}},
+            target={"ACL_TABLE": {"EVERFLOW": {"ports": ["Ethernet0"], "type": "L3"}}},
+            ex_ops=[])
+
+    def test_generate__list_of_dicts__no_moves(self):
+        """Lists of dicts (not leaf-lists) should be skipped."""
+        self.verify(
+            current={"TABLE": {"KEY": {"items": [{"a": 1}, {"b": 2}]}}},
+            target={"TABLE": {"KEY": {"items": [{"a": 1}]}}},
+            ex_ops=[])
+
+    def test_generate__list_only_in_current__no_moves(self):
+        """List exists in current but not target — not a REPLACE, skip."""
+        self.verify(
+            current={"ACL_TABLE": {"EVERFLOW": {"ports": ["Ethernet0"], "type": "MIRROR"}}},
+            target={"ACL_TABLE": {"EVERFLOW": {"type": "MIRROR"}}},
+            ex_ops=[])
+
+    def test_generate__list_only_in_target__no_moves(self):
+        """List exists in target but not current — handled by other generators, skip."""
+        self.verify(
+            current={"ACL_TABLE": {"EVERFLOW": {"type": "MIRROR"}}},
+            target={"ACL_TABLE": {"EVERFLOW": {"type": "MIRROR", "ports": ["Ethernet0"]}}},
+            ex_ops=[])
+
+    def test_generate__leaf_list_all_items_removed__single_replace_move(self):
+        """Removing all items from a leaf-list should produce one REPLACE with empty list."""
+        self.verify(
+            current={"ACL_TABLE": {"EVERFLOW": {"ports": ["Ethernet0", "Ethernet4"], "type": "MIRROR"}}},
+            target={"ACL_TABLE": {"EVERFLOW": {"ports": [], "type": "MIRROR"}}},
+            ex_ops=[{"op": "replace", "path": "/ACL_TABLE/EVERFLOW/ports", "value": []}])
+
+    def test_generate__multiple_tables_with_leaf_lists__multiple_moves(self):
+        """Multiple differing leaf-lists should each get a REPLACE move."""
+        self.verify(
+            current={"ACL_TABLE": {
+                "T1": {"ports": ["Ethernet0", "Ethernet4"], "type": "L3"},
+                "T2": {"ports": ["Ethernet8", "Ethernet12"], "type": "MIRROR"}}},
+            target={"ACL_TABLE": {
+                "T1": {"ports": ["Ethernet0"], "type": "L3"},
+                "T2": {"ports": ["Ethernet12"], "type": "MIRROR"}}},
+            ex_ops=[{"op": "replace", "path": "/ACL_TABLE/T1/ports", "value": ["Ethernet0"]},
+                    {"op": "replace", "path": "/ACL_TABLE/T2/ports", "value": ["Ethernet12"]}])
+
+    def verify(self, current, target, ex_ops):
+        diff = ps.Diff(current, target)
+        moves = list(self.generator.generate(diff))
+        moves_ops = []
+        for move in moves:
+            moves_ops.extend(move.get_jsonpatch())
+        self.assertCountEqual(ex_ops, moves_ops)
+
 
 class TestLowLevelMoveGenerator(unittest.TestCase):
     def setUp(self):
@@ -3332,7 +3465,8 @@ class TestSortAlgorithmFactory(unittest.TestCase):
                                               ps.BulkKeyLevelMoveGenerator,
                                               ps.KeyLevelMoveGenerator,
                                               ps.BulkKeyGroupLowLevelMoveGenerator,
-                                              ps.BulkLowLevelMoveGenerator]
+                                              ps.BulkLowLevelMoveGenerator,
+                                              ps.BulkLeafListMoveGenerator]
         expected_extenders = [ps.RequiredValueMoveExtender,
                               ps.UpperLevelMoveExtender,
                               ps.DeleteInsteadOfReplaceMoveExtender,

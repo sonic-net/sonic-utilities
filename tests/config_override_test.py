@@ -263,8 +263,6 @@ class TestConfigOverride(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
-        return
 
 
 class TestConfigOverrideMultiasic(object):
@@ -517,11 +515,3 @@ class TestConfigOverrideMultiasic(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
-        # change back to single asic config
-        from .mock_tables import dbconnector
-        from .mock_tables import mock_single_asic
-        importlib.reload(mock_single_asic)
-        dbconnector.load_namespace_config()
-        return

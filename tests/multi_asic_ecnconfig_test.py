@@ -1,3 +1,4 @@
+import importlib
 import os
 import sys
 from .ecn_test import TestEcnConfigBase
@@ -13,8 +14,11 @@ sys.path.insert(0, modules_path)
 class TestEcnConfigMultiAsic(TestEcnConfigBase):
     @classmethod
     def setup_class(cls):
-        super().setup_class()
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
+        from .mock_tables import mock_multi_asic
+        importlib.reload(mock_multi_asic)
+        from .mock_tables import dbconnector
+        dbconnector.load_namespace_config()
 
     def test_ecn_show_config_all_masic(self):
         self.executor(testData['ecn_show_config_masic'])
@@ -66,4 +70,3 @@ class TestEcnConfigMultiAsic(TestEcnConfigBase):
     @classmethod
     def teardown_class(cls):
         super().teardown_class()
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""

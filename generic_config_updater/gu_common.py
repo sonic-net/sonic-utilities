@@ -5,10 +5,10 @@ from jsonpointer import JsonPointer
 import sonic_yang
 import sonic_yang_ext
 import subprocess
-import yang as ly
 import copy
 import re
 import os
+import hashlib
 from sonic_py_common import logger, multi_asic
 from enum import Enum
 from functools import cmp_to_key
@@ -81,6 +81,8 @@ class ConfigWrapper:
         self.scope = scope
         self.yang_dir = YANG_DIR
         self.sonic_yang_with_loaded_models = None
+        self._validate_config_cache = {}
+        self._currently_loaded_hash = None
 
     def get_config_db_as_json(self):
         return get_config_db_as_json(self.scope)
@@ -138,6 +140,16 @@ class ConfigWrapper:
             return False, ex
 
     def validate_config_db_config(self, config_db_as_json):
+        # Cache validation results by config content hash.
+        # validate_config_db_config is a pure function: same config always produces
+        # the same result. Caching avoids redundant loadData() calls when the DFS
+        # revisits the same config state during backtracking.
+        _cache_key = hashlib.md5(
+            json.dumps(config_db_as_json, sort_keys=True).encode()
+        ).hexdigest()
+        if _cache_key in self._validate_config_cache:
+            return self._validate_config_cache[_cache_key]
+
         sy = self.create_sonic_yang_with_loaded_models()
 
         # TODO: Move these validators to YANG models
@@ -152,14 +164,22 @@ class ConfigWrapper:
             # tuple / SonicYangException, so callers retain full error
             # signal -- only the duplicate syslog spam is silenced.
             sy.loadData(config_db_as_json, quiet=True)
+            self._currently_loaded_hash = _cache_key
             for supplemental_yang_validator in supplemental_yang_validators:
                 success, error = supplemental_yang_validator(config_db_as_json)
                 if not success:
-                    return success, error
+                    result = (success, error)
+                    self._validate_config_cache[_cache_key] = result
+                    return result
         except sonic_yang.SonicYangException as ex:
-            return False, str(ex)
+            self._currently_loaded_hash = None
+            result = (False, str(ex))
+            self._validate_config_cache[_cache_key] = result
+            return result
 
-        return True, None
+        result = (True, None)
+        self._validate_config_cache[_cache_key] = result
+        return result
 
     def validate_field_operation(self, old_config, target_config):
         """
@@ -538,7 +558,17 @@ class PathAddressing:
         sy = self._create_sonic_yang_with_loaded_models()
 
         if reload_config:
-            sy.loadData(config)
+            _config_hash = hashlib.md5(
+                json.dumps(config, sort_keys=True).encode()
+            ).hexdigest()
+            already_loaded = (
+                self.config_wrapper is not None and
+                self.config_wrapper._currently_loaded_hash == _config_hash
+            )
+            if not already_loaded:
+                sy.loadData(config)
+                if self.config_wrapper is not None:
+                    self.config_wrapper._currently_loaded_hash = _config_hash
 
         # Force to be a list
         if not isinstance(paths, list):
@@ -551,10 +581,8 @@ class PathAddressing:
         # Iterate across all paths fetching references
         for path in paths:
             xpath = self.convert_path_to_xpath(path, config, sy)
-
-            leaf_xpaths = self._get_inner_leaf_xpaths(xpath, sy)
-            for xpath in leaf_xpaths:
-                ref_xpaths.extend(sy.find_data_dependencies(xpath))
+            # NOTE: This will recursively find dependencies for all decendents
+            ref_xpaths.extend(sy.find_data_dependencies(xpath))
 
         # For each xpath, convert to configdb path
         for ref_xpath in ref_xpaths:
@@ -565,22 +593,6 @@ class PathAddressing:
 
         ref_paths.sort()
         return ref_paths
-
-    def _get_inner_leaf_xpaths(self, xpath, sy):
-        if xpath == "/": # Point to Root element which contains all xpaths
-            nodes = sy.root.tree_for()
-        else: # Otherwise get all nodes that match xpath
-            nodes = sy.root.find_path(xpath).data()
-
-        for node in nodes:
-            for inner_node in node.tree_dfs():
-                # TODO: leaflist also can be used as the 'path' argument in 'leafref' so add support to leaflist
-                if self._is_leaf_node(inner_node):
-                    yield inner_node.path()
-
-    def _is_leaf_node(self, node):
-        schema = node.schema()
-        return ly.LYS_LEAF == schema.nodetype()
 
     def convert_path_to_xpath(self, path, config=None, sy=None):
         """

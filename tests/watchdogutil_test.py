@@ -40,3 +40,16 @@ class TestWatchdog(object):
                                [])
         assert result.exit_code == 0
         assert watchdogutil.VERSION in result.output
+
+    @patch('watchdogutil.main.platform_watchdog')
+    def test_status_armed_with_remaining_time(self, mock_platform_watchdog):
+        """Test status command when watchdog is armed and has remaining time"""
+        mock_platform_watchdog.is_armed.return_value = True
+        mock_platform_watchdog.get_remaining_time.return_value = 300
+
+        runner = CliRunner()
+        result = runner.invoke(watchdogutil.watchdogutil.commands["status"], [])
+
+        assert result.exit_code == 0
+        assert "Status: Armed" in result.output
+        assert "Time remaining: 300 seconds" in result.output

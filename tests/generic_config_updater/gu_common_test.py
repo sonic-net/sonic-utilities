@@ -221,6 +221,92 @@ class TestConfigWrapper(unittest.TestCase):
         self.assertEqual(expected, actual)
         self.assertIsNotNone(error)
 
+    def test_validate_config_db_config__same_config_called_twice__loadData_called_once(self):
+        """Cache hit: second call with same config must not call loadData again."""
+        config_wrapper = gu_common.ConfigWrapper()
+        mock_sy = MagicMock()
+        mock_sy.loadData = MagicMock()
+        mock_sy.loadYangModel = MagicMock()
+        config_wrapper.sonic_yang_with_loaded_models = mock_sy
+
+        config = {"ACL_TABLE": {}}
+
+        config_wrapper.validate_config_db_config(config)
+        config_wrapper.validate_config_db_config(config)
+
+        # loadData should only be called once — second call hits the result cache
+        mock_sy.loadData.assert_called_once()
+
+    def test_validate_config_db_config__different_configs__loadData_called_each_time(self):
+        """Cache miss: different configs must each call loadData."""
+        config_wrapper = gu_common.ConfigWrapper()
+        mock_sy = MagicMock()
+        mock_sy.loadData = MagicMock()
+        config_wrapper.sonic_yang_with_loaded_models = mock_sy
+
+        config_a = {"ACL_TABLE": {"rule1": {}}}
+        config_b = {"ACL_TABLE": {"rule2": {}}}
+
+        config_wrapper.validate_config_db_config(config_a)
+        config_wrapper.validate_config_db_config(config_b)
+
+        self.assertEqual(2, mock_sy.loadData.call_count)
+
+    def test_find_ref_paths__after_validate_same_config__loadData_skipped(self):
+        """
+        Core optimization: if validate_config_db_config already loaded config into sy,
+        find_ref_paths with the same config must skip loadData entirely.
+        """
+        config_wrapper = gu_common.ConfigWrapper()
+        mock_sy = MagicMock()
+        mock_sy.loadData = MagicMock()
+        mock_sy.root = MagicMock()
+        mock_sy.root.find_path = MagicMock(return_value=MagicMock(data=MagicMock(return_value=[])))
+        config_wrapper.sonic_yang_with_loaded_models = mock_sy
+
+        path_addressing = gu_common.PathAddressing(config_wrapper)
+        config = {"ACL_TABLE": {}}
+
+        # First: validate loads the config into sy and sets _currently_loaded_hash
+        config_wrapper.validate_config_db_config(config)
+        self.assertIsNotNone(config_wrapper._currently_loaded_hash,
+                             "validate_config_db_config should have set _currently_loaded_hash")
+        load_count_after_validate = mock_sy.loadData.call_count
+
+        # Second: find_ref_paths with same config should NOT call loadData again
+        path_addressing.find_ref_paths("/ACL_TABLE", config, reload_config=True)
+        load_count_after_find = mock_sy.loadData.call_count
+
+        self.assertEqual(load_count_after_validate, load_count_after_find,
+                         "find_ref_paths should skip loadData when validate already loaded same config")
+
+    def test_find_ref_paths__after_validate_different_config__loadData_called(self):
+        """
+        Cache miss in find_ref_paths: if validate loaded config_A, calling find_ref_paths
+        with config_B must still call loadData.
+        """
+        config_wrapper = gu_common.ConfigWrapper()
+        mock_sy = MagicMock()
+        mock_sy.loadData = MagicMock()
+        mock_sy.root = MagicMock()
+        mock_sy.root.find_path = MagicMock(return_value=MagicMock(data=MagicMock(return_value=[])))
+        config_wrapper.sonic_yang_with_loaded_models = mock_sy
+
+        path_addressing = gu_common.PathAddressing(config_wrapper)
+        config_a = {"ACL_TABLE": {"rule1": {}}}
+        config_b = {"ACL_TABLE": {"rule2": {}}}
+
+        config_wrapper.validate_config_db_config(config_a)
+        self.assertIsNotNone(config_wrapper._currently_loaded_hash,
+                             "validate_config_db_config should have set _currently_loaded_hash")
+        load_count_after_validate = mock_sy.loadData.call_count
+
+        path_addressing.find_ref_paths("/ACL_TABLE", config_b, reload_config=True)
+        load_count_after_find = mock_sy.loadData.call_count
+
+        self.assertEqual(load_count_after_find, load_count_after_validate + 1,
+                         "find_ref_paths should call loadData exactly once when config differs")
+
     def test_validate_bgp_peer_group__valid_non_intersecting_ip_ranges__returns_true(self):
         # Arrange
         config_wrapper = gu_common.ConfigWrapper()
