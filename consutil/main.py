@@ -5,6 +5,7 @@
 # Command-line utility for interacting with switches over serial via console device
 #
 
+
 try:
     import click
     import os
@@ -15,6 +16,7 @@ try:
     from .lib import *
 except ImportError as e:
     raise ImportError("%s - required module not found" % str(e))
+
 
 @click.group()
 @clicommon.pass_db
@@ -28,13 +30,14 @@ def consutil(db):
 
     SysInfoProvider.init_device_prefix()
 
+
 # 'show' subcommand
 @consutil.command()
 @clicommon.pass_db
-@click.option('--brief', '-b', metavar='<brief_mode>', required=False, is_flag=True)
+@click.option('--brief', '-b', is_flag=True)
 def show(db, brief):
     """Show all ports and their info include available ttyUSB devices unless specified brief mode"""
-    port_provider = ConsolePortProvider(db, brief, refresh=True)
+    port_provider = ConsolePortProvider(db, brief, refresh=True)  # noqa: F405
     ports = list(port_provider.get_all())
 
     # sort ports for table rendering
@@ -50,14 +53,50 @@ def show(db, brief):
         date = port.session_start_date if port.session_start_date else "-"
         baud = port.baud
         flow_control = "Enabled" if port.flow_control else "Disabled"
-        body.append([busy+port.line_num, baud if baud else "-", flow_control, pid if pid else "-", date if date else "-", port.remote_device])
+        body.append([
+            busy+port.line_num,
+            baud if baud else "-",
+            flow_control,
+            pid if pid else "-",
+            date if date else "-",
+            port.remote_device,
+        ])
     click.echo(tabulate(body, header, stralign='right'))
+
+
+# 'show-escape' subcommand
+@consutil.command('show-escape')
+@clicommon.pass_db
+@click.option('--brief', '-b', is_flag=True)
+def show_escape(db, brief):
+    """Show all default and line escape char info include available ttyUSB devices unless specified brief mode"""
+    port_provider = ConsolePortProvider(db, brief, refresh=True)  # noqa: F405
+    ports = list(port_provider.get_all())
+
+    # sort ports for table rendering
+    ports.sort(key=lambda p: int(p.line_num))
+
+    # set table header style
+    header = ["Line", "Default Escape Char", "Line Escape Char", "Final Escape Char"]
+    body = []
+    for port in ports:
+        # runtime information
+        busy = "*" if port.busy else " "
+        body.append([
+            busy+port.line_num,
+            port.default_escape_char if port.default_escape_char else "-",
+            port.line_escape_char if port.line_escape_char else "-",
+            port.escape_char if port.escape_char else "-",
+        ])
+    click.echo(tabulate(body, header, stralign='right'))
+
 
 # 'clear' subcommand
 @consutil.command()
 @clicommon.pass_db
 @click.argument('target')
-@click.option('--devicename', '-d', is_flag=True, help="clear by name - if flag is set, interpret target as device name instead")
+@click.option('--devicename', '-d', is_flag=True,
+              help="clear by name - if flag is set, interpret target as device name instead")
 def clear(db, target, devicename):
     """Clear preexisting connection to line"""
     if os.geteuid() != 0:
@@ -77,11 +116,13 @@ def clear(db, target, devicename):
     else:
         click.echo("Cleared line")
 
+
 # 'connect' subcommand
 @consutil.command()
 @clicommon.pass_db
 @click.argument('target')
-@click.option('--devicename', '-d', is_flag=True, help="connect by name - if flag is set, interpret target as device name instead")
+@click.option('--devicename', '-d', is_flag=True,
+              help="connect by name - if flag is set, interpret target as device name instead")
 def connect(db, target, devicename):
     """Connect to switch via console device - TARGET is line number or device name of switch"""
     # identify the target line
@@ -108,8 +149,10 @@ def connect(db, target, devicename):
         sys.exit(ERR_DEV)
 
     # interact
-    click.echo("Successful connection to line [{}]\nPress ^A ^X to disconnect".format(line_num))
+    click.echo("Successful connection to line [{}]\nPress ^{} ^X to disconnect"
+               .format(line_num, target_port.escape_char.upper() if target_port.escape_char is not None else "A"))
     session.interact()
+
 
 if __name__ == '__main__':
     consutil()

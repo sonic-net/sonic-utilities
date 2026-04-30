@@ -371,9 +371,26 @@
     "TUNNEL_ROUTE_TABLE:10.3.1.1": {
         "alias": "Vlan1000"
     },
+    "VNET_ROUTE_TABLE:test_v4_in_v4-0:160.162.191.1/32": {
+        "nexthop": "100.100.4.1",
+        "ifname": "Ethernet1"
+    },
+    "VNET_ROUTE_TABLE:test_v4_in_v4-0:160.163.191.1/32": {
+        "nexthop": "100.101.4.1, 100.101.4.2",
+        "ifname": "Ethernet1, Ethernet2"
+    },
+    "VNET_ROUTE_TABLE:test_v4_in_v4-0:160.164.191.1/32": {
+        "nexthop": "100.102.4.1, 100.102.4.2, 100.102.4.3",
+        "ifname": "Ethernet1, Ethernet2, Ethernet3"
+    },
+    "VNET_ROUTE_TABLE:test_v4_in_v4-1:160.165.191.1/32": {
+        "nexthop": "100.103.4.1, 100.103.4.2, 100.103.4.3",
+        "ifname": "Ethernet1, Ethernet2, Ethernet3"
+    },
     "VNET_ROUTE_TUNNEL_TABLE:test_v4_in_v4-0:160.163.191.1/32": {
         "endpoint":"100.251.7.1",
-        "endpoint_monitor":"100.251.7.1"
+        "endpoint_monitor":"100.251.7.1",
+        "metric": "0"
     },
     "VNET_ROUTE_TUNNEL_TABLE:Vnet_v6_in_v6-0:fddd:a156:a251::a6:1/128": {
         "endpoint": "fddd:a100:a251::a10:1,fddd:a101:a251::a10:1,fddd:a102:a251::a10:1,fddd:a103:a251::a10:1",

@@ -150,12 +150,10 @@ class TestFdbshow():
     @pytest.fixture(scope="class", autouse=True)
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "1"
         os.environ["FDBSHOW_UNIT_TESTING"] = "1"
         yield
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["FDBSHOW_UNIT_TESTING"] = "0"
 

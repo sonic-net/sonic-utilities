@@ -4,8 +4,8 @@ import contextlib
 import functools
 import os
 import pkgutil
+import subprocess
 import tempfile
-import yang as ly
 from inspect import signature
 from typing import Any, Iterable, List, Callable, Dict, Optional
 
@@ -1035,6 +1035,31 @@ class PackageManager:
         self._systemctl_action(package, 'enable')
         self._systemctl_action(package, 'start')
 
+    @staticmethod
+    def _systemctl_is_generated_or_transient(unit_name: str) -> bool:
+        """Returns True if systemd considers the unit generated/transient.
+
+        On some platforms, SONiC's systemd generator
+        may materialize unit files under /run/systemd/generator.
+        Such units cannot be enabled/disabled persistently.
+        """
+        try:
+            proc = subprocess.run(
+                ['systemctl', 'is-enabled', unit_name],
+                capture_output=True,
+                text=True,
+                timeout=15,
+            )
+        except subprocess.TimeoutExpired as err:
+            log.warning(f'systemctl is-enabled timed out for unit {unit_name}: timeout={err.timeout}s')
+            return False
+        except Exception as err:
+            log.error(f'systemctl is-enabled failed for unit {unit_name}: {err}')
+            return False
+
+        state = (proc.stdout or '').strip().lower()
+        return state in ('generated', 'transient')
+
     def _systemctl_action(self, package: Package, action: str):
         """ Execute systemctl action for a service. """
 
@@ -1046,10 +1071,17 @@ class PackageManager:
         single_instance = host_service or (asic_service and not self.is_multi_npu)
         multi_instance = asic_service and self.is_multi_npu
         if single_instance:
-            run_command(['systemctl', action, name])
+            if action in ('enable', 'disable') and self._systemctl_is_generated_or_transient(name):
+                log.warning(f'Skipping systemctl {action} for generated/transient unit {name}')
+            else:
+                run_command(['systemctl', action, name])
         if multi_instance:
             for npu in range(self.num_npus):
-                run_command(['systemctl', action, f'{name}@{npu}'])
+                inst_name = f'{name}@{npu}'
+                if action in ('enable', 'disable') and self._systemctl_is_generated_or_transient(inst_name):
+                    log.warning(f'Skipping systemctl {action} for generated/transient unit {inst_name}')
+                else:
+                    run_command(['systemctl', action, inst_name])
 
     def _disable_feature(self, package: Package, block: bool = True):
         """ Stops the feature and blocks till operation is finished if
@@ -1311,7 +1343,7 @@ class PackageManager:
         docker_api = DockerApi(docker.from_env(), ProgressManager())
         registry_resolver = RegistryResolver()
         metadata_resolver = MetadataResolver(docker_api, registry_resolver)
-        cfg_mgmt = config_mgmt.ConfigMgmt(source=INIT_CFG_JSON, sonicYangOptions=ly.LY_CTX_DISABLE_SEARCHDIR_CWD)
+        cfg_mgmt = config_mgmt.ConfigMgmt(source=INIT_CFG_JSON)
         cli_generator = CliGenerator(log)
         feature_registry = FeatureRegistry(SonicDB)
         service_creator = ServiceCreator(feature_registry,

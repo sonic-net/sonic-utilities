@@ -1,6 +1,7 @@
 import pytest
 import logging
 import os
+import shutil
 
 import clear.main as clear
 import show.main as show
@@ -8,6 +9,7 @@ import show.main as show
 from click.testing import CliRunner
 from utilities_common.cli import UserCache
 
+from .mock_tables import dbconnector
 from .utils import get_result_and_return_code
 from .portstat_input import assert_show_output
 
@@ -414,17 +416,35 @@ def verify_after_clear(output, expected_out):
     assert new_output == expected_out
 
 
+def _backup_mock_file(fname, suffix=".bak"):
+    """Backup a file in the per-worker mock_tables dir."""
+    src = os.path.join(dbconnector.INPUT_DIR, fname)
+    dst = os.path.join(dbconnector.INPUT_DIR, fname + suffix)
+    shutil.copyfile(src, dst)
+
+
+def _restore_mock_file(fname, suffix=".bak"):
+    """Restore a backed-up file in the per-worker mock_tables dir."""
+    src = os.path.join(dbconnector.INPUT_DIR, fname + suffix)
+    dst = os.path.join(dbconnector.INPUT_DIR, fname)
+    shutil.copyfile(src, dst)
+
+
+def _replace_mock_file(subdir, fname):
+    """Replace a mock file with a test-specific version."""
+    src = os.path.join(test_path, subdir, fname)
+    dst = os.path.join(dbconnector.INPUT_DIR, fname)
+    shutil.copyfile(src, dst)
+
+
 class TestPortStat(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ["UTILITIES_UNIT_TESTING"] = "2"
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] = "0"
-        os.system("cp {} /tmp/counters_db.json.orig".format(os.path.join(test_path, "mock_tables/counters_db.json")))
-        os.system("cp {} {}".format(os.path.join(test_path, "portstat_db/counters_db.json"),
-                                    os.path.join(test_path, "mock_tables/counters_db.json")))
+        _backup_mock_file("counters_db.json", ".orig")
+        _replace_mock_file("portstat_db", "counters_db.json")
         remove_tmp_cnstat_file()
 
     def test_show_intf_counters(self):
@@ -599,9 +619,8 @@ class TestPortStat(object):
 
     def test_show_intf_counters_on_sup_no_counters(self):
         remove_tmp_cnstat_file()
-        os.system("cp {} /tmp/".format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
-        os.system("cp {} {}".format(os.path.join(test_path, "portstat_db/on_sup_no_counters/chassis_state_db.json"),
-                                    os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+        _backup_mock_file("chassis_state_db.json")
+        _replace_mock_file("portstat_db/on_sup_no_counters", "chassis_state_db.json")
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "1"
 
         runner = CliRunner()
@@ -619,14 +638,12 @@ class TestPortStat(object):
         assert result == intf_counters_on_sup_no_counters
 
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
-        os.system("cp /tmp/chassis_state_db.json {}"
-                  .format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+        _restore_mock_file("chassis_state_db.json")
 
     def test_show_intf_counters_on_sup_partial_lc(self):
         remove_tmp_cnstat_file()
-        os.system("cp {} /tmp/".format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
-        os.system("cp {} {}".format(os.path.join(test_path, "portstat_db/on_sup_partial_lc/chassis_state_db.json"),
-                                    os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+        _backup_mock_file("chassis_state_db.json")
+        _replace_mock_file("portstat_db/on_sup_partial_lc", "chassis_state_db.json")
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "1"
 
         runner = CliRunner()
@@ -644,14 +661,12 @@ class TestPortStat(object):
         assert result == intf_counters_on_sup_partial_lc
 
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
-        os.system("cp /tmp/chassis_state_db.json {}"
-                  .format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+        _restore_mock_file("chassis_state_db.json")
 
     def test_show_intf_counters_on_sup_na(self):
         remove_tmp_cnstat_file()
-        os.system("cp {} /tmp/".format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
-        os.system("cp {} {}".format(os.path.join(test_path, "portstat_db/on_sup_na/chassis_state_db.json"),
-                                    os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+        _backup_mock_file("chassis_state_db.json")
+        _replace_mock_file("portstat_db/on_sup_na", "chassis_state_db.json")
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "1"
 
         runner = CliRunner()
@@ -669,16 +684,15 @@ class TestPortStat(object):
         assert result == intf_counters_on_sup_na
 
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
-        os.system("cp /tmp/chassis_state_db.json {}"
-                  .format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+        _restore_mock_file("chassis_state_db.json")
 
     def test_show_intf_counters_on_sup_packet_chassis(self):
-        os.system("cp {} /tmp/".format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
-        os.system("cp {} {}".format(os.path.join(test_path, "portstat_db/on_sup_packet_chassis/chassis_state_db.json"),
-                                    os.path.join(test_path, "mock_tables/chassis_state_db.json")))
-        os.system("cp {} /tmp/".format(os.path.join(test_path, "mock_tables/counters_db.json")))
-        os.system("cp {} {}".format(os.path.join(test_path, "portstat_db/on_sup_packet_chassis/counters_db.json"),
-                                    os.path.join(test_path, "mock_tables/counters_db.json")))
+        _backup_mock_file("chassis_state_db.json")
+        _replace_mock_file(
+            "portstat_db/on_sup_packet_chassis", "chassis_state_db.json")
+        _backup_mock_file("counters_db.json")
+        _replace_mock_file(
+            "portstat_db/on_sup_packet_chassis", "counters_db.json")
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "1"
         os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] = "1"
 
@@ -697,15 +711,13 @@ class TestPortStat(object):
         assert result.rstrip() == intf_counters_on_sup_packet_chassis.rstrip()
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] = "0"
-        os.system("cp /tmp/chassis_state_db.json {}"
-                  .format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
-        os.system("cp /tmp/counters_db.json {}"
-                  .format(os.path.join(test_path, "mock_tables/counters_db.json")))
+        _restore_mock_file("chassis_state_db.json")
+        _restore_mock_file("counters_db.json")
 
     def test_show_intf_counters_from_lc_on_sup_packet_chassis(self):
-        os.system("cp {} /tmp/".format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
-        os.system("cp {} {}".format(os.path.join(test_path, "portstat_db/on_sup_packet_chassis/chassis_state_db.json"),
-                                    os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+        _backup_mock_file("chassis_state_db.json")
+        _replace_mock_file(
+            "portstat_db/on_sup_packet_chassis", "chassis_state_db.json")
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "1"
         os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] = "1"
 
@@ -724,8 +736,7 @@ class TestPortStat(object):
         assert result.rstrip() == intf_counters_from_lc_on_sup_packet_chassis.rstrip()
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] = "0"
-        os.system("cp /tmp/chassis_state_db.json {}"
-                  .format(os.path.join(test_path, "mock_tables/chassis_state_db.json")))
+        _restore_mock_file("chassis_state_db.json")
 
     def test_show_intf_counters_nonzero(self):
         runner = CliRunner()
@@ -797,29 +808,23 @@ class TestPortStat(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(
-            os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_IS_SUP"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_IS_PACKET_CHASSIS"] = "0"
         remove_tmp_cnstat_file()
-        os.system("cp /tmp/counters_db.json.orig {}"
-                  .format(os.path.join(test_path, "mock_tables/counters_db.json")))
+        _restore_mock_file("counters_db.json", ".orig")
 
 
 class TestPortTrimStat(object):
     @classmethod
     def setup_class(cls):
         logger.info("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "2"
         remove_tmp_cnstat_file()
 
     @classmethod
     def teardown_class(cls):
         logger.info("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(
-            os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         remove_tmp_cnstat_file()
 
@@ -992,7 +997,6 @@ class TestMultiAsicPortStat(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "2"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
         remove_tmp_cnstat_file()
@@ -1120,8 +1124,6 @@ class TestMultiAsicPortStat(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(
-            os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
         remove_tmp_cnstat_file()

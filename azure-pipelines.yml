@@ -39,8 +39,7 @@ stages:
     variables:
       DIFF_COVER_CHECK_THRESHOLD: 80
       DIFF_COVER_ENABLE: 'true'
-    pool:
-      vmImage: ubuntu-24.04
+    pool: sonicso1ES-amd64
 
     container:
       image: sonicdev-microsoft.azurecr.io:443/sonic-slave-bookworm:$(BUILD_BRANCH)
@@ -85,6 +84,8 @@ stages:
         sudo dpkg -i libyang_1.0.73_amd64.deb
         sudo dpkg -i libyang-cpp_1.0.73_amd64.deb
         sudo dpkg -i python3-yang_1.0.73_amd64.deb
+        sudo dpkg -i libyang3_3.*_amd64.deb
+        sudo dpkg -i python3-libyang_3.*_amd64.deb
       workingDirectory: $(Pipeline.Workspace)/target/debs/bookworm/
       displayName: 'Install Debian dependencies'
 
@@ -178,11 +179,11 @@ stages:
 
     - script: |
         set -e
-        pushd gcu
+        pushd generic_config_updater
         python3 -m build -n
       displayName: 'Build Python 3 wheel for GCU'
 
-    - publish: '$(System.DefaultWorkingDirectory)/gcu/dist/'
+    - publish: '$(System.DefaultWorkingDirectory)/generic_config_updater/dist/'
       artifact: gcu_wheels
       displayName: "Publish Python wheels for GCU"
 

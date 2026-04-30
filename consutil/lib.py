@@ -32,6 +32,8 @@ DEVICE_KEY = "remote_device"
 FLOW_KEY = "flow_control"
 FEATURE_KEY = "console_mgmt"
 FEATURE_ENABLED_KEY = "enabled"
+DEFAULT_FEATURE_ESCAPE_KEY = "default_escape_char"
+FEATURE_ESCAPE_KEY = "escape_char"
 
 # STATE_DB Keys
 STATE_KEY = "state"
@@ -65,7 +67,7 @@ class ConsolePortProvider(object):
     def get_all(self):
         """Gets all console ports information"""
         for port in self._ports:
-            yield ConsolePortInfo(self._db_utils, port)
+            yield ConsolePortInfo(self._db_utils, port, self._default_escape_char)
 
     def get(self, target, use_device=False):
         """Gets information of a ports, the target is the line number by default"""
@@ -77,13 +79,28 @@ class ConsolePortProvider(object):
         # identify the line number by searching configuration
         for port in self._ports:
             if search_key in port and port[search_key] == target:
-                return ConsolePortInfo(self._db_utils, port)
+                return ConsolePortInfo(self._db_utils, port, self._default_escape_char)
 
         raise LineNotFoundError
 
     def _init_all(self, refresh):
         config_db = self._db.cfgdb
         state_db = self._db.db
+
+        # Querying CONFIG_DB to get console management feature state
+        feature_state = config_db.get_entry(CONSOLE_SWITCH_TABLE, FEATURE_KEY)
+        # Default to no escape character when console management feature is disabled or missing.
+        self._default_escape_char = None
+        if feature_state and feature_state.get(FEATURE_ENABLED_KEY, "no") == "yes":
+            self._default_escape_char = feature_state.get(
+                DEFAULT_FEATURE_ESCAPE_KEY,
+                feature_state.get(DEFAULT_FEATURE_ESCAPE_KEY, None),
+            )
+            if self._default_escape_char is not None and not self._default_escape_char.islower():
+                raise InvalidConfigurationError(
+                    DEFAULT_FEATURE_ESCAPE_KEY,
+                    "default console escape character is not valid",
+                )
 
         # Querying CONFIG_DB to get configured console ports
         keys = config_db.get_keys(CONSOLE_PORT_TABLE)
@@ -114,11 +131,12 @@ class ConsolePortProvider(object):
         self._ports = ports
 
 class ConsolePortInfo(object):
-    def __init__(self, db_utils, info):
+    def __init__(self, db_utils, info, default_escape_char=None):
         self._db_utils = db_utils
         self._info = info
         self._session = None
-    
+        self._default_escape_char = default_escape_char
+
     def __str__(self):
         return "({}, {}, {})".format(self.line_num, self.baud, self.remote_device)
 
@@ -137,7 +155,19 @@ class ConsolePortInfo(object):
     @property
     def remote_device(self):
         return self._info[DEVICE_KEY] if DEVICE_KEY in self._info else None
-    
+
+    @property
+    def default_escape_char(self):
+        return self._default_escape_char
+
+    @property
+    def line_escape_char(self):
+        return self._info.get(FEATURE_ESCAPE_KEY, None)
+
+    @property
+    def escape_char(self):
+        return self._info.get(FEATURE_ESCAPE_KEY, self._default_escape_char)
+
     @property
     def busy(self):
         return STATE_KEY in self.cur_state and self.cur_state[STATE_KEY] == BUSY_FLAG
@@ -170,7 +200,9 @@ class ConsolePortInfo(object):
 
         # build and start picocom command
         flow_cmd = "h" if self.flow_control else "n"
-        cmd = "picocom -b {} -f {} {}{}".format(self.baud, flow_cmd, SysInfoProvider.DEVICE_PREFIX, self.line_num)
+        escape_cmd = "-e {}".format(self.escape_char) if self.escape_char else ""
+        cmd = "picocom {} -b {} -f {} {}{}".format(escape_cmd, self.baud, flow_cmd,
+                                                   SysInfoProvider.DEVICE_PREFIX, self.line_num)
 
         # start connection
         try:
@@ -207,7 +239,7 @@ class ConsolePortInfo(object):
         finally:
             self.refresh()
             self._session = None
-        
+
         return True
 
     def refresh(self):

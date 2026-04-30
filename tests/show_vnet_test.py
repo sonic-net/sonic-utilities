@@ -1,3 +1,4 @@
+# flake8: noqa: E501
 import os
 from click.testing import CliRunner
 from utilities_common.db import Db
@@ -15,42 +16,43 @@ class TestShowVnetRoutesAll(object):
         row = ["Vnet_v6_in_v6-0", "fddd:a156:a251::a6:1/128"]
         mac_addr = ""
         vni = ""
+        metric = "0"
         state = "active"
         epval = "fddd:a100:a251::a10:1,fddd:a101:a251::a10:1"
 
-        vnet.pretty_print(table, row, epval, mac_addr, vni, state)
-        expected_output = [['Vnet_v6_in_v6-0', 'fddd:a156:a251::a6:1/128', 'fddd:a100:a251::a10:1,fddd:a101:a251::a10:1', '', '', 'active']]
+        vnet.pretty_print(table, row, epval, mac_addr, vni, metric, state)
+        expected_output = [['Vnet_v6_in_v6-0', 'fddd:a156:a251::a6:1/128', 'fddd:a100:a251::a10:1,fddd:a101:a251::a10:1', '', '', '0', 'active']]
         assert table == expected_output
 
         table =[]
         row = ["Vnet_v6_in_v6-0", "fddd:a156:a251::a6:1/128"]
         epval = "fddd:a100:a251::a10:1,fddd:a101:a251::a10:1,fddd:a100:a251::a11:1,fddd:a100:a251::a12:1,fddd:a100:a251::a13:1"
-        vnet.pretty_print(table, row, epval, mac_addr, vni, state)
+        vnet.pretty_print(table, row, epval, mac_addr, vni, metric, state)
         expected_output = [
-            ['Vnet_v6_in_v6-0', 'fddd:a156:a251::a6:1/128', 'fddd:a100:a251::a10:1,fddd:a101:a251::a10:1', '', '', 'active'],
-            ['',                '',                         'fddd:a100:a251::a11:1,fddd:a100:a251::a12:1', '', '', ''],
-            ['',                '',                         'fddd:a100:a251::a13:1',                       '', '', '']
+            ['Vnet_v6_in_v6-0', 'fddd:a156:a251::a6:1/128', 'fddd:a100:a251::a10:1,fddd:a101:a251::a10:1', '', '', '0', 'active'],
+            ['',                '',                         'fddd:a100:a251::a11:1,fddd:a100:a251::a12:1', '', '', '', ''],
+            ['',                '',                         'fddd:a100:a251::a13:1',                       '', '', '', '']
         ]
         assert table == expected_output
 
         table =[]
         row = ["Vnet_v6_in_v6-0", "fddd:a156:a251::a6:1/128"]
         epval = "192.168.1.1,192.168.1.2,192.168.1.3,192.168.1.4,192.168.1.5,192.168.1.6,192.168.1.7,192.168.1.8,192.168.1.9,192.168.1.10,192.168.1.11,192.168.1.12,192.168.1.13,192.168.1.14,192.168.1.15"
-        vnet.pretty_print(table, row, epval, mac_addr, vni, state)
+        vnet.pretty_print(table, row, epval, mac_addr, vni, metric, state)
         expected_output =[
-            ['Vnet_v6_in_v6-0', 'fddd:a156:a251::a6:1/128', '192.168.1.1,192.168.1.2,192.168.1.3',    '', '', 'active'],
-            ['',                '',                         '192.168.1.4,192.168.1.5,192.168.1.6',    '', '', ''],
-            ['',                '',                         '192.168.1.7,192.168.1.8,192.168.1.9',    '', '', ''],
-            ['',                '',                         '192.168.1.10,192.168.1.11,192.168.1.12', '', '', ''],
-            ['',                '',                         '192.168.1.13,192.168.1.14,192.168.1.15', '', '', '']]
+            ['Vnet_v6_in_v6-0', 'fddd:a156:a251::a6:1/128', '192.168.1.1,192.168.1.2,192.168.1.3',    '', '', '0', 'active'],
+            ['',                '',                         '192.168.1.4,192.168.1.5,192.168.1.6',    '', '', '', ''],
+            ['',                '',                         '192.168.1.7,192.168.1.8,192.168.1.9',    '', '', '', ''],
+            ['',                '',                         '192.168.1.10,192.168.1.11,192.168.1.12', '', '', '', ''],
+            ['',                '',                         '192.168.1.13,192.168.1.14,192.168.1.15', '', '', '', '']]
         assert table == expected_output
 
         table =[]
         row = ["Vnet_v6_in_v6-0", "fddd:a156:a251::a6:1/128"]
         epval = "192.168.1.1"
-        vnet.pretty_print(table, row, epval, mac_addr, vni, state)
+        vnet.pretty_print(table, row, epval, mac_addr, vni, metric, state)
         expected_output =[
-            ['Vnet_v6_in_v6-0', 'fddd:a156:a251::a6:1/128', '192.168.1.1', '', '', 'active']]
+            ['Vnet_v6_in_v6-0', 'fddd:a156:a251::a6:1/128', '192.168.1.1', '', '', '0', 'active']]
         assert table == expected_output
 
     def test_show_vnet_routes_all_basic(self):
@@ -60,16 +62,107 @@ class TestShowVnetRoutesAll(object):
         result = runner.invoke(show.cli.commands['vnet'].commands['routes'].commands['all'], [], obj=db)
         assert result.exit_code == 0
         expected_output = """\
-vnet name    prefix    nexthop    interface
------------  --------  ---------  -----------
+vnet name        prefix            nexthop                                interface
+---------------  ----------------  -------------------------------------  -------------------------------
+test_v4_in_v4-0  160.162.191.1/32  100.100.4.1                            Ethernet1
+test_v4_in_v4-0  160.163.191.1/32  100.101.4.1, 100.101.4.2               Ethernet1, Ethernet2
+test_v4_in_v4-0  160.164.191.1/32  100.102.4.1, 100.102.4.2, 100.102.4.3  Ethernet1, Ethernet2, Ethernet3
+test_v4_in_v4-1  160.165.191.1/32  100.103.4.1, 100.103.4.2, 100.103.4.3  Ethernet1, Ethernet2, Ethernet3
 
-vnet name        prefix                    endpoint                                     mac address    vni    status
----------------  ------------------------  -------------------------------------------  -------------  -----  --------
-Vnet_v6_in_v6-0  fddd:a156:a251::a6:1/128  fddd:a100:a251::a10:1,fddd:a101:a251::a10:1                        active
+vnet name        prefix                    endpoint                                     mac address    vni    metric    status
+---------------  ------------------------  -------------------------------------------  -------------  -----  --------  --------
+Vnet_v6_in_v6-0  fddd:a156:a251::a6:1/128  fddd:a100:a251::a10:1,fddd:a101:a251::a10:1                                  active
                                            fddd:a102:a251::a10:1,fddd:a103:a251::a10:1
-test_v4_in_v4-0  160.162.191.1/32          100.251.7.1                                                        active
-test_v4_in_v4-0  160.163.191.1/32          100.251.7.1                                                        active
+test_v4_in_v4-0  160.162.191.1/32          100.251.7.1                                                                  active
+test_v4_in_v4-0  160.163.191.1/32          100.251.7.1                                                        0         active
 test_v4_in_v4-0  160.164.191.1/32          100.251.7.1
+"""
+        assert result.output == expected_output
+
+    def test_show_vnet_routes_all_vnetname(self):
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(show.cli.commands['vnet'].commands['routes'].commands['all'],
+                               ['test_v4_in_v4-0'], obj=db)
+        assert result.exit_code == 0
+        expected_output = """\
+vnet name        prefix            nexthop                                interface
+---------------  ----------------  -------------------------------------  -------------------------------
+test_v4_in_v4-0  160.162.191.1/32  100.100.4.1                            Ethernet1
+test_v4_in_v4-0  160.163.191.1/32  100.101.4.1, 100.101.4.2               Ethernet1, Ethernet2
+test_v4_in_v4-0  160.164.191.1/32  100.102.4.1, 100.102.4.2, 100.102.4.3  Ethernet1, Ethernet2, Ethernet3
+
+vnet name        prefix            endpoint     mac address    vni      metric  status
+---------------  ----------------  -----------  -------------  -----  --------  --------
+test_v4_in_v4-0  160.162.191.1/32  100.251.7.1                                  active
+test_v4_in_v4-0  160.163.191.1/32  100.251.7.1                               0  active
+test_v4_in_v4-0  160.164.191.1/32  100.251.7.1
+"""
+        assert result.output == expected_output
+
+    def test_show_vnet_routes_tunnel_basic(self):
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(show.cli.commands['vnet'].commands['routes'].commands['tunnel'], [], obj=db)
+        assert result.exit_code == 0
+        expected_output = """\
+vnet name        prefix                    endpoint                                     mac address    vni    metric    status
+---------------  ------------------------  -------------------------------------------  -------------  -----  --------  --------
+Vnet_v6_in_v6-0  fddd:a156:a251::a6:1/128  fddd:a100:a251::a10:1,fddd:a101:a251::a10:1                                  active
+                                           fddd:a102:a251::a10:1,fddd:a103:a251::a10:1
+test_v4_in_v4-0  160.162.191.1/32          100.251.7.1                                                                  active
+test_v4_in_v4-0  160.163.191.1/32          100.251.7.1                                                        0         active
+test_v4_in_v4-0  160.164.191.1/32          100.251.7.1
+"""
+        assert result.output == expected_output
+
+    def test_show_vnet_routes_tunnel_vnetname(self):
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(show.cli.commands['vnet'].commands['routes'].commands['tunnel'],
+                               ['test_v4_in_v4-0'], obj=db)
+        assert result.exit_code == 0
+        expected_output = """\
+vnet name        prefix            endpoint     mac address    vni      metric  status
+---------------  ----------------  -----------  -------------  -----  --------  --------
+test_v4_in_v4-0  160.162.191.1/32  100.251.7.1                                  active
+test_v4_in_v4-0  160.163.191.1/32  100.251.7.1                               0  active
+test_v4_in_v4-0  160.164.191.1/32  100.251.7.1
+"""
+        assert result.output == expected_output
+
+    def test_show_vnet_routes_local_basic(self):
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(show.cli.commands['vnet'].commands['routes'].commands['local'], [], obj=db)
+        assert result.exit_code == 0
+        expected_output = """\
+vnet name        prefix            nexthop                                interface
+---------------  ----------------  -------------------------------------  -------------------------------
+test_v4_in_v4-0  160.162.191.1/32  100.100.4.1                            Ethernet1
+test_v4_in_v4-0  160.163.191.1/32  100.101.4.1, 100.101.4.2               Ethernet1, Ethernet2
+test_v4_in_v4-0  160.164.191.1/32  100.102.4.1, 100.102.4.2, 100.102.4.3  Ethernet1, Ethernet2, Ethernet3
+test_v4_in_v4-1  160.165.191.1/32  100.103.4.1, 100.103.4.2, 100.103.4.3  Ethernet1, Ethernet2, Ethernet3
+"""
+        assert result.output == expected_output
+
+    def test_show_vnet_routes_local_vnetname(self):
+        runner = CliRunner()
+        db = Db()
+
+        result = runner.invoke(show.cli.commands['vnet'].commands['routes'].commands['local'],
+                               ['test_v4_in_v4-0'], obj=db)
+        assert result.exit_code == 0
+        expected_output = """\
+vnet name        prefix            nexthop                                interface
+---------------  ----------------  -------------------------------------  -------------------------------
+test_v4_in_v4-0  160.162.191.1/32  100.100.4.1                            Ethernet1
+test_v4_in_v4-0  160.163.191.1/32  100.101.4.1, 100.101.4.2               Ethernet1, Ethernet2
+test_v4_in_v4-0  160.164.191.1/32  100.102.4.1, 100.102.4.2, 100.102.4.3  Ethernet1, Ethernet2, Ethernet3
 """
         assert result.output == expected_output
 

@@ -12,6 +12,7 @@ PORT_PHY_ATTR = "PORT_PHY_ATTR"
 PG_DROP = "PG_DROP"
 ACL = "ACL"
 ENI = "ENI"
+HA_SET = "HA_SET"
 DISABLE = "disable"
 ENABLE = "enable"
 DEFLT_60_SEC= "default (60000)"
@@ -30,7 +31,7 @@ def is_dpu(db):
 
 
 def connect_to_db(namespace):
-    if namespace is None:
+    if not namespace:
         namespace = DEFAULT_NAMESPACE
     else:
         if not SonicDBConfig.isGlobalInit():
@@ -38,6 +39,14 @@ def connect_to_db(namespace):
     configdb = ConfigDBConnector(use_unix_socket_path=True, namespace=str(namespace))
     configdb.connect()
     return configdb
+
+
+def get_valid_namespace_choices():
+    current_ns = multi_asic.get_current_namespace()
+    if current_ns:
+        return [current_ns]
+
+    return multi_asic.get_namespace_list() + [DEFAULT_NAMESPACE]
 
 
 @click.group()
@@ -49,7 +58,8 @@ def cli():
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def queue(ctx, namespace):
     """ Queue counter commands """
@@ -89,7 +99,8 @@ def queue_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def port(ctx, namespace):
     """ Port counter commands """
@@ -129,7 +140,8 @@ def port_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def port_buffer_drop(ctx, namespace):
     """ Port buffer drop  counter commands """
@@ -215,7 +227,8 @@ def disable(ctx):  # noqa: F811
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def pg_drop(ctx, namespace):
     """  Ingress PG drop counter commands """
@@ -257,7 +270,8 @@ def pg_drop_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def rif(ctx, namespace):
     """ RIF counter commands """
@@ -297,7 +311,8 @@ def rif_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def watermark(ctx, namespace):
     """ Watermark counter commands """
@@ -347,7 +362,8 @@ def watermark_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def acl(ctx, namespace):
     """  ACL counter commands """
@@ -389,7 +405,8 @@ def acl_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def tunnel(ctx, namespace):
     """ Tunnel counter commands """
@@ -428,7 +445,8 @@ def tunnel_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def flowcnt_trap(ctx, namespace):
     """ Trap flow counter commands """
@@ -467,7 +485,8 @@ def flowcnt_trap_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def flowcnt_route(ctx, namespace):
     """ Route flow counter commands """
@@ -507,7 +526,8 @@ def flowcnt_route_disable(ctx):
 @click.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def eni(ctx, namespace):
     """ ENI counter commands """
@@ -542,11 +562,49 @@ def eni_disable(ctx):
     ctx.obj.mod_entry("FLEX_COUNTER_TABLE", ENI, eni_info)
 
 
+# HA set counter commands
+@click.group()
+@click.pass_context
+def ha_set(ctx):
+    """ HA set counter commands """
+    ctx.obj = ConfigDBConnector()
+    ctx.obj.connect()
+
+
+@ha_set.command(name='interval')
+@click.argument('poll_interval', type=click.IntRange(1000, 30000))
+@click.pass_context
+def ha_set_interval(ctx, poll_interval):
+    """ Set HA set counter query interval """
+    ha_set_info = {}
+    ha_set_info['POLL_INTERVAL'] = poll_interval
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", HA_SET, ha_set_info)
+
+
+@ha_set.command(name='enable')
+@click.pass_context
+def ha_set_enable(ctx):
+    """ Enable HA set counter query """
+    ha_set_info = {}
+    ha_set_info['FLEX_COUNTER_STATUS'] = 'enable'
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", HA_SET, ha_set_info)
+
+
+@ha_set.command(name='disable')
+@click.pass_context
+def ha_set_disable(ctx):
+    """ Disable HA set counter query """
+    ha_set_info = {}
+    ha_set_info['FLEX_COUNTER_STATUS'] = 'disable'
+    ctx.obj.mod_entry("FLEX_COUNTER_TABLE", HA_SET, ha_set_info)
+
+
 # WRED queue counter commands
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def wredqueue(ctx, namespace):
     """ WRED queue counter commands """
@@ -585,7 +643,8 @@ def wredqueue_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def wredport(ctx, namespace):
     """ WRED port counter commands """
@@ -624,7 +683,8 @@ def wredport_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def srv6(ctx, namespace):
     """ SRv6 counter commands """
@@ -660,7 +720,8 @@ def srv6_disable(ctx):
 @cli.group()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 @click.pass_context
 def switch(ctx, namespace):
     """ Switch counter commands """
@@ -714,7 +775,8 @@ def switch_disable(ctx):
 @cli.command()
 @click.option('-n', '--namespace', help='Namespace name',
               required=False,
-              type=click.Choice(multi_asic.get_namespace_list()))
+              type=click.Choice(get_valid_namespace_choices()),
+              default=multi_asic.get_current_namespace())
 def show(namespace):
     """ Show the counter configuration """
     configdb = connect_to_db(namespace)
@@ -732,6 +794,7 @@ def show(namespace):
     trap_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'FLOW_CNT_TRAP')
     route_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'FLOW_CNT_ROUTE')
     eni_info = configdb.get_entry('FLEX_COUNTER_TABLE', ENI)
+    ha_set_info = configdb.get_entry('FLEX_COUNTER_TABLE', HA_SET)
     wred_queue_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'WRED_ECN_QUEUE')
     wred_port_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'WRED_ECN_PORT')
     srv6_info = configdb.get_entry('FLEX_COUNTER_TABLE', 'SRV6')
@@ -782,10 +845,13 @@ def show(namespace):
             switch_info.get("POLL_INTERVAL", DEFLT_60_SEC),
             switch_info.get("FLEX_COUNTER_STATUS", DISABLE)
         ])
-
-    if is_dpu(configdb) and eni_info:
+    dpu = is_dpu(configdb)
+    if dpu and eni_info:
         data.append(["ENI_STAT", eni_info.get("POLL_INTERVAL", DEFLT_10_SEC),
                     eni_info.get("FLEX_COUNTER_STATUS", DISABLE)])
+    if dpu and ha_set_info:
+        data.append(["HA_SET_STAT", ha_set_info.get("POLL_INTERVAL", DEFLT_10_SEC),
+                    ha_set_info.get("FLEX_COUNTER_STATUS", DISABLE)])
 
     click.echo(tabulate(data, headers=header, tablefmt="simple", missingval=""))
 
@@ -795,7 +861,8 @@ Format:
     (click group/command, callback function)
 """
 dynamic_commands = [
-    (eni, is_dpu)
+    (eni, is_dpu),
+    (ha_set, is_dpu)
 ]
 
 

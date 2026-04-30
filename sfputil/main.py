@@ -396,7 +396,7 @@ def convert_dom_to_output_string(sfp_type, is_sfp_cmis, dom_info_dict):
     channel_threshold_align = 18
     module_threshold_align = 15
 
-    if sfp_type.startswith('QSFP') or sfp_type.startswith('OSFP'):
+    if sfp_type.startswith('QSFP') or is_sfp_cmis:
         # Channel Monitor
         if is_sfp_cmis:
             output_dom += (indent + 'ChannelMonitorValues:\n')
@@ -727,7 +727,7 @@ def eeprom(port, dump_dom, namespace):
 # 'eeprom-hexdump' subcommand
 @show.command()
 @click.option('-p', '--port', metavar='<port_name>', help="Display SFP EEPROM hexdump for port <port_name>")
-@click.option('-n', '--page', metavar='<page_number>', help="Display SFP EEEPROM hexdump for <page_number_in_hex>")
+@click.option('-n', '--page', metavar='<page_number>', help="Display SFP EEPROM hexdump for <page_number_in_hex>")
 def eeprom_hexdump(port, page):
     """Display EEPROM hexdump of SFP transceiver(s)"""
     if port:
@@ -869,20 +869,14 @@ def eeprom_hexdump_pages_general(logical_port_name, pages, target_page):
         if page == 0:
             lines.append(f'{EEPROM_DUMP_INDENT}Lower page 0h')
             return_code, output = eeprom_dump_general(physical_port, page, 0, PAGE_SIZE, 0)
-            if return_code != 0:
-                return return_code, output
             lines.append(output)
 
             lines.append(f'\n{EEPROM_DUMP_INDENT}Upper page 0h')
             return_code, output = eeprom_dump_general(physical_port, page, PAGE_OFFSET, PAGE_SIZE, PAGE_OFFSET)
-            if return_code != 0:
-                return return_code, output
             lines.append(output)
         else:
             lines.append(f'\n{EEPROM_DUMP_INDENT}Upper page {page:x}h')
             return_code, output = eeprom_dump_general(physical_port, page, page * PAGE_SIZE + PAGE_OFFSET, PAGE_SIZE, PAGE_OFFSET)
-            if return_code != 0:
-                return return_code, output
             lines.append(output)
 
     lines.append('') # add a new line
@@ -915,20 +909,14 @@ def eeprom_hexdump_pages_sff8472(logical_port_name, pages, target_page):
                 return_code, output = eeprom_dump_general(physical_port, page, 0, SFF8472_A0_SIZE, 0)
             else:
                 return_code, output = eeprom_dump_general(physical_port, page, 0, PAGE_SIZE, 0)
-            if return_code != 0:
-                return return_code, 'Error: Failed to read EEPROM for A0h!'
             lines.append(output)
         elif page == 1:
             lines.append(f'\n{EEPROM_DUMP_INDENT}A2h dump (lower 128 bytes)')
             return_code, output = eeprom_dump_general(physical_port, page, SFF8472_A0_SIZE, PAGE_SIZE, 0)
-            if return_code != 0:
-                return ERROR_NOT_IMPLEMENTED, 'Error: Failed to read EEPROM for A2h!'
             lines.append(output)
         else:
             lines.append(f'\n{EEPROM_DUMP_INDENT}A2h dump (upper 128 bytes) page {page - 2:x}h')
             return_code, output = eeprom_dump_general(physical_port, page, SFF8472_A0_SIZE + PAGE_OFFSET + page * PAGE_SIZE, PAGE_SIZE, PAGE_SIZE)
-            if return_code != 0:
-                return ERROR_NOT_IMPLEMENTED, 'Error: Failed to read EEPROM for A2h upper page!'
             lines.append(output)
 
     lines.append('') # add a new line
