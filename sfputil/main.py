@@ -1133,7 +1133,8 @@ def error_status(port, fetch_from_hardware):
 # 'lpmode' subcommand
 @show.command()
 @click.option('-p', '--port', metavar='<port_name>', help="Display SFP low-power mode status for port <port_name> only")
-def lpmode(port):
+@click.option('--use-hardware-control', is_flag=True, default=False, help='Use Xcvr LPMode pin instead of EEPROM')
+def lpmode(port, use_hardware_control):
     """Display low-power mode status of SFP transceiver(s)"""
     logical_port_list = []
     output_table = []
@@ -1167,13 +1168,24 @@ def lpmode(port):
 
             for physical_port in physical_port_list:
                 port_name = get_physical_port_name(logical_port_name, i, ganged)
+                i += 1
 
+                sfp = platform_chassis.get_sfp(physical_port)
                 try:
-                    sfp = platform_chassis.get_sfp(physical_port)
                     if not sfp.get_presence():
                         output_table.append([port_name, "Not Present"])
                         continue
-                    lpmode = sfp.get_lpmode()
+                    if use_hardware_control:
+                        try:
+                            lpmode = sfp.get_lpmode(
+                                use_hardware_control=use_hardware_control
+                            )
+                        except TypeError:
+                            click.echo("Hardware control flag not implemented for this platform")
+                            sys.exit(ERROR_NOT_IMPLEMENTED)
+                    else:
+                        lpmode = sfp.get_lpmode()
+
                 except NotImplementedError:
                     click.echo("This functionality is currently not implemented for this platform")
                     sys.exit(ERROR_NOT_IMPLEMENTED)
@@ -1182,8 +1194,6 @@ def lpmode(port):
                     output_table.append([port_name, "On"])
                 else:
                     output_table.append([port_name, "Off"])
-
-                i += 1
 
     click.echo(tabulate(output_table, table_header, tablefmt='simple'))
 
@@ -1231,7 +1241,7 @@ def lpmode():
 
 
 # Helper method for setting low-power mode
-def set_lpmode(logical_port, enable):
+def set_lpmode(logical_port, enable, use_hardware_control=False):
     ganged = False
     i = 1
 
@@ -1253,6 +1263,8 @@ def set_lpmode(logical_port, enable):
         ganged = True
 
     for physical_port in physical_port_list:
+        port_name = get_physical_port_name(logical_port, i, ganged)
+        i += 1
         try:
             sfp = platform_chassis.get_sfp(physical_port)
             if not sfp.get_presence():
@@ -1260,8 +1272,17 @@ def set_lpmode(logical_port, enable):
                 continue
             click.echo("{} low-power mode for port {} ... ".format(
                 "Enabling" if enable else "Disabling",
-                get_physical_port_name(logical_port, i, ganged)), nl=False)
-            result = sfp.set_lpmode(enable)
+                port_name), nl=False)
+            if use_hardware_control:
+                try:
+                    result = sfp.set_lpmode(
+                        enable, use_hardware_control=use_hardware_control
+                    )
+                except TypeError:
+                    click.echo("Hardware control flag not implemented for this platform")
+                    sys.exit(ERROR_NOT_IMPLEMENTED)
+            else:
+                result = sfp.set_lpmode(enable)
         except NotImplementedError:
             click.echo("This functionality is currently not implemented for this platform")
             sys.exit(ERROR_NOT_IMPLEMENTED)
@@ -1271,23 +1292,23 @@ def set_lpmode(logical_port, enable):
         else:
             click.echo("Failed")
 
-        i += 1
-
 
 # 'off' subcommand
 @lpmode.command()
 @click.argument('port_name', metavar='<port_name>')
-def off(port_name):
+@click.option('--use-hardware-control', is_flag=True, default=False)
+def off(port_name, use_hardware_control):
     """Disable low-power mode for SFP transceiver"""
-    set_lpmode(port_name, False)
+    set_lpmode(port_name, False, use_hardware_control=use_hardware_control)
 
 
 # 'on' subcommand
 @lpmode.command()
 @click.argument('port_name', metavar='<port_name>')
-def on(port_name):
+@click.option('--use-hardware-control', is_flag=True, default=False)
+def on(port_name, use_hardware_control):
     """Enable low-power mode for SFP transceiver"""
-    set_lpmode(port_name, True)
+    set_lpmode(port_name, True, use_hardware_control=use_hardware_control)
 
 
 # 'reset' subcommand
@@ -1316,12 +1337,14 @@ def reset(port_name):
         ganged = True
 
     for physical_port in physical_port_list:
+        physical_port_name = get_physical_port_name(port_name, i, ganged)
+        i += 1
         try:
             sfp = platform_chassis.get_sfp(physical_port)
             if not sfp.get_presence():
                 click.echo(f"{port_name}: module {physical_port} is not present, skipping")
                 continue
-            click.echo("Resetting port {} ... ".format(get_physical_port_name(port_name, i, ganged)), nl=False)
+            click.echo("Resetting port {} ... ".format(physical_port_name), nl=False)
             result = sfp.reset()
         except NotImplementedError:
             click.echo("This functionality is currently not implemented for this platform")
@@ -1331,8 +1354,6 @@ def reset(port_name):
             click.echo("OK")
         else:
             click.echo("Failed")
-
-        i += 1
 
 
 # 'power' subgroup
