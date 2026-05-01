@@ -224,6 +224,7 @@ def startup_chassis_module(db, chassis_module_name):
         if not check_config_module_state_with_timeout(ctx, db, chassis_module_name, 'up'):
             fabric_module_set_admin_status(db, chassis_module_name, 'up')
 
+
 if is_bmc():
 
     #
