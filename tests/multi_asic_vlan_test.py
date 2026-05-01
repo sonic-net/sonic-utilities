@@ -45,8 +45,6 @@ Vlan2000   2000  Ethernet0        tagged
 class TestVlanMultiAsic(object):
     @classmethod
     def setup_class(cls):
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ['UTILITIES_UNIT_TESTING'] = "2"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
 
         # Set the database to mock multi-asic state
@@ -55,26 +53,13 @@ class TestVlanMultiAsic(object):
         from mock_tables import dbconnector
         dbconnector.load_namespace_config()
 
-        # Patch the Click option choices for namespace parameter
-        # The show and config vlan commands were already imported with empty namespace list
-        # We need to manually update the Click.Choice type to include the mocked namespaces
-        import click
-
-        # Update show vlan brief command
-        for param in show.cli.commands["vlan"].commands["brief"].params:
-            if param.name == "namespace":
-                param.type = click.Choice(['asic0', 'asic1'])
-
-        # Update show vlan config command
-        for param in show.cli.commands["vlan"].commands["config"].params:
-            if param.name == "namespace":
-                param.type = click.Choice(['asic0', 'asic1'])
-
-        # Update config vlan group namespace parameter (not subcommands)
+        # The config vlan namespace option's 'required' flag is frozen at import
+        # time (False for single-asic).  Set it to True for multi-asic tests.
         for param in config.config.commands["vlan"].params:
             if param.name == "namespace":
-                param.type = click.Choice(['asic0', 'asic1'])
+                cls._orig_required = param.required
                 param.required = True
+                break
 
         print("SETUP")
 
@@ -319,14 +304,17 @@ class TestVlanMultiAsic(object):
 
     @classmethod
     def teardown_class(cls):
+        # Restore the config vlan namespace required flag
+        for param in config.config.commands["vlan"].params:
+            if param.name == "namespace":
+                param.required = cls._orig_required
+                break
+
         # Reset the database to mock single-asic state
         from mock_tables import mock_single_asic
         reload(mock_single_asic)
         from mock_tables import dbconnector
         dbconnector.load_database_config()
 
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
-        os.environ['UTILITIES_UNIT_TESTING'] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
 
         print("TEARDOWN")

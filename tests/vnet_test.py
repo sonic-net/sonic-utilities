@@ -18,8 +18,6 @@ class TestVnet(object):
     def setup_class(cls):
         print("SETUP")
         os.environ["UTILITIES_UNIT_TESTING"] = "1"
-        from .mock_tables import mock_single_asic
-        importlib.reload(mock_single_asic)
         importlib.reload(config)
 
     def update_statedb(self, db, db_name, key):
@@ -477,6 +475,3 @@ Error: 'vnet_name' must begin with 'Vnet'.
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
-        from .mock_tables import mock_single_asic
-        importlib.reload(mock_single_asic)

@@ -1,3 +1,5 @@
+import os
+import tarfile
 import importlib
 import sys
 import pytest
@@ -328,3 +330,80 @@ class TestFwutilMain(object):
         mock_get_pdp.assert_called_once()
         assert result == "Comp1"
         assert ctx.obj[fw_main.COMPONENT_CTX_KEY] is component
+
+
+class TestFWPackageUntar(object):
+    """Tests for FWPackage.untar_fwpackage() path traversal protection."""
+
+    def _make_tar(self, members, tmp_path):
+        """Helper to create a tar file with given regular file members."""
+        import io
+        tar_path = str(tmp_path / "test.tar")
+        with tarfile.open(tar_path, 'w') as t:
+            for name in members:
+                info = tarfile.TarInfo(name=name)
+                data = b"test content"
+                info.size = len(data)
+                t.addfile(info, io.BytesIO(data))
+        return tar_path
+
+    def _make_symlink_tar(self, tmp_path, link_name, link_target):
+        """Helper to create a tar file with a symlink member."""
+        tar_path = str(tmp_path / "symlink.tar")
+        with tarfile.open(tar_path, 'w') as t:
+            info = tarfile.TarInfo(name=link_name)
+            info.type = tarfile.SYMTYPE
+            info.linkname = link_target
+            t.addfile(info)
+        return tar_path
+
+    def test_valid_tar_extracts_successfully(self, tmp_path):
+        extract_dir = str(tmp_path / "extract")
+        os.makedirs(extract_dir)
+        tar_path = self._make_tar(['platform_components.json', 'bios.bin'], tmp_path)
+        pkg = fwutil_lib.FWPackage.__new__(fwutil_lib.FWPackage)
+        pkg.fwupdate_package_name = tar_path
+        with patch('fwutil.lib.FWUPDATE_FWPACKAGE_DIR', extract_dir):
+            result = pkg.untar_fwpackage()
+        assert result is True
+
+    def test_path_traversal_is_blocked(self, tmp_path):
+        extract_dir = str(tmp_path / "extract")
+        os.makedirs(extract_dir)
+        tar_path = self._make_tar(['../../etc/cron.d/evil'], tmp_path)
+        pkg = fwutil_lib.FWPackage.__new__(fwutil_lib.FWPackage)
+        pkg.fwupdate_package_name = tar_path
+        with patch('fwutil.lib.FWUPDATE_FWPACKAGE_DIR', extract_dir):
+            with pytest.raises(ValueError, match="unsafe path"):
+                pkg.untar_fwpackage()
+
+    def test_absolute_path_in_tar_is_blocked(self, tmp_path):
+        extract_dir = str(tmp_path / "extract")
+        os.makedirs(extract_dir)
+        tar_path = self._make_tar(['/etc/passwd'], tmp_path)
+        pkg = fwutil_lib.FWPackage.__new__(fwutil_lib.FWPackage)
+        pkg.fwupdate_package_name = tar_path
+        with patch('fwutil.lib.FWUPDATE_FWPACKAGE_DIR', extract_dir):
+            with pytest.raises(ValueError, match="unsafe path"):
+                pkg.untar_fwpackage()
+
+    def test_symlink_escaping_is_blocked(self, tmp_path):
+        extract_dir = str(tmp_path / "extract")
+        os.makedirs(extract_dir)
+        tar_path = self._make_symlink_tar(tmp_path, 'evil_link', '/etc/passwd')
+        pkg = fwutil_lib.FWPackage.__new__(fwutil_lib.FWPackage)
+        pkg.fwupdate_package_name = tar_path
+        with patch('fwutil.lib.FWUPDATE_FWPACKAGE_DIR', extract_dir):
+            with pytest.raises(ValueError, match="unsafe link"):
+                pkg.untar_fwpackage()
+
+    def test_symlink_within_tarball_is_allowed(self, tmp_path):
+        extract_dir = str(tmp_path / "extract")
+        os.makedirs(extract_dir)
+        # Symlink pointing to another file inside the tarball is safe
+        tar_path = self._make_symlink_tar(tmp_path, 'link_to_config', './platform_components.json')
+        pkg = fwutil_lib.FWPackage.__new__(fwutil_lib.FWPackage)
+        pkg.fwupdate_package_name = tar_path
+        with patch('fwutil.lib.FWUPDATE_FWPACKAGE_DIR', extract_dir):
+            result = pkg.untar_fwpackage()
+        assert result is True

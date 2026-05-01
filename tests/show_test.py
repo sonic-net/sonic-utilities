@@ -77,7 +77,6 @@ class TestShowRunAllCommands(object):
     def teardown_class(cls):
         print("TEARDOWN")
         bgp_util.run_bgp_command = cls._old_run_bgp_command
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
 
 
@@ -116,7 +115,6 @@ class TestShowRunAllCommandsMasic(object):
     def teardown_class(cls):
         print("TEARDOWN")
         bgp_util.run_bgp_command = cls._old_run_bgp_command
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
         # change back to single asic config
@@ -242,7 +240,8 @@ def side_effect_subprocess_popen(*args, **kwargs):
 @patch('sonic_py_common.device_info.get_chassis_info', MagicMock(return_value={
         "serial": "N/A",
         "model": "N/A",
-        "revision": "N/A"}))
+        "revision": "N/A",
+        "switch_host_serial": "N/A"}))
 @patch('subprocess.Popen', MagicMock(side_effect=side_effect_subprocess_popen))
 def test_show_version():
     runner = CliRunner()
@@ -280,7 +279,8 @@ def test_show_version():
 @patch('sonic_py_common.device_info.get_chassis_info', MagicMock(return_value={
         "serial": "N/A",
         "model": "N/A",
-        "revision": "N/A"}))
+        "revision": "N/A",
+        "switch_host_serial": "N/A"}))
 @patch('subprocess.Popen', MagicMock(side_effect=side_effect_subprocess_popen))
 def test_show_version_brief():
     """Test that --brief flag omits docker image information."""
@@ -309,7 +309,8 @@ def test_show_version_brief():
 @patch('sonic_py_common.device_info.get_chassis_info', MagicMock(return_value={
         "serial": "N/A",
         "model": "N/A",
-        "revision": "N/A"}))
+        "revision": "N/A",
+        "switch_host_serial": "N/A"}))
 @patch('subprocess.Popen', MagicMock(side_effect=side_effect_subprocess_popen))
 def test_show_version_missing_fields():
     """Test show version doesn't crash when debian_version and kernel_version are missing.
@@ -323,6 +324,162 @@ def test_show_version_missing_fields():
     assert "Distribution: Debian N/A" in result.output
     assert "Kernel:" in result.output
     assert "Build commit: 46415d112" in result.output
+
+
+@patch('sonic_py_common.device_info.get_sonic_version_info', MagicMock(return_value={
+        "build_version": "release-1.1-7d94c0c28",
+        "sonic_os_version": "11",
+        "debian_version": "11.6",
+        "kernel_version": "5.10",
+        "commit_id": "7d94c0c28",
+        "build_date": "Wed Feb 15 06:17:08 UTC 2023",
+        "built_by": "AzDevOps"}))
+@patch('sonic_py_common.device_info.get_platform_info', MagicMock(return_value={
+        "platform": "arm64-nexthop_b27-r0",
+        "hwsku": "Nexthop-B27",
+        "asic_type": "aspeed",
+        "asic_count": 1}))
+@patch('sonic_py_common.device_info.get_chassis_info', MagicMock(return_value={
+        "serial": "BMC-SN-123456",
+        "model": "BMC-MODEL-1",
+        "revision": "1.0",
+        "switch_host_serial": "SWITCH-SN-789012"}))
+@patch('subprocess.Popen', MagicMock(side_effect=side_effect_subprocess_popen))
+def test_show_version_bmc_with_switch_host_serial():
+    """Test show version displays switch-host serial on BMC platforms"""
+    runner = CliRunner()
+    result = runner.invoke(show.cli.commands["version"])
+    assert result.exit_code == 0
+    assert "SONiC Software Version: SONiC.release-1.1-7d94c0c28" in result.output
+    assert "Platform: arm64-nexthop_b27-r0" in result.output
+    assert "ASIC: aspeed" in result.output
+    assert "Serial Number: BMC-SN-123456" in result.output
+    assert "Switch-Host Serial Number: SWITCH-SN-789012" in result.output
+    assert "Model Number: BMC-MODEL-1" in result.output
+    # Verify the switch-host serial appears after the regular serial
+    serial_pos = result.output.find("Serial Number: BMC-SN-123456")
+    switch_serial_pos = result.output.find("Switch-Host Serial Number: SWITCH-SN-789012")
+    assert serial_pos < switch_serial_pos, "Switch-Host Serial should appear after Serial Number"
+
+
+@patch('sonic_py_common.device_info.get_sonic_version_info', MagicMock(return_value={
+        "build_version": "release-1.1-7d94c0c28",
+        "sonic_os_version": "11",
+        "debian_version": "11.6",
+        "kernel_version": "5.10",
+        "commit_id": "7d94c0c28",
+        "build_date": "Wed Feb 15 06:17:08 UTC 2023",
+        "built_by": "AzDevOps"}))
+@patch('sonic_py_common.device_info.get_platform_info', MagicMock(return_value={
+        "platform": "arm64-nexthop_b27-r0",
+        "hwsku": "Nexthop-B27",
+        "asic_type": "aspeed",
+        "asic_count": 1}))
+@patch('sonic_py_common.device_info.get_chassis_info', MagicMock(return_value={
+        "serial": "BMC-SN-123456",
+        "model": "BMC-MODEL-1",
+        "revision": "1.0",
+        "switch_host_serial": "N/A"}))
+@patch('subprocess.Popen', MagicMock(side_effect=side_effect_subprocess_popen))
+def test_show_version_bmc_without_switch_host_serial():
+    """Test show version doesn't display switch-host serial when N/A"""
+    runner = CliRunner()
+    result = runner.invoke(show.cli.commands["version"])
+    assert result.exit_code == 0
+    assert "Serial Number: BMC-SN-123456" in result.output
+    assert "Switch-Host Serial Number" not in result.output
+
+
+@patch('sonic_py_common.device_info.get_sonic_version_info', MagicMock(return_value={
+        "build_version": "release-1.1-7d94c0c28",
+        "sonic_os_version": "11",
+        "debian_version": "11.6",
+        "kernel_version": "5.10",
+        "commit_id": "7d94c0c28",
+        "build_date": "Wed Feb 15 06:17:08 UTC 2023",
+        "built_by": "AzDevOps"}))
+@patch('sonic_py_common.device_info.get_platform_info', MagicMock(return_value={
+        "platform": "x86_64-mlnx_msn2700-r0",
+        "hwsku": "Mellanox-SN2700",
+        "asic_type": "mellanox",
+        "asic_count": 1}))
+@patch('sonic_py_common.device_info.get_chassis_info', MagicMock(return_value={
+        "serial": "MT1822K07815",
+        "model": "MSN2700-CS2FO",
+        "revision": "A1",
+        "switch_host_serial": "N/A"}))
+@patch('subprocess.Popen', MagicMock(side_effect=side_effect_subprocess_popen))
+def test_show_version_non_bmc_platform():
+    """Test show version on non-BMC platform doesn't show switch-host serial"""
+    runner = CliRunner()
+    result = runner.invoke(show.cli.commands["version"])
+    assert result.exit_code == 0
+    assert "Platform: x86_64-mlnx_msn2700-r0" in result.output
+    assert "ASIC: mellanox" in result.output
+    assert "Serial Number: MT1822K07815" in result.output
+    assert "Switch-Host Serial Number" not in result.output
+
+
+@patch('sonic_py_common.device_info.get_sonic_version_info', MagicMock(return_value={
+        "build_version": "release-1.1-7d94c0c28",
+        "sonic_os_version": "11",
+        "debian_version": "11.6",
+        "kernel_version": "5.10",
+        "commit_id": "7d94c0c28",
+        "build_date": "Wed Feb 15 06:17:08 UTC 2023",
+        "built_by": "AzDevOps"}))
+@patch('sonic_py_common.device_info.get_platform_info', MagicMock(return_value={
+        "platform": "arm64-nexthop_b27-r0",
+        "hwsku": "Nexthop-B27",
+        "asic_type": "aspeed",
+        "asic_count": 1}))
+@patch('sonic_py_common.device_info.get_chassis_info', MagicMock(return_value={
+        "serial": "BMC-SN-123456",
+        "model": "BMC-MODEL-1",
+        "revision": "1.0",
+        "switch_host_serial": "SWITCH-SN-789012"}))
+@patch('subprocess.Popen', MagicMock(side_effect=side_effect_subprocess_popen))
+def test_show_version_brief_bmc_with_switch_host_serial():
+    """Test show version --brief displays switch-host serial on BMC platforms"""
+    runner = CliRunner()
+    result = runner.invoke(show.cli.commands["version"], ["--brief"])
+    assert result.exit_code == 0
+    assert "Platform: arm64-nexthop_b27-r0" in result.output
+    assert "Serial Number: BMC-SN-123456" in result.output
+    assert "Switch-Host Serial Number: SWITCH-SN-789012" in result.output
+    # Verify Docker images section is omitted with --brief
+    assert "Docker images:" not in result.output
+    assert "REPOSITORY" not in result.output
+
+
+@patch('sonic_py_common.device_info.get_sonic_version_info', MagicMock(return_value={
+        "build_version": "release-1.1-7d94c0c28",
+        "sonic_os_version": "11",
+        "debian_version": "11.6",
+        "kernel_version": "5.10",
+        "commit_id": "7d94c0c28",
+        "build_date": "Wed Feb 15 06:17:08 UTC 2023",
+        "built_by": "AzDevOps"}))
+@patch('sonic_py_common.device_info.get_platform_info', MagicMock(return_value={
+        "platform": "arm64-nexthop_b27-r0",
+        "hwsku": "Nexthop-B27",
+        "asic_type": "aspeed",
+        "asic_count": 1}))
+@patch('sonic_py_common.device_info.get_chassis_info', MagicMock(return_value={
+        "serial": "BMC-SN-123456",
+        "model": "BMC-MODEL-1",
+        "revision": "1.0",
+        "switch_host_serial": ""}))
+@patch('subprocess.Popen', MagicMock(side_effect=side_effect_subprocess_popen))
+def test_show_version_bmc_with_empty_switch_host_serial():
+    """Test show version handles empty string switch-host serial"""
+    runner = CliRunner()
+    result = runner.invoke(show.cli.commands["version"])
+    assert result.exit_code == 0
+    assert "Serial Number: BMC-SN-123456" in result.output
+    # Empty string is not N/A, so it should appear
+    assert "Switch-Host Serial Number:" in result.output
+
 
 class TestShowAcl(object):
     def setup_method(self):

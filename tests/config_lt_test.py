@@ -25,7 +25,6 @@ class TestConfigInterface(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "1"
 
     def test_config_link_training(self, ctx):

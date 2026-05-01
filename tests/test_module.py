@@ -1,13 +1,20 @@
 import sys
 import pytest
 from unittest import mock
-from utilities_common.util_base import UtilHelper
 from utilities_common.module import ModuleHelper, INVALID_MODULE_INDEX
 
-sys.modules['sonic_platform'] = mock.MagicMock()
+# Populated by _mock_sonic_platform_module before any test in this module runs.
+module_helper = None
 
-util = UtilHelper()
-module_helper = ModuleHelper()
+
+@pytest.fixture(scope="module", autouse=True)
+def _mock_sonic_platform_module():
+    """Install a fake sonic_platform module."""
+    global module_helper
+    with pytest.MonkeyPatch.context() as mp:
+        mp.setitem(sys.modules, "sonic_platform", mock.MagicMock())
+        module_helper = ModuleHelper()
+        yield
 
 
 class TestModuleHelper:

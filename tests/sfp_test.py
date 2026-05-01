@@ -902,8 +902,6 @@ class TestSFP(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ["UTILITIES_UNIT_TESTING"] = "2"
 
     def test_sfp_presence(self):
         runner = CliRunner()
@@ -1063,7 +1061,6 @@ Ethernet36  Present
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
 
@@ -1071,7 +1068,6 @@ class Test_multiAsic_SFP(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
         os.environ["UTILITIES_UNIT_TESTING"] = "2"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
 
@@ -1228,9 +1224,10 @@ Ethernet200  Not present
     def test_is_rj45_port(self):
         import utilities_common.platform_sfputil_helper as platform_sfputil_helper
         platform_sfputil_helper.platform_chassis = None
-        if 'sonic_platform' in sys.modules:
-            sys.modules.pop('sonic_platform')
-        assert platform_sfputil_helper.is_rj45_port("Ethernet0") == False
+        mods_to_hide = {k: None for k in list(sys.modules)
+                        if k == 'sonic_platform' or k.startswith('sonic_platform.')}
+        with patch.dict(sys.modules, mods_to_hide):
+            assert platform_sfputil_helper.is_rj45_port("Ethernet0") is False
 
     def test_qsfp_dd_pm_all(self):
         runner = CliRunner()
@@ -1247,7 +1244,6 @@ Ethernet200  Not present
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
         os.environ["UTILITIES_UNIT_TESTING"] = "0"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
 
@@ -1392,6 +1388,3 @@ class TestMultiAsicSFP(object):
     @classmethod
     def teardown_class(cls):
         print("TEARDOWN")
-        os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""

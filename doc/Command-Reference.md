@@ -5580,11 +5580,17 @@ This command displays switch hash global configuration.
 
 - Usage:
   ```bash
-  show switch-hash global
+  show switch-hash global [--json]
+  show switch-hash -n <namespace> global [--json]
   ```
 
 - Options:
   - _-j,--json_: display in JSON format
+  - _-n,--namespace_: namespace name on multi-ASIC systems. Omit it to display all namespaces.
+
+- Note:
+  - On multi-ASIC systems, place _-n,--namespace_ before the sub-command. Without it, output is grouped by namespace.
+  - With _--json_ and no namespace on multi-ASIC systems, output is printed as one JSON block per namespace rather than a single JSON document.
 
 - Example:
   ```bash
@@ -5638,17 +5644,46 @@ This command displays switch hash global configuration.
   +--------+-------------------------------------+
   ```
 
+- Multi-ASIC Example:
+  ```bash
+  admin@sonic:~$ show switch-hash -n asic0 global
+  +--------+--------------------------------+
+  | Hash   | Configuration                  |
+  +========+================================+
+  | ECMP   | +--------------+-------------+ |
+  |        | | Hash Field   | Algorithm   | |
+  |        | |--------------+-------------| |
+  |        | | SRC_IP       | CRC         | |
+  |        | | DST_IP       |             | |
+  |        | +--------------+-------------+ |
+  +--------+--------------------------------+
+  | LAG    | +--------------+-------------+ |
+  |        | | Hash Field   | Algorithm   | |
+  |        | |--------------+-------------| |
+  |        | | SRC_MAC      | XOR         | |
+  |        | | DST_MAC      |             | |
+  |        | +--------------+-------------+ |
+  +--------+--------------------------------+
+  ```
+
 **show switch-hash capabilities**
 
 This command displays switch hash capabilities.
 
 - Usage:
   ```bash
-  show switch-hash capabilities
+  show switch-hash capabilities [--json]
+  show switch-hash -n <namespace> capabilities [--json]
   ```
 
 - Options:
   - _-j,--json_: display in JSON format
+  - _-n,--namespace_: namespace name on multi-ASIC systems. Omit it to display all namespaces.
+
+- Note:
+  - Supported hash fields and algorithms are platform dependent. Use this command to see valid values for the target namespace before configuring switch hash.
+  - On multi-ASIC systems, place _-n,--namespace_ before the sub-command.
+  - On multi-ASIC systems, use _-n,--namespace_ with _--json_ if you need one JSON object for a single namespace.
 
 - Example:
   ```bash
@@ -5706,6 +5741,12 @@ This command displays switch hash capabilities.
   +--------+-------------------------------------+
   ```
 
+- Multi-ASIC Examples:
+  ```bash
+  admin@sonic:~$ show switch-hash -n asic0 capabilities --json
+  admin@sonic:~$ show switch-hash capabilities
+  ```
+
 ### Hash Config Commands
 
 This subsection explains how to configure switch hash.
@@ -5718,10 +5759,17 @@ This command is used to manage switch hash global configuration.
   ```bash
   config switch-hash global ecmp-hash <hash_field_list>
   config switch-hash global lag-hash <hash_field_list>
+  config switch-hash global -n <namespace> ecmp-hash <hash_field_list>
+  config switch-hash global -n <namespace> lag-hash <hash_field_list>
   ```
 
 - Parameters:
   - _hash_field_list_: hash fields for hashing packets going through ECMP/LAG
+  - _-n,--namespace_: namespace name. Required on multi-ASIC systems.
+
+- Note:
+  - On multi-ASIC systems, place _-n,--namespace_ before _ecmp-hash_ or _lag-hash_.
+  - Use _show switch-hash capabilities_ or _show switch-hash -n <namespace> capabilities_ to see supported values for the target namespace.
 
 - Examples:
   ```bash
@@ -5763,6 +5811,12 @@ This command is used to manage switch hash global configuration.
   'IPV6_FLOW_LABEL'
   ```
 
+- Multi-ASIC Examples:
+  ```bash
+  admin@sonic:~$ config switch-hash global -n asic0 ecmp-hash SRC_IP DST_IP
+  admin@sonic:~$ config switch-hash global -n asic0 lag-hash SRC_MAC DST_MAC
+  ```
+
 **config switch-hash global ecmp/lag hash algorithm**
 
 This command is used to manage switch hash algorithm global configuration.
@@ -5771,15 +5825,28 @@ This command is used to manage switch hash algorithm global configuration.
   ```bash
   config switch-hash global ecmp-hash-algorithm <hash_algorithm>
   config switch-hash global lag-hash-algorithm <hash_algorithm>
+  config switch-hash global -n <namespace> ecmp-hash-algorithm <hash_algorithm>
+  config switch-hash global -n <namespace> lag-hash-algorithm <hash_algorithm>
   ```
 
 - Parameters:
   - _hash_algorithm_: hash algorithm for hashing packets going through ECMP/LAG
+  - _-n,--namespace_: namespace name. Required on multi-ASIC systems.
+
+- Note:
+  - On multi-ASIC systems, place _-n,--namespace_ before _ecmp-hash-algorithm_ or _lag-hash-algorithm_.
+  - Supported values depend on the target platform. Use _show switch-hash capabilities_ or _show switch-hash -n <namespace> capabilities_ to see supported values for the target namespace.
 
 - Examples:
   ```bash
   admin@sonic:~$ config switch-hash global ecmp-hash-algorithm 'CRC'
   admin@sonic:~$ config switch-hash global lag-hash-algorithm 'CRC'
+  ```
+
+- Multi-ASIC Examples:
+  ```bash
+  admin@sonic:~$ config switch-hash global -n asic0 ecmp-hash-algorithm CRC
+  admin@sonic:~$ config switch-hash global -n asic0 lag-hash-algorithm XOR
   ```
 
 ## Fast Link-Up
@@ -13721,14 +13788,14 @@ This command displays vnet neighbor information about all the vnets configured i
                30.30.30.30  11:22:33:44:55:66  Ethernet0.1002
   ```
 
-**show vnet routes all**
+**show vnet routes all [<vnet_name>]**
 
-This command displays all routes information about all the vnets configured in the device. It also show the vnet routes which are configured but may or may not be active based on endpoint BFD status.
+This command displays either all routes information about all the vnets or a specified vnet configured in the device. It also shows the vnet routes which are configured but may or may not be active based on endpoint BFD status.
 
 - Usage:
 
   ```
-  show vnet [ -n <namespace> ] routes all
+  show vnet [ -n <namespace> ] routes all [<vnet_name>]
   ```
 
 - Example:
@@ -13740,31 +13807,52 @@ This command displays all routes information about all the vnets configured in t
   Vnet_2000    100.100.3.0/24             Ethernet52
   Vnet_3000    100.100.4.0/24             Vlan2000
 
-  vnet name    prefix          endpoint    mac address        vni    status
-  -----------  --------------  ----------  -----------------  -----  -------
-  Vnet_2000    100.100.1.1/32  10.10.10.1                            active
-  Vnet_3000    100.100.2.1/32  10.10.10.2  00:00:00:00:03:04         inactive
+  vnet name    prefix          endpoint    mac address        vni      metric  status
+  -----------  --------------  ----------  -----------------  -----  --------  --------
+  Vnet_2000    100.100.1.1/32  10.10.10.1                                   0  active
+  Vnet_3000    100.100.2.1/32  10.10.10.2  00:00:00:00:03:04                   inactive
   Vnet_3000    100.100.2.3/32  10.10.10.6  00:00:00:00:03:04
   ```
 
-**show vnet routes tunnel**
+**show vnet routes local [<vnet_name>]**
 
-This command displays tunnel routes information about all the vnets configured in the device.
+This command displays either local routes information about all the vnets or a specified vnet configured in the device.
 
 - Usage:
 
   ```
-  show vnet [ -n <namespace> ] routes tunnel
+  show vnet [ -n <namespace> ] routes local [<vnet_name>]
+  ```
+
+- Example:
+
+  ```
+  admin@sonic:~$ show vnet routes local
+  vnet name    prefix          nexthop    interface
+  -----------  --------------  ---------  -----------
+  Vnet_2000    100.100.3.0/24             Ethernet52
+  Vnet_3000    100.100.4.0/24             Vlan2000
+  ```
+
+**show vnet routes tunnel [<vnet_name>]**
+
+This command displays tunnel routes information about all the vnets or a specified vnet configured in the device.
+
+- Usage:
+
+  ```
+  show vnet [ -n <namespace> ] routes tunnel [<vnet_name>]
   ```
 
 - Example:
 
   ```
   admin@sonic:~$ show vnet routes tunnel
-  vnet name    prefix          endpoint    mac address        vni
-  -----------  --------------  ----------  -----------------  -----
-  Vnet_2000    100.100.1.1/32  10.10.10.1
-  Vnet_3000    100.100.2.1/32  10.10.10.2  00:00:00:00:03:04
+  vnet name    prefix          endpoint    mac address        vni      metric  status
+  -----------  --------------  ----------  -----------------  -----  --------  --------
+  Vnet_2000    100.100.1.1/32  10.10.10.1                                   0  active
+  Vnet_3000    100.100.2.1/32  10.10.10.2  00:00:00:00:03:04                   inactive
+  Vnet_3000    100.100.2.3/32  10.10.10.6  00:00:00:00:03:04
   ```
 
 **Additional show vnet commands**

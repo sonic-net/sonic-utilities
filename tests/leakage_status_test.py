@@ -29,6 +29,7 @@ class TestLeakStatus(object):
     @classmethod
     def setup_class(cls):
         print("SETUP")
+        os.environ["UTILITIES_UNIT_TESTING"] = "1"
 
     def test_show_platform_leak_status(self):
         runner = CliRunner()

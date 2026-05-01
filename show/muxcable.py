@@ -582,6 +582,12 @@ def create_table_dump_per_port_config(db, print_data, per_npu_configdb, asic_id,
         port_list.append(prober_type_value)
     else:
         port_list.append("software")
+    neighbor_mode_value = get_optional_value_for_key_in_config_tbl(per_npu_configdb[asic_id],
+                                                                   port, "neighbor_mode", "MUX_CABLE")
+    if neighbor_mode_value is not None:
+        port_list.append(neighbor_mode_value)
+    else:
+        port_list.append("host-route")
 
     print_data.append(port_list)
 
@@ -609,6 +615,10 @@ def create_json_dump_per_port_config(db, port_status_dict, per_npu_configdb, asi
                                                                  port, "prober_type", "MUX_CABLE")
     if prober_type_value is not None:
         port_status_dict["MUX_CABLE"]["PORTS"][port_name]["SERVER"]["prober_type"] = prober_type_value
+    neighbor_mode_value = get_optional_value_for_key_in_config_tbl(per_npu_configdb[asic_id],
+                                                                   port, "neighbor_mode", "MUX_CABLE")
+    if neighbor_mode_value is not None:
+        port_status_dict["MUX_CABLE"]["PORTS"][port_name]["SERVER"]["neighbor_mode"] = neighbor_mode_value
 
 
 def get_tunnel_route_per_port(db, port_tunnel_route, per_npu_configdb, per_npu_appl_db, per_npu_asic_db, asic_id, port):
@@ -903,7 +913,8 @@ def config(db, port, json_output):
                     peer_tor_data.append(peer_switch_value)
                     print_peer_tor.append(peer_tor_data)
                     click.echo(tabulate(print_peer_tor, headers=headers))
-                    headers = ['port', 'state', 'ipv4', 'ipv6', 'cable_type', 'soc_ipv4', 'soc_ipv6', 'prober_type']
+                    headers = ['port', 'state', 'ipv4', 'ipv6', 'cable_type', 'soc_ipv4', 'soc_ipv6', 'prober_type',
+                               'neighbor_mode']
                     click.echo(tabulate(print_data, headers=headers))
 
                     sys.exit(CONFIG_SUCCESSFUL)
@@ -951,7 +962,8 @@ def config(db, port, json_output):
             peer_tor_data.append(peer_switch_value)
             print_peer_tor.append(peer_tor_data)
             click.echo(tabulate(print_peer_tor, headers=headers))
-            headers = ['port', 'state', 'ipv4', 'ipv6', 'cable_type', 'soc_ipv4', 'soc_ipv6', 'prober_type']
+            headers = ['port', 'state', 'ipv4', 'ipv6', 'cable_type', 'soc_ipv4', 'soc_ipv6', 'prober_type',
+                       'neighbor_mode']
             click.echo(tabulate(print_data, headers=headers))
 
         sys.exit(CONFIG_SUCCESSFUL)

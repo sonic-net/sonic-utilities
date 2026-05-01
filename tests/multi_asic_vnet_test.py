@@ -162,8 +162,8 @@ vnet name    prefix       nexthop       interface
 -----------  -----------  ------------  -----------
 Vnet_2000    10.0.0.0/24  10.10.10.100  Ethernet16
 
-vnet name    prefix       endpoint       mac address          vni
------------  -----------  -------------  -----------------  -----
+vnet name    prefix       endpoint       mac address          vni  metric
+-----------  -----------  -------------  -----------------  -----  --------
 Vnet_2000    20.0.0.0/24  192.168.1.200  00:aa:bb:cc:dd:01   5000
 Vnet_3000    30.0.0.0/24  192.168.1.201                      6000
 
@@ -172,8 +172,8 @@ vnet name    prefix       nexthop       interface
 -----------  -----------  ------------  -----------
 Vnet_4000    40.0.0.0/24  10.10.10.200  Ethernet64
 
-vnet name    prefix       endpoint       mac address          vni
------------  -----------  -------------  -----------------  -----
+vnet name    prefix       endpoint       mac address          vni  metric
+-----------  -----------  -------------  -----------------  -----  --------
 Vnet_4000    50.0.0.0/24  192.168.2.200  00:aa:bb:cc:dd:02   4000
 """
 
@@ -182,8 +182,8 @@ vnet name    prefix       nexthop       interface
 -----------  -----------  ------------  -----------
 Vnet_2000    10.0.0.0/24  10.10.10.100  Ethernet16
 
-vnet name    prefix       endpoint       mac address          vni
------------  -----------  -------------  -----------------  -----
+vnet name    prefix       endpoint       mac address          vni  metric
+-----------  -----------  -------------  -----------------  -----  --------
 Vnet_2000    20.0.0.0/24  192.168.1.200  00:aa:bb:cc:dd:01   5000
 Vnet_3000    30.0.0.0/24  192.168.1.201                      6000
 """
@@ -191,20 +191,20 @@ Vnet_3000    30.0.0.0/24  192.168.1.201                      6000
 show_vnet_routes_tunnel_multi_asic_output = """\
 
 Namespace: asic0
-vnet name    prefix       endpoint       mac address          vni
------------  -----------  -------------  -----------------  -----
+vnet name    prefix       endpoint       mac address          vni  metric
+-----------  -----------  -------------  -----------------  -----  --------
 Vnet_2000    20.0.0.0/24  192.168.1.200  00:aa:bb:cc:dd:01   5000
 Vnet_3000    30.0.0.0/24  192.168.1.201                      6000
 
 Namespace: asic1
-vnet name    prefix       endpoint       mac address          vni
------------  -----------  -------------  -----------------  -----
+vnet name    prefix       endpoint       mac address          vni  metric
+-----------  -----------  -------------  -----------------  -----  --------
 Vnet_4000    50.0.0.0/24  192.168.2.200  00:aa:bb:cc:dd:02   4000
 """
 
 show_vnet_routes_tunnel_asic1_output = """\
-vnet name    prefix       endpoint       mac address          vni
------------  -----------  -------------  -----------------  -----
+vnet name    prefix       endpoint       mac address          vni  metric
+-----------  -----------  -------------  -----------------  -----  --------
 Vnet_4000    50.0.0.0/24  192.168.2.200  00:aa:bb:cc:dd:02   4000
 """
 
@@ -225,8 +225,6 @@ class TestMultiAsicVnet:
     @classmethod
     def setup_class(cls):
         print("SETUP")
-        os.environ["PATH"] += os.pathsep + scripts_path
-        os.environ["UTILITIES_UNIT_TESTING"] = "2"
         os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = "multi_asic"
 
         from mock_tables import mock_multi_asic
@@ -539,10 +537,6 @@ class TestMultiAsicVnet:
         from mock_tables import dbconnector
         dbconnector.load_database_config()
 
-        os.environ["PATH"] = os.pathsep.join(
-            os.environ["PATH"].split(os.pathsep)[:-1])
-        os.environ["UTILITIES_UNIT_TESTING"] = "0"
-        os.environ["UTILITIES_UNIT_TESTING_TOPOLOGY"] = ""
 
         reload(utilities_common.multi_asic)
         reload(show.vnet)
