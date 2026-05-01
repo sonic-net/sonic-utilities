@@ -578,7 +578,7 @@ class TestChassisModuleTimingConfig(object):
         os.environ["UTILITIES_UNIT_TESTING"] = "1"
         import importlib
         import config.chassis_modules as cm
-        with mock.patch('sonic_py_common.device_info.is_switch_bmc', new=lambda: True):
+        with mock.patch('utilities_common.chassis.is_bmc', new=lambda: True):
             importlib.reload(cm)
         cls.modules = cm.modules
 
@@ -721,7 +721,7 @@ class TestChassisModuleBMCStartupShutdown(object):
         """SWITCH-HOST has no entry in CONFIG_DB; on BMC the default must be 'down'."""
         from config.chassis_modules import get_config_module_state
         db = Db()
-        with mock.patch('config.chassis_modules.is_switch_bmc', return_value=True):
+        with mock.patch('config.chassis_modules.is_bmc', return_value=True):
             state = get_config_module_state(db, "SWITCH-HOST")
         assert state == 'down'
 
@@ -734,7 +734,7 @@ class TestChassisModuleBMCStartupShutdown(object):
             'power_on_delay': '300',
             'graceful_shutdown_timeout': '120',
         })
-        with mock.patch('config.chassis_modules.is_switch_bmc', return_value=True):
+        with mock.patch('config.chassis_modules.is_bmc', return_value=True):
             result = runner.invoke(
                 config.config.commands["chassis"].commands["modules"].commands["startup"],
                 ["SWITCH-HOST"],
@@ -756,7 +756,7 @@ class TestChassisModuleBMCStartupShutdown(object):
             'power_on_delay': '60',
             'graceful_shutdown_timeout': '30',
         })
-        with mock.patch('config.chassis_modules.is_switch_bmc', return_value=True):
+        with mock.patch('config.chassis_modules.is_bmc', return_value=True):
             result = runner.invoke(
                 config.config.commands["chassis"].commands["modules"].commands["shutdown"],
                 ["SWITCH-HOST"],
@@ -774,7 +774,7 @@ class TestChassisModuleBMCStartupShutdown(object):
         runner = CliRunner()
         db = Db()
         db.cfgdb.mod_entry('CHASSIS_MODULE', 'SWITCH-HOST', {'admin_status': 'up'})
-        with mock.patch('config.chassis_modules.is_switch_bmc', return_value=True):
+        with mock.patch('config.chassis_modules.is_bmc', return_value=True):
             result = runner.invoke(
                 config.config.commands["chassis"].commands["modules"].commands["startup"],
                 ["SWITCH-HOST"],
@@ -788,7 +788,7 @@ class TestChassisModuleBMCStartupShutdown(object):
         """shutdown SWITCH-HOST when already down (no entry) should print a message and return."""
         runner = CliRunner()
         db = Db()
-        with mock.patch('config.chassis_modules.is_switch_bmc', return_value=True):
+        with mock.patch('config.chassis_modules.is_bmc', return_value=True):
             result = runner.invoke(
                 config.config.commands["chassis"].commands["modules"].commands["shutdown"],
                 ["SWITCH-HOST"],
@@ -797,6 +797,64 @@ class TestChassisModuleBMCStartupShutdown(object):
         print(result.output)
         assert result.exit_code == 0
         assert "already" in result.output
+
+    def test_show_status_bmc_uses_platform_oper_status(self):
+        """On BMC, oper_status should come from platform API when available."""
+        runner = CliRunner()
+        mock_module_helper = mock.MagicMock()
+        mock_module_helper.get_module_oper_status.return_value = "Online"
+
+        with mock.patch('utilities_common.chassis.is_bmc', return_value=True), \
+             mock.patch('show.chassis_modules.ModuleHelper', return_value=mock_module_helper):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["status"],
+                ["LINE-CARD0"]
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "Online" in result.output
+
+    def test_show_status_bmc_falls_back_to_db_when_platform_unavailable(self):
+        """On BMC, if platform API returns N/A, fall back to STATE_DB oper_status."""
+        runner = CliRunner()
+        mock_module_helper = mock.MagicMock()
+        mock_module_helper.get_module_oper_status.return_value = "N/A"
+
+        with mock.patch('utilities_common.chassis.is_bmc', return_value=True), \
+             mock.patch('show.chassis_modules.ModuleHelper', return_value=mock_module_helper):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["status"],
+                ["LINE-CARD0"]
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        # DB value for LINE-CARD0 is "Empty"; should be preserved when platform returns N/A
+        assert "Empty" in result.output
+
+    def test_show_status_non_bmc_uses_db_oper_status(self):
+        """On non-BMC, oper_status should always come from STATE_DB."""
+        runner = CliRunner()
+        with mock.patch('utilities_common.chassis.is_bmc', return_value=False):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["status"],
+                ["LINE-CARD0"]
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "Empty" in result.output
+
+    def test_show_status_bmc_module_helper_init_failure_falls_back_to_db(self):
+        """On BMC, if ModuleHelper init raises, gracefully fall back to STATE_DB."""
+        runner = CliRunner()
+        with mock.patch('utilities_common.chassis.is_bmc', return_value=True), \
+             mock.patch('show.chassis_modules.ModuleHelper', side_effect=Exception("init failed")):
+            result = runner.invoke(
+                show.cli.commands["chassis"].commands["modules"].commands["status"],
+                ["LINE-CARD0"]
+            )
+        print(result.output)
+        assert result.exit_code == 0
+        assert "Empty" in result.output
 
     @classmethod
     def teardown_class(cls):

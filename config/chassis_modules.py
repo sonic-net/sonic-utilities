@@ -5,10 +5,9 @@ import time
 import re
 import subprocess
 import utilities_common.cli as clicommon
-from utilities_common.chassis import is_smartswitch, get_all_dpus
+from utilities_common.chassis import is_smartswitch, is_bmc, get_all_dpus
 from utilities_common.module import ModuleHelper
 from datetime import datetime, timedelta, timezone
-from sonic_py_common.device_info import is_switch_bmc
 
 TIMEOUT_SECS = 10
 TRANSITION_TIMEOUT = timedelta(seconds=240)  # 4 minutes
@@ -61,7 +60,7 @@ def get_config_module_state(db, chassis_module_name):
     if not fvs:
         if is_smartswitch():
             return 'down'
-        elif is_switch_bmc() and chassis_module_name.startswith("SWITCH-HOST"):
+        elif is_bmc() and chassis_module_name.startswith("SWITCH-HOST"):
             # On BMC, SWITCH-HOST default is 'down' to keep it powered off on boot
             return 'down'
         else:
@@ -167,7 +166,7 @@ def shutdown_chassis_module(db, chassis_module_name):
             'admin_status': 'down',
         }
         config_db.set_entry('CHASSIS_MODULE', chassis_module_name, fvs)
-    elif is_switch_bmc() and chassis_module_name.startswith("SWITCH-HOST"):
+    elif is_bmc() and chassis_module_name.startswith("SWITCH-HOST"):
         click.echo(f"Shutting down chassis module {chassis_module_name}")
         # Use mod_entry to preserve power_on_delay and graceful_shutdown_timeout in the same entry
         config_db.mod_entry('CHASSIS_MODULE', chassis_module_name, {'admin_status': 'down'})
@@ -213,7 +212,7 @@ def startup_chassis_module(db, chassis_module_name):
             'admin_status': 'up',
         }
         config_db.set_entry('CHASSIS_MODULE', chassis_module_name, fvs)
-    elif is_switch_bmc() and chassis_module_name.startswith("SWITCH-HOST"):
+    elif is_bmc() and chassis_module_name.startswith("SWITCH-HOST"):
         click.echo(f"Starting up chassis module {chassis_module_name}")
         # Use mod_entry to preserve power_on_delay and graceful_shutdown_timeout in the same entry
         config_db.mod_entry('CHASSIS_MODULE', chassis_module_name, {'admin_status': 'up'})
@@ -225,7 +224,7 @@ def startup_chassis_module(db, chassis_module_name):
         if not check_config_module_state_with_timeout(ctx, db, chassis_module_name, 'up'):
             fabric_module_set_admin_status(db, chassis_module_name, 'up')
 
-if is_switch_bmc():
+if is_bmc():
 
     #
     # 'power-on-delay' subcommand ('config chassis modules power-on-delay ...')

@@ -290,3 +290,64 @@ class TestModuleHelper:
         result = module_helper.get_module_state_transition("DPU1")
         assert result is False
         mock_log_error.assert_called_once_with("Get module state transition method not found in platform chassis")
+
+    def test_get_module_oper_status_success(self, mock_load_platform_chassis, mock_try_get_args):
+        mock_try_get_args.side_effect = [1, "Online"]
+        mock_module = mock.MagicMock()
+        mock_module.get_oper_status.return_value = "Online"
+        module_helper.platform_chassis.get_module.return_value = mock_module
+
+        result = module_helper.get_module_oper_status("LINE-CARD0")
+        assert result == "Online"
+
+    def test_get_module_oper_status_invalid_index(self, mock_load_platform_chassis,
+                                                   mock_try_get_args, mock_log_error):
+        mock_try_get_args.return_value = INVALID_MODULE_INDEX
+
+        result = module_helper.get_module_oper_status("LINE-CARD0")
+        assert result == "N/A"
+        mock_log_error.assert_called_once_with("Unable to get module-index for LINE-CARD0")
+
+    def test_get_module_oper_status_no_chassis(self, mock_load_platform_chassis, mock_log_error):
+        original = module_helper.platform_chassis
+        module_helper.platform_chassis = None
+
+        result = module_helper.get_module_oper_status("LINE-CARD0")
+        assert result == "N/A"
+        mock_log_error.assert_called_once_with(
+            "Platform chassis not loaded, cannot get oper_status for LINE-CARD0"
+        )
+
+        module_helper.platform_chassis = original
+
+    def test_get_module_oper_status_none_module(self, mock_load_platform_chassis,
+                                                 mock_try_get_args, mock_log_error):
+        mock_try_get_args.return_value = 1
+        module_helper.platform_chassis.get_module.return_value = None
+
+        result = module_helper.get_module_oper_status("LINE-CARD0")
+        assert result == "N/A"
+        mock_log_error.assert_called_once_with("Unable to get module object for LINE-CARD0")
+
+    def test_get_module_oper_status_method_not_found(self, mock_load_platform_chassis,
+                                                      mock_try_get_args, mock_log_error):
+        mock_try_get_args.return_value = 1
+        mock_module = object()
+        module_helper.platform_chassis.get_module.return_value = mock_module
+
+        result = module_helper.get_module_oper_status("LINE-CARD0")
+        assert result == "N/A"
+        mock_log_error.assert_called_once_with(
+            "get_oper_status method not found for module LINE-CARD0"
+        )
+
+    def test_get_module_oper_status_not_implemented(self, mock_load_platform_chassis,
+                                                     mock_try_get_args):
+        # First call: module_index; second call: get_oper_status raises NotImplementedError → N/A
+        mock_try_get_args.side_effect = [1, "N/A"]
+        mock_module = mock.MagicMock()
+        mock_module.get_oper_status.side_effect = NotImplementedError
+        module_helper.platform_chassis.get_module.return_value = mock_module
+
+        result = module_helper.get_module_oper_status("LINE-CARD0")
+        assert result == "N/A"
