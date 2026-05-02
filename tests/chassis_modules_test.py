@@ -808,7 +808,7 @@ class TestChassisModuleBMCStartupShutdown(object):
         mock_module_helper = mock.MagicMock()
         mock_module_helper.get_module_oper_status.return_value = "Online"
 
-        with mock.patch('utilities_common.chassis.is_bmc', return_value=True), \
+        with mock.patch('show.chassis_modules.is_bmc', return_value=True), \
              mock.patch('show.chassis_modules.ModuleHelper', return_value=mock_module_helper):
             result = runner.invoke(
                 show.cli.commands["chassis"].commands["modules"].commands["status"],
@@ -824,7 +824,7 @@ class TestChassisModuleBMCStartupShutdown(object):
         mock_module_helper = mock.MagicMock()
         mock_module_helper.get_module_oper_status.return_value = "N/A"
 
-        with mock.patch('utilities_common.chassis.is_bmc', return_value=True), \
+        with mock.patch('show.chassis_modules.is_bmc', return_value=True), \
              mock.patch('show.chassis_modules.ModuleHelper', return_value=mock_module_helper):
             result = runner.invoke(
                 show.cli.commands["chassis"].commands["modules"].commands["status"],
@@ -838,7 +838,7 @@ class TestChassisModuleBMCStartupShutdown(object):
     def test_show_status_non_bmc_uses_db_oper_status(self):
         """On non-BMC, oper_status should always come from STATE_DB."""
         runner = CliRunner()
-        with mock.patch('utilities_common.chassis.is_bmc', return_value=False):
+        with mock.patch('show.chassis_modules.is_bmc', return_value=False):
             result = runner.invoke(
                 show.cli.commands["chassis"].commands["modules"].commands["status"],
                 ["LINE-CARD0"]
@@ -850,7 +850,7 @@ class TestChassisModuleBMCStartupShutdown(object):
     def test_show_status_bmc_module_helper_init_failure_falls_back_to_db(self):
         """On BMC, if ModuleHelper init raises, gracefully fall back to STATE_DB."""
         runner = CliRunner()
-        with mock.patch('utilities_common.chassis.is_bmc', return_value=True), \
+        with mock.patch('show.chassis_modules.is_bmc', return_value=True), \
              mock.patch('show.chassis_modules.ModuleHelper', side_effect=Exception("init failed")):
             result = runner.invoke(
                 show.cli.commands["chassis"].commands["modules"].commands["status"],
