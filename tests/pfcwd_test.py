@@ -575,6 +575,84 @@ class TestPfcwd(object):
             assert len(result.output) > 0
             assert "QUEUE" in result.output  # Should contain table headers
 
+    @patch('pfcwd.main.os')
+    def test_pfcwd_interval_valid(self, mock_os):
+        # mock has Ethernet0/4/8 with detection_time=600, restoration_time=600;
+        # 100 < 600, so the interval write must succeed.
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        mock_os.geteuid.return_value = 0
+        result = runner.invoke(
+            pfcwd.cli.commands["interval"], ["100"], obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0, result.output
+        assert db.cfgdb.get_entry("PFC_WD", "GLOBAL").get("POLL_INTERVAL") == "100"
+
+    @patch('pfcwd.main.os')
+    def test_pfcwd_interval_rejects_value_above_detection_time(self, mock_os):
+        # mock has detection_time=600 on every port; 700 must be rejected and
+        # the GLOBAL POLL_INTERVAL must remain at its pre-existing value (600).
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        mock_os.geteuid.return_value = 0
+        result = runner.invoke(
+            pfcwd.cli.commands["interval"], ["700"], obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 1
+        assert "detection time" in result.output
+        assert db.cfgdb.get_entry("PFC_WD", "GLOBAL").get("POLL_INTERVAL") == "600"
+
+    @patch('pfcwd.main.os')
+    def test_pfcwd_interval_partial_entry_no_crash(self, mock_os):
+        # Regression test for NOS-7575. A PFC_WD entry can legitimately exist
+        # without detection_time/restoration_time (e.g. created by
+        # `pfcwd pfc_stat_history` on a port with no prior PFC_WD config —
+        # mod_entry merges, leaving a partial entry). Previously the interval
+        # command crashed with `TypeError: int() argument must be ... not NoneType`
+        # on such entries.
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        # Inject a partial entry containing only pfc_stat_history.
+        db.cfgdb.set_entry("PFC_WD", "Ethernet12", {"pfc_stat_history": "disable"})
+
+        mock_os.geteuid.return_value = 0
+        result = runner.invoke(
+            pfcwd.cli.commands["interval"], ["100"], obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0, \
+            "interval command crashed on partial PFC_WD entry: {}".format(result.output)
+        assert "Traceback" not in result.output
+        assert db.cfgdb.get_entry("PFC_WD", "GLOBAL").get("POLL_INTERVAL") == "100"
+
+    @patch('pfcwd.main.os')
+    def test_pfcwd_interval_only_partial_entries(self, mock_os):
+        # If every Ethernet entry is partial (no detection/restoration), there
+        # is no constraint to compare against and the write must still succeed.
+        import pfcwd.main as pfcwd
+        runner = CliRunner()
+        db = Db()
+
+        # Strip detection/restoration from every existing PFC_WD|Ethernet* entry.
+        for port in ("Ethernet0", "Ethernet4", "Ethernet8"):
+            db.cfgdb.set_entry("PFC_WD", port, {"pfc_stat_history": "disable"})
+
+        mock_os.geteuid.return_value = 0
+        result = runner.invoke(
+            pfcwd.cli.commands["interval"], ["500"], obj=db
+        )
+        print(result.output)
+        assert result.exit_code == 0, result.output
+        assert db.cfgdb.get_entry("PFC_WD", "GLOBAL").get("POLL_INTERVAL") == "500"
+
     @classmethod
     def teardown_class(cls):
         os.environ["PATH"] = os.pathsep.join(os.environ["PATH"].split(os.pathsep)[:-1])

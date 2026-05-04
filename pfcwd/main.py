@@ -345,43 +345,47 @@ class PfcwdCli(object):
     def interval(self, poll_interval):
         if os.geteuid() != 0:
             sys.exit("Root privileges are required for this operation")
-        pfcwd_info = {}
-        if poll_interval is not None:
-            pfcwd_table = self.config_db.get_table(CONFIG_DB_PFC_WD_TABLE_NAME)
-            entry_min = MAX_POLL_INTERVAL_TIME
-            for entry in pfcwd_table:
-                if("Ethernet" not in entry):
-                    continue
-                detection_time_entry_value = int(self.config_db.get_entry(
-                    CONFIG_DB_PFC_WD_TABLE_NAME, entry
-                ).get('detection_time'))
-                restoration_time_entry_value = int(self.config_db.get_entry(
-                    CONFIG_DB_PFC_WD_TABLE_NAME, entry
-                ).get('restoration_time'))
-                if ((detection_time_entry_value is not None) and
-                    (detection_time_entry_value < entry_min)
-                ):
-                    entry_min = detection_time_entry_value
-                    entry_min_str = "detection time"
-                if ((restoration_time_entry_value is not None) and
-                    (restoration_time_entry_value < entry_min)
-                ):
-                    entry_min = restoration_time_entry_value
-                    entry_min_str = "restoration time"
-            if entry_min < poll_interval:
-                click.echo(
-                   "unable to use polling interval = {}ms, value is "
-                   "bigger than one of the configured {} values, "
-                   "please choose a smaller polling_interval".format(
-                        poll_interval, entry_min_str
-                    ), err=True
-                )
-                sys.exit(1)
+        if poll_interval is None:
+            return
 
-            pfcwd_info['POLL_INTERVAL'] = poll_interval
-            self.config_db.mod_entry(
-                CONFIG_DB_PFC_WD_TABLE_NAME, "GLOBAL", pfcwd_info
+        # An Ethernet entry in PFC_WD may legitimately omit detection_time or
+        # restoration_time (e.g. created by `pfcwd pfc_stat_history` on a port
+        # with no prior PFC_WD config — that path uses mod_entry, which merges
+        # rather than replaces). Skip the field when absent rather than calling
+        # int() on None.
+        pfcwd_table = self.config_db.get_table(CONFIG_DB_PFC_WD_TABLE_NAME)
+        entry_min = MAX_POLL_INTERVAL_TIME
+        entry_min_str = None
+        for entry, fields in pfcwd_table.items():
+            if "Ethernet" not in entry:
+                continue
+            detection_time = fields.get('detection_time')
+            if detection_time is not None:
+                detection_time = int(detection_time)
+                if detection_time < entry_min:
+                    entry_min = detection_time
+                    entry_min_str = "detection time"
+            restoration_time = fields.get('restoration_time')
+            if restoration_time is not None:
+                restoration_time = int(restoration_time)
+                if restoration_time < entry_min:
+                    entry_min = restoration_time
+                    entry_min_str = "restoration time"
+
+        if entry_min < poll_interval:
+            click.echo(
+               "unable to use polling interval = {}ms, value is "
+               "bigger than one of the configured {} values, "
+               "please choose a smaller polling_interval".format(
+                    poll_interval, entry_min_str
+                ), err=True
             )
+            sys.exit(1)
+
+        self.config_db.mod_entry(
+            CONFIG_DB_PFC_WD_TABLE_NAME, "GLOBAL",
+            {'POLL_INTERVAL': poll_interval}
+        )
 
     @multi_asic_util.run_on_multi_asic
     def stop(self, ports):
